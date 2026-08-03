@@ -83,7 +83,7 @@ from sdcm.provision.helpers.certificate import (
     JKS_TRUSTSTORE_FILE,
     TLSAssets,
 )
-from sdcm.provision.network_configuration import network_interfaces_count
+from sdcm.provision.network_configuration import ScyllaNetworkConfiguration, network_interfaces_count
 from sdcm.remote import (
     RemoteCmdRunnerBase,
     LOCALRUNNER,
@@ -401,6 +401,7 @@ class BaseNode(AutoSshContainerMixin):
 
     log = LOGGER
     _instance_type = "N/A"
+    scylla_network_configuration: Optional[ScyllaNetworkConfiguration] = None
 
     GOSSIP_STATUSES_FILTER_OUT = [
         "LEFT",  # in case the node was decommissioned
@@ -542,10 +543,6 @@ class BaseNode(AutoSshContainerMixin):
 
     @property
     def network_interfaces(self):
-        raise NotImplementedError()
-
-    @property
-    def network_configuration(self):
         raise NotImplementedError()
 
     def do_default_installations(self):
@@ -1172,7 +1169,23 @@ class BaseNode(AutoSshContainerMixin):
             self.log.error("Error checking if file %s exists: %s", file_path, details)
             return None
 
-    def stop_network_interface(self, interface_name="eth1"):
+    def _secondary_network_interface_name(self) -> str:
+        """Return a network interface the network nemesis may take down.
+
+        Any interface other than the one carrying `test_communication`: that one is the SSH
+        path from the test to the node, so downing it would also cut the connection the
+        nemesis needs to bring the interface back up.
+        """
+        if network_config := self.scylla_network_configuration:
+            ssh_nic = network_config.test_communication_nic
+            for interface in network_config.network_interfaces:
+                if interface.device_index != ssh_nic and interface.device_name:
+                    return interface.device_name
+
+        return "eth1"
+
+    def stop_network_interface(self, interface_name=None):
+        interface_name = interface_name or self._secondary_network_interface_name()
         if self.distro.is_rhel_like:
             shutdown_interface_command = "/sbin/ifdown {}"
         else:
@@ -1180,7 +1193,8 @@ class BaseNode(AutoSshContainerMixin):
         with DbNodeLogger([self], "stop network interface", target_node=self, additional_info=interface_name):
             self.remoter.sudo(shutdown_interface_command.format(interface_name))
 
-    def start_network_interface(self, interface_name="eth1"):
+    def start_network_interface(self, interface_name=None):
+        interface_name = interface_name or self._secondary_network_interface_name()
         if self.distro.is_rhel_like:
             startup_interface_command = "/sbin/ifup {}"
         elif (
@@ -1235,7 +1249,8 @@ class BaseNode(AutoSshContainerMixin):
 
     @property
     def private_dns_name(self) -> str:
-        return self.name
+        network_config = self.scylla_network_configuration
+        return network_config.dns_private_name if network_config else self.name
 
     def _get_public_ip_address(self) -> Optional[str]:
         public_ips, _ = self._refresh_instance_state()
@@ -1283,16 +1298,64 @@ class BaseNode(AutoSshContainerMixin):
             time.sleep(1)
             _, private_ips = self._refresh_instance_state()
 
+    @cached_property
+    def network_configuration(self) -> dict[str, str]:
+        """Query the MAC address to device name mapping from the node."""
+        remoter = self.remoter
+        if not remoter:
+            return {}
+
+        network_devices = {}
+        network_config_json = remoter.run("ip -j link", ignore_status=True).stdout.strip()
+        if network_config_json:
+            interfaces = json.loads(network_config_json)
+            network_devices = {
+                interface["address"]: interface["ifname"]
+                for interface in interfaces
+                if interface.get("ifname") != "lo" and interface.get("address")
+            }
+        if not network_devices:
+            ip_link_cmd = """ip -o link | awk '$2 != "lo:" {gsub(/:/,"",$2);print $17": " $2}'"""
+            network_config = remoter.run(ip_link_cmd).stdout.strip()
+            network_devices = yaml.safe_load(network_config)
+
+        self.log.debug("Node %s ethernets: %s", self.name, network_devices)
+        return network_devices
+
     def refresh_network_interfaces_info(self):
-        raise NotImplementedError()
+        # rebuild cached network mapping from the current remoter/node
+        self.__dict__.pop("network_configuration", None)
+
+        if self.scylla_network_configuration:
+            self.scylla_network_configuration.network_interfaces = self.network_interfaces
+
+    def _build_scylla_network_configuration(self) -> Optional[ScyllaNetworkConfiguration]:
+        """Build node network configuration from `scylla_network_config`."""
+        scylla_network_config = self.parent_cluster.params.get("scylla_network_config")
+        if not scylla_network_config:
+            return None
+
+        network_configuration = ScyllaNetworkConfiguration(
+            network_interfaces=self.network_interfaces,
+            scylla_network_config=scylla_network_config,
+        )
+        self.log.debug("Node %s scylla_network_config: %s", self.name, scylla_network_config)
+        self.log.debug("Node %s network_interfaces: %s", self.name, network_configuration.network_interfaces)
+        return network_configuration
 
     def _refresh_instance_state(self):
         raise NotImplementedError()
 
     @cached_property
     def cql_address(self):
-        # TODO: when new network configuration will be supported by all backends, take `cql_address` function from
-        #  `sdcm.cluster_aws.AWSNode.cql_address`, move it here and remove from all cluster modules
+        if self.scylla_network_configuration:
+            address = (
+                self.scylla_network_configuration.test_communication
+                if self.test_config.IP_SSH_CONNECTIONS == "public"
+                else self.scylla_network_configuration.broadcast_rpc_address
+            )
+            self.log.debug("cql_address is: %s", address)
+            return address
         if self.test_config.IP_SSH_CONNECTIONS == "public":
             return self.external_address
         with self.remote_scylla_yaml() as scylla_yaml:
@@ -1301,8 +1364,9 @@ class BaseNode(AutoSshContainerMixin):
 
     @property
     def ip_address(self):
-        # TODO: when new network configuration will be supported by all backends, take `ip_address` function from
-        #  `sdcm.cluster_aws.AWSNode.ip_address`, move it here and remove from all cluster modules
+        if self.scylla_network_configuration:
+            self.log.debug("ip_address is: %s", self.scylla_network_configuration.broadcast_address)
+            return self.scylla_network_configuration.broadcast_address
         if self.test_config.IP_SSH_CONNECTIONS == "ipv6":
             return self.ipv6_ip_address
         elif self.test_config.INTRA_NODE_COMM_PUBLIC:
@@ -1312,12 +1376,13 @@ class BaseNode(AutoSshContainerMixin):
 
     @property
     def external_address(self):
-        # TODO: when new network configuration will be supported by all backends, take `external_address` function from
-        #  `sdcm.cluster_aws.AWSNode.external_address`, move it here and remove from all cluster modules
         """
         the communication address for usage between the test and the nodes
         :return:
         """
+        if self.scylla_network_configuration:
+            self.log.debug("external_address is: %s", self.scylla_network_configuration.test_communication)
+            return self.scylla_network_configuration.test_communication
         if self.test_config.IP_SSH_CONNECTIONS == "ipv6":
             return self.ipv6_ip_address
         elif self.test_config.IP_SSH_CONNECTIONS == "public" or self.test_config.INTRA_NODE_COMM_PUBLIC:

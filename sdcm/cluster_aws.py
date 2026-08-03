@@ -26,7 +26,6 @@ from typing import Dict, Optional, ParamSpec, TypeVar
 import boto3
 import botocore.exceptions
 import tenacity
-import yaml
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import EC2ServiceResource
 
@@ -671,24 +670,6 @@ class AWSNode(cluster.BaseNode):
             after_config=after_config,
         )
 
-    @cached_property
-    def network_configuration(self):
-        network_devices = {}
-        if network_config_json := self.remoter.run("ip -j link", ignore_status=True).stdout.strip():
-            interfaces = json.loads(network_config_json)
-            network_devices = {
-                interface["address"]: interface["ifname"]
-                for interface in interfaces
-                if interface.get("ifname") != "lo" and interface.get("address")
-            }
-        if not network_devices:
-            # fallback to parsing ip link output in case json output is not supported
-            ip_link_cmd = """ip -o link | awk '$2 != "lo:" {gsub(/:/,"",$2);print $17": " $2}'"""
-            network_config = self.remoter.run(ip_link_cmd).stdout.strip()
-            network_devices = yaml.safe_load(network_config)
-        self.log.debug("Node %s ethernets: %s", self.name, network_devices)
-        return network_devices
-
     @property
     def network_interfaces(self):
         interfaces_tmp = []
@@ -750,17 +731,7 @@ class AWSNode(cluster.BaseNode):
             self._ec2_service.create_tags(Resources=resources_to_tag, Tags=tags_as_ec2_tags(self.tags))
 
         self._wait_public_ip()
-        self.scylla_network_configuration = ScyllaNetworkConfiguration(
-            network_interfaces=self.network_interfaces,
-            scylla_network_config=self.parent_cluster.params["scylla_network_config"],
-        )
-        # TODO: keep next two for debug purpose
-        self.log.debug(
-            "Node %s scylla_network_config: %s", self.name, self.parent_cluster.params["scylla_network_config"]
-        )
-        self.log.debug(
-            "Node %s network_interfaces: %s", self.name, self.scylla_network_configuration.network_interfaces
-        )
+        self.scylla_network_configuration = self._build_scylla_network_configuration()
         super().init()
         # Refresh network interfaces info after node remoter init
         self.refresh_network_interfaces_info()
@@ -872,22 +843,9 @@ class AWSNode(cluster.BaseNode):
             return instance_types[0].get("InstanceStorageSupported", False)
         return False
 
-    @property
-    def external_address(self):
-        """
-        the communication address for usage between the test and the nodes
-        :return:
-        """
-        self.log.debug("external_address is: %s", self.scylla_network_configuration.test_communication)
-        return self.scylla_network_configuration.test_communication
-
     @cached_property
     def public_dns_name(self) -> str:
         return self.query_aws_metadata("public-hostname")
-
-    @cached_property
-    def private_dns_name(self) -> str:
-        return self.scylla_network_configuration.dns_private_name
 
     def _get_ipv6_ip_address(self) -> Optional[str]:
         return self.scylla_network_configuration.interface_ipv6_address
@@ -916,15 +874,6 @@ class AWSNode(cluster.BaseNode):
             if extra_address not in ips:
                 ips.append(extra_address)
         return ips
-
-    def refresh_network_interfaces_info(self):
-        # Clear cached network_configuration to ensure fresh data is fetched from the node.
-        # This is important when the remoter was recreated (e.g., during _init_remoter),
-        # as the cached property may contain stale MAC address mappings from a previous
-        # remoter that was connected to a different node due to id() reuse.
-        if "network_configuration" in self.__dict__:
-            del self.__dict__["network_configuration"]
-        self.scylla_network_configuration.network_interfaces = self.network_interfaces
 
     def _refresh_instance_state(self):
         self._wait_public_ip()
@@ -971,21 +920,6 @@ class AWSNode(cluster.BaseNode):
 
     def _wait_public_ip(self):
         ec2_instance_wait_public_ip(self._instance)
-
-    @cached_property
-    def cql_address(self):
-        address = (
-            self.scylla_network_configuration.test_communication
-            if self.test_config.IP_SSH_CONNECTIONS == "public"
-            else self.scylla_network_configuration.broadcast_rpc_address
-        )
-        self.log.debug("cql_address is: %s", address)
-        return address
-
-    @property
-    def ip_address(self):
-        self.log.debug("ip_address is: %s", self.scylla_network_configuration.broadcast_address)
-        return self.scylla_network_configuration.broadcast_address
 
     def config_ipv6_as_persistent(self):
         if self.distro.is_ubuntu:
