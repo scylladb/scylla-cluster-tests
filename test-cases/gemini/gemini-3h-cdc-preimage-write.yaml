@@ -10,6 +10,7 @@ gemini_cmd: |
   --mode mixed
   --mutation-concurrency 24
   --read-concurrency 6
+  --partition-count 2000000
   --max-deleted-heap-size 2000000
 
 gemini_table_options:
