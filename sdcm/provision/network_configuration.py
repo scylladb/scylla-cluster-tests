@@ -29,6 +29,9 @@ class ScyllaNetworkConfiguration:
         self.network_interfaces = network_interfaces
         self.scylla_network_config = scylla_network_config
 
+    def __bool__(self) -> bool:
+        return bool(self.scylla_network_config)
+
     @property
     def _use_dns_names(self) -> bool:
         """Check if any network interface has use_dns_names enabled."""
@@ -144,6 +147,14 @@ class ScyllaNetworkConfiguration:
             return self.get_ip_by_address_config(address_config=test_communication_address_config[0])
 
         return self.broadcast_address
+
+    @property
+    def test_communication_nic(self) -> int:
+        """Device index of the interface used to connect from test to DB/monitor instances."""
+        if address_config := [conf for conf in self.scylla_network_config if conf["address"] == "test_communication"]:
+            return address_config[0]["nic"]
+
+        return 0
 
     @property
     def interface_ipv6_address(self):

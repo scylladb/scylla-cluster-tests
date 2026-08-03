@@ -56,6 +56,7 @@ class InstanceDefinition:
     )  # None when no cloud-init use at all
     use_public_ip: bool = False
     rack_index: int | None = None  # explicit rack index for rack-aware placement
+    network_interfaces_count: int = 1
 
 
 class ProvisionError(Exception):
