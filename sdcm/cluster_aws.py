@@ -1339,7 +1339,8 @@ class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
     @cluster.wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
         node_list = node_list if node_list else self.nodes
-        for node in node_list:
+
+        def _wait_for_node_db_up(node):
             wait.wait_for(
                 func=self.check_node_db_up,
                 step=10,
@@ -1348,6 +1349,10 @@ class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
                 throw_exc=True,
                 node=node,
             )
+
+        # Waiting for each node serially takes up to N * timeout; wait for all nodes in
+        # parallel so the whole cluster converges within a single timeout window (SCT-730).
+        self.run_func_parallel(func=_wait_for_node_db_up, node_list=node_list)
 
 
 class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
