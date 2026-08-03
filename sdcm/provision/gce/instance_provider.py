@@ -28,10 +28,17 @@ from sdcm.provision.provisioner import (
 )
 from sdcm.provision.gce.disk_provider import DiskProvider
 from sdcm.provision.gce.network_provider import NetworkProvider
-from sdcm.provision.gce.constants import DISK_TYPE_PD_STANDARD, DISK_TYPE_LOCAL_SSD
+from sdcm.provision.gce.constants import (
+    DISK_TYPE_PD_STANDARD,
+    DISK_TYPE_LOCAL_SSD,
+    GCE_MAX_NETWORK_INTERFACES,
+    GCE_MIN_NETWORK_INTERFACES,
+    GCE_SUPPORTED_NETWORK_INTERFACES,
+)
 from sdcm.provision.gce.utils import tags_to_gce_labels, normalize_instance_name
 from sdcm.utils.gce_utils import (
     get_gce_compute_instances_client,
+    get_gce_compute_machine_types_client,
     wait_for_extended_operation,
     gce_set_labels,
     get_gce_service_accounts,
@@ -47,6 +54,41 @@ def _is_zone_exhausted(error: BaseException) -> bool:
     return ZONE_EXHAUSTED_MARKER in str(error)
 
 
+def max_network_interfaces(vcpu_count: int) -> int:
+    """Number of NICs a machine type can carry: one per vCPU, floor of 2, ceiling of 8."""
+    return max(GCE_MIN_NETWORK_INTERFACES, min(vcpu_count, GCE_MAX_NETWORK_INTERFACES))
+
+
+def build_network_interfaces(
+    network_provider: NetworkProvider, region: str, count: int
+) -> List[compute_v1.NetworkInterface]:
+    """Build `count` network interfaces, all in the same VPC network.
+
+    The primary interface keeps the auto-mode subnet and carries the public IP; every extra
+    interface is placed in its own dedicated regional subnet and stays private, which is what
+    `scylla_network_config` validation already assumes (public IPv4 only on nic 0).
+    """
+    interfaces = []
+    for index in range(count):
+        if index == 0:
+            access = compute_v1.AccessConfig(
+                type_=compute_v1.AccessConfig.Type.ONE_TO_ONE_NAT.name,
+                name="External NAT",
+                network_tier=compute_v1.AccessConfig.NetworkTier.PREMIUM.name,
+            )
+            interfaces.append(
+                compute_v1.NetworkInterface(network=network_provider.get_network_url(), access_configs=[access])
+            )
+        else:
+            interfaces.append(
+                compute_v1.NetworkInterface(
+                    network=network_provider.get_network_url(),
+                    subnetwork=network_provider.get_subnetwork_url(region=region, index=index),
+                )
+            )
+    return interfaces
+
+
 class VirtualMachineProvider:
     """Provider for creating and managing GCE VM instances."""
 
@@ -60,6 +102,10 @@ class VirtualMachineProvider:
         self.network_provider = network_provider
         self._instances_client, _ = get_gce_compute_instances_client()
         self._cache: Dict[str, compute_v1.Instance] = {}
+
+    @property
+    def region(self) -> str:
+        return self.zone[:-2]
 
     def get(self, name: str) -> Optional[compute_v1.Instance]:
         """Get an instance by name."""
@@ -275,7 +321,7 @@ class VirtualMachineProvider:
             name=normalized_name,
             machine_type=f"zones/{self.zone}/machineTypes/{definition.type}",
             disks=disks,
-            network_interfaces=[self._build_network_interface()],
+            network_interfaces=self._build_network_interfaces(definition),
         )
         instance.metadata = compute_v1.Metadata()
         for k, v in metadata.items():
@@ -340,14 +386,36 @@ class VirtualMachineProvider:
             disks.append(disk)
         return disks
 
-    def _build_network_interface(self) -> compute_v1.NetworkInterface:
-        """Build network interface with external access."""
-        access = compute_v1.AccessConfig(
-            type_=compute_v1.AccessConfig.Type.ONE_TO_ONE_NAT.name,
-            name="External NAT",
-            network_tier=compute_v1.AccessConfig.NetworkTier.PREMIUM.name,
-        )
-        return compute_v1.NetworkInterface(network=self.network_provider.get_network_url(), access_configs=[access])
+    def _build_network_interfaces(self, definition: InstanceDefinition) -> List[compute_v1.NetworkInterface]:
+        """Build the network interfaces of an instance, validating the count against its machine type."""
+        count = max(1, definition.network_interfaces_count)
+        self._validate_network_interfaces_count(machine_type=definition.type, count=count)
+        return build_network_interfaces(network_provider=self.network_provider, region=self.region, count=count)
+
+    def _validate_network_interfaces_count(self, machine_type: str, count: int) -> None:
+        """Fail before the insert call when the requested interfaces cannot be attached."""
+        if count <= 1:
+            return
+
+        if count > GCE_SUPPORTED_NETWORK_INTERFACES:
+            raise ProvisionError(
+                f"{count} network interfaces were requested, but SCT supports at most "
+                f"{GCE_SUPPORTED_NETWORK_INTERFACES} on GCE: `hydra prepare-regions -c gce` creates a subnet for a "
+                f"single secondary interface. Reduce the number of distinct 'nic' values in 'scylla_network_config'."
+            )
+
+        if count <= GCE_MIN_NETWORK_INTERFACES:
+            return
+
+        machine_types_client, _ = get_gce_compute_machine_types_client()
+        machine_type_info = machine_types_client.get(project=self.project_id, zone=self.zone, machine_type=machine_type)
+        allowed = max_network_interfaces(machine_type_info.guest_cpus)
+        if count > allowed:
+            raise ProvisionError(
+                f"Machine type '{machine_type}' ({machine_type_info.guest_cpus} vCPUs) supports at most "
+                f"{allowed} network interfaces, but {count} were requested. Reduce the number of distinct "
+                f"'nic' values in 'scylla_network_config' or pick a machine type with more vCPUs."
+            )
 
     def _set_instance_labels(self, instance: compute_v1.Instance, tags: Dict[str, str], name: str) -> None:
         """Set labels on instance."""

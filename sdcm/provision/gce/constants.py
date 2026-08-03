@@ -42,3 +42,12 @@ SUPPORTED_GCE_REGIONS: list[str] = [
     "us-west1",
     "us-central1",
 ]
+
+# Multiple network interfaces.
+# GCE supports one NIC per vCPU, with an effective range of 2 to 8 NICs.
+# Each secondary NIC uses its own subnet in the same VPC, created by `hydra prepare-regions -c gce`,
+# which reserves a CIDR for one secondary subnet per region - hence 2 supported interfaces.
+GCE_MIN_NETWORK_INTERFACES = 2
+GCE_MAX_NETWORK_INTERFACES = 8
+GCE_SUPPORTED_NETWORK_INTERFACES = 2
+SECONDARY_SUBNET_NAME_TMPL = "{network_name}-nic{index}"
