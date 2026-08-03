@@ -684,7 +684,8 @@ class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
             return
 
         self.log.info("Reconfiguring Vector Store with Scylla node information")
-        for node in self.nodes:
+
+        def _reconfigure_node(node):
             try:
                 if ContainerManager.is_running(node, "node"):
                     self.log.debug("Stopping container %s for reconfiguration", node.name)
@@ -696,6 +697,11 @@ class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
             except Exception as e:  # noqa: BLE001
                 self.log.error("Failed to reconfigure container %s: %s", node.name, e)
                 raise
+
+        # Each node reconfiguration is an independent container restart, so run them in
+        # parallel to cut the serial per-node provisioning latency (SCT-729). run_func_parallel
+        # re-raises the first exception via future.result(), preserving the fail-fast behavior.
+        self.run_func_parallel(func=_reconfigure_node)
 
     def _create_node(self, node_index, container=None, after_config=None):
         node = VectorStoreDockerNode(
