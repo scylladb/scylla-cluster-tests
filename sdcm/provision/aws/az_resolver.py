@@ -18,6 +18,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, is_capacity_error
+from sdcm.provision.aws.utils import split_instance_types
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS
 from sdcm.test_config import TestConfig
 from sdcm.utils.aws_peering import AwsVpcPeering
@@ -330,17 +331,42 @@ class AZResolver:
     ) -> list[str]:
         """Intersect supported AZ letters across all configured regions.
 
+        Each entry in `instance_types` is one required param value (e.g.
+        `instance_type_db`) and may itself be a comma-separated list of
+        interchangeable EC2 Fleet instance type overrides (fleet diversification,
+        see `split_instance_types`). An AZ satisfies such an entry if it supports
+        AT LEAST ONE of the listed alternatives; across distinct entries (e.g.
+        `instance_type_db` vs `instance_type_loader`), an AZ must satisfy ALL of them.
+
         Returns letters in this order: configured letters first (preserving user
         intent), then any additional supported letters sorted alphabetically.
         """
+        groups = [split_instance_types(instance_type) for instance_type in instance_types]
+        groups = [group for group in groups if group]
+        if not groups:
+            return []
+
         common: set[str] | None = None
         for region in region_names:
+            aws_region = AwsRegion(region_name=region)
             preferred_full = [f"{region}{letter}" for letter in configured_letters]
-            supported_full = AwsRegion(region_name=region).get_common_availability_zones(
-                instance_types=instance_types,
-                preferred_azs=preferred_full,
-            )
-            letters = {az[len(region) :] for az in supported_full}
+            azs_by_type: dict[str, set[str]] = {}
+
+            def supported_azs(single_type: str, aws_region=aws_region, preferred_full=preferred_full) -> set[str]:
+                if single_type not in azs_by_type:
+                    azs_by_type[single_type] = set(
+                        aws_region.get_common_availability_zones(
+                            instance_types=[single_type], preferred_azs=preferred_full
+                        )
+                    )
+                return azs_by_type[single_type]
+
+            region_common: set[str] | None = None
+            for group in groups:
+                group_azs: set[str] = set().union(*(supported_azs(single_type) for single_type in group))
+                region_common = group_azs if region_common is None else region_common & group_azs
+
+            letters = {az[len(region) :] for az in (region_common or set())}
             common = letters if common is None else common & letters
 
         if not common:

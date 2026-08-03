@@ -140,6 +140,33 @@ def test_resolve_replaces_invalid_az_with_valid_alternative(mock_aws_region_cls)
     assert params["availability_zone"] in {"b", "c"}
 
 
+def test_resolve_multi_instance_type_db_uses_union_within_param(mock_aws_region_cls):
+    """A comma-separated instance_type_db (EC2 Fleet diversification) needs only ONE
+    of its alternatives supported per AZ, not all -- and never the raw joined string."""
+    _, region_instance = mock_aws_region_cls
+
+    def fake_common_azs(instance_types, preferred_azs=None):  # noqa: ARG001
+        per_type = {
+            "i7i.large": ["us-east-1a"],
+            "i4i.large": ["us-east-1b"],
+            "t3.small": ["us-east-1a", "us-east-1b"],
+        }
+        # unsplit/unknown types (e.g. the raw "i7i.large,i4i.large" string) resolve to no AZs
+        return per_type.get(instance_types[0], [])
+
+    region_instance.get_common_availability_zones.side_effect = fake_common_azs
+    params = _make_params(
+        instance_type_db="i7i.large,i4i.large",
+        instance_type_loader="t3.small",
+        instance_type_monitor="t3.small",
+        availability_zone="a",
+    )
+    AZResolver(params).resolve()
+    # "a" (via i7i.large) and "b" (via i4i.large) both satisfy instance_type_db;
+    # loader/monitor support both -> configured "a" remains valid, no replacement needed
+    assert params["availability_zone"] == "a"
+
+
 def test_resolve_multi_az_drops_unsupported_and_fills_alternatives(mock_aws_region_cls):
     _, region_instance = mock_aws_region_cls
     region_instance.get_common_availability_zones.return_value = ["us-east-1a", "us-east-1c", "us-east-1d"]
