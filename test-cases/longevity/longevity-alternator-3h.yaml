@@ -48,3 +48,5 @@ alternator_port: 8080
 dynamodb_primarykey_type: HASH_AND_RANGE
 
 docker_network: 'ycsb_net'
+adaptive_timeout_multipliers:
+  decommission: 8
