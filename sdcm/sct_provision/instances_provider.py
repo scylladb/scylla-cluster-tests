@@ -36,8 +36,11 @@ LOGGER = logging.getLogger(__name__)
 
 # Max number of nodes to wait on concurrently. Caps threads/SSH sessions on very large clusters.
 MAX_PROVISION_WAIT_WORKERS = 50
-# Overall timeout (seconds) for waiting on cloud-init across all nodes. wait_cloud_init_completes
-# itself retries for up to ~20*10s plus a 5min SSH is_up per node, so this leaves ample headroom.
+# Per-node timeout (seconds) passed to ParallelObject when waiting on cloud-init.
+# NOTE: ParallelObject applies this per future, not as a strict global wall-clock deadline
+# (see sdcm/utils/parallel_object.py). For clusters larger than MAX_PROVISION_WAIT_WORKERS the
+# overflow nodes are queued, so the effective ceiling can be higher than this value.
+# wait_cloud_init_completes itself retries for up to ~20*10s plus a 5min SSH is_up per node.
 CLOUD_INIT_WAIT_TIMEOUT = 30 * 60
 
 
@@ -77,7 +80,7 @@ def provision_instances_with_fallback(
         }
         remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
         wait_cloud_init_completes(remoter=remoter, instance=v_m)
-        # todo: wait for scylla-machine-image service to complete if instance is scylla-db?
+        # TODO: wait for scylla-machine-image service to complete if instance is scylla-db?
 
     # Instances are created in parallel by the provisioner, but each node still needs an SSH
     # connection and a (potentially multi-minute) cloud-init wait. Doing that serially made
