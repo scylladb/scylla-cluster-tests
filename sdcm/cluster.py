@@ -5703,7 +5703,9 @@ class BaseScyllaCluster:
 
     @retrying(n=10, sleep_time=5, allowed_exceptions=(AssertionError,))
     def wait_for_schema_agreement(self):
-        for node in self.nodes:
+        nodes_to_check = [node for node in self.nodes if not node.running_nemesis]
+        assert nodes_to_check, "All nodes are under active nemesis, schema agreement could not be verified"
+        for node in nodes_to_check:
             err = check_schema_agreement_in_gossip_and_peers(node)
             assert not err, err
         self.log.debug("Schema agreement is reached")
