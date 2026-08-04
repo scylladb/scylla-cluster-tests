@@ -1,0 +1,17 @@
+# GCE-backend overlay for minicloud runs. Layer it after configurations/minicloud.yaml.
+#
+# The GCE test-cases ask for local SSDs the guests do not have: minicloud backs each VM with a
+# qcow2 image on the agent's disk, not with NVMe passthrough. One keeps the disk layout SCT
+# expects without asking for eight devices that cannot appear.
+gce_n_local_ssd_disk_db: 1
+
+# The sct-runner hosts minicloud's QEMU guests, so it needs nested virtualization - on GCE the
+# N1/N2/N2D/C2/C2D/C3/C3D/M1-M3 families support it, the e2-standard default runner does not
+# (see NESTED_VIRTUALIZATION_INSTANCE_FAMILIES in sdcm/sct_runner.py). Sized for an artifacts
+# run: one lightweight guest (4 GiB) plus the SCT and minicloud containers. A test that boots a
+# bigger cluster must set its own instance_type_runner AFTER this file, or drop this overlay.
+instance_type_runner: 'n2-standard-4'
+
+# One converted guest image in ~/.cache/minicloud is tens of GiB on top of the OS, docker and
+# the hydra image sharing the default 80 GB root disk. See configurations/minicloud/aws.yaml.
+root_disk_size_runner: 160

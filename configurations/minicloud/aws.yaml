@@ -1,0 +1,15 @@
+# AWS-backend overlay for minicloud runs. Layer it after configurations/minicloud.yaml.
+
+# The sct-runner hosts minicloud's QEMU guests, so it needs nested virtualization - on AWS only
+# the c8i/m8i/r8i families support it (see NESTED_VIRTUALIZATION_INSTANCE_FAMILIES in
+# sdcm/sct_runner.py); the m7i-flex default runner cannot boot a single guest. Sized for an
+# artifacts run: one lightweight guest (4 GiB) plus the SCT and minicloud containers. A test
+# that boots a bigger cluster must set its own instance_type_runner in the test-case yaml and
+# layer it AFTER this file, or not include this overlay at all - see
+# test-cases/longevity/longevity-minicloud-10gb-1h.yaml for the multi-guest arithmetic.
+instance_type_runner: 'm8i.xlarge'
+
+# minicloud builds each guest disk from the AMI's snapshot into ~/.cache/minicloud/amis - one
+# converted image is tens of GiB, and the default 80 GB root disk also holds the OS, docker and
+# the hydra image. docs/minicloud.md asks for ~80 GiB free for the cache alone.
+root_disk_size_runner: 160

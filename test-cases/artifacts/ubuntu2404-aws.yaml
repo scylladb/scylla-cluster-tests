@@ -1,0 +1,40 @@
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the Debian/Ubuntu repository onto a
+    stock Ubuntu 24.04 LTS AMI and runs the standard artifact smoke checks. The AWS counterpart
+    of test-cases/artifacts/ubuntu2404.yaml, which covers the same distro on GCE - deb install
+    is otherwise untested on AWS.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+backtrace_decoding: false
+cluster_backend: 'aws'
+
+# Canonical's public SSM parameter for the current 24.04 amd64 gp3 image, rather than a pinned
+# AMI id: it resolves per region and stays current. resolve:owner: cannot express it - the
+# resolver splits on '/', and Canonical's image names contain slashes.
+ami_id_db_scylla: 'resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id'
+ami_db_scylla_user: 'ubuntu'
+scylla_linux_distro: 'ubuntu-noble'
+
+# Nothing is preinstalled on a stock Ubuntu image - this is the point of the test.
+use_preinstalled_scylla: false
+
+instance_type_db: 'i4i.large'
+root_disk_size_db: 50
+instance_provision: 'spot'
+instance_provision_fallback_on_demand: true
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 0
+nemesis_class_name: 'NoOpMonkey'
+test_duration: 60
+user_prefix: 'artifacts-ubuntu2404-aws'
+fallback_to_next_availability_zone: true
+
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'

@@ -1,0 +1,29 @@
+#!groovy
+
+// The regular AWS AMI artifacts test, run against minicloud instead of real EC2.
+//
+// `minicloud: true` is the whole switch - see vars/startMinicloud.groovy. The job then
+// provisions a nested-virtualization sct-runner and runs everything there: the emulator, the
+// guests and the test process. configurations/minicloud/aws.yaml (layered below) sizes that
+// runner; everything else minicloud needs is configuration too - configurations/minicloud.yaml
+// (KMS off, no spot, private ssh).
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_config: '''["test-cases/artifacts/ami.yaml", "configurations/minicloud.yaml", "configurations/minicloud/aws.yaml"]''',
+    minicloud: true,
+
+    // A released version, not master:latest. minicloud builds the guest disk by reading the
+    // AMI's snapshot over the EBS direct API, and the snapshots behind Scylla dev AMIs are not
+    // shared with the QA account - ListSnapshotBlocks returns SnapshotNotFound and the VM never
+    // boots. Released AMIs are public and their snapshots readable. Revert to master:latest once
+    // dev-AMI snapshots are shared.
+    scylla_version: '2026.3.0-rc0',
+
+    provision_type: 'on_demand',
+    timeout: [time: 60, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+)
