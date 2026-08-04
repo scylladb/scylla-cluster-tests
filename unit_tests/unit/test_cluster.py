@@ -15,19 +15,24 @@ import importlib
 import inspect
 import logging
 import tempfile
+import threading
 import time
 import unittest.mock
+from collections import defaultdict
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 from invoke import Result
 
-from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode
+from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode, BaseScyllaCluster
 from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
 from sdcm.sct_events.system import InstanceStatusEvent
+from sdcm.test_config import TestConfig
+from sdcm.utils import hard_exit
 from sdcm.utils.common import (
     get_keyspace_partition_ranges,
     keyspace_min_max_tokens,
@@ -958,3 +963,81 @@ def test_cluster_create_node_accepts_parent_kwargs(cls):
             raise
     except Exception:  # noqa: BLE001
         pass
+
+
+# --- BaseScyllaCluster.stop_nemesis / hard-exit escalation tests ---
+
+
+@pytest.fixture
+def scylla_cluster_for_nemesis(monkeypatch):
+    """Minimal `BaseScyllaCluster` instance wired for `stop_nemesis` tests.
+
+    `stop_nemesis` is decorated with `@optional_stage("nemesis")`, which reads
+    `TestConfig().tester_obj().skip_test_stages` — stub that out so the
+    decorator never skips the call. Also resets `hard_exit` module state so
+    arming in one test never leaks into another.
+    """
+    monkeypatch.setattr(
+        TestConfig,
+        "tester_obj",
+        classmethod(lambda cls: SimpleNamespace(skip_test_stages=defaultdict(lambda: False))),
+    )
+    monkeypatch.setattr(hard_exit, "_hard_exit_reason", None)
+
+    with unittest.mock.patch.object(BaseScyllaCluster, "__init__", lambda self, **kw: None):
+        cluster = BaseScyllaCluster()
+    cluster.log = logging.getLogger("test-scylla-cluster")
+    cluster.nemesis_termination_event = threading.Event()
+    cluster.nemesis_threads = []
+    return cluster
+
+
+def test_stop_nemesis_publishes_critical_event_and_arms_hard_exit_on_stuck_thread(
+    scylla_cluster_for_nemesis, events_function_scope
+):
+    """A nemesis thread that never honors termination must publish a CRITICAL
+    TestFrameworkEvent and arm the hard exit."""
+    block_forever = threading.Event()
+
+    def stuck_target():
+        # stop_nemesis() injects KillNemesis asynchronously via
+        # raise_exception_in_thread(); it is only delivered once bytecode runs
+        # on this thread again (e.g. once block_forever is set in teardown
+        # below), so swallow it here to keep this thread exception-free (this
+        # repo's unit tests fail on unhandled thread exceptions).
+        try:
+            block_forever.wait()
+        except BaseException:  # noqa: BLE001
+            pass
+
+    stuck_thread = threading.Thread(target=stuck_target, daemon=True)
+    stuck_thread.start()
+    scylla_cluster_for_nemesis.nemesis_threads = [stuck_thread]
+
+    try:
+        scylla_cluster_for_nemesis.stop_nemesis(timeout=0.1)
+
+        critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
+        assert len(critical_events) == 1, f"Expected exactly 1 CRITICAL event, got {len(critical_events)}"
+        assert "stop_nemesis" in critical_events[0]
+        assert hard_exit.hard_exit_requested()
+    finally:
+        block_forever.set()
+        stuck_thread.join(timeout=5)
+
+
+def test_stop_nemesis_does_not_arm_hard_exit_when_threads_stop(scylla_cluster_for_nemesis, events_function_scope):
+    """No false-positive kill on the normal path: threads that stop cleanly
+    must not publish a CRITICAL event or arm the hard exit."""
+    already_set = threading.Event()
+    already_set.set()
+    stopped_thread = threading.Thread(target=already_set.wait, daemon=True)
+    stopped_thread.start()
+    stopped_thread.join(timeout=5)
+    scylla_cluster_for_nemesis.nemesis_threads = [stopped_thread]
+
+    scylla_cluster_for_nemesis.stop_nemesis(timeout=0.1)
+
+    critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
+    assert len(critical_events) == 0, f"Expected no CRITICAL events, got {len(critical_events)}"
+    assert not hard_exit.hard_exit_requested()

@@ -135,6 +135,7 @@ from sdcm.utils.features import get_enabled_features, is_tablets_feature_enabled
 from sdcm.utils.install import InstallMode
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
+from sdcm.utils.hard_exit import request_hard_exit
 from sdcm.utils.health_checker import (
     check_nodes_status,
     check_node_status_in_gossip_and_nodetool_status,
@@ -5859,6 +5860,19 @@ class BaseScyllaCluster:
             if nemesis_thread.is_alive():
                 stack_trace = traceback.format_stack(current_thread_frames[nemesis_thread.ident])
                 threads_tracebacks.append("\n".join(stack_trace))
+
+        if threads_tracebacks:
+            message = (
+                f"{len(threads_tracebacks)} nemesis thread(s) still alive after {timeout}s stop_nemesis timeout:\n"
+                + "\n".join(threads_tracebacks)
+            )
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                source_method="stop_nemesis",
+                message=message,
+                severity=Severity.CRITICAL,
+            ).publish_or_dump()
+            request_hard_exit(f"{len(threads_tracebacks)} nemesis thread(s) still alive after stop_nemesis timeout")
 
     def start_kms_key_rotation_thread(self) -> None:
         if self.params.get("cluster_backend") != "aws":

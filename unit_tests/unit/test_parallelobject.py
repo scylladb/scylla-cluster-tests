@@ -1,7 +1,9 @@
 import time
 import logging
 import random
+import threading
 import concurrent.futures
+from concurrent.futures.thread import _threads_queues
 
 import pytest
 
@@ -148,3 +150,40 @@ def test_successfull_parallel_run_func_accepted_list_as_parameter():
     returned_results = [r.result for r in results]
     expected_results = [r[0][1] for r in LIST_AS_ARG]
     assert returned_results == expected_results
+
+
+def test_clean_up_detaches_stuck_worker_from_interpreter_shutdown():
+    """A worker stuck past its timeout must be removed from the CPython
+    registries `_python_exit()`/`threading._shutdown()` join against, so
+    interpreter shutdown doesn't hang on it forever.
+
+    `threading._shutdown_locks` (and `Thread._tstate_lock`) only exist on
+    Python <3.14 -- on 3.14 that second join moved into the C-level
+    `_thread._shutdown()`, which has no Python-level bypass, so that half of
+    the assertion is version-gated.
+    """
+    block_forever = threading.Event()
+    started_threads = []
+
+    def stuck_task():
+        started_threads.append(threading.current_thread())
+        block_forever.wait()
+
+    try:
+        parallel_object = ParallelObject(objects=[stuck_task], timeout=0.1, num_workers=1)
+        # clean_up() runs automatically at the end of run() (invoked via call_objects())
+        parallel_object.call_objects(ignore_exceptions=True)
+
+        assert len(started_threads) == 1
+        worker_thread = started_threads[0]
+
+        assert worker_thread not in _threads_queues
+
+        shutdown_locks = getattr(threading, "_shutdown_locks", None)
+        tstate_lock = getattr(worker_thread, "_tstate_lock", None)
+        if shutdown_locks is not None and tstate_lock is not None:
+            assert tstate_lock not in shutdown_locks
+    finally:
+        block_forever.set()
+        for thread in started_threads:
+            thread.join(timeout=5)
