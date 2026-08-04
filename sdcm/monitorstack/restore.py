@@ -345,7 +345,9 @@ def restore_grafana_dashboards_and_annotations(monitoring_dockers_dir, grafana_d
         status.append(
             restore_sct_dashboards(grafana_docker_port=grafana_docker_port, sct_dashboard_file=sct_dashboard_file)
         )
-        status.append(restore_annotations_data(monitoring_dockers_dir, grafana_docker_port=grafana_docker_port))
+        # annotations are optional: a missing, empty or malformed annotations file must not fail the
+        # restore; real upload errors raise and are handled below
+        restore_annotations_data(monitoring_dockers_dir, grafana_docker_port=grafana_docker_port)
     except Exception as details:  # noqa: BLE001
         LOGGER.error("Error during uploading sct monitoring data %s", details)
         status.append(False)
@@ -393,13 +395,20 @@ def restore_sct_dashboards(grafana_docker_port, sct_dashboard_file):
 def restore_annotations_data(monitoring_stack_dir, grafana_docker_port):
     annotations_file = os.path.join(monitoring_stack_dir, "sct_monitoring_addons", "annotations.json")
 
-    if not os.path.exists(annotations_file):
-        LOGGER.info("There is no annotations file.Skip loading annotations")
+    if not os.path.exists(annotations_file) or os.path.getsize(annotations_file) == 0:
+        LOGGER.info("There is no annotations file or it is empty. Skip loading annotations")
         return False
+
     try:
         with open(annotations_file, encoding="utf-8") as f:
             annotations = json.load(f)
+    except json.JSONDecodeError as details:
+        LOGGER.warning(
+            "Annotations file %s contains invalid JSON: %s. Skip loading annotations", annotations_file, details
+        )
+        return False
 
+    try:
         annotations_url = f"http://localhost:{grafana_docker_port}/api/annotations"
         for an in annotations:
             res = requests.post(annotations_url, data=json.dumps(an), headers={"Content-Type": "application/json"})
