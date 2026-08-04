@@ -22,6 +22,7 @@ import io
 import json
 import logging
 import os
+import stat
 import time
 from concurrent.futures.thread import ThreadPoolExecutor
 from unittest.mock import MagicMock, PropertyMock, patch
@@ -975,6 +976,24 @@ class TestSecretsManagerBackend:
             assert fh.read() == FAKE_SSH_PRIVATE_KEY
         # Version sidecar written alongside the key
         assert (tmp_path / "scylla_test_id_ed25519.version").exists()
+
+    def test_sync_from_sm_applies_permissions_to_sidecar(self, sm_ks, tmp_path):
+        """The sidecar must not inherit the umask - ssh rejects a group/world readable ~/.ssh."""
+        sm_ks.sync(["scylla_test_id_ed25519"], str(tmp_path), 0o600)
+        for name in ("scylla_test_id_ed25519", "scylla_test_id_ed25519.version"):
+            assert stat.S_IMODE((tmp_path / name).stat().st_mode) == 0o600, f"{name} has wrong permissions"
+
+    def test_sync_from_sm_repairs_sidecar_permissions_on_cache_hit(self, sm_ks, tmp_path):
+        """A sidecar left too permissive by an earlier sync is repaired without a re-download."""
+        sm_ks.get_obj_if_needed("scylla_test_id_ed25519", str(tmp_path), 0o600)
+        sidecar = tmp_path / "scylla_test_id_ed25519.version"
+        sidecar.chmod(0o664)
+
+        # Version is unchanged, so this must fix the permissions without downloading again
+        with patch.object(sm_ks, "download_file") as mock_dl:
+            sm_ks.get_obj_if_needed("scylla_test_id_ed25519", str(tmp_path), 0o600)
+            mock_dl.assert_not_called()
+        assert stat.S_IMODE(sidecar.stat().st_mode) == 0o600
 
     def test_get_sm_version_id_returns_awscurrent(self, sm_ks):
         version_id = sm_ks.get_sm_version_id("scylla_test_id_ed25519")
