@@ -4,6 +4,7 @@ n_loaders: '1 1'
 simulated_regions: 2
 gce_instance_type_db: 'n2-highmem-32'
 gce_instance_type_loader: 'e2-highcpu-32'
+root_disk_size_runner: 240  # collect-logs needs more space than the 80G runner default (SCT-780)
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '029'
