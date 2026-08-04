@@ -18,6 +18,7 @@ import pytest
 
 from sdcm import sct_config
 from sdcm.utils.common import get_latest_scylla_release
+from sdcm.utils.version_utils import latest_unified_package
 
 pytestmark = [
     pytest.mark.integration,
@@ -155,14 +156,14 @@ def test_baremetal(monkeypatch):
 
 
 def test_unified_package(monkeypatch):
+    # Unlike the sibling tests below, this one actually downloads and unpacks the
+    # package to read SCYLLA-VERSION-FILE, so the URL has to point at a package
+    # that still exists. Resolve the current master build instead of pinning one:
+    # unstable relocatables are garbage collected within a few months.
+    unified_package = latest_unified_package()
+
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
-    monkeypatch.setenv(
-        "SCT_UNIFIED_PACKAGE",
-        (
-            "https://downloads.scylladb.com/unstable/scylla/master/relocatable/2023-11-13T03:04:27Z/"
-            "scylla-unified-5.5.0~dev-0.20231113.7b08886e8dd8.x86_64.tar.gz"
-        ),
-    )
+    monkeypatch.setenv("SCT_UNIFIED_PACKAGE", unified_package)
     monkeypatch.setenv(
         "SCT_GCE_IMAGE_DB",
         ("https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7"),
@@ -176,7 +177,9 @@ def test_unified_package(monkeypatch):
 
     _version, _is_enterprise = conf.get_version_based_on_conf()
 
-    assert "5.5.0" in _version
+    # e.g. scylla-unified-2026.4.0~dev-0.20260804.0cba3cd2a4b0.x86_64.tar.gz -> 2026.4.0
+    expected_version = unified_package.rsplit("/", 1)[-1].removeprefix("scylla-unified-").split("~")[0]
+    assert expected_version in _version
     assert not _is_enterprise
 
 
