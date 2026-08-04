@@ -4,6 +4,9 @@ import pytest
 
 from unit_tests.test_cluster import DummyDbCluster
 
+pytestmark = [
+    pytest.mark.xdist_group("docker_heavy"),
+]
 
 log = logging.getLogger(__name__)
 

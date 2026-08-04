@@ -20,6 +20,7 @@ pytestmark = [
     pytest.mark.usefixtures(
         "events",
     ),
+    pytest.mark.xdist_group("docker_heavy"),
 ]
 
 
