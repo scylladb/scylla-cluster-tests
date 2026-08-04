@@ -5,6 +5,7 @@ from unit_tests.test_cluster import DummyScyllaCluster
 
 
 @pytest.mark.integration
+@pytest.mark.xdist_group("docker_heavy")
 def test_fetch_all_rows(docker_scylla, params, events):
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
