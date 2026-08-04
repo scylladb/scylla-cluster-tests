@@ -677,7 +677,11 @@ def get_specific_tag_of_docker_image(docker_repo: str, architecture: Literal["x8
         branch = "master"
     elif docker_repo == "scylladb/scylla-enterprise-nightly":
         product = "scylla-enterprise"
-        branch = "enterprise"
+        # The `enterprise` rolling branch stopped producing builds when
+        # enterprise development folded into the unified releases, and its
+        # relocatables are gone from downloads.scylladb.com. `enterprise-2024.1`
+        # is the only branch still publishing scylla-enterprise-nightly images.
+        branch = "enterprise-2024.1"
     else:
         raise ValueError(f"SCT doesn't support getting latest from {docker_repo}")
 
