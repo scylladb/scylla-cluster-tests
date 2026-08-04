@@ -4,9 +4,11 @@ import logging
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from concurrent.futures.thread import _threads_queues
+from concurrent.futures.thread import _global_shutdown_lock, _threads_queues
 from functools import wraps
 from typing import Iterable, Callable, List
+
+from sdcm.utils.hard_exit import request_hard_exit
 
 LOGGER = logging.getLogger("utils")
 
@@ -151,12 +153,33 @@ class ParallelObject:
         # above, so any still-running worker at this point is already an
         # abandoned zombie as far as this code is concerned -- we are just making
         # CPython agree.
+        # `_threads_queues` (and, transitively, `threading._shutdown_locks`) must be
+        # mutated while holding `_global_shutdown_lock`: CPython uses that lock
+        # internally to serialize worker registration against `_python_exit()`, which
+        # copies this same WeakKeyDictionary during interpreter shutdown. Racing that
+        # copy unlocked can corrupt shutdown-time iteration.
         shutdown_locks = getattr(threading, "_shutdown_locks", None)
-        for thread in self._thread_pool._threads:
-            _threads_queues.pop(thread, None)
-            tstate_lock = getattr(thread, "_tstate_lock", None)
-            if shutdown_locks is not None and tstate_lock is not None:
-                shutdown_locks.discard(tstate_lock)
+        with _global_shutdown_lock:
+            for thread in self._thread_pool._threads:
+                _threads_queues.pop(thread, None)
+                tstate_lock = getattr(thread, "_tstate_lock", None)
+                if shutdown_locks is not None and tstate_lock is not None:
+                    shutdown_locks.discard(tstate_lock)
+
+        # On Python 3.14+, `threading._shutdown()` delegates to the C-level
+        # `_thread._shutdown()`, which waits on its own internal `shutdown_handles`
+        # list of every non-daemon ThreadPoolExecutor worker -- a list this module has
+        # no Python-level access to. Popping the registries above therefore no longer
+        # guarantees a still-running worker gets abandoned at interpreter shutdown: if
+        # one is still alive here (shutdown(wait=False) above didn't let it finish),
+        # arm the same deferred hard-exit escalation `stop_nemesis` uses, so the
+        # eventual real exit point force-terminates instead of hanging.
+        stuck_workers = [thread for thread in self._thread_pool._threads if thread.is_alive()]
+        if stuck_workers:
+            request_hard_exit(
+                f"ParallelObject worker thread(s) still alive after shutdown: "
+                f"{[thread.name for thread in stuck_workers]}"
+            )
 
     @staticmethod
     def run_named_tasks_in_parallel(
