@@ -4,12 +4,22 @@ import random
 import threading
 import concurrent.futures
 from concurrent.futures.thread import _threads_queues
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
+import sdcm.utils.parallel_object as parallel_object_module
+from sdcm.utils import hard_exit
 from sdcm.utils.parallel_object import ParallelObject, ParallelObjectException
 
 LOGGER = logging.getLogger(name=__name__)
+
+
+@pytest.fixture(autouse=True)
+def _reset_hard_exit_state(monkeypatch):
+    """Ensure `_hard_exit_reason` never leaks between tests (clean_up() can arm it)."""
+    monkeypatch.setattr(hard_exit, "_hard_exit_reason", None)
+
 
 MAX_TIMEOUT = 0.3
 RAND_TIMEOUTS = random.sample([0.2, 0.3, 0.4], 3)
@@ -183,7 +193,55 @@ def test_clean_up_detaches_stuck_worker_from_interpreter_shutdown():
         tstate_lock = getattr(worker_thread, "_tstate_lock", None)
         if shutdown_locks is not None and tstate_lock is not None:
             assert tstate_lock not in shutdown_locks
+
+        # The worker is still alive at this point (blocked on block_forever), so on
+        # Python 3.14+ the registry-detachment trick above is not enough by itself
+        # (see module docstring): clean_up() must have armed the hard exit too.
+        assert hard_exit._hard_exit_reason
+        assert "ParallelObject" in hard_exit._hard_exit_reason
     finally:
         block_forever.set()
         for thread in started_threads:
             thread.join(timeout=5)
+
+
+def test_clean_up_arms_hard_exit_when_worker_still_alive_after_shutdown():
+    """clean_up() must arm the hard exit if a pool worker is still alive after
+    `shutdown(wait=False)`, regardless of CPython version: the registry-pop trick
+    alone cannot detach a worker from interpreter shutdown on Python 3.14+."""
+    parallel_object = ParallelObject(objects=[], timeout=1)
+    stuck_worker = Mock()
+    stuck_worker.is_alive.return_value = True
+    parallel_object._thread_pool._threads = {stuck_worker}
+
+    parallel_object.clean_up(futures=[])
+
+    assert hard_exit._hard_exit_reason
+    assert "ParallelObject" in hard_exit._hard_exit_reason
+
+
+def test_clean_up_does_not_arm_hard_exit_when_no_worker_alive():
+    """No false-positive escalation: if every worker has already finished,
+    clean_up() must not arm the hard exit."""
+    parallel_object = ParallelObject(objects=[], timeout=1)
+    finished_worker = Mock()
+    finished_worker.is_alive.return_value = False
+    parallel_object._thread_pool._threads = {finished_worker}
+
+    parallel_object.clean_up(futures=[])
+
+    assert not hard_exit._hard_exit_reason
+
+
+def test_clean_up_mutates_registries_under_global_shutdown_lock(monkeypatch):
+    """`_threads_queues`/`threading._shutdown_locks` mutations must happen while
+    holding `_global_shutdown_lock`, since CPython uses that same lock internally
+    to serialize worker registration against `_python_exit()`."""
+    mock_lock = MagicMock()
+    monkeypatch.setattr(parallel_object_module, "_global_shutdown_lock", mock_lock)
+
+    parallel_object = ParallelObject(objects=[], timeout=1)
+    parallel_object.clean_up(futures=[])
+
+    mock_lock.__enter__.assert_called_once()
+    mock_lock.__exit__.assert_called_once()
