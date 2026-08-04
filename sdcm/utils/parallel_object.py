@@ -12,6 +12,22 @@ from sdcm.utils.hard_exit import request_hard_exit
 
 LOGGER = logging.getLogger("utils")
 
+# How long clean_up() gives a still-alive pool worker to actually notice
+# shutdown(wait=False)'s sentinel, finish its current unit of work and unwind
+# before treating it as stuck. shutdown(wait=False) returns immediately without
+# waiting for anything, so a perfectly healthy worker that just hasn't won the
+# GIL yet will routinely still report is_alive() == True right afterwards; this
+# grace period is what turns "still alive this instant" into a meaningful signal.
+# It runs on every clean_up() call (i.e. every ParallelObject.run()), so it is
+# kept short enough not to noticeably slow down normal teardown while still
+# giving a healthy worker a fair chance.
+WORKER_JOIN_GRACE_PERIOD = 1  # seconds
+
+# How long clean_up() waits to acquire _global_shutdown_lock before giving up
+# and proceeding without it. See the comment at its use below for why this is
+# believed to be safe.
+GLOBAL_SHUTDOWN_LOCK_TIMEOUT = 1  # seconds
+
 
 class ParallelObject:
     """
@@ -158,13 +174,34 @@ class ParallelObject:
         # internally to serialize worker registration against `_python_exit()`, which
         # copies this same WeakKeyDictionary during interpreter shutdown. Racing that
         # copy unlocked can corrupt shutdown-time iteration.
+        #
+        # Deadlock consideration: CPython's own `_python_exit()` only holds this lock
+        # briefly, to flip an internal `_shutdown` flag, and releases it *before*
+        # copying `_threads_queues` and unboundedly joining every worker in it -- the
+        # lock is not held during that join. So a thread stuck in that join (the exact
+        # crisis this module exists to escalate out of) does not hold this lock while
+        # stuck, and acquiring it here should not be able to deadlock against it. That
+        # said, this is defensive code whose whole point is to never itself become
+        # another way to hang, so we still bound the wait rather than trust that
+        # invariant forever (e.g. across CPython versions): if the lock cannot be
+        # acquired promptly, log a warning and proceed without it.
         shutdown_locks = getattr(threading, "_shutdown_locks", None)
-        with _global_shutdown_lock:
+        lock_acquired = _global_shutdown_lock.acquire(timeout=GLOBAL_SHUTDOWN_LOCK_TIMEOUT)
+        if not lock_acquired:
+            LOGGER.warning(
+                "ParallelObject.clean_up(): could not acquire _global_shutdown_lock "
+                "within %ss; proceeding without it to avoid clean_up() itself hanging.",
+                GLOBAL_SHUTDOWN_LOCK_TIMEOUT,
+            )
+        try:
             for thread in self._thread_pool._threads:
                 _threads_queues.pop(thread, None)
                 tstate_lock = getattr(thread, "_tstate_lock", None)
                 if shutdown_locks is not None and tstate_lock is not None:
                     shutdown_locks.discard(tstate_lock)
+        finally:
+            if lock_acquired:
+                _global_shutdown_lock.release()
 
         # On Python 3.14+, `threading._shutdown()` delegates to the C-level
         # `_thread._shutdown()`, which waits on its own internal `shutdown_handles`
@@ -174,6 +211,16 @@ class ParallelObject:
         # one is still alive here (shutdown(wait=False) above didn't let it finish),
         # arm the same deferred hard-exit escalation `stop_nemesis` uses, so the
         # eventual real exit point force-terminates instead of hanging.
+        #
+        # shutdown(wait=False) only queues a sentinel and returns immediately -- it does
+        # not wait for a worker to notice it, finish its current unit of work and exit.
+        # Checking is_alive() right away would treat a perfectly healthy worker that
+        # simply hasn't unwound yet as "stuck", arming a hard exit on essentially every
+        # clean_up() call. Mirror the join(timeout)-then-check pattern `stop_nemesis`
+        # (sdcm/cluster.py) uses: give each worker a real, bounded grace period to
+        # actually finish before deciding it is stuck.
+        for thread in self._thread_pool._threads:
+            thread.join(timeout=WORKER_JOIN_GRACE_PERIOD)
         stuck_workers = [thread for thread in self._thread_pool._threads if thread.is_alive()]
         if stuck_workers:
             request_hard_exit(

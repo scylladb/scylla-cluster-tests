@@ -4,7 +4,7 @@ import random
 import threading
 import concurrent.futures
 from concurrent.futures.thread import _threads_queues
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,12 +13,6 @@ from sdcm.utils import hard_exit
 from sdcm.utils.parallel_object import ParallelObject, ParallelObjectException
 
 LOGGER = logging.getLogger(name=__name__)
-
-
-@pytest.fixture(autouse=True)
-def _reset_hard_exit_state(monkeypatch):
-    """Ensure `_hard_exit_reason` never leaks between tests (clean_up() can arm it)."""
-    monkeypatch.setattr(hard_exit, "_hard_exit_reason", None)
 
 
 MAX_TIMEOUT = 0.3
@@ -79,6 +73,12 @@ def test_successful_parallel_run_func_returning_tuple():
     returned_results = [r.result for r in results]
     expected_results = [(timeout, "test") for timeout in RAND_TIMEOUTS]
     assert returned_results == expected_results
+    # Regression guard: a normal, successful run using real threads must never arm the
+    # hard exit. clean_up() runs automatically as part of run() above; this is exactly
+    # the class of false positive that a naive is_alive()-right-after-shutdown(wait=False)
+    # check produces on essentially every call, since shutdown(wait=False) doesn't wait
+    # for a worker to notice the sentinel and exit before returning.
+    assert not hard_exit._hard_exit_reason
 
 
 def test_successful_parallel_run_func_returning_single_value():
@@ -206,29 +206,42 @@ def test_clean_up_detaches_stuck_worker_from_interpreter_shutdown():
 
 
 def test_clean_up_arms_hard_exit_when_worker_still_alive_after_shutdown():
-    """clean_up() must arm the hard exit if a pool worker is still alive after
-    `shutdown(wait=False)`, regardless of CPython version: the registry-pop trick
-    alone cannot detach a worker from interpreter shutdown on Python 3.14+."""
-    parallel_object = ParallelObject(objects=[], timeout=1)
-    stuck_worker = Mock()
-    stuck_worker.is_alive.return_value = True
-    parallel_object._thread_pool._threads = {stuck_worker}
+    """clean_up() must arm the hard exit if a pool worker is still alive even after
+    the bounded join() grace period it gives workers to unwind following
+    `shutdown(wait=False)` -- i.e. a genuinely stuck worker (blocked on a
+    never-set threading.Event here), not merely one that hasn't had a chance to
+    notice the shutdown sentinel yet. Regardless of CPython version, the
+    registry-pop trick alone cannot detach a worker from interpreter shutdown on
+    Python 3.14+, so clean_up() must escalate here too."""
+    block_forever = threading.Event()
 
-    parallel_object.clean_up(futures=[])
+    parallel_object = ParallelObject(objects=[block_forever.wait], timeout=0.1, num_workers=1)
+    try:
+        # clean_up() runs automatically at the end of run() (invoked via call_objects())
+        parallel_object.call_objects(ignore_exceptions=True)
 
-    assert hard_exit._hard_exit_reason
-    assert "ParallelObject" in hard_exit._hard_exit_reason
+        assert hard_exit._hard_exit_reason
+        assert "ParallelObject" in hard_exit._hard_exit_reason
+    finally:
+        block_forever.set()
+        for thread in parallel_object._thread_pool._threads:
+            thread.join(timeout=5)
 
 
 def test_clean_up_does_not_arm_hard_exit_when_no_worker_alive():
-    """No false-positive escalation: if every worker has already finished,
-    clean_up() must not arm the hard exit."""
-    parallel_object = ParallelObject(objects=[], timeout=1)
-    finished_worker = Mock()
-    finished_worker.is_alive.return_value = False
-    parallel_object._thread_pool._threads = {finished_worker}
+    """No false-positive escalation: `shutdown(wait=False)` only queues a sentinel
+    and returns immediately -- it does not wait for a worker to notice it, finish
+    its work and exit, so a perfectly healthy worker can still report
+    `is_alive() == True` in the instant right after it returns. Using a real
+    thread (via a task that actually returns) that finishes well within the
+    bounded join() grace period, clean_up() must not arm the hard exit -- this is
+    the exact regression a synthetic/mocked `is_alive()` check would miss."""
 
-    parallel_object.clean_up(futures=[])
+    def quick_task():
+        return "done"
+
+    parallel_object = ParallelObject(objects=[quick_task], timeout=1, num_workers=1)
+    parallel_object.call_objects()
 
     assert not hard_exit._hard_exit_reason
 
@@ -236,12 +249,31 @@ def test_clean_up_does_not_arm_hard_exit_when_no_worker_alive():
 def test_clean_up_mutates_registries_under_global_shutdown_lock(monkeypatch):
     """`_threads_queues`/`threading._shutdown_locks` mutations must happen while
     holding `_global_shutdown_lock`, since CPython uses that same lock internally
-    to serialize worker registration against `_python_exit()`."""
+    to serialize worker registration against `_python_exit()`. The lock is acquired
+    with a bounded timeout (not a bare `with`) so this defensive code can never
+    itself hang if the lock is somehow held elsewhere; it must still be released
+    once acquired."""
     mock_lock = MagicMock()
     monkeypatch.setattr(parallel_object_module, "_global_shutdown_lock", mock_lock)
 
     parallel_object = ParallelObject(objects=[], timeout=1)
     parallel_object.clean_up(futures=[])
 
-    mock_lock.__enter__.assert_called_once()
-    mock_lock.__exit__.assert_called_once()
+    mock_lock.acquire.assert_called_once_with(timeout=parallel_object_module.GLOBAL_SHUTDOWN_LOCK_TIMEOUT)
+    mock_lock.release.assert_called_once()
+
+
+def test_clean_up_proceeds_without_lock_when_acquire_times_out(monkeypatch, caplog):
+    """If `_global_shutdown_lock` cannot be acquired within the bounded timeout,
+    clean_up() must log a warning and proceed without it rather than hang -- this
+    is the whole point of bounding the wait instead of using a bare `with` lock."""
+    mock_lock = MagicMock()
+    mock_lock.acquire.return_value = False
+    monkeypatch.setattr(parallel_object_module, "_global_shutdown_lock", mock_lock)
+
+    parallel_object = ParallelObject(objects=[], timeout=1)
+    with caplog.at_level(logging.WARNING, logger="utils"):
+        parallel_object.clean_up(futures=[])
+
+    mock_lock.release.assert_not_called()
+    assert any("_global_shutdown_lock" in record.message for record in caplog.records)
