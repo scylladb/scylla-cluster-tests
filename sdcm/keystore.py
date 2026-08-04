@@ -43,6 +43,10 @@ KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
 # client must always be pinned explicitly.
 KEYSTORE_SM_REGION = "us-east-1"
 
+# Namespace the mirrored keystore entries live under in Secrets Manager, so a
+# keystore file `foo.json` maps to the secret `sct/foo.json`.
+KEYSTORE_SM_PREFIX = "sct/"
+
 SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
 
 BOTO3_CLIENT_CREATION_LOCK = threading.Lock()
@@ -99,7 +103,7 @@ class KeyStore:
         self._cache: dict[str, bytes] = {}
         self._cache_lock = threading.Lock()
         self._backend = backend or os.environ.get("SCT_KEYSTORE_BACKEND") or "secretsmanager"
-        self._sm_prefix = os.environ.get("SCT_KEYSTORE_SM_PREFIX") or "sct/"
+        self._sm_prefix = os.environ.get("SCT_KEYSTORE_SM_PREFIX") or KEYSTORE_SM_PREFIX
         self._sm_region = os.environ.get("SCT_KEYSTORE_SM_REGION") or KEYSTORE_SM_REGION
 
     @property
@@ -426,8 +430,17 @@ class KeyStore:
             self.download_file(filename=key, dest_filename=path)
             os.chmod(path=path, mode=permissions)
             if self._backend == "secretsmanager":
-                with open(f"{path}.version", "w", encoding="utf-8") as vf:
+                with open(version_path, "w", encoding="utf-8") as vf:
                     vf.write(remote_version)
+
+        if self._backend == "secretsmanager":
+            # Match the key's permissions: the sidecar lands in the same
+            # directory (often ~/.ssh, where ssh rejects group/world readable
+            # content) and would otherwise inherit the umask. Enforced on every
+            # sync rather than only after a download, because a sidecar whose
+            # version is still current is never rewritten -- one left at 0o664
+            # by an earlier sync would keep those permissions forever.
+            os.chmod(path=version_path, mode=permissions)
 
     def sync(self, keys, local_path, permissions=0o777):
         """Syncs the local and remote copies from the configured backend."""
