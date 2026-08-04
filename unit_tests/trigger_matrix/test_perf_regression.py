@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from sdcm.utils.trigger_matrix import filter_jobs, load_matrix_config
+from sdcm.utils.trigger_matrix import build_job_parameters, filter_jobs, load_matrix_config
 
 PERF_YAML = Path(__file__).parent.parent.parent / "configurations" / "triggers" / "perf-regression.yaml"
 
@@ -68,3 +68,24 @@ def test_gce_custom_monthly_rc1_included(perf_config):
         labels_selector="gce-custom-monthly",
     )
     assert len(result) == 2
+
+
+def test_rolling_upgrade_jobs_resolve_new_scylla_repo(perf_config):
+    """SCT-782: rolling_upgrade_test jobs must get scylla_version cleared and a fully
+    resolved (no leftover '{branch}') new_scylla_repo from build_job_parameters().
+    """
+    rolling_upgrade_jobs = [
+        job for job in perf_config.jobs if str(job.params.get("rolling_upgrade_test", "")).lower() == "true"
+    ]
+    assert len(rolling_upgrade_jobs) == 4, (
+        f"Expected 4 rolling_upgrade_test jobs in perf-regression.yaml, found {len(rolling_upgrade_jobs)}"
+    )
+
+    for job in rolling_upgrade_jobs:
+        params = build_job_parameters(job, perf_config.defaults, "master:latest", {})
+        assert params["scylla_version"] == "", f"Job {job.job_name} should have blank scylla_version"
+        new_scylla_repo = params.get("new_scylla_repo", "")
+        assert new_scylla_repo, f"Job {job.job_name} missing new_scylla_repo"
+        assert "{branch}" not in new_scylla_repo, (
+            f"Job {job.job_name} has unresolved {{branch}} placeholder in new_scylla_repo: {new_scylla_repo}"
+        )

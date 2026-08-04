@@ -118,6 +118,7 @@ jobs:
     params:
       region: "eu-west-1"
       rolling_upgrade_test: "true"
+      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   # === Latency with nemesis x86 (non-master only) ===
 
@@ -253,6 +254,7 @@ jobs:
       region: "eu-west-2"
       sub_tests: '["test_latency_mixed_with_upgrade"]'
       rolling_upgrade_test: "true"
+      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   # === Tablets latency with nemesis (non-master) ===
 
@@ -275,6 +277,7 @@ jobs:
       region: "us-east-2"
       sub_tests: '["test_latency_mixed_with_upgrade"]'
       rolling_upgrade_test: "true"
+      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets"
     backend: "aws"
@@ -285,6 +288,7 @@ jobs:
       region: "eu-west-2"
       sub_tests: '["test_latency_mixed_with_upgrade"]'
       rolling_upgrade_test: "true"
+      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   # === i8g tablets latency with nemesis (3-weekly) ===
 
