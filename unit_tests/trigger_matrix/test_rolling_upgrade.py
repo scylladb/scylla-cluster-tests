@@ -17,6 +17,7 @@ import pytest
 
 from sdcm.utils.trigger_matrix import (
     JobConfig,
+    _branch_directory_id,
     _extract_branch_from_version,
     build_job_parameters,
     filter_jobs,
@@ -40,6 +41,65 @@ ROLLING_UPGRADE_YAML = Path(__file__).parent.parent.parent / "configurations" / 
 )
 def test_extract_branch_from_version(version, expected):
     assert _extract_branch_from_version(version) == expected
+
+
+@pytest.mark.parametrize(
+    "branch,expected",
+    [
+        ("master", "master"),
+        ("2025.1", "branch-2025.1"),
+        ("2026.1", "branch-2026.1"),
+        ("branch-2025.4", "branch-2025.4"),
+        ("", ""),
+    ],
+)
+def test_branch_directory_id(branch, expected):
+    """SCT-782: {branch_id} must be branch-prefixed for non-master branches (matching
+    get_branched_repo()'s S3 directory segment), but unprefixed for master.
+    """
+    assert _branch_directory_id(branch) == expected
+
+
+def test_branch_id_template_resolved_in_params():
+    """SCT-782: {branch_id} resolves to the branch-prefixed directory segment while
+    {branch} stays bare, matching get_branched_repo()'s directory-vs-filename split.
+    """
+    job = JobConfig(
+        job_name="rolling-upgrade/test",
+        backend="aws",
+        params={
+            "rolling_upgrade_test": "true",
+            "new_scylla_repo": (
+                "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/"
+                "{branch_id}/deb/unified/latest/scylladb-{branch}/scylla.list"
+            ),
+        },
+    )
+    params = build_job_parameters(job, {}, "2025.1:latest", {})
+    assert params["new_scylla_repo"] == (
+        "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/"
+        "branch-2025.1/deb/unified/latest/scylladb-2025.1/scylla.list"
+    )
+
+
+def test_branch_id_template_for_master_stays_unprefixed():
+    """SCT-782: master must resolve {branch_id} to 'master', not 'branch-master'."""
+    job = JobConfig(
+        job_name="rolling-upgrade/test",
+        backend="aws",
+        params={
+            "rolling_upgrade_test": "true",
+            "new_scylla_repo": (
+                "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/"
+                "{branch_id}/deb/unified/latest/scylladb-{branch}/scylla.list"
+            ),
+        },
+    )
+    params = build_job_parameters(job, {}, "master:latest", {})
+    assert params["new_scylla_repo"] == (
+        "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/"
+        "master/deb/unified/latest/scylladb-master/scylla.list"
+    )
 
 
 def test_branch_template_resolved_in_params():
