@@ -409,11 +409,21 @@ def restore_annotations_data(monitoring_stack_dir, grafana_docker_port):
         )
         return False
 
+    if not isinstance(annotations, list):
+        LOGGER.warning(
+            "Annotations file %s does not contain a list of annotations. Skip loading annotations", annotations_file
+        )
+        return False
+
     try:
         annotations_url = f"http://localhost:{grafana_docker_port}/api/annotations"
-        session = create_retry_session()
+        # Retries are disabled here: the @retrying decorator on this function is the single
+        # retry policy for this non-idempotent POST loop, avoiding duplicate annotations.
+        session = create_retry_session(retries=0)
         for an in annotations:
-            res = session.post(annotations_url, data=json.dumps(an), headers={"Content-Type": "application/json"})
+            res = session.post(
+                annotations_url, data=json.dumps(an), headers={"Content-Type": "application/json"}, timeout=30
+            )
             if res.status_code != 200:
                 LOGGER.info("Error during uploading annotation %s. Error message %s", an, res.text)
                 raise ErrorUploadAnnotations(f"Error during uploading annotation {an}. Error message {res.text}")

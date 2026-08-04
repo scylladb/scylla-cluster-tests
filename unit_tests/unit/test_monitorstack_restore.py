@@ -34,10 +34,13 @@ def _annotations_dir(tmp_path):
         pytest.param(
             lambda addons_dir: (addons_dir / "annotations.json").write_text("{not valid json"), id="malformed"
         ),
+        pytest.param(lambda addons_dir: (addons_dir / "annotations.json").write_text("null"), id="null"),
+        pytest.param(lambda addons_dir: (addons_dir / "annotations.json").write_text("{}"), id="object"),
+        pytest.param(lambda addons_dir: (addons_dir / "annotations.json").write_text('"just a string"'), id="string"),
     ],
 )
 def test_restore_annotations_data_returns_false_without_raising(tmp_path, make_annotations_file):
-    """A missing, empty or malformed annotations.json must not raise, and must not upload anything."""
+    """A missing, empty, malformed, or non-list annotations.json must not raise, and must not upload anything."""
     addons_dir = _annotations_dir(tmp_path)
     make_annotations_file(addons_dir)
 
@@ -63,8 +66,10 @@ def test_restore_annotations_data_uploads_valid_annotations(tmp_path):
         result = restore_annotations_data(str(tmp_path), grafana_docker_port=1234)
 
     assert result is True
-    mock_create_retry_session.assert_called_once()
+    mock_create_retry_session.assert_called_once_with(retries=0)
     assert mock_session.post.call_count == 2
+    for call in mock_session.post.call_args_list:
+        assert call.kwargs["timeout"] == 30
 
 
 def test_restore_grafana_dashboards_and_annotations_succeeds_when_annotations_skipped():
