@@ -221,6 +221,9 @@ scylla_apt_keys:
 
 raid_level: 0
 
+nvme_rescan_repro: false
+nvme_rescan_repro_mode: 'unbind'
+
 bare_loaders: false
 
 aws_fallback_to_next_availability_zone: false

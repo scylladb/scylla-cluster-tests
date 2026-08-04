@@ -1,0 +1,18 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    params: params,
+
+    test_config: 'test-cases/artifacts/azure-image-nvme-rescan-root.yaml',
+    backend: 'azure',
+    provision_type: 'spot',
+    availability_zone: 'b', // since on release we have some families which are more available on that zone
+
+    timeout: [time: 160, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+    builds_to_keep: '30',
+    ip_ssh_connections: 'public'
+)

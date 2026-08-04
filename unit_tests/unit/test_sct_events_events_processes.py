@@ -19,6 +19,7 @@ import pytest
 from sdcm.sct_events.events_processes import (
     EventsProcessesRegistry,
     create_default_events_process_registry,
+    destroy_default_events_process_registry,
     get_default_events_process_registry,
 )
 
@@ -75,3 +76,39 @@ def test_create_default_registry():
     assert registry.log_dir == Path("some_path")
     assert registry.default is True
     assert get_default_events_process_registry() is registry
+
+
+@patch("sdcm.sct_events.events_processes._EVENTS_PROCESSES", None)
+def test_destroy_default_registry_allows_recreation():
+    """Simulates two tests sharing one pytest process: the second test's setup must not hit
+    "Try to create default EventsProcessRegistry second time" once the first test's teardown
+    has destroyed its registry."""
+    first = create_default_events_process_registry(log_dir="some_path")
+
+    destroy_default_events_process_registry(_registry=first)
+
+    second = create_default_events_process_registry(log_dir="some_path")
+    assert second is not first
+    assert get_default_events_process_registry() is second
+
+
+@patch("sdcm.sct_events.events_processes._EVENTS_PROCESSES", None)
+def test_destroy_default_registry_with_none_resets_unconditionally():
+    create_default_events_process_registry(log_dir="some_path")
+
+    destroy_default_events_process_registry(_registry=None)
+
+    with pytest.raises(RuntimeError):
+        get_default_events_process_registry()
+
+
+@patch("sdcm.sct_events.events_processes._EVENTS_PROCESSES", None)
+def test_destroy_default_registry_ignores_non_default_registry():
+    """A multi-tenant (non-default) registry being torn down must never clobber the default
+    one that a different, concurrently-running test still owns."""
+    default_registry = create_default_events_process_registry(log_dir="some_path")
+    other_registry = EventsProcessesRegistry("other_path")
+
+    destroy_default_events_process_registry(_registry=other_registry)
+
+    assert get_default_events_process_registry() is default_registry

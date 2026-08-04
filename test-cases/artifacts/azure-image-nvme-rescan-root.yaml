@@ -1,0 +1,22 @@
+cluster_backend: 'azure'
+azure_region_name: "eastus"
+use_preinstalled_scylla: true
+backtrace_decoding: false
+# NVMe-root SKU (root disk on its own NVMe controller + four separate local-disk NVMe
+# controllers) - required by nvme_rescan_repro_mode 'remove', which reproduces the
+# Standard_L8s_v4 production incident where only an unconditional PCI-bus rescan can
+# rediscover the local controllers. See docs/plans/testing/nvme-namespace-rescan-repro-test.md.
+azure_instance_type_db: 'Standard_L8s_v4'
+instance_provision: "spot"
+instance_provision_fallback_on_demand: false  # todo lukasz: add support for fallback on demand for azure
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 0
+nemesis_class_name: 'NoOpMonkey'
+test_duration: 60
+user_prefix: 'artifacts-azure-image-nvme-rescan-root'
+
+# since running from runner in AWS, we need the address to be publicly available
+intra_node_comm_public: true
+nvme_rescan_repro: true
+nvme_rescan_repro_mode: 'remove'

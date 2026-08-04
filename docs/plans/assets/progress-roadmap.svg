@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="840" height="968" viewBox="0 0 840 968">
-<rect width="840" height="968" fill="#0D1B2A" rx="8"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="996" viewBox="0 0 840 996">
+<rect width="840" height="996" fill="#0D1B2A" rx="8"/>
 <text x="420" y="60" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="bold" fill="#00BCD4">SCT Implementation Plans</text>
-<text x="420" y="84" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#8899AA">31 plans across 9 domains</text>
+<text x="420" y="84" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#8899AA">32 plans across 9 domains</text>
 <rect x="30" y="120" width="780" height="50" rx="6" fill="#1B2A4A" stroke="#2A3F5F" stroke-width="1"/>
 <circle cx="50" cy="148" r="5" fill="#607D8B"/>
-<text x="60" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">Draft: 11</text>
+<text x="60" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">Draft: 12</text>
 <circle cx="180" cy="148" r="5" fill="#FFC107"/>
 <text x="190" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">In Progress: 2</text>
 <circle cx="310" cy="148" r="5" fill="#2196F3"/>
@@ -16,14 +16,14 @@
 <circle cx="700" cy="148" r="5" fill="#9E9E9E"/>
 <text x="710" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">Pending PR: 13</text>
 <rect x="40" y="175" width="760" height="20" rx="10" fill="#1B2A4A" stroke="#2A3F5F" stroke-width="1"/>
-<rect x="40" y="175" width="122.58064516129032" height="20" rx="10" fill="#4CAF50"/>
-<text x="101.29032258064515" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">5</text>
-<rect x="162.5806451612903" y="175" width="49.03225806451613" height="20" rx="0" fill="#FFC107"/>
-<text x="187.09677419354836" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">2</text>
-<rect x="211.61290322580643" y="175" width="269.6774193548387" height="20" rx="0" fill="#607D8B"/>
-<text x="346.4516129032258" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">11</text>
-<rect x="481.2903225806451" y="175" width="318.7096774193549" height="20" rx="0" fill="#9E9E9E"/>
-<text x="640.6451612903226" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">13</text>
+<rect x="40" y="175" width="118.75" height="20" rx="10" fill="#4CAF50"/>
+<text x="99.375" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">5</text>
+<rect x="158.75" y="175" width="47.5" height="20" rx="0" fill="#FFC107"/>
+<text x="182.5" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">2</text>
+<rect x="206.25" y="175" width="285.0" height="20" rx="0" fill="#607D8B"/>
+<text x="348.75" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">12</text>
+<rect x="491.25" y="175" width="308.75" height="20" rx="0" fill="#9E9E9E"/>
+<text x="645.625" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">13</text>
 <rect x="30" y="220" width="380" height="32" rx="4" fill="#1B2A4A" stroke="#00BCD4" stroke-width="1"/>
 <text x="42" y="241" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" fill="#00BCD4">cluster</text>
 <text x="398" y="241" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#8899AA">4 plans</text>
@@ -137,12 +137,15 @@
 <text x="798" y="778" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#4CAF50">Complete</text>
 <rect x="430" y="804" width="380" height="32" rx="4" fill="#1B2A4A" stroke="#00BCD4" stroke-width="1"/>
 <text x="442" y="825" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" fill="#00BCD4">testing</text>
-<text x="798" y="825" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#8899AA">2 plans</text>
-<circle cx="444" cy="850" r="4" fill="#9E9E9E"/>
-<text x="456" y="854" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">MiniCloud Local Testing</text>
-<text x="798" y="854" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#9E9E9E">Pending PR</text>
-<circle cx="444" cy="878" r="4" fill="#4CAF50"/>
-<text x="456" y="882" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">Unit/Integration Test Separation</text>
-<text x="798" y="882" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#4CAF50">Complete</text>
-<text x="420" y="933" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#8899AA">Generated from docs/plans/progress.json</text>
+<text x="798" y="825" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#8899AA">3 plans</text>
+<circle cx="444" cy="850" r="4" fill="#607D8B"/>
+<text x="456" y="854" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">NVMe Namespace-Rescan Repro Test (AWS...</text>
+<text x="798" y="854" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#607D8B">Draft</text>
+<circle cx="444" cy="878" r="4" fill="#9E9E9E"/>
+<text x="456" y="882" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">MiniCloud Local Testing</text>
+<text x="798" y="882" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#9E9E9E">Pending PR</text>
+<circle cx="444" cy="906" r="4" fill="#4CAF50"/>
+<text x="456" y="910" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">Unit/Integration Test Separation</text>
+<text x="798" y="910" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#4CAF50">Complete</text>
+<text x="420" y="961" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#8899AA">Generated from docs/plans/progress.json</text>
 </svg>

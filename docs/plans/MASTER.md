@@ -97,6 +97,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 |------|--------|-----------|
 | MiniCloud Local Testing | `pending_pr` | [#14009](https://github.com/scylladb/scylla-cluster-tests/pull/14009) |
 | Unit/Integration Test Separation | `complete` | [unit-integration-test-separation.md](testing/unit-integration-test-separation.md), [#14172](https://github.com/scylladb/scylla-cluster-tests/pull/14172) |
+| NVMe Namespace-Rescan Repro Test (AWS, Azure, GCE, OCI) | `draft` | [nvme-namespace-rescan-repro-test.md](testing/nvme-namespace-rescan-repro-test.md) |
 
 ## Cross-Plan Dependencies
 

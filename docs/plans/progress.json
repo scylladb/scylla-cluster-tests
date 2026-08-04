@@ -2,6 +2,16 @@
   "generated": "2026-05-14",
   "plans": [
     {
+      "id": "nvme-namespace-rescan-repro-test",
+      "title": "NVMe Namespace-Rescan Repro Test (AWS, Azure, GCE, OCI)",
+      "file": "testing/nvme-namespace-rescan-repro-test.md",
+      "domain": "testing",
+      "status": "draft",
+      "created": "2026-07-09",
+      "phases_total": 6,
+      "phases_done": 0
+    },
+    {
       "id": "ai-skills-framework",
       "title": "AI Skills Framework",
       "file": "ai-tooling/ai-skills-framework.md",
