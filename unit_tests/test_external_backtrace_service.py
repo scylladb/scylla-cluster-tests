@@ -16,8 +16,12 @@
 External services: HTTPS to backtrace.scylladb.com
 """
 
-import pytest
+from http import HTTPStatus
 
+import pytest
+import yaml
+
+from sdcm.utils.session import create_retry_session
 from unit_tests.lib.dummy_remote import DummyRemote
 from unit_tests.lib.fake_cluster import DummyNode
 
@@ -25,8 +29,10 @@ pytestmark = [
     pytest.mark.integration,
 ]
 
-# Known-good build from Scylla 2026.1.0~dev (SCYLLADB-403)
-KNOWN_BUILD_ID = "527bc25417c81c8106b33400a4372616c7c90894"
+LATEST_MASTER_BUILD_URL = (
+    "https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/master/relocatable/latest/00-Build.txt"
+)
+# Addresses inside Scylla's text segment, so any build symbolizes them to something.
 SAMPLE_BACKTRACE_ADDRESSES = "0x4a3c9b7\n0x11ddd33\n0x11ddcec"
 
 
@@ -37,9 +43,33 @@ def node_fixture(tmp_path):
     return node
 
 
-def test_decode_via_external_service_returns_symbols(node):
+@pytest.fixture(name="known_build_id", scope="module")
+def known_build_id_fixture():
+    """Resolve a build the service can still symbolize.
+
+    A pinned build id rots: the service needs the build's unstripped package,
+    and unstable relocatables are garbage collected within a few months. Take
+    the current promoted master build instead - newer builds exist, but they
+    are not indexed by the service until they are promoted.
+    """
+    session = create_retry_session()
+
+    res = session.get(LATEST_MASTER_BUILD_URL, timeout=30)
+    res.raise_for_status()
+    build_id = yaml.safe_load(res.content)["scylla-x86_64-BuildID[sha1]"]
+
+    known = session.get("https://backtrace.scylladb.com/api/search/build_id", params={"build_id": build_id}, timeout=30)
+    # Only an unindexed build is a reason to skip. Anything else -- an outage, an
+    # auth error -- must fail loudly rather than quietly pass the suite.
+    if known.status_code == HTTPStatus.NOT_FOUND:
+        pytest.skip(f"backtrace.scylladb.com has not indexed the latest master build ({build_id}) yet")
+    known.raise_for_status()
+    return build_id
+
+
+def test_decode_via_external_service_returns_symbols(node, known_build_id):
     """Verify _decode_via_external_service returns decoded symbols for a known build."""
-    result = node._decode_via_external_service(KNOWN_BUILD_ID, SAMPLE_BACKTRACE_ADDRESSES)
+    result = node._decode_via_external_service(known_build_id, SAMPLE_BACKTRACE_ADDRESSES)
 
     assert result, "Decoded output should not be empty"
     assert "Backtrace" in result
