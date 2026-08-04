@@ -79,6 +79,20 @@ def ignore_repair_errors():
         yield
 
 
+@contextmanager
+def ignore_runtime_errors():
+    with ExitStack() as stack:
+        stack.enter_context(
+            EventsSeverityChangerFilter(
+                new_severity=Severity.NORMAL,
+                event_class=DatabaseLogEvent,
+                regex=r".*Failed to load SSTable.*due to std::runtime_error \(critical disk utilization\).*",
+                extra_time_to_expiration=60,
+            )
+        )
+        yield
+
+
 class LongevityOutOfSpaceTest(LongevityTest):
     def tearDown(self):
         # an extra failure check for disk usage
@@ -204,7 +218,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         """
         self.prepare()
 
-        with ignore_stress_errors():
+        with ignore_stress_errors(), ignore_runtime_errors():
             result = self.run_write_stress()
             if result:
                 TestFrameworkEvent(
@@ -226,7 +240,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         """
         self.prepare()
 
-        with ignore_stress_errors():
+        with ignore_stress_errors(), ignore_runtime_errors():
             stress_thread = Thread(target=self.run_write_stress)
             stress_thread.start()
 
@@ -278,7 +292,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         prepare_thread.join()
         self.log.info("Prepare write command finished.")
 
-        with ignore_stress_errors():
+        with ignore_stress_errors(), ignore_runtime_errors():
             stress_thread = Thread(target=self.run_write_stress)
             stress_thread.start()
             self.log.info("Started stress write thread.")
@@ -334,7 +348,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         self.prepare()
 
         # fill to 98%
-        with ignore_stress_errors():
+        with ignore_stress_errors(), ignore_runtime_errors():
             self.run_write_stress()
 
         # Check that the node that got to 98% does not have running compactions
