@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import ipaddress
 import json
 import logging
 import random
@@ -875,6 +876,25 @@ class AWSNode(cluster.BaseNode):
 
     def _get_ipv6_ip_address(self) -> Optional[str]:
         return self.scylla_network_configuration.interface_ipv6_address
+
+    def get_all_ip_addresses(self):
+        # BaseNode returns primary-NIC addresses only (see _refresh_instance_state: index [0]).
+        # In split-network configs rpc_address/broadcast_rpc_address may live on a secondary NIC and
+        # is what nodetool gossipinfo reports as RPC_ADDRESS, so nodes must be findable by it.
+        ips = super().get_all_ip_addresses()
+        for extra_address in (
+            self.scylla_network_configuration.rpc_address,
+            self.scylla_network_configuration.broadcast_rpc_address,
+        ):
+            if not extra_address or extra_address == ScyllaNetworkConfiguration.LISTEN_ALL:
+                continue
+            try:
+                ipaddress.ip_address(extra_address)
+            except ValueError:
+                continue  # DNS name (use_dns/use_dns_names), not an IP address
+            if extra_address not in ips:
+                ips.append(extra_address)
+        return ips
 
     def refresh_network_interfaces_info(self):
         # Clear cached network_configuration to ensure fresh data is fetched from the node.
