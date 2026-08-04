@@ -145,6 +145,8 @@ def configure_scylla_node(docker_scylla_args: dict, params):  # noqa: PLR0914
         func=db_alternator_up, step=1, text="Waiting for DB services to be up alternator)", timeout=120, throw_exc=True
     )
 
+    return scylla
+
 
 @pytest.fixture(name="docker_scylla", scope="function")
 def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # noqa: PLR0914
