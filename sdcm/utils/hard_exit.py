@@ -49,14 +49,16 @@ def exit_process(exit_code: int) -> None:
         sys.exit(exit_code)
         return
 
+    # Deliberately not calling logging.shutdown()/sys.stdout.flush()/sys.stderr.flush()
+    # here: those can themselves block (not just raise) on locks or I/O held by the
+    # very stuck thread that triggered this hard exit, which would defeat the whole
+    # point of this function. The LOGGER.error() call below goes through the same
+    # handlers and could in principle block too, but it's wrapped so it can never
+    # prevent os._exit() from running.
     try:
         LOGGER.error("Hard exit requested: %s", _hard_exit_reason)
-        sys.stdout.flush()
-        sys.stderr.flush()
-        logging.shutdown()
     except Exception:  # noqa: BLE001
-        # Diagnostics/flush are best-effort: os._exit() below must run no
-        # matter what, or we fall back into the untimed shutdown join this
-        # module exists to bypass.
+        # Best-effort: os._exit() below must run no matter what, or we fall back
+        # into the untimed shutdown join this module exists to bypass.
         pass
     os._exit(STUCK_THREAD_EXIT_CODE)

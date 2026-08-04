@@ -2196,7 +2196,7 @@ def unit_tests(test, n, junit_xml):
     args = ["-v", "-m", "not integration", f"-n{n}", *(f"unit_tests/{t}" for t in test)]
     if junit_xml:
         args.append(f"--junit-xml={junit_xml}")
-    sys.exit(pytest.main(args))
+    exit_process(pytest.main(args))
 
 
 @cli.command("integration-tests", help="Run all the SCT internal integration-tests")
@@ -2224,7 +2224,7 @@ def integration_tests(test, n, junit_xml):
     args = ["-v", "-m", "integration", "--dist", "loadgroup", f"-n{n}", *(f"unit_tests/{t}" for t in test)]
     if junit_xml:
         args.append(f"--junit-xml={junit_xml}")
-    sys.exit(pytest.main(args))
+    exit_process(pytest.main(args))
 
 
 @cli.command("pre-commit", help="Run pre-commit checkers")
@@ -2338,9 +2338,18 @@ def run_pytest(target, backend, config, logdir):
         print("argv is referring to the directory or file that contain tests, it can't be empty")
         sys.exit(1)
     return_code = pytest.main(["-s", "-v", f"--junit-xml={junit_file}", target])
-    test_config = get_test_config()
-    test_config.init_argus_client(params=SCTConfiguration())
-    test_config.argus_client().sct_submit_junit_report(file_name=junit_file.name, raw_content=junit_file.read_text())
+    try:
+        test_config = get_test_config()
+        test_config.init_argus_client(params=SCTConfiguration())
+        test_config.argus_client().sct_submit_junit_report(
+            file_name=junit_file.name, raw_content=junit_file.read_text()
+        )
+    except Exception:  # noqa: BLE001
+        # Reporting is best-effort: a failure here must not prevent exit_process()
+        # below from running, or an already-armed hard exit (e.g. from a stuck
+        # nemesis thread during the test run) would be stuck behind this exception
+        # and never acted on.
+        LOGGER.exception("Failed to submit JUnit report to Argus")
     exit_process(return_code)
 
 
