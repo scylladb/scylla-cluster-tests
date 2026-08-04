@@ -12,7 +12,7 @@ import boto3
 os.environ["MOTO_AMIS_PATH"] = str(Path(__file__).parents[1] / "test_data" / "mocked_ami_data.json")
 from moto.server import ThreadedMotoServer
 
-from sdcm.keystore import KeyStore
+from sdcm.keystore import KEYSTORE_S3_BUCKET, KEYSTORE_SM_PREFIX, KEYSTORE_SM_REGION, KeyStore
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
 from sdcm.utils.common import get_scylla_ami_versions
@@ -29,7 +29,7 @@ AWS_REGION = "us-east-1"
 @pytest.fixture(scope="session", autouse=True)
 def fixture_get_real_keys():
     KeyStore().sync(
-        keys=["scylla-qa-ec2", "scylla-test", "scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"],
+        keys=["scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"],
         local_path=Path("~/.ssh/").expanduser(),
         permissions=0o0600,
     )
@@ -55,17 +55,27 @@ def moto_server():
 
 @pytest.fixture(scope="module", autouse=True)
 def keystore_configure(moto_server):
-    s3 = boto3.resource(service_name="s3", region_name=AWS_REGION, endpoint_url=moto_server)
+    entries = {
+        "gcp-sct-project-1.json": b"{}",
+        "aws_images_role.json": (
+            b'{"role_arn": "arn:aws:iam::123456789012:role/role-name", "role_session_name": "role-session-name"}'
+        ),
+    }
+    for file in ("scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"):
+        entries[file] = (Path("~/.ssh").expanduser() / file).read_bytes()
 
-    bucket = s3.Bucket("scylla-qa-keystore")
+    s3 = boto3.resource(service_name="s3", region_name=AWS_REGION, endpoint_url=moto_server)
+    bucket = s3.Bucket(KEYSTORE_S3_BUCKET)
     bucket.create()
-    bucket.put_object(Key="gcp-sct-project-1.json", Body=b"{}")
-    bucket.put_object(
-        Key="aws_images_role.json",
-        Body=b'{"role_arn": "arn:aws:iam::123456789012:role/role-name", "role_session_name": "role-session-name"}',
-    )
-    for file in ("scylla-qa-ec2", "scylla-test", "scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"):
-        bucket.upload_file(Filename=str(Path("~/.ssh").expanduser() / file), Key=file)
+    for key, body in entries.items():
+        bucket.put_object(Key=key, Body=body)
+
+    # KeyStore reads from Secrets Manager by default, so mirror the same entries
+    # there under the `sct/` prefix - seeding only the bucket would leave every
+    # lookup failing with ResourceNotFoundException.
+    sm = boto3.client("secretsmanager", region_name=KEYSTORE_SM_REGION, endpoint_url=moto_server)
+    for key, body in entries.items():
+        sm.create_secret(Name=f"{KEYSTORE_SM_PREFIX}{key}", SecretBinary=body)
 
 
 @pytest.fixture(scope="module")
@@ -93,7 +103,7 @@ def test_02_keystore_sync(tmp_path) -> None:
     Validate the sync is working and setting right permissions.
     """
     k = KeyStore()
-    k.sync(keys=["scylla-qa-ec2", "scylla-test", "scylla_test_id_ed25519"], local_path=tmp_path, permissions=0o0600)
+    k.sync(keys=["scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"], local_path=tmp_path, permissions=0o0600)
 
     for file in tmp_path.iterdir():
         assert stat.S_IMODE(file.stat().st_mode) == 0o600
