@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, PropertyMock
 
 from sdcm.cluster import BaseCluster, BaseNode
 from sdcm.cluster_aws import AWSNode
-from sdcm.provision.network_configuration import ScyllaNetworkConfiguration
+from sdcm.provision.network_configuration import NetworkInterfaceNotFound, ScyllaNetworkConfiguration
 
 
 def _make_node(private_ip=None, public_ip=None, ipv6_ip=None):
@@ -150,3 +150,25 @@ def test_aws_node_get_all_ip_addresses_skips_dns_name():
     result = AWSNode.get_all_ip_addresses(node)
 
     assert result == ["10.0.0.1"]
+
+
+def test_aws_node_get_all_ip_addresses_tolerates_network_interface_not_found():
+    # scylla_network_config's "nic" index doesn't match an actual interface on this node
+    # (stale/misconfigured config). Accessing rpc_address/broadcast_rpc_address raises
+    # NetworkInterfaceNotFound; the base-class IPs must still be returned rather than
+    # propagating the exception and breaking the whole cluster's ip-to-node map.
+    node = MagicMock(spec=AWSNode)
+    type(node).private_ip_address = PropertyMock(return_value="10.0.0.1")
+    type(node).public_ip_address = PropertyMock(return_value="54.0.0.1")
+    type(node).ipv6_ip_address = PropertyMock(return_value=None)
+    node.scylla_network_configuration = MagicMock()
+    type(node.scylla_network_configuration).rpc_address = PropertyMock(
+        side_effect=NetworkInterfaceNotFound("nic 1 not found")
+    )
+    type(node.scylla_network_configuration).broadcast_rpc_address = PropertyMock(
+        side_effect=NetworkInterfaceNotFound("nic 1 not found")
+    )
+
+    result = AWSNode.get_all_ip_addresses(node)
+
+    assert set(result) == {"10.0.0.1", "54.0.0.1"}
