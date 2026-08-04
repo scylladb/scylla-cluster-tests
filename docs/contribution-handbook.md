@@ -1,6 +1,8 @@
-# Maintainers Handbook
+# Contribution Handbook
 
-High-level topics for the SCT maintainers handbook, organized by category.
+Guidelines for contributing to and maintaining SCT — governance, roles, code
+review, branches and backports, CI/CD, and security. The intended audience is
+everyone who contributes to the project, not only maintainers.
 Inspired by handbooks from the Linux kernel, Kubernetes, CPython,
 CNCF projects, and GitHub's Open Source Guides.
 
@@ -8,7 +10,7 @@ CNCF projects, and GitHub's Open Source Guides.
 
 ### 1.1 Roles and Responsibilities
 
-The project defines two roles with distinct responsibilities.
+The project defines the following roles with distinct responsibilities.
 
 **Contributor** — anyone who submits patches, reports bugs, reviews pull requests,
 or participates in discussions. Contributors are expected to:
@@ -38,19 +40,24 @@ health of their area. Maintainers are expected to:
   [`docs/sct-configuration.md`](sct-configuration.md) for the configuration system
 - Attend regular sync meetings or communicate async status updates
 
+**Project lead** — the maintainer responsible for the overall direction of the
+project. The project lead makes the final call when consensus cannot be reached
+(see sections 1.3 and 1.6) and drives succession planning decisions.
+
 Each role carries obligations, not just permissions. Having merge access without
 actively reviewing and triaging is not maintainership — it is dormant access that
 should be re-evaluated (see Succession Planning below).
 
-### 1.2 Contributor Ladder
+### 1.2 How to Become a Maintainer
 
-The contributor ladder defines the path from first-time contributor to maintainer.
-Each level has clear entry requirements so advancement is transparent and merit-based.
+Everyone who contributes — patches, bug reports, reviews, discussions — is a
+contributor. No special status or access is required, and there is no
+intermediate level between contributor and maintainer.
 
-| Level | Requirements | Privileges |
-|-------|-------------|------------|
-| **Contributor** | Submit at least 1 merged PR | Can open issues and PRs, review code, participate in discussions |
-| **Maintainer** | Sustained contributions, demonstrated review quality, broad knowledge of the area, nominated and approved by existing maintainers | Merge access, release authority, CI/CD configuration access, listed in CODEOWNERS |
+Maintainership is earned through sustained contributions, demonstrated review
+quality, and broad knowledge of the area, and is granted by nomination and
+approval of the existing maintainers. Maintainers gain merge access, release
+authority, CI/CD configuration access, and a CODEOWNERS listing.
 
 **Nomination process (suggested, to be agreed upon by the team):**
 1. An existing maintainer nominates the candidate with a summary of contributions
@@ -64,7 +71,10 @@ Each level has clear entry requirements so advancement is transparent and merit-
 Technical decisions follow a tiered approach based on impact:
 
 **Low impact** (bug fixes, small refactors, test additions) — a single reviewer
-approval is sufficient. The PR author or a maintainer can merge.
+approval is sufficient. Once approved, any maintainer can merge — including the
+author, if they are a maintainer. Authors do not merge their own PRs before
+someone else has reviewed them, except in emergencies (e.g., CI is broken for
+everyone).
 
 **Medium impact** (new features, API changes, configuration additions, new test
 categories) — requires review from at least two people, including one maintainer
@@ -94,7 +104,6 @@ authority over specific areas of the codebase. The current ownership map is at
 **How ownership is assigned:**
 - CODEOWNERS entries map file patterns to GitHub teams or individuals
 - Ownership follows expertise — the people who wrote and maintain the code own it
-- Shared ownership (2-3 people per area) prevents single points of failure
 
 **What ownership means:**
 - Owners are automatically added as reviewers on PRs touching their files
@@ -102,12 +111,18 @@ authority over specific areas of the codebase. The current ownership map is at
 - Owners are responsible for triaging issues in their area
 - Owners decide the technical direction for their area, within the project's overall architecture
 
-**Example areas and their scope:**
-- `sdcm/cluster_aws.py`, `sdcm/provision/aws/` — AWS backend
-- `sdcm/nemesis.py`, `sdcm/nemesis_registry.py` — Nemesis framework
-- `sdcm/sct_config.py`, `defaults/` — Configuration system
-- `jenkins-pipelines/` — CI/CD pipelines — see [`docs/sct-pipelines.md`](sct-pipelines.md)
-- `sdcm/cluster_k8s/` — Kubernetes backends — see [`docs/kubernetes_backend.md`](kubernetes_backend.md)
+**Example entries** (see [`.github/CODEOWNERS`](../.github/CODEOWNERS) for the
+authoritative list — patterns can be as broad as a directory or as narrow as a
+single file):
+- `/sdcm/cluster_aws.py`, `/sdcm/provision/aws` — AWS backend
+- `/defaults` — default configuration values
+- `/sdcm/nemesis/registry` — nemesis orchestration
+
+Not every area has a CODEOWNERS entry. Some responsibilities are held by
+convention rather than by file pattern — Jenkins CI for PRs
+([`Jenkinsfile`](../Jenkinsfile), see section 4.1) is one example: changes there
+affect everyone, so they warrant a reviewer familiar with the pipeline even
+though no owner is auto-requested.
 
 **Updating ownership:** When a contributor consistently reviews and maintains an area
 but is not listed as owner, a maintainer should propose adding them. When an owner
@@ -119,12 +134,9 @@ Maintainers step down, change roles, or become inactive. The project must handle
 these transitions gracefully to avoid stalled reviews, abandoned areas, and bus-factor
 risks.
 
-**Emeritus status:**
-- Merge access and CODEOWNERS entries are removed
-- The person is acknowledged in a contributors/emeritus list
-- Emeritus maintainers can return to active status by resuming contributions and going through an expedited nomination
-
-<!-- TODO: create an emeritus list or section in the repo -->
+**Stepping down:**
+- When a maintainer steps down or becomes inactive, merge access and CODEOWNERS
+  entries are removed
 
 **Planned transitions:**
 - Knowledge transfer includes: undocumented context, ongoing work, known technical debt
@@ -141,6 +153,11 @@ Disagreements are normal and healthy. The project uses a structured escalation p
 to resolve them without damaging relationships.
 
 <!-- TODO: document a Code of Conduct or link to one -->
+
+**Red flag / coffee break** — at any point, any participant can raise a "red flag"
+to signal that a discussion has become heated or is going in circles. The
+discussion pauses (a "coffee break") and resumes later, preferably in a
+synchronous conversation, once everyone has had time to step back.
 
 **Level 1 — Discussion on the PR or issue.** Most disagreements resolve here through
 back-and-forth discussion. Both parties should:
@@ -175,9 +192,10 @@ Every pull request must be reviewed before merging. Reviewers should check for:
 - **Test coverage** — are there unit tests for new logic? Integration tests where needed?
   See the [`writing-unit-tests`](../skills/writing-unit-tests/SKILL.md) and
   [`writing-integration-tests`](../skills/writing-integration-tests/SKILL.md) skills
-  for testing guidance
-- **Style and conventions** — imports at the top (no inline imports), pytest style (not
-  unittest), Google docstrings. See [`AGENTS.md`](../AGENTS.md) for the full style guide
+  for testing guidance. For changes that automated CI cannot cover (e.g., Jenkins
+  pipeline or provisioning changes), manually triggering the affected pipelines may
+  be necessary before merging
+- **Style and conventions** — see [`AGENTS.md`](../AGENTS.md) for the full style guide
 - **Security** — no credential leaks, no injection vulnerabilities, no secrets in config
   files. See section 7 (Security) for details
 - **Performance** — no unnecessary loops over large datasets, no blocking calls in async
@@ -193,6 +211,10 @@ Stale PRs slow everyone down. To keep the review pipeline healthy:
 - Prioritize reviewing others' PRs over opening new ones
 - If you cannot review a PR assigned to you, reassign it or let the author know
 - Authors should keep PRs small and focused to make reviews easier and faster
+- To keep track of PRs waiting for you, use a GitHub search filter such as
+  [`is:open is:pr review-requested:@me`](https://github.com/scylladb/scylla-cluster-tests/pulls?q=is%3Aopen+is%3Apr+review-requested%3A%40me)
+  — it lists PRs where your review was requested and you have not reviewed yet
+  (the filter clears once you submit a review)
 
 <!-- TODO: agree on expected review turnaround (e.g., first response within N business days) -->
 
@@ -201,7 +223,10 @@ Stale PRs slow everyone down. To keep the review pipeline healthy:
 A PR is ready to merge when all of the following are true:
 
 - At least one approval from a reviewer (two for medium/high impact — see section 1.3)
-- CI checks pass (pre-commit, unit tests, any triggered integration tests)
+- CI checks pass (pre-commit, unit tests, any triggered integration tests). A PR
+  with a failing check may still be merged if the failure was analyzed and is
+  clearly unrelated to the change (e.g., a known flaky test or an issue already
+  broken on `master`)
 - No unresolved review comments
 - PR description clearly explains what changed and why
 - Relevant labels are applied
@@ -219,8 +244,9 @@ large:
 
 - Ask the author to split it into smaller, self-contained PRs
 - Each PR should be independently reviewable and testable
-- A good split follows logical boundaries: refactoring in one PR, new feature in
-  another, tests in a third if they are substantial
+- A good split follows logical boundaries: preparatory refactoring in one PR, the
+  new feature in another. Keep a behavior change and the tests that cover it in the
+  same PR — only broader test expansion beyond the change itself is worth splitting out
 - If splitting is not practical (e.g., a large migration), review commit-by-commit —
   each commit should represent a coherent step
 
@@ -290,7 +316,7 @@ SCT maintains several branch types, each tied to a ScyllaDB release line:
 | Branch pattern | Purpose | Example |
 |---------------|---------|---------|
 | `master` | Main development branch, all new work lands here first | `master` |
-| `branch-X.Y` | Tracks a ScyllaDB OSS release line | `branch-2024.2`, `branch-2025.1` |
+| `branch-X.Y` | Tracks a ScyllaDB release line | `branch-2024.2`, `branch-2025.1` |
 | `branch-perf-vX` | Performance test baselines for specific release series | `branch-perf-v14` |
 | `manager-X.Y` | Scylla Manager release line | `manager-3.4` |
 
@@ -299,31 +325,47 @@ is branched, a corresponding SCT branch is created to track it.
 
 ### 3.2 Backport Labels
 
-Every PR targeting `master` **must** carry a backport label. This is enforced by
-the [`pr-require-backport-label`](../.github/workflows/pr-require-backport-label.yaml)
-GitHub Action. The required label must match one of:
+Every PR targeting `master` **must** carry a backport label, checked by the
+[`pr-require-backport-label`](../.github/workflows/pr-require-backport-label.yaml)
+GitHub Action. The check skips draft PRs and runs on open, label change, and push,
+so a PR that was opened as a draft and later marked ready without any further push
+or label change can slip through — apply the label yourself rather than relying on
+the check to catch it. The label must match one of:
 
-| Label | Meaning |
-|-------|---------|
-| `backport/none` | This change does not need backporting |
-| `backport/X.Y` | Backport to `branch-X.Y` (e.g., `backport/2025.1`) |
-| `backport/perf-vX` | Backport to `branch-perf-vX` |
-| `backport/manager-X.Y` | Backport to `manager-X.Y` |
+| Label | Meaning | Target branch |
+|-------|---------|--------------|
+| `backport/none` | This change does not need backporting | n/a |
+| `backport/X.Y` | Backport to a release line (e.g., `backport/2026.1`) | `branch-X.Y` |
+| `backport/perf-vX` | Backport to a performance baseline (e.g., `backport/perf-v17`) | `branch-perf-vX` |
+| `backport/manager-X.Y` | Backport to the Manager release line (e.g., `backport/manager-3.11`) | `manager-X.Y` |
 
 Multiple backport labels can be applied to a single PR when a fix needs to land
-on several branches.
+on several branches. By default the backports are created in parallel, one PR per
+target branch; adding the `cascade_backport` label switches to chained
+(highest-to-lowest) backports instead.
 
 ### 3.3 Automated Backport Workflow
 
-When a PR with a `backport/X.Y` label is merged to `master`, the
-[`add-label-when-promoted`](../.github/workflows/add-label-when-promoted.yaml)
-workflow triggers the automated backport process
-([`.github/scripts/auto-backport.py`](../.github/scripts/auto-backport.py)):
+When a PR carrying a `backport/*` label is merged, the
+[`call_backport_with_jira`](../.github/workflows/call_backport_with_jira.yaml)
+workflow creates the backport PRs. It is a thin caller for the shared reusable
+workflow in
+[`scylladb/github-automation`](https://github.com/scylladb/github-automation),
+which handles all three target-branch families above:
 
-1. The script cherry-picks the PR's commits to the target branch
-2. A backport PR is created automatically (authored by `scylladbbot`)
+1. The shared workflow cherry-picks the PR's commits to each target branch
+2. A backport PR is created automatically
 3. If cherry-pick conflicts occur, the backport PR is created as a **draft** with
    a `conflicts` label
+4. A Jira backport sub-task is created under the issue referenced in the PR body
+   (`Fixes: SCT-123`) and assigned to the original author; PRs with no Jira
+   reference still get their backports
+
+> **Note:** the previous in-repo automation
+> ([`add-label-when-promoted`](../.github/workflows/add-label-when-promoted.yaml)
+> plus [`auto-backport.py`](../.github/scripts/auto-backport.py)) is still present
+> and still triggers on overlapping events, so backports can currently be created
+> twice. Removing or disabling it is tracked separately from this handbook.
 
 ### 3.4 Resolving Backport Conflicts
 
@@ -335,8 +377,11 @@ When an automated backport PR has conflicts:
 4. Mark the PR as ready for review
 
 The [`fix-backport-conflicts`](../skills/fix-backport-conflicts/SKILL.md) skill
-provides the full step-by-step workflow. AI agents (Claude, Copilot) can also
-resolve backport conflicts when tagged on the PR — see section 4.3.
+provides the full step-by-step workflow, and AI agents can run it: Claude by
+mentioning `@claude` on the PR (see section 4.3), or Copilot from the reusable
+prompt in Agent mode inside VS Code. See
+[`docs/contrib.md`](contrib.md#using-with-github-copilot-vs-code) for the Copilot
+invocation.
 
 ### 3.5 What Gets Backported
 
@@ -344,7 +389,8 @@ resolve backport conflicts when tagged on the PR — see section 4.3.
 - **Test stability improvements** — backport when the flaky test affects the branch
 - **New features** — generally do not backport unless the feature is needed for
   testing a specific release
-- **Refactoring** — do not backport unless it is a prerequisite for a bug fix
+- **Refactoring** — do not backport unless it is a prerequisite for a bug fix,
+  or skipping it would make future backports to that branch significantly harder
 
 <!-- TODO: formalize the backport decision criteria (who decides, escalation for disagreements) -->
 
@@ -380,11 +426,13 @@ with the PR workflow and reduced Jenkins dependency.
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| [`pr-require-backport-label`](../.github/workflows/pr-require-backport-label.yaml) | PR open/label/sync on `master` | Enforces that every PR has a `backport/*` label |
-| [`add-label-when-promoted`](../.github/workflows/add-label-when-promoted.yaml) | Push to `master` or `branch-*` | Runs auto-backport when commits are promoted |
+| [`pr-require-backport-label`](../.github/workflows/pr-require-backport-label.yaml) | Non-draft PR open/label/sync on `master` | Checks that the PR has a `backport/*` label |
+| [`call_backport_with_jira`](../.github/workflows/call_backport_with_jira.yaml) | Push to a stable branch; `backport/*` label added | Creates backport PRs and Jira sub-tasks via the shared reusable workflow |
+| [`add-label-when-promoted`](../.github/workflows/add-label-when-promoted.yaml) | Push to `master`/`branch-*`/`manager-*`; `backport/*` label added | Legacy in-repo auto-backport — superseded by `call_backport_with_jira` (see section 3.3) |
 | [`auto_assign`](../.github/workflows/auto_assign.yaml) | PR/issue opened | Auto-assigns the author to their PR/issue |
 | [`claude`](../.github/workflows/claude.yml) | `@claude` mention in comments/issues | Triggers Claude AI agent for code tasks |
-| [`claude-code-review`](../.github/workflows/claude-code-review.yml) | PR open/sync/ready | Automated AI code review on new PRs |
+| [`ai-assisted-label`](../.github/workflows/ai-assisted-label.yaml) | PR open/sync | Labels PRs that contain AI-assistance markers as `ai-assisted` |
+| [`skill-review`](../.github/workflows/skill-review.yml) | PR touching `skills/**` | Reviews skill definitions for quality |
 | [`call_jira_sync`](../.github/workflows/call_jira_sync.yml) | PR events | Syncs PR status to Jira tickets |
 | [`build-docker-image`](../.github/workflows/build-docker-image.yaml) | `New Hydra Version` label | Builds and pushes a new Hydra Docker image |
 | [`test-hydra-macos`](../.github/workflows/test-hydra-macos.yaml) | `test-macos` label | Tests Hydra on macOS runners |
@@ -394,13 +442,15 @@ with the PR workflow and reduced Jenkins dependency.
 
 ### 4.3 AI Agents in CI
 
-SCT integrates AI agents (Claude) into the CI workflow for code review and
-task execution. See also section 2.1 for review expectations that apply to
-both human and AI reviewers.
+SCT integrates AI agents into the CI workflow for code review and task execution.
+See also section 2.1 for review expectations that apply to both human and AI
+reviewers.
 
-**Automated code review** — the [`claude-code-review`](../.github/workflows/claude-code-review.yml)
-workflow runs on every PR from the main repository (not forks). It provides an
-AI review that supplements, but does not replace, human review.
+**Automated code review** — PRs are reviewed automatically by CodeRabbit and
+GitHub Copilot. CodeRabbit is configured in [`.coderabbit.yaml`](../.coderabbit.yaml),
+which skips backport PRs and anything labeled `skip-review`. These reviews
+supplement, but do not replace, human review: treat bot findings as suggestions to
+verify against the code, not as rulings.
 
 **On-demand task execution** — mentioning `@claude` in a PR comment or issue
 triggers the [`claude`](../.github/workflows/claude.yml) workflow. This is
@@ -443,7 +493,7 @@ See [`docs/sct-pipelines.md`](sct-pipelines.md) for the full overview.
 
 | Directory | Purpose |
 |-----------|---------|
-| `jenkins-pipelines/oss/` | ScyllaDB OSS tests (longevity, upgrade, artifacts, nemesis, etc.) |
+| `jenkins-pipelines/oss/` | General ScyllaDB tests (longevity, upgrade, artifacts, nemesis, etc.) — the `oss` name is historical |
 | `jenkins-pipelines/operator/` | Kubernetes operator functional tests |
 | `jenkins-pipelines/performance/` | Performance regression tests |
 | `jenkins-pipelines/manager/` | Scylla Manager tests |
@@ -472,7 +522,6 @@ SCT runner creation, test execution, log collection, and result reporting.
 | Code of conduct | Expected behavior, enforcement, reporting mechanisms | CNCF Code of Conduct |
 | Onboarding new contributors | First steps, mentoring, pairing, documentation pointers | CNCF mentorship programs |
 | Public roadmap | How the project roadmap is communicated and updated | CNCF project planning |
-| External communications | Blog posts, conference talks, social media guidelines | CNCF marketing support for maintainers |
 
 ## 7. Security
 
@@ -515,7 +564,8 @@ leaks or injection vulnerabilities.
 Dependencies are managed via `pyproject.toml` and `uv.lock`. Security considerations:
 
 - Review dependency updates for supply chain risks (new or changed transitive dependencies)
-- Pin versions in `uv.lock` to ensure reproducible builds
+- Pin versions in `pyproject.toml`; the resolved versions captured in `uv.lock`
+  ensure reproducible builds
 - Check for known vulnerabilities before merging dependency updates
 
 <!-- TODO: set up automated vulnerability scanning (e.g., Dependabot, Snyk, or Renovate) -->
@@ -524,10 +574,30 @@ Dependencies are managed via `pyproject.toml` and `uv.lock`. Security considerat
 
 Several workflows use elevated permissions or secrets. Key security patterns:
 
-- **Org membership checks** — the Claude workflow verifies the commenter is an org
-  member before executing. The Docker image build workflow checks team affiliation
-- **`pull_request_target` caution** — workflows using this event have access to secrets
-  even for fork PRs. Each such workflow includes a membership gate
+- **Org membership checks** — the [`claude`](../.github/workflows/claude.yml)
+  workflow verifies the commenter is an org member (or has write permission) before
+  executing. The [`build-docker-image`](../.github/workflows/build-docker-image.yaml)
+  workflow checks `dev` team affiliation
+- **`pull_request_target` caution** — workflows using this event run in the context of
+  the base repository and can access secrets even for fork PRs. There is no single
+  control that makes them safe, so each one has to be assessed on its own:
+  - [`build-docker-image`](../.github/workflows/build-docker-image.yaml) checks out and
+    builds the PR head, so it gates on `dev` team affiliation — this is the combination
+    that most needs a membership gate
+  - [`test-hydra-macos`](../.github/workflows/test-hydra-macos.yaml) holds AWS secrets
+    but checks out the base branch (the `pull_request_target` default) and only runs
+    behind a label, which requires write access to apply
+  - [`call_jira_sync`](../.github/workflows/call_jira_sync.yml) never executes fork
+    code, but it does pass PR-supplied text (the Jira key in the PR body) into
+    authenticated Jira mutations — the exposure here is untrusted *input* reaching a
+    credentialed API, not code execution, so the Jira account's permissions are what
+    bound the damage
+  - [`auto_assign`](../.github/workflows/auto_assign.yaml) only calls the GitHub API
+    with `issues`/`pull-requests` write and uses no other secrets
+
+  When adding or changing a `pull_request_target` workflow, state which of these applies:
+  keep `permissions` minimal, gate on membership if it must check out the PR head, and
+  validate any PR-supplied value before passing it to an authenticated API
 - **Token scoping** — `AUTO_BACKPORT_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, and
   `ISSUE_ASSIGNMENT_TO_PROJECT_TOKEN` are scoped to specific operations
 
@@ -543,19 +613,6 @@ Several workflows use elevated permissions or secrets. Key security patterns:
 | Architecture decision records | How and when to document significant technical decisions | [`docs/plans/`](plans/) for implementation plans |
 | Runbooks and playbooks | Operational guides for common maintenance tasks | <!-- TODO: create runbooks directory --> |
 | AI agent configuration | Maintaining `CLAUDE.md`, `AGENTS.md`, and skills that guide AI behavior | [`skills/designing-skills/SKILL.md`](../skills/designing-skills/SKILL.md) |
-
-## 9. Infrastructure and Operations (provisional)
-
-> **Note:** This section may belong in a separate operational runbook rather than
-> the maintainers handbook. Keeping it here for now until we decide on the right home.
-
-| Topic | Description | Inspiration |
-|-------|-------------|-------------|
-| Cloud backend management | AWS, GCE, Azure account setup, quotas, cost control | SCT backend documentation |
-| Monitoring and alerting | Prometheus, Grafana, Argus — what is monitored and how | SCT monitoring stack |
-| Log collection and analysis | How logs are gathered, stored, and searched | SCT logcollector.py |
-| Incident response | What to do when CI breaks, tests fail at scale, infrastructure is down | Kubernetes postmortem process |
-| Resource cleanup | Automated and manual cleanup of leaked cloud resources | SCT provision cleanup |
 
 ## Sources and References
 
