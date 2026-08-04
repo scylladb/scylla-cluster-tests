@@ -7,6 +7,10 @@ from unit_tests.test_cluster import DummyDbCluster
 
 log = logging.getLogger(__name__)
 
+pytestmark = [
+    pytest.mark.xdist_group("docker_ssl"),
+]
+
 
 @pytest.mark.integration
 @pytest.mark.parametrize(

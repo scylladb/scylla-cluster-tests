@@ -31,6 +31,7 @@ pytestmark = [
 
 
 @pytest.mark.integration
+@pytest.mark.xdist_group("docker_ssl")
 def test_01_latte_schema(request, docker_scylla, params):
     params["enable_argus"] = False
     loader_set = LocalLoaderSetDummy(params=params)
@@ -50,6 +51,7 @@ def test_01_latte_schema(request, docker_scylla, params):
 
 
 @pytest.mark.integration
+@pytest.mark.xdist_group("docker_ssl")
 def test_02_latte_load(request, docker_scylla, params):
     params["enable_argus"] = False
     loader_set = LocalLoaderSetDummy(params=params)
@@ -69,6 +71,7 @@ def test_02_latte_load(request, docker_scylla, params):
 
 
 @pytest.mark.integration
+@pytest.mark.xdist_group("docker_ssl")
 def test_03_latte_run(request, docker_scylla, prom_address, params):
     params["enable_argus"] = False
     loader_set = LocalLoaderSetDummy(params=params)
@@ -107,6 +110,7 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
 
 
 @pytest.mark.integration
+@pytest.mark.xdist_group("docker_ssl")
 @pytest.mark.docker_scylla_args(ssl=True)
 def test_04_latte_run_client_encrypt(request, docker_scylla, params):
     params["client_encrypt"] = True

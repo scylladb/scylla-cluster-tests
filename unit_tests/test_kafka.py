@@ -23,6 +23,7 @@ from unit_tests.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
     pytest.mark.integration,
+    pytest.mark.xdist_group("docker_heavy"),
 ]
 
 LOGGER = logging.getLogger(__name__)
