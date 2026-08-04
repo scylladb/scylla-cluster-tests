@@ -74,8 +74,7 @@ def test_rolling_upgrade_jobs_resolve_new_scylla_repo(perf_config):
     """SCT-782: rolling_upgrade_test jobs must get scylla_version cleared and a fully
     resolved new_scylla_repo from build_job_parameters(), with the directory segment
     branch-prefixed (e.g. 'branch-2025.1' / 'master') and the filename segment bare
-    (e.g. 'scylladb-2025.1' / 'scylladb-master') — see get_branched_repo() in
-    sdcm/utils/version_utils.py for the S3 layout this mirrors.
+    (e.g. 'scylladb-2025.1' / 'scylladb-master').
     """
     rolling_upgrade_jobs = [
         job for job in perf_config.jobs if str(job.params.get("rolling_upgrade_test", "")).lower() == "true"
