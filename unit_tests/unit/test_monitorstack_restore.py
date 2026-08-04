@@ -45,6 +45,7 @@ def test_restore_annotations_data_returns_false_without_raising(tmp_path, make_a
         result = restore_annotations_data(str(tmp_path), grafana_docker_port=1234)
 
     assert result is False
+    mock_create_retry_session.assert_not_called()
     mock_create_retry_session.return_value.post.assert_not_called()
 
 
