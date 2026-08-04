@@ -526,7 +526,16 @@ def list_logs_by_test_id(test_id):
 
 
 def all_aws_regions(cached=False):
-    if cached:
+    # minicloud implements no DescribeRegions - it fails closed with UnsupportedOperation -
+    # and the emulated regions are exactly the ones prepare_regions() created from this
+    # list, so the static answer is also the correct one. Without this, the log collector's
+    # get_running_cluster_sets() aborts on any failing minicloud run: the logs are lost and
+    # the runner is then kept for 48h because logs_collected stayed false
+    # (minicloud-artifact-ami-test #20). Imported lazily: the minicloud package pulls in
+    # sct_config, which imports this module.
+    from sdcm.utils.minicloud.endpoint import is_minicloud_active  # noqa: PLC0415
+
+    if cached or is_minicloud_active():
         # Note: this is a hardcoded list of AWS regions, it may not have all of aws regions.
         # this list is used for setup of vpc peering, please don't remove or reshuffle it,
         # only add new regions at the bottom of it
