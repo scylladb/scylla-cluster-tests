@@ -35,7 +35,10 @@ def can_get_to_aws_account():
     """
     try:
         session = boto3.Session()
-        sts = session.client("sts")
+        # Pin real STS explicitly: under minicloud the global AWS_ENDPOINT_URL override
+        # would otherwise redirect this credential probe to the emulator, which cannot
+        # validate real credentials.
+        sts = session.client("sts", region_name="us-east-1", endpoint_url="https://sts.amazonaws.com")
         response = sts.get_caller_identity()
         assert response["Account"] == account_id
         LOGGER.info("logged in as %s", response["Arn"])

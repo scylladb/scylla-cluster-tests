@@ -4522,7 +4522,7 @@ class BaseCluster:
         return [node.private_ip_address for node in self.nodes]
 
     def get_node_public_ips(self):
-        return [node.public_ip_address for node in self.nodes]
+        return [node.public_ip_address for node in self.nodes if node.public_ip_address]
 
     def get_node_cql_ips(self, nodes: list[BaseNode] | None = None):
         nodes = nodes if nodes else self.nodes

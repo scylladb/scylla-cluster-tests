@@ -716,7 +716,7 @@ class AwsRegion:
         try:
             key_pairs = self.client.describe_key_pairs(KeyNames=[self.SCT_KEY_PAIR_NAME])
         except botocore.exceptions.ClientError as ex:
-            if "InvalidKeyPair.NotFound" in str(ex):
+            if "InvalidKeyPair.NotFound" in str(ex) or " does not exist" in str(ex):
                 return None
             raise
         existing = key_pairs.get("KeyPairs", [])

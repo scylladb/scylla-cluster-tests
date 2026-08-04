@@ -1,0 +1,42 @@
+# Overlay for any test run against minicloud instead of a real cloud. Layer it after the
+# test-case yaml, e.g.
+#
+#   test_config: '''["test-cases/artifacts/ami.yaml", "configurations/minicloud.yaml"]'''
+#
+# This overlay is MANDATORY for minicloud runs — it is the single delivery mechanism for
+# these parameters (env exports run after SCTConfiguration is built and never reach
+# params). MinicloudManager.preflight_check() fails fast when it is missing. It is
+# configuration, so a single run can override any of it, and none of it needs a pipeline
+# change once minicloud grows the missing feature.
+
+# minicloud implements no KMS endpoint, and its QEMU guests hold no cloud IAM credentials to
+# reach a real one. Both lines go away once minicloud implements KMS.
+enterprise_disable_kms: true
+enable_kms_key_rotation: false
+
+# There is no spot market to be interrupted by: every "instance" is a local QEMU guest.
+instance_provision: 'on_demand'
+
+# Guests live on minicloud's userspace switch and are reachable only from the host running
+# them, which is where SCT itself runs.
+ip_ssh_connections: 'private'
+
+# iotune against emulated storage produces meaningless numbers and wastes minutes per node.
+force_run_iotune: false
+
+# The emulator has no capacity limits, so a capacity fallback can only mask a real bug —
+# and minicloud rejects DescribeVpcPeeringConnections (region ranking) outright. Keeps the
+# aws_config.yaml defaults (both true for aws) from re-enabling fallback under minicloud.
+fallback_to_next_availability_zone: false
+fallback_to_next_region: false
+
+# Kernel-panic checkers poll the (emulated) console endpoint and spam connection errors
+# once the container stops before the checker threads do — off from the start instead.
+enable_kernel_panic_checker: false
+
+# Lightweight guests get 1 vCPU / minicloud_lightweight_memory RAM regardless of the
+# requested instance type; developer_mode keeps Scylla booting inside that budget.
+# (anyconfig MS_DICTS merge: this key merges with the test_default.yaml dict, it does
+# not replace it.)
+append_scylla_yaml:
+  developer_mode: true
