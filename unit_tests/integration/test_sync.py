@@ -23,7 +23,7 @@ def test_multiple_sync_on_lots_of_files():
     if not is_using_aws_mock():
         key_store = KeyStore()
         key_store.sync(
-            keys=["scylla-qa-ec2", "scylla-test", "scylla_test_id_ed25519"] * 20,
+            keys=["scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"] * 30,
             local_path=Path("~/.ssh/").expanduser(),
             permissions=0o0600,
         )
