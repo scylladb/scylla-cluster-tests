@@ -72,7 +72,10 @@ def test_gce_custom_monthly_rc1_included(perf_config):
 
 def test_rolling_upgrade_jobs_resolve_new_scylla_repo(perf_config):
     """SCT-782: rolling_upgrade_test jobs must get scylla_version cleared and a fully
-    resolved (no leftover '{branch}') new_scylla_repo from build_job_parameters().
+    resolved new_scylla_repo from build_job_parameters(), with the directory segment
+    branch-prefixed (e.g. 'branch-2025.1' / 'master') and the filename segment bare
+    (e.g. 'scylladb-2025.1' / 'scylladb-master') — see get_branched_repo() in
+    sdcm/utils/version_utils.py for the S3 layout this mirrors.
     """
     rolling_upgrade_jobs = [
         job for job in perf_config.jobs if str(job.params.get("rolling_upgrade_test", "")).lower() == "true"
@@ -82,10 +85,32 @@ def test_rolling_upgrade_jobs_resolve_new_scylla_repo(perf_config):
     )
 
     for job in rolling_upgrade_jobs:
-        params = build_job_parameters(job, perf_config.defaults, "master:latest", {})
+        params = build_job_parameters(job, perf_config.defaults, "2025.1:latest", {})
         assert params["scylla_version"] == "", f"Job {job.job_name} should have blank scylla_version"
         new_scylla_repo = params.get("new_scylla_repo", "")
         assert new_scylla_repo, f"Job {job.job_name} missing new_scylla_repo"
         assert "{branch}" not in new_scylla_repo, (
             f"Job {job.job_name} has unresolved {{branch}} placeholder in new_scylla_repo: {new_scylla_repo}"
+        )
+        assert "{branch_id}" not in new_scylla_repo, (
+            f"Job {job.job_name} has unresolved {{branch_id}} placeholder in new_scylla_repo: {new_scylla_repo}"
+        )
+        assert "/branch-2025.1/deb/" in new_scylla_repo, (
+            f"Job {job.job_name} new_scylla_repo directory segment must be branch-prefixed "
+            f"('branch-2025.1'): {new_scylla_repo}"
+        )
+        assert "/scylladb-2025.1/" in new_scylla_repo, (
+            f"Job {job.job_name} new_scylla_repo filename segment must stay bare ('scylladb-2025.1'): {new_scylla_repo}"
+        )
+
+    for job in rolling_upgrade_jobs:
+        params = build_job_parameters(job, perf_config.defaults, "master:latest", {})
+        new_scylla_repo = params.get("new_scylla_repo", "")
+        assert "/scylla/master/deb/" in new_scylla_repo, (
+            f"Job {job.job_name} new_scylla_repo directory segment for master must stay "
+            f"unprefixed ('master', not 'branch-master'): {new_scylla_repo}"
+        )
+        assert "/scylladb-master/" in new_scylla_repo, (
+            f"Job {job.job_name} new_scylla_repo filename segment for master must be "
+            f"'scylladb-master': {new_scylla_repo}"
         )

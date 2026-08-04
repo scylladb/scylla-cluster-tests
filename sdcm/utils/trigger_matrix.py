@@ -911,10 +911,33 @@ def _extract_branch_from_version(scylla_version: str) -> str:
     return ""
 
 
-def _resolve_templates(value: object, branch: str) -> object:
-    """Replace {branch} placeholder in a string value."""
-    if isinstance(value, str) and "{branch}" in value:
-        return value.replace("{branch}", branch)
+def _branch_directory_id(branch: str) -> str:
+    """Compute the S3 directory-prefixed branch id for a bare branch string.
+
+    Mirrors the directory-vs-filename distinction made by get_branched_repo()
+    (sdcm/utils/version_utils.py): the S3 directory path segment for a branch
+    uses a `branch-` prefix for non-master branches (e.g. `branch-2025.1`),
+    while `master` has no prefix. If `branch` already carries a `branch-` or
+    `enterprise-` prefix (or is empty), it is returned unchanged.
+    """
+    if not branch or branch == "master" or branch.startswith(("branch-", "enterprise-")):
+        return branch
+    return f"branch-{branch}"
+
+
+def _resolve_templates(value: object, branch: str, branch_id: str) -> object:
+    """Replace {branch} and {branch_id} placeholders in a string value.
+
+    {branch} is the bare branch (e.g. "2025.1", "master") — used where the S3
+    path must not be prefixed (e.g. the `scylladb-{branch}` filename segment).
+    {branch_id} is the directory-prefixed form (e.g. "branch-2025.1", "master")
+    — used for the S3 directory path segment, matching get_branched_repo().
+    """
+    if isinstance(value, str):
+        if "{branch}" in value:
+            value = value.replace("{branch}", branch)
+        if "{branch_id}" in value:
+            value = value.replace("{branch_id}", branch_id)
     return value
 
 
@@ -937,17 +960,22 @@ def build_job_parameters(
     own backend-specific images from the version.
 
     Template variables in parameter values are resolved:
-      {branch} — extracted from branch_source_version (or scylla_version if not provided)
+      {branch} — bare branch, extracted from branch_source_version (or scylla_version if
+          not provided), e.g. "2025.1" or "master".
+      {branch_id} — directory-prefixed branch, derived from {branch} the same way
+          get_branched_repo() (sdcm/utils/version_utils.py) computes its S3 directory
+          segment: "branch-2025.1" for non-master branches, "master" (no prefix) for
+          master.
 
     Args:
         job: Job configuration.
         defaults: Default parameters from the matrix.
         scylla_version: Version string to pass to the job (typically the resolved full version).
         cli_overrides: CLI-provided parameter overrides.
-        branch_source_version: Original version string used for {branch} template resolution
-            (e.g., "master:latest"). When provided, branch is extracted from this instead of
-            scylla_version. This avoids resolving {branch} to "2026.3" when the original
-            input was "master:latest".
+        branch_source_version: Original version string used for {branch}/{branch_id} template
+            resolution (e.g., "master:latest"). When provided, branch is extracted from this
+            instead of scylla_version. This avoids resolving {branch} to "2026.3" when the
+            original input was "master:latest".
 
     Returns:
         Merged parameter dictionary.
@@ -976,11 +1004,13 @@ def build_job_parameters(
         # to regular tests (e.g. perf) causes them to install wrong packages.
         params.pop("new_scylla_repo", None)
 
-    # Resolve {branch} templates — use the original version (e.g., "master:latest")
-    # not the resolved full tag (e.g., "2026.3.0~dev-...") which yields "2026.3".
+    # Resolve {branch}/{branch_id} templates — use the original version (e.g.,
+    # "master:latest") not the resolved full tag (e.g., "2026.3.0~dev-...") which
+    # yields "2026.3".
     branch = _extract_branch_from_version(branch_source_version or scylla_version)
     if branch:
-        params = {k: _resolve_templates(v, branch) for k, v in params.items()}
+        branch_id = _branch_directory_id(branch)
+        params = {k: _resolve_templates(v, branch, branch_id) for k, v in params.items()}
 
     return params
 
@@ -1440,8 +1470,9 @@ def trigger_matrix(  # noqa: PLR0914
         matrix_file: Path to the YAML matrix file.
         scylla_version: Full version tag or branch:qualifier.
         filter_version: Original version string before resolution (e.g., "master:latest").
-            Used for job folder determination and as branch_source_version for {branch}
-            template resolution. When None, scylla_version is used for both.
+            Used for job folder determination and as branch_source_version for
+            {branch}/{branch_id} template resolution. When None, scylla_version is used
+            for both.
         job_folder: Override auto-detected job folder.
         labels_selector: Comma-separated labels to filter jobs.
         backend: Filter by backend.
