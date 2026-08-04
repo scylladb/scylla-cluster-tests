@@ -1,7 +1,19 @@
 #! groovy
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
+    // Captured local, read from pipelineParams rather than params: this is evaluated at
+    // pipeline-definition time, where `params` is still empty on build #1 but the agent label has
+    // to be decided already. Never read params.minicloud - getJenkinsLabels merges `overrides` into
+    // an un-def'd global `params`, so it would look like it works and then not.
+    def minicloudEnabled = pipelineParams.get('minicloud', false)
+    // minicloud boots its QEMU/KVM guests on a nested-virtualization sct-runner, sized by
+    // instance_type_runner - see configurations/minicloud/{aws,gce}.yaml. Artifacts jobs had no
+    // runner stage at all before, so this is the whole of it; a regular (non-minicloud)
+    // artifacts run still creates no runner and is byte-identical to before.
+    def useRunner = minicloudEnabled
+
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter,
+                                   params.azure_region_name, params.oci_region_name)
 
     pipeline {
         agent none
@@ -67,7 +79,7 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: "a Scylla docker image to run against (for docker backend.) Should be `scylladb/scylla' for official images",
                    name: 'scylla_docker_image')
-            string(defaultValue: '',
+            string(defaultValue: "${pipelineParams.get('scylla_version', '')}",
                    description: 'a Scylla version to run against (mostly for docker backend)',
                    name: 'scylla_version')
             string(defaultValue: "${pipelineParams.get('test_config', 'test-cases/artifacts/centos9.yaml')}",
@@ -86,6 +98,17 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'on_demand|spot|spot_fleet',
                    name: 'provision_type')
+            // Minicloud Configuration
+            // Only has an effect when the jenkinsfile opts in with `minicloud: true` - see
+            // vars/startMinicloud.groovy. KMS off, the runner's instance type and the rest are
+            // test-case configuration (configurations/minicloud.yaml and
+            // configurations/minicloud/*.yaml), not job knobs.
+            separator(name: 'MINICLOUD_CONFIG', sectionHeader: 'Minicloud Configuration')
+            string(defaultValue: "${pipelineParams.get('minicloud_docker', '')}",
+                   description: 'Minicloud Docker image reference, e.g. ghcr.io/scylladb/minicloud:<tag>. ' +
+                                'Empty leaves the image at its renovate-managed default (defaults/docker_images/minicloud/). ' +
+                                'Ignored unless the jenkinsfile sets `minicloud: true`',
+                   name: 'minicloud_docker')
             separator(name: 'MISC_CONFIG', sectionHeader: 'Miscellaneous Configuration')
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                description: 'Gce project to use',
@@ -157,6 +180,10 @@ def call(Map pipelineParams) {
                                         stage("Checkout (${instance_type})") {
                                             script {
                                                 loadEnvFromString(params.extra_environment_variables)
+                                                // Opt in from the jenkinsfile with `minicloud: true`. Must come after
+                                                // extra_environment_variables is loaded (a per-run override wins) and
+                                                // before anything talks to a cloud API.
+                                                startMinicloud.exportEnv(params, pipelineParams)
                                                 tagBuilder()
                                             }
                                             dir('scylla-cluster-tests') {
@@ -165,6 +192,35 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                             dockerLogin(params)
+                                        }
+                                        // Everything from here on is wrapped so the runner - and with it the
+                                        // emulator and every guest - is always terminated. There is no post{}
+                                        // available inside a parallel branch, so try/finally is the only place
+                                        // teardown can live.
+                                        try {
+                                        if (useRunner) {
+                                            // Before Start Minicloud: startMinicloud reads ./sct_runner_ip, which
+                                            // create-runner-instance writes, so the container comes up on the
+                                            // runner rather than on this builder. The extra 30 minutes cover the
+                                            // collect-logs and cleanup stages that outlive the test timeout.
+                                            stage("Create SCT Runner (${instance_type})") {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        timeout(time: 10, unit: 'MINUTES') {
+                                                            createSctRunner(params, pipelineParams.timeout.time + 30, builder.region)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if (minicloudEnabled) {
+                                            stage("Start Minicloud (${instance_type})") {
+                                                dir('scylla-cluster-tests') {
+                                                    timeout(time: 15, unit: 'MINUTES') {
+                                                        startMinicloud(params)
+                                                    }
+                                                }
+                                            }
                                         }
                                         stage('Create Argus Test Run') {
                                             catchError(stageResult: 'FAILURE') {
@@ -186,8 +242,12 @@ def call(Map pipelineParams) {
                                                 sctScript """
                                                     rm -fv ./latest
 
-                                                    # clean the old sct_runner_ip file
-                                                    rm -fv ./sct_runner_ip
+                                                    # In runner topology ./sct_runner_ip was just written by
+                                                    # create-runner-instance and is what selects --execute-on-runner
+                                                    # below - only a builder-local run may sweep a stale one.
+                                                    if [[ "${useRunner}" != "true" ]] ; then
+                                                        rm -fv ./sct_runner_ip
+                                                    fi
 
                                                     if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
                                                         export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
@@ -292,7 +352,12 @@ def call(Map pipelineParams) {
                                                     fi
 
                                                     echo "start test ......."
-                                                    ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
+                                                    RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                                    if [[ -n "\${RUNNER_IP}" ]] ; then
+                                                        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} run-test artifacts_test --backend ${params.backend}
+                                                    else
+                                                        ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
+                                                    fi
                                                     echo "end test ....."
                                                 """
                                             }
@@ -339,6 +404,24 @@ def call(Map pipelineParams) {
                                                     dir('scylla-cluster-tests') {
                                                         timeout(time: 10, unit: 'MINUTES') {
                                                             runSendEmail(params, currentBuild)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        } finally {
+                                            // The minicloud container and every guest live on the runner, so
+                                            // terminating it is the whole teardown - and it must happen even on
+                                            // abort or failure, which is what this finally is for. There is no
+                                            // post{} inside a parallel branch. Safe this late: 'Collect log data'
+                                            // above already ran, on the runner, while it was still alive.
+                                            if (useRunner) {
+                                                stage("Clean SCT Runners (${instance_type})") {
+                                                    catchError(stageResult: 'FAILURE') {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                cleanSctRunners(params, currentBuild)
+                                                            }
                                                         }
                                                     }
                                                 }

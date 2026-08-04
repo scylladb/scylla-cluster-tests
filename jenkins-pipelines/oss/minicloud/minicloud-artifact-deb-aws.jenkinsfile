@@ -1,0 +1,30 @@
+#!groovy
+
+// Install ScyllaDB from the .deb repository onto a stock Ubuntu 24.04 guest, on minicloud with
+// the AWS backend.
+//
+// Different from the AMI job in what it exercises: no preinstalled Scylla, so this covers the
+// package install path - repo setup, apt, scylla_setup - on a plain distro image. Together with
+// minicloud-artifact-rpm-gce.jenkinsfile it gives one job per package format.
+//
+// Snapshot readability is not a concern here, unlike the AMI job: the guest disk comes from
+// Canonical's public image, and Scylla arrives over the network from downloads.scylladb.com
+// (which minicloud passes through - see the S3_PASSTHROUGH_BUCKETS env var).
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_config: '''["test-cases/artifacts/ubuntu2404-aws.yaml", "configurations/minicloud.yaml", "configurations/minicloud/aws.yaml"]''',
+    minicloud: true,
+
+    // Resolves to the matching deb repository. Override per build to test a specific repo with
+    // the scylla_repo parameter instead.
+    scylla_version: '2026.3.0-rc0',
+
+    provision_type: 'on_demand',
+    // Longer than the AMI job: this one installs Scylla rather than booting it preinstalled.
+    timeout: [time: 90, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+)
