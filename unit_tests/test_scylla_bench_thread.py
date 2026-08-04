@@ -24,6 +24,7 @@ pytestmark = [
 
 
 @pytest.mark.integration
+@pytest.mark.xdist_group("docker_ssl")
 @pytest.mark.parametrize(
     "extra_cmd",
     argvalues=[
