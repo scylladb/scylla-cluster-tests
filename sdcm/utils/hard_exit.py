@@ -44,17 +44,19 @@ def request_hard_exit(reason: str) -> None:
     _hard_exit_reason = reason
 
 
-def hard_exit_requested() -> str | None:
-    return _hard_exit_reason
-
-
 def exit_process(exit_code: int) -> None:
     if not _hard_exit_reason:
         sys.exit(exit_code)
         return
 
-    LOGGER.error("Hard exit requested: %s", _hard_exit_reason)
-    sys.stdout.flush()
-    sys.stderr.flush()
-    logging.shutdown()
+    try:
+        LOGGER.error("Hard exit requested: %s", _hard_exit_reason)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        logging.shutdown()
+    except Exception:  # noqa: BLE001
+        # Diagnostics/flush are best-effort: os._exit() below must run no
+        # matter what, or we fall back into the untimed shutdown join this
+        # module exists to bypass.
+        pass
     os._exit(STUCK_THREAD_EXIT_CODE)
