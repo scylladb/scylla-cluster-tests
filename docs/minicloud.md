@@ -253,8 +253,44 @@ longevity/rolling-upgrade test-cases set it themselves, and the artifacts jobs l
 'Clean SCT Runners' - which takes the container and every guest with it, so it runs after log
 collection.
 
-Running minicloud on a long-lived KVM Jenkins agent instead is a follow-up; it needs agent
-validation, workspace reclaim and a local teardown path that this PR deliberately leaves out.
+### The local-agent topology
+
+`local_agent: true` in the jenkinsfile runs everything on a KVM-capable Jenkins agent instead
+(label `minicloud-kvm-builders-v1`), with no sct-runner at all: the runner stages are skipped and
+every stage takes the builder-local branch, selected as everywhere else by the absence of
+`./sct_runner_ip`. The build gains *Minicloud Reclaim → Minicloud Preflight* ahead of
+*Start Minicloud*, and *Stop Minicloud* last - after log collection, because `docker rm -f` kills
+every guest with the container.
+
+Two things only a long-lived agent needs, both by design:
+
+- **Reclaim at build start, not at the end.** The previous failure's logs stay on the box for
+  post-mortem, which is one of the few genuine advantages of a static agent. The AMI cache
+  (`~/.cache/minicloud/amis`) is never swept - it is tens of GiB and tens of minutes to rebuild,
+  and it is the entire economic case for the agent.
+- **Preflight in one pass.** A misconfigured agent reports every problem at once rather than one
+  per build, and it runs before Argus registration and the hydra pull so a bad agent costs
+  seconds instead of twenty minutes.
+
+`local_agent` is a **job parameter** as well as a jenkinsfile knob, so an existing minicloud job
+can be moved to a lab agent for a single run without a new jenkinsfile: tick it and the KVM label
+is resolved for you. It is read off `params` from build #2 onward - build #1 only loads parameters
+and these pipelines abort it - falling back to the jenkinsfile default before that. `jenkins_label`
+stays the manual override for pinning any build to an approved agent label on any backend,
+independent of minicloud; see [sct-pipelines](./sct-pipelines.md).
+
+### Agent prerequisites
+
+A lab agent serving `minicloud-kvm-builders-v1` needs: the agent user in `kvm` and `docker`
+groups (restart the agent process after `usermod`, reconnecting is not enough); `minicloud0`
+pre-created by a boot-time unit (preferred - no sudo needed at run time) or passwordless sudo;
+`USER`/`HOME` set and `$HOME` writable with >=80 GiB free; `numExecutors=1` + exclusive mode,
+which is what serialises the host singletons (port 5000, the container name, `minicloud0`);
+egress to docker.io, ghcr.io, github.com, amazonaws.com, argus.scylladb.com,
+downloads.scylladb.com. The *Minicloud Preflight* stage verifies what a shell on the agent can
+see - /dev/kvm writability, the docker daemon, `minicloud0` and its routes, port 5000 ownership,
+`USER`/`HOME`, disk headroom - and reports every problem in one pass. `numExecutors=1`, exclusive
+mode and the egress list stay manual agent configuration: nothing in the build can check them.
 
 ### The jobs
 
