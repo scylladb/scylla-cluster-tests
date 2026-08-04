@@ -127,6 +127,30 @@ for the GCE path's image export). One-time network setup (the `minicloud0` TUN d
 boot-time unit and no sudo is needed at run time. A networking-setup failure aborts the start -
 guests without `minicloud0` would pass API health checks and then be unreachable over SSH.
 
+### Guest network ranges
+
+The emulated guest networks deliberately do NOT share CIDRs with any real cloud network, and
+every guest lands inside `10.160.0.0/11`:
+
+- **AWS**: when minicloud is active, `AwsRegion` shifts the region index by 160, so eu-west-1's
+  emulated VPC is `10.164.0.0/16` instead of the real `10.4.0.0/16` (all indexes land in
+  `10.160.0.0/16 .. 10.175.0.0/16`).
+- **GCE**: `prepare_gce_network()` pre-creates the emulated `qa-vpc` in custom mode with one
+  explicit subnet per supported region (`10.176.0.0/16 .. 10.179.0.0/16`). Without it,
+  minicloud emulates GCE auto-mode and hands out /20s from `10.128.0.0/9` - unroutable from
+  the host and inside the real GCE VPC space a runner lives in.
+
+SCT passes exactly the `10.160.0.0/11` range (plus the emulator's default-VPC `172.31.0.0/16`)
+to `minicloud-setup.sh` via its `MINICLOUD_VPC_ROUTES` override (scylladb/minicloud#187)
+instead of the script's historical blanket `10.0.0.0/8`. Both halves exist for the same
+reason: the host running the guests may itself live inside a real cloud VPC - an sct-runner
+always does - where an equal emulated CIDR sends guest traffic out `eth0` instead of the TUN,
+and a `10/8` route black-holes the QA infra (Argus, argus-proxy). A host still carrying the
+old blanket route is reconfigured on the next start; an image whose setup script predates the
+override fails the start with an upgrade message rather than 20 minutes later as Argus
+connect-timeouts. Constants: `MINICLOUD_REGION_INDEX_OFFSET`, `MINICLOUD_GCE_*`,
+`MINICLOUD_HOST_VPC_ROUTES` in `sdcm/utils/minicloud/config.py`.
+
 ```bash
 # start the container and prepare regions (keep_alive - survives across hydra invocations)
 ./docker/env/hydra.sh start-minicloud -b aws -c test-cases/minicloud-provision-test.yaml -c configurations/minicloud.yaml
@@ -213,5 +237,59 @@ The container's own log is the emulator's view of the run: `docker logs miniclou
 
 ## Running in Jenkins
 
-See the pipeline documentation - this section is filled in by the pipeline-integration change
-that adds the `minicloud: true` opt-in to the regular SCT pipelines.
+`minicloud: true` in a jenkinsfile is the whole opt-in; the regular pipelines
+(`artifactsPipeline`, `longevityPipeline`, `rollingUpgradePipeline`) do the rest. There is no
+dedicated minicloud pipeline - there used to be a fork, and it drifted.
+
+### The sct-runner topology
+
+Every minicloud job provisions a **nested-virtualization sct-runner** and runs there: the guests,
+the emulator and the test process all live on that one instance, so the Jenkins builder only
+drives hydra. Nested virtualization narrows the instance families - c8i/m8i/r8i on AWS,
+N1/N2/C2/C3 on GCE (E2 has none) - so the runner is sized by `instance_type_runner`:
+longevity/rolling-upgrade test-cases set it themselves, and the artifacts jobs layer
+`configurations/minicloud/aws.yaml` or `configurations/minicloud/gce.yaml`, which also raise
+`root_disk_size_runner` for the guest-image cache. Teardown is just the runner's termination -
+'Clean SCT Runners' - which takes the container and every guest with it, so it runs after log
+collection.
+
+Running minicloud on a long-lived KVM Jenkins agent instead is a follow-up; it needs agent
+validation, workspace reclaim and a local teardown path that this PR deliberately leaves out.
+
+### The jobs
+
+Under `jenkins-pipelines/oss/minicloud/`:
+
+| job | covers |
+|---|---|
+| `minicloud-artifact-ami` | AWS AMI boot, preinstalled Scylla |
+| `minicloud-artifact-gce-image` | GCE image boot, preinstalled Scylla |
+| `minicloud-artifact-deb-aws` | `.deb` install onto stock Ubuntu, AWS backend |
+| `minicloud-artifact-rpm-gce` | `.rpm` install onto stock Rocky, GCE backend |
+| `minicloud-provision-test` | 3-node provision + write smoke + non-disruptive nemesis |
+| `longevity-minicloud-10gb-1h` | a regular longevity test-case end to end |
+
+Job knobs: `minicloud_docker` selects the image for one run
+(`-s minicloud_docker=ghcr.io/scylladb/minicloud:master-<sha>` via `staging_trigger.py`) - the
+pipeline exports it as `SCT_MINICLOUD_DOCKER_IMAGE` for the whole build, because a stage that
+cannot see the override restarts the container to the default image (and in longevity topology
+that restart would kill the already-provisioned guests). Keep any new parameter name distinct
+from the env var it feeds by more than case: Jenkins' `EnvVars` map is case-insensitive, so a
+parameter named exactly like its variable swallows the export. A
+per-run `extra_environment_variables` override always beats the jenkinsfile's defaults.
+
+### Triggering from staging_trigger.py
+
+`generate` and `trigger` work on these jobs like any other. One gotcha: the `artifacts` preset
+injects `scylla_version: master:latest`, which **overrides the jenkinsfile** - and dev AMIs do
+not work on the AWS path (snapshot sharing, see above). Pass a released version explicitly for
+the preinstalled-image jobs:
+
+```bash
+python staging_trigger.py -f scylla-staging/<user> trigger -b <branch> \
+    -s scylla_version=2026.3.0-rc0 oss/minicloud/minicloud-artifact-ami-test
+```
+
+The deb/rpm jobs are fine with `master:latest` - they install over the network from
+`downloads.scylladb.com`.
+
