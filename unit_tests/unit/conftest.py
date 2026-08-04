@@ -27,6 +27,7 @@ import pytest
 
 from sdcm.keystore import KeyStore, SSHKey
 from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.utils import hard_exit
 
 from unit_tests.lib.fake_remoter import FakeRemoter
 
@@ -36,6 +37,13 @@ def fake_remoter():
     """Ensure all unit tests use FakeRemoter instead of real SSH remoters."""
     RemoteCmdRunnerBase.set_default_remoter_class(FakeRemoter)
     return FakeRemoter
+
+
+@pytest.fixture(autouse=True)
+def _reset_hard_exit_state(monkeypatch):
+    """Ensure `_hard_exit_reason` never leaks between tests (e.g. ParallelObject.clean_up()
+    or stop_nemesis() can arm it)."""
+    monkeypatch.setattr(hard_exit, "_hard_exit_reason", None)
 
 
 @pytest.fixture(scope="session", autouse=True)
