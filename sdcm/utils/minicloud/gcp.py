@@ -6,11 +6,20 @@ import os
 from pathlib import Path
 
 import google.auth.transport.requests
-from google.cloud import storage
+from google.api_core import exceptions as google_exceptions
+from google.cloud import compute_v1, storage
 from google.oauth2 import service_account
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.minicloud.config import MinicloudConfig, MinicloudError
+from sdcm.utils.minicloud.config import (
+    MINICLOUD_GCE_NETWORK,
+    MINICLOUD_GCE_REGION_INDEX_OFFSET,
+    MINICLOUD_GCE_REGIONS,
+    MINICLOUD_GCE_SUBNET_CIDR_TMPL,
+    MINICLOUD_HOST_VPC_ROUTES,
+    MinicloudConfig,
+    MinicloudError,
+)
 from sdcm.utils.session import create_retry_session
 
 LOGGER = logging.getLogger(__name__)
@@ -167,3 +176,78 @@ def ensure_cloudbuild_access(creds: dict, project_id: str, bucket_name: str) -> 
             )
     except Exception:  # noqa: BLE001
         LOGGER.warning("Could not verify Cloud Build bucket access", exc_info=True)
+
+
+def prepare_gce_network(config: MinicloudConfig) -> None:
+    """Pre-create the emulated qa-vpc network with one explicit subnet per supported region.
+
+    Must be called only after GCE_ENDPOINT_URL is set (i.e., after start()) - the compute
+    clients pick the emulator endpoint up through _gce_client_options().
+
+    Without this, minicloud emulates GCE auto-mode: the first instance insert auto-creates
+    the network's subnet with a /20 from 10.128.0.0/9, which is unroutable from the host
+    (outside MINICLOUD_HOST_VPC_ROUTES) and inside the real GCE VPC space an sct-runner
+    lives in - guests come up and every SSH to them times out. Custom-mode subnets with
+    explicit CIDRs keep every guest inside the routed 10.176.0.0/16 .. 10.179.0.0/16.
+
+    Idempotent: an existing network or subnet is left alone, so re-running start-minicloud
+    against a live emulator (keep_alive) is safe.
+    """
+    # cause import at module scope creates a cyclic dependency via gce_utils -> sct_config
+    from sdcm.utils.gce_utils import _gce_client_options  # noqa: PLC0415
+
+    creds = KeyStore().get_gcp_credentials()
+    credentials = service_account.Credentials.from_service_account_info(creds)
+    client_options = _gce_client_options()
+    networks = compute_v1.NetworksClient(credentials=credentials, **client_options)
+    subnets = compute_v1.SubnetworksClient(credentials=credentials, **client_options)
+    # The project the *VM requests* will use, which is what this network has to be reachable
+    # from: GceProvisioner takes it from the credentials (provision/gce/provisioner.py), while
+    # config.gcp_project is the container's own --gcp-project for GCS image staging. Those two
+    # differ whenever the gce_project job parameter is empty (credentials default to
+    # gcp-sct-project-1, the config default is sct-project-1), which would prepare qa-vpc in a
+    # project the launches never look at.
+    project = creds.get("project_id") or config.gcp_project
+
+    try:
+        networks.get(project=project, network=MINICLOUD_GCE_NETWORK)
+        LOGGER.info("Emulated GCE network '%s' already exists", MINICLOUD_GCE_NETWORK)
+    except google_exceptions.NotFound:
+        LOGGER.info("Creating emulated GCE network '%s' (custom mode)...", MINICLOUD_GCE_NETWORK)
+        networks.insert(
+            project=project,
+            network_resource=compute_v1.Network(name=MINICLOUD_GCE_NETWORK, auto_create_subnetworks=False),
+        )
+
+    for index, region in enumerate(MINICLOUD_GCE_REGIONS):
+        subnet_name = f"{MINICLOUD_GCE_NETWORK}-{region}"
+        cidr = MINICLOUD_GCE_SUBNET_CIDR_TMPL.format(MINICLOUD_GCE_REGION_INDEX_OFFSET + index)
+        try:
+            existing = subnets.get(project=project, region=region, subnetwork=subnet_name)
+            # Existence is not enough: a reused keep_alive emulator may carry a subnet of this
+            # name from an auto-mode launch (a /20 out of 10.128.0.0/9) or from an older offset,
+            # and accepting it would put the guests outside the host-routed range again - the
+            # failure mode this whole function exists to prevent, but silent this time. Fail
+            # rather than recreate: guests may already be attached to it.
+            if existing.ip_cidr_range != cidr:
+                raise MinicloudError(
+                    f"emulated GCE subnet '{subnet_name}' exists with {existing.ip_cidr_range}, "
+                    f"expected {cidr}. Guests would land outside the host-routed range "
+                    f"({MINICLOUD_HOST_VPC_ROUTES[0]}). Stop the minicloud container to drop its "
+                    f"state and let it be recreated: docker rm -f minicloud"
+                )
+            LOGGER.info("Emulated GCE subnet '%s' already exists with %s", subnet_name, cidr)
+            continue
+        except google_exceptions.NotFound:
+            # Expected on a fresh emulator: fall through to the insert below.
+            LOGGER.debug("Emulated GCE subnet '%s' does not exist yet", subnet_name)
+        LOGGER.info("Creating emulated GCE subnet '%s' (%s) in %s...", subnet_name, cidr, region)
+        subnets.insert(
+            project=project,
+            region=region,
+            subnetwork_resource=compute_v1.Subnetwork(
+                name=subnet_name,
+                network=f"projects/{project}/global/networks/{MINICLOUD_GCE_NETWORK}",
+                ip_cidr_range=cidr,
+            ),
+        )

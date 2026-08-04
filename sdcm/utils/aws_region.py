@@ -47,10 +47,20 @@ class AwsRegion:
         self.client: EC2Client = boto3.client("ec2", region_name=region_name)
         self.resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
 
-        # cause import straight from common create cyclic dependency
+        # cause import straight from common create cyclic dependency; same for the
+        # minicloud package, whose config imports sct_config which imports this module
         from sdcm.utils.common import all_aws_regions  # noqa: PLC0415
+        from sdcm.utils.minicloud.config import MINICLOUD_REGION_INDEX_OFFSET  # noqa: PLC0415
+        from sdcm.utils.minicloud.endpoint import is_minicloud_active  # noqa: PLC0415
 
         region_index = all_aws_regions(cached=True).index(self.region_name)
+        # In minicloud mode the emulated VPC must not share its CIDR with the real SCT VPC
+        # of the same region: the host running the guests (an sct-runner, or any machine
+        # inside a real SCT VPC) would route guest traffic out its own interface instead of
+        # the minicloud TUN device. The offset moves emulated VPCs into the dedicated
+        # 10.160.0.0/11 that the minicloud host routes cover - see MINICLOUD_HOST_VPC_ROUTES.
+        if is_minicloud_active():
+            region_index += MINICLOUD_REGION_INDEX_OFFSET
         cidr = ip_network(self.SCT_VPC_CIDR_TMPL.format(region_index))
         self.vpc_ipv4_cidr = cidr
 

@@ -67,6 +67,34 @@ MINICLOUD_DEFAULT_REGION = "eu-west-1"
 # real services in this project, so a wrong value here creates real resources in the wrong place.
 MINICLOUD_GCP_PROJECT_DEFAULT = "sct-project-1"
 
+# The emulated guest networks deliberately live in a DIFFERENT range than any real cloud
+# network. The host running the guests may itself sit inside a real cloud VPC - an
+# sct-runner always does - and any overlap is fatal twice over: an emulated CIDR equal to a
+# real one routes guest traffic out eth0 instead of the minicloud TUN, and a blanket host
+# route (the old 10.0.0.0/8) black-holes the QA infra (Argus, argus-proxy) from the host.
+#
+# Every emulated guest lands inside 10.160.0.0/11 - the single range (plus the emulator's
+# built-in 172.31.0.0/16 default VPC) that MINICLOUD_HOST_VPC_ROUTES tells
+# minicloud-setup.sh to route into the TUN device (scylladb/minicloud#187):
+#
+#   * AWS: AwsRegion shifts its region index (0-15 from all_aws_regions) by 160 whenever
+#     is_minicloud_active(), so the emulated VPCs occupy 10.160.0.0/16 .. 10.175.0.0/16.
+#   * GCE: prepare_gce_network() pre-creates the qa-vpc network with one explicit subnet
+#     per supported region in 10.176.0.0/16 .. 10.179.0.0/16. Without it, minicloud
+#     emulates GCE auto-mode and allocates /20s from 10.128.0.0/9 - unroutable from the
+#     host and inside the real GCE VPC space a runner lives in.
+#
+# The TUN address stays outside every routed range.
+MINICLOUD_REGION_INDEX_OFFSET = 160
+MINICLOUD_TUN_ADDR = "10.127.0.1/24"
+MINICLOUD_HOST_VPC_ROUTES = ("10.160.0.0/11", "172.31.0.0/16")
+MINICLOUD_GCE_NETWORK = "qa-vpc"
+MINICLOUD_GCE_REGION_INDEX_OFFSET = 176
+# Matches getJenkinsLabels' supported GCE regions; the order defines each region's subnet
+# index, so only append.
+MINICLOUD_GCE_REGIONS = ("us-east1", "us-east4", "us-west1", "us-central1")
+MINICLOUD_GCE_SUBNET_CIDR_TMPL = "10.{}.0.0/16"
+
 
 class MinicloudError(Exception):
     """Raised when minicloud lifecycle operations fail with actionable messages."""
