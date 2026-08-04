@@ -246,3 +246,23 @@ def test_non_rolling_upgrade_strips_new_scylla_repo_from_defaults():
     defaults = {"new_scylla_repo": "http://downloads/master/rpm/scylla.repo"}
     params = build_job_parameters(job, defaults, "master:latest", {})
     assert "new_scylla_repo" not in params
+
+
+def test_rolling_upgrade_jobs_have_new_scylla_repo():
+    """SCT-782: every job with rolling_upgrade_test == 'true' across all trigger matrices
+    must define new_scylla_repo (directly or via defaults) — otherwise build_job_parameters()
+    blanks scylla_version with no repo to fall back on, and provisioning fails downstream
+    with 'missing options: [ami_id_db_scylla]'.
+    """
+    triggers_dir = Path(__file__).parent.parent.parent / "configurations" / "triggers"
+    for yaml_path in sorted(triggers_dir.glob("*.yaml")):
+        config = load_matrix_config(yaml_path)
+        for job in config.jobs:
+            merged_params = {**config.defaults, **job.params}
+            is_rolling_upgrade = str(merged_params.get("rolling_upgrade_test", "")).lower() == "true"
+            if is_rolling_upgrade:
+                assert merged_params.get("new_scylla_repo"), (
+                    f"SCT-782: job '{job.job_name}' in {yaml_path.name} has "
+                    f"rolling_upgrade_test == 'true' but no new_scylla_repo defined "
+                    f"(neither in job.params nor in defaults)"
+                )
