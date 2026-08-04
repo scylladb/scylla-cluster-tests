@@ -6,14 +6,33 @@ def call(Map pipelineParams) {
     // to be decided already. Never read params.minicloud - getJenkinsLabels merges `overrides` into
     // an un-def'd global `params`, so it would look like it works and then not.
     def minicloudEnabled = pipelineParams.get('minicloud', false)
-    // minicloud boots its QEMU/KVM guests on a nested-virtualization sct-runner, sized by
-    // instance_type_runner - see configurations/minicloud/{aws,gce}.yaml. Artifacts jobs had no
-    // runner stage at all before, so this is the whole of it; a regular (non-minicloud)
-    // artifacts run still creates no runner and is byte-identical to before.
-    def useRunner = minicloudEnabled
+    // Same knob and default as longevityPipeline: the nested-virtualization sct-runner stays the
+    // default (sized by instance_type_runner - see configurations/minicloud/{aws,gce}.yaml), and
+    // `local_agent: true` opts a jenkinsfile into a KVM-capable Jenkins agent instead. Opt-in
+    // rather than opt-out on purpose: no node serves the KVM label yet, so a default of true
+    // would strand every minicloud artifacts job in the queue. Only consulted when minicloud is
+    // enabled; a regular artifacts run creates no runner either way.
+    // A build parameter as well as a jenkinsfile knob, so an existing job can be moved to a lab
+    // agent for one run without a new jenkinsfile: tick `local_agent` and the KVM label is
+    // resolved for you. Read off `params` first - it is populated from build #2 onward, which is
+    // where a per-build choice can exist at all - and it falls back to the jenkinsfile default on
+    // build #1, the params-loading build these pipelines abort anyway. Safe to read here, unlike
+    // params.minicloud: getJenkinsLabels only ever merges a `minicloud` key into the global
+    // binding, never this one.
+    // Gated on minicloudEnabled: without minicloud there is nothing to run on a KVM agent, and
+    // an ungated `local_agent` on a normal build would skip the runner stages while the label
+    // stayed the ordinary cloud builder - the test would then run on the builder itself.
+    def localAgent = minicloudEnabled && (params.local_agent != null
+                                          ? params.local_agent.toString().toBoolean()
+                                          : pipelineParams.get('local_agent', false))
+    def useRunner = minicloudEnabled && !localAgent
 
+    // On a local agent minicloud runs its guests on the agent itself, so it needs the KVM-capable
+    // label rather than a region builder. In the default runner topology the build runs on the
+    // usual region builder and the guests live on the sct-runner, like longevity.
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter,
-                                   params.azure_region_name, params.oci_region_name)
+                                   params.azure_region_name, params.oci_region_name,
+                                   (minicloudEnabled && localAgent) ? [minicloud: true] : null)
 
     pipeline {
         agent none
@@ -104,6 +123,18 @@ def call(Map pipelineParams) {
             // test-case configuration (configurations/minicloud.yaml and
             // configurations/minicloud/*.yaml), not job knobs.
             separator(name: 'MINICLOUD_CONFIG', sectionHeader: 'Minicloud Configuration')
+            booleanParam(defaultValue: "${pipelineParams.get('local_agent', false)}",
+                   description: 'Run minicloud on a KVM-capable Jenkins agent instead of ' +
+                                'provisioning an sct-runner. Needs an agent serving the ' +
+                                'minicloud label (or set jenkins_label). ' +
+                                'Ignored unless the jenkinsfile sets `minicloud: true`',
+                   name: 'local_agent')
+            string(defaultValue: '',
+                   description: 'Pin this build to a specific Jenkins agent label, e.g. a lab ' +
+                                'machine. Empty picks the usual builder for the backend/region, ' +
+                                'or the minicloud label when local_agent is set. A single label, ' +
+                                'not a label expression',
+                   name: 'jenkins_label')
             string(defaultValue: "${pipelineParams.get('minicloud_docker', '')}",
                    description: 'Minicloud Docker image reference, e.g. ghcr.io/scylladb/minicloud:<tag>. ' +
                                 'Empty leaves the image at its renovate-managed default (defaults/docker_images/minicloud/). ' +
@@ -195,7 +226,12 @@ def call(Map pipelineParams) {
                                                 // extra_environment_variables is loaded (a per-run override wins) and
                                                 // before anything talks to a cloud API.
                                                 startMinicloud.exportEnv(params, pipelineParams)
-                                                tagBuilder()
+                                                // Nothing to tag on a local agent: tagBuilder spends 5-8s on DMI
+                                                // reads and four IMDS curls before no-opping with UNKNOWN. The
+                                                // runner topology runs on a regular cloud builder, so tag it.
+                                                if (!(minicloudEnabled && localAgent)) {
+                                                    tagBuilder()
+                                                }
                                             }
                                             dir('scylla-cluster-tests') {
                                                 timeout(time: 10, unit: 'MINUTES') {
@@ -209,6 +245,25 @@ def call(Map pipelineParams) {
                                         // available inside a parallel branch, so try/finally is the only place
                                         // teardown can live.
                                         try {
+                                        if (minicloudEnabled && localAgent) {
+                                            stage("Minicloud Reclaim (${instance_type})") {
+                                                dir('scylla-cluster-tests') {
+                                                    timeout(time: 10, unit: 'MINUTES') {
+                                                        minicloudReclaim()
+                                                    }
+                                                }
+                                            }
+                                            // Fail here, before Argus registration and the hydra pull, rather than
+                                            // 20 minutes in. Not wrapped in catchError: an agent that cannot host
+                                            // minicloud must stop the build, not proceed to talk to the real cloud.
+                                            stage("Minicloud Preflight (${instance_type})") {
+                                                dir('scylla-cluster-tests') {
+                                                    timeout(time: 5, unit: 'MINUTES') {
+                                                        minicloudPreflight()
+                                                    }
+                                                }
+                                            }
+                                        }
                                         if (useRunner) {
                                             // Before Start Minicloud: startMinicloud reads ./sct_runner_ip, which
                                             // create-runner-instance writes, so the container comes up on the
@@ -432,6 +487,24 @@ def call(Map pipelineParams) {
                                                         wrap([$class: 'BuildUser']) {
                                                             dir('scylla-cluster-tests') {
                                                                 cleanSctRunners(params, currentBuild)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            // Last, deliberately: removing the container kills every guest with
+                                            // it (QEMU shares its PID namespace), and 'Collect log data' above
+                                            // needs them alive. A no-op in runner topology, where the container
+                                            // died with the instance the stage above terminated.
+                                            if (minicloudEnabled) {
+                                                stage("Stop Minicloud (${instance_type})") {
+                                                    catchError(stageResult: 'FAILURE') {
+                                                        dir('scylla-cluster-tests') {
+                                                            timeout(time: 10, unit: 'MINUTES') {
+                                                                stopMinicloud(params, currentBuild)
+                                                                // Leave the agent clean for the
+                                                                // next job, minicloud-aware or not.
+                                                                minicloudReclaim(atEnd: true)
                                                             }
                                                         }
                                                     }
