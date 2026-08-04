@@ -41,11 +41,11 @@ def test_restore_annotations_data_returns_false_without_raising(tmp_path, make_a
     addons_dir = _annotations_dir(tmp_path)
     make_annotations_file(addons_dir)
 
-    with patch("sdcm.monitorstack.restore.requests.post") as mock_post:
+    with patch("sdcm.monitorstack.restore.create_retry_session") as mock_create_retry_session:
         result = restore_annotations_data(str(tmp_path), grafana_docker_port=1234)
 
     assert result is False
-    mock_post.assert_not_called()
+    mock_create_retry_session.return_value.post.assert_not_called()
 
 
 def test_restore_annotations_data_uploads_valid_annotations(tmp_path):
@@ -55,11 +55,15 @@ def test_restore_annotations_data_uploads_valid_annotations(tmp_path):
     annotations_file.write_text('[{"text": "annotation-1"}, {"text": "annotation-2"}]')
 
     mock_response = MagicMock(status_code=200)
-    with patch("sdcm.monitorstack.restore.requests.post", return_value=mock_response) as mock_post:
+    mock_session = MagicMock(post=MagicMock(return_value=mock_response))
+    with patch(
+        "sdcm.monitorstack.restore.create_retry_session", return_value=mock_session
+    ) as mock_create_retry_session:
         result = restore_annotations_data(str(tmp_path), grafana_docker_port=1234)
 
     assert result is True
-    assert mock_post.call_count == 2
+    mock_create_retry_session.assert_called_once()
+    assert mock_session.post.call_count == 2
 
 
 def test_restore_grafana_dashboards_and_annotations_succeeds_when_annotations_skipped():

@@ -14,6 +14,7 @@ import yaml
 from sdcm.remote import LocalCmdRunner
 from sdcm.utils.common import get_free_port, list_logs_by_test_id, S3Storage, remove_files
 from sdcm.utils.decorators import retrying
+from sdcm.utils.session import create_retry_session
 
 from sdcm.monitorstack.constants import (
     ALERT_DOCKER_NAME,
@@ -410,8 +411,9 @@ def restore_annotations_data(monitoring_stack_dir, grafana_docker_port):
 
     try:
         annotations_url = f"http://localhost:{grafana_docker_port}/api/annotations"
+        session = create_retry_session()
         for an in annotations:
-            res = requests.post(annotations_url, data=json.dumps(an), headers={"Content-Type": "application/json"})
+            res = session.post(annotations_url, data=json.dumps(an), headers={"Content-Type": "application/json"})
             if res.status_code != 200:
                 LOGGER.info("Error during uploading annotation %s. Error message %s", an, res.text)
                 raise ErrorUploadAnnotations(f"Error during uploading annotation {an}. Error message {res.text}")
