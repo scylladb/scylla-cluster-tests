@@ -19,12 +19,6 @@ from sdcm.utils import hard_exit
 from sdcm.utils.hard_exit import STUCK_THREAD_EXIT_CODE, exit_process, request_hard_exit
 
 
-@pytest.fixture(autouse=True)
-def _reset_hard_exit_state(monkeypatch):
-    """Ensure `_hard_exit_reason` never leaks between tests."""
-    monkeypatch.setattr(hard_exit, "_hard_exit_reason", None)
-
-
 def test_exit_process_uses_sys_exit_when_not_armed(monkeypatch):
     os_exit_mock = Mock()
     monkeypatch.setattr(hard_exit.os, "_exit", os_exit_mock)
