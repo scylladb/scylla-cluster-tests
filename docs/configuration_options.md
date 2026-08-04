@@ -51,6 +51,15 @@ backend that will be used, aws/gce/azure/oci/docker/xcloud
 **type:** str
 
 
+## **minicloud_endpoint_url** / SCT_MINICLOUD_ENDPOINT_URL
+
+EC2 API endpoint URL for minicloud. When set, SCT adapts for minicloud limitations (no spot, no EIP, graceful TerminateInstances). Example: http://localhost:5000
+
+**default:** N/A
+
+**type:** str
+
+
 ## **test_method** / SCT_TEST_METHOD
 
 class.method used to run the test. Filled automatically with run-test sct command.
@@ -4001,6 +4010,78 @@ An escape hatch to disable KMS for enterprise run, when needed. We enable KMS by
 **default:** False
 
 **type:** bool
+
+
+## **minicloud_docker_image** / SCT_MINICLOUD_DOCKER_IMAGE
+
+Explicit minicloud image override. Empty means the renovate-managed default from defaults/docker_images/minicloud/ (exposed as stress_image.minicloud)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **minicloud_lightweight** / SCT_MINICLOUD_LIGHTWEIGHT
+
+Enable lightweight mode for minicloud deployments
+
+**default:** True
+
+**type:** bool
+
+
+## **minicloud_lightweight_memory** / SCT_MINICLOUD_LIGHTWEIGHT_MEMORY
+
+Memory allocation for lightweight minicloud deployments
+
+**default:** 4GiB
+
+**type:** str (appendable)
+
+
+## **minicloud_keep_alive** / SCT_MINICLOUD_KEEP_ALIVE
+
+Leave the minicloud container running after the test instead of tearing it down (CI sets this so separate provision/test/collect/clean stages reach the same container)
+
+**default:** False
+
+**type:** bool
+
+
+## **minicloud_skip_memory_check** / SCT_MINICLOUD_SKIP_MEMORY_CHECK
+
+Skip the conservative host-memory preflight gate — for development machines whose owner knows the workload's real footprint; an oversized test then dies mid-run as a container OOM kill (exit 137)
+
+**default:** False
+
+**type:** bool
+
+
+## **minicloud_s3_passthrough_buckets** / SCT_MINICLOUD_S3_PASSTHROUGH_BUCKETS
+
+S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads). Backend-independent: GCE runs reach S3 for the same content
+
+**default:** scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com
+
+**type:** str | list[str] → list[str] (appendable)
+
+
+## **minicloud_regions** / SCT_MINICLOUD_REGIONS
+
+Narrow the AWS regions minicloud prepares (default: every SCT-supported region; each costs ~2s at start-up)
+
+**default:** N/A
+
+**type:** str | list[str] → list[str] (appendable)
+
+
+## **minicloud_gcs_bucket** / SCT_MINICLOUD_GCS_BUCKET
+
+GCS bucket for minicloud GCE image staging. Empty means derive <project>-minicloud-staging and create it on demand
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 ## **logs_transport** / SCT_LOGS_TRANSPORT

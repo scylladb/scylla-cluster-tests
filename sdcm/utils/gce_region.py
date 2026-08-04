@@ -12,6 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 import logging
+import os
 import time
 from functools import cached_property
 from typing import Optional
@@ -25,7 +26,7 @@ from google.cloud import compute_v1
 from google.cloud.compute_v1 import Firewall
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.gce_utils import wait_for_extended_operation
+from sdcm.utils.gce_utils import _gce_client_options, wait_for_extended_operation
 
 
 LOGGER = logging.getLogger(__name__)
@@ -42,17 +43,26 @@ class GceRegion:
 
         credentials = service_account.Credentials.from_service_account_info(info)
 
-        self.iam = build("iam", "v1", credentials=credentials, cache_discovery=False)
+        # One shared endpoint override for every client here. Deliberate for now: point
+        # everything at minicloud and implement/route the gaps one service at a time
+        # (as done for AWS), rather than maintaining a per-service allowlist.
+        endpoint_kwargs = _gce_client_options()
 
-        self.network_client = compute_v1.NetworksClient(credentials=credentials)
-        self.firewall_client = compute_v1.FirewallsClient(credentials=credentials)
-        self.subnets_client = compute_v1.SubnetworksClient(credentials=credentials)
-        self.routes_client = compute_v1.RoutesClient(credentials=credentials)
-        self.storage_client = storage.Client(credentials=credentials)
+        self.iam = build("iam", "v1", credentials=credentials, cache_discovery=False, **endpoint_kwargs)
+
+        self.network_client = compute_v1.NetworksClient(credentials=credentials, **endpoint_kwargs)
+        self.firewall_client = compute_v1.FirewallsClient(credentials=credentials, **endpoint_kwargs)
+        self.subnets_client = compute_v1.SubnetworksClient(credentials=credentials, **endpoint_kwargs)
+        self.routes_client = compute_v1.RoutesClient(credentials=credentials, **endpoint_kwargs)
+        self.storage_client = storage.Client(credentials=credentials, **endpoint_kwargs)
 
     @property
     def backup_storage_bucket_name(self):
         return f"manager-backup-tests-{self.project}-{self.region_name}"
+
+    @property
+    def _is_minicloud(self) -> bool:
+        return bool(os.environ.get("GCE_ENDPOINT_URL"))
 
     @cached_property
     def network(self) -> compute_v1.Network:
@@ -254,8 +264,13 @@ class GceRegion:
     def configure(self):
         LOGGER.info("Configuring '%s' region...", self.region_name)
         self.configure_firewall()
-        self.create_backup_service_account()
-        self.configure_backup_storage()
+        if not self._is_minicloud:
+            # Backup service account + storage bucket require the IAM and GCS APIs,
+            # which minicloud does not serve (everything is pointed at the emulator, and
+            # manager-backup flows are not part of any minicloud test yet) — creating
+            # them here would fail region preparation before a single instance runs.
+            self.create_backup_service_account()
+            self.configure_backup_storage()
         LOGGER.info("Region configured successfully.")
 
     def add_network_peering(

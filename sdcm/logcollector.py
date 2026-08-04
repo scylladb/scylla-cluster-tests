@@ -1229,6 +1229,11 @@ class BaseSCTLogCollector(LogCollector):
         FileLog(name="partition_range_scan_diff_*.log", search_locally=True),
         FileLog(name="junit.xml", search_locally=True),
         FileLog(name="cdc-replicator.log", search_locally=True),
+        FileLog(name="minicloud.log", search_locally=True),
+        # the emulator's crash evidence: stderr and the (credential-redacted) container
+        # state snapshot carrying the exit code and OOMKilled flag
+        FileLog(name="minicloud-stderr.log", search_locally=True),
+        FileLog(name="minicloud-inspect.json", search_locally=True),
     ]
     cluster_log_type = "sct-runner-events"
     cluster_dir_prefix = "sct-runner-events"

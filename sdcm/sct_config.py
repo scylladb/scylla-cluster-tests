@@ -588,6 +588,11 @@ class SCTConfiguration(BaseModel):
         description="backend that will be used, aws/gce/azure/oci/docker/xcloud",
         appendable=False,
     )
+    minicloud_endpoint_url: String = SctField(
+        description="EC2 API endpoint URL for minicloud. When set, SCT adapts for minicloud "
+        "limitations (no spot, no EIP, graceful TerminateInstances). Example: http://localhost:5000",
+        appendable=False,
+    )
     test_method: String = SctField(
         description="class.method used to run the test. Filled automatically with run-test sct command.",
         appendable=False,
@@ -2056,6 +2061,39 @@ class SCTConfiguration(BaseModel):
     )
     enterprise_disable_kms: Boolean = SctField(
         description="An escape hatch to disable KMS for enterprise run, when needed. We enable KMS by default since if we use Scylla 2023.1.3 and up",
+    )
+    # minicloud params — every knob is a documented config option (with its SCT_* env
+    # form); the code reads no bare MINICLOUD_* env vars
+    minicloud_docker_image: String = SctField(
+        description="Explicit minicloud image override. Empty means the renovate-managed "
+        "default from defaults/docker_images/minicloud/ (exposed as stress_image.minicloud)",
+    )
+    minicloud_lightweight: Boolean = SctField(
+        description="Enable lightweight mode for minicloud deployments",
+    )
+    minicloud_lightweight_memory: String = SctField(
+        description="Memory allocation for lightweight minicloud deployments",
+    )
+    minicloud_keep_alive: Boolean = SctField(
+        description="Leave the minicloud container running after the test instead of tearing it down "
+        "(CI sets this so separate provision/test/collect/clean stages reach the same container)",
+    )
+    minicloud_skip_memory_check: Boolean = SctField(
+        description="Skip the conservative host-memory preflight gate — for development machines "
+        "whose owner knows the workload's real footprint; an oversized test then dies mid-run as "
+        "a container OOM kill (exit 137)",
+    )
+    minicloud_s3_passthrough_buckets: StringOrList = SctField(
+        description="S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads). "
+        "Backend-independent: GCE runs reach S3 for the same content",
+    )
+    minicloud_regions: StringOrList = SctField(
+        description="Narrow the AWS regions minicloud prepares (default: every SCT-supported region; "
+        "each costs ~2s at start-up)",
+    )
+    minicloud_gcs_bucket: String = SctField(
+        description="GCS bucket for minicloud GCE image staging. Empty means derive "
+        "<project>-minicloud-staging and create it on demand",
     )
     logs_transport: Literal["ssh", "docker", "syslog-ng", "vector"] = SctField(
         description="How to transport logs: syslog-ng, ssh or docker",
