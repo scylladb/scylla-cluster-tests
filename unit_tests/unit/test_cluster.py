@@ -1020,7 +1020,7 @@ def test_stop_nemesis_publishes_critical_event_and_arms_hard_exit_on_stuck_threa
         critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
         assert len(critical_events) == 1, f"Expected exactly 1 CRITICAL event, got {len(critical_events)}"
         assert "stop_nemesis" in critical_events[0]
-        assert hard_exit.hard_exit_requested()
+        assert hard_exit._hard_exit_reason
     finally:
         block_forever.set()
         stuck_thread.join(timeout=5)
@@ -1040,4 +1040,4 @@ def test_stop_nemesis_does_not_arm_hard_exit_when_threads_stop(scylla_cluster_fo
 
     critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
     assert len(critical_events) == 0, f"Expected no CRITICAL events, got {len(critical_events)}"
-    assert not hard_exit.hard_exit_requested()
+    assert not hard_exit._hard_exit_reason

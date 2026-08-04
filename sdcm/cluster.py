@@ -5862,17 +5862,16 @@ class BaseScyllaCluster:
                 threads_tracebacks.append("\n".join(stack_trace))
 
         if threads_tracebacks:
-            message = (
-                f"{len(threads_tracebacks)} nemesis thread(s) still alive after {timeout}s stop_nemesis timeout:\n"
-                + "\n".join(threads_tracebacks)
+            escalation_reason = (
+                f"{len(threads_tracebacks)} nemesis thread(s) still alive after {timeout}s stop_nemesis timeout"
             )
             TestFrameworkEvent(
                 source=self.__class__.__name__,
                 source_method="stop_nemesis",
-                message=message,
+                message=escalation_reason + ":\n" + "\n".join(threads_tracebacks),
                 severity=Severity.CRITICAL,
             ).publish_or_dump()
-            request_hard_exit(f"{len(threads_tracebacks)} nemesis thread(s) still alive after stop_nemesis timeout")
+            request_hard_exit(escalation_reason)
 
     def start_kms_key_rotation_thread(self) -> None:
         if self.params.get("cluster_backend") != "aws":
