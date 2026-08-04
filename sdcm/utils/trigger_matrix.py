@@ -914,11 +914,12 @@ def _extract_branch_from_version(scylla_version: str) -> str:
 def _branch_directory_id(branch: str) -> str:
     """Compute the S3 directory-prefixed branch id for a bare branch string.
 
-    Mirrors the directory-vs-filename distinction made by get_branched_repo()
-    (sdcm/utils/version_utils.py): the S3 directory path segment for a branch
-    uses a `branch-` prefix for non-master branches (e.g. `branch-2025.1`),
-    while `master` has no prefix. If `branch` already carries a `branch-` or
-    `enterprise-` prefix (or is empty), it is returned unchanged.
+    SCT-782: the unstable-repo S3 layout uses a `branch-` prefix for non-master
+    branches in the directory path segment (e.g. `branch-2025.1`), while `master`
+    has no prefix; the filename segment, in contrast, always stays bare (e.g.
+    `scylladb-2025.1`). This helper produces the former. If `branch` already
+    carries a `branch-` or `enterprise-` prefix (or is empty), it is returned
+    unchanged.
     """
     if not branch or branch == "master" or branch.startswith(("branch-", "enterprise-")):
         return branch
@@ -931,7 +932,7 @@ def _resolve_templates(value: object, branch: str, branch_id: str) -> object:
     {branch} is the bare branch (e.g. "2025.1", "master") — used where the S3
     path must not be prefixed (e.g. the `scylladb-{branch}` filename segment).
     {branch_id} is the directory-prefixed form (e.g. "branch-2025.1", "master")
-    — used for the S3 directory path segment, matching get_branched_repo().
+    — used for the S3 directory path segment.
     """
     if isinstance(value, str):
         if "{branch}" in value:
@@ -962,10 +963,10 @@ def build_job_parameters(
     Template variables in parameter values are resolved:
       {branch} — bare branch, extracted from branch_source_version (or scylla_version if
           not provided), e.g. "2025.1" or "master".
-      {branch_id} — directory-prefixed branch, derived from {branch} the same way
-          get_branched_repo() (sdcm/utils/version_utils.py) computes its S3 directory
-          segment: "branch-2025.1" for non-master branches, "master" (no prefix) for
-          master.
+      {branch_id} — directory-prefixed branch, derived from {branch}: "branch-2025.1"
+          for non-master branches, "master" (no prefix) for master (SCT-782 — this
+          mirrors the unstable-repo S3 directory layout, not get_branched_repo()'s
+          internal variable naming).
 
     Args:
         job: Job configuration.
