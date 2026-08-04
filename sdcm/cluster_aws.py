@@ -37,6 +37,7 @@ from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
 from sdcm.provision.network_configuration import (
     NetworkInterface,
+    NetworkInterfaceNotFound,
     ScyllaNetworkConfiguration,
     is_ip_ssh_connections_ipv6,
     network_interfaces_count,
@@ -882,10 +883,16 @@ class AWSNode(cluster.BaseNode):
         # In split-network configs rpc_address/broadcast_rpc_address may live on a secondary NIC and
         # is what nodetool gossipinfo reports as RPC_ADDRESS, so nodes must be findable by it.
         ips = super().get_all_ip_addresses()
-        for extra_address in (
-            self.scylla_network_configuration.rpc_address,
-            self.scylla_network_configuration.broadcast_rpc_address,
+        for address_getter in (
+            lambda: self.scylla_network_configuration.rpc_address,
+            lambda: self.scylla_network_configuration.broadcast_rpc_address,
         ):
+            try:
+                extra_address = address_getter()
+            except NetworkInterfaceNotFound:
+                # scylla_network_config's "nic" doesn't match an actual interface on this node;
+                # skip this address rather than failing the whole cluster's ip-to-node map.
+                continue
             if not extra_address or extra_address == ScyllaNetworkConfiguration.LISTEN_ALL:
                 continue
             try:
