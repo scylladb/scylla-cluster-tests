@@ -18,6 +18,8 @@ import pytest
 import logging
 import typing
 
+from sdcm.utils.vector_store_index import index_key, wait_for_index_build_seconds
+
 if typing.TYPE_CHECKING:
     from sdcm.utils.vector_store_client import VectorStoreClient
     from unit_tests.lib.dummy_remote import LocalScyllaClusterDummy
@@ -220,3 +222,62 @@ def test_vector_search_with_dedicated_scylla_user(docker_scylla, docker_vector_s
     assert vs_clients, "Vector Store has no CQL connection as vs_user"
     assert permissions and "VECTOR_SEARCH_INDEXING" in permissions.permissions
     assert service_level and service_level.service_level == "vector_store_sl"
+
+
+def test_index_status_polling_spans_a_missing_index(docker_scylla, docker_vector_store, params):
+    """'get_index_status_or_none' and 'wait_for_index_absent' against a real vector-store.
+
+    Both exist for the search performance tests, which build an index per step and drop it before the
+    next: vector-store discovers a fresh index asynchronously and forgets a dropped one just as
+    asynchronously, so a 404 has to read as "not there" rather than as an error. The unit tests mock
+    the HTTP layer; this checks the two states that are deterministic against a live service -- before
+    the index exists, and after it is dropped.
+
+    Exercised through a vector index because that is what the released images support. Neither helper
+    knows or cares which kind of index it is; the full-text tests use the same two calls.
+    """
+    db_cluster, vs_cluster = docker_scylla.parent_cluster, docker_vector_store
+    vector_client = vs_cluster.nodes[0].get_vector_store_api_client()
+    keyspace, index = "vector_test", "embeddings_vector_idx"
+
+    # No such index yet: a 404 that must not raise.
+    assert vector_client.get_index_status_or_none(keyspace, index) is None
+
+    create_vector_table(db_cluster)
+    insert_test_vectors(db_cluster, count=10)
+    wait_for_vector_indexing(vector_client)
+
+    status = vector_client.get_index_status_or_none(keyspace, index)
+    assert status is not None and "status" in status, f"discovered index reported no status: {status}"
+
+    with db_cluster.cql_connection_patient(db_cluster.nodes[0]) as session:
+        session.execute(f"DROP INDEX IF EXISTS {keyspace}.{index}")
+
+    # Returns when vector-store has forgotten it; raises if it never does.
+    vector_client.wait_for_index_absent(keyspace, index, timeout=120)
+    assert vector_client.get_index_status_or_none(keyspace, index) is None
+
+
+def test_index_build_time_is_read_from_the_vector_store_log(docker_scylla, docker_vector_store, params):
+    """'wait_for_index_build_seconds' against the log a real vector-store writes.
+
+    The search performance tests time an index build from vector-store's own "starting/finished full
+    scan" lines rather than from anything the stress tool prints. The unit tests parse captured lines;
+    what they cannot check is that the lines are still worded that way, still carry the case-folded
+    '<keyspace>.<index>' key, and still reach the runner's copy of the log -- all of which this does.
+    """
+    db_cluster, vs_cluster = docker_scylla.parent_cluster, docker_vector_store
+    vector_client = vs_cluster.nodes[0].get_vector_store_api_client()
+    keyspace, index = "vector_test", "embeddings_vector_idx"
+
+    create_vector_table(db_cluster)
+    insert_test_vectors(db_cluster, count=10)
+    wait_for_vector_indexing(vector_client)
+
+    build_seconds = wait_for_index_build_seconds(vs_cluster.nodes[0].system_log, keyspace, index, timeout=120)
+    assert build_seconds is not None, (
+        "no 'starting'/'finished full scan' pair for "
+        f"{index_key(keyspace, index)} in {vs_cluster.nodes[0].system_log} -- either vector-store "
+        "reworded the lines or they are not reaching the runner"
+    )
+    assert build_seconds >= 0.0
