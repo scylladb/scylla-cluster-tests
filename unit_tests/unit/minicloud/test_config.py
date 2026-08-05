@@ -1,12 +1,17 @@
 """Tests for MinicloudConfig: defaults, params-only from_env resolution and MinicloudError."""
 
+import os
+
 import pytest
 
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS
 from sdcm.utils.minicloud import (
+    MINICLOUD_CONTAINER_NAME,
     MINICLOUD_DEFAULT_REGION,
     MINICLOUD_GCP_PROJECT_DEFAULT,
     MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT,
+    MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT,
+    MINICLOUD_STATE_DIR_DEFAULT,
     MinicloudConfig,
     MinicloudError,
     default_minicloud_image,
@@ -202,6 +207,61 @@ def test_minicloud_config_falls_back_to_defaults_on_empty_params():
 def test_minicloud_config_gcs_bucket_param():
     config = MinicloudConfig.from_env(params={"minicloud_gcs_bucket": "sct-project-1-minicloud-staging"})
     assert config.gcs_bucket == "sct-project-1-minicloud-staging"
+
+
+def test_minicloud_config_sizing_params_are_honoured():
+    """The whole point of these params: local and CI pick different values from config."""
+    config = MinicloudConfig.from_env(
+        params={
+            "minicloud_lightweight_vcpus": 4,
+            "minicloud_container_memory": "48GiB",
+            "minicloud_container_cpus": "12",
+            "minicloud_container_name": "minicloud-ci",
+            "minicloud_state_dir": "/mnt/nvme/minicloud",
+        }
+    )
+    assert config.lightweight_vcpus == 4
+    assert config.container_memory == "48GiB"
+    assert config.container_cpus == "12"
+    assert config.container_name == "minicloud-ci"
+    assert config.state_dir == "/mnt/nvme/minicloud"
+
+
+def test_minicloud_config_sizing_defaults():
+    config = MinicloudConfig.from_env()
+    assert config.lightweight_vcpus == MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT
+    assert config.container_memory == ""  # empty means "no docker limit"
+    assert config.container_cpus == ""
+    assert config.container_name == MINICLOUD_CONTAINER_NAME
+    assert config.state_dir == os.path.expanduser(MINICLOUD_STATE_DIR_DEFAULT)
+
+
+def test_minicloud_config_empty_sizing_params_do_not_blank_defaults():
+    """Pipelines pass '' for an unset job parameter — that must read as "not set"."""
+    config = MinicloudConfig.from_env(
+        params={
+            "minicloud_lightweight_vcpus": "",
+            "minicloud_container_memory": "",
+            "minicloud_container_cpus": "",
+            "minicloud_container_name": "",
+            "minicloud_state_dir": "",
+        }
+    )
+    assert config.lightweight_vcpus == MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT
+    assert config.container_name == MINICLOUD_CONTAINER_NAME
+    assert config.state_dir == os.path.expanduser(MINICLOUD_STATE_DIR_DEFAULT)
+
+
+def test_minicloud_config_state_dir_drives_log_file():
+    """log_file is derived from state_dir, so it has to follow the configured value."""
+    config = MinicloudConfig.from_env(params={"minicloud_state_dir": "/mnt/nvme/minicloud"})
+    assert config.log_file == "/mnt/nvme/minicloud/minicloud.log"
+
+
+def test_minicloud_config_state_dir_expands_tilde():
+    config = MinicloudConfig.from_env(params={"minicloud_state_dir": "~/scratch/minicloud"})
+    assert config.state_dir == os.path.expanduser("~/scratch/minicloud")
+    assert "~" not in config.log_file
 
 
 def test_minicloud_config_gce_project_param_wins_over_env(monkeypatch):

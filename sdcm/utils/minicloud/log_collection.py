@@ -50,7 +50,7 @@ def redact_docker_inspect(raw: bytes) -> bytes:
         return b'{"error": "docker inspect output could not be parsed for credential redaction"}\n'
 
 
-def collect_minicloud_logs(logdir: str) -> None:
+def collect_minicloud_logs(logdir: str, container_name: str = MINICLOUD_CONTAINER_NAME) -> None:
     """Dump minicloud container logs and inspect state into the test logdir.
 
     Produces: minicloud.log, minicloud-stderr.log, minicloud-inspect.json.
@@ -59,8 +59,11 @@ def collect_minicloud_logs(logdir: str) -> None:
     Runs after the manager has already streamed the log and (on death or teardown)
     recorded minicloud-inspect.json, so anything already written here wins: those files
     were captured while the container still existed, this one runs after `docker rm -f`.
+
+    ``container_name`` defaults to the standard name because the log-collection entry points
+    run without an SCTConfiguration; pass the configured ``minicloud_container_name`` from
+    anywhere that has one, or the collector inspects the wrong container.
     """
-    container_name = MINICLOUD_CONTAINER_NAME
     os.makedirs(logdir, exist_ok=True)
 
     # 1. Collect container logs (works on stopped/exited containers, fails only if removed)

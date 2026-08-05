@@ -2496,7 +2496,9 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
         # Collect only — never ensure_minicloud_ready() here: its auto-start does
         # `docker rm -f` on a crashed container, destroying the very evidence
         # (exit code, container logs) this command exists to collect.
-        collect_minicloud_logs(get_test_config().logdir())
+        collect_minicloud_logs(
+            get_test_config().logdir(), container_name=MinicloudConfig.from_env(params=config).container_name
+        )
 
     if not test_id:
         test_id = config.get("test_id")

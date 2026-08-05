@@ -19,7 +19,6 @@ from sdcm.utils.minicloud.activation import (
     validate_minicloud_params,
 )
 from sdcm.utils.minicloud.config import (
-    MINICLOUD_CONTAINER_NAME,
     MINICLOUD_HEALTH_INTERVAL,
     MINICLOUD_HEALTH_TIMEOUT,
     MinicloudConfig,
@@ -48,8 +47,6 @@ class MinicloudManager:
             pass
         # minicloud container is stopped
     """
-
-    MINICLOUD_CONTAINER_NAME = MINICLOUD_CONTAINER_NAME
 
     def __init__(self, config: MinicloudConfig | None = None):
         self.config = config or MinicloudConfig.from_env()
@@ -129,7 +126,7 @@ class MinicloudManager:
     def _get_running_image(self) -> str:
         """Return the image name of the running minicloud container, or empty string."""
         result = subprocess.run(
-            ["docker", "inspect", self.MINICLOUD_CONTAINER_NAME, "--format", "{{.Config.Image}}"],
+            ["docker", "inspect", self.config.container_name, "--format", "{{.Config.Image}}"],
             capture_output=True,
             check=False,
         )
@@ -137,10 +134,10 @@ class MinicloudManager:
             return result.stdout.decode().strip()
         return ""
 
-    def _inspect_container(self, go_template: str) -> list | None:
+    def _inspect_container(self, go_template: str):
         """Return a JSON-decoded `docker inspect` field, or None if unavailable."""
         result = subprocess.run(
-            ["docker", "inspect", self.MINICLOUD_CONTAINER_NAME, "--format", go_template],
+            ["docker", "inspect", self.config.container_name, "--format", go_template],
             capture_output=True,
             check=False,
         )
@@ -254,10 +251,58 @@ class MinicloudManager:
             gaps.append("no --gcs-bucket")
         return gaps
 
+    def _container_sizing_gaps(self) -> list[str]:
+        """Return the ways a running container's sizing differs from what this run asked for.
+
+        Every sizing knob is start-time only — the guest sizing is a minicloud CLI argument and
+        the docker caps are cgroup limits fixed at ``docker run`` — so reuse silently keeps the
+        previous run's sizing: a rerun with a new ``SCT_MINICLOUD_LIGHTWEIGHT_MEMORY`` would get
+        the old guests, and a changed ``minicloud_container_memory`` would leave the host-memory
+        gate measuring against a cap nothing enforces.
+
+        A container that cannot be inspected yields no gaps: absence of evidence is not a reason
+        to throw away a working emulator (and every VM it hosts) mid-workflow.
+        """
+        cmd = self._inspect_container("{{json .Config.Cmd}}")
+        if cmd is None:
+            return []
+        cmd = [str(arg) for arg in cmd]
+        gaps = []
+
+        def running_arg(flag: str) -> str:
+            index = cmd.index(flag) + 1 if flag in cmd else 0
+            return cmd[index] if 0 < index < len(cmd) else ""
+
+        if self.config.lightweight != ("--lightweight" in cmd):
+            gaps.append(f"lightweight mode is {'--lightweight' in cmd}, this run wants {self.config.lightweight}")
+        elif self.config.lightweight:
+            for flag, wanted in (
+                ("--lightweight-memory", self.config.lightweight_memory),
+                ("--lightweight-vcpus", str(self.config.lightweight_vcpus)),
+            ):
+                if (running := running_arg(flag)) != wanted:
+                    gaps.append(f"{flag} is {running or 'unset'}, this run wants {wanted}")
+
+        # docker's own caps, read back from HostConfig: unset means no flag, which docker reports
+        # as 0 - so the same "0" stands for both sides of "no limit" and the comparison is exact.
+        for field, wanted_value, flag, divisor in (
+            ("Memory", self.config.container_memory, "--memory", 1024**3),
+            ("NanoCpus", self.config.container_cpus, "--cpus", 10**9),
+        ):
+            raw = self._inspect_container(f"{{{{json .HostConfig.{field}}}}}")
+            if not isinstance(raw, (int, float)):
+                continue
+            wanted = parse_memory_gib(wanted_value) if flag == "--memory" and wanted_value else float(wanted_value or 0)
+            # format both through :g so the GiB->flag rounding docker was given is the same
+            # rounding this comparison sees, and an unchanged config never looks like a change
+            if f"{raw / divisor:g}" != f"{wanted:g}":
+                gaps.append(f"{flag} is {raw / divisor:g}, this run wants {wanted:g}")
+        return gaps
+
     def _force_stop_container(self) -> None:
         # Target the ID we started when we know it, so we can never remove a different
         # container that has meanwhile taken over the 'minicloud' name.
-        target = self._container_id or self.MINICLOUD_CONTAINER_NAME
+        target = self._container_id or self.config.container_name
         subprocess.run(["docker", "rm", "-f", target], capture_output=True, check=False)
         subprocess.run(["docker", "network", "disconnect", "-f", "host", target], capture_output=True, check=False)
 
@@ -285,6 +330,8 @@ class MinicloudManager:
                 restart_reason = f"running image '{running_image}' != expected '{expected_image}'"
             elif self.backend in ("gce", "gce-siren") and (gaps := self._container_gce_gaps()):
                 restart_reason = f"running container is not usable for the '{self.backend}' backend: {', '.join(gaps)}"
+            elif sizing_gaps := self._container_sizing_gaps():
+                restart_reason = f"running container was started with different sizing: {', '.join(sizing_gaps)}"
             if restart_reason:
                 LOGGER.info("minicloud restarting — %s", restart_reason)
                 self._force_stop_container()
@@ -296,7 +343,7 @@ class MinicloudManager:
                 self._start_log_streaming()
                 return
 
-        container_name = self.MINICLOUD_CONTAINER_NAME
+        container_name = self.config.container_name
         image = self.config.docker_image
 
         self._force_stop_container()
@@ -318,6 +365,16 @@ class MinicloudManager:
             "-v",
             f"{self.config.state_dir}:/root/.cache/minicloud",
         ]
+
+        # Optional docker limits. Unset means no flag at all, so the container stays bounded only
+        # by the host - what every run did before these were configurable. A cap is what stops a
+        # runaway emulator from taking the whole dev box (or CI agent) down with it.
+        if self.config.container_memory:
+            # docker --memory speaks b/k/m/g, not the GiB form the rest of the minicloud config
+            # uses, so convert rather than make the user remember two unit styles.
+            docker_cmd += ["--memory", f"{parse_memory_gib(self.config.container_memory):g}g"]
+        if self.config.container_cpus:
+            docker_cmd += ["--cpus", str(self.config.container_cpus)]
 
         # Name-only --env: docker reads the values from this process's environment, so no
         # credential ever appears in argv (visible via ps/procfs) or in the logged command.
@@ -357,7 +414,13 @@ class MinicloudManager:
             minicloud_args += ["--gcs-bucket", self.config.gcs_bucket]
         minicloud_args += ["--gcp-project", self.config.gcp_project]
         if self.config.lightweight:
-            minicloud_args += ["--lightweight", "--lightweight-memory", self.config.lightweight_memory]
+            minicloud_args += [
+                "--lightweight",
+                "--lightweight-memory",
+                self.config.lightweight_memory,
+                "--lightweight-vcpus",
+                str(self.config.lightweight_vcpus),
+            ]
 
         full_cmd = docker_cmd + minicloud_args
         # Safe to log verbatim: credentials are passed as name-only --env flags above.
@@ -394,7 +457,7 @@ class MinicloudManager:
         if self.keep_alive:
             LOGGER.info("minicloud keep_alive is set, skipping stop")
             return
-        container_name = self.MINICLOUD_CONTAINER_NAME
+        container_name = self.config.container_name
         # Set before terminating the streamer: that terminate wakes the death watcher, and
         # this flag is how it tells our own teardown apart from an external kill.
         self._stopping = True
@@ -443,7 +506,7 @@ class MinicloudManager:
         self._close_log_file()
         self._container_log_file = open(log_path, "a")  # noqa: SIM115
         self._container_log_process = subprocess.Popen(
-            ["docker", "logs", "-f", self._container_id or self.MINICLOUD_CONTAINER_NAME],
+            ["docker", "logs", "-f", self._container_id or self.config.container_name],
             stdout=self._container_log_file,
             stderr=self._container_log_file,
         )
@@ -516,7 +579,7 @@ class MinicloudManager:
     def is_running(self) -> bool:
         """Check if minicloud container is running."""
         result = subprocess.run(
-            ["docker", "inspect", "-f", "{{.State.Running}}", self.MINICLOUD_CONTAINER_NAME],
+            ["docker", "inspect", "-f", "{{.State.Running}}", self.config.container_name],
             capture_output=True,
             text=True,
             check=False,

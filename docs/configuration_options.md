@@ -4055,6 +4055,51 @@ Memory allocation for lightweight minicloud deployments
 **type:** str (appendable)
 
 
+## **minicloud_lightweight_vcpus** / SCT_MINICLOUD_LIGHTWEIGHT_VCPUS
+
+vCPUs per guest in lightweight mode. Scylla runs one shard per vCPU, so this multiplies with minicloud_lightweight_memory across every guest in the test — raise it only on a host with cores to spare
+
+**default:** 1
+
+**type:** int
+
+
+## **minicloud_container_memory** / SCT_MINICLOUD_CONTAINER_MEMORY
+
+Cap the minicloud container's memory (e.g. '32GiB'). Empty means no docker limit, so the container can consume the whole host. Setting it also makes this, rather than the host's free memory, the budget the preflight guest-memory gate measures against
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **minicloud_container_cpus** / SCT_MINICLOUD_CONTAINER_CPUS
+
+Cap the minicloud container's CPU allowance, in docker --cpus form (e.g. '8' or '7.5'). Empty means no limit
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **minicloud_state_dir** / SCT_MINICLOUD_STATE_DIR
+
+Where minicloud keeps its image cache, per-instance disks and minicloud.log — tens of GiB. Empty means ~/.cache/minicloud; point it at a bigger disk or a CI workspace
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **minicloud_container_name** / SCT_MINICLOUD_CONTAINER_NAME
+
+Name of the minicloud docker container. Change it to run two emulators on one host — a second run under the same name force-removes the first one's container
+
+**default:** minicloud
+
+**type:** str (appendable)
+
+
 ## **minicloud_keep_alive** / SCT_MINICLOUD_KEEP_ALIVE
 
 Leave the minicloud container running after the test instead of tearing it down (CI sets this so separate provision/test/collect/clean stages reach the same container)

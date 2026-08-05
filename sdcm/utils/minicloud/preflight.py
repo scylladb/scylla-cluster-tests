@@ -52,6 +52,11 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
     sct_config.py:sum(n_db_nodes) does. Without this check the container is
     cgroup-OOM-killed mid-test (exit 137) and every VM dies with it.
 
+    When ``minicloud_container_memory`` caps the container, that cap - not the host's free
+    memory - is what the guests actually have to fit into, and it is the figure the cgroup
+    OOM killer enforces. Measuring against the host instead would happily pass a test that
+    the cap kills.
+
     The ``minicloud_skip_memory_check`` param (SCT_MINICLOUD_SKIP_MEMORY_CHECK) disables
     the gate — the arithmetic is deliberately conservative, and a developer who knows the
     workload's real footprint should not be blocked by it.
@@ -69,24 +74,34 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
     guests = sum(sum_node_counts(params.get(name)) for name in GUEST_NODE_COUNT_PARAMS)
     if not guests:
         return
-    meminfo = Path("/proc/meminfo")
-    if not meminfo.exists():  # non-Linux dev box; the container will not run here anyway
-        return
-    available_gib = 0.0
-    for line in meminfo.read_text().splitlines():
-        if line.startswith("MemAvailable:"):
-            available_gib = int(line.split()[1]) / 1024 / 1024
-            break
     per_guest_gib = parse_memory_gib(config.lightweight_memory)
-    host_headroom_gib = 2.0  # dockerd, hydra, SCT itself and the page cache need to live too
-    needed_gib = guests * per_guest_gib + host_headroom_gib
-    if available_gib and available_gib < needed_gib:
+    if config.container_memory:
+        # The cap is the whole budget the guests get, so no host headroom is subtracted from
+        # it - dockerd and SCT live outside the cgroup.
+        budget_gib = parse_memory_gib(config.container_memory)
+        needed_gib = guests * per_guest_gib
+        budget_source = f"the minicloud_container_memory cap ({config.container_memory})"
+        headroom_note = ""
+    else:
+        meminfo = Path("/proc/meminfo")
+        if not meminfo.exists():  # non-Linux dev box; the container will not run here anyway
+            return
+        budget_gib = 0.0
+        for line in meminfo.read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                budget_gib = int(line.split()[1]) / 1024 / 1024
+                break
+        host_headroom_gib = 2.0  # dockerd, hydra, SCT itself and the page cache need to live too
+        needed_gib = guests * per_guest_gib + host_headroom_gib
+        budget_source = "available host memory"
+        headroom_note = f" + {host_headroom_gib:.0f}GiB host headroom"
+    if budget_gib and budget_gib < needed_gib:
         raise MinicloudError(
-            f"not enough memory for this test on this host: {guests} guest(s) x "
-            f"{per_guest_gib:.1f}GiB ({config.lightweight_memory}) + {host_headroom_gib:.0f}GiB "
-            f"host headroom = {needed_gib:.1f}GiB needed, but only {available_gib:.1f}GiB is "
-            f"available. Reduce {'/'.join(GUEST_NODE_COUNT_PARAMS)}, lower "
-            f"minicloud_lightweight_memory, use a bigger host, or set "
+            f"not enough memory for this test: {guests} guest(s) x "
+            f"{per_guest_gib:.1f}GiB ({config.lightweight_memory}){headroom_note} = "
+            f"{needed_gib:.1f}GiB needed, but only {budget_gib:.1f}GiB is available from "
+            f"{budget_source}. Reduce {'/'.join(GUEST_NODE_COUNT_PARAMS)}, lower "
+            f"minicloud_lightweight_memory, raise the budget, or set "
             f"SCT_MINICLOUD_SKIP_MEMORY_CHECK=true if you know the real footprint - otherwise the "
             f"container is OOM-killed mid-test (exit 137) taking every VM with it."
         )
