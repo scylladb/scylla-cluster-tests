@@ -278,6 +278,37 @@ from the env var it feeds by more than case: Jenkins' `EnvVars` map is case-inse
 parameter named exactly like its variable swallows the export. A
 per-run `extra_environment_variables` override always beats the jenkinsfile's defaults.
 
+#### Sizing
+
+The guest and container budget is the one thing a test-case yaml cannot settle, because the same
+test wants a smaller budget on a lab machine than on a CI agent. Each knob is an ordinary SCT
+config option with a default in `defaults/test_default.yaml`; the pipeline layer only overrides it.
+
+| Job parameter | SCT config option | Empty means |
+|---|---|---|
+| `minicloud_lightweight_memory` | `minicloud_lightweight_memory` | keep the yaml value (4GiB) |
+| `minicloud_lightweight_vcpus` | `minicloud_lightweight_vcpus` | keep the yaml value (1) |
+| `minicloud_container_memory` | `minicloud_container_memory` | no docker limit on the container |
+| — (jenkinsfile / `extra_environment_variables` only) | `minicloud_container_cpus` | no docker limit |
+| — (jenkinsfile / `extra_environment_variables` only) | `minicloud_state_dir` | `~/.cache/minicloud` |
+| — (jenkinsfile / `extra_environment_variables` only) | `minicloud_container_name` | `minicloud` |
+
+`startMinicloud.exportSizing()` resolves each one as **`extra_environment_variables` > job
+parameter > jenkinsfile `pipelineParams`**, and exports it build-wide. Build-wide matters for the
+same reason the image does: `start-minicloud`, `provision-resources`, `run-test`, `collect-logs`
+and `clean-resources` are separate hydra invocations that each rebuild `MinicloudConfig`, so an
+invocation that cannot see `minicloud_container_name` or `minicloud_state_dir` looks for the
+container under the default name or in the wrong directory - teardown then leaves the real
+container running and collection finds no logs.
+
+Empty stays unset at every level, so a string parameter nobody filled in does not override the
+yaml with nothing. The three knobs without a job parameter are agent properties rather than
+per-build choices; set them in the jenkinsfile, or per run via `extra_environment_variables`.
+
+Setting `minicloud_container_memory` also moves the preflight guest-memory gate onto that cap
+instead of the host's free memory - the cgroup OOM killer enforces the cap, so measuring the host
+would pass a test the cap then kills.
+
 ### Triggering from staging_trigger.py
 
 `generate` and `trigger` work on these jobs like any other. One gotcha: the `artifacts` preset
@@ -292,4 +323,3 @@ python staging_trigger.py -f scylla-staging/<user> trigger -b <branch> \
 
 The deb/rpm jobs are fine with `master:latest` - they install over the network from
 `downloads.scylladb.com`.
-

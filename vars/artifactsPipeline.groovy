@@ -109,6 +109,17 @@ def call(Map pipelineParams) {
                                 'Empty leaves the image at its renovate-managed default (defaults/docker_images/minicloud/). ' +
                                 'Ignored unless the jenkinsfile sets `minicloud: true`',
                    name: 'minicloud_docker')
+            string(defaultValue: "${pipelineParams.get('minicloud_lightweight_memory', '')}",
+                   description: 'RAM per emulated guest, e.g. 6GiB. Empty keeps the test-case/defaults value. ' +
+                                'Multiplies across every guest in the test, so the agent or sct-runner has to fit the product',
+                   name: 'minicloud_lightweight_memory')
+            string(defaultValue: "${pipelineParams.get('minicloud_lightweight_vcpus', '')}",
+                   description: 'vCPUs per emulated guest (one Scylla shard each). Empty keeps the test-case/defaults value',
+                   name: 'minicloud_lightweight_vcpus')
+            string(defaultValue: "${pipelineParams.get('minicloud_container_memory', '')}",
+                   description: 'Cap the minicloud container itself, e.g. 32GiB. Empty means no docker limit. ' +
+                                'When set, this is also the budget the preflight guest-memory gate measures against',
+                   name: 'minicloud_container_memory')
             separator(name: 'MISC_CONFIG', sectionHeader: 'Miscellaneous Configuration')
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                description: 'Gce project to use',
