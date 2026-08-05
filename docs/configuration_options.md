@@ -1215,7 +1215,7 @@ Cloud-agnostic instance sizing constraints for monitor nodes
 
 ## **instance_type_loader** / SCT_INSTANCE_TYPE_LOADER
 
-AWS image type of the loader node. Accepts a comma-separated list of interchangeable instance types (e.g. 'c6i.xlarge,c7i.xlarge'). The first entry is the preferred type and the only one used outside of EC2 Fleet provisioning; the extra entries are offered to EC2 Fleet as alternatives so spot capacity can be satisfied from more than one pool.
+AWS image type of the loader node
 
 **default:** N/A
 
@@ -1233,7 +1233,7 @@ AWS image type of the monitor node
 
 ## **instance_type_db** / SCT_INSTANCE_TYPE_DB
 
-AWS image type of the db node. Accepts a comma-separated list of interchangeable instance types (e.g. 'i7i.large,i7ie.large,i4i.large'). The first entry is the preferred type and the only one used outside of EC2 Fleet provisioning; the extra entries are offered to EC2 Fleet as alternatives so spot capacity can be satisfied from more than one pool. Only list types with equivalent CPU/memory/disk characteristics - SCT does not verify this.
+AWS image type of the db node
 
 **default:** N/A
 
@@ -1241,6 +1241,15 @@ AWS image type of the db node. Accepts a comma-separated list of interchangeable
 
 **backend overrides:**
 - `i4i.4xlarge`: k8s-eks
+
+
+## **instance_type_db_alternatives** / SCT_INSTANCE_TYPE_DB_ALTERNATIVES
+
+Comma-separated list of additional, interchangeable AWS DB instance types (e.g. 'i7ie.large,i4i.large,i3en.large') offered ONLY to EC2 Fleet (spot) provisioning as alternatives to instance_type_db, so a large spot request can be satisfied from more than one capacity pool. instance_type_db remains the single primary type used by every other code path (validation, AMI/arch lookup, AZ selection, non-fleet provisioning). Only list types with CPU/memory/disk characteristics equivalent to instance_type_db - SCT does not verify this. AWS-only.
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 ## **instance_type_db_oracle** / SCT_INSTANCE_TYPE_DB_ORACLE

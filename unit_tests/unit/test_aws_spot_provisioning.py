@@ -320,6 +320,57 @@ def test_delete_ec2_fleet_is_best_effort(mock_ec2_client, caplog):
     assert "Failed to delete EC2 fleet" in caplog.records[0].message
 
 
+def test_delete_ec2_fleet_terminates_instances_when_delete_raises(mock_ec2_client):
+    """A failed delete must fall back to terminating the tracked instances (no leaks)."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.delete_fleets.side_effect = Exception("Fleet delete error")
+
+    delete_ec2_fleet(
+        region_name="us-east-1",
+        fleet_id="fleet-1",
+        terminate_instances=True,
+        instance_ids=["i-1", "i-2"],
+    )
+
+    mock_client.terminate_instances.assert_called_once_with(InstanceIds=["i-1", "i-2"])
+
+
+def test_delete_ec2_fleet_terminates_instances_on_unsuccessful_deletion(mock_ec2_client):
+    """UnsuccessfulFleetDeletions in the response must trigger direct instance termination."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.delete_fleets.return_value = {
+        "UnsuccessfulFleetDeletions": [{"FleetId": "fleet-1", "Error": {"Code": "fleetIdDoesNotExist"}}],
+        "SuccessfulFleetDeletions": [],
+    }
+
+    delete_ec2_fleet(
+        region_name="us-east-1",
+        fleet_id="fleet-1",
+        terminate_instances=True,
+        instance_ids=["i-1"],
+    )
+
+    mock_client.terminate_instances.assert_called_once_with(InstanceIds=["i-1"])
+
+
+def test_delete_ec2_fleet_no_terminate_on_successful_deletion(mock_ec2_client):
+    """A clean deletion (no UnsuccessfulFleetDeletions) must not double-terminate instances."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.delete_fleets.return_value = {"UnsuccessfulFleetDeletions": [], "SuccessfulFleetDeletions": []}
+
+    delete_ec2_fleet(
+        region_name="us-east-1",
+        fleet_id="fleet-1",
+        terminate_instances=True,
+        instance_ids=["i-1"],
+    )
+
+    mock_client.terminate_instances.assert_not_called()
+
+
 def test_delete_ec2_fleet_ignores_missing_fleet_id(mock_ec2_client):
     mock_client = MagicMock()
     mock_ec2_client.__getitem__.return_value = mock_client

@@ -21,7 +21,6 @@ from pydantic import Field, computed_field
 from sdcm.cluster import UserRemoteCredentials
 from sdcm.provision.aws.instance_parameters import AWSDiskMapping, AWSPlacementInfo, AWSDiskMappingEbsInfo
 from sdcm.provision.aws.instance_parameters_builder import AWSInstanceParamsBuilderBase
-from sdcm.provision.aws.utils import split_instance_types
 from sdcm.provision.common.user_data import UserDataBuilderBase
 from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
@@ -90,9 +89,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     @computed_field
     @property
     def InstanceType(self) -> str:
-        # The parameter may hold a comma-separated list of interchangeable types; everything except
-        # EC2 Fleet provisioning works with a single type, so resolve to the preferred (first) one.
-        return split_instance_types(self.params.get(self._INSTANCE_TYPE_PARAM_NAME))[0]
+        return self.params.get(self._INSTANCE_TYPE_PARAM_NAME)
 
     @computed_field
     @property

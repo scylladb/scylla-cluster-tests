@@ -1080,23 +1080,23 @@ class SCTConfiguration(BaseModel):
         default=None, description="Cloud-agnostic instance sizing constraints for monitor nodes"
     )
     instance_type_loader: String = SctField(
-        description=(
-            "AWS image type of the loader node. Accepts a comma-separated list of interchangeable "
-            "instance types (e.g. 'c6i.xlarge,c7i.xlarge'). The first entry is the preferred type and "
-            "the only one used outside of EC2 Fleet provisioning; the extra entries are offered to "
-            "EC2 Fleet as alternatives so spot capacity can be satisfied from more than one pool."
-        ),
+        description="AWS image type of the loader node",
     )
     instance_type_monitor: String = SctField(
         description="AWS image type of the monitor node",
     )
     instance_type_db: String = SctField(
+        description="AWS image type of the db node",
+    )
+    instance_type_db_alternatives: String = SctField(
         description=(
-            "AWS image type of the db node. Accepts a comma-separated list of interchangeable "
-            "instance types (e.g. 'i7i.large,i7ie.large,i4i.large'). The first entry is the preferred "
-            "type and the only one used outside of EC2 Fleet provisioning; the extra entries are offered "
-            "to EC2 Fleet as alternatives so spot capacity can be satisfied from more than one pool. "
-            "Only list types with equivalent CPU/memory/disk characteristics - SCT does not verify this."
+            "Comma-separated list of additional, interchangeable AWS DB instance types "
+            "(e.g. 'i7ie.large,i4i.large,i3en.large') offered ONLY to EC2 Fleet (spot) provisioning "
+            "as alternatives to instance_type_db, so a large spot request can be satisfied from more "
+            "than one capacity pool. instance_type_db remains the single primary type used by every "
+            "other code path (validation, AMI/arch lookup, AZ selection, non-fleet provisioning). "
+            "Only list types with CPU/memory/disk characteristics equivalent to instance_type_db - "
+            "SCT does not verify this. AWS-only."
         ),
     )
     instance_type_db_oracle: String = SctField(
@@ -4261,10 +4261,13 @@ class SCTConfiguration(BaseModel):
     def _instance_type_validation(self):
         backend = self.get("cluster_backend")
 
-        # Validate main instance types (db, loader, monitor) are available in the target region
+        # Validate main instance types (db, loader, monitor) are available in the target region.
+        # instance_type_db_alternatives is a comma-separated list of EC2 Fleet-only alternatives,
+        # so every listed type must also be available in the target region.
         if backend == "aws":
             instance_type_params = [
                 "instance_type_db",
+                "instance_type_db_alternatives",
                 "instance_type_loader",
                 "instance_type_monitor",
                 "instance_type_db_target",

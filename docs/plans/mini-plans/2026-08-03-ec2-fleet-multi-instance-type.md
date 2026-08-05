@@ -48,17 +48,19 @@ this mini-plan — track its removal/migration separately if `tester.py` still d
   `InstanceParamsBase | List[InstanceParamsBase]`, so no interface change needed there) — when a
   list is given, build one `Overrides` entry per `InstanceType` in the EC2 Fleet request instead
   of a single-type launch spec.
-- Add a new AWS config param `instance_type_db_fleet` (or extend `instance_type_db` to accept a
-  comma-separated list, consistent with the existing `availability_zone` comma-separated pattern
-  in `sdcm/sct_config.py:2163`) — **Needs Investigation**: confirm with maintainers whether to
-  overload `instance_type_db`/`instance_type_loader` to accept CSV, or add a dedicated
-  `*_instance_types` list param, since `instance_type_db` is consumed as a plain string in many
-  other places (AMI lookups, sizing validation) that would need auditing.
-- Wire the parsed instance type list from config down through
-  `sdcm/sct_provision/aws/cluster.py` into `AWSInstanceParams`/the new list-based
-  `provision()` call.
-- Update `test-cases/scale/scale-cluster.yaml` (or a new scale-specific override file) to set
-  `instance_type_db: 'i7i.large,i7ie.large,i4i.large'` as a concrete usage example.
+- Add a dedicated AWS config param `instance_type_db_alternatives` (comma-separated list of
+  interchangeable DB instance types) consumed **only** by the EC2 Fleet provisioning path.
+  `instance_type_db` / `instance_type_loader` stay single-literal and unchanged everywhere else.
+  **Decision:** rejected overloading `instance_type_db` with CSV — maintainer feedback (@fruch) and
+  the open heterogeneous-cluster proposal (PR #13427) reserve a future CSV/`cluster_topology`
+  meaning of "deploy different types per rack" for `instance_type_db`, which would collide with a
+  "spot alternatives" meaning. A separate param keeps the two concepts unambiguous and avoids
+  auditing every plain-string consumer of `instance_type_db` (AMI/arch lookup, sizing validation,
+  AZ selection).
+- Wire the parsed alternatives list down through `sdcm/sct_provision/aws/cluster.py`
+  (`_instance_types = [instance_type_db] + split_instance_types(instance_type_db_alternatives)`,
+  deduped) into the list-based `provision()` call. Only DBCluster defines an alternatives param;
+  all other clusters (loader, monitor, oracle, zero-token) provision a single instance type.
 - Keep `SPOT_FLEET_LIMIT` / `SPOT_CNT_LIMIT` constants as-is; EC2 Fleet has its own equivalent
   limits but the existing batching logic in `_provision_spot_instances()` is provider-agnostic
   and doesn't need to change.
@@ -76,13 +78,14 @@ this mini-plan — track its removal/migration separately if `tester.py` still d
 - `sdcm/provision/aws/constants.py` -- add any new EC2 Fleet-specific state/error constants
   (e.g. fleet `Errors[].ErrorCode` values equivalent to `FLEET_LIMIT_EXCEEDED_ERROR`,
   `SPOT_CAPACITY_NOT_AVAILABLE_ERROR`)
-- `sdcm/sct_config.py` -- extend `instance_type_db`/`instance_type_loader` parsing (or add new
-  param) to support a comma-separated list of instance types, following the `availability_zone`
-  split pattern (L2163, parsed at L4188/L4886)
-- `sdcm/sct_provision/aws/cluster.py` -- pass the parsed list of instance types into
-  `AWSInstanceParams` construction / `provision()` call
-- `test-cases/scale/scale-cluster.yaml` -- example config using multiple instance types for the
-  180-200 node scale test
+- `sdcm/sct_config.py` -- add the dedicated `instance_type_db_alternatives` field (fleet-only,
+  AWS-only) and validate every listed type is available in the target region in
+  `_instance_type_validation()`; `instance_type_db`/`instance_type_loader` stay single-literal
+- `sdcm/sct_provision/aws/cluster.py` -- `_instance_types` builds `[instance_type_db] +
+  alternatives` (deduped) via `_INSTANCE_TYPE_ALTERNATIVES_PARAM_NAME`; only the fleet path uses
+  entries beyond the first
+- `test-cases/scale/scale-cluster.yaml` -- example config: `instance_type_db: 'i7i.large'` +
+  `instance_type_db_alternatives: 'i7ie.large,i4i.large,i3en.large'` for the 180-200 node scale test
 - `unit_tests/unit/test_aws_spot_provisioning.py` -- add tests for
   `get_provisioned_ec2_fleet_instance_ids()` mirroring existing fleet test scenarios (fulfilled,
   limit exceeded, capacity not available, pending)

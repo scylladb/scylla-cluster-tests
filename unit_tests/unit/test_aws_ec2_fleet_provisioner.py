@@ -109,7 +109,7 @@ def test_partial_fulfillment_is_rolled_back(provision_parameters, fleet_mocks):
 
     assert instances == []
     fleet_mocks["delete_fleet"].assert_called_once_with(
-        region_name="us-east-1", fleet_id="fleet-1", terminate_instances=True
+        region_name="us-east-1", fleet_id="fleet-1", terminate_instances=True, instance_ids=["i-1"]
     )
     fleet_mocks["delete_template"].assert_called_once()
 

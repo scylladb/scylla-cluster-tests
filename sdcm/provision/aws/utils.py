@@ -373,14 +373,40 @@ def log_ec2_fleet_errors(region_name: str, fleet_id: Optional[str], errors: List
         )
 
 
-def delete_ec2_fleet(region_name: str, fleet_id: Optional[str], terminate_instances: bool) -> None:
-    """Delete an `instant` fleet record. Instances outlive it unless `terminate_instances` is set."""
+def delete_ec2_fleet(
+    region_name: str,
+    fleet_id: Optional[str],
+    terminate_instances: bool,
+    instance_ids: Optional[List[str]] = None,
+) -> None:
+    """Delete an `instant` fleet record. Instances outlive it unless `terminate_instances` is set.
+
+    When `terminate_instances` is True this also guards against a leaked-instance rollback: if the
+    delete call raises or AWS reports the fleet in `UnsuccessfulFleetDeletions`, it falls back to
+    terminating `instance_ids` directly so a failed rollback can never leave spot instances running.
+    """
     if not fleet_id:
         return
     try:
-        ec2_clients[region_name].delete_fleets(FleetIds=[fleet_id], TerminateInstances=terminate_instances)
+        response = ec2_clients[region_name].delete_fleets(FleetIds=[fleet_id], TerminateInstances=terminate_instances)
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Failed to delete EC2 fleet %s in region %s: %s", fleet_id, region_name, exc)
+        if terminate_instances and instance_ids:
+            _terminate_instances(region_name=region_name, instance_ids=instance_ids)
+        return
+    if unsuccessful := response.get("UnsuccessfulFleetDeletions"):
+        LOGGER.warning("EC2 fleet %s in region %s was not fully deleted: %s", fleet_id, region_name, unsuccessful)
+        if terminate_instances and instance_ids:
+            _terminate_instances(region_name=region_name, instance_ids=instance_ids)
+
+
+def _terminate_instances(region_name: str, instance_ids: List[str]) -> None:
+    """Best-effort direct termination of instances left behind by a failed fleet deletion."""
+    try:
+        ec2_clients[region_name].terminate_instances(InstanceIds=list(instance_ids))
+        LOGGER.info("Terminated leftover EC2 fleet instances %s in region %s", instance_ids, region_name)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Failed to terminate leftover instances %s in region %s: %s", instance_ids, region_name, exc)
 
 
 def sort_by_index(item: dict) -> str:

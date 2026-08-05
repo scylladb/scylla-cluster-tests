@@ -246,6 +246,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
             instance_parameters=instance_parameters_dict,
         )
         fleet_id = None
+        instance_ids: List[str] = []
         try:
             fleet_id, instance_ids, errors = create_ec2_fleet_instance_request(
                 region_name=region_name,
@@ -267,9 +268,12 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
                     count,
                     " (request is unfulfillable)" if is_ec2_fleet_unfulfillable(errors) else "",
                 )
-                if fleet_id:
-                    delete_ec2_fleet(region_name=region_name, fleet_id=fleet_id, terminate_instances=True)
-                    fleet_id = None
+                delete_ec2_fleet(
+                    region_name=region_name,
+                    fleet_id=fleet_id,
+                    terminate_instances=True,
+                    instance_ids=instance_ids,
+                )
                 return []
 
             LOGGER.info("EC2 Fleet instances: %s", instance_ids)
@@ -289,7 +293,12 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
             ]
         except Exception:
             if fleet_id:
-                delete_ec2_fleet(region_name=region_name, fleet_id=fleet_id, terminate_instances=True)
+                delete_ec2_fleet(
+                    region_name=region_name,
+                    fleet_id=fleet_id,
+                    terminate_instances=True,
+                    instance_ids=instance_ids,
+                )
             raise
         finally:
             delete_launch_template(region_name=region_name, template_id=template_id)
