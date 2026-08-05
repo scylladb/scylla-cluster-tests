@@ -87,7 +87,73 @@ def exportEnv(Map params, Map pipelineParams) {
     }
     println("minicloud image: " + (env.SCT_MINICLOUD_DOCKER_IMAGE ?: 'renovate-managed default'))
 
+    exportSizing(params, pipelineParams)
+
     return true
+}
+
+// Resolve one sizing knob: job parameter first, then the jenkinsfile's pipelineParams.
+//
+// Empty at every level stays empty, so the yaml default keeps charge - a Jenkins string parameter
+// nobody filled in arrives as '', and exporting that would override the yaml with nothing.
+def pickSizing(Map params, Map pipelineParams, String name) {
+    def value = params.get(name) ?: pipelineParams.get(name, '')
+    return value?.toString() ?: ''
+}
+
+// Export the guest and container sizing knobs build-wide.
+//
+// Every one is an ordinary SCT config option with a default in defaults/test_default.yaml, so a
+// test-case or overlay yaml already covers the common case. These exist for the axis a yaml cannot
+// express: the same test wants a different guest budget on a lab machine than on a CI agent.
+//
+// Build-wide rather than inside the 'Start Minicloud' sh step, for the same reason the image is:
+// start-minicloud, provision-resources, run-test, collect-logs and clean-resources are separate
+// hydra invocations and MinicloudConfig is rebuilt in each one. A later invocation that cannot see
+// minicloud_container_name or minicloud_state_dir looks for the container under the default name,
+// or in the wrong state directory - so teardown leaves the real container running and collection
+// finds no logs.
+//
+// `env.X = env.X ?: value` keeps extra_environment_variables winning: it is loaded before this
+// runs, and a per-run override has to beat both the parameter and the jenkinsfile. Written out one
+// name at a time rather than looped over a map, because a dynamic env write needs
+// env.setProperty() and nothing else in vars/ does that - a groovy mistake here surfaces as a
+// pipeline that will not start, not as a test failure.
+//
+// Parameter names stay distinct from the env vars they feed (the SCT_ prefix does it) - see the
+// EnvVars case-insensitivity note above, which cost two builds of the same job to diagnose.
+def exportSizing(Map params, Map pipelineParams) {
+    def value
+
+    if ((value = pickSizing(params, pipelineParams, 'minicloud_lightweight'))) {
+        env.SCT_MINICLOUD_LIGHTWEIGHT = env.SCT_MINICLOUD_LIGHTWEIGHT ?: value
+    }
+    if ((value = pickSizing(params, pipelineParams, 'minicloud_lightweight_memory'))) {
+        env.SCT_MINICLOUD_LIGHTWEIGHT_MEMORY = env.SCT_MINICLOUD_LIGHTWEIGHT_MEMORY ?: value
+    }
+    if ((value = pickSizing(params, pipelineParams, 'minicloud_lightweight_vcpus'))) {
+        env.SCT_MINICLOUD_LIGHTWEIGHT_VCPUS = env.SCT_MINICLOUD_LIGHTWEIGHT_VCPUS ?: value
+    }
+    if ((value = pickSizing(params, pipelineParams, 'minicloud_container_memory'))) {
+        env.SCT_MINICLOUD_CONTAINER_MEMORY = env.SCT_MINICLOUD_CONTAINER_MEMORY ?: value
+    }
+    if ((value = pickSizing(params, pipelineParams, 'minicloud_container_cpus'))) {
+        env.SCT_MINICLOUD_CONTAINER_CPUS = env.SCT_MINICLOUD_CONTAINER_CPUS ?: value
+    }
+    if ((value = pickSizing(params, pipelineParams, 'minicloud_state_dir'))) {
+        env.SCT_MINICLOUD_STATE_DIR = env.SCT_MINICLOUD_STATE_DIR ?: value
+    }
+    if ((value = pickSizing(params, pipelineParams, 'minicloud_container_name'))) {
+        env.SCT_MINICLOUD_CONTAINER_NAME = env.SCT_MINICLOUD_CONTAINER_NAME ?: value
+    }
+
+    println("minicloud sizing: lightweight=${env.SCT_MINICLOUD_LIGHTWEIGHT ?: 'yaml default'} " +
+            "memory=${env.SCT_MINICLOUD_LIGHTWEIGHT_MEMORY ?: 'yaml default'} " +
+            "vcpus=${env.SCT_MINICLOUD_LIGHTWEIGHT_VCPUS ?: 'yaml default'} " +
+            "container_memory=${env.SCT_MINICLOUD_CONTAINER_MEMORY ?: 'no limit'} " +
+            "container_cpus=${env.SCT_MINICLOUD_CONTAINER_CPUS ?: 'no limit'} " +
+            "state_dir=${env.SCT_MINICLOUD_STATE_DIR ?: 'yaml default'} " +
+            "container=${env.SCT_MINICLOUD_CONTAINER_NAME ?: 'minicloud'}")
 }
 
 // Bring the minicloud container up and prepare its regions.
