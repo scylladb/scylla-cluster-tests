@@ -29,7 +29,7 @@ stress_cmd: [
 
 round_robin: true
 n_db_nodes: '3 3'
-instance_type_db: 'i4i.4xlarge'
+instance_type_db: 'i8g.large'
 n_loaders: '2 2'
 
 rack_aware_loader: true
@@ -47,3 +47,9 @@ alternator_port: 8080
 dynamodb_primarykey_type: HASH_AND_RANGE
 alternator_use_dns_routing: true
 docker_network: 'ycsb_net'
+
+append_scylla_yaml:
+  # Needed because cluster has small amount of data (~50GB), which generates a lot of small (~100MB) tablets
+  # which hurt performance and cause timing (things take too much time) issues in the test. Workaround,
+  # problem is known to tablets team.
+  tablets_initial_scale_factor: 1
