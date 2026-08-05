@@ -13,6 +13,7 @@
 
 """Unit tests for GCE multiple network interfaces support."""
 
+import subprocess
 from ipaddress import ip_network
 
 import pytest
@@ -25,7 +26,10 @@ from sdcm.provision.gce.instance_provider import (
 from sdcm.provision.gce.network_provider import NetworkProvider
 from sdcm.provision.provisioner import ProvisionError
 from sdcm.utils.gce_region import GceRegion
-from sdcm.utils.gce_utils import gce_mac_address_for_ipv4
+from sdcm.utils.gce_utils import (
+    SECONDARY_NIC_ROUTING_SCRIPT,
+    gce_mac_address_for_ipv4,
+)
 
 
 PROJECT_ID = "sct-project"
@@ -140,3 +144,10 @@ def test_bootstrap_subnet_name_matches_what_the_provisioner_looks_up(network_pro
     assert network_provider.get_subnetwork_url(region="us-east1", index=1).endswith(
         f"/subnetworks/{new_region().secondary_subnet_name}"
     )
+
+
+def test_secondary_nic_routing_script_is_valid_bash(tmp_path):
+    script = tmp_path / "sct-secondary-nic-routing.sh"
+    script.write_text(SECONDARY_NIC_ROUTING_SCRIPT)
+    result = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, f"script has bash syntax errors: {result.stderr}"
