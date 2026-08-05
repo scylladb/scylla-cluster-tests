@@ -2426,6 +2426,16 @@ class SCTConfiguration(BaseModel):
         perf_stress_keyspace/perf_stress_table are not set.
         For example, {'keyspace': 'test_keyspace', 'table': 'test_table'}""",
     )
+
+    # Search (full-text, vector) performance test config options
+
+    search_test_config: String = SctField(
+        description="""Search test definition (datasets, shards, query sets and their runtime settings).
+        Accepts an absolute path, or one relative to the SCT root, e.g. data_dir/latte/fts_search/plan.yaml.
+        Required by a search test: it is the definition of what to run, so there is nothing to fall back on.
+        Per-query-set rate, duration and index-wait values live inside this file, not in SCT params.""",
+    )
+
     perf_stress_keyspace: String = SctField(
         description="""Keyspace name used in performance gradual throughput tests.
         Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).

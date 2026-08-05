@@ -1,0 +1,31 @@
+# Tiny FTS plan for local correctness runs on the docker backend.
+#
+# Used by test-cases/fts-search/fts-search-test-docker.yaml. Deliberately small:
+# the goal is to exercise every branch of FtsSearchTest.test_fts_search, not to
+# produce meaningful performance numbers.
+#
+# Every corpus file is read from data_dir/latte/fts_search/local_tiny/. The corpora are
+# generated, not tracked in git, and the run leaves them in place, so this is a one-off after a
+# fresh clone:
+#   python3 data_dir/latte/fts_search/generate_local_dataset.py
+datasets:
+  - name: local_tiny
+    max_index_wait_secs: 300
+    steps:
+      # Single shard: simplest load path.
+      - shards: [0]
+      # Shard range: exercises _parse_shard_spec, cumulative doc counts and the
+      # _drop_index of the previous step's index.
+      - shards: [1..2]
+
+  # Second dataset: exercises the multi-dataset loop in test_fts_search
+  # (drop table + recreate schema per dataset). No `shards` key, so
+  # _load_step_shards takes the step["documents_file"] branch instead.
+  - name: local_smoke
+    max_index_wait_secs: 300
+    steps:
+      - documents_file: documents.tsv
+      # A rebuild on the same corpus (an empty 'shards' list, so _load_step_shards is a
+      # no-op), exercising the "index build without a load" path -- see
+      # docs/fts-search-test.md "Repeated builds on the same data".
+      - shards: []
