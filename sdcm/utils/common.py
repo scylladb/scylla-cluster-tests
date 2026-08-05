@@ -1157,6 +1157,40 @@ def get_vector_store_ami_versions(
     )
 
 
+# RC builds are tagged with a dotted form (2026.3.0.rc1.0.20260730.726f67a532e2) that
+# SCYLLA_VERSION_GROUPED_RE doesn't parse, yet it still points at one exact build.
+RC_VERSION_TAG_RE = re.compile(r"^\d+\.\d+\.\d+\.rc\d+\.\d+\.\d{8}\.[0-9a-f]+$")
+
+
+def gce_image_version_label(version: str) -> str:
+    """Convert a full Scylla version tag to the `scylla_version` label used on GCE images.
+
+    GCE labels can't hold dots or tildes, so they are replaced with dashes. The trailing
+    packaging revision AWS carries on release tags (`…-1`) is not part of the GCE label.
+
+    Returns an empty string when the version isn't a full (single build) version tag.
+
+    Examples:
+        >>> gce_image_version_label("2026.4.0~dev-0.20260804.9a3aba9e452a")
+        '2026-4-0-dev-0-20260804-9a3aba9e452a'
+        >>> gce_image_version_label("2025.4.10-0.20260609.99f4121cd8e1-1")
+        '2025-4-10-0-20260609-99f4121cd8e1'
+        >>> gce_image_version_label("2026.3.0.rc1.0.20260730.726f67a532e2")
+        '2026-3-0-rc1-0-20260730-726f67a532e2'
+        >>> gce_image_version_label("2025.4")
+        ''
+    """
+    if not version:
+        return ""
+    if version_tag := parse_scylla_version_tag(version):
+        label = f"{version_tag.base_version}-{version_tag.build}-{version_tag.date}-{version_tag.commit_id}"
+    elif RC_VERSION_TAG_RE.match(version):
+        label = version
+    else:
+        return ""
+    return label.replace(".", "-").replace("~", "-")
+
+
 def build_gce_image_filter(version: str = None, arch: VmArch = None) -> str:
     """Build the server-side filter string for GCE image listing.
 
@@ -1166,14 +1200,20 @@ def build_gce_image_filter(version: str = None, arch: VmArch = None) -> str:
     or you can see brief explanation here:
       https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
     """
-    filters = "(family eq 'scylla(-enterprise)?')(labels.environment eq 'production')"
+    # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1,
+    # 2026.4.0~dev-0.20260804.9a3aba9e452a or 2026.3.0.rc1.0.20260730.726f67a532e2)
+    exact_build_label = gce_image_version_label(version) if version and version != "all" else ""
+
+    filters = "(family eq 'scylla(-enterprise)?')"
+    if not exact_build_label:
+        # Released images only. Nightly/dev builds are labeled `environment=daily` and freshly
+        # built release candidates `environment=candidate`, so this filter must not be applied
+        # when looking up one exact build by its full version tag.
+        filters += "(labels.environment eq 'production')"
+
     if version and version != "all":
-        # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
-        if parse_scylla_version_tag(version):
-            # For full version tags, use the complete tag for exact matching
-            # GCE labels require dots to be replaced with dashes
-            normalized_version = version.replace(".", "-").replace("~", "-")
-            filters += f"(labels.scylla_version eq '{normalized_version}')"
+        if exact_build_label:
+            filters += f"(labels.scylla_version eq '{exact_build_label}')(name ne debug-.*)"
         else:
             # For simple versions, use the existing wildcard logic
             filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
