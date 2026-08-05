@@ -472,6 +472,7 @@ class BackupTask(ManagerTask):
         if snapshot_index >= len(snapshot_line):
             snapshot_index = -1
         snapshot_tag = snapshot_line[snapshot_index].split(":")[1].strip()
+        LOGGER.debug("Snapshot tag: %s", snapshot_tag)
         return snapshot_tag
 
     def is_task_in_uploading_stage(self):
@@ -487,16 +488,17 @@ class BackupTask(ManagerTask):
         )
         return is_status_reached
 
-    def delete_backup_snapshot(self):
-        if self.status == TaskStatus.DONE:
+    def delete_backup_snapshot(self, snapshot_tag: str | None = None):
+        if snapshot_tag is None:
+            if self.status != TaskStatus.DONE:
+                LOGGER.warning(
+                    f"Did not delete the snapshot of task {self.id}, since the status of said task is {self.status!s}, "
+                    "and the manager can only delete snapshots of finished tasks"
+                )
+                return
             snapshot_tag = self.get_snapshot_tag()
-            command = f" -c {self.cluster_id} backup delete --snapshot-tag {snapshot_tag}"
-            self.sctool.run(command, parse_table_res=False, is_verify_errorless_result=True)
-        else:
-            LOGGER.warning(
-                f"Did not delete the snapshot of task {self.id}, since the status of said task is {self.status!s}, and the "
-                "manager can only delete snapshots of finished tasks"
-            )
+        command = f" -c {self.cluster_id} backup delete --snapshot-tag {snapshot_tag}"
+        self.sctool.run(command, parse_table_res=False, is_verify_errorless_result=True)
 
 
 class RestoreTask(ManagerTask):
@@ -928,6 +930,17 @@ class ManagerCluster(ScyllaManagerBase):
                 per_node_keyspaces_and_tables_backup_files[node_id][keyspace][table] = []
             per_node_keyspaces_and_tables_backup_files[node_id][keyspace][table].append(s3_file_path)
         return per_node_keyspaces_and_tables_backup_files
+
+    def list_backup_snapshot_tags(self, location: str) -> set[str]:
+        """Return the set of snapshot tags still present in the given backup location.
+
+        Wraps `sctool backup list -c <cluster> -L <location>`.
+        """
+        command = f" -c {self.id} backup list --location {location}"
+        parsed_table = self.sctool.run(command)
+        if not parsed_table:
+            return set()
+        return self.sctool.parse_snapshot_tags_from_backup_list(parsed_table)
 
     def delete(self):
         """
@@ -1548,6 +1561,38 @@ class SCTool:
         column_name_index = column_titles.index(column_name.upper())
         column_values = [row[column_name_index] for row in parsed_table[1:]]
         return column_values
+
+    @staticmethod
+    def parse_snapshot_tags_from_backup_list(parsed_table) -> set[str]:
+        """
+        Parses the output of `sctool backup list`, which is a free-form report rather
+        than a column table, e.g.:
+
+            backup/2f4a07b9-17e7-4735-87c1-d367dae9959b
+            Snapshots:
+              - sm_20260804122044UTC (3.359GiB, 3 nodes)
+              - sm_20260804120320UTC (3.359GiB, 3 nodes)
+            Keyspaces:
+              - keyspace1 (1 table)
+              ...
+
+        A location can list several backup tasks, each with its own `Snapshots:`
+        section, so all of them are collected.
+        """
+        snapshot_tags = set()
+        in_snapshots_section = False
+        for row in parsed_table:
+            line = row[0].strip()
+            if line == "Snapshots:":
+                in_snapshots_section = True
+                continue
+            if not in_snapshots_section:
+                continue
+            if not line.startswith("-"):
+                in_snapshots_section = False
+                continue
+            snapshot_tags.add(line.lstrip("- ").split()[0])
+        return snapshot_tags
 
     @staticmethod
     def _is_found_in_table(parsed_table, identifier, is_search_substring=False):

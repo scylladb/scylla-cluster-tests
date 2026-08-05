@@ -353,16 +353,13 @@ class ManagerBackupTests(ManagerRestoreTests):
         self.log.info("Create WORM backup bucket")
         worm_bucket_name = f"manager-worm-backup-test-{self.test_id[:8]}"
         location = f"gcs:{worm_bucket_name}"
-        worm_bucket = self.create_worm_bucket(region=self.params.gce_datacenters[0], bucket_name=worm_bucket_name)
+        worm_bucket = self.create_object_lock_bucket(
+            region=self.params.gce_datacenters[0], bucket_name=worm_bucket_name
+        )
 
         try:
-            self.log.info("Wait 30s for backup location accessibility after bucket creation")
-            # We tried to use `scylla-manager-agent check-location` here instead of dummy sleep, but the approach
-            # turned out to be not stable enough - check-location could proceed while the follow-up sctool backup
-            # could fail immediately due to bucket access issue. The reason - check-location command issued in test
-            # initializes rclone from scratch with fresh tokens, while backup runs through the SM agent server may
-            # hold stale tokens. A fixed sleep is the most robust approach here.
-            time.sleep(30)
+            self.log.info("Wait for backup location accessibility after bucket creation")
+            self.wait_for_location_accessibility_after_bucket_creation()
 
             self.log.info("Create backup task and wait for its completion")
             backup_task = mgr_cluster.create_backup_task(
@@ -392,10 +389,135 @@ class ManagerBackupTests(ManagerRestoreTests):
             self.log.info("All snapshot files are properly protected by object lock")
 
         finally:
-            self.destroy_worm_bucket(bucket=worm_bucket)
+            self.destroy_object_lock_bucket(bucket=worm_bucket)
             mgr_cluster.delete()
 
         self.log.info("finishing test_worm_backup")
+
+    def test_event_based_hold_backup(self):  # noqa: PLR0914
+        """Verify GCS event-based hold retention for Manager backups.
+
+        Steps:
+        1. Write a fresh batch of rows to a second keyspace, to be dropped once backup #1 is done.
+        2. Create a GCS bucket with event-based hold enabled and a default retention period.
+        3. Wait for the backup location to become accessible after bucket creation.
+        4. Run backup #1 and wait for its completion; capture its snapshot tag.
+        5. Verify snapshot #1's files exist, are marked with an event-based hold, and cannot be deleted.
+        6. Drop the second keyspace, so its snapshot #1 files end up in a vanished backup dir.
+        7. Write a fresh batch of rows and compact all nodes so sstables get rewritten,
+           producing files from snapshot #1 that become stale.
+        8. Run backup #2 (restart the same task); capture its snapshot tag and compute the
+           stale files left over from snapshot #1 (including the dropped keyspace's files).
+        9. Verify the stale snapshot #1 files (dropped keyspace and rewritten sstables) have had
+           their event-based hold released.
+        10. Verify snapshot #2's current files are still protected by an event-based hold.
+        11. Attempt to explicitly delete snapshot #1; expect it to fail since its retention window has not elapsed yet.
+        12. Sleep for the retention period so snapshot #1's default retention window elapses.
+        13. Run backup #3 and capture its snapshot tag.
+        14. Verify only snapshots #2 and #3 remain in the backup location (snapshot #1 purged).
+        15. Verify snapshot #1's stale (orphaned) files were purged from the bucket.
+        """
+        self.log.info("starting test_event_based_hold_backup")
+        mgr_cluster = self.db_cluster.get_cluster_manager()
+
+        second_keyspace = "keyspace2"
+        self.log.info("Write initial rows to a second keyspace, to be dropped after backup #1")
+        second_keyspace_stress_cmd = (
+            f"cassandra-stress write cl=QUORUM n=1000000 -schema 'keyspace={second_keyspace} "
+            "replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native "
+            "-rate threads=400 -pop seq=1..1000000"
+        )
+        second_keyspace_write_thread = self.run_stress_thread(stress_cmd=second_keyspace_stress_cmd, round_robin=False)
+        self.verify_stress_thread(second_keyspace_write_thread)
+
+        retention_seconds = 10 * 60
+        self.log.info("Create bucket with event-based hold and a %s seconds default retention", retention_seconds)
+        bucket_name = f"manager-event-based-hold-backup-test-{self.test_id[:8]}"
+        location = f"gcs:{bucket_name}"
+        bucket = self.create_event_hold_bucket(
+            region=self.params.gce_datacenters[0],
+            bucket_name=bucket_name,
+            retention_seconds=retention_seconds,
+        )
+
+        try:
+            self.log.info("Wait for backup location accessibility after bucket creation")
+            self.wait_for_location_accessibility_after_bucket_creation()
+
+            self.log.info("Run backup #1 and wait for its completion")
+            backup_task = self.backup_with_manager_task(
+                mgr_cluster,
+                location_list=[location],
+                retention=1,
+                retention_lock_mode=BackupRetentionLockMode.EVENT_BASED_HOLD,
+            )
+            snapshot_tag_1 = backup_task.get_snapshot_tag()
+
+            snapshot_files_1 = self.get_snapshot_files(bucket_location=bucket_name, snapshot_tag=snapshot_tag_1)
+            assert snapshot_files_1, "No snapshot files found after backup #1"
+
+            self.log.info("Verify snapshot #1 files are protected by an event-based hold")
+            self.assert_blobs_event_based_hold(bucket, snapshot_files_1, expected=True)
+            self.assert_blobs_deletion_forbidden(bucket, snapshot_files_1)
+
+            self.log.info("Drop the second keyspace to verify SM releases holds on vanished backup dirs")
+            with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+                session.execute(f"DROP KEYSPACE IF EXISTS {second_keyspace}")
+
+            self.log.info("Write a fresh batch of rows to keyspace1")
+            extra_rows_stress_cmd = (
+                "cassandra-stress write cl=QUORUM n=1000000 -schema 'replication(strategy=NetworkTopologyStrategy,"
+                "replication_factor=3)' -mode cql3 native -rate threads=400 -pop seq=700000000..701000000"
+            )
+            write_thread = self.run_stress_thread(stress_cmd=extra_rows_stress_cmd, round_robin=False)
+            self.verify_stress_thread(write_thread)
+
+            self.log.info("Compact all nodes so sstables get rewritten")
+            for node in self.db_cluster.nodes:
+                node.run_nodetool("compact")
+
+            self.log.info("Run backup #2 and wait for its completion")
+            self.backup_rerun_with_manager_task(backup_task)
+            snapshot_tag_2 = backup_task.get_snapshot_tag()
+
+            snapshot_files_2 = self.get_snapshot_files(bucket_location=bucket_name, snapshot_tag=snapshot_tag_2)
+            stale_files = snapshot_files_1 - snapshot_files_2
+            assert stale_files, "No stale files were found"
+
+            self.log.info("Verify stale snapshot files have their event-based hold removed")
+            self.assert_blobs_event_based_hold(bucket, stale_files, expected=False)
+
+            self.log.info("Verify snapshot #2 files are protected by an event-based hold")
+            self.assert_blobs_event_based_hold(bucket, snapshot_files_2, expected=True)
+
+            self.log.info("Attempt to explicitly delete snapshot #1 before its retention window elapses")
+            try:
+                backup_task.delete_backup_snapshot(snapshot_tag_1)
+                raise AssertionError(f"Deletion of snapshot {snapshot_tag_1} unexpectedly succeeded")
+            except ScyllaManagerError as error:
+                self.log.info("Explicit deletion of snapshot #1 failed as expected: %s", error)
+
+            self.log.info("Sleep %s seconds for snapshot's #1 default retention window to pass", retention_seconds)
+            time.sleep(retention_seconds)
+
+            self.log.info("Run backup #3 and wait for its completion")
+            self.backup_rerun_with_manager_task(backup_task, timeout=200)
+            snapshot_tag_3 = backup_task.get_snapshot_tag()
+
+            self.log.info("Verify only snapshot #2 and #3 remain in the backup location")
+            remaining_snapshot_tags = mgr_cluster.list_backup_snapshot_tags(location=f"gcs:{bucket_name}")
+            assert remaining_snapshot_tags == {snapshot_tag_2, snapshot_tag_3}, (
+                f"Expected to remain snapshots: {snapshot_tag_2}, {snapshot_tag_3}, got {remaining_snapshot_tags}"
+            )
+
+            self.log.info("Verify snapshot's #1 orphaned files were purged from the bucket")
+            self.assert_blobs_purged(bucket, stale_files)
+
+        finally:
+            self.destroy_event_hold_bucket(bucket=bucket)
+            mgr_cluster.delete()
+
+        self.log.info("finishing test_event_based_hold_backup")
 
     def test_backup_feature(self):
         self.generate_load_and_wait_for_results()
@@ -411,6 +533,8 @@ class ManagerBackupTests(ManagerRestoreTests):
             # WORM backup feature is currently available for GCP only
             with self.subTest("Test WORM backup with object lock"):
                 self.test_worm_backup()
+            with self.subTest("Test event-based hold backup"):
+                self.test_event_based_hold_backup()
         with self.subTest("Test Backup end of space"):  # Preferably at the end
             self.test_enospc_during_backup()
         with self.subTest("Test Restore end of space"):
