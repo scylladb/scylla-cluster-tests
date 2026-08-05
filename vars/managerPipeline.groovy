@@ -270,7 +270,7 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: params.backend == 'azure' ? 60 : 30, unit: 'MINUTES') {
-                                        if (params.backend == 'aws' || params.backend == 'azure' || params.backend == 'oci') {
+                                        if (params.backend == 'aws' || params.backend == 'azure' || params.backend == 'gce' || params.backend == 'oci') {
                                             provisionResources(params, builder.region)
                                         } else if (params.backend.contains('docker')) {
                                             sh """
@@ -278,7 +278,7 @@ def call(Map pipelineParams) {
                                             """
                                         } else {
                                             sh """
-                                                echo 'Skipping because non-AWS/Azure/OCI backends are not supported'
+                                                echo 'Skipping because non-AWS/Azure/GCE/OCI backends are not supported'
                                             """
                                         }
                                         completed_stages['provision_resources'] = true
