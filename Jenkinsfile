@@ -324,7 +324,7 @@ pipeline {
                                             wrap([$class: 'BuildUser']) {
                                                 dir(working_dir) {
                                                     timeout(time: 30, unit: 'MINUTES') {
-                                                        if (curr_params.backend == 'oci') {
+                                                        if (curr_params.backend == 'gce' || curr_params.backend == 'oci') {
                                                             provisionResources(curr_params, builder.region)
                                                         } else if (curr_params.backend.contains('docker')) {
                                                             sh """
