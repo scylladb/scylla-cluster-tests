@@ -17,19 +17,15 @@ The flow is the same whichever index is under test -- full-text (BM25 over docum
 (ANN over embeddings) -- because vector-store serves both and latte drives both:
 
     a YAML plan names datasets; a dataset is a sequence of steps; a step loads more shards on top
-    of the previous ones and rebuilds the index, so one dataset yields results at several corpus
-    sizes. Index build time comes from vector-store's own log (see sdcm.utils.vector_store_index),
-    and every measurement is appended to RESULTS_FILE_NAME in the run's log directory as it is
-    taken, one JSON object per line.
+    of the previous ones, rebuilds the index and runs its query sets, so one dataset yields results
+    at several corpus sizes. Index build time comes from vector-store's own log (see
+    sdcm.utils.vector_store_index), query latency from latte's HDR output, and every measurement is
+    appended to RESULTS_FILE_NAME in the run's log directory as it is taken, one JSON object per line.
 
 What differs per workload is the rune script, the vocabulary and the names things are reported
 under. All of it is declared in a 'SearchWorkload', which a subclass points 'WORKLOAD' at; the
 subclass then only owns its 'test_*' entry point. See fts_test.py for a worked
 example, and docs/fts-search-test.md for the plan format.
-
-The query phase -- running a step's query sets against the index that was just built and reporting
-their latency -- is not here yet. It needs the hdr-tag workload detection fix, and lands on top of
-this.
 """
 
 import json
@@ -37,6 +33,7 @@ import math
 import os
 import posixpath
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
@@ -58,6 +55,10 @@ RESULTS_FILE_NAME = "search_results.jsonl"
 TEST_CONFIG_PARAM = "search_test_config"
 
 DEFAULT_MAX_INDEX_WAIT = 1800
+DEFAULT_RATE = 0
+DEFAULT_DURATION = "60s"
+DEFAULT_LIMIT = 5
+DEFAULT_CONCURRENCY = 2
 
 # How often SCT re-checks the vector-store state it is waiting on over the API: the node reporting
 # SERVING, and a dropped index disappearing. Neither is on a measured path -- the build time comes
@@ -84,6 +85,24 @@ INDEX_BUILD_TIMEOUT_GRACE_SECS = 120
 # Validated once on the way in instead of being quoted differently at each of those three places.
 SAFE_NAME_RE = re.compile(r"[A-Za-z0-9_]+")
 SAFE_DATA_FILE_RE = re.compile(r"[A-Za-z0-9_.\-/]+")
+# A latte '--duration': digits and one of its unit suffixes, the form 'get_timeout_from_stress_cmd'
+# parses a phase timeout out of.
+SAFE_DURATION_RE = re.compile(r"\d+[hms]")
+
+# What a query record keeps of the HDR summary 'get_hdrhistogram' builds, under the record's names.
+HDR_SUMMARY_FIELDS = {
+    "percentile_50": "p50_ms",
+    "percentile_90": "p90_ms",
+    "percentile_95": "p95_ms",
+    "percentile_99": "p99_ms",
+    "percentile_99_9": "p99_9_ms",
+    "percentile_99_99": "p99_99_ms",
+    "throughput": "throughput_ops",
+}
+
+# Cap on the 'query_example' field of a query record. The value comes from a corpus the plan names
+# rather than from anything validated here.
+QUERY_EXAMPLE_MAX_CHARS = 256
 
 
 @dataclass(frozen=True)
@@ -102,6 +121,10 @@ class LatteScriptParams:
     dataset_dir: str
     records_file: str
     record_count: str
+    queries_file: str
+    qrels_file: str
+    search_limit: str
+    compute_accuracy: str
     index_name: str
     max_index_wait: str
     min_probes: str
@@ -116,6 +139,7 @@ class SearchWorkload:
     name: str  # 'fts_search' -- names the workload in the results file
     base_dir: str  # holds the rune script, the tracked plans and the local datasets
     script: str  # the rune script latte runs
+    hdr_tag: str  # HDR tag its search function emits, e.g. 'fn--search'
     item_noun: str  # 'docs' -- the unit record counts are logged in
     index_prefix: str  # 'fts_idx' -- prefixes every index this test builds
     default_keyspace: str
@@ -166,6 +190,28 @@ def _checked_data_file(name: str, kind: str) -> str:
     return name
 
 
+def _checked_int(value, kind: str, minimum: int = 0) -> int:
+    """Validate a plan-supplied number that is interpolated into a latte command line."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"Invalid {kind} {value!r}: expected an integer >= {minimum}")
+    return value
+
+
+def _checked_positive_float(value, kind: str) -> float:
+    """Validate a plan-supplied latency expectation: a finite number > 0, and not a bool."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        raise ValueError(f"Invalid {kind} {value!r}: expected a finite number > 0")
+    return float(value)
+
+
+def _checked_duration(value, kind: str) -> str:
+    """Validate a plan-supplied latte duration in the time form ('60s', '5m', '1h'): the only one
+    'get_timeout_from_stress_cmd' parses, and the phase timeout otherwise becomes 'test_duration'."""
+    if not isinstance(value, str) or not SAFE_DURATION_RE.fullmatch(value):
+        raise ValueError(f"Invalid {kind} {value!r}: expected a latte duration like '60s', '5m' or '1h'")
+    return value
+
+
 def _count_tsv_lines(path: str) -> int:
     """Count the records in a shard: its non-empty lines.
 
@@ -178,6 +224,28 @@ def _count_tsv_lines(path: str) -> int:
             if line.strip():
                 count += 1
     return count
+
+
+def _first_query_example(local_ds_dir: str, queries_file: str) -> str:
+    """Return the text of the first query in a 'queries_<set>.tsv' file, or "" if there is none.
+
+    Truncated, since natural-language queries can run long.
+    """
+    path = os.path.join(local_ds_dir, queries_file)
+    try:
+        with open(path, encoding="utf-8") as f:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                parts = stripped.split("\t", 1)
+                text = parts[1] if len(parts) > 1 else parts[0]
+                if len(text) <= QUERY_EXAMPLE_MAX_CHARS:
+                    return text
+                return text[: QUERY_EXAMPLE_MAX_CHARS - 3] + "..."
+    except FileNotFoundError:
+        pass
+    return ""
 
 
 def _parse_shard_spec(shards: list) -> list[int]:
@@ -228,6 +296,68 @@ def resolve_test_config_path(config: str) -> str:
     if os.path.isabs(config):
         return config
     return sct_abs_path(config)
+
+
+# ---------------------------------------------------------------------------
+# Query discovery
+# ---------------------------------------------------------------------------
+
+
+def _query_params(query: dict, defaults: dict) -> tuple:
+    """Resolve (limit, concurrency, rate) for a query entry, applying dataset defaults.
+
+    Checked, not just read: all three are interpolated into the latte command line, the same reason
+    '_checked_name' exists for the plan's names.
+    """
+    return (
+        _checked_int(query.get("limit", defaults.get("limit", DEFAULT_LIMIT)), "query limit", minimum=1),
+        _checked_int(
+            query.get("concurrency", defaults.get("concurrency", DEFAULT_CONCURRENCY)), "query concurrency", minimum=1
+        ),
+        # 0 is 'unthrottled' -- '_run_search' drops '--rate' entirely for it.
+        _checked_int(query.get("rate", defaults.get("rate", DEFAULT_RATE)), "query rate"),
+    )
+
+
+def _query_duration(query: dict, defaults: dict) -> str:
+    """Resolve the latte '--duration' for a query entry, applying dataset defaults."""
+    return _checked_duration(query.get("duration", defaults.get("duration", DEFAULT_DURATION)), "query duration")
+
+
+def _expected_p99_read_ms(query: dict, defaults: dict) -> float:
+    """Resolve the expected P99 read latency (ms) for a query entry.
+
+    Required, on the entry or in the dataset's 'defaults': the expectation belongs to the plan, so
+    SCT has no default for it.
+    """
+    expected = query.get("expected_p99_read_ms", defaults.get("expected_p99_read_ms"))
+    if expected is None:
+        raise ValueError(
+            f"Query set {query.get('set')!r} has no 'expected_p99_read_ms' "
+            f"(set it on the query entry or the dataset's 'defaults')"
+        )
+    return _checked_positive_float(expected, f"expected_p99_read_ms for query set {query.get('set')!r}")
+
+
+def validate_plan_queries(datasets: list) -> None:
+    """Check every query entry of every dataset, so a bad plan fails before anything runs.
+
+    At query time the step has already loaded and indexed its corpus: tens of minutes on a real one.
+    """
+    for dataset in datasets:
+        defaults = dataset.get("defaults", {})
+        for step_idx, step in enumerate(dataset.get("steps", [])):
+            for query in step.get("queries", []):
+                where = f"dataset {dataset.get('name')!r}, step #{step_idx + 1}"
+                if "set" not in query:
+                    raise ValueError(f"Query entry in {where} has no 'set'")
+                try:
+                    _checked_name(query["set"], "query set name")
+                    _query_params(query, defaults)
+                    _query_duration(query, defaults)
+                    _expected_p99_read_ms(query, defaults)
+                except ValueError as exc:
+                    raise ValueError(f"{exc} (in {where})") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -412,13 +542,69 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             duration=_timeout_minutes(DEFAULT_SCHEMA_TIMEOUT),
         )
 
+    def _run_search(
+        self,
+        local_ds_dir,
+        container_ds_dir,
+        queries_file,
+        limit,
+        concurrency,
+        rate,
+        search_duration,
+        qrels_file=None,
+    ) -> dict:
+        """Run a single search configuration and return its latency summary.
+
+        Passing `qrels_file` turns on the relevance (accuracy) metrics of the rune script. The
+        summary is what 'get_hdrhistogram' builds from latte's HDR output for the search function's
+        tag over the run's time window -- percentiles in ms, throughput in ops/s -- and is empty if
+        no histogram was written for it.
+        """
+        workload = self.WORKLOAD
+        params = workload.params
+        files_to_stage = [
+            (os.path.join(local_ds_dir, queries_file), os.path.join(container_ds_dir, queries_file)),
+        ]
+        qrels_param = ""
+        if qrels_file:
+            files_to_stage.append((os.path.join(local_ds_dir, qrels_file), os.path.join(container_ds_dir, qrels_file)))
+            qrels_param = rf"-P {params.qrels_file}=\"{qrels_file}\" "
+        rate_param = f"--rate={rate} " if rate else ""
+
+        start = time.time()
+        self._run_latte(
+            # NOTE: '--duration' spelled out rather than '-d': 'get_timeout_from_stress_cmd'
+            #       only recognises the long form, and without it the phase would fall back to
+            #       the whole 'test_duration' as its timeout. '--retry-number 1' is the lowest
+            #       that runs at all: latte counts it as attempts per cycle but as retries per
+            #       query, so a rejected query is still retried once (QATOOLS-629).
+            stress_cmd=(
+                f"latte run -f search "
+                f"--duration {search_duration} "
+                rf"-P {params.dataset_dir}=\"{container_ds_dir}/\" "
+                rf"-P {params.queries_file}=\"{queries_file}\" "
+                f"{qrels_param}"
+                f"-P {params.compute_accuracy}={'true' if qrels_file else 'false'} "
+                f"-P {params.search_limit}={limit} "
+                f"{rate_param}--concurrency={concurrency} --retry-number 1 "
+                f"{workload.script} "
+            ),
+            files_to_stage=files_to_stage,
+        )
+        end = time.time()
+        summary = self.get_hdrhistogram(
+            hdr_tags=[workload.hdr_tag], stress_operation="read", start_time=start, end_time=end
+        )
+        # One entry, keyed '<operation>--<tag>', for the one tag asked for.
+        return next(iter(summary.values()), {})
+
     def run_search_benchmark(self):
         """Run every dataset of the plan 'search_test_config' points at."""
         self._wait_for_vector_store_serving()
 
-        # NOTE: no fallback plan. Which datasets and shards to run is the whole definition of the
-        #       test, and it is test-case specific, so there is nothing sensible to default to --
-        #       say so instead of failing later on a missing file.
+        # NOTE: no fallback plan. Which datasets, shards and query sets to run is the whole
+        #       definition of the test, and it is test-case specific, so there is nothing sensible
+        #       to default to -- say so instead of failing later on a missing file.
         config_name = self.params.get(TEST_CONFIG_PARAM)
         if not config_name:
             raise ValueError(f"'{TEST_CONFIG_PARAM}' is not set: the search test needs a plan to run")
@@ -443,18 +629,24 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         names = [_checked_name(dataset["name"], "dataset name") for dataset in datasets]
         if duplicates := sorted({name for name in names if names.count(name) > 1}):
             raise ValueError(f"Duplicate dataset names in '{config_name}': {duplicates}")
+        validate_plan_queries(datasets)
+        # Query latency comes from latte's HDR output, which is only written with 'use_hdrhistogram'.
+        if not self.params.get("use_hdrhistogram") and any(
+            step.get("queries") for dataset in datasets for step in dataset.get("steps") or []
+        ):
+            raise ValueError(f"Test config '{config_name}' runs query sets, but 'use_hdrhistogram' is off")
 
         for dataset in datasets:
             self._run_dataset(dataset)
 
     def _run_dataset(self, dataset):
-        """Load and index one dataset.
+        """Load, index and query one dataset.
 
         Every dataset uses the keyspace/table named by 'latte_schema_parameters', dropped and
         recreated here so each one starts from an empty table.
 
         Each step adds more shards on top of the previous ones and rebuilds the index, so that one
-        dataset yields index build results at several corpus sizes. An *empty* 'shards'
+        dataset yields index build and search results at several corpus sizes. An *empty* 'shards'
         list loads nothing and only rebuilds on the corpus already there, e.g. to sample build-time
         variance; an *absent* one falls back to the step's single-file key (an unsharded corpus --
         see 'local_smoke' in data_dir/latte/fts_search/local_config.yaml).
@@ -476,6 +668,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
 
         max_index_wait = dataset.get("max_index_wait_secs", DEFAULT_MAX_INDEX_WAIT)
         max_load_wait = dataset.get("max_shard_load_secs", DEFAULT_MAX_SHARD_LOAD)
+        defaults = dataset.get("defaults", {})
         keyspace = (self.params.get("latte_schema_parameters") or {}).get("keyspace") or workload.default_keyspace
 
         # NOTE: the script drops with 'IF EXISTS', so on a fresh cluster this is a no-op.
@@ -496,8 +689,75 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             )
             self._record_index_build(dataset_name, step_idx + 1, index_name, total_record_count, build_seconds)
 
+            self._run_step_queries(
+                step, dataset_name, defaults, total_record_count, step_idx + 1, local_ds_dir, container_ds_dir
+            )
+
         if index_name is not None:
             self._drop_index(index_name, keyspace, max_index_wait)
+
+    def _run_step_queries(
+        self, step, dataset_name, defaults, record_count, step_number, local_ds_dir, container_ds_dir
+    ):
+        """Run every query set of a step against the index that was just built, recording each."""
+        for query_index, query in enumerate(step.get("queries", []), start=1):
+            qset = _checked_name(query["set"], "query set name")
+            limit, concurrency, rate = _query_params(query, defaults)
+            search_duration = _query_duration(query, defaults)
+            expected_p99_read_ms = _expected_p99_read_ms(query, defaults)
+            queries_file = f"queries_{qset}.tsv"
+            qrels_file = f"qrels_{qset}.tsv" if query.get("qrels") else None
+            # Checked here to name the query set that asked for a missing file, rather than fail
+            # on the copy to the loader.
+            for needed in (queries_file, qrels_file):
+                if needed and not os.path.isfile(os.path.join(local_ds_dir, needed)):
+                    raise ValueError(
+                        f"Query set {qset!r} of step #{step_number} needs {needed!r}, which is not in {local_ds_dir}"
+                    )
+
+            latency = self._run_search(
+                local_ds_dir,
+                container_ds_dir,
+                queries_file=queries_file,
+                limit=limit,
+                concurrency=concurrency,
+                rate=rate,
+                search_duration=search_duration,
+                qrels_file=qrels_file,
+            )
+            if not latency:
+                self.log.warning("No HDR latency summary for query set %s of step #%d", qset, step_number)
+            self._record_search(
+                dataset=dataset_name,
+                step=step_number,
+                record_count=record_count,
+                # Position in the step: two entries with the same configuration are told apart by it.
+                query_index=query_index,
+                query_set=qset,
+                limit=limit,
+                concurrency=concurrency,
+                rate=rate,
+                duration=search_duration,
+                qrels=qrels_file is not None,
+                query_example=_first_query_example(local_ds_dir, queries_file),
+                expected_p99_read_ms=expected_p99_read_ms,
+                latency=latency,
+            )
+
+    def _record_search(self, expected_p99_read_ms: float, latency: dict, **fields):
+        """Record one query configuration: what ran, and the latency and throughput it measured.
+
+        An empty *latency* -- no histogram for the run -- is recorded too, with nulls.
+        """
+        measured = {field: latency.get(key) for key, field in HDR_SUMMARY_FIELDS.items()}
+        p99 = measured["p99_ms"]
+        self._record_result(
+            "search",
+            **fields,
+            expected_p99_read_ms=expected_p99_read_ms,
+            **measured,
+            p99_within_expectation=None if p99 is None else p99 <= expected_p99_read_ms,
+        )
 
     def _record_result(self, phase: str, **fields):
         """Append one measurement to the run's results file."""

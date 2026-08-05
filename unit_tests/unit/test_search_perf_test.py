@@ -22,26 +22,34 @@ import contextlib
 import json
 import logging
 import os
+import re
 import types
 
 import pytest
 
 import search_perf_test
+from sdcm.stress.latte_thread import get_latte_operation_type
 from search_perf_test import (
     LatteScriptParams,
     SearchWorkload,
     _checked_data_file,
     _checked_name,
+    _expected_p99_read_ms,
+    QUERY_EXAMPLE_MAX_CHARS,
+    _first_query_example,
     _parse_shard_spec,
+    _query_params,
     _timeout_minutes,
     indexing_throughput,
     resolve_test_config_path,
+    validate_plan_queries,
 )
 
 WORKLOAD = SearchWorkload(
     name="search_bench",
     base_dir="data_dir/latte/search_bench",
     script="data_dir/latte/search_bench/bench.rn",
+    hdr_tag="fn--search",
     item_noun="docs",
     index_prefix="bench_idx",
     default_keyspace="bench",
@@ -50,6 +58,10 @@ WORKLOAD = SearchWorkload(
         dataset_dir="data_dir",
         records_file="records_file",
         record_count="record_count",
+        queries_file="queries_file",
+        qrels_file="qrels_file",
+        search_limit="search_limit",
+        compute_accuracy="compute_accuracy",
         index_name="index_name",
         max_index_wait="max_index_wait_secs",
         min_probes="min_successful_probes",
@@ -60,6 +72,133 @@ WORKLOAD = SearchWorkload(
     default_records_file="records.tsv",
     default_shard_suffix="records_{:03d}.tsv",
 )
+
+DEFAULTS = {"limit": 5, "concurrency": 32, "rate": 0, "expected_p99_read_ms": 10}
+
+# ---------------------------------------------------------------------------
+# Resolving the expected latency
+# ---------------------------------------------------------------------------
+
+
+def test_expected_p99_read_ms_query_overrides_defaults():
+    assert _expected_p99_read_ms({"set": "s", "expected_p99_read_ms": 50}, {"expected_p99_read_ms": 10}) == 50.0
+
+
+def test_expected_p99_read_ms_falls_back_to_defaults():
+    assert _expected_p99_read_ms({"set": "s"}, {"expected_p99_read_ms": 10}) == 10.0
+
+
+def test_expected_p99_read_ms_missing_raises():
+    with pytest.raises(ValueError, match="term_common"):
+        _expected_p99_read_ms({"set": "term_common"}, {})
+
+
+@pytest.mark.parametrize(
+    "value",
+    (True, 0, -1, float("nan"), float("inf"), "fast", [10]),
+    ids=["bool", "zero", "negative", "nan", "inf", "string", "list"],
+)
+def test_expected_p99_read_ms_rejects_unusable_values(value):
+    """The measured P99 is compared against this value. 'float()' alone accepts all of these: a bool
+    from an unquoted YAML 'yes', or an expectation no run can meet or none can miss."""
+    with pytest.raises(ValueError, match="expected a finite number > 0"):
+        _expected_p99_read_ms({"set": "term_common", "expected_p99_read_ms": value}, {})
+
+
+# ---------------------------------------------------------------------------
+# Validating a plan's query entries up front
+# ---------------------------------------------------------------------------
+
+
+def _plan(query, defaults=None):
+    return [{"name": "ds", "defaults": DEFAULTS if defaults is None else defaults, "steps": [{"queries": [query]}]}]
+
+
+def test_validate_plan_queries_accepts_a_good_plan():
+    validate_plan_queries(_plan({"set": "term_common", "limit": 100, "concurrency": 1, "rate": 50, "duration": "5m"}))
+
+
+@pytest.mark.parametrize(
+    "query, message",
+    (
+        ({"limit": 5}, "has no 'set'"),
+        ({"set": "term common"}, "query set name"),
+        ({"set": "t", "limit": 0}, "query limit"),
+        ({"set": "t", "limit": "5; rm -rf /"}, "query limit"),
+        ({"set": "t", "concurrency": 0}, "query concurrency"),
+        ({"set": "t", "rate": -1}, "query rate"),
+        ({"set": "t", "duration": "10"}, "query duration"),
+        ({"set": "t", "duration": "10s; id"}, "query duration"),
+    ),
+)
+def test_validate_plan_queries_rejects_a_bad_entry(query, message):
+    """Every one of these reaches a latte command line, so it is checked before the run rather than
+    quoted at each use."""
+    with pytest.raises(ValueError, match=re.escape(message)):
+        validate_plan_queries(_plan(query))
+
+
+def test_validate_plan_queries_names_the_offending_step():
+    with pytest.raises(ValueError, match=r"dataset 'ds', step #1"):
+        validate_plan_queries(_plan({"set": "t"}, defaults={}))
+
+
+def test_validate_plan_queries_ignores_steps_without_queries():
+    validate_plan_queries([{"name": "ds", "steps": [{"shards": []}, {"documents_file": "documents.tsv"}]}])
+
+
+def test_rate_zero_is_allowed_as_unthrottled():
+    """0 means 'no --rate at all', not a missing value -- it is the DEFAULT_RATE."""
+    assert _query_params({"set": "t", "rate": 0}, DEFAULTS)[2] == 0
+
+
+def test_booleans_are_not_accepted_as_numbers():
+    """'True' is an int in Python and would reach the command line as 'concurrency=True'."""
+    with pytest.raises(ValueError, match="query concurrency"):
+        _query_params({"set": "t", "concurrency": True}, DEFAULTS)
+
+
+# ---------------------------------------------------------------------------
+# Extracting a readable query example for a query record
+# ---------------------------------------------------------------------------
+
+
+def test_first_query_example_returns_the_text_column(tmp_path):
+    (tmp_path / "queries_term_common.tsv").write_text("q1\tfirst query text\nq2\tsecond\n", encoding="utf-8")
+    assert _first_query_example(str(tmp_path), "queries_term_common.tsv") == "first query text"
+
+
+def test_first_query_example_skips_leading_blank_lines(tmp_path):
+    (tmp_path / "queries_natural.tsv").write_text("\n\nq1\tactual first\n", encoding="utf-8")
+    assert _first_query_example(str(tmp_path), "queries_natural.tsv") == "actual first"
+
+
+def test_first_query_example_missing_file_returns_empty_string(tmp_path):
+    assert _first_query_example(str(tmp_path), "queries_missing.tsv") == ""
+
+
+def test_first_query_example_without_a_tab_returns_whole_line(tmp_path):
+    (tmp_path / "queries_odd.tsv").write_text("just one column\n", encoding="utf-8")
+    assert _first_query_example(str(tmp_path), "queries_odd.tsv") == "just one column"
+
+
+def test_first_query_example_truncates_a_long_query(tmp_path):
+    """The record's field is bounded here, not by the corpus the plan happens to name."""
+    (tmp_path / "queries_long.tsv").write_text(f"q1\t{'a' * 900}\n", encoding="utf-8")
+
+    example = _first_query_example(str(tmp_path), "queries_long.tsv")
+
+    assert len(example) == QUERY_EXAMPLE_MAX_CHARS
+    assert example.endswith("...")
+
+
+def test_first_query_example_keeps_a_query_at_the_cap_intact(tmp_path):
+    (tmp_path / "queries_exact.tsv").write_text(f"q1\t{'a' * QUERY_EXAMPLE_MAX_CHARS}\n", encoding="utf-8")
+
+    example = _first_query_example(str(tmp_path), "queries_exact.tsv")
+
+    assert example == "a" * QUERY_EXAMPLE_MAX_CHARS
+
 
 # ---------------------------------------------------------------------------
 # Waiting for the vector-store node to actually serve
@@ -278,7 +417,7 @@ class _PhaseTester:
         self.asked = []
 
     def _run_latte(self, stress_cmd, **kwargs):
-        self.asked.append(kwargs)
+        self.asked.append({"stress_cmd": stress_cmd, **kwargs})
 
     def _vector_store_node(self):
         return types.SimpleNamespace(system_log="system.log")
@@ -321,6 +460,59 @@ def test_each_shard_is_staged_for_the_load_that_reads_it(tmp_path):
     ]
 
 
+def test_a_query_set_stages_its_queries_and_qrels(monkeypatch):
+    monkeypatch.setattr(search_perf_test, "DbEventsFilter", lambda **_: contextlib.nullcontext())
+    tester = _PhaseTester()
+    tester.get_hdrhistogram = lambda **_: {}
+
+    search_perf_test.SearchPerformanceTest._run_search(
+        tester,
+        "/local/ds",
+        "/tmp/bench/ds",
+        "queries/queries.tsv",
+        limit=10,
+        concurrency=1,
+        rate=None,
+        search_duration="10s",
+        qrels_file="queries/qrels.tsv",
+    )
+
+    (asked,) = tester.asked
+    assert asked["files_to_stage"] == [
+        ("/local/ds/queries/queries.tsv", "/tmp/bench/ds/queries/queries.tsv"),
+        ("/local/ds/queries/qrels.tsv", "/tmp/bench/ds/queries/qrels.tsv"),
+    ]
+
+
+def _search_command():
+    """Run one search; return the command it asked latte to run."""
+    tester = _PhaseTester()
+    tester.get_hdrhistogram = lambda **_: {}
+    search_perf_test.SearchPerformanceTest._run_search(
+        tester,
+        "/local/ds",
+        "/tmp/bench/ds",
+        "queries_natural.tsv",
+        limit=5,
+        concurrency=1,
+        rate=0,
+        search_duration="10s",
+    )
+    (asked,) = tester.asked
+    return asked["stress_cmd"]
+
+
+def test_a_search_retries_as_little_as_latte_allows():
+    """latte waits between retries inside the measured call, and a rejected query never succeeds.
+    0 would not run the search function at all."""
+    assert "--retry-number 1 " in _search_command()
+
+
+def test_a_search_is_a_read_to_latte():
+    """Otherwise the HDR exporter cannot classify its 'fn--search' tag and fails the command."""
+    assert get_latte_operation_type(_search_command()) == "read"
+
+
 # ---------------------------------------------------------------------------
 # Plan validation
 # ---------------------------------------------------------------------------
@@ -331,9 +523,9 @@ class _PlanTester:
 
     WORKLOAD = WORKLOAD
 
-    def __init__(self, plan_path):
+    def __init__(self, plan_path, use_hdrhistogram=True):
         self.log = logging.getLogger("test")
-        self.params = {search_perf_test.TEST_CONFIG_PARAM: str(plan_path)}
+        self.params = {search_perf_test.TEST_CONFIG_PARAM: str(plan_path), "use_hdrhistogram": use_hdrhistogram}
         self.ran = []
 
     def _wait_for_vector_store_serving(self):
@@ -343,10 +535,10 @@ class _PlanTester:
         self.ran.append(dataset["name"])
 
 
-def _run_plan(tmp_path, plan):
+def _run_plan(tmp_path, plan, **kwargs):
     plan_path = tmp_path / "plan.yaml"
     plan_path.write_text(plan, encoding="utf-8")
-    tester = _PlanTester(plan_path)
+    tester = _PlanTester(plan_path, **kwargs)
     search_perf_test.SearchPerformanceTest.run_search_benchmark(tester)
     return tester
 
@@ -354,6 +546,26 @@ def _run_plan(tmp_path, plan):
 def test_a_plan_runs_its_datasets_in_order(tmp_path):
     tester = _run_plan(tmp_path, "datasets:\n  - name: first\n  - name: second\n")
     assert tester.ran == ["first", "second"]
+
+
+QUERYING_PLAN = """\
+datasets:
+  - name: first
+    defaults: {expected_p99_read_ms: 10}
+    steps:
+      - queries: [{set: natural}]
+"""
+
+
+def test_a_plan_with_queries_needs_hdr_histograms(tmp_path):
+    """Without them every query would be recorded with null latencies, after the corpus was loaded."""
+    with pytest.raises(ValueError, match="use_hdrhistogram"):
+        _run_plan(tmp_path, QUERYING_PLAN, use_hdrhistogram=False)
+
+
+def test_a_plan_without_queries_runs_without_hdr_histograms(tmp_path):
+    tester = _run_plan(tmp_path, "datasets:\n  - name: first\n", use_hdrhistogram=False)
+    assert tester.ran == ["first"]
 
 
 def test_repeated_dataset_names_are_rejected(tmp_path):
@@ -481,3 +693,87 @@ def test_an_unmeasured_build_is_recorded_with_nulls(tmp_path):
 @pytest.mark.parametrize("record_count, build_seconds", ((1000, None), (1000, 0.0), (0, 2.5)))
 def test_no_throughput_is_derived_without_a_build_time_or_records(record_count, build_seconds):
     assert indexing_throughput(record_count, build_seconds) is None
+
+
+def test_a_search_is_recorded_with_its_configuration_and_latency(tmp_path):
+    tester = _ResultsTester(tmp_path)
+    search_perf_test.SearchPerformanceTest._record_search(
+        tester,
+        expected_p99_read_ms=10.0,
+        latency={"percentile_50": 2.08, "percentile_99": 3.86, "percentile_99_9": 5.0, "throughput": 50},
+        dataset="local_tiny",
+        step=1,
+        query_index=2,
+        query_set="term_common",
+        limit=5,
+        concurrency=1,
+        rate=50,
+    )
+
+    (record,) = _results(tmp_path)
+    assert {k: v for k, v in record.items() if k != "time"} == {
+        "workload": "search_bench",
+        "phase": "search",
+        "dataset": "local_tiny",
+        "step": 1,
+        "query_index": 2,
+        "query_set": "term_common",
+        "limit": 5,
+        "concurrency": 1,
+        "rate": 50,
+        "expected_p99_read_ms": 10.0,
+        "p50_ms": 2.08,
+        "p90_ms": None,
+        "p95_ms": None,
+        "p99_ms": 3.86,
+        "p99_9_ms": 5.0,
+        "p99_99_ms": None,
+        "throughput_ops": 50,
+        "p99_within_expectation": True,
+    }
+
+
+@pytest.mark.parametrize("latency, within", (({"percentile_99": 12.0}, False), ({}, None)))
+def test_a_search_says_whether_it_met_its_expectation(tmp_path, latency, within):
+    """Unknown when nothing was measured -- not a pass, and not a miss either."""
+    search_perf_test.SearchPerformanceTest._record_search(
+        _ResultsTester(tmp_path), expected_p99_read_ms=10.0, latency=latency, query_set="natural"
+    )
+    (record,) = _results(tmp_path)
+    assert record["p99_within_expectation"] is within
+
+
+class _StepTester(_ResultsTester):
+    """Runs a step's queries with '_run_search' answering from a canned HDR summary."""
+
+    def __init__(self, logdir):
+        super().__init__(logdir)
+        self.searched = []
+
+    def _run_search(self, local_ds_dir, container_ds_dir, **kwargs):
+        self.searched.append(kwargs)
+        return {"percentile_99": 4.0, "throughput": 50}
+
+    def _record_search(self, **fields):
+        search_perf_test.SearchPerformanceTest._record_search(self, **fields)
+
+
+def test_every_query_of_a_step_is_recorded_in_order(tmp_path):
+    """Two entries with the same configuration stay apart by their position in the step."""
+    (tmp_path / "queries_term_common.tsv").write_text("q1\tthe query\n", encoding="utf-8")
+    tester = _StepTester(tmp_path)
+    step = {"queries": [{"set": "term_common"}, {"set": "term_common", "limit": 100}, {"set": "term_common"}]}
+
+    search_perf_test.SearchPerformanceTest._run_step_queries(
+        tester, step, "ds", DEFAULTS, record_count=900, step_number=2, local_ds_dir=str(tmp_path), container_ds_dir="/r"
+    )
+
+    assert [searched["limit"] for searched in tester.searched] == [5, 100, 5]
+    records = _results(tmp_path)
+    assert [(r["step"], r["query_index"], r["limit"], r["record_count"]) for r in records] == [
+        (2, 1, 5, 900),
+        (2, 2, 100, 900),
+        (2, 3, 5, 900),
+    ]
+    assert {r["query_example"] for r in records} == {"the query"}
+    assert {r["p99_ms"] for r in records} == {4.0}
