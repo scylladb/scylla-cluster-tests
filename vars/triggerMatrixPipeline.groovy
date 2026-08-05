@@ -79,6 +79,12 @@ def call(Map pipelineParams = [:]) {
                    description: 'Billing project for resource tagging')
             string(name: 'email_recipients', defaultValue: 'qa@scylladb.com',
                    description: 'Comma-separated email recipients for wait-mode results report')
+            choice(name: 'version_resolution', choices: ['', 'per-backend', 'common', 'aws-strict'],
+                   description: '''Overrides the matrix YAML. How the version passed to the jobs is picked:
+                                   per-backend - every backend runs its own latest build;
+                                   common - all jobs run the newest build published on every backend in the matrix;
+                                   aws-strict - the AWS build for everyone, backends missing that build are not triggered.
+                                   Empty keeps whatever the matrix YAML defines.''')
             booleanParam(name: 'use_job_throttling', defaultValue: true,
                    description: 'If true, use job throttling to limit the number of concurrent builds')
             booleanParam(name: 'dry_run', defaultValue: false,
@@ -135,6 +141,7 @@ def call(Map pipelineParams = [:]) {
                             'requested_by_user': params.requested_by_user,
                             'billing_project': params.billing_project,
                             'email_recipients': params.email_recipients,
+                            'version_resolution': params.version_resolution,
                         ]
 
                         if (!params.matrix_file?.trim()) {
@@ -204,6 +211,9 @@ def call(Map pipelineParams = [:]) {
                         }
                         if (params.email_recipients?.trim()) {
                             cmd += " --email-recipients '${params.email_recipients}'"
+                        }
+                        if (params.version_resolution?.trim()) {
+                            cmd += " --version-resolution '${params.version_resolution}'"
                         }
                         if (params.use_job_throttling) {
                             cmd += " --use-job-throttling"

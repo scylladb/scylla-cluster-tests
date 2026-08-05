@@ -317,8 +317,40 @@ The trigger matrix always passes a **full version tag** (e.g., `2026.2.0~dev-0.2
 ### Resolution Flow
 
 1. **Full version tag provided** (e.g., `2024.2.5-0.20250221.cb9e2a54ae6d-1`): used as-is
-2. **Partial version** (e.g., `master:latest`, `2025.4`): resolved to full tag via AMI lookup (`get_branched_ami`)
+2. **Partial version** (e.g., `master:latest`, `2025.4`): resolved to a full tag per backend — see [strategies](#version-resolution-strategies)
 3. **Image param only** (e.g., `--scylla-ami-id ami-xxx`): version extracted from image tags, then used for all jobs
+
+### Version Resolution Strategies
+
+Nightly images are built per backend and per architecture, so at any moment AWS may have a build GCE
+doesn't have yet. Handing every job the AWS build then aborts the non-AWS jobs during config validation
+(`GCE image for scylla_version='…' was not found`, SCT-665). Which build each job gets is decided by
+`version_resolution` in the matrix YAML, overridable per run with `--version-resolution`:
+
+| Strategy | What every job gets | Use it when |
+|----------|--------------------|-------------|
+| `per-backend` (default) | Each backend/region/arch resolves its own latest build | Jobs are independent — a GCE job may run yesterday's nightly while AWS runs today's |
+| `common` | The newest build published on **every** backend/region/arch in the matrix (i.e. the lowest of their latest builds) | Results must be comparable across jobs — perf regression |
+| `aws-strict` | The AWS build; jobs whose backend doesn't have that exact build are **not triggered** | You want the AWS build or nothing |
+
+`common` fails the trigger run when no build is shared by all backends; `per-backend` and `aws-strict`
+skip only the jobs they can't serve and report them in the skipped list.
+
+Jobs that don't install from an image (rolling-upgrade jobs using `new_scylla_repo`, PGO jobs using
+`unified_package`) are left out of resolution entirely.
+
+```bash
+# per-backend: GCE jobs get the newest GCE build, AWS jobs the newest AMI
+uv run sct.py trigger-matrix --matrix configurations/triggers/tier1.yaml \
+    --scylla-version "master:latest" --version-resolution per-backend --dry-run
+
+# common: one build for the whole matrix
+uv run sct.py trigger-matrix --matrix configurations/triggers/perf-regression.yaml \
+    --scylla-version "master:latest" --version-resolution common --dry-run
+```
+
+ARM jobs must declare `arch: "aarch64"` in the matrix YAML — images are published per architecture, and
+without it their version is resolved against x86_64 images.
 
 ### Triggering from an Image (scylla-pkg flow)
 
@@ -376,8 +408,8 @@ uv run sct.py trigger-matrix \
 
 ```bash
 # Run all trigger matrix unit tests
-uv run python -m pytest unit_tests/test_trigger_matrix.py -v -n0
+uv run python -m pytest unit_tests/trigger_matrix/ -v -n0
 
 # Run with coverage
-uv run python -m pytest unit_tests/test_trigger_matrix.py --cov=sdcm.utils.trigger_matrix --cov-report=term-missing -n0
+uv run python -m pytest unit_tests/trigger_matrix/ --cov=sdcm.utils.trigger_matrix --cov-report=term-missing -n0
 ```

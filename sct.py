@@ -75,6 +75,7 @@ from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.decorators import retrying
 from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
 from sdcm.utils.trigger_matrix import (
+    VERSION_RESOLUTION_STRATEGIES,
     resolve_image_architecture,
     resolve_scylla_version_from_image,
     resolve_to_full_version,
@@ -3324,6 +3325,15 @@ def hdr_investigate(
     "Comma-separated base versions to upgrade FROM (e.g., '2025.1,2025.2'). "
     "When empty, the downstream job auto-selects base versions.",
 )
+@click.option(
+    "--version-resolution",
+    default=None,
+    type=click.Choice(VERSION_RESOLUTION_STRATEGIES),
+    help="How the version passed to the jobs is picked (overrides the matrix YAML): "
+    "per-backend — every backend runs its own latest build; "
+    "common — all jobs run the newest build published on every backend in the matrix; "
+    "aws-strict — the AWS build for everyone, backends missing that build are not triggered",
+)
 @click.option("--dry-run", is_flag=True, default=False, help="Preview mode — do not trigger jobs")
 @click.option(
     "--use-job-throttling/--no-use-job-throttling",
@@ -3353,6 +3363,7 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     unified_package,
     new_scylla_repo,
     base_versions,
+    version_resolution,
     dry_run,
     use_job_throttling,
     requested_by_user,
@@ -3395,6 +3406,9 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
                 sys.exit(1)
 
     # For user-provided partial versions (master:latest, 2025.4), resolve to full version.
+    # This is the AWS reference version — it decides pre_release job filtering, and is what
+    # aws-strict stamps on every job. Each backend still resolves its own build later on,
+    # according to the matrix' version_resolution strategy.
     # Skip if version was already resolved from image tags — that's already the real version.
     original_version = scylla_version
     if scylla_version and not version_from_image:
@@ -3402,8 +3416,11 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
             scylla_version = resolve_to_full_version(scylla_version, region=region)
             click.echo(f"Using full version: {scylla_version}")
         except Exception as exc:  # noqa: BLE001
-            click.echo(f"Error resolving full version: {exc}", err=True)
-            sys.exit(1)
+            if version_resolution == "aws-strict":
+                click.echo(f"Error resolving full version: {exc}", err=True)
+                sys.exit(1)
+            click.echo(f"Warning: {exc}")
+            click.echo(f"Leaving '{original_version}' unresolved — each backend resolves its own build")
 
     # Detect image architecture for arch-aware job filtering
     image_arch = None
@@ -3457,6 +3474,7 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
             dry_run=dry_run,
             email_recipients=email_recipients.split(",") if email_recipients else None,
             image_arch=image_arch,
+            version_resolution=version_resolution,
             **overrides,
         )
     except Exception as exc:  # noqa: BLE001

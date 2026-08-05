@@ -44,6 +44,11 @@ cron_triggers:
       labels_selector: "gce-custom-monthly"
       requested_by_user: "valerii.ponomarov"
 
+# Performance numbers are only comparable when every job of a run measures the same build,
+# so all jobs get the newest build published on every backend/region/arch in this matrix,
+# instead of each backend running whatever nightly it happens to have.
+version_resolution: "common"
+
 defaults:
   provision_type: "on_demand"
   post_behavior_db_nodes: "destroy"
@@ -57,6 +62,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-vnodes"
     backend: "aws"
+    arch: "aarch64"
     include_versions: ["master"]
     labels: ["master-monthly"]
     job_throttle_category: "SCT-perf-eu-west-2-i8g"
@@ -66,6 +72,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-vnodes"
     backend: "aws"
+    arch: "aarch64"
     exclude_versions: ["2025.2", "2025.1", "2024.2", "2024.1", "master"]
     labels: []
     job_throttle_category: "SCT-perf-eu-west-2-i8g"
@@ -75,6 +82,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-vnodes"
     backend: "aws"
+    arch: "aarch64"
     include_versions: ["master"]
     labels: ["master-monthly"]
     job_throttle_category: "SCT-perf-eu-north-1-i8g"
@@ -84,6 +92,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-vnodes"
     backend: "aws"
+    arch: "aarch64"
     exclude_versions: ["2025.2", "2025.1", "2024.2", "2024.1", "master"]
     labels: []
     job_throttle_category: "SCT-perf-eu-west-1-i8g"
@@ -143,6 +152,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64"
     backend: "aws"
+    arch: "aarch64"
     labels: ["master-weekly"]
     params:
       region: "us-east-1"
@@ -150,6 +160,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-write"
     backend: "aws"
+    arch: "aarch64"
     labels: ["master-weekly"]
     params:
       region: "us-east-1"
@@ -210,6 +221,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets"
     backend: "aws"
+    arch: "aarch64"
     include_versions: ["master"]
     labels: ["master-weekly"]
     job_throttle_category: "SCT-perf-us-east-1-i8g"
@@ -219,6 +231,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets"
     backend: "aws"
+    arch: "aarch64"
     exclude_versions: ["2025.2", "2025.1", "2024.1", "2024.2", "master"]
     labels: []
     job_throttle_category: "SCT-perf-us-west-2-i8g"
@@ -273,6 +286,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets"
     backend: "aws"
+    arch: "aarch64"
     include_versions: ["master"]
     labels: ["master-3weeks"]
     job_throttle_category: "SCT-perf-us-east-2-i8g"
@@ -284,6 +298,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets"
     backend: "aws"
+    arch: "aarch64"
     exclude_versions: ["2025.2", "2025.1", "2024.2", "2024.1", "master"]
     labels: []
     job_throttle_category: "SCT-perf-eu-west-2-i8g"
@@ -297,6 +312,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets"
     backend: "aws"
+    arch: "aarch64"
     include_versions: ["master"]
     labels: ["master-3weeks"]
     job_throttle_category: "SCT-perf-eu-north-1-i8g"
@@ -306,6 +322,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets"
     backend: "aws"
+    arch: "aarch64"
     exclude_versions: ["2025.2", "2025.1", "2024.2", "2024.1", "master"]
     labels: []
     job_throttle_category: "SCT-perf-eu-west-2-i8g"
@@ -317,6 +334,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-2.5tb-i8g-elasticity"
     backend: "aws"
+    arch: "aarch64"
     exclude_versions: ["2024.1", "2024.2", "2025.1", "2025.4", "master"]
     labels: []
     params:
@@ -325,6 +343,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-2.5tb-i8g-elasticity"
     backend: "aws"
+    arch: "aarch64"
     include_versions: ["master"]
     labels: ["master-monthly"]
     params:

@@ -33,6 +33,7 @@ jobs:
 
   - job_name: "/scylla-doctor/oss/artifacts/artifacts-ami-arm-test"
     backend: "aws"
+    arch: "aarch64"
     wait: true
     wait_timeout: 7200
     fail_on_error: true
