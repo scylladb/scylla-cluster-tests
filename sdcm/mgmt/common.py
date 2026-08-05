@@ -58,6 +58,7 @@ class BackupRetentionLockMode(StrEnum):
     DISABLED = "disabled"
     UNLOCKED = "unlocked"
     LOCKED = "locked"
+    EVENT_BASED_HOLD = "event-based-hold"
 
 
 class HostRestStatus(Enum):
