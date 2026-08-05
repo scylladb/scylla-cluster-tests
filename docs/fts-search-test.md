@@ -1,12 +1,9 @@
 # Running the FTS (BM25 full-text search) performance test
 
 `fts_test.FtsSearchTest.test_fts_search` drives a full-text-search benchmark:
-load documents → build a `fulltext_index` → report index build time and indexing
-throughput to Argus. Build time is read from vector-store's own "full scan" log lines
-(see "Index build timing" below).
-
-The query phase — running query sets against the index and reporting their latency — lands on
-top of this.
+load documents → build a `fulltext_index` → run query sets → report latency and
+index-build metrics to Argus. Index build time is read from vector-store's own "full scan"
+log lines (see "Index build timing" below).
 
 The flow is not specific to full text. It lives in `search_perf_test.py` and is shared with the
 other benchmarks of a vector-store-served index; `fts_test.py` is the full-text half — the rune
@@ -22,7 +19,7 @@ So far there is one way to run it:
 
 The local run produces meaningless numbers — 1 shard of 300 synthetic documents on a
 containerised Scylla. Use it to check that shard staging, index building, metric
-parsing and the Argus table all work. A run on real hardware against real corpora comes
+parsing and the Argus tables all work. A run on real hardware against real corpora comes
 separately.
 
 > **Note:** minicloud cannot run this test. It emulates only `i4i.large` and
@@ -86,8 +83,8 @@ Argus, creating a junk run there. Setting it explicitly keeps Argus in replay-on
 mode: every submission is written to `argus_replay_log_*.jsonl` in the run's log
 directory and nothing is posted.
 
-Drop that line if you *want* to see the table render in Argus for real — which is the
-strongest check of any change to how results are submitted.
+Drop that line if you *want* to see the tables render in Argus for real — which is
+the strongest check of any change to the `expected_p99_read_ms` table split.
 
 **If the tables do not show up in Argus,** check both gates before suspecting the test —
 either one silently downgrades the whole run to replay-only, and neither fails loudly:
@@ -159,27 +156,44 @@ grep -E "Index build time \(vector-store full scan\)" $D/sct.log
 # 'starting'/'finished' pair for the same index (note the lower-cased index name).
 grep -E "(starting|finished) full scan on" $D/*vs-set*/*/system.log
 
-# Argus submissions (replay-only mode). Expect this table:
+# The expected_p99_read_ms split: local_config.yaml exercises fts_search_p99_10ms (term_common)
+# and fts_search_p99_50ms (natural).
+python3 -c "import json; print(list(json.load(open('$D/latency_results.json'))))"
+
+# Argus submissions (replay-only mode). Expect at least these tables:
 #   FTS Index Build Time
-grep -o "FTS Index Build Time" $D/argus_replay_log_*.jsonl | sort -u
+#   read - fts_search_p99_10ms - latencies
+#   read - fts_search_p99_50ms - latencies
+grep -o "read - fts_search_p99_[a-z0-9_]* - latencies\|FTS Index Build Time" \
+  $D/argus_replay_log_*.jsonl | sort -u
 ```
 
-The shape to expect — one build row per step:
+The shape to expect — one build row per step, one latency table per distinct
+`expected_p99_read_ms`, a `step #N` in every query row, and a `run #N` only where a step repeats
+a query configuration verbatim:
 
 ```
 Index build time (vector-store full scan): <s> (local_tiny | 300 docs | build #1)
 Index build time (vector-store full scan): <s> (local_tiny | 900 docs | build #2)
 Index build time (vector-store full scan): <s> (local_smoke | 10 docs | build #1)
 Index build time (vector-store full scan): <s> (local_smoke | 10 docs | build #2)
+Index build time (vector-store full scan): <s> (local_smoke | 10 docs | build #3)
 
-FTS Index Build Time                  rows: local_tiny | 300 docs | build #1, local_tiny | 900 docs |
-                                             build #2, local_smoke | 10 docs | build #1,
-                                             local_smoke | 10 docs | build #2
+FTS Index Build Time                  rows: 5 (one per step, 'build #N'-suffixed)
+read - fts_search_p99_10ms - lat.     rows: local_tiny | 300 docs | step #1 | term_common,
+                                             local_tiny | 900 docs | step #2 | term_common |
+                                               limit=5 concurrency=2 rate=0 run #1,
+                                             ... the same with run #2
+read - fts_search_p99_50ms - lat.     rows: local_tiny | 900 docs | step #2 | natural,
+                                             local_smoke | 10 docs | step #1 | natural,
+                                             local_smoke | 10 docs | step #3 | natural
 ```
 
-local_smoke's second build (`build #2`) has no load -- it rebuilds the index on the corpus the
-first step already loaded, so its build time reflects only the index rebuild, not the load. See
-"Repeated builds on the same data" below.
+local_smoke's second and third builds have no load — they rebuild the index on the corpus the
+first step already loaded, so their build time reflects only the index rebuild, not the load (see
+"Repeated builds on the same data" below). `build #2` also has no queries at all, and `build #3`
+repeats `build #1`'s query set — which is why its query rows differ from step #1's only in the
+`step #N`.
 
 The pieces that can be checked without a cluster already are, so a failure here is more likely to be
 the orchestration than the plumbing underneath it:
@@ -236,20 +250,81 @@ The dataset/query plan is a separate YAML from the SCT test case:
 The option is not full-text specific: the plan format belongs to the shared flow, so a vector-search
 test case will name its own plan through the same option.
 
-It has no default — which datasets and shards to run *is* the definition of the test, so a test
-case has to name a plan. The plans live in the repo, next to the rune scripts they
+It has no default — which datasets, shards and query sets to run *is* the definition of the test,
+so a test case has to name a plan. The plans live in the repo, next to the rune scripts they
 drive:
 
 | Plan | Used by | Size |
 |---|---|---|
 | `local_config.yaml` | the docker test case | two tiny generated corpora, read from disk |
 
-The index and load waits are plan values, not SCT params. Per dataset:
+Rate, duration and index-wait are per-query-set values inside the plan YAML — there are no SCT
+params for them. Per dataset:
 
 | Key | Default | Bounds |
 |---|---|---|
 | `max_index_wait_secs` | 1800 | the rune script's own budget for probing the index until it answers, the index-build phase timeout, and how long SCT waits for a dropped index to disappear |
 | `max_shard_load_secs` | 3600 | the load phase timeout, **per shard** — shards load one at a time |
+
+### Every query needs an expected latency
+
+Every query entry must resolve an `expected_p99_read_ms`, either on the entry itself or the
+dataset's `defaults` — there is no SCT-side default or hardcoded threshold, and missing it on both
+raises `ValueError` as soon as the plan is read:
+
+```yaml
+defaults:
+  expected_p99_read_ms: 10   # inherited by every query in the dataset unless overridden
+
+steps:
+  - queries:
+      - set: term_common          # uses the default: 10ms
+      - set: natural
+        expected_p99_read_ms: 50  # overridden: 50ms
+```
+
+The value selects the Argus table — `read - fts_search_p99_{value}ms - latencies`
+(`_cycle_name()` in `search_perf_test.py`) — and becomes that table's `P99 read` validation rule.
+It is a property of the table, not a column, so queries resolving to the same value share a table.
+What varies per row is reported as columns instead: `limit`, `concurrency`, `rate` and a
+`query_example` (the first line of the query set's `.tsv`).
+
+The whole plan is resolved up front, right after it is read (`validate_plan_queries()` in
+`search_perf_test.py`), so a typo fails before a step spends tens of minutes loading shards. Note
+that a query's `duration` has to be latte's *time* form (`60s`, `5m`, `1h`), not its request-count
+form — `get_timeout_from_stress_cmd()` only parses the former, and a duration it cannot read
+silently gives the search phase the whole `test_duration` as its timeout.
+
+### Repeated query configs get a disambiguating suffix
+
+Argus row labels are built from dataset / document count / step ordinal / query set
+(`row_labels_for_step()` in `search_perf_test.py`); the query parameters are columns, not part of
+the label. Two entries for the same set within one step therefore collide, and a colliding label
+gets a suffix naming its query configuration — plus a positional `run #N` when the entries agree
+on every parameter too. A label that does not collide is left byte-identical, so Argus history
+stays continuous. So:
+
+```yaml
+- set: term_common
+  concurrency: 1
+  rate: 50
+- set: term_common
+  limit: 100
+- set: term_common     # identical to the next one
+- set: term_common
+```
+
+produces
+
+```
+ds | N docs | step #1 | term_common | limit=5 concurrency=1 rate=50
+ds | N docs | step #1 | term_common | limit=100 concurrency=32 rate=0
+ds | N docs | step #1 | term_common | limit=5 concurrency=32 rate=0 run #1
+ds | N docs | step #1 | term_common | limit=5 concurrency=32 rate=0 run #2
+```
+
+`local_config.yaml` exercises it deliberately — `local_tiny`'s second step repeats
+`set: term_common` with identical parameters. Covered by `unit_tests/unit/test_search_perf_test.py`.
 
 ### Repeated builds on the same data
 
@@ -271,6 +346,8 @@ steps:
 Each build still gets its own Argus row (`{dataset} | {doc_count} docs | build #{N}`, one per
 step regardless of whether it loaded anything), so repeats do not collide -- see `local_smoke`
 in `local_config.yaml`, which does a build followed by a warm rebuild on the same corpus.
+
+Queries are optional too (`step.get("queries", [])` defaults to none), so a step can be build-only.
 
 ### Index build timing
 

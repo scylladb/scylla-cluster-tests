@@ -27,11 +27,10 @@ Two datasets are produced, together covering every branch of
     between steps.
 
 ``local_smoke``
-    10 hand-written documents, non-sharded (``documents.tsv``).  Exercises the
-    multi-dataset loop and the ``documents_file`` branch of
-    ``_load_step_shards``.  Copied from the vector-store repo's
-    ``latte/full-text-search/testdata`` smoke fixture, graded qrels included --
-    those are for the query phase, which is not here yet.
+    10 hand-written documents with graded qrels, non-sharded (``documents.tsv``).
+    Exercises the multi-dataset loop, the ``documents_file`` branch of
+    ``_load_step_shards``, and qrels staging.  Copied from the vector-store
+    repo's ``latte/full-text-search/testdata`` smoke fixture.
 
 Every query matches at least one document, so a zero ``result_count`` metric
 means a real failure rather than a badly chosen query.
