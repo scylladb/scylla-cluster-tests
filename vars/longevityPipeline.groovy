@@ -338,20 +338,7 @@ def call(Map pipelineParams) {
                         wrap([$class: 'BuildUser']) {
                             dir('scylla-cluster-tests') {
                                 timeout(time: params.backend == 'azure' ? 90 : 30, unit: 'MINUTES') {
-                                    if (params.backend == 'xcloud') {
-                                        echo "Scylla Cloud backend selected: provisioning loader nodes only on ${params.xcloud_provider} cloud provider"
-                                    }
-                                    if (params.backend == 'xcloud' || params.backend == 'aws' || params.backend == 'azure' || params.backend == 'oci') {
-                                        provisionResources(params, builder.region)
-                                    } else if (params.backend.contains('docker')) {
-                                        sh """
-                                            echo 'Tests are to be executed on Docker backend in SCT-Runner. No additional resources to be provisioned.'
-                                        """
-                                    } else {
-                                        sh """
-                                            echo 'Skipping because non-AWS/Azure backends are not supported'
-                                        """
-                                    }
+                                    provisionResources(params, builder.region)
                                     completed_stages['provision_resources'] = true
                                 }
                             }
