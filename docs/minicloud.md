@@ -137,9 +137,33 @@ export SCT_MINICLOUD_ENDPOINT_URL=http://localhost:5000
 ```
 
 `scripts/run-minicloud-test.sh` is the single local entry point - it starts the container via
-`sct.py start-minicloud` and runs the chosen flavor (`-f ami|repo|provision`) on the chosen
+`sct.py start-minicloud` and runs the chosen flavor (`-f ami|repo|provision|upgrade`) on the chosen
 backend (`-b aws|gce`), directly or through hydra (`-m direct|hydra`), layering
 `configurations/minicloud.yaml` for you.
+
+The `upgrade` flavor runs `upgrade_test.UpgradeTest.test_rolling_upgrade` - the same test the
+`rollingUpgradePipeline` runs in CI - and needs a target to upgrade *to* on top of the base version:
+
+```bash
+SCT_SCYLLA_VERSION=2026.1 \
+SCT_NEW_SCYLLA_REPO=http://downloads.scylladb.com/deb/unified/2026.2/scylladb-2026.2/scylla.list \
+  scripts/run-minicloud-test.sh -f upgrade -b aws
+```
+
+`SCT_NEW_VERSION` works instead on the GCE backend; `sct_config` rejects it for AWS AMIs, and the
+script fails on that up front rather than after provisioning a cluster. The production test-case is
+6x `i4i.2xlarge` with 20M-row workloads, so the flavor layers
+`configurations/minicloud/rolling-upgrade.yaml` on top of it: 3 db nodes (the floor for keeping
+quorum with one node down at a time), 1 loader, 1 monitor - the monitor is load-bearing, because the
+test queries Prometheus to confirm the write workload landed before it starts upgrading - and every
+workload cut to what a 1-vCPU guest can serve. That is 5 guests x `minicloud_lightweight_memory`
+= 20GiB plus host headroom, so raise the per-guest memory only if the host has room for 5x the
+increase.
+
+It is an overlay rather than a separate test-case copy on purpose: `test_rolling_upgrade` reads a
+dozen stress params, and a copy would silently miss any new one the real test-case grows. Passing
+your own `SCT_TEST_CASE` drops the overlay, since shrinking someone else's yaml by name would be
+wrong.
 `scripts/run-minicloud-clean-resources.sh` is a local-dev convenience only - the pipelines use
 the regular `clean-resources` path.
 
