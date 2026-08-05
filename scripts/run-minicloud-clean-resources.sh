@@ -84,7 +84,9 @@ uv run sct.py clean-resources "${CLEAN_ARGS[@]}" "$@"
 # clean-resources only removes what the cloud API knows about. minicloud additionally
 # keeps per-VM state on the host, which it will not touch - report it rather than
 # deleting, since the AMI cache next to it is expensive to rebuild.
-STATE_DIR="${MINICLOUD_STATE_DIR:-${HOME}/.cache/minicloud}"
+# SCT_MINICLOUD_STATE_DIR is the env form of the minicloud_state_dir config option; the bare
+# name stays accepted so an older shell/CI export keeps working.
+STATE_DIR="${SCT_MINICLOUD_STATE_DIR:-${MINICLOUD_STATE_DIR:-${HOME}/.cache/minicloud}}"
 if [[ -d "${STATE_DIR}/instances" ]]; then
     leftover=$(find "${STATE_DIR}/instances" -mindepth 1 -maxdepth 1 | wc -l)
     if [[ "${leftover}" -gt 0 ]]; then

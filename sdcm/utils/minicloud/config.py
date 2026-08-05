@@ -36,6 +36,11 @@ def default_minicloud_image() -> str:
 # ~2.2 GiB for the single shard. Raising this multiplies across every VM in the test, so
 # the sct-runner has to be sized for n_db_nodes + n_loaders + n_monitor_nodes times this.
 MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT = "4GiB"
+# One shard per vCPU. minicloud's own default is also 1, but pass it explicitly so the value a
+# run used is visible in its config rather than inherited from whichever image version ran.
+MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT = 1
+# Image cache, per-instance qcow2 disks and minicloud.log all live here - tens of GiB.
+MINICLOUD_STATE_DIR_DEFAULT = "~/.cache/minicloud"
 # Backend-independent: GCE runs also reach S3 (keystore, job artifacts, downloads), so the
 # same list is passed to the container no matter which backend the test uses.
 # Keep in sync with the default in scripts/start-minicloud.sh.
@@ -125,6 +130,12 @@ class MinicloudConfig:
     port: int = MINICLOUD_PORT
     lightweight: bool = True
     lightweight_memory: str = MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT
+    lightweight_vcpus: int = MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT
+    # Docker limits on the container itself. Empty means "pass no flag" — the container is then
+    # bounded only by the host, which is what every run did before these became configurable.
+    container_memory: str = ""
+    container_cpus: str = ""
+    container_name: str = MINICLOUD_CONTAINER_NAME
     s3_passthrough_buckets: List[str] = dataclasses.field(
         default_factory=lambda: list(MINICLOUD_S3_PASSTHROUGH_BUCKETS_DEFAULT)
     )
@@ -135,7 +146,7 @@ class MinicloudConfig:
     default_region: str = MINICLOUD_DEFAULT_REGION
     gcp_project: str = MINICLOUD_GCP_PROJECT_DEFAULT
     gcs_bucket: str = ""
-    state_dir: str = dataclasses.field(default_factory=lambda: os.path.expanduser("~/.cache/minicloud"))
+    state_dir: str = dataclasses.field(default_factory=lambda: os.path.expanduser(MINICLOUD_STATE_DIR_DEFAULT))
     log_file: str = ""
     backend: str = ""
     # Skips the host-memory preflight gate (minicloud_skip_memory_check param) — the
@@ -167,11 +178,15 @@ class MinicloudConfig:
         are cloud-standard ones (SCT_GCE_PROJECT, GOOGLE_APPLICATION_CREDENTIALS, AWS_*)
         and the SCT_MINICLOUD_ENDPOINT_URL activation/endpoint override.
         """
-        state_dir = os.path.expanduser("~/.cache/minicloud")
+        state_dir = MINICLOUD_STATE_DIR_DEFAULT
         backend = ""
         docker_image = default_minicloud_image()
         lightweight = True
         lightweight_memory = MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT
+        lightweight_vcpus = MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT
+        container_memory = ""
+        container_cpus = ""
+        container_name = MINICLOUD_CONTAINER_NAME
         skip_memory_check = False
         gcs_bucket = ""
         gcp_project = ""
@@ -185,6 +200,13 @@ class MinicloudConfig:
             if (explicit_lightweight := params.get("minicloud_lightweight")) is not None:
                 lightweight = bool(explicit_lightweight)
             lightweight_memory = params.get("minicloud_lightweight_memory") or lightweight_memory
+            lightweight_vcpus = int(params.get("minicloud_lightweight_vcpus") or lightweight_vcpus)
+            # These three are genuinely optional: empty has to mean "no docker limit" / "keep the
+            # default name", so they only ever widen, never blank a value the caller set.
+            container_memory = params.get("minicloud_container_memory") or ""
+            container_cpus = params.get("minicloud_container_cpus") or ""
+            container_name = params.get("minicloud_container_name") or container_name
+            state_dir = params.get("minicloud_state_dir") or state_dir
             skip_memory_check = bool(params.get("minicloud_skip_memory_check"))
             gcs_bucket = params.get("minicloud_gcs_bucket") or ""
             # the SCT param wins over the environment: gce_project can be set from a
@@ -199,11 +221,18 @@ class MinicloudConfig:
         s3_passthrough_buckets = _param_as_list(params, "minicloud_s3_passthrough_buckets") or list(
             MINICLOUD_S3_PASSTHROUGH_BUCKETS_DEFAULT
         )
+        # ~ only expands here, after the param has had its say, so a configured path with a
+        # leading ~ works the same as the default.
+        state_dir = os.path.expanduser(state_dir)
         return cls(
             docker_image=docker_image,
             port=cls._resolve_port(params),
             lightweight=lightweight,
             lightweight_memory=lightweight_memory,
+            lightweight_vcpus=lightweight_vcpus,
+            container_memory=container_memory,
+            container_cpus=container_cpus,
+            container_name=container_name,
             s3_passthrough_buckets=s3_passthrough_buckets,
             regions=resolve_minicloud_regions(params),
             default_region=resolve_minicloud_default_region(params),

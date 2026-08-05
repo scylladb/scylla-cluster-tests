@@ -141,6 +141,29 @@ def test_check_host_memory_counts_every_guest_pool(tmp_path):
             manager._check_host_memory(params)
 
 
+def test_check_host_memory_measures_against_container_cap(tmp_path):
+    """A docker --memory cap, not host free memory, is what the cgroup OOM killer enforces.
+
+    The host here has plenty free (64GiB) but the cap is 8GiB, so 3 guests x 4GiB cannot fit
+    and the run has to fail before starting rather than be killed mid-test.
+    """
+    config = MinicloudConfig(state_dir=str(tmp_path), lightweight=True, container_memory="8GiB")
+    manager = MinicloudManager(config=config)
+    params = {"n_db_nodes": 3, "n_loaders": 0, "n_monitor_nodes": 0}
+    with _meminfo_path_patch(64 * 1024 * 1024):
+        with pytest.raises(MinicloudError, match="3 guest.*12.0GiB needed.*8.0GiB.*container_memory cap"):
+            manager._check_host_memory(params)
+
+
+def test_check_host_memory_container_cap_that_fits_passes(tmp_path):
+    """No host headroom is subtracted from the cap — dockerd and SCT live outside the cgroup."""
+    config = MinicloudConfig(state_dir=str(tmp_path), lightweight=True, container_memory="12GiB")
+    manager = MinicloudManager(config=config)
+    params = {"n_db_nodes": 3, "n_loaders": 0, "n_monitor_nodes": 0}
+    with _meminfo_path_patch(1 * 1024 * 1024):  # host looks starved; the cap is what counts
+        manager._check_host_memory(params)  # must not raise
+
+
 def test_check_host_memory_skipped_outside_lightweight_mode(tmp_path):
     # non-lightweight sizing follows the requested instance types - no fixed per-guest figure
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=False))

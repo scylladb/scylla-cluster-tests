@@ -40,6 +40,70 @@ def test_start_runs_docker_container(tmp_path, monkeypatch):
     assert "5000" in cmd
 
 
+def _started_docker_cmd(config) -> list[str]:
+    """Run start() with every side effect stubbed and return the `docker run` argv."""
+    manager = MinicloudManager(config=config)
+    with (
+        patch("sdcm.utils.minicloud.manager.MinicloudManager.is_endpoint_healthy", return_value=False),
+        patch("sdcm.utils.minicloud.manager.MinicloudManager._wait_for_health"),
+        patch("sdcm.utils.minicloud.manager.MinicloudManager._start_log_streaming"),
+        patch("sdcm.utils.minicloud.manager.MinicloudManager._setup_host_networking"),
+        patch("sdcm.utils.minicloud.manager.subprocess.run") as mock_run,
+    ):
+        mock_run.return_value = MagicMock(returncode=0, stdout="cid123\n")
+        manager.start()
+    return mock_run.call_args_list[2][0][0]
+
+
+def test_start_passes_lightweight_vcpus(tmp_path):
+    """Guests get one shard per vCPU; the value a run used must come from its config."""
+    cmd = _started_docker_cmd(
+        MinicloudConfig(
+            state_dir=str(tmp_path),
+            log_file=str(tmp_path / "minicloud.log"),
+            lightweight=True,
+            lightweight_memory="6GiB",
+            lightweight_vcpus=2,
+        )
+    )
+    assert "--lightweight" in cmd
+    assert cmd[cmd.index("--lightweight-memory") + 1] == "6GiB"
+    assert cmd[cmd.index("--lightweight-vcpus") + 1] == "2"
+
+
+def test_start_omits_container_limits_by_default(tmp_path):
+    """Unset caps must reproduce the previous behaviour: no docker limit flags at all."""
+    cmd = _started_docker_cmd(MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log")))
+    assert "--memory" not in cmd
+    assert "--cpus" not in cmd
+
+
+def test_start_applies_container_limits(tmp_path):
+    """docker --memory speaks b/k/m/g, so the GiB config form has to be converted."""
+    cmd = _started_docker_cmd(
+        MinicloudConfig(
+            state_dir=str(tmp_path),
+            log_file=str(tmp_path / "minicloud.log"),
+            container_memory="32GiB",
+            container_cpus="7.5",
+        )
+    )
+    assert cmd[cmd.index("--memory") + 1] == "32g"
+    assert cmd[cmd.index("--cpus") + 1] == "7.5"
+
+
+def test_start_uses_configured_container_name(tmp_path):
+    """Two emulators on one host need distinct names, or the second removes the first."""
+    cmd = _started_docker_cmd(
+        MinicloudConfig(
+            state_dir=str(tmp_path),
+            log_file=str(tmp_path / "minicloud.log"),
+            container_name="minicloud-second",
+        )
+    )
+    assert cmd[cmd.index("--name") + 1] == "minicloud-second"
+
+
 def test_start_reuses_healthy_endpoint(tmp_path):
     config = MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log"))
     manager = MinicloudManager(config=config)
@@ -131,6 +195,108 @@ def test_start_reuses_fully_configured_gce_container(tmp_path, monkeypatch):
         manager.start()
 
     assert not any(cmd[:2] == ["docker", "run"] for cmd in (c[0][0] for c in mock_run.call_args_list))
+
+
+RUNNING_DEFAULT_SIZING_CMD = [
+    "--port",
+    "5000",
+    "--lightweight",
+    "--lightweight-memory",
+    "4GiB",
+    "--lightweight-vcpus",
+    "1",
+]
+
+
+def _inspect_stub(cmd=None, memory=0, nano_cpus=0):
+    """Stand in for `docker inspect` on the three fields the sizing comparison reads."""
+
+    def _inspect(go_template):
+        if "Config.Cmd" in go_template:
+            return cmd
+        if "HostConfig.Memory" in go_template:
+            return memory
+        if "HostConfig.NanoCpus" in go_template:
+            return nano_cpus
+        return None
+
+    return _inspect
+
+
+def test_container_sizing_gaps_none_when_unchanged(tmp_path):
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
+    with patch.object(MinicloudManager, "_inspect_container", side_effect=_inspect_stub(RUNNING_DEFAULT_SIZING_CMD)):
+        assert manager._container_sizing_gaps() == []
+
+
+def test_container_sizing_gaps_detects_changed_guest_sizing(tmp_path):
+    """A rerun with new guest sizing must not silently inherit the old container's guests."""
+    manager = MinicloudManager(
+        config=MinicloudConfig(state_dir=str(tmp_path), lightweight_memory="8GiB", lightweight_vcpus=2)
+    )
+    with patch.object(MinicloudManager, "_inspect_container", side_effect=_inspect_stub(RUNNING_DEFAULT_SIZING_CMD)):
+        assert manager._container_sizing_gaps() == [
+            "--lightweight-memory is 4GiB, this run wants 8GiB",
+            "--lightweight-vcpus is 1, this run wants 2",
+        ]
+
+
+def test_container_sizing_gaps_detects_changed_docker_caps(tmp_path):
+    """The cgroup caps are what check_host_memory sizes against, so a stale one makes it lie."""
+    manager = MinicloudManager(
+        config=MinicloudConfig(state_dir=str(tmp_path), container_memory="48GiB", container_cpus="4")
+    )
+    with patch.object(MinicloudManager, "_inspect_container", side_effect=_inspect_stub(RUNNING_DEFAULT_SIZING_CMD)):
+        assert manager._container_sizing_gaps() == [
+            "--memory is 0, this run wants 48",
+            "--cpus is 0, this run wants 4",
+        ]
+
+
+def test_container_sizing_gaps_ignores_unchanged_docker_caps(tmp_path):
+    manager = MinicloudManager(
+        config=MinicloudConfig(state_dir=str(tmp_path), container_memory="48GiB", container_cpus="4")
+    )
+    with patch.object(
+        MinicloudManager,
+        "_inspect_container",
+        side_effect=_inspect_stub(RUNNING_DEFAULT_SIZING_CMD, memory=48 * 1024**3, nano_cpus=4 * 10**9),
+    ):
+        assert manager._container_sizing_gaps() == []
+
+
+def test_container_sizing_gaps_empty_when_not_inspectable(tmp_path):
+    """No evidence of a mismatch is not a reason to kill a working emulator and its VMs."""
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight_memory="8GiB"))
+    with patch.object(MinicloudManager, "_inspect_container", side_effect=_inspect_stub(cmd=None)):
+        assert manager._container_sizing_gaps() == []
+
+
+def test_start_restarts_container_with_stale_sizing(tmp_path):
+    config = MinicloudConfig(
+        docker_image="minicloud:test",
+        state_dir=str(tmp_path),
+        log_file=str(tmp_path / "mc.log"),
+        lightweight_memory="8GiB",
+    )
+    manager = MinicloudManager(config=config)
+
+    with (
+        patch("sdcm.utils.minicloud.manager.MinicloudManager.is_endpoint_healthy", return_value=True),
+        patch("sdcm.utils.minicloud.manager.MinicloudManager._get_running_image", return_value="minicloud:test"),
+        patch.object(MinicloudManager, "_inspect_container", side_effect=_inspect_stub(RUNNING_DEFAULT_SIZING_CMD)),
+        patch("sdcm.utils.minicloud.manager.MinicloudManager._setup_gcp_credentials"),
+        patch("sdcm.utils.minicloud.manager.MinicloudManager._setup_host_networking"),
+        patch("sdcm.utils.minicloud.manager.MinicloudManager._wait_for_health"),
+        patch("sdcm.utils.minicloud.manager.MinicloudManager._start_log_streaming"),
+        patch("sdcm.utils.minicloud.manager.subprocess.run") as mock_run,
+    ):
+        mock_run.return_value = MagicMock(returncode=0, stdout="cid123\n")
+        manager.start()
+
+    started = [cmd for cmd in (call[0][0] for call in mock_run.call_args_list) if cmd[:2] == ["docker", "run"]]
+    assert started, "expected the differently-sized container to be replaced by a fresh 'docker run'"
+    assert started[0][started[0].index("--lightweight-memory") + 1] == "8GiB"
 
 
 def test_start_sets_aws_endpoint_url(tmp_path):

@@ -2074,6 +2074,28 @@ class SCTConfiguration(BaseModel):
     minicloud_lightweight_memory: String = SctField(
         description="Memory allocation for lightweight minicloud deployments",
     )
+    minicloud_lightweight_vcpus: int = SctField(
+        description="vCPUs per guest in lightweight mode. Scylla runs one shard per vCPU, so this "
+        "multiplies with minicloud_lightweight_memory across every guest in the test — raise it "
+        "only on a host with cores to spare",
+    )
+    minicloud_container_memory: String = SctField(
+        description="Cap the minicloud container's memory (e.g. '32GiB'). Empty means no docker "
+        "limit, so the container can consume the whole host. Setting it also makes this, rather "
+        "than the host's free memory, the budget the preflight guest-memory gate measures against",
+    )
+    minicloud_container_cpus: String = SctField(
+        description="Cap the minicloud container's CPU allowance, in docker --cpus form "
+        "(e.g. '8' or '7.5'). Empty means no limit",
+    )
+    minicloud_state_dir: String = SctField(
+        description="Where minicloud keeps its image cache, per-instance disks and minicloud.log — "
+        "tens of GiB. Empty means ~/.cache/minicloud; point it at a bigger disk or a CI workspace",
+    )
+    minicloud_container_name: String = SctField(
+        description="Name of the minicloud docker container. Change it to run two emulators on one "
+        "host — a second run under the same name force-removes the first one's container",
+    )
     minicloud_keep_alive: Boolean = SctField(
         description="Leave the minicloud container running after the test instead of tearing it down "
         "(CI sets this so separate provision/test/collect/clean stages reach the same container)",
