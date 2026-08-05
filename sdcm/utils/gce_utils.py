@@ -19,7 +19,7 @@ import logging
 import time
 import uuid
 from functools import cached_property
-from typing import Any, List, Literal, TYPE_CHECKING
+from typing import Any, Callable, List, Literal, TYPE_CHECKING
 
 import google.api_core.exceptions
 from google.oauth2 import service_account
@@ -98,6 +98,8 @@ SUPPORTED_REGIONS = [
 SUPPORTED_PROJECTS = {"gcp-sct-project-1", "gcp-local-ssd-latency"} | {
     os.environ.get("SCT_GCE_PROJECT", "gcp-sct-project-1")
 }
+
+GCS_BATCH_CHUNK_SIZE = 100  # GCS batch requests are capped at 100 sub-requests each.
 
 
 def _get_zone_letters_for_region(region: str) -> list[str]:
@@ -187,42 +189,46 @@ def get_gce_storage_client() -> tuple[storage.Client, dict]:
     return storage.Client(credentials=credentials), info
 
 
-def create_gce_storage_bucket(name: str, region: str, object_lock_enabled: bool = False) -> storage.Bucket:
-    """Create a GCS bucket.
-
-    Args:
-        name: bucket name
-        region: GCS region (e.g., 'us-east1')
-        object_lock_enabled: if True, enables object retention (object lock) on the bucket.
-                             Requires uniform bucket-level access (set automatically).
-
-    Returns:
-        the created Bucket object
+def create_object_retention_bucket(name: str, region: str) -> storage.Bucket:
+    """Create a GCS bucket with per-object "Object Retention Lock" enabled.
+    Requires uniform bucket-level access, which is set automatically.
     """
     storage_client, _ = get_gce_storage_client()
 
     bucket = storage_client.bucket(name)
-    if object_lock_enabled:
-        bucket.iam_configuration.uniform_bucket_level_access_enabled = True
+    bucket.iam_configuration.uniform_bucket_level_access_enabled = True
 
-    storage_client.create_bucket(
-        bucket,
-        location=region,
-        enable_object_retention=object_lock_enabled,
-    )
-    LOGGER.info("Created GCS bucket gs://%s in %s (object_lock_enabled=%s)", name, region, object_lock_enabled)
+    storage_client.create_bucket(bucket, location=region, enable_object_retention=True)
+    LOGGER.info("Created GCS bucket gs://%s in %s with object retention lock enabled", name, region)
+
     return bucket
 
 
-def gce_override_object_retention(bucket_name: str, path: str) -> None:
-    """Override governance-mode object retention locks on blobs in a GCS bucket.
+def create_event_based_hold_bucket(name: str, region: str, retention_seconds: int) -> storage.Bucket:
+    """Create a GCS bucket with the event-based hold mechanism enabled."""
+    storage_client, _ = get_gce_storage_client()
 
-    Processes all matching blobs individually — if one blob fails, the rest are
-    still attempted. Raises after all blobs have been processed if any failed.
+    bucket = storage_client.bucket(name)
+    storage_client.create_bucket(bucket, location=region)
+    LOGGER.info("Created GCS bucket gs://%s in %s", name, region)
+
+    bucket.default_event_based_hold = True
+    bucket.retention_period = retention_seconds
+    bucket.patch()
+    LOGGER.info("Enabled default_event_based_hold on gs://%s (retention_period=%s seconds)", name, retention_seconds)
+
+    return bucket
+
+
+def _gce_iterate_blobs(bucket_name: str, path: str, action_desc: str, action: Callable[[storage.Blob], None]) -> None:
+    """Run `action` against every blob matching `path` in a GCS bucket, batching requests in
+    chunks of up to `GCS_BATCH_CHUNK_SIZE` to cut down on the number of HTTP round-trips.
 
     Args:
         bucket_name: the name of the GCS bucket
         path: path prefix to match blobs (empty string means all blobs)
+        action_desc: short description of the action, used for logging (e.g. "Overriding retention")
+        action: callable invoked with each matching blob
     """
     storage_client, _ = get_gce_storage_client()
 
@@ -234,18 +240,59 @@ def gce_override_object_retention(bucket_name: str, path: str) -> None:
         LOGGER.warning("No blobs found in gs://%s/%s to unlock", bucket_name, path)
         return
 
-    LOGGER.info("Overriding retention on %d blob(s) in gs://%s/%s", len(blobs), bucket_name, path)
-    failed = []
-    for blob in blobs:
+    LOGGER.info("%s on %d blob(s) in gs://%s/%s", action_desc, len(blobs), bucket_name, path)
+    failed_chunks = 0
+    for i in range(0, len(blobs), GCS_BATCH_CHUNK_SIZE):
+        chunk = blobs[i : i + GCS_BATCH_CHUNK_SIZE]
         try:
-            blob.retention.mode = None
-            blob.retention.retain_until_time = None
-            blob.patch(override_unlocked_retention=True)
+            with storage_client.batch():
+                for blob in chunk:
+                    action(blob)
         except Exception as exc:  # noqa: BLE001
-            LOGGER.error("Failed to override retention on gs://%s/%s: %s", bucket_name, blob.name, exc)
-            failed.append((blob.name, exc))
-    if failed:
-        raise RuntimeError(f"Failed to override retention on {len(failed)}/{len(blobs)} blob(s) in gs://{bucket_name}")
+            LOGGER.error(
+                "Failed action %r on a batch of %d blob(s) in gs://%s/%s: %s",
+                action_desc,
+                len(chunk),
+                bucket_name,
+                path,
+                exc,
+            )
+            failed_chunks += 1
+    if failed_chunks:
+        raise RuntimeError(f"Failed action {action_desc!r} on {failed_chunks} batch(es) in gs://{bucket_name}/{path}")
+
+
+def gce_override_object_retention(bucket_name: str, path: str) -> None:
+    """Override the per-object "Object Retention Lock" governance-mode retention on blobs in a GCS bucket,
+    so they become deletable.
+
+    Args:
+        bucket_name: the name of the GCS bucket
+        path: path prefix to match blobs (empty string means all blobs)
+    """
+
+    def clear_retention(blob: storage.Blob) -> None:
+        blob.retention.mode = None
+        blob.retention.retain_until_time = None
+        blob.patch(override_unlocked_retention=True)
+
+    _gce_iterate_blobs(bucket_name, path, "Overriding retention", clear_retention)
+
+
+def gce_clear_event_based_hold(bucket_name: str, path: str) -> None:
+    """Clear the event_based_hold flag on blobs in a GCS bucket (used with buckets configured via
+    event_based_hold_enabled), so they become deletable.
+
+    Args:
+        bucket_name: the name of the GCS bucket
+        path: path prefix to match blobs (empty string means all blobs)
+    """
+
+    def clear_hold(blob: storage.Blob) -> None:
+        blob.event_based_hold = False
+        blob.patch()
+
+    _gce_iterate_blobs(bucket_name, path, "Clearing event_based_hold", clear_hold)
 
 
 def get_gce_compute_disks_client() -> tuple[compute_v1.DisksClient, dict]:
