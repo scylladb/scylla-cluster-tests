@@ -84,10 +84,10 @@ class PerformanceConfigMixin(BaseModel):
         description="Flag for running db node benchmarks before the tests",
     )
     search_test_config: String = SctField(
-        description="""Search test definition (datasets, shards and their runtime settings).
+        description="""Search test definition (datasets, shards, query sets and their runtime settings).
         Accepts an absolute path, or one relative to the SCT root, e.g. data_dir/latte/fts_search/plan.yaml.
         Required by a search test: it is the definition of what to run, so there is nothing to fall back on.
-        Per-dataset load and index-wait limits live inside this file, not in SCT params.""",
+        Per-dataset load and index-wait limits and per-query rate and duration live inside this file, not in SCT params.""",
     )
     stop_on_hw_perf_failure: Boolean = SctField(
         description="""Stop sct performance test if hardware performance test failed
