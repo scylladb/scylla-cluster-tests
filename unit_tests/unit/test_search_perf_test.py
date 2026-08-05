@@ -41,6 +41,7 @@ WORKLOAD = SearchWorkload(
     item_noun="docs",
     index_prefix="bench_idx",
     default_keyspace="bench",
+    remote_root="/tmp/bench",
     build_result_table=object,
     build_count_column="record_count",
     params=LatteScriptParams(

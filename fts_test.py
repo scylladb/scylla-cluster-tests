@@ -50,6 +50,7 @@ FTS_WORKLOAD = SearchWorkload(
     item_noun="docs",
     index_prefix="fts_idx",
     default_keyspace="fts_bench",
+    remote_root="/tmp/fts",
     build_result_table=FtsIndexBuildResult,
     build_count_column=FTS_BUILD_COUNT_COLUMN,
     # The names fts.rn uses. It is mirrored from scylladb/vector-store, so they are its to choose --

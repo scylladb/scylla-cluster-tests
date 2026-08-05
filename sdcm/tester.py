@@ -3194,6 +3194,7 @@ class ClusterTester(unittest.TestCase):
         stats_aggregate_cmds=True,
         stop_test_on_failure=True,
         node_list=None,
+        extra_files_to_stage=None,
         **_,
     ):
         if duration:
@@ -3216,6 +3217,7 @@ class ClusterTester(unittest.TestCase):
             round_robin=round_robin,
             stop_test_on_failure=stop_test_on_failure,
             params=self.params,
+            extra_files_to_stage=extra_files_to_stage,
         ).run()
 
     def run_hydra_kcl_thread(
