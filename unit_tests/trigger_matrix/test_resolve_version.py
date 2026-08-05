@@ -60,17 +60,17 @@ def test_branch_qualifier_version_passes_as_is(mock_resolve):
     result = resolve_to_full_version("master:latest")
 
     assert result == FULL_TAG
-    mock_resolve.assert_called_once_with("master:latest", "eu-west-1")
+    mock_resolve.assert_called_once_with("master:latest", "eu-west-1", "x86_64")
 
 
 @patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_ami")
-def test_simple_version_passed_as_is_not_with_latest(mock_resolve):
+def test_simple_version_looked_up_as_release_branch(mock_resolve):
     mock_resolve.return_value = FULL_TAG
 
     result = resolve_to_full_version("2025.4")
 
     assert result == FULL_TAG
-    mock_resolve.assert_called_once_with("2025.4", "eu-west-1")
+    mock_resolve.assert_called_once_with("branch-2025.4:latest", "eu-west-1", "x86_64")
 
 
 @patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_ami")
@@ -80,7 +80,45 @@ def test_custom_region_forwarded(mock_resolve):
     result = resolve_to_full_version("2025.4", region="us-east-1")
 
     assert result == FULL_TAG
-    mock_resolve.assert_called_once_with("2025.4", "us-east-1")
+    mock_resolve.assert_called_once_with("branch-2025.4:latest", "us-east-1", "x86_64")
+
+
+@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_gce_image")
+def test_gce_backend_resolved_against_gce_images(mock_resolve):
+    mock_resolve.return_value = FULL_TAG
+
+    result = resolve_to_full_version("master:latest", backend="gce")
+
+    assert result == FULL_TAG
+    mock_resolve.assert_called_once_with("master:latest", "x86_64")
+
+
+@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_azure_image")
+def test_azure_backend_defaults_to_eastus(mock_resolve):
+    mock_resolve.return_value = FULL_TAG
+
+    result = resolve_to_full_version("master:latest", backend="azure")
+
+    assert result == FULL_TAG
+    mock_resolve.assert_called_once_with("master:latest", "eastus", "x86_64")
+
+
+@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_ami")
+def test_arch_forwarded_to_lookup(mock_resolve):
+    mock_resolve.return_value = FULL_TAG
+
+    result = resolve_to_full_version("master:latest", arch="aarch64")
+
+    assert result == FULL_TAG
+    mock_resolve.assert_called_once_with("master:latest", "eu-west-1", "aarch64")
+
+
+@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_gce_image")
+def test_error_mentions_the_backend_that_failed(mock_resolve):
+    mock_resolve.return_value = ""
+
+    with pytest.raises(TriggerMatrixError, match="on backend 'gce'"):
+        resolve_to_full_version("master:latest", backend="gce")
 
 
 @patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_ami")

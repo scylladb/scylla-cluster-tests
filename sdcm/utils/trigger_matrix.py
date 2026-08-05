@@ -91,11 +91,31 @@ BRANCH_VERSION_RE = re.compile(r"^(?P<branch>[a-zA-Z0-9._-]+):(?P<qualifier>.+)$
 
 VALID_BACKENDS = {"aws", "gce", "azure", "docker", "oci"}
 
+# Backends whose Scylla build is published as an image SCT looks up by version
+VALID_IMAGE_BACKENDS = {"aws", "gce", "azure", "oci"}
+
+DEFAULT_ARCH = "x86_64"
+
 MAX_TRIGGER_RETRIES = 3
 RETRY_BACKOFF_BASE = 2
 
 # Default region used for AMI tag lookups
 DEFAULT_AWS_REGION = "eu-west-1"
+DEFAULT_AZURE_REGION = "eastus"
+
+# Backends whose images are region scoped — both resolution and availability of a
+# given build have to be checked in the region the job actually runs in.
+REGIONAL_BACKENDS = {"aws", "azure", "oci"}
+
+# How the version passed to the downstream jobs is picked:
+#   per-backend — every backend resolves its own latest build (jobs may run different builds)
+#   common      — one build for the whole matrix: the newest one published on *every* backend
+#                 in the matrix (i.e. the lowest of the per-backend latest builds)
+#   aws-strict  — the AWS latest build for everyone; jobs on a backend that doesn't have that
+#                 exact build published are not triggered
+VersionResolution = Literal["per-backend", "common", "aws-strict"]
+VERSION_RESOLUTION_STRATEGIES: tuple[str, ...] = ("per-backend", "common", "aws-strict")
+DEFAULT_VERSION_RESOLUTION: VersionResolution = "per-backend"
 
 WAIT_POLL_INTERVAL = 30
 WAIT_TIMEOUT = 14400
@@ -113,18 +133,34 @@ def is_full_version_tag(version: str) -> bool:
     return bool(FULL_VERSION_TAG_RE.match(version))
 
 
+def is_resolvable_partial_version(scylla_version: str) -> bool:
+    """Check whether a version string points at "whatever is newest" rather than one build.
+
+    Those are the versions that have to be resolved against a backend's published images:
+    branch:qualifier (``master:latest``) and simple versions (``2025.4``).
+    """
+    if not scylla_version or is_full_version_tag(scylla_version) or RELEASE_VERSION_RE.match(scylla_version):
+        return False
+    return bool(BRANCH_VERSION_RE.match(scylla_version) or SIMPLE_VERSION_RE.match(scylla_version))
+
+
 def resolve_to_full_version(
     scylla_version: str,
     region: str | None = None,
+    backend: str = "aws",
+    arch: str = DEFAULT_ARCH,
 ) -> str:
-    """Resolve a partial version to a full version tag.
+    """Resolve a partial version to a full version tag using a backend's published images.
 
     If the version is already a full tag, return it as-is.
-    Otherwise, look up the latest AMI matching the version and extract the full tag.
+    Otherwise, look up the latest image matching the version on ``backend`` and extract
+    the full tag from its tags/labels.
 
     Args:
         scylla_version: Version string in any format (e.g., master:latest, 2025.4, or full tag).
-        region: AWS region for AMI lookup.
+        region: Region for the image lookup (ignored for region-less backends like GCE).
+        backend: Backend to resolve against — aws, gce, azure or oci.
+        arch: CPU architecture of the images to look up (x86_64 or aarch64).
 
     Returns:
         Full version tag string.
@@ -138,27 +174,111 @@ def resolve_to_full_version(
     if RELEASE_VERSION_RE.match(scylla_version):
         return scylla_version
 
-    # For branch:qualifier or simple versions, resolve via AMI lookup
-    lookup_region = region or DEFAULT_AWS_REGION
-    branch_match = BRANCH_VERSION_RE.match(scylla_version)
-
-    if branch_match:
-        # e.g., master:latest, branch-2025.4:latest
-        version = _resolve_version_via_branched_ami(scylla_version, lookup_region)
-        if version:
-            return version
-
-    if SIMPLE_VERSION_RE.match(scylla_version):
-        # e.g., 2025.4 — try as branch:latest
-        version = _resolve_version_via_branched_ami(scylla_version, lookup_region)
-        if version:
+    lookup_region = _backend_region(backend, region)
+    if is_resolvable_partial_version(scylla_version):
+        # e.g., master:latest, branch-2025.4:latest, or 2025.4 (treated as a branch)
+        if version := _resolve_latest_version_for_backend(scylla_version, backend, lookup_region, arch):
             return version
 
     raise TriggerMatrixError(
-        f"Cannot resolve '{scylla_version}' to a full version tag. "
+        f"Cannot resolve '{scylla_version}' to a full version tag on backend '{backend}'. "
         f"Provide a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1) "
-        f"or ensure AMIs exist for the version in region '{lookup_region}'."
+        f"or ensure images exist for the version"
+        f"{f' in region {lookup_region!r}' if lookup_region else ''}."
     )
+
+
+def split_regions(region: str | None) -> list[str]:
+    """Split a matrix `region` value into single regions.
+
+    Multi-DC jobs carry a JSON list (`'["eu-west-1", "eu-west-2"]'`), single-DC jobs a plain
+    region name.
+
+    Examples:
+        >>> split_regions("eu-west-1")
+        ['eu-west-1']
+        >>> split_regions('["eu-west-1", "eu-west-2"]')
+        ['eu-west-1', 'eu-west-2']
+        >>> split_regions("")
+        []
+    """
+    value = (region or "").strip()
+    if not value:
+        return []
+    if value.startswith("["):
+        try:
+            return [str(item).strip() for item in json.loads(value) if str(item).strip()]
+        except json.JSONDecodeError:
+            logger.warning("Could not parse region list %r — treating it as a plain region", value)
+    return [part for part in re.split(r"[,\s]+", value) if part]
+
+
+def _backend_region(backend: str, region: str | None) -> str:
+    """Regions to use for a backend's image lookups, comma separated.
+
+    Empty for region-less backends (GCE); the backend default when a job declares no region.
+    """
+    if backend not in REGIONAL_BACKENDS:
+        return ""
+    regions = split_regions(region)
+    if not regions:
+        return {"aws": DEFAULT_AWS_REGION, "azure": DEFAULT_AZURE_REGION}.get(backend, "")
+    return ",".join(regions)
+
+
+def _as_branch_qualifier(scylla_version: str) -> str:
+    """Normalize a partial version to the branch:qualifier form all image lookups expect.
+
+    Examples:
+        >>> _as_branch_qualifier("master:latest")
+        'master:latest'
+        >>> _as_branch_qualifier("2025.4")
+        'branch-2025.4:latest'
+        >>> _as_branch_qualifier("2025.4.0")
+        'branch-2025.4:latest'
+    """
+    if BRANCH_VERSION_RE.match(scylla_version):
+        return scylla_version
+    if simple_match := SIMPLE_VERSION_RE.match(scylla_version):
+        return f"branch-{simple_match.group('major')}.{simple_match.group('minor')}:latest"
+    return scylla_version
+
+
+def _vm_arch(arch: str):
+    """Convert an architecture string to the VmArch enum used by the image lookups."""
+    from sdcm.provision.provisioner import VmArch  # noqa: PLC0415 - circular import avoidance
+
+    return VmArch.ARM if arch == "aarch64" else VmArch.X86
+
+
+def _aws_arch(arch: str) -> str:
+    """AWS names the ARM architecture `arm64`, not `aarch64`, on both AMIs and instances."""
+    from sdcm.utils.aws_utils import vmarch_to_aws  # noqa: PLC0415 - circular import avoidance
+
+    return vmarch_to_aws(_vm_arch(arch))
+
+
+def _resolve_latest_version_for_backend(
+    scylla_version: str, backend: str, region: str, arch: str = DEFAULT_ARCH
+) -> str:
+    """Resolve a branch:qualifier version to the full tag of that backend's newest image.
+
+    Multi-DC jobs resolve in their first region; `version_exists_for_backend` is what makes
+    sure the build reached every region the job runs in.
+    """
+    branch_version = _as_branch_qualifier(scylla_version)
+    region = next(iter(split_regions(region)), "")
+    match backend:
+        case "aws":
+            return _resolve_version_via_branched_ami(branch_version, region, arch)
+        case "gce":
+            return _resolve_version_via_branched_gce_image(branch_version, arch)
+        case "azure":
+            return _resolve_version_via_branched_azure_image(branch_version, region, arch)
+        case "oci":
+            return _resolve_version_via_branched_oci_image(branch_version, region, arch)
+    logger.warning("No image lookup implemented for backend '%s' — cannot resolve '%s'", backend, scylla_version)
+    return ""
 
 
 def resolve_scylla_version_from_image(
@@ -219,7 +339,7 @@ def resolve_scylla_version_from_image(
     raise TriggerMatrixError(f"Cannot resolve scylla_version from images: {provided}")
 
 
-def _resolve_version_via_branched_ami(scylla_version: str, region: str) -> str:
+def _resolve_version_via_branched_ami(scylla_version: str, region: str, arch: str = DEFAULT_ARCH) -> str:
     """Resolve a branch:qualifier version to a full tag via AMI lookup.
 
     Uses get_branched_ami which searches across both Scylla images account and default credentials.
@@ -227,7 +347,7 @@ def _resolve_version_via_branched_ami(scylla_version: str, region: str) -> str:
     try:
         from sdcm.utils.common import get_branched_ami  # noqa: PLC0415 - circular import avoidance
 
-        amis = get_branched_ami(scylla_version, region_name=region, arch="x86_64")
+        amis = get_branched_ami(scylla_version, region_name=region, arch=_aws_arch(arch))
         if amis:
             tags = {t["Key"]: t["Value"] for t in (amis[0].tags or [])}
             if version := tags.get("scylla_version"):
@@ -236,6 +356,146 @@ def _resolve_version_via_branched_ami(scylla_version: str, region: str) -> str:
     except Exception as exc:  # noqa: BLE001 - best-effort cloud lookup
         logger.warning("Failed to resolve '%s' via AMI lookup: %s", scylla_version, exc)
     return ""
+
+
+def _gce_label_to_version(label: str) -> str:
+    """Rebuild a full version tag from the dashed `scylla_version` label of a GCE image.
+
+    GCE labels can't hold dots or tildes, so the separators have to be put back:
+
+        >>> _gce_label_to_version("2026-4-0-dev-0-20260804-9a3aba9e452a")
+        '2026.4.0~dev-0.20260804.9a3aba9e452a'
+        >>> _gce_label_to_version("2026-3-0-rc1-0-20260730-726f67a532e2")
+        '2026.3.0.rc1.0.20260730.726f67a532e2'
+        >>> _gce_label_to_version("2025-4-10-0-20260609-99f4121cd8e1")
+        '2025.4.10-0.20260609.99f4121cd8e1'
+
+    Returns an empty string when the result isn't a valid full version tag.
+    """
+    parts = label.split("-")
+    if len(parts) < 4:
+        logger.warning("GCE label '%s' doesn't look like a full version label", label)
+        return ""
+    major, minor, patch, *rest = parts
+    if rest[0] == "dev":
+        version = f"{major}.{minor}.{patch}~dev-" + ".".join(rest[1:])
+    elif rest[0].startswith("rc"):
+        version = f"{major}.{minor}.{patch}." + ".".join(rest)
+    else:
+        version = f"{major}.{minor}.{patch}-" + ".".join(rest)
+
+    if not is_full_version_tag(version):
+        logger.warning("GCE label '%s' doesn't map to a valid full version tag (got '%s')", label, version)
+        return ""
+    return version
+
+
+def _resolve_version_via_branched_gce_image(scylla_version: str, arch: str = DEFAULT_ARCH) -> str:
+    """Resolve a branch:qualifier version to a full tag via GCE image lookup."""
+    try:
+        from sdcm.utils.common import get_branched_gce_images  # noqa: PLC0415 - circular import avoidance
+
+        images = get_branched_gce_images(scylla_version, arch=_vm_arch(arch))
+        if images and (label := images[0].labels.get("scylla_version")):
+            if version := _gce_label_to_version(label):
+                logger.info(
+                    "Resolved '%s' → full version '%s' (via GCE image %s)", scylla_version, version, images[0].name
+                )
+                return version
+    except Exception as exc:  # noqa: BLE001 - best-effort cloud lookup
+        logger.warning("Failed to resolve '%s' via GCE image lookup: %s", scylla_version, exc)
+    return ""
+
+
+def _resolve_version_via_branched_azure_image(scylla_version: str, region: str, arch: str = DEFAULT_ARCH) -> str:
+    """Resolve a branch:qualifier version to a full tag via Azure image lookup."""
+    try:
+        import sdcm.provision.azure.utils as azure_utils  # noqa: PLC0415 - optional cloud dependency
+
+        images = azure_utils.get_scylla_images(scylla_version=scylla_version, region_name=region, arch=_vm_arch(arch))
+        if images and (version := _extract_version_from_tags(images[0].tags or {})):
+            logger.info(
+                "Resolved '%s' → full version '%s' (via Azure image %s)", scylla_version, version, images[0].name
+            )
+            return version
+    except Exception as exc:  # noqa: BLE001 - best-effort cloud lookup
+        logger.warning("Failed to resolve '%s' via Azure image lookup: %s", scylla_version, exc)
+    return ""
+
+
+def _resolve_version_via_branched_oci_image(scylla_version: str, region: str, arch: str = DEFAULT_ARCH) -> str:
+    """Resolve a branch:qualifier version to a full tag via OCI image lookup."""
+    try:
+        from sdcm.utils import oci_utils  # noqa: PLC0415 - optional cloud dependency
+
+        # rows are [backend, name, image_id, created, build_id, arch, scylla_version]
+        rows = oci_utils.get_scylla_images_by_branch(branch=scylla_version, region=region or None, arch=_vm_arch(arch))
+        if rows and (version := rows[0][-1]) and version != "N/A":
+            logger.info("Resolved '%s' → full version '%s' (via OCI image %s)", scylla_version, version, rows[0][1])
+            return version
+    except Exception as exc:  # noqa: BLE001 - best-effort cloud lookup
+        logger.warning("Failed to resolve '%s' via OCI image lookup: %s", scylla_version, exc)
+    return ""
+
+
+def version_exists_for_backend(version: str, backend: str, region: str = "", arch: str = DEFAULT_ARCH) -> bool:
+    """Check whether an exact build is published as an image on a backend.
+
+    Mirrors the lookups `SCTConfiguration` runs when it turns `scylla_version` into a
+    backend image, so a version that passes here won't abort provisioning downstream.
+    A multi-DC job needs the build in *every* region it provisions in, exactly like the
+    downstream config does.
+
+    Backends without an image lookup (docker) are reported as available.
+    """
+    lookup_regions = split_regions(_backend_region(backend, region)) or [""]
+    return all(_version_exists_in_region(version, backend, single, arch) for single in lookup_regions)
+
+
+def _version_exists_in_region(version: str, backend: str, lookup_region: str, arch: str) -> bool:
+    try:
+        match backend:
+            case "aws":
+                from sdcm.utils.common import get_scylla_ami_versions  # noqa: PLC0415 - circular import avoidance
+
+                found = bool(get_scylla_ami_versions(version=version, region_name=lookup_region, arch=_aws_arch(arch)))
+            case "gce":
+                from sdcm.utils.common import (  # noqa: PLC0415 - circular import avoidance
+                    get_scylla_gce_images_versions,
+                )
+
+                found = bool(get_scylla_gce_images_versions(version=version, arch=_vm_arch(arch)))
+            case "azure":
+                import sdcm.provision.azure.utils as azure_utils  # noqa: PLC0415 - optional cloud dependency
+
+                found = bool(
+                    azure_utils.get_scylla_images(
+                        scylla_version=version, region_name=lookup_region, arch=_vm_arch(arch)
+                    )
+                )
+            case "oci":
+                from sdcm.utils import oci_utils  # noqa: PLC0415 - optional cloud dependency
+
+                found = bool(
+                    oci_utils.get_scylla_images_by_version(
+                        version=version, region=lookup_region or None, arch=_vm_arch(arch)
+                    )
+                )
+            case _:
+                return True
+    except Exception as exc:  # noqa: BLE001 - best-effort cloud lookup
+        logger.warning("Failed to check '%s' availability on %s/%s: %s", version, backend, lookup_region, exc)
+        return False
+
+    logger.info(
+        "Version '%s' (%s) is %savailable on %s%s",
+        version,
+        arch,
+        "" if found else "NOT ",
+        backend,
+        f"/{lookup_region}" if lookup_region else "",
+    )
+    return found
 
 
 def _extract_version_from_tags(tags: dict, tag_keys: tuple[str, ...] = ("scylla_version", "ScyllaVersion")) -> str:
@@ -458,6 +718,9 @@ class JobConfig(BaseModel):
 
     job_name: str
     backend: Literal["aws", "gce", "azure", "docker", "oci"]
+    # CPU architecture the job's DB nodes run on — images are published per architecture,
+    # so ARM jobs must declare it to have their version resolved against ARM images.
+    # Left empty it is inferred from the job's labels — see job_arch().
     arch: str = ""
 
     @field_validator("arch")
@@ -480,6 +743,19 @@ class JobConfig(BaseModel):
     collect_results: list[str] = Field(default_factory=list)
 
 
+def job_arch(job: JobConfig) -> str:
+    """The architecture a job's DB nodes run on.
+
+    Jobs that predate the `arch` field only say so through an "aarch64" label, so fall back
+    to that before assuming the default. Used both to filter jobs against a supplied image's
+    architecture and to look up per-backend images for version resolution — the two must
+    agree on what a job's architecture is.
+    """
+    if job.arch:
+        return job.arch
+    return "aarch64" if "aarch64" in job.labels else DEFAULT_ARCH
+
+
 class MatrixConfig(BaseModel):
     """Full trigger matrix configuration loaded from YAML."""
 
@@ -488,6 +764,7 @@ class MatrixConfig(BaseModel):
     jobs: list[JobConfig]
     defaults: dict = Field(default_factory=dict)
     default_scylla_version: str = ""
+    version_resolution: VersionResolution = DEFAULT_VERSION_RESOLUTION
     cron_triggers: list[CronTriggerConfig] = Field(default_factory=list)
     email_recipients: list[str] = Field(default_factory=list)
     jenkinsfiles: list[JenkinsfileEntry] = Field(default_factory=list)
@@ -788,12 +1065,12 @@ def filter_jobs(
 
         # Skip by architecture (derived from supplied image)
         if image_arch:
-            job_arch = job.arch or ("aarch64" if "aarch64" in job.labels else "x86_64")
-            if image_arch == "aarch64" and job_arch != "aarch64":
-                logger.debug("Skipping job '%s': ARM image but job arch is %s", job.job_name, job_arch)
+            this_job_arch = job_arch(job)
+            if image_arch == "aarch64" and this_job_arch != "aarch64":
+                logger.debug("Skipping job '%s': ARM image but job arch is %s", job.job_name, this_job_arch)
                 continue
-            if image_arch == "x86_64" and job_arch == "aarch64":
-                logger.debug("Skipping job '%s': x86_64 image but job arch is %s", job.job_name, job_arch)
+            if image_arch == "x86_64" and this_job_arch == "aarch64":
+                logger.debug("Skipping job '%s': x86_64 image but job arch is %s", job.job_name, this_job_arch)
                 continue
 
         # Skip by version inclusion (prefix match — only run for listed versions)
@@ -909,6 +1186,153 @@ def _extract_branch_from_version(scylla_version: str) -> str:
         return "master"
 
     return ""
+
+
+@dataclass(frozen=True, order=True)
+class BackendTarget:
+    """A backend/region/arch combination that matrix jobs need an image for."""
+
+    backend: str
+    region: str = ""
+    arch: str = DEFAULT_ARCH
+
+    def __str__(self) -> str:
+        return "/".join(part for part in (self.backend, self.region, self.arch) if part)
+
+
+def target_for_job(job: JobConfig, defaults: dict | None = None, region_override: str | None = None) -> BackendTarget:
+    """Backend/region/arch combination a job's images are looked up in.
+
+    The region is picked the way `build_job_parameters` picks it: a job that pins its own
+    `params.region` keeps it, and `region_override` (the CLI `--region`) only fills in for
+    jobs that don't — otherwise a multi-DC job would be resolved against a single region
+    it does not actually run in (SCT-693).
+    """
+    region = job.params.get("region") or region_override or (defaults or {}).get("region", "")
+    return BackendTarget(job.backend, _backend_region(job.backend, region), job_arch(job))
+
+
+def job_uses_scylla_version(job: JobConfig, defaults: dict, overrides: dict | None = None) -> bool:
+    """Whether a job's Scylla build comes from `scylla_version` (and thus from an image).
+
+    Rolling-upgrade jobs get an empty `scylla_version` (they install from `new_scylla_repo`)
+    and PGO jobs install a `unified_package`, so neither needs a per-backend image.
+    """
+    merged = dict(defaults)
+    merged.update(job.params)
+    merged.update({k: v for k, v in (overrides or {}).items() if v is not None})
+
+    if str(merged.get("rolling_upgrade_test", "")).lower() == "true":
+        return False
+    return not merged.get("unified_package")
+
+
+def _version_build_date(version: str) -> str:
+    """Extract the YYYYMMDD build date from a full version tag (empty when absent)."""
+    match = re.search(r"[.-](\d{8})[.-]", version)
+    return match.group(1) if match else ""
+
+
+def resolve_versions_for_targets(
+    original_version: str,
+    reference_version: str,
+    targets: list[BackendTarget],
+    strategy: VersionResolution = DEFAULT_VERSION_RESOLUTION,
+) -> tuple[dict[BackendTarget, str], dict[BackendTarget, str]]:
+    """Pick the scylla_version to trigger with, per backend/region, following `strategy`.
+
+    Args:
+        original_version: What the trigger was asked for (e.g. "master:latest", or a full tag).
+        reference_version: `original_version` resolved against AWS — used as-is by `aws-strict`
+            and for versions that don't need resolving at all.
+        targets: Backend/region pairs the filtered jobs run on.
+        strategy: per-backend | common | aws-strict (see VersionResolution).
+
+    Returns:
+        (version per target, reason per target that must not be triggered).
+
+    Raises:
+        TriggerMatrixError: For an unknown strategy, or when `common` finds no build that is
+            published on every target.
+    """
+    if strategy not in VERSION_RESOLUTION_STRATEGIES:
+        raise TriggerMatrixError(
+            f"Unknown version resolution strategy '{strategy}'. Valid: {', '.join(VERSION_RESOLUTION_STRATEGIES)}"
+        )
+
+    reference_version = reference_version or original_version
+    resolvable = is_resolvable_partial_version(original_version)
+    versions: dict[BackendTarget, str] = {}
+    unavailable: dict[BackendTarget, str] = {}
+
+    if strategy == "per-backend":
+        for target in targets:
+            if not resolvable or target.backend not in VALID_IMAGE_BACKENDS:
+                # Nothing to resolve against — pass the request through as the downstream
+                # job would have received it before backend-aware resolution existed.
+                versions[target] = reference_version if not resolvable else original_version
+                continue
+            if version := _resolve_latest_version_for_backend(
+                original_version, target.backend, target.region, target.arch
+            ):
+                # The build was found in the target's first region — a multi-DC job also needs
+                # it in the others, which the image copy may not have reached yet.
+                other_regions = split_regions(target.region)[1:]
+                if any(
+                    not _version_exists_in_region(version, target.backend, other, target.arch)
+                    for other in other_regions
+                ):
+                    unavailable[target] = f"build '{version}' is not published in every region"
+                    continue
+                versions[target] = version
+            else:
+                unavailable[target] = f"no image found for '{original_version}'"
+        return versions, unavailable
+
+    if strategy == "aws-strict":
+        for target in targets:
+            if version_exists_for_backend(reference_version, target.backend, target.region, target.arch):
+                versions[target] = reference_version
+            else:
+                unavailable[target] = f"build '{reference_version}' is not published"
+        return versions, unavailable
+
+    # common — every job must run the exact same build, so take the newest build that is
+    # published on all targets (i.e. the lowest of the per-backend latest builds).
+    candidates: list[str] = []
+    if resolvable:
+        for target in targets:
+            if target.backend not in VALID_IMAGE_BACKENDS:
+                continue
+            version = _resolve_latest_version_for_backend(original_version, target.backend, target.region, target.arch)
+            if version and version not in candidates:
+                candidates.append(version)
+        candidates.sort(key=_version_build_date, reverse=True)
+    elif reference_version:
+        candidates = [reference_version]
+
+    if not candidates:
+        raise TriggerMatrixError(
+            f"Cannot resolve '{original_version}' to a build on any of: "
+            f"{', '.join(str(t) for t in targets)}. Check that images were published."
+        )
+
+    for candidate in candidates:
+        missing = [t for t in targets if not version_exists_for_backend(candidate, t.backend, t.region, t.arch)]
+        if not missing:
+            logger.info("Common version for %s: %s", ", ".join(str(t) for t in targets), candidate)
+            return {target: candidate for target in targets}, {}
+        logger.info(
+            "Build '%s' is not published on %s — trying an older build",
+            candidate,
+            ", ".join(str(t) for t in missing),
+        )
+
+    raise TriggerMatrixError(
+        f"No build of '{original_version}' is published on all of: {', '.join(str(t) for t in targets)} "
+        f"(tried: {', '.join(candidates)}). Use version_resolution=per-backend to let every backend "
+        f"run its own latest build, or aws-strict to trigger only the backends that have the AWS build."
+    )
 
 
 def _branch_directory_id(branch: str) -> str:
@@ -1463,6 +1887,7 @@ def trigger_matrix(  # noqa: PLR0914
     dry_run: bool = False,
     email_recipients: list[str] | None = None,
     image_arch: str | None = None,
+    version_resolution: str | None = None,
     **overrides,
 ) -> dict:
     """Main entry point: load matrix, filter, build params, trigger jobs.
@@ -1471,22 +1896,26 @@ def trigger_matrix(  # noqa: PLR0914
         matrix_file: Path to the YAML matrix file.
         scylla_version: Full version tag or branch:qualifier.
         filter_version: Original version string before resolution (e.g., "master:latest").
-            Used for job folder determination and as branch_source_version for
-            {branch}/{branch_id} template resolution. When None, scylla_version is used
-            for both.
+            Used for job folder determination, for backend-aware version resolution, and as
+            branch_source_version for {branch}/{branch_id} template resolution. When None,
+            scylla_version is used for all three.
         job_folder: Override auto-detected job folder.
         labels_selector: Comma-separated labels to filter jobs.
         backend: Filter by backend.
         skip_jobs: Comma-separated job names to skip.
         dry_run: If True, print what would be triggered.
+        version_resolution: Override the matrix' version_resolution strategy
+            (per-backend | common | aws-strict).
         **overrides: Additional parameter overrides (e.g., stress_duration, region).
 
     Returns:
-        Dict with 'triggered', 'skipped', and 'failed' job lists.
+        Dict with 'triggered', 'skipped', 'failed' job lists and the 'versions' each job
+        was triggered with, keyed by job path.
 
     Raises:
         MatrixValidationError: If the YAML matrix file is invalid.
-        TriggerMatrixError: If the version cannot be mapped to a job folder.
+        TriggerMatrixError: If the version cannot be mapped to a job folder, or when
+            version_resolution=common finds no build shared by all backends.
         JenkinsTriggerError: If Jenkins credentials are missing (non-dry-run).
     """
     config = load_matrix_config(matrix_file)
@@ -1524,9 +1953,36 @@ def trigger_matrix(  # noqa: PLR0914
     if not filtered:
         logger.warning("No jobs matched the filters. Check your version, labels, backend, and skip_jobs settings.")
 
-    results = {"triggered": [], "skipped": [], "failed": [], "waited": []}
+    results = {"triggered": [], "skipped": [], "failed": [], "waited": [], "versions": {}}
     filtered_names = {j.job_name for j in filtered}
     results["skipped"] = [j.job_name for j in config.jobs if j.job_name not in filtered_names]
+
+    # Resolve the version every job gets, per backend/region, so a job never receives a
+    # build that was only published on some other backend (SCT-665).
+    strategy = version_resolution or config.version_resolution
+
+    def job_target(job: JobConfig) -> BackendTarget | None:
+        # Not keyed by job_name: the same job runs in the matrix more than once, on
+        # different regions/architectures.
+        if not job_uses_scylla_version(job, config.defaults, overrides):
+            return None
+        return target_for_job(job, config.defaults, region_override=overrides.get("region"))
+
+    matrix_targets = sorted({target for target in map(job_target, filtered) if target})
+    versions_by_target: dict[BackendTarget, str] = {}
+    unavailable_targets: dict[BackendTarget, str] = {}
+    if scylla_version and matrix_targets:
+        logger.info("Resolving scylla_version with strategy '%s'", strategy)
+        versions_by_target, unavailable_targets = resolve_versions_for_targets(
+            original_version=version_for_filtering,
+            reference_version=scylla_version,
+            targets=matrix_targets,
+            strategy=strategy,
+        )
+        for target, version in sorted(versions_by_target.items()):
+            logger.info("  %s → %s", target, version)
+        for target, reason in sorted(unavailable_targets.items()):
+            logger.warning("  %s → not triggered: %s", target, reason)
 
     # Step 1: Trigger all jobs, deduplicating by resolved path to prevent
     # the same Jenkins job from being triggered twice (e.g. when both x86
@@ -1539,9 +1995,19 @@ def trigger_matrix(  # noqa: PLR0914
         if full_path in triggered_paths:
             logger.debug("Skipping duplicate trigger for %s", full_path)
             continue
+
+        job_version = scylla_version
+        if target := job_target(job):
+            if reason := unavailable_targets.get(target):
+                logger.warning("Skipping job '%s' on %s: %s", job.job_name, target, reason)
+                results["skipped"].append(job.job_name)
+                continue
+            job_version = versions_by_target.get(target, scylla_version)
+
         params = build_job_parameters(
-            job, config.defaults, scylla_version, overrides, branch_source_version=filter_version
+            job, config.defaults, job_version, overrides, branch_source_version=filter_version
         )
+        results["versions"][full_path] = params.get("scylla_version", "")
 
         if job.wait:
             try:
