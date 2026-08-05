@@ -164,6 +164,34 @@ It is an overlay rather than a separate test-case copy on purpose: `test_rolling
 dozen stress params, and a copy would silently miss any new one the real test-case grows. Passing
 your own `SCT_TEST_CASE` drops the overlay, since shrinking someone else's yaml by name would be
 wrong.
+
+The `scale` flavor works the same way, running `grow_cluster_test.GrowClusterTest.test_grow_x_to_y`
+over `test-cases/scale/scale-cluster.yaml` - the cluster-growth test proper, which starts at
+`n_db_nodes` and adds nodes under load until it reaches `cluster_target_size`:
+
+```bash
+SCT_SCYLLA_VERSION=2026.2 scripts/run-minicloud-test.sh -f scale
+```
+
+**What survives the shrink is the shape of the test, not the scale.** Production is 15 db nodes
+growing to 25 - 28 guests x `minicloud_lightweight_memory` = 112GiB at the peak, which no single
+host has. `configurations/minicloud/scale-cluster.yaml` cuts that to 3 -> 4 nodes and sizes the load
+down to what a 1-vCPU guest can serve, keeping what the test exists for: the add-node path
+(bootstrap, streaming, monitoring reconfigured per node) under load, with a nemesis once the target
+size is reached. It tells you nothing about behaviour at scale, so do not read performance or
+scalability conclusions off a local run. Grow further on a bigger host with `SCT_N_DB_NODES` /
+`SCT_CLUSTER_TARGET_SIZE` - every added node costs another `minicloud_lightweight_memory`.
+
+One trap worth knowing if you tune that overlay: `test_grow_x_to_y` does **not** read the base
+test-case's `stress_cmd` or `prepare_write_cmd`, and `run_fullscan` is only wired up in
+`longevity_test`. `GrowClusterTest.get_stress_cmd()` builds its own cassandra-stress command from
+`cassandra_stress_population_size`, `cassandra_stress_threads` and `test_duration`, so those three
+are what actually size the load - the defaults are 1M rows at 1000 threads. `test_duration` doubles
+as the stress duration, so it also decides how long a local run takes.
+
+Note that the memory gate sizes a growing cluster by `cluster_target_size`, not `n_db_nodes`:
+budgeting the initial cluster would pass and then let the run die at the exact moment it adds the
+node nobody accounted for.
 `scripts/run-minicloud-clean-resources.sh` is a local-dev convenience only - the pipelines use
 the regular `clean-resources` path.
 

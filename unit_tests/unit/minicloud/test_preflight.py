@@ -141,6 +141,29 @@ def test_check_host_memory_counts_every_guest_pool(tmp_path):
             manager._check_host_memory(params)
 
 
+def test_check_host_memory_counts_the_grown_cluster_not_the_initial_one(tmp_path):
+    """A scale test starts at n_db_nodes and grows to cluster_target_size.
+
+    Sizing the initial cluster only would pass the gate and then let the run die at the exact
+    moment it adds the node nobody budgeted for.
+    """
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
+    # starts at 3 db, grows to 6; + 1 loader + 1 monitor = 8 guests x 4GiB + 2GiB = 34GiB needed
+    params = {"n_db_nodes": 3, "cluster_target_size": 6, "n_loaders": 1, "n_monitor_nodes": 1}
+    with _meminfo_path_patch(24 * 1024 * 1024):  # enough for the initial 5, not for the peak 8
+        with pytest.raises(MinicloudError, match="8 guest.*34.0GiB needed"):
+            manager._check_host_memory(params)
+
+
+def test_check_host_memory_ignores_a_target_below_the_initial_size(tmp_path):
+    """cluster_target_size never shrinks a cluster, so it must not shrink the budget either."""
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
+    params = {"n_db_nodes": 6, "cluster_target_size": 3, "n_loaders": 0, "n_monitor_nodes": 0}
+    with _meminfo_path_patch(16 * 1024 * 1024):
+        with pytest.raises(MinicloudError, match="6 guest.*26.0GiB needed"):
+            manager._check_host_memory(params)
+
+
 def test_check_host_memory_measures_against_container_cap(tmp_path):
     """A docker --memory cap, not host free memory, is what the cgroup OOM killer enforces.
 

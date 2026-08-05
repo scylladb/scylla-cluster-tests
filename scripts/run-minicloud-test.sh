@@ -2,13 +2,14 @@
 # One entry point for every local minicloud test flow.
 #
 # Usage:
-#   scripts/run-minicloud-test.sh [-b aws|gce] [-f ami|repo|provision|upgrade] [-m direct|hydra]
+#   scripts/run-minicloud-test.sh [-b aws|gce] [-f ami|repo|provision|upgrade|scale] [-m direct|hydra]
 #
 #   -b  backend to emulate                          (default: aws)
 #   -f  flavor: ami       - image-based artifacts test (AMI / GCE image)
 #               repo      - deb/rpm repo-install artifacts test
 #               provision - provisioning smoke test (longevity + nemesis)
 #               upgrade   - rolling upgrade, 3 nodes, shrunk workloads
+#               scale     - cluster grow test, 3 -> 4 nodes, shrunk workloads
 #                                                   (default: ami)
 #   -m  direct: run sct.py from this checkout; hydra: run inside the hydra container
 #                                                   (default: direct)
@@ -28,6 +29,8 @@
 #   SCT_TEST_CASE           - override the flavor's default test-case yaml
 #   SCT_MINICLOUD_*         - any documented minicloud_* config option, e.g.
 #                             SCT_MINICLOUD_LIGHTWEIGHT_MEMORY / _VCPUS to resize the guests
+#   SCT_N_DB_NODES / SCT_CLUSTER_TARGET_SIZE - scale flavor: grow further on a bigger host.
+#                             Every added node costs another minicloud_lightweight_memory.
 #
 # The container is started via `sct.py start-minicloud` (keep_alive), which owns
 # preflight, host networking, region preparation and health checks.
@@ -76,7 +79,17 @@ case "$FLAVOR" in
         # the cluster to 3 nodes and the workloads to what a 1-vCPU guest can serve.
         EXTRA_CONFIGS=(configurations/minicloud/rolling-upgrade.yaml)
         ;;
-    *) echo "ERROR: unknown flavor '$FLAVOR' (ami|repo|provision|upgrade)" >&2; exit 5 ;;
+    scale)
+        # The cluster-growth test proper: starts at n_db_nodes and adds nodes under load until it
+        # reaches cluster_target_size. Same test and test-case as
+        # jenkins-pipelines/oss/raft/scale-40-60-cluster-test.jenkinsfile.
+        TEST="grow_cluster_test.GrowClusterTest.test_grow_x_to_y"
+        DEFAULT_CASE="test-cases/scale/scale-cluster.yaml"
+        # Production is 15 db nodes growing to 25 - 112GiB of guests at the peak. The overlay cuts
+        # that to 3 -> 4 nodes and sizes the load down to what a 1-vCPU guest can serve.
+        EXTRA_CONFIGS=(configurations/minicloud/scale-cluster.yaml)
+        ;;
+    *) echo "ERROR: unknown flavor '$FLAVOR' (ami|repo|provision|upgrade|scale)" >&2; exit 5 ;;
 esac
 TEST_CASE="${SCT_TEST_CASE:-$DEFAULT_CASE}"
 # A --config given by the caller replaces the overlay's base, so do not shrink someone else's yaml.

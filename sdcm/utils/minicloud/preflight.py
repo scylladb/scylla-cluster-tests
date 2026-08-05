@@ -72,6 +72,13 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
     # every pool that becomes a guest has to be counted, or a test with an oracle cluster,
     # zero-token nodes or a vector store passes the gate and still OOM-kills the container.
     guests = sum(sum_node_counts(params.get(name)) for name in GUEST_NODE_COUNT_PARAMS)
+    # n_db_nodes is only where the cluster *starts*. A test that grows it - the scale tests set
+    # cluster_target_size, and longevity_test grows to it - peaks higher, and the peak is what has
+    # to fit: a gate that sizes the initial cluster only would pass and then let the run die at the
+    # exact moment it adds the node nobody budgeted for. Same idiom as
+    # provision/aws/capacity_reservation.py, which sizes its reservation off the target too.
+    if target_size := sum_node_counts(params.get("cluster_target_size")):
+        guests += max(0, target_size - sum_node_counts(params.get("n_db_nodes")))
     if not guests:
         return
     per_guest_gib = parse_memory_gib(config.lightweight_memory)
