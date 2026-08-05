@@ -46,7 +46,7 @@ def latest_release():
 
 @pytest.fixture(scope="function", autouse=True)
 def function_setup(monkeypatch):
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "internal_test_data/minimal_test_case.yaml")
 
 
 @pytest.mark.parametrize(
@@ -189,7 +189,7 @@ def test_unified_package_aws_sets_ubuntu_user(monkeypatch):
         ),
     )
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-test123")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "internal_test_data/minimal_test_case.yaml")
 
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()

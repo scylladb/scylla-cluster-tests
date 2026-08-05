@@ -88,7 +88,7 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
         self.setup_default_env()
 
     def setup_default_env(self):
-        self.monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+        self.monkeypatch.setenv("SCT_CONFIG_FILES", "internal_test_data/minimal_test_case.yaml")
         self.monkeypatch.setenv("SCT_CLUSTER_BACKEND", "k8s-eks")
 
     def _multitenant_class_with_shared_options(self, klass):
