@@ -17,23 +17,25 @@ The flow is the same whichever index is under test -- full-text (BM25 over docum
 (ANN over embeddings) -- because vector-store serves both and latte drives both:
 
     a YAML plan names datasets; a dataset is a sequence of steps; a step loads more shards on top
-    of the previous ones and rebuilds the index, so one dataset yields results at several corpus
-    sizes. Index build time comes from vector-store's own log (see sdcm.utils.vector_store_index),
-    and every row is streamed to Argus as it is produced.
+    of the previous ones, rebuilds the index and runs its query sets, so one dataset yields results
+    at several corpus sizes. Index build time comes from vector-store's own log (see
+    sdcm.utils.vector_store_index), query latency from latte's HDR output, and every row is streamed
+    to Argus as it is produced.
 
 What differs per workload is the rune script, the vocabulary and the names things are reported
 under. All of it is declared in a 'SearchWorkload', which a subclass points 'WORKLOAD' at; the
 subclass then only owns its Argus table and its 'test_*' entry point. See fts_test.py for a worked
 example, and docs/fts-search-test.md for the plan format.
 
-The query phase -- running a step's query sets against the index that was just built and reporting
-their latency -- is not here yet. It needs the Argus latency-table extras and the hdr-tag workload
-detection fix, and lands on top of this.
+Every query entry must resolve an ``expected_p99_read_ms`` (on the query itself or the dataset's
+``defaults``): it both groups results into the Argus table for that latency expectation and becomes
+the table's validation rule, so there is no SCT-side hardcoded threshold or label.
 """
 
 import math
 import os
 import re
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
@@ -43,14 +45,21 @@ from performance_regression_test import PerformanceRegressionTest
 from sdcm import sct_abs_path
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.vector_store_client import VectorStoreClient
 from sdcm.utils.vector_store_index import send_index_build_result, wait_for_index_build_seconds
+
+from argus.client.generic_result import ColumnMetadata, ResultType
 
 # The SCT param naming the plan to run. One option for every search workload rather than one per
 # test: the plan format is the flow's, not any single workload's, so a vector-search test reuses it.
 TEST_CONFIG_PARAM = "search_test_config"
 
 DEFAULT_MAX_INDEX_WAIT = 1800
+DEFAULT_RATE = 0
+DEFAULT_DURATION = "60s"
+DEFAULT_LIMIT = 5
+DEFAULT_CONCURRENCY = 2
 
 # How often SCT re-checks the vector-store state it is waiting on over the API: the node reporting
 # SERVING, and a dropped index disappearing. Neither is on a measured path -- the build time comes
@@ -77,6 +86,23 @@ INDEX_BUILD_TIMEOUT_GRACE_SECS = 120
 # Validated once on the way in instead of being quoted differently at each of those three places.
 SAFE_NAME_RE = re.compile(r"[A-Za-z0-9_]+")
 SAFE_DATA_FILE_RE = re.compile(r"[A-Za-z0-9_.\-/]+")
+# A latte '--duration': digits and one of its unit suffixes, the form 'get_timeout_from_stress_cmd'
+# parses a phase timeout out of.
+SAFE_DURATION_RE = re.compile(r"\d+[hms]")
+
+# Cap on the 'query_example' cell below. Argus' TEXT column takes whatever it is given, and the value
+# comes from a corpus the plan names rather than from anything validated here.
+QUERY_EXAMPLE_MAX_CHARS = 256
+
+# Columns added to the search latency tables alongside the usual latency/throughput ones, so that
+# the query configuration and an example query are visible per row instead of folded into an
+# increasingly long row label (see 'row_labels_for_step').
+SEARCH_EXTRA_COLUMNS = [
+    ColumnMetadata(name="limit", unit="", type=ResultType.INTEGER),
+    ColumnMetadata(name="concurrency", unit="", type=ResultType.INTEGER),
+    ColumnMetadata(name="rate", unit="ops/s", type=ResultType.INTEGER),
+    ColumnMetadata(name="query_example", unit="", type=ResultType.TEXT),
+]
 
 
 @dataclass(frozen=True)
@@ -95,6 +121,10 @@ class LatteScriptParams:
     dataset_dir: str
     records_file: str
     record_count: str
+    queries_file: str
+    qrels_file: str
+    search_limit: str
+    compute_accuracy: str
     index_name: str
     max_index_wait: str
     min_probes: str
@@ -109,10 +139,12 @@ class SearchWorkload:
     name: str  # 'fts_search' -- prefixes the Argus cycle name
     base_dir: str  # holds the rune script, the tracked plans and the local datasets
     script: str  # the rune script latte runs
-    item_noun: str  # 'docs' -- the unit Argus row keys count in
+    hdr_tag: str  # HDR tag its search function emits, e.g. 'fn--search'
+    item_noun: str  # 'docs' -- the unit row labels count in
     index_prefix: str  # 'fts_idx' -- prefixes every index this test builds
     default_keyspace: str
     remote_root: str  # where datasets are staged inside the loader container
+    latency_legend: str  # first sentence of the Argus latency table description
     build_result_table: type  # StaticGenericResultTable subclass for index build rows
     build_count_column: str  # its column counting what was indexed, e.g. 'document_count'
     params: LatteScriptParams
@@ -154,6 +186,37 @@ def _checked_data_file(name: str, kind: str) -> str:
     return name
 
 
+def _checked_int(value, kind: str, minimum: int = 0) -> int:
+    """Validate a plan-supplied number that is interpolated into a latte command line."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"Invalid {kind} {value!r}: expected an integer >= {minimum}")
+    return value
+
+
+def _checked_positive_float(value, kind: str) -> float:
+    """Validate a plan-supplied latency expectation.
+
+    Same bool-before-number care as '_checked_int', plus the values 'float()' accepts and nothing
+    downstream can use: a non-positive expectation is a validation rule no run can satisfy, and
+    'nan'/'inf' reach '_format_ms' and end up in an Argus table name.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        raise ValueError(f"Invalid {kind} {value!r}: expected a finite number > 0")
+    return float(value)
+
+
+def _checked_duration(value, kind: str) -> str:
+    """Validate a plan-supplied latte duration, e.g. '60s'.
+
+    The time form specifically, not latte's request-count form: 'get_timeout_from_stress_cmd' only
+    recognises '<digits><h|m|s>', and a duration it cannot parse silently gives the phase the whole
+    'test_duration' as its timeout (see the '--duration' NOTE in '_run_search').
+    """
+    if not isinstance(value, str) or not SAFE_DURATION_RE.fullmatch(value):
+        raise ValueError(f"Invalid {kind} {value!r}: expected a latte duration like '60s', '5m' or '1h'")
+    return value
+
+
 def _count_tsv_lines(path: str) -> int:
     """Count non-empty lines in a TSV file."""
     count = 0
@@ -162,6 +225,34 @@ def _count_tsv_lines(path: str) -> int:
             if line.strip():
                 count += 1
     return count
+
+
+def _first_query_example(local_ds_dir: str, queries_file: str) -> str:
+    """Return the text of the first query in a 'queries_<set>.tsv' file, or "" if unavailable.
+
+    Rows are '<id>\\t<text>' (see data_dir/latte/fts_search/generate_local_dataset.py); only the
+    text is kept, since it is what makes an Argus row readable at a glance. Read once, on demand,
+    rather than cached: the file is small and this only runs once per query-set/step.
+
+    Truncated, because the length is not ours to bound: a plan can point 'base_url' at any corpus,
+    natural-language query sets run long, and a row without the tab separator yields the whole line.
+    The marker keeps a cut example from reading as a complete one.
+    """
+    path = os.path.join(local_ds_dir, queries_file)
+    try:
+        with open(path, encoding="utf-8") as f:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                parts = stripped.split("\t", 1)
+                text = parts[1] if len(parts) > 1 else parts[0]
+                if len(text) <= QUERY_EXAMPLE_MAX_CHARS:
+                    return text
+                return text[: QUERY_EXAMPLE_MAX_CHARS - 3] + "..."
+    except FileNotFoundError:
+        pass
+    return ""
 
 
 def _parse_shard_spec(shards: list) -> list[int]:
@@ -214,6 +305,151 @@ def resolve_test_config_path(config: str) -> str:
     if os.path.isabs(config):
         return config
     return sct_abs_path(config)
+
+
+# ---------------------------------------------------------------------------
+# Query discovery
+# ---------------------------------------------------------------------------
+
+
+def _query_params(query: dict, defaults: dict) -> tuple:
+    """Resolve (limit, concurrency, rate) for a query entry, applying dataset defaults.
+
+    Checked, not just read: all three are interpolated into the latte command line, the same reason
+    '_checked_name' exists for the plan's names.
+    """
+    return (
+        _checked_int(query.get("limit", defaults.get("limit", DEFAULT_LIMIT)), "query limit", minimum=1),
+        _checked_int(
+            query.get("concurrency", defaults.get("concurrency", DEFAULT_CONCURRENCY)), "query concurrency", minimum=1
+        ),
+        # 0 is 'unthrottled' -- '_run_search' drops '--rate' entirely for it.
+        _checked_int(query.get("rate", defaults.get("rate", DEFAULT_RATE)), "query rate"),
+    )
+
+
+def _query_duration(query: dict, defaults: dict) -> str:
+    """Resolve the latte '--duration' for a query entry, applying dataset defaults."""
+    return _checked_duration(query.get("duration", defaults.get("duration", DEFAULT_DURATION)), "query duration")
+
+
+def _expected_p99_read_ms(query: dict, defaults: dict) -> float:
+    """Resolve the expected P99 read latency (ms) for a query entry.
+
+    Required -- on the query itself or the dataset's 'defaults' -- rather than defaulted by SCT:
+    it both groups the query into an Argus table (see '_cycle_name') and becomes that table's
+    validation rule, so the expectation lives entirely in the plan, not as a hardcoded SCT value.
+    """
+    expected = query.get("expected_p99_read_ms", defaults.get("expected_p99_read_ms"))
+    if expected is None:
+        raise ValueError(
+            f"Query set {query.get('set')!r} has no 'expected_p99_read_ms' "
+            f"(set it on the query entry or the dataset's 'defaults')"
+        )
+    return _checked_positive_float(expected, f"expected_p99_read_ms for query set {query.get('set')!r}")
+
+
+def _format_ms(value: float) -> str:
+    """Render an expected-latency value for use in an Argus table/cycle name.
+
+    NOTE: not '{:g}' -- that switches to scientific notation past six digits, so a plan asking for
+          10000000 would name its table 'p99_1e+07ms'.
+    """
+    return f"{value:f}".rstrip("0").rstrip(".").replace(".", "_")
+
+
+def _cycle_name(workload: SearchWorkload, expected_p99_read_ms: float) -> str:
+    """Argus cycle name for a query entry, which also selects its results table.
+
+    Queries of one workload that share an 'expected_p99_read_ms' land in the same table (and
+    validation rule) by construction -- there is no separate SCT-side grouping label.
+    """
+    return f"{workload.name}_p99_{_format_ms(expected_p99_read_ms)}ms"
+
+
+# Names for the values '_query_params' returns, in the same order, used when a row label has to be
+# disambiguated by the query configuration.
+_QUERY_PARAM_NAMES = ("limit", "concurrency", "rate")
+
+
+def row_labels_for_step(
+    workload: SearchWorkload, queries: list, dataset_name: str, defaults: dict, record_count: int, step_number: int
+) -> list[str]:
+    """Build the Argus row label for every query in a step, disambiguating collisions.
+
+    Argus keys a result cell by (row, column), and ``add_result`` appends cells without
+    deduplicating while ``as_dict`` deduplicates ``rows_meta`` by name. Two entries that land in
+    the same table (see ``_cycle_name``) under the same label would therefore push conflicting
+    values into a single row -- their limit/concurrency/rate cannot keep them apart, since those
+    are reported as columns rather than folded into the label (see ``SEARCH_EXTRA_COLUMNS``).
+
+    The label carries ``step #N``, the same 1-based ordinal the step's build row uses, for the same
+    reason that one does: record count alone does not identify a step. A step with an empty
+    ``shards`` list loads nothing, so it repeats its predecessor's count, and without the ordinal
+    its query rows would land on the predecessor's. It also lets a query row be lined up with the
+    build row it ran against.
+
+    That leaves only collisions *within* a step, resolved in two cases:
+
+    1. A label that does not collide is returned unchanged.
+    2. A colliding label is suffixed with the query configuration, e.g.
+       ``' | limit=5 concurrency=1 rate=50'``. Entries that collide *and* agree on every parameter
+       are genuinely indistinguishable, and those additionally get a ``' run #N'``.
+
+    The suffix names every parameter rather than only the ones that differ within the collision
+    group: a differing-only suffix is shorter, but it depends on the whole group, so adding one
+    entry that varies a new parameter would rewrite the label of every other entry in the group --
+    and Argus would lose their history. As written, the suffix depends on nothing but the entry, so
+    reordering never renames anything and adding an entry only affects rows sharing its label. Only
+    ``run #N`` is positional, and by then the entries are interchangeable by construction.
+    """
+    labels = [
+        f"{dataset_name} | {record_count:,} {workload.item_noun} | step #{step_number} | {query['set']}"
+        for query in queries
+    ]
+    params = [_query_params(query, defaults) for query in queries]
+    label_keys = [
+        (_cycle_name(workload, _expected_p99_read_ms(query, defaults)), label) for query, label in zip(queries, labels)
+    ]
+    full_keys = [(*label_key, param) for label_key, param in zip(label_keys, params)]
+
+    label_counts, full_counts = Counter(label_keys), Counter(full_keys)
+    seen_runs: Counter = Counter()
+    disambiguated = []
+    for label, label_key, full_key, param in zip(labels, label_keys, full_keys, params):
+        if label_counts[label_key] < 2:
+            disambiguated.append(label)
+            continue
+        suffix = " ".join(f"{name}={value}" for name, value in zip(_QUERY_PARAM_NAMES, param))
+        if full_counts[full_key] > 1:
+            seen_runs[full_key] += 1
+            suffix = f"{suffix} run #{seen_runs[full_key]}"
+        disambiguated.append(f"{label} | {suffix}")
+    return disambiguated
+
+
+def validate_plan_queries(datasets: list) -> None:
+    """Resolve every query entry of every dataset, so a bad plan fails before anything runs.
+
+    Each of these raises on its own at the point the query is about to run -- but by then the step
+    has already loaded its shards and built its index, which on a real corpus is tens of minutes
+    spent to report a typo. Nothing here touches the cluster or the dataset files, so it is cheap
+    to do up front for the whole plan.
+    """
+    for dataset in datasets:
+        defaults = dataset.get("defaults", {})
+        for step_idx, step in enumerate(dataset.get("steps", [])):
+            for query in step.get("queries", []):
+                where = f"dataset {dataset.get('name')!r}, step #{step_idx + 1}"
+                if "set" not in query:
+                    raise ValueError(f"Query entry in {where} has no 'set'")
+                try:
+                    _checked_name(query["set"], "query set name")
+                    _query_params(query, defaults)
+                    _query_duration(query, defaults)
+                    _expected_p99_read_ms(query, defaults)
+                except ValueError as exc:
+                    raise ValueError(f"{exc} (in {where})") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -395,13 +631,98 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             duration=_timeout_minutes(DEFAULT_SCHEMA_TIMEOUT),
         )
 
+    def _run_search(
+        self,
+        local_ds_dir,
+        remote_ds_dir,
+        queries_file,
+        limit,
+        concurrency,
+        rate,
+        search_duration,
+        row_label,
+        expected_p99_read_ms,
+        query_example,
+        qrels_file=None,
+    ):
+        """Run a single search configuration with latency collection.
+
+        Passing `qrels_file` turns on the relevance (accuracy) metrics of the rune script.
+        `row_label` is the Argus row; the table is selected by `expected_p99_read_ms` (see
+        `_cycle_name`), whose value also becomes the table's P99 validation rule and is stated in the
+        table description -- it is deliberately not a column, since it is the same for every row of
+        the table. `limit`/`concurrency`/`rate`/`query_example` do vary per row and are columns.
+        """
+        workload = self.WORKLOAD
+        params = workload.params
+        cycle_name = _cycle_name(workload, expected_p99_read_ms)
+        # NOTE: this legend becomes the Argus table description (see 'send_result_to_argus') and is
+        #       computed purely from the expected latency, so it is identical for every call sharing
+        #       a cycle name -- unlike a per-query legend, it cannot make the description depend on
+        #       whichever row happened to be submitted last.
+        table_description = (
+            f"{workload.latency_legend} Expected P99 read <= {expected_p99_read_ms:g} ms. "
+            f"Query configuration (limit/concurrency/rate) and an example query are reported per row."
+        )
+        error_thresholds = {"read": {"default": {"P99 read": {"fixed_limit": expected_p99_read_ms}}}}
+        extra_values = {
+            "limit": limit,
+            "concurrency": concurrency,
+            "rate": rate,
+            "query_example": query_example,
+        }
+
+        @latency_calculator_decorator(
+            workload_type="read",
+            legend=table_description,
+            cycle_name=cycle_name,
+            row_name=row_label,
+            error_thresholds=error_thresholds,
+            extra_columns=SEARCH_EXTRA_COLUMNS,
+        )
+        def _do_search(self):
+            files_to_stage = [
+                (os.path.join(local_ds_dir, queries_file), os.path.join(remote_ds_dir, queries_file)),
+            ]
+            qrels_param = ""
+            if qrels_file:
+                files_to_stage.append((os.path.join(local_ds_dir, qrels_file), os.path.join(remote_ds_dir, qrels_file)))
+                qrels_param = rf"-P {params.qrels_file}=\"{qrels_file}\" "
+            rate_param = f"--rate={rate} " if rate else ""
+            self._run_latte(
+                # NOTE: '--duration' spelled out rather than '-d': 'get_timeout_from_stress_cmd'
+                #       only recognises the long form, and without it the phase would fall back to
+                #       the whole 'test_duration' as its timeout.
+                stress_cmd=(
+                    f"latte run -f search {workload.script} "
+                    f"--duration {search_duration} "
+                    rf"-P {params.dataset_dir}=\"{remote_ds_dir}/\" "
+                    rf"-P {params.queries_file}=\"{queries_file}\" "
+                    f"{qrels_param}"
+                    f"-P {params.compute_accuracy}={'true' if qrels_file else 'false'} "
+                    f"-P {params.search_limit}={limit} "
+                    f"{rate_param}--concurrency={concurrency} --retry-number 1 "
+                ),
+                files_to_stage=files_to_stage,
+            )
+            # Read by 'latency_calculator_decorator': 'hdr_tags' selects the histograms to summarise,
+            # 'extra_values' fills the SEARCH_EXTRA_COLUMNS cells of this row.
+            return {"hdr_tags": [workload.hdr_tag], "extra_values": extra_values}
+
+        with DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line=r"failed to parse query",
+            extra_time_to_expiration=120,
+        ):
+            _do_search(self)
+
     def run_search_benchmark(self):
         """Run every dataset of the plan 'search_test_config' points at."""
         self._wait_for_vector_store_serving()
 
-        # NOTE: no fallback plan. Which datasets and shards to run is the whole definition of the
-        #       test, and it is test-case specific, so there is nothing sensible to default to --
-        #       say so instead of failing later on a missing file.
+        # NOTE: no fallback plan. Which datasets, shards and query sets to run is the whole
+        #       definition of the test, and it is test-case specific, so there is nothing sensible
+        #       to default to -- say so instead of failing later on a missing file.
         config_name = self.params.get(TEST_CONFIG_PARAM)
         if not config_name:
             raise ValueError(f"'{TEST_CONFIG_PARAM}' is not set: the search test needs a plan to run")
@@ -426,18 +747,19 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         names = [_checked_name(dataset["name"], "dataset name") for dataset in datasets]
         if duplicates := sorted({name for name in names if names.count(name) > 1}):
             raise ValueError(f"Duplicate dataset names in '{config_name}': {duplicates}")
+        validate_plan_queries(datasets)
 
         for dataset in datasets:
             self._run_dataset(dataset)
 
     def _run_dataset(self, dataset):
-        """Load and index one dataset.
+        """Load, index and query one dataset.
 
         Every dataset uses the keyspace/table named by 'latte_schema_parameters', dropped and
         recreated here so each one starts from an empty table.
 
         Each step adds more shards on top of the previous ones and rebuilds the index, so that one
-        dataset yields index build results at several corpus sizes. An *empty* 'shards'
+        dataset yields index build and search results at several corpus sizes. An *empty* 'shards'
         list loads nothing and only rebuilds on the corpus already there, e.g. to sample build-time
         variance; an *absent* one falls back to the step's single-file key (an unsharded corpus --
         see 'local_smoke' in data_dir/latte/fts_search/local_config.yaml).
@@ -459,6 +781,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
 
         max_index_wait = dataset.get("max_index_wait_secs", DEFAULT_MAX_INDEX_WAIT)
         max_load_wait = dataset.get("max_shard_load_secs", DEFAULT_MAX_SHARD_LOAD)
+        defaults = dataset.get("defaults", {})
         keyspace = (self.params.get("latte_schema_parameters") or {}).get("keyspace") or workload.default_keyspace
 
         self._drop_table()
@@ -479,8 +802,51 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             build_row_key = f"{dataset_name} | {total_record_count:,} {workload.item_noun} | build #{step_idx + 1}"
             self._report_build_metrics(build_seconds, total_record_count, build_row_key)
 
+            self._run_step_queries(
+                step, dataset_name, defaults, total_record_count, step_idx + 1, local_ds_dir, remote_ds_dir
+            )
+
         if index_name is not None:
             self._drop_index(index_name, keyspace, max_index_wait)
+
+    def _run_step_queries(self, step, dataset_name, defaults, record_count, step_number, local_ds_dir, remote_ds_dir):
+        """Run every query set of a step against the index that was just built."""
+        queries = step.get("queries", [])
+        # NOTE: row labels are resolved for the whole step up front so that repeated query configs
+        #       can be told apart -- see row_labels_for_step().
+        row_labels = row_labels_for_step(self.WORKLOAD, queries, dataset_name, defaults, record_count, step_number)
+
+        for query, row_label in zip(queries, row_labels):
+            qset = _checked_name(query["set"], "query set name")
+            limit, concurrency, rate = _query_params(query, defaults)
+            expected_p99_read_ms = _expected_p99_read_ms(query, defaults)
+            queries_file = f"queries_{qset}.tsv"
+            qrels_file = f"qrels_{qset}.tsv" if query.get("qrels") else None
+            # A file the plan asks for but the corpus does not have would otherwise surface as a
+            # staging failure inside the loader container, phases into a run that has already loaded
+            # and indexed the corpus. Checked here instead -- after the dataset's download, so it
+            # covers an S3 corpus too -- to name the query set that asked for it. 'qrels: true' on a
+            # set that has no qrels file is the likely typo; the queries file is checked with it
+            # because a missing one is just as quiet ('_first_query_example' returns "" for it).
+            for needed in (queries_file, qrels_file):
+                if needed and not os.path.isfile(os.path.join(local_ds_dir, needed)):
+                    raise ValueError(
+                        f"Query set {qset!r} of step #{step_number} needs {needed!r}, which is not in {local_ds_dir}"
+                    )
+
+            self._run_search(
+                local_ds_dir,
+                remote_ds_dir,
+                queries_file=queries_file,
+                limit=limit,
+                concurrency=concurrency,
+                rate=rate,
+                search_duration=_query_duration(query, defaults),
+                row_label=row_label,
+                expected_p99_read_ms=expected_p99_read_ms,
+                query_example=_first_query_example(local_ds_dir, queries_file),
+                qrels_file=qrels_file,
+            )
 
     def _report_build_metrics(self, build_time: float | None, record_count, row_key):
         """Send the index build time and indexing throughput of one step to Argus."""

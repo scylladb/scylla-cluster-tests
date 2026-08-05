@@ -20,6 +20,7 @@ in test_fts_test.py.
 
 import logging
 import os
+import re
 
 import pytest
 
@@ -29,25 +30,38 @@ from search_perf_test import (
     SearchWorkload,
     _checked_data_file,
     _checked_name,
+    _cycle_name,
+    _expected_p99_read_ms,
+    QUERY_EXAMPLE_MAX_CHARS,
+    _first_query_example,
     _parse_shard_spec,
+    _query_params,
     _timeout_minutes,
     resolve_test_config_path,
+    row_labels_for_step,
+    validate_plan_queries,
 )
 
 WORKLOAD = SearchWorkload(
     name="search_bench",
     base_dir="data_dir/latte/search_bench",
     script="data_dir/latte/search_bench/bench.rn",
+    hdr_tag="fn--search",
     item_noun="docs",
     index_prefix="bench_idx",
     default_keyspace="bench",
     remote_root="/tmp/bench",
+    latency_legend="Search bench query latency.",
     build_result_table=object,
     build_count_column="record_count",
     params=LatteScriptParams(
         dataset_dir="data_dir",
         records_file="records_file",
         record_count="record_count",
+        queries_file="queries_file",
+        qrels_file="qrels_file",
+        search_limit="search_limit",
+        compute_accuracy="compute_accuracy",
         index_name="index_name",
         max_index_wait="max_index_wait_secs",
         min_probes="min_successful_probes",
@@ -58,6 +72,275 @@ WORKLOAD = SearchWorkload(
     default_records_file="records.tsv",
     default_shard_suffix="records_{:03d}.tsv",
 )
+
+# ---------------------------------------------------------------------------
+# Argus row-label disambiguation
+# ---------------------------------------------------------------------------
+
+DEFAULTS = {"limit": 5, "concurrency": 32, "rate": 0, "expected_p99_read_ms": 10}
+
+
+def _labels(queries, dataset_name="ds", defaults=None, record_count=900, step_number=1):
+    return row_labels_for_step(
+        WORKLOAD, queries, dataset_name, DEFAULTS if defaults is None else defaults, record_count, step_number
+    )
+
+
+def test_distinct_query_sets_keep_plain_labels():
+    """Different query sets (or different record counts/datasets) must not be indexed --
+    only limit/concurrency/rate no longer distinguish a row, since they are columns now."""
+    queries = [
+        {"set": "term_common", "concurrency": 1, "rate": 50},
+        {"set": "term_medium"},
+        {"set": "term_rare", "limit": 100},
+    ]
+    assert _labels(queries) == [
+        "ds | 900 docs | step #1 | term_common",
+        "ds | 900 docs | step #1 | term_medium",
+        "ds | 900 docs | step #1 | term_rare",
+    ]
+
+
+def test_steps_with_an_equal_record_count_do_not_collide():
+    """A step with an empty 'shards' list loads nothing, so it repeats its predecessor's record
+    count. Without the step ordinal its query rows would land on the predecessor's rows."""
+    queries = [{"set": "term_common"}]
+    assert _labels(queries, record_count=300, step_number=1) != _labels(queries, record_count=300, step_number=2)
+
+
+def test_repeated_query_set_is_disambiguated_by_its_config():
+    """Entries for the same set/expected-latency group collide onto one row unless disambiguated.
+
+    The ones that differ are told apart by their query configuration; only the two that are
+    identical in every parameter need a positional 'run #N'.
+    """
+    queries = [
+        {"set": "term_common", "concurrency": 1, "rate": 50},
+        {"set": "term_common"},
+        {"set": "term_medium"},
+        {"set": "term_common"},
+    ]
+    labels = _labels(queries)
+
+    assert labels[0] == "ds | 900 docs | step #1 | term_common | limit=5 concurrency=1 rate=50"
+    assert labels[1] == "ds | 900 docs | step #1 | term_common | limit=5 concurrency=32 rate=0 run #1"
+    assert labels[2] == "ds | 900 docs | step #1 | term_medium"
+    assert labels[3] == "ds | 900 docs | step #1 | term_common | limit=5 concurrency=32 rate=0 run #2"
+    assert len(set(labels)) == len(labels)
+
+
+def test_inserting_a_query_does_not_rename_the_other_rows():
+    """The point of naming every parameter in the suffix rather than only those that differ.
+
+    A differing-only suffix depends on the whole collision group, so an inserted entry that varies
+    a parameter the others agreed on would rename every one of their rows, and Argus would lose
+    their history. Here the inserted entry is the only one varying 'concurrency'.
+    """
+    original = [
+        {"set": "term_common", "rate": 50},
+        {"set": "term_common", "rate": 10},
+    ]
+    edited = [
+        {"set": "term_common", "concurrency": 4},  # inserted at the head, varies a new parameter
+        *original,
+    ]
+
+    before = _labels(original)
+    after = _labels(edited)
+
+    assert after[1:] == before
+    assert after[0] == "ds | 900 docs | step #1 | term_common | limit=5 concurrency=4 rate=0"
+
+
+def test_reordering_queries_does_not_rename_their_rows():
+    """Reordering is pure permutation: no label depends on where its entry sits."""
+    queries = [
+        {"set": "term_common", "rate": 50},
+        {"set": "term_common", "rate": 10},
+        {"set": "term_common", "concurrency": 4},
+    ]
+    assert sorted(_labels(queries)) == sorted(_labels(list(reversed(queries))))
+
+
+def test_same_label_in_different_tables_is_not_indexed():
+    """Same set/record-count but a different 'expected_p99_read_ms' land in different tables, so
+    the shared row label is not a collision."""
+    queries = [
+        {"set": "natural", "expected_p99_read_ms": 50},
+        {"set": "natural"},  # inherits DEFAULTS' expected_p99_read_ms of 10 -> a different table
+    ]
+    expected = "ds | 900 docs | step #1 | natural"
+    assert _labels(queries) == [expected, expected]
+
+
+def test_three_way_collision_numbers_sequentially():
+    queries = [{"set": "phrase", "expected_p99_read_ms": 50}] * 3
+    assert _labels(queries, record_count=10) == [
+        "ds | 10 docs | step #1 | phrase | limit=5 concurrency=32 rate=0 run #1",
+        "ds | 10 docs | step #1 | phrase | limit=5 concurrency=32 rate=0 run #2",
+        "ds | 10 docs | step #1 | phrase | limit=5 concurrency=32 rate=0 run #3",
+    ]
+
+
+def test_record_count_is_thousands_separated():
+    assert _labels([{"set": "natural"}], record_count=10_000_000)[0] == "ds | 10,000,000 docs | step #1 | natural"
+
+
+def test_empty_step_returns_empty_list():
+    assert _labels([], record_count=0) == []
+
+
+def test_missing_expected_latency_raises():
+    """A query with no 'expected_p99_read_ms' on itself or the dataset defaults is a plan error,
+    not a silently-defaulted SCT value."""
+    with pytest.raises(ValueError, match="expected_p99_read_ms"):
+        _labels([{"set": "natural"}], defaults={}, record_count=10)
+
+
+# ---------------------------------------------------------------------------
+# Resolving the expected latency and its Argus cycle/table name
+# ---------------------------------------------------------------------------
+
+
+def test_expected_p99_read_ms_query_overrides_defaults():
+    assert _expected_p99_read_ms({"set": "s", "expected_p99_read_ms": 50}, {"expected_p99_read_ms": 10}) == 50.0
+
+
+def test_expected_p99_read_ms_falls_back_to_defaults():
+    assert _expected_p99_read_ms({"set": "s"}, {"expected_p99_read_ms": 10}) == 10.0
+
+
+def test_expected_p99_read_ms_missing_raises():
+    with pytest.raises(ValueError, match="term_common"):
+        _expected_p99_read_ms({"set": "term_common"}, {})
+
+
+@pytest.mark.parametrize(
+    "value",
+    (True, 0, -1, float("nan"), float("inf"), "fast", [10]),
+    ids=["bool", "zero", "negative", "nan", "inf", "string", "list"],
+)
+def test_expected_p99_read_ms_rejects_unusable_values(value):
+    """This value names the Argus table, becomes its P99 validation rule and is stated in its
+    description. 'float()' alone accepts all of these: a bool from an unquoted YAML 'yes', a rule no
+    run can satisfy, or a table named 'p99_infms'."""
+    with pytest.raises(ValueError, match="expected a finite number > 0"):
+        _expected_p99_read_ms({"set": "term_common", "expected_p99_read_ms": value}, {})
+
+
+@pytest.mark.parametrize(
+    "value, expected_name",
+    (
+        (10, "search_bench_p99_10ms"),
+        (50, "search_bench_p99_50ms"),
+        (12.5, "search_bench_p99_12_5ms"),
+        # '{:g}' would render this one as '1e+07'.
+        (10_000_000, "search_bench_p99_10000000ms"),
+    ),
+)
+def test_cycle_name_encodes_workload_and_expected_latency(value, expected_name):
+    assert _cycle_name(WORKLOAD, value) == expected_name
+
+
+def test_cycle_name_groups_equal_expectations_together():
+    """Two different queries sharing an expected value must land in the same table by construction."""
+    assert _cycle_name(WORKLOAD, 10) == _cycle_name(WORKLOAD, 10.0)
+
+
+# ---------------------------------------------------------------------------
+# Validating a plan's query entries up front
+# ---------------------------------------------------------------------------
+
+
+def _plan(query, defaults=None):
+    return [{"name": "ds", "defaults": DEFAULTS if defaults is None else defaults, "steps": [{"queries": [query]}]}]
+
+
+def test_validate_plan_queries_accepts_a_good_plan():
+    validate_plan_queries(_plan({"set": "term_common", "limit": 100, "concurrency": 1, "rate": 50, "duration": "5m"}))
+
+
+@pytest.mark.parametrize(
+    "query, message",
+    (
+        ({"limit": 5}, "has no 'set'"),
+        ({"set": "term common"}, "query set name"),
+        ({"set": "t", "limit": 0}, "query limit"),
+        ({"set": "t", "limit": "5; rm -rf /"}, "query limit"),
+        ({"set": "t", "concurrency": 0}, "query concurrency"),
+        ({"set": "t", "rate": -1}, "query rate"),
+        ({"set": "t", "duration": "10"}, "query duration"),
+        ({"set": "t", "duration": "10s; id"}, "query duration"),
+    ),
+)
+def test_validate_plan_queries_rejects_a_bad_entry(query, message):
+    """Every one of these reaches a latte command line or an Argus name, so it is checked before the
+    run rather than quoted at each use."""
+    with pytest.raises(ValueError, match=re.escape(message)):
+        validate_plan_queries(_plan(query))
+
+
+def test_validate_plan_queries_names_the_offending_step():
+    with pytest.raises(ValueError, match=r"dataset 'ds', step #1"):
+        validate_plan_queries(_plan({"set": "t"}, defaults={}))
+
+
+def test_validate_plan_queries_ignores_steps_without_queries():
+    validate_plan_queries([{"name": "ds", "steps": [{"shards": []}, {"documents_file": "documents.tsv"}]}])
+
+
+def test_rate_zero_is_allowed_as_unthrottled():
+    """0 means 'no --rate at all', not a missing value -- it is the DEFAULT_RATE."""
+    assert _query_params({"set": "t", "rate": 0}, DEFAULTS)[2] == 0
+
+
+def test_booleans_are_not_accepted_as_numbers():
+    """'True' is an int in Python and would reach the command line as 'concurrency=True'."""
+    with pytest.raises(ValueError, match="query concurrency"):
+        _query_params({"set": "t", "concurrency": True}, DEFAULTS)
+
+
+# ---------------------------------------------------------------------------
+# Extracting a readable query example for the Argus 'query_example' column
+# ---------------------------------------------------------------------------
+
+
+def test_first_query_example_returns_the_text_column(tmp_path):
+    (tmp_path / "queries_term_common.tsv").write_text("q1\tfirst query text\nq2\tsecond\n", encoding="utf-8")
+    assert _first_query_example(str(tmp_path), "queries_term_common.tsv") == "first query text"
+
+
+def test_first_query_example_skips_leading_blank_lines(tmp_path):
+    (tmp_path / "queries_natural.tsv").write_text("\n\nq1\tactual first\n", encoding="utf-8")
+    assert _first_query_example(str(tmp_path), "queries_natural.tsv") == "actual first"
+
+
+def test_first_query_example_missing_file_returns_empty_string(tmp_path):
+    assert _first_query_example(str(tmp_path), "queries_missing.tsv") == ""
+
+
+def test_first_query_example_without_a_tab_returns_whole_line(tmp_path):
+    (tmp_path / "queries_odd.tsv").write_text("just one column\n", encoding="utf-8")
+    assert _first_query_example(str(tmp_path), "queries_odd.tsv") == "just one column"
+
+
+def test_first_query_example_truncates_a_long_query(tmp_path):
+    """The Argus cell is bounded here, not by the corpus the plan happens to name."""
+    (tmp_path / "queries_long.tsv").write_text(f"q1\t{'a' * 900}\n", encoding="utf-8")
+
+    example = _first_query_example(str(tmp_path), "queries_long.tsv")
+
+    assert len(example) == QUERY_EXAMPLE_MAX_CHARS
+    assert example.endswith("...")
+
+
+def test_first_query_example_keeps_a_query_at_the_cap_intact(tmp_path):
+    (tmp_path / "queries_exact.tsv").write_text(f"q1\t{'a' * QUERY_EXAMPLE_MAX_CHARS}\n", encoding="utf-8")
+
+    example = _first_query_example(str(tmp_path), "queries_exact.tsv")
+
+    assert example == "a" * QUERY_EXAMPLE_MAX_CHARS
+
 
 # ---------------------------------------------------------------------------
 # Waiting for the vector-store node to actually serve

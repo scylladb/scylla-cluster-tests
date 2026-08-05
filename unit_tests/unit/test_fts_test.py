@@ -48,12 +48,17 @@ def test_every_mapped_parameter_is_a_parameter_of_the_script(script_source):
     assert mapped <= declared, f"not parameters of {FTS_WORKLOAD.script}: {sorted(mapped - declared)}"
 
 
+def test_the_hdr_tag_names_a_function_of_the_script(script_source):
+    """The tag is 'fn--<function>'; latte emits nothing under it if that function is not there,
+    and the latency table would come out empty."""
+    function = FTS_WORKLOAD.hdr_tag.removeprefix("fn--")
+    assert function in set(RUNE_FUNCTION_RE.findall(script_source))
+
+
 def test_the_phases_the_flow_invokes_exist(script_source):
-    """'load' and 'build_index' are the contract between the flow and any rune script. The script
-    also carries a 'search' function, unused until the query phase lands -- it is mirrored whole
-    from scylladb/vector-store, so trimming it would only create a divergence to undo."""
+    """'load', 'build_index' and 'search' are the contract between the flow and any rune script."""
     functions = set(RUNE_FUNCTION_RE.findall(script_source))
-    assert {"load", "build_index"} <= functions
+    assert {"load", "build_index", "search"} <= functions
 
 
 def test_the_step_record_file_key_shares_the_scripts_vocabulary():
@@ -71,7 +76,8 @@ def test_index_build_table_counts_documents():
 def test_argus_names_are_the_ones_the_history_is_under():
     """Renaming any of these silently starts a new, empty history in Argus."""
     assert FtsIndexBuildResult.Meta.name == "FTS Index Build Time"
-    assert FTS_WORKLOAD.item_noun == "docs"  # row keys: 'ds | 900 docs | build #1'
+    assert FTS_WORKLOAD.name == "fts_search"  # cycle names: 'fts_search_p99_10ms'
+    assert FTS_WORKLOAD.item_noun == "docs"  # row labels: 'ds | 900 docs | term_common'
     assert FTS_WORKLOAD.index_prefix == "fts_idx"
 
 

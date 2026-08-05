@@ -13,15 +13,16 @@
 
 """Full-Text Search (BM25) performance test.
 
-The flow -- plan, datasets, cumulative shard steps, index build timing -- lives in
+The flow -- plan, datasets, cumulative shard steps, index build timing, query sets -- lives in
 search_perf_test.py and is shared with the other search benchmarks. This module is the full-text
 half of it: the rune script to run, the vocabulary to report in, and the names to report under.
 
-Driven by a YAML plan (the `search_test_config` param) naming the datasets and the shards to load. See
-docs/fts-search-test.md.
+Driven by a YAML plan (the `search_test_config` param) naming the datasets, the shards and the
+query configurations to test. See docs/fts-search-test.md.
 
-Results go to Argus: one row per index build in the "FTS Index Build Time" table. The query phase,
-which adds a latency row per query configuration, lands on top of this.
+Results go to Argus: one row per index build in the "FTS Index Build Time" table, and one
+latency/throughput row per query configuration in "read - fts_search_p99_{expected_p99_read_ms}ms -
+latencies".
 """
 
 from argus.client.generic_result import StaticGenericResultTable
@@ -47,10 +48,12 @@ FTS_WORKLOAD = SearchWorkload(
     name="fts_search",
     base_dir=FTS_BASE_DIR,
     script=f"{FTS_BASE_DIR}/fts.rn",
+    hdr_tag="fn--search",
     item_noun="docs",
     index_prefix="fts_idx",
     default_keyspace="fts_bench",
     remote_root="/tmp/fts",
+    latency_legend="FTS BM25 full-text search query latency.",
     build_result_table=FtsIndexBuildResult,
     build_count_column=FTS_BUILD_COUNT_COLUMN,
     # The names fts.rn uses. It is mirrored from scylladb/vector-store, so they are its to choose --
@@ -59,6 +62,10 @@ FTS_WORKLOAD = SearchWorkload(
         dataset_dir="fts_data_dir",
         records_file="documents_file",
         record_count="document_count",
+        queries_file="queries_file",
+        qrels_file="qrels_file",
+        search_limit="search_limit",
+        compute_accuracy="compute_accuracy",
         index_name="index_name",
         max_index_wait="max_index_wait_secs",
         min_probes="min_successful_probes",
@@ -75,8 +82,8 @@ class FtsSearchTest(SearchPerformanceTest):
     """FTS (Full-Text Search / BM25) performance test.
 
     Runs multi-dataset, multi-step FTS benchmarks from a YAML plan in the repo (see
-    'resolve_test_config_path'): per-shard loading, index building and Argus reporting all come from
-    'SearchPerformanceTest'.
+    'resolve_test_config_path'): per-shard loading, index building, query execution and Argus
+    reporting all come from 'SearchPerformanceTest'.
     """
 
     WORKLOAD = FTS_WORKLOAD
