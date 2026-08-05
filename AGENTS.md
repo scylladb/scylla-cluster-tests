@@ -95,7 +95,7 @@ export SCT_REUSE_CLUSTER=$(cat ~/sct-results/latest/test_id)
   `unit_tests/integration/conftest.py`.
 - `unit_tests/lib/` - Shared test utilities: `fake_remoter.py`, `fake_events.py`,
   `fake_provisioner.py`, `dummy_remote.py`, `s3_utils.py`, etc.
-- `unit_tests/test_data/` and `unit_tests/test_configs/` - Shared test data files
+- `unit_tests/test_data/` and `internal_test_data/` - Shared test data files
 - `unit_tests/conftest.py` - Shared fixtures (events, params, prom_address)
 
 **Key Test Categories:**
