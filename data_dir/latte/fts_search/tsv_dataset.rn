@@ -1,0 +1,76 @@
+//! Document-corpus loader for the full-text-search workload.
+//!
+//! Origin: scylladb/vector-store, latte/full-text-search/tsv_dataset.rn. This copy is the one test
+//! runs use (see the header of fts.rn for why). Mirror any change back to vector-store.
+//!
+//! The corpus is a TSV file, one `doc_id<TAB>body` per line. Bodies are the
+//! bulk of a benchmark dataset, so they are not held in memory: `index` scans
+//! the file once recording where each line starts, and `read_at` parses one
+//! line per call from a handle the worker opened for itself.
+
+const SEPARATOR = "\t";
+
+/// Scan a documents file once, returning `#{ path, offsets }`: the byte offset
+/// of every document, plus a final entry holding the file length, so document
+/// `i` spans `offsets[i]..offsets[i + 1]`.
+///
+/// Blank lines are skipped. A line with no tab, or no id before it, is an
+/// error: both would otherwise pass silently, one shrinking the document
+/// count and the other inserting an empty doc_id. An empty body is kept -
+/// title-only documents are legitimate.
+pub fn index(path) {
+    // latte's line reader panics if the file cannot be opened, so open it
+    // first: a typo in -P documents_file should be an error naming the file,
+    // not a Rust backtrace.
+    fs::open_binary(path)?;
+    // Untrimmed and keeping empty fields, so the parts reconstruct the line
+    // byte for byte (the reader leaves the line terminator on the last part);
+    // maxsplit 1 both keeps a body containing tabs whole and makes the part
+    // count a separator check.
+    let it = fs::read_split_lines_iter(path, [SEPARATOR, 1, false, false])?;
+    let offsets = [];
+    let offset = 0;
+    let line_no = 0;
+    while let Some(entry) = it.next() {
+        line_no += 1;
+        let raw = entry?;
+        let line_len = raw[0].len();
+        if raw.len() == 2 {
+            line_len += SEPARATOR.len() + raw[1].len();
+            if raw[0].trim() == "" {
+                return Err(`${path}:${line_no}: no id before the tab`);
+            }
+            offsets.push(offset);
+        } else if raw[0].trim() != "" {
+            return Err(`${path}:${line_no}: expected "id<TAB>body", found no tab`);
+        }
+        offset += line_len;
+    }
+    // Sentinel: the last document runs to the end of the file.
+    offsets.push(offset);
+    Ok(#{ "path": path, "offsets": offsets })
+}
+
+/// Number of documents in an index returned by `index`.
+pub fn document_count(index) {
+    index.offsets.len() - 1
+}
+
+/// Read document `idx` as `#{ id, body }`, from a file opened in
+/// `prepare_worker` and the `index` built for it.
+///
+/// A worker's concurrent cycles share the handle, so the seek and the read
+/// must stay in one synchronous call: an await between them would let another
+/// cycle reposition the file.
+pub fn read_at(file, index, idx) {
+    let start = index.offsets[idx];
+    file.seek(start)?;
+    // The span runs to the next document, so it can carry blank lines; the
+    // trims below remove them.
+    let line = String::from_utf8(file.read_bytes(index.offsets[idx + 1] - start)?)?;
+    match line.split_once(SEPARATOR) {
+        // `index` only records lines that have a tab, so this always hits.
+        Some((id, body)) => Ok(#{ "id": id.trim(), "body": body.trim() }),
+        None => Err(`${index.path}: document ${idx} at byte ${start}: no tab`),
+    }
+}
