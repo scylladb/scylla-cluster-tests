@@ -70,17 +70,14 @@ def get_all_tables_with_no_compact_storage(cluster, target_node, tables_to_skip=
     return output
 
 
-def verify_initial_inputs_for_delete_nemesis(cluster, tester):
-    """Verify preconditions for delete nemesis operations."""
-    test_keyspaces = cluster.get_test_keyspaces()
+def verify_scylla_bench_keyspace_exists(cluster):
+    """Verify the scylla_bench keyspace has been created by the test's stress load.
 
-    if "scylla_bench" not in test_keyspaces:
+    Dynamic check - the keyspace appears only once scylla-bench started writing, so it
+    cannot be evaluated in precheck().
+    """
+    if "scylla_bench" not in cluster.get_test_keyspaces():
         raise UnsupportedNemesis("This nemesis can run on scylla_bench test only")
-
-    if not (tester.partitions_attrs and tester.partitions_attrs.max_partitions_in_test_table):
-        raise UnsupportedNemesis(
-            'This nemesis expects "max_partitions_in_test_table" sub-parameter of data_validation to be set'
-        )
 
 
 def get_random_timestamp_from_partition(
@@ -203,12 +200,14 @@ class TruncateLargeParititionMonkey(TruncateMonkey):
     free_tier_set = True
     limited = False
 
-    def disrupt(self):
+    def precheck(self, node) -> str | None:
         if SkipPerIssues(
             issues="https://github.com/scylladb/scylladb/issues/20356", params=self.runner.tester.params
         ) and self.runner.tester.params.get("use_zero_nodes"):
-            raise UnsupportedNemesis("Unsupported nemesis due to scylladb/scylladb#20356")
+            return "Unsupported nemesis due to scylladb/scylladb#20356"
+        return None
 
+    def disrupt(self):
         ks_name = "ks_truncate_large_partition"
         table = "test_table"
         ks_cf = f"{ks_name}.{table}"
@@ -247,6 +246,12 @@ class DeleteMonkeyBase(NemesisBaseClass):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.random = self.runner.random
+
+    def precheck(self, node) -> str | None:
+        partitions_attrs = self.runner.tester.partitions_attrs
+        if not (partitions_attrs and partitions_attrs.max_partitions_in_test_table):
+            return 'This nemesis expects "max_partitions_in_test_table" sub-parameter of data_validation to be set'
+        return None
 
     @property
     def partition_deletion_divisor(self) -> int:
@@ -327,7 +332,7 @@ class DeleteByPartitionsMonkey(DeleteMonkeyBase):
     """Delete 10 full partitions from a table with large partitions."""
 
     def disrupt(self):
-        verify_initial_inputs_for_delete_nemesis(self.runner.cluster, self.runner.tester)
+        verify_scylla_bench_keyspace_exists(self.runner.cluster)
 
         partitions_for_delete = self.choose_partitions_for_delete(partitions_amount=10, ks_cf=self.KS_CF)
 
@@ -348,7 +353,7 @@ class DeleteOverlappingRowRangesMonkey(DeleteMonkeyBase):
     """Delete several overlapping row ranges in a table with large partitions."""
 
     def disrupt(self):
-        verify_initial_inputs_for_delete_nemesis(self.runner.cluster, self.runner.tester)
+        verify_scylla_bench_keyspace_exists(self.runner.cluster)
 
         partitions_for_delete = self.choose_partitions_for_delete(
             partitions_amount=self.runner.tester.partitions_attrs.non_validated_partitions
@@ -502,7 +507,7 @@ class DeleteByRowsRangeMonkey(DeleteMonkeyBase):
         return list(partitions_for_delete.keys()) + partitions_for_exclude
 
     def disrupt(self):
-        verify_initial_inputs_for_delete_nemesis(self.runner.cluster, self.runner.tester)
+        verify_scylla_bench_keyspace_exists(self.runner.cluster)
 
         ks_cf = self.KS_CF
 
