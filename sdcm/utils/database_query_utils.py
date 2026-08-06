@@ -35,6 +35,12 @@ class PartitionsValidationAttributes:
     A class that gathers all data related to partitions-validation.
     It helps Longevity tests that uses "validate_partitions" to
     save and compare a table partitions-rows-number during stress and nemesis.
+
+    partition_start_range / partition_end_range / non_validated_partitions describe the
+    split between the partitions the test validates and the ones a nemesis may modify.
+    They are always defined: without partition_range_with_data_validation there is no
+    protected range, so the whole table counts as non-validated. Consumers such as the
+    delete nemesis can read them unconditionally.
     """
 
     PARTITIONS_ROWS_BEFORE = "partitions_rows_before"
@@ -62,6 +68,11 @@ class PartitionsValidationAttributes:
         self.partition_range_with_data_validation = partition_range_with_data_validation
         self.max_partitions_in_test_table = int(max_partitions_in_test_table) if max_partitions_in_test_table else None
         self.partitions_rows_collected = False
+        # No protected range by default, so every partition is available to a nemesis.
+        # _init_partition_range() narrows this down when a range is configured.
+        self.partition_start_range = 0
+        self.partition_end_range = 0
+        self.non_validated_partitions = self.max_partitions_in_test_table or 0
         self._init_partition_range()
         self.limit_rows_number = limit_rows_number
         self.partitions_dict_before = None
