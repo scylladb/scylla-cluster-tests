@@ -188,7 +188,7 @@ class OciNode(cluster.BaseNode):
 
         return SPOT_TERMINATION_CHECK_DELAY
 
-    def restart(self):
+    def _restart_inner(self):
         self._instance.reboot(wait=True, hard=False)
 
     def hard_reboot(self):
