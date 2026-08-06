@@ -4571,10 +4571,6 @@ class NemesisRunner:
                 network_replication.apply(node, keyspace)
 
     def disrupt_add_remove_dc(self) -> None:
-        if self.cluster.test_config.MULTI_REGION:
-            raise UnsupportedNemesis(
-                "add_remove_dc skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)"
-            )
         if self.runner.tester.prepare_phase_active.is_set():
             raise UnsupportedNemesis(
                 "Skipped during prepare phase, due to stress commands potentially writing to the new DC."
