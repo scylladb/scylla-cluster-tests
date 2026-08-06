@@ -35,10 +35,10 @@ n_loaders: 4
 n_db_nodes: 6
 
 # Instance types
-instance_type_db: 'i4i.2xlarge'
-azure_instance_type_db: 'Standard_L16s_v3'
-gce_instance_type_db: 'n2-highmem-32'
-gce_n_local_ssd_disk_db: 16
+sizing_db:
+  vcpu: '>=8'
+  memory: '>=64'
+  local_disk_gb: '>=1500'  # ~80% of i4i.2xlarge's 1875GB
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '007'
