@@ -17,10 +17,12 @@ from typing import List, Tuple
 
 from botocore.exceptions import ClientError
 from pydantic import BaseModel, ConfigDict, PrivateAttr, computed_field
+
 from sdcm import cluster
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, attach_failed_region
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
+from sdcm.provision.aws.utils import create_cluster_placement_groups_aws
 from sdcm.provision.common.provision_plan import ProvisionPlan
 from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder
 from sdcm.provision.common.provisioner import TagsType
@@ -28,16 +30,15 @@ from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.aws.instance_parameters_builder import (
     CassandraInstanceParamsBuilder,
-    ScyllaInstanceParamsBuilder,
     LoaderInstanceParamsBuilder,
     MonitorInstanceParamsBuilder,
     OracleScyllaInstanceParamsBuilder,
+    ScyllaInstanceParamsBuilder,
     ScyllaZeroTokenParamsBuilder,
 )
-from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder, AWSInstanceUserDataBuilder
+from sdcm.sct_provision.aws.user_data import AWSInstanceUserDataBuilder, ScyllaUserDataBuilder
 from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_SPOT, INSTANCE_PROVISION_SPOT_FLEET
 from sdcm.test_config import TestConfig
-from sdcm.provision.aws.utils import create_cluster_placement_groups_aws
 
 
 class ClusterNode(BaseModel):

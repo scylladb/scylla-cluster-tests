@@ -12,7 +12,6 @@
 # Copyright (c) 2020 ScyllaDB
 
 import queue
-
 from multiprocessing import Queue
 from unittest.mock import MagicMock, patch
 
@@ -22,7 +21,6 @@ import requests
 from sdcm.cluster import TestConfig
 from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
-
 from unit_tests.lib.dummy_remote import DummyRemote
 from unit_tests.lib.fake_cluster import DummyNode
 

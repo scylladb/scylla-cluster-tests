@@ -13,8 +13,8 @@
 
 import pytest
 
-from sdcm.utils.agent_client import AgentClient
 from sdcm.remote.agent_cmd_runner import AgentCmdRunner
+from sdcm.utils.agent_client import AgentClient
 
 
 @pytest.mark.parametrize(

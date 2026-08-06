@@ -10,9 +10,9 @@ or pools are created.
 On non-POSIX platforms we do not override Python's default
 """
 
+import logging
 import multiprocessing
 import os
-import logging
 from typing import Optional
 
 LOGGER = logging.getLogger(__name__)

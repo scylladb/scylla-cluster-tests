@@ -11,12 +11,13 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import uuid
-import time
-import random
-import pytest
 import logging
+import random
+import time
 import typing
+import uuid
+
+import pytest
 
 if typing.TYPE_CHECKING:
     from sdcm.utils.vector_store_client import VectorStoreClient

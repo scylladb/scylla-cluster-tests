@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2024 ScyllaDB
 from typing import TypeVar
+
 from sdcm.rest.remote_curl_client import RemoteCurlClient
 
 BaseNode = TypeVar("BaseNode")

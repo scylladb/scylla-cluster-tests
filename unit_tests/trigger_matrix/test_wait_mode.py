@@ -16,7 +16,7 @@ import logging
 import yaml
 
 from sdcm.utils import trigger_matrix as tm
-from sdcm.utils.trigger_matrix import JobConfig, JenkinsTriggerError, load_matrix_config, trigger_matrix
+from sdcm.utils.trigger_matrix import JenkinsTriggerError, JobConfig, load_matrix_config, trigger_matrix
 
 
 def test_job_config_wait_defaults_false():

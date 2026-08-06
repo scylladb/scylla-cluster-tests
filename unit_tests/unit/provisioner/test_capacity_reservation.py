@@ -12,11 +12,11 @@
 # Copyright (c) 2024 ScyllaDB
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 
-from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.exceptions import CapacityReservationError
-
+from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from unit_tests.lib.dot_dict import DotDict
 
 

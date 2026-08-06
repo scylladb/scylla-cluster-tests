@@ -1,4 +1,4 @@
-from typing import Union, TextIO
+from typing import TextIO, Union
 
 
 class PropertiesDict(dict):

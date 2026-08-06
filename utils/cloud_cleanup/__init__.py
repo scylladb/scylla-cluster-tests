@@ -1,11 +1,10 @@
 import os
 import sys
 from datetime import datetime, timedelta, timezone
-from functools import partial, lru_cache
-from typing import Literal, Callable
+from functools import lru_cache, partial
+from typing import Callable, Literal
 
 from argus.client.sct.client import ArgusSCTClient
-
 from sdcm.keystore import KeyStore
 from sdcm.utils.log import setup_stdout_logger
 

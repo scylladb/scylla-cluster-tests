@@ -46,7 +46,6 @@ from sdcm.keystore import (
     pub_key_from_private_key_file,
 )
 
-
 # ---------------------------------------------------------------------------
 # Override the session-scoped mock_cloud_services fixture from conftest.py.
 #

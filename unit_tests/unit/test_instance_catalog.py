@@ -17,7 +17,6 @@ import pytest
 
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo
 
-
 AWS_YAML = """\
 cloud: aws
 instances:

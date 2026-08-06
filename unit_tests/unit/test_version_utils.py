@@ -2,33 +2,33 @@ from __future__ import absolute_import
 
 import os
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 import sdcm
 from sdcm.utils.version_utils import (
+    ARGUS_VERSION_RE,
+    SCYLLA_VERSION_GROUPED_RE,
+    VERSION_NOT_FOUND_ERROR,
+    ComparableScyllaOperatorVersion,
+    ComparableScyllaVersion,
+    FullVersionTag,
+    MethodVersionNotFound,
+    RepositoryDetails,
+    ScyllaFileType,
     assume_version,
     get_all_versions,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
     get_gemini_version,
     get_git_tag_from_helm_chart_version,
+    get_scylla_docker_repo_from_version,
     get_scylla_urls_from_repository,
     is_enterprise,
-    scylla_versions,
-    ComparableScyllaOperatorVersion,
-    ComparableScyllaVersion,
-    MethodVersionNotFound,
-    RepositoryDetails,
-    ScyllaFileType,
-    SCYLLA_VERSION_GROUPED_RE,
-    ARGUS_VERSION_RE,
-    VERSION_NOT_FOUND_ERROR,
-    get_scylla_docker_repo_from_version,
-    parse_scylla_version_tag,
-    FullVersionTag,
     latest_unified_package,
+    parse_scylla_version_tag,
+    scylla_versions,
 )
 
 BASE_S3_DOWNLOAD_URL = "https://s3.amazonaws.com/downloads.scylladb.com"

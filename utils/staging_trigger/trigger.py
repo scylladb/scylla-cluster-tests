@@ -12,13 +12,12 @@ import yaml
 
 from sdcm.utils.common import get_sct_root_path
 from sdcm.utils.version_utils import get_scylla_docker_repo_from_version
-
 from utils.staging_trigger.cache import lookup_pr
 from utils.staging_trigger.constants import (
     DTEST_TOPOLOGY_FLAGS,
     PIPELINE_TO_PRESET,
-    Preset,
     SCT_REPO,
+    Preset,
     TriggeredJob,
     _default_folder,
     _get_jenkins_url,

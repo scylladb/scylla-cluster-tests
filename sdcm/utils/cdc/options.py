@@ -1,9 +1,8 @@
+import logging
 import re
 import time
-import logging
-
-from typing import Dict, Union, List
 from random import choice, randint
+from typing import Dict, List, Union
 
 LOGGER = logging.getLogger(__name__)
 

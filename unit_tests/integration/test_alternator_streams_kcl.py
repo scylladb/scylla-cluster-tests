@@ -11,14 +11,15 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import time
 import logging
+import time
+
 import pytest
 
+from sdcm.kcl_thread import CompareTablesSizesThread, KclStressThread
 from sdcm.ycsb_thread import YcsbStressThread
-from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
-from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
+from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
     pytest.mark.usefixtures("events"),

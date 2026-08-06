@@ -23,7 +23,6 @@ from sdcm.provision.gce.zone_resolver import GceAZResolver
 from sdcm.provision.provisioner import ProvisionError, ProvisionUnrecoverableError, ZoneResourcesExhaustedError
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.tester import ClusterTester, CriticalTestFailure
-
 from unit_tests.lib.dot_dict import DotDict
 
 CAPACITY_MSG = "Operation failed: ZONE_RESOURCE_POOL_EXHAUSTED"

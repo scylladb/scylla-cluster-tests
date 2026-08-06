@@ -1,7 +1,7 @@
 import json
+from unittest.mock import MagicMock
 
 import pytest
-from unittest.mock import MagicMock
 
 from sdcm.cluster_gce import GCENode
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration

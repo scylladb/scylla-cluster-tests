@@ -14,7 +14,7 @@
 import logging
 import threading
 from functools import partial
-from typing import Tuple, Any
+from typing import Any, Tuple
 
 from sdcm.cluster import TestConfig
 from sdcm.sct_events.events_processes import (

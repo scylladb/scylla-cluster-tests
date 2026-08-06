@@ -15,8 +15,8 @@
 Utility functions for GCE provisioning.
 """
 
-import re
 import logging
+import re
 from typing import Dict
 
 from sdcm.provision.gce.constants import (

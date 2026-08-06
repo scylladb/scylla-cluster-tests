@@ -11,16 +11,16 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, List
 import os
 import threading
 import types
+from typing import List, Optional
 
-from fabric import Connection, Config
-from paramiko import SSHException, Transport
-from paramiko.ssh_exception import NoValidConnectionsError, AuthenticationException
+from fabric import Config, Connection
+from invoke.exceptions import Failure, UnexpectedExit
 from invoke.watchers import StreamWatcher
-from invoke.exceptions import UnexpectedExit, Failure
+from paramiko import SSHException, Transport
+from paramiko.ssh_exception import AuthenticationException, NoValidConnectionsError
 
 from .base import RetryableNetworkException, SSHConnectTimeoutError
 from .remote_base import RemoteCmdRunnerBase

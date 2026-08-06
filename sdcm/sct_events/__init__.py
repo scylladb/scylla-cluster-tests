@@ -14,7 +14,7 @@
 import enum
 import json
 import logging
-from typing import Protocol, Optional, Type, runtime_checkable
+from typing import Optional, Protocol, Type, runtime_checkable
 
 
 class Severity(enum.Enum):

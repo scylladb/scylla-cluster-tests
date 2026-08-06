@@ -11,25 +11,24 @@
 #
 # Copyright (c) 2022 ScyllaDB
 import base64
-import time
-from datetime import datetime, timezone
+import binascii
 import logging
 import os
+import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
-from typing import Dict, Optional, Any, List
-
-import binascii
-from azure.core.exceptions import ResourceNotFoundError, AzureError, ODataV4Error
-from azure.mgmt.compute.models import VirtualMachine, RunCommandInput
+from azure.core.exceptions import AzureError, ODataV4Error, ResourceNotFoundError
+from azure.mgmt.compute.models import RunCommandInput, VirtualMachine
 from invoke import Result
 
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from sdcm.provision.provisioner import (
     InstanceDefinition,
+    OperationPreemptedError,
     PricingModel,
     ProvisionError,
-    OperationPreemptedError,
     StuckVMProvisioningError,
 )
 from sdcm.provision.user_data import UserDataBuilder

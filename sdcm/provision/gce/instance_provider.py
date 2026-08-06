@@ -15,28 +15,28 @@
 
 import logging
 from datetime import datetime, timezone
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 import google.api_core.exceptions
 from google.cloud import compute_v1
 
+from sdcm.provision.gce.constants import DISK_TYPE_LOCAL_SSD, DISK_TYPE_PD_STANDARD
+from sdcm.provision.gce.disk_provider import DiskProvider
+from sdcm.provision.gce.network_provider import NetworkProvider
+from sdcm.provision.gce.utils import normalize_instance_name, tags_to_gce_labels
 from sdcm.provision.provisioner import (
     InstanceDefinition,
     PricingModel,
     ProvisionError,
     ZoneResourcesExhaustedError,
 )
-from sdcm.provision.gce.disk_provider import DiskProvider
-from sdcm.provision.gce.network_provider import NetworkProvider
-from sdcm.provision.gce.constants import DISK_TYPE_PD_STANDARD, DISK_TYPE_LOCAL_SSD
-from sdcm.provision.gce.utils import tags_to_gce_labels, normalize_instance_name
-from sdcm.utils.gce_utils import (
-    get_gce_compute_instances_client,
-    wait_for_extended_operation,
-    gce_set_labels,
-    get_gce_service_accounts,
-)
 from sdcm.utils.decorators import retrying
+from sdcm.utils.gce_utils import (
+    gce_set_labels,
+    get_gce_compute_instances_client,
+    get_gce_service_accounts,
+    wait_for_extended_operation,
+)
 
 LOGGER = logging.getLogger(__name__)
 

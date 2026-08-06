@@ -12,15 +12,15 @@
 # Copyright (c) 2024 ScyllaDB
 
 from datetime import datetime
-from logging import getLogger
 from functools import wraps
+from logging import getLogger
 
 import boto3
 import requests
-from sdcm.utils.parallel_object import ParallelObject
-from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.sct_events import Severity
 
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.utils.parallel_object import ParallelObject
 
 logger = getLogger(__name__)
 

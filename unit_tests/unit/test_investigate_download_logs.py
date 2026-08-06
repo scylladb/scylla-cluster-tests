@@ -14,7 +14,7 @@
 """Unit tests for the 'hydra investigate download-logs' CLI command."""
 
 import datetime
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner

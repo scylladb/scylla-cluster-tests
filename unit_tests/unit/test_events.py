@@ -11,24 +11,23 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
 import logging
-from pathlib import Path
+import time
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest import mock
 
 import pytest
 
-from sdcm.exceptions import UnsupportedNemesis, KillNemesis
-from sdcm.sct_events.nodetool import NodetoolEvent
+from sdcm.exceptions import KillNemesis, UnsupportedNemesis
 from sdcm.sct_events import Severity
-from sdcm.sct_events.system import CoreDumpEvent, TestFrameworkEvent, SoftTimeoutEvent
+from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.event_counter import EventCounterContextManager
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
-from sdcm.sct_events.database import DatabaseLogEvent
-from sdcm.sct_events.event_counter import EventCounterContextManager
-
+from sdcm.sct_events.nodetool import NodetoolEvent
+from sdcm.sct_events.system import CoreDumpEvent, SoftTimeoutEvent, TestFrameworkEvent
 from unit_tests.lib.real_events import RealEventsTest
 
 LOGGER = logging.getLogger(__name__)

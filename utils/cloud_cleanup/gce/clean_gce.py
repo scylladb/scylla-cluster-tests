@@ -5,9 +5,9 @@ from datetime import datetime
 from pytz import utc
 
 from sdcm.utils.context_managers import environment
-from sdcm.utils.gce_utils import get_gce_compute_instances_client, SUPPORTED_PROJECTS
+from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, get_gce_compute_instances_client
 from sdcm.utils.log import setup_stdout_logger
-from utils.cloud_cleanup import update_argus_resource_status, should_keep, get_keep_hours_from_tags, DEFAULT_KEEP_HOURS
+from utils.cloud_cleanup import DEFAULT_KEEP_HOURS, get_keep_hours_from_tags, should_keep, update_argus_resource_status
 
 LOGGER = setup_stdout_logger()
 

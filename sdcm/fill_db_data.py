@@ -18,25 +18,22 @@ __author__ = "Roy Dahan"
 import contextlib
 import logging
 import random
-import time
 import re
-
+import time
 from collections import OrderedDict
 from uuid import UUID
 
-from cassandra import InvalidRequest
-from cassandra.util import sortedset, SortedSet
-from cassandra import ConsistencyLevel
+from cassandra import ConsistencyLevel, InvalidRequest
 from cassandra.protocol import ProtocolException
+from cassandra.util import SortedSet, sortedset
 
 from sdcm.tester import ClusterTester
+from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
 from sdcm.utils.database_query_utils import fetch_all_rows
 from sdcm.utils.decorators import retrying
-from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
-from sdcm.utils.version_utils import ComparableScyllaVersion
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.issues import SkipPerIssues
-
+from sdcm.utils.version_utils import ComparableScyllaVersion
 
 LOGGER = logging.getLogger(__name__)
 

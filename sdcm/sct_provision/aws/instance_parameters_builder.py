@@ -14,17 +14,17 @@
 import abc
 import logging
 from functools import cached_property
-from typing import Union, List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 from pydantic import Field, computed_field
 
 from sdcm.cluster import UserRemoteCredentials
-from sdcm.provision.aws.instance_parameters import AWSDiskMapping, AWSPlacementInfo, AWSDiskMappingEbsInfo
+from sdcm.provision.aws.instance_parameters import AWSDiskMapping, AWSDiskMappingEbsInfo, AWSPlacementInfo
 from sdcm.provision.aws.instance_parameters_builder import AWSInstanceParamsBuilderBase
 from sdcm.provision.common.user_data import UserDataBuilderBase
 from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.aws_utils import ec2_ami_get_root_device_name, EC2NetworkConfiguration
+from sdcm.utils.aws_utils import EC2NetworkConfiguration, ec2_ami_get_root_device_name
 
 LOGGER = logging.getLogger(__name__)
 

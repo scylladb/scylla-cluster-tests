@@ -2,7 +2,7 @@ import logging
 import re
 from datetime import datetime, timedelta
 from enum import Enum, StrEnum
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict

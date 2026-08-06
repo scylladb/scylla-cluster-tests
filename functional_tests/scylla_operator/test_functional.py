@@ -13,48 +13,47 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import base64
 import logging
 import os
 import random
+import ssl
 import threading
 import time
-import ssl
-import base64
+
 import invoke
 import path
-
 import pytest
 import yaml
 from cassandra.cluster import (
+    EXEC_PROFILE_DEFAULT,
     Cluster,
     ExecutionProfile,
-    EXEC_PROFILE_DEFAULT,
 )
 from cassandra.policies import WhiteListRoundRobinPolicy
 
-from sdcm.cluster_k8s import ScyllaPodCluster, SCYLLA_NAMESPACE, SCYLLA_MANAGER_NAMESPACE, SCYLLA_OPERATOR_NAMESPACE
-from sdcm.mgmt import TaskStatus
-from sdcm.utils.parallel_object import ParallelObject
-from sdcm.utils.k8s import (
-    convert_cpu_units_to_k8s_value,
-    convert_cpu_value_from_k8s_to_units,
-    HelmValues,
-    KubernetesOps,
-)
-from sdcm.utils.k8s.chaos_mesh import PodFailureExperiment
-
 from functional_tests.scylla_operator.libs.helpers import (
-    get_scylla_sysctl_value,
-    get_orphaned_services,
-    get_pods_without_probe,
-    get_pods_and_statuses,
-    get_pod_storage_capacity,
     PodStatuses,
+    get_orphaned_services,
+    get_pod_storage_capacity,
+    get_pods_and_statuses,
+    get_pods_without_probe,
+    get_scylla_sysctl_value,
     reinstall_scylla_manager,
     set_scylla_sysctl_value,
     verify_resharding_on_k8s,
     wait_for_resource_absence,
 )
+from sdcm.cluster_k8s import SCYLLA_MANAGER_NAMESPACE, SCYLLA_NAMESPACE, SCYLLA_OPERATOR_NAMESPACE, ScyllaPodCluster
+from sdcm.mgmt import TaskStatus
+from sdcm.utils.k8s import (
+    HelmValues,
+    KubernetesOps,
+    convert_cpu_units_to_k8s_value,
+    convert_cpu_value_from_k8s_to_units,
+)
+from sdcm.utils.k8s.chaos_mesh import PodFailureExperiment
+from sdcm.utils.parallel_object import ParallelObject
 
 log = logging.getLogger()
 

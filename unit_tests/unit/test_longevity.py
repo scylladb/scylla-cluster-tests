@@ -10,7 +10,6 @@ from sdcm.sct_events.base import SctEvent
 from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode
 from unit_tests.lib.fake_events import make_fake_events
 
-
 LongevityTest.__test__ = False
 
 

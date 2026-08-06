@@ -1,8 +1,9 @@
 import contextlib
-import yaml
-import pytest
 
-from sdcm.cluster_k8s import KubernetesCluster, SCYLLA_NAMESPACE
+import pytest
+import yaml
+
+from sdcm.cluster_k8s import SCYLLA_NAMESPACE, KubernetesCluster
 
 
 class DummyCluster(KubernetesCluster):

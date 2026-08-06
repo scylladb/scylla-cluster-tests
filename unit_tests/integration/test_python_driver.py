@@ -4,7 +4,6 @@ import pytest
 
 from unit_tests.lib.fake_cluster import DummyDbCluster
 
-
 log = logging.getLogger(__name__)
 
 

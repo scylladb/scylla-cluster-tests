@@ -14,10 +14,10 @@
 import pytest
 
 from sdcm.provision.gce.capacity_errors import (
-    is_zone_capacity_error,
+    classify_provisioning_error,
     is_quota_error,
     is_type_unavailable_error,
-    classify_provisioning_error,
+    is_zone_capacity_error,
 )
 
 

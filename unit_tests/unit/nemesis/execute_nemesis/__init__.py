@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from unittest.mock import MagicMock
 
-from sdcm.nemesis import NemesisRunner, UnsupportedNemesis, KillNemesis
+from sdcm.nemesis import KillNemesis, NemesisRunner, UnsupportedNemesis
 from sdcm.nemesis.registry import NemesisRegistry
 from sdcm.utils.version_utils import MethodVersionNotFound
 

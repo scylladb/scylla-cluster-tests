@@ -515,8 +515,8 @@ def generate_gce_catalog(  # noqa: PLR0914
         List of InstanceTypeInfo. Returns empty list on credential/import error.
     """
     try:
-        from google.cloud import compute_v1  # noqa: PLC0415
         from google.auth.exceptions import DefaultCredentialsError  # noqa: PLC0415
+        from google.cloud import compute_v1  # noqa: PLC0415
     except ImportError:
         LOG.error("google-cloud-compute is not installed — cannot generate GCE catalog")
         return []
@@ -527,6 +527,7 @@ def generate_gce_catalog(  # noqa: PLR0914
 
     try:
         from google.oauth2 import service_account as sa_module  # noqa: PLC0415
+
         from sdcm.keystore import KeyStore  # noqa: PLC0415
 
         info = KeyStore().get_gcp_credentials()

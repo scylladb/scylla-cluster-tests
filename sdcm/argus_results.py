@@ -10,26 +10,25 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2024 ScyllaDB
-from collections import defaultdict
-from itertools import count
 import json
 import logging
-from threading import Event, Thread
 import time
-from datetime import timezone, datetime
+from collections import defaultdict
+from datetime import datetime, timezone
+from itertools import count
+from threading import Event, Thread
 from typing import TYPE_CHECKING
 
 from argus.client import ArgusClient
 from argus.client.base import ArgusClientError
 from argus.client.generic_result import (
-    GenericResultTable,
     ColumnMetadata,
+    GenericResultTable,
     ResultType,
+    StaticGenericResultTable,
     Status,
     ValidationRule,
-    StaticGenericResultTable,
 )
-
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 from sdcm.sct_events.system import FailedResultEvent
 

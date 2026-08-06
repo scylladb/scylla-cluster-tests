@@ -14,9 +14,9 @@ import logging
 
 import pytest
 
-from sdcm.stress_thread import CassandraStressThread
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.kafka.kafka_consumer import KafkaCDCReaderThread
+from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.issues import SkipPerIssues
 from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 

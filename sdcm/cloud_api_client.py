@@ -11,19 +11,18 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import logging
 import ipaddress
+import logging
 from enum import Enum
 from functools import cached_property
 from pprint import pformat
-from urllib.parse import urljoin
 from typing import Any, Literal
+from urllib.parse import urljoin
 
-import yaml
 import requests
+import yaml
 
 from sdcm.utils.session import create_retry_session
-
 
 LOGGER = logging.getLogger(__name__)
 

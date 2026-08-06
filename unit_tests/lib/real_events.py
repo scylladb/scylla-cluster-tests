@@ -22,7 +22,6 @@ incurs ~4 seconds of startup overhead.
 from pathlib import Path
 
 from sdcm.prometheus import start_metrics_server
-
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 

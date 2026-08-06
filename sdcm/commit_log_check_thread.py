@@ -1,12 +1,14 @@
-import traceback
 import logging
-import time
 import re
 import threading
+import time
+import traceback
 from dataclasses import dataclass
+
 from distutils.util import strtobool
-from sdcm.sct_events.database import CommitLogCheckErrorEvent, Severity
+
 from sdcm.rest.remote_curl_client import RemoteCurlClient
+from sdcm.sct_events.database import CommitLogCheckErrorEvent, Severity
 
 
 def get_max_disk_size_metric(db_cluster):

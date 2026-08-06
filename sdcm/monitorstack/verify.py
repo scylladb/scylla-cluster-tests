@@ -3,14 +3,13 @@ import time
 
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.logcollector import GrafanaEntity, MonitoringStack
-from sdcm.remote import LocalCmdRunner
-
 from sdcm.monitorstack.constants import (
     GRAFANA_DOCKER_NAME,
     GRAFANA_DOCKER_PORT,
     PROMETHEUS_DOCKER_NAME,
     PROMETHEUS_DOCKER_PORT,
 )
+from sdcm.remote import LocalCmdRunner
 
 LOGGER = logging.getLogger(name="monitoringstack")
 

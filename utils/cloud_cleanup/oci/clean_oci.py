@@ -12,20 +12,20 @@
 # See LICENSE for more details.
 
 import argparse
-from datetime import datetime, timezone
 import os
+from datetime import datetime, timezone
 
 import oci
 
 from sdcm.provision.oci.constants import TAG_NAMESPACE
 from sdcm.utils.log import setup_stdout_logger
 from sdcm.utils.oci_utils import (
-    delete_oci_volume_with_retry,
-    OciService,
-    oci_keep_action,
     SUPPORTED_REGIONS,
+    OciService,
+    delete_oci_volume_with_retry,
     get_oci_compartment_id,
     list_instances_oci,
+    oci_keep_action,
 )
 from utils.cloud_cleanup import DEFAULT_KEEP_HOURS, get_keep_hours_from_tags, should_keep, update_argus_resource_status
 

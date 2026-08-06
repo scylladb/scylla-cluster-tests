@@ -555,6 +555,7 @@ def resolve_architecture_from_ami(ami_id: str, region: str | None = None) -> str
     region = region or DEFAULT_AWS_REGION
     try:
         import boto3  # noqa: PLC0415 - optional cloud dependency
+
         from sdcm.utils.aws_utils import get_scylla_images_ec2_resource  # noqa: PLC0415 - circular import avoidance
 
         # Try Scylla images account first (private AMIs) — uses STS role assumption

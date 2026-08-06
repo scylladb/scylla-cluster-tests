@@ -24,20 +24,20 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
-from ipaddress import ip_network
 from functools import (
     cache,
     cached_property,
 )
+from ipaddress import ip_network
 
 import oci
 from oci.core.models import (
     AddNetworkSecurityGroupSecurityRulesDetails,
     AddSecurityRuleDetails,
-    CreateInternetGatewayDetails,
-    CreateNatGatewayDetails,
     CreateDrgAttachmentDetails,
     CreateDrgDetails,
+    CreateInternetGatewayDetails,
+    CreateNatGatewayDetails,
     CreateNetworkSecurityGroupDetails,
     CreateRemotePeeringConnectionDetails,
     CreateRouteTableDetails,
@@ -58,19 +58,18 @@ from oci.identity.models import (
     CreateTagNamespaceDetails,
 )
 
-from sdcm.provision.security import ScyllaOpenPorts
-from sdcm.utils.get_username import get_username
-from sdcm.utils.lock_utils import KeyBasedLock
-from sdcm.utils.oci_utils import (
-    OciService,
-    SUPPORTED_REGIONS,
-    get_availability_domains,
-)
 from sdcm.provision.oci.constants import (
     SCT_TAG_KEYS,
     TAG_NAMESPACE,
 )
-
+from sdcm.provision.security import ScyllaOpenPorts
+from sdcm.utils.get_username import get_username
+from sdcm.utils.lock_utils import KeyBasedLock
+from sdcm.utils.oci_utils import (
+    SUPPORTED_REGIONS,
+    OciService,
+    get_availability_domains,
+)
 
 KEY_BASED_LOCKS = KeyBasedLock()
 LOGGER = logging.getLogger(__name__)

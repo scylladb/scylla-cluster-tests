@@ -17,7 +17,6 @@ import yaml
 from sdcm.utils import trigger_matrix
 from sdcm.utils.trigger_matrix import JobConfig
 
-
 # Version the stubbed cloud lookups report for every backend, so tests that don't care about
 # version resolution get a deterministic full tag instead of reaching a cloud image API.
 STUB_RESOLVED_VERSION = "2025.4.1-0.20250601.abc123def456-1"

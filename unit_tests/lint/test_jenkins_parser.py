@@ -11,7 +11,6 @@ from sdcm.utils.lint.jenkins_parser import (
     parse_jenkinsfile,
 )
 
-
 # --- Fixtures ---
 
 

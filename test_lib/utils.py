@@ -1,6 +1,6 @@
-import typing
-import functools
 import collections
+import functools
+import typing
 
 
 class __DEFAULT__:

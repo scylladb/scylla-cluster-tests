@@ -31,7 +31,6 @@ from sdcm.utils.trigger_matrix import (
     version_exists_for_backend,
 )
 
-
 AWS_BUILD = "2026.4.0~dev-0.20260804.9a3aba9e452a"
 GCE_BUILD = "2026.4.0~dev-0.20260803.1122334455aa"
 

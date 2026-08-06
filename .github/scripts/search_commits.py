@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-import sys
-import os
 import argparse
+import os
 import re
-import requests
+import sys
 
+import requests
 from github import Github
 
 try:

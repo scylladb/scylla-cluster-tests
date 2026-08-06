@@ -11,12 +11,12 @@
 #
 # Copyright (c) 2024 ScyllaDB
 
-import os
-import sys
-import pathlib
 import configparser
 import datetime
 import logging
+import os
+import pathlib
+import sys
 
 import boto3
 from botocore.exceptions import NoCredentialsError

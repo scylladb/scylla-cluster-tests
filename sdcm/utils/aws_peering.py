@@ -11,14 +11,14 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
-import logging
 import itertools
+import logging
 import time
 
 from botocore.exceptions import ClientError
 
-from sdcm.utils.aws_region import AwsRegion
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS
+from sdcm.utils.aws_region import AwsRegion
 
 LOG = logging.getLogger(__name__)
 

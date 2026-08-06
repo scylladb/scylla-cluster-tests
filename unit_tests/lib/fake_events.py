@@ -11,8 +11,8 @@
 #
 # Copyright (c) 2025 ScyllaDB
 import json
-import time
 import threading
+import time
 import unittest.mock
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -20,8 +20,8 @@ from dataclasses import dataclass
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import SctEvent, SystemEvent
 from sdcm.sct_events.events_processes import (
-    EVENTS_MAIN_DEVICE_ID,
     EVENTS_FILE_LOGGER_ID,
+    EVENTS_MAIN_DEVICE_ID,
     EventsProcessesRegistry,
 )
 

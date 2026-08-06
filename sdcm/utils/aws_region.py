@@ -14,17 +14,17 @@
 import base64
 import hashlib
 import logging
+from functools import cache, cached_property
 from ipaddress import ip_network
-from functools import cached_property, cache
 
 import boto3
 import botocore
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 
-from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
-from sdcm.utils.decorators import retrying
+from sdcm.test_config import TestConfig
 from sdcm.utils.aws_utils import tags_as_ec2_tags
+from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
 

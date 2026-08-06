@@ -12,23 +12,23 @@
 # Copyright (c) 2022 ScyllaDB
 
 import uuid
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
 from sdcm.logcollector import (
-    Collector,
     BaseSCTLogCollector,
+    Collector,
+    FailureStatisticsCollector,
+    GrafanaScreenShot,
+    MonitoringStack,
+    PrometheusSnapshots,
     PythonSCTLogCollector,
     SchemaLogCollector,
-    FailureStatisticsCollector,
-    PrometheusSnapshots,
-    MonitoringStack,
-    GrafanaScreenShot,
 )
 from sdcm.provision import provisioner_factory
-from unit_tests.lib.fake_resources import prepare_fake_region
 from sdcm.utils import common
+from unit_tests.lib.fake_resources import prepare_fake_region
 
 
 @pytest.fixture(scope="session")

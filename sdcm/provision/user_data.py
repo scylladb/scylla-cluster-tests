@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from textwrap import dedent
-from typing import List, Dict
+from typing import Dict, List
 
 import yaml
 

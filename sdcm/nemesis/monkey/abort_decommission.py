@@ -10,8 +10,8 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.utils.features import is_tablets_feature_enabled
-from sdcm.utils.tasks import wait_for_tasks
 from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.tasks import wait_for_tasks
 from sdcm.wait import wait_for
 
 logger = logging.getLogger(__name__)

@@ -12,17 +12,17 @@
 # Copyright (c) 2021 ScyllaDB
 import logging
 from difflib import unified_diff
-from typing import Literal, List, Dict, Any, Union
+from typing import Any, Dict, List, Literal, Union
 
 import yaml
-from pydantic import field_validator, BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from sdcm.provision.scylla_yaml.auxiliaries import (
-    EndPointSnitchType,
-    ServerEncryptionOptions,
     ClientEncryptionOptions,
-    SeedProvider,
+    EndPointSnitchType,
     RequestSchedulerOptions,
+    SeedProvider,
+    ServerEncryptionOptions,
 )
 
 logger = logging.getLogger(__name__)

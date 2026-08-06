@@ -11,11 +11,6 @@ from textwrap import dedent
 import requests
 import yaml
 
-from sdcm.remote import LocalCmdRunner
-from sdcm.utils.common import get_free_port, list_logs_by_test_id, S3Storage, remove_files
-from sdcm.utils.decorators import retrying
-from sdcm.utils.session import create_retry_session
-
 from sdcm.monitorstack.constants import (
     ALERT_DOCKER_NAME,
     ALERT_DOCKER_PORT,
@@ -26,6 +21,10 @@ from sdcm.monitorstack.constants import (
     PROMETHEUS_DOCKER_PORT,
 )
 from sdcm.monitorstack.verify import verify_monitoring_stack
+from sdcm.remote import LocalCmdRunner
+from sdcm.utils.common import S3Storage, get_free_port, list_logs_by_test_id, remove_files
+from sdcm.utils.decorators import retrying
+from sdcm.utils.session import create_retry_session
 
 LOGGER = logging.getLogger(name="monitoringstack")
 

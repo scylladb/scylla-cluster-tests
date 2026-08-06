@@ -12,27 +12,29 @@
 # Copyright (c) 2017 ScyllaDB
 
 from __future__ import absolute_import, annotations
+
+import ipaddress
 import logging
 import os
-import time
-import ipaddress
 import tempfile
+import time
 from collections import defaultdict
 from contextlib import contextmanager
 
-from botocore.exceptions import ClientError
 import boto3
 import google.api_core.exceptions
 import oci
+from botocore.exceptions import ClientError
 from google.cloud.compute_v1.types import Instance as GceInstance
 from mypy_boto3_ec2 import EC2Client
 
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, ScyllaCloudAPIError
-from sdcm.provision.oci.constants import TAG_NAMESPACE
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.aws.emr_provisioner import list_emr_clusters
 from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.provision.oci.constants import TAG_NAMESPACE
+from sdcm.sct_config import AWS_SUPPORTED_REGIONS
 from sdcm.utils.argus import (
     ArgusError,
     ReplayOnlyArgusSCTClient,
@@ -42,16 +44,14 @@ from sdcm.utils.argus import (
 )
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.gce_region import GceRegion
-from sdcm.sct_config import AWS_SUPPORTED_REGIONS
 from sdcm.utils.common import (
     all_aws_regions,
     aws_tags_to_dict,
     get_post_behavior_actions,
     get_testrun_status,
     list_cloudformation_stacks_aws,
-    list_clusters_gke,
     list_clusters_eks,
+    list_clusters_gke,
     list_elastic_ips_aws,
     list_instances_aws,
     list_instances_gce,
@@ -62,22 +62,22 @@ from sdcm.utils.common import (
     list_test_security_groups,
     run_per_region_ignore_failures,
 )
-from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.context_managers import environment
 from sdcm.utils.decorators import retrying
+from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.gce_utils import (
     GkeCleaner,
     get_gce_compute_instances_client,
 )
 from sdcm.utils.oci_utils import (
-    delete_oci_volume_with_retry,
-    OciService,
-    oci_keep_action,
     SUPPORTED_REGIONS,
+    OciService,
+    delete_oci_volume_with_retry,
     get_oci_compartment_id,
     list_instances_oci,
+    oci_keep_action,
 )
-
+from sdcm.utils.parallel_object import ParallelObject
 
 LOGGER = logging.getLogger("utils")
 

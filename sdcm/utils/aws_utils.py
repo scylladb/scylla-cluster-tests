@@ -14,25 +14,24 @@ from __future__ import absolute_import, annotations
 
 import functools
 import json
+import logging
 import socket
 import time
-import logging
 from functools import cached_property
-from typing import List, Dict, get_args, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, get_args
 
 import boto3
 import botocore
 from botocore.exceptions import ClientError
-from mypy_boto3_ec2 import EC2ServiceResource, EC2Client
+from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.literals import ArchitectureTypeType
 
-from sdcm.provision.network_configuration import ssh_connection_ip_type, network_interfaces_count
-from sdcm.utils.decorators import retrying
-
-from sdcm.wait import wait_for
-from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
+from sdcm.provision.network_configuration import network_interfaces_count, ssh_connection_ip_type
 from sdcm.provision.provisioner import VmArch
+from sdcm.test_config import TestConfig
+from sdcm.utils.decorators import retrying
+from sdcm.wait import wait_for
 
 if TYPE_CHECKING:
     from sdcm.utils.aws_region import AwsRegion

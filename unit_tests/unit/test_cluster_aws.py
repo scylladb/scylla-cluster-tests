@@ -4,9 +4,10 @@
 Unit tests for AWS cluster functionality.
 """
 
-import pytest
 from unittest.mock import Mock, patch
+
 import botocore.exceptions
+import pytest
 
 from sdcm.cluster_aws import AWSNode
 

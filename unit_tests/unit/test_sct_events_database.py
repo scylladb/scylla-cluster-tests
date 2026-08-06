@@ -13,15 +13,14 @@
 
 import re
 
-
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.database import (
+    SYSTEM_ERROR_EVENTS,
+    TOLERABLE_REACTOR_STALL,
     DatabaseLogEvent,
     FullScanEvent,
     IndexSpecialColumnErrorEvent,
-    TOLERABLE_REACTOR_STALL,
-    SYSTEM_ERROR_EVENTS,
 )
 from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 

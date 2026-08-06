@@ -15,88 +15,87 @@
 Handling Scylla-cluster-test configuration loading
 """
 
-import os
-import random
-import re
 import ast
+import copy
 import dataclasses
+import getpass
 import json
 import logging
-import getpass
+import os
 import pathlib
+import random
+import re
 import tempfile
-from textwrap import dedent
-
-import yaml
-import copy
-from typing import List, Union, Set, Literal, get_origin, get_args, ClassVar
 from functools import cached_property, lru_cache
+from textwrap import dedent
+from typing import ClassVar, List, Literal, Set, Union, get_args, get_origin
 
-from distutils.util import strtobool
 import anyconfig
-from argus.client.sct.types import Package
+import yaml
+from distutils.util import strtobool
 from packaging import version
-from pydantic import BaseModel, Field, ConfigDict, RootModel, fields as pydantic_fields, model_validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
+from pydantic import fields as pydantic_fields
+from pydantic.fields import FieldInfo
+from pydantic.functional_validators import BeforeValidator
 from pydantic.types import confloat
 from typing_extensions import Annotated
-from pydantic.functional_validators import BeforeValidator
-from pydantic.fields import FieldInfo
-from sdcm import sct_abs_path
-from sdcm.test_metadata import TestMetadata
+
 import sdcm.provision.azure.utils as azure_utils
-from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
+from argus.client.sct.types import Package
+from sdcm import sct_abs_path
+from sdcm.cloud_api_client import CloudProviderType, ScyllaCloudAPIClient
+from sdcm.kafka.kafka_config import SctKafkaConfiguration
 from sdcm.keystore import KeyStore
-from sdcm.utils.cloud_api_utils import get_cloud_rest_credentials_from_file
-from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
+from sdcm.mgmt.common import AgentBackupParameters
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
+from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
-from sdcm.utils import alternator
-from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
-from sdcm.utils.common import (
-    ami_built_by_scylla,
-    get_ami_tags,
-    get_branched_ami,
-    get_branched_gce_images,
-    get_scylla_ami_versions,
-    get_scylla_gce_images_versions,
-    convert_name_to_ami_if_needed,
-    find_equivalent_ami,
-    get_sct_root_path,
-    get_vector_store_ami_versions,
-)
-from sdcm.utils import oci_utils
-from sdcm.utils.operations_thread import ConfigParams
-from sdcm.utils.version_utils import (
-    ARGUS_VERSION_RE,
-    get_branch_version,
-    get_branch_version_for_multiple_repositories,
-    get_scylla_docker_repo_from_version,
-    resolve_latest_repo_symlink,
-    get_specific_tag_of_docker_image,
-    find_scylla_repo,
-    is_enterprise,
-    ComparableScyllaVersion,
-    latest_unified_package,
-)
+from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
-from sdcm.utils.gce_utils import (
-    get_gce_image_tags,
-    get_gce_compute_machine_types_client,
-    get_gce_compute_regions_client,
-    gce_check_if_machine_type_supported,
-)
+from sdcm.test_config import TestConfig
+from sdcm.test_metadata import TestMetadata
+from sdcm.utils import alternator, oci_utils
+from sdcm.utils.aws_utils import aws_check_instance_type_supported, get_arch_from_instance_type
 from sdcm.utils.azure_utils import (
     azure_check_instance_type_available,
 )
-from sdcm.utils.cloud_api_utils import MIN_SCYLLA_VERSION_FOR_VS
-from sdcm.remote import LOCALRUNNER, shell_script_cmd
-from sdcm.utils.curl import curl_with_retry
-from sdcm.test_config import TestConfig
-from sdcm.kafka.kafka_config import SctKafkaConfiguration
-from sdcm.mgmt.common import AgentBackupParameters
-from sdcm.utils.version_utils import parse_scylla_version_tag
+from sdcm.utils.cloud_api_utils import MIN_SCYLLA_VERSION_FOR_VS, get_cloud_rest_credentials_from_file
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
 from sdcm.utils.cloud_catalog.instance_matcher import NoMatchingInstanceError, select_instance
+from sdcm.utils.common import (
+    ami_built_by_scylla,
+    convert_name_to_ami_if_needed,
+    find_equivalent_ami,
+    get_ami_tags,
+    get_branched_ami,
+    get_branched_gce_images,
+    get_sct_root_path,
+    get_scylla_ami_versions,
+    get_scylla_gce_images_versions,
+    get_vector_store_ami_versions,
+)
+from sdcm.utils.curl import curl_with_retry
+from sdcm.utils.gce_utils import (
+    gce_check_if_machine_type_supported,
+    get_gce_compute_machine_types_client,
+    get_gce_compute_regions_client,
+    get_gce_image_tags,
+)
+from sdcm.utils.operations_thread import ConfigParams
+from sdcm.utils.version_utils import (
+    ARGUS_VERSION_RE,
+    ComparableScyllaVersion,
+    find_scylla_repo,
+    get_branch_version,
+    get_branch_version_for_multiple_repositories,
+    get_scylla_docker_repo_from_version,
+    get_specific_tag_of_docker_image,
+    is_enterprise,
+    latest_unified_package,
+    parse_scylla_version_tag,
+    resolve_latest_repo_symlink,
+)
 
 _SIZING_RESOLUTION_CACHE: dict[tuple, str] = {}
 

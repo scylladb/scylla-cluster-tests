@@ -16,13 +16,13 @@ Disk configuration provider for GCE provisioning.
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from sdcm.provision.gce.constants import (
-    DISK_TYPE_PD_STANDARD,
-    DISK_TYPE_LOCAL_SSD,
-    DISK_INTERFACE_NVME,
     DEFAULT_BOOT_DISK_SIZE_GB,
+    DISK_INTERFACE_NVME,
+    DISK_TYPE_LOCAL_SSD,
+    DISK_TYPE_PD_STANDARD,
 )
 from sdcm.provision.provisioner import DataDisk
 

@@ -13,12 +13,11 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import contextlib
 import logging
 import os
 import time
 import traceback
-import contextlib
-
 from typing import Optional
 
 import pytest
@@ -26,8 +25,8 @@ from deepdiff import DeepDiff
 
 from functional_tests.scylla_operator.libs.auxiliary import ScyllaOperatorFunctionalClusterTester, sct_abs_path
 from sdcm.cluster_k8s import ScyllaPodCluster
-from sdcm.utils import version_utils
 from sdcm.sct_events.setup import start_events_device
+from sdcm.utils import version_utils
 
 TESTER: Optional[ScyllaOperatorFunctionalClusterTester] = None
 LOGGER = logging.getLogger(__name__)
