@@ -2,6 +2,21 @@
 Data manipulation nemesis: truncate, delete partitions/rows, add/drop columns.
 
 Extracted from NemesisRunner as part of SCT-209.
+
+Two independent families live here, with very different test requirements:
+
+Truncate / AddDropColumn
+    Self-sufficient. They create the data they need (TruncateMonkey runs
+    cassandra-stress, TruncateLargeParititionMonkey runs scylla-bench) or discover a
+    victim table at runtime (AddDropColumnMonkey). They run in any longevity test.
+
+Delete family (DeleteMonkeyBase subclasses)
+    Only usable in large-partition longevity tests. See DeleteMonkeyBase for the full
+    list of requirements - in short they need a scylla_bench.test table written by a
+    scylla-bench load and a `data_validation` config block describing its partition
+    layout, because they delete data in place and must not corrupt the range that the
+    test's own data validation reads back.
+    Reference config: test-cases/longevity/longevity-large-partition-3h.yaml
 """
 
 import logging
@@ -233,7 +248,44 @@ class TruncateLargeParititionMonkey(TruncateMonkey):
 
 
 class DeleteMonkeyBase(NemesisBaseClass):
-    """Base class for delete nemesis with shared partition selection and deletion logic."""
+    """
+    Base class for the delete nemesis family: shared partition selection and deletion.
+
+    What it does
+        Picks random partitions of scylla_bench.test and issues DELETE statements against
+        them, then flushes so the tombstones reach sstables. Subclasses differ only in the
+        shape of the delete (whole partition, one row range, several overlapping ranges,
+        range bounded by a write timestamp).
+
+    When it can run
+        Only in a large-partition longevity test. All of the following must hold:
+
+        1. `data_validation.max_partitions_in_test_table` is set. Partition keys of
+           scylla_bench.test are the integers 0..max-1, and that is the only source the
+           nemesis has for which keys exist - it never scans the table for keys.
+           Enforced statically by precheck(); the nemesis is dropped from the rotation
+           for the whole run if missing.
+        2. `data_validation.partition_range_with_data_validation` is set whenever
+           `non_validated_partitions` is read (every subclass except
+           DeleteByPartitionsMonkey). PartitionsValidationAttributes only computes that
+           attribute when the range is configured.
+        3. The scylla_bench keyspace exists, i.e. the test's scylla-bench load has
+           already created it. Checked per-disruption by
+           verify_scylla_bench_keyspace_exists() - it cannot be a precheck, since at
+           precheck time no stress has run yet.
+        4. Partitions actually still hold rows. Repeated deletions plus a finite
+           partition count mean the table can run dry mid-test, so each disrupt() raises
+           UnsupportedNemesis when selection comes back empty and the runner skips that
+           cycle only.
+
+    Why the data_validation coupling
+        The test validates row counts of the partitions inside
+        `partition_range_with_data_validation` before and after the nemesis phase. Those
+        partitions must stay untouched, so choose_partitions_for_delete() deletes only
+        from `partition_end_range + 1 .. max_partitions_in_test_table` and sizes batches
+        against `non_validated_partitions`. Deleting outside that window would fail the
+        test's own validation rather than find a Scylla bug.
+    """
 
     disruptive = False
     kubernetes = True
@@ -272,7 +324,24 @@ class DeleteMonkeyBase(NemesisBaseClass):
         self, partitions_amount, ks_cf, with_clustering_key_data=False, exclude_partitions=None
     ):
         """
-        Choose random partitions for deletion from a table.
+        Choose random, non-empty partitions to delete from.
+
+        Partition keys are not discovered by scanning - they are the integer range derived
+        from data_validation (see the class docstring), narrowed to skip the validated
+        range. Keys are drawn from that range at random without replacement, and each
+        candidate is probed with `select ck ... order by ck desc limit 1` to confirm it
+        still holds rows; already-emptied or unreadable partitions are dropped silently.
+        Selection stops once `partitions_amount` partitions are collected or the range is
+        exhausted, so the result may be shorter than requested - and empty once the table
+        has been deleted dry, which callers translate into UnsupportedNemesis.
+
+        Args:
+            partitions_amount: how many partitions to collect (upper bound).
+            ks_cf: fully qualified table name.
+            with_clustering_key_data: also record the clustering key bounds of each
+                partition, needed by range deletions to build the `ck` predicates.
+            exclude_partitions: partition keys to skip, used to keep the two steps of
+                DeleteByRowsRangeMonkey from overlapping.
 
         Returns:
             defaultdict mapping partition key to [min_ck, max_ck] if with_clustering_key_data else empty list.
@@ -329,7 +398,16 @@ class DeleteMonkeyBase(NemesisBaseClass):
 
 
 class DeleteByPartitionsMonkey(DeleteMonkeyBase):
-    """Delete 10 full partitions from a table with large partitions."""
+    """
+    Delete 10 whole partitions of scylla_bench.test.
+
+    Exercises partition tombstones: one tombstone shadowing a very large number of rows,
+    which compaction and reads must then skip cheaply.
+
+    The only subclass that does not read `non_validated_partitions` - the batch size is a
+    fixed 10 - so it needs `max_partitions_in_test_table` but not
+    `partition_range_with_data_validation`.
+    """
 
     def disrupt(self):
         verify_scylla_bench_keyspace_exists(self.runner.cluster)
@@ -350,7 +428,16 @@ class DeleteByPartitionsMonkey(DeleteMonkeyBase):
 
 
 class DeleteOverlappingRowRangesMonkey(DeleteMonkeyBase):
-    """Delete several overlapping row ranges in a table with large partitions."""
+    """
+    Delete 3-20 randomly chosen, overlapping clustering-key ranges per partition.
+
+    Exercises range tombstones that overlap each other inside one partition - the case
+    where a read has to merge many partially redundant tombstones. Overlap is deliberate:
+    bounds are drawn independently per iteration, so ranges nest and intersect.
+
+    Batch size is `non_validated_partitions // partition_deletion_divisor`, so it needs
+    both data_validation sub-parameters.
+    """
 
     def disrupt(self):
         verify_scylla_bench_keyspace_exists(self.runner.cluster)
@@ -379,7 +466,27 @@ class DeleteOverlappingRowRangesMonkey(DeleteMonkeyBase):
 
 
 class DeleteByRowsRangeMonkey(DeleteMonkeyBase):
-    """Delete row ranges: first half-partition or timestamp-based, then range in remaining partitions."""
+    """
+    Two-step row-range deletion, the widest of the delete nemesis.
+
+    Step 1 picks one of two variants at random (50/50):
+      - delete_half_partition: drop the upper half of each partition by clustering key
+        (`ck > max_ck / 2`) over half of the non-validated partitions.
+      - delete_by_range_using_timestamp: delete whole partitions with `USING TIMESTAMP`,
+        the timestamp taken from a pivot row 25-75% into the partition, so only rows
+        written at or before that point disappear. Deletions are then read back to confirm
+        the row is gone from the base table and, when configured, from the
+        scylla_bench.view_test materialized view. A surviving row raises RuntimeError -
+        that is the actual bug this variant hunts.
+
+    Step 2 (delete_range_in_few_partitions) deletes the same clustering-key range - the
+    middle third common to all of them - across a fresh set of partitions, excluding the
+    ones step 1 already touched, so the two steps never overlap.
+
+    Needs both data_validation sub-parameters. The timestamp variant additionally needs
+    partitions that still contain rows, and raises PartitionNotFound / TimestampNotFound
+    if a partition it selected turns out to be empty by the time it probes it.
+    """
 
     def delete_half_partition(self, ks_cf):
         """Delete half of each selected partition by clustering key range."""
