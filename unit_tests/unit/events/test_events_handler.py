@@ -18,7 +18,6 @@ from sdcm.sct_events.event_handler import start_events_handler
 from sdcm.sct_events.events_processes import get_events_process, EVENTS_HANDLER_ID
 from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
-from sdcm.test_config import TestConfig
 
 
 def test_events_handler(main_events_context):
@@ -31,9 +30,6 @@ def test_events_handler(main_events_context):
         )
         time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
-        TestConfig().set_tester_obj("abc")
-        time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
-
         try:
             assert events_handler.is_alive()
             assert events_handler._registry == main_events_context.events_main_device._registry
@@ -43,5 +39,6 @@ def test_events_handler(main_events_context):
                 main_events_context.events_main_device.publish_event(event1)
             mock.assert_called_once()
             assert mock.call_args.kwargs["event"] == event1
+            assert mock.call_args.kwargs["tester_obj"] == "abc"
         finally:
             events_handler.stop(timeout=1)
