@@ -42,6 +42,11 @@ class AddRemoveDcNemesis(NemesisBaseClass):
     limited = True
     topology_changes = True
 
+    def precheck(self, node) -> str | None:
+        if self.runner.cluster.test_config.MULTI_REGION:
+            return "Skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)"
+        return None
+
     def disrupt(self):
         self.runner.disrupt_add_remove_dc()
 
