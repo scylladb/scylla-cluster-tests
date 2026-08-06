@@ -15,6 +15,7 @@ import pickle
 
 from itertools import chain
 
+import pytest
 from invoke.runners import Result
 
 from sdcm.sct_events import Severity
@@ -262,164 +263,81 @@ def test_scylla_bench_continuous_event_without_error():
     assert scylla_bench_event == pickle.loads(pickle.dumps(scylla_bench_event))
 
 
-def test_ycsb_stress_subevents():
-    assert issubclass(YcsbStressEvent.failure, YcsbStressEvent)
-    assert issubclass(YcsbStressEvent.error, YcsbStressEvent)
-    assert not hasattr(YcsbStressEvent, "timeout")
-    assert issubclass(YcsbStressEvent.start, YcsbStressEvent)
-    assert issubclass(YcsbStressEvent.finish, YcsbStressEvent)
+@pytest.mark.parametrize(
+    ("event_class", "has_error_subevent"),
+    [
+        pytest.param(YcsbStressEvent, True, id="ycsb"),
+        pytest.param(CDCReaderStressEvent, True, id="cdc_reader"),
+        pytest.param(NdBenchStressEvent, True, id="ndbench"),
+        pytest.param(KclStressEvent, False, id="kcl"),
+    ],
+)
+def test_stress_subevents(event_class, has_error_subevent):
+    assert issubclass(event_class.failure, event_class)
+    assert issubclass(event_class.start, event_class)
+    assert issubclass(event_class.finish, event_class)
+    assert not hasattr(event_class, "timeout")
+    if has_error_subevent:
+        assert issubclass(event_class.error, event_class)
+    else:
+        assert not hasattr(event_class, "error")
 
 
-def test_ycsb_stress_without_errors():
-    event = YcsbStressEvent.error(node=[], stress_cmd="c-s", log_file_name="1.log")
-    assert event.severity == Severity.ERROR
+@pytest.mark.parametrize(
+    ("event_class", "subevent", "severity", "event_id"),
+    [
+        pytest.param(YcsbStressEvent, "error", Severity.ERROR, "68067fe2-4c9e-421c-97b5-12db8d7ba71d", id="ycsb"),
+        pytest.param(
+            CDCReaderStressEvent, "start", Severity.NORMAL, "aed3946d-33a8-4f68-b56c-1d09f71f5da9", id="cdc_reader"
+        ),
+        pytest.param(NdBenchStressEvent, "error", Severity.ERROR, "a07b48fa-2706-465b-b139-698d35909cfa", id="ndbench"),
+        pytest.param(KclStressEvent, "failure", Severity.ERROR, "1acd4202-3a38-4b0d-9464-62f4825ee148", id="kcl"),
+    ],
+)
+def test_stress_event_without_errors(event_class, subevent, severity, event_id):
+    event = getattr(event_class, subevent)(node=[], stress_cmd="c-s", log_file_name="1.log")
+    assert event.severity == severity
     assert event.node == "[]"
     assert event.stress_cmd == "c-s"
     assert event.log_file_name == "1.log"
     assert not event.errors
-    event.event_id = "68067fe2-4c9e-421c-97b5-12db8d7ba71d"
+    event.event_id = event_id
     assert str(event) == (
-        "(YcsbStressEvent Severity.ERROR) period_type=not-set "
-        "event_id=68067fe2-4c9e-421c-97b5-12db8d7ba71d: type=error node=[]\nstress_cmd=c-s"
+        f"({event_class.__name__} {severity}) period_type=not-set "
+        f"event_id={event_id}: type={subevent} node=[]\nstress_cmd=c-s"
     )
     assert event == pickle.loads(pickle.dumps(event))
 
 
-def test_ycsb_stress_with_errors():
-    event = YcsbStressEvent.failure(node="node1", errors=["e1", "e2"])
-    assert event.severity == Severity.CRITICAL
+@pytest.mark.parametrize(
+    ("event_class", "severity", "event_id"),
+    [
+        pytest.param(YcsbStressEvent, Severity.CRITICAL, "225676a7-ddd1-4f4d-bae8-1cf5b35d0955", id="ycsb"),
+        pytest.param(CDCReaderStressEvent, Severity.CRITICAL, "3c5deb9e-7a67-49ee-9295-c7e986b015a9", id="cdc_reader"),
+        pytest.param(NdBenchStressEvent, Severity.CRITICAL, "e45b347e-c395-4583-9f19-6e1fcdf31fab", id="ndbench"),
+        pytest.param(KclStressEvent, Severity.ERROR, "d169ca02-c119-49f2-9eb7-23f152098cb7", id="kcl"),
+    ],
+)
+def test_stress_event_with_errors(event_class, severity, event_id):
+    event = event_class.failure(node="node1", errors=["e1", "e2"])
+    assert event.severity == severity
     assert event.node == "node1"
     assert event.stress_cmd is None
     assert event.log_file_name is None
     assert event.errors == ["e1", "e2"]
-    event.event_id = "225676a7-ddd1-4f4d-bae8-1cf5b35d0955"
+    event.event_id = event_id
     assert str(event) == (
-        "(YcsbStressEvent Severity.CRITICAL) period_type=not-set "
-        "event_id=225676a7-ddd1-4f4d-bae8-1cf5b35d0955:"
-        " type=failure node=node1\nerrors:\n\ne1\ne2"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_cdc_reader_stress_subevents():
-    assert issubclass(CDCReaderStressEvent.failure, CDCReaderStressEvent)
-    assert issubclass(CDCReaderStressEvent.error, CDCReaderStressEvent)
-    assert not hasattr(CDCReaderStressEvent, "timeout")
-    assert issubclass(CDCReaderStressEvent.start, CDCReaderStressEvent)
-    assert issubclass(CDCReaderStressEvent.finish, CDCReaderStressEvent)
-
-
-def test_cdc_reader_stress_without_errors():
-    event = CDCReaderStressEvent.start(node=[], stress_cmd="c-s", log_file_name="1.log")
-    assert event.severity == Severity.NORMAL
-    assert event.node == "[]"
-    assert event.stress_cmd == "c-s"
-    assert event.log_file_name == "1.log"
-    assert not event.errors
-    event.event_id = "aed3946d-33a8-4f68-b56c-1d09f71f5da9"
-    assert str(event) == (
-        "(CDCReaderStressEvent Severity.NORMAL) period_type=not-set "
-        "event_id=aed3946d-33a8-4f68-b56c-1d09f71f5da9: type=start node=[]\nstress_cmd=c-s"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_cdc_reader_stress_with_errors():
-    event = CDCReaderStressEvent.failure(node="node1", errors=["e1", "e2"])
-    assert event.severity == Severity.CRITICAL
-    assert event.node == "node1"
-    assert event.stress_cmd is None
-    assert event.log_file_name is None
-    assert event.errors == ["e1", "e2"]
-    event.event_id = "3c5deb9e-7a67-49ee-9295-c7e986b015a9"
-    assert str(event) == (
-        "(CDCReaderStressEvent Severity.CRITICAL) period_type=not-set "
-        "event_id=3c5deb9e-7a67-49ee-9295-c7e986b015a9: type=failure node=node1"
-        "\nerrors:\n\ne1\ne2"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_ndbench_stress_subevents():
-    assert issubclass(NdBenchStressEvent.failure, NdBenchStressEvent)
-    assert issubclass(NdBenchStressEvent.error, NdBenchStressEvent)
-    assert not hasattr(NdBenchStressEvent, "timeout")
-    assert issubclass(NdBenchStressEvent.start, NdBenchStressEvent)
-    assert issubclass(NdBenchStressEvent.finish, NdBenchStressEvent)
-
-
-def test_ndbench_stress_without_errors():
-    event = NdBenchStressEvent.error(node=[], stress_cmd="c-s", log_file_name="1.log")
-    assert event.severity == Severity.ERROR
-    assert event.node == "[]"
-    assert event.stress_cmd == "c-s"
-    assert event.log_file_name == "1.log"
-    assert not event.errors
-    event.event_id = "a07b48fa-2706-465b-b139-698d35909cfa"
-    assert str(event) == (
-        "(NdBenchStressEvent Severity.ERROR) period_type=not-set "
-        "event_id=a07b48fa-2706-465b-b139-698d35909cfa: type=error node=[]\nstress_cmd=c-s"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_ndbench_stress_with_errors():
-    event = NdBenchStressEvent.failure(node="node1", errors=["e1", "e2"])
-    assert event.severity == Severity.CRITICAL
-    assert event.node == "node1"
-    assert event.stress_cmd is None
-    assert event.log_file_name is None
-    assert event.errors == ["e1", "e2"]
-    event.event_id = "e45b347e-c395-4583-9f19-6e1fcdf31fab"
-    assert str(event) == (
-        "(NdBenchStressEvent Severity.CRITICAL) period_type=not-set "
-        "event_id=e45b347e-c395-4583-9f19-6e1fcdf31fab: type=failure "
-        "node=node1\nerrors:\n\ne1\ne2"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_kcl_stress_subevents():
-    assert issubclass(KclStressEvent.failure, KclStressEvent)
-    assert not hasattr(KclStressEvent, "error")
-    assert not hasattr(KclStressEvent, "timeout")
-    assert issubclass(KclStressEvent.start, KclStressEvent)
-    assert issubclass(KclStressEvent.finish, KclStressEvent)
-
-
-def test_kcl_stress_without_errors():
-    event = KclStressEvent.failure(node=[], stress_cmd="c-s", log_file_name="1.log")
-    assert event.severity == Severity.ERROR
-    assert event.node == "[]"
-    assert event.stress_cmd == "c-s"
-    assert event.log_file_name == "1.log"
-    assert not event.errors
-    event.event_id = "1acd4202-3a38-4b0d-9464-62f4825ee148"
-    assert str(event) == (
-        "(KclStressEvent Severity.ERROR) period_type=not-set "
-        "event_id=1acd4202-3a38-4b0d-9464-62f4825ee148: type=failure node=[]\nstress_cmd=c-s"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_kcl_stress_with_errors():
-    event = KclStressEvent.failure(node="node1", errors=["e1", "e2"])
-    assert event.severity == Severity.ERROR
-    assert event.node == "node1"
-    assert event.stress_cmd is None
-    assert event.log_file_name is None
-    assert event.errors == ["e1", "e2"]
-    event.event_id = "d169ca02-c119-49f2-9eb7-23f152098cb7"
-    assert str(event) == (
-        "(KclStressEvent Severity.ERROR) period_type=not-set event_id=d169ca02-c119-49f2-9eb7-23f152098cb7: "
-        "type=failure node=node1\nerrors:\n\ne1\ne2"
+        f"({event_class.__name__} {severity}) period_type=not-set "
+        f"event_id={event_id}: type=failure node=node1\nerrors:\n\ne1\ne2"
     )
     assert event == pickle.loads(pickle.dumps(event))
 
 
 def assert_cassandra_stress_log_event(line, expected_type, expected_severity):
-    for pattern, event in chain(CS_NORMAL_EVENTS_PATTERNS, CS_ERROR_EVENTS_PATTERNS):
+    for pattern, prototype in chain(CS_NORMAL_EVENTS_PATTERNS, CS_ERROR_EVENTS_PATTERNS):
         if pattern.search(line):
+            # the events in the pattern lists are module-level prototypes, mutating them leaks across tests
+            event = prototype.clone()
             event.add_info(node="self.node", line=line, line_number=1).dont_publish()
             assert event.type == expected_type, f'Unexpected event.type {event.type}. Expected "{expected_type}"'
             assert event.severity == expected_severity, (
@@ -506,8 +424,10 @@ def test_cs_normal_shared_awarnes_event():
 
 
 def assert_scylla_bench_log_event(line, expected_type, expected_severity):
-    for pattern, event in chain(SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS):
+    for pattern, prototype in chain(SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS):
         if pattern.search(line):
+            # the events in the pattern lists are module-level prototypes, mutating them leaks across tests
+            event = prototype.clone()
             event.add_info(node="self.node", line=line, line_number=1).dont_publish()
             assert event.type == expected_type, f'Unexpected event.type {event.type}. Expected "{expected_type}"'
             assert event.severity == expected_severity, (
