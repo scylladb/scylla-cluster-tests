@@ -167,7 +167,7 @@ class AzureNode(cluster.BaseNode):
             return 0
         return SPOT_TERMINATION_CHECK_DELAY
 
-    def restart(self):
+    def _restart_inner(self):
         # When using NVMe disks in Azure, there is no option to Stop and Start an instance.
         # So, for now we will keep restart the same as hard reboot.
         self._instance.reboot(wait=True, hard=False)

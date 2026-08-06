@@ -249,6 +249,63 @@ INFO  2022-07-14 09:28:35,102 [shard 1] database - Flushed non-system tables
         assert event["line_number"] == 2
         assert "Reactor stalled for 32 ms on shard 1" in event["line"]
 
+    def test_restart_suspends_kernel_panic_checker_around_restart_inner(self):
+        """BaseNode.restart() must suspend/resume the kernel panic checker around
+        `_restart_inner()`, mirroring `reboot()`'s existing suspend/resume window
+        (SCT-459). Backends whose `restart()` stops/starts or reboots the underlying
+        cloud instance (e.g. `OciNode._restart_inner()`) can otherwise trip a false
+        KernelPanicEvent while the instance is intentionally down (SCT-658).
+        """
+        call_order = []
+        checker = unittest.mock.MagicMock()
+        checker.suspended.return_value.__enter__.side_effect = lambda: call_order.append("suspend")
+        checker.suspended.return_value.__exit__.side_effect = lambda *_a: call_order.append("resume")
+        self.node.kernel_panic_checker = checker
+
+        with unittest.mock.patch.object(
+            self.node, "_restart_inner", side_effect=lambda: call_order.append("restart")
+        ) as mock_inner:
+            self.node.restart()
+
+        assert call_order == ["suspend", "restart", "resume"]
+        checker.suspended.assert_called_once()
+        mock_inner.assert_called_once()
+
+    def test_restart_without_kernel_panic_checker_calls_inner_directly(self):
+        self.node.kernel_panic_checker = None
+
+        with unittest.mock.patch.object(self.node, "_restart_inner") as mock_inner:
+            self.node.restart()
+
+        mock_inner.assert_called_once()
+
+    def test_restart_resumes_kernel_panic_checker_even_if_inner_raises(self):
+        call_order = []
+        checker = unittest.mock.MagicMock()
+        checker.suspended.return_value.__enter__.side_effect = lambda: call_order.append("suspend")
+        checker.suspended.return_value.__exit__.side_effect = lambda *_a: call_order.append("resume")
+        self.node.kernel_panic_checker = checker
+
+        def _boom():
+            call_order.append("restart")
+            raise RuntimeError("boom")
+
+        with unittest.mock.patch.object(self.node, "_restart_inner", side_effect=_boom):
+            with pytest.raises(RuntimeError):
+                self.node.restart()
+
+        assert call_order == ["suspend", "restart", "resume"]
+
+    def test_restart_inner_not_implemented_by_default(self):
+        """Derived classes that don't implement `_restart_inner()` must raise
+        NotImplementedError, same as before this refactor (previously `restart()`
+        itself raised NotImplementedError directly).
+        """
+        self.node.kernel_panic_checker = None
+
+        with pytest.raises(NotImplementedError):
+            self.node.restart()
+
 
 class VersionDummyRemote:
     def __init__(self, test, results):
