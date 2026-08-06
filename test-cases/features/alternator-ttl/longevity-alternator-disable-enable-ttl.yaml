@@ -28,7 +28,10 @@ round_robin: true
 dynamodb_primarykey_type: HASH_AND_RANGE
 
 n_loaders: 2
-instance_type_db: 'i4i.large'
+sizing_db:
+  vcpu: '>=2'
+  memory: '>=16'
+  local_disk_gb: '>=350'  # ~80% of i4i.large's 468GB
 n_db_nodes: 6
 
 nemesis_class_name: 'NoOpMonkey'

@@ -29,7 +29,10 @@ stress_cmd: [
 
 round_robin: true
 n_db_nodes: '3 3'
-instance_type_db: 'i8g.large'
+sizing_db:
+  vcpu: '>=2'
+  memory: '>=16'
+  local_disk_gb: '>=350'  # ~80% of i8g.large's 468GB; cluster is small (~50GB), doesn't need a bigger machine
 n_loaders: '2 2'
 
 rack_aware_loader: true
