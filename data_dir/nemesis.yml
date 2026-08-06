@@ -604,7 +604,7 @@ KillMVBuildingCoordinator:
   manager_operation: false
   modify_table: false
   networking: false
-  schema_changes: false
+  schema_changes: true
   sla: false
   supports_high_disk_utilization: false
   topology_changes: true
