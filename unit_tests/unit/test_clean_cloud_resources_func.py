@@ -18,6 +18,7 @@ import pytest
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils import resources_cleanup
 from sdcm.utils.resources_cleanup import (
+    clean_spot_fleet_requests_aws,
     clean_cloud_resources,
     clean_clusters_gke,
     clean_elastic_ips_aws,
@@ -339,6 +340,7 @@ class TestCleanCloudResources:
     integration = False  # set it to True if you want to run test with actual cloud operations.
     functions_to_patch = (
         "sdcm.utils.resources_cleanup.clean_emr_clusters",
+        "sdcm.utils.resources_cleanup.clean_spot_fleet_requests_aws",
         "sdcm.utils.resources_cleanup.clean_instances_aws",
         "sdcm.utils.resources_cleanup.clean_elastic_ips_aws",
         "sdcm.utils.resources_cleanup.clean_clusters_gke",
@@ -410,3 +412,106 @@ class TestCleanCloudResources:
         assert res  # the run completed and did not propagate the exception
         # clean_elastic_ips_aws runs right after the failing dedicated-hosts step
         resources_cleanup.clean_elastic_ips_aws.assert_called()
+
+
+def _fleet_config(request_id, state, tags):
+    return {
+        "SpotFleetRequestId": request_id,
+        "SpotFleetRequestState": state,
+        "Tags": [{"Key": k, "Value": v} for k, v in tags.items()],
+    }
+
+
+def _paginator_returning(configs):
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"SpotFleetRequestConfigs": configs}]
+    return paginator
+
+
+# SCT-779: Spot Fleet Requests are tagged with the standard SCT tags at creation, so clean-resources
+# discovers and cancels them by tag - like every other resource - even when the process that created
+# them was killed before it could cancel them itself.
+
+
+def test_clean_spot_fleet_requests_aws_cancels_matching_active_request():
+    tags = {"TestId": "1111", "RunByUser": "test"}
+    configs = [_fleet_config("sfr-match", "active", tags)]
+    with patch("boto3.client") as ec2_client_factory:
+        ec2_client = ec2_client_factory.return_value
+        ec2_client.get_paginator.return_value = _paginator_returning(configs)
+        with patch("time.sleep") as sleep_mock:
+            clean_spot_fleet_requests_aws(tags, regions=["eu-west-3"])
+
+    ec2_client_factory.assert_called_once_with("ec2", region_name="eu-west-3")
+    ec2_client.cancel_spot_fleet_requests.assert_called_once_with(
+        SpotFleetRequestIds=["sfr-match"], TerminateInstances=True
+    )
+    sleep_mock.assert_called_once()
+
+
+def test_clean_spot_fleet_requests_aws_skips_non_matching_tags():
+    tags = {"TestId": "1111"}
+    configs = [_fleet_config("sfr-other", "active", {"TestId": "2222"})]
+    with patch("boto3.client") as ec2_client_factory:
+        ec2_client = ec2_client_factory.return_value
+        ec2_client.get_paginator.return_value = _paginator_returning(configs)
+        clean_spot_fleet_requests_aws(tags, regions=["eu-west-3"])
+
+    ec2_client.cancel_spot_fleet_requests.assert_not_called()
+
+
+def test_clean_spot_fleet_requests_aws_skips_terminal_state_requests():
+    tags = {"TestId": "1111"}
+    configs = [_fleet_config("sfr-old", "cancelled", tags)]
+    with patch("boto3.client") as ec2_client_factory:
+        ec2_client = ec2_client_factory.return_value
+        ec2_client.get_paginator.return_value = _paginator_returning(configs)
+        clean_spot_fleet_requests_aws(tags, regions=["eu-west-3"])
+
+    ec2_client.cancel_spot_fleet_requests.assert_not_called()
+
+
+def test_clean_spot_fleet_requests_aws_dry_run_does_not_cancel():
+    tags = {"TestId": "1111"}
+    configs = [_fleet_config("sfr-match", "active", tags)]
+    with patch("boto3.client") as ec2_client_factory:
+        ec2_client = ec2_client_factory.return_value
+        ec2_client.get_paginator.return_value = _paginator_returning(configs)
+        with patch("time.sleep") as sleep_mock:
+            clean_spot_fleet_requests_aws(tags, regions=["eu-west-3"], dry_run=True)
+
+    ec2_client.cancel_spot_fleet_requests.assert_not_called()
+    sleep_mock.assert_not_called()
+
+
+def test_clean_spot_fleet_requests_aws_matches_list_valued_node_type():
+    # clean_resources_according_post_behavior() passes NodeType as a list of allowed values (like
+    # every other clean_*_aws tag filter), while a fleet request's own tag is a scalar string.
+    tags = {"TestId": "1111", "NodeType": ["scylla-db", "loader"]}
+    configs = [_fleet_config("sfr-match", "active", {"TestId": "1111", "NodeType": "scylla-db"})]
+    with patch("boto3.client") as ec2_client_factory:
+        ec2_client = ec2_client_factory.return_value
+        ec2_client.get_paginator.return_value = _paginator_returning(configs)
+        with patch("time.sleep"):
+            clean_spot_fleet_requests_aws(tags, regions=["eu-west-3"])
+
+    ec2_client.cancel_spot_fleet_requests.assert_called_once_with(
+        SpotFleetRequestIds=["sfr-match"], TerminateInstances=True
+    )
+
+
+def test_clean_spot_fleet_requests_aws_error_in_one_region_does_not_abort_others():
+    tags = {"TestId": "1111"}
+    match = [_fleet_config("sfr-ok", "active", tags)]
+    with patch("boto3.client") as ec2_client_factory:
+        broken = MagicMock()
+        broken.get_paginator.side_effect = resources_cleanup.ClientError(
+            {"Error": {"Code": "UnauthorizedOperation", "Message": "denied"}}, "DescribeSpotFleetRequests"
+        )
+        ok = MagicMock()
+        ok.get_paginator.return_value = _paginator_returning(match)
+        ec2_client_factory.side_effect = [broken, ok]
+        with patch("time.sleep"):
+            clean_spot_fleet_requests_aws(tags, regions=["me-south-1", "eu-west-1"])
+
+    ok.cancel_spot_fleet_requests.assert_called_once_with(SpotFleetRequestIds=["sfr-ok"], TerminateInstances=True)

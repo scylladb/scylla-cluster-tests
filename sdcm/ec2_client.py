@@ -28,6 +28,18 @@ MAX_SPOT_EXCEEDED_ERROR = "MaxSpotInstanceCountExceeded"
 REQUEST_TIMEOUT = 300
 
 
+def _spot_fleet_request_tag_specifications(instance_tag_specifications) -> list:
+    """Build ``spot-fleet-request`` tag specifications from the instance tag specifications.
+
+    The Spot Fleet Request resource is tagged with the same tags as the instances it launches, so
+    clean-resources can discover and cancel it by tag like any other resource. See SCT-779.
+    """
+    for tag_spec in instance_tag_specifications or []:
+        if tags := tag_spec.get("Tags"):
+            return [{"ResourceType": "spot-fleet-request", "Tags": tags}]
+    return []
+
+
 class GetSpotPriceHistoryError(Exception):
     pass
 
@@ -160,6 +172,11 @@ class EC2ClientWrapper:
             fleet_config["LaunchSpecifications"][0].update({"UserData": self._encode_user_data(user_data)})
         if block_device_mappings:
             fleet_config["LaunchSpecifications"][0]["BlockDeviceMappings"] = block_device_mappings
+        # Tag the Spot Fleet Request itself (not only the instances it launches) so a request that
+        # outlives the process which created it (e.g. a Jenkins stage timeout) stays discoverable and
+        # cancellable by clean-resources via its tags, like every other SCT resource. See SCT-779.
+        if fleet_request_tags := _spot_fleet_request_tag_specifications(tag_specifications):
+            fleet_config["TagSpecifications"] = fleet_request_tags
         LOGGER.info("Sending spot fleet request with params: %s", fleet_config)
         resp = self._client.request_spot_fleet(DryRun=False, SpotFleetRequestConfig=fleet_config)
 
