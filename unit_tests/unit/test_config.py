@@ -733,6 +733,18 @@ def test_36_update_config_based_on_version():
     conf.update_config_based_on_version()
 
 
+def test_36a_scale_tests_disable_region_fallback(monkeypatch):
+    # SCT-779: relocating a very large scale-test cluster across regions can exceed the fixed
+    # Jenkins "Provision Resources" stage timeout, leaving in-flight Spot Fleet Requests
+    # uncancelled. Scale tests must not attempt cross-region relocation.
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "test-cases/scale/scale-cluster.yaml")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("fallback_to_next_region") is False
+
+
 def test_37_validates_single_thread_count_for_all_throttle_steps(monkeypatch):
     monkeypatch.setenv("SCT_PERF_GRADUAL_THREADS", '{"read": 620, "write": [630], "mixed": [500]}')
     monkeypatch.setenv(
