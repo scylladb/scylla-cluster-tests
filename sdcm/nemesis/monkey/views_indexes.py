@@ -57,21 +57,24 @@ class CreateIndexNemesis(NemesisBaseClass):
     free_tier_set = True
     supports_high_disk_utilization = False  # Creating an Index consumes disk space
 
+    def precheck(self, node) -> str | None:
+        if self.runner.cluster.nemesis_count > 1 and SkipPerIssues(
+            issues="https://github.com/scylladb/scylladb/issues/21695", params=self.runner.tester.params
+        ):
+            return "Skip create index nemesis with parallel nemesis run"
+
+        # Disable MV tests with tablets.
+        if is_tablets_feature_enabled(node):
+            if ComparableScyllaVersion(node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
+                return "MV/SI for tablets are not supported for Scylla 2025.3 and older versions"
+
+        return None
+
     def disrupt(self):
         """
         Create index on a random column (regular or static) of a table with the most number of partitions and wait until it gets build.
         Then verify it can be used in a query. Finally, drop the index.
         """
-        if self.runner.cluster.nemesis_count > 1 and SkipPerIssues(
-            issues="https://github.com/scylladb/scylladb/issues/21695", params=self.runner.tester.params
-        ):
-            raise UnsupportedNemesis("Skip create index nemesis with parallel nemesis run")
-
-        # Disable MV tests with tablets.
-        if is_tablets_feature_enabled(self.runner.target_node):
-            if ComparableScyllaVersion(self.runner.target_node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
-                raise UnsupportedNemesis("MV/SI for tablets are not supported for Scylla 2025.3 and older versions")
-
         with (
             self.runner.cluster.cql_connection_patient(self.runner.target_node, connect_timeout=300) as session,
             collect_diagnostics(MVDiagnosticCollector(session, exception_handler=EventExceptionHandler())),
@@ -127,6 +130,14 @@ class AddRemoveMvNemesis(NemesisBaseClass):
     free_tier_set = True
     supports_high_disk_utilization = False  # Creating an MV consumes disk space
 
+    def precheck(self, node) -> str | None:
+        # Disable MV tests with tablets.
+        if is_tablets_feature_enabled(node):
+            if ComparableScyllaVersion(node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
+                return "MV for tablets are not supported for Scylla 2025.3 and older versions"
+
+        return None
+
     def disrupt(self):
         """
         Create a Materialized view on an existing table while a node is down.
@@ -134,12 +145,6 @@ class AddRemoveMvNemesis(NemesisBaseClass):
         Verify the MV can be used in a query.
         Finally, drop the MV.
         """
-
-        # Disable MV tests with tablets.
-        if is_tablets_feature_enabled(self.runner.target_node):
-            if ComparableScyllaVersion(self.runner.target_node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
-                raise UnsupportedNemesis("MV for tablets are not supported for Scylla 2025.3 and older versions")
-
         free_nodes = [node for node in self.runner.cluster.data_nodes if not node.running_nemesis]
         if not free_nodes:
             raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
@@ -207,6 +212,19 @@ class KillMVBuildingCoordinator(NemesisBaseClass):
     topology_changes = True
     supports_high_disk_utilization = False  # Creating an MV consumes disk space
 
+    def precheck(self, node) -> str | None:
+        if not node.raft.is_consistent_topology_changes_enabled:
+            return "Consistent topology changes feature is disabled"
+
+        if not is_tablets_feature_enabled(node):
+            return "MV building coordinator works only with tablets"
+
+        with self.runner.cluster.cql_connection_patient(node=node, connect_timeout=600) as session:
+            if not is_views_with_tablets_enabled(session):
+                return "MV building coordinator works only with tablets"
+
+        return None
+
     @decorate_with_context(suppress_expected_unavailability_errors)
     def disrupt(self):
         """
@@ -218,25 +236,14 @@ class KillMVBuildingCoordinator(NemesisBaseClass):
         Nemesis kill mv building coordinator several times while materialized view is being built,
         and validate that after the node is restarted, the view is successfully built.
         """
-        if not self.runner.target_node.raft.is_consistent_topology_changes_enabled:
-            raise UnsupportedNemesis("Consistent topology changes feature is disabled")
-
-        if not is_tablets_feature_enabled(self.runner.target_node):
-            raise UnsupportedNemesis("MV building coordinator works only with tablets")
-
-        with self.runner.cluster.cql_connection_patient(node=self.runner.target_node, connect_timeout=600) as session:
-            if not is_views_with_tablets_enabled(session):
-                raise UnsupportedNemesis("MV building coordinator works only with tablets")
-            ks_cfs = self.runner.cluster.get_non_system_ks_cf_with_tablets_list(
-                db_node=self.runner.target_node,
-                filter_empty_tables=True,
-                filter_out_mv=True,
-                filter_out_table_with_counter=True,
-            )
-            if not ks_cfs:
-                raise UnsupportedNemesis(
-                    "Non-system keyspaces with enabled tablets are not found. nemesis can't be run"
-                )
+        ks_cfs = self.runner.cluster.get_non_system_ks_cf_with_tablets_list(
+            db_node=self.runner.target_node,
+            filter_empty_tables=True,
+            filter_out_mv=True,
+            filter_out_table_with_counter=True,
+        )
+        if not ks_cfs:
+            raise UnsupportedNemesis("Non-system keyspaces with enabled tablets are not found. nemesis can't be run")
 
         coordinator_node = get_topology_coordinator_node(self.runner.target_node)
         try:
