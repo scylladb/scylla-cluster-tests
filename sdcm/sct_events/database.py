@@ -205,7 +205,7 @@ DatabaseLogEvent.add_subevent_type(
 )
 
 DatabaseLogEvent.add_subevent_type("DATABASE_ERROR", severity=Severity.ERROR, regex=r"(^ERROR|!\s*?ERR).*\[shard.*\]")
-DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR, regex="^(?!.*audit:).*backtrace")
+DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR, regex=r"^(?!.*audit:)(?!.*perf\[).*backtrace")
 
 DatabaseLogEvent.add_subevent_type("TABLET_SPLIT", severity=Severity.DEBUG, regex=r"Detected tablet split for table")
 DatabaseLogEvent.add_subevent_type("TABLET_MERGE", severity=Severity.DEBUG, regex=r"Detected tablet merge for table")
