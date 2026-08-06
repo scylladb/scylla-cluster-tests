@@ -187,6 +187,32 @@ pipeline {
                 }
             }
         }
+        stage("collect tests") {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    withEnv(["AWS_ACCESS_KEY_ID=", "AWS_SECRET_ACCESS_KEY="]) {
+                        script {
+                            sh './docker/env/hydra.sh python -m pytest --collect-only -q -p no:cacheprovider *_test.py'
+                        }
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
+                        pullRequestSetResult('success', 'jenkins/collect_tests', 'All SCT test modules are collectable')
+                    }
+                }
+                failure {
+                    script {
+                        pullRequestSetResult('failure', 'jenkins/collect_tests', 'Some SCT test modules fail pytest collection')
+                    }
+                }
+            }
+        }
         stage("lint test-cases") {
             options {
                 timeout(time: 10, unit: 'MINUTES')
