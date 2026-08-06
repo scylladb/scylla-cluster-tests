@@ -14,8 +14,6 @@
 # Copyright (c) 2016 ScyllaDB
 import time
 
-from pkg_resources import parse_version
-
 from longevity_test import LongevityTest
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.es import ES
@@ -345,7 +343,7 @@ class SlaPerUserTest(LongevityTest):
         # https://github.com/scylladb/scylla-cluster-tests/pull/4943#issuecomment-1168507500
         # http://13.48.103.68/test/71402aa7-051b-4803-a6b4-384529680fb7/runs?additionalRuns[]=1adf34d1-15cf-4973-80ce-9de130be0b09
         expected_shares_ratio = 3.5
-        release = parse_version(self.db_cluster.nodes[0].scylla_version.replace("~", "-")).release[0]
+        release = ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version).v_major
         if release >= 2023:
             # Running the test with 2023.1  - ratio is improved
             expected_shares_ratio = 4.2
