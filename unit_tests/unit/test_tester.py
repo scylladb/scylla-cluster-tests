@@ -807,3 +807,61 @@ def test_get_cluster_docker_nonzero_monitor_nodes_builds_monitor_set_docker(tmp_
 
     cluster_docker_mock.MonitorSetDocker.assert_called_once()
     assert tester.monitors is cluster_docker_mock.MonitorSetDocker.return_value
+
+
+# --- Tests for ClusterTester.reliable_replication_factor RF-by-racks bounding ---
+
+
+def _rf_tester(n_db_nodes, racks_count, append_scylla_yaml=None, tablets_enabled=True):
+    tester = MagicMock(spec=ClusterTester)
+    tester.params = {"n_db_nodes": n_db_nodes, "append_scylla_yaml": append_scylla_yaml}
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [MagicMock()]
+    tester.db_cluster.racks_count = racks_count
+    tester._is_rf_rack_valid_keyspaces_enabled = types.MethodType(
+        ClusterTester._is_rf_rack_valid_keyspaces_enabled, tester
+    )
+    with patch("sdcm.tester.is_tablets_feature_enabled", return_value=tablets_enabled):
+        return ClusterTester.reliable_replication_factor.fget(tester)
+
+
+@pytest.mark.parametrize(
+    "tablets_enabled, rf_rack_valid, n_db_nodes, racks_count, expected_rf",
+    [
+        pytest.param(True, True, [6], 1, 1, id="tablets-rfrack-one-rack-bites"),
+        pytest.param(True, True, [6], 3, 3, id="tablets-rfrack-multi-rack-unaffected"),
+        pytest.param(True, True, [6], 4, 3, id="tablets-rfrack-cap-at-3-still-wins"),
+        pytest.param(True, False, [6], 1, 3, id="tablets-rfrack-disabled-no-change"),
+        pytest.param(False, True, [6], 1, 3, id="no-tablets-rfrack-enabled-no-change"),
+        pytest.param(False, True, [2, 3], 1, 2, id="no-tablets-path-untouched"),
+        pytest.param(True, True, [1], 0, 1, id="never-degenerates-to-zero"),
+    ],
+)
+def test_reliable_replication_factor(tablets_enabled, rf_rack_valid, n_db_nodes, racks_count, expected_rf):
+    append_scylla_yaml = {"rf_rack_valid_keyspaces": rf_rack_valid} if rf_rack_valid is not None else {}
+    rf = _rf_tester(
+        n_db_nodes=n_db_nodes,
+        racks_count=racks_count,
+        append_scylla_yaml=append_scylla_yaml,
+        tablets_enabled=tablets_enabled,
+    )
+    assert rf == expected_rf
+
+
+@pytest.mark.parametrize(
+    "append_scylla_yaml, expected",
+    [
+        pytest.param(None, False, id="none"),
+        pytest.param({}, False, id="empty-dict"),
+        pytest.param({"enable_tablets": True}, False, id="unrelated-key"),
+        pytest.param({"rf_rack_valid_keyspaces": False}, False, id="explicitly-disabled"),
+        pytest.param({"rf_rack_valid_keyspaces": True}, True, id="explicitly-enabled"),
+    ],
+)
+def test_is_rf_rack_valid_keyspaces_enabled(append_scylla_yaml, expected):
+    tester = MagicMock(spec=ClusterTester)
+    tester.params = {"append_scylla_yaml": append_scylla_yaml}
+    tester._is_rf_rack_valid_keyspaces_enabled = types.MethodType(
+        ClusterTester._is_rf_rack_valid_keyspaces_enabled, tester
+    )
+    assert tester._is_rf_rack_valid_keyspaces_enabled() is expected

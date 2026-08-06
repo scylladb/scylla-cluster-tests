@@ -2298,7 +2298,8 @@ class NemesisRunner:
         table = "test_table"
         ks_cf = f"{ks_name}.{table}"
         stress_cmd = (
-            "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=10 "
+            f"scylla-bench -workload=sequential -mode=write "
+            f"-replication-factor={self.tester.reliable_replication_factor} -partition-count=10 "
             + "-clustering-row-count=5555 -clustering-row-size=uniform:10..20 -concurrency=10 "
             + "-connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=60s "
             + f"-keyspace {ks_name} -table {table}"
