@@ -84,10 +84,10 @@ def test_fleet_request_offers_every_configured_instance_type(
 
     assert instances == ["i-1", "i-2"]
     assert fleet_mocks["create_fleet"].call_args.kwargs["instance_types"] == expected_types
-    # instances were handed over to the cluster, so the fleet record must not terminate them
-    fleet_mocks["delete_fleet"].assert_called_once_with(
-        region_name="us-east-1", fleet_id="fleet-1", terminate_instances=False
-    )
+    # An `instant` fleet cannot be deleted while keeping its instances, so on success the (inert)
+    # fleet record is left for AWS to reap and no delete is attempted -- only the throwaway
+    # launch template is cleaned up.
+    fleet_mocks["delete_fleet"].assert_not_called()
     fleet_mocks["delete_template"].assert_called_once_with(region_name="us-east-1", template_id="lt-1234")
 
 
@@ -165,6 +165,41 @@ def test_small_batches_still_use_plain_spot_requests(provision_parameters):
     fleet_request.assert_not_called()
     # single-type APIs only get the preferred instance type
     assert spot_request.call_args.kwargs["instance_parameters"].InstanceType == "i7i.large"
+
+
+def test_multi_batch_partial_fulfillment_rolls_back_earlier_batches(provision_parameters):
+    """A later fleet batch returning [] must not leave earlier batches provisioned.
+
+    Otherwise ProvisionPlan would treat the earlier non-empty batch as full success and skip
+    AZ/region/on-demand fallback, silently under-provisioning the cluster.
+    """
+    provisioner = AWSInstanceProvisioner()
+    first_batch = [MagicMock(instance_id="i-1"), MagicMock(instance_id="i-2")]
+    with (
+        # count=12 (> SPOT_CNT_LIMIT) routes to the fleet path; a 2-instance limit forces
+        # the request to be split into batches, the second of which comes back empty.
+        patch("sdcm.provision.aws.provisioner.EC2_FLEET_LIMIT", 2),
+        patch.object(
+            provisioner,
+            "_execute_ec2_fleet_instance_request",
+            side_effect=[first_batch, []],
+        ),
+        patch("sdcm.provision.aws.provisioner.ec2_clients") as ec2_clients,
+    ):
+        client = MagicMock()
+        ec2_clients.__getitem__.return_value = client
+
+        instances = provisioner._provision_spot_instances(
+            provision_parameters=provision_parameters,
+            instance_parameters=[make_instance_parameters("i7i.large"), make_instance_parameters("i4i.large")],
+            count=12,
+            tags=[{"NodeIndex": str(idx)} for idx in range(12)],
+        )
+
+    # the whole request is rejected so fallback can run ...
+    assert instances == []
+    # ... and the two instances from the successful first batch are terminated, not leaked
+    client.terminate_instances.assert_called_once_with(InstanceIds=["i-1", "i-2"])
 
 
 def test_on_demand_uses_preferred_instance_type_only(provision_parameters):

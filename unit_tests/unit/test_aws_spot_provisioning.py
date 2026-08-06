@@ -188,6 +188,11 @@ class TestGetProvisionedSpotInstanceIds:
         pytest.param("i7i.large,,i4i.large", ["i7i.large", "i4i.large"], id="empty_entries_ignored"),
         pytest.param("", [], id="empty_value"),
         pytest.param(None, [], id="none_value"),
+        # aws_instance_type_db_alternatives is a StringOrList, so an actual list is the common input
+        pytest.param(["i7i.large", "i4i.large"], ["i7i.large", "i4i.large"], id="list_input"),
+        pytest.param(["i7i.large", "i7i.large"], ["i7i.large"], id="list_duplicates_removed"),
+        pytest.param([" i7i.large ", "i4i.large"], ["i7i.large", "i4i.large"], id="list_whitespace_stripped"),
+        pytest.param([], [], id="empty_list"),
     ],
 )
 def test_split_instance_types(value, expected):

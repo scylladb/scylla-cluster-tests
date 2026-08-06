@@ -30,17 +30,19 @@ this mini-plan — track its removal/migration separately if `tester.py` still d
   and a `LaunchTemplateConfigs[0].Overrides` list built from one-or-more instance types (each
   override differs only by `InstanceType`, everything else — AMI, subnet, security groups, user
   data — shared via a single launch template / launch spec base).
-- Add `get_provisioned_ec2_fleet_instance_ids()` mirroring the existing
-  `get_provisioned_fleet_instance_ids()` polling logic, but reading `describe_fleets` /
-  `describe_fleet_instances` and their `Instances[].InstanceIds` /
-  `Errors[].ErrorCode` fields (EC2 Fleet has a different response shape than Spot Fleet —
-  no `describe_spot_fleet_request_history`; use `Errors` field on `describe_fleets` response
-  instead to detect `capacity-not-available` type failures).
-- In `sdcm/provision/aws/provisioner.py::AWSInstanceProvisioner`, replace
-  `_execute_spot_fleet_instance_request()` internals to call the new EC2 Fleet helper instead of
-  `create_spot_fleet_instance_request()`/`cancel_spot_fleet_requests`, using `delete_fleets` for
-  cleanup instead. Keep the public method name and `_is_provision_type_fleet()` gating (count >
-  `SPOT_CNT_LIMIT`) unchanged so callers are unaffected.
+- **No polling helper is needed.** Because the request uses `Type="instant"`, `create_fleet`
+  is synchronous: the response already carries `Instances[].InstanceIds` and an `Errors` list
+  (non-empty on partial fulfillment). The Spot Fleet describe/poll loop
+  (`get_provisioned_fleet_instance_ids()` + `describe_spot_fleet_request_history`) is therefore
+  dropped rather than mirrored; error classification reads the `Errors` list directly
+  (`is_ec2_fleet_unfulfillable()` / `log_ec2_fleet_errors()`).
+- In `sdcm/provision/aws/provisioner.py::AWSInstanceProvisioner`, rename
+  `_execute_spot_fleet_instance_request()` -> `_execute_ec2_fleet_instance_request()` and call the
+  new EC2 Fleet helper instead of `create_spot_fleet_instance_request()`/`cancel_spot_fleet_requests`,
+  using `delete_fleets` for cleanup. `_is_provision_type_fleet()` gating (count > `SPOT_CNT_LIMIT`)
+  is unchanged. Note: an `instant` fleet cannot be deleted while retaining its instances, so on
+  success the (inert) fleet record is left for AWS to reap; deletion with termination is used only
+  on the rollback/error paths.
 - Extend `instance_parameters` handling so `AWSInstanceProvisioner.provision()` /
   `_provision_spot_instances()` accept `instance_parameters: AWSInstanceParams |
   List[AWSInstanceParams]` (the abstract base in
@@ -48,9 +50,9 @@ this mini-plan — track its removal/migration separately if `tester.py` still d
   `InstanceParamsBase | List[InstanceParamsBase]`, so no interface change needed there) — when a
   list is given, build one `Overrides` entry per `InstanceType` in the EC2 Fleet request instead
   of a single-type launch spec.
-- Add a dedicated AWS config param `instance_type_db_alternatives` (comma-separated list of
-  interchangeable DB instance types) consumed **only** by the EC2 Fleet provisioning path.
-  `instance_type_db` / `instance_type_loader` stay single-literal and unchanged everywhere else.
+- Add a dedicated AWS config param `aws_instance_type_db_alternatives` (a `StringOrList`, i.e. an
+  actual list of interchangeable DB instance types) consumed **only** by the EC2 Fleet provisioning
+  path. `instance_type_db` / `instance_type_loader` stay single-literal and unchanged everywhere else.
   **Decision:** rejected overloading `instance_type_db` with CSV — maintainer feedback (@fruch) and
   the open heterogeneous-cluster proposal (PR #13427) reserve a future CSV/`cluster_topology`
   meaning of "deploy different types per rack" for `instance_type_db`, which would collide with a
@@ -58,37 +60,38 @@ this mini-plan — track its removal/migration separately if `tester.py` still d
   auditing every plain-string consumer of `instance_type_db` (AMI/arch lookup, sizing validation,
   AZ selection).
 - Wire the parsed alternatives list down through `sdcm/sct_provision/aws/cluster.py`
-  (`_instance_types = [instance_type_db] + split_instance_types(instance_type_db_alternatives)`,
+  (`_instance_types = [instance_type_db] + split_instance_types(aws_instance_type_db_alternatives)`,
   deduped) into the list-based `provision()` call. Only DBCluster defines an alternatives param;
   all other clusters (loader, monitor, oracle, zero-token) provision a single instance type.
-- Keep `SPOT_FLEET_LIMIT` / `SPOT_CNT_LIMIT` constants as-is; EC2 Fleet has its own equivalent
-  limits but the existing batching logic in `_provision_spot_instances()` is provider-agnostic
-  and doesn't need to change.
+- Replace the `SPOT_FLEET_LIMIT` constant with `EC2_FLEET_LIMIT` (500) for the per-request fleet
+  batch cap; `SPOT_CNT_LIMIT` (10) still gates fleet vs. plain-spot. The batching logic in
+  `_provision_spot_instances()` additionally rolls back all instances from earlier batches when a
+  later batch under-fulfills, so a multi-batch partial result is never silently returned as success.
 
 ## Files to Modify
 
-- `sdcm/provision/aws/utils.py` -- add `create_ec2_fleet_instance_request()` and
-  `get_provisioned_ec2_fleet_instance_ids()`, replacing the `SpotFleet`-specific helpers
-  (`create_spot_fleet_instance_request()` at L302-317, `get_provisioned_fleet_instance_ids()` at
-  L174-247) or keeping both temporarily behind a feature check during rollout
-- `sdcm/provision/aws/provisioner.py` -- update `_execute_spot_fleet_instance_request()`
-  (L192-243) and `_get_provisioned_fleet_instance_ids()`/`_wait_for_fleet_request_done()`
-  (L245-297) to call the EC2 Fleet APIs and support a list of `AWSInstanceParams`; update
-  `cancel_spot_fleet_requests` cleanup calls to `delete_fleets`
-- `sdcm/provision/aws/constants.py` -- add any new EC2 Fleet-specific state/error constants
-  (e.g. fleet `Errors[].ErrorCode` values equivalent to `FLEET_LIMIT_EXCEEDED_ERROR`,
-  `SPOT_CAPACITY_NOT_AVAILABLE_ERROR`)
-- `sdcm/sct_config.py` -- add the dedicated `instance_type_db_alternatives` field (fleet-only,
-  AWS-only) and validate every listed type is available in the target region in
+- `sdcm/provision/aws/utils.py` -- add `create_ec2_fleet_instance_request()`,
+  `create_launch_template()`/`delete_launch_template()`, `delete_ec2_fleet()`,
+  `is_ec2_fleet_unfulfillable()`, `log_ec2_fleet_errors()` and `split_instance_types()`, replacing
+  the `SpotFleet`-specific helpers (`create_spot_fleet_instance_request()`,
+  `get_provisioned_fleet_instance_ids()`). No `describe_fleets` polling helper is added —
+  `instant` fleets return synchronously.
+- `sdcm/provision/aws/provisioner.py` -- rename `_execute_spot_fleet_instance_request()` ->
+  `_execute_ec2_fleet_instance_request()` (supporting a list of `AWSInstanceParams`), drop the
+  `_get_provisioned_fleet_instance_ids()`/`_wait_for_fleet_request_done()` poll helpers, and use
+  `delete_ec2_fleet()`/direct termination for cleanup instead of `cancel_spot_fleet_requests`
+- `sdcm/provision/aws/constants.py` -- add EC2 Fleet constants (`EC2_FLEET_LIMIT`,
+  `EC2_FLEET_TYPE_INSTANT`, `EC2_FLEET_ALLOCATION_STRATEGY`, `EC2_FLEET_UNFULFILLABLE_ERROR_CODES`)
+- `sdcm/sct_config.py` -- add the dedicated `aws_instance_type_db_alternatives` field (fleet-only,
+  AWS-only, `StringOrList`) and validate every listed type is available in the target region in
   `_instance_type_validation()`; `instance_type_db`/`instance_type_loader` stay single-literal
 - `sdcm/sct_provision/aws/cluster.py` -- `_instance_types` builds `[instance_type_db] +
   alternatives` (deduped) via `_INSTANCE_TYPE_ALTERNATIVES_PARAM_NAME`; only the fleet path uses
   entries beyond the first
 - `test-cases/scale/scale-cluster.yaml` -- example config: `instance_type_db: 'i7i.large'` +
-  `instance_type_db_alternatives: 'i7ie.large,i4i.large,i3en.large'` for the 180-200 node scale test
-- `unit_tests/unit/test_aws_spot_provisioning.py` -- add tests for
-  `get_provisioned_ec2_fleet_instance_ids()` mirroring existing fleet test scenarios (fulfilled,
-  limit exceeded, capacity not available, pending)
+  `aws_instance_type_db_alternatives: ['i7ie.large', 'i4i.large', 'i3en.large']` for the scale test
+- `unit_tests/unit/test_aws_spot_provisioning.py` -- add tests for the `create_fleet` request
+  shape, error classification, and `split_instance_types()` (replacing the Spot Fleet polling tests)
 - `unit_tests/integration/test_aws_services.py` -- extend the `instance_provision` parametrize
   list / add a case exercising multiple instance types end-to-end against moto
 

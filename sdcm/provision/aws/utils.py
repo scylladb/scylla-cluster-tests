@@ -25,6 +25,7 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
+    Union,
 )
 
 import boto3
@@ -103,17 +104,18 @@ ec2_clients = Ec2ClientsDict()
 ec2_resources = Ec2ServiceResourcesDict()
 
 
-def split_instance_types(instance_type: str) -> List[str]:
+def split_instance_types(instance_type: Union[str, List[str], None]) -> List[str]:
     """Parse an `instance_type_*` config value into an ordered list of interchangeable types.
 
-    The value is normally a single instance type, but may be a comma-separated list such as
-    `"i7i.large,i7ie.large,i4i.large"`. The first entry is the preferred type; the rest exist so
-    EC2 Fleet can fall back to another instance pool when spot capacity for the preferred type
-    runs out. Order is preserved and duplicates removed.
+    Accepts either an actual list (e.g. `aws_instance_type_db_alternatives`, a ``StringOrList``
+    param) or a single/comma-separated string. The first entry is the preferred type; the rest
+    exist so EC2 Fleet can fall back to another instance pool when spot capacity for the preferred
+    type runs out. Order is preserved and duplicates removed.
     """
     if not instance_type:
         return []
-    types = [entry.strip() for entry in str(instance_type).split(",") if entry.strip()]
+    raw = instance_type if isinstance(instance_type, (list, tuple)) else [instance_type]
+    types = [part.strip() for item in raw for part in str(item).split(",") if part.strip()]
     return list(dict.fromkeys(types))
 
 

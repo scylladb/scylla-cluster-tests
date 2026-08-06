@@ -1088,10 +1088,10 @@ class SCTConfiguration(BaseModel):
     instance_type_db: String = SctField(
         description="AWS image type of the db node",
     )
-    instance_type_db_alternatives: String = SctField(
+    aws_instance_type_db_alternatives: StringOrList = SctField(
         description=(
-            "Comma-separated list of additional, interchangeable AWS DB instance types "
-            "(e.g. 'i7ie.large,i4i.large,i3en.large') offered ONLY to EC2 Fleet (spot) provisioning "
+            "List of additional, interchangeable AWS DB instance types "
+            "(e.g. ['i7ie.large', 'i4i.large', 'i3en.large']) offered ONLY to EC2 Fleet (spot) provisioning "
             "as alternatives to instance_type_db, so a large spot request can be satisfied from more "
             "than one capacity pool. instance_type_db remains the single primary type used by every "
             "other code path (validation, AMI/arch lookup, AZ selection, non-fleet provisioning). "
@@ -4262,12 +4262,12 @@ class SCTConfiguration(BaseModel):
         backend = self.get("cluster_backend")
 
         # Validate main instance types (db, loader, monitor) are available in the target region.
-        # instance_type_db_alternatives is a comma-separated list of EC2 Fleet-only alternatives,
+        # aws_instance_type_db_alternatives is a list of EC2 Fleet-only alternatives,
         # so every listed type must also be available in the target region.
         if backend == "aws":
             instance_type_params = [
                 "instance_type_db",
-                "instance_type_db_alternatives",
+                "aws_instance_type_db_alternatives",
                 "instance_type_loader",
                 "instance_type_monitor",
                 "instance_type_db_target",

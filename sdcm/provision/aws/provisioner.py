@@ -204,9 +204,40 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
                     count=instances_to_provision,
                     tags=tags,
                 )
+            if len(new_instances) < instances_to_provision:
+                # A batch under-fulfilled (the fleet path already rolled its own batch back and
+                # returned []; the plain-spot path may return a partial set). Returning the earlier
+                # successful batches would silently under-provision the cluster, since ProvisionPlan
+                # treats any non-empty result as success and skips AZ/region/on-demand fallback.
+                # Roll everything provisioned in this request back and return [] so the fallback
+                # provision steps get a chance to satisfy the exact requested count.
+                leftover = provisioned_instances + new_instances
+                if leftover:
+                    LOGGER.error(
+                        "Spot batch in %s provisioned %d of %d requested instances; "
+                        "rolling back %d instance(s) already provisioned in this request.",
+                        provision_parameters.region_name,
+                        len(new_instances),
+                        instances_to_provision,
+                        len(leftover),
+                    )
+                    self._terminate_instances(provision_parameters.region_name, leftover)
+                return []
             provisioned_instances.extend(new_instances)
             rest_to_provision -= instances_to_provision
         return provisioned_instances
+
+    @staticmethod
+    def _terminate_instances(region_name: str, instances: List[Instance]) -> None:
+        """Best-effort termination of instances from a rolled-back multi-batch spot request."""
+        instance_ids = [instance.instance_id for instance in instances if getattr(instance, "instance_id", None)]
+        if not instance_ids:
+            return
+        try:
+            ec2_clients[region_name].terminate_instances(InstanceIds=instance_ids)
+            LOGGER.info("Rolled back spot instances %s in region %s", instance_ids, region_name)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Failed to roll back spot instances %s in region %s: %s", instance_ids, region_name, exc)
 
     def _execute_ec2_fleet_instance_request(
         self,
@@ -284,9 +315,12 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
                     instance_ids=[instance_id],
                     tags={"Name": f"spot_fleet_{instance_id}_{ind}"} | instance_tags,
                 )
-            # `instant` fleets do not maintain capacity, but the fleet record lingers until deleted.
-            # TerminateInstances=False keeps the instances we just handed to the cluster.
-            delete_ec2_fleet(region_name=region_name, fleet_id=fleet_id, terminate_instances=False)
+            # `instant` fleets are one-shot: they never maintain or replace capacity, and AWS does
+            # not allow deleting the fleet record while keeping its instances
+            # (`DeleteFleets(TerminateInstances=False)` is rejected for `instant` fleets). The
+            # launched instances are fully independent of the now-inert fleet record, so we hand
+            # them off and leave the record for AWS to reap. Clearing `fleet_id` keeps the error
+            # handler below from terminating the instances we just provisioned.
             fleet_id = None
             return [
                 find_instance_by_id(region_name=region_name, instance_id=instance_id) for instance_id in instance_ids

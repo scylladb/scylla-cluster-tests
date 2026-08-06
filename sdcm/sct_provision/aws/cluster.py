@@ -207,7 +207,7 @@ class ClusterBase(BaseModel):
         """Instance types offered to EC2 Fleet, primary first.
 
         The primary ``instance_type_*`` is always first. Clusters that define a
-        fleet-only alternatives param (currently only DB, via ``instance_type_db_alternatives``)
+        fleet-only alternatives param (currently only DB, via ``aws_instance_type_db_alternatives``)
         append their interchangeable alternatives here, de-duplicated. Only the EC2 Fleet
         provisioning path consumes entries beyond the first; every other code path uses
         ``_instance_type``.
@@ -296,7 +296,7 @@ class DBCluster(ClusterBase):
     _NODE_TYPE = "scylla-db"
     _NODE_PREFIX = "db"
     _INSTANCE_TYPE_PARAM_NAME = "instance_type_db"
-    _INSTANCE_TYPE_ALTERNATIVES_PARAM_NAME = "instance_type_db_alternatives"
+    _INSTANCE_TYPE_ALTERNATIVES_PARAM_NAME = "aws_instance_type_db_alternatives"
     _NODE_NUM_PARAM_NAME = "n_db_nodes"
     _ZEROTOKEN_NODE_NUM_PARAM_NAME = "n_db_zero_token_nodes"
     _ZEROTOKEN_NODE_INSTANCE_TYPE_PARAM_NAME = "zero_token_instance_type_db"
