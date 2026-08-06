@@ -19,6 +19,12 @@ n_loaders: 2
 instance_type_db: 'i7i.large'
 instance_type_loader: 'c6i.xlarge'
 instance_provision_fallback_on_demand: false
+# Scale tests provision very large clusters (100+ nodes) and want the region fixed and
+# controlled rather than silently relocated. AZ-level fallback within the configured region
+# is unaffected. Region relocation on this scale is also what exceeded the fixed Jenkins
+# "Provision Resources" stage timeout in the SCT-779 incident, but that leak class is now
+# handled independently of this setting by tagging Spot Fleet Requests for cleanup.
+fallback_to_next_region: false
 
 # GCP
 gce_instance_type_db: 'n2-highmem-2'
