@@ -198,6 +198,7 @@ class AddRemoveMvNemesis(NemesisBaseClass):
 @target_all_nodes
 class KillMVBuildingCoordinator(NemesisBaseClass):
     disruptive = True
+    schema_changes = True
     topology_changes = True
     supports_high_disk_utilization = False  # Creating an MV consumes disk space
 
