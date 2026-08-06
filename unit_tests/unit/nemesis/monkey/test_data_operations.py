@@ -15,7 +15,7 @@ from sdcm.nemesis.monkey.data_operations import (
     DeleteOverlappingRowRangesMonkey,
     TruncateLargeParititionMonkey,
     TruncateMonkey,
-    verify_initial_inputs_for_delete_nemesis,
+    verify_scylla_bench_keyspace_exists,
 )
 from sdcm.nemesis.utils.common import prepare_test_table
 
@@ -118,8 +118,8 @@ def add_drop_column_monkey(runner):
 
 
 @pytest.fixture()
-def mock_verify_inputs():
-    with patch(f"{MODULE}.verify_initial_inputs_for_delete_nemesis") as mock:
+def mock_verify_keyspace():
+    with patch(f"{MODULE}.verify_scylla_bench_keyspace_exists") as mock:
         yield mock
 
 
@@ -136,7 +136,7 @@ def mock_get_tables():
 
 
 @pytest.fixture(autouse=True)
-def patch_all_helpers(mock_verify_inputs, mock_run_deletions, mock_get_tables):
+def patch_all_helpers(mock_verify_keyspace, mock_run_deletions, mock_get_tables):
     """Ensure module-level helpers are patched for every test."""
     yield
 
@@ -444,24 +444,64 @@ def test_partition_deletion_divisor(delete_partitions_monkey, stress_cmd, expect
 
 
 # ---------------------------------------------------------------------------
-# Tests: verify_initial_inputs_for_delete_nemesis
+# Tests: verify_scylla_bench_keyspace_exists
 # ---------------------------------------------------------------------------
 
 
-def test_verify_inputs_raises_when_no_scylla_bench():
+def test_verify_keyspace_raises_when_no_scylla_bench():
     cluster = MagicMock()
     cluster.get_test_keyspaces.return_value = ["keyspace1"]
-    tester = MagicMock()
 
     with pytest.raises(UnsupportedNemesis, match="scylla_bench"):
-        verify_initial_inputs_for_delete_nemesis(cluster, tester)
+        verify_scylla_bench_keyspace_exists(cluster)
 
 
-def test_verify_inputs_raises_when_no_partition_attrs():
+def test_verify_keyspace_passes_when_scylla_bench_present():
     cluster = MagicMock()
     cluster.get_test_keyspaces.return_value = ["scylla_bench"]
-    tester = MagicMock()
-    tester.partitions_attrs = None
 
-    with pytest.raises(UnsupportedNemesis, match="max_partitions_in_test_table"):
-        verify_initial_inputs_for_delete_nemesis(cluster, tester)
+    assert verify_scylla_bench_keyspace_exists(cluster) is None
+
+
+# ---------------------------------------------------------------------------
+# Tests: precheck()
+# ---------------------------------------------------------------------------
+
+
+def test_delete_monkey_precheck_skips_without_partition_attrs(runner):
+    runner.tester.partitions_attrs = None
+    monkey = DeleteByPartitionsMonkey(runner)
+
+    assert "max_partitions_in_test_table" in monkey.precheck(node=runner.target_node)
+
+
+def test_delete_monkey_precheck_skips_when_max_partitions_unset(runner):
+    runner.tester.partitions_attrs.max_partitions_in_test_table = 0
+    monkey = DeleteByPartitionsMonkey(runner)
+
+    assert "max_partitions_in_test_table" in monkey.precheck(node=runner.target_node)
+
+
+def test_delete_monkey_precheck_passes_with_partition_attrs(delete_partitions_monkey):
+    assert delete_partitions_monkey.precheck(node=delete_partitions_monkey.runner.target_node) is None
+
+
+@pytest.mark.parametrize(
+    "skip_per_issues,use_zero_nodes,expected_skip",
+    [
+        (True, True, True),
+        (True, False, False),
+        (False, True, False),
+    ],
+)
+def test_truncate_large_partition_precheck_issue_20356(
+    truncate_large_monkey, skip_per_issues, use_zero_nodes, expected_skip
+):
+    truncate_large_monkey.runner.tester.params.get.return_value = use_zero_nodes
+    with patch(f"{MODULE}.SkipPerIssues", return_value=skip_per_issues):
+        result = truncate_large_monkey.precheck(node=truncate_large_monkey.runner.target_node)
+
+    if expected_skip:
+        assert "20356" in result
+    else:
+        assert result is None
