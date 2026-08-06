@@ -85,7 +85,7 @@ def provision_instances_with_fallback(
     # Instances are created in parallel by the provisioner, but each node still needs an SSH
     # connection and a (potentially multi-minute) cloud-init wait. Doing that serially made
     # provisioning time grow linearly with cluster size, so wait for all nodes concurrently.
-    instance_pairs = list(zip(definitions, provisioned_instances))
+    instance_pairs = list(zip(definitions, provisioned_instances, strict=True))
     if instance_pairs:
         # ignore_exceptions=False so any cloud-init failure still propagates (provisioning must fail
         # if a node did not come up correctly), while ParallelObject surfaces it after all workers run.
