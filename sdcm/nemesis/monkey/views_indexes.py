@@ -12,7 +12,6 @@ Includes:
 """
 
 import logging
-import random
 from uuid import uuid4
 
 from cassandra import InvalidRequest
@@ -154,45 +153,51 @@ class AddRemoveMvNemesis(NemesisBaseClass):
             )
             if not ks_cfs:
                 raise UnsupportedNemesis("Non-system keyspace and table are not found. nemesis can't be run")
-            ks_name, base_table_name = random.choice(ks_cfs).split(".")
+            ks_name, base_table_name = self.runner.random.choice(ks_cfs).split(".")
             view_name = f"{base_table_name}_view"
             with suppress_expected_unavailability_errors():
                 self.runner.target_node.stop_scylla()
-            with (
-                self.runner.cluster.cql_connection_patient(
-                    node=cql_query_executor_node, connect_timeout=600
-                ) as session,
-                collect_diagnostics(MVDiagnosticCollector(session, exception_handler=EventExceptionHandler())),
-            ):
-                try:
-                    create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
-                except Exception as error:
-                    self.runner.log.warning("Failed creating a materialized view: %s", error)
-                    self.runner.target_node.start_scylla()
-                    raise
-                try:
-                    self.runner.log.info("Starting Scylla on node %s", self.runner.target_node.name)
-                    self.runner.actions_log.info(f"Start Scylla on {self.runner.target_node.name} node")
-                    self.runner.target_node.start_scylla()
-                    with self.runner.action_log_scope(f"Run repair on {self.runner.target_node.name} node"):
-                        self.runner.target_node.run_nodetool(sub_cmd="repair -pr")
-                    with (
-                        adaptive_timeout(
-                            operation=Operations.CREATE_MV, node=self.runner.target_node, timeout=14400
-                        ) as timeout,
-                        self.runner.action_log_scope(
-                            f"Wait for {ks_name}.{view_name} materialized view to be built on "
-                            f"{self.runner.target_node.name} node"
-                        ),
-                    ):
-                        wait_for_view_to_be_built(self.runner.target_node, ks_name, view_name, timeout=timeout * 2)
-                    session.execute(SimpleStatement(f"SELECT * FROM {ks_name}.{view_name} limit 1", fetch_size=10))
-                    sleep_for_percent_of_duration(
-                        self.runner.tester.test_duration * 60, percent=1, min_duration=300, max_duration=2400
-                    )
-                finally:
-                    with self.runner.action_log_scope("Drop materialized view"):
-                        drop_materialized_view(session, ks_name, view_name)
+            try:
+                with (
+                    self.runner.cluster.cql_connection_patient(
+                        node=cql_query_executor_node, connect_timeout=600
+                    ) as session,
+                    collect_diagnostics(MVDiagnosticCollector(session, exception_handler=EventExceptionHandler())),
+                ):
+                    try:
+                        create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
+                    except Exception as error:
+                        self.runner.log.warning("Failed creating a materialized view: %s", error)
+                        raise
+                    try:
+                        self.runner.log.info("Starting Scylla on node %s", self.runner.target_node.name)
+                        self.runner.actions_log.info(f"Start Scylla on {self.runner.target_node.name} node")
+                        self.runner.target_node.start_scylla()
+                        with self.runner.action_log_scope(f"Run repair on {self.runner.target_node.name} node"):
+                            self.runner.target_node.run_nodetool(sub_cmd="repair -pr")
+                        with (
+                            adaptive_timeout(
+                                operation=Operations.CREATE_MV, node=self.runner.target_node, timeout=14400
+                            ) as timeout,
+                            self.runner.action_log_scope(
+                                f"Wait for {ks_name}.{view_name} materialized view to be built on "
+                                f"{self.runner.target_node.name} node"
+                            ),
+                        ):
+                            wait_for_view_to_be_built(self.runner.target_node, ks_name, view_name, timeout=timeout * 2)
+                        session.execute(SimpleStatement(f"SELECT * FROM {ks_name}.{view_name} limit 1", fetch_size=10))
+                        sleep_for_percent_of_duration(
+                            self.runner.tester.test_duration * 60, percent=1, min_duration=300, max_duration=2400
+                        )
+                    finally:
+                        with self.runner.action_log_scope("Drop materialized view"):
+                            drop_materialized_view(session, ks_name, view_name)
+            except Exception:
+                # Covers both a failed cql_connection_patient (node never restarted otherwise) and
+                # any failure surfaced from inside the session block (start_scylla is a no-op if
+                # the node is already up).
+                self.runner.target_node.start_scylla()
+                raise
 
 
 @target_all_nodes
