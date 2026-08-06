@@ -159,7 +159,7 @@
       "status": "in_progress",
       "created": "2026-06-11",
       "phases_total": 5,
-      "phases_done": 3
+      "phases_done": 4
     },
     {
       "id": "k8s-multitenancy-dict-config",

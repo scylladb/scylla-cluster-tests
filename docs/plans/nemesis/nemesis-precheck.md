@@ -2,7 +2,7 @@
 status: in_progress
 domain: nemesis
 created: 2026-06-11
-last_updated: 2026-06-25
+last_updated: 2026-08-06
 owner: pehala
 ---
 
@@ -88,9 +88,9 @@ There is no mechanism today to evaluate a static skip **once** and exclude the n
 - An overridable, return-based feasibility hook on `NemesisBaseClass`. → **Phase 1**
 - A one-time evaluation/pruning step in `precheck_nemesis()` before the run loop. → **Phase 1**
 - Graceful handling (a single CRITICAL event that fails the test) when every selected nemesis is pruned. → **Phase 2**
-- A taxonomy-driven migration of the 85 static skips out of the per-cycle `disrupt()` path. → **Phases 3–4**
-  - 57 Category 1 (config / backend / edition) guards → **Phase 3**
-  - 28 Category 2 (version / feature flag / cluster-uniform node attribute) guards → **Phase 4**
+- A taxonomy-driven migration of the 85 static skips (Category 1 + Category 2) out of the per-cycle `disrupt()` path, split by where the guard currently lives. → **Phases 3–4**
+  - Guards inside the extracted nemesis classes in `sdcm/nemesis/monkey/*.py` → **Phase 3**
+  - Guards inside `NemesisRunner.disrupt_*` in `sdcm/nemesis/__init__.py`, owned by the thin wrappers in `sdcm/nemesis/monkey/__init__.py` → **Phase 4**
 - Documentation of the `precheck(node)` contract, the category rule, and the pruning/reporting behavior for future nemesis authors. → **Phase 5**
 
 ## Goals
@@ -104,7 +104,7 @@ There is no mechanism today to evaluate a static skip **once** and exclude the n
 
 ## Implementation Phases
 
-Phases are ordered by dependency: the framework hook and reporting/empty-list handling land first (foundational, must leave the tree working), then the bulk migration is split into reviewable, domain-grouped PRs of ≤200 LOC each. Migration PRs depend only on Phase 1/2 and are independent of one another.
+Phases are ordered by dependency: the framework hook and reporting/empty-list handling land first (foundational, must leave the tree working), then the migration follows the nemesis-extraction boundary — first the classes that already own their disruption logic (Phase 3), then the ones whose logic still sits in `NemesisRunner` (Phase 4). Migration phases depend only on Phase 1/2 and are independent of one another. The Category 1/2/3 taxonomy above decides *which* guards move; it no longer defines the phase split, because a single extracted module usually holds guards of both static categories.
 
 ### Phase 1: Add the `precheck(node)` hook and one-time pruning — Done
 
@@ -169,43 +169,50 @@ Phases are ordered by dependency: the framework hook and reporting/empty-list ha
 
 ---
 
-### Phase 3: Migrate Category 1 (config / backend / edition) skips
+### Phase 3: Migrate the extracted nemesis modules — Done
 
 **Importance**: Important
-**Description**: Move the 57 config/backend/edition guards from runner `disrupt_*` methods into the owning class `precheck(node)`, switching `self.target_node` references to the provided representative `node`. Remove the migrated static guards from the runner methods in the same PR. Split into ≤200 LOC PRs grouped by nemesis family (e.g. SLA group, LDAP/auth group, network-interface group, K8s-only group, manager group).
+**Description**: Move every static guard (Category 1 and Category 2) out of the `disrupt()` bodies of the nemesis classes that already own their disruption logic — the modules under `sdcm/nemesis/monkey/` other than the thin-wrapper `__init__.py`. These classes carry their own code, so the guard and its `precheck(node)` live in the same file and the migration is self-contained. Single PR.
 
 **Dependencies**: Phase 1, Phase 2
 
 **Deliverables**:
-- `precheck(node)` overrides on the relevant classes in `sdcm/nemesis/monkey/` (and extracted modules), e.g. LDAP nemesis (`sdcm/nemesis/__init__.py:1117-1123`), SLA nemesis (`sdcm/nemesis/__init__.py:5084-5232`), KMS-encryption backend gate (`sdcm/nemesis/__init__.py:4474`), network-interface nemesis (`3557/3648/4016`).
-- Removal of the corresponding `raise UnsupportedNemesis(...)` static guards from the runner methods.
-- Per-family unit tests asserting the nemesis is pruned under the negative config and kept under the positive config.
+- `sla.py` — `SlaMonkeyBase.precheck()` covering the `sla` param, Scylla Enterprise edition (via the representative `node`), `authenticator`, and `prepare_write_cmd`; the last one gated by the new `requires_prefilled_cs_data` class attribute (`False` on `RemoveServiceLevelMonkey`). `validate_sla_preconditions()` removed together with its 7 call sites.
+- `network.py` — module helper `extra_network_interface_precheck(runner)` used by `RandomInterruptionNetworkMonkey`, `BlockNetworkMonkey` (both returning no reason on Kubernetes, where the Chaos Mesh path needs no secondary interface) and `StopStartInterfacesNetworkMonkey`; `RejectInterNodeNetworkMonkey.precheck()` reporting the `SkipPerIssues(scylladb#6522)` gate.
+- `add_remove_dc.py` — `AddRemoveDcNemesis.precheck()` for `test_config.MULTI_REGION`.
+- `abort_decommission.py` — `AbortDecommissionMonkey`'s tablets guard (landed early with the foundation PR).
+- `modify_table.py` — intentionally unchanged: every guard there ("no non-system ks.cf", "no TWCS table", "no user table") is Category 3.
+- Unit tests per module asserting prune under the negative config and keep under the positive one.
 
-**Adaptation Notes**: Some SLA methods mix a Category 1 gate (`sla`/`enterprise`/`authenticator`) with a Category 3 data-presence gate (`get_cassandra_stress_write_cmds()`). Only the Category 1 portion moves to `precheck(node)`; the data-presence check stays in `disrupt()`.
+**Adaptation Notes**: The SLA `get_cassandra_stress_write_cmds()` gate reads *only* the `prepare_write_cmd` config param (`sdcm/nemesis/monkey/sla.py`) — despite its "table is created and prefilled" message it probes no cluster state, so it is Category 1 and moves to `precheck(node)` together with the `sla`/`enterprise`/`authenticator` gates. The raise inside `get_stress_params()` is kept as an in-method safety net (`skip_optional_stage("prepare_write")` can still skip the prepare load even when the param is set). `install_traffic_control()` stays in `disrupt()`: it installs a package on the target node, a mutating action rather than a static probe.
 
 **Definition of Done**:
-- [ ] All 57 Category 1 guards are evaluated via `precheck(node)` and removed from the per-cycle path.
-- [ ] No remaining `target_node`-dependent reference inside any migrated `precheck(node)`.
-- [ ] Unit tests per family (negative prunes, positive keeps).
-- [ ] `uv run sct.py pre-commit` passes for each PR.
+- [x] Every Category 1/2 guard in the extracted modules is evaluated via `precheck(node)` and removed from the per-cycle path.
+- [x] No remaining `target_node`-dependent reference inside any migrated `precheck(node)`.
+- [x] Category 3 guards stay in `disrupt()` (`tester.roles`, remaining service-level slots, `prepare_phase_active`, all `modify_table.py` checks).
+- [x] Unit tests per module — `unit_tests/unit/nemesis/monkey/test_{sla,network,add_remove_dc,abort_decommission}.py`.
+- [x] `uv run sct.py pre-commit` passes.
 
 ---
 
-### Phase 4: Migrate Category 2 (version / feature flag / cluster-uniform node attribute) skips
+### Phase 4: Migrate the guards owned by the thin-wrapper nemesis
 
 **Importance**: Important
-**Description**: Move the remaining 27 version/feature/uniform-attribute guards into `precheck(node)`, using the provided representative node for cluster-wide probes. Convert the implicit `@scylla_versions` `MethodVersionNotFound` cases into explicit `precheck(node)` version checks where the method group is owned by a single nemesis. Split into ≤200 LOC PRs (e.g. tablets group, raft-coordinator group, version-compare group, `SkipPerIssues` group). Excludes `AbortDecommissionMonkey`'s tablets guard, already migrated ahead of schedule in the foundation PR (see PR History).
+**Description**: Move the remaining ~76 static guards out of the `NemesisRunner.disrupt_*` methods in `sdcm/nemesis/__init__.py` into `precheck(node)` on the owning wrapper class in `sdcm/nemesis/monkey/__init__.py`, switching `self.target_node` references to the provided representative `node`. Unlike Phase 3 the guard and its new home are in different files, so each move must confirm the `disrupt_*` method has no other caller. Convert the implicit `@scylla_versions` `MethodVersionNotFound` cases into explicit version checks where the method group is owned by a single nemesis. Split into ≤200 LOC PRs grouped by nemesis family (K8s-only, manager, LDAP/auth, KMS-encryption, tablets, raft-coordinator, version-compare, `SkipPerIssues`).
 
 **Dependencies**: Phase 1, Phase 2
 
 **Deliverables**:
-- `precheck(node)` overrides for tablets-gated nemesis (`915-920`, `1090-1094`, `4242`, `5277`, `5334`, `5837`, `5921`), raft-coordinator nemesis (`5652`, `5723`, `5834`), version-compare nemesis (`1798`, `5409`, `5413`), the node OS/distro check in `disrupt_memory_stress` (`4768-4774`, evaluated via `node.distro`), and `SkipPerIssues`-gated nemesis.
-- Removal of the corresponding static guards from runner methods; for `@scylla_versions`-decorated single-owner groups, add an explicit version `precheck(node)` and document that the decorator remains the in-method safety net.
+- Category 1 families: K8s-only nemesis (`1464`, `1508`, `1561`, `1609`, `4023`), AWS/KMS gates (`3055`, `4111`), enterprise-only (`888`, `1142`, `1157`, `4669`), manager-not-configured (`3053`, `3136`, `3186`, `3191`), config flags (`hinted_handoff` `3287`, zero-tokens `4904`).
+- Category 2 families: tablets-gated nemesis (`5103`, `5187`, `4544`, `4601`), raft-coordinator nemesis (`4918`, `4989`, `5100`), version-compare nemesis, the node OS/distro check in `disrupt_memory_stress` (evaluated via `node.distro`), and the permanently-disabled `SkipPerIssues` gates (`941`, `1679`, `1876`, `2296`, `2807`, `2847`, `4410`).
+- Removal of the corresponding static guards from the runner methods; for `@scylla_versions`-decorated single-owner groups, add an explicit version `precheck(node)` and document that the decorator remains the in-method safety net.
+- Per-family unit tests asserting prune under the negative config and keep under the positive one.
 
-**Adaptation Notes (Needs Investigation)**: `disrupt_create_index`, `disrupt_add_remove_mv`, `disrupt_kill_mv_building_coordinator`, and `disrupt_trigger_split_merge_tablets_with_alter` mix Category 2 feature gates with Category 3 table-existence / node-busy gates. Confirm per nemesis that only the feature/version portion is hoisted to `precheck(node)` and the dynamic portion remains in `disrupt()`. Verify that `is_views_with_tablets_enabled(session)` (`sdcm/nemesis/__init__.py:5841`) can be evaluated against a representative node session before the execution loop.
+**Adaptation Notes (Needs Investigation)**: `disrupt_create_index`, `disrupt_add_remove_mv`, `disrupt_kill_mv_building_coordinator`, and `disrupt_trigger_split_merge_tablets_with_alter` mix feature gates with Category 3 table-existence / node-busy gates. Confirm per nemesis that only the feature/version portion is hoisted to `precheck(node)` and the dynamic portion remains in `disrupt()`. Verify that `is_views_with_tablets_enabled(session)` can be evaluated against a representative node session before the execution loop.
 
 **Definition of Done**:
-- [ ] Remaining 27 Category 2 guards evaluated via `precheck(node)`; static guards removed from the per-cycle path.
+- [ ] All remaining static guards evaluated via `precheck(node)`; static guards removed from the per-cycle path.
+- [ ] Every migrated `disrupt_*` method confirmed to have no other caller relying on the removed guard.
 - [ ] Feature probes use a representative node, not a target node.
 - [ ] Unit tests assert pruning under disabled feature/version and retention under enabled.
 - [ ] `uv run sct.py pre-commit` passes for each PR.
@@ -294,8 +301,9 @@ All Definition of Done items across phases are met. Additionally:
 
 ## Commit Plan
 
-The foundation (Phases 1–2 + 5 of this plan — the `precheck(node)` hook, one-time
-pruning/reporting, and documentation) ships as **one PR of 3 commits**. Each
+Each phase ships as its own PR. The foundation (Phases 1–2 + 5 — the
+`precheck(node)` hook, one-time pruning/reporting, and documentation) shipped as
+**one PR of 3 commits**; Phase 3 as **one PR of 4 commits** (see below). Each
 commit is self-standing: all tests in `unit_tests/unit/nemesis/` pass after every
 individual commit.
 
@@ -362,27 +370,38 @@ SKIPPED/FAILED reporting, empty-rotation CRITICAL, before/after example). Update
 the `writing-nemesis` skill and the AGENTS.md nemesis section. Advance plan
 status to `in_progress`.
 
-### Future work — migrating the remaining 84 static skips (Phases 3–4)
+One Category 2 guard was migrated ahead of schedule as part of the foundation
+branch: `AbortDecommissionMonkey`'s `is_tablets_feature_enabled()` check
+(`sdcm/nemesis/monkey/abort_decommission.py`) moved from
+`decommission_target_node()` into `precheck(node)`. It counts towards Phase 3.
 
-Migrating the 57 config/backend and remaining 27 version/feature guards out of the
-`disrupt_*` methods into `precheck(node)` overrides (Implementation Phases 3 and 4
-above) is **not** part of this foundation PR. Each migration adds a `precheck(node)`
-override to a nemesis class and removes the matching `raise UnsupportedNemesis`
-guard, grouped by nemesis family into ≤200 LOC PRs, using the `precheck_nemesis()`
-machinery landed here.
+### Phase 3 PR — migrating the extracted nemesis modules
 
-One Category 2 guard already migrated ahead of schedule as part of this branch:
-`AbortDecommissionMonkey`'s `is_tablets_feature_enabled()` check
-(`sdcm/nemesis/monkey/abort_decommission.py`) moved from `decommission_target_node()`
-into `precheck(node)` — see PR History below. It is excluded from the Phase 4 count
-and deliverables to avoid double-migrating it.
+Phase 3 ships as its own PR, covering **only** the classes under
+`sdcm/nemesis/monkey/` that already own their disruption logic. Four commits, one
+per module plus the plan update; the full `unit_tests/unit/nemesis/` suite passes
+after each:
+
+1. `feature(nemesis): migrate SLA nemesis static guards to precheck()`
+2. `feature(nemesis): migrate network nemesis static guards to precheck()`
+3. `feature(nemesis): migrate add_remove_dc multi-dc guard to precheck()`
+4. `docs(nemesis): correct precheck plan SLA categorization and PR history`
+
+### Future work — Phase 4
+
+The ~76 guards still living in `NemesisRunner.disrupt_*` (owned by the thin
+wrappers in `sdcm/nemesis/monkey/__init__.py`) are **not** part of the Phase 3 PR.
+Each migration adds a `precheck(node)` override to the wrapper class and removes
+the matching `raise UnsupportedNemesis` guard from the runner method, grouped by
+nemesis family into ≤200 LOC PRs, using the `precheck_nemesis()` machinery landed
+in Phases 1–2.
 
 ## PR History
 
 | Phase | PR | Status |
 |-------|-----|--------|
-| Phase 1 — `precheck(node)` hook + pruning | current PR | Done |
-| Phase 2 — Empty-list + Argus reporting | current PR | Done |
-| Phase 3 — Migrate Category 1 skips | — | Not started |
-| Phase 4 — Migrate Category 2 skips | — | Not started (1/28 done ahead of schedule: `AbortDecommissionMonkey` tablets guard, current PR) |
-| Phase 5 — Documentation | current PR | Done |
+| Phase 1 — `precheck(node)` hook + pruning | foundation PR | Done |
+| Phase 2 — Empty-list + Argus reporting | foundation PR | Done |
+| Phase 3 — Migrate the extracted nemesis modules | extracted-modules PR | Done (`sla.py`, `network.py`, `add_remove_dc.py`, `abort_decommission.py`; `modify_table.py` has no static guard) |
+| Phase 4 — Migrate the thin-wrapper guards | — | Not started |
+| Phase 5 — Documentation | foundation PR | Done |
