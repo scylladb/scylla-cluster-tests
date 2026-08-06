@@ -258,25 +258,27 @@ class DeleteMonkeyBase(NemesisBaseClass):
            nemesis has for which keys exist.
            Enforced statically by precheck(); the nemesis is dropped from the rotation
            for the whole run if missing.
-        2. `data_validation.partition_range_with_data_validation` is set whenever
-           `non_validated_partitions` is read (every subclass except
-           DeleteByPartitionsMonkey). PartitionsValidationAttributes only computes that
-           attribute when the range is configured.
-        3. The scylla_bench keyspace exists, i.e. the test's scylla-bench load has
+        2. The scylla_bench keyspace exists, i.e. the test's scylla-bench load has
            already created it. Checked per-disruption by
            verify_scylla_bench_keyspace_exists(), because the keyspace appears once the
            stress has started.
-        4. Partitions actually still hold rows. Repeated deletions plus a finite
+        3. Partitions actually still hold rows. Repeated deletions plus a finite
            partition count mean the table can run dry mid-test, so each disrupt() raises
            UnsupportedNemesis when selection comes back empty and the runner skips that
            cycle only.
 
+        `data_validation.partition_range_with_data_validation` is optional but
+        recommended. Without it PartitionsValidationAttributes reports no protected range
+        and `non_validated_partitions == max_partitions_in_test_table`, so the nemesis
+        may delete from anywhere in the table - correct for a test that does not validate
+        partition rows, and something to be aware of for one that does.
+
     Why the data_validation coupling
-        The test validates row counts of the partitions inside
+        A test that validates row counts compares the partitions inside
         `partition_range_with_data_validation` before and after the nemesis phase. Those
         partitions must stay untouched, so choose_partitions_for_delete() deletes only
         from `partition_end_range + 1 .. max_partitions_in_test_table` and sizes batches
-        against `non_validated_partitions`. Deleting outside that window would fail the
+        against `non_validated_partitions`. Deleting inside that window would fail the
         test's own validation rather than find a Scylla bug.
     """
 
@@ -396,8 +398,7 @@ class DeleteByPartitionsMonkey(DeleteMonkeyBase):
     Exercises partition tombstones: one tombstone shadowing a very large number of rows,
     which compaction and reads must then skip cheaply.
 
-    The batch size is a fixed 10, so `max_partitions_in_test_table` is the only
-    data_validation setting it requires.
+    The batch size is a fixed 10.
     """
 
     def disrupt(self):
@@ -426,8 +427,7 @@ class DeleteOverlappingRowRangesMonkey(DeleteMonkeyBase):
     where a read has to merge many partially redundant tombstones. Overlap is deliberate:
     bounds are drawn independently per iteration, so ranges nest and intersect.
 
-    Batch size is `non_validated_partitions // partition_deletion_divisor`, so it needs
-    both data_validation sub-parameters.
+    Batch size is `non_validated_partitions // partition_deletion_divisor`.
     """
 
     def disrupt(self):
@@ -474,9 +474,9 @@ class DeleteByRowsRangeMonkey(DeleteMonkeyBase):
     middle third common to all of them - across a fresh set of partitions, excluding the
     ones step 1 already touched, so the two steps touch disjoint partitions.
 
-    Needs both data_validation sub-parameters. The timestamp variant additionally needs
-    partitions that still contain rows, and raises PartitionNotFound / TimestampNotFound
-    if a partition it selected turns out to be empty by the time it probes it.
+    The timestamp variant additionally needs partitions that still contain rows, and
+    raises PartitionNotFound / TimestampNotFound if a partition it selected turns out to
+    be empty by the time it probes it.
     """
 
     def delete_half_partition(self, ks_cf):
