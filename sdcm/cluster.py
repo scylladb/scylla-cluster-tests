@@ -1472,8 +1472,25 @@ class BaseNode(AutoSshContainerMixin):
             self._dc_info_str(),
         )
 
+    def _restart_inner(self):
+        raise NotImplementedError("Derived classes must implement _restart_inner")
+
     def restart(self):
-        raise NotImplementedError("Derived classes must implement restart")
+        """Restart the node via the backend-specific mechanism.
+
+        Some backends implement restart as a stop/start or reboot of the underlying
+        cloud instance (see e.g. `OciNode._restart_inner()`), which can trip the same
+        false-positive kernel-panic detection as `reboot()` — e.g. OCI reports the
+        instance as STOPPED/STOPPING while it is intentionally down (SCT-459, SCT-658).
+        Suspend the kernel panic checker for the duration of the restart, mirroring
+        `reboot()`'s behavior below, so every code path that stops/starts or reboots
+        the underlying instance goes through the same suppression window.
+        """
+        if self.kernel_panic_checker:
+            with self.kernel_panic_checker.suspended():
+                self._restart_inner()
+        else:
+            self._restart_inner()
 
     def hard_reboot(self):
         # Need to re-implement this method if the backend supports hard reboot.

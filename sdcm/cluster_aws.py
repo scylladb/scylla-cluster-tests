@@ -988,7 +988,7 @@ class AWSNode(cluster.BaseNode):
             res = self.remoter.run(f"grep '{ipv6_cidr}' /etc/sysconfig/network-scripts/init.ipv6-global")
             LOGGER.debug("init.ipv6-global was {}updated".format("" if res.stdout.strip else "NOT "))
 
-    def restart(self):
+    def _restart_inner(self):
         # We differentiate between "Restart" and "Reboot".
         # Restart in AWS will be a Stop and Start of an instance.
         # When using storage optimized instances like i2 or i3, the data on disk is deleted upon STOP.  Therefore, we
