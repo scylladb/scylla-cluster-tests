@@ -47,7 +47,7 @@ from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.provision.provisioner import ProvisionError
 from sdcm.sct_provision.aws.cluster import PlacementGroup
 
-from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
+from sdcm.remote import shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
@@ -69,7 +69,6 @@ INSTANCE_PROVISION_SPOT_FLEET = "spot_fleet"
 SPOT_CNT_LIMIT = 10
 SPOT_FLEET_LIMIT = 500
 SPOT_TERMINATION_CHECK_OVERHEAD = 15
-LOCAL_CMD_RUNNER = LocalCmdRunner()
 EBS_VOLUME = "attached"
 INSTANCE_STORE = "instance_store"
 
@@ -1116,25 +1115,6 @@ class AWSNode(cluster.BaseNode):
         if not imagedata:
             self.log.warning("Some error during getting console screenshot")
         return imagedata.encode("ascii")
-
-    def traffic_control(self, tcconfig_params=None):
-        """
-        run tcconfig locally to create tc commands, and run them on the node
-        :param tcconfig_params: commandline arguments for tcset, if None will call tcdel
-        :return: None
-        """
-
-        self.remoter.run("sudo modprobe sch_netem")
-
-        if tcconfig_params is None:
-            tc_command = LOCAL_CMD_RUNNER.run("tcdel eth1 --tc-command", ignore_status=True).stdout
-            self.remoter.run('sudo bash -cxe "%s"' % tc_command, ignore_status=True)
-        else:
-            tc_command = LOCAL_CMD_RUNNER.run(f"tcset eth1 {tcconfig_params} --tc-command").stdout
-            self.remoter.run('sudo bash -cxe "%s"' % tc_command)
-
-    def install_traffic_control(self):
-        return self.remoter.run("/sbin/tc -h", ignore_status=True).ok
 
     @property
     def image(self):

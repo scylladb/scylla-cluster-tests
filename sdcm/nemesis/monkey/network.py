@@ -228,7 +228,7 @@ class RandomInterruptionNetworkMonkey(NemesisBaseClass):
             self._disrupt_k8s(list_of_timeout_options)
             return
 
-        if not self.runner.target_node.install_traffic_control():
+        if not self.runner.target_node.has_traffic_control():
             raise UnsupportedNemesis("Traffic control package not installed on system")
 
         if not self.runner.target_node.scylla_network_configuration or (
@@ -389,7 +389,7 @@ class BlockNetworkMonkey(NemesisBaseClass):
                 self._disrupt_k8s(list_of_timeout_options)
             return
 
-        if not self.runner.target_node.install_traffic_control():
+        if not self.runner.target_node.has_traffic_control():
             raise UnsupportedNemesis("Traffic control package not installed on system")
 
         if self.runner.target_node.systemd_version < 256:

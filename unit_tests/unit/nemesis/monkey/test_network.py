@@ -291,9 +291,9 @@ def test_precheck_keeps_on_kubernetes_without_extra_interface(runner, monkey_cla
     ],
 )
 def test_raises_when_tc_not_installed(runner, monkey_class):
-    """Verify monkeys raise UnsupportedNemesis when traffic control installation fails."""
+    """Verify monkeys raise UnsupportedNemesis when traffic control is unavailable."""
     runner.cluster.extra_network_interface = True
-    runner.target_node.install_traffic_control.return_value = False
+    runner.target_node.has_traffic_control.return_value = False
     with pytest.raises(UnsupportedNemesis, match="Traffic control"):
         monkey_class(runner).disrupt()
 
