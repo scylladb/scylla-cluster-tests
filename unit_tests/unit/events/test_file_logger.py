@@ -109,5 +109,7 @@ def test_get_events_grouped_by_category_limit(main_events_context, file_logger) 
     grouped = get_events_grouped_by_category(_registry=main_events_context.events_processes_registry, limit=5)
     for severity, group in grouped.items():
         assert len(group) == 5
+        # get_events_by_category() keeps the first `limit` CRITICAL events and the last `limit` of every
+        # other severity, so out of the 10 events published above CRITICAL yields m-0..m-4 and the rest m-5..m-9.
         for num, event in enumerate(group, start=0 if severity == Severity.CRITICAL.name else 5):
             assert f"m-{num}-{severity}" in event
