@@ -405,6 +405,7 @@ stages run automatically on every PR:
 |-------|-------------|---------|
 | **precommit** | Runs `hydra.sh pre-commit` (linting, formatting, ruff) | 15 min |
 | **unittest** | Runs `hydra.sh unit-tests` | 20 min |
+| **collect tests** | Runs `pytest --collect-only` over the repo-root `*_test.py` modules to catch broken imports | 10 min |
 | **lint test-cases** | Validates test-case YAML files | 10 min |
 
 These stages run conditionally, triggered by **GitHub labels**:
