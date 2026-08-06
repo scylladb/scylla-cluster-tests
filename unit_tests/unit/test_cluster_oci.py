@@ -1,6 +1,6 @@
 """Unit tests for OCI cluster node behavior."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -131,6 +131,82 @@ def test_create_node_certificate_includes_short_and_fqdn_dns_names(mock_create_c
     dns_names = mock_create_cert.call_args.kwargs["dns_names"]
     assert "db-node-short" in dns_names
     assert "db-node-short.subnet.vcn.oraclevcn.com" in dns_names
+
+
+# --- OciNode.restart() / kernel panic checker suppression tests (SCT-459 / SCT-658) ---
+
+
+@patch("sdcm.cluster.BaseNode.__init__", new=_base_node_init)
+def test_restart_inner_performs_soft_reboot_via_oci_api() -> None:
+    """OciNode._restart_inner() must issue a soft reboot (hard=False) via the OCI instance API.
+
+    This is the primitive that RestartThenRepairNodeMonkey drives through
+    BaseNode.restart() (sdcm/nemesis/__init__.py disrupt_restart_then_repair_node).
+    """
+    instance = _mock_cloud_instance()
+    oci_node = OciNode(instance, MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
+
+    oci_node._restart_inner()
+
+    instance.reboot.assert_called_once_with(wait=True, hard=False)
+
+
+@patch("sdcm.cluster.BaseNode.__init__", new=_base_node_init)
+def test_restart_suspends_kernel_panic_checker_around_soft_reboot() -> None:
+    """restart() must suspend the OCI kernel panic checker for the whole soft-reboot window.
+
+    Regression test for SCT-658: OciNode.restart() used to call `self._instance.reboot(...)`
+    directly, bypassing the suspend/resume window that BaseNode.reboot() already applies
+    (added for SCT-459). Because RestartThenRepairNodeMonkey drives soft reboots through
+    node.restart() (not node.reboot()), the checker kept running and OCI's STOPPED/STOPPING
+    lifecycle-state check misfired a false KernelPanicEvent while the instance was
+    intentionally down. restart() must now suspend/resume the checker exactly like reboot().
+    """
+    instance = _mock_cloud_instance()
+    oci_node = OciNode(instance, MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
+
+    call_order = []
+    checker = MagicMock()
+    checker.suspended.return_value.__enter__.side_effect = lambda: call_order.append("suspend")
+    checker.suspended.return_value.__exit__.side_effect = lambda *_a: call_order.append("resume")
+    oci_node.kernel_panic_checker = checker
+    instance.reboot = Mock(side_effect=lambda **_kw: call_order.append("reboot"))
+
+    oci_node.restart()
+
+    assert call_order == ["suspend", "reboot", "resume"]
+    checker.suspended.assert_called_once()
+    instance.reboot.assert_called_once_with(wait=True, hard=False)
+
+
+@patch("sdcm.cluster.BaseNode.__init__", new=_base_node_init)
+def test_restart_resumes_kernel_panic_checker_even_if_reboot_fails() -> None:
+    """The checker must resume even when the underlying reboot call raises."""
+    instance = _mock_cloud_instance()
+    oci_node = OciNode(instance, MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
+
+    checker = MagicMock()
+    resumed = []
+    checker.suspended.return_value.__exit__.side_effect = lambda *_a: resumed.append(True)
+    oci_node.kernel_panic_checker = checker
+    instance.reboot = Mock(side_effect=RuntimeError("OCI API error"))
+
+    with pytest.raises(RuntimeError):
+        oci_node.restart()
+
+    assert resumed == [True]
+
+
+@patch("sdcm.cluster.BaseNode.__init__", new=_base_node_init)
+def test_restart_without_kernel_panic_checker_still_reboots() -> None:
+    """restart() must work when no kernel panic checker was created for the node."""
+    instance = _mock_cloud_instance()
+    oci_node = OciNode(instance, MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
+    oci_node.kernel_panic_checker = None
+
+    oci_node.restart()
+
+    instance.reboot.assert_called_once_with(wait=True, hard=False)
 
 
 # --- OciCluster.add_nodes rack assignment tests ---
