@@ -87,7 +87,7 @@ class SlaPerUserTest(LongevityTest):
             n=self.num_of_partitions, user=self.DEFAULT_USER, password=self.DEFAULT_USER_PASSWORD, threads=250
         )
         self.run_stress_and_verify_threads(
-            params={"stress_cmd": write_cmd, "prefix": "preload-", "stats_aggregate_cmds": False}
+            params={"stress_cmd": [write_cmd], "prefix": "preload-", "stats_aggregate_cmds": False}
         )
 
         self.wait_no_compactions_running(n=120)
