@@ -264,7 +264,7 @@ class ManagerBackupTests(ManagerRestoreTests):
 
         ctx = (
             ignore_snapshot_listing_oversized_allocation()
-            if ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version) <= "2026.2.0"
+            if ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version) <= "2026.3.0"
             else nullcontext()
         )
         with ctx:
