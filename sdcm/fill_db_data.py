@@ -40,6 +40,18 @@ from sdcm.utils.issues import SkipPerIssues
 
 LOGGER = logging.getLogger(__name__)
 
+# Applied on both sides of a TRUNCATE: as the server-side USING TIMEOUT and as the driver's
+# per-request timeout. They have to agree - the client timing out first is what made the
+# server-side value cosmetic.
+TRUNCATE_TIMEOUT = 300
+# A truncate pass covers ~100 tables, and every failure costs a full TRUNCATE_TIMEOUT. Bound how
+# much of the test budget a cluster that cannot truncate is allowed to consume.
+MAX_TRUNCATE_FAILURES = 5
+
+
+class TruncateTablesError(Exception):
+    """Raised when truncate_tables() could not clear every table it was asked to."""
+
 
 class FillDatabaseData(ClusterTester):
     """
@@ -262,10 +274,15 @@ class FillDatabaseData(ClusterTester):
                 ],
                 [[24], [12], [128], [24], [12], [42]],
             ],
-            "invalid_queries": [
-                # Error from server: code=2200 [Invalid query] message="Missing PRIMARY KEY part url"
-                "INSERT INTO dynamic_cf_test (userid, url, time) VALUES (810e8500-e29b-41d4-a716-446655440000, '', 42)"
-            ],
+            # No invalid_queries here on purpose. This used to carry
+            #   INSERT INTO dynamic_cf_test (userid, url, time) VALUES (810e8500-..., '', 42)
+            # expecting 'Missing PRIMARY KEY part url', but an empty string is a legal clustering
+            # key value and Scylla accepts the insert. _run_invalid_queries() only logs when a
+            # query it expected to be rejected succeeds, so the row stayed in the table - and the
+            # unrestricted "SELECT time FROM dynamic_cf_test" above then returned a 7th row on any
+            # later stage whose truncate had not cleared it. A data-mutating statement does not
+            # belong in invalid_queries at all: when the expectation goes stale it does not just
+            # fail to assert, it corrupts the dataset every other stage is verified against.
             "min_version": "1.0",
             "max_version": "",
             "skip": "",
@@ -3604,12 +3621,16 @@ class FillDatabaseData(ClusterTester):
         """Check is tablets enabled on cluster"""
         return is_tablets_feature_enabled(self.db_cluster.nodes[0])
 
+    # Deliberately not retrying OperationTimedOut: the timeout is already TRUNCATE_TIMEOUT long, so
+    # a retry would cost another full timeout for something that has just shown it is not moving.
     @retrying(n=3, sleep_time=20, allowed_exceptions=ProtocolException)
     def truncate_table(self, session, truncate):
         if "using timeout" not in truncate.lower():
-            truncate = f"{truncate} USING TIMEOUT 300s"
+            truncate = f"{truncate} USING TIMEOUT {TRUNCATE_TIMEOUT}s"
         LOGGER.debug(truncate)
-        session.execute(truncate)
+        # The driver's own request timeout defaults to well under the server-side USING TIMEOUT, so
+        # without this the client gives up first and the server-side value never applies.
+        session.execute(truncate, timeout=TRUNCATE_TIMEOUT)
 
     @contextlib.contextmanager
     def _execute_and_log(self, message):
@@ -3620,12 +3641,39 @@ class FillDatabaseData(ClusterTester):
     def truncate_tables(self, session):
         # Run through the list of items and create all tables
         self.log.info("Start table truncation")
+        failed = []
+        gave_up = False
         for test_num, item in enumerate(self.all_verification_items):
+            if gave_up:
+                break
             test_name = item.get("name", "Test #" + str(test_num))
             if not item["skip"] and ("skip_condition" not in item or eval(str(item["skip_condition"]))):
                 for truncate in item["truncates"]:
-                    with self._execute_and_log(f'Truncated table for test "{test_name}" in {{}} seconds'):
-                        self.truncate_table(session, truncate)
+                    # Per-table rather than per-loop: one slow TRUNCATE used to abort the whole
+                    # pass, so every table after it kept the previous stage's rows and the next
+                    # verify_db_data() compared against stale data. Keep going and report at the
+                    # end - a skipped truncate has to be visible, not inferred from a later
+                    # assertion on some unrelated table.
+                    try:
+                        with self._execute_and_log(f'Truncated table for test "{test_name}" in {{}} seconds'):
+                            self.truncate_table(session, truncate)
+                    except Exception as ex:  # noqa: BLE001 - one table must not stop the rest
+                        LOGGER.error("Failed to truncate '%s' for test %r: %s", truncate, test_name, ex)
+                        failed.append(test_name)
+                        # Each failure costs a full TRUNCATE_TIMEOUT, so carrying on through every
+                        # remaining table on a cluster that clearly cannot truncate would burn hours
+                        # of the test's budget to learn nothing new. Stop once it is established.
+                        if len(failed) >= MAX_TRUNCATE_FAILURES:
+                            gave_up = True
+                            break
+        if failed:
+            summary = f"{len(failed)} table(s) were not truncated"
+            if gave_up:
+                summary += f" (gave up after {MAX_TRUNCATE_FAILURES}; later tables were not attempted)"
+            raise TruncateTablesError(
+                f"{summary}, so they still hold the previous stage's rows and any verification "
+                f"against them is meaningless: {', '.join(sorted(set(failed)))}"
+            )
 
     def cql_insert_data_to_tables(self, session, default_fetch_size):
         self.log.info("Start to populate data into tables")
@@ -3755,7 +3803,12 @@ class FillDatabaseData(ClusterTester):
                 session.set_keyspace(self.base_ks)
                 self.truncate_tables(session)
             except Exception as ex:  # noqa: BLE001
-                LOGGER.debug("Found error in truncate tables: '%s'", ex)
+                # Deliberately non-fatal - the first fill_db_data() of a run has nothing to truncate
+                # yet. But a truncate that silently does nothing leaves the previous stage's rows in
+                # place, and the next verify_db_data() then fails on whichever table happens to have
+                # kept a row, far from the cause. WARNING, not DEBUG, so it is in the log when that
+                # assertion is being read.
+                LOGGER.warning("Truncate before re-populating did not complete: %s", ex)
 
             # Insert data to the tables according to the "inserts" and flush to disk in several cases (nodetool flush)
             self.cql_insert_data_to_tables(session, session.default_fetch_size)
