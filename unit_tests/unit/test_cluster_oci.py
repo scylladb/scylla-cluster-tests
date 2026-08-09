@@ -1,5 +1,6 @@
 """Unit tests for OCI cluster node behavior."""
 
+import stat
 from unittest.mock import Mock, patch
 
 import pytest
@@ -213,3 +214,106 @@ def test_add_nodes_rack_none_consistent_across_node_index_offsets(
 
     actual_racks = [call.kwargs["rack"] for call in oci_cluster_for_rack_tests._create_node.call_args_list]
     assert actual_racks == expected_racks
+
+
+# --- fix_scylla_server_systemd_config tests ---
+
+# Sentinel values — distinctive enough that accidental interpolation into any
+# command string would be caught immediately by the leak-assertion test.
+_SENTINEL_ACCESS_KEY = "SENTINEL_OCI_ACCESS_KEY_ID"
+_SENTINEL_SECRET_KEY = "SENTINEL_OCI_SECRET_ACCESS_KEY"
+_DROP_IN_PATH = "/etc/systemd/system/scylla-server.service.d/oci-s3-creds.conf"
+
+
+@pytest.fixture()
+def _oci_node_for_systemd(monkeypatch):
+    """OciNode with a mocked remoter, ready to exercise fix_scylla_server_systemd_config.
+
+    BaseNode.__init__ is patched away for construction; BaseNode's own
+    fix_scylla_server_systemd_config is monkeypatched so its remoter calls
+    don't interfere with assertions on the OCI-specific behaviour.
+    """
+    with patch("sdcm.cluster.BaseNode.__init__", new=_base_node_init):
+        node = OciNode(_mock_cloud_instance(), MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
+    node.remoter = Mock()
+    node.is_docker = Mock(return_value=False)
+    mock_base_fix = Mock()
+    monkeypatch.setattr("sdcm.cluster.BaseNode.fix_scylla_server_systemd_config", mock_base_fix)
+    return node, mock_base_fix
+
+
+def _fake_oci_keystore():
+    """Return a patch context manager for sdcm.cluster_oci.KeyStore with sentinel credentials."""
+    mock_ks = Mock()
+    mock_ks.return_value.get_backup_oci_credentials.return_value = {
+        "access_key_id": _SENTINEL_ACCESS_KEY,
+        "secret_access_key": _SENTINEL_SECRET_KEY,
+    }
+    return patch("sdcm.cluster_oci.KeyStore", mock_ks)
+
+
+def test_fix_scylla_server_systemd_config_calls_super(_oci_node_for_systemd):
+    """super().fix_scylla_server_systemd_config() must be called unconditionally."""
+    node, mock_base_fix = _oci_node_for_systemd
+    with _fake_oci_keystore():
+        node.fix_scylla_server_systemd_config()
+    mock_base_fix.assert_called_once()
+
+
+def test_fix_scylla_server_systemd_config_skips_on_docker(_oci_node_for_systemd):
+    """Docker nodes must be skipped — no KeyStore lookup and no file transfer or sudo call."""
+    node, _ = _oci_node_for_systemd
+    node.is_docker.return_value = True
+    with patch("sdcm.cluster_oci.KeyStore") as mock_ks:
+        node.fix_scylla_server_systemd_config()
+    mock_ks.assert_not_called()
+    node.remoter.send_files.assert_not_called()
+    node.remoter.sudo.assert_not_called()
+
+
+def test_fix_scylla_server_systemd_config_credentials_not_on_command_line(_oci_node_for_systemd):
+    """Credentials must travel only inside the transferred file, never on any sudo command line.
+
+    This is a regression guard: if a future change embeds credentials in a
+    shell command (which remoter logs verbatim), this test will catch it.
+    """
+    node, _ = _oci_node_for_systemd
+    with _fake_oci_keystore():
+        node.fix_scylla_server_systemd_config()
+
+    node.remoter.send_files.assert_called_once()
+    dst = node.remoter.send_files.call_args.kwargs["dst"]
+    assert dst.startswith("/tmp/"), f"credentials should be staged under /tmp/, got {dst!r}"
+
+    for sudo_call in node.remoter.sudo.call_args_list:
+        cmd = sudo_call.args[0]
+        assert _SENTINEL_ACCESS_KEY not in cmd, "access_key_id must not appear in sudo command"
+        assert _SENTINEL_SECRET_KEY not in cmd, "secret_access_key must not appear in sudo command"
+
+
+def test_fix_scylla_server_systemd_config_installs_dropin_with_mode_0600(_oci_node_for_systemd):
+    """Drop-in must be installed with mode 0600 on the remote host, and the local temp file
+    must also be protected before transfer."""
+    node, _ = _oci_node_for_systemd
+    with _fake_oci_keystore(), patch("sdcm.cluster_oci.os.chmod") as mock_chmod:
+        node.fix_scylla_server_systemd_config()
+
+    # Remote: install command must carry -m 0600
+    sudo_cmd = node.remoter.sudo.call_args.args[0]
+    assert "install" in sudo_cmd
+    assert "0600" in sudo_cmd
+    assert _DROP_IN_PATH in sudo_cmd
+
+    # Local: temp file must be restricted before transfer
+    mock_chmod.assert_called_once()
+    _, mode = mock_chmod.call_args.args
+    assert mode == stat.S_IRUSR | stat.S_IWUSR
+
+
+def test_fix_scylla_server_systemd_config_reloads_systemd_daemon(_oci_node_for_systemd):
+    """systemctl daemon-reload must be issued so the new drop-in takes effect immediately."""
+    node, _ = _oci_node_for_systemd
+    with _fake_oci_keystore():
+        node.fix_scylla_server_systemd_config()
+    sudo_cmd = node.remoter.sudo.call_args.args[0]
+    assert "daemon-reload" in sudo_cmd

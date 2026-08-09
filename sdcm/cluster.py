@@ -2573,9 +2573,24 @@ class BaseNode(AutoSshContainerMixin):
         if general_config is provided.
         """
         backup_backend = self.parent_cluster.params.get("backup_bucket_backend")
+        cluster_backend = self.parent_cluster.params.get("cluster_backend")
         backup_backend_config = {}
         if backup_backend == "s3":
-            if region and region != self.region:
+            if cluster_backend == "oci":
+                # OCI is compatible with S3, so we use the S3 backend for OCI
+                # but requires different endpoint and region configuration, as well as access keys.
+                endpoint_data = self.parent_cluster.params.get("append_scylla_yaml")
+                # object_storage_endpoints is a list of endpoints, we take the first one
+                backup_backend_config["endpoint"] = endpoint_data["object_storage_endpoints"][0]["name"]
+                backup_backend_config["region"] = endpoint_data["object_storage_endpoints"][0]["aws_region"]
+                backup_backend_config["access_key_id"] = self.test_config.backup_oci_credentials["access_key_id"]
+                backup_backend_config["secret_access_key"] = self.test_config.backup_oci_credentials[
+                    "secret_access_key"
+                ]
+                # forces path-style addressing, e.g.
+                # endpoint/bucket instead of bucket.endpoint
+                backup_backend_config["provider"] = "Minio"
+            elif region and region != self.region:
                 backup_backend_config["region"] = region
         elif backup_backend == "gcs":
             backup_backend_config["endpoint"] = "https://storage.googleapis.com"

@@ -948,6 +948,10 @@ class ScyllaLogCollector(LogCollector):
         ),
         CommandLog(name="cassandra-rackdc.properties", command=f"cat {SCYLLA_PROPERTIES_PATH}"),
         CommandLog(name="scylla-manager-agent.yaml", command=f"cat {SCYLLA_MANAGER_AGENT_YAML_PATH}"),
+        CommandLog(
+            name="scylla-manager-agent.log",
+            command="sudo journalctl --no-tail --no-pager -u scylla-manager-agent.service -o short-precise",
+        ),
         CommandLog(name="setup_scripts_errors.log", command="for i in /var/tmp/scylla/*.log;do echo [$i]; cat $i;done"),
         CommandLog(name="scylla_doctor.vitals.json", command="cat *.vitals.json"),
         CommandLog(name="cloud-init-output.log", command="cat /var/log/cloud-init-output.log"),

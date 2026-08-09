@@ -1,0 +1,5 @@
+append_scylla_yaml:
+  auto_snapshot: false
+  object_storage_endpoints:
+    - name: https://idedxcgnkfkt.compat.objectstorage.us-ashburn-1.oci.customer-oci.com
+      aws_region: us-ashburn-1

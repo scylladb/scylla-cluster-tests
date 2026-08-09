@@ -13,6 +13,9 @@
 
 import json
 import logging
+import os
+import stat
+import tempfile
 import time
 from datetime import datetime
 from functools import cached_property
@@ -27,6 +30,8 @@ from sdcm.provision.helpers.certificate import CA_CERT_FILE, CA_KEY_FILE, create
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
+from sdcm.keystore import KeyStore
+from sdcm.remote.base import shell_script_cmd
 from sdcm.utils.decorators import retrying
 from sdcm.utils.net import resolve_ip_to_dns
 from sdcm.utils.oci_utils import get_oci_compartment_id
@@ -187,6 +192,43 @@ class OciNode(cluster.BaseNode):
             self.log.warning("Error during getting OCI spot termination notification: %s", details)
 
         return SPOT_TERMINATION_CHECK_DELAY
+
+    def fix_scylla_server_systemd_config(self):
+        super().fix_scylla_server_systemd_config()
+        if self.is_docker():
+            return
+        # OCI S3-compatible object storage authenticates via AWS-style credentials.
+        # Override whatever AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are in the
+        # environment (SCT runner credentials) with the OCI backup credentials so
+        # Scylla talks to the right endpoint.
+        oci_creds = KeyStore().get_backup_oci_credentials()
+        access_key = oci_creds["access_key_id"]
+        secret_key = oci_creds["secret_access_key"]
+        self.log.debug("Setting OCI S3 credentials in scylla-server systemd unit")
+        dropin = (
+            f"[Service]\nEnvironment=AWS_ACCESS_KEY_ID={access_key}\nEnvironment=AWS_SECRET_ACCESS_KEY={secret_key}\n"
+        )
+        # Write to a local temp file (mode 0600) then transfer; credentials
+        # must never appear on a command line where they would be logged.
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as tmp:
+            os.chmod(tmp.name, stat.S_IRUSR | stat.S_IWUSR)
+            tmp.write(dropin)
+            tmp.flush()
+            tmp_remote = f"/tmp/{os.path.basename(tmp.name)}"
+            try:
+                self.remoter.send_files(src=tmp.name, dst=tmp_remote)
+            finally:
+                os.unlink(tmp.name)
+        drop_in_dir = "/etc/systemd/system/scylla-server.service.d"
+        drop_in_path = f"{drop_in_dir}/oci-s3-creds.conf"
+        self.remoter.sudo(
+            shell_script_cmd(f"""\
+            mkdir -p {drop_in_dir}
+            install -m 0600 -o root -g root {tmp_remote} {drop_in_path}
+            rm -f {tmp_remote}
+            systemctl daemon-reload
+        """)
+        )
 
     def restart(self):
         self._instance.reboot(wait=True, hard=False)

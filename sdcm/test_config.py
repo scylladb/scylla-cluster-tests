@@ -73,6 +73,7 @@ class TestConfig(metaclass=Singleton):
     _agent_api_key = None
 
     backup_azure_blob_credentials = {}
+    backup_oci_credentials = {}
 
     @classmethod
     def test_id(cls):
@@ -268,6 +269,10 @@ class TestConfig(metaclass=Singleton):
     @classmethod
     def set_backup_azure_blob_credentials(cls) -> None:
         cls.backup_azure_blob_credentials = KeyStore().get_backup_azure_blob_credentials()
+
+    @classmethod
+    def set_backup_oci_credentials(cls) -> None:
+        cls.backup_oci_credentials = KeyStore().get_backup_oci_credentials()
 
     @classmethod
     def reuse_cluster(cls, val=False):
