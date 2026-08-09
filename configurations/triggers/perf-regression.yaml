@@ -19,11 +19,11 @@ cron_triggers:
       job_folder: "scylla-master"
       labels_selector: "alternator-weekly"
       requested_by_user: "radoslawcybulski"
-  - schedule: "00 6 * * 0"
+  - schedule: "00 6 */14 * *"
     params:
       scylla_version: "{branch}:latest"
       job_folder: "scylla-master"
-      labels_selector: "master-weekly"
+      labels_selector: "master-2weeks"
       requested_by_user: "juliayakovlev"
   - schedule: "0 23 */21 * *"
     params:
@@ -153,7 +153,7 @@ jobs:
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64"
     backend: "aws"
     arch: "aarch64"
-    labels: ["master-weekly"]
+    labels: []
     params:
       region: "us-east-1"
       microbenchmark: "true"
@@ -161,21 +161,21 @@ jobs:
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-write"
     backend: "aws"
     arch: "aarch64"
-    labels: ["master-weekly"]
+    labels: []
     params:
       region: "us-east-1"
       microbenchmark: "true"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64"
     backend: "aws"
-    labels: ["master-weekly"]
+    labels: []
     params:
       region: "us-east-1"
       microbenchmark: "true"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64-write"
     backend: "aws"
-    labels: ["master-weekly"]
+    labels: []
     params:
       region: "us-east-1"
       microbenchmark: "true"
@@ -223,7 +223,7 @@ jobs:
     backend: "aws"
     arch: "aarch64"
     include_versions: ["master"]
-    labels: ["master-weekly"]
+    labels: ["master-2weeks"]
     job_throttle_category: "SCT-perf-us-east-1-i8g"
     params:
       region: "us-east-1"

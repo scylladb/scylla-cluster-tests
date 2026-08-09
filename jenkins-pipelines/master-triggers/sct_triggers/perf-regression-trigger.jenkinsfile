@@ -6,7 +6,7 @@ triggerMatrixPipeline(
     matrix_file: 'configurations/triggers/perf-regression.yaml',
     cron: '''0 8 * * * % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=alternator-daily;requested_by_user=radoslawcybulski
 0 8 * * 6 % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=alternator-weekly;requested_by_user=radoslawcybulski
-00 6 * * 0 % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=master-weekly;requested_by_user=juliayakovlev
+00 6 */14 * * % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=master-2weeks;requested_by_user=juliayakovlev
 0 23 */21 * * % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=master-3weeks;requested_by_user=juliayakovlev
 0 6 1 * * % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=master-monthly;requested_by_user=juliayakovlev
 13 6 8-14 * 2 % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=gce-custom-monthly;requested_by_user=valerii.ponomarov'''
