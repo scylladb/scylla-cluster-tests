@@ -4,20 +4,31 @@ db_type: mixed_cassandra
 
 # Scylla target cluster params
 n_db_nodes: 3
-instance_type_db: 'i4i.4xlarge'
+sizing_db:  # no OCI match (DenseIO.E5 at 16 vCPUs caps at 96 GB)
+  vcpu: 16
+  memory: '>=128'
+  local_disk_gb: '>=400'
 root_disk_size_db: 100
 
 # Cassandra source cluster params
 n_test_oracle_db_nodes: 3
-instance_type_db_oracle: 'i4i.4xlarge'
+sizing_db_oracle:  # no OCI match (DenseIO.E5 at 16 vCPUs caps at 96 GB)
+  vcpu: 16
+  memory: '>=128'
+  arch: x86_64
+  local_disk_gb: '>=400'
 cassandra_oracle_version: '4.1'
 ami_id_db_cassandra: 'resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id'
 
 n_loaders: 2
-instance_type_loader: 'c6i.4xlarge'
+sizing_loader:
+  vcpu: 16
+  memory: '>=32'
 
 n_monitor_nodes: 1
-instance_type_monitor: 'i4i.large'
+sizing_monitor:
+  vcpu: 2
+  memory: '>=16'
 
 emr_release_label: 'emr-spark-8.0.0'
 emr_instance_type_master: 'm5.xlarge'

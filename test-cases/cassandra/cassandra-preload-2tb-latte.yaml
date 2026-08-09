@@ -1,9 +1,15 @@
 test_duration: 1440
 n_db_nodes: 3
 n_loaders: 4
-instance_type_db: 'i4i.8xlarge'
+sizing_db:  # no OCI match (DenseIO.E5 at 32 vCPUs caps at 192 GB)
+  vcpu: 32
+  memory: '>=256'
+  arch: x86_64
+  local_disk_gb: '>=1500'
 root_disk_size_db: 100
-instance_type_loader: 'c6i.4xlarge'
+sizing_loader:
+  vcpu: 16
+  memory: '>=32'
 
 db_type: cassandra
 cassandra_version: '4.1'

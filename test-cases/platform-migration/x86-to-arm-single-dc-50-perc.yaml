@@ -1,10 +1,15 @@
 test_duration: 480
 
-instance_type_db: 'i7i.2xlarge'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 8
+  memory: '>=64'
+  arch: x86_64
 instance_type_db_target: 'i8g.2xlarge'
 n_db_nodes: 6
 n_loaders: 2
-instance_type_loader: 'c7i.4xlarge'
+sizing_loader:
+  vcpu: 16
+  memory: '>=32'
 n_monitor_nodes: 1
 
 prepare_write_cmd: [

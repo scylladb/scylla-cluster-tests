@@ -4,9 +4,9 @@ n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
 
-instance_type_db: 'i4i.large'
-instance_type_loader: 'c6i.xlarge'
-instance_type_monitor: 't3.large'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
 
 # legacy fallback: Spark 4.x installed via bootstrap on an emr-7.x release
 emr_release_label: 'emr-7.12.0'
