@@ -27,14 +27,14 @@ def perf_config():
     return load_matrix_config(PERF_YAML)
 
 
-def test_master_weekly_selects_expected_jobs(perf_config):
+def test_master_2weeks_selects_expected_jobs(perf_config):
     result = filter_jobs(
         perf_config.jobs,
         scylla_version="master:latest",
         resolved_version="2026.3.0~dev-0.20260525.69a5b417d1dc",
-        labels_selector="master-weekly",
+        labels_selector="master-2weeks",
     )
-    assert len(result) == 5
+    assert len(result) == 1
     names = {j.job_name for j in result}
     assert any("i8g-tablets" in n for n in names)
 
