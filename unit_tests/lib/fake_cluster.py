@@ -24,7 +24,7 @@ from typing import List
 from invoke import Result
 
 from sdcm import sct_config
-from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
+from sdcm.cluster import BaseCluster, BaseNode, BaseScyllaCluster
 from sdcm.utils.distro import Distro
 
 

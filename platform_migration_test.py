@@ -16,8 +16,8 @@
 from collections import defaultdict
 
 from longevity_test import LongevityTest
-from sdcm.sct_events.system import InfoEvent
 from sdcm.cluster import MAX_TIME_WAIT_FOR_DECOMMISSION, MAX_TIME_WAIT_FOR_NEW_NODE_UP
+from sdcm.sct_events.system import InfoEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.cluster_tools import group_nodes_by_dc_idx

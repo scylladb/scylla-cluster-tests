@@ -23,7 +23,6 @@ from sdcm.utils.trigger_matrix import (
     resolve_to_full_version,
 )
 
-
 FULL_TAG = "2025.4.1-0.20250601.abc123def456-1"
 
 

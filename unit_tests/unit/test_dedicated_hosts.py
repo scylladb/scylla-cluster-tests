@@ -12,10 +12,10 @@
 # Copyright (c) 2024 ScyllaDB
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
-
 from unit_tests.lib.dot_dict import DotDict
 
 

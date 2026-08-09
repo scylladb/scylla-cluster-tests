@@ -11,25 +11,23 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
-import re
 import logging
+import re
 import threading
-
 from dataclasses import dataclass
-from pathlib import Path
-from uuid import uuid4
-from typing import Tuple, Callable, Any, cast
 from functools import partial
+from pathlib import Path
+from typing import Any, Callable, Tuple, cast
+from uuid import uuid4
 
 from sdcm.sct_events.base import T_log_event
-
 from sdcm.sct_events.events_device import get_events_main_device
 from sdcm.sct_events.events_processes import (
     EVENTS_COUNTER_ID,
-    EventsProcessesRegistry,
     BaseEventsProcess,
-    start_events_process,
+    EventsProcessesRegistry,
     get_events_process,
+    start_events_process,
     verbose_suppress,
 )
 

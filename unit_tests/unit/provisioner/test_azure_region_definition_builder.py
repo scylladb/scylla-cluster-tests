@@ -12,7 +12,6 @@
 # Copyright (c) 2022 ScyllaDB
 from collections import namedtuple
 
-
 from sdcm.keystore import KeyStore
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration

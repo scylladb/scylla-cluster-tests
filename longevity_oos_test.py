@@ -12,14 +12,17 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2025 ScyllaDB
-from itertools import cycle
 from contextlib import ExitStack, contextmanager
+from itertools import cycle
+from threading import Thread
 from time import sleep, time
+
 from longevity_test import LongevityTest
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.exceptions import WaitForTimeoutError
 from sdcm.mgmt.common import ScyllaManagerError, TaskStatus
+from sdcm.nemesis.utils.indexes import create_index, verify_query_by_index_works, wait_for_index_to_be_built
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
@@ -28,9 +31,7 @@ from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.decorators import retrying
-from sdcm.nemesis.utils.indexes import create_index, verify_query_by_index_works, wait_for_index_to_be_built
 from sdcm.utils.tablets.common import wait_tablets_balanced
-from threading import Thread
 
 
 @contextmanager

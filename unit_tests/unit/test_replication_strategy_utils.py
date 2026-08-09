@@ -6,12 +6,12 @@ import pytest
 from sdcm.exceptions import DatacenterNotResolvedError
 from sdcm.utils import replication_strategy_utils as replication_strategy_utils_module
 from sdcm.utils.replication_strategy_utils import (
-    temporary_replication_strategy_setter,
-    SimpleReplicationStrategy,
+    DataCenterTopologyRfControl,
+    LocalReplicationStrategy,
     NetworkTopologyReplicationStrategy,
     ReplicationStrategy,
-    LocalReplicationStrategy,
-    DataCenterTopologyRfControl,
+    SimpleReplicationStrategy,
+    temporary_replication_strategy_setter,
 )
 
 

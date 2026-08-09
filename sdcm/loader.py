@@ -11,11 +11,11 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import logging
 import os
 import re
-from abc import abstractmethod, ABCMeta
 import time
-import logging
+from abc import ABCMeta, abstractmethod
 from typing import NamedTuple
 
 from sdcm.prometheus import NemesisMetrics

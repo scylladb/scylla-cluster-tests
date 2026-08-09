@@ -39,7 +39,6 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.test_config import TestConfig
 from sdcm.tester import ClusterTester
 
-
 # ---------------------------------------------------------------------------
 # MinimalProvisioningTester
 # ---------------------------------------------------------------------------

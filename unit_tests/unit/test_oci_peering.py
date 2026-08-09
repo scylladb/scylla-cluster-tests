@@ -20,7 +20,6 @@ from sdcm.utils.oci_peering import OciVcnPeering
 from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.oci_utils import SUPPORTED_REGIONS
 
-
 # ---------------------------------------------------------------------------
 # OciVcnPeering.__init__
 # ---------------------------------------------------------------------------

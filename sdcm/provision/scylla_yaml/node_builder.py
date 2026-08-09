@@ -11,13 +11,12 @@
 #
 # Copyright (c) 2021 ScyllaDB
 from functools import cached_property
-from typing import Optional, List, Any
+from typing import Any, List, Optional
 
 from pydantic import Field, computed_field
 
 from sdcm.provision.network_configuration import is_ip_ssh_connections_ipv6
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, SeedProvider
-
 
 # Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
 

@@ -13,7 +13,6 @@
 
 from typing import Optional
 
-
 APT_DEFAULTS = {
     "Acquire::http::Timeout": "60",
     "Acquire::Retries": "3",

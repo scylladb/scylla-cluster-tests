@@ -11,33 +11,33 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-from functools import cached_property
-import time
-import logging
 import datetime
+import logging
 import re
-from packaging.version import Version
+import time
+from contextlib import contextmanager
+from functools import cached_property
 from pathlib import Path
 from re import findall
-from textwrap import dedent
 from statistics import mean
-from contextlib import contextmanager
+from textwrap import dedent
 
 from invoke.exceptions import Failure as InvokeFailure
+from packaging.version import Version
 
-from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2Failure
 from sdcm import wait
 from sdcm.mgmt.common import (
-    TaskStatus,
-    ScyllaManagerError,
-    HostStatus,
-    HostSsl,
-    HostRestStatus,
-    duration_to_timedelta,
     DEFAULT_TASK_TIMEOUT,
+    HostRestStatus,
+    HostSsl,
+    HostStatus,
+    ScyllaManagerError,
+    TaskStatus,
+    duration_to_timedelta,
     parse_size_to_bytes,
 )
 from sdcm.provision.helpers.certificate import TLSAssets
+from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2Failure
 from sdcm.utils.context_managers import DbNodeLogger
 from sdcm.utils.database_query_utils import is_system_keyspace
 from sdcm.utils.replication_strategy_utils import ReplicationStrategy

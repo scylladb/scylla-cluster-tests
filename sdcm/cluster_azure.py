@@ -16,11 +16,11 @@ from functools import cached_property
 from typing import Dict, List
 
 from sdcm import cluster
+from sdcm.kernel_panic_checker import AzureKernelPanicChecker
+from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
 from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.kernel_panic_checker import AzureKernelPanicChecker
-from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying

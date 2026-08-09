@@ -22,9 +22,8 @@ from sdcm.provision.aws.az_resolver import (
     _node_count_positive,
     run_pre_flight_capacity_probe,
 )
-from sdcm.provision.common.fallback import is_az_fallback_enabled
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted
-
+from sdcm.provision.common.fallback import is_az_fallback_enabled
 from unit_tests.lib.dot_dict import DotDict
 
 

@@ -30,9 +30,8 @@ import pytest
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.base import SctEvent
 from sdcm.sct_events.file_logger import get_events_grouped_by_category
-from sdcm.tester import ClusterTester, silence, TestResultEvent
+from sdcm.tester import ClusterTester, TestResultEvent, silence
 from sdcm.utils.action_logger import get_action_logger
-
 from unit_tests.lib.fake_events import make_fake_events
 
 

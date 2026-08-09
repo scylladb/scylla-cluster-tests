@@ -12,7 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 import json
-from typing import Literal, TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode

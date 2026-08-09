@@ -12,13 +12,13 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from sdcm import sct_config
-from sdcm.utils.common import get_latest_scylla_release
 from sdcm.utils.aws_utils import get_ssm_ami
+from sdcm.utils.common import get_latest_scylla_release
 
 RPM_URL = (
     "https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/"

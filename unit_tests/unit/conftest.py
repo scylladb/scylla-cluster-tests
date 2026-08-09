@@ -21,13 +21,12 @@
 
 import json
 import os
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
 from sdcm.keystore import KeyStore, SSHKey
 from sdcm.remote import RemoteCmdRunnerBase
-
 from unit_tests.lib.fake_remoter import FakeRemoter
 
 

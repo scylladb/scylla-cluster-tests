@@ -13,7 +13,7 @@
 
 """Unit tests for fetch_official_supported_versions and the CLI command."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 

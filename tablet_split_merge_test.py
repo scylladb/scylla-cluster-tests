@@ -11,8 +11,8 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import time
 import os
+import time
 from enum import StrEnum
 from functools import cache, cached_property
 from textwrap import dedent
@@ -20,9 +20,8 @@ from textwrap import dedent
 from longevity_test import LongevityTest
 from sdcm import cluster
 from sdcm.sct_events import Severity
-from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.sct_events.group_common_events import ignore_mutation_write_errors
-
+from sdcm.sct_events.health import DataValidatorEvent
 
 REPLICATOR_URL = (
     "https://mlitvk.s3.eu-north-1.amazonaws.com/scylla-cdc-replicator-1.3.8-SNAPSHOT-jar-with-dependencies.jar"

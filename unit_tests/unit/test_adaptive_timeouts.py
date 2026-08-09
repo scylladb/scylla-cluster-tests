@@ -22,19 +22,19 @@ from invoke import Result
 
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import AdaptiveTimeoutMultipliers, SCTConfiguration
+from sdcm.utils.adaptive_timeouts import (
+    _STREAMING_OVERHEAD,
+    TABLETS_HARD_TIMEOUT,
+    Operations,
+    _get_operation_timeout_factor,
+    adaptive_timeout,
+)
 from sdcm.utils.adaptive_timeouts.load_info_store import (
+    _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC,
+    _I4I_LARGE_SHARD_COUNT,
     AdaptiveTimeoutStore,
     NodeLoadInfoService,
     NodeLoadInfoServices,
-    _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC,
-    _I4I_LARGE_SHARD_COUNT,
-)
-from sdcm.utils.adaptive_timeouts import (
-    _STREAMING_OVERHEAD,
-    _get_operation_timeout_factor,
-    Operations,
-    adaptive_timeout,
-    TABLETS_HARD_TIMEOUT,
 )
 from unit_tests.lib.fake_cluster import DummyDbCluster
 

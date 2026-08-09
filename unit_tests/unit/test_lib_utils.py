@@ -15,8 +15,7 @@ import logging
 
 import pytest
 
-from test_lib.utils import get_data_by_path, MagicList
-
+from test_lib.utils import MagicList, get_data_by_path
 
 logging.basicConfig(level=logging.DEBUG)
 

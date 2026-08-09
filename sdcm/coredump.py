@@ -11,25 +11,25 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import json
 import os
 import re
 import time
-import json
 from abc import abstractmethod
-from typing import List, Optional, Dict
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
-from threading import Thread, Event
-from dataclasses import dataclass
 from pathlib import Path
-from contextlib import contextmanager
+from threading import Event, Thread
+from typing import Dict, List, Optional
 
 from sdcm.log import SDCMAdapter
 from sdcm.remote import NETWORK_EXCEPTIONS
+from sdcm.sct_events.decorators import raise_event_on_failure
+from sdcm.sct_events.system import CoreDumpEvent
 from sdcm.utils.decorators import timeout
 from sdcm.utils.version_utils import get_systemd_version
-from sdcm.sct_events.system import CoreDumpEvent
-from sdcm.sct_events.decorators import raise_event_on_failure
 
 
 @dataclass

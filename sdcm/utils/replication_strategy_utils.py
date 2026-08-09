@@ -1,14 +1,13 @@
 import ast
 import logging
 import re
-
 from contextlib import ContextDecorator
-from typing import Callable, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Dict
 
 from sdcm.exceptions import DatacenterNotResolvedError
 from sdcm.utils.cql_utils import cql_quote_if_needed
-from sdcm.utils.database_query_utils import is_system_keyspace, LOGGER
-from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.database_query_utils import LOGGER, is_system_keyspace
+from sdcm.utils.decorators import Retry, retrying
 from sdcm.utils.tablets.common import wait_tablets_balanced
 
 if TYPE_CHECKING:

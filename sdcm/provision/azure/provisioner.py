@@ -28,19 +28,19 @@ from sdcm.provision.azure.network_security_group_provider import NetworkSecurity
 from sdcm.provision.azure.resource_group_provider import ResourceGroupProvider
 from sdcm.provision.azure.subnet_provider import SubnetProvider
 from sdcm.provision.azure.virtual_machine_provider import (
-    VirtualMachineProvider,
-    DEFAULT_STUCK_VM_TIMEOUT,
     DEFAULT_STUCK_VM_POLL_INTERVAL,
+    DEFAULT_STUCK_VM_TIMEOUT,
+    VirtualMachineProvider,
 )
 from sdcm.provision.azure.virtual_network_provider import VirtualNetworkProvider
 from sdcm.provision.provisioner import (
-    Provisioner,
     InstanceDefinition,
-    VmInstance,
-    PricingModel,
     OperationPreemptedError,
-    StuckVMProvisioningError,
+    PricingModel,
+    Provisioner,
     ProvisionUnrecoverableError,
+    StuckVMProvisioningError,
+    VmInstance,
 )
 from sdcm.provision.security import ScyllaOpenPorts
 from sdcm.sct_events import Severity

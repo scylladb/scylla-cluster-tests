@@ -15,16 +15,14 @@ import base64
 import json
 import logging
 import time
-
 from threading import Event, Thread
 
 from confluent_kafka import Consumer
 
-from sdcm.sct_config import SCTConfiguration
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
+from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.common import generate_random_string
 from sdcm.wait import wait_for
-
 
 LOGGER = logging.getLogger(__name__)
 

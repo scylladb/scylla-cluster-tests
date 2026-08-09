@@ -6,7 +6,6 @@ import pytest
 
 from sdcm.cluster import BaseNode, NodeSetupFailed
 
-
 _BASE_URL = (
     "https://downloads.scylladb.com/unstable/scylla/master/relocatable/latest/scylla-unified-2026.1.1~dev-0.20260326"
 )

@@ -2,8 +2,8 @@
 Simple git wrappers that provide useful information about current repository
 """
 
-import subprocess
 import logging
+import subprocess
 from typing import TypedDict
 
 LOGGER = logging.getLogger(__name__)

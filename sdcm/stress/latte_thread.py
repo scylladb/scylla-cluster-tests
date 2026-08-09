@@ -12,10 +12,10 @@
 # Copyright (c) 2023 ScyllaDB
 
 import contextlib
+import logging
 import os
 import re
 import uuid
-import logging
 from pathlib import Path
 
 from sdcm.loader import (
@@ -27,8 +27,8 @@ from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
 from sdcm.remote.libssh2_client.exceptions import Failure
 from sdcm.reporting.tooling_reporter import LatteVersionReporter
-from sdcm.sct_events.loaders import LatteStressEvent
 from sdcm.sct_events import Severity
+from sdcm.sct_events.loaders import LatteStressEvent
 from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.common import get_sct_root_path
 from sdcm.utils.docker_remote import RemoteDocker

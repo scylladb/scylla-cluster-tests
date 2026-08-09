@@ -11,22 +11,20 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import time
-import random
 import logging
-import uuid
+import os
+import random
 import threading
-
+import time
+import uuid
 from functools import cached_property
 from typing import Dict
 
-from sdcm.stress_thread import DockerBasedStressThread
-from sdcm.stress.base import format_stress_cmd_error
-from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.loaders import KclStressEvent
-
+from sdcm.sct_events.system import InfoEvent
+from sdcm.stress.base import format_stress_cmd_error
+from sdcm.stress_thread import DockerBasedStressThread
+from sdcm.utils.docker_remote import RemoteDocker
 
 LOGGER = logging.getLogger(__name__)
 

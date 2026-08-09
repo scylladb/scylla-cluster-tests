@@ -6,7 +6,6 @@ import pytest
 
 from sdcm.cluster_oci import OciCluster, OciNode
 
-
 MOCK_CREDENTIALS = Mock(key_file="/tmp/test_key")
 MOCK_PARENT_CLUSTER = Mock(params={"simulated_regions": 0})
 

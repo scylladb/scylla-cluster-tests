@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 from jinja2 import Template
 
-from sdcm import sct_abs_path, nemesis
+from sdcm import nemesis, sct_abs_path
 from sdcm.nemesis import NemesisBaseClass, NemesisFlags
 from sdcm.nemesis.registry import NemesisRegistry
 

@@ -1,5 +1,5 @@
-import math
 import logging
+import math
 import random
 import traceback
 from functools import cached_property
@@ -11,7 +11,6 @@ from deepdiff import DeepDiff
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import PerftuneResultEvent
 from sdcm.utils.version_utils import get_systemd_version
-
 
 # https://docs.scylladb.com/stable/operating-scylla/admin-tools/perftune.html
 

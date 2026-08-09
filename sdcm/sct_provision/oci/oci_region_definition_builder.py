@@ -13,12 +13,12 @@
 import logging
 from typing import Dict
 
+from sdcm.sct_provision.common.types import NodeTypeType
+from sdcm.sct_provision.region_definition_builder import ConfigParamsMap, DefinitionBuilder
 from sdcm.utils.oci_utils import (
     get_oci_compartment_id,
     get_ubuntu_image_ocid,
 )
-from sdcm.sct_provision.common.types import NodeTypeType
-from sdcm.sct_provision.region_definition_builder import ConfigParamsMap, DefinitionBuilder
 
 db_map = ConfigParamsMap(
     image_id="oci_image_db",

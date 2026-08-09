@@ -17,36 +17,36 @@ import shlex
 import socket
 import subprocess
 import sys
-from functools import singledispatch, cached_property
+from functools import cached_property, singledispatch
 
 import click
 import questionary
-from questionary import Choice
-from google.cloud import compute_v1
 from azure.mgmt.compute.models import VirtualMachine
+from google.cloud import compute_v1
+from questionary import Choice
 
-from sdcm.cluster import BaseScyllaCluster, BaseCluster, BaseNode
+from sdcm.cluster import BaseCluster, BaseNode, BaseScyllaCluster
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
+from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.azure_utils import AzureService, list_instances_azure
 from sdcm.utils.common import (
-    list_instances_aws,
-    get_free_port,
-    list_instances_gce,
-    gce_meta_to_dict,
     SSH_KEY_AWS_DEFAULT,
-    SSH_KEY_GCE_DEFAULT,
     SSH_KEY_AZURE_DEFAULT,
+    SSH_KEY_GCE_DEFAULT,
     download_dir_from_cloud,
+    gce_meta_to_dict,
+    get_free_port,
+    list_instances_aws,
+    list_instances_gce,
 )
-from sdcm.utils.gce_utils import (
-    gce_public_addresses,
-    gce_private_addresses,
-    get_gce_compute_instances_client,
-    gce_set_tags,
-)
-from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.decorators import retrying
+from sdcm.utils.gce_utils import (
+    gce_private_addresses,
+    gce_public_addresses,
+    gce_set_tags,
+    get_gce_compute_instances_client,
+)
 
 LOGGER = logging.getLogger(__name__)
 

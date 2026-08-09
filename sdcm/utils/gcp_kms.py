@@ -16,6 +16,7 @@ import logging
 from google.cloud import kms
 from google.cloud.exceptions import GoogleCloudError
 from google.oauth2 import service_account
+
 from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)

@@ -28,7 +28,7 @@ from cassandra.query import BatchStatement
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.rest.remote_curl_client import RemoteCurlClient
 from sdcm.tester import ClusterTester
-from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.decorators import Retry, retrying
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 
 

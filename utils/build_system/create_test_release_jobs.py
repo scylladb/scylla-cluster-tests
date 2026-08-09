@@ -11,18 +11,18 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import os
 import logging
-from pathlib import Path
+import os
 import re
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import jenkins
 import yaml
 
-from sdcm.wait import wait_for
-from sdcm.utils.common import get_sct_root_path
 from sdcm.keystore import KeyStore
+from sdcm.utils.common import get_sct_root_path
+from sdcm.wait import wait_for
 
 DIR_TEMPLATE = Path(__file__).parent.joinpath("folder-template.xml").read_text(encoding="utf-8")
 JOB_TEMPLATE = Path(__file__).parent.joinpath("template.xml").read_text(encoding="utf-8")

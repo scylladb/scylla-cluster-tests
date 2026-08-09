@@ -10,21 +10,21 @@ To run manually:
 
 import logging
 import os
-import uuid
-import time
 import threading
+import time
+import uuid
 
 import pytest
 
-from sdcm.remote import shell_script_cmd, RemoteCmdRunnerBase
-from sdcm.sct_runner import get_sct_runner, list_sct_runners
-from sdcm.sct_config import SCTConfiguration
 from sdcm.kernel_panic_checker import (
     AWSKernelPanicChecker,
-    GCPKernelPanicChecker,
     AzureKernelPanicChecker,
+    GCPKernelPanicChecker,
     OCIKernelPanicChecker,
 )
+from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
+from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_runner import get_sct_runner, list_sct_runners
 
 LOGGER = logging.getLogger(__name__)
 

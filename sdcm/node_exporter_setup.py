@@ -1,7 +1,6 @@
 from sdcm.remote import shell_script_cmd
 from sdcm.utils.curl import curl_with_retry
 
-
 NODE_EXPORTER_VERSION = "1.8.2"
 
 

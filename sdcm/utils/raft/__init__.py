@@ -1,25 +1,24 @@
 from __future__ import annotations
+
 import contextlib
 import logging
 import random
-
-from enum import Enum, StrEnum
 from abc import ABC, abstractmethod
-from typing import NamedTuple, Mapping, Iterable, Generator, TYPE_CHECKING
+from enum import Enum, StrEnum
+from typing import TYPE_CHECKING, Generator, Iterable, Mapping, NamedTuple
 
-
+from sdcm.rest.raft_api import RaftApi
+from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.sct_events import Severity
 from sdcm.utils.features import (
-    is_consistent_topology_changes_feature_enabled,
     is_consistent_cluster_management_feature_enabled,
+    is_consistent_topology_changes_feature_enabled,
     is_group0_limited_voters_enabled,
 )
 from sdcm.utils.health_checker import HealthEventsGenerator
 from sdcm.wait import wait_for
-from sdcm.rest.raft_api import RaftApi
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode, TokenRingMember

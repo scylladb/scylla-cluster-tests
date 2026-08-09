@@ -13,9 +13,9 @@
 
 import logging
 import time
-from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import requests
 from requests.adapters import HTTPAdapter

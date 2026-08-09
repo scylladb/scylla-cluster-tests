@@ -14,11 +14,10 @@
 import contextlib
 import traceback
 
-from sdcm.utils import alternator
-from sdcm.utils.decorators import optional_stage, latency_calculator_decorator
-from sdcm.sct_events.group_common_events import ignore_operation_errors, ignore_alternator_client_errors
-
 from performance_regression_test import PerformanceRegressionTest
+from sdcm.sct_events.group_common_events import ignore_alternator_client_errors, ignore_operation_errors
+from sdcm.utils import alternator
+from sdcm.utils.decorators import latency_calculator_decorator, optional_stage
 
 
 class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):

@@ -20,6 +20,8 @@ import contextlib
 import datetime
 import importlib
 import inspect
+import itertools
+import json
 import logging
 import math
 import os
@@ -28,167 +30,165 @@ import random
 import re
 import time
 import traceback
-import json
-import itertools
 from abc import ABC, abstractmethod
+from collections import Counter, defaultdict, namedtuple
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from datetime import timedelta
-from typing import List, Optional, Callable, Union, Iterable, TYPE_CHECKING
-from functools import partial, cached_property
-from collections import defaultdict, Counter, namedtuple
-from concurrent.futures import ThreadPoolExecutor
+from functools import cached_property, partial
+from typing import TYPE_CHECKING, Callable, Iterable, List, Optional, Union
 from uuid import uuid4
 
 from cassandra import ConsistencyLevel, InvalidRequest
 from cassandra.query import SimpleStatement
 from invoke import UnexpectedExit
-from argus.common.enums import NemesisStatus
-from sdcm.nemesis.registry import NemesisRegistry
-from sdcm.utils.action_logger import get_action_logger
 
-from sdcm.utils.cql_utils import cql_unquote_if_needed, cql_quote_if_needed
-from sdcm import wait, mgmt
+from argus.common.enums import NemesisStatus
+from sdcm import mgmt, wait
 from sdcm.audit import Audit, AuditConfiguration
 from sdcm.cluster import (
+    DB_LOG_PATTERN_RESHARDING_FINISH,
+    DB_LOG_PATTERN_RESHARDING_START,
+    HOUR_IN_SEC,
+    MAX_TIME_WAIT_FOR_DECOMMISSION,
+    MAX_TIME_WAIT_FOR_NEW_NODE_UP,
     BaseCluster,
     BaseNode,
     BaseScyllaCluster,
-    DB_LOG_PATTERN_RESHARDING_START,
-    DB_LOG_PATTERN_RESHARDING_FINISH,
-    MAX_TIME_WAIT_FOR_NEW_NODE_UP,
-    MAX_TIME_WAIT_FOR_DECOMMISSION,
+    NodeCleanedAfterDecommissionAborted,
     NodeSetupFailed,
     NodeSetupTimeout,
-    HOUR_IN_SEC,
-    NodeCleanedAfterDecommissionAborted,
     NodeStayInClusterAfterDecommission,
 )
 from sdcm.cluster_k8s import (
     KubernetesOps,
     PodCluster,
 )
+from sdcm.exceptions import (
+    AuditLogTestFailure,
+    BootstrapStreamErrorFailure,
+    CdcStreamsWasNotUpdated,
+    FilesNotCorrupted,
+    KillNemesis,
+    LdapNotRunning,
+    LogContentNotFound,
+    NemesisStressFailure,
+    NoFilesFoundToDestroy,
+    NoKeyspaceFound,
+    PartitionNotFound,
+    QuotaConfigurationFailure,
+    TimestampNotFound,
+    UnsupportedNemesis,
+    WatcherCallableException,
+)
 from sdcm.log import SDCMAdapter
 from sdcm.logcollector import save_kallsyms_map
-from sdcm.mgmt.common import TaskStatus, ScyllaManagerError, get_persistent_snapshots, ObjectStorageUploadMode
-from sdcm.mgmt.backup import run_manager_backup
 from sdcm.mgmt.argus_report import report_manager_backup_results_to_argus
+from sdcm.mgmt.backup import run_manager_backup
+from sdcm.mgmt.common import ObjectStorageUploadMode, ScyllaManagerError, TaskStatus, get_persistent_snapshots
 from sdcm.mgmt.helpers import get_dc_name_from_ks_statement, get_schema_create_statements_from_snapshot
+from sdcm.nemesis.registry import NemesisRegistry
+from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS, DefaultValue, node_operations, unique_disruption_name
+from sdcm.nemesis.utils.indexes import (
+    ViewFinishedBuildingException,
+    create_index,
+    create_materialized_view_for_random_column,
+    drop_index,
+    drop_materialized_view,
+    get_random_column_name,
+    is_cf_a_view,
+    verify_query_by_index_works,
+    wait_for_index_to_be_built,
+    wait_for_view_to_be_built,
+    wait_materialized_view_building_tasks_started,
+)
+from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocationError, NemesisNodeAllocator
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.provision.helpers.certificate import update_certificate, TLSAssets
+from sdcm.provision.helpers.certificate import TLSAssets, update_certificate
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import (
-    ignore_no_space_errors,
-    ignore_scrub_invalid_errors,
     decorate_with_context,
-    ignore_reactor_stall_errors,
-    ignore_disk_quota_exceeded_errors,
     decorate_with_context_if_issues_open,
-    ignore_take_snapshot_failing,
+    ignore_disk_quota_exceeded_errors,
     ignore_ipv6_failure_to_assign,
-    ignore_raft_topology_cmd_failing,
-    suppress_expected_unavailability_errors,
+    ignore_no_space_errors,
     ignore_raft_applier_gate_closed_errors,
+    ignore_raft_topology_cmd_failing,
+    ignore_reactor_stall_errors,
+    ignore_scrub_invalid_errors,
+    ignore_take_snapshot_failing,
+    suppress_expected_unavailability_errors,
 )
-
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
-from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.action_logger import get_action_logger
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
+from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.common import (
-    get_db_tables,
-    generate_random_string,
-    reach_enospc_on_node,
     clean_enospc_on_node,
-    parse_nodetool_listsnapshots,
-    update_authenticator,
-    sleep_for_percent_of_duration,
+    generate_random_string,
+    get_db_tables,
     get_views_of_base_table,
-)
-from sdcm.utils.parallel_object import ParallelObject, ParallelObjectResult
-from sdcm.utils.features import is_tablets_feature_enabled, is_views_with_tablets_enabled
-from sdcm.utils.quota import (
-    configure_quota_on_node_for_scylla_user_context,
-    is_quota_enabled_on_node,
-    enable_quota_on_node,
-    write_data_to_reach_end_of_quota,
+    parse_nodetool_listsnapshots,
+    reach_enospc_on_node,
+    sleep_for_percent_of_duration,
+    update_authenticator,
 )
 from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
-from sdcm.utils.context_managers import nodetool_context, DbNodeLogger
-from sdcm.utils.decorators import critical_on_capacity_issues, retrying, latency_calculator_decorator
+from sdcm.utils.context_managers import DbNodeLogger, nodetool_context
+from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed
+from sdcm.utils.decorators import (
+    critical_on_capacity_issues,
+    latency_calculator_decorator,
+    retrying,
+    skip_on_capacity_issues,
+)
 from sdcm.utils.decorators import timeout as timeout_decor
-from sdcm.utils.decorators import skip_on_capacity_issues
 from sdcm.utils.docker_utils import ContainerManager
+from sdcm.utils.features import is_tablets_feature_enabled, is_views_with_tablets_enabled
+from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
     convert_cpu_value_from_k8s_to_units,
     convert_memory_value_from_k8s_to_units,
 )
 from sdcm.utils.k8s.chaos_mesh import (
-    MemoryStressExperiment,
-    IOFaultChaosExperiment,
     DiskError,
+    IOFaultChaosExperiment,
+    MemoryStressExperiment,
 )
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
-
-
-from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS, DefaultValue, node_operations, unique_disruption_name
-from sdcm.nemesis.utils.indexes import (
-    ViewFinishedBuildingException,
-    is_cf_a_view,
-    get_random_column_name,
-    create_index,
-    wait_for_index_to_be_built,
-    verify_query_by_index_works,
-    drop_index,
-    wait_for_view_to_be_built,
-    drop_materialized_view,
-    is_cf_a_view,
-    create_materialized_view_for_random_column,
-    wait_materialized_view_building_tasks_started,
-)
-from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator, NemesisNodeAllocationError
 from sdcm.utils.node import build_node_api_command
+from sdcm.utils.parallel_object import ParallelObject, ParallelObjectResult
+from sdcm.utils.quota import (
+    configure_quota_on_node_for_scylla_user_context,
+    enable_quota_on_node,
+    is_quota_enabled_on_node,
+    write_data_to_reach_end_of_quota,
+)
+from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
+from sdcm.utils.raft.common import NodeBootstrapAbortManager, get_topology_coordinator_node
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 from sdcm.utils.tablets.common import wait_tablets_balanced
+from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
-from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions, ComparableScyllaVersion
-from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
-from sdcm.utils.raft.common import NodeBootstrapAbortManager, get_topology_coordinator_node
-from sdcm.utils.issues import SkipPerIssues
+from sdcm.utils.version_utils import ComparableScyllaVersion, MethodVersionNotFound, scylla_versions
 from sdcm.wait import wait_for
-from sdcm.exceptions import (
-    KillNemesis,
-    NoFilesFoundToDestroy,
-    NoKeyspaceFound,
-    FilesNotCorrupted,
-    LogContentNotFound,
-    LdapNotRunning,
-    TimestampNotFound,
-    PartitionNotFound,
-    WatcherCallableException,
-    UnsupportedNemesis,
-    CdcStreamsWasNotUpdated,
-    AuditLogTestFailure,
-    BootstrapStreamErrorFailure,
-    QuotaConfigurationFailure,
-    NemesisStressFailure,
-)
 from test_lib.compaction import (
     CompactionStrategy,
-    get_compaction_strategy,
-    get_compaction_random_additional_params,
-    get_gc_mode,
     GcMode,
+    get_compaction_random_additional_params,
+    get_compaction_strategy,
+    get_gc_mode,
 )
 from test_lib.cql_types import CQLTypeBuilder
-from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
 
 if TYPE_CHECKING:
     from sdcm.audit import AuditStore

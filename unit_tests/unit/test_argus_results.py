@@ -15,13 +15,13 @@ import json
 from unittest.mock import MagicMock, call
 
 import pytest
-from argus.client.generic_result import Cell, Status
 
+from argus.client.generic_result import Cell, Status
 from sdcm.argus_results import (
+    LatencyCalculatorMixedResult,
     ReactorStallStatsResult,
     send_iotune_results_to_argus,
     send_result_to_argus,
-    LatencyCalculatorMixedResult,
 )
 
 

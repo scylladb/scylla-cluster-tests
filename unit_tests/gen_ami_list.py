@@ -3,6 +3,7 @@ import json
 from moto.ec2.utils import gen_moto_amis
 
 from sdcm.utils.aws_utils import get_scylla_images_ec2_client
+
 # generate moto AMIs file, base on actual Scylla AMIs
 # used to generate `unit_tests/test_data/mocked_ami_data.json`
 

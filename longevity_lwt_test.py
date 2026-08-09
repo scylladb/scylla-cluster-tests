@@ -16,16 +16,15 @@
 #
 # After the test is finished will be performed the data validation.
 
-import time
 import logging
+import time
 
 from longevity_test import LongevityTest
 from sdcm.sct_events import Severity
-from sdcm.sct_events.health import DataValidatorEvent
-from sdcm.utils.data_validator import LongevityDataValidator
-from sdcm.utils.common import skip_optional_stage
 from sdcm.sct_events.group_common_events import ignore_mutation_write_errors
-
+from sdcm.sct_events.health import DataValidatorEvent
+from sdcm.utils.common import skip_optional_stage
+from sdcm.utils.data_validator import LongevityDataValidator
 
 LOGGER = logging.getLogger(__name__)
 

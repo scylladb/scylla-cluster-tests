@@ -17,13 +17,13 @@ import logging
 import os
 import re
 from functools import cached_property
-from multiprocessing import Process, Event, Queue
+from multiprocessing import Event, Process, Queue
 from typing import Optional
 
 from sdcm.remote.base import CommandRunner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
-from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping, BACKTRACE_RE
+from sdcm.sct_events.database import BACKTRACE_RE, get_pattern_to_event_to_func_mapping
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.common import make_threads_be_daemonic_by_default
 

@@ -45,9 +45,8 @@ from sdcm.provision.helpers.certificate import (
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_data_dir_path
 from sdcm.utils.docker_remote import RemoteDocker
-
-from unit_tests.lib.dummy_remote import LocalNode, LocalScyllaClusterDummy
 from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
+from unit_tests.lib.dummy_remote import LocalNode, LocalScyllaClusterDummy
 
 # Inherit UNIT_TESTS_DIR from the parent conftest so we don't use __file__ here.
 _REPO_ROOT: Path = Path(__file__).parent.parent.parent

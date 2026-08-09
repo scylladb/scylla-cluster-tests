@@ -13,10 +13,10 @@
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import date, datetime
 from typing import Any, List, Literal, Optional
 
-from cassandra.util import uuid_from_time, datetime_from_uuid1
+from cassandra.util import datetime_from_uuid1, uuid_from_time
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.group_common_events import (

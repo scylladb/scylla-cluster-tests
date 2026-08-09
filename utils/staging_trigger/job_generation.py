@@ -7,7 +7,6 @@ import click
 import yaml
 
 from sdcm.utils.common import get_sct_root_path
-
 from utils.staging_trigger.constants import SCT_REPO, _default_folder, _get_jenkins_url
 from utils.staging_trigger.trigger import detect_preset_from_jenkinsfile, find_jenkinsfile
 

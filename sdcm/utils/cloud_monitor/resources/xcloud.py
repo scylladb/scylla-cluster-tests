@@ -11,16 +11,15 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import re
-import logging
 import datetime
+import logging
+import re
 from dataclasses import dataclass
 
 import pytz
 
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.keystore import KeyStore
-
 
 LOGGER = logging.getLogger(__name__)
 

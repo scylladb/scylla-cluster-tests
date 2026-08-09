@@ -22,7 +22,6 @@ from sdcm.provision.aws.az_resolver import (
     AZResolver,
     run_pre_flight_capacity_probe,
 )
-from sdcm.provision.common.fallback import is_az_fallback_enabled, is_region_fallback_enabled
 from sdcm.provision.aws.capacity_errors import (
     ProvisioningCapacityExhausted,
     RegionAMINotFoundError,
@@ -40,10 +39,10 @@ from sdcm.provision.aws.region_fallback import (
     switch_region,
 )
 from sdcm.provision.aws.utils import cleanup_abandoned_region, ec2_clients
-from sdcm.sct_provision.aws.cluster import OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup
+from sdcm.provision.common.fallback import is_az_fallback_enabled, is_region_fallback_enabled
+from sdcm.sct_provision.aws.cluster import DBCluster, LoaderCluster, MonitoringCluster, OracleDBCluster, PlacementGroup
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.test_config import TestConfig
-
 
 LOGGER = logging.getLogger(__name__)
 

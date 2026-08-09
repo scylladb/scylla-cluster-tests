@@ -18,25 +18,25 @@ Main GCE provisioner implementation.
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from typing import List, Dict
+from typing import Dict, List
 
 from google.cloud import compute_v1
 from invoke import Result
 
-from sdcm.provision.provisioner import (
-    Provisioner,
-    InstanceDefinition,
-    VmInstance,
-    PricingModel,
-    ProvisionError,
-)
-from sdcm.provision.gce.disk_provider import DiskProvider
-from sdcm.provision.gce.network_provider import NetworkProvider
-from sdcm.provision.gce.instance_provider import VirtualMachineProvider
-from sdcm.provision.user_data import UserDataBuilder
-from sdcm.utils.gce_utils import get_gce_compute_instances_client, random_zone
 from sdcm.keystore import KeyStore
+from sdcm.provision.gce.disk_provider import DiskProvider
+from sdcm.provision.gce.instance_provider import VirtualMachineProvider
+from sdcm.provision.gce.network_provider import NetworkProvider
+from sdcm.provision.provisioner import (
+    InstanceDefinition,
+    PricingModel,
+    Provisioner,
+    ProvisionError,
+    VmInstance,
+)
+from sdcm.provision.user_data import UserDataBuilder
 from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.utils.gce_utils import get_gce_compute_instances_client, random_zone
 
 LOGGER = logging.getLogger(__name__)
 

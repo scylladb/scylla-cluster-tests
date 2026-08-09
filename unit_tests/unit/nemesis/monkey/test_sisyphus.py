@@ -10,9 +10,9 @@ import pytest
 
 from sdcm.nemesis.monkey.runners import SisyphusMonkey
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
-from unit_tests.unit.nemesis import TestNemesisClass
-from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
 from unit_tests.lib.fake_tester import ClusterTesterForTests
+from unit_tests.unit.nemesis import TestNemesisClass
+from unit_tests.unit.nemesis.fake_cluster import PARAMS, Cluster, FakeTester, Node
 
 
 # Use multiple inheritance to ensure we override registry after Nemesis but before Sisyphus

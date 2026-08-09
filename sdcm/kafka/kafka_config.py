@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import Field, BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConnectorConfiguration(BaseModel):

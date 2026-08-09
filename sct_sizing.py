@@ -127,7 +127,7 @@ def sizing_update_catalog(ctx, cloud):
 def sizing_resolve(ctx, vcpu, memory, disk, arch, role, region):
     # lazy: sdcm imports pull boto3/google-cloud/azure-mgmt — too heavy for CLI startup
     from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog  # noqa: PLC0415
-    from sdcm.utils.cloud_catalog.instance_matcher import select_instance, NoMatchingInstanceError  # noqa: PLC0415
+    from sdcm.utils.cloud_catalog.instance_matcher import NoMatchingInstanceError, select_instance  # noqa: PLC0415
 
     catalog_dir = Path(__file__).parent / "data" / "instance_catalog"
     try:
@@ -221,9 +221,9 @@ def sizing_preview(  # noqa: PLR0912, PLR0914, PLR0915
     # lazy: sdcm imports pull boto3/google-cloud/azure-mgmt — too heavy for CLI startup
     from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog  # noqa: PLC0415
     from sdcm.utils.cloud_catalog.instance_matcher import (  # noqa: PLC0415
+        NoMatchingInstanceError,
         is_literal_instance_type,
         select_instance,
-        NoMatchingInstanceError,
     )
 
     config_files = _resolve_config_files(config_files)

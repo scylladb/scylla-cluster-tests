@@ -20,29 +20,29 @@ from typing import List, Optional, Union
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import Instance
 
-from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
-from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
-from sdcm.provision.aws.instance_parameters import AWSInstanceParams
-from sdcm.provision.aws.utils import (
-    ec2_services,
-    ec2_clients,
-    find_instance_by_id,
-    set_tags_on_instances,
-    wait_for_provision_request_done,
-    create_spot_fleet_instance_request,
-    create_spot_instance_request,
-)
 from sdcm.provision.aws.constants import (
+    FLEET_LIMIT_EXCEEDED_ERROR,
+    SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
     SPOT_CNT_LIMIT,
     SPOT_FLEET_LIMIT,
     SPOT_REQUEST_TIMEOUT,
-    STATUS_FULFILLED,
     SPOT_STATUS_UNEXPECTED_ERROR,
-    FLEET_LIMIT_EXCEEDED_ERROR,
-    SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
+    STATUS_FULFILLED,
 )
-from sdcm.provision.common.provisioner import TagsType, ProvisionParameters, InstanceProvisionerBase
+from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
+from sdcm.provision.aws.instance_parameters import AWSInstanceParams
+from sdcm.provision.aws.utils import (
+    create_spot_fleet_instance_request,
+    create_spot_instance_request,
+    ec2_clients,
+    ec2_services,
+    find_instance_by_id,
+    set_tags_on_instances,
+    wait_for_provision_request_done,
+)
+from sdcm.provision.common.provisioner import InstanceProvisionerBase, ProvisionParameters, TagsType
+from sdcm.utils.aws_utils import tags_as_ec2_tags
 
 LOGGER = logging.getLogger(__name__)
 

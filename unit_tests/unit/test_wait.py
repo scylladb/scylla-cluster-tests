@@ -23,7 +23,7 @@ from types import SimpleNamespace
 import pytest
 
 from sdcm.cluster import BaseNode
-from sdcm.wait import wait_for, wait_for_log_lines, WaitForTimeoutError, ExitByEventError
+from sdcm.wait import ExitByEventError, WaitForTimeoutError, wait_for, wait_for_log_lines
 
 logging.basicConfig(level=logging.DEBUG)
 

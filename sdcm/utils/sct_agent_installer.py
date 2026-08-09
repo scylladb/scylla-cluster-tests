@@ -20,7 +20,6 @@ import yaml
 
 from sdcm.utils.curl import curl_with_retry
 
-
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_AGENT_PORT = 16000

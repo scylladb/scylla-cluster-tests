@@ -1,10 +1,10 @@
-import time
 import logging
-from typing import Callable, Optional, NamedTuple, Union
+import time
+from typing import Callable, NamedTuple, Optional, Union
 
 from fabric.runners import Result
 
-from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
+from sdcm.cluster import BaseCluster, BaseNode, BaseScyllaCluster
 from sdcm.rest.storage_service_client import StorageServiceClient
 
 LOGGER = logging.getLogger(__name__)

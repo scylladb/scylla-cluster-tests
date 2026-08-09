@@ -1,18 +1,17 @@
+import json
 import pathlib
 import time
-from enum import Enum
-from collections import defaultdict, Counter
-
-import json
+from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
+from enum import Enum
 from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
-from sdcm.utils.common import skip_optional_stage
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import latency_calculator_decorator
-from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
+from sdcm.utils.latency import analyze_hdr_percentiles, calculate_latency
 
 
 class CSPopulateDistribution(Enum):

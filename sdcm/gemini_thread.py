@@ -11,24 +11,23 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import json
 import logging
 import os
-import uuid
 import random
-import json
 import time
+import uuid
 from pathlib import Path
 
-
 from sdcm.cluster import BaseCluster, BaseScyllaCluster
+from sdcm.reporting.tooling_reporter import GeminiVersionReporter
 from sdcm.sct_events import Severity
+from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
+from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.curl import curl_with_retry
-from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
-from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.reporting.tooling_reporter import GeminiVersionReporter
 
 LOGGER = logging.getLogger(__name__)
 

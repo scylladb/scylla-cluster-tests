@@ -13,7 +13,7 @@
 
 """Unit tests for `sdcm.utils.oci_region.OciRegion`."""
 
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 

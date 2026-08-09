@@ -11,9 +11,9 @@
 #
 # Copyright (c) 2021 ScyllaDB
 import logging
-from typing import Type, Optional
+from typing import Optional, Type
 
-from sdcm.sct_events import Severity, SctEventProtocol
+from sdcm.sct_events import SctEventProtocol, Severity
 from sdcm.sct_events.base import InformationalEvent
 
 LOGGER = logging.getLogger(__name__)

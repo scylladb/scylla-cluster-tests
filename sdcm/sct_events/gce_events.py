@@ -3,7 +3,7 @@ from typing import Dict
 from dateutil import parser
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent, EventPeriod, add_severity_limit_rules
+from sdcm.sct_events.base import EventPeriod, SctEvent, add_severity_limit_rules
 
 
 class GceInstanceEvent(SctEvent):

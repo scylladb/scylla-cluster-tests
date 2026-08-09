@@ -11,27 +11,26 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import time
 import logging
 import threading
-from typing import NewType, Dict, Any, Tuple, Optional, Callable, cast
-from functools import partial
+import time
 from collections import defaultdict
+from functools import partial
+from typing import Any, Callable, Dict, NewType, Optional, Tuple, cast
 
 from argus.common.sct_types import RawEventPayload
 from sdcm.sct_events.events_processes import (
-    EVENTS_ARGUS_ANNOTATOR_ID,
     EVENTS_ARGUS_AGGREGATOR_ID,
+    EVENTS_ARGUS_ANNOTATOR_ID,
     EVENTS_ARGUS_POSTMAN_ID,
-    EventsProcessesRegistry,
     BaseEventsProcess,
+    EventsProcessesRegistry,
     EventsProcessPipe,
-    start_events_process,
     get_events_process,
+    start_events_process,
     verbose_suppress,
 )
 from sdcm.utils.argus import Argus
-
 
 ARGUS_EVENT_AGGREGATOR_TIME_WINDOW: float = 90  # seconds
 LOGGER = logging.getLogger(__name__)
