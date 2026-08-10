@@ -199,3 +199,47 @@ def test_cleanup_failure_is_logged_and_keeps_a_good_transfer_successful(remote_d
     assert remote_docker.send_files("/local/file.tsv", "/container/dst/file.tsv") is True
     remote_docker.log.warning.assert_called_once()
     assert "/tmp/tmpNOPERM" in str(remote_docker.log.warning.call_args)
+
+
+# --------------------------------------------------------------------------------------------------
+# kill
+# --------------------------------------------------------------------------------------------------
+
+
+def test_kill_runs_docker_rm_with_a_bounded_timeout(remote_docker):
+    """'docker rm -f' must not be left to run unbounded -- see SCT-546."""
+    remote_docker.kill()
+
+    remote_docker.node.remoter.run.assert_called_once_with(
+        " docker rm -f dummy-container-id", verbose=False, ignore_status=True, timeout=120
+    )
+
+
+@pytest.mark.parametrize(
+    "stuck_teardown_exc",
+    [
+        RetryableNetworkException("connection lost", original=OSError("connection lost")),
+        TimeoutError("command timed out"),
+    ],
+)
+def test_kill_swallows_a_stuck_teardown_and_logs_a_warning(remote_docker, stuck_teardown_exc):
+    """A 'docker rm -f' that hangs in the SSH transport (SCT-546) must resolve within the bounded
+    timeout instead of blocking the caller until the global stress timeout fires."""
+    remote_docker.node.remoter.run.side_effect = stuck_teardown_exc
+
+    result = remote_docker.kill()
+
+    assert result is None
+    remote_docker.log.warning.assert_called_once()
+    assert "dummy-container-id" in str(remote_docker.log.warning.call_args)
+
+
+def test_kill_uses_sudo_when_the_host_needs_it(remote_docker):
+    """The teardown command runs with the same privileges as every other docker command on this host."""
+    remote_docker.sudo_needed = "sudo "
+
+    remote_docker.kill()
+
+    remote_docker.node.remoter.run.assert_called_once_with(
+        "sudo  docker rm -f dummy-container-id", verbose=False, ignore_status=True, timeout=120
+    )
