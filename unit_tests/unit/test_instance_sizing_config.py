@@ -156,6 +156,20 @@ def test_env_var_dot_notation_vcpu_and_memory_resolved(monkeypatch):
     assert conf.get("instance_type_db") == "i8g.2xlarge"
 
 
+def test_env_var_double_underscore_notation_vcpu_and_memory_resolved(monkeypatch):
+    """SCT_INSTANCE_TYPE_DB__VCPU / __MEMORY (bash-exportable, uppercase sub-keys) resolve like the dot form."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB__VCPU", "8")
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB__MEMORY", "64")
+
+    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)):
+        conf = sct_config.SCTConfiguration()
+
+    assert conf.get("instance_type_db") == "i8g.2xlarge"
+
+
 def test_missing_catalog_directory_logs_warning_and_skips(monkeypatch, caplog):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
