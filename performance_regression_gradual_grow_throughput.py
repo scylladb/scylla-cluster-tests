@@ -386,6 +386,48 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         total = sum(_op_rate(r) for r in results)
         return total if num_commands == num_loaders else total * num_loaders
 
+    def test_dual_engine_mixed_gradual_increase_load(self):
+        """Run logstor (60%) and LSM (40%) Latte workloads together as one mixed workload.
+
+        All four commands (logstor_write, logstor_read, lsm_write, lsm_read) run
+        concurrently within the same gradual step, so what is measured is the combined
+        60/40 distribution across both storage engines.  Argus reports one latency row
+        per HDR tag (fn--logstor_write, fn--logstor_read, fn--lsm_write, fn--lsm_read)
+        plus a summary row for the distribution as a whole.
+
+        Test flow:
+        1. Populate both tables (500M rows each, CL=ALL).  Both tables are created by the
+           auto-schema call inside LatteStressThread.build_stress_cmd, which passes
+           latte_schema_parameters (both engines' keyspace/table names) to 'latte schema'.
+        2. Wait for compactions to quiesce.
+        3. Run the mixed (write:30/read:70) gradual-throughput steps; per-engine rates are
+           baked into each command via $logstor_write_rate / $lsm_read_rate / ... .
+
+        Required config keys (provided by logstor_lsm_dual_60_40.yaml):
+          stress_cmd_m - all four commands,
+          perf_gradual_throttle_steps.dual_engine_mixed,
+          perf_gradual_step_duration.dual_engine_mixed
+        """
+        workload_type = "dual_engine_mixed"
+        # Each engine has its own keyspace/table, so there is no single "test table" here.
+        # test_keyspace/test_table stay empty: they only feed drop_keyspace (disabled) and
+        # run_post_prepare_cql (no post_prepare_cql_cmds in this config).
+        workload = Workload(
+            workload_type=workload_type,
+            cs_cmd_tmpl=self.params.get("stress_cmd_m"),
+            cs_cmd_warm_up=None,
+            num_threads=self.get_num_threads_for_workload(workload_type),
+            throttle_steps=self.throttle_steps(workload_type),
+            preload_data=True,
+            drop_keyspace=False,
+            wait_no_compactions=True,
+            step_duration=self.step_duration(workload_type),
+            prepare_schema=False,
+        )
+        self._base_test_workflow(
+            workload=workload, test_name="test_dual_engine_mixed_gradual_increase_load (logstor 60% / lsm 40%)"
+        )
+
     def check_latency_during_steps(self, step):
         with open(self.latency_results_file, encoding="utf-8") as file:
             latency_results = json.load(file)
