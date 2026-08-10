@@ -133,9 +133,16 @@ class RemoteDocker(BaseNode):
         )
 
     def kill(self):
-        return self.node.remoter.run(
-            f"{self.sudo_needed} docker rm -f {self.docker_id}", verbose=False, ignore_status=True
-        )
+        try:
+            return self.node.remoter.run(
+                f"{self.sudo_needed} docker rm -f {self.docker_id}",
+                verbose=False,
+                ignore_status=True,
+                timeout=120,  # don't let a stuck SSH/libssh2 read block the run until the global stress timeout
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to remove docker container '%s' within timeout: %s", self.docker_id, exc)
+            return None
 
     def send_files(self, src, dst, **kwargs):
         remote_tempfile = self.node.remoter.run("mktemp", verbose=kwargs.get("verbose")).stdout.strip()
