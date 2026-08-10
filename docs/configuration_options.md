@@ -2,9 +2,25 @@
 
 #### Appending with environment variables or with config files
 * **strings:** can be appended with adding `++` at the beginning of the string:
-`export SCT_APPEND_SCYLLA_ARGS="++ --overprovisioned 1"`
+       `export SCT_APPEND_SCYLLA_ARGS="++ --overprovisioned 1"`
 * **list:** can be appended by adding `++` as the first item of the list
-`export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
+       `export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
+
+#### Nested (dict/list) options
+* A single sub-key of a dict/list option can be set on its own, without
+       quoting the whole value, using either dot-notation or double-underscore
+       notation: `SCT_STRESS_IMAGE.ycsb=...` or `SCT_STRESS_IMAGE__ycsb=...`.
+* `__` is the bash-exportable form (dots are invalid in bash variable names),
+       so prefer it with plain `export`, e.g. `export SCT_STRESS_IMAGE__ycsb=...`.
+* Sub-keys containing `-` (e.g. `cassandra-stress`) still require the dot form,
+       set via `env 'SCT_STRESS_IMAGE.cassandra-stress=...' ...`, since `-` is not
+       a valid bash identifier character either.
+* **Case matters:** the `__` form lower-cases the sub-key (e.g.
+       `SCT_INSTANCE_TYPE_DB__ARCH` becomes sub-key `arch`), while the `.` form
+       preserves case verbatim (`SCT_INSTANCE_TYPE_DB.ARCH` stays `ARCH`). This
+       matters for sub-keys consumed by case-sensitive lookups -- prefer
+       uppercase sub-keys with `__` (they'll be lowered, matching the common
+       convention) rather than the case-preserving dot form.
 
 ## **perf_simple_query_extra_command** / SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND
 
@@ -2174,7 +2190,7 @@ Store adaptive timeout metrics in Argus. Disabled for performance tests only.
 
 ## **adaptive_timeout_multipliers** / SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS
 
-Optional dict of adaptive-timeout multipliers keyed by operation name (from Operations enum value[0], e.g. decommission, remove_node, new_node, repair, etc.). If the current operation key is absent, multiplier 1.0 is used.<br>YAML example:<br>adaptive_timeout_multipliers:<br>  decommission: 4<br>  new_node: 2<br>Environment variable examples:<br>SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS="{'decommission': 4, 'new_node': 2}"<br>Or dot-notation: SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4
+Optional dict of adaptive-timeout multipliers keyed by operation name (from Operations enum value[0], e.g. decommission, remove_node, new_node, repair, etc.). If the current operation key is absent, multiplier 1.0 is used.<br>YAML example:<br>adaptive_timeout_multipliers:<br>  decommission: 4<br>  new_node: 2<br>Environment variable examples:<br>SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS="{'decommission': 4, 'new_node': 2}"<br>Or dot-notation: SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4<br>Or double-underscore (bash-exportable): SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__decommission=4
 
 **default:** {}
 
