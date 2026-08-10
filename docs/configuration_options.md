@@ -2,9 +2,25 @@
 
 #### Appending with environment variables or with config files
 * **strings:** can be appended with adding `++` at the beginning of the string:
-`export SCT_APPEND_SCYLLA_ARGS="++ --overprovisioned 1"`
+       `export SCT_APPEND_SCYLLA_ARGS="++ --overprovisioned 1"`
 * **list:** can be appended by adding `++` as the first item of the list
-`export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
+       `export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
+
+#### Nested (dict/list) options
+* A single sub-key of a dict/list option can be set on its own, without
+       quoting the whole value, using either dot-notation or double-underscore
+       notation: `SCT_STRESS_IMAGE.ycsb=...` or `SCT_STRESS_IMAGE__ycsb=...`.
+* `__` is the bash-exportable form (dots are invalid in bash variable names),
+       so prefer it with plain `export`, e.g. `export SCT_STRESS_IMAGE__ycsb=...`.
+* Sub-keys containing `-` (e.g. `cassandra-stress`) still require the dot form,
+       set via `env 'SCT_STRESS_IMAGE.cassandra-stress=...' ...`, since `-` is not
+       a valid bash identifier character either.
+* **Case matters:** the `__` form lower-cases the sub-key (e.g.
+       `SCT_STRESS_IMAGE__YCSB` becomes sub-key `ycsb`), while the `.` form
+       preserves case verbatim (`SCT_STRESS_IMAGE.YCSB` stays `YCSB`). This
+       matters for sub-keys consumed by case-sensitive lookups -- prefer
+       uppercase sub-keys with `__` (they'll be lowered, matching the common
+       convention) rather than the case-preserving dot form.
 
 ## **config_files** / SCT_CONFIG_FILES
 
