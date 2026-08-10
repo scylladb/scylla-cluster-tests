@@ -115,6 +115,7 @@ lint.select = [
     "UP032",  # Replace .format() with f-string
     "FLY002",  # Replace static join with f-string
     "RUF010",  # Use f-string conversion flags (!s, !r, !a)
+    "LOG",  # flake8-logging rules
 ]
 lint.ignore = ["E501", "PLR2004"]
 
