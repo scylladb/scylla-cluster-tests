@@ -162,6 +162,16 @@
       "phases_done": 3
     },
     {
+      "id": "coredump-preservation-oos-nemesis",
+      "title": "Preserve Coredumps During Out-of-Space Nemesis",
+      "file": "nemesis/coredump-preservation-oos-nemesis.md",
+      "domain": "nemesis",
+      "status": "draft",
+      "created": "2026-02-01",
+      "phases_total": 4,
+      "phases_done": 0
+    },
+    {
       "id": "k8s-multitenancy-dict-config",
       "title": "K8s Multitenancy Dict Config",
       "file": "config/k8s-multitenancy-dict-config.md",
