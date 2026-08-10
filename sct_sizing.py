@@ -177,13 +177,13 @@ def sizing_resolve(ctx, vcpu, memory, disk, arch, role, region):
 
 
 def _resolve_config_files(config_files: tuple[str, ...]) -> list[str]:
-    # lazy: pulls groovy parser dependencies not needed unless Jenkinsfiles are passed
-    from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile  # noqa: PLC0415
-
     resolved = []
     for path_str in config_files:
         path = Path(path_str)
         if path.suffix in {".jenkinsfile", ".groovy"} or path.name == "Jenkinsfile":
+            # lazy: pulls groovy parser dependencies not needed unless Jenkinsfiles are passed
+            from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile  # noqa: PLC0415
+
             pipeline_config = parse_jenkinsfile(path)
             if pipeline_config and pipeline_config.test_config:
                 resolved.extend(pipeline_config.test_config)
