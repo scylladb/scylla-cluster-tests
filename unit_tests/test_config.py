@@ -301,9 +301,13 @@ def test_12_k8s_scylla_version_ubuntu_loader_centos(monkeypatch):
 
 @pytest.mark.integration
 def test_13_scylla_version_ami_branch_latest(monkeypatch):
+    # resolve the branch from the current release instead of hardcoding one: AMIs for
+    # old branches age out of eu-west-1, which is how this test started failing on
+    # 'branch-5.2:latest'.
+    latest_branch = ".".join(_get_latest_scylla_release().split(".")[0:2])
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "branch-5.2:latest")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", f"branch-{latest_branch}:latest")
     monkeypatch.setenv("SCT_CONFIG_FILES", "internal_test_data/multi_region_dc_test_case.yaml")
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
