@@ -808,6 +808,109 @@ class ConfigurationTests(unittest.TestCase):
 
         self.assertEqual(conf.get("stress_read_cmd"), ["cassandra_stress", "cassandra_stress"])
 
+    def test_21_1_nested_values_double_underscore_notation(self):
+        """SCT_<FIELD>__sub_key=... (bash-exportable form) parses the same as SCT_<FIELD>.sub_key=... ."""
+        os.environ["SCT_CONFIG_FILES"] = (
+            '["internal_test_data/minimal_test_case.yaml", "unit_tests/test_data/stress_image_extra_config.yaml"]'
+        )
+        os.environ["SCT_CLUSTER_BACKEND"] = "aws"
+        os.environ["SCT_AMI_ID_DB_SCYLLA"] = "ami-1234"
+        os.environ["SCT_STRESS_READ_CMD__0"] = "cassandra_stress"
+        os.environ["SCT_STRESS_READ_CMD__1"] = "cassandra_stress"
+        os.environ["SCT_STRESS_IMAGE"] = '{"ycsb": "scylladb/something_else"}'
+        os.environ["SCT_STRESS_IMAGE__ycsb"] = "scylladb/something"
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertEqual(conf.get("stress_image.ycsb"), "scylladb/something")
+        self.assertEqual(conf.get("stress_read_cmd"), ["cassandra_stress", "cassandra_stress"])
+
+    def test_21_2_nested_values_dot_and_double_underscore_merge(self):
+        """Dot-notation and double-underscore sub-keys on the same field merge; on a clash, "__" wins."""
+        os.environ["SCT_CONFIG_FILES"] = (
+            '["internal_test_data/minimal_test_case.yaml", "unit_tests/test_data/stress_image_extra_config.yaml"]'
+        )
+        os.environ["SCT_CLUSTER_BACKEND"] = "aws"
+        os.environ["SCT_AMI_ID_DB_SCYLLA"] = "ami-1234"
+        os.environ["SCT_STRESS_IMAGE"] = '{"ycsb": "scylladb/something_else"}'
+        # one sub-key set only via dot-notation
+        os.environ["SCT_STRESS_IMAGE.scylla-bench"] = "scylladb/dot-value"
+        # a different sub-key set via both notations -- "__" must win
+        os.environ["SCT_STRESS_IMAGE.ycsb"] = "scylladb/dot-ycsb"
+        os.environ["SCT_STRESS_IMAGE__ycsb"] = "scylladb/dunder-ycsb"
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertEqual(conf.get("stress_image.scylla-bench"), "scylladb/dot-value")
+        self.assertEqual(conf.get("stress_image.ycsb"), "scylladb/dunder-ycsb")
+
+    def test_21_3_single_underscore_field_names_not_mistaken_for_nesting(self):
+        """Single underscores in field names must never be treated as a nested-key separator.
+
+        SCT_INSTANCE_TYPE_DB is a plain scalar field (single underscores throughout its
+        name) and must stay a literal string rather than being split into a nested
+        sub-key of some shorter field name.
+        """
+        os.environ["SCT_CLUSTER_BACKEND"] = "aws"
+        os.environ["SCT_AMI_ID_DB_SCYLLA"] = "ami-dummy"
+        os.environ["SCT_CONFIG_FILES"] = "internal_test_data/minimal_test_case.yaml"
+        os.environ["SCT_INSTANCE_TYPE_DB"] = "i4i.large"
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertEqual(conf.get("instance_type_db"), "i4i.large")
+
+    def test_21_4_nested_env_subkey_requires_explicit_separator(self):
+        """`sep` is a required argument: there's no "check every separator" fallback.
+
+        The only real caller (`_load_environment_variables`) always iterates
+        NESTED_ENV_SEPARATORS itself and passes the current separator explicitly, so a
+        no-arg convenience mode would be dead code -- and worse, misleading dead code,
+        since a naive iteration order there would invert the "__" wins precedence the
+        live call site relies on.
+        """
+        with self.assertRaises(TypeError):
+            sct_config._nested_env_subkey("SCT_STRESS_IMAGE__ycsb", "SCT_STRESS_IMAGE")
+
+    def test_21_5_nested_env_subkey(self):
+        cases = [
+            ("SCT_STRESS_IMAGE__ycsb", "SCT_STRESS_IMAGE", "__", "ycsb"),
+            ("SCT_STRESS_IMAGE.ycsb", "SCT_STRESS_IMAGE", ".", "ycsb"),
+            # The "__" form lower-cases the sub-key; the "." form keeps its case verbatim.
+            ("SCT_STRESS_IMAGE__YCSB", "SCT_STRESS_IMAGE", "__", "ycsb"),
+            ("SCT_STRESS_IMAGE.YCSB", "SCT_STRESS_IMAGE", ".", "YCSB"),
+            # Anchored on `field_env + sep`, so a field name that is a prefix of another
+            # field's env var name never causes a false match.
+            ("SCT_STRESS_IMAGE_EXTRA__vcpu", "SCT_STRESS_IMAGE", "__", None),
+            ("SCT_AMI_ID_DB_SCYLLA", "SCT_STRESS_IMAGE", "__", None),
+            # Multi-level nesting silently drops everything after the first sub-key: the
+            # existing, documented single-level limitation shared with the dot notation,
+            # not a bug introduced by "__" support.
+            ("SCT_STRESS_IMAGE__foo__bar", "SCT_STRESS_IMAGE", "__", "foo"),
+            ("SCT_STRESS_IMAGE.foo.bar", "SCT_STRESS_IMAGE", ".", "foo"),
+        ]
+        for env_key, field_env, sep, expected in cases:
+            with self.subTest(env_key=env_key, sep=sep):
+                self.assertEqual(sct_config._nested_env_subkey(env_key, field_env, sep), expected)
+
+    def test_21_6_no_option_name_contains_double_underscore(self):
+        """`_check_unexpected_sct_variables` truncates env var names at the first "." or "__"
+        on the assumption that no config option name itself contains "__". This is a
+        developer-facing safety net for that assumption, not a runtime check: it fails
+        the test suite (rather than every import or every config verification) if a
+        future option name breaks it, which would silently mis-truncate env var matching.
+        """
+        offenders = [opt["name"] for opt in sct_config.SCTConfiguration.config_options if "__" in opt["name"]]
+        self.assertEqual(
+            offenders,
+            [],
+            "a config option name contains '__', which breaks the env var name truncation "
+            "assumption in SCTConfiguration._check_unexpected_sct_variables",
+        )
+
     def test_22_get_none(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
         os.environ["SCT_CONFIG_FILES"] = "internal_test_data/minimal_test_case.yaml"
