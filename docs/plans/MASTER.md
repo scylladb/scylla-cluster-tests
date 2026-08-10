@@ -40,6 +40,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Nemesis Rework (Nemesis 2.0) | `in_progress` | [nemesis-rework.md](nemesis/nemesis-rework.md) |
 | Nemesis Extraction Phase 3 | `in_progress` | [nemesis-extraction.md](nemesis/nemesis-extraction.md) |
 | Nemesis Pre-Execution Skip Check (`precheck`) | `in_progress` | [nemesis-precheck.md](nemesis/nemesis-precheck.md) |
+| Preserve Coredumps During Out-of-Space Nemesis | `draft` | [coredump-preservation-oos-nemesis.md](nemesis/coredump-preservation-oos-nemesis.md) |
 
 ### Stress Tools — Load generators
 
