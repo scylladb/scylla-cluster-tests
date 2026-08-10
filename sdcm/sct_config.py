@@ -97,8 +97,45 @@ from sdcm.mgmt.common import AgentBackupParameters
 from sdcm.utils.version_utils import parse_scylla_version_tag
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
 from sdcm.utils.cloud_catalog.instance_matcher import NoMatchingInstanceError, select_instance
+from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS, nested_env_subkey
 
 _SIZING_RESOLUTION_CACHE: dict[tuple, str] = {}
+
+
+def _nested_env_subkey(env_key: str, field_env: str, sep: str) -> str | None:
+    """Return the nested sub-key of *env_key* for *field_env* under separator *sep*, or None if it doesn't nest under it.
+
+    Delegates the anchored splitting itself to `nested_env_subkey` (see
+    sdcm.utils.nested_env_key) so that, e.g., SCT_SIZING_DB_ORACLE__vcpu is
+    never wrongly claimed by field `sizing_db`, and a single underscore inside
+    a field name (like SCT_INSTANCE_TYPE_DB) is never mistaken for a
+    separator.
+
+    *sep* is required: the caller is always iterating NESTED_ENV_SEPARATORS itself
+    (see `_load_environment_variables`, which needs "." matches applied before
+    "__" ones for deterministic last-write-wins precedence), so there is no
+    "check every separator" convenience mode here to keep in sync with that order.
+
+    The "__" form is lower-cased (bash-exportable env vars are conventionally
+    upper-case, but sub-keys like operation names are lower-case); the "."
+    form keeps its existing case-preserving behaviour for backwards
+    compatibility. This means the two forms are NOT drop-in equivalents for
+    non-lowercase sub-keys consumed by case-sensitive lookups: prefer
+    uppercase sub-keys with "__" (they'll be lowered, matching the common
+    convention) rather than relying on ".", whose case is passed through
+    verbatim.
+
+    Only the first sub-key level is supported: a multi-level key like
+    SCT_STRESS_IMAGE__foo__bar resolves to sub-key "foo", silently dropping the
+    trailing "__bar" (same pre-existing limitation as the dot notation, e.g.
+    SCT_STRESS_IMAGE.foo.bar also resolves to "foo" -- not a regression from
+    adding "__" support, just previously undocumented).
+    """
+    sub_key = nested_env_subkey(env_key, field_env, sep)
+    if sub_key is None:
+        return None
+    return sub_key.lower() if sep == "__" else sub_key
+
 
 # SCT_KEYSTORE_* env vars this process exported itself (see the keystore
 # propagation at the end of SCTConfiguration.__init__), mapped to the value we
@@ -342,6 +379,12 @@ class AdaptiveTimeoutMultipliers(RootModel):
 
         SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4
         SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.new_node=3
+
+    Or using double-underscore notation (bash-exportable, dots are invalid
+    in bash variable names):
+
+        SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__decommission=4
+        SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__new_node=3
     """
 
     root: dict[str, confloat(gt=0)] = Field(default_factory=dict)
@@ -1406,7 +1449,8 @@ class SCTConfiguration(BaseModel):
             "  new_node: 2<br>"
             "Environment variable examples:<br>"
             "SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS=\"{'decommission': 4, 'new_node': 2}\"<br>"
-            "Or dot-notation: SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4",
+            "Or dot-notation: SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4<br>"
+            "Or double-underscore (bash-exportable): SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__decommission=4",
         )
     )
 
@@ -3604,12 +3648,19 @@ class SCTConfiguration(BaseModel):
                         environment_vars[field_name] = from_env_func(raw_value)
                     except Exception as ex:  # noqa: BLE001
                         raise ValueError(f"failed to parse {field_env} from environment variable") from ex
-                nested_keys = [key for key in os.environ if key.startswith(field_env + ".")]
+                # Iterate "." matches before "__" matches so that, if both forms set the
+                # same sub-key, "__" deterministically wins (last-write-wins below) --
+                # independent of os.environ's iteration order.
+                nested_keys = [
+                    (key, sub_key)
+                    for sep in NESTED_ENV_SEPARATORS
+                    for key in os.environ
+                    if (sub_key := _nested_env_subkey(key, field_env, sep)) is not None
+                ]
                 if nested_keys:
                     list_value = []
                     dict_value = {}
-                    for key in nested_keys:
-                        nest_key, *_ = key.split(".")[1:]
+                    for key, nest_key in nested_keys:
                         nested_value = os.environ.get(key)
                         if isinstance(nested_value, str):
                             nested_value = nested_value.strip()
@@ -4102,7 +4153,10 @@ class SCTConfiguration(BaseModel):
             for field_name, field in self.__class__.model_fields.items()
             if not is_ignored_field(field)
         }
-        env_keys = {o.split(".")[0] for o in os.environ if o.startswith("SCT_")}
+        # Truncate at the first "." or "__" (whichever appears first) so nested
+        # SCT_<FIELD>.sub / SCT_<FIELD>__sub forms resolve to their parent field.
+        # No config field name contains "__", so a global split is safe here.
+        env_keys = {o.split(".")[0].split("__")[0] for o in os.environ if o.startswith("SCT_")}
         unknown_env_keys = env_keys.difference(config_keys)
         if unknown_env_keys:
             output = [f"{key}={os.environ.get(key)}" for key in unknown_env_keys]
@@ -4746,17 +4800,42 @@ class SCTConfiguration(BaseModel):
                    `export SCT_APPEND_SCYLLA_ARGS="++ --overprovisioned 1"`
             * **list:** can be appended by adding `++` as the first item of the list
                    `export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
+
+            #### Nested (dict/list) options
+            * A single sub-key of a dict/list option can be set on its own, without
+                   quoting the whole value, using either dot-notation or double-underscore
+                   notation: `SCT_STRESS_IMAGE.ycsb=...` or `SCT_STRESS_IMAGE__ycsb=...`.
+            * `__` is the bash-exportable form (dots are invalid in bash variable names),
+                   so prefer it with plain `export`, e.g. `export SCT_STRESS_IMAGE__ycsb=...`.
+            * Sub-keys containing `-` (e.g. `cassandra-stress`) still require the dot form,
+                   set via `env 'SCT_STRESS_IMAGE.cassandra-stress=...' ...`, since `-` is not
+                   a valid bash identifier character either.
+            * **Case matters:** the `__` form lower-cases the sub-key (e.g.
+                   `SCT_INSTANCE_TYPE_DB__ARCH` becomes sub-key `arch`), while the `.` form
+                   preserves case verbatim (`SCT_INSTANCE_TYPE_DB.ARCH` stays `ARCH`). This
+                   matters for sub-keys consumed by case-sensitive lookups -- prefer
+                   uppercase sub-keys with `__` (they'll be lowered, matching the common
+                   convention) rather than the case-preserving dot form.
         """
         defaults, backend_defaults = cls._get_defaults_for_docs()
 
-        def strip_help_text(text):
+        def strip_help_text(text, preserve_indent=False):
             """
-            strip all lines, and also remove empty lines from start or end
+            Strip all lines, and also remove empty lines from start or end.
+
+            If *preserve_indent* is set, dedent to the common margin and keep each
+            line's *relative* indentation (so multi-line list-item continuations,
+            like the ones in *header* above, stay visually nested under their
+            bullet in the rendered markdown, matching this docstring's own
+            indentation) instead of flattening every line flush left.
             """
-            output = [l.strip() for l in text.splitlines()]
+            if preserve_indent:
+                output = [line.rstrip() for line in dedent(text).splitlines()]
+            else:
+                output = [l.strip() for l in text.splitlines()]
             return "\n".join(output[1 if not output[0] else 0 : -1 if not output[-1] else None])
 
-        ret = strip_help_text(header)
+        ret = strip_help_text(header, preserve_indent=True)
 
         for field_name, field in cls.model_fields.items():
             if field.exclude or is_ignored_field(field):

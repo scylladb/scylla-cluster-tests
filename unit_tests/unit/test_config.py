@@ -512,6 +512,119 @@ def test_21_nested_values(monkeypatch):
     assert conf.stress_read_cmd == ["cassandra_stress", "cassandra_stress"]
 
 
+def test_21_1_nested_values_double_underscore_notation(monkeypatch):
+    """SCT_<FIELD>__sub_key=... (bash-exportable form) parses the same as SCT_<FIELD>.sub_key=... ."""
+    monkeypatch.setenv(
+        "SCT_CONFIG_FILES",
+        ('["unit_tests/test_configs/minimal_test_case.yaml", "unit_tests/test_data/stress_image_extra_config.yaml"]'),
+    )
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-1234")
+    monkeypatch.setenv("SCT_STRESS_READ_CMD__0", "cassandra_stress")
+    monkeypatch.setenv("SCT_STRESS_READ_CMD__1", "cassandra_stress")
+    monkeypatch.setenv("SCT_STRESS_IMAGE", '{"ycsb": "scylladb/something_else"}')
+    monkeypatch.setenv("SCT_STRESS_IMAGE__ycsb", "scylladb/something")
+
+    conf = sct_config.SCTConfiguration()
+    conf.verify_configuration()
+
+    assert conf.get("stress_image.ycsb") == "scylladb/something"
+    assert conf.stress_read_cmd == ["cassandra_stress", "cassandra_stress"]
+
+
+def test_21_2_nested_values_dot_and_double_underscore_merge(monkeypatch):
+    """Dot-notation and double-underscore sub-keys on the same field merge; on a clash, "__" wins."""
+    monkeypatch.setenv(
+        "SCT_CONFIG_FILES",
+        ('["unit_tests/test_configs/minimal_test_case.yaml", "unit_tests/test_data/stress_image_extra_config.yaml"]'),
+    )
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-1234")
+    monkeypatch.setenv("SCT_STRESS_IMAGE", '{"ycsb": "scylladb/something_else"}')
+    # one sub-key set only via dot-notation
+    monkeypatch.setenv("SCT_STRESS_IMAGE.scylla-bench", "scylladb/dot-value")
+    # a different sub-key set via both notations -- "__" must win
+    monkeypatch.setenv("SCT_STRESS_IMAGE.ycsb", "scylladb/dot-ycsb")
+    monkeypatch.setenv("SCT_STRESS_IMAGE__ycsb", "scylladb/dunder-ycsb")
+
+    conf = sct_config.SCTConfiguration()
+    conf.verify_configuration()
+
+    assert conf.get("stress_image.scylla-bench") == "scylladb/dot-value"
+    assert conf.get("stress_image.ycsb") == "scylladb/dunder-ycsb"
+
+
+def test_21_3_single_underscore_field_names_not_mistaken_for_nesting(monkeypatch):
+    """Single underscores in field names must never be treated as a nested-key separator.
+
+    SCT_INSTANCE_TYPE_DB is a plain scalar field (single underscores throughout its
+    name) and must stay a literal string. SCT_SIZING_DB_ORACLE__vcpu nests under the
+    *sizing_db_oracle* field (whose own name also contains underscores) via "__", and
+    must not be wrongly absorbed by the unrelated "sizing_db" field.
+    """
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
+    monkeypatch.setenv("SCT_SIZING_DB_ORACLE__vcpu", "8")
+
+    conf = sct_config.SCTConfiguration()
+    conf.verify_configuration()
+
+    assert conf.get("instance_type_db") == "i4i.large"
+    assert conf.get("sizing_db") is None
+    assert conf.get("sizing_db_oracle")["vcpu"] == "8"
+
+
+def test_21_4_nested_env_subkey_requires_explicit_separator():
+    """`sep` is a required argument: there's no "check every separator" fallback.
+
+    The only real caller (`_load_environment_variables`) always iterates
+    NESTED_ENV_SEPARATORS itself and passes the current separator explicitly, so a
+    no-arg convenience mode would be dead code -- and worse, misleading dead code,
+    since a naive iteration order there would invert the "__" wins precedence the
+    live call site relies on.
+    """
+    with pytest.raises(TypeError):
+        sct_config._nested_env_subkey("SCT_STRESS_IMAGE__ycsb", "SCT_STRESS_IMAGE")
+
+
+@pytest.mark.parametrize(
+    ("env_key", "field_env", "sep", "expected"),
+    [
+        pytest.param("SCT_STRESS_IMAGE__ycsb", "SCT_STRESS_IMAGE", "__", "ycsb", id="dunder-form"),
+        pytest.param("SCT_STRESS_IMAGE.ycsb", "SCT_STRESS_IMAGE", ".", "ycsb", id="dot-form"),
+        # The "__" form lower-cases the sub-key; the "." form keeps its case verbatim.
+        pytest.param("SCT_STRESS_IMAGE__YCSB", "SCT_STRESS_IMAGE", "__", "ycsb", id="dunder-form-lower-cases"),
+        pytest.param("SCT_STRESS_IMAGE.YCSB", "SCT_STRESS_IMAGE", ".", "YCSB", id="dot-form-preserves-case"),
+        # Anchored on `field_env + sep`, so a field name that is a prefix of another field's
+        # env var name (sizing_db vs. sizing_db_oracle) never causes a false match.
+        pytest.param("SCT_SIZING_DB_ORACLE__vcpu", "SCT_SIZING_DB", "__", None, id="anchors-on-full-field-prefix"),
+        pytest.param("SCT_AMI_ID_DB_SCYLLA", "SCT_STRESS_IMAGE", "__", None, id="unrelated-field"),
+        # Multi-level nesting silently drops everything after the first sub-key: the
+        # existing, documented single-level limitation shared with the dot notation, not a
+        # bug introduced by "__" support.
+        pytest.param("SCT_STRESS_IMAGE__foo__bar", "SCT_STRESS_IMAGE", "__", "foo", id="only-first-level-dunder"),
+        pytest.param("SCT_STRESS_IMAGE.foo.bar", "SCT_STRESS_IMAGE", ".", "foo", id="only-first-level-dot"),
+    ],
+)
+def test_21_5_nested_env_subkey(env_key, field_env, sep, expected):
+    assert sct_config._nested_env_subkey(env_key, field_env, sep) == expected
+
+
+def test_21_6_no_field_name_contains_double_underscore():
+    """`_check_unexpected_sct_variables` truncates env var names at the first "." or "__"
+    on the assumption that no config field name itself contains "__". This is a
+    developer-facing safety net for that assumption, not a runtime check: it fails
+    the test suite (rather than every import or every config verification) if a
+    future field name breaks it, which would silently mis-truncate env var matching.
+    """
+    assert not any("__" in field_name for field_name in sct_config.SCTConfiguration.model_fields), (
+        "a config field name contains '__', which breaks the env var name truncation "
+        "assumption in SCTConfiguration._check_unexpected_sct_variables"
+    )
+
+
 def test_22_get_none(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")

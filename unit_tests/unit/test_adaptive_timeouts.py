@@ -492,6 +492,16 @@ def test_multiplier_invalid_env_var_raises(monkeypatch, env_value, match_pattern
             {"remove_node": 2.5, "decommission": 1.0},
             id="float-value",
         ),
+        pytest.param(
+            {"SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__remove_node": "2.5"},
+            {"remove_node": 2.5, "decommission": 1.0},
+            id="double-underscore-notation",
+        ),
+        pytest.param(
+            {"SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__REMOVE_NODE": "2.5"},
+            {"remove_node": 2.5, "decommission": 1.0},
+            id="double-underscore-notation-uppercase-subkey",
+        ),
     ],
 )
 def test_multiplier_dot_notation_env_var(monkeypatch, env_vars, expected_multipliers):
@@ -499,6 +509,11 @@ def test_multiplier_dot_notation_env_var(monkeypatch, env_vars, expected_multipl
 
     This mirrors the pattern used by SCT_STRESS_IMAGE.cassandra-stress=... in pipelines.
     Values arrive as strings and are coerced to floats by Pydantic.
+
+    Also covers the "__" (double-underscore) form -- the bash-exportable alternative to
+    dot-notation -- including an uppercase sub-key. "remove_node" itself contains a single
+    underscore, which must survive: only a *consecutive* double underscore acts as the
+    nested-key separator.
     """
     monkeypatch.delenv("SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS", raising=False)
     for key, value in env_vars.items():

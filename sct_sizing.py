@@ -18,6 +18,11 @@ from pathlib import Path
 import click
 import yaml
 
+# sdcm.utils.nested_env_key is stdlib-only, so importing it here at module load time does
+# not pull in sdcm's boto3/google-cloud/azure-mgmt transitive dependencies and keeps this
+# CLI's lazy cloud-SDK import boundary intact (see the imports inside sizing_preview()).
+from sdcm.utils.nested_env_key import split_earliest_nested_key
+
 _SSD_SUFFIX_RE = re.compile(r"-(\d+)ssd$")
 
 
@@ -265,10 +270,9 @@ def sizing_preview(  # noqa: PLR0912, PLR0914, PLR0915
         if not key.startswith("SCT_"):
             continue
         base_key = key[4:].lower()
-        dot_pos = base_key.find(".")
-        if dot_pos != -1:
-            param_name = base_key[:dot_pos]
-            sub_key = base_key[dot_pos + 1 :]
+        split = split_earliest_nested_key(base_key)
+        if split is not None:
+            param_name, sub_key = split
             env_overrides.setdefault(param_name, {})
             if isinstance(env_overrides[param_name], dict):
                 env_overrides[param_name][sub_key] = val.strip()
