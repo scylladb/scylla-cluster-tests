@@ -26,6 +26,8 @@ from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_latest_scylla_release
 
+LOGGER = logging.getLogger(__name__)
+
 
 def _get_latest_scylla_release(product="scylla"):
     return get_latest_scylla_release(product=product, verify=False)
@@ -66,7 +68,7 @@ def fixture_env(monkeypatch):
 
 
 def test_01_dump_config(conf):
-    logging.debug(conf.dump_config())
+    LOGGER.debug(conf.dump_config())
 
 
 def test_02_verify_config(conf):

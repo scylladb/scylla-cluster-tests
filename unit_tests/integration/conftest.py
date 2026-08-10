@@ -49,6 +49,8 @@ from sdcm.utils.docker_remote import RemoteDocker
 from unit_tests.lib.dummy_remote import LocalNode, LocalScyllaClusterDummy
 from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
 
+LOGGER = logging.getLogger(__name__)
+
 # Inherit UNIT_TESTS_DIR from the parent conftest so we don't use __file__ here.
 _REPO_ROOT: Path = Path(__file__).parent.parent.parent
 
@@ -86,9 +88,9 @@ def mock_remote_scylla_yaml(scylla_node):
                 if result.returncode == 0:
                     changes_applied.append(f"{yaml_key}: {yaml_value}")
                 else:
-                    logging.error("Failed to apply scylla.yaml change %s: %s", yaml_key, result.stderr)
+                    LOGGER.error("Failed to apply scylla.yaml change %s: %s", yaml_key, result.stderr)
     except Exception as e:  # noqa: BLE001
-        logging.error("Error in mock_remote_scylla_yaml: %s", e)
+        LOGGER.error("Error in mock_remote_scylla_yaml: %s", e)
 
 
 @contextmanager
@@ -187,14 +189,14 @@ def configure_scylla_node(docker_scylla_args: dict, params, ssl_dir: Path | None
         try:
             return scylla.is_port_used(port=BaseNode.CQL_PORT, service_name="scylla-server")
         except Exception as details:  # noqa: BLE001
-            logging.error("Error checking for scylla up normal: %s", details)
+            LOGGER.error("Error checking for scylla up normal: %s", details)
             return False
 
     def db_alternator_up():
         try:
             return scylla.is_port_used(port=ALTERNATOR_PORT, service_name="scylla-server")
         except Exception as details:  # noqa: BLE001
-            logging.error("Error checking for scylla up normal: %s", details)
+            LOGGER.error("Error checking for scylla up normal: %s", details)
             return False
 
     wait.wait_for(func=db_up, step=1, text="Waiting for DB services to be up", timeout=120, throw_exc=True)
@@ -256,7 +258,7 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
             check=False,
         )
         if result.returncode != 0:
-            logging.warning("Failed to send SIGHUP to Scylla process: %s", result.stderr)
+            LOGGER.warning("Failed to send SIGHUP to Scylla process: %s", result.stderr)
 
     docker_scylla.reload_config = reload_config_for_test
 
@@ -295,7 +297,7 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
             try:
                 vs_cluster.destroy()
             except Exception:  # noqa: BLE001
-                logging.warning("Failed to destroy Vector Store cluster", exc_info=True)
+                LOGGER.warning("Failed to destroy Vector Store cluster", exc_info=True)
 
     vector_store_cluster = None
     try:

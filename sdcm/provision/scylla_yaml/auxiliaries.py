@@ -36,7 +36,7 @@ SEED_PROVIDERS = [
     "RackInferringSnitch",
 ]
 SASLAUTHD_AUTHENTICATOR = "com.scylladb.auth.SaslauthdAuthenticator"
-LOGGER = logging.getLogger(__file__)
+LOGGER = logging.getLogger(__name__)
 
 
 class SeedProvider(BaseModel):

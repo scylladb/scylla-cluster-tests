@@ -23,6 +23,8 @@ from sdcm.utils.common import (
 from sdcm.utils.version_utils import ComparableScyllaVersion
 from unit_tests.lib.fake_cluster import DummyScyllaCluster
 
+LOGGER = logging.getLogger(__name__)
+
 
 @pytest.fixture
 def prepared_keyspaces(docker_scylla, params):
@@ -328,10 +330,10 @@ def test_is_table_has_no_sstables(docker_scylla, params, events):
         snapshot_name = re.findall(r"(\d+)", result.stdout.split("snapshot name")[1])[0]
 
         result = docker_scylla.run_nodetool("listsnapshots")
-        logging.debug(result)
+        LOGGER.debug(result)
         snapshots_content = parse_nodetool_listsnapshots(listsnapshots_output=result.stdout)
         snapshot_content = snapshots_content[snapshot_name]
-        logging.debug(snapshot_content)
+        LOGGER.debug(snapshot_content)
 
         snapshot_content_list = [[elem.keyspace_name, elem.table_name] for elem in snapshot_content]
         if sorted(keyspace_table) != sorted(snapshot_content_list):
