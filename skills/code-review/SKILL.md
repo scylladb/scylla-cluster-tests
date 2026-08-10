@@ -6,7 +6,8 @@ description: >-
   across class hierarchies, verifying override compatibility, checking import
   conventions, error handling patterns, backend impact, test coverage, or
   provision label requirements. Covers inheritance safety, polymorphic method
-  audits, and SCT-specific review criteria.
+  audits, detection of serial per-node blocking-I/O loops in provisioning paths,
+  and SCT-specific review criteria.
 ---
 
 # Code Review for SCT
@@ -56,6 +57,7 @@ Ask: Is there a test for this change? Is there a default value for this config o
 - Evaluating whether a PR needs provision test labels
 - Checking for missing tests, missing defaults, or missing docstrings
 - Reviewing nemesis operations or cluster configuration changes
+- Spotting serial per-node loops doing blocking I/O (SSH/cloud-API/HTTP) that should run in parallel
 
 ## When NOT to Use
 
@@ -180,6 +182,29 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
 - No bare `requests.get()` / `requests.post()` without session+retry
 - Localhost/metadata calls may use `retry=0` but must still use the utility for consistent `--connect-timeout`
 
+### Check 10: Serial Per-Node Blocking I/O in Provisioning Paths
+
+**Trigger**: PR adds or modifies a `for node in self.nodes:` (or `for node in node_list:`) loop whose body performs **blocking I/O** — SSH commands (`node.remoter.run/sudo`), cloud-provider API calls, HTTP requests, or `wait.wait_for(...)` polling — especially in cluster setup/provisioning paths (`cluster.py`, `cluster_aws.py`, `cluster_gce.py`, `cluster_azure.py`, `sct_provision/`).
+
+**Why this matters**: These loops run once per node and each iteration blocks on network round-trips. On large clusters the latency is `N * per_node_latency`, and for `wait.wait_for` loops with a per-node timeout the worst case is `N * timeout` (e.g. `CassandraAWSCluster.wait_for_init` was `N * 1200s`). Parallelizing turns this into roughly a single per-node latency, materially cutting provisioning time. This is a correctness-adjacent performance issue that static checks and existing tests never surface.
+
+**How to review:**
+
+1. Identify whether the per-node work items are **independent** (no ordering dependency, no shared mutable state written without a lock). If independent -> **flag the serial loop and suggest parallelization**.
+2. Prefer the existing helper `BaseCluster.run_func_parallel(func, node_list=None)` — it submits `func(node)` per node on a `ThreadPoolExecutor` and re-raises the first exception via `future.result()`, preserving fail-fast.
+3. Verify the refactor **preserves original semantics**:
+   - Fail-fast loops (that `raise` on error) must still propagate the first exception — `run_func_parallel` does this; a bare `ParallelObject(...).run(..., ignore_exceptions=True)` does NOT.
+   - Order-dependent side effects (e.g. seed election, first-node-only work) must NOT be parallelized blindly.
+   - `ParallelObject` applies its `timeout` **per future**, not as a global deadline — do not describe it as a whole-operation timeout.
+4. If the author left the loop serial, ask whether it is intentional (ordering/dependency) or an oversight; request a one-line comment when serial execution is deliberate.
+
+**Reference examples** (EPIC SCT-720 — parallelizing serial per-node provisioning work):
+- `update_seed_provider` (SCT-731) — per-node `scylla.yaml` SSH read+write.
+- `CassandraAWSCluster.wait_for_init` (SCT-730) — per-node `wait.wait_for(check_node_db_up)` polling.
+- `VectorStoreSetAWS._reconfigure_vector_store_nodes` (SCT-729) — per-node `systemctl` restart, fail-fast preserved.
+
+All three extract the loop body into a local `func(node)` and dispatch via `self.run_func_parallel(func=...)`, with a unit test asserting every node is processed (and, where relevant, that exceptions still propagate).
+
 ## Reference Index
 
 | File | Content |
@@ -205,3 +230,4 @@ A complete code review:
 - [ ] Commit message validated — Conventional Commits format followed
 - [ ] Missing code identified — defaults, docstrings, tests, other backends
 - [ ] HTTP resilience verified — no bare curl or requests calls without retry
+- [ ] Serial per-node blocking-I/O loops flagged — independent per-node work in provisioning paths parallelized (or deliberately kept serial with a comment)

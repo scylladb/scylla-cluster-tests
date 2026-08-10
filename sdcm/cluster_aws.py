@@ -58,6 +58,7 @@ from sdcm.kernel_panic_checker import AWSKernelPanicChecker
 from sdcm.utils.decorators import retrying
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import to_inet_ntop_format
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.vector_store_utils import VectorStoreClusterMixin, VectorStoreNodeMixin
 from sdcm.wait import exponential_retry
 
@@ -74,6 +75,17 @@ EBS_VOLUME = "attached"
 INSTANCE_STORE = "instance_store"
 
 SPOT_TERMINATION_CHECK_DELAY = 0
+
+# Max number of nodes to initialize concurrently in add_nodes. Caps threads/SSH sessions
+# and concurrent EC2 API calls on very large clusters.
+MAX_NODE_INIT_WORKERS = 20
+# Per-node timeout (seconds) passed to ParallelObject when creating + initializing nodes.
+# NOTE: ParallelObject applies this per future, not as a strict global wall-clock deadline
+# (see sdcm/utils/parallel_object.py). For clusters larger than MAX_NODE_INIT_WORKERS the
+# overflow nodes are queued, so the effective ceiling can be higher than this value.
+# node.init() waits for the instance to reach `running`, allocates/attaches an EIP, waits for
+# the public IP, then runs wait_ssh_up (up to 5min) and wait_for_cloud_init.
+NODE_INIT_TIMEOUT = 40 * 60
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -571,15 +583,22 @@ class AWSCluster(cluster.BaseCluster):
                     ami_id=image_id,
                 )
             )
+        # Assign node_index/rack serially so node names, ordering and rack distribution stay
+        # deterministic and identical to the previous serial implementation.
+        node_specs = []
         for node_index, instance in enumerate(instances):
             self._node_index += 1
             # in case rack is not specified, spread nodes to different racks
             node_rack = node_index % self.racks_count if rack is None else rack
+            node_specs.append((instance, self._node_index, node_rack))
+
+        def _create_and_init_node(node_spec):
+            instance, node_index, node_rack = node_spec
             node = self._create_node(
                 instance,
                 self._ec2_ami_username,
                 self.node_prefix,
-                self._node_index,
+                node_index,
                 self.logdir,
                 dc_idx=dc_idx,
                 rack=node_rack,
@@ -588,8 +607,27 @@ class AWSCluster(cluster.BaseCluster):
             node.enable_auto_bootstrap = enable_auto_bootstrap
             if ssh_connection_ip_type(self.params) == "ipv6" and not node.distro.is_ubuntu:
                 node.config_ipv6_as_persistent()
+            return node
 
-            self.nodes.append(node)
+        # _create_node runs node.init(), which blocks per node on EC2 waiters (instance running,
+        # public IP), EIP allocation and SSH/cloud-init - previously done one node at a time, making
+        # provisioning grow linearly with cluster size (SCT-721). Initialize all nodes concurrently.
+        # ignore_exceptions=True so a failure on one node does not discard the nodes that succeeded:
+        # they must still be registered in self.nodes to be terminated during teardown. Nodes that
+        # fail init self-terminate via the @terminate_on_failure decorator on init().
+        results = ParallelObject(
+            objects=node_specs,
+            timeout=NODE_INIT_TIMEOUT,
+            num_workers=min(len(node_specs), MAX_NODE_INIT_WORKERS),
+        ).run(_create_and_init_node, ignore_exceptions=True)
+
+        # ParallelObject preserves submission order, so self.nodes keeps the original ordering.
+        self.nodes.extend([result.result for result in results if result.exc is None])
+
+        if failed := [result for result in results if result.exc is not None]:
+            self.log.error("Failed to initialize %s out of %s node(s)", len(failed), len(node_specs))
+            raise failed[0].exc
+
         self.write_node_public_ip_file()
         self.write_node_private_ip_file()
         return self.nodes[-count:]
@@ -1366,7 +1404,8 @@ class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
     @cluster.wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
         node_list = node_list if node_list else self.nodes
-        for node in node_list:
+
+        def _wait_for_node_db_up(node):
             wait.wait_for(
                 func=self.check_node_db_up,
                 step=10,
@@ -1375,6 +1414,10 @@ class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
                 throw_exc=True,
                 node=node,
             )
+
+        # Waiting for each node serially takes up to N * timeout; wait for all nodes in
+        # parallel so the whole cluster converges within a single timeout window (SCT-730).
+        self.run_func_parallel(func=_wait_for_node_db_up, node_list=node_list)
 
 
 class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
@@ -1563,7 +1606,8 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
             return
 
         self.log.info("Reconfiguring Vector Store nodes with Scylla cluster information")
-        for node in self.nodes:
+
+        def _reconfigure_node(node):
             try:
                 node.remoter.run("sudo systemctl stop vector-store", ignore_status=True, verbose=True)
                 node.configure_vector_store_service()
@@ -1571,6 +1615,11 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
             except Exception as e:
                 self.log.error("Failed to reconfigure Vector Store node %s: %s", node.name, e)
                 raise
+
+        # Each node reconfiguration is an independent set of SSH commands, so run them in
+        # parallel to cut the serial per-node provisioning latency (SCT-729). run_func_parallel
+        # re-raises the first exception via future.result(), preserving the fail-fast behavior.
+        self.run_func_parallel(func=_reconfigure_node)
 
     def _create_node(
         self, instance, ami_username, node_prefix, node_index, base_logdir, dc_idx, rack, after_config=None
