@@ -16,6 +16,7 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.base import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 
+LOGGER = logging.getLogger(__name__)
 DEFAULT_GH_USER = "scylladb"
 DEFAULT_GH_REPO = "scylladb"
 
@@ -151,7 +152,7 @@ class JiraIssueRetriever:
                 server=credentials["jira_server"], basic_auth=(credentials["jira_email"], credentials["jira_api_token"])
             )
         except Exception as ex:  # noqa: BLE001
-            logging.warning(f"failed to create jira client: {ex}")
+            LOGGER.warning(f"failed to create jira client: {ex}")
 
     @lru_cache
     def get_issue(self, issue_id: str) -> Issue | None:
@@ -224,7 +225,7 @@ class GithubIssueRetriever:
         auth = github.Auth.Token(token=github_access["token"])
         _github = github.Github(auth=auth, retry=None)
         rate = _github.get_rate_limit()
-        logging.debug(rate.raw_data)
+        LOGGER.debug(rate.raw_data)
         return _github
 
     @lru_cache
@@ -269,7 +270,7 @@ class SkipPerIssues:
             auth = github.Auth.Token(token=github_access["token"])
             cls._github = github.Github(auth=auth, retry=None)
             rate = cls._github.get_rate_limit()
-            logging.debug(rate.raw_data)
+            LOGGER.debug(rate.raw_data)
         return cls._github
 
     def __init__(self, issues: list[str] | str, params: SCTConfiguration | dict):
@@ -285,7 +286,7 @@ class SkipPerIssues:
             ref = parse_issue(issue)
 
         except ValueError:
-            logging.warning("couldn't parse issue: %s", issue)
+            LOGGER.warning("couldn't parse issue: %s", issue)
             TestFrameworkEvent(
                 source=self.__class__.__name__,
                 message=f"couldn't parse issue: {issue}",
@@ -299,7 +300,7 @@ class SkipPerIssues:
             try:
                 return GithubIssueRetriever().get_issue(ref.user, ref.repo, issue_id)
             except Exception as exc:  # noqa: BLE001
-                logging.warning("failed to get issue: %s\n %s", issue, exc)
+                LOGGER.warning("failed to get issue: %s\n %s", issue, exc)
                 TestFrameworkEvent(
                     source=self.__class__.__name__,
                     message=f"failed to get issue {issue}",
@@ -313,7 +314,7 @@ class SkipPerIssues:
             try:
                 return JiraIssueRetriever().get_issue(issue_id)
             except Exception as exc:  # noqa: BLE001
-                logging.warning("failed to get issue: %s\n %s", issue, exc)
+                LOGGER.warning("failed to get issue: %s\n %s", issue, exc)
                 TestFrameworkEvent(
                     source=self.__class__.__name__,
                     message=f"failed to get issue {issue}",
@@ -322,7 +323,7 @@ class SkipPerIssues:
                 ).publish()
                 return None
 
-        logging.warning("issue should be github/jira issue: %s", issue)
+        LOGGER.warning("issue should be github/jira issue: %s", issue)
         TestFrameworkEvent(
             source=self.__class__.__name__,
             message=f"issue should be github/jira issue {issue}",
