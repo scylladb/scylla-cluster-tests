@@ -1318,9 +1318,12 @@ def unit_tests(test, junit_xml):
 
 
 @cli.command("integration-tests", help="Run all the SCT internal integration-tests")
-@click.option("-t", "--test", required=False, default="", help="Run specific test file from unit-tests directory")
+@click.option(
+    "-t", "--test", required=False, default=[""], multiple=True, help="Run specific test file from unit-tests directory"
+)
+@click.option("-n", required=False, default=4, help="Sets number of parallel tests to run, default is 4")
 @click.option("--junit-xml", required=False, default="", help="Path to write JUnit XML report")
-def integration_tests(test, junit_xml):
+def integration_tests(test, n, junit_xml):
     get_test_config().logdir()
     add_file_logger()
 
@@ -1336,7 +1339,17 @@ def integration_tests(test, junit_xml):
         )
         local_cluster.setup_prerequisites()
 
-    args = ["-v", "-p", "no:warnings", "-m", "integration", "unit_tests/{}".format(test)]
+    args = [
+        "-v",
+        "-p",
+        "no:warnings",
+        "-m",
+        "integration",
+        "--dist",
+        "loadgroup",
+        f"-n{n}",
+        *(f"unit_tests/{t}" for t in test),
+    ]
     if junit_xml:
         args.append(f"--junit-xml={junit_xml}")
     sys.exit(pytest.main(args))

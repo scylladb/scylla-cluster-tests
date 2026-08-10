@@ -840,6 +840,7 @@ def test_base_node_cpuset_not_configured(cat_results):
 
 
 @pytest.mark.integration
+@pytest.mark.xdist_group("docker_heavy")
 def test_get_any_ks_cf_list(docker_scylla, params, events):
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
@@ -983,6 +984,7 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):
 
 
 @pytest.mark.integration
+@pytest.mark.xdist_group("docker_heavy")
 def test_filter_out_ks_with_rf_one(docker_scylla, params, events):
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
@@ -1007,6 +1009,7 @@ def test_filter_out_ks_with_rf_one(docker_scylla, params, events):
 
 
 @pytest.mark.integration
+@pytest.mark.xdist_group("docker_heavy")
 def test_is_table_has_no_sstables(docker_scylla, params, events):
     """
     test is_table_has_no_sstables filter function, as it would be used in `disrupt_snapshot_operations` nemesis
@@ -1070,6 +1073,7 @@ def test_is_table_has_no_sstables(docker_scylla, params, events):
 
 
 @pytest.mark.integration
+@pytest.mark.xdist_group("docker_heavy")
 def test_exclusive_connection(docker_scylla, docker_scylla_2, params, events):
     """
     Test exclusive CQL connection creation for each node in the cluster.
