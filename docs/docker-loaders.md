@@ -52,6 +52,23 @@ export SCT_STRESS_IMAGE.cassandra-stress="scylladb/scylla:5.0.0"
 export SCT_STRESS_IMAGE.scylla-bench="scylladb/hydra-loaders:scylla-bench-v0.1.8"
 ```
 
+`__` is a bash-exportable alternative to the dot notation above (dots are invalid
+in bash variable names), usable with plain `export`:
+
+```bash
+export SCT_STRESS_IMAGE__ycsb="scylladb/hydra-loaders:ycsb-jdk8-20211104"
+```
+
+`cassandra-stress` and `scylla-bench` contain `-`, which is also invalid in bash
+variable names, so `__` doesn't apply to them -- keep using the dot form above.
+
+Note the two forms are not fully interchangeable for case: `__` lower-cases the
+sub-key (`SCT_STRESS_IMAGE__YCSB` becomes sub-key `ycsb`), while `.` preserves
+case verbatim (`SCT_STRESS_IMAGE.YCSB` stays `YCSB`). Since `stress_image` keys
+are lower-case tool names, this doesn't bite here, but for options whose
+sub-keys are consumed by case-sensitive lookups, prefer uppercase sub-keys with
+`__` over the case-preserving dot form.
+
 for using multiple versions, we should be able to define the image as part of the stress command:
 
 ```yaml
