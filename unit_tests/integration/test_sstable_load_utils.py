@@ -33,7 +33,7 @@ def test_sstable_load_utils_usage(docker_scylla, params, request):
 
     cs_thread.run()
 
-    output, _ = cs_thread.parse_results()
+    output, _ = cs_thread.verify_results()
 
     column_num = SstableLoadUtils.calculate_columns_count_in_table(
         docker_scylla, keyspace_name="keyspace_refresh", table_name="standard1"
