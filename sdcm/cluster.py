@@ -6027,6 +6027,7 @@ class BaseScyllaCluster:
         self.log.debug("There are %s nemesis threads currently running", len(self.nemesis_threads))
         self.nemesis_termination_event.set()
         threads_tracebacks = []
+        stuck_threads = []
 
         current_thread_frames = sys._current_frames()
         for nemesis_thread in self.nemesis_threads:
@@ -6035,6 +6036,7 @@ class BaseScyllaCluster:
             if nemesis_thread.is_alive():
                 stack_trace = traceback.format_stack(current_thread_frames[nemesis_thread.ident])
                 threads_tracebacks.append("\n".join(stack_trace))
+                stuck_threads.append(nemesis_thread)
 
         if threads_tracebacks:
             escalation_reason = (
@@ -6046,7 +6048,7 @@ class BaseScyllaCluster:
                 message=escalation_reason + ":\n" + "\n".join(threads_tracebacks),
                 severity=Severity.CRITICAL,
             ).publish_or_dump()
-            request_hard_exit(escalation_reason)
+            request_hard_exit(escalation_reason, stuck_threads)
 
     def start_kms_key_rotation_thread(self) -> None:
         if self.params.get("cluster_backend") != "aws":

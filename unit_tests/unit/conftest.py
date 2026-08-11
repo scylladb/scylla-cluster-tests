@@ -41,9 +41,10 @@ def fake_remoter():
 
 @pytest.fixture(autouse=True)
 def _reset_hard_exit_state(monkeypatch):
-    """Ensure `_hard_exit_reason` never leaks between tests (e.g. ParallelObject.clean_up()
-    or stop_nemesis() can arm it)."""
+    """Ensure `_hard_exit_reason`/`_hard_exit_threads` never leak between tests (e.g.
+    ParallelObject.clean_up() or stop_nemesis() can arm them)."""
     monkeypatch.setattr(hard_exit, "_hard_exit_reason", None)
+    monkeypatch.setattr(hard_exit, "_hard_exit_threads", [])
 
 
 @pytest.fixture(scope="session", autouse=True)

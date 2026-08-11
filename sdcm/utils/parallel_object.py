@@ -2,6 +2,7 @@ from __future__ import absolute_import, annotations
 
 import logging
 import threading
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from concurrent.futures.thread import _global_shutdown_lock, _threads_queues
@@ -147,6 +148,9 @@ class ParallelObject:
         return self.run(lambda x: x(), ignore_exceptions=ignore_exceptions)
 
     def clean_up(self, futures):
+        # TODO SCT-803: route clean-resources/collect-logs through exit_process() --
+        # ParallelObject usage there can arm a hard-exit that's currently silently
+        # ignored, since those CLI commands exit through Click's normal return path.
         # if there are futures that didn't run  we cancel them
         for future, _ in futures:
             future.cancel()
@@ -219,13 +223,20 @@ class ParallelObject:
         # clean_up() call. Mirror the join(timeout)-then-check pattern `stop_nemesis`
         # (sdcm/cluster.py) uses: give each worker a real, bounded grace period to
         # actually finish before deciding it is stuck.
+        #
+        # This is deadline-bound, not per-thread-bound: a single shared deadline is
+        # computed once up front, and each join() gets whatever budget remains, so the
+        # total added latency across all workers is capped at roughly one grace period
+        # regardless of worker count, rather than growing to num_workers * grace period.
+        deadline = time.monotonic() + WORKER_JOIN_GRACE_PERIOD
         for thread in self._thread_pool._threads:
-            thread.join(timeout=WORKER_JOIN_GRACE_PERIOD)
+            thread.join(timeout=max(0, deadline - time.monotonic()))
         stuck_workers = [thread for thread in self._thread_pool._threads if thread.is_alive()]
         if stuck_workers:
             request_hard_exit(
                 f"ParallelObject worker thread(s) still alive after shutdown: "
-                f"{[thread.name for thread in stuck_workers]}"
+                f"{[thread.name for thread in stuck_workers]}",
+                stuck_workers,
             )
 
     @staticmethod
