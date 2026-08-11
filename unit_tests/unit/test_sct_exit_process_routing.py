@@ -67,6 +67,7 @@ def test_run_pytest_calls_exit_process_when_reporting_raises(tmp_path):
 
     with (
         patch("sct.get_test_config", return_value=mock_test_config),
+        patch("sct.SCTConfiguration"),
         patch("sct.pytest.main", return_value=0) as mock_pytest_main,
         patch("sct.exit_process") as mock_exit_process,
     ):

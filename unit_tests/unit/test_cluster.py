@@ -983,6 +983,7 @@ def scylla_cluster_for_nemesis(monkeypatch):
         classmethod(lambda cls: SimpleNamespace(skip_test_stages=defaultdict(lambda: False))),
     )
     monkeypatch.setattr(hard_exit, "_hard_exit_reason", None)
+    monkeypatch.setattr(hard_exit, "_hard_exit_threads", [])
 
     with unittest.mock.patch.object(BaseScyllaCluster, "__init__", lambda self, **kw: None):
         cluster = BaseScyllaCluster()

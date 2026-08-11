@@ -199,6 +199,7 @@ def test_clean_up_detaches_stuck_worker_from_interpreter_shutdown():
         # (see module docstring): clean_up() must have armed the hard exit too.
         assert hard_exit._hard_exit_reason
         assert "ParallelObject" in hard_exit._hard_exit_reason
+        assert worker_thread in hard_exit._hard_exit_threads
     finally:
         block_forever.set()
         for thread in started_threads:
@@ -222,6 +223,42 @@ def test_clean_up_arms_hard_exit_when_worker_still_alive_after_shutdown():
 
         assert hard_exit._hard_exit_reason
         assert "ParallelObject" in hard_exit._hard_exit_reason
+        assert set(hard_exit._hard_exit_threads) == set(parallel_object._thread_pool._threads)
+    finally:
+        block_forever.set()
+        for thread in parallel_object._thread_pool._threads:
+            thread.join(timeout=5)
+
+
+def test_clean_up_join_grace_period_is_deadline_bound_not_per_thread():
+    """The join() grace period clean_up() gives workers before checking is_alive()
+    must be bounded by a single shared wall-clock deadline, not applied in full to
+    each thread in turn -- otherwise N simultaneously-stuck workers would add
+    N * WORKER_JOIN_GRACE_PERIOD to teardown latency instead of roughly one grace
+    period total. This uses a generous upper bound (well under the naive N *
+    WORKER_JOIN_GRACE_PERIOD, but comfortably above one grace period) to avoid CI
+    flakiness -- it is testing an order-of-magnitude property, not exact timing.
+
+    Tasks are submitted directly to the pool (bypassing run()/call_objects()) and
+    only clean_up() itself is timed, so this isolates the join-loop's latency from
+    unrelated latency like run()'s own future.result(timeout) wait.
+    """
+    num_workers = 4
+    block_forever = threading.Event()
+
+    parallel_object = ParallelObject(objects=[], timeout=1, num_workers=num_workers)
+    futures = [(parallel_object._thread_pool.submit(block_forever.wait), None) for _ in range(num_workers)]
+    try:
+        start = time.monotonic()
+        parallel_object.clean_up(futures)
+        elapsed = time.monotonic() - start
+
+        naive_worst_case = num_workers * parallel_object_module.WORKER_JOIN_GRACE_PERIOD
+        assert elapsed < naive_worst_case / 2, (
+            f"clean_up() took {elapsed}s for {num_workers} stuck workers, "
+            f"expected well under the naive per-thread worst case of {naive_worst_case}s"
+        )
+        assert hard_exit._hard_exit_reason
     finally:
         block_forever.set()
         for thread in parallel_object._thread_pool._threads:
