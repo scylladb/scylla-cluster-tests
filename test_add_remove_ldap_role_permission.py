@@ -31,7 +31,7 @@ class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
         stress_queue = []
         background_write_cmd = self.params.get("stress_cmd")
         InfoEvent(message=f"Starting C-S stress load: {background_write_cmd}").publish()
-        stress_queue.append(self.run_stress_thread(stress_cmd=background_write_cmd, round_robin=True))
+        self.assemble_and_run_all_stress_cmd(stress_queue, background_write_cmd, keyspace_num=1)
 
         if not node.is_enterprise:
             raise ValueError("Cluster is not enterprise. LDAP is supported only for enterprise. aborting.")
