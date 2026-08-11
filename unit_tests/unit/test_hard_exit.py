@@ -34,11 +34,36 @@ def test_exit_process_hard_exits_with_distinct_code_when_armed(monkeypatch):
     os_exit_mock = Mock()
     monkeypatch.setattr(hard_exit.os, "_exit", os_exit_mock)
 
-    request_hard_exit("stuck nemesis thread")
+    alive_thread = Mock(is_alive=Mock(return_value=True))
+    request_hard_exit("stuck nemesis thread", [alive_thread])
     exit_process(3)
 
     os_exit_mock.assert_called_once_with(STUCK_THREAD_EXIT_CODE)
     assert 3 not in os_exit_mock.call_args.args
+
+
+def test_exit_process_falls_through_when_implicated_thread_finished_naturally(monkeypatch):
+    """False-positive prevention: a thread that was stuck when `request_hard_exit()`
+    was called can finish naturally during the remaining cleanup steps (log
+    collection, `clean_resources()`, etc.) that run before the eventual
+    `exit_process()` call. If none of the implicated threads are still alive by
+    then, the danger that justified arming has passed: `exit_process()` must fall
+    through to normal `sys.exit()` behavior, not force a hard exit that would
+    silently override the real test pass/fail result.
+    """
+    os_exit_mock = Mock()
+    monkeypatch.setattr(hard_exit.os, "_exit", os_exit_mock)
+
+    # Was alive when the caller decided to arm; has since finished by the time
+    # exit_process() actually runs.
+    finished_thread = Mock(is_alive=Mock(return_value=False))
+    request_hard_exit("stuck nemesis thread", [finished_thread])
+
+    with pytest.raises(SystemExit) as exc_info:
+        exit_process(3)
+
+    assert exc_info.value.code == 3
+    os_exit_mock.assert_not_called()
 
 
 def test_exit_process_armed_path_does_not_call_blocking_cleanup(monkeypatch):
@@ -49,9 +74,17 @@ def test_exit_process_armed_path_does_not_call_blocking_cleanup(monkeypatch):
     `LOGGER` is mocked out too so this only observes calls hard_exit.py itself
     makes, not incidental flushing a real logging handler would perform when
     emitting the "Hard exit requested" record.
+
+    A `try/except` cannot protect against a call that blocks rather than raises,
+    so `LOGGER.error()` (or any other logging call) must not run in the armed
+    branch of `exit_process()` either -- only `request_hard_exit()`, which runs
+    in a different, non-shutdown-crisis context, is safe to log from. The mock's
+    call count is reset right after arming so this only observes what
+    `exit_process()` itself does.
     """
     monkeypatch.setattr(hard_exit.os, "_exit", Mock())
-    monkeypatch.setattr(hard_exit, "LOGGER", Mock())
+    logger_mock = Mock()
+    monkeypatch.setattr(hard_exit, "LOGGER", logger_mock)
     logging_shutdown_mock = Mock()
     stdout_flush_mock = Mock()
     stderr_flush_mock = Mock()
@@ -59,9 +92,12 @@ def test_exit_process_armed_path_does_not_call_blocking_cleanup(monkeypatch):
     monkeypatch.setattr(hard_exit.sys.stdout, "flush", stdout_flush_mock)
     monkeypatch.setattr(hard_exit.sys.stderr, "flush", stderr_flush_mock)
 
-    request_hard_exit("stuck nemesis thread")
+    alive_thread = Mock(is_alive=Mock(return_value=True))
+    request_hard_exit("stuck nemesis thread", [alive_thread])
+    logger_mock.error.reset_mock()  # request_hard_exit() itself logs at arm-time; that's fine
     exit_process(3)
 
     logging_shutdown_mock.assert_not_called()
     stdout_flush_mock.assert_not_called()
     stderr_flush_mock.assert_not_called()
+    logger_mock.error.assert_not_called()
