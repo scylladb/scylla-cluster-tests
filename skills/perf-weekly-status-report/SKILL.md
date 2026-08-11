@@ -13,13 +13,32 @@ description: >-
 
 Generate Gmail-compatible HTML reports summarizing ScyllaDB Enterprise performance test results from the past week using the Argus CLI.
 
+## First Step: Ask the User Which Build Type to Report
+
+**Before collecting any data, ask the user which build type to report on.**
+
+Use the interactive question tool to present two options:
+1. **Master (~dev)** -- Filter to dev versions matching `^\d{4}\.\d+\.\d+.+dev$`. These are builds from the master/development branch.
+2. **Release** -- Filter to release versions matching `^\d{4}\.\d+\.\d+$` (no `dev` suffix). These are builds from stable release branches.
+
+The chosen build type determines:
+- The version filter regex applied in Phase 2
+- The header subtitle text ("Master (~dev) builds only" vs "Release builds only")
+- The output filename (`perf-weekly-status-report.html` vs `perf-weekly-status-report-release.html`)
+
+If the user has already specified the build type in their prompt (e.g., "generate report for release versions"), skip the question and proceed with that choice.
+
 ## Essential Principles
 
-### Master (~dev) Builds Only
+### Version Filtering by Build Type
 
-**Filter to dev versions matching `^\d{4}\.\d+\.\d+.+dev$` -- exclude release builds.**
+**Master mode:** Filter to dev versions matching `^\d{4}\.\d+\.\d+.+dev$` -- exclude release builds.
 
-Release builds (`2026.1.5`) run on stable branches and represent prior releases. The weekly report must only include master/dev versions (e.g., `2026.3.0~dev`) because these represent the latest development state being validated. Mixing release and dev data would produce misleading conclusions about the current master branch performance.
+Release builds (`2026.1.5`) run on stable branches and represent prior releases. The master report only includes master/dev versions (e.g., `2026.3.0~dev`) because these represent the latest development state being validated.
+
+**Release mode:** Filter to release versions matching `^\d{4}\.\d+\.\d+$` -- exclude dev builds.
+
+Dev builds run on the master branch and represent unreleased code. The release report only includes release versions (e.g., `2026.2.3`, `2026.1.10`) because these represent validated stable releases. Note that release reports often span multiple versions (e.g., `2026.2.3` and `2026.1.10` in the same week).
 
 ### Use Argus CLI Directly
 
@@ -51,20 +70,29 @@ Gmail only supports inline CSS styles on elements. Never use `<style>` tags, `<l
 
 ### Overview Table: Group by Workload
 
-**The overview table shows each workload as its own row. Columns: Category | Test | Workload | Status | Link.**
+**The overview table shows each workload as its own row. Columns: Category | Test | Workload | Status | Issues | Link.**
 
 - Category column shows the category name only on the first row of that category group (empty on subsequent rows)
 - Test column shows the test name only on the first workload row for that test (empty on subsequent rows)
 - Workload column shows the actual workload name (mixed, read, write, read_disk_only). **For microbenchmarks use "-"** since they don't have separate workloads
-- Status column shows just the status badge (PASSED/FAILED/ERROR) of the latest run -- no counts
+- Status column shows just the status badge (PASSED/FAILED/ERROR/RUNNING) of the latest run -- no counts
+- Issues column shows linked Jira issue keys as clickable links (comma-separated if multiple); empty for runs with no linked issues
 - Link column shows an Argus link to the specific run for that workload
 - Each run covers a single workload, so each workload has its own run(s)
+
+**Per-version tables:** When the report spans multiple versions, create a separate Overview table for each version with a version label above it (e.g., "Version 2026.2.3"). When only a single version is present, show one table without a version label.
 
 **Microbenchmark handling**: Microbenchmarks don't report results in the same table structure as performance tests. When a microbenchmark run has no workload-specific tables, use "-" as the workload value. Each microbenchmark test appears as a single row in the overview with workload="-".
 
 **Runs column format:** Removed. Status column shows just the badge.
 
-**Status column format:** Show just the status badge (PASSED/FAILED/ERROR) of the latest run for that workload. No counts.
+**Status column format:** Show just the status badge (PASSED/FAILED/ERROR/RUNNING) of the latest run for that workload. No counts.
+
+### Running Tests
+
+**Include runs with status `running` in the report if they match the version filter.**
+
+Running tests should appear in the Overview table with a RUNNING status badge (blue, `#17a2b8`). They are counted separately in the Summary (not as passed or failed). Determine the workload from partial results (`argus run results`) if available, or from Jenkins `sub_tests` positional mapping. Do not include running tests in Detailed Results or Uninvestigated Failures.
 
 ### Runs With No Results: Recover the Workload From Jenkins
 
@@ -82,13 +110,49 @@ Recover the workload from the Jenkins build that produced the run:
 
 Map sub-test names to workload labels: `test_read_gradual_increase_load` -> `read`, `test_write_gradual_increase_load` -> `write`, `test_mixed_gradual_increase_load` -> `mixed`, `test_read_disk_only_gradual_increase_load` -> `read_disk_only`, `test_latency_mixed_with_nemesis` -> `mixed`.
 
-Also determine *why* the run produced nothing, and say so in the Conclusion -- a provisioning abort is not a performance result. Grep the Jenkins console for the cause; the common one is AWS capacity:
+Also determine *why* the run produced nothing using `argus run events`:
+
+```bash
+argus run events --run-id <RUN_UUID> --url https://argus.scylladb.com
+```
+
+This returns CRITICAL and ERROR events for the run. The common cause is AWS capacity:
 
 ```
-sdcm.exceptions.CapacityReservationError: Failed to create capacity reservation in any availability zone.
+(TestFrameworkEvent Severity.CRITICAL) Failed to provision aws resources: CapacityReservationError: Failed to create capacity reservation in any availability zone.
 ```
 
-State the real reason (e.g. `InsufficientInstanceCapacity` for a given instance type and region) rather than reporting a bare `ERROR`. Do **not** list these runs as rows in the Failed Results table -- they have no metrics to show; the Conclusion carries them.
+State the real reason (e.g. `CapacityReservationError`) rather than reporting a bare `ERROR`.
+
+### CapacityReservationError Runs: Detect Re-runs and Exclude
+
+**If a `test_error` run caused by CapacityReservationError was successfully re-run, exclude it from the report entirely.**
+
+To detect re-runs:
+1. Group runs by test name + version.
+2. Within each group, sort by `build_number`.
+3. If a later build exists for the same test + version, and it has runs with matching workloads that passed, the earlier CapacityReservationError run was re-run successfully.
+4. Exclude the original CapacityReservationError run from all report sections (overview, detailed results, counts).
+5. If the re-run also failed with CapacityReservationError, exclude the intermediate attempts and keep only the latest one. Note this in the Uninvestigated Failures table cause column (e.g., "CapacityReservationError, re-run also failed (builds #57,#59,#61)").
+
+Note: There is no explicit "re-run of build #X" field in Argus. The link is inferred by matching test + version + sequential build numbers.
+
+**CapacityReservationError runs that were NOT re-run** (or whose re-run also failed) should appear in the **Uninvestigated Failures** table with the cause noted as "CapacityReservationError, not re-run". Do **not** list them in the Failed Results table -- they have no metrics to show.
+
+### Uninvestigated Failures Table
+
+**Show a table of all failed/test_error runs that have no linked Argus issue, placed between the Conclusion and Issues sections.**
+
+This table helps the user quickly identify runs that need investigation. Columns: Test | Workload | Version | Status | Cause | Link.
+
+- **Include**: Any run with status `failed` or `test_error` where `argus issue list` returns `[]`
+- **Exclude**: CapacityReservationError runs that were successfully re-run (same test + version, later build passed)
+- **Cause column**: Show the specific failure reason:
+  - For `test_error` runs: the error from `argus run events` (e.g. "CapacityReservationError, not re-run")
+  - For `failed` runs with failed tables: the specific metric failure (e.g. "P99 ERROR at 750K step")
+  - For `failed` runs where all tables pass: "All tables PASS, run marked failed"
+- The table heading is "Uninvestigated Failures (no issue linked)"
+- Print this table to the user during the conclusion review step so they can investigate before finalizing the report
 
 ### Version Display
 
@@ -131,7 +195,7 @@ Note: A run may have status `"failed"` but its individual tables may show `ERROR
 **The entire "Detailed Results" section is ONLY shown when there are actual failures (run status `failed` or `test_error`).** When all tests pass, the Detailed Results section is completely omitted from the report.
 
 When failures exist, the section includes:
-- **Failed Results table**: Lists individual failed/error steps with workload, step name, P99, throughput, version, and Argus link
+- **Failed Results table**: Lists individual failed/error steps with workload, step name, P99, throughput, version, and Argus link. Only tests that have actual failed result tables (status `FAIL` or `ERROR`) are shown. Tests where the run is marked `failed` but all result tables show `PASS`, or `test_error` runs with no result tables, are excluded from Detailed Results -- they belong in the Uninvestigated Failures table instead.
 - **Max Throughput table** (only for `predefined-throughput-steps` tests where the **unthrottled step itself** has status `FAIL` or `ERROR`): Shows per-workload max throughput from the latest run. If the unthrottled steps all pass (status `PASS`), the Max Throughput table is **omitted** even if other throttled steps failed -- the throughput is as expected.
 
 This means:
@@ -199,6 +263,7 @@ Do not treat a mostly-empty result as a collection failure, and do not list test
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
+| Build type | (ask user) | Master (~dev) or Release. Controls version filter regex. If not specified, ask the user before collecting data. |
 | Time window (days) | 7 | Number of days to look back for runs. Controls `--after` timestamp in `argus run list`. User can specify a different period (e.g., "last 14 days", "last 30 days"). |
 
 Example user prompts with time window:
@@ -244,6 +309,20 @@ Returns JSON array of result tables. Each table has:
   - `"P99 <op>"` -- 99th percentile latency in ms
   - `"Throughput <op>"` -- Actual throughput in op/s
 
+### Fetch events (errors) for a run
+
+```bash
+argus run events \
+  --run-id <RUN_UUID> \
+  --url https://argus.scylladb.com
+```
+
+Returns JSON array of CRITICAL and ERROR event objects. Key fields:
+- `severity` -- "CRITICAL" or "ERROR"
+- `message` -- Event message text (contains the error description)
+
+Use this to determine why a `test_error` run failed (e.g., CapacityReservationError). This is more reliable than fetching Jenkins console output, which often requires authentication.
+
 ### Fetch issues for a run
 
 ```bash
@@ -276,12 +355,13 @@ Use `status` / `resolution` for the State column, and to support any "no progres
 The output HTML file must contain:
 
 1. **Header** -- Report title, date range, "Master (~dev) builds only" indicator
-2. **Summary** -- Title format: "Summary for Scylla version {full_version}" where full_version includes build date and revision hash (e.g., "2026.3.0.dev.20260612.91ada5517d59"). Body: Total tests run, passed count, failed count, error count. **Counts are per run, not per test group.** Each workload is a separate run, so a test with 4 workloads (mixed, read, write, read_disk_only) counts as 4 runs. Microbenchmark tests count as 1 run each. This ensures that Total = Passed + Failed/Error always holds.
-3. **Conclusion** -- Hierarchical bullet-point lines summarizing weekly results. Structure: top-level items are test names in bold (prefixed with `- `), sub-items are specific observations (prefixed with `&#8226;`). The agent MUST print the generated conclusion text to the user and ask for confirmation or edits BEFORE saving it into the final HTML report file. This ensures the user can review and adjust the conclusion wording.
-4. **New Issues - Regression** -- Shown after Conclusion when new issues exist. Lists Jira issues whose tickets were created during the report period (i.e., newly filed regressions). Classify by fetching each issue's `created` date from Jira (Atlassian MCP `getJiraIssue`) and comparing it to the report window; only ask the user if Jira is unreachable. If no new issues, this section is omitted.
-5. **Reproduced Issues** -- Always shown after New Issues (or after Conclusion if no new issues). Lists issues linked to runs whose Jira tickets were created before the report period. If no reproduced issues, displays "No reproduced issues in this period."
-6. **Overview Table** -- Grouped by category, then test, then workload. Columns: Category | Test | Workload | Status | Link. Microbenchmarks use "-" as workload.
-7. **Detailed Results** -- **ONLY shown when there are actual failures.** When all tests pass, this section is completely omitted. When failures exist, shows per-category breakdown of failed steps with P99/throughput, and optionally a Max Throughput table for failed predefined-throughput-steps tests where the unthrottled step itself has FAIL/ERROR status.
+2. **Summary** -- Title format: "Summary for Scylla version {full_version}" where full_version includes build date and revision hash (e.g., "2026.3.0.dev.20260612.91ada5517d59"). Body: Total tests run, passed count, failed count, error count, running count. **Counts are per run, not per test group.** Each workload is a separate run, so a test with 4 workloads (mixed, read, write, read_disk_only) counts as 4 runs. Microbenchmark tests count as 1 run each. Running tests are counted separately and not included in passed/failed totals.
+3. **Conclusion** -- Hierarchical bullet-point lines summarizing weekly results. Structure: top-level items are test names in bold (prefixed with `- `), sub-items are specific observations (prefixed with `&#8226;`). Version numbers must be bold. Do NOT mention CapacityReservationError runs (those are in the Uninvestigated Failures table). Do NOT mention issue numbers per test in the conclusion body -- issue references belong only in the warning banner; the Issues column in Overview and the Known Issues table provide the per-run linkage. **Per-version grouping:** When the report spans multiple versions, create a separate list per version with a bold version header (e.g., "Version 2026.2.3:"). When only a single version is present, omit the version header and list tests directly. **Warning banner** (optional): After collecting all issues, present the de-duplicated list to the user and ask which issues (if any) should be highlighted in a warning banner at the top of the Conclusion. If the user selects issues, render a yellow/red banner with `&#9888;` icon stating "No updates on [issues] during last week." **Issue numbers in the banner must be clickable links** (e.g., `<a href="...">SCYLLADB-3459</a>`), not plain text. If the user selects none, omit the banner entirely. The agent MUST print the generated conclusion text to the user and ask for confirmation or edits BEFORE saving it into the final HTML report file. This ensures the user can review and adjust the conclusion wording.
+4. **Uninvestigated Failures** -- Table of failed/test_error runs with no linked Argus issue. Shown after Conclusion when such runs exist. Columns: Test | Workload | Version | Status | Cause | Link. Excludes CapacityReservationError runs that were successfully re-run. Printed to the user during conclusion review for investigation before finalizing.
+5. **New Issues - Regression** -- Shown after Uninvestigated Failures when new issues exist. Lists Jira issues whose tickets were created during the report period (i.e., newly filed regressions). Classify by fetching each issue's `created` date from Jira (Atlassian MCP `getJiraIssue`) and comparing it to the report window; only ask the user if Jira is unreachable. If no new issues, this section is omitted.
+6. **Reproduced Issues** -- Always shown after New Issues (or after Uninvestigated Failures if no new issues). Lists issues linked to runs whose Jira tickets were created before the report period. If no reproduced issues, displays "No reproduced issues in this period."
+7. **Overview Table** -- Grouped by category, then test, then workload. Columns: Category | Test | Workload | Status | Issues | Link. Issues column shows linked Jira keys as clickable links. Microbenchmarks use "-" as workload. **When multiple versions exist, create a separate table per version with a version label above it; when single version, show one table without a version label.**
+8. **Detailed Results** -- **ONLY shown when there are actual failures.** When all tests pass, this section is completely omitted. When failures exist, shows per-category breakdown of failed steps with P99/throughput, and optionally a Max Throughput table for failed predefined-throughput-steps tests where the unthrottled step itself has FAIL/ERROR status. **When multiple versions exist, group detailed results by version with version sub-headings; when single version, omit the version sub-heading.**
    - **Microbenchmarks**: Shown only when they have failures.
 
 ## Reference Index
@@ -296,7 +376,8 @@ The output HTML file must contain:
 
 A valid weekly status report:
 
-- [ ] Filters exclusively to master (~dev) versions (no release builds included)
+- [ ] User asked to choose build type (master or release) before data collection, unless already specified in prompt
+- [ ] Filters exclusively to the chosen build type (master ~dev or release -- no mixing)
 - [ ] Shows only tests that were actually run (no "NO_RUNS" entries)
 - [ ] Uses table-based layout with inline CSS only (no style blocks, no div layout, no border-radius)
 - [ ] Uses bgcolor attribute alongside background-color for Gmail compatibility
@@ -304,8 +385,12 @@ A valid weekly status report:
 - [ ] Summary title format: "Summary for Scylla version {full_version}" with build date and revision hash
 - [ ] Overview table: grouped by category/test/workload with Argus links in Link column
 - [ ] Overview table: microbenchmarks appear with "-" as workload
-- [ ] Overview Status column: just the status badge (PASSED/FAILED/ERROR) -- no counts
-- [ ] Overview columns: Category | Test | Workload | Status | Link (no Runs column, no Version column)
+- [ ] Overview Status column: just the status badge (PASSED/FAILED/ERROR/RUNNING) -- no counts
+- [ ] Running tests included in Overview with RUNNING badge (blue #17a2b8) when they match version filter
+- [ ] Overview columns: Category | Test | Workload | Status | Issues | Link (no Runs column, no Version column)
+- [ ] Overview Issues column: linked Jira keys as clickable links, comma-separated; empty for runs with no issues
+- [ ] Overview and Detailed Results: separate table per version with version header when multiple versions; no version header when single version
+- [ ] Conclusion grouped by version when multiple versions present; single list when only one version
 - [ ] Detailed results: ONLY shown when there are actual failures (completely omitted when all pass)
 - [ ] Detailed results: test sub-heading has full version, NO status badge
 - [ ] Detailed results: Failed Results table lists all failed steps with metrics
@@ -319,12 +404,24 @@ A valid weekly status report:
 - [ ] Output file is NOT saved into the SCT repository (scratchpad/temp dir or home dir)
 - [ ] Conclusion text is printed to the user for review/editing BEFORE being saved into the HTML report
 - [ ] Conclusion uses hierarchical format: bold test names as top-level items, specific observations as sub-bullets
+- [ ] Conclusion version numbers are bold (e.g., `<b>2026.2.3</b>`)
+- [ ] Conclusion does not mention CapacityReservationError runs (those are in the Uninvestigated Failures table)
+- [ ] Conclusion warning banner: user asked to select which issues to highlight from the found issues list; omitted if user selects none or no issues found
+- [ ] Conclusion warning banner: issue numbers rendered as clickable links, not plain text
+- [ ] CapacityReservationError re-runs that also failed: intermediate attempts excluded, only latest kept in Uninvestigated table with cause noting all build numbers
 - [ ] Issues are split into "New Issues - Regression" (created during period) and "Reproduced Issues" (pre-existing)
 - [ ] Issue classification comes from Jira `created` dates; the user is asked only for unlinked failures or if Jira is unreachable
 - [ ] `argus` resolved from PATH, not a hardcoded home directory; login handled by a pre-flight call
 - [ ] Every master run in the window is accounted for, including `test_error` runs with zero result tables
 - [ ] Workload for runs with no result tables recovered from the Jenkins `sub_tests` order and validated against runs that do have tables
 - [ ] Runs that produced nothing state the actual cause (e.g. `CapacityReservationError`) rather than a bare ERROR
+- [ ] Test error causes determined via `argus run events`, not Jenkins console
+- [ ] CapacityReservationError runs that were successfully re-run are excluded from the report entirely
+- [ ] Re-runs detected by matching same test + version with a later build number that passed
+- [ ] Uninvestigated Failures table shown for failed/test_error runs with no linked Argus issue
+- [ ] Uninvestigated Failures table includes Cause column with specific failure reason
+- [ ] Uninvestigated Failures table excludes CapacityReservationError runs that were successfully re-run
+- [ ] Uninvestigated Failures table printed to user during conclusion review for investigation
 - [ ] Categories with no master runs are named in the Conclusion, so "passed" is distinguishable from "never ran"
 - [ ] Summary version chosen by run count when the period spans multiple builds; per-run versions shown in Detailed Results
 - [ ] Data tables use `border="1"` plus per-cell borders (CSS-only cell borders get stripped)
