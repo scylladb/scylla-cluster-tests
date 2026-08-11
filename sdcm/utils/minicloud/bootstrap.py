@@ -57,3 +57,5 @@ def ensure_minicloud_ready(backend: str = "aws", params=None) -> None:
     manager.start()
     if backend in ("aws", "aws-siren"):
         manager.prepare_regions()
+    elif backend in ("gce", "gce-siren"):
+        manager.prepare_gce_network()

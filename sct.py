@@ -368,6 +368,9 @@ def start_minicloud(backend, config):
 
     if backend in ("aws", "aws-siren"):
         manager.prepare_regions()
+    elif backend in ("gce", "gce-siren"):
+        # Guests must get IPs inside the routed guest range - see prepare_gce_network.
+        manager.prepare_gce_network()
 
     click.echo(f"Minicloud started (endpoint: http://localhost:{cfg.port}, region: {cfg.region})")
     click.echo(f"Logs: {cfg.log_file}")

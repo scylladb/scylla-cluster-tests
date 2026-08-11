@@ -1,0 +1,27 @@
+#!groovy
+
+// A regular longevity test-case run against minicloud instead of a real cloud.
+//
+// This is the ordinary longevityPipeline - `minicloud: true` is what switches it over. That
+// flag adds a 'Start Minicloud' stage ahead of 'Provision Resources' (which calls the EC2 API,
+// i.e. localhost:5000 here) and exports SCT_MINICLOUD_ENDPOINT_URL for the rest of the build.
+// Everything else minicloud needs - a KVM-capable instance_type_runner, KMS disabled - lives in
+// the test-case yaml.
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: '''["test-cases/longevity/longevity-minicloud-10gb-1h.yaml", "configurations/minicloud.yaml"]''',
+    minicloud: true,
+    // A released version, NOT master:latest. minicloud builds a guest disk by reading the AMI's
+    // snapshot over the EBS direct API, and the snapshots behind Scylla dev AMIs are not shared
+    // with the QA account - ListSnapshotBlocks returns SnapshotNotFound and the VM never boots.
+    // Released AMIs are public and their snapshots are readable.
+    // Revert to master:latest once dev-AMI snapshots are shared.
+    scylla_version: '2026.3.0-rc0',
+    provision_type: 'on_demand',
+    post_behavior_db_nodes: 'destroy',
+)

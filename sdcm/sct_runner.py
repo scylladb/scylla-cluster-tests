@@ -19,10 +19,11 @@ import base64
 import datetime
 import glob
 import logging
+import os
 import random
 import string
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import ExitStack, suppress
+from contextlib import ExitStack, contextmanager, suppress
 from enum import Enum
 from functools import cached_property
 from itertools import chain
@@ -2038,6 +2039,35 @@ def _get_runner_user_tag(sct_runner_info: SctRunnerInfo) -> str | None:
     return None
 
 
+@contextmanager
+def _real_cloud_api():
+    """Talk to the real cloud API even while this process runs against minicloud.
+
+    An sct-runner is a real instance, so discovering, tagging or terminating one has to reach
+    the real provider - but a minicloud process has AWS_ENDPOINT_URL/GCE_ENDPOINT_URL pointing
+    at the emulator, which answers with the emulated *guests* instead. Their DescribeInstances
+    output has no LaunchTime, so runner enumeration died with `KeyError: 'LaunchTime'`:
+    collect-logs then never tagged `logs_collected`, and cleanup kept the runner for 48h
+    (minicloud-artifact-ami-test #23).
+
+    Applied to the whole operation rather than the lookup alone, because not every provider
+    reuses the client the lookup built: GceSctRunner.set_tags() calls
+    get_gce_compute_instances_client() itself, so a scope that ended with enumeration would
+    leave GCE tagging - and therefore the same 48h retention - pointed at the emulator. AWS and
+    Azure reuse SctRunnerInfo.cloud_service_instance, which is constructed inside the scope.
+
+    Used as a decorator on the entry points; everything else in the process keeps talking to
+    the emulator. contextlib's ContextDecorator recreates the manager per call, so nesting
+    (clean_sct_runners -> list_sct_runners) is safe.
+    """
+    saved = {var: os.environ.pop(var) for var in ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL") if var in os.environ}
+    try:
+        yield
+    finally:
+        os.environ.update(saved)
+
+
+@_real_cloud_api()
 def list_sct_runners(
     backend: str = None, test_runner_ip: str = None, user: str = None, test_id: str | tuple = None, verbose: bool = True
 ) -> list[SctRunnerInfo]:
@@ -2096,6 +2126,7 @@ def list_sct_runners(
     return filtered_runners
 
 
+@_real_cloud_api()
 def update_sct_runner_tags(backend: str = None, test_runner_ip: str = None, test_id: str = None, tags: dict = None):
     LOGGER.info("Test runner ip in update_sct_runner_tags: %s; test_id: %s", test_runner_ip, test_id)
     if not test_runner_ip and not test_id:
@@ -2223,6 +2254,7 @@ def _process_sct_runner(
         return False
 
 
+@_real_cloud_api()
 def clean_sct_runners(
     test_status: str,
     test_runner_ip: str = None,

@@ -24,7 +24,7 @@ from sdcm.utils.minicloud.config import (
     MinicloudConfig,
     MinicloudError,
 )
-from sdcm.utils.minicloud.gcp import setup_gcp_credentials
+from sdcm.utils.minicloud.gcp import prepare_gce_network, setup_gcp_credentials
 from sdcm.utils.minicloud.log_collection import _decode_exit, redact_docker_inspect
 from sdcm.utils.minicloud.networking import setup_host_networking
 from sdcm.utils.minicloud.preflight import (
@@ -308,6 +308,9 @@ class MinicloudManager:
 
     def _setup_gcp_credentials(self) -> None:
         setup_gcp_credentials(self.config, self.backend)
+
+    def prepare_gce_network(self) -> None:
+        prepare_gce_network(self.config)
 
     def _setup_host_networking(self) -> None:
         setup_host_networking(self.config)

@@ -9,7 +9,11 @@ def call(Map params, Integer test_duration, String region) {
     }
 
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-    def test_name = groovy.json.JsonOutput.toJson(params.test_name)
+    // artifactsPipeline has no test_name parameter - omitting the option makes
+    // create-runner-instance fall back to tagging the runner with the test id. Omitted rather
+    // than passed empty: hydra does not preserve empty-string arguments, so `--test-name ""`
+    // reaches click as a --test-name with no value and fails the command.
+    def test_name_arg = params.test_name ? "--test-name " + groovy.json.JsonOutput.toJson(params.test_name) : ""
 
     // NOTE: EKS jobs have 'availability_zone' be defined as 'a,b'
     //       So, just pick up the first one for the SCT runner in such a case.
@@ -64,7 +68,7 @@ def call(Map params, Integer test_duration, String region) {
                 $availability_zone_arg \
                 --test-id \${SCT_TEST_ID} \
                 --duration ${test_duration} \
-                --test-name ${test_name}
+                ${test_name_arg}
         fi
 
     else

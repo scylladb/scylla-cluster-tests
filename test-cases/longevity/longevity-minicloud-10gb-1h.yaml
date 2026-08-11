@@ -1,0 +1,67 @@
+test_duration: 120
+test_metadata:
+  description: >-
+    Longevity test running a cassandra-stress write workload at QUORUM consistency for
+    ~1 hour on a 3-node single-DC cluster provisioned through minicloud (local QEMU/KVM
+    VMs emulating the AWS/GCE compute APIs) instead of a real cloud. Same shape as
+    longevity-10gb-3h, scaled to fit on a single KVM-capable sct-runner, and used to
+    validate that the regular longevity flow works end-to-end against minicloud.
+  test_type: longevity
+  tier: tier1
+  duration_class: short
+  # AWS only for now: instance_type_runner below is an AWS nested-virtualization type, and the
+  # job layers no GCE runner override, so a gce run would hand GceSctRunner an invalid machine
+  # type. Add gce back together with a gce_instance_type_runner sized for nested virt.
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  nemesis_labels:
+    - SisyphusMonkey
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
+             ]
+
+# 3 DB (quorum) + 1 loader + 1 monitor = 5 VMs. In lightweight mode every VM gets
+# minicloud_lightweight_memory (4GiB), so this is 20GiB of guest RAM - the reason the
+# 6-node/2-loader shape of longevity-10gb-3h cannot be reused verbatim here.
+n_db_nodes: 3
+n_loaders: 1
+
+# minicloud ignores the requested instance type in lightweight mode (1 vCPU + 4GiB per
+# VM regardless), but SCT still validates and reports it, so keep it realistic.
+instance_type_db: 'i4i.large'
+gce_instance_type_db: 'n2-highmem-2'
+gce_instance_type_loader: 'e2-standard-2'
+
+# sct-runner needs nested virtualization (KVM) to host minicloud's QEMU VMs. Only the
+# c8i/m8i/r8i families support NestedVirtualization on AWS. 5 VMs x 4GiB = 20GiB of
+# guests, so m8i.2xlarge (32GiB) leaves headroom for the host and the SCT process.
+instance_type_runner: 'm8i.2xlarge'
+
+# Everything this run needs shares the runner's one disk, and the 80GB default does not
+# hold it: the OS, docker and the hydra image, the converted AMI cached under
+# ~/.cache/minicloud (tens of GB), a qcow2 root overlay plus store files for each of the
+# 5 VMs (3 db + 1 loader + 1 monitor), and ~30GB of test data (10GB at RF=3).
+# configurations/minicloud/aws.yaml raises the artifacts runner for the same reason.
+root_disk_size_runner: 160
+
+# Only non-disruptive nemeses: node terminate/reboot/stop exercise minicloud lifecycle
+# paths that are not all implemented yet, and a failure there would be a minicloud gap
+# rather than a Scylla finding. Widen this once those paths are covered.
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: "not disruptive"
+nemesis_seed: '111'
+nemesis_interval: 2
+
+user_prefix: 'longevity-minicloud-10gb-1h'
+space_node_threshold: 64424
+
+use_preinstalled_scylla: true
+
+# KMS must be disabled - minicloud implements no KMS endpoint, and the QEMU guests have
+# no cloud IAM credentials to reach the real one.
+enterprise_disable_kms: true
+enable_kms_key_rotation: false
+
+run_db_node_benchmarks: false

@@ -5,7 +5,14 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
+    // Captured locals, read from pipelineParams because this runs at pipeline-definition time where
+    // `params` is still empty on build #1. Never read params.minicloud in a when{} guard:
+    // getJenkinsLabels merges its `overrides` into an un-def'd global `params`, so it would appear
+    // to work and then not.
+    def minicloudEnabled = pipelineParams.get('minicloud', false)
+
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter,
+                                   params.azure_region_name, params.oci_region_name)
     def functional_test = pipelineParams.functional_test
 
     pipeline {
@@ -90,6 +97,28 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('instance_provision_fallback_on_demand', '')}",
                    description: 'true|false',
                    name: 'instance_provision_fallback_on_demand')
+
+            // Minicloud Configuration
+            // Only has an effect when the jenkinsfile opts in with `minicloud: true`; see
+            // vars/startMinicloud.groovy. Everything else minicloud needs - KMS off, a
+            // KVM-capable instance_type_runner - is test-case configuration, not a job knob.
+            separator(name: 'MINICLOUD_CONFIG', sectionHeader: 'Minicloud Configuration')
+            string(defaultValue: "${pipelineParams.get('minicloud_docker', '')}",
+                   description: 'Minicloud Docker image reference, e.g. ghcr.io/scylladb/minicloud:<tag>. ' +
+                                'Empty leaves the image at its renovate-managed default (defaults/docker_images/minicloud/). ' +
+                                'Ignored unless the jenkinsfile sets `minicloud: true`',
+                   name: 'minicloud_docker')
+            string(defaultValue: "${pipelineParams.get('minicloud_lightweight_memory', '')}",
+                   description: 'RAM per emulated guest, e.g. 6GiB. Empty keeps the test-case/defaults value. ' +
+                                'Multiplies across every guest in the test, so the agent or sct-runner has to fit the product',
+                   name: 'minicloud_lightweight_memory')
+            string(defaultValue: "${pipelineParams.get('minicloud_lightweight_vcpus', '')}",
+                   description: 'vCPUs per emulated guest (one Scylla shard each). Empty keeps the test-case/defaults value',
+                   name: 'minicloud_lightweight_vcpus')
+            string(defaultValue: "${pipelineParams.get('minicloud_container_memory', '')}",
+                   description: 'Cap the minicloud container itself, e.g. 32GiB. Empty means no docker limit. ' +
+                                'When set, this is also the budget the preflight guest-memory gate measures against',
+                   name: 'minicloud_container_memory')
 
             // Post Behavior Configuration
             separator(name: 'POST_BEHAVIOR', sectionHeader: 'Post Behavior Configuration')
@@ -264,6 +293,12 @@ def call(Map pipelineParams) {
                     script {
                         completed_stages = [:]
                         loadEnvFromString(params.extra_environment_variables)
+                        // Opt in from the jenkinsfile with `minicloud: true`. Must come after
+                        // extra_environment_variables is loaded (a per-run override wins) and
+                        // before anything talks to a cloud API: env writes here are global for
+                        // the rest of the build, so 'Provision Resources' and 'Run SCT Test'
+                        // both reach minicloud instead of the real cloud.
+                        startMinicloud.exportEnv(params, pipelineParams)
                         tagBuilder()
                     }
                     dir('scylla-cluster-tests') {
@@ -339,6 +374,27 @@ def call(Map pipelineParams) {
                             dir('scylla-cluster-tests') {
                                 timeout(time: params.reuse_cluster ? 10 : 5, unit: 'MINUTES') {
                                     createSctRunner(params, runnerTimeout , builder.region)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Must run before 'Provision Resources': that stage calls the EC2/GCE API, which in
+            // minicloud mode means localhost:5000, so the container has to be up first.
+            //
+            // Deliberately not wrapped in catchError: a minicloud that failed to start leaves
+            // SCT_MINICLOUD_ENDPOINT_URL pointing at nothing, and 'Provision Resources' would
+            // fall through to the real cloud and spend real money. Fail the build instead.
+            stage('Start Minicloud') {
+                when { expression { startMinicloud.active(pipelineParams) } }
+                steps {
+                    script {
+                        wrap([$class: 'BuildUser']) {
+                            dir('scylla-cluster-tests') {
+                                timeout(time: 15, unit: 'MINUTES') {
+                                    startMinicloud(params)
+                                    completed_stages['start_minicloud'] = true
                                 }
                             }
                         }
@@ -476,7 +532,9 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
-                                        timeout(time: collectLogsTimeout, unit: 'MINUTES') {
+                                        // ?: - collectLogsTimeout is still 0 if 'Get test duration'
+                                        // never ran, and timeout(time: 0) aborts immediately.
+                                        timeout(time: collectLogsTimeout ?: 30, unit: 'MINUTES') {
                                             runCollectLogs(params, builder.region)
                                         }
                                     }
@@ -489,7 +547,7 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
-                                        timeout(time: resourceCleanupTimeout, unit: 'MINUTES') {
+                                        timeout(time: resourceCleanupTimeout ?: 30, unit: 'MINUTES') {
                                             runCleanupResource(params, builder.region)
                                         }
                                     }

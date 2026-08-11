@@ -2932,6 +2932,8 @@ class ClusterTester(unittest.TestCase):
             manager.start()
             if cluster_backend in ("aws", "aws-siren"):
                 manager.prepare_regions()
+            elif cluster_backend in ("gce", "gce-siren"):
+                manager.prepare_gce_network()
             self.minicloud = manager
 
         self.get_cluster_kafka()

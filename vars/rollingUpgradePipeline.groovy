@@ -6,7 +6,12 @@ def completed_stages = [:]
 (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
+    // Captured locals - see the same block in longevityPipeline for why these come from
+    // pipelineParams and must never be read back off `params` in a guard.
+    def minicloudEnabled = pipelineParams.get('minicloud', false)
+
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter,
+                                   params.azure_region_name, params.oci_region_name)
 
     // since this is a boolean param, we need to handle its default value upfront, we can't do it in the parameters section
     // we'll keep it as boolean to simplify its usage later on
@@ -58,6 +63,27 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'on_demand|spot_fleet|spot',
                    name: 'provision_type')
+            // Minicloud Configuration
+            // Only has an effect when the jenkinsfile opts in with `minicloud: true`; see
+            // vars/startMinicloud.groovy. Everything else minicloud needs - KMS off, a
+            // KVM-capable instance_type_runner - is test-case configuration, not a job knob.
+            separator(name: 'MINICLOUD_CONFIG', sectionHeader: 'Minicloud Configuration')
+            string(defaultValue: "${pipelineParams.get('minicloud_docker', '')}",
+                   description: 'Minicloud Docker image reference, e.g. ghcr.io/scylladb/minicloud:<tag>. ' +
+                                'Empty leaves the image at its renovate-managed default (defaults/docker_images/minicloud/). ' +
+                                'Ignored unless the jenkinsfile sets `minicloud: true`',
+                   name: 'minicloud_docker')
+            string(defaultValue: "${pipelineParams.get('minicloud_lightweight_memory', '')}",
+                   description: 'RAM per emulated guest, e.g. 6GiB. Empty keeps the test-case/defaults value. ' +
+                                'Multiplies across every guest in the test, so the agent or sct-runner has to fit the product',
+                   name: 'minicloud_lightweight_memory')
+            string(defaultValue: "${pipelineParams.get('minicloud_lightweight_vcpus', '')}",
+                   description: 'vCPUs per emulated guest (one Scylla shard each). Empty keeps the test-case/defaults value',
+                   name: 'minicloud_lightweight_vcpus')
+            string(defaultValue: "${pipelineParams.get('minicloud_container_memory', '')}",
+                   description: 'Cap the minicloud container itself, e.g. 32GiB. Empty means no docker limit. ' +
+                                'When set, this is also the budget the preflight guest-memory gate measures against',
+                   name: 'minicloud_container_memory')
             separator(name: 'POST_BEHAVIOR', sectionHeader: 'Post Behavior Configuration')
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
@@ -254,6 +280,10 @@ def call(Map pipelineParams) {
                                                         timeout(time: 5, unit: 'MINUTES') {
                                                             script {
                                                                 loadEnvFromString(params.extra_environment_variables)
+                                                                // Opt in from the jenkinsfile with `minicloud: true`. Must come
+                                                                // after extra_environment_variables is loaded (a per-run override
+                                                                // wins) and before anything talks to a cloud API.
+                                                                startMinicloud.exportEnv(params, pipelineParams)
                                                                 wrap([$class: 'BuildUser']) {
                                                                     dir('scylla-cluster-tests') {
                                                                         checkout scm
@@ -283,6 +313,20 @@ def call(Map pipelineParams) {
                                                         dir('scylla-cluster-tests') {
                                                             timeout(time: 5, unit: 'MINUTES') {
                                                                 createSctRunner(params_mapping[base_version], runnerTimeout, builder.region)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                // Must run before 'Provision Resources': that stage calls the
+                                                // EC2/GCE API, which in minicloud mode means localhost:5000 on
+                                                // the runner, so the container has to be up first.
+                                                if (startMinicloud.active(pipelineParams)) {
+                                                    stage("Start Minicloud for ${base_version}") {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                timeout(time: 10, unit: 'MINUTES') {
+                                                                    startMinicloud(params_mapping[base_version])
+                                                                }
                                                             }
                                                         }
                                                     }
