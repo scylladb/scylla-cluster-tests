@@ -57,6 +57,10 @@ Only inline `style` attributes on supported elements survive. Use `<table>` for 
 </tr>
 ```
 
+Note: The subtitle text varies by build type:
+- Master mode: `Master (~dev) builds only`
+- Release mode: `Release builds only`
+
 ## Spacer Row
 
 Gmail ignores margin/padding between table rows. Use explicit spacer rows:
@@ -67,13 +71,13 @@ Gmail ignores margin/padding between table rows. Use explicit spacer rows:
 
 ## Summary Box
 
-Counts are **per run** (each workload = 1 run), not per test group. A test with 4 workloads counts as 4 runs. This ensures Total = Passed + Failed/Error always holds. Example: 1 throughput test (4 workloads) + 4 microbenchmarks = 8 total runs.
+Counts are **per run** (each workload = 1 run), not per test group. A test with 4 workloads counts as 4 runs. This ensures Total = Passed + Failed/Error + Running always holds. Example: 1 throughput test (4 workloads) + 4 microbenchmarks = 8 total runs.
 
 ```html
 <tr>
 <td bgcolor="#f8f9fa" style="background-color:#f8f9fa;border:1px solid #dee2e6;padding:15px;">
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333333;">
-  <tr><td colspan="4" style="font-size:16px;font-weight:bold;padding-bottom:10px;">Summary</td></tr>
+  <tr><td colspan="4" style="font-size:16px;font-weight:bold;padding-bottom:10px;">Summary for Scylla versions <b>{version_1}</b> / <b>{version_2}</b></td></tr>
   <tr>
     <td style="padding:3px 15px 3px 0;"><strong>Total Tests:</strong></td>
     <td style="padding:3px 15px 3px 0;">{total_runs}</td>
@@ -92,10 +96,26 @@ Counts are **per run** (each workload = 1 run), not per test group. A test with 
 
 ## Conclusion Box (hierarchical bullet points)
 
-The Conclusion section uses a white-background box with a heading table and a content table.
-Structure: heading in one table, hierarchical bullets in a separate table (both inside the same `<td>`).
+The Conclusion section uses a white-background box with a heading table, an optional warning banner, and a content table (all inside the same `<td>`).
+
+Structure: heading in one table, optional warning banner in a separate table, hierarchical bullets in another table.
 
 The number of top-level items and sub-bullets varies per report -- include one row per test/category that had runs, and one sub-bullet per notable observation.
+
+### Warning Banner (optional)
+
+When the user selects issues to highlight (from the interactive Step 2 prompt), render a warning banner between the heading and the bullet points. If the user selects no issues, or there are no issues found, omit the banner entirely.
+
+```html
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;"><tr>
+<td bgcolor="#fff3cd" style="background-color:#fff3cd;border:2px solid #dc3545;padding:8px 12px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#dc3545;font-weight:bold;">
+&#9888; {user_provided_message}
+</td></tr></table>
+```
+
+Key styling: yellow background (`#fff3cd`), red border (`2px solid #dc3545`), red bold text (`color:#dc3545`), warning icon (`&#9888;`). Uses `bgcolor` for Gmail fallback.
+
+### Full Conclusion Structure
 
 ```html
 <tr><td height="15" style="font-size:1px;line-height:1px;">&nbsp;</td></tr>
@@ -104,7 +124,12 @@ The number of top-level items and sub-bullets varies per report -- include one r
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333333;">
 <tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">Conclusion</td></tr>
 </table>
+<!-- optional warning banner here (see above) -->
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#555555;">
+<!-- Per-version header (when multiple versions; omit when single version) -->
+<tr><td style="padding:6px 0 2px 0;font-size:13px;font-weight:bold;color:#333333;">Version {version}:</td></tr>
+<!-- Subsequent version headers use extra top padding for visual separation -->
+<tr><td style="padding:10px 0 2px 0;font-size:13px;font-weight:bold;color:#333333;">Version {version}:</td></tr>
 <!-- Repeat this block for each test/category with runs -->
 <tr><td style="padding:2px 0 2px 15px;">- <b>{test_or_category_name}:</b></td></tr>
 <!-- Repeat this row for each observation under that test/category -->
@@ -117,9 +142,11 @@ The number of top-level items and sub-bullets varies per report -- include one r
 ```
 
 Key details:
+- Version header (first): `padding:6px 0 2px 0;font-size:13px;font-weight:bold;color:#333333;`
+- Version header (subsequent): `padding:10px 0 2px 0;` for extra visual separation
 - Top-level: `padding:2px 0 2px 15px;` with `- <b>test/category name:</b>` format
 - Sub-level: `padding:2px 0 2px 30px;` with `&#8226; observation.` format
-- The heading table and content table are siblings inside the same `<td>` container
+- The heading table, optional warning banner, and content table are siblings inside the same `<td>` container
 - The outer `<td>` has `bgcolor="#ffffff"` and `border:1px solid #dee2e6;padding:15px;`
 
 ## Section Headings (as table cells, not h-tags)
@@ -135,9 +162,14 @@ Key details:
 <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#333333;padding:15px 0 5px 0;border-bottom:2px solid #007bff;">{category_name}</td></tr>
 </table>
 
-<!-- Sub-heading (test name with full version, NO status badge) -->
+<!-- Version sub-heading (dark blue, used in both overview and detailed results) -->
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#333333;padding:10px 0 5px 0;">{test_name} ({full_version})</td></tr>
+<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;color:#1a237e;padding:10px 0 5px 0;">Version {version}</td></tr>
+</table>
+
+<!-- Sub-heading (test name, NO status badge) -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#333333;padding:10px 0 5px 0;">{test_name}</td></tr>
 </table>
 ```
 
@@ -155,8 +187,9 @@ above requires.
   <td bgcolor="#28a745" align="center" style="background-color:#28a745;padding:3px 10px;font-size:11px;font-weight:bold;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">PASSED</td>
 </tr></table>
 
-<!-- Failed: bgcolor="#dc3545" / background-color:#dc3545 -->
-<!-- Error:  bgcolor="#fd7e14" / background-color:#fd7e14 -->
+<!-- Failed:  bgcolor="#dc3545" / background-color:#dc3545 -->
+<!-- Error:   bgcolor="#fd7e14" / background-color:#fd7e14 -->
+<!-- Running: bgcolor="#17a2b8" / background-color:#17a2b8 -->
 <!-- No Runs: bgcolor="#6c757d" / background-color:#6c757d -->
 ```
 
@@ -165,7 +198,7 @@ it renders in most clients but has no fallback when the background is stripped.
 
 ## Data Tables
 
-### Overview Table (dark header, grouped by category/test/workload, with Link column)
+### Overview Table (dark header, grouped by category/test/workload, with Issues and Link columns)
 
 Number of rows varies: one row per workload per test that had runs. Categories and tests with no runs are omitted.
 
@@ -176,6 +209,7 @@ Number of rows varies: one row per workload per test that had runs. Categories a
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Test</th>
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Workload</th>
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Status</th>
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Issues</th>
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Link</th>
 </tr>
 <!-- First row of a category group: category name shown, test name shown -->
@@ -184,6 +218,7 @@ Number of rows varies: one row per workload per test that had runs. Categories a
   <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{test_name}</td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{workload}</td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- status badge --></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- issue keys or empty --></td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a></td>
 </tr>
 <!-- Subsequent workload row within same test: category and test cells are empty -->
@@ -192,6 +227,7 @@ Number of rows varies: one row per workload per test that had runs. Categories a
   <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;"></td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{workload}</td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- status badge --></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- issue keys or empty --></td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a></td>
 </tr>
 <!-- ... repeat rows for each workload, test, and category ... -->
@@ -202,33 +238,56 @@ NOTE: Each workload row has its own Argus link in the Link column. Version is in
 Argus URL format: `https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}` (singular `/test/`, NOT `/tests/`)
 Status column: just the badge (PASSED/FAILED/ERROR) -- no counts.
 
-### Results Table (light header) -- Per-Workload with Argus Links
+### Overview Section Heading and Per-Version Label
 
-Number of rows varies: one per workload that has results.
+The overview section starts with a standalone heading row, followed by a version label (when multiple versions) and the table. Each version gets its own table.
+
+```html
+<!-- Section heading (standalone row in the main content table) -->
+<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#333333;padding-bottom:10px;">Test Overview</td></tr>
+
+<!-- Version label (when multiple versions; omit when single version) -->
+<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;color:#1a237e;padding:10px 0 5px 0;">Version {version}</td></tr>
+
+<!-- Then the overview table wrapped in <tr><td>...</td></tr> -->
+<tr><td>
+<table width="100%" ...>
+<!-- ... overview table content ... -->
+</table>
+</td></tr>
+```
+
+### Failed Results Table (light header) -- Per-Workload with Argus Links
+
+Number of rows varies: one per failed/error step across all runs in the period.
 
 ```html
 <table width="100%" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12px;border-color:#dee2e6;margin-bottom:5px;">
 <tr bgcolor="#f8f9fa" style="background-color:#f8f9fa;">
-  <th style="border:1px solid #dee2e6;padding:4px 8px;text-align:left;font-weight:bold;">Workload</th>
-  <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">Max Throughput (run)</th>
+  <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">Workload</th>
+  <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">Step</th>
   <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">P99 (ms)</th>
-  <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">Status</th>
+  <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">Throughput (op/s)</th>
+  <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">Version</th>
   <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">Link</th>
 </tr>
-<!-- Repeat for each workload -->
-<tr>
+<!-- Repeat for each failed step -->
+<tr bgcolor="#ffffff" style="background-color:#ffffff;">
   <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{workload}</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{max_throughput}</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{p99_value}</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- status badge --></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{step}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#dc3545;font-weight:bold;">{p99_value}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{throughput}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{version}</td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a></td>
 </tr>
 <!-- ... more rows as needed ... -->
 </table>
 ```
 
-NOTE: Each workload row has its own Argus link pointing to the specific run for that workload.
-Argus URL format: `https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}` (singular `/test/`, NOT `/tests/`)
+Key details:
+- Failed P99 values are styled with `color:#dc3545;font-weight:bold;` (red bold)
+- Header uses light background `#f8f9fa` (not dark `#343a40`)
+- Each workload row has its own Argus link pointing to the specific run
 
 ## Bullet Lists (as table rows, not ul/li)
 
@@ -268,6 +327,49 @@ Key styling details:
 <a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a>
 ```
 
+## Uninvestigated Failures Table
+
+Shows failed/test_error runs with no linked Argus issue, placed between the Conclusion and Issues sections.
+Columns: Test | Workload | Version | Status | Cause | Link.
+Excludes CapacityReservationError runs that were successfully re-run.
+
+```html
+<tr><td height="15" style="font-size:1px;line-height:1px;">&nbsp;</td></tr>
+<tr>
+<td bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid #dee2e6;padding:15px;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333333;">
+<tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">Uninvestigated Failures (no issue linked)</td></tr>
+</table>
+<table width="100%" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12px;border-color:#dee2e6;">
+<tr bgcolor="#343a40" style="background-color:#343a40;">
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Test</th>
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Workload</th>
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Version</th>
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Status</th>
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Cause</th>
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Link</th>
+</tr>
+<!-- Repeat for each uninvestigated run, alternating bgcolor #ffffff / #f8f9fa -->
+<tr bgcolor="#ffffff" style="background-color:#ffffff;">
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{test_name}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{workload}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{version}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- status badge --></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{cause}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a></td>
+</tr>
+<!-- ... more rows as needed ... -->
+</table>
+</td>
+</tr>
+```
+
+Key details:
+- Cause column values: "CapacityReservationError, not re-run", "P99 ERROR at <step>", "All tables PASS, run marked failed", etc.
+- Status column uses the standard status badge (FAILED/ERROR)
+- Only shown when uninvestigated failures exist
+- CapacityReservationError runs that were re-run successfully are excluded
+
 ## New Issues and Reproduced Issues Sections
 
 Issues are split into two sections based on Jira creation date (user-classified):
@@ -304,7 +406,9 @@ The "Status" column contains the Jira custom field "Status Description" value fo
 </tr>
 ```
 
-### Reproduced Issues (always shown)
+### Reproduced Issues / Known Issues (always shown)
+
+The section heading may be "Reproduced Issues" or "Known Issues" depending on context. When all issues are reproduced (pre-existing), "Known Issues" is preferred.
 
 ```html
 <tr><td height="15" style="font-size:1px;line-height:1px;">&nbsp;</td></tr>
@@ -380,6 +484,7 @@ Key details:
 | Passed/OK | #28a745 | Green badge |
 | Failed | #dc3545 | Red badge |
 | Error/Warning | #fd7e14 | Orange badge |
+| Running | #17a2b8 | Blue badge |
 | No data/neutral | #6c757d | Gray badge |
 | Link color | #007bff | Blue |
 | Table header (dark) | #343a40 | Dark gray |

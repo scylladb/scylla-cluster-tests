@@ -162,6 +162,49 @@ Microbenchmark tests have a different cell structure:
 | `tps` | float | Transactions per second |
 | `mad tps` | float | Median absolute deviation of TPS |
 
+## `argus run events` Output
+
+Returns CRITICAL and ERROR events for an SCT test run:
+
+```bash
+argus run events \
+  --run-id <RUN_UUID> \
+  --url https://argus.scylladb.com
+```
+
+```json
+[
+  {
+    "severity": "CRITICAL",
+    "message": "(TestFrameworkEvent Severity.CRITICAL) Failed to provision aws resources: CapacityReservationError: Failed to create capacity reservation in any availability zone.",
+        "ts": "2026-08-05T10:16:06.223Z"
+  }
+]
+```
+
+### Event Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `severity` | string | Event severity: "CRITICAL" or "ERROR" |
+| `message` | string | Full event message text |
+| `ts` | string | ISO-8601 timestamp of when the event occurred |
+
+### Common Error Patterns
+
+| Pattern in `message` | Meaning |
+|----------------------|---------|
+| `CapacityReservationError: Failed to create capacity reservation` | AWS instance capacity unavailable |
+| `InsufficientInstanceCapacity` | AWS cannot fulfill the instance request |
+| `Unable to provision` | General provisioning failure |
+
+### Usage Notes
+
+- Use `argus run events` instead of fetching Jenkins console output, which often requires authentication (403)
+- For `test_error` runs with empty results, events reveal why the run failed
+- The common pattern is `CapacityReservationError` -- check if the run was re-run by looking for a later build with the same test + version that passed
+- Time filtering is available with `--before` and `--after` flags but usually not needed for individual run queries
+
 ## `argus issue list` Output
 
 Returns array of issue objects linked to a run, test, or other entity:
