@@ -32,6 +32,7 @@ from cassandra.query import SimpleStatement
 from sdcm import argus_results
 from sdcm import wait
 from sdcm.cluster import BaseNode
+from sdcm.utils.apt import apt_cmd
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.sct_events import Severity
@@ -339,10 +340,18 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 if node.distro.is_rhel_like:
                     node.remoter.run(rf"sudo yum update {scylla_pkg_ver}\* -y", retry=3, timeout=600)
                 else:
-                    node.remoter.sudo("apt-get update", retry=3, timeout=600)
+                    # Use apt_cmd() (as done elsewhere, e.g. BaseNode.install_package() /
+                    # upgrade_manager_agent()) so that a retry after an SSH timeout waits for
+                    # the dpkg frontend lock (DPkg::Lock::Timeout) instead of immediately
+                    # failing while the previous apt-get process is still running and holding
+                    # it. See SCT-839.
+                    dist_upgrade_cmd = apt_cmd(
+                        f"dist-upgrade {scylla_pkg_ver} -y",
+                        options={"DPkg::Lock::Timeout": "300"},
+                    )
+                    node.remoter.sudo(apt_cmd("update"), retry=3, timeout=600)
                     node.remoter.sudo(
-                        f"DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade {scylla_pkg_ver} -y"
-                        f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"',
+                        f"DEBIAN_FRONTEND=noninteractive {dist_upgrade_cmd}",
                         retry=3,
                         timeout=600,
                     )
@@ -491,10 +500,18 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 node.remoter.run(r"sudo yum remove scylla\* -y", retry=3)
                 node.remoter.run(rf"sudo yum install {scylla_pkg_ver} -y", retry=3, timeout=600)
             else:
-                node.remoter.sudo(r"apt-get remove scylla\* -y", retry=3)
+                # Use apt_cmd() (as done elsewhere, e.g. BaseNode.install_package() /
+                # upgrade_manager_agent()) so that a retry after an SSH timeout waits for
+                # the dpkg frontend lock (DPkg::Lock::Timeout) instead of immediately
+                # failing while a previous apt-get process is still running and holding it.
+                # See SCT-839.
+                node.remoter.sudo(apt_cmd(r"remove scylla\* -y"), retry=3)
+                install_cmd = apt_cmd(
+                    f"install {scylla_pkg_ver} -y",
+                    options={"DPkg::Lock::Timeout": "300"},
+                )
                 node.remoter.sudo(
-                    rf"DEBIAN_FRONTEND=noninteractive apt-get install {scylla_pkg_ver} -y"
-                    rf' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"',
+                    f"DEBIAN_FRONTEND=noninteractive {install_cmd}",
                     retry=3,
                     timeout=600,
                 )
