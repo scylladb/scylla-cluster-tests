@@ -131,6 +131,7 @@ from sdcm.utils.aws_utils import (
     ec2_ami_get_root_device_name,
 )
 from sdcm.utils.ci_tools import get_job_name, get_job_url
+from sdcm.utils.minicloud import MinicloudConfig, MinicloudManager, is_minicloud_active
 from sdcm.utils.common import (
     wait_ami_available,
     download_dir_from_cloud,
@@ -438,6 +439,7 @@ class ClusterTester(unittest.TestCase):
         # Initialize test_config (was previously done in TestStatsMixin which was removed)
         self.test_config = TestConfig()
         self.prepare_phase_active = threading.Event()
+        self.minicloud: MinicloudManager | None = None
 
     def _init_test_duration(self):
         self._stress_duration: int = self.params.get("stress_duration")
@@ -2917,6 +2919,21 @@ class ClusterTester(unittest.TestCase):
         if cluster_backend is None:
             cluster_backend = "aws"
 
+        if is_minicloud_active(self.params) and self.minicloud is None:
+            cfg = MinicloudConfig.from_env(params=self.params)
+            cfg.log_file = os.path.join(self.logdir, "minicloud.log")
+            manager = MinicloudManager(cfg)
+            manager.keep_alive = bool(self.params.get("minicloud_keep_alive"))
+            # params gives the memory preflight the test's node counts - without it the check
+            # cannot run, and an oversized test dies mid-run as a container OOM kill instead.
+            # Credentials are validated only when we are about to start a fresh container:
+            # a healthy pre-started one (the CI flow) already has them mounted.
+            manager.preflight_check(skip_aws_creds=manager.is_endpoint_healthy(), params=self.params)
+            manager.start()
+            if cluster_backend in ("aws", "aws-siren"):
+                manager.prepare_regions()
+            self.minicloud = manager
+
         self.get_cluster_kafka()
         self.get_cluster_emr()
 
@@ -3962,6 +3979,9 @@ class ClusterTester(unittest.TestCase):
         self._stop_all_node_task_threads()
         if not self.params.get("execute_post_behavior"):
             self.log.info("Resources will continue to run")
+            if getattr(self, "minicloud", None) is not None:
+                self.minicloud.keep_alive = True
+                self.log.info("minicloud keep_alive set (execute_post_behavior=false)")
             return
 
         actions_per_cluster_type = get_post_behavior_actions(self.params)
@@ -4024,6 +4044,19 @@ class ClusterTester(unittest.TestCase):
             elif action == "keep-on-failure" and critical_events:
                 self.log.info("Critical errors found. Keeping EMR cluster %s", self.emr_cluster.cluster_id)
                 self.test_config.keep_cluster(node_type="emr_cluster", val="keep")
+
+        if getattr(self, "minicloud", None) is not None:
+            # every cluster still standing above lives inside the minicloud container as a
+            # QEMU guest, so removing the container would destroy exactly the nodes the
+            # post behavior just decided to keep.
+            if any(cluster is not None for cluster in (self.db_cluster, self.loaders, self.monitors)):
+                self.minicloud.keep_alive = True
+                self.log.info("minicloud keep_alive set (post behavior kept some nodes)")
+            if not self.minicloud.keep_alive:
+                self.minicloud.stop()
+                self.minicloud = None
+            else:
+                self.log.info("minicloud keep_alive is set, leaving it running")
 
         self.destroy_credentials()
 

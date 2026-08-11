@@ -52,6 +52,8 @@ seeds_num: 1
 
 instance_provision: "spot"
 
+minicloud_endpoint_url: ""
+
 execute_post_behavior: false
 post_behavior_db_nodes: "destroy"
 post_behavior_loader_nodes: "destroy"
@@ -384,6 +386,37 @@ download_from_s3: []
 manager_backup_restore_method: ''
 
 argus_email_report_template: email_report_template_basic.yaml
+
+# minicloud params
+# The default docker image tag lives in defaults/docker_images/minicloud/values_minicloud.yaml
+# (renovate-managed, exposed as stress_image.minicloud); minicloud_docker_image overrides it.
+minicloud_docker_image: ''
+minicloud_lightweight: true
+# Lightweight VMs get minicloud_lightweight_vcpus vCPUs and this much RAM regardless of the
+# requested instance type. Scylla needs >1 GiB per shard on top of the ~1.7 GiB it reserves
+# for the guest OS, so anything under ~3 GiB fails to boot with "memory per shard too low".
+# This is per VM.
+minicloud_lightweight_memory: '4GiB'
+# One shard per vCPU. Both this and the memory above multiply across every guest in the test,
+# so the sct-runner (or dev host) has to be sized for the product.
+minicloud_lightweight_vcpus: 1
+# Empty = no docker limit, the container may use the whole host. When set, this also becomes
+# the budget the preflight guest-memory gate measures against instead of host MemAvailable.
+minicloud_container_memory: ''
+# Empty = no docker limit. docker --cpus form, e.g. '8' or '7.5'.
+minicloud_container_cpus: ''
+# Empty = ~/.cache/minicloud. Holds the image cache, per-instance disks and minicloud.log.
+minicloud_state_dir: ''
+# Change to run two emulators on one host; same name means the second run removes the first.
+minicloud_container_name: 'minicloud'
+minicloud_keep_alive: false
+minicloud_skip_memory_check: false
+# Backend-independent: GCE runs reach S3 for the same content (keystore, artifacts, downloads)
+minicloud_s3_passthrough_buckets: 'scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com'
+# Empty = prepare every SCT-supported AWS region (~2s each)
+minicloud_regions: ''
+# Empty = derive <project>-minicloud-staging and create on demand
+minicloud_gcs_bucket: ''
 
 # SCT agent defaults
 agent:

@@ -229,9 +229,21 @@ class AwsRegion:
         associated_route_table_id = associated_route_table[0].get("RouteTableId")
         # If subnet is associated with route table but not that was created for this subnet
         if associated_route_table_id != sct_route_table.route_table_id:
-            self.client.replace_route_table_association(
-                AssociationId=associated_route_table_id, RouteTableId=sct_route_table.route_table_id
-            )
+            # replace_route_table_association expects the association id (rtbassoc-*),
+            # not the route table id — find the association entry for this subnet
+            association_id = None
+            for assoc in associated_route_table[0].get("Associations", []):
+                if assoc.get("SubnetId") == subnet.subnet_id:
+                    association_id = assoc.get("RouteTableAssociationId")
+                    break
+            if association_id:
+                self.client.replace_route_table_association(
+                    AssociationId=association_id, RouteTableId=sct_route_table.route_table_id
+                )
+            else:
+                self.client.associate_route_table(
+                    RouteTableId=sct_route_table.route_table_id, SubnetId=subnet.subnet_id
+                )
             LOGGER.info(
                 "Subnet '%s' has been associated with '%s' route table.",
                 subnet.subnet_id,
@@ -704,7 +716,7 @@ class AwsRegion:
         try:
             key_pairs = self.client.describe_key_pairs(KeyNames=[self.SCT_KEY_PAIR_NAME])
         except botocore.exceptions.ClientError as ex:
-            if "InvalidKeyPair.NotFound" in str(ex):
+            if "InvalidKeyPair.NotFound" in str(ex) or " does not exist" in str(ex):
                 return None
             raise
         existing = key_pairs.get("KeyPairs", [])

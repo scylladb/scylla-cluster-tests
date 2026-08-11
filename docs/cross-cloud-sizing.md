@@ -141,7 +141,11 @@ uv run sct.py sizing preview --sizing-db "vcpu=32,memory=128" --duration 480 tes
 Note: bash doesn't allow dots in variable names, so use the `env` command:
 
 ```bash
-# Override sizing constraints via env vars (dot notation requires `env` prefix)
+# Override sizing constraints via env vars (preferred: "__" is bash-exportable, dots aren't)
+export SCT_SIZING_DB__vcpu=32 SCT_SIZING_DB__memory=128
+uv run sct.py sizing preview test-cases/longevity/my-test.yaml
+
+# Alternative (dot notation, works via `env`, needed for keys containing `-`)
 env 'SCT_SIZING_DB.VCPU=32' 'SCT_SIZING_DB.MEMORY=128' uv run sct.py sizing preview test-cases/longevity/my-test.yaml
 
 # Override a literal instance type (no dots, works with regular export)
@@ -150,6 +154,14 @@ SCT_INSTANCE_TYPE_DB=i3en.2xlarge uv run sct.py sizing preview test-cases/longev
 # Override node count or duration
 SCT_N_DB_NODES=6 SCT_TEST_DURATION=120 uv run sct.py sizing preview test-cases/longevity/my-test.yaml
 ```
+
+Note: `sizing preview`'s own env-var scanner lower-cases the whole key
+(including the sub-key) up front, so `__` and `.` behave identically here
+regardless of case. This differs from the real SCT config system used when
+actually running a test: there, the `__` form lower-cases the sub-key while
+the `.` form preserves case verbatim -- so for options like `instance_type_db`
+whose sub-keys are consumed by case-sensitive lookups (e.g. the `arch` alias),
+prefer uppercase sub-keys with `__` when setting them for a real test run.
 
 The **Source** column in output shows provenance: `(cli)`, `(env-var)`, `(test-config)`, or `(defaults)`, followed by `(resolved)` or `(literal)`.
 

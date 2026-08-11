@@ -49,9 +49,10 @@ from sdcm.provision.provisioner import ProvisionError
 from sdcm.sct_provision.aws.cluster import PlacementGroup
 
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
+from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
-from sdcm.sct_events.system import SpotTerminationEvent
+from sdcm.sct_events.system import SpotTerminationEvent, TestFrameworkEvent
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
 from sdcm.utils.common import list_instances_aws
 from sdcm.kernel_panic_checker import AWSKernelPanicChecker
@@ -75,8 +76,21 @@ INSTANCE_STORE = "instance_store"
 
 SPOT_TERMINATION_CHECK_DELAY = 0
 
+# transient AWS errors that can happen right after instance termination
+TRANSIENT_EIP_RELEASE_ERRORS = ("InvalidNetworkInterfaceID.NotFound", "InvalidIPAddress.InUse")
+EIP_RELEASE_RETRIES = 8
+EIP_RELEASE_BACKOFF_THRESHOLD = 10
+
 P = ParamSpec("P")
 R = TypeVar("R")
+
+
+class TransientEipReleaseError(Exception):
+    """Releasing an elastic IP failed with an AWS error that is expected to clear on a retry."""
+
+    def __init__(self, client_error: botocore.exceptions.ClientError):
+        super().__init__(str(client_error))
+        self.client_error = client_error
 
 
 class AWSCluster(cluster.BaseCluster):
@@ -1088,26 +1102,62 @@ class AWSNode(cluster.BaseNode):
         self._instance.wait_until_terminated()
 
         client: EC2Client = boto3.client("ec2", region_name=self.parent_cluster.region_names[self.dc_idx])
-        try:
-            client.release_address(AllocationId=self.eip_allocation_id)
-        except botocore.exceptions.ClientError as exc:
-            if exc.response["Error"]["Code"] == "InvalidAllocationID.NotFound":
-                self.log.warning(
-                    "Ignoring InvalidAllocationID.NotFound error when releasing address: %s. "
-                    "The allocation ID '%s' does not exist, likely already released.",
-                    exc,
-                    self.eip_allocation_id,
-                )
-            else:
+
+        def release_address_once():
+            try:
+                client.release_address(AllocationId=self.eip_allocation_id)
+            except botocore.exceptions.ClientError as exc:
+                error_code = exc.response["Error"]["Code"]
+                if error_code == "InvalidAllocationID.NotFound":
+                    self.log.warning(
+                        "Ignoring InvalidAllocationID.NotFound error when releasing address: %s. "
+                        "The allocation ID '%s' does not exist, likely already released.",
+                        exc,
+                        self.eip_allocation_id,
+                    )
+                    return
+                if error_code in TRANSIENT_EIP_RELEASE_ERRORS:
+                    raise TransientEipReleaseError(exc) from exc
+
                 raise
+
+        try:
+            exponential_retry(
+                func=release_address_once,
+                exceptions=TransientEipReleaseError,
+                threshold=EIP_RELEASE_BACKOFF_THRESHOLD,
+                retries=EIP_RELEASE_RETRIES,
+                logger=self.log,
+            )
+        except tenacity.RetryError as retry_error:
+            raise retry_error.last_attempt.exception().client_error from None
 
     def destroy(self):
         self.stop_task_threads()
         self.wait_till_tasks_threads_are_stopped()
         self._instance.terminate()
         self._instance.wait_until_terminated()
-        if self.eip_allocation_id:
+
+        if not self.eip_allocation_id:
+            super().destroy()
+            return
+
+        try:
             self.release_address()
+        except Exception as exc:  # noqa: BLE001
+            # the instance is already terminated, so keep teardown going and let test cleanup release the EIP
+            self.log.error("Failed to release elastic IP '%s': %s", self.eip_allocation_id, exc)
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                source_method="release_address",
+                message=(
+                    f"Failed to release elastic IP '{self.eip_allocation_id}' of node {self.name}. "
+                    "It is left for the cleanup at the end of the test."
+                ),
+                exception=exc,
+                severity=Severity.WARNING,
+            ).publish_or_dump()
+
         super().destroy()
 
     def get_console_output(self):

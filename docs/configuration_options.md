@@ -2,9 +2,25 @@
 
 #### Appending with environment variables or with config files
 * **strings:** can be appended with adding `++` at the beginning of the string:
-`export SCT_APPEND_SCYLLA_ARGS="++ --overprovisioned 1"`
+       `export SCT_APPEND_SCYLLA_ARGS="++ --overprovisioned 1"`
 * **list:** can be appended by adding `++` as the first item of the list
-`export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
+       `export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
+
+#### Nested (dict/list) options
+* A single sub-key of a dict/list option can be set on its own, without
+       quoting the whole value, using either dot-notation or double-underscore
+       notation: `SCT_STRESS_IMAGE.ycsb=...` or `SCT_STRESS_IMAGE__ycsb=...`.
+* `__` is the bash-exportable form (dots are invalid in bash variable names),
+       so prefer it with plain `export`, e.g. `export SCT_STRESS_IMAGE__ycsb=...`.
+* Sub-keys containing `-` (e.g. `cassandra-stress`) still require the dot form,
+       set via `env 'SCT_STRESS_IMAGE.cassandra-stress=...' ...`, since `-` is not
+       a valid bash identifier character either.
+* **Case matters:** the `__` form lower-cases the sub-key (e.g.
+       `SCT_INSTANCE_TYPE_DB__ARCH` becomes sub-key `arch`), while the `.` form
+       preserves case verbatim (`SCT_INSTANCE_TYPE_DB.ARCH` stays `ARCH`). This
+       matters for sub-keys consumed by case-sensitive lookups -- prefer
+       uppercase sub-keys with `__` (they'll be lowered, matching the common
+       convention) rather than the case-preserving dot form.
 
 ## **perf_simple_query_extra_command** / SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND
 
@@ -45,6 +61,15 @@ a list of config files that would be used
 ## **cluster_backend** / SCT_CLUSTER_BACKEND
 
 backend that will be used, aws/gce/azure/oci/docker/xcloud
+
+**default:** N/A
+
+**type:** str
+
+
+## **minicloud_endpoint_url** / SCT_MINICLOUD_ENDPOINT_URL
+
+EC2 API endpoint URL for minicloud. When set, SCT adapts for minicloud limitations (no spot, no EIP, graceful TerminateInstances). Example: http://localhost:5000
 
 **default:** N/A
 
@@ -2174,7 +2199,7 @@ Store adaptive timeout metrics in Argus. Disabled for performance tests only.
 
 ## **adaptive_timeout_multipliers** / SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS
 
-Optional dict of adaptive-timeout multipliers keyed by operation name (from Operations enum value[0], e.g. decommission, remove_node, new_node, repair, etc.). If the current operation key is absent, multiplier 1.0 is used.<br>YAML example:<br>adaptive_timeout_multipliers:<br>  decommission: 4<br>  new_node: 2<br>Environment variable examples:<br>SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS="{'decommission': 4, 'new_node': 2}"<br>Or dot-notation: SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4
+Optional dict of adaptive-timeout multipliers keyed by operation name (from Operations enum value[0], e.g. decommission, remove_node, new_node, repair, etc.). If the current operation key is absent, multiplier 1.0 is used.<br>YAML example:<br>adaptive_timeout_multipliers:<br>  decommission: 4<br>  new_node: 2<br>Environment variable examples:<br>SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS="{'decommission': 4, 'new_node': 2}"<br>Or dot-notation: SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4<br>Or double-underscore (bash-exportable): SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__decommission=4
 
 **default:** {}
 
@@ -4001,6 +4026,123 @@ An escape hatch to disable KMS for enterprise run, when needed. We enable KMS by
 **default:** False
 
 **type:** bool
+
+
+## **minicloud_docker_image** / SCT_MINICLOUD_DOCKER_IMAGE
+
+Explicit minicloud image override. Empty means the renovate-managed default from defaults/docker_images/minicloud/ (exposed as stress_image.minicloud)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **minicloud_lightweight** / SCT_MINICLOUD_LIGHTWEIGHT
+
+Enable lightweight mode for minicloud deployments
+
+**default:** True
+
+**type:** bool
+
+
+## **minicloud_lightweight_memory** / SCT_MINICLOUD_LIGHTWEIGHT_MEMORY
+
+Memory allocation for lightweight minicloud deployments
+
+**default:** 4GiB
+
+**type:** str (appendable)
+
+
+## **minicloud_lightweight_vcpus** / SCT_MINICLOUD_LIGHTWEIGHT_VCPUS
+
+vCPUs per guest in lightweight mode. Scylla runs one shard per vCPU, so this multiplies with minicloud_lightweight_memory across every guest in the test — raise it only on a host with cores to spare
+
+**default:** 1
+
+**type:** int
+
+
+## **minicloud_container_memory** / SCT_MINICLOUD_CONTAINER_MEMORY
+
+Cap the minicloud container's memory (e.g. '32GiB'). Empty means no docker limit, so the container can consume the whole host. Setting it also makes this, rather than the host's free memory, the budget the preflight guest-memory gate measures against
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **minicloud_container_cpus** / SCT_MINICLOUD_CONTAINER_CPUS
+
+Cap the minicloud container's CPU allowance, in docker --cpus form (e.g. '8' or '7.5'). Empty means no limit
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **minicloud_state_dir** / SCT_MINICLOUD_STATE_DIR
+
+Where minicloud keeps its image cache, per-instance disks and minicloud.log — tens of GiB. Empty means ~/.cache/minicloud; point it at a bigger disk or a CI workspace
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **minicloud_container_name** / SCT_MINICLOUD_CONTAINER_NAME
+
+Name of the minicloud docker container. Change it to run two emulators on one host — a second run under the same name force-removes the first one's container
+
+**default:** minicloud
+
+**type:** str (appendable)
+
+
+## **minicloud_keep_alive** / SCT_MINICLOUD_KEEP_ALIVE
+
+Leave the minicloud container running after the test instead of tearing it down (CI sets this so separate provision/test/collect/clean stages reach the same container)
+
+**default:** False
+
+**type:** bool
+
+
+## **minicloud_skip_memory_check** / SCT_MINICLOUD_SKIP_MEMORY_CHECK
+
+Skip the conservative host-memory preflight gate — for development machines whose owner knows the workload's real footprint; an oversized test then dies mid-run as a container OOM kill (exit 137)
+
+**default:** False
+
+**type:** bool
+
+
+## **minicloud_s3_passthrough_buckets** / SCT_MINICLOUD_S3_PASSTHROUGH_BUCKETS
+
+S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads). Backend-independent: GCE runs reach S3 for the same content
+
+**default:** scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com
+
+**type:** str | list[str] → list[str] (appendable)
+
+
+## **minicloud_regions** / SCT_MINICLOUD_REGIONS
+
+Narrow the AWS regions minicloud prepares (default: every SCT-supported region; each costs ~2s at start-up)
+
+**default:** N/A
+
+**type:** str | list[str] → list[str] (appendable)
+
+
+## **minicloud_gcs_bucket** / SCT_MINICLOUD_GCS_BUCKET
+
+GCS bucket for minicloud GCE image staging. Empty means derive <project>-minicloud-staging and create it on demand
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 ## **logs_transport** / SCT_LOGS_TRANSPORT

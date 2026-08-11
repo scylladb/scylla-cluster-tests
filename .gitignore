@@ -74,3 +74,4 @@ scylla-qa-internal/
 
 # AI agent working directory
 .sisyphus/
+sct_runner_ip

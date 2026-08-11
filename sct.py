@@ -135,6 +135,16 @@ from sdcm.utils.resources_cleanup import (
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login, running_in_podman
+from sdcm.utils.minicloud import (
+    MinicloudConfig,
+    MinicloudManager,
+    check_minicloud_reachability,
+    collect_minicloud_logs,
+    ensure_minicloud_ready,
+    get_minicloud_endpoint,
+    is_minicloud_active,
+    set_minicloud_endpoint_env,
+)
 from sdcm.monitorstack.restore import (
     restore_monitoring_stack,
     get_monitoring_stack_services,
@@ -312,6 +322,57 @@ def _report_provision_error_to_argus(backend: str, exc: Exception):
         LOGGER.warning("Failed to set TEST_ERROR status in Argus", exc_info=True)
 
 
+def _minicloud_backend(backend: str | None) -> str:
+    """Single source for the backend default on the minicloud CLI paths.
+
+    Several sct.py stages accept --backend without a click default; every minicloud
+    call site funnels through here instead of each one repeating its own `or "aws"`.
+    """
+    return backend or "aws"
+
+
+@cli.command(
+    "start-minicloud",
+    help="Start minicloud container and prepare region (must run before provision-resources/collect-logs/clean-resources)",
+)
+@click.option("-b", "--backend", type=click.Choice(available_backends), default="aws", help="Backend to emulate")
+@click.option(
+    "-c",
+    "--config",
+    multiple=True,
+    type=click.Path(exists=True),
+    help="Test config .yaml to use, can have multiple of those",
+)
+def start_minicloud(backend, config):
+    if config:
+        os.environ["SCT_CONFIG_FILES"] = str(list(config))
+    if backend:
+        os.environ["SCT_CLUSTER_BACKEND"] = backend
+
+    add_file_logger()
+
+    # Build a real SCTConfiguration rather than reading env alone: the minicloud_* params
+    # (lightweight mode, per-guest memory, S3 passthrough buckets) only exist after the
+    # yaml+env merge, and from_env() without params silently ran the container with defaults
+    # while the test's config dump claimed otherwise. Deliberately no verify_configuration():
+    # this command only needs the params values, and a config the full validation would
+    # reject still deserves a container that matches it.
+    params = SCTConfiguration()
+    cfg = MinicloudConfig.from_env(params=params)
+    manager = MinicloudManager(cfg)
+    manager.keep_alive = True
+    # The overlay check is meaningful only when the caller supplied a config list — a bare
+    # `hydra start-minicloud -b aws` builds default params (spot etc.) but runs no test.
+    manager.preflight_check(params=params, enforce_overlay=bool(config))
+    manager.start()
+
+    if backend in ("aws", "aws-siren"):
+        manager.prepare_regions()
+
+    click.echo(f"Minicloud started (endpoint: http://localhost:{cfg.port}, region: {cfg.region})")
+    click.echo(f"Logs: {cfg.log_file}")
+
+
 @cli.command("provision-resources", help="Provision resources for the test")
 @click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
 @click.option("-t", "--test-name", type=str, help="Test name")
@@ -342,6 +403,9 @@ def provision_resources(backend, test_name: str, config: str):
             raise ValueError("No test_id was provided. Aborting provisioning.")
         test_config.set_test_id_only(test_id)
         localhost = LocalHost(user_prefix=params.get("user_prefix"), test_id=test_config.test_id())
+
+        if is_minicloud_active(params):
+            ensure_minicloud_ready(backend=_minicloud_backend(backend), params=params)
 
         if params.get("logs_transport") == "syslog-ng":
             click.echo("Provision syslog-ng logging service")
@@ -596,6 +660,25 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
         os.environ["SCT_CLUSTER_BACKEND"] = backend
 
     config = SCTConfiguration()
+
+    if is_minicloud_active(config):
+        # After SCTConfiguration so yaml-only activation (minicloud_endpoint_url in
+        # SCT_CONFIG_FILES) is seen too — an env-only check would let such a cleanup
+        # run against the real cloud. Never auto-start here: a fresh, empty emulator
+        # would make cleanup "succeed" while the original run's resources died with
+        # the old container. Fail closed — if minicloud is gone, nothing is left to clean.
+        # Resolve once and use the same endpoint for both: with a yaml-only custom port the
+        # env-only default would probe localhost:5000 while cleanup targets the configured
+        # one — rejecting a healthy emulator, or passing on a stale one and then deleting
+        # against a port that was never probed.
+        endpoint = get_minicloud_endpoint(config)
+        try:
+            check_minicloud_reachability(endpoint)
+        except RuntimeError as exc:
+            click.echo(f"ERROR: minicloud is not reachable — refusing to clean against a fresh/empty emulator: {exc}")
+            sys.exit(1)
+        set_minicloud_endpoint_env(endpoint, _minicloud_backend(backend))
+
     if post_behavior:
         click.echo(f"Use {logdir} as a logdir")
         clean_func = partial(clean_resources_according_post_behavior, config=config, logdir=logdir)
@@ -2288,6 +2371,11 @@ def run_test(argv, backend, config, logdir):
     if backend:
         os.environ["SCT_CLUSTER_BACKEND"] = backend
 
+    # No minicloud hook here: ClusterTester.init_resources() owns the container lifecycle
+    # for run-test (it has the resolved params for the memory gate and overlay validation).
+    # A second manager here would adopt the same container and its death watcher would
+    # misreport the tester's intentional teardown as a mid-test death.
+
     if logdir:
         os.environ["_SCT_LOGDIR"] = logdir
 
@@ -2398,6 +2486,19 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
         os.environ["SCT_CONFIG_FILES"] = config_file
 
     config = SCTConfiguration()
+
+    if is_minicloud_active(config):
+        # After SCTConfiguration so yaml-only activation is seen, and the SDK endpoint
+        # is exported before Collector runs — in a fresh collect-logs process
+        # SCT_MINICLOUD_ENDPOINT_URL alone is invisible to the AWS/GCE SDKs, so
+        # collection would otherwise query the real cloud.
+        set_minicloud_endpoint_env(get_minicloud_endpoint(config), _minicloud_backend(backend))
+        # Collect only — never ensure_minicloud_ready() here: its auto-start does
+        # `docker rm -f` on a crashed container, destroying the very evidence
+        # (exit code, container logs) this command exists to collect.
+        collect_minicloud_logs(
+            get_test_config().logdir(), container_name=MinicloudConfig.from_env(params=config).container_name
+        )
 
     if not test_id:
         test_id = config.get("test_id")

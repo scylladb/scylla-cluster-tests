@@ -1,0 +1,71 @@
+# Shrinks test-cases/upgrades/rolling-upgrade.yaml to something a single host can run under
+# minicloud. Layer all three, in this order:
+#
+#   -c test-cases/upgrades/rolling-upgrade.yaml \
+#   -c configurations/minicloud/rolling-upgrade.yaml \
+#   -c configurations/minicloud.yaml
+#
+# An overlay rather than a self-contained test-case copy on purpose: upgrade_test.test_rolling_upgrade
+# reads a dozen stress params, and a copy would silently miss any new one the real test-case grows.
+# This way a new key arrives with its production value - too big for one host, which the preflight
+# memory gate reports immediately, instead of absent and failing somewhere obscure mid-run.
+#
+# Guest budget: 3 db + 1 loader + 1 monitor = 5 guests x minicloud_lightweight_memory (4GiB) = 20GiB,
+# plus ~2GiB host headroom. Raise minicloud_lightweight_memory only if the host has room for
+# 5x the increase.
+
+# Three nodes is the floor for a rolling upgrade: RF=3 with one node down at a time still has quorum.
+n_db_nodes: 3
+n_loaders: 1
+# The test calls metric_has_data() to confirm the write workload reached Prometheus before it starts
+# upgrading, so the monitor is load-bearing here, not optional.
+n_monitor_nodes: 1
+
+# Lightweight mode caps every guest to 1 vCPU / minicloud_lightweight_memory regardless of the type,
+# so these only have to exist in the emulated catalogs.
+instance_type_db: 'i4i.large'
+instance_type_loader: 'i4i.large'
+gce_instance_type_db: 'n2-standard-2'
+gce_instance_type_loader: 'n2-standard-2'
+gce_instance_type_monitor: 'n2-standard-2'
+# qcow2-backed disks, no NVMe passthrough - the gce_config.yaml default of 4 cannot be served.
+gce_n_local_ssd_disk_db: 1
+
+# Nested virtualization (KVM) for the QEMU guests, and enough RAM for the 20GiB above.
+# AWS: only c8i/m8i/r8i support it. GCE: n1/n2/c2/c3 (see SctRunner families).
+instance_type_runner: 'm8i.2xlarge'
+
+# Boot the base version from its image rather than installing it from a repo - one less slow step
+# on emulated storage. A repo-based base run overrides this with SCT_USE_PREINSTALLED_SCYLLA=false.
+use_preinstalled_scylla: true
+
+# 90 minutes is enough for 3 nodes up, a small load, three rolling restarts and the verify pass.
+test_duration: 90
+
+# Every workload below is the production command with the row counts and thread counts cut to what
+# a 1-vCPU guest can serve. The shapes (keyspace names, CL, compaction) stay identical, because the
+# test asserts on them - only the volume changes.
+user_prefix: 'minicloud-rolling-upgrade'
+
+# Runs for the whole test, and the keyspace name is what metric_has_data() queries on.
+write_stress_during_entire_test: "cassandra-stress write no-warmup cl=QUORUM n=200000 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=10 -pop seq=1..200000 -log interval=5"
+verify_stress_after_cluster_upgrade: "cassandra-stress read no-warmup cl=QUORUM n=200000 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=10 -pop seq=1..200000 -log interval=5"
+
+# Written with CL=ALL before any node is upgraded, so a later validation failure is unambiguous.
+prepare_write_stress:
+  - "cassandra-stress write no-warmup cl=QUORUM n=200000 -schema 'keyspace=keyspace1 replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..200000"
+  - "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=100 -clustering-row-size=1024 -concurrency=4 -rows-per-request=10 -consistency-level=all"
+
+stress_cmd_read_cl_quorum: "cassandra-stress read no-warmup cl=QUORUM duration=2m -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10 -pop seq=1..200000"
+stress_after_cluster_upgrade: "cassandra-stress read no-warmup cl=QUORUM n=100000 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10 -pop seq=1..100000"
+
+# Runs while nodes are being upgraded, so CL=QUORUM not ALL - not every node is available.
+large_partition_stress_during_upgrade: "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=10 -clustering-row-count=1000 -clustering-row-size=1024 -concurrency=4 -rows-per-request=10 -consistency-level=quorum"
+
+# The complex profile runs unless tablets disable it (should_do_complex_profile()), so these have to
+# be present and small rather than removed. The profile path must stay /tmp/complex_schema.yaml -
+# check_required_files() resolves it against data_dir/, and the ops sets are what the test asserts on.
+stress_cmd_complex_prepare: "cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml ops'(insert=1)' cl=ALL n=10000 -mode cql3 native -rate threads=10 -pop seq=1..10000"
+stress_cmd_complex_verify_read: "cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml ops'(read1=1,read3=1)' cl=ONE n=10000 -mode cql3 native -rate threads=10 -pop seq=1..10000"
+stress_cmd_complex_verify_more: "cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml ops'(read1=1,read2=1,read3=1,update_static=1,update_ttl=1,update_diff1_ts=1,update_diff2_ts=1,update_same1_ts=1,update_same2_ts=1)' cl=ALL n=10000 -mode cql3 native -rate threads=10 -pop seq=1..10000"
+stress_cmd_complex_verify_delete: "cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml ops'(delete_row=1)' cl=ALL n=10000 -mode cql3 native -rate threads=10 -pop seq=1..10000"

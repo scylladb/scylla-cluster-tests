@@ -22,6 +22,7 @@ from functools import cached_property
 from typing import Any, List, Literal, TYPE_CHECKING
 
 import google.api_core.exceptions
+from google.api_core.client_options import ClientOptions
 from google.oauth2 import service_account
 from google.cloud import compute_v1
 from google.cloud.compute_v1 import Image
@@ -145,10 +146,17 @@ def get_alternative_zones(region: str, exhausted_zone: str, machine_types: list[
     return alternatives
 
 
+def _gce_client_options() -> dict:
+    if endpoint := os.environ.get("GCE_ENDPOINT_URL"):
+        LOGGER.info("GCE client using custom endpoint: %s", endpoint)
+        return {"client_options": ClientOptions(api_endpoint=endpoint)}
+    return {}
+
+
 def get_gce_compute_instances_client() -> tuple[compute_v1.InstancesClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return compute_v1.InstancesClient(credentials=credentials), info
+    return compute_v1.InstancesClient(credentials=credentials, **_gce_client_options()), info
 
 
 def get_gce_service_accounts() -> list[dict] | None:
@@ -166,25 +174,27 @@ def get_gce_service_accounts() -> list[dict] | None:
 def get_gce_compute_images_client() -> tuple[compute_v1.ImagesClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return compute_v1.ImagesClient(credentials=credentials), info
+    return compute_v1.ImagesClient(credentials=credentials, **_gce_client_options()), info
 
 
 def get_gce_compute_addresses_client() -> tuple[compute_v1.AddressesClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return compute_v1.AddressesClient(credentials=credentials), info
+    return compute_v1.AddressesClient(credentials=credentials, **_gce_client_options()), info
 
 
 def get_gce_compute_regions_client() -> tuple[compute_v1.RegionsClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return compute_v1.RegionsClient(credentials=credentials), info
+    opts = _gce_client_options()
+    LOGGER.debug("Creating RegionsClient with options: %s", opts)
+    return compute_v1.RegionsClient(credentials=credentials, **opts), info
 
 
 def get_gce_storage_client() -> tuple[storage.Client, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return storage.Client(credentials=credentials), info
+    return storage.Client(credentials=credentials, **_gce_client_options()), info
 
 
 def create_gce_storage_bucket(name: str, region: str, object_lock_enabled: bool = False) -> storage.Bucket:
@@ -251,13 +261,15 @@ def gce_override_object_retention(bucket_name: str, path: str) -> None:
 def get_gce_compute_disks_client() -> tuple[compute_v1.DisksClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return compute_v1.DisksClient(credentials=credentials), info
+    return compute_v1.DisksClient(credentials=credentials, **_gce_client_options()), info
 
 
 def get_gce_compute_machine_types_client() -> tuple[compute_v1.MachineTypesClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return compute_v1.MachineTypesClient(credentials=credentials), info
+    opts = _gce_client_options()
+    LOGGER.debug("Creating MachineTypesClient with options: %s", opts)
+    return compute_v1.MachineTypesClient(credentials=credentials, **opts), info
 
 
 class GceZoneResolver:
@@ -274,10 +286,19 @@ class GceZoneResolver:
     def get_zones_for_region(self, region: str) -> list[str]:
         try:
             regions_client, _ = get_gce_compute_regions_client()
+            # self._project is not logged: it derives from KeyStore().get_gcp_credentials(),
+            # so CodeQL traces any log of it as clear-text logging of secret-sourced data.
+            LOGGER.debug(
+                "Fetching zones for region %s (endpoint=%s)",
+                region,
+                os.environ.get("GCE_ENDPOINT_URL", "default"),
+            )
             region_info = regions_client.get(project=self._project, region=region)
-            return [z.rsplit("/", 1)[-1] for z in region_info.zones]
+            zones = [z.rsplit("/", 1)[-1] for z in region_info.zones]
+            LOGGER.debug("Got %d zones for region %s: %s", len(zones), region, zones)
+            return zones
         except Exception:  # noqa: BLE001
-            LOGGER.warning("Failed to get zones from GCE API for region %s", region)
+            LOGGER.warning("Failed to get zones from GCE API for region %s", region, exc_info=True)
             return []
 
     def get_zones_for_machine_type(self, region: str, machine_type: str) -> list[str]:
@@ -289,9 +310,10 @@ class GceZoneResolver:
                 self._machine_types_client.get(project=self._project, zone=zone, machine_type=machine_type)
                 available.append(zone)
             except google.api_core.exceptions.NotFound:
+                LOGGER.debug("Machine type %s not found in zone %s", machine_type, zone)
                 continue
             except Exception:  # noqa: BLE001
-                LOGGER.warning("Error checking machine type %s in zone %s; skipping", machine_type, zone)
+                LOGGER.warning("Error checking machine type %s in zone %s", machine_type, zone, exc_info=True)
                 continue
         return available
 
@@ -569,7 +591,9 @@ class GceLoggingClient:
             f" logName : projects/{self.project_id}/logs/cloudaudit.googleapis.com%2Fsystem_event"
             f' timestamp > "{from_}" timestamp < "{until}"',
         }
-        with build("logging", "v2", credentials=self.credentials, cache_discovery=False) as service:
+        with build(
+            "logging", "v2", credentials=self.credentials, cache_discovery=False, **_gce_client_options()
+        ) as service:
             return self._get_log_entries(service, query)
 
     def _get_log_entries(self, service, query, page_token=None):
@@ -697,6 +721,7 @@ def create_instance(  # noqa: PLR0913
     network_tags: list = None,
     metadata: dict = None,
     service_accounts: list = None,
+    enable_nested_virtualization: bool = False,
 ) -> compute_v1.Instance:
     """
     Send an instance creation request to the Compute Engine API and wait for it to complete.
@@ -736,6 +761,11 @@ def create_instance(  # noqa: PLR0913
         network_tags: List of tags to apply to network labels
         metadata: dict of key values to add to metadata
         service_accounts: list of service account to attach to the instance
+        enable_nested_virtualization: enable nested virtualization (KVM passthrough) on the instance.
+            Supported on the Intel Haswell+ general-purpose/compute-optimized families
+            (N1, N2, C2, C3) - the same list as
+            GceSctRunner.NESTED_VIRTUALIZATION_INSTANCE_FAMILIES. Not supported on E2, H4D,
+            the memory-optimized M/X series, or anything on AMD (N2D/C2D/C3D) or Arm silicon.
     Returns:
         Instance object.
     """
@@ -797,6 +827,16 @@ def create_instance(  # noqa: PLR0913
     if custom_hostname is not None:
         # Set the custom hostname for the instance
         instance.hostname = custom_hostname
+
+    if enable_nested_virtualization:
+        instance.advanced_machine_features = compute_v1.AdvancedMachineFeatures(
+            enable_nested_virtualization=True,
+        )
+        if machine_type.split("-")[0] == "n1":
+            # N1 spans pre-Haswell CPUs and nested virtualization needs Haswell or later;
+            # the other families that support it at all (N2/C2/C3) are Haswell+ by definition,
+            # and pinning a platform there would only narrow placement.
+            instance.min_cpu_platform = "Intel Haswell"
 
     if delete_protection:
         # Set the delete protection bit

@@ -379,7 +379,11 @@ def terminate_on_failure(func):
             return func(self, *args, **kwargs)
         except Exception:  # noqa: BLE001
             if self.parent_cluster:
-                self.log.error("Failed to initialize node %s, collecting logs and terminating", self.name)
+                # exc_info: print the actual failure BEFORE the log-collection/termination
+                # noise below buries it — the re-raise surfaces it again only much later
+                self.log.error(
+                    "Failed to initialize node %s, collecting logs and terminating", self.name, exc_info=True
+                )
                 try:
                     self.parent_cluster.terminate_node(self, scylla_shards=0)
                 except Exception:  # noqa: BLE001
@@ -4523,7 +4527,7 @@ class BaseCluster:
         return [node.private_ip_address for node in self.nodes]
 
     def get_node_public_ips(self):
-        return [node.public_ip_address for node in self.nodes]
+        return [node.public_ip_address for node in self.nodes if node.public_ip_address]
 
     def get_node_cql_ips(self, nodes: list[BaseNode] | None = None):
         nodes = nodes if nodes else self.nodes

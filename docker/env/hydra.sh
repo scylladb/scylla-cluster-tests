@@ -199,6 +199,7 @@ AWS_OPTIONS=$(env | sed -n 's/^\(AWS_[^=]*\)=.*/--env \1/p')
 # export all JENKINS_* env vars into the docker run
 JENKINS_OPTIONS=$(env | sed -n 's/^\(JENKINS_[^=]*\)=.*/--env \1/p')
 
+
 is_podman="$($tool --help | { grep -o podman || :; })"
 docker_common_args=()
 
