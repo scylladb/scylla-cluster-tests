@@ -3656,6 +3656,15 @@ Step duration of c-s load for gradual performance test per sub-test. Example: {'
 **type:** dict | YAML/JSON string → dict
 
 
+## **perf_gradual_write_preload_data** / SCT_PERF_GRADUAL_WRITE_PRELOAD_DATA
+
+If true, preload data (via prepare_write_cmd) before test_write_gradual_increase_load. Needed for LWT conditional-update workloads (e.g. UPDATE ... IF <cond>) that require existing rows to have a chance of applying; not needed for INSERT-based write workloads on a fresh table.
+
+**default:** False
+
+**type:** bool
+
+
 ## **stress_cmd_lwt_i** / SCT_STRESS_CMD_LWT_I
 
 Stress command for LWT performance test for INSERT baseline
