@@ -67,7 +67,16 @@ jobs:
 
   - job_name: "tier1/longevity-50gb-3days-test"
     backend: "aws"
+<<<<<<< HEAD
     region: "eu-west-1"
+||||||| parent of 5a5fd41d7 (fix(trigger-matrix): Fix availability_zone for longevity-50gb-3days-test)
+    params:
+      region: "eu-west-1"
+=======
+    params:
+      region: "eu-west-1"
+      availability_zone: "a,b,c"
+>>>>>>> 5a5fd41d7 (fix(trigger-matrix): Fix availability_zone for longevity-50gb-3days-test)
     labels:
       - "weekly"
     include_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
