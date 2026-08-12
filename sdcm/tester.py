@@ -4662,7 +4662,9 @@ class ClusterTester(unittest.TestCase):
             with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0], connect_timeout=600) as session:
                 query_result = session.execute(query)
 
-            results_set = set([result_row.resize_type for result_row in query_result])
+            # resize_type is NULL for tablets that were never involved in a resize (equivalent to
+            # the string "none" - no resize in progress), so normalize before comparing.
+            results_set = {result_row.resize_type or "none" for result_row in query_result}
             self.log.debug("resize_type all results: %s", results_set)
             assert results_set == {"none"} or not results_set, (
                 "Tablet splits or merges still in progress: %s" % results_set
