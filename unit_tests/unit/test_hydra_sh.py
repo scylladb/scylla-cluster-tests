@@ -399,16 +399,39 @@ class LongevityPipelineTest:
         )
 
 
+STUB_DOCKER_SCRIPT = """#!/usr/bin/env bash
+case "$1" in
+    images) echo "stub-image-id" ;;
+    pull) echo "stub: pull skipped, no real registry access in unit tests" ;;
+    --help) echo "stub docker cli" ;;
+    *) exit 0 ;;
+esac
+"""
+
+
 class TestHydraSh:
     cmd_runner = LocalCmdRunner()
 
+    @pytest.fixture(scope="class")
+    def stub_docker_bin_dir(self, tmp_path_factory):
+        # hydra.sh calls `docker images`/`docker pull` for real even with --dry-run-hydra (only the
+        # final `docker run` is echoed instead of executed), which hits the network and dominates the
+        # runtime of this file. Stub `docker` on PATH so those two calls return instantly.
+        bin_dir = tmp_path_factory.mktemp("stub_docker_bin")
+        docker_stub_path = bin_dir / "docker"
+        docker_stub_path.write_text(STUB_DOCKER_SCRIPT, encoding="utf-8")
+        docker_stub_path.chmod(0o755)
+        return str(bin_dir)
+
     @pytest.fixture(autouse=True)
-    def fixture_env(self, monkeypatch):
+    def fixture_env(self, monkeypatch, stub_docker_bin_dir):
         self.monkeypatch = monkeypatch
 
         for name in os.environ:
             if any(name.startswith(prefix) for prefix in ["SCT_", "AWS_", "GOOGLE_"]):
                 self.monkeypatch.delenv(name)
+
+        self.monkeypatch.setenv("PATH", stub_docker_bin_dir + os.pathsep + os.environ["PATH"])
 
     def prepare_environment(self, env):
         for name, value in env.items():
