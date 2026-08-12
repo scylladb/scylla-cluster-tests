@@ -209,6 +209,31 @@ class AwsBuilder:
             else:
                 raise
 
+    @property
+    def mixed_instances_policy(self) -> dict:
+        return {
+            "LaunchTemplate": {
+                "LaunchTemplateSpecification": {
+                    "LaunchTemplateName": self.launch_template_name,
+                    "Version": "$Latest",
+                },
+                "Overrides": [
+                    {
+                        "InstanceRequirements": {
+                            "VCpuCount": {"Min": self.NUM_CPUS, "Max": self.NUM_CPUS},
+                            "MemoryMiB": {"Min": 8192, "Max": 8192},
+                        }
+                    }
+                ],
+            },
+            "InstancesDistribution": {
+                "OnDemandAllocationStrategy": "lowest-price",
+                "OnDemandBaseCapacity": 0,
+                "OnDemandPercentageAboveBaseCapacity": 100,
+                "SpotAllocationStrategy": "price-capacity-optimized",
+            },
+        }
+
     def create_auto_scaling_group(self):
         click.secho(f"{self.region.region_name}: create_auto_scaling_group")
         try:
@@ -220,28 +245,7 @@ class AwsBuilder:
                 MaxSize=200,
                 AvailabilityZones=self.region.availability_zones,
                 VPCZoneIdentifier=",".join(subnet_ids),
-                MixedInstancesPolicy={
-                    "LaunchTemplate": {
-                        "LaunchTemplateSpecification": {
-                            "LaunchTemplateName": self.launch_template_name,
-                            "Version": "$Latest",
-                        },
-                        "Overrides": [
-                            {
-                                "InstanceRequirements": {
-                                    "VCpuCount": {"Min": self.NUM_CPUS, "Max": self.NUM_CPUS},
-                                    "MemoryMiB": {"Min": 4096, "Max": 8192},
-                                }
-                            }
-                        ],
-                    },
-                    "InstancesDistribution": {
-                        "OnDemandAllocationStrategy": "lowest-price",
-                        "OnDemandBaseCapacity": 0,
-                        "OnDemandPercentageAboveBaseCapacity": 100,
-                        "SpotAllocationStrategy": "price-capacity-optimized",
-                    },
-                },
+                MixedInstancesPolicy=self.mixed_instances_policy,
                 Tags=[
                     {"Key": "Name", "Value": "sct-jenkins-builder-asg", "PropagateAtLaunch": True},
                     {"Key": "NodeType", "Value": "builder", "PropagateAtLaunch": True},
@@ -254,10 +258,16 @@ class AwsBuilder:
 
         except botocore.exceptions.ClientError as error:
             LOGGER.info(error.response)
-            if not error.response["Error"]["Code"] in [
-                "AlreadyExists",
-            ]:
+            error_code = error.response["Error"]["Code"]
+            if error_code != "AlreadyExists":
                 raise
+
+            # create_auto_scaling_group can't modify an existing group, so push
+            # the current instance requirements to it explicitly.
+            click.secho(f"{self.region.region_name}: updating existing auto scaling group")
+            asg_client.update_auto_scaling_group(
+                AutoScalingGroupName=self.name, MixedInstancesPolicy=self.mixed_instances_policy
+            )
 
     def add_scaling_group_to_jenkins(self):
         click.secho(f"{self.region.region_name}: add_scaling_group_to_jenkins")
