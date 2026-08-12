@@ -35,6 +35,7 @@ class ClusterHealthValidatorEvent(ContinuousEvent):
     ScyllaCloudClusterServerDiagnostic: Type[SctEventProtocol]
     Group0TokenRingInconsistency: Type[SctEventProtocol]
     ParallelHealthCheckFailure: Type[SctEventProtocol]
+    NvmeHealth: Type[SctEventProtocol]
 
     def __init__(
         self, node=None, message: Optional[str] = None, error: Optional[str] = None, severity=Severity.NORMAL
@@ -91,6 +92,9 @@ ClusterHealthValidatorEvent.add_subevent_type(
 )
 ClusterHealthValidatorEvent.add_subevent_type(
     "ParallelHealthCheckFailure", severity=Severity.ERROR, mixin=ClusterHealthValidatorSubEvents
+)
+ClusterHealthValidatorEvent.add_subevent_type(
+    "NvmeHealth", severity=Severity.WARNING, mixin=ClusterHealthValidatorSubEvents
 )
 
 

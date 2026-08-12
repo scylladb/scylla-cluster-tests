@@ -917,6 +917,7 @@ class ScyllaLogCollector(LogCollector):
         FileLog(name="kallsyms_*", search_locally=True),
         FileLog(name="lsof_*", search_locally=True),
         FileLog(name="netstat_*", search_locally=True),
+        FileLog(name="nvme_error_log_*", search_locally=True),
         FileLog(name="schema.log", search_locally=True, collect_from_parent=True),
         FileLog(name="system_schema_tables.log", search_locally=True, collect_from_parent=True),
         FileLog(name="system_truncated.log", search_locally=True, collect_from_parent=True),
@@ -952,6 +953,54 @@ class ScyllaLogCollector(LogCollector):
         CommandLog(name="scylla_doctor.vitals.json", command="cat *.vitals.json"),
         CommandLog(name="cloud-init-output.log", command="cat /var/log/cloud-init-output.log"),
         CommandLog(name="cloud-init.log", command="cat /var/log/cloud-init.log"),
+        # NVMe diagnostics — conditional on nvme-cli being installed.
+        # Uses "command -v nvme" guard so the commands are silently skipped on
+        # nodes without nvme-cli (docker, EBS-only instances).
+        CommandLog(
+            name="nvme_smart_log.log",
+            command=(
+                "( command -v nvme > /dev/null 2>&1 && "
+                "for dev in $(sudo nvme list -o json 2>/dev/null "
+                '| python3 -c "import sys,json; '
+                "d=json.load(sys.stdin); "
+                "devs=d.get('Devices',d.get('devices',[])); "
+                "[print(ns.get('DevicePath',ns.get('device',ns.get('NameSpace','')))) "
+                "for item in devs "
+                "for ns in (item.get('Namespaces',[item]) if isinstance(item,dict) and 'Namespaces' in item else [item])]"
+                '" 2>/dev/null); do echo "=== $dev ==="; sudo nvme smart-log $dev 2>&1; done '
+                "|| true )"
+            ),
+        ),
+        CommandLog(
+            name="nvme_error_log.log",
+            command=(
+                "( command -v nvme > /dev/null 2>&1 && "
+                "for dev in $(sudo nvme list -o json 2>/dev/null "
+                '| python3 -c "import sys,json; '
+                "d=json.load(sys.stdin); "
+                "devs=d.get('Devices',d.get('devices',[])); "
+                "[print(ns.get('DevicePath',ns.get('device',ns.get('NameSpace','')))) "
+                "for item in devs "
+                "for ns in (item.get('Namespaces',[item]) if isinstance(item,dict) and 'Namespaces' in item else [item])]"
+                '" 2>/dev/null); do echo "=== $dev ==="; sudo nvme error-log $dev 2>&1; done '
+                "|| true )"
+            ),
+        ),
+        CommandLog(
+            name="nvme_self_test_log.log",
+            command=(
+                "( command -v nvme > /dev/null 2>&1 && "
+                "for dev in $(sudo nvme list -o json 2>/dev/null "
+                '| python3 -c "import sys,json; '
+                "d=json.load(sys.stdin); "
+                "devs=d.get('Devices',d.get('devices',[])); "
+                "[print(ns.get('DevicePath',ns.get('device',ns.get('NameSpace','')))) "
+                "for item in devs "
+                "for ns in (item.get('Namespaces',[item]) if isinstance(item,dict) and 'Namespaces' in item else [item])]"
+                '" 2>/dev/null); do echo "=== $dev ==="; sudo nvme self-test-log $dev 2>&1; done '
+                "|| true )"
+            ),
+        ),
     ]
 
     cmd = "test -f /etc/scylla/ssl_conf/{0} && cat /etc/scylla/ssl_conf/{0}"
