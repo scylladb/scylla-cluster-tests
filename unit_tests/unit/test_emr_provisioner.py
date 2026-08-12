@@ -10,7 +10,7 @@ import boto3
 import pytest
 
 os.environ["MOTO_AMIS_PATH"] = str(Path(__file__).parent.parent / "test_data" / "mocked_ami_data.json")
-from moto.server import ThreadedMotoServer
+from moto import mock_aws
 
 from sdcm.provision.aws.emr_provisioner import (
     EMR_EC2_INSTANCE_PROFILE_NAME,
@@ -24,34 +24,15 @@ from sdcm.provision.aws.emr_provisioner import (
 AWS_REGION = "us-east-1"
 
 
-@pytest.fixture(scope="module")
-def moto_server():
-    """Run a mocked AWS server for testing."""
-    server = ThreadedMotoServer(port=0)
-    server.start()
-    host, port = server.get_host_and_port()
-
-    env_vars = {
-        "AWS_ENDPOINT_URL": f"http://{host}:{port}",
-        "AWS_ACCESS_KEY_ID": "testing",
-        "AWS_SECRET_ACCESS_KEY": "testing",
-        "AWS_DEFAULT_REGION": AWS_REGION,
-    }
-    saved_env = {key: os.environ.get(key) for key in env_vars}
-    os.environ.update(env_vars)
-
-    yield env_vars["AWS_ENDPOINT_URL"]
-
-    for key, original in saved_env.items():
-        if original is None:
-            os.environ.pop(key, None)
-        else:
-            os.environ[key] = original
-    server.stop()
+@pytest.fixture(autouse=True)
+def aws_mock():
+    """Mock AWS APIs in-process for the duration of each test."""
+    with mock_aws():
+        yield
 
 
-@pytest.fixture(scope="module")
-def iam_roles(moto_server):
+@pytest.fixture()
+def iam_roles():
     """Create required IAM roles for EMR."""
     iam = boto3.client("iam", region_name=AWS_REGION)
     trust_policy = '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"elasticmapreduce.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
@@ -91,7 +72,7 @@ def emr_params():
 
 
 @pytest.fixture()
-def provisioner(moto_server, iam_roles, emr_params):
+def provisioner(iam_roles, emr_params):
     return EmrClusterProvisioner(region_name=AWS_REGION, params=emr_params)
 
 
@@ -193,7 +174,7 @@ def test_terminate_emr_cluster(provisioner):
     assert status["State"] in ("TERMINATING", "TERMINATED")
 
 
-def test_list_emr_clusters_by_tags(moto_server, iam_roles):
+def test_list_emr_clusters_by_tags(iam_roles):
     """Test listing EMR clusters filtered by tags."""
     params = MockParams()
     prov = EmrClusterProvisioner(region_name=AWS_REGION, params=params)
@@ -286,7 +267,7 @@ def test_get_step_status(provisioner):
     assert "State" in status
 
 
-def test_ensure_emr_roles_creates_missing_roles(moto_server):
+def test_ensure_emr_roles_creates_missing_roles():
     """Test that ensure_emr_roles creates both roles when they don't exist."""
     iam = boto3.client("iam", region_name=AWS_REGION)
     iam.attach_role_policy = lambda **kw: None
@@ -300,7 +281,7 @@ def test_ensure_emr_roles_creates_missing_roles(moto_server):
     assert profile["InstanceProfile"]["InstanceProfileName"] == EMR_EC2_INSTANCE_PROFILE_NAME
 
 
-def test_ensure_emr_roles_idempotent(moto_server, iam_roles):
+def test_ensure_emr_roles_idempotent(iam_roles):
     """Test that ensure_emr_roles is safe to call when roles already exist."""
     iam = boto3.client("iam", region_name=AWS_REGION)
     iam.attach_role_policy = lambda **kw: None
