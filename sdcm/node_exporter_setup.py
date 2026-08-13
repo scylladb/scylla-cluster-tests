@@ -16,6 +16,7 @@ class NodeExporterSetup:
                 useradd -rs /bin/false node_exporter
             fi
             curl -L -f --connect-timeout 10 --retry 8 --retry-max-time 300 -O https://github.com/prometheus/node_exporter/releases/download/v{NODE_EXPORTER_VERSION}/node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
+            tar xzf node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
             mv node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin
 
             if [ -e /etc/systemd/system/node_exporter.service ]; then
