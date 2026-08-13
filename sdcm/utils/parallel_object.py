@@ -173,22 +173,35 @@ class ParallelObject:
         # above, so any still-running worker at this point is already an
         # abandoned zombie as far as this code is concerned -- we are just making
         # CPython agree.
-        # `_threads_queues` (and, transitively, `threading._shutdown_locks`) must be
-        # mutated while holding `_global_shutdown_lock`: CPython uses that lock
-        # internally to serialize worker registration against `_python_exit()`, which
-        # copies this same WeakKeyDictionary during interpreter shutdown. Racing that
-        # copy unlocked can corrupt shutdown-time iteration.
+        # `_threads_queues` must be mutated while holding `_global_shutdown_lock`:
+        # CPython uses that lock internally to serialize worker registration against
+        # `_python_exit()`, which copies this same WeakKeyDictionary during interpreter
+        # shutdown. Racing that copy unlocked can corrupt shutdown-time iteration.
         #
-        # Deadlock consideration: CPython's own `_python_exit()` only holds this lock
-        # briefly, to flip an internal `_shutdown` flag, and releases it *before*
-        # copying `_threads_queues` and unboundedly joining every worker in it -- the
-        # lock is not held during that join. So a thread stuck in that join (the exact
-        # crisis this module exists to escalate out of) does not hold this lock while
-        # stuck, and acquiring it here should not be able to deadlock against it. That
-        # said, this is defensive code whose whole point is to never itself become
-        # another way to hang, so we still bound the wait rather than trust that
-        # invariant forever (e.g. across CPython versions): if the lock cannot be
-        # acquired promptly, log a warning and proceed without it.
+        # `threading._shutdown_locks` (Python <3.14) is NOT covered by that same lock:
+        # CPython actually protects that set with its own separate internal lock
+        # (`threading._shutdown_locks_lock`), not `_global_shutdown_lock` -- so the
+        # `.discard()` call below is not perfectly synchronized against CPython's own
+        # mutation of that set on those versions. This repo supports Python 3.10-3.13
+        # (see pyproject.toml) where that set still exists, but this code cannot verify
+        # `_shutdown_locks_lock`'s name/existence is stable across all of them, so it is
+        # not acquired here. Accepted tradeoff: worst case, `.discard()` races CPython's
+        # own housekeeping of this set and the removal is a redundant no-op -- it does
+        # not corrupt anything, and it does not weaken this module's actual safety net,
+        # which is the hard-exit escalation below: that arms independently of whether
+        # this particular discard succeeds, so a thread that is genuinely still stuck is
+        # still caught regardless.
+        #
+        # Deadlock consideration: CPython's own `_python_exit()` only holds
+        # `_global_shutdown_lock` briefly, to flip an internal `_shutdown` flag, and
+        # releases it *before* copying `_threads_queues` and unboundedly joining every
+        # worker in it -- the lock is not held during that join. So a thread stuck in
+        # that join (the exact crisis this module exists to escalate out of) does not
+        # hold this lock while stuck, and acquiring it here should not be able to
+        # deadlock against it. That said, this is defensive code whose whole point is to
+        # never itself become another way to hang, so we still bound the wait rather than
+        # trust that invariant forever (e.g. across CPython versions): if the lock cannot
+        # be acquired promptly, log a warning and proceed without it.
         shutdown_locks = getattr(threading, "_shutdown_locks", None)
         lock_acquired = _global_shutdown_lock.acquire(timeout=GLOBAL_SHUTDOWN_LOCK_TIMEOUT)
         if not lock_acquired:

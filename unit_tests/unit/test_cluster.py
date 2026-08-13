@@ -19,6 +19,7 @@ import threading
 import time
 import unittest.mock
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -993,11 +994,56 @@ def scylla_cluster_for_nemesis(monkeypatch):
     return cluster
 
 
-def test_stop_nemesis_publishes_critical_event_and_arms_hard_exit_on_stuck_thread(
+def test_stop_nemesis_publishes_critical_event_and_arms_hard_exit_on_stuck_threadpool_worker(
     scylla_cluster_for_nemesis, events_function_scope
 ):
-    """A nemesis thread that never honors termination must publish a CRITICAL
-    TestFrameworkEvent and arm the hard exit."""
+    """Nemesis threads are started with daemon=True (see start_nemesis()): interpreter
+    shutdown never joins them, so a nemesis thread's own liveness is not what can hang
+    the process. What can hang it is a non-daemon ThreadPoolExecutor worker a nemesis
+    spun up internally and never joined -- tracked in
+    concurrent.futures.thread._threads_queues, the registry stop_nemesis() now checks.
+
+    Simulate that: the nemesis thread finishes quickly (its own is_alive() is False by
+    the time stop_nemesis() checks _threads_queues), but a ThreadPoolExecutor worker it
+    left behind is still genuinely blocked. stop_nemesis() must still publish a CRITICAL
+    TestFrameworkEvent and arm the hard exit for that worker thread -- this is exactly
+    the false-negative the old nemesis-thread-is_alive() check missed entirely.
+    """
+    already_set = threading.Event()
+    already_set.set()
+    finished_nemesis_thread = threading.Thread(target=already_set.wait, daemon=True)
+    finished_nemesis_thread.start()
+    finished_nemesis_thread.join(timeout=5)
+    scylla_cluster_for_nemesis.nemesis_threads = [finished_nemesis_thread]
+
+    block_forever = threading.Event()
+    executor = ThreadPoolExecutor(max_workers=1)
+    executor.submit(block_forever.wait)
+
+    try:
+        scylla_cluster_for_nemesis.stop_nemesis(timeout=0.1)
+
+        critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
+        assert len(critical_events) == 1, f"Expected exactly 1 CRITICAL event, got {len(critical_events)}"
+        assert "stop_nemesis" in critical_events[0]
+        assert hard_exit._hard_exit_reason
+        worker_thread = next(iter(executor._threads))
+        assert worker_thread in hard_exit._hard_exit_threads
+    finally:
+        block_forever.set()
+        executor.shutdown(wait=True)
+
+
+def test_stop_nemesis_does_not_arm_hard_exit_when_nemesis_thread_alive_but_no_worker_stuck(
+    scylla_cluster_for_nemesis, events_function_scope
+):
+    """No false-positive escalation: a nemesis thread that is still alive (e.g. still
+    unwinding after KillNemesis was raised into it) must not, by itself, trigger
+    escalation. Nemesis threads are daemon threads and are not what blocks interpreter
+    shutdown, so their own is_alive() must no longer be the trigger -- only a genuinely
+    live ThreadPoolExecutor worker (checked via _threads_queues) should be. This is the
+    false-positive the old nemesis-thread-is_alive() check risked.
+    """
     block_forever = threading.Event()
 
     def stuck_target():
@@ -1011,20 +1057,19 @@ def test_stop_nemesis_publishes_critical_event_and_arms_hard_exit_on_stuck_threa
         except BaseException:  # noqa: BLE001
             pass
 
-    stuck_thread = threading.Thread(target=stuck_target, daemon=True)
-    stuck_thread.start()
-    scylla_cluster_for_nemesis.nemesis_threads = [stuck_thread]
+    alive_nemesis_thread = threading.Thread(target=stuck_target, daemon=True)
+    alive_nemesis_thread.start()
+    scylla_cluster_for_nemesis.nemesis_threads = [alive_nemesis_thread]
 
     try:
         scylla_cluster_for_nemesis.stop_nemesis(timeout=0.1)
 
         critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
-        assert len(critical_events) == 1, f"Expected exactly 1 CRITICAL event, got {len(critical_events)}"
-        assert "stop_nemesis" in critical_events[0]
-        assert hard_exit._hard_exit_reason
+        assert len(critical_events) == 0, f"Expected no CRITICAL events, got {len(critical_events)}"
+        assert not hard_exit._hard_exit_reason
     finally:
         block_forever.set()
-        stuck_thread.join(timeout=5)
+        alive_nemesis_thread.join(timeout=5)
 
 
 def test_stop_nemesis_does_not_arm_hard_exit_when_threads_stop(scylla_cluster_for_nemesis, events_function_scope):

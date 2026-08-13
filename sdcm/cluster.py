@@ -44,6 +44,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from contextlib import ExitStack, contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures.thread import _threads_queues
 import packaging.version
 
 import yaml
@@ -5852,25 +5853,41 @@ class BaseScyllaCluster:
         self.log.debug("There are %s nemesis threads currently running", len(self.nemesis_threads))
         self.nemesis_termination_event.set()
         threads_tracebacks = []
-        stuck_threads = []
 
         current_thread_frames = sys._current_frames()
         for nemesis_thread in self.nemesis_threads:
             raise_exception_in_thread(nemesis_thread, KillNemesis)
             nemesis_thread.join(timeout)
             if nemesis_thread.is_alive():
+                # Collected for diagnostics only: nemesis threads are started with
+                # daemon=True (see start_nemesis()), so interpreter shutdown never joins
+                # them and a nemesis thread still being alive here is not, by itself,
+                # what can hang the process at exit -- see the escalation condition below.
                 stack_trace = traceback.format_stack(current_thread_frames[nemesis_thread.ident])
                 threads_tracebacks.append("\n".join(stack_trace))
-                stuck_threads.append(nemesis_thread)
 
-        if threads_tracebacks:
+        # What can actually hang interpreter shutdown is a non-daemon ThreadPoolExecutor
+        # worker thread that a nemesis (or other code) spun up internally and never
+        # joined -- e.g. a nested ThreadPoolExecutor used inside a disruption method.
+        # Every live ThreadPoolExecutor worker thread in the process is tracked in
+        # concurrent.futures.thread._threads_queues (the same registry
+        # ParallelObject.clean_up() inspects), so that -- not a nemesis thread's own
+        # is_alive() -- is the correct, process-wide signal for whether anything from
+        # this stop_nemesis() call is actually stuck.
+        stuck_threads = [thread for thread in _threads_queues if thread.is_alive()]
+
+        if stuck_threads:
             escalation_reason = (
-                f"{len(threads_tracebacks)} nemesis thread(s) still alive after {timeout}s stop_nemesis timeout"
+                f"{len(stuck_threads)} ThreadPoolExecutor worker thread(s) still alive after "
+                f"{timeout}s stop_nemesis timeout"
             )
+            message = escalation_reason
+            if threads_tracebacks:
+                message += ":\n" + "\n".join(threads_tracebacks)
             TestFrameworkEvent(
                 source=self.__class__.__name__,
                 source_method="stop_nemesis",
-                message=escalation_reason + ":\n" + "\n".join(threads_tracebacks),
+                message=message,
                 severity=Severity.CRITICAL,
             ).publish_or_dump()
             request_hard_exit(escalation_reason, stuck_threads)
