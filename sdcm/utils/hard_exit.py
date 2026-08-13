@@ -52,6 +52,12 @@ STUCK_THREAD_EXIT_CODE = 86
 
 _hard_exit_reason: str | None = None
 _hard_exit_threads: list[threading.Thread] = []
+# Guards the read-modify-write merge in request_hard_exit() below: multiple call
+# sites can arm concurrently from different threads during teardown (e.g. a
+# nemesis-monitor thread and a main teardown thread both calling
+# request_hard_exit() around the same time), and an unsynchronized merge could lose
+# one caller's contribution to another's.
+_hard_exit_lock = threading.Lock()
 
 
 def request_hard_exit(reason: str, threads: list[threading.Thread]) -> None:
@@ -64,14 +70,15 @@ def request_hard_exit(reason: str, threads: list[threading.Thread]) -> None:
     # call's thread that is still genuinely stuck, silently defeating exit_process()'s
     # liveness re-check below. Reasons are concatenated for the same reason: nothing
     # from an earlier arm should be lost.
-    seen_ids = {id(thread) for thread in _hard_exit_threads}
-    merged_threads = list(_hard_exit_threads)
-    for thread in threads:
-        if id(thread) not in seen_ids:
-            seen_ids.add(id(thread))
-            merged_threads.append(thread)
-    _hard_exit_threads = merged_threads
-    _hard_exit_reason = f"{_hard_exit_reason}; {reason}" if _hard_exit_reason else reason
+    with _hard_exit_lock:
+        seen_ids = {id(thread) for thread in _hard_exit_threads}
+        merged_threads = list(_hard_exit_threads)
+        for thread in threads:
+            if id(thread) not in seen_ids:
+                seen_ids.add(id(thread))
+                merged_threads.append(thread)
+        _hard_exit_threads = merged_threads
+        _hard_exit_reason = f"{_hard_exit_reason}; {reason}" if _hard_exit_reason else reason
 
     # Logged here, at arm-time, rather than in exit_process(): this call site runs in
     # the caller's own thread, not in the shutdown crisis exit_process() may later run
@@ -85,7 +92,15 @@ def request_hard_exit(reason: str, threads: list[threading.Thread]) -> None:
 
 
 def exit_process(exit_code: int) -> None:
-    if not _hard_exit_reason or not any(thread.is_alive() for thread in _hard_exit_threads):
+    # Guard this read with the same lock request_hard_exit() uses for its
+    # read-modify-write merge: _hard_exit_reason and _hard_exit_threads are updated
+    # together (but as two separate assignments) under that lock, so an unguarded read
+    # here could race a concurrent request_hard_exit() call and observe one field
+    # updated but not the other (e.g. the new reason but the old, shorter thread list).
+    with _hard_exit_lock:
+        hard_exit_reason = _hard_exit_reason
+        hard_exit_threads = list(_hard_exit_threads)
+    if not hard_exit_reason or not any(thread.is_alive() for thread in hard_exit_threads):
         # Either never armed, or every implicated thread has since finished naturally
         # (e.g. during log collection/clean_resources() that ran between arming and
         # this call) -- the danger that justified arming has passed, so this is a
