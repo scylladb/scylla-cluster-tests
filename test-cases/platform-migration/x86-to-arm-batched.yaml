@@ -1,3 +1,19 @@
+# overlay on x86-to-arm-single-dc-50-perc.yaml - only the keys that differ are set,
+# the rest of test_metadata is inherited from the base config on config merge
+test_metadata:
+  description: >-
+    Overlay on x86-to-arm-single-dc-50-perc.yaml that switches the x86-to-ARM migration
+    to batched per-rack mode: the 6 nodes are spread across 3 simulated racks and each
+    rack is migrated as a unit (add target nodes, update seeds, decommission source
+    nodes) before the next rack starts. Composed with the base config this is the
+    variant that the weekly platform-migration trigger runs every Saturday.
+  test_type: platform-migration
+  tier: tier1
+  features:
+    - tablets
+    - rack-aware
+  team_ownership: core-test-infra
+
 n_db_nodes: 6
 simulated_racks: 3
 

@@ -1,3 +1,24 @@
+# overlay on x86-to-arm-single-dc-50-perc.yaml - only the keys that differ are set,
+# the rest of test_metadata is inherited from the base config on config merge
+test_metadata:
+  description: >-
+    Overlay on x86-to-arm-single-dc-50-perc.yaml that turns the x86-to-ARM migration
+    into a two-DC run: 3 nodes each in eu-west-1 and us-east-1 holding 900M rows of
+    ~1KB at RF=3. Target nodes are added across both DCs simultaneously and source
+    nodes are then decommissioned in parallel across DCs, one per DC at a time, under
+    a LOCAL_QUORUM 9:1 read/write workload driven by rack- and region-aware loaders.
+  test_type: platform-migration
+  tier: ondemand
+  duration_class: medium
+  stress_tools:
+    - cassandra-stress
+    - scylla-bench
+  workload: mixed
+  features:
+    - tablets
+    - multi-dc
+  team_ownership: core-test-infra
+
 test_duration: 480
 n_db_nodes: '3 3'
 region_name: 'eu-west-1 us-east-1'

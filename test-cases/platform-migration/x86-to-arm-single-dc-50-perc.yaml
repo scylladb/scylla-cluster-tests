@@ -1,3 +1,27 @@
+test_metadata:
+  description: >-
+    Migrates a 6-node single-DC cluster filled to ~50% disk utilization (1.8B rows of
+    ~1KB at RF=3) from x86 to ARM (i8g.2xlarge) by adding target-platform nodes and
+    decommissioning the source nodes, all under a continuous QUORUM 9:1 read/write
+    cassandra-stress workload, with scylla-bench validation datasets
+    written before and re-read after the migration. This is the base of the
+    platform-migration suite and the only config here that runs standalone: it alone
+    defines instance_type_db_target, which the test requires. The other files in this
+    directory are overlays on it that select the migration mode (batched per-rack),
+    the topology (multi-DC), the dataset size (10-perc) or vnodes instead of tablets.
+  test_type: platform-migration
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+    - scylla-bench
+  workload: mixed
+  features:
+    - tablets
+  team_ownership: core-test-infra
+
 test_duration: 480
 
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)

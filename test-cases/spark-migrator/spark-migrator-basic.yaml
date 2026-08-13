@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Smoke test for the scylla-migrator plumbing: creates a small source table on a
+    3-node ScyllaDB cluster, submits a spark-migrator job on an auxiliary EMR cluster
+    to copy it into a target table on the same cluster, then verifies the migrated row
+    count. Uses the legacy EMR path, where Spark 4.x is installed by a bootstrap action
+    on an emr-7.x release, which keeps that fallback exercised alongside the native
+    emr-spark-8.0.0 releases used by the cs-to-scylla configs.
+  test_type: spark-migrator
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools: []
+  features: []
+  team_ownership: core-test-infra
+
 test_duration: 120
 
 n_db_nodes: 3

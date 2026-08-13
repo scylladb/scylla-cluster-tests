@@ -4,7 +4,7 @@ All valid values are defined in `docs/pipeline-labels/taxonomy.yaml` (single sou
 The pydantic model in `sdcm/test_metadata.py` loads and enforces them at runtime.
 
 ## test_type
-longevity, performance, upgrade, artifacts, manager, functional, scale, jepsen, gemini, features, platform-migration, vector-search, cdc, operator, cassandra, kafka, microbenchmarking, load
+longevity, performance, upgrade, artifacts, manager, functional, scale, jepsen, gemini, features, platform-migration, vector-search, cdc, operator, cassandra, spark-migrator, kafka, microbenchmarking, load
 
 ## tier
 sanity, tier1, tier2, release, ondemand
