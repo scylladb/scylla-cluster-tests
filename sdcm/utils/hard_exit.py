@@ -16,22 +16,29 @@
 Normal interpreter shutdown runs ``threading._shutdown()``, which calls
 ``concurrent.futures.thread._python_exit()``.  That function joins *every*
 ``ThreadPoolExecutor`` worker thread ever created in the process, with no
-timeout.  If one of those workers is permanently stuck (e.g. a nemesis thread
-that ignored its termination event), the whole process hangs forever, even
-after ``sys.exit()`` has been called.
+timeout.  If one of those workers is permanently stuck (e.g. a nested
+``ThreadPoolExecutor`` spun up internally by a nemesis, whose worker thread
+ignored its own termination signal), the whole process hangs forever, even
+after ``sys.exit()`` has been called. Nemesis threads themselves are daemon
+threads (see ``start_nemesis()`` in ``sdcm/cluster.py``) and are *not* what
+blocks shutdown -- interpreter shutdown never joins daemon threads -- so
+callers must check for a live non-daemon ``ThreadPoolExecutor`` worker (e.g.
+via ``concurrent.futures.thread._threads_queues``), not a nemesis thread's own
+``is_alive()``.
 
 This module has no sdcm imports (leaf module, avoids import cycles): a
 caller that detects a thread it cannot safely kill calls ``request_hard_exit``
 with a reason and the implicated thread(s), and whichever real process-exit
 point runs last calls ``exit_process`` instead of ``sys.exit`` directly. If
 nothing armed it, behavior is unchanged; if it was armed, ``exit_process``
-re-checks whether any implicated thread is still alive -- a thread stuck
-during, say, ``stop_nemesis()`` can finish naturally during the remaining
-cleanup steps that run before the eventual ``exit_process`` call, and forcing
-a hard exit at that point would just be a false positive overriding the real
-test pass/fail result. Only if at least one implicated thread is still alive
-does ``os._exit()`` bypass the untimed shutdown join; otherwise this falls
-through to normal ``sys.exit`` behavior, as if never armed.
+re-checks whether any implicated thread is still alive -- a worker thread
+stuck during, say, ``stop_nemesis()`` can finish naturally during the
+remaining cleanup steps that run before the eventual ``exit_process`` call,
+and forcing a hard exit at that point would just be a false positive
+overriding the real test pass/fail result. Only if at least one implicated
+thread is still alive does ``os._exit()`` bypass the untimed shutdown join;
+otherwise this falls through to normal ``sys.exit`` behavior, as if never
+armed.
 """
 
 import logging
@@ -49,14 +56,32 @@ _hard_exit_threads: list[threading.Thread] = []
 
 def request_hard_exit(reason: str, threads: list[threading.Thread]) -> None:
     global _hard_exit_reason, _hard_exit_threads  # noqa: PLW0603
+    # More than one call site can arm during a single test's teardown (e.g.
+    # stop_nemesis() and, later, a ParallelObject used during log collection): merge
+    # into the existing tracked threads (deduped by identity, since the same thread
+    # object could plausibly be passed twice) rather than replacing them outright.
+    # Replacing would let a later call's threads finishing naturally hide an earlier
+    # call's thread that is still genuinely stuck, silently defeating exit_process()'s
+    # liveness re-check below. Reasons are concatenated for the same reason: nothing
+    # from an earlier arm should be lost.
+    seen_ids = {id(thread) for thread in _hard_exit_threads}
+    merged_threads = list(_hard_exit_threads)
+    for thread in threads:
+        if id(thread) not in seen_ids:
+            seen_ids.add(id(thread))
+            merged_threads.append(thread)
+    _hard_exit_threads = merged_threads
+    _hard_exit_reason = f"{_hard_exit_reason}; {reason}" if _hard_exit_reason else reason
+
     # Logged here, at arm-time, rather than in exit_process(): this call site runs in
     # the caller's own thread, not in the shutdown crisis exit_process() may later run
     # in, so it is safe to log from -- unlike exit_process()'s armed path, which must
     # not risk blocking on a logging handler held by the very stuck thread that
-    # triggered the hard exit.
+    # triggered the hard exit. Logged *after* the state above is assigned, not before:
+    # if a stuck thread happens to hold a logging handler's internal lock, this call
+    # could itself block, and the arm state must already be set by the time that
+    # happens -- otherwise exit_process() would never see it.
     LOGGER.error("Hard exit requested: %s", reason)
-    _hard_exit_reason = reason
-    _hard_exit_threads = list(threads)
 
 
 def exit_process(exit_code: int) -> None:
