@@ -66,6 +66,74 @@ def test_exit_process_falls_through_when_implicated_thread_finished_naturally(mo
     os_exit_mock.assert_not_called()
 
 
+def test_request_hard_exit_accumulates_threads_across_calls(monkeypatch):
+    """Two call sites can arm during a single test's teardown (e.g. `stop_nemesis()`
+    followed by a `ParallelObject` used during log collection). The second call must
+    not replace the first call's tracked threads: if the first call's thread is still
+    alive when `exit_process()` eventually runs, it must still be caught even though
+    the second call's thread has since finished on its own.
+    """
+    os_exit_mock = Mock()
+    monkeypatch.setattr(hard_exit.os, "_exit", os_exit_mock)
+
+    first_stuck_thread = Mock(is_alive=Mock(return_value=True))
+    second_thread_that_finished = Mock(is_alive=Mock(return_value=False))
+
+    request_hard_exit("first stuck thread", [first_stuck_thread])
+    request_hard_exit("second stuck thread", [second_thread_that_finished])
+
+    assert first_stuck_thread in hard_exit._hard_exit_threads
+    assert second_thread_that_finished in hard_exit._hard_exit_threads
+
+    exit_process(3)
+
+    os_exit_mock.assert_called_once_with(STUCK_THREAD_EXIT_CODE)
+
+
+def test_request_hard_exit_dedupes_thread_passed_twice():
+    """The same thread object could plausibly be passed to `request_hard_exit()` by
+    more than one caller; it must not be tracked twice."""
+    thread = Mock(is_alive=Mock(return_value=True))
+
+    request_hard_exit("first reason", [thread])
+    request_hard_exit("second reason", [thread])
+
+    assert hard_exit._hard_exit_threads.count(thread) == 1
+
+
+def test_request_hard_exit_keeps_reason_from_earlier_call():
+    """Replacing `_hard_exit_reason` outright on a second call would lose the context
+    of what the first call armed for; both reasons must remain discoverable."""
+    request_hard_exit("first reason", [])
+    request_hard_exit("second reason", [])
+
+    assert "first reason" in hard_exit._hard_exit_reason
+    assert "second reason" in hard_exit._hard_exit_reason
+
+
+def test_request_hard_exit_sets_state_before_logging(monkeypatch):
+    """If a stuck thread happens to hold a logging handler's internal lock,
+    `LOGGER.error()` could itself block. The arm state (`_hard_exit_reason`/
+    `_hard_exit_threads`) must already be set by the time that call runs, or
+    `exit_process()` would never see it armed."""
+    state_at_log_time = {}
+
+    def fake_error(*_args, **_kwargs):
+        state_at_log_time["reason"] = hard_exit._hard_exit_reason
+        state_at_log_time["threads"] = list(hard_exit._hard_exit_threads)
+
+    logger_mock = Mock()
+    logger_mock.error.side_effect = fake_error
+    monkeypatch.setattr(hard_exit, "LOGGER", logger_mock)
+
+    thread = Mock(is_alive=Mock(return_value=True))
+    request_hard_exit("stuck thread", [thread])
+
+    logger_mock.error.assert_called_once()
+    assert state_at_log_time["reason"] == "stuck thread"
+    assert thread in state_at_log_time["threads"]
+
+
 def test_exit_process_armed_path_does_not_call_blocking_cleanup(monkeypatch):
     """logging.shutdown()/sys.stdout.flush()/sys.stderr.flush() can block on locks
     or I/O held by the very stuck thread that triggered the hard exit -- the armed
