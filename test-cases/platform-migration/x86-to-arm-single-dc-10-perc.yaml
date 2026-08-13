@@ -1,3 +1,21 @@
+# overlay on x86-to-arm-single-dc-50-perc.yaml - only the keys that differ are set,
+# the rest of test_metadata is inherited from the base config on config merge
+test_metadata:
+  description: >-
+    Overlay on x86-to-arm-single-dc-50-perc.yaml that shrinks the dataset to ~10% disk
+    utilization (360M rows of ~1KB at RF=3) and the run to 4 hours, for quick validation
+    of the x86-to-ARM migration procedure. Only the cassandra-stress prepare and
+    continuous workload are resized; the base topology and the scylla-bench
+    pre/post-migration validation datasets are inherited unchanged.
+  test_type: platform-migration
+  tier: ondemand
+  duration_class: short
+  stress_tools:
+    - cassandra-stress
+    - scylla-bench
+  workload: mixed
+  team_ownership: core-test-infra
+
 test_duration: 240
 
 prepare_write_cmd: [

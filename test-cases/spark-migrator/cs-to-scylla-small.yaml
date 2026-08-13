@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Smallest Cassandra-to-ScyllaDB migration case: preloads 100K rows into a
+    single-node Apache Cassandra 4.1 source cluster over CQL, replicates the source
+    schema onto a single-node ScyllaDB target via dump_schema, then migrates the table
+    with a spark-migrator job on a native Spark 4 EMR cluster (emr-spark-8.0.0) and
+    checks the migrated row count. Provisions no loaders and skips the post-migration
+    validator job, which makes it the quickest end-to-end check of the migrator path.
+  test_type: spark-migrator
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools: []
+  features: []
+  team_ownership: core-test-infra
+
 test_duration: 120
 
 db_type: mixed_cassandra

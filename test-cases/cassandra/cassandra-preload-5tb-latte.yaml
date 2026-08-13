@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Largest Apache Cassandra 4.1 baseline: preloads 5TB (5.5B rows of ~1KB, RF=1)
+    onto a 6-node cluster with four parallel latte write streams, then measures a
+    30-minute gauss-distributed latte read workload over the full key range.
+    Establishes the reference numbers that the scylla-migrator and platform-migration
+    suites compare against; runs Cassandra rather than ScyllaDB, so no nemesis is used.
+  test_type: cassandra
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: read
+  features: []
+  team_ownership: core-test-infra
+
 test_duration: 2880
 n_db_nodes: 6
 n_loaders: 4

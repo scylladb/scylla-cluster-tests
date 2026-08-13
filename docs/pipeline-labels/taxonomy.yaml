@@ -19,6 +19,8 @@ test_type:
     - platform-migration
     - vector-search
     - cdc
+    - cassandra
+    - spark-migrator
 
 tier:
   description: "Test priority tier"

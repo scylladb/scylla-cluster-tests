@@ -1,3 +1,17 @@
+# overlay on x86-to-arm-single-dc-50-perc.yaml - only the keys that differ are set,
+# the rest of test_metadata is inherited from the base config on config merge
+test_metadata:
+  description: >-
+    Overlay on x86-to-arm-single-dc-50-perc.yaml that disables tablets, so the
+    x86-to-ARM migration is exercised against vnode-based keyspaces and covers the
+    pre-tablets topology-change path. Base topology, dataset and workload are
+    inherited unchanged.
+  test_type: platform-migration
+  tier: ondemand
+  features:
+    - vnodes
+  team_ownership: core-test-infra
+
 append_scylla_yaml:
   enable_tablets: false
   tablets_mode_for_new_keyspaces: 'disabled'
