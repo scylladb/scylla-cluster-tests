@@ -2093,7 +2093,7 @@ Flag to run Scylla Doctor tool
 
 Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.10')<br>to hardcode the version, or leave empty to use the latest available version. For stability,<br>artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.
 
-**default:** 1.12
+**default:** 1.13
 
 **type:** str (appendable)
 
