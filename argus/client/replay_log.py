@@ -21,18 +21,16 @@ from __future__ import annotations
 
 import atexit
 import functools
-import itertools
 import json
 import logging
 import os
 import re
 import threading
 import time
+import uuid
 import weakref
 from pathlib import Path
 from typing import IO
-
-_instance_counter = itertools.count()
 
 LOGGER = logging.getLogger(__name__)
 
@@ -94,12 +92,13 @@ class ReplayLog:
         run_id: str | None = None,
         test_type: str | None = None,
     ) -> None:
-        safe_run_id = _sanitize_for_filename(run_id or "unknown")
+        safe_run_id = _sanitize_for_filename(run_id or "unknown")[:64]
         log_dir_path = Path(log_dir)
-        # Nanosecond clock + pid + process-wide counter guarantees uniqueness
-        # across parallel processes and back-to-back instantiation, even when
-        # the system clock has coarser-than-nanosecond resolution.
-        suffix = f"{_now_ns()}_{os.getpid()}_{next(_instance_counter)}"
+        # A uuid4 guarantees uniqueness on its own, so collisions can't happen
+        # even when ``log_dir`` is a mount shared across hosts/containers where
+        # pids and clocks aren't comparable. The timestamp and pid are kept
+        # only to make the filename sortable/debuggable, not for uniqueness.
+        suffix = f"{_now_ns()}_{os.getpid()}_{uuid.uuid4().hex}"
         self._path: Path = log_dir_path / f"argus_replay_log_{safe_run_id}_{suffix}.jsonl"
         self._test_type: str = test_type or "unknown"
         self._lock = threading.Lock()
