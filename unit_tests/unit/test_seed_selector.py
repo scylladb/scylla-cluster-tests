@@ -112,3 +112,21 @@ class TestSeedSelector:
         assert self.cluster.seed_nodes == [self.cluster.nodes[0]]
         assert self.cluster.non_seed_nodes == []
         assert self.cluster.seed_nodes_addresses == [self.cluster.nodes[0].ip_address]
+
+    def test_random_seeds_num_is_capped_by_nodes_count(self):
+        self.setup_cluster(nodes_number=2)
+        self.cluster.set_test_params(seeds_selector="random", seeds_num=3, db_type="scylla")
+        self.cluster.set_seeds()
+        assert len(self.cluster.seed_nodes) == 2
+        assert self.cluster.non_seed_nodes == []
+
+    def test_set_seeds_replaces_previous_seed_flags(self):
+        self.setup_cluster(nodes_number=3)
+        self.cluster.set_test_params(seeds_selector="all", seeds_num=3, db_type="scylla")
+        self.cluster.set_seeds()
+        assert len(self.cluster.seed_nodes) == 3
+
+        self.cluster.set_test_params(seeds_selector="first", seeds_num=1, db_type="scylla")
+        self.cluster.set_seeds()
+        assert self.cluster.seed_nodes == [self.cluster.nodes[0]]
+        assert self.cluster.non_seed_nodes == [self.cluster.nodes[1], self.cluster.nodes[2]]
