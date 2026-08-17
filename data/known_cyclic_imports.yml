@@ -1,0 +1,5 @@
+# Auto-generated allowlist of known cyclic import edges.
+# Each entry is a directed edge (source -> target) that forms part of a cycle.
+# To add: run `python scripts/detect_cyclic_imports.py --update-allowlist`
+# To fix: resolve the cycle and remove both directional edges.
+edges: []

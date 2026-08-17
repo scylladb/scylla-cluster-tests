@@ -49,6 +49,14 @@ repos:
 
 -   repo: local
     hooks:
+    -   id: cyclic-imports
+        name: Cyclic Import Detection
+        language: system
+        entry: ./scripts/detect_cyclic_imports.py
+        files: \.py$
+        pass_filenames: false
+        always_run: true
+
     -   id: ruff-format
         name: ruff-format
         entry: ruff format
