@@ -78,3 +78,50 @@ def get_cloud_rest_credentials_from_file(file_path: str) -> dict:
     with path.open("r", encoding="utf-8") as creds_file:
         creds = json.load(creds_file)
     return creds
+
+
+def parse_availability_zones(value: str | None) -> list[str]:
+    """Parse a comma-separated availability zone list from config into a clean list"""
+    return [zone.strip() for zone in (value or "").split(",") if zone.strip()]
+
+
+# AWS compresses region names in AZ IDs, e.g.: 'us-east-1' -> 'use1-az1', 'ap-southeast-1' -> 'apse1-az1'
+AWS_AZ_ID_DIRECTIONS = {
+    "north": "n",
+    "south": "s",
+    "east": "e",
+    "west": "w",
+    "central": "c",
+    "northeast": "ne",
+    "northwest": "nw",
+    "southeast": "se",
+    "southwest": "sw",
+}
+
+
+def aws_region_to_az_id_prefix(region_name: str) -> str | None:
+    """Return AZ-ID region prefix (for example: 'us-east-1' -> 'use1')."""
+    try:
+        geo, direction, index = region_name.split("-")
+    except ValueError:
+        return None
+
+    short_direction = AWS_AZ_ID_DIRECTIONS.get(direction)
+    if short_direction is None:
+        return None
+    return f"{geo}{short_direction}{index}"
+
+
+def expand_availability_zones(zones: list[str], node_count: int) -> list[str]:
+    """Expand the configured AZ list to one entry per node."""
+    if not zones:
+        return []
+
+    zone_count = len(zones)
+    if node_count % zone_count:
+        raise ValueError(
+            f"Cannot spread {node_count} nodes evenly across {zone_count} availability zones {zones}. "
+            f"Provide one zone per node or a list that divides the node count evenly."
+        )
+
+    return zones * (node_count // zone_count)
