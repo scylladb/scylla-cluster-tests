@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch, mock_open
 import pytest
 
 from sdcm.teardown_validators.events import ErrorEventsValidator, Severity
+from sdcm.teardown_validators.rackaware import RackawareValidator
 from sdcm.sct_config import SCTConfiguration
 
 LOGGER = logging.getLogger(__name__)
@@ -136,3 +137,15 @@ def test_validate_with_failing_events_with_critical_events(
     with patch("builtins.open", open_mock):
         validator.validate()
     assert tester_mock.get_test_status() == "FAILED"
+
+
+def test_rackaware_validator_skips_when_cluster_was_not_created(tester_mock):
+    """Skip rack-aware validation when setup failed before creating cluster objects."""
+    params = SCTConfiguration()
+    params.update({"teardown_validators": {"rackaware": {"enabled": True}}})
+    tester_mock.is_rack_aware_policy = True
+    tester_mock.db_cluster = tester_mock.loaders = None
+
+    RackawareValidator(params, tester_mock).validate()
+    # reaching the traffic comparison would have replaced get_test_status
+    tester_mock.get_test_status.assert_not_called()

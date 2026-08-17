@@ -2,6 +2,10 @@ n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
 
+# xcloud uses real racks from availability zones, so rack simulation is disabled.
+# this also prevents fake rack spread for AWS loaders and monitors.
+simulated_racks: 0
+
 # disable it since it need ssh access to db nodes
 # TODO: remove it once we have such access by default
 run_commit_log_check_thread: false
@@ -13,3 +17,5 @@ xcloud_vpc_peering:
   cidr_subnet_size: 24
 
 xcloud_scaling_config: {}
+
+xcloud_availability_zones: ''
