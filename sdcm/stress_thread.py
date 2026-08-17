@@ -137,13 +137,11 @@ class CassandraStressThread(DockerBasedStressThread):
         params = get_stress_cmd_params(stress_cmd)
         tag_suffix = "rt" if "fixed threads" in params else "st"
         if "user profile=" in stress_cmd:
-            has_write, has_read = self._classify_user_profile_ops(stress_cmd)
-            if has_write:
-                self.hdr_tags.append(f"WRITE-{tag_suffix}")
-            if has_read:
-                self.hdr_tags.append(f"READ-{tag_suffix}")
-            if not has_write and not has_read:
-                raise ValueError(f"Cannot detect stress operation type from user profile command: {stress_cmd}")
+            # cassandra-stress tags HDR histogram entries for "user profile=" commands by the
+            # literal operation name from the ops(...) clause (e.g. "stmt-select", "stmt-update-if-cond"),
+            # not by a WRITE/READ classification, so hdr_tags must match those names exactly.
+            op_names = self._extract_user_profile_op_names(stress_cmd)
+            self.hdr_tags = [f"{op_name}-{tag_suffix}" for op_name in op_names]
         elif " mixed " in stress_cmd:
             self.hdr_tags = [f"WRITE-{tag_suffix}", f"READ-{tag_suffix}"]
         elif " read " in stress_cmd:
@@ -151,41 +149,28 @@ class CassandraStressThread(DockerBasedStressThread):
         else:
             self.hdr_tags = [f"WRITE-{tag_suffix}"]
 
-    WRITE_OP_KEYWORDS = ("insert", "update", "delete", "write")
-    READ_OP_KEYWORDS = ("read", "select", "get", "count", "scan")
+    @staticmethod
+    def _extract_user_profile_op_names(stress_cmd: str) -> list[str]:
+        """Extract the literal operation names from a user-profile ops(...) clause.
 
-    @classmethod
-    def _classify_user_profile_ops(cls, stress_cmd: str) -> tuple[bool, bool]:
-        """Classify user-profile ops(...) operations as write and/or read.
-
-        Parses the ops clause from the stress command (e.g. ``ops'(select_base=3,url_column_update=1)'``)
-        and classifies each operation name using keyword matching.
-        Operations whose names don't match any known keyword are treated as both write and read
-        to avoid silently dropping HDR data.
+        Parses the ops clause from the stress command (e.g. ``ops'(select_base=3,url_column_update=1)'``).
+        These names are exactly what cassandra-stress uses as HDR histogram tags for "user profile="
+        commands, so they must be returned as-is rather than reclassified into write/read.
 
         Returns:
-            tuple of (has_write, has_read)
+            list of operation names
         """
-        has_write = False
-        has_read = False
         if ops_match := re.search(r"ops['\s]*\(([^)]+)\)", stress_cmd):
-            for op_part in ops_match.group(1).split(","):
-                op_name = op_part.strip().split("=")[0].lower()
-                if any(w in op_name for w in cls.WRITE_OP_KEYWORDS):
-                    has_write = True
-                elif any(r in op_name for r in cls.READ_OP_KEYWORDS):
-                    has_read = True
-                else:
-                    LOGGER.warning("Unknown user-profile operation %r — treating as mixed (write+read)", op_name)
-                    has_write = True
-                    has_read = True
+            op_names = [op_part.strip().split("=")[0] for op_part in ops_match.group(1).split(",")]
+        elif "insert=" in stress_cmd:
+            op_names = ["insert"]
+        elif "read=" in stress_cmd:
+            op_names = ["read"]
         else:
-            # Fallback: no ops() clause found — check for legacy patterns
-            if "insert=" in stress_cmd:
-                has_write = True
-            if "read=" in stress_cmd:
-                has_read = True
-        return has_write, has_read
+            op_names = []
+        if not op_names:
+            raise ValueError(f"Cannot detect stress operation type from user profile command: {stress_cmd}")
+        return op_names
 
     @staticmethod
     def append_no_warmup_to_cmd(stress_cmd):
