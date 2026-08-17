@@ -1,4 +1,6 @@
 import logging
+from uuid import UUID
+
 from argus.client.base import ArgusClient
 
 
@@ -14,10 +16,11 @@ class ArgusGenericClient(ArgusClient):
 
     def __init__(self, auth_token: str, base_url: str, log_dir, api_version="v1",
                  extra_headers: dict | None = None, timeout: int = 180, max_retries: int = 3,
-                 use_tunnel: bool | None = None, replay_log_only: bool = False) -> None:
+                 use_tunnel: bool | None = None, replay_log_only: bool = False,
+                 run_id: UUID | str | None = None) -> None:
         super().__init__(auth_token, base_url, log_dir=log_dir, api_version=api_version,
                          extra_headers=extra_headers, timeout=timeout, max_retries=max_retries,
-                         use_tunnel=use_tunnel, replay_log_only=replay_log_only)
+                         use_tunnel=use_tunnel, replay_log_only=replay_log_only, run_id=run_id)
 
     def submit_generic_run(self, build_id: str, run_id: str, started_by: str, build_url: str, sub_type: str = None, scylla_version: str | None = None):
         request_body = {
