@@ -7,9 +7,9 @@ managerPipeline(
     backend: 'aws',
     region: 'eu-west-1',
 
-    scylla_version: '2025.4',
+    scylla_version: '2026.1',
 
-    manager_version: '3.8',
+    manager_version: '3.10',
     target_manager_version: 'master_latest',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
