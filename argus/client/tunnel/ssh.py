@@ -11,7 +11,6 @@ import time
 
 from argus.client.tunnel.models import (
     ALLOWED_HOST_KEY_TYPES,
-    DEFAULT_RECONNECT_RETRIES,
     DEFAULT_TUNNEL_TIMEOUT,
     MAX_PORT_BIND_ATTEMPTS,
     TunnelClientError,
@@ -117,17 +116,6 @@ class SSHTunnel:
             return False
         return is_local_port_open(self._local_port)
 
-    def reconnect(self, config: TunnelConfig) -> tuple[int | None, str | None]:
-        self.shutdown()
-        last_reason: str | None = None
-        for attempt in range(1, DEFAULT_RECONNECT_RETRIES + 1):
-            local_port, reason = self.establish(config)
-            if local_port is not None:
-                return local_port, None
-            last_reason = reason
-            time.sleep(2 ** (attempt - 1))
-        return None, last_reason or "reconnect exhausted"
-
     def shutdown(self) -> None:
         if self._process is not None:
             self._terminate_process(self._process)
@@ -138,6 +126,12 @@ class SSHTunnel:
         if self._known_hosts_path is not None:
             _unlink(self._known_hosts_path)
             self._known_hosts_path = None
+
+        # The monitor builds a fresh SSHTunnel per reconnect. Leaving the hook
+        # registered would pin every dead tunnel for the life of the process.
+        if self._atexit_registered:
+            atexit.unregister(self.shutdown)
+            self._atexit_registered = False
 
     def _register_atexit(self) -> None:
         if self._atexit_registered:
