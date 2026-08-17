@@ -1,0 +1,39 @@
+# LWT Heavy Vnodes - predefined throughput steps: gradual-load config + latency thresholds
+
+perf_gradual_threads: {"read": 468, "write": 468, "mixed": 468}
+perf_gradual_throttle_steps: {"read": ['25000'], "write": ['22000'], "mixed": ['25000']}
+perf_gradual_step_duration: {"read": '30m', "write": '30m', "mixed": '30m'}
+
+# P99 calibrated from vnodes' own measured latency (Jenkins lwt-heavy-vnodes #25, 2026-08-08),
+# +25% margin for run-to-run variance.
+latency_decorator_error_thresholds:
+  write:
+    default:
+      P90 write:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 17.31
+      Throughput write:
+        fixed_limit: 21000
+
+  read:
+    default:
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: 14.70
+      Throughput read:
+        fixed_limit: 24000
+
+  mixed:
+    default:
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 37.79
+      P99 read:
+        fixed_limit: 34.08
+      Throughput write:
+        fixed_limit: 12000

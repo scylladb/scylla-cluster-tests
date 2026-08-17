@@ -2004,6 +2004,13 @@ class SCTConfiguration(BaseModel):
         description="Step duration of c-s load for gradual performance test per sub-test. "
         "Example: {'read': '30m', 'write': None, 'mixed': '30m'}",
     )
+    perf_gradual_write_preload_data: Boolean = SctField(
+        description="If true, preload data (via prepare_write_cmd) before "
+        "test_write_gradual_increase_load. Needed for LWT conditional-update "
+        "workloads (e.g. UPDATE ... IF <cond>) that require existing rows to "
+        "have a chance of applying; not needed for INSERT-based write "
+        "workloads on a fresh table.",
+    )
 
     # PerformanceRegressionLWTTest
     stress_cmd_lwt_i: StringOrList = SctField(

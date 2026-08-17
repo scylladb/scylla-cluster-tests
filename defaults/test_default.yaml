@@ -362,6 +362,8 @@ mgmt_snapshots_preparer_params:
 adaptive_timeout_store_metrics: true
 adaptive_timeout_multipliers: {}
 
+perf_gradual_write_preload_data: false
+
 # XCloud-specific defaults
 xcloud_scaling_config: null
 
