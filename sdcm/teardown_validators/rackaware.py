@@ -44,6 +44,13 @@ class RackawareValidator(TeardownValidator):  # pylint: disable=too-few-public-m
             LOGGER.info("No workloads were running under the rack-aware policy.")
             return
 
+        if self.tester.db_cluster is None or self.tester.loaders is None:
+            LOGGER.warning(
+                "Rackaware validation skipped: DB cluster or loaders were not created "
+                "(the run failed before setup completed)."
+            )
+            return
+
         validation_passed = set()
         # The case: multi-region cluster
         loaders_per_region = self.tester.loaders.nodes_by_region()

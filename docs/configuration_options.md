@@ -4801,6 +4801,9 @@ Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate ra
 
 **type:** int
 
+**backend overrides:**
+- `0`: xcloud
+
 
 ## **rack_aware_loader** / SCT_RACK_AWARE_LOADER
 
@@ -4854,6 +4857,15 @@ Replication factor for Scylla Cloud cluster
 **default:** N/A
 
 **type:** int
+
+
+## **xcloud_availability_zones** / SCT_XCLOUD_AVAILABILITY_ZONES
+
+Comma-separated availability zones for Scylla Cloud DB placement.<br>AWS values are AZ IDs (e.g., 'use1-az1,use1-az2,use1-az3'); GCE values are zone names<br>(e.g., 'us-east1-b,us-east1-c'). When set, SCT sends 'availabilityZoneIdsOverride' and forces placement.<br>Provide one zone per DB node, or provide a shorter list to cycle round-robin (node count must divide evenly).<br>Repeat the same zone to keep all nodes in one AZ. Leave empty (default) to let Scylla Cloud choose placement<br>(multi-AZ spread). Cannot be used with 'xcloud_scaling_config'.
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 ## **xcloud_vpc_peering** / SCT_XCLOUD_VPC_PEERING

@@ -3,11 +3,13 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
+from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.cluster_cloud import (
     xcloud_super_if_supported,
     ScyllaCloudCluster,
     ScyllaCloudError,
     CloudNode,
+    VectorStoreSetCloud,
 )
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.cloud_api_utils import (
@@ -441,3 +443,306 @@ def test_configure_remote_logging_falls_back_to_self_install():
 
     ordered = [c[0] for c in node.mock_calls]
     assert ordered.index("_self_install_vector") < ordered.index("_apply_vector_target_config")
+
+
+def make_cloud_node_payload(
+    node_id=1, az_name="us-east-1a", az_id="use1-az1", public_ip="54.0.0.1", private_ip="10.0.0.1"
+):
+    """Payload shaped like NodeInfoEnriched from GET /account/{id}/cluster/{id}/nodes"""
+    return {
+        "id": node_id,
+        "azName": az_name,
+        "azId": az_id,
+        "rackName": az_id,
+        "publicIp": public_ip,
+        "privateIp": private_ip,
+        "status": "ACTIVE",
+        "state": "NORMAL",
+        "instance": {"externalId": "i4i.large"},
+        "region": {"externalId": "us-east-1", "name": "US East (N. Virginia)"},
+        "dcId": 1,
+    }
+
+
+@pytest.mark.parametrize(
+    "drop_external_id,expected",
+    [
+        # the (region, rack) join keys off the external id, not the display name
+        (False, "us-east-1"),
+        (True, "US East (N. Virginia)"),
+    ],
+)
+def test_cloud_node_region_prefers_external_id(drop_external_id, expected):
+    payload = make_cloud_node_payload()
+    if drop_external_id:
+        del payload["region"]["externalId"]
+    node = MagicMock(_cloud_instance_data=payload)
+    assert CloudNode.vm_region.fget(node) == expected
+
+
+def test_refresh_instance_state_requests_enriched_payload():
+    node = MagicMock(_node_id=1, _public_ip="54.0.0.1", _private_ip="10.0.0.1")
+    node._account_id, node._cluster_id = 1, 2
+    node._api_client = MagicMock()
+    node._api_client.get_cluster_nodes.return_value = [make_cloud_node_payload(node_id=1)]
+    CloudNode._refresh_instance_state(node)
+    node._api_client.get_cluster_nodes.assert_called_once_with(account_id=1, cluster_id=2, enriched=True)
+
+
+def test_init_nodes_from_data_mixed_az_and_azless_nodes():
+    """Racks are derived per node: AZ-bearing nodes by alphabetical AZ order, AZ-less ones from the caller's rack"""
+    mock_cluster = MagicMock(spec=ScyllaCloudCluster)
+    mock_cluster.log = MagicMock()
+    mock_cluster._create_node = MagicMock(side_effect=lambda **kwargs: kwargs)
+
+    nodes_data = [
+        make_cloud_node_payload(node_id=1, az_name="us-east-1c"),
+        make_cloud_node_payload(node_id=2, az_name="us-east-1a"),
+        {"id": 3, "publicIp": "54.0.0.3", "privateIp": "10.0.0.3", "status": "ACTIVE"},
+        make_cloud_node_payload(node_id=4, az_name="us-east-1b"),
+    ]
+    created = ScyllaCloudCluster._init_nodes_from_data(mock_cluster, nodes_data=nodes_data, rack=9)
+    assert [node["rack"] for node in created] == [2, 0, 9, 1]
+
+
+def test_vs_nodes_data_injects_az_id_from_group():
+    vs_set = MagicMock(spec=VectorStoreSetCloud)
+    vs_set._get_vs_info.return_value = {
+        "availabilityZones": [
+            {
+                "azid": "use1-az1",
+                "rackName": "use1-az1",
+                "nodes": [
+                    {"id": 1, "status": "ACTIVE"},
+                    {"id": 2, "status": "PENDING_DELETE"},
+                ],
+            },
+            {
+                "azid": "use1-az2",
+                "rackName": "use1-az2",
+                "nodes": [{"id": 3, "status": "ACTIVE"}],
+            },
+        ]
+    }
+
+    nodes = VectorStoreSetCloud.vs_nodes_data.fget(vs_set)
+    assert [(node["id"], node["azId"]) for node in nodes] == [(1, "use1-az1"), (3, "use1-az2")]
+
+
+def _build_real_cloud_cluster():
+    """Construct a real ScyllaCloudCluster with mocked externals (mirrors legacy fixture)"""
+    with (
+        patch("sdcm.cluster_cloud.TestConfig"),
+        patch.object(ScyllaCloudCluster, "init_log_directory"),
+        patch("sdcm.cluster.ScyllaClusterBenchmarkManager"),
+    ):
+        params = SCTConfiguration()
+        params.update(
+            {
+                "xcloud_provider": "aws",
+                "xcloud_vpc_peering": {"enabled": False},
+                "n_vector_store_nodes": 0,
+                "region_name": "us-east-1",
+            }
+        )
+        api_client = MagicMock(get_current_account_id=MagicMock(return_value=123))
+        return ScyllaCloudCluster(
+            cloud_api_client=api_client, user_prefix="test", n_nodes=0, params=params, add_nodes=False
+        )
+
+
+def test_cloud_cluster_datacenter_is_list():
+    cluster_obj = _build_real_cloud_cluster()
+    assert cluster_obj.datacenter == ["us-east-1"]
+
+
+def test_update_racks_count_from_nodes():
+    cluster_obj = _build_real_cloud_cluster()
+    cluster_obj.nodes = [MagicMock(rack=0), MagicMock(rack=1), MagicMock(rack=2)]
+    cluster_obj._update_racks_count()
+    assert cluster_obj.racks_count == 3
+
+
+def _fake_conf(values, region_names=("us-east-1",)):
+    conf = MagicMock(region_names=list(region_names))
+    conf.get.side_effect = lambda key: values.get(key)
+    return conf
+
+
+def _rackaware_conf(**overrides):
+    config = {
+        "rack_aware_loader": True,
+        "n_loaders": 1,
+    }
+    config.update(overrides)
+    return _fake_conf(config)
+
+
+@pytest.mark.parametrize("zones", ["", "use1-az1,use1-az1,use1-az1"])
+def test_rackaware_verification_xcloud_requires_two_distinct_zones(zones):
+    conf = _rackaware_conf(cluster_backend="xcloud", xcloud_availability_zones=zones)
+    with pytest.raises(ValueError, match="xcloud_availability_zones"):
+        SCTConfiguration._verify_rackaware_configuration(conf)
+
+
+def test_rackaware_verification_xcloud_passes_with_multi_az():
+    conf = _rackaware_conf(cluster_backend="xcloud", xcloud_availability_zones="use1-az1,use1-az2,use1-az3")
+    SCTConfiguration._verify_rackaware_configuration(conf)
+
+
+def test_rackaware_verification_non_xcloud_unchanged():
+    conf = _rackaware_conf(cluster_backend="aws", availability_zone="a,b,c", simulated_racks=0)
+    SCTConfiguration._verify_rackaware_configuration(conf)
+
+
+@pytest.mark.parametrize(
+    "values,error",
+    [
+        # node count is Cloud-managed under a scaling policy, so pinned zones cannot be honoured
+        (
+            {
+                "xcloud_availability_zones": "use1-az1,use1-az2",
+                "xcloud_scaling_config": {"Mode": "xcloud"},
+                "n_db_nodes": [3],
+            },
+            "xcloud_scaling_config",
+        ),
+        # 4 nodes cannot spread evenly over 3 zones
+        (
+            {"xcloud_availability_zones": "use1-az1,use1-az2,use1-az3", "n_db_nodes": [4]},
+            "Cannot spread 4 nodes evenly",
+        ),
+    ],
+)
+def test_xcloud_az_validation_rejects_bad_config(values, error):
+    with pytest.raises(ValueError, match=error):
+        SCTConfiguration._validate_xcloud_availability_zones(_fake_conf(values))
+
+
+@pytest.mark.parametrize(
+    "region,zones,raises",
+    [
+        ("eu-west-1", "use1-az1,use1-az2,use1-az4", True),
+        ("eu-west-1", "euw1-az1,euw1-az2,euw1-az3", False),
+        ("us-east-1", "use1-az1,use1-az2,use1-az4", False),
+        ("ap-southeast-1", "apse1-az1,apse1-az2,apse1-az3", False),
+        ("us-gov-west-1", "usgw1-az1,usgw1-az2,usgw1-az3", False),
+    ],
+)
+def test_xcloud_az_validation_checks_region_prefix(region, zones, raises):
+    conf = _fake_conf(
+        {"xcloud_availability_zones": zones, "n_db_nodes": [3], "xcloud_provider": "aws"},
+        region_names=(region,),
+    )
+    if raises:
+        with pytest.raises(ValueError, match="does not belong to region"):
+            SCTConfiguration._validate_xcloud_availability_zones(conf)
+    else:
+        SCTConfiguration._validate_xcloud_availability_zones(conf)
+
+
+def _make_api_client():
+    with patch.object(ScyllaCloudAPIClient, "_create_session", return_value=MagicMock()):
+        return ScyllaCloudAPIClient(api_url="https://api.example.com", auth_token="token")
+
+
+def _minimal_create_kwargs():
+    return dict(
+        account_id=1,
+        cluster_name="c",
+        scylla_version="2025.4.0",
+        cidr_block=None,
+        broadcast_type="PUBLIC",
+        allowed_ips=[],
+        cloud_provider_id=1,
+        region_id=1,
+        instance_id=1,
+        replication_factor=3,
+        number_of_nodes=3,
+        account_credential_id=1,
+        free_trial=False,
+        user_api_interface="CQL",
+        enable_dns_association=True,
+        jump_start=False,
+        encryption_at_rest=None,
+        maintenance_windows=[],
+        scaling={},
+        prom_proxy=True,
+        vector_search=None,
+        tablets=None,
+    )
+
+
+def test_create_cluster_request_without_az_override_keeps_payload():
+    client = _make_api_client()
+    client.request = MagicMock(return_value={"requestId": 1})
+    client.create_cluster_request(**_minimal_create_kwargs())
+    assert client.request.call_args.kwargs == {
+        "clusterName": "c",
+        "scyllaVersion": "2025.4.0",
+        "cidrBlock": None,
+        "broadcastType": "PUBLIC",
+        "allowedIPs": [],
+        "cloudProviderId": 1,
+        "regionId": 1,
+        "instanceId": 1,
+        "replicationFactor": 3,
+        "numberOfNodes": 3,
+        "accountCredentialId": 1,
+        "freeTier": False,
+        "userApiInterface": "CQL",
+        "enableDnsAssociation": True,
+        "jumpStart": False,
+        "encryptionAtRest": None,
+        "maintenanceWindows": [],
+        "scaling": {},
+        "promProxy": True,
+        "vectorSearch": None,
+        "tablets": None,
+    }
+
+
+def test_create_cluster_request_with_az_override_sets_placement():
+    client = _make_api_client()
+    client.request = MagicMock(return_value={"requestId": 1})
+    client.create_cluster_request(
+        **_minimal_create_kwargs(), availability_zone_ids=["use1-az1", "use1-az2", "use1-az3"]
+    )
+    body = client.request.call_args.kwargs
+    assert body["availabilityZoneIdsOverride"] == ["use1-az1", "use1-az2", "use1-az3"]
+    assert body["placement"] == "true"
+
+
+def _mock_cluster_for_prepare_config(az_knob=""):
+    mock_cluster = MagicMock(spec=ScyllaCloudCluster)
+    mock_cluster.log = MagicMock()
+    mock_cluster.xcloud_scaling_config = {}
+    mock_cluster.vpc_peering_enabled = False
+    mock_cluster._deploy_vs_nodes = False
+    mock_cluster._allowed_ips = []
+    mock_cluster._account_id = 1
+    mock_cluster.provider_id = 1
+    mock_cluster.region_id = 1
+    mock_cluster.shortid = "abc12345"
+    mock_cluster.node_type = "scylla-db"
+    mock_cluster.test_config = MagicMock(TEST_DURATION=60)
+    mock_cluster._api_client = MagicMock(client_ip="1.2.3.4", get_instance_id_by_name=MagicMock(return_value=42))
+    params = {
+        "xcloud_availability_zones": az_knob,
+        "xcloud_replication_factor": 3,
+        "xcloud_credential_id": 7,
+        "scylla_version": "2025.4.0",
+    }
+    mock_cluster.params = MagicMock()
+    mock_cluster.params.get = MagicMock(side_effect=lambda key: params.get(key))
+    mock_cluster.params.cloud_provider_params = {"instance_type_db": "i4i.large", "region": "us-east-1"}
+    return mock_cluster
+
+
+@patch("sdcm.cluster_cloud.get_username", return_value="user")
+@patch("sdcm.cluster_cloud.get_test_name", return_value="test")
+def test_prepare_cluster_config_expands_knob_to_node_count(mock_test_name, mock_username):
+    az_ids = ["use1-az1", "use1-az2", "use1-az3"]
+    cluster = _mock_cluster_for_prepare_config(az_knob=",".join(az_ids))
+    config = ScyllaCloudCluster._prepare_cluster_config(cluster, node_count=6, instance_type=None)
+    assert config["availability_zone_ids"] == az_ids * 2

@@ -264,6 +264,7 @@ class ScyllaCloudAPIClient:
         prom_proxy: bool,
         vector_search: dict | None,
         tablets: str | None,
+        availability_zone_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         """
         Create cluster-create request.
@@ -291,9 +292,15 @@ class ScyllaCloudAPIClient:
         :param prom_proxy: whether to enable Prometheus proxy for the cluster (default: False)
         :param vector_search: Vector Search configuration
         :param tablets: tablets configuration, should be set to "enforced" for XCloud cluster
+        :param availability_zone_ids: optional per-node AZ placement. AWS expects AZ IDs
+            (e.g., 'use1-az1'); GCE expects zone names (e.g., 'us-east1-b').
+            Provide one value per node to force placement. Use None to let Scylla Cloud choose placement.
 
         :return: created cluster details
         """
+        placement_overrides = (
+            {"availabilityZoneIdsOverride": availability_zone_ids, "placement": "true"} if availability_zone_ids else {}
+        )
         response = self.request(
             "POST",
             f"/account/{account_id}/cluster",
@@ -318,6 +325,7 @@ class ScyllaCloudAPIClient:
             promProxy=prom_proxy,
             vectorSearch=vector_search,
             tablets=tablets,
+            **placement_overrides,
         )
         return self._parse_response_data(response)
 

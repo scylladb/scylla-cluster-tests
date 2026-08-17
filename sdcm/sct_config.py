@@ -46,7 +46,12 @@ from sdcm.test_metadata import TestMetadata
 import sdcm.provision.azure.utils as azure_utils
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.keystore import KeyStore
-from sdcm.utils.cloud_api_utils import get_cloud_rest_credentials_from_file
+from sdcm.utils.cloud_api_utils import (
+    get_cloud_rest_credentials_from_file,
+    aws_region_to_az_id_prefix,
+    expand_availability_zones,
+    parse_availability_zones,
+)
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
@@ -2509,6 +2514,14 @@ class SCTConfiguration(BaseModel):
     )
     xcloud_replication_factor: int = SctField(
         description="Replication factor for Scylla Cloud cluster",
+    )
+    xcloud_availability_zones: String = SctField(
+        description="""Comma-separated availability zones for Scylla Cloud DB placement.
+         AWS values are AZ IDs (e.g., 'use1-az1,use1-az2,use1-az3'); GCE values are zone names
+         (e.g., 'us-east1-b,us-east1-c'). When set, SCT sends 'availabilityZoneIdsOverride' and forces placement.
+         Provide one zone per DB node, or provide a shorter list to cycle round-robin (node count must divide evenly).
+         Repeat the same zone to keep all nodes in one AZ. Leave empty (default) to let Scylla Cloud choose placement
+         (multi-AZ spread). Cannot be used with 'xcloud_scaling_config'.""",
     )
     xcloud_vpc_peering: Annotated[dict, BeforeValidator(dict_or_str)] = SctField(
         description="""Dictionary of VPC peering parameters for private connectivity between
@@ -5088,15 +5101,21 @@ class SCTConfiguration(BaseModel):
         if not self.get("rack_aware_loader"):
             raise ValueError("'rack_aware_loader' must be set to True for rackaware validator.")
 
-        regions = self.get("simulated_regions") or len(self.region_names)
-        availability_zone = self.get("availability_zone")
-        racks_count = (
-            simulated_racks
-            if (simulated_racks := self.get("simulated_racks"))
-            else len(availability_zone.split(","))
-            if availability_zone
-            else 1
-        )
+        if self.get("cluster_backend") == "xcloud":
+            # xcloud+gce keeps the region in gce_datacenters, not region_names
+            regions = self.get("simulated_regions") or len(self.region_names or self.gce_datacenters)
+            # deterministic placement is required: this is the only source of AZ layout
+            racks_count = len(set(parse_availability_zones(self.get("xcloud_availability_zones"))))
+            if racks_count < 2:
+                raise ValueError(
+                    "Rack-aware validation on the xcloud backend requires 'xcloud_availability_zones' "
+                    "with at least two distinct zones."
+                )
+        else:
+            regions = self.get("simulated_regions") or len(self.region_names)
+            availability_zone, simulated_racks = self.get("availability_zone"), self.get("simulated_racks")
+            racks_count = simulated_racks or (len(availability_zone.split(",")) if availability_zone else 1)
+
         if racks_count == 1 and regions == 1:
             raise ValueError(
                 "Rack-aware validation can only be performed in multi-availability zone or multi-region environments."
@@ -5107,6 +5126,37 @@ class SCTConfiguration(BaseModel):
         zones = racks_count * regions
         if loaders >= zones:
             raise ValueError("Rack-aware validation requires zones without loaders.")
+
+    def _validate_xcloud_availability_zones(self):
+        """Validate the AZ placement knob against node count, scaling config and the target region"""
+        zones = parse_availability_zones(self.get("xcloud_availability_zones"))
+        if not zones:
+            return
+        if self.get("xcloud_scaling_config"):
+            raise ValueError(
+                "'xcloud_availability_zones' cannot be combined with 'xcloud_scaling_config': "
+                "node count is managed by Scylla Cloud scaling."
+            )
+        expand_availability_zones(zones, self.get("n_db_nodes")[0])
+
+        # zones from another region are only rejected by Siren after provisioning starts, with an
+        # opaque "general error creating the cluster", so catch the mismatch here instead
+        cloud_provider = self.get("xcloud_provider")
+        is_aws = cloud_provider == "aws"
+        region_name = self.region_names[0] if is_aws else self.gce_datacenters[0]
+        expected_prefix = aws_region_to_az_id_prefix(region_name) if is_aws else region_name
+
+        if (not is_aws) or expected_prefix:
+            zone_prefix = f"{expected_prefix}-"
+            mismatched = [zone for zone in zones if not zone.startswith(zone_prefix)]
+            if mismatched:
+                provider = "AWS" if is_aws else "GCE"
+                zone_kind = "availability zone IDs" if is_aws else "zone names"
+                example = f"{expected_prefix}-az1" if is_aws else f"{region_name}-b"
+                raise ValueError(
+                    f"'xcloud_availability_zones' {mismatched} does not belong to region '{region_name}'. "
+                    f"{provider} {zone_kind} for this region start with '{zone_prefix}' (e.g. '{example}')."
+                )
 
     def _validate_cloud_backend_parameters(self):
         cloud_api_client = ScyllaCloudAPIClient(
@@ -5165,6 +5215,8 @@ class SCTConfiguration(BaseModel):
             self["xcloud_replication_factor"] = min(*n_nodes, 3)
         elif rf > min(n_nodes):
             raise ValueError(f"xcloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
+
+        self._validate_xcloud_availability_zones()
 
         # validate Vector Search parameters for cloud backend
         # TODO: update after Vector Search moves out of Beta for Scylla Cloud and limitations are changed/no longer apply
