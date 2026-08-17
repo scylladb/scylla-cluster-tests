@@ -128,11 +128,12 @@ class ArgusClient:
                 f"Unexpected HTTP Response encountered - expected: {expected_code}, got: {response.status_code}",
                 expected_code,
                 response.status_code,
-                response.request,
+                response.request.method,
+                response.request.path_url,
             )
 
         response_data: JSON = response.json()
-        LOGGER.debug("API Response: %s", response_data)
+        LOGGER.debug("API Response: status=%s", response_data.get("status"))
         if response_data.get("status") != "ok":
             exc_args = response_data["response"]["arguments"]
             raise ArgusClientError(
@@ -196,7 +197,7 @@ class ArgusClient:
         if self._replay_log_only:
             # Record the request so a future replay can re-send it, but skip
             # the HTTP call. Not sent means not successful.
-            LOGGER.debug("POST [replay-log-only] %s body: %s", endpoint, body)
+            LOGGER.debug("POST [replay-log-only] %s", endpoint)
             record(success=False)
             return ReplayLogOnlyResponse(endpoint=endpoint)
 
@@ -204,7 +205,7 @@ class ArgusClient:
             endpoint=endpoint,
             location_params=location_params
         )
-        LOGGER.debug("POST Request: %s, params: %s, body: %s", url, params, body)
+        LOGGER.debug("POST Request: %s, params: %s", url, params)
         try:
             response = self.session.post(
                 url=url,
