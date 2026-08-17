@@ -224,7 +224,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             cs_cmd_warm_up=None,
             num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
-            preload_data=False,
+            preload_data=bool(self.params.get("perf_gradual_write_preload_data")),
             drop_keyspace=True,
             wait_no_compactions=False,
             step_duration=self.step_duration(workload_type),

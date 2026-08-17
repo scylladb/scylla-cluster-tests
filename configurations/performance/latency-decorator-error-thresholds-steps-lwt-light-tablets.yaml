@@ -1,0 +1,39 @@
+# LWT Light Tablets - predefined throughput steps: gradual-load config + latency thresholds
+
+perf_gradual_threads: {"read": 468, "write": 468, "mixed": 468}
+perf_gradual_throttle_steps: {"read": ['267000'], "write": ['23000'], "mixed": ['42000']}
+perf_gradual_step_duration: {"read": '30m', "write": '30m', "mixed": '30m'}
+
+# P99 calibrated from tablets' own measured latency (Jenkins lwt-light-tablets #45, 2026-08-08),
+# +25% margin for run-to-run variance.
+latency_decorator_error_thresholds:
+  write:
+    default:
+      P90 write:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 35.39
+      Throughput write:
+        fixed_limit: 22500
+
+  read:
+    default:
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: 5347.74
+      Throughput read:
+        fixed_limit: 254000
+
+  mixed:
+    default:
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 6.96
+      P99 read:
+        fixed_limit: 4.08
+      Throughput write:
+        fixed_limit: 20000
