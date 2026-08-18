@@ -108,18 +108,18 @@ def runner(base_runner):
     return base_runner
 
 
-def test_disrupt_raises_unsupported_for_multi_region(runner):
-    """MULTI_REGION runs are rejected before any topology changes start."""
+def test_precheck_skips_for_multi_region(runner):
+    """MULTI_REGION runs are pruned before the nemesis is ever scheduled."""
     runner.cluster.test_config.MULTI_REGION = True
 
-    with pytest.raises(UnsupportedNemesis, match="multi-dc scenario"):
-        AddRemoveDcNemesis(runner).disrupt()
+    assert AddRemoveDcNemesis(runner).precheck(node=runner.cluster.nodes[0]) == (
+        "Skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)"
+    )
 
-    runner.tester.create_keyspace.assert_not_called()
-    runner.cluster.add_nodes.assert_not_called()
-    runner.run_repair.assert_not_called()
-    runner.decommission_nodes.assert_not_called()
-    assert not runner.executed
+
+def test_precheck_keeps_for_single_region(runner):
+    """Single-region runs keep the nemesis in the rotation."""
+    assert AddRemoveDcNemesis(runner).precheck(node=runner.cluster.nodes[0]) is None
 
 
 @pytest.mark.parametrize(
