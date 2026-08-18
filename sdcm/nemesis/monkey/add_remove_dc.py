@@ -45,6 +45,11 @@ class AddRemoveDcNemesis(NemesisBaseClass):
         self.new_ks_name: str = "keyspace_new_dc"
         self.new_ks_rf: int = len(self.runner.cluster.racks)
 
+    def precheck(self, node) -> str | None:
+        if self.runner.cluster.test_config.MULTI_REGION:
+            return "Skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)"
+        return None
+
     @property
     def num_nodes_in_new_dc(self) -> int:
         """Return new datacenter size based on supported RF change size."""
@@ -270,10 +275,6 @@ class AddRemoveDcNemesis(NemesisBaseClass):
 
     def disrupt(self) -> None:
         """Execute the add/remove datacenter nemesis workflow."""
-        if self.runner.cluster.test_config.MULTI_REGION:
-            raise UnsupportedNemesis(
-                "Skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)"
-            )
         if self.runner.tester.prepare_phase_active.is_set():
             raise UnsupportedNemesis(
                 "Skipped during prepare phase, due to stress commands potentially writing to the new DC."
