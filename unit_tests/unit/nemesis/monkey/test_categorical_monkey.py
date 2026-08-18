@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from sdcm.nemesis.monkey.runners import CategoricalMonkey
-from unit_tests.unit.nemesis import TestNemesisClass
 from unit_tests.unit.nemesis.fake_cluster import FakeTester
+from unit_tests.unit.nemesis.test_sisyphus import TestNemesisClass
 
 
 class FakeCategorialMonkey(CategoricalMonkey, TestNemesisClass):
@@ -118,4 +118,9 @@ def test_categorical_monkey_run_partial_prune_runs_survivors_without_critical(
 
     population, _ = nemesis.disruption_distribution
     assert [m.__class__.__name__ for m in population] == ["CustomNemesisC"]
-    assert events_function_scope.get_events_by_category()["CRITICAL"] == []
+    framework_events = [
+        event
+        for event in events_function_scope.published_events
+        if event.get("base") == "TestFrameworkEvent" and event.get("severity") == "CRITICAL"
+    ]
+    assert framework_events == []
