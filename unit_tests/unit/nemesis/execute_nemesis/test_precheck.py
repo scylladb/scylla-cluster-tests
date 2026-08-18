@@ -401,5 +401,10 @@ def test_run_partial_prune_runs_survivors_without_critical(runner, events_functi
     runner.run(cycles_count=1)
 
     assert [n.__class__.__name__ for n in runner.disruptions_list] == ["CustomTestNemesis"]
-    assert events_function_scope.get_events_by_category()["CRITICAL"] == []
+    framework_events = [
+        event
+        for event in events_function_scope.published_events
+        if event.get("base") == "TestFrameworkEvent" and event.get("severity") == "CRITICAL"
+    ]
+    assert framework_events == []
     assert len(runner.duration_list) == 1
