@@ -1,0 +1,2 @@
+instance_type_db: 'c8i.large'
+user_prefix: 'perf-cql-raw-amazon-x86'
