@@ -44,6 +44,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from contextlib import ExitStack, contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures.thread import _threads_queues
 import packaging.version
 
 import yaml
@@ -135,6 +136,8 @@ from sdcm.utils.features import get_enabled_features, is_tablets_feature_enabled
 from sdcm.utils.install import InstallMode
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
+from sdcm.utils.hard_exit import request_hard_exit
+from sdcm.utils.parallel_object import WORKER_JOIN_GRACE_PERIOD
 from sdcm.utils.health_checker import (
     check_nodes_status,
     check_node_status_in_gossip_and_nodetool_status,
@@ -5870,6 +5873,18 @@ class BaseScyllaCluster:
             return
         self.log.info("Set _nemesis_termination_event")
         self.log.debug("There are %s nemesis threads currently running", len(self.nemesis_threads))
+
+        # concurrent.futures.thread._threads_queues is process-wide: it tracks every
+        # ThreadPoolExecutor worker thread in the whole process, including long-lived
+        # ones that are supposed to stay alive for the entire test (e.g.
+        # SSHLoggerBase._child_thread's executor in sdcm/utils/remote_logger.py, or
+        # TimeoutMonitor.executor in sdcm/utils/adaptive_timeouts/__init__.py -- both
+        # sit blocked-but-alive in queue.get() for most/all of a test's duration by
+        # design). Snapshot which of those are already alive *before* asking this
+        # nemesis to stop, so they can be excluded below: they are not newly stuck
+        # because of this stop_nemesis() call, they were already fine.
+        pre_existing_threads = {thread for thread in _threads_queues if thread.is_alive()}
+
         self.nemesis_termination_event.set()
         threads_tracebacks = []
 
@@ -5878,8 +5893,48 @@ class BaseScyllaCluster:
             raise_exception_in_thread(nemesis_thread, KillNemesis)
             nemesis_thread.join(timeout)
             if nemesis_thread.is_alive():
+                # Collected for diagnostics only: nemesis threads are started with
+                # daemon=True (see start_nemesis()), so interpreter shutdown never joins
+                # them and a nemesis thread still being alive here is not, by itself,
+                # what can hang the process at exit -- see the escalation condition below.
                 stack_trace = traceback.format_stack(current_thread_frames[nemesis_thread.ident])
                 threads_tracebacks.append("\n".join(stack_trace))
+
+        # What can actually hang interpreter shutdown is a non-daemon ThreadPoolExecutor
+        # worker thread that a nemesis (or other code) spun up internally and never
+        # joined -- e.g. a nested ThreadPoolExecutor used inside a disruption method.
+        # Every live ThreadPoolExecutor worker thread in the process is tracked in
+        # concurrent.futures.thread._threads_queues (the same registry
+        # ParallelObject.clean_up() inspects). Checking that immediately, unscoped,
+        # would false-positive on almost every run: the long-lived executors above are
+        # essentially always alive at this point, and a freshly submitted worker may
+        # simply not have unwound yet even though it is perfectly healthy. Mirror
+        # ParallelObject.clean_up()'s join(timeout)-then-check grace period (same
+        # WORKER_JOIN_GRACE_PERIOD constant) for the second concern, and subtract
+        # pre_existing_threads for the first: only a worker that (a) was not already
+        # alive before this stop_nemesis() call and (b) is still alive after the grace
+        # period counts as genuinely stuck because of this call.
+        candidate_threads = [thread for thread in _threads_queues if thread not in pre_existing_threads]
+        deadline = time.monotonic() + WORKER_JOIN_GRACE_PERIOD
+        for thread in candidate_threads:
+            thread.join(timeout=max(0, deadline - time.monotonic()))
+        stuck_threads = [thread for thread in candidate_threads if thread.is_alive()]
+
+        if stuck_threads:
+            escalation_reason = (
+                f"{len(stuck_threads)} ThreadPoolExecutor worker thread(s) still alive after "
+                f"{timeout}s stop_nemesis timeout"
+            )
+            message = escalation_reason
+            if threads_tracebacks:
+                message += ":\n" + "\n".join(threads_tracebacks)
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                source_method="stop_nemesis",
+                message=message,
+                severity=Severity.CRITICAL,
+            ).publish_or_dump()
+            request_hard_exit(escalation_reason, stuck_threads)
 
     def start_kms_key_rotation_thread(self) -> None:
         if self.params.get("cluster_backend") != "aws":

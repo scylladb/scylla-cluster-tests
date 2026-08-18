@@ -1,15 +1,33 @@
 from __future__ import absolute_import, annotations
 
-import atexit
 import logging
 import threading
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from concurrent.futures.thread import _python_exit
+from concurrent.futures.thread import _global_shutdown_lock, _threads_queues
 from functools import wraps
 from typing import Iterable, Callable, List
 
+from sdcm.utils.hard_exit import request_hard_exit
+
 LOGGER = logging.getLogger("utils")
+
+# How long clean_up() gives a still-alive pool worker to actually notice
+# shutdown(wait=False)'s sentinel, finish its current unit of work and unwind
+# before treating it as stuck. shutdown(wait=False) returns immediately without
+# waiting for anything, so a perfectly healthy worker that just hasn't won the
+# GIL yet will routinely still report is_alive() == True right afterwards; this
+# grace period is what turns "still alive this instant" into a meaningful signal.
+# It runs on every clean_up() call (i.e. every ParallelObject.run()), so it is
+# kept short enough not to noticeably slow down normal teardown while still
+# giving a healthy worker a fair chance.
+WORKER_JOIN_GRACE_PERIOD = 1  # seconds
+
+# How long clean_up() waits to acquire _global_shutdown_lock before giving up
+# and proceeding without it. See the comment at its use below for why this is
+# believed to be safe.
+GLOBAL_SHUTDOWN_LOCK_TIMEOUT = 1  # seconds
 
 
 class ParallelObject:
@@ -130,12 +148,109 @@ class ParallelObject:
         return self.run(lambda x: x(), ignore_exceptions=ignore_exceptions)
 
     def clean_up(self, futures):
+        # TODO SCT-803: route clean-resources/collect-logs through exit_process() --
+        # ParallelObject usage there can arm a hard-exit that's currently silently
+        # ignored, since those CLI commands exit through Click's normal return path.
         # if there are futures that didn't run  we cancel them
         for future, _ in futures:
             future.cancel()
         self._thread_pool.shutdown(wait=False)
-        # we need to unregister internal function that waits for all threads to finish when interpreter exits
-        atexit.unregister(_python_exit)
+
+        # Since CPython bpo-39812 (3.9+), ThreadPoolExecutor worker threads are
+        # non-daemon and `daemon` cannot be flipped after start, so they used to be
+        # joined twice at interpreter shutdown with no timeout: once via
+        # concurrent.futures.thread._python_exit() (registered through the
+        # CPython-internal threading._register_atexit(), which is why calling
+        # the public atexit.unregister(_python_exit) here never actually removed
+        # it) and again via threading._shutdown_locks (Python <3.14; on 3.14+ that
+        # second join moved into the C-level _thread._shutdown(), which has no
+        # Python-level bypass -- os._exit() in sdcm.utils.hard_exit is what
+        # actually protects us there). Removing this pool's worker threads from
+        # both registries -- where they still exist -- is the only way to let
+        # CPython abandon them instead of joining them forever. This is safe here
+        # because clean_up() runs only after every result has already been
+        # collected or timed out and the pool has already been told to shut down
+        # above, so any still-running worker at this point is already an
+        # abandoned zombie as far as this code is concerned -- we are just making
+        # CPython agree.
+        # `_threads_queues` must be mutated while holding `_global_shutdown_lock`:
+        # CPython uses that lock internally to serialize worker registration against
+        # `_python_exit()`, which copies this same WeakKeyDictionary during interpreter
+        # shutdown. Racing that copy unlocked can corrupt shutdown-time iteration.
+        #
+        # `threading._shutdown_locks` (Python <3.14) is NOT covered by that same lock:
+        # CPython actually protects that set with its own separate internal lock
+        # (`threading._shutdown_locks_lock`), not `_global_shutdown_lock` -- so the
+        # `.discard()` call below is not perfectly synchronized against CPython's own
+        # mutation of that set on those versions. This repo supports Python 3.10-3.13
+        # (see pyproject.toml) where that set still exists, but this code cannot verify
+        # `_shutdown_locks_lock`'s name/existence is stable across all of them, so it is
+        # not acquired here. Accepted tradeoff: worst case, `.discard()` races CPython's
+        # own housekeeping of this set and the removal is a redundant no-op -- it does
+        # not corrupt anything, and it does not weaken this module's actual safety net,
+        # which is the hard-exit escalation below: that arms independently of whether
+        # this particular discard succeeds, so a thread that is genuinely still stuck is
+        # still caught regardless.
+        #
+        # Deadlock consideration: CPython's own `_python_exit()` only holds
+        # `_global_shutdown_lock` briefly, to flip an internal `_shutdown` flag, and
+        # releases it *before* copying `_threads_queues` and unboundedly joining every
+        # worker in it -- the lock is not held during that join. So a thread stuck in
+        # that join (the exact crisis this module exists to escalate out of) does not
+        # hold this lock while stuck, and acquiring it here should not be able to
+        # deadlock against it. That said, this is defensive code whose whole point is to
+        # never itself become another way to hang, so we still bound the wait rather than
+        # trust that invariant forever (e.g. across CPython versions): if the lock cannot
+        # be acquired promptly, log a warning and proceed without it.
+        shutdown_locks = getattr(threading, "_shutdown_locks", None)
+        lock_acquired = _global_shutdown_lock.acquire(timeout=GLOBAL_SHUTDOWN_LOCK_TIMEOUT)
+        if not lock_acquired:
+            LOGGER.warning(
+                "ParallelObject.clean_up(): could not acquire _global_shutdown_lock "
+                "within %ss; proceeding without it to avoid clean_up() itself hanging.",
+                GLOBAL_SHUTDOWN_LOCK_TIMEOUT,
+            )
+        try:
+            for thread in self._thread_pool._threads:
+                _threads_queues.pop(thread, None)
+                tstate_lock = getattr(thread, "_tstate_lock", None)
+                if shutdown_locks is not None and tstate_lock is not None:
+                    shutdown_locks.discard(tstate_lock)
+        finally:
+            if lock_acquired:
+                _global_shutdown_lock.release()
+
+        # On Python 3.14+, `threading._shutdown()` delegates to the C-level
+        # `_thread._shutdown()`, which waits on its own internal `shutdown_handles`
+        # list of every non-daemon ThreadPoolExecutor worker -- a list this module has
+        # no Python-level access to. Popping the registries above therefore no longer
+        # guarantees a still-running worker gets abandoned at interpreter shutdown: if
+        # one is still alive here (shutdown(wait=False) above didn't let it finish),
+        # arm the same deferred hard-exit escalation `stop_nemesis` uses, so the
+        # eventual real exit point force-terminates instead of hanging.
+        #
+        # shutdown(wait=False) only queues a sentinel and returns immediately -- it does
+        # not wait for a worker to notice it, finish its current unit of work and exit.
+        # Checking is_alive() right away would treat a perfectly healthy worker that
+        # simply hasn't unwound yet as "stuck", arming a hard exit on essentially every
+        # clean_up() call. Mirror the join(timeout)-then-check pattern `stop_nemesis`
+        # (sdcm/cluster.py) uses: give each worker a real, bounded grace period to
+        # actually finish before deciding it is stuck.
+        #
+        # This is deadline-bound, not per-thread-bound: a single shared deadline is
+        # computed once up front, and each join() gets whatever budget remains, so the
+        # total added latency across all workers is capped at roughly one grace period
+        # regardless of worker count, rather than growing to num_workers * grace period.
+        deadline = time.monotonic() + WORKER_JOIN_GRACE_PERIOD
+        for thread in self._thread_pool._threads:
+            thread.join(timeout=max(0, deadline - time.monotonic()))
+        stuck_workers = [thread for thread in self._thread_pool._threads if thread.is_alive()]
+        if stuck_workers:
+            request_hard_exit(
+                f"ParallelObject worker thread(s) still alive after shutdown: "
+                f"{[thread.name for thread in stuck_workers]}",
+                stuck_workers,
+            )
 
     @staticmethod
     def run_named_tasks_in_parallel(

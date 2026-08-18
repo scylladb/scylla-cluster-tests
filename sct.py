@@ -172,6 +172,7 @@ from utils.build_system.create_test_release_jobs import JenkinsPipelines
 from utils.build_system.throttle_categories import ThrottleCategoryManager, ThrottleCategory
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion, fetch_official_supported_versions
 from sdcm.utils.docker_utils import get_ip_address_of_container
+from sdcm.utils.hard_exit import exit_process
 from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
 from unit_tests.unit.nemesis.fake_cluster import FakeTester
 from sdcm.logcollector import Collector
@@ -2282,7 +2283,7 @@ def unit_tests(test, n, junit_xml):
     args = ["-v", "-m", "not integration", f"-n{n}", *(f"unit_tests/{t}" for t in test)]
     if junit_xml:
         args.append(f"--junit-xml={junit_xml}")
-    sys.exit(pytest.main(args))
+    exit_process(pytest.main(args))
 
 
 @cli.command("integration-tests", help="Run all the SCT internal integration-tests")
@@ -2310,7 +2311,7 @@ def integration_tests(test, n, junit_xml):
     args = ["-v", "-m", "integration", "--dist", "loadgroup", f"-n{n}", *(f"unit_tests/{t}" for t in test)]
     if junit_xml:
         args.append(f"--junit-xml={junit_xml}")
-    sys.exit(pytest.main(args))
+    exit_process(pytest.main(args))
 
 
 @cli.command("pre-commit", help="Run pre-commit checkers")
@@ -2398,7 +2399,7 @@ def run_test(argv, backend, config, logdir):
         print("argv is referring to the directory or file that contain tests, it can't be empty")
         sys.exit(1)
     return_code = pytest.main(["-s", "-vv", "-rN", "-p", "no:logging", target])
-    sys.exit(return_code)
+    exit_process(return_code)
 
 
 @cli.command("run-pytest", help="Run tests using pytest")
@@ -2429,10 +2430,19 @@ def run_pytest(target, backend, config, logdir):
         print("argv is referring to the directory or file that contain tests, it can't be empty")
         sys.exit(1)
     return_code = pytest.main(["-s", "-v", f"--junit-xml={junit_file}", target])
-    test_config = get_test_config()
-    test_config.init_argus_client(params=SCTConfiguration())
-    test_config.argus_client().sct_submit_junit_report(file_name=junit_file.name, raw_content=junit_file.read_text())
-    sys.exit(return_code)
+    try:
+        test_config = get_test_config()
+        test_config.init_argus_client(params=SCTConfiguration())
+        test_config.argus_client().sct_submit_junit_report(
+            file_name=junit_file.name, raw_content=junit_file.read_text()
+        )
+    except Exception:  # noqa: BLE001
+        # Reporting is best-effort: a failure here must not prevent exit_process()
+        # below from running, or an already-armed hard exit (e.g. from a stuck
+        # nemesis thread during the test run) would be stuck behind this exception
+        # and never acted on.
+        LOGGER.exception("Failed to submit JUnit report to Argus")
+    exit_process(return_code)
 
 
 @cli.command("cloud-usage-report", help="Generate and send Cloud usage report")
