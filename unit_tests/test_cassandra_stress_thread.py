@@ -12,6 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 import subprocess
 import time
+from pathlib import Path
 
 import pytest
 
@@ -23,6 +24,17 @@ pytestmark = [
     pytest.mark.integration,
     pytest.mark.xdist_group("docker_ssl"),
 ]
+
+
+@pytest.fixture(autouse=True)
+def enable_safepoint_logging(params):
+    """Run every c-s integration test with safepoint logging on, instead of paying for a dedicated run.
+
+    It has to stay compatible with every way c-s is started here (user profiles, client encryption,
+    multi-region, compression, extra JVM opts), so exercising it everywhere is the point.
+    test_06 is the one that asserts what it actually produces.
+    """
+    params["cs_safepoint_logging"] = True
 
 
 def test_01_cassandra_stress(request, docker_scylla, params):
@@ -210,7 +222,10 @@ def test_06_cassandra_stress_with_extra_jvm_opts(request, docker_scylla, params)
         check=True,
     )
     actual_jvm_opts = result.stdout.strip()
-    assert actual_jvm_opts == jvm_opts, f"JVM_OPTS not set correctly inside container: {actual_jvm_opts!r}"
+    assert actual_jvm_opts.startswith(jvm_opts), f"JVM_OPTS not set correctly inside container: {actual_jvm_opts!r}"
+    assert "-Xlog:safepoint*=info:file=/cs-safepoint-" in actual_jvm_opts, (
+        f"safepoint logging options not added to JVM_OPTS: {actual_jvm_opts!r}"
+    )
 
     result = subprocess.run(
         ["docker", "exec", container_id, "bash", "-c", "cat /proc/$(pgrep -x java | head -1)/cmdline | tr '\\0' ' '"],
@@ -222,6 +237,7 @@ def test_06_cassandra_stress_with_extra_jvm_opts(request, docker_scylla, params)
     assert "-XX:+UseZGC" in java_cmdline, f"ZGC flag not found in Java cmdline: {java_cmdline}"
     assert "-XX:+ZGenerational" in java_cmdline, f"ZGenerational flag not found in Java cmdline: {java_cmdline}"
     assert "-Xms512m" in java_cmdline, f"-Xms512m not found in Java cmdline: {java_cmdline}"
+    assert "-Xlog:safepoint" in java_cmdline, f"safepoint logging flag not found in Java cmdline: {java_cmdline}"
 
     output, _ = cs_thread.parse_results()
     assert "latency mean" in output[0]
@@ -229,3 +245,12 @@ def test_06_cassandra_stress_with_extra_jvm_opts(request, docker_scylla, params)
 
     assert "latency 99th percentile" in output[0]
     assert float(output[0]["latency 99th percentile"]) > 0
+
+    # the safepoint log is written into a file bind mounted from the loader - the container itself is gone
+    # once the stress command is over - and pulled into the loader log directory
+    logdir = Path(cs_thread.loaders[0].logdir)
+    safepoint_logs = list(logdir.glob("cs-safepoint-*.log"))
+    assert safepoint_logs, f"no safepoint log was collected into {logdir}"
+
+    content = safepoint_logs[0].read_text()
+    assert "[safepoint" in content, f"unexpected safepoint log content: {content[:500]}"

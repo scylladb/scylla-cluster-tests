@@ -2668,6 +2668,15 @@ Extra JVM options passed to cassandra-stress via JVM_OPTS environment variable. 
 **type:** str (appendable)
 
 
+## **cs_safepoint_logging** / SCT_CS_SAFEPOINT_LOGGING
+
+Enable JVM safepoint logging (-Xlog:safepoint) for the cassandra-stress loaders. The log is written on the loader host, pulled into the loader log directory and collected into the run log archive. Use it to tell a loader JVM pause (including non-GC safepoints) apart from a server-side or network stall behind a latency-step failure. Not supported for k8s backends and prepared loaders.
+
+**default:** N/A
+
+**type:** boolean
+
+
 ## **stress_cmd_mv** / SCT_STRESS_CMD_MV
 
 cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list
