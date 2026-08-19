@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Longevity test running a 48-hour scylla-bench timeseries write/read workload against a
+    TimeWindowCompactionStrategy table with ZSTD dictionary compression and a 3-hour TTL,
+    validating TWCS compaction scheduling and compression stability under sustained ingestion.
+  test_type: longevity
+  tier: tier1
+  duration_class: long
+  stress_tools:
+    - scylla-bench
+  workload: mixed
+  features:
+    - twcs
+    - tombstone-gc
+  team_ownership: storage-qa
+
 # LONGEVITY TEST: TWCS 48H WITH ZSTD DICTIONARY COMPRESSION
 #
 # Purpose:

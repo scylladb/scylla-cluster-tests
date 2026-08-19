@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Out-of-space prevention feature test that fills a tablets-enabled cluster to ~90% disk usage
+    plus an extra ~15% write burst, validating secondary index (views-with-tablets) creation and
+    behavior as the cluster approaches disk capacity.
+  test_type: features
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  features:
+    - tablets
+  team_ownership: storage-qa
+
 # Maintained by Storage QA
 
 test_duration: 1440

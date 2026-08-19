@@ -1,3 +1,22 @@
+test_metadata:
+  description: >-
+    Longevity test running concurrent per-user-role cassandra-stress workloads with service levels
+    on a multi-DC cluster (2x6 nodes) for 12 hours, while parallel topology-change and schema-
+    change SisyphusMonkey nemeses run per DC to validate cluster stability under concurrent
+    structural changes.
+  test_type: longevity
+  tier: tier1
+  duration_class: medium
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  features:
+    - multi-dc
+    - tls-ssl
+    - authorization
+    - sla
+  team_ownership: storage-qa
+
 test_duration: 1200
 
 # `connectionsPerHost` - target a specific number of TCP connections per shard.
