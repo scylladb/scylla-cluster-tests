@@ -50,6 +50,8 @@ Each loader node directory contains:
 | `cloud-init.log` | Cloud-init execution log |
 | `cloud-init-output.log` | Cloud-init stdout/stderr |
 | `console_output.log` | Serial console output (when kernel panic checker is enabled) |
+| `hdrh-cs-*.hdr` | cassandra-stress HDR histogram files |
+| `cs-safepoint-*.log` | cassandra-stress JVM safepoint log (when `cs_safepoint_logging` is enabled) |
 
 ## Monitor Node Logs
 

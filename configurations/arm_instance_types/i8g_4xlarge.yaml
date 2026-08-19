@@ -1,1 +1,2 @@
 instance_type_db: 'i8g.4xlarge'
+cs_safepoint_logging: true
