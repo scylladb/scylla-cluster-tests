@@ -2127,6 +2127,13 @@ class SCTConfiguration(BaseModel):
         "Recommended for low-latency: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch' "
         "(requires Java 21+, which cassandra-stress 3.20.6+ ships with).",
     )
+    cs_safepoint_logging: Boolean = SctField(
+        description="Enable JVM safepoint logging (-Xlog:safepoint) for the cassandra-stress loaders. "
+        "The log is written on the loader host, pulled into the loader log directory and collected into the "
+        "run log archive. Use it to tell a loader JVM pause (including non-GC safepoints) apart from a "
+        "server-side or network stall behind a latency-step failure. Not supported for k8s backends and "
+        "prepared loaders.",
+    )
     stress_cmd_mv: StringOrList = SctField(
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
     )
@@ -4183,6 +4190,7 @@ class SCTConfiguration(BaseModel):
         if backend == "xcloud":
             self._validate_cloud_backend_parameters()
         self._verify_data_volume_configuration(backend)
+        self._verify_cs_safepoint_logging(backend)
 
         if self.get("n_db_nodes"):
             self._validate_seeds_number()
@@ -5198,6 +5206,16 @@ class SCTConfiguration(BaseModel):
 
         if not self.get("data_volume_disk_size") or not self.get("data_volume_disk_type"):
             raise ValueError("Data volume configuration requires: data_volume_disk_type, data_volume_disk_size")
+
+    def _verify_cs_safepoint_logging(self, backend):
+        if not self.get("cs_safepoint_logging"):
+            return
+
+        if "k8s" in backend or self.get("use_prepared_loaders"):
+            raise ValueError(
+                "'cs_safepoint_logging' requires cassandra-stress to run in a docker container on the loader, "
+                "it is not supported for k8s backends or with 'use_prepared_loaders'"
+            )
 
     def _verify_scylla_bench_mode_and_workload_parameters(self):
         for param_name in self.stress_cmd_params:

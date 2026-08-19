@@ -53,3 +53,4 @@ parallel_node_operations: true
 cluster_health_check: false
 
 adaptive_timeout_store_metrics: false
+cs_safepoint_logging: true

@@ -1589,3 +1589,33 @@ def test_mixed_scylla_run_reserves_user_prefix_room_for_oracle_suffix(monkeypatc
     conf.verify_configuration()
 
     assert conf.user_prefix == user_prefix[:expected_len]
+
+
+@pytest.mark.parametrize(
+    "backend, use_prepared_loaders",
+    [
+        pytest.param("k8s-eks", False, id="k8s-backend"),
+        pytest.param("aws", True, id="prepared-loaders"),
+    ],
+)
+def test_cs_safepoint_logging_rejected_without_cs_docker_container(monkeypatch, backend, use_prepared_loaders):
+    """JVM_OPTS is only injected into the c-s docker container, so the flag would silently do nothing."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_USE_PREPARED_LOADERS", str(use_prepared_loaders))
+    monkeypatch.setenv("SCT_CS_SAFEPOINT_LOGGING", "true")
+
+    conf = sct_config.SCTConfiguration()
+
+    with pytest.raises(ValueError, match="cs_safepoint_logging"):
+        conf._verify_cs_safepoint_logging(backend)
+
+
+def test_cs_safepoint_logging_allowed_on_docker_based_loaders(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_CS_SAFEPOINT_LOGGING", "true")
+
+    conf = sct_config.SCTConfiguration()
+
+    conf._verify_cs_safepoint_logging("aws")
