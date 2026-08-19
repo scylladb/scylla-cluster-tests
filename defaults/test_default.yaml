@@ -392,6 +392,7 @@ agent:
 
 c_s_driver_version: '3'
 cs_extra_jvm_opts: ''
+cs_safepoint_logging: false
 test_metadata: null
 
 # KeyStore backend for credential retrieval.
