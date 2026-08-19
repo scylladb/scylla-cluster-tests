@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Feature test validating tombstone GC modes by writing a scylla-bench timeseries workload
+    against a TWCS table configured with a short (4-minute) TTL, gc_grace_seconds, compaction
+    window, and disabled tombstone_gc propagation delay.
+  test_type: features
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - scylla-bench
+  workload: write
+  features:
+    - tombstone-gc
+    - twcs
+  team_ownership: storage-qa
+
 # Maintained by Storage QA
 test_duration: 200
 
