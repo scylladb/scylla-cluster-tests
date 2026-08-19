@@ -102,6 +102,7 @@ features:
     - twcs
     - zero-token-nodes
     - alternator-streams
+    - elasticity
 
 team_ownership:
   description: "QA team responsible for maintaining this test"
