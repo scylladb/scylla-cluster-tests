@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Longevity-style feature test validating the Incremental Compaction Strategy (ICS) space
+    amplification goal by writing ~1B rows with ICS and measuring disk space amplification under
+    continued QUORUM writes on a 3-node cluster. Note: this test has not been run in a while.
+  test_type: features
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  features: []
+  team_ownership: storage-qa
+
 test_duration: 3600
 
 

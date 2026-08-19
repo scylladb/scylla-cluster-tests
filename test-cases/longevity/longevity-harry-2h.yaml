@@ -1,3 +1,17 @@
+test_metadata:
+  description: >-
+    Longevity test running the cassandra-harry fuzzing/verification tool for 2 hours on a 6-node
+    single-DC cluster with SisyphusMonkey nemesis (ENOSPC-safe selector), validating data
+    consistency under continuous chaos.
+  test_type: longevity
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools: []
+  features: []
+  team_ownership: storage-qa
+
 test_duration: 240
 stress_cmd: ["cassandra-harry -run-time 2 -run-time-unit HOURS"]
 
