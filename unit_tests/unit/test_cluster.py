@@ -20,8 +20,9 @@ from datetime import datetime, timezone
 import pytest
 from invoke import Result
 
-from sdcm.cluster import BaseMonitorSet
+from sdcm.cluster import BaseMonitorSet, BaseNode
 from sdcm.db_log_reader import DbLogReader
+from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
@@ -923,3 +924,63 @@ def test_base_node_init_with_none_ssh_login_info():
     node.init()
 
     assert isinstance(node.remoter, LocalCmdRunner), f"Expected LocalCmdRunner, got {type(node.remoter)}"
+
+
+def test_ip_address_ignores_empty_scylla_network_configuration():
+    """Empty Scylla network config should fall back to the legacy private IP path."""
+    node = unittest.mock.MagicMock()
+    node.scylla_network_configuration = ScyllaNetworkConfiguration([], [])
+    node.test_config = unittest.mock.MagicMock(IP_SSH_CONNECTIONS="private", INTRA_NODE_COMM_PUBLIC=False)
+    assert BaseNode.ip_address.fget(node) == node.private_ip_address
+
+
+def _network_config_with_broadcast_on_primary():
+    """`scylla_addresses_on_different_interfaces.yaml`: broadcast_address stays on nic 0."""
+    interfaces = [
+        NetworkInterface(
+            ipv4_public_address=None,
+            ipv6_public_addresses=[],
+            ipv4_private_addresses=["10.0.0.1"],
+            ipv6_private_address="",
+            dns_private_name="",
+            dns_public_name="",
+            device_index=index,
+            device_name=name,
+            mac_address=None,
+            use_dns_names=False,
+        )
+        for index, name in enumerate(("ens4", "ens5"))
+    ]
+    return ScyllaNetworkConfiguration(
+        network_interfaces=interfaces,
+        scylla_network_config=[
+            {"address": "listen_address", "ip_type": "ipv4", "public": False, "nic": 0, "use_dns": False},
+            {"address": "rpc_address", "ip_type": "ipv4", "public": False, "nic": 1, "use_dns": False},
+            {"address": "broadcast_rpc_address", "ip_type": "ipv4", "public": False, "nic": 1, "use_dns": False},
+            {"address": "broadcast_address", "ip_type": "ipv4", "public": False, "nic": 0, "use_dns": False},
+            {"address": "test_communication", "ip_type": "ipv4", "public": False, "nic": 0, "use_dns": False},
+        ],
+    )
+
+
+def test_secondary_network_interface_is_never_the_one_used_for_ssh():
+    """The network nemesis must never take down the interface carrying `test_communication`.
+
+    Downing it would cut the SSH connection the nemesis needs to bring the interface back up.
+    Following `broadcast_address` instead is not enough: it can sit on the very same interface.
+    """
+    node = unittest.mock.MagicMock()
+    network_config = _network_config_with_broadcast_on_primary()
+    node.scylla_network_configuration = network_config
+
+    assert network_config.device == "ens4", "broadcast_address is on the interface used for SSH"
+    assert BaseNode._secondary_network_interface_name(node) == "ens5"
+
+    # SSH over the secondary interface: the primary one becomes the safe target
+    for address_config in network_config.scylla_network_config:
+        if address_config["address"] == "test_communication":
+            address_config["nic"] = 1
+    assert BaseNode._secondary_network_interface_name(node) == "ens4"
+
+    node.scylla_network_configuration = None
+    assert BaseNode._secondary_network_interface_name(node) == "eth1", "backends without network config use eth1"

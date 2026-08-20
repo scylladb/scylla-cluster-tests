@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import json
 import os
 import time
 import logging
@@ -20,14 +19,13 @@ from functools import cached_property, cache
 from collections.abc import Callable
 
 import tenacity
-import yaml
 import google.api_core.exceptions
 from google.cloud import compute_v1
 
 from sdcm import cluster
 from sdcm.provision.gce.provisioner import GceProvisioner
 from sdcm.provision.gce.instance_provider import _is_zone_exhausted
-from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration, ssh_connection_ip_type
+from sdcm.provision.network_configuration import NetworkInterface, ssh_connection_ip_type
 from sdcm.provision.provisioner import PricingModel, ProvisionError, ZoneResourcesExhaustedError
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.sct_provision import region_definition_builder
@@ -110,46 +108,9 @@ class GCENode(cluster.BaseNode):
             rack=rack,
         )
 
-    @cached_property
-    def network_configuration(self):
-        """Query MAC→device name mapping from the node, same pattern as AWS."""
-        network_devices = {}
-        if self.remoter:
-            if network_config_json := self.remoter.run("ip -j link", ignore_status=True).stdout.strip():
-                interfaces = json.loads(network_config_json)
-                network_devices = {
-                    interface["address"]: interface["ifname"]
-                    for interface in interfaces
-                    if interface.get("ifname") != "lo" and interface.get("address")
-                }
-            if not network_devices:
-                ip_link_cmd = """ip -o link | awk '$2 != "lo:" {gsub(/:/,"",$2);print $17": " $2}'"""
-                network_config = self.remoter.run(ip_link_cmd).stdout.strip()
-                network_devices = yaml.safe_load(network_config)
-            self.log.debug("Node %s ethernets: %s", self.name, network_devices)
-        return network_devices
-
-    def refresh_network_interfaces_info(self):
-        if "network_configuration" in self.__dict__:
-            del self.__dict__["network_configuration"]
-        if self.scylla_network_configuration:
-            self.scylla_network_configuration.network_interfaces = self.network_interfaces
-
     @staticmethod
     def is_gce() -> bool:
         return True
-
-    @cached_property
-    def cql_address(self):
-        if self.scylla_network_configuration:
-            address = (
-                self.scylla_network_configuration.test_communication
-                if self.test_config.IP_SSH_CONNECTIONS == "public"
-                else self.scylla_network_configuration.broadcast_rpc_address
-            )
-            self.log.debug("cql_address is: %s", address)
-            return address
-        return super().cql_address
 
     @cluster.terminate_on_failure
     def init(self):
@@ -161,18 +122,8 @@ class GCENode(cluster.BaseNode):
 
         super().init()
 
-        if self.parent_cluster.params.get("scylla_network_config"):
-            self.scylla_network_configuration = ScyllaNetworkConfiguration(
-                network_interfaces=self.network_interfaces,
-                scylla_network_config=self.parent_cluster.params["scylla_network_config"],
-            )
-            self.log.debug(
-                "Node %s scylla_network_config: %s", self.name, self.parent_cluster.params["scylla_network_config"]
-            )
-            self.log.debug(
-                "Node %s network_interfaces: %s", self.name, self.scylla_network_configuration.network_interfaces
-            )
-            self.refresh_network_interfaces_info()
+        self.scylla_network_configuration = self._build_scylla_network_configuration()
+        self.refresh_network_interfaces_info()
 
     def wait_for_cloud_init(self):
         if self.remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:
