@@ -52,7 +52,7 @@ def get_latest_branches_from_s3(bucket="downloads.scylladb.com", limit=3):
         oss_branches_sorted.extend(branch_versions[:limit])
 
         return oss_branches_sorted
-    except (boto3.exceptions.Boto3Error, KeyError, ValueError):
+    except boto3.exceptions.Boto3Error, KeyError, ValueError:
         # Fallback to hardcoded values if S3 access fails or parsing errors occur
         # Using fallback ensures tests remain functional even if S3 is temporarily unavailable
         return ["master", "branch-2025.4", "branch-2025.3", "branch-2025.2"]
