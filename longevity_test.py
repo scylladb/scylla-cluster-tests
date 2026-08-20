@@ -13,12 +13,14 @@
 #
 # Copyright (c) 2016 ScyllaDB
 import json
+import math
 import os
 import re
 import string
 import tempfile
 import itertools
 import contextlib
+from functools import cached_property
 from typing import List, Dict
 
 import yaml
@@ -37,6 +39,7 @@ from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.cluster_tools import group_nodes_by_dc_idx
 from sdcm.utils.decorators import optional_stage
 from sdcm.utils.operations_thread import ThreadParams
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.sct_events import Severity
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
@@ -46,6 +49,46 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     """
     Test a Scylla cluster stability over a time period.
     """
+
+    STATIC_SIZING_OVERHEAD_RATIO = 1.1
+
+    @property
+    def stress_template_whitelist(self) -> set[str]:
+        return {"db_node_count_per_dc", "effective_disk_size_bytes"}
+
+    @property
+    def db_node_count_per_dc(self) -> int:
+        configured_n_db_nodes = self.params.get("n_db_nodes") or []
+        if isinstance(configured_n_db_nodes, int):
+            return configured_n_db_nodes
+        if configured_n_db_nodes:
+            return configured_n_db_nodes[0]
+        return len(group_nodes_by_dc_idx(self.db_cluster.nodes).get(0, []))
+
+    @cached_property
+    def effective_disk_size_bytes(self) -> int:
+        """Return floor(average available bytes on /var/lib/scylla / effective_compression_ratio / 1.1).
+
+        ``df -B1`` is run on all DB nodes in parallel; the average of the available-byte column is
+        used because Scylla load-balances data across nodes.  The result is then divided by the
+        configured ``effective_compression_ratio`` and a global 10% static overhead factor so that
+        callers bias toward undershooting disk usage instead of overshooting when payload-based row
+        sizing misses table/storage overhead.
+        """
+
+        def get_available_bytes(node) -> int:
+            result = node.remoter.run("df -B1 /var/lib/scylla", ignore_status=False)
+            # df output: Filesystem 1B-blocks Used Available Use% Mounted-on
+            # We want the "Available" column (index 3) from the second line.
+            lines = result.stdout.strip().splitlines()
+            return int(lines[1].split()[3])
+
+        nodes = self.db_cluster.nodes
+        results = ParallelObject(nodes, timeout=60, num_workers=len(nodes)).run(get_available_bytes)
+        available_bytes_per_node = [r.result for r in results]
+        average_available = sum(available_bytes_per_node) / len(available_bytes_per_node)
+        ratio = self.params.get("effective_compression_ratio") or 1.0
+        return math.floor(average_available / ratio / self.STATIC_SIZING_OVERHEAD_RATIO)
 
     def setUp(self):
         super().setUp()
