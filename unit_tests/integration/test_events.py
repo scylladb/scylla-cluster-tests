@@ -31,7 +31,7 @@ class TestSctEventsIntegration(RealEventsTest):
         with environment(SCT_CLUSTER_BACKEND="docker"):
             enable_default_filters(SCTConfiguration())
 
-        with self.wait_for_n_events(self.get_events_logger(), count=6):
+        with self.wait_for_n_events(self.get_events_logger(), count=7):
             DatabaseLogEvent.BACKTRACE().add_info(
                 node="A",
                 line_number=22,
@@ -72,18 +72,30 @@ class TestSctEventsIntegration(RealEventsTest):
                 "std::runtime_error (exception exceptions::unavailable_exception (Cannot achieve consistency level for cl ONE. Requires 1, alive 0))",
             ).publish()
 
+            DatabaseLogEvent.RUNTIME_ERROR().add_info(
+                node="A",
+                line_number=22,
+                line="INFO 2023-12-18 12:45:25,673 [shard 0: gms] storage_proxy - Failed to apply mutation from 10.0.0.1#0: "
+                "ignoring error response: std::runtime_error (Rate limit exceeded)",
+            ).publish()
+
         log_content = self.get_event_log_file("events.log")
 
         assert "other back trace" in log_content
         assert "supressed" not in log_content
 
+        normal_log_content = self.get_event_log_file("normal.log")
+        assert "ignoring error response" in normal_log_content
+
         warnings_log_content = self.get_event_log_file("warning.log")
         assert "data_dictionary::no_such_column_family" in warnings_log_content
         assert "Authentication error" in warnings_log_content
         assert "Unexpected exception when writing login log" in warnings_log_content
+        assert "ignoring error response" not in warnings_log_content
 
         error_log_content = self.get_event_log_file("error.log")
         assert "data_dictionary::no_such_column_family" not in error_log_content
         assert "Authentication error" not in error_log_content
         assert "Unexpected exception when writing login log" not in error_log_content
         assert "topology change coordinator fiber got error" not in error_log_content
+        assert "ignoring error response" not in error_log_content

@@ -186,6 +186,15 @@ def enable_default_filters(sct_config: SCTConfiguration):
         regex=r".*audit - Unexpected exception when writing.*unavailable_exception.*",
     ).publish()
 
+    # These are actually INFO logs from Scylla, but the RUNTIME_ERROR subevent regex
+    # ("std::runtime_error", sdcm/sct_events/database.py:147) matches the message body.
+    # Severity.NORMAL (not WARNING) because there is no underlying error at all.
+    EventsSeverityChangerFilter(
+        new_severity=Severity.NORMAL,
+        event_class=DatabaseLogEvent,
+        regex=r".*ignoring error response: std::runtime_error.*",
+    ).publish()
+
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="Rate-limit: supressed").publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="Rate-limit: suppressed").publish()
     DbEventsFilter(db_event=DatabaseLogEvent.WARNING, line="abort_requested_exception").publish()
