@@ -343,6 +343,30 @@ def gce_private_addresses(instance: compute_v1.Instance) -> list[str]:
     return addresses
 
 
+def gce_mac_address_for_ipv4(ipv4_address: str | None) -> str | None:
+    """Derive the MAC address GCE assigns to a NIC from that NIC's internal IPv4.
+
+    GCE builds NIC MACs as `42:01:` followed by the four IPv4 octets in hex. The compute API does
+    not report MACs, so this is how a cloud-side NIC is matched to its OS device name - and unlike
+    matching by address, it also works while the interface is still waiting for DHCP.
+    """
+    if not ipv4_address:
+        return None
+
+    octets = str(ipv4_address).split(".")
+    if len(octets) != 4:
+        return None
+
+    try:
+        values = [int(octet) for octet in octets]
+        if not all(0 <= value <= 255 for value in values):
+            return None
+    except ValueError:
+        return None
+
+    return "42:01:" + ":".join(f"{value:02x}" for value in values)
+
+
 GCE_IMAGE_URL_REGEX = re.compile(
     r"https://www.googleapis.com/compute/v1/projects/(?P<project>.*)/global/images/(?P<image>.*)"
 )
