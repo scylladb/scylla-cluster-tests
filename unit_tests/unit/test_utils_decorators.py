@@ -5,7 +5,7 @@ import pytest
 from google.api_core.exceptions import ServiceUnavailable
 
 from sdcm.exceptions import UnsupportedNemesis
-from sdcm.provision.provisioner import ProvisionUnrecoverableError
+from sdcm.provision.provisioner import InstanceConfigurationError, ProvisionUnrecoverableError
 from sdcm.sct_events import Severity
 from sdcm.utils.decorators import (
     _find_hdr_tags,
@@ -61,6 +61,13 @@ def _raise_service_unavailable():
     raise ServiceUnavailable("GCE capacity issue")
 
 
+def _raise_instance_configuration_error():
+    raise InstanceConfigurationError(
+        "Failed to create instance node-x due to configuration error: "
+        "[pd-standard, pd-ssd, n4-standard-16] features are not compatible for creating instance."
+    )
+
+
 def test_skip_on_capacity_issues_converts_stuck_vm_give_up_to_nemesis_skip():
     """Stuck VM recovery give-up on a balanced cluster must skip the nemesis, not fail it."""
     with patch("sdcm.utils.decorators.check_cluster_layout", return_value=True):
@@ -94,6 +101,43 @@ def test_critical_on_capacity_issues_publishes_critical_on_stuck_vm_give_up():
         with pytest.raises(ProvisionUnrecoverableError):
             critical_on_capacity_issues(_raise_stuck_vm_give_up)()
     assert event_mock.call_args.kwargs["severity"] == Severity.CRITICAL
+    event_mock.return_value.publish.assert_called_once()
+
+
+def test_skip_on_capacity_issues_does_not_skip_on_instance_configuration_error():
+    """An invalid instance configuration is not a capacity issue: it must fail, not skip the nemesis.
+
+    `InstanceConfigurationError` is a `ProvisionUnrecoverableError`, so without its own clause it
+    would be softened into `UnsupportedNemesis("Capacity Issue")` and the real misconfiguration
+    would never surface.
+    """
+    with patch("sdcm.utils.decorators.check_cluster_layout", return_value=True):
+        with patch("sdcm.utils.decorators.TestFrameworkEvent") as event_mock:
+            with pytest.raises(InstanceConfigurationError, match="not compatible for creating instance"):
+                skip_on_capacity_issues(db_cluster=MagicMock())(_raise_instance_configuration_error)()
+    event_mock.return_value.publish.assert_not_called()
+
+
+def test_skip_on_capacity_issues_reports_configuration_error_on_unbalanced_cluster():
+    """On an unbalanced cluster it still publishes CRITICAL and re-raises, but not as a capacity issue."""
+    with patch("sdcm.utils.decorators.check_cluster_layout", return_value=False):
+        with patch("sdcm.utils.decorators.TestFrameworkEvent") as event_mock:
+            with pytest.raises(InstanceConfigurationError):
+                skip_on_capacity_issues(db_cluster=MagicMock())(_raise_instance_configuration_error)()
+    assert event_mock.call_args.kwargs["severity"] == Severity.CRITICAL
+    assert "invalid instance configuration" in event_mock.call_args.kwargs["message"]
+    assert "capacity" not in event_mock.call_args.kwargs["message"]
+    event_mock.return_value.publish.assert_called_once()
+
+
+def test_critical_on_capacity_issues_reports_configuration_error_as_such():
+    """A must-succeed topology change still fails critically, with the actual cause in the message."""
+    with patch("sdcm.utils.decorators.TestFrameworkEvent") as event_mock:
+        with pytest.raises(InstanceConfigurationError):
+            critical_on_capacity_issues(_raise_instance_configuration_error)()
+    assert event_mock.call_args.kwargs["severity"] == Severity.CRITICAL
+    assert "invalid instance configuration" in event_mock.call_args.kwargs["message"]
+    assert "capacity" not in event_mock.call_args.kwargs["message"]
     event_mock.return_value.publish.assert_called_once()
 
 
