@@ -17,7 +17,7 @@ from typing import List, Dict, Type, Any
 from pathlib import Path
 
 from sdcm.keystore import KeyStore, SSHKey
-from sdcm.provision.network_configuration import ssh_connection_ip_type
+from sdcm.provision.network_configuration import network_interfaces_count, ssh_connection_ip_type
 from sdcm.provision.provisioner import DataDisk, InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.types import NodeTypeType
@@ -150,6 +150,7 @@ class DefinitionBuilder(abc.ABC):
             ssh_key=self._get_ssh_key(),
             user_data=user_data,
             use_public_ip=use_public_ip,
+            network_interfaces_count=network_interfaces_count(self.params),
         )
 
     def build_region_definition(
