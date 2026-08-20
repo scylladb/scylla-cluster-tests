@@ -8,6 +8,6 @@ longevityPipeline(
     region: 'us-east-1',
     availability_zone: 'b',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-1TB-5days-authorization-and-tls-ssl.yaml", "configurations/2TB_high_disk_used_capacity.yaml", "configurations/auth_cassandra.yaml"]'''
+    test_config: '''["test-cases/longevity/longevity-1TB-5days-authorization-and-tls-ssl.yaml", "configurations/2TB_high_disk_used_capacity.yaml", "configurations/auth_cassandra.yaml", "configurations/auto-repair-1h.yaml"]'''
 
 )
