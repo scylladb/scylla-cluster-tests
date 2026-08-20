@@ -91,6 +91,7 @@ from sdcm.sct_events.group_common_events import (
     ignore_ipv6_failure_to_assign,
     ignore_raft_topology_cmd_failing,
     suppress_expected_unavailability_errors,
+    ignore_drop_table_during_repair_errors,
 )
 
 from sdcm.sct_events.loaders import CassandraStressLogEvent
@@ -1701,7 +1702,10 @@ class NemesisRunner:
             self.cluster.wait_for_schema_agreement()
 
         self.log.debug("Start repair target_node in background")
-        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="NodeToolRepairThread") as thread_pool:
+        with (
+            ignore_drop_table_during_repair_errors(),
+            ThreadPoolExecutor(max_workers=1, thread_name_prefix="NodeToolRepairThread") as thread_pool,
+        ):
             thread = thread_pool.submit(partial(self.run_repair_nodetool, nodes=[self.target_node]))
             try:
                 # drop test tables one by one during repair
