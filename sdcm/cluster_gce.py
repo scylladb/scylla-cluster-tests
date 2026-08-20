@@ -12,11 +12,9 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
-import re
 import time
 import logging
-from typing import Dict, Any, ParamSpec, TypeVar
-from textwrap import dedent
+from typing import Dict, ParamSpec, TypeVar, List
 from functools import cached_property, cache
 from collections.abc import Callable
 
@@ -25,25 +23,25 @@ import google.api_core.exceptions
 from google.cloud import compute_v1
 
 from sdcm import cluster
+from sdcm.provision.gce.provisioner import GceProvisioner
+from sdcm.provision.gce.instance_provider import _is_zone_exhausted
 from sdcm.provision.network_configuration import ssh_connection_ip_type
+from sdcm.provision.provisioner import PricingModel, ProvisionError, ZoneResourcesExhaustedError
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
-from sdcm.provision.provisioner import ProvisionError
+from sdcm.sct_provision import region_definition_builder
+from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
 from sdcm.utils.gce_utils import (
     GceLoggingClient,
-    create_instance,
-    disk_from_image,
-    get_alternative_zones,
     get_gce_compute_disks_client,
+    get_alternative_zones,
     wait_for_extended_operation,
     gce_private_addresses,
     gce_public_addresses,
-    random_zone,
     gce_set_labels,
 )
 from sdcm.wait import exponential_retry
-from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
@@ -61,10 +59,6 @@ R = TypeVar("R")
 
 class CreateGCENodeError(Exception):
     pass
-
-
-class _ZoneExhaustedError(Exception):
-    """Internal signal that the GCE zone is exhausted — escapes the @retrying decorator."""
 
 
 class GCENode(cluster.BaseNode):
@@ -90,10 +84,10 @@ class GCENode(cluster.BaseNode):
         rack: int = 0,
         gce_project: str = None,
     ):
-        name = f"{node_prefix}-{dc_idx}-{node_index}".lower()
+        self._instance = gce_instance
+        name = self._instance.name
         self.node_index = node_index
         self.project = gce_project
-        self._instance = gce_instance
         self._instance_type = gce_instance.machine_type.split("/")[-1]
         self._gce_service = gce_service
         self._gce_logging_client = GceLoggingClient(instance_name=name, zone=self.zone)
@@ -254,6 +248,16 @@ class GCENode(cluster.BaseNode):
         self._instance_wait_safe(self._safe_destroy)
         super().destroy()
 
+    def get_console_output(self):
+        # TODO adding console output from instance on GCE
+        self.log.warning("Method is not implemented for GCENode")
+        return ""
+
+    def get_console_screenshot(self):
+        # TODO adding console output from instance on GCE
+        self.log.warning("Method is not implemented for GCENode")
+        return b""
+
     @cache
     def _get_ipv6_ip_address(self):
         self.log.warning(
@@ -295,6 +299,7 @@ class GCECluster(cluster.BaseCluster):
         gce_network,
         gce_service,
         credentials,
+        provisioners: List[GceProvisioner],
         cluster_uuid=None,
         gce_instance_type="n2-standard-1",
         gce_region_names=None,
@@ -306,9 +311,9 @@ class GCECluster(cluster.BaseCluster):
         add_disks=None,
         params=None,
         node_type=None,
-        service_accounts=None,
         add_nodes=True,
     ):
+        self.provisioners: List[GceProvisioner] = provisioners
         self._gce_image = gce_image
         self._gce_image_type = gce_image_type
         self._gce_image_size = gce_image_size
@@ -318,17 +323,15 @@ class GCECluster(cluster.BaseCluster):
         self._credentials = credentials
         self._gce_instance_type = gce_instance_type
         self._gce_image_username = gce_image_username
-        availability_zone = self.params.get("availability_zone")
-        self._gce_zone_names: list[str] = [
-            f"{region}-{availability_zone or random_zone(region)}" for region in gce_region_names
-        ]
+        # Use provisioner's zones to ensure consistency - provisioners already resolved random_zone() if needed
+        self._gce_zone_names: list[str] = [provisioner.availability_zone for provisioner in provisioners]
         # Keep this print out for debugging purposes: validate that zones are correctly set
         LOGGER.debug("GCE zones used: %s", self._gce_zone_names)
         self._gce_n_local_ssd = int(gce_n_local_ssd) if gce_n_local_ssd else 0
         self._add_disks = add_disks
-        self._service_accounts = service_accounts
         # the full node prefix will contain unique uuid, so use this for search of existing nodes
         self._node_prefix = node_prefix.lower()
+        self._definition_builder = region_definition_builder.get_builder(params, test_config=self.test_config)
         super().__init__(
             cluster_uuid=cluster_uuid,
             cluster_prefix=cluster_prefix,
@@ -353,21 +356,6 @@ class GCECluster(cluster.BaseCluster):
                     identifier += "%s: %s | " % (disk_type, disk_size)
         return identifier
 
-    def _get_disk_url(self, disk_type="pd-standard", dc_idx=0):
-        return "projects/%s/zones/%s/diskTypes/%s" % (self.project, self._gce_zone_names[dc_idx], disk_type)
-
-    def _get_root_disk_struct(self, name, disk_type="pd-standard", dc_idx=0):
-        device_name = "%s-root-%s" % (name, disk_type)
-        return disk_from_image(
-            disk_type=self._get_disk_url(disk_type, dc_idx=dc_idx),
-            disk_size_gb=self._gce_image_size,
-            boot=True,
-            source_image=self._gce_image,
-            auto_delete=True,
-            type_="PERSISTENT",
-            device_name=device_name,
-        )
-
     @property
     def is_az_fallback_enabled(self) -> bool:
         """Return True when AZ fallback on capacity errors is enabled.
@@ -378,233 +366,141 @@ class GCECluster(cluster.BaseCluster):
             return bool(value)
         return False
 
-    def _get_local_ssd_disk_struct(self, name, index, interface="NVME", dc_idx=0):
-        device_name = "%s-data-local-ssd-%s" % (name, index)
-        return disk_from_image(
-            disk_type=self._get_disk_url("local-ssd", dc_idx=dc_idx),
-            boot=False,
-            auto_delete=True,
-            type_="SCRATCH",
-            device_name=device_name,
-            interface=interface,
-        )
-
-    def _get_persistent_disk_struct(self, name, disk_size, disk_type="pd-ssd", dc_idx=0):
-        device_name = "%s-data-%s" % (name, disk_type)
-        return disk_from_image(
-            disk_type=self._get_disk_url(disk_type, dc_idx=dc_idx),
-            disk_size_gb=disk_size,
-            boot=False,
-            auto_delete=True,
-            type_="PERSISTENT",
-            device_name=device_name,
-        )
-
-    def _get_disks_struct(self, name, dc_idx):
-        gce_disk_struct = [self._get_root_disk_struct(name=name, disk_type=self._gce_image_type, dc_idx=dc_idx)]
-        for i in range(self._gce_n_local_ssd):
-            gce_disk_struct.append(self._get_local_ssd_disk_struct(name=name, index=i, dc_idx=dc_idx))
-        if self._add_disks:
-            for disk_type, disk_size in self._add_disks.items():
-                disk_size = int(disk_size)  # noqa: PLW2901
-                if disk_size:
-                    gce_disk_struct.append(
-                        self._get_persistent_disk_struct(
-                            name=name, disk_size=disk_size, disk_type=disk_type, dc_idx=dc_idx
-                        )
-                    )
-        self.log.debug(gce_disk_struct)
-        return gce_disk_struct
-
-    def _create_instance(self, node_index, dc_idx, spot=False, enable_auto_bootstrap=False, instance_type=None):
-        def set_tags_as_labels(_instance: compute_v1.Instance):
-            self.log.debug(f"Expected tags are {self.tags}")
-            # https://cloud.google.com/resource-manager/docs/tags/tags-creating-and-managing#adding_tag_values
-            regex_key = re.compile(r"[^a-z0-9-_]")
-
-            def to_short_name(value):
-                return regex_key.sub("_", value.lower())[:60]
-
-            normalized_tags = {to_short_name(k): to_short_name(v) for k, v in self.tags.items()}
-            self.log.debug(f"normalized tags are {normalized_tags}")
-
-            gce_set_labels(
-                instances_client=self._gce_service,
-                instance=_instance,
-                new_labels=normalized_tags,
-                project=self.project,
-                zone=self._gce_zone_names[dc_idx],
-            )
-
-        name = f"{self.node_prefix}-{dc_idx}-{node_index}".lower()
-        gce_disk_struct = self._get_disks_struct(name=name, dc_idx=dc_idx)
-        # Name must start with a lowercase letter followed by up to 63
-        # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
-        assert len(name) <= 63, "Max length of instance name is 63"
-        startup_script = ""
-
-        if self.params.get("scylla_linux_distro") in (
-            "ubuntu-bionic",
-            "ubuntu-xenial",
-            "ubuntu-focal",
-        ):
-            # we need to disable sshguard to prevent blocking connections from the builder
-            startup_script += dedent("""
-                sudo systemctl disable sshguard
-                sudo systemctl stop sshguard
-            """)
-        username = self._gce_image_username
-        public_key, key_type = pub_key_from_private_key_file(self.params.get("user_credentials_path"))
-        zone = self._gce_zone_names[dc_idx]
-        network_tags = ["sct-network-only"]
-        if self.params.get("intra_node_comm_public") or ssh_connection_ip_type(self.params) == "public":
-            network_tags.append("sct-allow-public")
-        create_node_params = dict(
-            project_id=self.project,
-            zone=zone,
-            machine_type=instance_type or self._gce_instance_type,
-            instance_name=name,
-            network_name=self._gce_network,
-            disks=gce_disk_struct,
-            external_access=True,
-            metadata={
-                **self.tags,
-                "Name": name,
-                "NodeIndex": node_index,
-                "startup-script": startup_script,
-                "user-data": self.prepare_user_data(enable_auto_bootstrap),
-                "block-project-ssh-keys": "true",
-                "ssh-keys": f"{username}:{key_type} {public_key} {username}",
-            },
-            spot=spot,
-            service_accounts=self._service_accounts,
-            network_tags=network_tags,
-        )
-        instance = self._create_node_with_retries(name=name, dc_idx=dc_idx, create_node_params=create_node_params)
-
-        self.log.debug("Created %s instance %s", "spot" if spot else "on-demand", instance)
-        try:
-            set_tags_as_labels(instance)
-        except google.api_core.exceptions.InvalidArgument as exc:
-            self.log.warning(f"Unable to set tags as labels due to {exc}")
-
-        return instance
-
-    @retrying(
-        n=3,
-        sleep_time=900,
-        allowed_exceptions=(google.api_core.exceptions.GoogleAPIError, google.api_core.exceptions.NotFound),
-        message="Retrying to create a GCE node...",
-        raise_on_exceeded=True,
-    )
-    def _create_node_with_retries(
-        self, name: str, dc_idx: int, create_node_params: dict[str, Any]
-    ) -> compute_v1.Instance:
-        try:
-            return create_instance(**create_node_params)
-        except google.api_core.exceptions.GoogleAPIError as gbe:
-            if "ZONE_RESOURCE_POOL_EXHAUSTED" in str(gbe):
-                # Raise a non-retryable error so zone fallback can handle it
-                raise _ZoneExhaustedError(str(gbe)) from gbe
-            #  attempt to destroy if node did not start due to preemption or quota exceeded
-            if "Instance failed to start due to preemption" in str(gbe) or "Quota exceeded" in str(gbe):
-                try:
-                    self._destroy_instance(name=name, dc_idx=dc_idx)
-                except google.api_core.exceptions.NotFound:
-                    LOGGER.warning(
-                        "Attempted to destroy node: {name: %s, idx:%s}, but could not find it. "
-                        "Possibly the node was destroyed already.",
-                        name,
-                        dc_idx,
-                    )
-
-            # on any case of failure, fall back to on-demand instance
-            create_node_params["spot"] = False
-
-            raise gbe
-
-    def _create_instances(self, count, dc_idx=0, enable_auto_bootstrap=False, instance_type=None):
-        spot = "spot" in self.instance_provision
-        instances = []
+    def _create_instances(self, count, dc_idx=0, instance_type=None):
+        region = self._definition_builder.regions[dc_idx]
+        pricing_model = PricingModel.SPOT if "spot" in self.instance_provision else PricingModel.ON_DEMAND
+        definitions = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
-            try:
-                instances.append(
-                    self._create_instance(node_index, dc_idx, spot, enable_auto_bootstrap, instance_type=instance_type)
+            definitions.append(
+                self._definition_builder.build_instance_definition(
+                    region=region,
+                    node_type=self.node_type,
+                    index=node_index,
+                    dc_idx=dc_idx,
+                    instance_type=instance_type,
                 )
-            except _ZoneExhaustedError as exc:
-                if not self.is_az_fallback_enabled:
-                    raise google.api_core.exceptions.GoogleAPIError(str(exc)) from exc.__cause__
-                if count > 1:
-                    self.log.warning(
-                        "AZ fallback is only supported for single-node provisioning (count=%d), not retrying", count
+            )
+        try:
+            return provision_instances_with_fallback(
+                self.provisioners[dc_idx],
+                definitions=definitions,
+                pricing_model=pricing_model,
+                fallback_on_demand=self.params.get("instance_provision_fallback_on_demand"),
+            )
+        except (ZoneResourcesExhaustedError, ProvisionError) as exc:
+            if isinstance(exc, ProvisionError) and not _is_zone_exhausted(exc):
+                raise
+            if not self.is_az_fallback_enabled:
+                raise
+            if count > 1:
+                self.log.warning(
+                    "AZ fallback is only supported for single-node provisioning (count=%d), not retrying", count
+                )
+                raise
+            exhausted_zone = self.provisioners[dc_idx].availability_zone
+            self.log.warning("Zone %s exhausted, trying alternative zones in region %s", exhausted_zone, region)
+            machine_types = sorted({d.type for d in definitions if d.type})
+            alternative_zones = get_alternative_zones(region, exhausted_zone, machine_types=machine_types)
+            if not alternative_zones:
+                self.log.error(
+                    "No alternative zones found in region %s supporting machine types %s",
+                    region,
+                    machine_types,
+                )
+                raise
+            self.log.info(
+                "%s | %s: Attempting zone fallback; candidates: %s",
+                self,
+                self._gce_instance_type,
+                [f"{region}-{z}" for z in alternative_zones],
+            )
+            last_fallback_exc = None
+            for alt_zone in alternative_zones:
+                self.log.info("Attempting zone %s-%s as fallback", region, alt_zone)
+                try:
+                    new_provisioner = GceProvisioner(
+                        test_id=str(self.test_config.test_id()),
+                        region=region,
+                        availability_zone=alt_zone,
+                        network_name=self._gce_network,
                     )
-                    raise google.api_core.exceptions.GoogleAPIError(str(exc)) from exc.__cause__
-                zone_name = self._gce_zone_names[dc_idx]
-                region = zone_name.rsplit("-", 1)[0]
-                self.log.warning("Zone %s exhausted, trying alternative zones in region %s", zone_name, region)
-                machine_type = instance_type or self._gce_instance_type
-                alternative_zones = get_alternative_zones(region, zone_name, machine_types=[machine_type])
-                if not alternative_zones:
-                    self.log.error(
-                        "No alternative zones found in region %s supporting machine type %s",
-                        region,
-                        machine_type,
+                    result = provision_instances_with_fallback(
+                        new_provisioner,
+                        definitions=definitions,
+                        pricing_model=pricing_model,
+                        fallback_on_demand=self.params.get("instance_provision_fallback_on_demand"),
                     )
-                    raise google.api_core.exceptions.GoogleAPIError(
-                        f"No alternative zones available in region {region} for machine type {machine_type}"
-                    ) from exc.__cause__
-                self.log.info(
-                    "%s | %s: Attempting zone fallback; candidates: %s",
-                    self,
-                    machine_type,
-                    [f"{region}-{z}" for z in alternative_zones],
-                )
-                instance = self._try_alternative_zones(
-                    node_index, dc_idx, spot, enable_auto_bootstrap, instance_type, region, alternative_zones, exc
-                )
-                instances.append(instance)
-        return instances
-
-    def _try_alternative_zones(
-        self, node_index, dc_idx, spot, enable_auto_bootstrap, instance_type, region, alternative_zones, original_exc
-    ):
-        """Try provisioning in alternative zones after the primary zone is exhausted."""
-        original_zone = self._gce_zone_names[dc_idx]
-        for alt_zone_letter in alternative_zones:
-            alt_zone = f"{region}-{alt_zone_letter}"
-            self.log.info("Attempting fallback to zone %s", alt_zone)
-            self._gce_zone_names[dc_idx] = alt_zone
-            try:
-                instance = self._create_instance(
-                    node_index, dc_idx, spot, enable_auto_bootstrap, instance_type=instance_type
-                )
-                self.log.info("Successfully provisioned in fallback zone %s", alt_zone)
-                return instance
-            except _ZoneExhaustedError:
-                self.log.warning("Fallback zone %s also exhausted, trying next", alt_zone)
-                continue
-        # All zones exhausted — restore original zone and raise
-        self._gce_zone_names[dc_idx] = original_zone
-        raise google.api_core.exceptions.GoogleAPIError(
-            f"All zones in region {region} are exhausted: tried {original_zone} and "
-            f"{[f'{region}-{z}' for z in alternative_zones]}"
-        ) from original_exc.__cause__
+                    # Update provisioner and zone for this dc_idx on success
+                    self.provisioners[dc_idx] = new_provisioner
+                    self._gce_zone_names[dc_idx] = new_provisioner.availability_zone
+                    self.log.info("Successfully provisioned instances in fallback zone %s-%s", region, alt_zone)
+                    return result
+                except (ZoneResourcesExhaustedError, ProvisionError) as fallback_exc:
+                    last_fallback_exc = fallback_exc
+                    if isinstance(fallback_exc, ProvisionError) and not _is_zone_exhausted(fallback_exc):
+                        # Non-capacity error (auth/quota/misconfig) — don't retry other zones, re-raise immediately
+                        self.log.error(
+                            "Fallback zone %s-%s failed with non-capacity error: %s", region, alt_zone, fallback_exc
+                        )
+                        raise
+                    self.log.warning("Fallback zone %s-%s exhausted: %s, trying next", region, alt_zone, fallback_exc)
+                    continue
+            # All fallback zones were capacity-exhausted
+            cause = last_fallback_exc or exc
+            raise ZoneResourcesExhaustedError(
+                f"All zones in region {region} exhausted: tried {exhausted_zone} and "
+                f"{[f'{region}-{z}' for z in alternative_zones]}"
+            ) from cause
 
     def _destroy_instance(self, name: str, dc_idx: int):
         target_node = self._get_instances_by_name(dc_idx=dc_idx, name=name)
         operation = self._gce_service.delete(
-            instance=target_node, project=self.project, zone=self._gce_zone_names[dc_idx]
+            instance=target_node, project=self.project, zone=self.provisioners[dc_idx].availability_zone
         )
         wait_for_extended_operation(operation, "Wait for instance deletion")
 
     def _get_instances_by_prefix(self, dc_idx: int = 0):
-        instances_by_zone = self._gce_service.list(project=self.project, zone=self._gce_zone_names[dc_idx])
+        instances_by_zone = self._gce_service.list(
+            project=self.project, zone=self.provisioners[dc_idx].availability_zone
+        )
         return [node for node in instances_by_zone if node.name.startswith(self._node_prefix)]
 
     def _get_instances_by_name(self, name: str, dc_idx: int = 0):
-        instances_by_zone = self._gce_service.list(project=self.project, zone=self._gce_zone_names[dc_idx])
-        found = [node for node in instances_by_zone if node.name == name]
-        return found[0] if found else None
+        """Search for an instance by name in the zone where the provisioner created it.
+
+        Uses the provisioner's zone to ensure we search in the same zone where instances
+        are created, avoiding mismatches when availability_zone is not specified and
+        random_zone() is used independently.
+        """
+        zone = self.provisioners[dc_idx].availability_zone
+        all_instances = self._gce_service.aggregated_list(project=self.project)
+        for zone_key, response in all_instances:
+            # zone_key format is "zones/zone-name"
+            if response.instances and zone in zone_key:
+                for instance in response.instances:
+                    if instance.name == name:
+                        return instance
+        return None
+
+    @retrying(
+        n=20,
+        sleep_time=30,
+        allowed_exceptions=(CreateGCENodeError,),
+        message="Waiting for GCE instance to be available and in RUNNING state...",
+        raise_on_exceeded=True,
+    )
+    def _get_instance_with_retry(self, name: str, dc_idx: int) -> compute_v1.Instance:
+        """Fetch GCE instance by name with retry logic.
+
+        The provisioner may take some time to create the instance and bring it to RUNNING state,
+        so we retry until the instance is found and ready.
+        """
+        instance = self._get_instances_by_name(name=name, dc_idx=dc_idx)
+        if not instance:
+            raise CreateGCENodeError(f"Instance {name} not found")
+        if instance.status != "RUNNING":
+            raise CreateGCENodeError(f"Instance {name} is not in RUNNING state: {instance.status}")
+        return instance
 
     def _get_instances(self, dc_idx: int) -> list[compute_v1.Instance]:
         test_id = self.test_config.test_id()
@@ -612,7 +508,9 @@ class GCECluster(cluster.BaseCluster):
             raise ValueError("test_id should be configured for using reuse_cluster")
 
         instances_by_tags = list_instances_gce(tags_dict={"TestId": test_id, "NodeType": self.node_type})
-        region = self._gce_zone_names[dc_idx][:-2]
+        # Use provisioner's zone to extract region, ensuring consistency with where instances are created
+        provisioner_zone = self.provisioners[dc_idx].availability_zone
+        region = provisioner_zone[:-2]  # Remove zone suffix (e.g., "us-east1-b" -> "us-east1")
         # Use ssh_connection_ip_type from params if _node_public_ips is not yet set (during __init__)
         # If _node_public_ips exists, use it; otherwise fallback to ssh_connection_ip_type
         if hasattr(self, "_node_public_ips"):
@@ -623,6 +521,10 @@ class GCECluster(cluster.BaseCluster):
 
         # Filter instances by ip addresses and region
         instances = [instance for instance in instances_by_tags if ip_addresses(instance) and region in instance.zone]
+
+        # Filter out instances that are already in use by existing nodes in this cluster
+        existing_node_names = {node.name for node in self.nodes}
+        instances = [instance for instance in instances if instance.name not in existing_node_names]
 
         def sort_by_index(instance):
             metadata = gce_meta_to_dict(instance.metadata)
@@ -672,7 +574,14 @@ class GCECluster(cluster.BaseCluster):
                     f"for dc_idx={dc_idx}. The pre-provisioning step may have partially failed."
                 )
         else:
-            instances = self._create_instances(count, instance_dc, enable_auto_bootstrap, instance_type=instance_type)
+            self.log.info("Found no provisioned instances. Provision them.")
+            provisioned_vms = self._create_instances(count, instance_dc, instance_type=instance_type)
+            # The provisioner returns VmInstance objects, but GCENode expects compute_v1.Instance.
+            # Fetch the native GCE instances by name with retry to ensure they are in RUNNING state.
+            instances = []
+            for vm in provisioned_vms:
+                gce_instance = self._get_instance_with_retry(name=vm.name, dc_idx=instance_dc)
+                instances.append(gce_instance)
 
         self.log.debug("instances: %s", instances)
         if instances:
@@ -700,6 +609,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
         gce_network,
         gce_service,
         credentials,
+        provisioners: List[GceProvisioner],
         gce_instance_type="n2-standard-1",
         gce_n_local_ssd=1,
         gce_image_username="centos",
@@ -708,7 +618,6 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
         add_disks=None,
         params=None,
         gce_datacenter=None,
-        service_accounts=None,
     ):
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "db-cluster")
@@ -730,7 +639,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
             params=params,
             gce_region_names=gce_datacenter,
             node_type="scylla-db",
-            service_accounts=service_accounts,
+            provisioners=provisioners,
         )
         self.version = "2.1"
 
@@ -751,6 +660,7 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
         gce_network,
         gce_service,
         credentials,
+        provisioners: List[GceProvisioner],
         gce_instance_type="n2-standard-1",
         gce_n_local_ssd=1,
         gce_image_username="centos",
@@ -781,6 +691,7 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
             params=params,
             node_type="loader",
             gce_region_names=gce_datacenter,
+            provisioners=provisioners,
         )
 
 
@@ -793,6 +704,7 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
         gce_network,
         gce_service,
         credentials,
+        provisioners: List[GceProvisioner],
         gce_instance_type="n2-standard-1",
         gce_n_local_ssd=1,
         gce_image_username="centos",
@@ -834,4 +746,5 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
             node_type="monitor",
             gce_region_names=gce_datacenter,
             add_nodes=add_nodes,
+            provisioners=provisioners,
         )
