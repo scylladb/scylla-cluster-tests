@@ -744,7 +744,7 @@ class LogCollector:
                 node.remoter.run(collect_log_command, ignore_status=True, verbose=True)
                 result = node.remoter.run(f"test -f '{log_filename}'", ignore_status=True)
                 ok = result.ok
-            except (Libssh2_Failure, InvokeFailure):
+            except Libssh2_Failure, InvokeFailure:
                 ssh_connected = False
 
         # Check if node is AWS-based

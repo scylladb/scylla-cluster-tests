@@ -78,7 +78,7 @@ def _build_target_repo(version: str, linux_distro: str) -> str:
     fetched), so there is no need for a concrete timestamp - and a pinned timestamp would rot once the
     download S3 buckets get their regular cleanup.
     """
-    if linux_distro.split("-")[0] in ("centos", "rocky", "rhel"):
+    if linux_distro.split("-", maxsplit=1)[0] in ("centos", "rocky", "rhel"):
         return f"{url_base}/branch-{version}/rpm/centos/latest/scylla.repo"
     return f"{url_base}/branch-{version}/deb/unified/latest/scylladb-{version}/scylla.list"
 

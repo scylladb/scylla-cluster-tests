@@ -131,7 +131,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
 
         try:
             return float(results[0]["values"][-1][1])
-        except (IndexError, ValueError, TypeError):
+        except IndexError, ValueError, TypeError:
             # Catch any errors in case the results are malformed
             return -1
 

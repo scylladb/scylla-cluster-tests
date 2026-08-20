@@ -966,7 +966,7 @@ def create_instance(  # noqa: PLR0913
         instance.scheduling.on_host_maintenance = "TERMINATE"
         instance.scheduling.provisioning_model = compute_v1.Scheduling.ProvisioningModel.SPOT.name
         instance.scheduling.instance_termination_action = instance_termination_action
-    elif machine_type.split("/")[-1].startswith("e2-"):
+    elif machine_type.rsplit("/", maxsplit=1)[-1].startswith("e2-"):
         # e2 family supports only on_host_maintenance=MIGRATE for non-spot VMs
         instance.scheduling.on_host_maintenance = "MIGRATE"
     else:
@@ -982,7 +982,7 @@ def create_instance(  # noqa: PLR0913
         instance.advanced_machine_features = compute_v1.AdvancedMachineFeatures(
             enable_nested_virtualization=True,
         )
-        if machine_type.split("-")[0] == "n1":
+        if machine_type.split("-", maxsplit=1)[0] == "n1":
             # N1 spans pre-Haswell CPUs and nested virtualization needs Haswell or later;
             # the other families that support it at all (N2/C2/C3) are Haswell+ by definition,
             # and pinning a platform there would only narrow placement.

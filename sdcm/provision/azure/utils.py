@@ -166,8 +166,8 @@ def get_scylla_images(
     elif len(version_bucket) == 1:
         if "." in scylla_version:
             # Plain version, like 4.5.0
-            tags_to_search["scylla_version"] = (
-                lambda ver: ver and ver.replace("~", "-").startswith(scylla_version) and "-dev" not in ver
+            tags_to_search["scylla_version"] = lambda ver: (
+                ver and ver.replace("~", "-").startswith(scylla_version) and "-dev" not in ver
             )
         else:
             # commit id

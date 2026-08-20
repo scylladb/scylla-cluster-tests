@@ -74,13 +74,13 @@ def test_01_kafka_cdc_source_connector(request, docker_scylla, kafka_cluster, pa
     cmd = """cassandra-stress write cl=ONE n=500 -mode cql3 native -rate threads=10 """
 
     cs_thread = CassandraStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params)
-    request.addfinalizer(lambda: cs_thread.kill())
+    request.addfinalizer(cs_thread.kill)
 
     cs_thread.run()
     LOGGER.info(cs_thread.get_results())
 
     reader_thread = KafkaCDCReaderThread(tester=None, params=params, connector_index=0, read_number_of_key=500)
-    request.addfinalizer(lambda: reader_thread.stop())
+    request.addfinalizer(reader_thread.stop)
 
     reader_thread.start()
 

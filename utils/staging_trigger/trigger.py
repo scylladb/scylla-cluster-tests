@@ -174,7 +174,7 @@ def _auto_set_docker_image(params: dict[str, str]) -> None:
         return
     try:
         params["scylla_docker_image"] = get_scylla_docker_repo_from_version(scylla_version)
-    except (ValueError, Exception):  # noqa: BLE001
+    except ValueError, Exception:  # noqa: BLE001
         logger.debug("Could not derive docker image from version %s", scylla_version, exc_info=True)
 
 

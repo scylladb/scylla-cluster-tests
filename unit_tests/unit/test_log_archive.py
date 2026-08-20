@@ -272,7 +272,7 @@ def test_peak_work_dir_size_bounded_to_single_chunk(tmp_path, large_log_file):
             try:
                 total = sum(f.stat().st_size for f in work_dir.iterdir() if f.is_file())
                 max_observed[0] = max(max_observed[0], total)
-            except (FileNotFoundError, OSError):
+            except FileNotFoundError, OSError:
                 pass
             stop_event.wait(0.005)
 

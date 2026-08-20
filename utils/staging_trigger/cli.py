@@ -134,7 +134,7 @@ def _detect_pr_from_branch() -> int | None:
             check=True,
         )
         return json.loads(result.stdout).get("number")
-    except (subprocess.CalledProcessError, Exception):  # noqa: BLE001
+    except subprocess.CalledProcessError, Exception:  # noqa: BLE001
         return None
 
 
