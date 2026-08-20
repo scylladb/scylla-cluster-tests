@@ -29,25 +29,25 @@ extra_definitions:
 columnspec:
   - name: key
     size: fixed(10)
-    population: uniform(1..10M)
+    population: uniform(1..2M)
 
   - name: key2
     cluster: uniform(1..100)
 
   - name: c0
-    size: fixed(1024)
+    size: fixed(128)
 
   - name: c1
-    size: fixed(1024)
+    size: fixed(128)
 
   - name: c2
-    size: fixed(1024)
+    size: fixed(128)
 
   - name: c3
-    size: fixed(1024)
+    size: fixed(128)
 
   - name: c4
-    size: fixed(1024)
+    size: fixed(128)
 
 
 ### Batch Ratio Distribution Specifications ###
