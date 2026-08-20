@@ -101,6 +101,8 @@ from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS, nested_env_subkey
 
 _SIZING_RESOLUTION_CACHE: dict[tuple, str] = {}
 
+LOGGER = logging.getLogger(__name__)
+
 
 def _nested_env_subkey(env_key: str, field_env: str, sep: str) -> str | None:
     """Return the nested sub-key of *env_key* for *field_env* under separator *sep*, or None if it doesn't nest under it.
@@ -4616,7 +4618,7 @@ class SCTConfiguration(BaseModel):
                 tags = get_gce_image_tags(image)
                 if "user_data_format_version" not in tags.keys():
                     # since older release aren't tagged, we default to 2 which was the version on the first gce images
-                    logging.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
+                    LOGGER.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
                 self["user_data_format_version"] = tags.get("user_data_format_version", "2")
 
         if backend == "azure":
@@ -4625,7 +4627,7 @@ class SCTConfiguration(BaseModel):
                 tags = azure_utils.get_image_tags(image)
                 if "user_data_format_version" not in tags.keys():
                     # since older release aren't tagged, we default to 2 which was the version on the first gce images
-                    logging.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
+                    LOGGER.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
                 self["user_data_format_version"] = tags.get("user_data_format_version", "2")
 
         if backend == "oci":
@@ -4660,7 +4662,7 @@ class SCTConfiguration(BaseModel):
                 for image, region in zip(oci_image_db.split(), oci_region_names):
                     tags = oci_utils.get_image_tags(region, image, "scylla")
                     if "user_data_format_version" not in tags.keys():
-                        logging.warning(
+                        LOGGER.warning(
                             "'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags
                         )
                     self["user_data_format_version"] = tags.get("user_data_format_version", "3")
