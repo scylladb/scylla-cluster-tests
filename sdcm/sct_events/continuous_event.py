@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 import traceback
 from typing import Optional, List, Iterable, Any
@@ -31,49 +32,59 @@ class ContinuousEventRegistryException(Exception):
 
 
 class ContinuousEventsRegistry(metaclass=Singleton):
+    lock = threading.RLock()
+
     def __init__(self):
         self.hashed_continuous_events: dict[int, list[ContinuousEvent]] = {}
 
     @property
     def continuous_events(self) -> Iterable[ContinuousEvent]:
-        for hash_bucket in self.hashed_continuous_events.values():
-            for event in hash_bucket:
-                yield event
+        with self.lock:
+            for hash_bucket in self.hashed_continuous_events.values():
+                for event in hash_bucket:
+                    yield event
 
     def add_event(self, event: ContinuousEvent):
         if not issubclass(type(event), ContinuousEvent):
             msg = f"Event: {event} is not a ContinuousEvent"
             raise ContinuousEventRegistryException(msg)
-        hash_bucket = self.hashed_continuous_events.get(event.continuous_hash, None)
-        if hash_bucket is None:
-            hash_bucket = []
-            self.hashed_continuous_events[event.continuous_hash] = hash_bucket
-        elif hash_bucket:
-            LOGGER.error(
-                "Continues event %s with hash %s (%s) is not suppose to have duplicates, "
-                "while there is another event with same hash - %s",
-                hash_bucket[-1],
-                event.continuous_hash,
-                event.continuous_hash_dict,
-                event,
-            )
-        hash_bucket.append(event)
+        with self.lock:
+            hash_bucket = self.hashed_continuous_events.get(event.continuous_hash, None)
+            if hash_bucket is None:
+                hash_bucket = []
+                self.hashed_continuous_events[event.continuous_hash] = hash_bucket
+            elif hash_bucket:
+                LOGGER.error(
+                    "Continues event %s with hash %s (%s) is not suppose to have duplicates, "
+                    "while there is another event with same hash - %s",
+                    hash_bucket[-1],
+                    event.continuous_hash,
+                    event.continuous_hash_dict,
+                    event,
+                )
+            hash_bucket.append(event)
 
     def del_event(self, event: ContinuousEvent):
-        hash_bucket = self.hashed_continuous_events.get(event.continuous_hash, [])
-        if event in hash_bucket:
-            hash_bucket.remove(event)
+        with self.lock:
+            hash_bucket = self.hashed_continuous_events.get(event.continuous_hash, [])
+            if event in hash_bucket:
+                hash_bucket.remove(event)
 
     def cleanup_registry(self):
-        self.hashed_continuous_events.clear()
+        with self.lock:
+            self.hashed_continuous_events.clear()
 
     def find_continuous_events_by_hash(self, continuous_hash: int) -> list[ContinuousEvent]:
-        return self.hashed_continuous_events.get(continuous_hash, []).copy()
+        with self.lock:
+            return self.hashed_continuous_events.get(continuous_hash, []).copy()
 
     def find_running_disruption_events(self):
-        running_nemesis_events = [
-            event[0] for event in self.hashed_continuous_events.values() if event and event[0].base == "DisruptionEvent"
-        ]
+        with self.lock:
+            running_nemesis_events = [
+                hash_bucket[0]
+                for hash_bucket in self.hashed_continuous_events.values()
+                if hash_bucket and hash_bucket[0].base == "DisruptionEvent"
+            ]
         return running_nemesis_events
 
 
