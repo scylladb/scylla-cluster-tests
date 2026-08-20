@@ -266,6 +266,19 @@ def ignore_abort_requested_errors():
 
 
 @contextmanager
+def ignore_drop_table_during_repair_errors():
+    # Dropping a table while a tablet-migration stream for it is in flight makes Scylla fail to
+    # load the streamed SSTable and unlink it cleanly; the migration is retried by raft topology.
+    # This is expected/benign behaviour exercised deliberately by NoCorruptRepairMonkey.
+    with DbEventsFilter(
+        db_event=DatabaseLogEvent.DATABASE_ERROR,
+        line=r"Failed to load SSTable .* of origin memtable due to seastar::named_gate_closed_exception",
+        extra_time_to_expiration=60,
+    ):
+        yield
+
+
+@contextmanager
 def ignore_scrub_invalid_errors():
     with ExitStack() as stack:
         stack.enter_context(
