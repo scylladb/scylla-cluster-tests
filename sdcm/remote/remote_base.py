@@ -394,7 +394,7 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
                     result = self.run("test -x %s" % dst, verbose=False)
                     if result.ok:
                         dest_exists = True
-                except (self.exception_failure, self.exception_unexpected):
+                except self.exception_failure, self.exception_unexpected:
                     pass
 
                 dest_is_dir = False
@@ -403,7 +403,7 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
                         result = self.run("test -d %s" % dst, verbose=False)
                         if result.ok:
                             dest_is_dir = True
-                    except (self.exception_failure, self.exception_unexpected):
+                    except self.exception_failure, self.exception_unexpected:
                         pass
 
                 # If there is a list of more than one path, dst *has*

@@ -136,7 +136,7 @@ class VirtualMachineProvider:
                 else:
                     node_index = int(definition.tags.get("NodeIndex", 1))
                     az_to_use = az_list[(node_index - 1) % len(az_list)]
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 LOGGER.warning(
                     "Could not determine valid NodeIndex for instance %s, using first AZ: %s",
                     definition.name,
@@ -244,17 +244,17 @@ class VirtualMachineProvider:
                 if parts_num > 1:
                     try:
                         shape_config["ocpus"] = float(parts[1])
-                    except (ValueError, IndexError):
+                    except ValueError, IndexError:
                         LOGGER.warning("Failed to parse out the OCPUs config from the shape %s", definition.type)
                 if parts_num > 2:
                     try:
                         shape_config["memory_in_gbs"] = float(parts[2])
-                    except (ValueError, IndexError):
+                    except ValueError, IndexError:
                         LOGGER.warning("Failed to parse out the Memory config from the shape %s", definition.type)
                 if parts_num > 3:
                     try:
                         shape_config["nvmes"] = int(parts[3])
-                    except (ValueError, IndexError):
+                    except ValueError, IndexError:
                         LOGGER.warning("Failed to parse out the NVMe config from the shape %s", definition.type)
             elif "Dense" in shape_type:
                 # NOTE: Dense shapes with local NVMe disks
@@ -674,7 +674,7 @@ class VirtualMachineProvider:
             instance_id=instance_id,
         ).data
         active = [a for a in attachments if a.lifecycle_state == "ATTACHED"]
-        active.sort(key=lambda a: (a.nic_index or 0))
+        active.sort(key=lambda a: a.nic_index or 0)
         return active
 
     def get_vnic_details(self, vnic_id: str):

@@ -63,7 +63,7 @@ class UpgradeBaseVersion:
         if len(linux_distro.split("-")) > 1:
             self.dist_type, *_, self.dist_version = linux_distro.split("-")
         else:
-            self.dist_type = linux_distro.split("-")[0]
+            self.dist_type = linux_distro.split("-", maxsplit=1)[0]
             self.dist_version = None
         self.scylla_repo = scylla_repo
         self.linux_distro = linux_distro
