@@ -1,23 +1,26 @@
 # Logstor hotspot distribution workload configuration
-# Uses latte_cs_alike_hotspot.rn with hotspot_write/hotspot_read functions
-# 55% of ops target 5M hot keys (1% of dataset), 45% spread across remaining 495M keys
+# Populate: uniform full coverage (base `write` in latte_cs_alike.rn, sequential single pass)
+# so every one of the 500M keys exists before the measured workload.
+# Measured mixed step: hotspot_write/hotspot_read in latte_cs_alike_hotspot.rn, where
+# 55% of ops target 500k hot keys (0.1% of dataset), 45% spread across remaining ~499.5M keys.
 # Schema: 10 columns x 200 bytes each (matching kv_hotspot.rn reference)
-# Only mixed (hotspot_write:30,hotspot_read:70) workload at 750k ops/s for 60m
+# Measured step uses random uniform selection (distribution="random") over an unbounded cycle
+# range (no --end-cycle) so the key sequence never repeats within the 60m run.
 # This test is a part of the benchmark done by Aerospike
 # https://aerospike.com/files/benchmarks/aerospike-vs-scylladb-performance-and-cost-at-multi-terabyte-scale.pdf
 
 perf_gradual_throttle_steps:
   mixed:
-    - {threads: 16, concurrency: 128, rate: '750000'}
+    - {threads: 32, concurrency: 48, rate: '750000', write_rate: '225000', read_rate: '525000', duration: '60m'}
 
 perf_gradual_step_duration: {"mixed": '60m'}
 
-# Cache warmup: read 5M hot keys with CL=ALL before mixed workload
+# Cache warmup: read 500k hot keys with CL=ALL before mixed workload
 stress_cmd_cache_warmup:
   - >-
     latte run --function read --consistency ALL --duration 5m
-    --threads 12 --concurrency 64
-    --start-cycle 1 --end-cycle 5000000
+    --threads 32 --concurrency 24
+    --start-cycle 1 --end-cycle 500000
     -P row_count=500000000 -P offset=0
     -P column_count=10 -P column_size=200 -P key_size=48
     data_dir/latte/latte_cs_alike_hotspot.rn
@@ -27,26 +30,34 @@ prepare_stress_cmd: >-
   -P speculative_retry="\"NONE\"" -P replication_factor=2
   data_dir/latte/latte_cs_alike_hotspot.rn
 
-# Populate 500M rows with hotspot distribution (hot keys written densely, cold keys sparsely)
+# Populate all 500M rows uniformly (sequential single pass, full coverage) so no key is empty.
+# Hotspot skew is applied only to the measured mixed workload below, not to the populate.
 prepare_write_cmd:
   - >-
-    latte run --function hotspot_write --consistency ALL --duration 500000000
-    --threads 32 --concurrency 32 --rate 93750
+    latte run --function write --consistency ALL --duration 500000000
+    --threads 64 --concurrency 16 --rate 250000
     --start-cycle 1 --end-cycle 500000000
     -P row_count=500000000 -P offset=0
     -P column_count=10 -P column_size=200 -P key_size=48
-    -P hotset_items=5000000 -P hotset_chance=55
-    data_dir/latte/latte_cs_alike_hotspot.rn
+    data_dir/latte/latte_cs_alike.rn
 
 # Mixed workload: hotspot write:30,read:70 for $duration
 stress_cmd_m:
   - >-
-    latte run --function hotspot_write:30,hotspot_read:70 --consistency QUORUM --duration $duration
-    --threads $threads --concurrency $concurrency $throttle
-    --start-cycle 1 --end-cycle 500000000
-    -P row_count=500000000 -P offset=0
+    latte run --function hotspot_write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency --rate $write_rate
+    --start-cycle 1
+    -P row_count=500000000 -P offset=0 -P distribution=\"random\"
     -P column_count=10 -P column_size=200 -P key_size=48
-    -P hotset_items=5000000 -P hotset_chance=55
+    -P hotset_items=500000 -P hotset_chance=55
+    data_dir/latte/latte_cs_alike_hotspot.rn
+  - >-
+    latte run --function hotspot_read --consistency ONE --duration $duration
+    --threads $threads --concurrency $concurrency --rate $read_rate
+    --start-cycle 1
+    -P row_count=500000000 -P offset=0 -P distribution=\"random\"
+    -P column_count=10 -P column_size=200 -P key_size=48
+    -P hotset_items=500000 -P hotset_chance=55
     data_dir/latte/latte_cs_alike_hotspot.rn
 
 latte_schema_parameters:
@@ -58,7 +69,10 @@ latte_schema_parameters:
   key_size: 48
   speculative_retry: 'NONE'
   storage_engine: 'logstor'
-  min_per_shard_tablet_count: 32
+  min_per_shard_tablet_count: 64
 
 perf_stress_keyspace: keyspace1
 perf_stress_table: standard1
+
+# Disable rack-aware loader so latte commands are not pinned to a rack (no --rack flag)
+rack_aware_loader: false

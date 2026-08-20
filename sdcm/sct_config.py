@@ -4107,6 +4107,30 @@ class SCTConfiguration(BaseModel):
             )
             return default
 
+    # perf_gradual_throttle_steps dict-entry fields: (key, is_valid, description-for-error-message)
+    _THROTTLE_STEP_FIELD_CHECKS: ClassVar[tuple] = (
+        ("threads", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
+        ("concurrency", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
+        ("rate", lambda v: isinstance(v, str), "a string"),
+        ("duration", lambda v: isinstance(v, str) and v, "a non-empty string"),
+        ("wait_no_compactions", lambda v: isinstance(v, bool), "a boolean"),
+    )
+
+    @staticmethod
+    def _validate_throttle_step_dict(workload: str, step_idx: int, step: dict) -> None:
+        """Validate a single dict-format perf_gradual_throttle_steps entry."""
+        if not step:
+            raise ValueError(
+                f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                f"dict must have at least one key (threads, concurrency, or rate)"
+            )
+        for key, is_valid, description in SCTConfiguration._THROTTLE_STEP_FIELD_CHECKS:
+            if key in step and not is_valid(step[key]):
+                raise ValueError(
+                    f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                    f"'{key}' must be {description}, got {step[key]!r}"
+                )
+
     def _validate_perf_gradual_throttle_steps(self):
         """Validate perf_gradual_throttle_steps configuration parameter."""
         if not (performance_throughput_params := self.get("perf_gradual_throttle_steps")):
@@ -4126,36 +4150,7 @@ class SCTConfiguration(BaseModel):
                     # String format for backward compatibility (cassandra-stress)
                     continue
                 elif isinstance(step, dict):
-                    # Dict format for latte and other multi-parameter tools
-                    if not step:
-                        raise ValueError(
-                            f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
-                            f"dict must have at least one key (threads, concurrency, or rate)"
-                        )
-
-                    # Validate threads if present
-                    if "threads" in step:
-                        if not isinstance(step["threads"], int) or step["threads"] <= 0:
-                            raise ValueError(
-                                f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
-                                f"'threads' must be a positive integer, got {step['threads']}"
-                            )
-
-                    # Validate concurrency if present
-                    if "concurrency" in step:
-                        if not isinstance(step["concurrency"], int) or step["concurrency"] <= 0:
-                            raise ValueError(
-                                f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
-                                f"'concurrency' must be a positive integer, got {step['concurrency']}"
-                            )
-
-                    # Validate rate if present
-                    if "rate" in step:
-                        if not isinstance(step["rate"], str):
-                            raise ValueError(
-                                f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
-                                f"'rate' must be a string, got {type(step['rate']).__name__}"
-                            )
+                    self._validate_throttle_step_dict(workload, step_idx, step)
                 else:
                     raise ValueError(
                         f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
