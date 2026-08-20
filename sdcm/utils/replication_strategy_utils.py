@@ -5,14 +5,27 @@ import re
 from contextlib import ContextDecorator
 from typing import Callable, Dict, TYPE_CHECKING
 
+from sdcm.exceptions import DatacenterNotResolvedError
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import is_system_keyspace, LOGGER
+<<<<<<< HEAD
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+||||||| parent of b20dbc7d7 (fix(nemesis): use existing retry/decorator machinery instead of a hand-rolled loop)
+from sdcm.utils.tablets.common import wait_tablets_balanced
+=======
+from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.tablets.common import wait_tablets_balanced
+>>>>>>> b20dbc7d7 (fix(nemesis): use existing retry/decorator machinery instead of a hand-rolled loop)
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger(__name__)
+
+# BaseNode.datacenter re-attempts resolution whenever its cached value is falsy, so a short
+# retry here rides out a driver cluster-metadata refresh instead of baking in a transient None.
+DATACENTER_RESOLVE_RETRY_TIMEOUT = 10
+DATACENTER_RESOLVE_RETRY_STEP = 2
 
 
 class ReplicationStrategy:
@@ -148,9 +161,30 @@ class DataCenterTopologyRfControl:
     def __init__(self, target_node: "BaseNode") -> None:
         self.target_node = target_node
         self.cluster = target_node.parent_cluster
-        self.datacenter = target_node.datacenter
+        self.datacenter = self._resolve_datacenter(target_node)
         self.decreased_rf_keyspaces = []
         self.original_nodes_number = self._get_original_nodes_number(target_node)
+
+    @staticmethod
+    def _resolve_datacenter(node: "BaseNode") -> str | None:
+        def read_datacenter():
+            # Raise the sentinel Retry only on a falsy value: a real exception from
+            # node.datacenter is a genuine failure and must propagate immediately, not be
+            # masked behind a retry-then-None fallback.
+            if datacenter := node.datacenter:
+                return datacenter
+            raise Retry
+
+        # retrying()'s timeout param doesn't reliably stop the loop when raise_on_exceeded is
+        # False (see sdcm/utils/decorators.py), so bound retries via `n` instead.
+        n = max(int(DATACENTER_RESOLVE_RETRY_TIMEOUT / DATACENTER_RESOLVE_RETRY_STEP), 2)
+        return retrying(
+            n=n,
+            sleep_time=DATACENTER_RESOLVE_RETRY_STEP,
+            allowed_exceptions=(Retry,),
+            message=f"Waiting for datacenter of node {node.name} to resolve",
+            raise_on_exceeded=False,
+        )(read_datacenter)()
 
     def _get_original_nodes_number(self, node: "BaseNode") -> int:
         # Get the original number of nodes in the data center
@@ -164,6 +198,12 @@ class DataCenterTopologyRfControl:
             For a replication_factor of 3 and dc of "dc1", the output might be:
             ["keyspace1", "scylla_bench"]
         """
+        if not self.datacenter:
+            raise DatacenterNotResolvedError(
+                f"Cannot determine keyspaces to decrease RF for node {self.target_node.name}: "
+                "its datacenter could not be resolved (driver cluster metadata may be mid-refresh)"
+            )
+
         query = "SELECT keyspace_name, replication FROM system_schema.keyspaces"
         cql_result = session.execute(query)
 
