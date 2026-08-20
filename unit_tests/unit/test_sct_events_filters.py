@@ -13,10 +13,12 @@
 
 import re
 import pickle
+import unittest.mock
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.group_common_events import ignore_drop_table_during_repair_errors
 
 
 def test_db_events_filter_just_type():
@@ -204,3 +206,39 @@ def test_events_severity_changer_filter_gce_first_boot_bind_race():
     startup_failed_filter.eval_filter(unrelated_event)
     prometheus_bind_filter.eval_filter(unrelated_event)
     assert unrelated_event.severity == Severity.ERROR
+
+
+def test_ignore_drop_table_during_repair_errors(events_function_scope):  # noqa: ARG001
+    # Capture the real DbEventsFilter instance the context manager builds, so the test
+    # exercises the actual filter object rather than reimplementing its regex.
+    created_filters = []
+    original_init = DbEventsFilter.__init__
+
+    def spy_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        created_filters.append(self)
+
+    with unittest.mock.patch.object(DbEventsFilter, "__init__", spy_init):
+        with ignore_drop_table_during_repair_errors():
+            pass
+
+    assert len(created_filters) == 1
+    db_events_filter = created_filters[0]
+
+    matching_line = (
+        "table - Failed to load SSTable /var/lib/scylla/data/drop_table_during_repair_ks_1/"
+        "standard1-982af76069f611f1b3409d1699bc3637/mt-3h1c_082m_3sbeo2uuqiz7h5z0ox-big-Data.db "
+        "of origin memtable due to seastar::named_gate_closed_exception (named gate closed), "
+        "it will be unlinked"
+    )
+    matching_event = DatabaseLogEvent.DATABASE_ERROR().add_info(node="node1", line=matching_line, line_number=1)
+    other_database_error_event = DatabaseLogEvent.DATABASE_ERROR().add_info(
+        node="node1", line="some unrelated database error", line_number=2
+    )
+    other_event_class_with_same_line = DatabaseLogEvent.RUNTIME_ERROR().add_info(
+        node="node1", line=matching_line, line_number=3
+    )
+
+    assert db_events_filter.eval_filter(matching_event)
+    assert not db_events_filter.eval_filter(other_database_error_event)
+    assert not db_events_filter.eval_filter(other_event_class_with_same_line)
