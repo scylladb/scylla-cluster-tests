@@ -160,8 +160,8 @@ class AzureService(metaclass=Singleton):
     def rotate_vault_key(self, key_uri: str) -> str:
         # Extract vault URI and key name from full key URI
         # Format: https://vault-name.vault.azure.net/scylla-key-N
-        vault_uri = key_uri.split("scylla-key-")[0]
-        key_name = key_uri.split("/")[-1]
+        vault_uri = key_uri.split("scylla-key-", maxsplit=1)[0]
+        key_name = key_uri.rsplit("/", maxsplit=1)[-1]
 
         key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
         rotated_key = key_client.rotate_key(name=key_name)

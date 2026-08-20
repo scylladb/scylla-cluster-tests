@@ -71,7 +71,7 @@ class AgentJob:
             return None
         try:
             return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             return None
 
 
@@ -176,7 +176,7 @@ class AgentClient:
         """Check if agent is healthy and responding"""
         try:
             return self.health_check().get("status") == "healthy"
-        except (AgentConnectionError, AgentAPIError, AgentTimeoutError):
+        except AgentConnectionError, AgentAPIError, AgentTimeoutError:
             return False
 
     def execute_command(

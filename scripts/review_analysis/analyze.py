@@ -48,7 +48,7 @@ def get_quarter(created_at: str) -> str | None:
         dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
         q = (dt.month - 1) // 3 + 1
         return f"{dt.year}-Q{q}"
-    except (ValueError, AttributeError, TypeError):
+    except ValueError, AttributeError, TypeError:
         return None
 
 

@@ -115,7 +115,7 @@ class KubernetesRunner(Runner):
     def returncode(self) -> Optional[int]:
         try:
             return self.process.returncode
-        except (TypeError, KeyError, ValueError):
+        except TypeError, KeyError, ValueError:
             return None
 
     def stop(self) -> None:

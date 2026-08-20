@@ -486,7 +486,7 @@ def get_gemini_version(output: str) -> str | None:
     """
     try:
         return json.loads(output).get("gemini", {}).get("version")
-    except (json.JSONDecodeError, AttributeError):
+    except json.JSONDecodeError, AttributeError:
         return None
 
 
@@ -915,7 +915,7 @@ def get_relocatable_pkg_url(scylla_version: str) -> str | None:
     relocatable_pkg = None
     if scylla_version and "build-id" in scylla_version:
         try:
-            scylla_build_id = scylla_version.split("build-id")[-1].split()[0]
+            scylla_build_id = scylla_version.rsplit("build-id", maxsplit=1)[-1].split(maxsplit=1)[0]
             response = requests.get(
                 "https://backtrace.scylladb.com/api/search/build_id",
                 params={"build_id": scylla_build_id},

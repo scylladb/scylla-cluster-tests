@@ -84,7 +84,7 @@ def test_only_open_ended_versions_need_resolution(version, expected):
 
 def test_per_backend_gives_every_backend_its_own_build():
     with patch("sdcm.utils.trigger_matrix._resolve_latest_version_for_backend") as mock_resolve:
-        mock_resolve.side_effect = lambda version, backend, region, arch: (AWS_BUILD if backend == "aws" else GCE_BUILD)
+        mock_resolve.side_effect = lambda version, backend, region, arch: AWS_BUILD if backend == "aws" else GCE_BUILD
         versions, unavailable = resolve_versions_for_targets(
             original_version="master:latest",
             reference_version=AWS_BUILD,
@@ -162,9 +162,9 @@ def test_common_picks_the_newest_build_published_everywhere():
         patch("sdcm.utils.trigger_matrix._resolve_latest_version_for_backend") as mock_resolve,
         patch("sdcm.utils.trigger_matrix.version_exists_for_backend") as mock_exists,
     ):
-        mock_resolve.side_effect = lambda version, backend, region, arch: (AWS_BUILD if backend == "aws" else GCE_BUILD)
+        mock_resolve.side_effect = lambda version, backend, region, arch: AWS_BUILD if backend == "aws" else GCE_BUILD
         # only the older build exists on both backends
-        mock_exists.side_effect = lambda version, backend, region, arch: (version == GCE_BUILD or backend == "aws")
+        mock_exists.side_effect = lambda version, backend, region, arch: version == GCE_BUILD or backend == "aws"
         versions, unavailable = resolve_versions_for_targets(
             original_version="master:latest",
             reference_version=AWS_BUILD,
@@ -181,7 +181,7 @@ def test_common_raises_when_no_build_is_shared():
         patch("sdcm.utils.trigger_matrix._resolve_latest_version_for_backend") as mock_resolve,
         patch("sdcm.utils.trigger_matrix.version_exists_for_backend", return_value=False),
     ):
-        mock_resolve.side_effect = lambda version, backend, region, arch: (AWS_BUILD if backend == "aws" else GCE_BUILD)
+        mock_resolve.side_effect = lambda version, backend, region, arch: AWS_BUILD if backend == "aws" else GCE_BUILD
         with pytest.raises(TriggerMatrixError, match="is published on all of"):
             resolve_versions_for_targets(
                 original_version="master:latest",
@@ -356,7 +356,7 @@ def test_trigger_matrix_stamps_each_backend_with_its_own_build(tmp_path):
     matrix_file = _write_matrix(tmp_path)
 
     with patch("sdcm.utils.trigger_matrix._resolve_latest_version_for_backend") as mock_resolve:
-        mock_resolve.side_effect = lambda version, backend, region, arch: (AWS_BUILD if backend == "aws" else GCE_BUILD)
+        mock_resolve.side_effect = lambda version, backend, region, arch: AWS_BUILD if backend == "aws" else GCE_BUILD
         results = trigger_matrix(
             matrix_file=str(matrix_file),
             scylla_version=AWS_BUILD,
@@ -397,8 +397,8 @@ def test_trigger_matrix_common_runs_one_build_everywhere(tmp_path):
         patch("sdcm.utils.trigger_matrix._resolve_latest_version_for_backend") as mock_resolve,
         patch("sdcm.utils.trigger_matrix.version_exists_for_backend") as mock_exists,
     ):
-        mock_resolve.side_effect = lambda version, backend, region, arch: (AWS_BUILD if backend == "aws" else GCE_BUILD)
-        mock_exists.side_effect = lambda version, backend, region, arch: (version == GCE_BUILD or backend == "aws")
+        mock_resolve.side_effect = lambda version, backend, region, arch: AWS_BUILD if backend == "aws" else GCE_BUILD
+        mock_exists.side_effect = lambda version, backend, region, arch: version == GCE_BUILD or backend == "aws"
         results = trigger_matrix(
             matrix_file=str(matrix_file),
             scylla_version=AWS_BUILD,

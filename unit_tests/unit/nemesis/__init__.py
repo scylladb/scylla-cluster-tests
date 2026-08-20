@@ -39,7 +39,7 @@ class TestRunner:
 
         self.executed = []
         session = MagicMock()
-        session.execute.side_effect = lambda cmd: self.executed.append(cmd)
+        session.execute.side_effect = self.executed.append
         self.cluster.cql_connection_patient.return_value.__enter__.return_value = session
 
 

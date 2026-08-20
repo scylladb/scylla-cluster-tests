@@ -41,7 +41,7 @@ def get_my_public_ip() -> str:
             ip_address = result.text.strip()
             ipaddress.IPv4Address(ip_address)  # validating that we got IPv4 address
             return ip_address
-        except (ipaddress.AddressValueError, ipaddress.NetmaskValueError, requests.exceptions.RequestException):
+        except ipaddress.AddressValueError, ipaddress.NetmaskValueError, requests.exceptions.RequestException:
             LOGGER.warning("Failed to get my public IP from %s", hostname)
 
     raise ValueError("Failed to get my public IP from any service")

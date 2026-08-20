@@ -131,7 +131,7 @@ class CachedJiraIssues:
         return issues
 
     def get_issue(self, issue_id: str) -> Issue:
-        project = issue_id.split("-")[0]
+        project = issue_id.split("-", maxsplit=1)[0]
         return self.get_project(project=project).get(issue_id)
 
 

@@ -42,7 +42,7 @@ def can_get_to_aws_account():
         response = sts.get_caller_identity()
         assert response["Account"] == account_id
         LOGGER.info("logged in as %s", response["Arn"])
-    except (NoCredentialsError, AssertionError):
+    except NoCredentialsError, AssertionError:
         LOGGER.exception("failed")
         return False
     return True
