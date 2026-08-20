@@ -15,7 +15,7 @@ _CACHE_FILE = Path.home() / ".cache" / "sct-staging-trigger.json"
 def _load_cache() -> dict:
     try:
         return json.loads(_CACHE_FILE.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError, json.JSONDecodeError:
         return {}
 
 

@@ -103,7 +103,7 @@ def cross_reference_config(config_path: Path) -> LintResult:
     try:
         with open(config_path) as f:
             config = yaml.safe_load(f) or {}
-    except (OSError, yaml.YAMLError):
+    except OSError, yaml.YAMLError:
         return result
 
     raw_meta = config.get("test_metadata")
@@ -112,7 +112,7 @@ def cross_reference_config(config_path: Path) -> LintResult:
 
     try:
         meta = TestMetadata(**raw_meta)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return result
 
     # TD-006: stress_tools should match stress commands in config
@@ -155,7 +155,7 @@ def cross_reference_config(config_path: Path) -> LintResult:
                     f"TD-008: duration_class '{meta.duration_class}' inconsistent with "
                     f"test_duration={minutes}min (expected '{expected}')"
                 )
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             result.warnings.append("TD-008: test_duration is not a valid integer, cannot verify duration_class")
 
     # TD-009: features consistent with config

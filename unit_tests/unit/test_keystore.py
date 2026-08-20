@@ -1052,7 +1052,7 @@ class TestAccessLogging:
         body = MagicMock()
         body.read.return_value = data
         mock_obj = MagicMock()
-        mock_obj.get.side_effect = lambda: (time.sleep(0.05) or {"Body": body})  # force small delay
+        mock_obj.get.side_effect = lambda: time.sleep(0.05) or {"Body": body}  # force small delay
         mock_s3 = MagicMock()
         mock_s3.Object.return_value = mock_obj
 

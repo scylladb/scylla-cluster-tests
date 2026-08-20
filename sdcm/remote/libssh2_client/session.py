@@ -48,7 +48,7 @@ class Session(LibSSH2Session):
             readfds = (_socket,) if (directions & LIBSSH2_SESSION_BLOCK_INBOUND) else ()
             writefds = (_socket,) if (directions & LIBSSH2_SESSION_BLOCK_OUTBOUND) else ()
             select(readfds, writefds, (), timeout)
-        except (ValueError, SocketRecvError):  # under high load it can throw these errors, on next try it will be ok
+        except ValueError, SocketRecvError:  # under high load it can throw these errors, on next try it will be ok
             pass
 
     def eagain(

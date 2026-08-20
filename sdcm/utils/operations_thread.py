@@ -195,8 +195,9 @@ class OperationThread:
             self.thread_params.ks_cf = self.thread_params.db_cluster.get_non_system_ks_cf_list(db_node)[0]
         else:
             wait.wait_for(
-                func=lambda: self.thread_params.ks_cf
-                in (self.thread_params.db_cluster.get_non_system_ks_cf_list(db_node)),
+                func=lambda: (
+                    self.thread_params.ks_cf in (self.thread_params.db_cluster.get_non_system_ks_cf_list(db_node))
+                ),
                 step=60,
                 text=text,
                 timeout=60 * timeout_min,

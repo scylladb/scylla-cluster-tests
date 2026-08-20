@@ -90,7 +90,7 @@ def test_stop_drains_pending_events(argus_pipeline):
     """stop() posts every event still queued in the aggregator before the thread exits."""
     postman, aggregator = argus_pipeline
     submitted = []
-    postman._argus_client.submit_event.side_effect = lambda event: submitted.append(event)
+    postman._argus_client.submit_event.side_effect = submitted.append
 
     events = [
         argus_event(Severity.WARNING, "warn"),

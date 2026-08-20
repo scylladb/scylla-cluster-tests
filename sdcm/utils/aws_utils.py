@@ -498,7 +498,7 @@ def ec2_ami_get_root_device_name(image_id, region_name):
             image = client.Image(image_id)
             if image.root_device_name:
                 return image.root_device_name
-        except (TypeError, AttributeError, ClientError):
+        except TypeError, AttributeError, ClientError:
             pass
     raise AssertionError(f"Image '{image_id}' details not found in '{region_name}'")
 
@@ -524,7 +524,7 @@ def get_arch_from_instance_type(instance_type: str, region_name: str) -> AwsArch
 
         try:
             arch = instance_type_info["InstanceTypes"][0].get("ProcessorInfo", {}).get("SupportedArchitectures")[0]
-        except (IndexError, KeyError):
+        except IndexError, KeyError:
             pass
     return arch
 
