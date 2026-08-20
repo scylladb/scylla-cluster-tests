@@ -1229,7 +1229,7 @@ class SCTConfiguration(BaseModel):
               - ip_type: ipv4 or ipv6
               - public: false or true
               - nic: number of NIC. 0, 1
-              Supported for AWS only meanwhile""",
+              Supported for AWS and GCE meanwhile""",
     )
     gce_image_loader: String = SctField(
         description="Google Compute Engine image to use for loader nodes",
@@ -3217,6 +3217,17 @@ class SCTConfiguration(BaseModel):
                         "If ipv4 and public is True it has to be primary network interface, it means device index (nic) is 0"
                     )
 
+                if (
+                    self.get("cluster_backend") == "gce"
+                    and address_config["nic"] != 0
+                    and address_config.get("use_dns")
+                ):
+                    raise ValueError(
+                        "GCE creates a private DNS record for the primary network interface only, so a DNS name "
+                        "on a secondary interface resolves back to the primary one. Set 'use_dns: false' for "
+                        f"'{address_config['address']}' or move it to nic 0"
+                    )
+
                 nics.add(address_config["nic"])
                 if address_config["address"] not in check_list:
                     continue
@@ -3226,7 +3237,8 @@ class SCTConfiguration(BaseModel):
             if not_defined_address := ",".join([key for key, value in check_list.items() if value is None]):
                 raise ValueError(f"Interface address(es) were not defined: {not_defined_address}")
 
-            if len(nics) > 1 and len(self.region_names) >= 2:
+            regions = self.gce_datacenters if self.get("cluster_backend") == "gce" else self.region_names
+            if len(nics) > 1 and len(regions) >= 2:
                 raise ValueError("Multiple network interfaces aren't supported for multi region use cases")
 
         # 18 Validate K8S TLS+SNI values

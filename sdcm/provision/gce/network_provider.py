@@ -21,6 +21,7 @@ from typing import List
 from sdcm.provision.gce.constants import (
     NETWORK_TAG_SCT_NETWORK_ONLY,
     NETWORK_TAG_SCT_ALLOW_PUBLIC,
+    SECONDARY_SUBNET_NAME_TMPL,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -48,6 +49,11 @@ class NetworkProvider:
             Full network URL
         """
         return f"projects/{self.project_id}/global/networks/{self.network_name}"
+
+    def get_subnetwork_url(self, region: str, index: int) -> str:
+        """Return the regional subnetwork URL for a secondary network interface."""
+        subnet_name = SECONDARY_SUBNET_NAME_TMPL.format(network_name=self.network_name, index=index)
+        return f"projects/{self.project_id}/regions/{region}/subnetworks/{subnet_name}"
 
     def get_network_tags(
         self,
@@ -78,32 +84,3 @@ class NetworkProvider:
 
         LOGGER.debug("Network tags: %s", tags)
         return tags
-
-    def create_network_interface(
-        self,
-        network_url: str = None,
-    ) -> List[dict]:
-        """
-        Create network interface configuration.
-
-        Args:
-            network_url: Full network URL (uses self.network_name if None)
-
-        Returns:
-            List of network interface configurations for GCE API
-        """
-        if network_url is None:
-            network_url = self.get_network_url()
-
-        interface = {
-            "network": network_url,
-            # Always add access config for external IP on GCE
-            "access_configs": [
-                {
-                    "name": "External NAT",
-                    "type_": "ONE_TO_ONE_NAT",
-                }
-            ],
-        }
-
-        return [interface]
