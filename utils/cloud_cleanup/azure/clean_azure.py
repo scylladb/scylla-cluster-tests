@@ -36,7 +36,7 @@ def get_keep_hours(v_m, default=DEFAULT_KEEP_HOURS):
         return -1
     try:
         return int(keep)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return default
 
 

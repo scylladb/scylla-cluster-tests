@@ -86,7 +86,7 @@ def get_git_status_info() -> GitStatus:
         output = origin_proc.stdout.decode(encoding="utf-8").strip()
         git_status["upstream.url"] = output.strip()
 
-    except (subprocess.CalledProcessError, KeyError):
+    except subprocess.CalledProcessError, KeyError:
         LOGGER.warning("Error parsing git information", exc_info=True)
         return {}
     return git_status
@@ -95,7 +95,7 @@ def get_git_status_info() -> GitStatus:
 def clone_repo(remoter, repo_url: str, destination_dir_name: str = "", clone_as_root=True, branch=None):
     try:
         LOGGER.debug("Cloning from %s...", repo_url)
-        rm_cmd = f"rm -rf ./{repo_url.split('/')[-1].split('.')[0]}"
+        rm_cmd = f"rm -rf ./{repo_url.rsplit('/', maxsplit=1)[-1].split('.', maxsplit=1)[0]}"
         remoter.sudo(rm_cmd, ignore_status=False)
         branch = f"--branch {branch}" if branch else ""
         clone_cmd = f"git clone {branch} {repo_url} {destination_dir_name}"
