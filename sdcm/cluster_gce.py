@@ -33,6 +33,10 @@ from sdcm.sct_provision.instances_provider import provision_instances_with_fallb
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
 from sdcm.utils.gce_utils import (
+    SECONDARY_NIC_ROUTING_SCRIPT,
+    SECONDARY_NIC_ROUTING_SCRIPT_PATH,
+    SECONDARY_NIC_ROUTING_SERVICE,
+    SECONDARY_NIC_ROUTING_SERVICE_UNIT,
     GceLoggingClient,
     get_gce_compute_disks_client,
     get_alternative_zones,
@@ -123,8 +127,43 @@ class GCENode(cluster.BaseNode):
 
         super().init()
 
+        if self.parent_cluster.extra_network_interface:
+            self._configure_secondary_nic_routing()
         self.scylla_network_configuration = self._build_scylla_network_configuration()
         self.refresh_network_interfaces_info()
+
+    def _configure_secondary_nic_routing(self):
+        """Install and persist policy routing for secondary network interfaces.
+
+        GCE drops outgoing packets when the source IP does not match the NIC that sends them.
+        Without policy routing, replies from a secondary NIC IP to a peer outside that NIC subnet
+        (for example, the SCT runner connecting to the CQL address) are dropped. The guest agent
+        sets the address but does not add policy routes, so SCT installs them with a script and a
+        systemd oneshot service that runs now and again on every boot. This follows the official
+        recommendation: https://cloud.google.com/vpc/docs/configure-routing-additional-interface
+        """
+        self.log.info("Configuring policy routing for secondary network interfaces")
+
+        service_name = f"{SECONDARY_NIC_ROUTING_SERVICE}.service"
+        service_path = f"/etc/systemd/system/{service_name}"
+        self.remoter.sudo(
+            f"bash -c 'cat > {SECONDARY_NIC_ROUTING_SCRIPT_PATH}' << 'SCTEOF'\n{SECONDARY_NIC_ROUTING_SCRIPT}\nSCTEOF"
+        )
+        self.remoter.sudo(f"chmod 755 {SECONDARY_NIC_ROUTING_SCRIPT_PATH}")
+        self.remoter.sudo(f"bash -c 'cat > {service_path}' << 'SCTEOF'\n{SECONDARY_NIC_ROUTING_SERVICE_UNIT}\nSCTEOF")
+
+        for command in (
+            "systemctl daemon-reload",
+            f"systemctl enable {service_name}",
+            f"systemctl restart {service_name}",
+        ):
+            self.remoter.sudo(command)
+
+    def start_network_interface(self, interface_name=None):
+        super().start_network_interface(interface_name=interface_name)
+        # bringing an interface down flushes policy routes; re-apply them after it comes back
+        if self.parent_cluster.extra_network_interface:
+            self.remoter.sudo(f"systemctl restart {SECONDARY_NIC_ROUTING_SERVICE}.service")
 
     def wait_for_cloud_init(self):
         if self.remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:
