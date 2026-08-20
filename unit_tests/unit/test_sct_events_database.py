@@ -22,6 +22,7 @@ from sdcm.sct_events.database import (
     IndexSpecialColumnErrorEvent,
     TOLERABLE_REACTOR_STALL,
     SYSTEM_ERROR_EVENTS,
+    SYSTEM_ERROR_EVENTS_PATTERNS,
 )
 from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 
@@ -151,6 +152,31 @@ def test_too_long_queue_accumulated_event():
     assert expected_error_data["node"] == too_long_queue_accumulated_error_event.node
     assert expected_error_data["line_number"] == too_long_queue_accumulated_error_event.line_number
     assert expected_error_data["line"] == too_long_queue_accumulated_error_event.line
+
+
+def test_drop_table_during_repair_gate_closed_line_matches_database_error():
+    """Verify the benign SSTable-load gate-closed line is classified as DATABASE_ERROR.
+
+    Mirrors the first-match pattern-matching loop in sdcm/db_log_reader.py, which walks
+    SYSTEM_ERROR_EVENTS_PATTERNS in order and stops at the first regex that matches.
+    """
+    line = (
+        "2026-06-17T02:54:28.468+00:00 long-100gb-4h-oci-master-db-node-485a782c-us-ashburn-1-4 "
+        "!     ERR | scylla[7599]:  [shard 5:strm] table - Failed to load SSTable "
+        "/var/lib/scylla/data/drop_table_during_repair_ks_1/"
+        "standard1-982af76069f611f1b3409d1699bc3637/mt-3h1c_082m_3sbeo2uuqiz7h5z0ox-big-Data.db "
+        "of origin memtable due to seastar::named_gate_closed_exception (named gate closed), "
+        "it will be unlinked..."
+    )
+
+    matched_event = None
+    for pattern, event in SYSTEM_ERROR_EVENTS_PATTERNS:
+        if pattern.search(line):
+            matched_event = event
+            break
+
+    assert matched_event is not None
+    assert matched_event.type == DatabaseLogEvent.DATABASE_ERROR.type
 
 
 NODE_NAME = "db-node-1"
