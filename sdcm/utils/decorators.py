@@ -414,7 +414,10 @@ def skip_on_capacity_issues(func: Callable | None = None, db_cluster: BaseCluste
     def decorator(inner_func):
         @wraps(inner_func)
         def wrapper(*args, **kwargs):
-            from sdcm.provision.provisioner import ProvisionUnrecoverableError  # noqa: PLC0415
+            from sdcm.provision.provisioner import (  # noqa: PLC0415
+                InstanceConfigurationError,
+                ProvisionUnrecoverableError,
+            )
 
             cluster = db_cluster
             # Try to get db_cluster from inner_func's bound instance if not provided
@@ -449,6 +452,21 @@ def skip_on_capacity_issues(func: Callable | None = None, db_cluster: BaseCluste
                     ).publish()
                     raise
                 raise UnsupportedNemesis("Capacity Issue") from ex
+            except InstanceConfigurationError as ex:
+                # Unrecoverable, but not a capacity issue: the requested instance configuration is
+                # invalid (e.g. a disk type the machine type does not support), so it fails the same
+                # way in every zone and region. Deliberately never softened into a nemesis skip -
+                # that would hide a real misconfiguration behind "Capacity Issue".
+                if not check_cluster_layout(cluster):
+                    TestFrameworkEvent(
+                        source=inner_func.__name__,
+                        message=(
+                            f"Test failed due to an invalid instance configuration: {ex} cluster is unbalanced, "
+                            "continuing with test would yield unknown results"
+                        ),
+                        severity=Severity.CRITICAL,
+                    ).publish()
+                raise
             except ProvisionUnrecoverableError as ex:
                 # Azure stuck-VM recovery gave up - a capacity/provisioning issue
                 if check_cluster_layout(cluster):
@@ -479,7 +497,10 @@ def critical_on_capacity_issues(func: callable) -> callable:
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        from sdcm.provision.provisioner import ProvisionUnrecoverableError  # noqa: PLC0415
+        from sdcm.provision.provisioner import (  # noqa: PLC0415
+            InstanceConfigurationError,
+            ProvisionUnrecoverableError,
+        )
 
         try:
             return func(*args, **kwargs)
@@ -496,6 +517,16 @@ def critical_on_capacity_issues(func: callable) -> callable:
             TestFrameworkEvent(
                 source=func.__name__,
                 message=f"Test failed due to service availability issues: {ex} "
+                "cluster is probably unbalanced, continuing with test would yield unknown results",
+                severity=Severity.CRITICAL,
+            ).publish()
+            raise
+        except InstanceConfigurationError as ex:
+            # Unrecoverable like a capacity error, but a different cause - report it as what it is,
+            # otherwise an invalid instance configuration is filed as a capacity shortage.
+            TestFrameworkEvent(
+                source=func.__name__,
+                message=f"Test failed due to an invalid instance configuration: {ex} "
                 "cluster is probably unbalanced, continuing with test would yield unknown results",
                 severity=Severity.CRITICAL,
             ).publish()
