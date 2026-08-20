@@ -20,13 +20,23 @@ from sdcm.provision.common.fallback import is_region_fallback_enabled
 from sdcm.provision.gce import region_fallback as rf
 from sdcm.provision.gce.constants import SUPPORTED_GCE_REGIONS
 from sdcm.provision.gce.zone_resolver import GceAZResolver
-from sdcm.provision.provisioner import ProvisionError, ProvisionUnrecoverableError, ZoneResourcesExhaustedError
+from sdcm.provision.provisioner import (
+    InstanceConfigurationError,
+    ProvisionError,
+    ProvisionUnrecoverableError,
+    ZoneResourcesExhaustedError,
+)
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.tester import ClusterTester, CriticalTestFailure
 
 from unit_tests.lib.dot_dict import DotDict
 
 CAPACITY_MSG = "Operation failed: ZONE_RESOURCE_POOL_EXHAUSTED"
+# Verbatim GCE shape: an unsupported machine-type/disk-type pair reported under the capacity code.
+CONFIG_ERROR_MSG = (
+    "ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS: Error 400: "
+    "[pd-standard, pd-ssd, n4-standard-16] features are not compatible for creating instance., badRequest"
+)
 
 
 class _GceParams(DotDict):
@@ -278,6 +288,45 @@ def test_loop_non_capacity_error_propagates_and_restores(monkeypatch):
     cleanup.assert_not_called()
     assert params["gce_datacenter"] == "us-east1"  # restored
     assert params["availability_zone"] == "b"
+
+
+def test_loop_does_not_relocate_on_config_error(monkeypatch):
+    """A config error wearing the capacity code must not relocate: it fails identically everywhere."""
+    monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
+    params = _make_params()
+    provision_once = MagicMock(side_effect=InstanceConfigurationError(CONFIG_ERROR_MSG))
+    with patch.object(rf, "cleanup_region") as cleanup:
+        with pytest.raises(InstanceConfigurationError, match="not compatible for creating instance"):
+            rf.provision_with_region_fallback(
+                params=params,
+                test_id="t",
+                network_name="qa-vpc",
+                region_candidates=lambda: [("us-west1", ["a"])],
+                provision_once=provision_once,
+                error_factory=ProvisionUnrecoverableError,
+            )
+    assert provision_once.call_count == 1
+    cleanup.assert_not_called()
+    assert params["gce_datacenter"] == "us-east1"  # restored
+
+
+def test_loop_does_not_relocate_on_config_error_wrapped_in_provision_error(monkeypatch):
+    """Text-based classification agrees with the type-based one: no relocation on a config message."""
+    monkeypatch.delenv("SCT_GCE_DATACENTER", raising=False)
+    params = _make_params()
+    provision_once = MagicMock(side_effect=ProvisionError(CONFIG_ERROR_MSG))
+    with patch.object(rf, "cleanup_region") as cleanup:
+        with pytest.raises(ProvisionError, match="not compatible for creating instance"):
+            rf.provision_with_region_fallback(
+                params=params,
+                test_id="t",
+                network_name="qa-vpc",
+                region_candidates=lambda: [("us-west1", ["a"])],
+                provision_once=provision_once,
+                error_factory=ProvisionUnrecoverableError,
+            )
+    assert provision_once.call_count == 1
+    cleanup.assert_not_called()
 
 
 def test_loop_all_regions_exhausted_raises_via_error_factory(monkeypatch):

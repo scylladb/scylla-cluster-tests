@@ -30,8 +30,31 @@ TYPE_NOT_AVAILABLE_MARKERS: list[str] = [
 ]
 
 
+# GCE reports an unsupported machine-type / disk-type / image combination with the very same
+# ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS code it uses for a genuine capacity shortage, e.g.
+# "Error 400: [pd-standard, pd-ssd, n4-standard-16] features are not compatible for creating
+# instance., badRequest". Retrying such a request in another zone or region can never succeed,
+# so these markers veto the capacity classification. Matched case-insensitively.
+CONFIG_ERROR_MARKERS: list[str] = [
+    "not compatible for creating instance",
+    "not compatible with machine type architecture",
+]
+
+
+def is_config_error(exception: BaseException) -> bool:
+    """Return True if `exception` reports an unsupported machine-type / disk / image combination."""
+    error_str = str(exception).lower()
+    return any(marker in error_str for marker in CONFIG_ERROR_MARKERS)
+
+
 def is_zone_capacity_error(exception: BaseException) -> bool:
-    """Return True if `exception` is a transient GCE zone capacity exhaustion error."""
+    """Return True if `exception` is a transient GCE zone capacity exhaustion error.
+
+    Configuration errors are excluded even when they carry a capacity marker: they are not
+    transient, so relocating the cluster to another zone or region only reproduces the failure.
+    """
+    if is_config_error(exception):
+        return False
     error_str = str(exception)
     return any(marker in error_str for marker in CAPACITY_ERROR_MARKERS)
 
@@ -51,8 +74,10 @@ def is_type_unavailable_error(exception: BaseException) -> bool:
 def classify_provisioning_error(exception: BaseException) -> str:
     """Classify a GCE provisioning error for fallback routing.
 
-    Returns one of: "capacity", "quota", "type_unavailable", "unknown".
+    Returns one of: "config", "capacity", "quota", "type_unavailable", "unknown".
     """
+    if is_config_error(exception):
+        return "config"
     if is_zone_capacity_error(exception):
         return "capacity"
     if is_quota_error(exception):
