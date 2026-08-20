@@ -1268,6 +1268,15 @@ AWS image type of the db node
 - `i4i.4xlarge`: k8s-eks
 
 
+## **aws_instance_type_db_alternatives** / SCT_AWS_INSTANCE_TYPE_DB_ALTERNATIVES
+
+List of additional, interchangeable AWS DB instance types (e.g. ['i7ie.large', 'i4i.large', 'i3en.large']) offered ONLY to EC2 Fleet (spot) provisioning as alternatives to instance_type_db, so a large spot request can be satisfied from more than one capacity pool. instance_type_db remains the single primary type used by every other code path (validation, AMI/arch lookup, AZ selection, non-fleet provisioning). Only list types with CPU/memory/disk characteristics equivalent to instance_type_db - SCT does not verify this. AWS-only.
+
+**default:** []
+
+**type:** str | list[str] → list[str] (appendable)
+
+
 ## **instance_type_db_oracle** / SCT_INSTANCE_TYPE_DB_ORACLE
 
 AWS image type of the oracle node
