@@ -984,3 +984,22 @@ def test_secondary_network_interface_is_never_the_one_used_for_ssh():
 
     node.scylla_network_configuration = None
     assert BaseNode._secondary_network_interface_name(node) == "eth1", "backends without network config use eth1"
+
+
+def test_traffic_control_targets_the_secondary_interface():
+    """tc commands must shape nic 1, resolved the same way the interface nemesis resolves it."""
+    node = unittest.mock.MagicMock()
+    node.scylla_network_configuration = _network_config_with_broadcast_on_primary()
+    node._secondary_network_interface_name = BaseNode._secondary_network_interface_name.__get__(node)
+
+    with unittest.mock.patch("sdcm.cluster.LOCALRUNNER") as local_runner:
+        local_runner.run.return_value.stdout = "tc qdisc del dev ens5 root"
+        BaseNode.traffic_control(node)
+    local_runner.run.assert_called_once_with("tcdel ens5 --tc-command", ignore_status=True)
+    node.remoter.run.assert_any_call('sudo bash -cxe "tc qdisc del dev ens5 root"', ignore_status=True)
+
+    with unittest.mock.patch("sdcm.cluster.LOCALRUNNER") as local_runner:
+        local_runner.run.return_value.stdout = "tc qdisc add dev ens5 root netem loss 5%"
+        BaseNode.traffic_control(node, "--loss 5%")
+    local_runner.run.assert_called_once_with("tcset ens5 --loss 5% --tc-command")
+    node.remoter.run.assert_any_call('sudo bash -cxe "tc qdisc add dev ens5 root netem loss 5%"')
