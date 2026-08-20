@@ -7,5 +7,5 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/scale/longevity-5000-tables-latte.yaml',
+    test_config: '''["test-cases/scale/longevity-5000-tables-latte.yaml", "configurations/auto-repair-1h.yaml"]''',
 )
