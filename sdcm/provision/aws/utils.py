@@ -311,6 +311,13 @@ def create_spot_fleet_instance_request(
         IamFleetRole=fleet_role,
         TargetCapacity=count,
     )
+    # Tag the Spot Fleet Request itself (not only the instances it launches) so a request that
+    # outlives the process which created it (e.g. a Jenkins stage timeout) stays discoverable and
+    # cancellable by clean-resources via its tags, like every other SCT resource. See SCT-779.
+    for tag_spec in instance_parameters.get("TagSpecifications") or []:
+        if tags := tag_spec.get("Tags"):
+            params["TagSpecifications"] = [{"ResourceType": "spot-fleet-request", "Tags": tags}]
+            break
     if valid_until:
         params["ValidUntil"] = valid_until
     resp = ec2_clients[region_name].request_spot_fleet(DryRun=False, SpotFleetRequestConfig=params)
