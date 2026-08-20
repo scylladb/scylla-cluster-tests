@@ -1203,6 +1203,27 @@ class BaseNode(AutoSshContainerMixin):
         with DbNodeLogger([self], "start network interface", target_node=self, additional_info=interface_name):
             self.remoter.sudo(startup_interface_command.format(interface_name))
 
+    def traffic_control(self, tcconfig_params=None):
+        """Run tcconfig locally to generate tc commands, then execute them on the node.
+
+        :param tcconfig_params: commandline arguments for tcset, if None will call tcdel
+        :return: None
+        """
+        device = self._secondary_network_interface_name()
+        self.remoter.run("sudo modprobe sch_netem")
+
+        if tcconfig_params is None:
+            tc_command = LOCALRUNNER.run(f"tcdel {device} --tc-command", ignore_status=True).stdout
+            self.remoter.run('sudo bash -cxe "%s"' % tc_command, ignore_status=True)
+        else:
+            tc_command = LOCALRUNNER.run(f"tcset {device} {tcconfig_params} --tc-command").stdout
+            self.remoter.run('sudo bash -cxe "%s"' % tc_command)
+
+    def has_traffic_control(self) -> bool:
+        # assumes the image ships tc out of the box (true for SMI-based AMIs/GCE
+        # images); the caller nemesis skips when this returns False
+        return self.remoter.run("/sbin/tc -h", ignore_status=True).ok
+
     @property
     def is_enterprise(self) -> bool:
         return is_enterprise(self.scylla_version)
