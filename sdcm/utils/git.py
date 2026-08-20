@@ -86,7 +86,7 @@ def get_git_status_info() -> GitStatus:
         output = origin_proc.stdout.decode(encoding="utf-8").strip()
         git_status["upstream.url"] = output.strip()
 
-    except (subprocess.CalledProcessError, KeyError):
+    except subprocess.CalledProcessError, KeyError:
         LOGGER.warning("Error parsing git information", exc_info=True)
         return {}
     return git_status

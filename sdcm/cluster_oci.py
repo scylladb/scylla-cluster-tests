@@ -188,7 +188,7 @@ class OciNode(cluster.BaseNode):
                 if addrs:
                     ipv6_map[ifname] = addrs
             return ipv6_map
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             return {}
 
     def _build_network_interfaces(self) -> list:
@@ -262,7 +262,7 @@ class OciNode(cluster.BaseNode):
             vm_provider = provisioner._vm_provider  # noqa: SLF001
             instance = vm_provider._resolve_instance(self._instance.name)  # noqa: SLF001
             return instance.id if instance else ""
-        except (AttributeError, IndexError):
+        except AttributeError, IndexError:
             LOGGER.warning("Could not resolve OCI instance ID for %s", self.name)
             return ""
 

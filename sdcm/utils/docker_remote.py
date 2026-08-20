@@ -83,7 +83,7 @@ class RemoteDocker(BaseNode):
     def public_dns_name(self) -> str:
         try:
             return resolve_ip_to_dns(self.external_address)
-        except (ValueError, socket.herror):
+        except ValueError, socket.herror:
             return self.external_address
 
     @staticmethod

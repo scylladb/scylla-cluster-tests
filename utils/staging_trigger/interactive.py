@@ -165,7 +165,7 @@ def maybe_set_docker_image(all_params: dict[str, str]) -> None:
         docker_repo = get_scylla_docker_repo_from_version(scylla_version)
         all_params["scylla_docker_image"] = docker_repo
         click.secho(f"  Auto-set scylla_docker_image={docker_repo} (from {scylla_version})", fg="green")
-    except (ValueError, Exception):  # noqa: BLE001
+    except ValueError, Exception:  # noqa: BLE001
         logger.debug("Could not derive docker image from version %s", scylla_version, exc_info=True)
 
 
@@ -465,7 +465,7 @@ def _ruff_format(code: str) -> str:
             check=True,
         )
         return result.stdout
-    except (FileNotFoundError, subprocess.CalledProcessError):
+    except FileNotFoundError, subprocess.CalledProcessError:
         return code
 
 

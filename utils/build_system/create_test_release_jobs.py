@@ -415,7 +415,7 @@ class JenkinsPipelines:
             lines.append(f"duration_class: {duration_class}")
             lines.append(f"supported_backends: {backends}")
             return "\n".join(lines)
-        except (OSError, KeyError, ValueError, TypeError, yaml.YAMLError):
+        except OSError, KeyError, ValueError, TypeError, yaml.YAMLError:
             LOGGER.debug("Could not read test_metadata from %s", jenkins_file, exc_info=True)
             return ""
 
@@ -436,7 +436,7 @@ class JenkinsPipelines:
                 for backend in meta["supported_backends"]:
                     ET.SubElement(backends_elem, "backend").text = str(backend)
             return ET.tostring(root, encoding="unicode", xml_declaration=True)
-        except (OSError, KeyError, ValueError, TypeError):
+        except OSError, KeyError, ValueError, TypeError:
             LOGGER.debug("Could not inject testMetadata XML from %s", jenkins_file, exc_info=True)
             return xml_data
 
