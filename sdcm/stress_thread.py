@@ -326,6 +326,31 @@ class CassandraStressThread(DockerBasedStressThread):
 
         return stress_cmd
 
+    @staticmethod
+    def _safepoint_jvm_opts(container_log_file: str) -> str:
+        """Build the unified logging (JDK 11+) options that make the c-s JVM log every safepoint.
+
+        `safepoint=info` logs one line per safepoint with its operation/reason, the stop-the-world time
+        (`Total`) and the time it took to bring all threads to the safepoint (`Reaching safepoint`);
+        `safepoint+stats=info` adds a per-operation table and the worst-case times at JVM exit.
+        Rotation is disabled on purpose - the log is bind mounted into the container as a single file.
+        Not usable with a JDK 8 cassandra-stress image, `-Xlog` keeps such a JVM from starting at all.
+        """
+        return f"-Xlog:safepoint+stats=info,safepoint=info:file={container_log_file}:time,uptime,level,tags:filecount=0"
+
+    @staticmethod
+    def _collect_safepoint_log(loader, remote_log_file: str, local_log_file: str) -> None:
+        """Pull the safepoint log from the loader, so that LoaderLogCollector finds it in the local logdir."""
+        try:
+            loader.remoter.receive_files(src=remote_log_file, dst=local_log_file)
+            if os.path.getsize(local_log_file) == 0:
+                LOGGER.debug("Safepoint log %s is empty, removing it", local_log_file)
+                os.remove(local_log_file)
+            else:
+                LOGGER.info("cassandra-stress safepoint log collected: %s", local_log_file)
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Failed to collect cassandra-stress safepoint log %s", remote_log_file, exc_info=True)
+
     def _run_stress(self, loader, loader_idx, cpu_idx):
         pass
 
@@ -346,6 +371,9 @@ class CassandraStressThread(DockerBasedStressThread):
         LOGGER.debug("cassandra-stress HDR local file %s", local_hdr_file_name)
 
         remote_hdr_file_name_full_path = remote_hdr_file_name
+        jvm_opts = ""
+        safepoint_log_name = ""
+        remote_safepoint_log_full_path = ""
         if "k8s" in self.params.get("cluster_backend"):
             cmd_runner = loader.remoter
             cmd_runner_name = loader.remoter.pod_name
@@ -359,11 +387,24 @@ class CassandraStressThread(DockerBasedStressThread):
             ).stdout.strip()
             cmd_runner_name = loader.ip_address
 
+            safepoint_volume_opt = ""
+            jvm_opts_value = self.params.get("cs_extra_jvm_opts") or ""
+            if self.params.get("cs_safepoint_logging"):
+                safepoint_log_name = f"cs-safepoint-{stress_cmd_opt}-{log_id}.log"
+                # the container is removed as soon as the stress command is over, so the JVM has to write
+                # the log into a file bind mounted from the loader host, same as it is done for the HDR file
+                loader.remoter.run(f"touch $HOME/{safepoint_log_name}", ignore_status=False, verbose=False)
+                remote_safepoint_log_full_path = loader.remoter.run(
+                    f"realpath $HOME/{safepoint_log_name}", ignore_status=False, verbose=False
+                ).stdout.strip()
+                safepoint_volume_opt = f" -v {remote_safepoint_log_full_path}:/{safepoint_log_name}"
+                jvm_opts_value = f"{jvm_opts_value} {self._safepoint_jvm_opts(f'/{safepoint_log_name}')}".strip()
+                LOGGER.info("cassandra-stress safepoint log on %s: %s", loader.name, remote_safepoint_log_full_path)
+
             cpu_options = ""
-            jvm_opts = ""
-            if cs_extra_jvm_opts := self.params.get("cs_extra_jvm_opts"):
-                jvm_opts = f" -e JVM_OPTS='{cs_extra_jvm_opts}'"
-                LOGGER.info("Passing JVM_OPTS to cassandra-stress container: %s", cs_extra_jvm_opts)
+            if jvm_opts_value:
+                jvm_opts = f" -e JVM_OPTS='{jvm_opts_value}'"
+                LOGGER.info("Passing JVM_OPTS to cassandra-stress container: %s", jvm_opts_value)
             cmd_runner = cleanup_context = RemoteDocker(
                 loader,
                 self.docker_image_name,
@@ -375,8 +416,12 @@ class CassandraStressThread(DockerBasedStressThread):
                 f" --entrypoint /bin/bash"
                 f" -w /"
                 f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}"
+                f"{safepoint_volume_opt}"
                 f"{jvm_opts}",
             )
+
+        if self.params.get("cs_safepoint_logging") and not remote_safepoint_log_full_path:
+            LOGGER.warning("cs_safepoint_logging is not supported on k8s and prepared loaders, skipping it")
 
         stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx, loader)
         if self.params.get("cs_debug"):
@@ -409,7 +454,7 @@ class CassandraStressThread(DockerBasedStressThread):
 
         LOGGER.info("Stress command:\n%s", stress_cmd)
 
-        if self.params.get("cs_extra_jvm_opts"):
+        if jvm_opts:
             try:
                 env_check = cmd_runner.run("echo JVM_OPTS=$JVM_OPTS", ignore_status=True, verbose=False)
                 LOGGER.info("JVM_OPTS env inside container: %s", env_check.stdout.strip())
@@ -478,6 +523,11 @@ class CassandraStressThread(DockerBasedStressThread):
                     )
             except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=cs_stress_event, exc=exc)
+
+        if remote_safepoint_log_full_path:
+            self._collect_safepoint_log(
+                loader, remote_safepoint_log_full_path, os.path.join(loader.logdir, safepoint_log_name)
+            )
 
         return loader, result, cs_stress_event
 

@@ -1982,6 +1982,12 @@ class SCTConfiguration(BaseModel):
         "Recommended for low-latency: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch' "
         "(requires Java 21+, which cassandra-stress 3.20.6+ ships with).",
     )
+    cs_safepoint_logging: Boolean = SctField(
+        description="Enable JVM safepoint logging (-Xlog:safepoint) for the cassandra-stress loaders. "
+        "The log is written on the loader host, pulled into the loader log directory and collected into the "
+        "run log archive. Use it to tell a loader JVM pause (including non-GC safepoints) apart from a "
+        "server-side or network stall behind a latency-step failure. Ignored for k8s and prepared loaders.",
+    )
     stress_cmd_mv: StringOrList = SctField(
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
     )

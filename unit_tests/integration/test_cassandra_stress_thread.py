@@ -12,6 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 import subprocess
 import time
+from pathlib import Path
 
 import pytest
 
@@ -229,3 +230,61 @@ def test_06_cassandra_stress_with_extra_jvm_opts(request, docker_scylla, params)
 
     assert "latency 99th percentile" in output[0]
     assert float(output[0]["latency 99th percentile"]) > 0
+
+
+def test_07_cassandra_stress_safepoint_logging(request, docker_scylla, params):
+    # safepoint logging has to compose with whatever cs_extra_jvm_opts already carries
+    params["cs_extra_jvm_opts"] = "-Xms512m -Xmx512m"
+    params["cs_safepoint_logging"] = True
+
+    loader_set = LocalLoaderSetDummy(params=params)
+
+    cmd = (
+        "cassandra-stress write cl=ONE duration=30s -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) "
+        "compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native "
+        "-rate threads=5 -pop seq=1..10000000 -log interval=5"
+    )
+
+    cs_thread = CassandraStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params)
+
+    def cleanup_thread():
+        cs_thread.kill()
+
+    request.addfinalizer(cleanup_thread)
+
+    cs_thread.run()
+
+    # Wait briefly for the Java process to start inside the container
+    time.sleep(5)
+
+    result = subprocess.run(
+        ["docker", "ps", "--filter", f"label=shell_marker={cs_thread.shell_marker}", "--format", "{{.ID}}"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    container_id = result.stdout.strip().split("\n")[0]
+    assert container_id, "Could not find cassandra-stress container"
+
+    # The safepoint log has to be written into a file bind mounted from the loader,
+    # the container itself is gone once the stress command is over
+    result = subprocess.run(
+        ["docker", "exec", container_id, "bash", "-c", "cat /proc/$(pgrep -x java | head -1)/cmdline | tr '\\0' ' '"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    java_cmdline = result.stdout
+    assert "-Xlog:safepoint" in java_cmdline, f"safepoint logging flag not found in Java cmdline: {java_cmdline}"
+    assert "-Xms512m" in java_cmdline, f"cs_extra_jvm_opts were dropped from Java cmdline: {java_cmdline}"
+
+    output, _ = cs_thread.parse_results()
+    assert "latency mean" in output[0]
+    assert float(output[0]["latency mean"]) > 0
+
+    logdir = Path(cs_thread.loaders[0].logdir)
+    safepoint_logs = list(logdir.glob("cs-safepoint-*.log"))
+    assert safepoint_logs, f"no safepoint log was collected into {logdir}"
+
+    content = safepoint_logs[0].read_text()
+    assert "[safepoint" in content, f"unexpected safepoint log content: {content[:500]}"
