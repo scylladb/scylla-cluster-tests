@@ -1,0 +1,70 @@
+# SCYLLADB-2122 reproduction profile — see longevity_lwt_paxos_growth_test.py
+# for the reproduction mechanism. Column names are arbitrary; only the
+# key/value shape matters (2 partition-key + 2 clustering-key + 3 value columns).
+
+keyspace: ks_paxos_growth
+
+keyspace_definition: |
+  CREATE KEYSPACE ks_paxos_growth WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};
+
+table: event_history
+
+table_definition: |
+  CREATE TABLE event_history (
+        partition_key1 text,
+        partition_key2 text,
+        clustering_key1 timestamp,
+        clustering_key2 text,
+        value1 text,
+        value2 text,
+        value3 text,
+        PRIMARY KEY ((partition_key1, partition_key2), clustering_key1, clustering_key2)
+  ) WITH CLUSTERING ORDER BY (clustering_key1 DESC, clustering_key2 DESC)
+    AND bloom_filter_fp_chance = 0.01
+    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+    AND compaction = {'class': 'IncrementalCompactionStrategy'}
+    AND compression = {'sstable_compression': 'LZ4Compressor'}
+    AND default_time_to_live = 300
+    AND gc_grace_seconds = 300
+    AND max_index_interval = 2048
+    AND memtable_flush_period_in_ms = 0
+    AND min_index_interval = 128
+    AND speculative_retry = '99.0PERCENTILE'
+    AND paxos_grace_seconds = 864000
+    AND tombstone_gc = {'mode': 'immediate'}
+    AND comment = 'SCYLLADB-2122: paxos table growth reproduction'
+
+columnspec:
+  - name: partition_key1
+    size: uniform(5..15)
+    population: uniform(1..2)
+  - name: partition_key2
+    size: uniform(10..30)
+    population: uniform(1..50000000)
+  - name: clustering_key1
+    population: uniform(1..10)
+  - name: clustering_key2
+    size: uniform(100..200)
+    population: uniform(1..100)
+  - name: value1
+    size: uniform(5..20)
+  - name: value2
+    size: uniform(10..50)
+  - name: value3
+    size: uniform(5..30)
+
+insert:
+  partitions: fixed(1)
+  select: fixed(1)/10000
+  batchtype: UNLOGGED
+
+queries:
+   write_insert-if-not-exists:
+      cql: INSERT INTO event_history (partition_key1, partition_key2, clustering_key1, clustering_key2, value1, value2, value3) VALUES (?, ?, ?, ?, ?, ?, ?) IF NOT EXISTS
+      fields: samerow
+   delete_plain:
+      cql: DELETE FROM event_history WHERE partition_key1 = ? AND partition_key2 = ? AND clustering_key1 = ? AND clustering_key2 = ?
+      fields: samerow
+   read_serial-select:
+      cql: SELECT * FROM event_history WHERE partition_key1 = ? AND partition_key2 = ? AND clustering_key1 = ? AND clustering_key2 = ?
+      fields: samerow

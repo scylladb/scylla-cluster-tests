@@ -1,0 +1,46 @@
+# SCYLLADB-2122 (VNODES) — same as the tablets variant with tablets disabled.
+# See longevity_lwt_paxos_growth_test.py for the reproduction mechanism.
+
+test_duration: 100
+
+stress_cmd:
+  - "cassandra-stress user profile=/tmp/cs_paxos_growth_lwt.yaml 'ops(write_insert-if-not-exists=1)' no-warmup cl=QUORUM serial-cl=LOCAL_SERIAL duration=10m -mode native cql3 -rate threads=400 -pop 'seq=1..50000000'"
+
+stress_read_cmd:
+  - "cassandra-stress user profile=/tmp/cs_paxos_growth_lwt.yaml 'ops(read_serial-select=1)' no-warmup cl=LOCAL_SERIAL duration=50m -mode native cql3 -rate threads=50 -pop 'seq=1..50000000'"
+
+stress_cmd_w:
+  - "cassandra-stress user profile=/tmp/cs_paxos_growth_lwt.yaml 'ops(delete_plain=1)' no-warmup cl=QUORUM duration=10m -mode native cql3 -rate threads=400 -pop 'seq=1..50000000'"
+
+n_db_nodes: 3
+n_loaders: 3
+round_robin: true
+
+# EBS-backed instance for production-like I/O characteristics
+instance_type_db: 'r5b.2xlarge'
+instance_type_loader: 'c7i.xlarge'
+instance_type_monitor: 't3.large'
+instance_type_runner: 'm7i.2xlarge'
+
+# Single gp2 EBS volume — constrained I/O, production-like disk profile
+data_volume_disk_num: 1
+data_volume_disk_type: "gp2"
+data_volume_disk_size: 300
+
+instance_provision: 'on_demand'
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_during_prepare: false
+
+user_prefix: 'lwt-paxos-vnodes'
+
+use_preinstalled_scylla: true
+use_mgmt: false
+backtrace_decoding: true
+
+append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+append_scylla_yaml:
+  auto_snapshot: false
+  rf_rack_valid_keyspaces: false
+  enable_tablets: false
+  tablets_mode_for_new_keyspaces: 'disabled'
