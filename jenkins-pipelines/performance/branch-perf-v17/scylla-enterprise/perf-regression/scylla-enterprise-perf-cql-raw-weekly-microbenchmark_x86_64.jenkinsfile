@@ -1,0 +1,13 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    provision_type: 'on_demand',
+    test_name: 'microbenchmarking_test.PerfCqlRawTest.test_read',
+    test_config: """[ 'test-cases/microbenchmarking/amazon_perf_cql_raw_ARM.yaml', 'test-cases/microbenchmarking/amazon_perf_cql_raw_x86.yaml', 'configurations/performance/perf_cql_raw/latency-decorator-error-thresholds-perf-cql-raw-microbenchmark_x86_64.yaml' ]""",
+    email_recipients: "scylla-perf-results@scylladb.com",
+)
