@@ -25,6 +25,7 @@ from google.cloud import compute_v1
 from google.cloud.compute_v1 import Firewall
 
 from sdcm.keystore import KeyStore
+from sdcm.provision.gce.constants import SECONDARY_SUBNET_NAME_TMPL
 from sdcm.utils.gce_utils import wait_for_extended_operation
 
 
@@ -34,6 +35,30 @@ LOGGER = logging.getLogger(__name__)
 class GceRegion:
     SCT_NETWORK_NAME = "qa-vpc"
     SCT_BACKUP_SERVICE_ACCOUNT = "sct-manager-backup"
+
+    # Secondary subnets for extra network interfaces.
+    # `qa-vpc` is auto-mode and already uses 10.128.0.0/9, so we keep these in 10.100.X.0/24.
+    # Keep region order stable; append new regions to avoid shifting existing CIDRs.
+    SECONDARY_SUBNET_REGIONS = (
+        "us-east1",
+        "us-east4",
+        "us-central1",
+        "us-west1",
+        "us-west2",
+        "us-west4",
+        "europe-west1",
+        "europe-west2",
+        "europe-west3",
+        "europe-west4",
+        "asia-east1",
+        "asia-northeast1",
+        "asia-south1",
+        "australia-southeast1",
+        "southamerica-east1",
+    )
+
+    SECONDARY_SUBNET_REGION_INDEXES = {region: index for index, region in enumerate(SECONDARY_SUBNET_REGIONS)}
+    SECONDARY_SUBNET_CIDR_TMPL = "10.100.{index}.0/24"
 
     def __init__(self, region_name):
         self.region_name = region_name
@@ -251,9 +276,68 @@ class GceRegion:
         policy.bindings.append({"role": role, "members": {f"serviceAccount:{service['email']}"}})
         bucket.set_iam_policy(policy)
 
+    @property
+    def secondary_subnet_name(self) -> str:
+        return SECONDARY_SUBNET_NAME_TMPL.format(network_name=self.SCT_NETWORK_NAME, index=1)
+
+    @property
+    def secondary_subnet_cidr(self) -> str:
+        """CIDR of this region's subnet for secondary network interfaces."""
+        if (index := self.SECONDARY_SUBNET_REGION_INDEXES.get(self.region_name)) is None:
+            raise RuntimeError(
+                f"Region '{self.region_name}' has no CIDR reserved for secondary network interfaces. "
+                f"Add it to {type(self).__name__}.SECONDARY_SUBNET_REGION_INDEXES, picking an index that is "
+                f"not used by another region."
+            )
+        return self.SECONDARY_SUBNET_CIDR_TMPL.format(index=index)
+
+    def create_secondary_subnet(self) -> None:
+        """Create this region's subnet for secondary network interfaces.
+
+        GCE attaches every network interface of an instance to a different subnet, so multi-NIC
+        nodes need a subnet next to the auto-mode one. It lives in the same VPC network, which
+        keeps the SCT runner and the monitor able to reach the secondary addresses without
+        peering.
+
+        Regions with no reserved CIDR are skipped rather than treated as an error: `prepare-regions`
+        with no `-r` runs over every region the project has, while multi-NIC is used in a few.
+        """
+        if self.region_name not in self.SECONDARY_SUBNET_REGION_INDEXES:
+            LOGGER.warning(
+                "Region '%s' has no CIDR reserved for secondary network interfaces, skipping subnet creation",
+                self.region_name,
+            )
+            return
+
+        subnet_name = self.secondary_subnet_name
+        try:
+            subnet = self.subnets_client.get(
+                project=self.project,
+                region=self.region_name,
+                subnetwork=subnet_name,
+            )
+        except google.api_core.exceptions.NotFound:
+            subnet_cidr = self.secondary_subnet_cidr
+            LOGGER.info("Creating subnet '%s' (%s)...", subnet_name, subnet_cidr)
+            subnet_resource = compute_v1.Subnetwork(
+                name=subnet_name,
+                network=self.network.self_link,
+                ip_cidr_range=subnet_cidr,
+                region=self.region_name,
+            )
+            operation = self.subnets_client.insert(
+                project=self.project,
+                region=self.region_name,
+                subnetwork_resource=subnet_resource,
+            )
+            wait_for_extended_operation(operation, f"create subnet {subnet_name}")
+        else:
+            LOGGER.info("Subnet '%s' already exists (%s)", subnet_name, subnet.ip_cidr_range)
+
     def configure(self):
         LOGGER.info("Configuring '%s' region...", self.region_name)
         self.configure_firewall()
+        self.create_secondary_subnet()
         self.create_backup_service_account()
         self.configure_backup_storage()
         LOGGER.info("Region configured successfully.")
