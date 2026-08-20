@@ -901,7 +901,7 @@ def import_image_from_object_storage(
 
 
 def is_shape_available(shape_name: str, region: str) -> bool:
-    shape_name = shape_name.split(":")[0]
+    shape_name = shape_name.split(":", maxsplit=1)[0]
     compute_client = OciService().get_compute_client(region=region)
     shapes = oci.pagination.list_call_get_all_results_generator(
         compute_client.list_shapes,

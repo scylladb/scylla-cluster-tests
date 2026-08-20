@@ -3007,10 +3007,12 @@ class BaseNode(AutoSshContainerMixin):
                 )
                 collect_diagnostic_data(self)
                 wait.wait_for(
-                    func=lambda: self._service_cmd(
-                        service_name="scylla-server", cmd="is-active", timeout=timeout, ignore_status=True
-                    ).stdout.strip()
-                    == "inactive",
+                    func=lambda: (
+                        self._service_cmd(
+                            service_name="scylla-server", cmd="is-active", timeout=timeout, ignore_status=True
+                        ).stdout.strip()
+                        == "inactive"
+                    ),
                     step=60,
                     text="still waiting for scylla-server to stop",
                     timeout=900,
@@ -6623,7 +6625,7 @@ class BaseMonitorSet:
         self.configure_overview_template(node)
         try:
             self.start_scylla_monitoring(node)
-        except (Failure, UnexpectedExit):
+        except Failure, UnexpectedExit:
             self.restart_scylla_monitoring()
         # The time will be used in url of Grafana monitor,
         # the data from this point to the end of test will
@@ -6860,7 +6862,7 @@ class BaseMonitorSet:
                 variable["spec"]["current"]["value"] = "instance"
                 by_instance_option = next(opt for opt in variable["spec"]["options"] if opt["text"] == "Instance")
                 by_instance_option["selected"] = True
-            except (StopIteration, KeyError):
+            except StopIteration, KeyError:
                 LOGGER.warning("Unable to change defaults for the template", exc_info=True)
 
             template["dashboard"].setdefault("spec/annotations", []).extend(sct_addon_template["annotations"])
