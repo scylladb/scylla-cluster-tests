@@ -34,6 +34,8 @@ from sdcm.utils.cloud_api_utils import (
     compute_cluster_exp_hours,
     build_cloud_cluster_name,
     apply_keep_tag_to_name,
+    parse_availability_zones,
+    expand_availability_zones,
     CLOUD_KEEP_ALIVE_HOURS,
 )
 from sdcm.utils.gce_region import GceRegion
@@ -171,6 +173,22 @@ def download_vector_locally(arch="amd64", dest_dir="downloads"):
     return dest
 
 
+def get_node_az(node_data: dict[str, Any]) -> str | None:
+    """Return node availability zone from cloud API data."""
+    return node_data.get("azName") or node_data.get("azId")
+
+
+def map_azs_to_rack_indexes(nodes_data: list[dict[str, Any]]) -> dict[str, int]:
+    """Build a stable AZ-to-rack index map from cloud node payloads."""
+    unique_azs: set[str] = set()
+    for node_data in nodes_data:
+        az = get_node_az(node_data)
+        if az:
+            unique_azs.add(az)
+
+    return {az: index for index, az in enumerate(sorted(unique_azs))}
+
+
 class ScyllaCloudError(Exception):
     """Exception for Scylla Cloud related errors"""
 
@@ -228,7 +246,9 @@ class CloudNode(cluster.BaseNode):
 
     def _refresh_instance_state(self):
         try:
-            node_details = self._api_client.get_cluster_nodes(account_id=self._account_id, cluster_id=self._cluster_id)
+            node_details = self._api_client.get_cluster_nodes(
+                account_id=self._account_id, cluster_id=self._cluster_id, enriched=True
+            )
             for node_data in node_details:
                 if node_data.get("id") == self._node_id:
                     self._cloud_instance_data = node_data
@@ -255,7 +275,8 @@ class CloudNode(cluster.BaseNode):
 
     @property
     def vm_region(self):
-        return self._cloud_instance_data.get("region", {}).get("name", "unknown")
+        region_info = self._cloud_instance_data.get("region", {})
+        return region_info.get("externalId") or region_info.get("name", "unknown")
 
     @property
     def region(self):
@@ -264,6 +285,10 @@ class CloudNode(cluster.BaseNode):
     @property
     def datacenter(self):
         return f"datacenter{self.dc_idx + 1}"
+
+    @property
+    def availability_zone(self) -> str:
+        return get_node_az(self._cloud_instance_data) or ""
 
     def _get_ipv6_ip_address(self):
         return None
@@ -592,9 +617,13 @@ class VectorStoreSetCloud(VectorStoreClusterMixin, cluster.BaseCluster):
 
     @property
     def vs_nodes_data(self) -> list[dict]:
-        """Fetch active Vector Search nodes data"""
+        """Fetch active Vector Search nodes data with each node availability zone attached"""
         vs_info = self._get_vs_info()
-        all_nodes = [node for az in (vs_info.get("availabilityZones") or []) for node in az.get("nodes", [])]
+        all_nodes = [
+            node | {"azId": az.get("azid")}
+            for az in (vs_info.get("availabilityZones") or [])
+            for node in az.get("nodes", [])
+        ]
         return [node for node in all_nodes if node.get("status", "").upper() not in ("DELETED", "PENDING_DELETE")]
 
     def init_vs_nodes_from_cluster(self) -> None:
@@ -604,7 +633,6 @@ class VectorStoreSetCloud(VectorStoreClusterMixin, cluster.BaseCluster):
             node_class=CloudVSNode,
             node_prefix=self.node_prefix,
             dc_idx=0,
-            rack=0,
         )
         self.nodes.extend(created_nodes)
 
@@ -716,10 +744,11 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             node_prefix=node_prefix,
             n_nodes=n_nodes,
             params=params,
-            region_names=params.cloud_provider_params.get("region"),
+            region_names=[params.cloud_provider_params.get("region")],
             node_type=node_type,
             add_nodes=add_nodes,
         )
+        self._update_racks_count()
 
     @property
     def parallel_startup(self):
@@ -810,10 +839,13 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         if self.test_config.REUSE_CLUSTER:
             self._cluster_id = self._resolve_cluster_id()
             self._reuse_existing_cluster()
+            self._update_racks_count()
             return self.nodes
 
         self.log.info("Adding %s nodes to Scylla Cloud cluster", count)
-        return self._create_cluster(count, dc_idx, rack, enable_auto_bootstrap, instance_type)
+        nodes = self._create_cluster(count, dc_idx, rack, enable_auto_bootstrap, instance_type)
+        self._update_racks_count()
+        return nodes
 
     def _init_vector_store_cluster(self) -> None:
         """Initialize Vector Store cluster object"""
@@ -888,22 +920,32 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         dc_idx: int = 0,
         rack: int = 0,
     ) -> list[CloudNode]:
-        """Create cloud node objects from API data"""
+        """Create cloud node objects from API data, deriving each node rack from its AZ"""
         if not nodes_data:
             return []
 
         self.log.info("Initializing %s %s objects", len(nodes_data), node_class.__name__)
 
+        az_to_rack = map_azs_to_rack_indexes(nodes_data)
+        if az_to_rack:
+            self.log.info("AZ to rack index mapping: %s", az_to_rack)
+        else:
+            self.log.warning(
+                "No availability zone data in the cloud nodes payload; all %s nodes fall back to rack %s. "
+                "Rack-aware features and RackawareValidator are inoperative.",
+                len(nodes_data),
+                rack,
+            )
         return [
             self._create_node(
                 cloud_instance_data=node_data,
-                node_index=i,
+                node_index=index,
                 dc_idx=dc_idx,
-                rack=rack,
+                rack=az_to_rack.get(get_node_az(node_data), rack),
                 node_class=node_class,
                 node_prefix=node_prefix,
             )
-            for i, node_data in enumerate(nodes_data, start=1)
+            for index, node_data in enumerate(nodes_data, start=1)
         ]
 
     def _init_nodes_from_cluster(self, count: int, dc_idx: int, rack: int) -> list[CloudNode]:
@@ -921,6 +963,25 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         )
         self.nodes.extend(created_nodes)
         return created_nodes
+
+    def _update_racks_count(self) -> None:
+        """Set racks_count from real AZ topology instead of simulated/config-derived values"""
+        configured_zones = parse_availability_zones(self.params.get("xcloud_availability_zones"))
+        configured_zone_count = len(set(configured_zones))
+
+        if self.nodes:
+            self.racks_count = len({node.rack for node in self.nodes})
+            if configured_zones and self.racks_count < configured_zone_count:
+                self.log.warning(
+                    "xcloud_availability_zones configures %s distinct zone(s), but only %s distinct rack(s) were "
+                    "derived from the cluster nodes. Rack-aware features and RackawareValidator may not be "
+                    "exercising all configured zones.",
+                    configured_zone_count,
+                    self.racks_count,
+                )
+            return
+
+        self.racks_count = configured_zone_count if configured_zones else 1
 
     def _init_manager_node(self, wait_for_install: bool = True) -> None:
         localhost = TestConfig().tester_obj().localhost
@@ -1029,9 +1090,10 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             instance_id = 0
             tablets_mode = "enforced"
         else:
-            instance_type_name = instance_type or self.params.cloud_provider_params.get("instance_type_db")
             instance_id = self._api_client.get_instance_id_by_name(
-                cloud_provider_id=self.provider_id, region_id=self.region_id, instance_type_name=instance_type_name
+                cloud_provider_id=self.provider_id,
+                region_id=self.region_id,
+                instance_type_name=instance_type or self.params.cloud_provider_params.get("instance_type_db"),
             )
             tablets_mode = None
 
@@ -1069,6 +1131,15 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
                 "nodeCount": int(self.params.get("n_vector_store_nodes")),
                 "defaultInstanceTypeId": vs_instance_types[vs_instance_type_name],
             }
+
+        availability_zone_ids = (
+            expand_availability_zones(
+                parse_availability_zones(self.params.get("xcloud_availability_zones")), node_count
+            )
+            or None
+        )
+        if availability_zone_ids:
+            self.log.info("Forcing DB node AZ placement: %s", availability_zone_ids)
 
         expiration_hours = compute_cluster_exp_hours(
             self.test_config.TEST_DURATION, self.test_config.should_keep_alive(self.node_type)
@@ -1108,6 +1179,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             "scaling": self.xcloud_scaling_config,
             "vector_search": vs_config,
             "tablets": tablets_mode,
+            "availability_zone_ids": availability_zone_ids,
         }
 
     def _get_cluster_diagnostic_info(self) -> tuple[str, str]:
