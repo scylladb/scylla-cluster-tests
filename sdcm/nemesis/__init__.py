@@ -1239,7 +1239,7 @@ class NemesisRunner:
             self.cluster.clean_replacement_node_options(new_node)
             self.cluster.set_seeds()
             self.cluster.update_seed_provider()
-        except (NodeSetupFailed, NodeSetupTimeout):
+        except NodeSetupFailed, NodeSetupTimeout:
             self.log.warning("TestConfig of the '%s' failed, collecting logs and terminating node" % new_node)
             self.cluster.terminate_node(new_node)
             raise
@@ -1290,7 +1290,7 @@ class NemesisRunner:
             self.actions_log.info(f"New nodes initialized: {nodes_names}")
             self.cluster.set_seeds()
             self.cluster.update_seed_provider()
-        except (NodeSetupFailed, NodeSetupTimeout):
+        except NodeSetupFailed, NodeSetupTimeout:
             self.log.warning("TestConfig of the '%s' failed, collecting logs and terminating nodes" % new_nodes)
             for node in new_nodes:
                 self.cluster.terminate_node(node)
@@ -2597,7 +2597,7 @@ class NemesisRunner:
 
     def _verify_using_timestamp_deletions(self, ks_cf: str, verification_queries: list[tuple[int, int, int]]):
         mv_not_configured = False
-        mv_table_name = ".".join([ks_cf.split(sep=".")[0], "view_test"])
+        mv_table_name = ".".join([ks_cf.split(maxsplit=1, sep=".")[0], "view_test"])
         with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
             for pk, ck, ts in verification_queries:
                 result = session.execute(
@@ -3201,7 +3201,7 @@ class NemesisRunner:
                     long_running=True,
                     retry=0,
                 )
-            except (UnexpectedExit, Libssh2UnexpectedExit):
+            except UnexpectedExit, Libssh2UnexpectedExit:
                 self.actions_log.info("Repair failed as expected")
             except Exception:
                 self.log.error("Repair failed due to the unknown error")

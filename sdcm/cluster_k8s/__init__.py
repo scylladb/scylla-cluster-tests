@@ -896,10 +896,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
         # NOTE: Apply new image repo if provided or set default one redefining base value
         #       example structure: scylladb/scylla-operator:latest
-        values.set("image.repository", new_docker_image.split("/")[0].strip() or "scylladb")
+        values.set("image.repository", new_docker_image.split("/", maxsplit=1)[0].strip() or "scylladb")
 
         # NOTE: Set operator_image_tag even if it is empty, we need to redefine base operator image
-        values.set("image.tag", new_docker_image.split(":")[-1].strip())
+        values.set("image.tag", new_docker_image.rsplit(":", maxsplit=1)[-1].strip())
 
         # Upgrade Scylla Operator using Helm chart
         self.log.debug(

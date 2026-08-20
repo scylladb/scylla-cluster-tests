@@ -235,7 +235,7 @@ class AzurePricing:
                     ][0]
                 else:
                     return [price["retailPrice"] for price in prices if "Spot" in price["meterName"]][0]
-            except (KeyError, IndexError):
+            except KeyError, IndexError:
                 LOGGER.warning("Failed to get price from prices: %s", prices)
                 return 0
         else:

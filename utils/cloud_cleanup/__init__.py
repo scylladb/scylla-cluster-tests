@@ -76,5 +76,5 @@ def get_keep_hours_from_tags(tags_dict: dict, default: int = DEFAULT_KEEP_HOURS)
         return -1
     try:
         return int(keep)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return default

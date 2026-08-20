@@ -67,7 +67,7 @@ class BaseKernelPanicChecker(threading.Thread):
         try:
             with socket.create_connection((self.host, self.SSH_CHECK_PORT), timeout=self.SSH_CONNECT_TIMEOUT):
                 return True
-        except (OSError, TimeoutError):
+        except OSError, TimeoutError:
             return False
 
     def _publish_panic_event(self, output: str, instance_identifier: str):

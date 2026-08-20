@@ -190,8 +190,9 @@ class VnodeToTabletMigrationTest(LongevityTest):
             self.log.info("Waiting for node %s status to change to 'uses tablets'", node.name)
             for ks in keyspaces:
                 wait_for(
-                    func=lambda n=node, k=ks: get_nodetool_migrate_to_tablets_status(n, k)[n.host_id]
-                    == NodeMigrationStatus.USES_TABLETS,
+                    func=lambda n=node, k=ks: (
+                        get_nodetool_migrate_to_tablets_status(n, k)[n.host_id] == NodeMigrationStatus.USES_TABLETS
+                    ),
                     step=60,
                     timeout=3600,
                     text=f"Waiting for node {node.name} to reach {NodeMigrationStatus.USES_TABLETS!r} for keyspace {ks}",

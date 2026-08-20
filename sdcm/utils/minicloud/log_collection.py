@@ -45,7 +45,7 @@ def redact_docker_inspect(raw: bytes) -> bytes:
                 for name in [var.split("=", 1)[0]]
             ]
         return json.dumps(data, indent=2).encode()
-    except (json.JSONDecodeError, TypeError, AttributeError):
+    except json.JSONDecodeError, TypeError, AttributeError:
         LOGGER.warning("Could not parse docker inspect output for redaction — dropping the snapshot")
         return b'{"error": "docker inspect output could not be parsed for credential redaction"}\n'
 
@@ -117,7 +117,7 @@ def collect_minicloud_logs(logdir: str, container_name: str = MINICLOUD_CONTAINE
                     _decode_exit(state.get("ExitCode")),
                     state.get("OOMKilled"),
                 )
-        except (json.JSONDecodeError, IndexError, KeyError):
+        except json.JSONDecodeError, IndexError, KeyError:
             # best-effort convenience logging only — the snapshot file above is the record
             LOGGER.debug("Could not parse docker inspect output for state logging", exc_info=True)
     else:

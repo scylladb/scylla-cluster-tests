@@ -111,7 +111,7 @@ class OciNode(cluster.BaseNode):
             vm_provider = provisioner._vm_provider  # noqa: SLF001
             instance = vm_provider._resolve_instance(self._instance.name)  # noqa: SLF001
             return instance.id if instance else ""
-        except (AttributeError, IndexError):
+        except AttributeError, IndexError:
             LOGGER.warning("Could not resolve OCI instance ID for %s", self.name)
             return ""
 

@@ -1113,7 +1113,7 @@ class GceSctRunner(SctRunner):
         else:
             external_ipv4 = None
 
-        instance_family = instance_type.split("-")[0] if "-" in instance_type else ""
+        instance_family = instance_type.split("-", maxsplit=1)[0] if "-" in instance_type else ""
         nested_virt = instance_family in self.NESTED_VIRTUALIZATION_INSTANCE_FAMILIES
         if nested_virt:
             LOGGER.info(
