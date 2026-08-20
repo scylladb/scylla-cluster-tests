@@ -5,6 +5,8 @@ import re
 from contextlib import ContextDecorator
 from typing import Callable, Dict, TYPE_CHECKING
 
+from cassandra import InvalidRequest
+
 from sdcm.exceptions import DatacenterNotResolvedError
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import is_system_keyspace, LOGGER
@@ -126,8 +128,13 @@ class temporary_replication_strategy_setter(ContextDecorator):
 
     def __call__(self, **keyspaces: ReplicationStrategy) -> None:
         for keyspace, strategy in keyspaces.items():
-            self._preserve_replication_strategy(keyspace)
-            strategy.apply(self.node, keyspace)
+            try:
+                self._preserve_replication_strategy(keyspace)
+                strategy.apply(self.node, keyspace)
+            except InvalidRequest as exc:
+                # A concurrent nemesis may have dropped this keyspace in the meantime:
+                # skip it instead of aborting rollback of the remaining keyspaces.
+                LOGGER.warning("Skipping replication strategy update for keyspace %s: %s", keyspace, exc)
 
 
 class DataCenterTopologyRfControl:

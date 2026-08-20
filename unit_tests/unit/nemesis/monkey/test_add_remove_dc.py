@@ -1,6 +1,7 @@
 """Tests for sdcm.nemesis.monkey.add_remove_dc module."""
 
 from threading import Event
+from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -16,6 +17,11 @@ from sdcm.utils.replication_strategy_utils import (
 _MODULE = "sdcm.nemesis.monkey.add_remove_dc"
 
 pytestmark = pytest.mark.usefixtures("events")
+
+
+def _keyspace_row(name, replication):
+    """Build a system_schema.keyspaces row for replication discovery tests."""
+    return SimpleNamespace(keyspace_name=name, replication=replication)
 
 
 def _clone_strategy(strategy):
@@ -155,8 +161,31 @@ def test_disrupt_updates_replication_and_cleans_new_dc(runner):
     monkey = AddRemoveDcNemesis(runner)
     new_nodes = [MagicMock(name="node-new-1"), MagicMock(name="node-new-2")]
     events = []
+    created_keyspace = "created_during_nemesis"
     first_setter = FakeReplicationStrategySetter("system-keyspaces", events)
     second_setter = FakeReplicationStrategySetter("new-dc-rf", events)
+    session = runner.cluster.cql_connection_patient.return_value.__enter__.return_value
+    session.execute.side_effect = None
+    session.execute.return_value = MagicMock(
+        current_rows=[
+            _keyspace_row(
+                created_keyspace,
+                {
+                    "class": "org.apache.cassandra.locator.NetworkTopologyStrategy",
+                    monkey.initial_dc_name: str(monkey.new_ks_rf),
+                    "dc1_nemesis_dc": str(monkey.num_nodes_in_new_dc),
+                },
+            ),
+            _keyspace_row("local_strategy_keyspace", {"class": "org.apache.cassandra.locator.LocalStrategy"}),
+            _keyspace_row(
+                "other_dc_keyspace",
+                {
+                    "class": "org.apache.cassandra.locator.NetworkTopologyStrategy",
+                    monkey.initial_dc_name: str(monkey.new_ks_rf),
+                },
+            ),
+        ]
+    )
 
     def add_nodes():
         monkey.new_nodes = new_nodes
@@ -180,6 +209,10 @@ def test_disrupt_updates_replication_and_cleans_new_dc(runner):
             return NetworkTopologyReplicationStrategy(**{monkey.initial_dc_name: monkey.new_ks_rf})
         if keyspace in ("system_distributed", "system_traces"):
             return SimpleReplicationStrategy(monkey.new_ks_rf)
+        if keyspace == created_keyspace:
+            return NetworkTopologyReplicationStrategy(
+                **{monkey.initial_dc_name: monkey.new_ks_rf, "dc1_nemesis_dc": monkey.num_nodes_in_new_dc}
+            )
         return NetworkTopologyReplicationStrategy(**{monkey.initial_dc_name: monkey.new_ks_rf})
 
     with (
@@ -234,10 +267,54 @@ def test_disrupt_updates_replication_and_cleans_new_dc(runner):
         }
 
     assert len(second_setter.rollback_calls) == 1
-    assert list(second_setter.rollback_calls[0]) == updated_keyspaces
+    assert list(second_setter.rollback_calls[0]) == updated_keyspaces + [created_keyspace]
     assert events.index("new-dc-rf:rollback") < events.index("decommission")
 
     assert monkey.new_dc_name is None
+
+
+def test_temporary_new_dc_replication_factors_preserves_created_keyspaces_on_error(runner):
+    """Keyspaces created during the temporary DC window should be rolled back on errors too."""
+    monkey = AddRemoveDcNemesis(runner)
+    runner.status_by_dc["dc1_nemesis_dc"] = object()
+    created_keyspace = "created_during_error"
+    setter = FakeReplicationStrategySetter("new-dc-rf", [])
+    session = runner.cluster.cql_connection_patient.return_value.__enter__.return_value
+    session.execute.side_effect = None
+    session.execute.return_value = MagicMock(
+        current_rows=[
+            _keyspace_row(
+                created_keyspace,
+                {
+                    "class": "org.apache.cassandra.locator.NetworkTopologyStrategy",
+                    monkey.initial_dc_name: str(monkey.new_ks_rf),
+                    "dc1_nemesis_dc": str(monkey.num_nodes_in_new_dc),
+                },
+            )
+        ]
+    )
+
+    def fake_get(node, keyspace):
+        if keyspace == created_keyspace:
+            return NetworkTopologyReplicationStrategy(
+                **{monkey.initial_dc_name: monkey.new_ks_rf, "dc1_nemesis_dc": monkey.num_nodes_in_new_dc}
+            )
+        return NetworkTopologyReplicationStrategy(**{monkey.initial_dc_name: monkey.new_ks_rf})
+
+    with pytest.raises(RuntimeError, match="boom"):
+        with (
+            patch(f"{_MODULE}.temporary_replication_strategy_setter", return_value=setter),
+            patch(f"{_MODULE}.ReplicationStrategy.get", side_effect=fake_get),
+        ):
+            with monkey.temporary_new_dc_replication_factors():
+                raise RuntimeError("boom")
+
+    expected_keyspaces = ["system_distributed", "system_traces", monkey.new_ks_name, created_keyspace]
+    assert list(setter.rollback_calls[0]) == expected_keyspaces
+    assert setter.preserved[created_keyspace].replication_factors_per_dc == {
+        monkey.initial_dc_name: monkey.new_ks_rf,
+        "dc1_nemesis_dc": 0,
+    }
 
 
 def test_assert_new_dc_registered_retries_until_status_contains_new_dc(runner):
@@ -343,7 +420,7 @@ def test_finalizer_skips_decommission_when_no_new_nodes(runner):
 @pytest.mark.parametrize(
     "feature_enabled,expected_count",
     [
-        pytest.param(True, 2, id="multi-rf-change-enabled"),
+        pytest.param(True, 3, id="multi-rf-change-enabled"),
         pytest.param(False, 1, id="multi-rf-change-disabled"),
     ],
 )
