@@ -393,6 +393,15 @@ class GceZoneResolver:
         return {mt: self.get_zones_for_machine_type(region, mt) for mt in machine_types}
 
 
+def gce_instance_zone(instance: compute_v1.Instance) -> str:
+    """Full zone name of an instance (e.g. 'us-east1-b').
+
+    GCE reports it as a URL - "projects/<project>/zones/<zone>" - and every instance operation
+    needs the bare zone name.
+    """
+    return str(instance.zone).split("/")[-1]
+
+
 def gce_public_addresses(instance: compute_v1.Instance) -> list[str]:
     addresses = []
 

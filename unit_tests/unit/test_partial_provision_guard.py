@@ -44,25 +44,8 @@ def _make_gce_cluster(instance_count, requested_count, is_reuse=False):
     """
     fake_instances = [MagicMock(name=f"instance-{i}") for i in range(instance_count)]
 
-    cluster = MagicMock(spec=GCECluster)
-    cluster.log = MagicMock()
-    cluster.params = MagicMock()
-    cluster.params.get.side_effect = lambda key, *a, **kw: {
-        "simulated_regions": False,
-    }.get(key)
-    cluster._node_index = 0
-    cluster.nodes = []
-    cluster.racks_count = 1
-
-    test_config = MagicMock()
-    test_config.REUSE_CLUSTER = is_reuse
-    test_config.test_id.return_value = "test-id-123"
-    cluster.test_config = test_config
-
-    cluster._get_instances = MagicMock(return_value=fake_instances)
-    cluster._create_node = MagicMock(
-        side_effect=lambda inst, idx, dc, rack, after_config=None: MagicMock(name=f"node-{idx}")
-    )
+    cluster = _gce_cluster_mock(is_reuse=is_reuse)
+    cluster._get_instances = MagicMock(side_effect=lambda dc_idx, az_idx=None: fake_instances)
 
     # Call the real add_nodes with self=cluster
     return GCECluster.add_nodes.__wrapped__(
@@ -71,6 +54,35 @@ def _make_gce_cluster(instance_count, requested_count, is_reuse=False):
         dc_idx=0,
         rack=0,
     )
+
+
+def _gce_cluster_mock(is_reuse=False, racks_count=1):
+    """Mocked GCECluster keeping the real rack placement and find-or-create logic."""
+    cluster = MagicMock(spec=GCECluster)
+    cluster.log = MagicMock()
+    cluster.params = MagicMock()
+    cluster.params.get.side_effect = lambda key, *a, **kw: {
+        "simulated_regions": False,
+    }.get(key)
+    cluster._node_index = 0
+    cluster.nodes = []
+    cluster.racks_count = racks_count
+
+    test_config = MagicMock()
+    test_config.REUSE_CLUSTER = is_reuse
+    test_config.test_id.return_value = "test-id-123"
+    cluster.test_config = test_config
+
+    cluster._rack_distribution = MagicMock(
+        side_effect=lambda count, rack: GCECluster._rack_distribution(cluster, count, rack)
+    )
+    cluster._create_or_find_instances = MagicMock(
+        side_effect=lambda **kwargs: GCECluster._create_or_find_instances(cluster, **kwargs)
+    )
+    cluster._create_node = MagicMock(
+        side_effect=lambda inst, idx, dc, rack, after_config=None: MagicMock(name=f"node-{idx}")
+    )
+    return cluster
 
 
 def test_gce_add_nodes_partial_provision_raises_error():
@@ -93,33 +105,64 @@ def test_gce_add_nodes_more_instances_than_requested_succeeds():
 
 def test_gce_add_nodes_no_instances_provisions_inline():
     """add_nodes should fall through to inline provisioning when no instances are found."""
-    cluster = MagicMock(spec=GCECluster)
-    cluster.log = MagicMock()
-    cluster.params = MagicMock()
-    cluster.params.get.side_effect = lambda key, *a, **kw: {
-        "simulated_regions": False,
-    }.get(key)
-    cluster._node_index = 0
-    cluster.nodes = []
-    cluster.racks_count = 1
-
-    test_config = MagicMock()
-    test_config.REUSE_CLUSTER = False
-    cluster.test_config = test_config
+    cluster = _gce_cluster_mock()
 
     # _get_instances returns empty list -> falls through to _create_instances
-    cluster._get_instances = MagicMock(return_value=[])
+    cluster._get_instances = MagicMock(side_effect=lambda dc_idx, az_idx=None: [])
 
     fake_vms = [MagicMock(name=f"vm-{i}") for i in range(3)]
     cluster._create_instances = MagicMock(return_value=fake_vms)
     cluster._get_instance_with_retry = MagicMock(side_effect=lambda name, dc_idx: MagicMock(name=name))
-    cluster._create_node = MagicMock(
-        side_effect=lambda inst, idx, dc, rack, after_config=None: MagicMock(name=f"node-{idx}")
-    )
 
     result = GCECluster.add_nodes.__wrapped__(cluster, count=3, dc_idx=0, rack=0)
-    cluster._create_instances.assert_called_once_with(3, 0, instance_type=None)
+    cluster._create_instances.assert_called_once_with(node_indexes=[1, 2, 3], dc_idx=0, rack=0, instance_type=None)
     assert len(result) == 3
+
+
+def test_gce_add_nodes_spreads_racks_by_node_index():
+    """rack=None must place each node in the rack its node index maps to."""
+    cluster = _gce_cluster_mock(racks_count=3)
+    cluster._get_instances = MagicMock(side_effect=lambda dc_idx, az_idx=None: [])
+    cluster._create_instances = MagicMock(
+        side_effect=lambda node_indexes, **kwargs: [MagicMock(name=f"vm-{idx}") for idx in node_indexes]
+    )
+    cluster._get_instance_with_retry = MagicMock(side_effect=lambda name, dc_idx: MagicMock(name=name))
+
+    GCECluster.add_nodes.__wrapped__(cluster, count=6, dc_idx=0, rack=None)
+
+    # every rack gets its own provisioning call, with the node indexes belonging to it
+    placement = {call.kwargs["rack"]: call.kwargs["node_indexes"] for call in cluster._create_instances.call_args_list}
+    assert placement == {0: [1, 4], 1: [2, 5], 2: [3, 6]}
+    # node labels agree with where the nodes were placed
+    assert [call.kwargs["rack"] for call in cluster._create_node.call_args_list] == [0, 1, 2, 0, 1, 2]
+
+
+def test_gce_add_nodes_explicit_rack_places_all_nodes_in_it():
+    """An explicit rack must be used for every node of the call, as the AZ to provision in."""
+    cluster = _gce_cluster_mock(racks_count=3)
+    cluster._get_instances = MagicMock(side_effect=lambda dc_idx, az_idx=None: [])
+    cluster._create_instances = MagicMock(
+        side_effect=lambda node_indexes, **kwargs: [MagicMock(name=f"vm-{idx}") for idx in node_indexes]
+    )
+    cluster._get_instance_with_retry = MagicMock(side_effect=lambda name, dc_idx: MagicMock(name=name))
+
+    GCECluster.add_nodes.__wrapped__(cluster, count=2, dc_idx=0, rack=2)
+
+    cluster._create_instances.assert_called_once_with(node_indexes=[1, 2], dc_idx=0, rack=2, instance_type=None)
+    assert [call.kwargs["rack"] for call in cluster._create_node.call_args_list] == [2, 2]
+
+
+def test_gce_add_nodes_finds_pre_provisioned_instances_per_rack():
+    """Pre-provisioned instances must be looked up in the zone bucket of each rack."""
+    cluster = _gce_cluster_mock(racks_count=3)
+    per_az = {az_idx: [MagicMock(name=f"instance-az{az_idx}")] for az_idx in range(3)}
+    cluster._get_instances = MagicMock(side_effect=lambda dc_idx, az_idx=None: per_az[az_idx])
+
+    nodes = GCECluster.add_nodes.__wrapped__(cluster, count=3, dc_idx=0, rack=None)
+
+    assert [call.kwargs["az_idx"] for call in cluster._create_or_find_instances.call_args_list] == [0, 1, 2]
+    cluster._create_instances.assert_not_called()
+    assert len(nodes) == 3
 
 
 # ---------------------------------------------------------------------------

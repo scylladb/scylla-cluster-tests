@@ -38,6 +38,7 @@ from sdcm.utils.gce_utils import (
     SECONDARY_NIC_ROUTING_SERVICE,
     SECONDARY_NIC_ROUTING_SERVICE_UNIT,
     GceLoggingClient,
+    gce_instance_zone,
     get_gce_compute_disks_client,
     get_alternative_zones,
     wait_for_extended_operation,
@@ -287,7 +288,7 @@ class GCENode(cluster.BaseNode):
 
     @property
     def zone(self):
-        return self._instance.zone.split("/")[-1]
+        return gce_instance_zone(self._instance)
 
     def set_hostname(self):
         self.log.debug("Hostname for node %s left as is", self.name)
@@ -433,7 +434,7 @@ class GCECluster(cluster.BaseCluster):
         # Use provisioner's zones to ensure consistency - provisioners already resolved random_zone() if needed
         self._gce_zone_names: list[str] = [provisioner.availability_zone for provisioner in provisioners]
         # Keep this print out for debugging purposes: validate that zones are correctly set
-        LOGGER.debug("GCE zones used: %s", self._gce_zone_names)
+        LOGGER.debug("GCE zones used: %s", [provisioner.availability_zones for provisioner in provisioners])
         self._gce_n_local_ssd = int(gce_n_local_ssd) if gce_n_local_ssd else 0
         self._add_disks = add_disks
         # the full node prefix will contain unique uuid, so use this for search of existing nodes
@@ -476,20 +477,28 @@ class GCECluster(cluster.BaseCluster):
             return bool(value)
         return False
 
-    def _create_instances(self, count, dc_idx=0, instance_type=None):
+    def _create_instances(self, node_indexes: list[int], dc_idx=0, rack=None, instance_type=None):
+        """Provision instances for the given node indexes, placing them in the zone of `rack`.
+
+        `rack` is handed to the provisioner as the definition's rack index, which selects the zone -
+        the GCE equivalent of picking the AZ subnet on AWS. When it is None the provisioner falls
+        back to the node index, so placement stays keyed on the node rather than on the batch.
+        """
+        count = len(node_indexes)
         region = self._definition_builder.regions[dc_idx]
         pricing_model = PricingModel.SPOT if "spot" in self.instance_provision else PricingModel.ON_DEMAND
         definitions = []
-        for node_index in range(self._node_index + 1, self._node_index + count + 1):
-            definitions.append(
-                self._definition_builder.build_instance_definition(
-                    region=region,
-                    node_type=self.node_type,
-                    index=node_index,
-                    dc_idx=dc_idx,
-                    instance_type=instance_type,
-                )
+        for node_index in node_indexes:
+            definition = self._definition_builder.build_instance_definition(
+                region=region,
+                node_type=self.node_type,
+                index=node_index,
+                dc_idx=dc_idx,
+                instance_type=instance_type,
             )
+            if rack is not None:
+                definition.rack_index = rack
+            definitions.append(definition)
         try:
             return provision_instances_with_fallback(
                 self.provisioners[dc_idx],
@@ -501,6 +510,14 @@ class GCECluster(cluster.BaseCluster):
             if isinstance(exc, ProvisionError) and not _is_zone_exhausted(exc):
                 raise
             if not self.is_az_fallback_enabled:
+                raise
+            if len(self.provisioners[dc_idx].availability_zones) > 1:
+                # Replacing a multi-AZ provisioner with a single-zone one would collapse the
+                # cluster into one zone; there is also no way to tell which zone was exhausted.
+                self.log.warning(
+                    "AZ fallback is not supported for a multi-AZ configuration (%s), not retrying",
+                    self.provisioners[dc_idx].availability_zones,
+                )
                 raise
             if count > 1:
                 self.log.warning(
@@ -565,28 +582,27 @@ class GCECluster(cluster.BaseCluster):
     def _destroy_instance(self, name: str, dc_idx: int):
         target_node = self._get_instances_by_name(dc_idx=dc_idx, name=name)
         operation = self._gce_service.delete(
-            instance=target_node, project=self.project, zone=self.provisioners[dc_idx].availability_zone
+            instance=target_node, project=self.project, zone=gce_instance_zone(target_node)
         )
         wait_for_extended_operation(operation, "Wait for instance deletion")
 
     def _get_instances_by_prefix(self, dc_idx: int = 0):
-        instances_by_zone = self._gce_service.list(
-            project=self.project, zone=self.provisioners[dc_idx].availability_zone
-        )
-        return [node for node in instances_by_zone if node.name.startswith(self._node_prefix)]
+        instances = []
+        for zone in self.provisioners[dc_idx].availability_zones:
+            instances.extend(self._gce_service.list(project=self.project, zone=zone))
+        return [node for node in instances if node.name.startswith(self._node_prefix)]
 
     def _get_instances_by_name(self, name: str, dc_idx: int = 0):
-        """Search for an instance by name in the zone where the provisioner created it.
+        """Search for an instance by name in every zone of the DC's region.
 
-        Uses the provisioner's zone to ensure we search in the same zone where instances
-        are created, avoiding mismatches when availability_zone is not specified and
-        random_zone() is used independently.
+        A multi-AZ cluster has its nodes spread over several zones of one region, so the search
+        cannot be pinned to a single zone - the provisioner's own zone is just the first of them.
         """
-        zone = self.provisioners[dc_idx].availability_zone
+        region = self.provisioners[dc_idx].region
         all_instances = self._gce_service.aggregated_list(project=self.project)
         for zone_key, response in all_instances:
             # zone_key format is "zones/zone-name"
-            if response.instances and zone in zone_key:
+            if response.instances and zone_key.split("/")[-1].startswith(f"{region}-"):
                 for instance in response.instances:
                     if instance.name == name:
                         return instance
@@ -612,15 +628,13 @@ class GCECluster(cluster.BaseCluster):
             raise CreateGCENodeError(f"Instance {name} is not in RUNNING state: {instance.status}")
         return instance
 
-    def _get_instances(self, dc_idx: int) -> list[compute_v1.Instance]:
+    def _get_instances(self, dc_idx: int, az_idx: int | None = None) -> list[compute_v1.Instance]:
         test_id = self.test_config.test_id()
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
 
         instances_by_tags = list_instances_gce(tags_dict={"TestId": test_id, "NodeType": self.node_type})
-        # Use provisioner's zone to extract region, ensuring consistency with where instances are created
-        provisioner_zone = self.provisioners[dc_idx].availability_zone
-        region = provisioner_zone[:-2]  # Remove zone suffix (e.g., "us-east1-b" -> "us-east1")
+        region = self.provisioners[dc_idx].region
         # Use ssh_connection_ip_type from params if _node_public_ips is not yet set (during __init__)
         # If _node_public_ips exists, use it; otherwise fallback to ssh_connection_ip_type
         if hasattr(self, "_node_public_ips"):
@@ -636,12 +650,41 @@ class GCECluster(cluster.BaseCluster):
         existing_node_names = {node.name for node in self.nodes}
         instances = [instance for instance in instances if instance.name not in existing_node_names]
 
+        if az_idx is not None and instances:
+            instances = self._instances_in_az(instances, az_idx)
+
         def sort_by_index(instance):
             metadata = gce_meta_to_dict(instance.metadata)
             return metadata.get("NodeIndex", 0)
 
         instances = sorted(instances, key=sort_by_index)
         return instances
+
+    def _instances_in_az(self, instances: list[compute_v1.Instance], az_idx: int) -> list[compute_v1.Instance]:
+        """Keep only the instances that live in the zone of rack `az_idx`.
+
+        Bucketing goes by the zone each instance is actually in, not by the configured
+        availability_zone value, so instances are still found when provisioning moved them to
+        another zone (AZ fallback flow).
+        """
+        configured_letters = [
+            letter.strip() for letter in (self.params.get("availability_zone") or "").split(",") if letter.strip()
+        ]
+        if len(configured_letters) < 2:
+            # A single rack owns every instance of the DC, wherever runtime AZ fallback put it
+            return instances
+
+        by_zone_letter = {}
+        for instance in instances:
+            by_zone_letter.setdefault(gce_instance_zone(instance).rsplit("-", 1)[-1], []).append(instance)
+
+        ordered_letters = configured_letters + sorted(
+            letter for letter in by_zone_letter if letter not in configured_letters
+        )
+        ordered_letters = [letter for letter in ordered_letters if letter in by_zone_letter]
+        if az_idx >= len(ordered_letters):
+            return []
+        return by_zone_letter[ordered_letters[az_idx]]
 
     def _create_node(self, instance, node_index, dc_idx, rack, after_config=None):
         try:
@@ -680,33 +723,27 @@ class GCECluster(cluster.BaseCluster):
         self.log.info("Adding nodes to cluster")
         nodes = []
         instance_dc = 0 if self.params.get("simulated_regions") else dc_idx
-        if self.test_config.REUSE_CLUSTER:
-            instances = self._get_instances(instance_dc)
-            if not instances:
-                raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
-        elif instances := self._get_instances(instance_dc):
-            if len(instances) < count:
-                raise ProvisionError(
-                    f"Found only {len(instances)} pre-provisioned instance(s) but {count} were requested "
-                    f"for dc_idx={instance_dc}. The pre-provisioning step may have partially failed."
-                )
-            self.log.info("Found provisioned instances = %s", instances)
-        else:
-            self.log.info("Found no provisioned instances. Provision them.")
-            provisioned_vms = self._create_instances(count, instance_dc, instance_type=instance_type)
-            # The provisioner returns VmInstance objects, but GCENode expects compute_v1.Instance.
-            # Fetch the native GCE instances by name with retry to ensure they are in RUNNING state.
-            instances = []
-            for vm in provisioned_vms:
-                gce_instance = self._get_instance_with_retry(name=vm.name, dc_idx=instance_dc)
-                instances.append(gce_instance)
+        # With simulated racks every instance goes to the same zone; only the node labels differ
+        instance_rack = 0 if self.params.get("simulated_racks") else rack
+        rack_distribution = self._rack_distribution(count, instance_rack)
+        self.log.info("rack distribution: %s", {rack_idx: len(indexes) for rack_idx, indexes in rack_distribution})
 
-        self.log.debug("instances: %s", instances)
-        if instances:
-            self.log.debug("GCE instance extra info: %s", instances[0])
-        for node_index, instance in enumerate(instances, start=self._node_index + 1):
-            # in case rack is not specified, spread nodes to different racks
-            node_rack = node_index % self.racks_count if rack is None else rack
+        placed = []
+        for rack_idx, node_indexes in rack_distribution:
+            instances = self._create_or_find_instances(
+                node_indexes=node_indexes, dc_idx=instance_dc, az_idx=rack_idx, instance_type=instance_type
+            )
+            # Requesting N instances may find more than N leftover pre-provisioned ones; take N
+            placed.extend(zip(node_indexes, instances))
+        placed.sort(key=lambda item: item[0])
+
+        self.log.debug("instances: %s", [instance for _, instance in placed])
+        if placed:
+            self.log.debug("GCE instance extra info: %s", placed[0][1])
+        for node_index, instance in placed:
+            # in case rack is not specified, spread nodes to different racks - the same node index
+            # based rule the provisioner uses to pick the zone, so rack and zone stay in sync
+            node_rack = (node_index - 1) % self.racks_count if rack is None else rack
             node = self._create_node(instance, node_index, dc_idx, rack=node_rack, after_config=after_config)
             nodes.append(node)
             self.nodes.append(node)
@@ -716,6 +753,52 @@ class GCECluster(cluster.BaseCluster):
         self._node_index += count
         self.log.info("added nodes: %s", nodes)
         return nodes
+
+    def _rack_distribution(self, count: int, rack: int | None) -> list[tuple[int, list[int]]]:
+        """Split the next `count` node indexes into `(rack_idx, node_indexes)` groups.
+
+        With an explicit rack every node goes to it. With rack=None nodes are spread over the racks
+        by node index, so which rack - and therefore which zone - a node ends up in depends only on
+        the node itself, not on how many nodes happen to be provisioned together.
+        """
+        node_indexes = list(range(self._node_index + 1, self._node_index + count + 1))
+        if rack is not None:
+            return [(rack, node_indexes)]
+        groups: Dict[int, list[int]] = {}
+        for node_index in node_indexes:
+            groups.setdefault((node_index - 1) % self.racks_count, []).append(node_index)
+        return sorted(groups.items())
+
+    def _create_or_find_instances(
+        self, node_indexes: list[int], dc_idx: int, az_idx: int, instance_type=None
+    ) -> list[compute_v1.Instance]:
+        """Return instances for the given node indexes, all placed in the zone of rack `az_idx`.
+
+        Pre-provisioned instances of that zone are reused when present, otherwise the nodes are
+        provisioned inline.
+        """
+        count = len(node_indexes)
+        if self.test_config.REUSE_CLUSTER:
+            instances = self._get_instances(dc_idx, az_idx)
+            if not instances:
+                raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
+            return instances
+        if instances := self._get_instances(dc_idx, az_idx):
+            if len(instances) < count:
+                raise ProvisionError(
+                    f"Found only {len(instances)} pre-provisioned instance(s) but {count} were requested "
+                    f"for dc_idx={dc_idx}, az_idx={az_idx}. The pre-provisioning step may have partially failed."
+                )
+            self.log.info("Found provisioned instances = %s", instances)
+            return instances
+
+        self.log.info("Found no provisioned instances. Provision them.")
+        provisioned_vms = self._create_instances(
+            node_indexes=node_indexes, dc_idx=dc_idx, rack=az_idx, instance_type=instance_type
+        )
+        # The provisioner returns VmInstance objects, but GCENode expects compute_v1.Instance.
+        # Fetch the native GCE instances by name with retry to ensure they are in RUNNING state.
+        return [self._get_instance_with_retry(name=vm.name, dc_idx=dc_idx) for vm in provisioned_vms]
 
 
 class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
