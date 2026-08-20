@@ -41,7 +41,7 @@ def nested_env_subkey(env_key: str, prefix: str, sep: str) -> str | None:
     """
     full_prefix = prefix + sep
     if env_key.startswith(full_prefix):
-        return env_key[len(full_prefix) :].split(sep)[0]
+        return env_key[len(full_prefix) :].split(sep, maxsplit=1)[0]
     return None
 
 
