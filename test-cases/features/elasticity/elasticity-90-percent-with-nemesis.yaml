@@ -1,3 +1,22 @@
+test_metadata:
+  description: >-
+    Elasticity feature test running a tablets-enabled keyspace at high disk utilization for 50
+    hours with concurrent read/write cassandra-stress load and SisyphusMonkey nemesis restricted to
+    disk-utilization-safe disruptions, validating elasticity nemesis interaction under sustained
+    load.
+  test_type: features
+  tier: tier1
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  features:
+    - elasticity
+    - tablets
+  team_ownership: storage-qa
+
 # Maintained by Storage QA
 test_duration: 3000
 prepare_stress_duration: 720

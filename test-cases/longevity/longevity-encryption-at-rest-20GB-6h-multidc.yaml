@@ -1,3 +1,22 @@
+test_metadata:
+  description: >-
+    Longevity test validating encryption-at-rest (server_encrypt) on a multi-DC cluster (2x3
+    nodes), running cassandra-stress write/read workloads for ~6 hours with SisyphusMonkey nemesis
+    and rack-aware/region-aware loaders.
+  test_type: longevity
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  features:
+    - encryption-at-rest
+    - tls-ssl
+    - multi-dc
+  team_ownership: storage-qa
+
 test_duration: 550
 
 prepare_write_cmd:  [

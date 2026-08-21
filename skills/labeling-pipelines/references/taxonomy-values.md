@@ -29,7 +29,7 @@ cassandra-stress, cql-stress-cassandra-stress, scylla-bench, ycsb, latte, gemini
 Any class from NemesisRegistry + NemesisRunner (124 values). See `docs/pipeline-labels/taxonomy.yaml` nemesis_labels section for the full list.
 
 ## features
-tls-ssl, multi-dc, cdc, tablets, vnodes, alternator, encryption-at-rest, ldap, authorization, ipv6, counters, large-partitions, materialized-views, secondary-indexes, lwt, schema-changes, tombstone-gc, twcs, ... (see taxonomy.yaml for full list)
+tls-ssl, multi-dc, cdc, tablets, vnodes, alternator, encryption-at-rest, ldap, authorization, ipv6, counters, large-partitions, materialized-views, secondary-indexes, lwt, schema-changes, tombstone-gc, twcs, elasticity, ... (see taxonomy.yaml for full list)
 
 ## supported_backends
 aws, gce, azure, docker, k8s-eks, k8s-gke, k8s-local-kind, baremetal, xcloud, oci

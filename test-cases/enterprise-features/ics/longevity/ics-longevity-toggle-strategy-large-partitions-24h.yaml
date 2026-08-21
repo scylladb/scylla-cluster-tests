@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Enterprise ICS longevity test that toggles a table's compaction strategy via
+    ToggleTableIcsMonkey nemesis while running scylla-bench large-partition write/read workloads
+    for ~27 hours. Note: this test has not been run in a while.
+  test_type: longevity
+  tier: ondemand
+  duration_class: long
+  stress_tools:
+    - scylla-bench
+  workload: mixed
+  features:
+    - large-partitions
+  team_ownership: storage-qa
+
 test_duration: 1600
 
 nemesis_class_name: "SisyphusMonkey"

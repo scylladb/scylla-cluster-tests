@@ -1,1 +1,14 @@
+test_metadata:
+  description: >-
+    Enterprise ICS (Incremental Compaction Strategy) longevity overlay that sets the compaction
+    strategy to IncrementalCompactionStrategy for a large-partition longevity scenario running over
+    ~4 days. Note: this test has not been run in a while.
+  test_type: longevity
+  tier: ondemand
+  duration_class: long
+  stress_tools: []
+  features:
+    - large-partitions
+  team_ownership: storage-qa
+
 compaction_strategy: 'IncrementalCompactionStrategy'
