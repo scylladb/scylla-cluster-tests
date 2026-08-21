@@ -49,7 +49,7 @@ prepare_write_cmd:
     -mode cql3 native
     -rate threads=80
     -pop seq=1..120000000
-    -col 'n=FIXED(5) size=FIXED(512)'
+    -col 'n=FIXED(4) size=FIXED(512)'
     -log interval=5
   - >-
     cassandra-stress write cl=QUORUM n=120000000
@@ -57,7 +57,7 @@ prepare_write_cmd:
     -mode cql3 native
     -rate threads=80
     -pop seq=120000001..240000000
-    -col 'n=FIXED(5) size=FIXED(512)'
+    -col 'n=FIXED(4) size=FIXED(512)'
     -log interval=5
 
 stress_cmd:
@@ -67,7 +67,7 @@ stress_cmd:
     -mode cql3 native
     -rate threads=50 throttle=30000/s
     -pop seq=1..120000000
-    -col 'n=FIXED(5) size=FIXED(512)'
+    -col 'n=FIXED(4) size=FIXED(512)'
     -log interval=5
   - >-
     cassandra-stress mixed cl=QUORUM duration=240m
@@ -75,7 +75,7 @@ stress_cmd:
     -mode cql3 native
     -rate threads=50 throttle=30000/s
     -pop seq=120000001..240000000
-    -col 'n=FIXED(5) size=FIXED(512)'
+    -col 'n=FIXED(4) size=FIXED(512)'
     -log interval=5
 
 use_hdrhistogram: true
