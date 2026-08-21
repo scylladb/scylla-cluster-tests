@@ -288,7 +288,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             # flush all memtables to SSTables
             with self.actions_log.action_scope("stopping node"):
                 node.run_nodetool("drain", timeout=15 * 60, coredump_on_timeout=True, long_running=True, retry=0)
-                node.run_nodetool("snapshot")
+                # node.run_nodetool("snapshot")
                 node.stop_scylla_server()
             with self.actions_log.action_scope("upgrading packages"):
                 node.remoter.run("sudo rpm -UvhR --oldpackage /tmp/scylla/*development*", ignore_status=True)
@@ -307,7 +307,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             # flush all memtables to SSTables
             with self.actions_log.action_scope("stop node"):
                 node.run_nodetool("drain", timeout=15 * 60, coredump_on_timeout=True, long_running=True, retry=0)
-                node.run_nodetool("snapshot")
+                # node.run_nodetool("snapshot")
                 node.stop_scylla_server(verify_down=False)
 
             orig_is_enterprise = node.is_product_enterprise
@@ -473,7 +473,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         with self.actions_log.action_scope("stop node"):
             node.run_nodetool("drain", timeout=15 * 60, coredump_on_timeout=True, long_running=True, retry=0)
             # backup the data
-            node.run_nodetool("snapshot")
+            # node.run_nodetool("snapshot")
             node.stop_scylla_server(verify_down=False)
 
         if node.distro.is_rhel_like:
@@ -722,6 +722,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.upgrade_os(self.db_cluster.nodes)
 
         self.actions_log.info("Preparing test keyspaces and tables")
+        # Pre-create keyspaces with custom storage (e.g. S3) before prepare_keyspaces_and_tables,
+        # so the hardcoded CREATE KEYSPACE IF NOT EXISTS calls inside it reuse the pre-created ones.
+        self._pre_create_keyspace()
         # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
         self.prepare_keyspaces_and_tables()
         self.actions_log.info("Running s-b to create schemas to avoid #11459")
