@@ -104,6 +104,9 @@ PARAM_TO_ENV: dict[str, str] = {
     "post_behavior_monitor_nodes": "SCT_POST_BEHAVIOR_MONITOR_NODES",
     "post_behavior_k8s_cluster": "SCT_POST_BEHAVIOR_K8S_CLUSTER",
     "post_behavior_vector_store_nodes": "SCT_POST_BEHAVIOR_VECTOR_STORE_NODES",
+    "vector_store_source_repo": "SCT_VECTOR_STORE_SOURCE_REPO",
+    "vector_store_source_ref": "SCT_VECTOR_STORE_SOURCE_REF",
+    "vector_store_source_build_timeout": "SCT_VECTOR_STORE_SOURCE_BUILD_TIMEOUT",
     # Misc
     "disable_raft": "SCT_DISABLE_RAFT",
     "internode_compression": "SCT_INTERNODE_COMPRESSION",

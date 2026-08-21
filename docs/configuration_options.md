@@ -4685,6 +4685,15 @@ Optional. Allows to pass through custom rune script parameters to the 'latte sch
 **type:** dict | YAML/JSON string → dict
 
 
+## **search_test_config** / SCT_SEARCH_TEST_CONFIG
+
+Search test definition (datasets, shards, query sets and their runtime settings).<br>Accepts a full 's3://bucket/key' URL (downloaded into the workload's own data directory),<br>an absolute path, or one relative to the SCT root, e.g. data_dir/latte/fts_search/plan.yaml.<br>Required by a search test: it is the definition of what to run, so there is nothing to fall back on.<br>Per-query-set rate, duration and index-wait values live inside this file, not in SCT params.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **perf_stress_keyspace** / SCT_PERF_STRESS_KEYSPACE
 
 Keyspace name used in performance gradual throughput tests.<br>Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).<br>For latte, if not set, falls back to the 'keyspace' key in latte_schema_parameters.
@@ -4912,6 +4921,33 @@ ScyllaDB connection port for Vector Store
 Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)
 
 **default:** 0
+
+**type:** int
+
+
+## **vector_store_source_repo** / SCT_VECTOR_STORE_SOURCE_REPO
+
+Git repository URL to build vector-store from source on the VS node.<br>Setting this (or 'vector_store_source_ref') switches provisioning from a prebuilt AMI to a<br>source build over the base AMI, and is mutually exclusive with 'vector_store_version'.<br>If omitted while 'vector_store_source_ref' is set, defaults to https://github.com/scylladb/vector-store.git.<br>Source builds are supported on the aws backend only.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **vector_store_source_ref** / SCT_VECTOR_STORE_SOURCE_REF
+
+Git ref (branch, tag or commit SHA) to build vector-store from source on the VS node.<br>Setting this (or 'vector_store_source_repo') switches provisioning from a prebuilt AMI to a<br>source build over the base AMI, and is mutually exclusive with 'vector_store_version'.<br>If omitted while 'vector_store_source_repo' is set, defaults to 'master'.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **vector_store_source_build_timeout** / SCT_VECTOR_STORE_SOURCE_BUILD_TIMEOUT
+
+Max seconds to wait for vector-store source build to complete
+
+**default:** 3600
 
 **type:** int
 

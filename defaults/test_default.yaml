@@ -309,6 +309,7 @@ zero_token_instance_type_db: ''
 use_zero_nodes: false
 
 latte_schema_parameters: {}
+search_test_config: null
 perf_stress_keyspace: null
 perf_stress_table: null
 workload_name: ''
@@ -374,6 +375,14 @@ vector_store_scylla_port: 9042
 vector_store_threads: 0  # 0 = defaults to number of cores on a node
 vector_store_docker_image: 'scylladb/vector-store'
 vector_store_version: ''
+# Both must stay empty: setting either one is what requests a source build over the base AMI.
+# The fallbacks applied once one of them is set live in sdcm/utils/vector_store_utils.py.
+vector_store_source_repo: ''
+vector_store_source_ref: ''
+# Covers apt, the rustup bootstrap and a cold 'cargo build --release' on the small instance types
+# the VS nodes use. Note this is per node: the builds run one after another, see
+# VectorStoreSetAWS.reconfigure_vector_store_nodes.
+vector_store_source_build_timeout: 3600
 docker_image_cassandra: 'cassandra'
 cassandra_version: '4.1'
 cassandra_num_tokens: 16

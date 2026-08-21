@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from google.api_core.exceptions import ServiceUnavailable
 
+from argus.client.generic_result import ColumnMetadata, ResultType
 from sdcm.exceptions import UnsupportedNemesis
 from sdcm.provision.provisioner import ProvisionUnrecoverableError
 from sdcm.sct_events import Severity
@@ -234,3 +235,88 @@ def test_latency_calculator_decorator_with_monitoring_set(tmp_path):
     assert cycle["Scylla P99_read - node-1"] == 1.5
     assert len(cycle["screenshots"]) == 1
     assert tester.monitors.screenshot_requests
+
+
+# error_thresholds override / extra_columns / extra_values -- used by fts_test.py so that a plan-
+# supplied expected latency becomes the table's validation rule and per-row metadata columns,
+# without requiring every caller to route through 'latency_decorator_error_thresholds'.
+
+
+def test_error_thresholds_override_bypasses_test_params(tmp_path):
+    tester = FakeLatencyTester(latency_results_file=tmp_path / "latency_results.json", monitors=FakeMonitorSet())
+    tester.params["latency_decorator_error_thresholds"] = {"read": {"default": {"P99 read": {"fixed_limit": 999}}}}
+    override = {"read": {"default": {"P99 read": {"fixed_limit": 50}}}}
+
+    @latency_calculator_decorator(
+        workload_type="read", legend="fts search", cycle_name="fts_search", row_name="row-1", error_thresholds=override
+    )
+    def _do_search(_self):
+        return {"hdr_tags": ["fn--search"]}
+
+    with (
+        patch("sdcm.tester.ClusterTester", FakeLatencyTester),
+        patch("sdcm.utils.decorators.EventCounterContextManager", FakeEventCounter),
+        patch("sdcm.utils.latency.collect_latency"),
+        patch("sdcm.utils.decorators.send_result_to_argus") as send_to_argus_mock,
+    ):
+        _do_search(tester)
+
+    assert send_to_argus_mock.call_args.kwargs["error_thresholds"] == override
+
+
+def test_error_thresholds_defaults_to_test_params_when_not_overridden(tmp_path):
+    tester = FakeLatencyTester(latency_results_file=tmp_path / "latency_results.json", monitors=FakeMonitorSet())
+    configured = {"read": {"default": {"P99 read": {"fixed_limit": 10}}}}
+    tester.params["latency_decorator_error_thresholds"] = configured
+
+    with (
+        patch("sdcm.tester.ClusterTester", FakeLatencyTester),
+        patch("sdcm.utils.decorators.EventCounterContextManager", FakeEventCounter),
+        patch("sdcm.utils.latency.collect_latency"),
+        patch("sdcm.utils.decorators.send_result_to_argus") as send_to_argus_mock,
+    ):
+        _run_decorated_search(tester)
+
+    assert send_to_argus_mock.call_args.kwargs["error_thresholds"] == configured
+
+
+def test_extra_columns_and_extra_values_are_forwarded(tmp_path):
+    tester = FakeLatencyTester(latency_results_file=tmp_path / "latency_results.json", monitors=FakeMonitorSet())
+    extra_columns = [ColumnMetadata(name="query_example", unit="", type=ResultType.TEXT)]
+
+    @latency_calculator_decorator(
+        workload_type="read",
+        legend="fts search",
+        cycle_name="fts_search",
+        row_name="row-1",
+        extra_columns=extra_columns,
+    )
+    def _do_search(_self):
+        return {"hdr_tags": ["fn--search"], "extra_values": {"query_example": "hello world"}}
+
+    with (
+        patch("sdcm.tester.ClusterTester", FakeLatencyTester),
+        patch("sdcm.utils.decorators.EventCounterContextManager", FakeEventCounter),
+        patch("sdcm.utils.latency.collect_latency"),
+        patch("sdcm.utils.decorators.send_result_to_argus") as send_to_argus_mock,
+    ):
+        _do_search(tester)
+
+    assert send_to_argus_mock.call_args.kwargs["extra_columns"] == extra_columns
+    assert send_to_argus_mock.call_args.kwargs["extra_values"] == {"query_example": "hello world"}
+
+
+def test_extra_columns_defaults_to_none_for_existing_callers(tmp_path):
+    """Callers that do not pass 'extra_columns' must not change the call to 'send_result_to_argus'."""
+    tester = FakeLatencyTester(latency_results_file=tmp_path / "latency_results.json", monitors=FakeMonitorSet())
+
+    with (
+        patch("sdcm.tester.ClusterTester", FakeLatencyTester),
+        patch("sdcm.utils.decorators.EventCounterContextManager", FakeEventCounter),
+        patch("sdcm.utils.latency.collect_latency"),
+        patch("sdcm.utils.decorators.send_result_to_argus") as send_to_argus_mock,
+    ):
+        _run_decorated_search(tester)
+
+    assert send_to_argus_mock.call_args.kwargs["extra_columns"] is None
+    assert send_to_argus_mock.call_args.kwargs["extra_values"] is None

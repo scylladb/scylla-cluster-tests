@@ -1,0 +1,65 @@
+test_metadata:
+  description: >-
+    Full-text search (BM25) performance test on AWS. Loads sharded document datasets from S3 into
+    ScyllaDB, builds a fulltext_index on a vector-store node, and runs latte query sets at
+    configured concurrency and rate. Reports index build time and throughput (measured by SCT from
+    vector-store's own 'full scan' log lines) plus per-query-set search latency to Argus, split into
+    one table per 'expected_p99_read_ms' value configured in the plan. Defaults to a sanity-sized
+    plan; point 'search_test_config' at large_config.yaml for a full performance run.
+  test_type: performance
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: read
+  nemesis_labels: []
+  features:
+    - tablets
+
+# Sized for the default (sanity) plan, with room for the vector-store source build and the AMI
+# provisioning on top. Every latte phase carries a timeout of its own now (see fts_test.py), so
+# this is the budget for the run as a whole rather than the fallback timeout of each command.
+# Raise it via SCT_TEST_DURATION when pointing 'search_test_config' at large_config.yaml, which loads
+# 100 shards per dataset and takes several hours.
+test_duration: 600
+
+use_hdrhistogram: true
+
+n_db_nodes: 1
+n_loaders: 1
+n_vector_store_nodes: 1
+
+# Build vector-store from source rather than taking the one baked into the AMI: released
+# vector-store does not have full-text index support yet, upstream master does.
+# Setting either 'vector_store_source_ref' or 'vector_store_source_repo' switches provisioning to
+# a source build; the repo defaults to scylladb/vector-store, so the ref alone is enough here.
+# Override with SCT_VECTOR_STORE_SOURCE_REPO / SCT_VECTOR_STORE_SOURCE_REF to test a fork or a
+# specific commit. The base AMI is picked automatically (newest VS AMI for the arch) unless
+# 'ami_id_vector_store' is set explicitly -- the source build replaces whatever binary it ships.
+vector_store_source_ref: 'master'
+
+# 'scylla_version' is not pinned here: like every other aws test case it comes from the pipeline
+# (see the jenkinsfile) or from SCT_SCYLLA_VERSION for a manual run. It has to be a build with
+# full-text index support, i.e. 'master:latest' for now.
+
+instance_type_db: 'i4i.xlarge'
+instance_type_loader: 'c5.large'
+instance_type_vector_store: 'r8g.xlarge'
+
+user_prefix: 'fts-search'
+
+use_preinstalled_scylla: true
+
+# The dataset/query plan. Defaults to the sanity-sized one; the corpora it names still come from
+# S3, only the plan is in the repo. Resolved relative to the SCT root by
+# resolve_test_config_path() in search_perf_test.py, which also takes a full 's3://bucket/key'
+# URL, so a run can use a plan that is not in the repo at all:
+#   SCT_SEARCH_TEST_CONFIG=data_dir/latte/fts_search/large_config.yaml  # the full run, in-repo
+#   SCT_SEARCH_TEST_CONFIG=s3://full-text-search-sct/fts/config/x.yaml  # anything else
+search_test_config: 'data_dir/latte/fts_search/sanity_config.yaml'
+
+latte_schema_parameters:
+  keyspace: 'fts_bench'
+  table: 'documents'
