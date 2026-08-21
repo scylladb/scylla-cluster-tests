@@ -77,6 +77,9 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         output = []
         for index in range(network_interfaces_count(self.params)):
             output.append({"DeviceIndex": index, **self._network_interface_params(interface_index=index)})
+        # request public IP only for single-NIC instances (device index 0)
+        if len(output) == 1:
+            output[0]["AssociatePublicIpAddress"] = True
         return output
 
     @computed_field
