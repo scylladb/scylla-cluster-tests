@@ -1,0 +1,19 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+rollingUpgradePipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    minicloud: true,
+
+    // Use a fixed base version, not auto: auto runs one upgrade per supported base from
+    // new_scylla_repo (matrix expansion).
+    base_versions: '2026.2.4',
+    linux_distro: 'ubuntu-noble',
+
+    test_name: 'upgrade_test.UpgradeTest.test_generic_cluster_upgrade',
+    test_config: '''["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/minicloud/generic-rolling-upgrade.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]''',
+    provision_type: 'on_demand'
+)
