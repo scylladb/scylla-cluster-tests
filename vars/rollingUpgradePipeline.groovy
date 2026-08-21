@@ -213,7 +213,11 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     loadEnvFromString(params.extra_environment_variables)
-                                    tagBuilder()
+                                    // tag only when not running on a local minicloud agent:
+                                    // local agents have no IMDS, so tagBuilder() would fail there.
+                                    if (!(minicloudEnabled && localAgent)) {
+                                        tagBuilder()
+                                    }
                                     dir('scylla-cluster-tests') {
                                         checkout scm
                                         checkoutQaInternal(params)

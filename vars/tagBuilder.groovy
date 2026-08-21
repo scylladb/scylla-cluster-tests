@@ -180,7 +180,8 @@ def identifyCloud() {
 
     // AWS Network Check (IMDSv2 Aware)
     // Try to fetch token first
-    def awsToken = sh(script: "curl -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' --connect-timeout 1 -s 2>/dev/null", returnStdout: true).trim()
+    // with `|| true` curl failures are non-fatal on hosts without IMDS (e.g. bare-metal agents)
+    def awsToken = sh(script: "curl -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' --connect-timeout 1 -s 2>/dev/null || true", returnStdout: true).trim()
     def awsHeader = awsToken ? "-H 'X-aws-ec2-metadata-token: ${awsToken}'" : ""
 
     if (sh(script: "curl -fs --connect-timeout 2 ${awsHeader} http://169.254.169.254/latest/meta-data/instance-id", returnStatus: true) == 0) {
