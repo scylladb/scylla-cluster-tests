@@ -1,0 +1,101 @@
+use latte::*;
+
+
+const KEYSPACE = latte::param!("keyspace", "vdb_bench_perf");
+const TABLE = latte::param!("table", "vdb_bench_collection");
+const REPLICATION_FACTOR = latte::param!("replication_factor", 1);
+
+const VECTOR_DATA_DIR = latte::param!("vector_data_dir", "data_dir/latte/vector_search/");
+
+const PARSING_DELIMITER = ", ";
+
+const P_STMT = #{
+    "INSERT": #{
+        "NAME": "p_stmt_vdb_bench_collection__insert",
+        "CQL": `INSERT INTO ${KEYSPACE}.${TABLE} (id, vector) VALUES (:id, :vector)`,
+    },
+};
+
+
+pub async fn schema(db) {
+    db.execute(`CREATE KEYSPACE IF NOT EXISTS ${KEYSPACE} WITH REPLICATION = {
+        'class': 'NetworkTopologyStrategy', 'replication_factor': '${REPLICATION_FACTOR}'} AND durable_writes = true`).await?;
+
+    db.execute(`CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE} (
+        id int,
+        vector vector<float, 1536>,
+        PRIMARY KEY (id)
+    ) WITH bloom_filter_fp_chance = 0.01
+        AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+        AND compaction = {'class': 'IncrementalCompactionStrategy'}
+        AND compression = {'sstable_compression': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+        AND cdc = {'delta': 'full', 'enabled': 'true', 'postimage': 'false', 'preimage': 'false', 'ttl': '86400'}
+        AND tombstone_gc = {'mode': 'timeout', 'propagation_delay_in_seconds': '3600'}`
+    ).await?;
+
+    Ok(())
+}
+
+pub async fn prepare(db) {
+    schema(db).await?;
+    db.prepare(P_STMT.INSERT.NAME, P_STMT.INSERT.CQL).await?;
+    load_dataset(db).await?;
+}
+
+fn strip_surrounding_brackets(s) {
+    let cleaned = s;
+    if s.len() > 0 {
+        let chars = s.chars().collect::<Vec>();
+        let first_char = chars[0];
+        let last_idx = s.len() - 1;
+        let last_char = chars[last_idx];
+
+        if first_char == '[' && last_char == ']' {
+            cleaned = s[1..last_idx];
+        }
+    }
+    cleaned
+}
+
+pub async fn load_dataset(db) {
+    let dataset_path = VECTOR_DATA_DIR + "vs_sanity_dataset_50k_1536dim.txt";
+    let maxsplit = 1;
+    let file_iterator = fs::read_split_lines_iter(dataset_path, [PARSING_DELIMITER, maxsplit])?;
+
+    db.data.dataset = [];
+    while let Some(_entry) = file_iterator.next() {
+        let raw_entry = _entry?;
+        if !raw_entry.is_empty() {
+            let id = raw_entry[0].parse::<i64>()?;
+
+            let vectors = [];
+            let raw_vectors = strip_surrounding_brackets(raw_entry[1]);
+            let vector_strings = raw_vectors.split(',').collect::<Vec>();
+
+            for vector_str in vector_strings {
+                vectors.push(f64::parse(vector_str.trim())?);
+            }
+
+            let entry = #{ "id": id, "vectors": vectors };
+            db.data.dataset.push(entry)
+        }
+    }
+    println!("Loaded {} dataset lines", db.data.dataset.len());
+
+    Ok(())
+}
+
+pub async fn erase(db) {
+   db.execute(`TRUNCATE TABLE ${KEYSPACE}.${TABLE}`).await?;
+}
+
+pub async fn load(db, i) {
+}
+
+pub async fn insert(db, i) {
+    // Get the line for this iteration (dataset loaded in prepare phase)
+    let row_to_insert = db.data.dataset[i];
+
+    let params = #{ "id": row_to_insert.id, "vector": row_to_insert.vectors };
+    db.execute_prepared(P_STMT.INSERT.NAME, params).await?;
+}
