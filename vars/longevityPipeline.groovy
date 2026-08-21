@@ -1,7 +1,8 @@
 #!groovy
 
 def completed_stages = [:]
-def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+// keep these in the script binding (no `def`) so post{} can always read fallback timeout values
+(testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
 
@@ -327,7 +328,11 @@ def call(Map pipelineParams) {
                         // the rest of the build, so 'Provision Resources' and 'Run SCT Test'
                         // both reach minicloud instead of the real cloud.
                         startMinicloud.exportEnv(params, pipelineParams)
-                        tagBuilder()
+                        // tag only when not running on a local minicloud agent:
+                        // local agents have no IMDS, so tagBuilder() would fail there.
+                        if (!(minicloudEnabled && localAgent)) {
+                            tagBuilder()
+                        }
                     }
                     dir('scylla-cluster-tests') {
                         timeout(time: 5, unit: 'MINUTES') {
