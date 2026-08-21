@@ -23,6 +23,7 @@ class AWSNetworkInterfaces(BaseModel):
     DeviceIndex: int
     SubnetId: str
     Groups: List[str]
+    AssociatePublicIpAddress: Optional[bool] = None
 
 
 class AWSInstanceProfile(BaseModel):

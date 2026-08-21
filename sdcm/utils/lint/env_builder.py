@@ -163,6 +163,9 @@ NON_ENV_PARAMS = frozenset(
         # minicloud_docker maps to SCT_MINICLOUD_DOCKER_IMAGE (the minicloud_docker_image option), but only when minicloud is on -
         # the pipeline decides, so it is not a static jenkinsfile-to-env mapping
         "minicloud_docker",
+        # local_agent picks the topology (KVM Jenkins agent vs sct-runner), which decides which
+        # stages run and which agent label is resolved - pipeline orchestration, not an SCT setting
+        "local_agent",
     }
 )
 
