@@ -37,11 +37,27 @@ LOADERS_EVENTS = {
     "CDCReaderStressEvent",
 }
 
+# GCE reports a host-maintenance live migration as a `GceInstanceEvent` with `type ==
+# GCE_LIVE_MIGRATION_EVENT_TYPE`, at Severity.CRITICAL (see sdcm/cluster_gce.py). On loader
+# nodes this is a known-benign, transient cloud infrastructure event -- not an indication the
+# test/cluster is broken -- so it should be logged rather than aborting the test (SCT-863).
+# Every other CRITICAL event, including this same event type for db/monitor nodes and any
+# other GceInstanceEvent, must keep aborting the test as before.
+GCE_LIVE_MIGRATION_EVENT_TYPE = "migrateOnHostMaintenance"
+
 LOGGER = logging.getLogger(__name__)
 
 
 class TestFailure(Exception):
     pass
+
+
+def _is_benign_gce_live_migration_of_loader(event_class: str, event) -> bool:
+    return (
+        event_class == "GceInstanceEvent"
+        and getattr(event, "type", None) == GCE_LIVE_MIGRATION_EVENT_TYPE
+        and "loader" in str(getattr(event, "node", ""))
+    )
 
 
 class EventsAnalyzer(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
@@ -52,6 +68,10 @@ class EventsAnalyzer(BaseEventsProcess[Tuple[str, Any], None], threading.Thread)
 
                 # Don't kill the test cause of TestResultEvent: it was done already when this event was sent out.
                 if event_class == "TestResultEvent" or event.severity != Severity.CRITICAL:
+                    continue
+
+                if _is_benign_gce_live_migration_of_loader(event_class, event):
+                    LOGGER.warning("Not failing the test on benign GCE live-migration event: %s", event)
                     continue
 
                 try:
