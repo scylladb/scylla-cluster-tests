@@ -10,7 +10,10 @@ n_db_nodes: 6
 n_loaders: 2
 seeds_num: 3
 
-instance_type_db: 'i7i.2xlarge'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 8
+  memory: '>=64'
+  arch: x86_64
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '032'

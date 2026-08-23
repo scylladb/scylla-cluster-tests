@@ -79,8 +79,14 @@ round_robin: true
 n_db_nodes: 3
 n_loaders: 1
 
-instance_type_db: 'i4i.4xlarge'
-instance_type_loader: 'c5.9xlarge' # 32 vCPU, 72 GB RAM, 10GiB
+sizing_db:
+  vcpu: 16
+  # OCI DenseIO.E5 at 16 vCPUs provides only 96 GB (12 GB/OCPU fixed ratio).
+  # Lowered from >=128 to >=96 so OCI can match; other clouds still pick >=128 naturally.
+  memory: '>=96'
+sizing_loader:  # no GCE match (e2 family tops out at 32 vCPUs); >= used since 36 vCPUs isn't a standard catalog step
+  vcpu: '>=36'
+  memory: '>=72'
 
 nemesis_class_name: 'NoOpMonkey'
 

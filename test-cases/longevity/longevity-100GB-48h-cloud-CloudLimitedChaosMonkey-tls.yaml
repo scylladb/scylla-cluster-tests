@@ -8,7 +8,9 @@ run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", 
 n_db_nodes: 6
 n_loaders: 1
 
-instance_type_db: 'i4i.large' # instance type is defined in the jenkins job (with default value in the jenkinsfile for the cloud longevity
+sizing_db:  # instance type is defined in the jenkins job (with default value in the jenkinsfile for the cloud longevity); no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'limited'

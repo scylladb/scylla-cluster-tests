@@ -15,7 +15,9 @@ rack_aware_loader: true
 region_aware_loader: true
 simulated_racks: 0
 
-instance_type_db: 'i8g.2xlarge'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 8
+  memory: '>=64'
 zero_token_instance_type_db: 'i8g.large'
 use_zero_nodes: true
 
