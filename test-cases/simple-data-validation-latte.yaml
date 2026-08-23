@@ -37,7 +37,9 @@ stress_cmd:
     data_dir/latte/validation.rn
 
 n_loaders: 1
-instance_type_db: 'i4i.large'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
 n_db_nodes: 3
 
 nemesis_class_name: SisyphusMonkey
