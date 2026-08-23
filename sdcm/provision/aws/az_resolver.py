@@ -18,7 +18,9 @@ import boto3
 from botocore.exceptions import ClientError
 
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, is_capacity_error
+from sdcm.provision.aws.spot_placement_score import get_scores, rank_az_letters, rank_regions
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS
+from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_ON_DEMAND
 from sdcm.test_config import TestConfig
 from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.aws_region import AwsRegion
@@ -71,6 +73,42 @@ def _has_vector_store(params) -> bool:
 
 def _always(params) -> bool:  # noqa: ARG001
     return True
+
+
+def _node_count_total(value) -> int:
+    """Sum an SCT node-count parameter across regions/DCs, treating anything unparseable as 0."""
+    if value is None or isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return max(int(value), 0)
+    if isinstance(value, list):
+        return sum(int(n) for n in value if str(n).strip().lstrip("-").isdigit() and int(n) > 0)
+    if isinstance(value, str):
+        return sum(int(n) for n in value.split() if n.strip().lstrip("-").isdigit() and int(n) > 0)
+    return 0
+
+
+# Node-count params paired with the gate deciding whether the test launches them at all, mirroring
+# `_INSTANCE_TYPE_PARAM_GATES`. Used to size the spot placement score request.
+_NODE_COUNT_PARAM_GATES: tuple[tuple[str, Callable[[object], bool]], ...] = (
+    ("n_db_nodes", _always),
+    ("n_loaders", _has_loaders),
+    ("n_monitor_nodes", _has_monitor),
+    ("n_db_zero_token_nodes", _has_zero_token),
+    ("n_test_oracle_db_nodes", _has_oracle),
+)
+
+
+def is_spot_placement_scoring_enabled(params) -> bool:
+    """Return True when AZ/region ordering should consult `ec2:GetSpotPlacementScores`.
+
+    Pointless for on-demand runs (the scores only describe spot capacity), so those skip the API entirely.
+    """
+    if not params.get("use_spot_placement_scores"):
+        return False
+    if params.get("cluster_backend") != "aws":
+        return False
+    return params.get("instance_provision") != INSTANCE_PROVISION_ON_DEMAND
 
 
 # (instance-type param key, gate). The gate decides whether this type will actually
@@ -138,24 +176,45 @@ class AZResolver:
                 f"across regions {region_names}; cannot proceed with provisioning."
             )
 
-        resolved = [letter for letter in configured_letters if letter in supported_letters]
-        for letter in supported_letters:
-            if len(resolved) >= len(configured_letters):
-                break
-            if letter not in resolved:
-                resolved.append(letter)
+        # Spot scores only reorder the pool the AZ slots are filled from. By default the configured letters keep
+        # priority, so an explicit `availability_zone` stays honoured and only backfilled slots are score-driven;
+        # `spot_score_overrides_configured_az` opts into letting the score win outright.
+        ranked_letters = self._rank_letters_by_spot_score(region_names, supported_letters)
+        if self._params.get("spot_score_overrides_configured_az") and is_spot_placement_scoring_enabled(self._params):
+            resolved = ranked_letters[: len(configured_letters)]
+        else:
+            resolved = [letter for letter in configured_letters if letter in supported_letters]
+            for letter in ranked_letters:
+                if len(resolved) >= len(configured_letters):
+                    break
+                if letter not in resolved:
+                    resolved.append(letter)
 
         new_value = ",".join(resolved)
         original_value = self._params.get("availability_zone")
         if new_value != original_value:
-            LOGGER.warning(
-                "AZResolver: availability_zone '%s' does not support all required "
-                "instance types %s in regions %s; replacing with '%s'",
-                original_value,
-                instance_types,
-                region_names,
-                new_value,
-            )
+            # Two different reasons land here, and saying the wrong one sends whoever reads this log
+            # chasing a capacity problem that does not exist: the configured AZ may be genuinely
+            # unsupported for the required types, or it may be perfectly valid and merely outranked on
+            # spot placement score because `spot_score_overrides_configured_az` is on.
+            dropped = [letter for letter in configured_letters if letter not in supported_letters]
+            if dropped:
+                LOGGER.warning(
+                    "AZResolver: availability_zone '%s' does not support all required "
+                    "instance types %s in regions %s; replacing with '%s'",
+                    original_value,
+                    instance_types,
+                    region_names,
+                    new_value,
+                )
+            else:
+                LOGGER.info(
+                    "AZResolver: availability_zone '%s' is valid but outranked on spot placement score "
+                    "in regions %s; using '%s' (spot_score_overrides_configured_az is enabled)",
+                    original_value,
+                    region_names,
+                    new_value,
+                )
             self._params["availability_zone"] = new_value
         else:
             LOGGER.info("AZResolver: availability_zone '%s' already valid for regions %s", original_value, region_names)
@@ -183,12 +242,19 @@ class AZResolver:
         if not supported_letters:
             return [configured_letters]
 
-        primary = [letter for letter in configured_letters if letter in supported_letters]
-        for letter in supported_letters:
-            if len(primary) >= len(configured_letters):
-                break
-            if letter not in primary:
-                primary.append(letter)
+        # Rank once, then use the ranked pool for both the primary candidate's backfill and the later
+        # single-slot replacements, so fallback attempts walk the best-scoring AZs first.
+        supported_letters = self._rank_letters_by_spot_score(self._region_names(), supported_letters)
+
+        if self._params.get("spot_score_overrides_configured_az") and is_spot_placement_scoring_enabled(self._params):
+            primary = supported_letters[: len(configured_letters)]
+        else:
+            primary = [letter for letter in configured_letters if letter in supported_letters]
+            for letter in supported_letters:
+                if len(primary) >= len(configured_letters):
+                    break
+                if letter not in primary:
+                    primary.append(letter)
 
         if not primary:
             return [configured_letters]
@@ -215,6 +281,10 @@ class AZResolver:
             - VPC-peered with the runner region
             - able to supply the configured number of AZs that support the required instance types.
         The current region is excluded (as the starting point).
+
+        Eligible regions are ordered by spot placement score when scoring is enabled, so the first relocation
+        attempt goes to the region most likely to have spot capacity instead of the next one in
+        `AWS_SUPPORTED_REGIONS` order. The peering and AZ-cardinality gates are unchanged.
         """
         region_names = self._region_names()
         if not region_names:
@@ -225,9 +295,7 @@ class AZResolver:
         instance_types = self.required_instance_types()
 
         candidates = []
-        for region in AWS_SUPPORTED_REGIONS:
-            if region == current_region:
-                continue
+        for region in self._ordered_fallback_regions(exclude={current_region}, instance_types=instance_types):
             if not self._is_region_peered(current_region, region):
                 LOGGER.info("Region fallback: skipping %s (no active VPC peering with %s)", region, current_region)
                 continue
@@ -241,8 +309,76 @@ class AZResolver:
                     cardinality,
                 )
                 continue
+            letters = self._rank_letters_by_spot_score([region], letters)
             candidates.append((region, letters[:cardinality]))
         return candidates
+
+    def get_preferred_spot_region(self) -> tuple[str, list[str]] | None:
+        """Return a ``(region, az_letters)`` worth relocating to BEFORE the first provisioning attempt.
+
+        Region fallback is reactive: it only relocates after the configured region has actually failed. When the
+        configured region is a poor spot bet to begin with (e.g. `region: random` landed on it by shuffle), that
+        first attempt is predictably wasted. This returns a better-scoring, VPC-peered candidate when its score
+        beats the configured region's by at least `spot_score_region_relocation_margin`, else None.
+
+        Opt-in: the runner already lives in the configured region, so relocating the cluster splits them across
+        a peering link. Callers must respect the same eligibility gates as `get_region_fallback_candidates`.
+        """
+        margin = int(self._params.get("spot_score_region_relocation_margin") or 0)
+        region_names = self._region_names()
+        instance_types = self.required_instance_types()
+        if (
+            margin <= 0
+            or not is_spot_placement_scoring_enabled(self._params)
+            or len(region_names) != 1
+            or not instance_types
+        ):
+            return None
+        current_region = region_names[0]
+
+        scored = get_scores(
+            instance_types=instance_types,
+            target_capacity=self.spot_target_capacity(),
+            regions=[current_region, *(r for r in AWS_SUPPORTED_REGIONS if r != current_region)],
+            single_az=False,
+        )
+        by_region = {item.region: item.score for item in scored}
+        if (current_score := by_region.get(current_region)) is None:
+            return None
+
+        for candidate in self.get_region_fallback_candidates():
+            region, az_letters = candidate
+            candidate_score = by_region.get(region)
+            if candidate_score is None or candidate_score - current_score < margin:
+                continue
+            LOGGER.info(
+                "Spot placement scores: relocating upfront from %s (score %d) to %s (score %d), margin >= %d",
+                current_region,
+                current_score,
+                region,
+                candidate_score,
+                margin,
+            )
+            return region, az_letters
+        LOGGER.info(
+            "Spot placement scores: keeping configured region %s (score %s); no candidate beats it by %d",
+            current_region,
+            current_score,
+            margin,
+        )
+        return None
+
+    def _ordered_fallback_regions(self, exclude: set[str], instance_types: list[str]) -> list[str]:
+        """Candidate regions for relocation, spot-score-ordered when enabled."""
+        regions = [region for region in AWS_SUPPORTED_REGIONS if region not in exclude]
+        if not is_spot_placement_scoring_enabled(self._params) or len(regions) < 2:
+            return regions
+        ranked = rank_regions(
+            instance_types=instance_types, target_capacity=self.spot_target_capacity(), regions=regions
+        )
+        if ranked != regions:
+            LOGGER.info("Spot placement scores reordered region fallback candidates: %s -> %s", regions, ranked)
+        return ranked or regions
 
     def get_dc_fallback_candidates(self, dc_index: int) -> list[tuple[str, list[str]]]:
         """Collect ordered ``(region, az_letters)`` candidates to relocate the DC at ``dc_index``."""
@@ -257,9 +393,7 @@ class AZResolver:
         instance_types = [instance_type for instance_type in [self._params.get("instance_type_db")] if instance_type]
 
         candidates = []
-        for region in AWS_SUPPORTED_REGIONS:
-            if region in in_use_regions:
-                continue
+        for region in self._ordered_fallback_regions(exclude=in_use_regions, instance_types=instance_types):
             if not all(self._is_region_peered(staying, region) for staying in staying_regions):
                 LOGGER.info(
                     "Region fallback (DC %d): skipping %s (no active VPC peering with all staying DCs %s)",
@@ -280,6 +414,7 @@ class AZResolver:
                     required_az_count,
                 )
                 continue
+            supported_letters = self._rank_letters_by_spot_score([region], supported_letters)
             candidates.append((region, supported_letters[:required_az_count]))
         return candidates
 
@@ -333,6 +468,39 @@ class AZResolver:
         configured_first = [letter for letter in configured_letters if letter in common]
         additional = sorted(common - set(configured_first))
         return configured_first + additional
+
+    def spot_target_capacity(self) -> int:
+        """Total instance count a spot placement score request should be sized for."""
+        total = sum(
+            _node_count_total(self._params.get(key)) for key, gate in _NODE_COUNT_PARAM_GATES if gate(self._params)
+        )
+        return max(total, 1)
+
+    def _rank_letters_by_spot_score(self, region_names: list[str], letters: list[str]) -> list[str]:
+        """Reorder `letters` by spot placement score, best-first.
+
+        A no-op unless spot scoring is enabled, and a no-op for multi-region configs: AZ letters there must be
+        valid in every region, and a letter that scores well in one region may score poorly in another, so
+        there is no single meaningful ranking. Falls back to the given order whenever scores are unavailable.
+        """
+        if len(letters) < 2 or not is_spot_placement_scoring_enabled(self._params):
+            return letters
+        if len(region_names) != 1:
+            LOGGER.debug("Spot placement scores: skipping AZ ranking for multi-region config %s", region_names)
+            return letters
+
+        ranked = rank_az_letters(
+            instance_types=self.required_instance_types(),
+            target_capacity=self.spot_target_capacity(),
+            region=region_names[0],
+            az_letters=letters,
+            min_score=int(self._params.get("spot_placement_score_min") or 0),
+        )
+        if ranked != letters:
+            LOGGER.info(
+                "Spot placement scores reordered AZ candidates in %s: %s -> %s", region_names[0], letters, ranked
+            )
+        return ranked or letters
 
     def _region_names(self) -> list[str]:
         if regions := getattr(self._params, "region_names", None):

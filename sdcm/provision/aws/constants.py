@@ -37,3 +37,20 @@ FLEET_LIMIT_EXCEEDED_ERROR = "spotInstanceCountLimitExceeded"
 
 SPOT_CAPACITY_NOT_AVAILABLE_ERROR = "capacity-not-available"
 # Spot request event type that is signaling that it won't be processed due to the lack of resources on AWS side
+
+SPOT_FLEET_ALLOCATION_STRATEGY = "capacity-optimized"
+# Allocation strategy for spot fleet requests. `ec2:GetSpotPlacementScores` documents that a high per-AZ score
+# "assumes that your fleet request will be configured to use a single Availability Zone and the
+# capacity-optimized allocation strategy" - so this must match, or the scores we rank AZs by over-predict
+# our actual fulfillment rate.
+
+SPOT_PLACEMENT_SCORE_MAX_REGIONS = 10
+# `ec2:GetSpotPlacementScores` accepts at most 10 entries in RegionName.N, so region lists are chunked
+
+SPOT_PLACEMENT_SCORE_RECOMMENDED_TYPES = 3
+# AWS: "We recommend that you specify at least three instance types. If you specify one or two instance types,
+# or specify variations of a single instance type, the returned placement score will always be low."
+
+SPOT_PLACEMENT_SCORE_CACHE_TTL = 3600
+# Placement scores are refreshed by AWS roughly daily, so caching them for an hour is safe and avoids
+# re-querying once per AZ candidate within a single provisioning run

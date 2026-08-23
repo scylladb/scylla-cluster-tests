@@ -126,6 +126,41 @@ class SpotTerminationEvent(InformationalEvent):
         return super().msgfmt + ": node={0.node} message={0.message}"
 
 
+class SpotProvisionOutcomeEvent(InformationalEvent):
+    """Published once per provisioning step, recording which provision type actually got the instances.
+
+    Spot requests fall back to on-demand silently (`ProvisionPlan.provision_instances`), so without this event a
+    run configured for spot can be billed at on-demand rates with nothing recording it. Comparing `requested`
+    against `realized` across runs is what makes the spot-vs-on-demand spend split measurable.
+    """
+
+    def __init__(
+        self,
+        requested: str,
+        realized: str | None,
+        region: str,
+        availability_zone: str,
+        instance_type: str | None = None,
+        count: int = 0,
+    ):
+        super().__init__(severity=Severity.NORMAL if realized else Severity.WARNING)
+
+        self.requested = requested
+        self.realized = realized or "none"
+        self.region = region
+        self.availability_zone = availability_zone
+        self.instance_type = instance_type or "unknown"
+        self.count = count
+        self.downgraded = bool(realized) and realized != requested
+
+    @property
+    def msgfmt(self) -> str:
+        return (
+            super().msgfmt + ": requested={0.requested} realized={0.realized} downgraded={0.downgraded} "
+            "region={0.region} az={0.availability_zone} instance_type={0.instance_type} count={0.count}"
+        )
+
+
 class InstanceProvisionStuckEvent(InformationalEvent):
     """Published when a VM is accepted by the cloud but stays in a non-Succeeded
     provisioning state past the configured timeout.
