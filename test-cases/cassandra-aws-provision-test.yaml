@@ -1,7 +1,7 @@
 test_duration: 60
 n_db_nodes: 1
 n_loaders: 1
-sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+sizing_db:  # arch pinned: Cassandra AMI (Ubuntu 22.04) is amd64-only
   vcpu: 4
   memory: '>=32'
   arch: x86_64

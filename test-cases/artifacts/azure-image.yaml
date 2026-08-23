@@ -2,7 +2,7 @@ cluster_backend: 'azure'
 azure_region_name: "eastus"
 use_preinstalled_scylla: true
 backtrace_decoding: false
-sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+sizing_db:
   vcpu: 8
   memory: '>=64'
   local_disk_gb: '>=1500'  # ~80% of Standard_L8s_v3's 1920GB

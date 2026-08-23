@@ -1,6 +1,6 @@
 cluster_backend: 'gce'
 backtrace_decoding: false
-sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+sizing_db:
   vcpu: 2
   memory: '>=8'
 gce_root_disk_type_db: 'pd-ssd'
