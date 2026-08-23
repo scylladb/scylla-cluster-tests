@@ -2,9 +2,15 @@ test_duration: 1060 # ~3h prepare schema + 3h of prepare data+ 7h mixed/MV reads
 prepare_stress_duration: 360
 
 n_db_nodes: 6
-instance_type_db: 'i4i.4xlarge'
+sizing_db:
+  vcpu: 16
+  # OCI DenseIO.E5 at 16 vCPUs provides only 96 GB (12 GB/OCPU fixed ratio).
+  # Lowered from >=128 to >=96 so OCI can match; other clouds still pick >=128 naturally.
+  memory: '>=96'
 n_loaders: 1
-instance_type_loader: 'c6i.4xlarge'
+sizing_loader:
+  vcpu: 16
+  memory: '>=32'
 
 user_prefix: 'schema-scale-5000t-5000mv'
 append_scylla_yaml:

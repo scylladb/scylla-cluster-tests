@@ -2,9 +2,17 @@ test_duration: 1440
 
 n_db_nodes: '3 3 3 3 3'
 n_loaders: '5 1 1 1 1'
-instance_type_db: 'i3en.xlarge'
-instance_type_loader: 'c6i.2xlarge'
-instance_type_monitor: 't3.2xlarge'
+sizing_db:  # no GCE/Azure/OCI match (2500GB local disk unavailable at 4 vCPUs on these clouds; DenseIO min 16 vCPUs on OCI)
+  vcpu: 4
+  memory: '>=32'
+  arch: x86_64
+  local_disk_gb: '>=2500'
+sizing_loader:
+  vcpu: 8
+  memory: '>=16'
+sizing_monitor:
+  vcpu: 8
+  memory: '>=32'
 
 user_prefix: 'upgrd-ltncy-rgrssn-custom-d2w1-5dc'
 enterprise_disable_kms: true
