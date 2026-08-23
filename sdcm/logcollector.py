@@ -1279,10 +1279,17 @@ class BaseSCTLogCollector(LogCollector):
         FileLog(name="junit.xml", search_locally=True),
         FileLog(name="cdc-replicator.log", search_locally=True),
         FileLog(name="minicloud.log", search_locally=True),
+        # the complete container log, pulled at collection time. minicloud.log above is the
+        # manager's streamed copy and always stops where its streamer was killed, so this is
+        # the only one carrying the teardown ending
+        FileLog(name="minicloud-teardown.log", search_locally=True),
         # the emulator's crash evidence: stderr and the (credential-redacted) container
         # state snapshot carrying the exit code and OOMKilled flag
         FileLog(name="minicloud-stderr.log", search_locally=True),
         FileLog(name="minicloud-inspect.json", search_locally=True),
+        # each emulated guest's serial console — the only view inside a node SCT never
+        # managed to SSH into, where every per-node archive comes back empty
+        FileLog(name="minicloud-serial-*.log", search_locally=True),
     ]
     cluster_log_type = "sct-runner-events"
     cluster_dir_prefix = "sct-runner-events"

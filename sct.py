@@ -124,6 +124,7 @@ from sdcm.utils.common import (
     get_hdr_tags,
     download_and_unpack_logs,
     find_equivalent_ami,
+    get_testrun_dir,
 )
 from sdcm.nemesis.generator import generate_nemesis_yaml, NemesisJobGenerator
 from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
@@ -139,6 +140,7 @@ from sdcm.utils.minicloud import (
     MinicloudConfig,
     MinicloudManager,
     check_minicloud_reachability,
+    collect_minicloud_guest_serial_logs,
     collect_minicloud_logs,
     ensure_minicloud_ready,
     get_minicloud_endpoint,
@@ -2490,23 +2492,35 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
     config = SCTConfiguration()
 
+    if not test_id:
+        test_id = config.get("test_id")
+        if test_id:
+            LOGGER.info("Using test_id from SCT configuration: %s", test_id)
+
     if is_minicloud_active(config):
         # After SCTConfiguration so yaml-only activation is seen, and the SDK endpoint
         # is exported before Collector runs — in a fresh collect-logs process
         # SCT_MINICLOUD_ENDPOINT_URL alone is invisible to the AWS/GCE SDKs, so
         # collection would otherwise query the real cloud.
         set_minicloud_endpoint_env(get_minicloud_endpoint(config), _minicloud_backend(backend))
+        minicloud_config = MinicloudConfig.from_env(params=config)
+        # Write into the run's own logdir — the one Collector globs — not
+        # get_test_config().logdir(), which in this fresh process is a brand-new
+        # timestamped dir that Collector never looks at, so everything landed there was
+        # silently dropped. Resolve it the same way Collector does (sdcm/logcollector.py
+        # Collector.sct_result_dir / run), so the two cannot drift apart; fall back to the
+        # fresh logdir only when the run dir cannot be located at all.
+        minicloud_logdir = (
+            get_testrun_dir(logdir or os.path.join(os.environ.get("HOME"), "sct-results"), test_id)
+            or get_test_config().logdir()
+        )
         # Collect only — never ensure_minicloud_ready() here: its auto-start does
         # `docker rm -f` on a crashed container, destroying the very evidence
         # (exit code, container logs) this command exists to collect.
-        collect_minicloud_logs(
-            get_test_config().logdir(), container_name=MinicloudConfig.from_env(params=config).container_name
-        )
-
-    if not test_id:
-        test_id = config.get("test_id")
-        if test_id:
-            LOGGER.info("Using test_id from SCT configuration: %s", test_id)
+        collect_minicloud_logs(minicloud_logdir, container_name=minicloud_config.container_name)
+        # The guests' serial consoles: the only record of a node SCT could never reach,
+        # and the emulator keeps them after the instance is gone.
+        collect_minicloud_guest_serial_logs(minicloud_logdir, state_dir=minicloud_config.state_dir)
 
     collector = Collector(test_id=test_id, params=config, test_dir=logdir)
 
