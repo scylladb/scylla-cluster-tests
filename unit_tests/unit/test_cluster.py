@@ -1095,3 +1095,136 @@ def test_traffic_control_targets_the_secondary_interface():
         BaseNode.traffic_control(node, "--loss 5%")
     local_runner.run.assert_called_once_with("tcset ens5 --loss 5% --tc-command")
     node.remoter.run.assert_any_call('sudo bash -cxe "tc qdisc add dev ens5 root netem loss 5%"')
+
+
+def _node_for_str(instance_type="i4i.4xlarge", ip_ssh_connections="private"):
+    """A node stub whose only working attributes are the ones `__str__` is allowed to touch."""
+    node = unittest.mock.MagicMock()
+    node.name = "longevity-db-node-1"
+    node._instance_type = instance_type
+    node.scylla_network_configuration = None
+    node.test_config = unittest.mock.MagicMock(IP_SSH_CONNECTIONS=ip_ssh_connections)
+    node._public_ip_address_cached = None
+    node._private_ip_address_cached = "10.164.8.11"
+    node._ipv6_ip_address_cached = None
+    node._dc_info_str = unittest.mock.MagicMock(return_value="")
+    # any access to these must fail the test: they perform cloud API calls and SSH commands
+    for resolving_property in ("public_ip_address", "private_ip_address", "ipv6_ip_address"):
+        setattr(
+            type(node),
+            resolving_property,
+            unittest.mock.PropertyMock(side_effect=AssertionError(f"__str__ resolved {resolving_property}")),
+        )
+    return node
+
+
+def test_str_does_not_resolve_ip_addresses():
+    """`__str__` runs from log records, so it must never trigger cloud API calls or SSH commands.
+
+    A node terminated by a nemesis stays reachable through `dead_nodes_list` and
+    `nemesis.target_node`; resolving its addresses there blocks on the SSH connect timeout for
+    minutes per log line and raises spurious errors (scylladb/scylla-cluster-tests#10217).
+    """
+    node = _node_for_str()
+
+    assert BaseNode.__str__(node) == "Node longevity-db-node-1 [None | 10.164.8.11] (Type: i4i.4xlarge)"
+
+
+def test_str_uses_cached_ipv6_address():
+    node = _node_for_str(ip_ssh_connections="ipv6")
+    node._ipv6_ip_address_cached = "2a05:d018::1"
+
+    assert "| 2a05:d018::1]" in BaseNode.__str__(node)
+
+
+def test_dc_info_str_does_not_run_nodetool():
+    """`_dc_info_str` is only reachable from `__str__`, so it reads the cached values as well."""
+    node = unittest.mock.MagicMock()
+    params = SCTConfiguration()
+    params["region_name"] = "eu-west-1 eu-west-2"
+    node.parent_cluster.params = params
+    node.parent_cluster.racks_count = 2
+    node._datacenter_name = "eu-west-1"
+    node._node_rack = "RACK1"
+    for resolving_property in ("datacenter", "node_rack"):
+        setattr(
+            type(node),
+            resolving_property,
+            unittest.mock.PropertyMock(side_effect=AssertionError(f"_dc_info_str resolved {resolving_property}")),
+        )
+
+    assert BaseNode._dc_info_str(node) == " (dc name: eu-west-1, rack: RACK1)"
+
+
+def test_public_ip_address_caches_a_missing_address():
+    """`ip_ssh_connections: private` nodes have no public IP - that must be resolved only once.
+
+    Using `None` as the "not resolved yet" marker made every access re-run the full instance
+    state refresh: a cloud API call plus `ip -j link` over SSH.
+    """
+    node = unittest.mock.MagicMock()
+    node._public_ip_address_cached = None
+    node._public_ip_address_resolved = False
+    node._get_public_ip_address.return_value = None
+
+    for _ in range(3):
+        assert BaseNode.public_ip_address.fget(node) is None
+
+    node._get_public_ip_address.assert_called_once()
+
+
+def test_destroy_drops_the_remoter():
+    """A destroyed node must not keep a remoter around for later callers to connect with."""
+    node = unittest.mock.MagicMock()
+    node.destroyed = False
+    remoter = node.remoter
+
+    with unittest.mock.patch("sdcm.cluster.ContainerManager"):
+        BaseNode.destroy(node)
+
+    remoter.stop.assert_called_once()
+    assert node.remoter is None
+    assert node.destroyed is True
+
+
+def test_network_configuration_skips_a_destroyed_node():
+    """`ip -j link` must not be attempted against a node whose instance is already gone."""
+    node = unittest.mock.MagicMock()
+    node.destroyed = True
+
+    assert BaseNode.network_configuration.func(node) == {}
+
+    node.remoter.run.assert_not_called()
+
+
+def test_refresh_network_interfaces_info_keeps_the_cached_mapping():
+    """The MAC to device mapping only goes stale when the remoter is replaced.
+
+    Dropping it on every instance-state refresh re-runs `ip -j link` over SSH for each access
+    (scylladb/scylla-cluster-tests#10217), and turns a single log line about an unreachable node
+    into minutes of SSH connect timeouts.
+    """
+    node = unittest.mock.MagicMock()
+    node.__dict__["network_configuration"] = {"42:01:0a:80:00:02": "ens4"}
+
+    BaseNode.refresh_network_interfaces_info(node)
+
+    assert node.__dict__["network_configuration"] == {"42:01:0a:80:00:02": "ens4"}
+
+    BaseNode.invalidate_network_configuration_cache(node)
+
+    assert "network_configuration" not in node.__dict__
+
+
+def test_invalidate_ip_address_cache_allows_re_resolution():
+    """After an instance restart the addresses must be resolved again, `None` result included."""
+    node = unittest.mock.MagicMock()
+    node._get_public_ip_address.side_effect = [None, "34.1.2.3"]
+    node._public_ip_address_cached = None
+    node._public_ip_address_resolved = False
+
+    assert BaseNode.public_ip_address.fget(node) is None
+
+    BaseNode.invalidate_ip_address_cache(node)
+
+    assert BaseNode.public_ip_address.fget(node) == "34.1.2.3"
