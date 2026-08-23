@@ -3,7 +3,9 @@ ami_id_db_scylla: 'ami-0d6a24fe35fdf5dc4'
 root_disk_size_db: 50
 backtrace_decoding: false
 cluster_backend: 'aws'
-instance_type_db: 'i4i.large'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
 instance_provision: "spot"
 instance_provision_fallback_on_demand: true
 n_db_nodes: 1

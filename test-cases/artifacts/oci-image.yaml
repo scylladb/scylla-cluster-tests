@@ -3,7 +3,9 @@ oci_region_name: "us-phoenix-1"
 use_preinstalled_scylla: true
 backtrace_decoding: false
 
-oci_instance_type_db: "VM.DenseIO.E5.Flex:8"
+sizing_db:
+  vcpu: 16
+  memory: '>=96'
 
 # NOTE: DenseIO instance shapes are not allowed to be "spot"
 instance_provision: "on_demand"
