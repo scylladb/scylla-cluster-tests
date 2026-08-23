@@ -55,6 +55,13 @@ This can be done by setting the appropriate values through the `append_scylla_ar
 append_scylla_args: '--smp 2 --memory 2G'
 ```
 
+## SSL/TLS certificates
+The Docker backend supports `client_encrypt` and `server_encrypt`, but certificate generation and
+the file transfer that installs them work differently than on cloud backends — there is no SSH, so
+files move as in-memory tar streams into the container.<br>
+See [SSL/TLS on the Docker backend](docker-backend-ssl.md) for the certificate flow, the
+trailing-slash copy semantics, and troubleshooting notes.
+
 ## Executing a longevity test on the Docker backend in Jenkins
 SCT longevity tests can be executed on the Docker backend in Jenkins, with AWS serving as the cloud provider for SCT runner instance.<br>
 This setup allows simulating test execution as if it was running on a local machine. The SCT runner instance in AWS operates as an all-in-one setup, hosting the loaders, DB nodes and monitoring stack.
