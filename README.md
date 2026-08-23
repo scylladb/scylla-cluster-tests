@@ -228,6 +228,11 @@ so those tests won't honor what is set in `test-cases/your_config.yaml`.
 - **[Cross-Cloud Instance Sizing](./docs/cross-cloud-sizing.md)** - Constraint-based instance selection across AWS, GCE, Azure, and OCI
 - **[Running against minicloud](./docs/minicloud.md)** - Local QEMU/KVM cloud emulation: run SCT tests without real cloud credentials or cost
 
+### Diagnostics Documentation
+
+- **[Kernel Panic Detection](./docs/kernel-panic-detection.md)** - How SCT detects kernel panics from cloud serial consoles, and how to troubleshoot false positives
+- **[Collected Log Files](./docs/collected-logs.md)** - What each log archive contains after a test run
+
 
 ## Development Plans
 
