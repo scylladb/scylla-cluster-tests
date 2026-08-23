@@ -1,12 +1,14 @@
 """Minicloud log/forensics collection into the test logdir, with credential redaction."""
 
+import glob
 import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 
-from sdcm.utils.minicloud.config import MINICLOUD_CONTAINER_NAME
+from sdcm.utils.minicloud.config import MINICLOUD_CONTAINER_NAME, MINICLOUD_STATE_DIR_DEFAULT
 
 LOGGER = logging.getLogger(__name__)
 
@@ -50,15 +52,57 @@ def redact_docker_inspect(raw: bytes) -> bytes:
         return b'{"error": "docker inspect output could not be parsed for credential redaction"}\n'
 
 
+def collect_minicloud_guest_serial_logs(logdir: str, state_dir: str = MINICLOUD_STATE_DIR_DEFAULT) -> int:
+    """Copy every QEMU guest's serial console log out of the minicloud state dir.
+
+    minicloud runs each guest with `-serial file:<state_dir>/instances/<instance-id>/serial.log`
+    (scylladb/minicloud src/vm/mod.rs), and deliberately keeps that file when it removes the
+    guest's disks so it survives a terminated instance. It is the ONLY record of what happened
+    inside a guest that SCT could never SSH into: cloud-init output, sshd startup, kernel
+    messages. Everything else SCT collects needs a working SSH or SSM channel to the guest, so a
+    node that never came up produces empty per-node archives — exactly the case where the
+    console is the whole story.
+
+    Copied as ``minicloud-serial-<instance-id>.log`` into the test logdir, where
+    BaseSCTLogCollector's glob picks them up. Returns the number of files copied.
+
+    Never raises: this runs on the failure path, where losing the evidence is bad but breaking
+    the rest of log collection is worse.
+    """
+    instances_dir = os.path.join(os.path.expanduser(state_dir), "instances")
+    if not os.path.isdir(instances_dir):
+        LOGGER.debug("No minicloud instances dir at %s — nothing to collect", instances_dir)
+        return 0
+
+    os.makedirs(logdir, exist_ok=True)
+    copied = 0
+    for serial_log in sorted(glob.glob(os.path.join(instances_dir, "*", "serial.log"))):
+        instance_id = os.path.basename(os.path.dirname(serial_log))
+        destination = os.path.join(logdir, f"minicloud-serial-{instance_id}.log")
+        try:
+            shutil.copyfile(serial_log, destination)
+        except OSError as exc:
+            LOGGER.warning("Could not collect guest serial log %s: %s", serial_log, exc)
+            continue
+        copied += 1
+        LOGGER.info("Collected guest serial log %s (%d bytes)", destination, os.path.getsize(destination))
+
+    if not copied:
+        LOGGER.warning("No guest serial logs found under %s", instances_dir)
+    return copied
+
+
 def collect_minicloud_logs(logdir: str, container_name: str = MINICLOUD_CONTAINER_NAME) -> None:
     """Dump minicloud container logs and inspect state into the test logdir.
 
-    Produces: minicloud.log, minicloud-stderr.log, minicloud-inspect.json.
-    Never raises — each collector runs independently.
+    Produces: minicloud.log or minicloud-teardown.log, minicloud-stderr.log,
+    minicloud-inspect.json. Never raises — each collector runs independently.
 
-    Runs after the manager has already streamed the log and (on death or teardown)
-    recorded minicloud-inspect.json, so anything already written here wins: those files
-    were captured while the container still existed, this one runs after `docker rm -f`.
+    Runs after the manager has (on death or teardown) recorded minicloud-inspect.json, so
+    that snapshot wins: it was captured while the container still existed, this runs after
+    `docker rm -f`.
+
+    The container log is the exception — see the note on minicloud-teardown.log below.
 
     ``container_name`` defaults to the standard name because the log-collection entry points
     run without an SCTConfiguration; pass the configured ``minicloud_container_name`` from
@@ -67,28 +111,39 @@ def collect_minicloud_logs(logdir: str, container_name: str = MINICLOUD_CONTAINE
     os.makedirs(logdir, exist_ok=True)
 
     # 1. Collect container logs (works on stopped/exited containers, fails only if removed)
+    #
+    # The manager's `docker logs -f` streamer dies with the test process, so the copy it
+    # streamed into the run dir always stops short of teardown. `docker logs` here returns
+    # the container's whole log, so it must never be skipped just because that partial copy
+    # exists — that is precisely the run where the missing ending is worth having.
+    #
+    # It goes to its own name rather than over the streamed copy: the manager can adopt or
+    # restart a container mid-run, and then `docker logs` holds only the surviving
+    # container's output. Overwriting would trade one truncation for a worse one.
     log_path = os.path.join(logdir, "minicloud.log")
-    if os.path.exists(log_path) and os.path.getsize(log_path):
-        LOGGER.info("minicloud logs already streamed to %s, keeping the streamed copy", log_path)
-    else:
-        result = subprocess.run(["docker", "logs", container_name], capture_output=True, check=False)
-        if result.returncode == 0:
-            with open(log_path, "wb") as fh:
-                fh.write(result.stdout)
-                fh.write(result.stderr)
-            LOGGER.info("Collected minicloud logs to %s (%d bytes)", log_path, len(result.stdout) + len(result.stderr))
+    streamed_copy_exists = os.path.exists(log_path) and os.path.getsize(log_path)
+    if streamed_copy_exists:
+        log_path = os.path.join(logdir, "minicloud-teardown.log")
+        LOGGER.info("minicloud logs already streamed; collecting the complete log to %s", log_path)
 
-            # Write stderr separately for crash diagnostics
-            if result.stderr:
-                stderr_path = os.path.join(logdir, "minicloud-stderr.log")
-                with open(stderr_path, "wb") as fh:
-                    fh.write(result.stderr)
-                LOGGER.info("Collected minicloud stderr to %s (%d bytes)", stderr_path, len(result.stderr))
-        else:
-            LOGGER.warning(
-                "Failed to collect minicloud container logs (container removed?): %s",
-                result.stderr.decode(errors="replace").strip(),
-            )
+    result = subprocess.run(["docker", "logs", container_name], capture_output=True, check=False)
+    if result.returncode == 0:
+        with open(log_path, "wb") as fh:
+            fh.write(result.stdout)
+            fh.write(result.stderr)
+        LOGGER.info("Collected minicloud logs to %s (%d bytes)", log_path, len(result.stdout) + len(result.stderr))
+
+        # Write stderr separately for crash diagnostics
+        if result.stderr:
+            stderr_path = os.path.join(logdir, "minicloud-stderr.log")
+            with open(stderr_path, "wb") as fh:
+                fh.write(result.stderr)
+            LOGGER.info("Collected minicloud stderr to %s (%d bytes)", stderr_path, len(result.stderr))
+    else:
+        LOGGER.warning(
+            "Failed to collect minicloud container logs (container removed?): %s",
+            result.stderr.decode(errors="replace").strip(),
+        )
 
     # 2. Collect container inspect (state, exit code, health, config)
     inspect_path = os.path.join(logdir, "minicloud-inspect.json")

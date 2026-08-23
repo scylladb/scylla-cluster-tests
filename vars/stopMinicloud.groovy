@@ -54,6 +54,25 @@ docker logs --tail 5000 minicloud > ./minicloud-logs/minicloud-container.log 2>&
 echo "--- last 50 lines of the minicloud container log ---"
 tail -50 ./minicloud-logs/minicloud-container.log
 
+# Every guest's serial console, straight off the builder's state dir. minicloud runs each VM
+# with `-serial file:<state_dir>/instances/<id>/serial.log` and keeps that file after the
+# instance is gone, so this is the only view inside a node SCT never managed to SSH into -
+# where every per-node archive comes back empty and the container log only shows the API side.
+# The state dir is read off the container's own bind mount, so a non-default
+# minicloud_state_dir is picked up without this needing to know about it.
+MINICLOUD_MOUNT_TEMPLATE='{{range .Mounts}}{{if eq .Destination "/root/.cache/minicloud"}}{{.Source}}{{end}}{{end}}'
+MINICLOUD_STATE_DIR="\$(docker inspect minicloud --format "\${MINICLOUD_MOUNT_TEMPLATE}" 2>/dev/null)"
+if [[ -d "\${MINICLOUD_STATE_DIR}/instances" ]] ; then
+    for serial in "\${MINICLOUD_STATE_DIR}"/instances/*/serial.log ; do
+        [[ -f "\$serial" ]] || continue
+        instance_id="\$(basename "\$(dirname "\$serial")")"
+        cp "\$serial" "./minicloud-logs/minicloud-serial-\${instance_id}.log"
+    done
+    echo "collected \$(ls -1 ./minicloud-logs/minicloud-serial-*.log 2>/dev/null | wc -l) guest serial log(s)"
+else
+    echo "no minicloud instances dir found (state dir: \${MINICLOUD_STATE_DIR:-unknown}) - no guest serial logs"
+fi
+
 if [[ "${keepGuests}" == "true" ]] ; then
     # The container is the cluster here: removing it would destroy the very nodes the
     # post_behavior_* settings asked to keep. Left running, and left for the next build's

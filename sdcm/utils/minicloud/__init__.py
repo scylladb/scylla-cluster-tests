@@ -26,7 +26,11 @@ from sdcm.utils.minicloud.config import (
     resolve_minicloud_regions,
 )
 from sdcm.utils.minicloud.endpoint import MINICLOUD_PORT, get_minicloud_endpoint, is_minicloud_active
-from sdcm.utils.minicloud.log_collection import collect_minicloud_logs, redact_docker_inspect
+from sdcm.utils.minicloud.log_collection import (
+    collect_minicloud_guest_serial_logs,
+    collect_minicloud_logs,
+    redact_docker_inspect,
+)
 from sdcm.utils.minicloud.manager import MinicloudManager
 
 __all__ = [
@@ -42,6 +46,7 @@ __all__ = [
     "MinicloudError",
     "MinicloudManager",
     "check_minicloud_reachability",
+    "collect_minicloud_guest_serial_logs",
     "collect_minicloud_logs",
     "default_minicloud_image",
     "ensure_minicloud_ready",
