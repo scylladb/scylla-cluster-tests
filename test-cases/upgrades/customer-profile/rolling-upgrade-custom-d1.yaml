@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Rolling-upgrade test driven by the custom_d1 customer profile: a 6-node GCE cluster with
+    hybrid-RAID storage and the customer's own scylla.d cpuset/memory/io overrides is upgraded while
+    cassandra-stress user profiles from scylla-qa-internal run. Backs both the parallel and the
+    sequential rolling-upgrade jobs for that customer shape.
+  test_type: upgrade
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - gce
+  stress_tools:
+    - cassandra-stress
+  workload: user-profile
+  nemesis_labels: []
+  team_ownership: core-test-infra
+
 test_duration: 360
 
 # workloads

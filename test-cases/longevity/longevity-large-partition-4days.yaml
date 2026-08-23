@@ -1,3 +1,22 @@
+test_metadata:
+  description: >-
+    4.5-day large-partition longevity test built around reads: scylla-bench preloads 60 partitions of
+    10M clustering rows each, then several uniform read streams run at a capped rate for 4 days on a
+    6-node cluster under SisyphusMonkey. The read-heavy counterpart to the 200k-pks write soak.
+  test_type: longevity
+  tier: tier2
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - scylla-bench
+  workload: read
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - large-partitions
+  team_ownership: core-test-infra
+
 test_duration: 6480
 
 prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=6 -clustering-row-count=10000000 -clustering-row-size=2048 -concurrency=8 -rows-per-request=2000 -timeout=180s -connection-count 8 -retry-number=3 -retry-interval=40s -consistency-level=all",

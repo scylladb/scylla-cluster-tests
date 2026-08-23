@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Cluster-growth scale test: a 15-node cluster holding a 244GB dataset of 128KB rows is grown
+    towards a target size in batches while cassandra-stress mixed workloads and fullscans run under
+    SisyphusMonkey. Parameterised by the pipelines into the 15-25, 40-60, 180-200 and 450-500 node
+    growth jobs.
+  test_type: scale
+  tier: tier2
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: core-test-infra
+
 test_duration: 600
 # 128KB row (16 * 8192), 244GB dataset (2M rows * 128KB)
 prepare_write_cmd:  [ "cassandra-stress write cl=ALL n=1000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=1..1000000          -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5",

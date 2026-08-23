@@ -1,3 +1,27 @@
+test_metadata:
+  description: >-
+    48-hour longevity test on a 6-node encrypted cluster: a 200GB dataset plus a small low-load
+    keyspace, driven by parallel cassandra-stress write and read streams with data verification, under
+    a SisyphusMonkey limited to the non-destructive set. Reused broadly - the ICS, LDAP, operator/EKS,
+    ARM, Azure, GCE, RF=1 and asymmetric-cluster pipelines all build on it.
+  test_type: longevity
+  tier: tier1
+  duration_class: long
+  supported_backends:
+    - aws
+    - azure
+    - gce
+    - k8s-eks
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - tls-ssl
+    - authorization
+  team_ownership: core-test-infra
+
 test_duration: 3100
 prepare_write_cmd:
   - "cassandra-stress write cl=ALL n=200200300  -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..200200300 -log interval=15"

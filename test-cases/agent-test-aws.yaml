@@ -1,5 +1,23 @@
 # Sanity test for sct-agent: verifies basic agent functionality with a minimal cluster configuration
 # and no nemesis disruptions. Used to validate agent communication and command execution.
+
+test_metadata:
+  description: >-
+    Sanity test for the sct-agent: a minimal 3-node AWS cluster with the agent enabled and no
+    disruptions is preloaded with 100k rows via cassandra-stress, verifying agent communication and
+    remote command execution end to end. Driven by the weekly sct-agent trigger.
+  test_type: longevity
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 test_duration: 10
 prepare_write_cmd: "cassandra-stress write cl=QUORUM n=100000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10"
 

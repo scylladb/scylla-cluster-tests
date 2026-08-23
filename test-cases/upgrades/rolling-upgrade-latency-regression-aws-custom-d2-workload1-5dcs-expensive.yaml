@@ -1,3 +1,24 @@
+test_metadata:
+  description: >-
+    Latency-regression rolling upgrade on the custom_d2 workload1 shape at full customer scale: 5 DCs
+    of i4i.24xlarge nodes preloaded with 1B rows, then latte measures latency before, during and after
+    the upgrade with sstable upgrade and truncate checks enabled. The expensive twin of the
+    i3en.xlarge variant, run on demand only.
+  test_type: upgrade
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: mixed
+  nemesis_labels:
+    - NoOpMonkey
+  features:
+    - multi-dc
+    - tls-ssl
+  team_ownership: core-test-infra
+
 test_duration: 1440
 
 n_db_nodes: '3 3 3 3 3'

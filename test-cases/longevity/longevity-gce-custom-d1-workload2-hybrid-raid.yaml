@@ -1,3 +1,24 @@
+test_metadata:
+  description: >-
+    Customer-profile longevity test reproducing the custom_d1 workload2 shape on a 2-region 12-node
+    GCE cluster with hybrid RAID storage: latte drives the customer's rune script with a skewed
+    partition-size distribution for 12 hours, with the customer's scylla.d overrides, under
+    SisyphusMonkey. Also the base for the repair-focused variant.
+  test_type: longevity
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - gce
+  stress_tools:
+    - latte
+  workload: read
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - multi-dc
+    - large-partitions
+  team_ownership: core-test-infra
+
 test_duration: 900
 n_db_nodes: '6 6'
 n_loaders: '1 1'

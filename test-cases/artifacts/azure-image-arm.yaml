@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Artifacts validation test for the official ScyllaDB Azure ARM64 image: provisions a single
+    Standard_D4pds_v6 node from the published Scylla machine image and runs the
+    artifact smoke checks. Verifies the ARM image itself, not cluster behaviour, so no load and no
+    nemesis.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - azure
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 cluster_backend: 'azure'
 azure_region_name: "eastus"
 use_preinstalled_scylla: true

@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Artifacts validation test for the official ScyllaDB GCE image on local SSD: provisions one
+    n2-standard-2 node from the published image and runs the artifact smoke checks. Also used by the
+    minicloud GCE-image artifact job that runs the same flow on the local QEMU/KVM cloud emulator.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - gce
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 cluster_backend: 'gce'
 backtrace_decoding: false
 sizing_db:

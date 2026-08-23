@@ -1,3 +1,25 @@
+test_metadata:
+  description: >-
+    The canonical provisioning smoke test for SCT itself: a constraint-sized 3-node cluster with
+    forced io-tune is preloaded with scylla-bench (with data validation), then runs a one-minute
+    cassandra-stress write under a non-disruptive SisyphusMonkey. Used by the pull-request job and by
+    the documented manual runs on every cloud backend.
+  test_type: longevity
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+    - gce
+    - azure
+    - xcloud
+  stress_tools:
+    - cassandra-stress
+    - scylla-bench
+  workload: write
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: core-test-infra
+
 test_duration: 60
 data_validation: |
   validate_partitions: false

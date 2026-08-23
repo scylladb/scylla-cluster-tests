@@ -1,3 +1,24 @@
+test_metadata:
+  description: >-
+    Short rack-aware validation test: two 6-node DCs with rack-aware loaders running cassandra-stress
+    at LOCAL_QUORUM for 2 hours under SisyphusMonkey, with the 'rackaware' teardown validator
+    asserting that client connections actually stayed within their own rack. The functional check
+    behind the longer rack-aware soaks.
+  test_type: longevity
+  tier: tier1
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - multi-dc
+    - rack-aware
+  team_ownership: core-test-infra
+
 test_duration: 180
 
 prepare_write_cmd:  ["cassandra-stress write cl=LOCAL_QUORUM n=2097152 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -port jmx=6868 -mode cql3 native -rate threads=80 -pop seq=1..2097152 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",

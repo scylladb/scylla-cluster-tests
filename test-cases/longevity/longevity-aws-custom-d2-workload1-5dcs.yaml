@@ -1,3 +1,25 @@
+test_metadata:
+  description: >-
+    Customer-profile longevity test scaling the custom_d2 workload1 shape to 5 DCs and 60 nodes on AWS
+    for 24 hours: latte drives the customer's rune script from a loader in every region with vnodes
+    (tablets explicitly disabled), under SisyphusMonkey. The widest multi-DC cluster in the
+    customer-cases suite.
+  test_type: longevity
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - multi-dc
+    - tls-ssl
+    - vnodes
+  team_ownership: core-test-infra
+
 test_duration: 1440
 n_db_nodes: '12 12 12 12 12'
 n_loaders: '5 1 1 1 1'

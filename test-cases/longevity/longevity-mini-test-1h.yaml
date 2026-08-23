@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Smallest longevity smoke test: a single 90-minute cassandra-stress write stream at QUORUM on a
+    6-node i4i.large cluster with SisyphusMonkey firing every minute. Deliberately tiny and
+    disruption-dense, so nemesis and framework changes can be shaken out quickly before committing to
+    a full longevity run.
+  test_type: longevity
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: core-test-infra
+
 test_duration: 180
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=90m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop seq=1..10000000 -log interval=5"]
 

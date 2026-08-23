@@ -1,3 +1,25 @@
+test_metadata:
+  description: >-
+    24-hour longevity test with a 5TB dataset (large 25-column rows) on a 6-node encrypted cluster,
+    running mixed and read cassandra-stress streams plus a synchronous materialized-view update
+    profile under SisyphusMonkey. The largest single-DC dataset in the longevity suite; the pipeline
+    runs it on GCE n2-highmem-32 nodes.
+  test_type: longevity
+  tier: tier2
+  duration_class: medium
+  supported_backends:
+    - aws
+    - azure
+    - gce
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - tls-ssl
+  team_ownership: core-test-infra
+
 test_duration: 1360
 prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(25)' -pop seq=1..275050075",
                     "cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(25)' -pop seq=275050076..550100150",

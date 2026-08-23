@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the RPM repository onto a stock Oracle Linux
+    8 platform image on OCI and runs the standard artifact smoke checks. Covers both the repository
+    install and the offline install pipelines.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - oci
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 user_prefix: "artifacts-oel8-oci"
 
 cluster_backend: "oci"

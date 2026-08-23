@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the RPM repository onto a stock CentOS
+    Stream 9 GCE image with SELinux left enforcing (via extra scylla_setup args). Guards against
+    packaging or setup steps that only work with SELinux disabled.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - gce
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 backtrace_decoding: false
 cluster_backend: 'gce'
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9'

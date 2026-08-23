@@ -1,3 +1,24 @@
+test_metadata:
+  description: >-
+    Kafka CDC source-connector test: a single-node cluster with a CDC-enabled table (created with
+    tablets disabled, since CDC does not support them yet) is written to with cassandra-stress while a
+    KafkaCDCReaderThread verifies that every key reaches the Kafka topic through the
+    scylla-cdc-source-connector. Runs on both AWS and Docker.
+  test_type: longevity
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+    - docker
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  nemesis_labels:
+    - NoOpMonkey
+  features:
+    - cdc
+  team_ownership: core-test-infra
+
 test_duration: 60
 # CDC log cannot be created for a table if keyspace uses tablets (issue scylladb/scylladb#16317).
 # Creating keyspace with tablets disabled until the issues is fixed

@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Docker-backend provisioning smoke test used by the SCT pull-request job: a single-node container
+    plus one loader run a one-minute cassandra-stress write with a non-disruptive SisyphusMonkey. The
+    cheapest end-to-end check that a framework change can still bring up a cluster and drive load.
+  test_type: longevity
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - docker
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: core-test-infra
+
 test_duration: 60
 stress_cmd: ["cassandra-stress write cl=ONE duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate threads=10 -pop seq=1..10000000 -log interval=5",
              ]

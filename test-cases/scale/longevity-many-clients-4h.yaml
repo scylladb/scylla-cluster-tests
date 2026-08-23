@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Client-scale test: 50 loaders open 500 connections per host each against a 6-node i4i.metal
+    cluster spread over 50 keyspaces, running cassandra-stress write and read streams for 4 hours
+    under SisyphusMonkey. Exercises connection handling and per-client overhead rather than data
+    volume.
+  test_type: scale
+  tier: tier2
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: core-test-infra
+
 test_duration: 420
 
 prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..20971520 -col 'n=FIXED(2) size=FIXED(256)' -log interval=5"

@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the Debian repository onto a stock Ubuntu
+    22.04 LTS (jammy) image and runs the standard artifact smoke checks. Shared by the GCE pipelines
+    (repository, web-install, GCP preview instance and offline/nonroot install) and by the ARM variant
+    that runs on AWS Graviton.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+    - gce
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 backtrace_decoding: false
 cluster_backend: 'gce'
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts'

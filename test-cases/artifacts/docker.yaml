@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Artifacts validation test for the ScyllaDB Docker image: starts a single-node container from the
+    published image and runs the artifact smoke checks with no load generation. The lightest artifact
+    job in the suite and also the base for the FIPS image variant.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - docker
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 backtrace_decoding: false
 cluster_backend: 'docker'
 n_db_nodes: 1
