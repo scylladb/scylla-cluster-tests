@@ -14,12 +14,30 @@ import threading
 import time
 import unittest.mock
 
+from sdcm.sct_events import Severity
+from sdcm.sct_events.gce_events import GceInstanceEvent
 from sdcm.sct_events.system import InfoEvent, SpotTerminationEvent
 from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
-from sdcm.sct_events.events_analyzer import EventsAnalyzer, start_events_analyzer
+from sdcm.sct_events.events_analyzer import (
+    EventsAnalyzer,
+    _is_benign_gce_live_migration_of_loader,
+    start_events_analyzer,
+)
 from sdcm.sct_events.events_processes import EVENTS_ANALYZER_ID, get_events_process
 
 from unit_tests.lib.events_utils import EventsUtilsMixin
+
+
+def _gce_instance_event(node_name: str, method: str, severity: Severity = Severity.CRITICAL) -> GceInstanceEvent:
+    gce_log_entry = {
+        "timestamp": "2026-08-23T00:00:00.000000+00:00",
+        "protoPayload": {
+            "resourceName": f"projects/p/zones/z/instances/{node_name}",
+            "methodName": method,
+            "status": {"message": "host maintenance"},
+        },
+    }
+    return GceInstanceEvent(gce_log_entry, severity=severity)
 
 
 class TestEventsAnalyzer(EventsUtilsMixin):
@@ -58,6 +76,64 @@ class TestEventsAnalyzer(EventsUtilsMixin):
         finally:
             events_analyzer.stop(timeout=1)
 
+    def test_kill_test_not_called_for_gce_live_migration_of_loader(self):
+        """A GCE host-maintenance live migration of a loader node is a known-benign, transient
+        cloud event (SCT-863) and must not abort the test."""
+        start_events_analyzer(_registry=self.events_processes_registry)
+        events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
+
+        time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
+
+        try:
+            event = _gce_instance_event("loader-node-1", "compute.instances.migrateOnHostMaintenance")
+
+            with unittest.mock.patch("sdcm.sct_events.events_analyzer.EventsAnalyzer.kill_test") as mock:
+                with self.wait_for_n_events(events_analyzer, count=1, timeout=1):
+                    self.events_main_device.publish_event(event)
+
+                mock.assert_not_called()
+        finally:
+            events_analyzer.stop(timeout=1)
+
+    def test_kill_test_called_for_gce_live_migration_of_db_node(self):
+        """The same live-migration event on a db node must still abort the test: the SCT-863
+        exemption is specific to loader nodes only."""
+        start_events_analyzer(_registry=self.events_processes_registry)
+        events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
+
+        time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
+
+        try:
+            event = _gce_instance_event("db-node-1", "compute.instances.migrateOnHostMaintenance")
+
+            with unittest.mock.patch("sdcm.sct_events.events_analyzer.EventsAnalyzer.kill_test") as mock:
+                with self.wait_for_n_events(events_analyzer, count=1, timeout=1):
+                    self.events_main_device.publish_event(event)
+
+                mock.assert_called_once()
+        finally:
+            events_analyzer.stop(timeout=1)
+
+    def test_kill_test_called_for_non_live_migration_gce_event_on_loader(self):
+        """A CRITICAL GceInstanceEvent on a loader node that is NOT a live migration (e.g. a
+        host-maintenance terminate) must still abort the test: the exemption is specific to the
+        live-migration scenario, not "any GceInstanceEvent on a loader"."""
+        start_events_analyzer(_registry=self.events_processes_registry)
+        events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
+
+        time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
+
+        try:
+            event = _gce_instance_event("loader-node-1", "compute.instances.terminateOnHostMaintenance")
+
+            with unittest.mock.patch("sdcm.sct_events.events_analyzer.EventsAnalyzer.kill_test") as mock:
+                with self.wait_for_n_events(events_analyzer, count=1, timeout=1):
+                    self.events_main_device.publish_event(event)
+
+                mock.assert_called_once()
+        finally:
+            events_analyzer.stop(timeout=1)
+
     def test_can_stop_events_analyzer_during_stream_of_events(self):
         start_events_analyzer(_registry=self.events_processes_registry)
         events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
@@ -81,3 +157,23 @@ class TestEventsAnalyzer(EventsUtilsMixin):
         finally:
             stop_event.set()
             thread.join(timeout=1)
+
+
+def test_is_benign_gce_live_migration_of_loader_true_for_loader():
+    event = _gce_instance_event("loader-node-1", "compute.instances.migrateOnHostMaintenance")
+    assert _is_benign_gce_live_migration_of_loader("GceInstanceEvent", event) is True
+
+
+def test_is_benign_gce_live_migration_of_loader_false_for_db_node():
+    event = _gce_instance_event("db-node-1", "compute.instances.migrateOnHostMaintenance")
+    assert _is_benign_gce_live_migration_of_loader("GceInstanceEvent", event) is False
+
+
+def test_is_benign_gce_live_migration_of_loader_false_for_non_live_migration_event():
+    event = _gce_instance_event("loader-node-1", "compute.instances.terminateOnHostMaintenance")
+    assert _is_benign_gce_live_migration_of_loader("GceInstanceEvent", event) is False
+
+
+def test_is_benign_gce_live_migration_of_loader_false_for_other_event_class():
+    event = SpotTerminationEvent(node="loader-node-1", message="m")
+    assert _is_benign_gce_live_migration_of_loader("SpotTerminationEvent", event) is False
