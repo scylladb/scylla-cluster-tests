@@ -18,7 +18,6 @@ jenkins-pipelines
 |-- artifacts-debian10.jenkinsfile
 |-- artifacts-debian11.jenkinsfile
 |-- artifacts-docker.jenkinsfile
-|-- artifacts-oel76.jenkinsfile
 |-- artifacts-ubuntu2004.jenkinsfile
 `-- private-repo.jenkinsfile
 ```
@@ -66,19 +65,9 @@ hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian11.yaml
 ```
 
-## RHEL 7
-```sh
-hydra run-test artifacts_test --backend gce --config test-cases/artifacts/rhel7.yaml
-```
-
 ## RHEL 8
 ```sh
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/rhel8.yaml
-```
-
-## Oracle Enterprise Linux 7.6
-```sh
-hydra run-test artifacts_test --backend aws --config test-cases/artifacts/oel76.yaml
 ```
 
 
