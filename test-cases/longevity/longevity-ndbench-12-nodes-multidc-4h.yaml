@@ -18,8 +18,12 @@ rack_aware_loader: true
 region_aware_loader: true
 simulated_racks: 0
 
-instance_type_db: 'i4i.xlarge'
-instance_type_loader: 'c6i.4xlarge'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 4
+  memory: '>=32'
+sizing_loader:
+  vcpu: 16
+  memory: '>=32'
 
 user_prefix: 'longevity-ndbench-multi-dc'
 space_node_threshold: 64424

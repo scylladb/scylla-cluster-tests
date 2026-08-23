@@ -23,8 +23,14 @@ round_robin: true
 n_db_nodes: 6
 n_loaders: 4
 
-instance_type_db: 'i3en.3xlarge'
-instance_type_loader: 'c6i.2xlarge'
+sizing_db:  # no GCE/Azure/OCI match (12 vCPU tier unavailable on those clouds)
+  vcpu: 12
+  memory: '>=96'
+  arch: x86_64
+  local_disk_gb: '>=6000'  # ~80% of i3en.3xlarge's 7500GB
+sizing_loader:
+  vcpu: 8
+  memory: '>=16'
 instance_type_runner: 'r6i.2xlarge'
 
 cluster_health_check: false

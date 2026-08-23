@@ -6,7 +6,11 @@ stress_cmd: [
 n_db_nodes: 6
 n_loaders: 1
 
-instance_type_db: 'i3en.3xlarge'
+sizing_db:  # no GCE/Azure/OCI match (12 vCPU tier unavailable on those clouds)
+  vcpu: 12
+  memory: '>=96'
+  arch: x86_64
+  local_disk_gb: '>=6000'  # ~80% of i3en.3xlarge's 7500GB
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '012'
