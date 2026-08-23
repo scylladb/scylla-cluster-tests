@@ -179,6 +179,7 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
 - All `requests.get/post/put/delete` calls go through a `requests.Session` with `HTTPAdapter(max_retries=Retry(...))` — follow `sdcm/rest/rest_client.py` pattern
 - No bare `requests.get()` / `requests.post()` without session+retry
 - Localhost/metadata calls may use `retry=0` but must still use the utility for consistent `--connect-timeout`
+- Full convention reference: [docs/http-retry-conventions.md](../../docs/http-retry-conventions.md)
 
 ## Reference Index
 

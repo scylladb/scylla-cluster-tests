@@ -187,6 +187,7 @@ SCT_CLUSTER_BACKEND= hydra clean-resources --test-id `cat ~/sct-results/latest/t
 ## [Install local development environment](docs/install-local-env.md)
 ## [Frequently Asked Questions (FAQ)](docs/faq.md)
 ## [Contribution instructions](docs/contrib.md)
+## [HTTP retry & timeout conventions](docs/http-retry-conventions.md)
 
 ## AI code review on PRs
 
