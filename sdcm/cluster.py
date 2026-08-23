@@ -414,6 +414,13 @@ class BaseNode(AutoSshContainerMixin):
     _instance_type = "N/A"
     scylla_network_configuration: Optional[ScyllaNetworkConfiguration] = None
 
+    # Class-level defaults, so that instances built by test fakes that bypass `__init__`
+    # (and any subclass that does the same) still resolve these attributes.
+    _public_ip_address_resolved = False
+    _private_ip_address_resolved = False
+    _ipv6_ip_address_resolved = False
+    destroyed = False
+
     GOSSIP_STATUSES_FILTER_OUT = [
         "LEFT",  # in case the node was decommissioned
         "removed",  # in case the node was removed by nodetool removenode
@@ -456,6 +463,10 @@ class BaseNode(AutoSshContainerMixin):
         self._public_ip_address_cached = None
         self._private_ip_address_cached = None
         self._ipv6_ip_address_cached = None
+        self._public_ip_address_resolved = False
+        self._private_ip_address_resolved = False
+        self._ipv6_ip_address_resolved = False
+        self.destroyed = False
         self._maximum_number_of_cores_to_publish = 10
 
         self.last_line_no = 1
@@ -567,6 +578,10 @@ class BaseNode(AutoSshContainerMixin):
     def init(self) -> None:
         if self.logdir:
             os.makedirs(self.logdir, exist_ok=True)
+        # `__str__` reads only the already-resolved addresses, so they are resolved once here:
+        # the log prefix built below is computed a single time and reused for every log record
+        # of this node.
+        self.resolve_ip_addresses()
         self.log = SDCMAdapter(self.log, extra={"prefix": str(self)})
         if self.ssh_login_info:
             self.ssh_login_info["hostname"] = self.external_address
@@ -749,6 +764,9 @@ class BaseNode(AutoSshContainerMixin):
         ssh_remoter.run(f"sudo bash -cxe {shlex.quote(script)}", verbose=True)
 
     def _init_remoter(self, ssh_login_info):
+        # A new remoter may point at a different host, so the MAC to device mapping cached from
+        # the previous one has to go.
+        self.invalidate_network_configuration_cache()
         agent_config = self.parent_cluster.params.get("agent")
         agent_enabled = agent_config.get("enabled", False) and self.parent_cluster.node_type in (
             "scylla-db",
@@ -901,7 +919,7 @@ class BaseNode(AutoSshContainerMixin):
 
     def refresh_ip_address(self):
         # Invalidate ip address cache
-        self._private_ip_address_cached = self._public_ip_address_cached = self._ipv6_ip_address_cached = None
+        self.invalidate_ip_address_cache()
         self.__dict__.pop("cql_address", None)
         self.__dict__.pop("public_dns_name", None)
         self.__dict__.pop("private_dns_name", None)
@@ -1276,9 +1294,13 @@ class BaseNode(AutoSshContainerMixin):
 
     @property
     def public_ip_address(self) -> Optional[str]:
-        # Primary network interface public IP
-        if self._public_ip_address_cached is None:
+        # Primary network interface public IP.
+        # A `None` result is cached as well: nodes provisioned without a public IP
+        # (`ip_ssh_connections: private`) would otherwise re-run the whole instance-state
+        # refresh - a cloud API call plus an `ip -j link` over SSH - on every single access.
+        if not self._public_ip_address_resolved:
             self._public_ip_address_cached = self._get_public_ip_address()
+            self._public_ip_address_resolved = True
         return self._public_ip_address_cached
 
     @property
@@ -1300,8 +1322,9 @@ class BaseNode(AutoSshContainerMixin):
     @property
     def private_ip_address(self) -> Optional[str]:
         # Primary network interface private IP
-        if self._private_ip_address_cached is None:
+        if not self._private_ip_address_resolved:
             self._private_ip_address_cached = to_inet_ntop_format(self._get_private_ip_address())
+            self._private_ip_address_resolved = True
         return self._private_ip_address_cached
 
     def _get_private_ip_address(self) -> Optional[str]:
@@ -1314,8 +1337,9 @@ class BaseNode(AutoSshContainerMixin):
     @property
     def ipv6_ip_address(self) -> Optional[str]:
         # Primary network interface public IPv6
-        if self._ipv6_ip_address_cached is None:
+        if not self._ipv6_ip_address_resolved:
             self._ipv6_ip_address_cached = to_inet_ntop_format(self._get_ipv6_ip_address())
+            self._ipv6_ip_address_resolved = True
         return self._ipv6_ip_address_cached
 
     def _get_ipv6_ip_address(self) -> Optional[str]:
@@ -1344,6 +1368,29 @@ class BaseNode(AutoSshContainerMixin):
                     ips.append(extra_address)
         return ips
 
+    def invalidate_ip_address_cache(self) -> None:
+        """Drop the cached addresses so that the next access resolves them again."""
+        self._private_ip_address_cached = self._public_ip_address_cached = self._ipv6_ip_address_cached = None
+        self._private_ip_address_resolved = self._public_ip_address_resolved = self._ipv6_ip_address_resolved = False
+
+    def resolve_ip_addresses(self) -> None:
+        """Populate the address cache, so that `__str__` has something to print.
+
+        `__str__` never resolves addresses on its own (it would run cloud API calls and SSH
+        commands from inside a log record), so the addresses are resolved here instead, while
+        the node is known to be reachable.
+        """
+        for ip_address_property in ("private_ip_address", "public_ip_address"):
+            try:
+                getattr(self, ip_address_property)
+            except Exception as exc:  # noqa: BLE001
+                self.log.debug("Node %s: failed to resolve %s: %s", self.name, ip_address_property, exc)
+        if self.test_config.IP_SSH_CONNECTIONS == "ipv6":
+            try:
+                self.ipv6_ip_address
+            except Exception as exc:  # noqa: BLE001
+                self.log.debug("Node %s: failed to resolve ipv6_ip_address: %s", self.name, exc)
+
     def _wait_public_ip(self):
         public_ips, _ = self._refresh_instance_state()
         while not public_ips:
@@ -1360,7 +1407,7 @@ class BaseNode(AutoSshContainerMixin):
     def network_configuration(self) -> dict[str, str]:
         """Query the MAC address to device name mapping from the node."""
         remoter = self.remoter
-        if not remoter:
+        if not remoter or self.destroyed:
             return {}
 
         network_devices = {}
@@ -1380,10 +1427,16 @@ class BaseNode(AutoSshContainerMixin):
         self.log.debug("Node %s ethernets: %s", self.name, network_devices)
         return network_devices
 
-    def refresh_network_interfaces_info(self):
-        # rebuild cached network mapping from the current remoter/node
+    def invalidate_network_configuration_cache(self) -> None:
+        """Drop the cached MAC address to device name mapping.
+
+        The mapping is a property of the node itself, so it only goes stale when the remoter is
+        replaced (see `_init_remoter`) - it must not be dropped on every instance-state refresh,
+        which would re-run `ip -j link` over SSH for each access (scylladb/scylla-cluster-tests#10217).
+        """
         self.__dict__.pop("network_configuration", None)
 
+    def refresh_network_interfaces_info(self):
         if self.scylla_network_configuration:
             self.scylla_network_configuration.network_interfaces = self.network_interfaces
 
@@ -1548,6 +1601,9 @@ class BaseNode(AutoSshContainerMixin):
         return AlertSilencer(self._alert_manager, alert_name, duration, start, end)
 
     def _dc_info_str(self):
+        # Called from `__str__` only, so it must stay I/O free: the cached values are read
+        # directly instead of the `datacenter`/`node_rack` properties, which run `nodetool`
+        # on the node when their cache is empty.
         dc_info = []
 
         # Example: `ManagerPodCluser` - the `params` is not needed and may be not passed there. Manager always created in the first DC
@@ -1568,18 +1624,22 @@ class BaseNode(AutoSshContainerMixin):
                 severity=Severity.ERROR,
             ).publish()
 
-        elif len(self.parent_cluster.params.region_names) > 1 and self.datacenter:
-            dc_info.append(f"dc name: {self.datacenter}")
+        elif len(self.parent_cluster.params.region_names) > 1 and self._datacenter_name:
+            dc_info.append(f"dc name: {self._datacenter_name}")
 
         # Workaround for 'k8s-local-kind*' backend.
         # "node.init()" is called in `sdcm.cluster_k8s.mini_k8s.LocalMinimalClusterBase.host_node` when Scylla cluster, that hold
         # "racks_count" parameter, is not created yet
-        if hasattr(self.parent_cluster, "racks_count") and self.parent_cluster.racks_count > 1 and self.node_rack:
-            dc_info.append(f"rack: {self.node_rack}")
+        if hasattr(self.parent_cluster, "racks_count") and self.parent_cluster.racks_count > 1 and self._node_rack:
+            dc_info.append(f"rack: {self._node_rack}")
 
         return f" ({', '.join(dc_info)})" if dc_info else ""
 
     def __str__(self):
+        # `__str__` is called from log records and event messages, so it must never perform
+        # cloud API calls or run commands over SSH: a node that is unreachable (terminated by
+        # a nemesis, for example) would make every log line that mentions it block for minutes
+        # and emit spurious errors. Only already-resolved addresses are used here.
         # If multiple network interface is defined on the node (AWS), private address in the `nodetool status`
         # is IP that defined in broadcast_address. Keep this output in correlation with `nodetool status`
         if (
@@ -1588,13 +1648,13 @@ class BaseNode(AutoSshContainerMixin):
         ):
             node_private_ip = self.scylla_network_configuration.broadcast_address
         else:
-            node_private_ip = self.private_ip_address
+            node_private_ip = self._private_ip_address_cached
 
         return "Node %s [%s | %s%s] (Type: %s)%s" % (
             self.name,
-            self.public_ip_address,
+            self._public_ip_address_cached,
             node_private_ip,
-            " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
+            " | %s" % self._ipv6_ip_address_cached if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
             self._instance_type,
             self._dc_info_str(),
         )
@@ -1812,6 +1872,12 @@ class BaseNode(AutoSshContainerMixin):
         self.stop_task_threads()
         if self.remoter:
             self.remoter.stop()
+            # The instance is gone, so drop the remoter as well: it is kept reachable through
+            # `cluster.dead_nodes_list` and `nemesis.target_node`, and any later attempt to run
+            # a command on it would block until the SSH connect timeout expires, several times
+            # over, for every access.
+            self.remoter = None
+        self.destroyed = True
         ContainerManager.destroy_all_containers(self)
         self._terminate_node_in_argus()
         LOGGER.info("%s destroyed", self)

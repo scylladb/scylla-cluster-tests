@@ -113,6 +113,7 @@ def test_gce_node_network_interfaces_multiple_interfaces():
 def test_gce_network_configuration_parses_ip_json_link():
     node = MagicMock(spec=GCENode)
     node.remoter = MagicMock()
+    node.destroyed = False
     node.name = "test-node-1"
     ip_json_output = json.dumps(
         [
@@ -132,6 +133,7 @@ def test_gce_network_configuration_parses_ip_json_link():
 def test_gce_network_configuration_without_remoter():
     node = MagicMock(spec=GCENode)
     node.remoter = None
+    node.destroyed = False
     node.name = "test-node-2"
     node.log = MagicMock()
 
@@ -140,16 +142,33 @@ def test_gce_network_configuration_without_remoter():
     assert result == {}
 
 
+def test_gce_network_configuration_of_a_destroyed_node():
+    """A destroyed node's instance is gone, so `ip -j link` must not be attempted on it."""
+    node = MagicMock(spec=GCENode)
+    node.remoter = MagicMock()
+    node.destroyed = True
+    node.name = "test-node-3"
+    node.log = MagicMock()
+
+    result = GCENode.network_configuration.func(node)
+
+    assert result == {}
+    node.remoter.run.assert_not_called()
+
+
 def test_gce_refresh_network_interfaces_info():
     class FakeNode:
-        network_configuration = {"old": "data"}
         scylla_network_configuration = MagicMock()
         network_interfaces = [MagicMock()]
 
     node = FakeNode()
+    # the MAC to device mapping is not dropped here: it only goes stale when the remoter is
+    # replaced, and re-running `ip -j link` on every refresh is what makes an unreachable node
+    # cost minutes of SSH connect timeouts per access
+    node.__dict__["network_configuration"] = {"old": "data"}
     GCENode.refresh_network_interfaces_info(node)
 
-    assert not hasattr(node, "network_configuration") or "network_configuration" not in node.__dict__
+    assert node.__dict__["network_configuration"] == {"old": "data"}
     assert node.scylla_network_configuration.network_interfaces == node.network_interfaces
 
 

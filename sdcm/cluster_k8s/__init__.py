@@ -2287,11 +2287,12 @@ class BaseScyllaPodContainer(BasePodContainer):
     def __str__(self):
         # TODO: when new network_configuration will be supported by all backends, copy this function from sdcm.cluster_aws.AWSNode.__str__
         #  to here
+        # Same as `BaseNode.__str__`: read the cached addresses only, never trigger a refresh.
         return "Node %s [%s | %s%s]%s" % (
             self.name,
-            self.public_ip_address,
-            self.private_ip_address,
-            " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
+            self._public_ip_address_cached,
+            self._private_ip_address_cached,
+            " | %s" % self._ipv6_ip_address_cached if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
             self._dc_info_str(),
         )
 
@@ -2447,7 +2448,7 @@ class BaseScyllaPodContainer(BasePodContainer):
     def refresh_ip_address(self):
         # Invalidate ip address cache
         old_ip_info = (self.public_ip_address, self.private_ip_address)
-        self._private_ip_address_cached = self._public_ip_address_cached = self._ipv6_ip_address_cached = None
+        self.invalidate_ip_address_cache()
 
         if old_ip_info == (self.public_ip_address, self.private_ip_address):
             return
