@@ -25,7 +25,9 @@ scylla_linux_distro: 'ubuntu-noble'
 # Nothing is preinstalled on a stock Ubuntu image - this is the point of the test.
 use_preinstalled_scylla: false
 
-instance_type_db: 'i4i.large'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
 root_disk_size_db: 50
 instance_provision: 'spot'
 instance_provision_fallback_on_demand: true

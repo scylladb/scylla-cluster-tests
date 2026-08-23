@@ -2,7 +2,13 @@ cluster_backend: 'azure'
 azure_region_name: "eastus"
 use_preinstalled_scylla: true
 backtrace_decoding: false
-azure_instance_type_db: 'Standard_D4pds_v6'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 4
+  memory: '>=16'
+  # Azure's cloud default arch is x86_64 (see sizing_config.yaml); pin arm64 so the
+  # resolver stays on an ARM instance instead of silently picking an x86 one, which
+  # would defeat the purpose of this ARM-specific artifact test.
+  arch: arm64
 instance_provision: "spot"
 instance_provision_fallback_on_demand: true
 n_db_nodes: 1

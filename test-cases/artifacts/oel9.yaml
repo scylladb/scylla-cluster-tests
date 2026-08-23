@@ -2,7 +2,9 @@ user_prefix: "artifacts-oel9-oci"
 
 cluster_backend: "oci"
 instance_provision: "on_demand" # NOTE: DenseIO shapes cannot be 'spot'
-oci_instance_type_db: "VM.DenseIO.E5.Flex:8"
+sizing_db:
+  vcpu: 16
+  memory: '>=96'
 oci_image_db: "resolve:platform:Oracle Linux:9"
 oci_image_username: "opc"
 oci_region_name:
