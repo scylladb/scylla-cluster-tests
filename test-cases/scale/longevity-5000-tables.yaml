@@ -14,9 +14,17 @@ n_loaders: 3
 n_db_nodes: 1
 add_node_cnt: 5
 
-instance_type_db: 'i4i.8xlarge'
-instance_type_loader: 'c6i.8xlarge'
-instance_type_monitor: 'm6i.xlarge'
+sizing_db:
+  vcpu: 32
+  # OCI DenseIO.E5 at 32 vCPUs provides only 192 GB (12 GB/OCPU fixed ratio).
+  # Lowered from >=256 to >=192 so OCI can match; other clouds still pick >=256 naturally.
+  memory: '>=192'
+sizing_loader:
+  vcpu: 32
+  memory: '>=64'
+sizing_monitor:
+  vcpu: 4
+  memory: '>=16'
 root_disk_size_monitor: 120
 root_disk_size_runner: 120
 

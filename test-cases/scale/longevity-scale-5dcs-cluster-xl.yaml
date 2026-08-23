@@ -13,7 +13,9 @@ add_node_cnt: 10
 n_loaders: '1 1 1 1 1'
 region_aware_loader: true
 
-instance_type_db: 'i4i.xlarge'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 4
+  memory: '>=32'
 
 nemesis_class_name: 'NoOpMonkey'
 nemesis_selector: ''
