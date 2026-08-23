@@ -146,3 +146,4 @@ PR #13509's initial migration grepped for `remoter.run("curl ...")` patterns but
 - **During review**: Search for `curl` inside `shell_script_cmd()` blocks — these won't match simple `remoter.run("curl` patterns
 - **Grep pattern**: `grep -rn "curl" sdcm/ --include="*.py" | grep -v curl_with_retry | grep -v "# no-retry"`
 - **Fix pattern**: Interpolate `curl_with_retry()` into the f-string: `f"{curl_with_retry(url, output='file', follow_redirects=True)}"`
+- **Conventions**: [docs/http-retry-conventions.md](../../../docs/http-retry-conventions.md)

@@ -69,16 +69,18 @@ reviews:
 
     - path: "sdcm/utils/curl.py"
       instructions: |
-        HTTP/Curl conventions (AGENTS.md "HTTP/Curl Conventions"):
+        HTTP/Curl conventions (docs/http-retry-conventions.md):
         - All remoter.run("curl ...") must use curl_with_retry()
         - All requests calls must use a session with retry adapter
+        - Never a bare --retry-all-errors literal; it must go through RETRY_ALL_ERRORS_PROBE
         - Exceptions must have "# no-retry: <reason>" comments
 
     - path: "sdcm/rest/**"
       instructions: |
-        HTTP/Curl conventions (AGENTS.md "HTTP/Curl Conventions"):
+        HTTP/Curl conventions (docs/http-retry-conventions.md):
         - All remoter.run("curl ...") must use curl_with_retry()
         - All requests calls must use a session with retry adapter
+        - Never a bare --retry-all-errors literal; it must go through RETRY_ALL_ERRORS_PROBE
         - Exceptions must have "# no-retry: <reason>" comments
 
     - path: "unit_tests/**"

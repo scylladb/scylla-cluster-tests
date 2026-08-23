@@ -222,6 +222,8 @@ Within each group, sort imports alphabetically.
 - Localhost calls may use `retry=0` but must still use the utility for consistent `--connect-timeout`
 - Document any exceptions with `# no-retry: <reason>` comments
 
+Full reference (defaults, probe rationale, curl-in-bash patterns, compliance greps): [docs/http-retry-conventions.md](docs/http-retry-conventions.md)
+
 ### Method Signature Changes (Override Safety)
 
 **CRITICAL**: SCT uses deep class hierarchies (e.g., `BaseCluster` -> `AWSCluster` -> `MonitorSetEKS`).
