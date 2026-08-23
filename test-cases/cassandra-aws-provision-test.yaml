@@ -1,9 +1,14 @@
 test_duration: 60
 n_db_nodes: 1
 n_loaders: 1
-instance_type_db: 'r6i.xlarge'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 4
+  memory: '>=32'
+  arch: x86_64
 root_disk_size_db: 100
-instance_type_loader: 'm6i.large'
+sizing_loader:
+  vcpu: 2
+  memory: '>=8'
 
 db_type: cassandra
 cassandra_version: '4.1'
