@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Kafka sink-connector test skeleton: a single-node cluster plus a localstack Kafka backend on the
+    local docker network, with the actual connector and workload supplied by the job. The counterpart
+    of longevity-kafka-cdc.yaml for the sink direction; no pipeline references it yet.
+  test_type: longevity
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+    - docker
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 test_duration: 60
 
 n_loaders: 1

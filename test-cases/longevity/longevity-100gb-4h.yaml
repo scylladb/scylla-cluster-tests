@@ -1,3 +1,26 @@
+test_metadata:
+  description: >-
+    Core 4-hour longevity test: 100GB dataset preloaded with cassandra-stress, then parallel write and
+    read streams at QUORUM on a 6-node cluster with server and client encryption and SisyphusMonkey
+    chaos. The most widely reused longevity config in the repo - the FIPS, ICS, LDAP, audit,
+    rackaware, zero-token, splitted-networks, raft and ARM/Azure pipelines all layer their overlays on
+    top of it.
+  test_type: longevity
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+    - azure
+    - gce
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - tls-ssl
+  team_ownership: core-test-infra
+
 test_duration: 330
 
 prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"

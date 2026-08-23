@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Schema-scale test with 5000 pre-created cassandra-stress user-profile tables on a single large
+    i4i.8xlarge node, driven in batch mode from 3 loaders with per-table metrics disabled and
+    SisyphusMonkey firing every 3 minutes. The cassandra-stress predecessor of the latte schema-scale
+    tests, run from the scale and raft suites.
+  test_type: scale
+  tier: tier2
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: user-profile
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: core-test-infra
+
 test_duration: 2520
 
 cs_duration: '20m'

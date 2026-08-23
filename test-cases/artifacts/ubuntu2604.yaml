@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the Debian repository onto a stock Ubuntu
+    26.04 LTS (resolute) GCE image and runs the standard artifact smoke checks. Covers the newest
+    Ubuntu LTS target on x86_64 and ARM, in both the repository and offline/nonroot install flavours.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - gce
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 backtrace_decoding: false
 cluster_backend: 'gce'
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2604-lts-amd64'

@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Scylla Manager upgrade test: a 3-node cluster with client encryption is managed by an older
+    Manager release, which is then upgraded to the target version while cassandra-stress write and
+    read workloads run and backup/restore keeps working. Shared by the per-distro manager-upgrade
+    pipelines.
+  test_type: upgrade
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels: []
+  team_ownership: core-test-infra
+
 test_duration: 360
 
 stress_cmd: "cassandra-stress write cl=QUORUM n=1200300 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -pop seq=400200300..600200300"

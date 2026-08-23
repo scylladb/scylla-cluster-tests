@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Data-validation smoke test for the latte loader: one latte stream inserts and then deletes a known
+    row range while a second stream reads across the whole range with the retry validation strategy,
+    on a 3-node cluster (tablets disabled) under a non-disruptive SisyphusMonkey. Verifies that
+    latte's validation catches nothing when the data is in fact consistent.
+  test_type: longevity
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: core-test-infra
+
 test_duration: 60
 
 prepare_write_cmd:

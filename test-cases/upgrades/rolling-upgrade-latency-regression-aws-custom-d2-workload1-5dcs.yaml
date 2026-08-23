@@ -1,3 +1,24 @@
+test_metadata:
+  description: >-
+    Latency-regression rolling upgrade on the custom_d2 workload1 shape across 5 DCs of i3en.xlarge
+    nodes: latte drives the customer's rune script with generated reports before, during and after the
+    upgrade, so the latency cost of upgrading a wide multi-DC cluster can be compared release over
+    release.
+  test_type: upgrade
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: mixed
+  nemesis_labels:
+    - NoOpMonkey
+  features:
+    - multi-dc
+    - tls-ssl
+  team_ownership: core-test-infra
+
 test_duration: 1440
 
 n_db_nodes: '3 3 3 3 3'

@@ -25,6 +25,24 @@
 #
 #         10900 seconds = 7 days * 24 hours a day * 60 minutes an hour
 #         3600  seconds = 60 minutes
+
+test_metadata:
+  description: >-
+    YCSB workload A load phase with 10M records against a 3-node cluster, using the Scylla native YCSB
+    binding and a pre-created ycsb keyspace, with no nemesis. The mid-size step of the YCSB comparison
+    family, run on demand rather than from a pipeline.
+  test_type: longevity
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: write
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 test_duration: 1800
 
 pre_create_keyspace: [

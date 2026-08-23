@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Artifacts validation test for the official ScyllaDB Azure x86_64 image: provisions a single
+    Standard_L8s_v3 node from the published Scylla machine image and runs the artifact smoke
+    checks. Node addresses are made public because the test drives the Azure VM from an AWS runner.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - azure
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 cluster_backend: 'azure'
 azure_region_name: "eastus"
 use_preinstalled_scylla: true

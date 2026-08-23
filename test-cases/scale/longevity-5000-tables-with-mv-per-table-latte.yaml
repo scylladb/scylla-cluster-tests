@@ -1,3 +1,23 @@
+test_metadata:
+  description: >-
+    Schema-scale test that pairs every one of 5000 tablet-enabled tables with collocated and
+    non-collocated materialized views: latte creates the schema, populates it and then runs a
+    validated write/read mix plus dedicated MV read streams for 7 hours on a 6-node cluster. The
+    heaviest schema-scale variant - 5000 tables and 5000 views at once.
+  test_type: scale
+  tier: tier2
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - tablets
+  team_ownership: core-test-infra
+
 test_duration: 1060 # ~3h prepare schema + 3h of prepare data+ 7h mixed/MV reads + 4h margin
 prepare_stress_duration: 360
 

@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the RPM repository onto a stock Amazon Linux
+    2023 AMI and runs the standard artifact smoke checks. Backs the artifacts-amazon2023 pipelines in
+    both flavours - repository install and offline (nonroot) install - plus the arm64 variant on
+    Graviton instances.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 ami_db_scylla_user: 'ec2-user'
 ami_id_db_scylla: 'resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64'
 root_disk_size_db: 50

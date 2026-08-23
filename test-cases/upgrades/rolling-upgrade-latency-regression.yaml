@@ -1,3 +1,23 @@
+test_metadata:
+  description: >-
+    Latency-regression rolling upgrade on the custom_d1 workload2 shape: a 3-node GCE cluster with
+    hybrid-RAID storage and the customer's scylla.d overrides is preloaded with 115M rows, then latte
+    measures latency before, during and after the upgrade with sstable upgrade enabled. Installs from
+    a repo rather than a preinstalled image.
+  test_type: upgrade
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - gce
+  stress_tools:
+    - latte
+  workload: mixed
+  nemesis_labels:
+    - NoOpMonkey
+  features:
+    - tls-ssl
+  team_ownership: core-test-infra
+
 test_duration: 360
 
 n_db_nodes: 3

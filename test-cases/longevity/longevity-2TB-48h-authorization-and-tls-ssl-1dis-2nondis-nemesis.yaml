@@ -1,3 +1,24 @@
+test_metadata:
+  description: >-
+    48-hour longevity test with a 2TB dataset on a 6-node encrypted cluster running three
+    SisyphusMonkey instances in parallel - one disruptive, two non-disruptive - so that node
+    operations and background disruptions overlap. Workload is mixed cassandra-stress plus a
+    materialized-view user profile; the test fails on any core dump.
+  test_type: longevity
+  tier: tier2
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - tls-ssl
+    - authorization
+  team_ownership: core-test-infra
+
 test_duration: 3120 # 7h (preapre) + 41h for stress + 4h spare.
 prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..536870912",
                     "cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=536870913..1073741824",

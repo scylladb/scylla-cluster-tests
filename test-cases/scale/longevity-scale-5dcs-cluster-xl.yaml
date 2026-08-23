@@ -1,3 +1,24 @@
+test_metadata:
+  description: >-
+    Multi-DC scale test that grows a 5-region cluster (5 nodes per DC to start) towards its target
+    size while rack-aware loaders run cassandra-stress write and read streams at LOCAL_QUORUM with ICS
+    compaction over 100 hours. The widest-region growth scenario in the scale suite; no disruptions,
+    the growth itself is the test.
+  test_type: scale
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - NoOpMonkey
+  features:
+    - multi-dc
+    - rack-aware
+  team_ownership: core-test-infra
+
 test_duration: 6000
 
 prepare_write_cmd:  ["cassandra-stress write cl=LOCAL_QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native -rate threads=20 -pop seq=1..20971520 -col 'n=FIXED(5) size=FIXED(64)' -log interval=5",

@@ -1,3 +1,23 @@
+test_metadata:
+  description: >-
+    Short large-partition longevity test: scylla-bench writes partitions with mixed clustering-row
+    shapes on a 6-node cluster while SisyphusMonkey fires every 15 minutes, with table and partition
+    fullscans validating row counts and data before and after each disruption. The 3-hour entry point
+    of the large-partition family.
+  test_type: longevity
+  tier: tier1
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - scylla-bench
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - large-partitions
+  team_ownership: core-test-infra
+
 test_duration: 210
 
 prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=5555                       -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data" ,

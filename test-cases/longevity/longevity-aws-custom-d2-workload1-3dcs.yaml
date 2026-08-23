@@ -1,3 +1,25 @@
+test_metadata:
+  description: >-
+    Customer-profile longevity test reproducing the custom_d2 workload1 shape on a 3-DC, 9-node AWS
+    cluster: latte runs the customer's own rune script at 50k ops/s per stream with vnodes (tablets
+    explicitly disabled) and tuned compaction settings, under SisyphusMonkey. Client encryption on,
+    internode compression all.
+  test_type: longevity
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - multi-dc
+    - tls-ssl
+    - vnodes
+  team_ownership: core-test-infra
+
 test_duration: 255
 n_db_nodes: '3 3 3'
 n_loaders: '3 1 1'

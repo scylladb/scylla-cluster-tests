@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Longevity test running scylla-bench sequential write and read streams against RF=1 keyspaces for
+    ~10 hours on a 3-node cluster, with a non-disruptive SisyphusMonkey. Rack simulation is switched
+    off because it is meaningless with a single replica; the point is to keep the RF=1 code paths (no
+    redundancy, no repair-based recovery) covered with data validation on.
+  test_type: longevity
+  tier: tier2
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - scylla-bench
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: core-test-infra
+
 test_duration: 800
 
 prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=1 -partition-count=100 -clustering-row-count=55555                       -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -validate-data" ,

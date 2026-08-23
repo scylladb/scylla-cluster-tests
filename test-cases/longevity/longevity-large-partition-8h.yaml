@@ -1,3 +1,26 @@
+test_metadata:
+  description: >-
+    8-hour large-partition longevity test: scylla-bench writes and reads partitions of mixed
+    clustering-row shapes on a 6-node cluster under SisyphusMonkey, with partition fullscan data
+    validation and tombstone-GC verification on a materialized view whose tombstone_gc mode is set to
+    'repair'. Runs on AWS, GCE and Azure.
+  test_type: longevity
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+    - azure
+    - gce
+  stress_tools:
+    - scylla-bench
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - large-partitions
+    - tombstone-gc
+  team_ownership: core-test-infra
+
 test_duration: 600
 
 prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=5555                       -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data" ,

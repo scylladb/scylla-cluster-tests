@@ -24,6 +24,24 @@
 #         around 200K TPS for 3 nodes Scylla cluster.
 #
 #         10900 seconds = 7 days * 24 hours a day * 60 minutes an hour
+
+test_metadata:
+  description: >-
+    YCSB workload A load phase with 1B records against a 3-node cluster over ~7 days, using the Scylla
+    native YCSB binding with 840 loader threads and 240 driver connections. The largest YCSB dataset
+    in the family, kept for on-demand benchmarking.
+  test_type: longevity
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: write
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
 test_duration: 10900
 
 pre_create_keyspace: [

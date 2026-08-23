@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Provisioning smoke test for the Apache Cassandra backend on Docker: starts a single Cassandra
+    container plus a Scylla-image loader (which ships cassandra-stress) and runs a one-minute write.
+    The fastest check that the Cassandra db_type path still provisions; Scylla-only KMS and commit-log
+    checks are disabled.
+  test_type: cassandra
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - docker
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  nemesis_labels: []
+  team_ownership: core-test-infra
+
 test_duration: 5
 n_db_nodes: 1
 n_loaders: 1

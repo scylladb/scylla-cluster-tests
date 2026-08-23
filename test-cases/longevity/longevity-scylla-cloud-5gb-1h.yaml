@@ -1,3 +1,22 @@
+test_metadata:
+  description: >-
+    Short longevity test against a Scylla Cloud (xcloud) cluster: a 5GB dataset driven by
+    cassandra-stress write and read streams plus a scylla-bench reader on a 3-node cluster, with
+    SisyphusMonkey restricted to the non-disruptive xcloud-safe set. The provisioning and disruption
+    smoke test for the cross-cloud backend, run weekly.
+  test_type: longevity
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - xcloud
+  stress_tools:
+    - cassandra-stress
+    - scylla-bench
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: core-test-infra
+
 test_duration: 90
 
 prepare_write_cmd:

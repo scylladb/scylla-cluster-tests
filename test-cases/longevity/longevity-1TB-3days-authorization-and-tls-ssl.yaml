@@ -1,3 +1,24 @@
+test_metadata:
+  description: >-
+    3-day longevity test that preloads 1TB across 4 loaders and then runs mixed and read
+    cassandra-stress streams plus a materialized-view user profile at QUORUM on a 3-node encrypted
+    cluster with SisyphusMonkey. Run with the auth_cassandra overlay and SizeTieredCompactionStrategy,
+    this is the small-cluster, large-dataset stress point.
+  test_type: longevity
+  tier: tier2
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - tls-ssl
+    - authorization
+  team_ownership: core-test-infra
+
 test_duration: 5020
 prepare_write_cmd: ["cassandra-stress write cl=ALL n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..275050075",
                     "cassandra-stress write cl=ALL n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=275050076..550100150",

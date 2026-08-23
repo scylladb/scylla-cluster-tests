@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Provisioning smoke test for the Apache Cassandra backend on AWS: brings up a single Cassandra node
+    from a dedicated AMI plus a Scylla-image loader and runs a one-minute cassandra-stress write. KMS
+    encryption-at-rest and the commit-log check thread are switched off because they are Scylla-only.
+  test_type: cassandra
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  nemesis_labels: []
+  team_ownership: core-test-infra
+
 test_duration: 60
 n_db_nodes: 1
 n_loaders: 1

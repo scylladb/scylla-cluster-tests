@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Admission-control overload test: 12 loaders deliberately overwhelm a single i4i.large node with
+    3000 write threads and 1000 read threads (errors ignored) using a background-reads user profile,
+    checking that admission control sheds load instead of letting the node collapse.
+  test_type: longevity
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels: []
+  team_ownership: core-test-infra
+
 test_duration: 50
 
 prepare_write_cmd: "cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml ops'(insert=10)' no-warmup cl=ONE -mode cql3 native -rate threads=1000 -errors ignore"

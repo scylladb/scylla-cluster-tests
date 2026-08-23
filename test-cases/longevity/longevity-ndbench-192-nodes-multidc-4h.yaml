@@ -1,3 +1,25 @@
+test_metadata:
+  description: >-
+    4-hour scale test driven by ndbench on a 192-node, 2-region cluster (96 nodes each in us-east-1
+    and eu-west-1) with 64 loaders, rate-limited reads and writes at LOCAL_QUORUM, internode
+    encryption and compression, and no nemesis. The largest node-count configuration in the longevity
+    suite.
+  test_type: longevity
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - ndbench
+  workload: mixed
+  nemesis_labels:
+    - NoOpMonkey
+  features:
+    - multi-dc
+    - rack-aware
+    - tls-ssl
+  team_ownership: core-test-infra
+
 test_duration: 240
 
 prepare_write_cmd: >-

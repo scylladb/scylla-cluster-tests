@@ -1,3 +1,24 @@
+test_metadata:
+  description: >-
+    Multi-DC rolling upgrade test: two 3-node DCs in eu-west-1 and eu-west-2 with server encryption
+    and internode compression are upgraded node by node, with cassandra-stress workloads before,
+    during and after the upgrade and rack-aware loaders. Verifies that a partially upgraded cluster
+    keeps serving across DCs.
+  test_type: upgrade
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels: []
+  features:
+    - multi-dc
+    - tls-ssl
+    - rack-aware
+  team_ownership: core-test-infra
+
 test_duration: 360
 # Workloads
 stress_before_upgrade: cassandra-stress write no-warmup cl=ALL n=10100200 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..10100200 -log interval=5

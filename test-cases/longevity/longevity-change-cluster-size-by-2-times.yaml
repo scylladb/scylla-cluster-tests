@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    12-hour longevity test that doubles and halves the cluster while schema changes run: two
+    SisyphusMonkey instances in parallel, one restricted to GrowShrinkClusterNemesis and one to
+    non-disruptive schema_changes, against cassandra-stress write and read streams plus a
+    materialized-view/secondary-index user profile on a 3-node cluster.
+  test_type: longevity
+  tier: tier2
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: core-test-infra
+
 test_duration: 900
 
 prepare_write_cmd:  ["cassandra-stress write cl=QUORUM n=20971520 no-warmup -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",

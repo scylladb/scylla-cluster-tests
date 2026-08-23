@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Customer-profile longevity test reproducing the custom_d1 workload1 shape on a 9-node GCE cluster
+    whose storage is a hybrid RAID of local SSDs and a persistent disk: latte drives the customer's
+    rune script for 12 hours with the customer's own scylla.d cpuset/io overrides, under
+    SisyphusMonkey.
+  test_type: longevity
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - gce
+  stress_tools:
+    - latte
+  workload: read
+  nemesis_labels:
+    - SisyphusMonkey
+  team_ownership: core-test-infra
+
 test_duration: 900
 n_db_nodes: 9
 n_loaders: 2
