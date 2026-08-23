@@ -2,7 +2,7 @@ cluster_backend: 'azure'
 azure_region_name: "eastus"
 use_preinstalled_scylla: true
 backtrace_decoding: false
-sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+sizing_db:
   vcpu: 4
   memory: '>=16'
   # Azure's cloud default arch is x86_64 (see sizing_config.yaml); pin arm64 so the

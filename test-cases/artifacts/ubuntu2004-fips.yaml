@@ -3,7 +3,7 @@ assert_linux_distro_features: ['fips']
 root_disk_size_db: 50
 backtrace_decoding: false
 cluster_backend: 'aws'
-sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+sizing_db:
   vcpu: 2
   memory: '>=16'
 instance_provision: "spot"

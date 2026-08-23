@@ -14,9 +14,7 @@ sizing_db:  # no Azure/OCI match (128 vCPUs falls between standard tiers on thes
   # OCI DenseIO.E5 at 128 vCPUs provides only 768 GB (12 GB/OCPU fixed ratio).
   # Lowered from >=1024 to >=768 so OCI can match; other clouds still pick >=1024 naturally.
   memory: '>=768'
-  # NOTE: pinned to x86_64 (unlike the general i4i guidance) because without it the
-  # resolver's ARM-first AWS default (i8g) has no exact 128 vCPU tier, leaving AWS
-  # -- this test's only backend -- with no match at all.
+  # arch pinned: AWS db-role default is arm64 (i8g), no exact 128-vCPU arm tier
   arch: x86_64
 sizing_loader:
   vcpu: 2

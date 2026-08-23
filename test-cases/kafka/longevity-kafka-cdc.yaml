@@ -13,7 +13,7 @@ n_loaders: 1
 n_db_nodes: 1
 
 instance_type_runner: c7i.2xlarge
-sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+sizing_db:
   vcpu: 2
   memory: '>=16'
 

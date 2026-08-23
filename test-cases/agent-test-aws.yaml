@@ -6,7 +6,7 @@ prepare_write_cmd: "cassandra-stress write cl=QUORUM n=100000 -schema 'replicati
 n_db_nodes: 3
 n_loaders: 1
 
-sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+sizing_db:
   vcpu: 2
   memory: '>=16'
 
