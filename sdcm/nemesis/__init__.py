@@ -140,6 +140,7 @@ from sdcm.nemesis.utils.indexes import (
     is_cf_a_view,
 )
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
+from sdcm.nemesis.utils.topology_ops import grow_cluster, shrink_cluster
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.sstable.sstable_utils import SstableUtils
@@ -3508,31 +3509,6 @@ class NemesisRunner:
             result = self.target_node.run_nodetool(sub_cmd="toppartitions", args=top_partition_api.get_cmd_args())
             top_partition_api.verify_output(result.stdout)
 
-    def disrupt_remove_node_then_add_node(self):
-        """
-        https://docs.scylladb.com/operating-scylla/procedures/cluster-management/remove_node/
-
-        1. Terminate node
-        2. Run full repair
-        3. Nodetool removenode, if removenode rejected, because removing node is UN in gossiper,
-           repeat operation in 5 second
-        4. Add new node
-        5. Run nodetool cleanup (on each node) for each keyspace
-        """
-        if self.cluster.params.get("db_type") == "cloud_scylla":
-            raise UnsupportedNemesis(
-                "Skipping this nemesis due the replace node option that supported by Cloud "
-                "is tested by CloudReplaceNonResponsiveNode nemesis"
-            )
-
-        node_to_remove = self.target_node
-        up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
-
-        with self.node_allocator.run_nemesis(
-            nemesis_label="RemoveNodeAddNode", node_list=up_normal_nodes
-        ) as verification_node:
-            self._remove_node_add_node(verification_node=verification_node, node_to_remove=node_to_remove)
-
     def _remove_node_add_node(self, verification_node, node_to_remove, remove_node_host_id=None):
         # node_to_remove must be different than node
         # node_to_remove is single/last seed in cluster, before
@@ -3936,150 +3912,6 @@ class NemesisRunner:
         self.monitoring_set.reconfigure_scylla_monitoring()
         InfoEvent(f"FinishEvent - ShrinkCluster has done decommissioning {len(nodes)} nodes").publish()
 
-    def _decommission_nodes(
-        self,
-        nodes_number,
-        rack,
-        is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue,
-        dc_idx: Optional[int] = None,
-        exact_nodes: list[BaseNode] | None = None,
-    ):
-        nodes_to_decommission = []
-        if exact_nodes:
-            nodes_to_decommission = exact_nodes
-            for node in exact_nodes:
-                self.node_allocator.set_running_nemesis(node, self.current_disruption)
-        else:
-            for idx in range(nodes_number):
-                if self._is_it_on_kubernetes():
-                    if rack is None and self._is_it_on_kubernetes():
-                        rack = 0
-                    self.set_target_node_pool_type(NEMESIS_TARGET_POOLS.data_nodes)
-                    self.set_target_node(rack=rack, is_seed=is_seed, allow_only_last_node_in_rack=True)
-                else:
-                    rack_idx = rack if rack is not None else idx % self.cluster.racks_count
-                    # if rack is not specified, round-robin racks
-                    self.set_target_node(is_seed=is_seed, dc_idx=dc_idx, rack=rack_idx)
-                nodes_to_decommission.append(self.target_node)
-                self.target_node = (
-                    None  # otherwise node.running_nemesis will be taken off the node by self.set_target_node
-                )
-        try:
-            if self.cluster.parallel_node_operations:
-                self.decommission_nodes(nodes_to_decommission)
-            else:
-                for node in nodes_to_decommission:
-                    self.decommission_nodes([node])
-        except Exception as exc:  # noqa: BLE001
-            InfoEvent(
-                f"FinishEvent - ShrinkCluster failed decommissioning a node {self.target_node} with error {exc!s}"
-            ).publish()
-
-    @latency_calculator_decorator(legend="Doubling cluster load")
-    def _double_cluster_load(self, duration: int) -> None:
-        duration = 30
-        stress_cmd = self.tester.stress_cmd
-        if isinstance(stress_cmd, list):
-            stress_cmd = stress_cmd[0]
-        self.log.info("Doubling the load on the cluster for %s minutes", duration)
-        stress_queue = self.tester.run_stress_thread(
-            stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False, duration=duration
-        )
-        results = self.tester.verify_stress_thread(
-            thread_pool=stress_queue, error_handler=self._nemesis_stress_failure_handler
-        )
-        self.log.info(f"Double load results: {results}")
-
-    def disrupt_grow_shrink_cluster(self):
-        sleep_time_between_ops = self.cluster.params.get("nemesis_sequence_sleep_between_ops")
-        if not self.has_steady_run and sleep_time_between_ops:
-            self.steady_state_latency()
-            self.has_steady_run = True
-        new_nodes = self._grow_cluster(rack=None)
-
-        # pass on the exact nodes only if we have specific types for them
-        new_nodes = new_nodes if self.tester.params.get("nemesis_grow_shrink_instance_type") else None
-        if duration := self.tester.params.get("nemesis_double_load_during_grow_shrink_duration"):
-            with self.action_log_scope("Double load after grow cluster"):
-                self._double_cluster_load(duration)
-        self._shrink_cluster(rack=None, new_nodes=new_nodes)
-
-    # NOTE: version limitation is caused by the following:
-    #       - https://github.com/scylladb/scylla-enterprise/issues/3211
-    #       - https://github.com/scylladb/scylladb/issues/14184
-    @scylla_versions(("5.2.7", None), ("2023.1.1", None))
-    def disrupt_grow_shrink_new_rack(self):
-        if not self._is_it_on_kubernetes():
-            raise UnsupportedNemesis("Adding new rack is not supported for non-k8s Scylla clusters")
-        rack = max(self.cluster.racks) + 1
-        self._grow_cluster(rack)
-        self._shrink_cluster(rack)
-
-    def _grow_cluster(self, rack=None):
-        if rack is None and self._is_it_on_kubernetes():
-            rack = 0
-        add_nodes_number = self.tester.params.get("nemesis_add_node_cnt")
-        new_nodes = []
-        with self.action_log_scope(f"Grow cluster by {add_nodes_number} nodes"):
-            if self.cluster.parallel_node_operations:
-                new_nodes = self.add_new_nodes(
-                    count=add_nodes_number,
-                    rack=rack,
-                    instance_type=self.tester.params.get("nemesis_grow_shrink_instance_type"),
-                )
-            else:
-                for idx in range(add_nodes_number):
-                    # if rack is not specified, round-robin racks to spread nodes evenly
-                    rack_idx = rack if rack is not None else idx % self.cluster.racks_count
-                    new_nodes += self.add_new_nodes(
-                        count=1,
-                        rack=rack_idx,
-                        instance_type=self.tester.params.get("nemesis_grow_shrink_instance_type"),
-                    )
-        time.sleep(self.interval)
-        for node in new_nodes:
-            self.node_allocator.unset_running_nemesis(node, self.current_disruption)
-        return new_nodes
-
-    def _shrink_cluster(self, rack=None, new_nodes: list[BaseNode] | None = None):
-        add_nodes_number = self.tester.params.get("nemesis_add_node_cnt")
-        InfoEvent(message=f"Start shrink cluster by {add_nodes_number} nodes").publish()
-        # Check that number of nodes is enough for decommission:
-        self.log.debug(
-            "Current target_node %s, is zero_node: %s, dc_idx: %s",
-            self.target_node.name,
-            self.target_node._is_zero_token_node,
-            self.target_node.dc_idx,
-        )
-        cur_num_nodes_in_dc = len([n for n in self.cluster.data_nodes if n.dc_idx == self.target_node.dc_idx])
-        initial_db_size = self.tester.params.get("n_db_nodes")
-        if self._is_it_on_kubernetes():
-            k8s_size = self.tester.params.get("k8s_n_scylla_pods_per_cluster")
-            initial_db_size = [k8s_size] * len(initial_db_size) if k8s_size else initial_db_size
-
-        initial_db_size_in_dc = initial_db_size[self.target_node.dc_idx]
-        decommission_nodes_number = min(cur_num_nodes_in_dc - initial_db_size_in_dc, add_nodes_number)
-
-        if decommission_nodes_number < 1:
-            error = "Not enough nodes for decommission"
-            self.log.warning("Shrink cluster skipped. Error: %s", error)
-            raise Exception(error)
-
-        self.log.info("Start shrink cluster by %s nodes", decommission_nodes_number)
-        # Currently on kubernetes first two nodes of each rack are getting seed status
-        # Because of such behavior only way to get them decommission is to enable decommissioning
-        # TBD: After https://github.com/scylladb/scylla-operator/issues/292 is fixed remove is_seed parameter
-        self._decommission_nodes(
-            decommission_nodes_number,
-            rack,
-            is_seed=None if self._is_it_on_kubernetes() else DefaultValue,
-            dc_idx=self.target_node.dc_idx,
-            exact_nodes=new_nodes,
-        )
-        num_of_nodes = len(self.cluster.data_nodes)
-        self.log.info("Cluster shrink finished. Current number of data nodes %s", num_of_nodes)
-        InfoEvent(message=f"Cluster shrink finished. Current number of data nodes {num_of_nodes}").publish()
-
     def disrupt_hot_reloading_internode_certificate(self):
         """
         https://github.com/scylladb/scylla/issues/6067
@@ -4156,7 +3988,7 @@ class NemesisRunner:
             InfoEvent(message="FinishEvent - Manager repair was Skipped").publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message="Starting grow disruption").publish()
-        self._grow_cluster(rack=None)
+        grow_cluster(self, rack=None)
         InfoEvent(message="Finished grow disruption").publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message="Starting terminate_and_replace disruption").publish()
@@ -4164,7 +3996,7 @@ class NemesisRunner:
         InfoEvent(message="Finished terminate_and_replace disruption").publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message="Starting shrink disruption").publish()
-        self._shrink_cluster(rack=None)
+        shrink_cluster(self, rack=None)
         InfoEvent(message="Finished shrink disruption").publish()
 
     def _k8s_disrupt_memory_stress(self):
@@ -4594,18 +4426,6 @@ class NemesisRunner:
             self.actions_log.info(f"Restarting {self.target_node.name} node")
             self.target_node.restart_scylla_server()
             raise
-
-    def disrupt_grow_shrink_zero_nodes(self):
-        """ "Add/remove znodes to same dc where target node. The target node could be any node"""
-        if not self.cluster.params.get("use_zero_nodes"):
-            raise UnsupportedNemesis("The zero tokens support is not enabled")
-
-        duration_with_znode = 300
-        new_znode = self._add_and_init_new_cluster_nodes(count=1, is_zero_node=True)[0]
-        self.log.debug("Run with zero-token node %s for %ds", new_znode.name, duration_with_znode)
-        time.sleep(duration_with_znode)
-        znode = self.random.choice([node for node in self.cluster.zero_nodes if node.dc_idx == self.target_node.dc_idx])
-        self.decommission_nodes(nodes=[znode])
 
     def disrupt_serial_restart_elected_topology_coordinator(self):
         """Serial restart of elected topology coordinator node,

@@ -37,25 +37,6 @@ class ToggleLdapConfiguration(NemesisBaseClass):
         self.runner.disrupt_disable_enable_ldap_authorization()
 
 
-@target_data_nodes
-class GrowShrinkClusterNemesis(NemesisBaseClass):
-    disruptive = True
-    kubernetes = True
-    topology_changes = True
-
-    def disrupt(self):
-        self.runner.disrupt_grow_shrink_cluster()
-
-
-class AddRemoveRackNemesis(NemesisBaseClass):
-    disruptive = True
-    kubernetes = True
-    config_changes = True
-
-    def disrupt(self):
-        self.runner.disrupt_grow_shrink_new_rack()
-
-
 @target_all_nodes
 class StopWaitStartMonkey(NemesisBaseClass):
     disruptive = True
@@ -576,21 +557,6 @@ class NemesisSequence(NemesisBaseClass):
         self.runner.disrupt_run_unique_sequence()
 
 
-@target_all_nodes
-class TerminateAndRemoveNodeMonkey(NemesisBaseClass):
-    """Remove a Node from a Scylla Cluster (Down Scale)"""
-
-    disruptive = True
-    # It should not be run on kubernetes, since it is a manual procedure
-    # While on kubernetes we put it all on scylla-operator
-    kubernetes = False
-    topology_changes = True
-    supports_high_disk_utilization = False  # Removing a node consumes disk space
-
-    def disrupt(self):
-        self.runner.disrupt_remove_node_then_add_node()
-
-
 class ToggleCDCMonkey(NemesisBaseClass):
     disruptive = False
     schema_changes = True
@@ -724,15 +690,6 @@ class EndOfQuotaNemesis(NemesisBaseClass):
 
     def disrupt(self):
         self.runner.disrupt_end_of_quota_nemesis()
-
-
-@target_all_nodes
-class GrowShrinkZeroTokenNode(NemesisBaseClass):
-    disruptive = True
-    zero_node_changes = True
-
-    def disrupt(self):
-        self.runner.disrupt_grow_shrink_zero_nodes()
 
 
 @target_all_nodes
