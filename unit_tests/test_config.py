@@ -1575,5 +1575,44 @@ def test_keystore_env_is_exported_before_init_resolves_xcloud_version(monkeypatc
     assert seen == ["s3"], f"KeyStore built during __init__ saw {seen}, config file asked for s3"
 
 
+@pytest.fixture(name="nvme_conf")
+def fixture_nvme_conf(monkeypatch):
+    """A minimal docker-backend config, for checking the NVMe diagnostics defaults."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "internal_test_data/minimal_test_case.yaml")
+    return sct_config.SCTConfiguration()
+
+
+def test_collect_nvme_diagnostics_default_false(nvme_conf):
+    """collect_nvme_diagnostics is off by default."""
+    assert nvme_conf.get("collect_nvme_diagnostics") is False
+
+
+def test_collect_nvme_diagnostics_env_override(monkeypatch):
+    """collect_nvme_diagnostics can be set via environment variable."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "internal_test_data/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_COLLECT_NVME_DIAGNOSTICS", "true")
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("collect_nvme_diagnostics") is True
+
+
+def test_nvme_self_test_type_default(nvme_conf):
+    """nvme_self_test_type defaults to 1 (short)."""
+    assert nvme_conf.get("nvme_self_test_type") == 1
+
+
+def test_nvme_self_test_type_env_override(monkeypatch):
+    """nvme_self_test_type can be set to 2 (extended) via environment variable."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "internal_test_data/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_NVME_SELF_TEST_TYPE", "2")
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("nvme_self_test_type") == 2
+
+
 if __name__ == "__main__":
     unittest.main()

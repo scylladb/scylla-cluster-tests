@@ -2105,6 +2105,21 @@ class SCTConfiguration(dict):
             name="collect_logs", env="SCT_COLLECT_LOGS", type=boolean, help="Collect logs from instances and sct runner"
         ),
         dict(
+            name="collect_nvme_diagnostics",
+            env="SCT_COLLECT_NVME_DIAGNOSTICS",
+            type=boolean,
+            help="""Collect NVMe SMART logs, error logs, and self-test results from DB nodes during test teardown.
+                 Requires nvme-cli to be installed on the nodes.
+                 Skipped gracefully on backends without NVMe devices.""",
+        ),
+        dict(
+            name="nvme_self_test_type",
+            env="SCT_NVME_SELF_TEST_TYPE",
+            type=int,
+            help="""NVMe device self-test type to run: 1 (short, ~2 min) or 2 (extended, may take hours).
+                 Only used when collect_nvme_diagnostics is enabled.""",
+        ),
+        dict(
             name="execute_post_behavior",
             env="SCT_EXECUTE_POST_BEHAVIOR",
             type=boolean,
@@ -3916,6 +3931,9 @@ class SCTConfiguration(dict):
             re.compile(backtrace_decoding_disable_regex)
 
         self._validate_perf_gradual_throttle_steps()
+
+        if (nvme_test_type := self.get("nvme_self_test_type")) not in (1, 2):
+            raise ValueError(f"nvme_self_test_type must be 1 (short) or 2 (extended), got {nvme_test_type!r}")
 
     def _get_normalized_arch(self, instance_type: str, region_name: str, default: str = "x86_64") -> str:
         """Detect architecture from AWS instance type and normalize to Scylla package naming.
