@@ -82,6 +82,17 @@ else
     fi
 fi
 
+# --- firewall --------------------------------------------------------------------------------
+# On firewalld hosts without passwordless sudo, we can only validate this state.
+# If minicloud0 is not in the trusted zone, IMDS is blocked and SSH key injection fails.
+if command -v firewall-cmd >/dev/null 2>&1 && ! sudo -n true 2>/dev/null ; then
+    if [[ "\$(firewall-cmd --state 2>/dev/null)" == "running" ]] && ip addr show minicloud0 >/dev/null 2>&1 ; then
+        if [[ "\$(firewall-cmd --get-zone-of-interface=minicloud0 2>/dev/null)" != "trusted" ]] ; then
+            fail+=("firewalld is running but minicloud0 is not in the trusted zone and there is no passwordless sudo to move it - guests would boot but never reach IMDS (symptom: SSH AuthenticationError after ~25 min). Move it with 'firewall-cmd --zone=trusted --change-interface=minicloud0' in the boot-time unit that creates the device")
+        fi
+    fi
+fi
+
 # --- port 5000 -----------------------------------------------------------------------------
 if ss -ltn 2>/dev/null | grep -q ':5000 ' ; then
     # -f and a body match, both needed: bare `curl -s -o /dev/null` exits 0 on a 404, so any random
