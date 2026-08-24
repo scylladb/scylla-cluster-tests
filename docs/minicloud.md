@@ -126,6 +126,15 @@ for the GCE path's image export). One-time network setup (the `minicloud0` TUN d
 `10.127.0.1`) is created by the container's setup script under sudo, or pre-create it via a
 boot-time unit and no sudo is needed at run time. A networking-setup failure aborts the start -
 guests without `minicloud0` would pass API health checks and then be unreachable over SSH.
+On firewalld hosts (for example, Fedora), `minicloud0` must be in the `trusted` zone.
+Guest IMDS traffic is DNATed through the TUN device into the host INPUT chain, and the default
+zone blocks it.  If that traffic is blocked, guests still boot, but never receive their SSH key,
+so login fails with `AuthenticationError`.
+
+Startup applies this automatically at runtime and re-applies it on every run, because
+`firewall-cmd --reload` clears the setting.
+If you configure networking with a boot-time unit, that unit must include:
+`firewall-cmd --zone=trusted --change-interface=minicloud0`.
 
 ### Guest network ranges
 
@@ -230,6 +239,7 @@ the regular `clean-resources` path.
 | `SnapshotNotFound` from `ListSnapshotBlocks` | dev AMI whose snapshot is not shared with the QA account - use a released version |
 | "memory per shard too low" in a guest's Scylla log | `minicloud_lightweight_memory` set below ~3 GiB |
 | start aborts with "could not extract minicloud-setup.sh" or "minicloud-setup.sh failed" | host networking could not be configured - pre-create the `minicloud0` device or grant passwordless sudo |
+| guests boot and get DHCP, but SSH fails with `AuthenticationError` until the timeout | the host firewall blocks the guests' IMDS requests, so no SSH key was injected - on firewalld hosts the start moves `minicloud0` into the `trusted` zone itself; hitting this means it could not (no `firewall-cmd`-compatible firewall, or no passwordless sudo) |
 | `clean-resources` refuses to run: "minicloud is not reachable" | the container died; collect its logs (`docker logs minicloud`) - cleanup against a fresh emulator would only pretend to succeed |
 
 The container's own log is the emulator's view of the run: `docker logs minicloud`, and
@@ -284,12 +294,14 @@ independent of minicloud; see [sct-pipelines](./sct-pipelines.md).
 A lab agent serving `minicloud-kvm-builders-v1` needs: the agent user in `kvm` and `docker`
 groups (restart the agent process after `usermod`, reconnecting is not enough); `minicloud0`
 pre-created by a boot-time unit (preferred - no sudo needed at run time) or passwordless sudo;
+on firewalld hosts, `minicloud0` in the `trusted` zone (done by the run itself given sudo, or
+by the boot-time unit - see [Running locally](#running-locally));
 `USER`/`HOME` set and `$HOME` writable with >=80 GiB free; `numExecutors=1` + exclusive mode,
 which is what serialises the host singletons (port 5000, the container name, `minicloud0`);
 egress to docker.io, ghcr.io, github.com, amazonaws.com, argus.scylladb.com,
 downloads.scylladb.com. The *Minicloud Preflight* stage verifies what a shell on the agent can
-see - /dev/kvm writability, the docker daemon, `minicloud0` and its routes, port 5000 ownership,
-`USER`/`HOME`, disk headroom - and reports every problem in one pass. `numExecutors=1`, exclusive
+see - /dev/kvm writability, the docker daemon, `minicloud0` and its routes, the firewalld zone,
+port 5000 ownership, `USER`/`HOME`, disk headroom - and reports every problem in one pass. `numExecutors=1`, exclusive
 mode and the egress list stay manual agent configuration: nothing in the build can check them.
 
 ### The jobs

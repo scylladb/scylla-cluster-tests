@@ -5,6 +5,7 @@ running the guests is usually an sct-runner inside a real VPC.
 """
 
 import subprocess
+from contextlib import contextmanager
 from ipaddress import ip_network
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -25,7 +26,12 @@ from sdcm.utils.minicloud.config import (
     MinicloudError,
 )
 from sdcm.utils.minicloud.gcp import prepare_gce_network
-from sdcm.utils.minicloud.networking import LEGACY_BLANKET_ROUTE, setup_host_networking
+from sdcm.utils.minicloud.networking import (
+    FIREWALLD_TRUSTED_ZONE,
+    LEGACY_BLANKET_ROUTE,
+    TUN_NAME,
+    setup_host_networking,
+)
 
 MINICLOUD_ENV_VARS = ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL")
 
@@ -61,20 +67,31 @@ def test_every_supported_region_shifted_cidr_is_covered_by_host_routes(monkeypat
 
 
 class FakeHostNetwork:
-    """Simulates the host's ip/docker/sudo command surface for setup_host_networking().
+    """Emulates the host command layer used by `setup_host_networking()` (`ip`, `docker`, `sudo`, `firewall-cmd`).
 
-    ``setup_applies`` mirrors whether the image's minicloud-setup.sh honours the
-    MINICLOUD_VPC_ROUTES override (scylladb/minicloud#187) or installs its legacy
-    hardcoded ranges.
+    `setup_applies` tells whether the image's `minicloud-setup.sh` applies the
+    `MINICLOUD_VPC_ROUTES` override (`scylladb/minicloud#187`) or keeps legacy hardcoded ranges.
+    `has_firewalld` tells whether `firewall-cmd` exists on PATH (see `_fake_host`).
+    `tun_zone` is the current firewalld zone for the TUN device.
     """
 
     def __init__(
-        self, tun_up=False, routes=(), setup_applies=True, tun_stdout=b"inet 10.127.0.1/24 scope global minicloud0"
+        self,
+        tun_up=False,
+        routes=(),
+        setup_applies=True,
+        tun_stdout=b"inet 10.127.0.1/24 scope global minicloud0",
+        has_firewalld=False,
+        tun_zone=None,
+        zone_change_fails=False,
     ):
         self.tun_up = tun_up
         self.routes = set(routes)
         self.setup_applies = setup_applies
         self.tun_stdout = tun_stdout
+        self.has_firewalld = has_firewalld
+        self.tun_zone = tun_zone
+        self.zone_change_fails = zone_change_fails
         self.commands = []
 
     def run(self, cmd, **_):
@@ -89,6 +106,8 @@ class FakeHostNetwork:
             return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr=b"")
         if cmd[0] == "docker":
             return subprocess.CompletedProcess(cmd, 0, stdout=b"#!/bin/bash\ntrue\n", stderr=b"")
+        if cmd[:3] == ["sudo", "-n", "firewall-cmd"]:
+            return self._run_firewall_cmd(cmd)
         if cmd[0] == "sudo":
             self.tun_up = True
             if self.setup_applies:
@@ -99,15 +118,43 @@ class FakeHostNetwork:
             return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
         raise AssertionError(f"unexpected command: {cmd}")
 
+    def _run_firewall_cmd(self, cmd):
+        action = cmd[3]
+        if action == "--state":
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"running\n", stderr=b"")
+        if action == f"--get-zone-of-interface={TUN_NAME}":
+            if self.tun_zone:
+                return subprocess.CompletedProcess(cmd, 0, stdout=f"{self.tun_zone}\n".encode(), stderr=b"")
+            return subprocess.CompletedProcess(cmd, 2, stdout=b"", stderr=b"Error: INVALID_INTERFACE\n")
+        if cmd[3:] == [f"--zone={FIREWALLD_TRUSTED_ZONE}", f"--change-interface={TUN_NAME}"]:
+            if self.zone_change_fails:
+                return subprocess.CompletedProcess(cmd, 13, stdout=b"", stderr=b"Error: COMMAND_FAILED\n")
+            self.tun_zone = FIREWALLD_TRUSTED_ZONE
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"success\n", stderr=b"")
+        raise AssertionError(f"unexpected firewall-cmd invocation: {cmd}")
+
     def sudo_commands(self):
-        return [cmd for cmd in self.commands if cmd[0] == "sudo"]
+        return [cmd for cmd in self.commands if cmd[0] == "sudo" and "firewall-cmd" not in cmd]
+
+
+@contextmanager
+def _fake_host(fake):
+    """Patch subprocess.run and firewall-cmd lookup to match the fake host."""
+    with (
+        patch("sdcm.utils.minicloud.networking.subprocess.run", side_effect=fake.run),
+        patch(
+            "sdcm.utils.minicloud.networking.shutil.which",
+            side_effect=lambda name: "/usr/bin/firewall-cmd" if fake.has_firewalld and name == "firewall-cmd" else None,
+        ),
+    ):
+        yield
 
 
 def test_setup_host_networking_passes_range_overrides_to_setup_script(tmp_path):
     """The script runs under sudo with the narrowed MINICLOUD_TUN_ADDR/MINICLOUD_VPC_ROUTES."""
     fake = FakeHostNetwork()
     config = MinicloudConfig(docker_image="ghcr.io/scylladb/minicloud:test", state_dir=str(tmp_path))
-    with patch("sdcm.utils.minicloud.networking.subprocess.run", side_effect=fake.run):
+    with _fake_host(fake):
         setup_host_networking(config)
     (sudo_cmd,) = fake.sudo_commands()
     assert f"MINICLOUD_TUN_ADDR={MINICLOUD_TUN_ADDR}" in sudo_cmd
@@ -118,7 +165,7 @@ def test_setup_host_networking_skips_when_already_configured(tmp_path):
     """A host already carrying the narrowed routes is left alone - no docker, no sudo."""
     fake = FakeHostNetwork(tun_up=True, routes=MINICLOUD_HOST_VPC_ROUTES)
     config = MinicloudConfig(docker_image="ghcr.io/scylladb/minicloud:test", state_dir=str(tmp_path))
-    with patch("sdcm.utils.minicloud.networking.subprocess.run", side_effect=fake.run):
+    with _fake_host(fake):
         setup_host_networking(config)
     assert not fake.sudo_commands()
     assert not [cmd for cmd in fake.commands if cmd[0] == "docker"]
@@ -128,7 +175,7 @@ def test_setup_host_networking_reconfigures_when_legacy_blanket_route_present(tm
     """A stale 10.0.0.0/8 from an older image forces a re-run instead of an early return."""
     fake = FakeHostNetwork(tun_up=True, routes=(LEGACY_BLANKET_ROUTE, "172.31.0.0/16"))
     config = MinicloudConfig(docker_image="ghcr.io/scylladb/minicloud:test", state_dir=str(tmp_path))
-    with patch("sdcm.utils.minicloud.networking.subprocess.run", side_effect=fake.run):
+    with _fake_host(fake):
         setup_host_networking(config)
     assert fake.sudo_commands()
     assert LEGACY_BLANKET_ROUTE not in fake.routes
@@ -138,7 +185,7 @@ def test_setup_host_networking_old_image_ignoring_overrides_raises(tmp_path):
     """An image whose setup script predates the overrides fails fast with the reason."""
     fake = FakeHostNetwork(setup_applies=False)
     config = MinicloudConfig(docker_image="ghcr.io/scylladb/minicloud:test", state_dir=str(tmp_path))
-    with patch("sdcm.utils.minicloud.networking.subprocess.run", side_effect=fake.run):
+    with _fake_host(fake):
         with pytest.raises(MinicloudError, match="MINICLOUD_VPC_ROUTES override"):
             setup_host_networking(config)
 
@@ -151,9 +198,54 @@ def test_setup_host_networking_reconfigures_on_wrong_tun_address(tmp_path):
         tun_stdout=b"inet 10.127.0.10/24 scope global minicloud0",
     )
     config = MinicloudConfig(docker_image="ghcr.io/scylladb/minicloud:test", state_dir=str(tmp_path))
-    with patch("sdcm.utils.minicloud.networking.subprocess.run", side_effect=fake.run):
+    with _fake_host(fake):
         setup_host_networking(config)
     assert fake.sudo_commands()
+
+
+# --- firewalld zone for the TUN device (guest IMDS traffic crosses the host INPUT chain) ---
+
+
+def _run_setup_host_networking(tmp_path, **fake_kwargs):
+    fake = FakeHostNetwork(**fake_kwargs)
+    config = MinicloudConfig(
+        docker_image="ghcr.io/scylladb/minicloud:test",
+        state_dir=str(tmp_path),
+    )
+    with _fake_host(fake):
+        setup_host_networking(config)
+    return fake
+
+
+def test_setup_host_networking_moves_tun_to_trusted_zone_despite_early_return(tmp_path):
+    """The zone fix must run even when device+routes short-circuit the setup."""
+    fake = _run_setup_host_networking(
+        tmp_path,
+        tun_up=True,
+        routes=MINICLOUD_HOST_VPC_ROUTES,
+        has_firewalld=True,
+    )
+    assert fake.tun_zone == FIREWALLD_TRUSTED_ZONE
+    assert not fake.sudo_commands()  # still the early-return path: no setup script ran
+
+
+def test_setup_host_networking_applies_trusted_zone_after_fresh_setup(tmp_path):
+    """On a fresh host the zone is assigned right after the setup script creates the device."""
+    fake = _run_setup_host_networking(tmp_path, has_firewalld=True)
+    assert fake.sudo_commands()  # the setup script did run
+    assert fake.tun_zone == FIREWALLD_TRUSTED_ZONE
+
+
+def test_setup_host_networking_zone_change_failure_raises(tmp_path):
+    """A failed zone change is fatal: guests would boot but never reach IMDS."""
+    with pytest.raises(MinicloudError, match="trusted zone"):
+        _run_setup_host_networking(
+            tmp_path,
+            tun_up=True,
+            routes=MINICLOUD_HOST_VPC_ROUTES,
+            has_firewalld=True,
+            zone_change_fails=True,
+        )
 
 
 # --- emulated GCE network preparation (routed qa-vpc subnets) ---
