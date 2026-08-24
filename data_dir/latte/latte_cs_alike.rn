@@ -193,7 +193,7 @@ async fn prepare_gauss_distribution(db) {
 async fn get_partition_idx(db, i) {
     if db.data.gauss_enabled {
         let current_idx = normal(i, db.data.gauss_mean, db.data.gauss_stddev) as i64;
-        if current_idx > OFFSET + ROW_COUNT {
+        if current_idx >= OFFSET + ROW_COUNT {
             current_idx = OFFSET + ROW_COUNT - 1;
         } else if current_idx < OFFSET {
             current_idx = OFFSET;
