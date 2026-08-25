@@ -34,6 +34,7 @@ import oci
 from oci.core.models import (
     AddNetworkSecurityGroupSecurityRulesDetails,
     AddSecurityRuleDetails,
+    AddSubnetIpv6CidrDetails,
     CreateInternetGatewayDetails,
     CreateNatGatewayDetails,
     CreateDrgAttachmentDetails,
@@ -137,6 +138,139 @@ class OciRegion:
             if vcn.lifecycle_state == "AVAILABLE":
                 return vcn
         return None
+
+    def _enable_vcn_ipv6(self, vcn):
+        """Enable IPv6 on an existing VCN that was created without it.
+
+        add_ipv6_vcn_cidr triggers Oracle to assign a /56 prefix to the VCN.
+        After the CIDR is allocated, reconcile the public route table with a ::/0 rule.
+        """
+        LOGGER.info("Enabling IPv6 on existing VCN '%s' (%s)", vcn.display_name, vcn.id)
+        self.network_client.add_ipv6_vcn_cidr(vcn.id)
+        updated = self._wait_for_state(
+            self.network_client,
+            self.network_client.get_vcn,
+            vcn.id,
+            "AVAILABLE",
+        )
+        self._cache_vcn_ipv6_cidr(updated)
+        if not self._vcn_ipv6_cidr:
+            LOGGER.warning("VCN %s still has no IPv6 CIDR after enabling IPv6", vcn.id)
+        else:
+            self._ensure_public_route_table_ipv6()
+            self._ensure_security_list_ipv6()
+        return updated
+
+    def _ensure_public_route_table_ipv6(self):
+        """Add ::/0 IGW route to an existing public route table if missing."""
+        rt = self._find_route_table(f"{self.SCT_VCN_NAME}-rt-public")
+        if not rt:
+            return
+        existing_dests = {rule.destination for rule in (rt.route_rules or [])}
+        if "::/0" in existing_dests:
+            return
+        LOGGER.info("Adding IPv6 default route to existing public route table '%s'", rt.display_name)
+        igw = self.internet_gateway
+        updated_rules = list(rt.route_rules or []) + [
+            RouteRule(
+                destination="::/0",
+                destination_type="CIDR_BLOCK",
+                network_entity_id=igw.id,
+                description="Route to Internet Gateway (IPv6)",
+            )
+        ]
+        self.network_client.update_route_table(
+            rt.id,
+            UpdateRouteTableDetails(route_rules=updated_rules),
+        )
+
+    @staticmethod
+    def _ipv6_ssh_ingress_rule() -> IngressSecurityRule:
+        return IngressSecurityRule(
+            protocol="6",  # TCP
+            source="::/0",
+            source_type="CIDR_BLOCK",
+            tcp_options=TcpOptions(destination_port_range=PortRange(min=22, max=22)),
+            description="Allow SSH from anywhere (IPv6)",
+        )
+
+    def _ipv6_intra_vcn_ingress_rule(self) -> IngressSecurityRule:
+        return IngressSecurityRule(
+            protocol="all",
+            source=str(self.vcn_ipv6_cidr),
+            source_type="CIDR_BLOCK",
+            description="Allow all IPv6 traffic within VCN",
+        )
+
+    @staticmethod
+    def _ipv6_egress_rule() -> EgressSecurityRule:
+        return EgressSecurityRule(
+            protocol="all",
+            destination="::/0",
+            destination_type="CIDR_BLOCK",
+            description="Allow all outbound IPv6 traffic",
+        )
+
+    @staticmethod
+    def _has_ipv6_ssh_ingress(ingress_rules) -> bool:
+        """Tell whether the security list already allows SSH over IPv6.
+
+        Matching on the source alone is not enough here: SSH is not the only rule sourced
+        from '::/0', so an unrelated one would mask the missing SSH rule.
+        """
+        for rule in ingress_rules:
+            if rule.source != "::/0":
+                continue
+            if rule.protocol == "all":
+                return True
+            if rule.protocol != "6":
+                continue
+            # NOTE: no 'tcp_options' at all means every TCP port, port 22 included
+            port_range = getattr(rule.tcp_options, "destination_port_range", None)
+            if port_range is None or port_range.min <= 22 <= port_range.max:
+                return True
+        return False
+
+    def _ensure_security_list_ipv6(self):
+        """Add the IPv6 egress, SSH and intra-VCN ingress rules to an existing security list.
+
+        Keep this in sync with '_create_security_list': a region prepared before IPv6 support
+        must end up with the same rule set as a freshly created one.
+        """
+        sl = self._find_security_list()
+        if not sl:
+            return
+
+        existing_egress_dests = {rule.destination for rule in (sl.egress_security_rules or [])}
+        existing_ingress = list(sl.ingress_security_rules or [])
+        existing_ingress_sources = {rule.source for rule in existing_ingress}
+
+        needs_update = False
+        updated_egress = list(sl.egress_security_rules or [])
+        updated_ingress = list(existing_ingress)
+
+        if "::/0" not in existing_egress_dests:
+            updated_egress.append(self._ipv6_egress_rule())
+            needs_update = True
+
+        if not self._has_ipv6_ssh_ingress(existing_ingress):
+            updated_ingress.append(self._ipv6_ssh_ingress_rule())
+            needs_update = True
+
+        if str(self.vcn_ipv6_cidr) not in existing_ingress_sources:
+            updated_ingress.append(self._ipv6_intra_vcn_ingress_rule())
+            needs_update = True
+
+        if not needs_update:
+            return
+        LOGGER.info("Adding IPv6 rules to existing security list '%s'", sl.display_name)
+        self.network_client.update_security_list(
+            sl.id,
+            UpdateSecurityListDetails(
+                ingress_security_rules=updated_ingress,
+                egress_security_rules=updated_egress,
+            ),
+        )
 
     def _create_vcn(self):
         LOGGER.info("Creating VCN '%s' in %s", self.SCT_VCN_NAME, self.region_name)
@@ -294,45 +428,21 @@ class OciRegion:
             tcp_options=TcpOptions(destination_port_range=PortRange(min=22, max=22)),
             description="Allow SSH from anywhere",
         )
-        ssh_rule_v6 = IngressSecurityRule(
-            protocol="6",  # TCP
-            source="::/0",
-            source_type="CIDR_BLOCK",
-            tcp_options=TcpOptions(destination_port_range=PortRange(min=22, max=22)),
-            description="Allow SSH from anywhere (IPv6)",
-        )
         intra_vcn_rule = IngressSecurityRule(
             protocol="all",
             source=str(self.vcn_ipv4_cidr),
             description="Allow all traffic within VCN",
         )
-        intra_vcn_rule_v6 = None
-        if self.vcn_ipv6_cidr:
-            intra_vcn_rule_v6 = IngressSecurityRule(
-                protocol="all",
-                source=str(self.vcn_ipv6_cidr),
-                source_type="CIDR_BLOCK",
-                description="Allow all IPv6 traffic within VCN",
-            )
         egress_rule = EgressSecurityRule(
             protocol="all",
             destination="0.0.0.0/0",
             description="Allow all outbound traffic",
         )
-        egress_rule_v6 = None
-        if self.vcn_ipv6_cidr:
-            egress_rule_v6 = EgressSecurityRule(
-                protocol="all",
-                destination="::/0",
-                destination_type="CIDR_BLOCK",
-                description="Allow all outbound IPv6 traffic",
-            )
-        ingress_rules = [ssh_rule, ssh_rule_v6, intra_vcn_rule]
-        if intra_vcn_rule_v6:
-            ingress_rules.append(intra_vcn_rule_v6)
+        ingress_rules = [ssh_rule, self._ipv6_ssh_ingress_rule(), intra_vcn_rule]
         egress_rules = [egress_rule]
-        if egress_rule_v6:
-            egress_rules.append(egress_rule_v6)
+        if self.vcn_ipv6_cidr:
+            ingress_rules.append(self._ipv6_intra_vcn_ingress_rule())
+            egress_rules.append(self._ipv6_egress_rule())
         details = CreateSecurityListDetails(
             compartment_id=self.compartment_id,
             display_name=self.SCT_SECURITY_LIST_NAME,
@@ -542,18 +652,21 @@ class OciRegion:
         )
         return ngw
 
-    def subnet_name(self, public: bool = False) -> str:
+    def subnet_name(self, public: bool = False, nic_index: int = 0) -> str:
         # We append "-public" or "-private" to distinguish subnets.
         # This allows having both public and private subnets in the same VCN.
+        # Secondary NIC subnets get an additional "-nicN" suffix.
         suffix = "-public" if public else "-private"
+        if nic_index > 0:
+            suffix += f"-nic{nic_index}"
         return self.SCT_SUBNET_NAME_TMPL.format(suffix=suffix)
 
-    def subnet(self, public: bool = False, _cache: dict = {}):  # noqa: B006
-        cache_key = (self.region_name, public)
+    def subnet(self, public: bool = False, nic_index: int = 0, _cache: dict = {}):  # noqa: B006
+        cache_key = (self.region_name, public, nic_index)
         if existing := _cache.get(cache_key):
             return existing
-        with KEY_BASED_LOCKS.get_lock(f"oci-subnet-{self.region_name}-public-{public}"):
-            name = self.subnet_name(public=public)
+        with KEY_BASED_LOCKS.get_lock(f"oci-subnet-{self.region_name}-public-{public}-nic-{nic_index}"):
+            name = self.subnet_name(public=public, nic_index=nic_index)
             subnets = oci.pagination.list_call_get_all_results_generator(
                 self.network_client.list_subnets,
                 yield_mode="record",
@@ -563,18 +676,76 @@ class OciRegion:
             )
             while current_subnet := next(subnets, None):
                 if current_subnet.lifecycle_state == "AVAILABLE":
+                    current_subnet = self._ensure_subnet_ipv6(current_subnet)
                     _cache[cache_key] = current_subnet
                     return current_subnet
         return None
+
+    def _pick_free_subnet_ipv6_cidr(self, name: str):
+        """Pick an IPv6 prefix from the VCN IPv6 CIDR which is not taken by any subnet yet."""
+        used_v6 = set()
+        all_subnets = oci.pagination.list_call_get_all_results(
+            self.network_client.list_subnets,
+            compartment_id=self.compartment_id,
+            vcn_id=self.vcn.id,
+        ).data
+        for current_subnet in all_subnets:
+            for block in getattr(current_subnet, "ipv6_cidr_blocks", None) or []:
+                used_v6.add(block)
+        for cidr6 in self.vcn_ipv6_cidr.subnets(prefixlen_diff=8):
+            if str(cidr6) not in used_v6:
+                return cidr6
+        raise RuntimeError(f"No free IPv6 CIDR available for subnet '{name}'")
+
+    def _ensure_subnet_ipv6(self, subnet):
+        """Add an IPv6 prefix to an existing subnet which was created without one.
+
+        VNICs are created with 'assign_ipv6_ip=True' and OCI rejects that for subnets
+        without an IPv6 prefix. So subnets of the regions which were prepared before
+        the IPv6 support got added must be upgraded in-place.
+        """
+        if getattr(subnet, "ipv6_cidr_blocks", None):
+            return subnet
+        if not self.vcn_ipv6_cidr:
+            LOGGER.warning(
+                "Cannot add an IPv6 prefix to the '%s' subnet: VCN '%s' has no IPv6 CIDR. "
+                "Run 'hydra prepare-regions --cloud-provider oci' to enable IPv6 in this region.",
+                subnet.display_name,
+                self.vcn.display_name,
+            )
+            return subnet
+
+        ipv6_cidr = self._pick_free_subnet_ipv6_cidr(subnet.display_name)
+        LOGGER.info("Adding the '%s' IPv6 prefix to the existing '%s' subnet", ipv6_cidr, subnet.display_name)
+        try:
+            self.network_client.add_ipv6_subnet_cidr(
+                subnet.id,
+                AddSubnetIpv6CidrDetails(ipv6_cidr_block=str(ipv6_cidr)),
+            )
+        except oci.exceptions.ServiceError as exc:
+            # NOTE: another SCT process may have added a prefix concurrently
+            LOGGER.warning(
+                "Failed to add the '%s' IPv6 prefix to the '%s' subnet: %s", ipv6_cidr, subnet.display_name, exc
+            )
+        updated = self._wait_for_state(
+            self.network_client,
+            self.network_client.get_subnet,
+            subnet.id,
+            "AVAILABLE",
+        )
+        if not getattr(updated, "ipv6_cidr_blocks", None):
+            LOGGER.warning("Subnet '%s' still has no IPv6 prefix after the upgrade attempt", subnet.display_name)
+        return updated
 
     def create_subnet(
         self,
         ipv4_cidr=None,
         ipv6_cidr=None,
         public: bool = False,
+        nic_index: int = 0,
     ):
-        name = self.subnet_name(public=public)
-        if subnet := self.subnet(public=public):
+        name = self.subnet_name(public=public, nic_index=nic_index)
+        if subnet := self.subnet(public=public, nic_index=nic_index):
             LOGGER.info("Subnet '%s' already exists", name)
             return subnet
 
@@ -589,24 +760,28 @@ class OciRegion:
                         ipv4_cidr=subnet_cidr4,
                         ipv6_cidr=subnet_cidr6,
                         public=public,
+                        nic_index=nic_index,
                     )
                 except oci.exceptions.ServiceError as exc:
                     LOGGER.warning("Failed to create a %s subnet: %s", ("public" if public else "private"), exc)
                     time.sleep(2)
                     continue
-            subnet = self.subnet(public=public)
+            subnet = self.subnet(public=public, nic_index=nic_index)
             if subnet is None:
-                raise RuntimeError("Failed to create '{public}' subnet" % public)
+                raise RuntimeError(f"Failed to create '{'public' if public else 'private'}' subnet")
             else:
                 return subnet
 
-        LOGGER.info("Creating regional subnet '%s' (public=%s)", name, public)
+        if ipv6_cidr is None and self.vcn_ipv6_cidr:
+            ipv6_cidr = self._pick_free_subnet_ipv6_cidr(name)
+
+        LOGGER.info("Creating regional subnet '%s' (public=%s, nic_index=%d)", name, public, nic_index)
         details_kwargs = dict(
             cidr_block=str(ipv4_cidr),
             compartment_id=self.compartment_id,
             vcn_id=self.vcn.id,
             display_name=name,
-            dns_label=self._subnet_dns_label(public=public),
+            dns_label=self._subnet_dns_label(public=public, nic_index=nic_index),
             prohibit_public_ip_on_vnic=not public,
             security_list_ids=[self.security_list.id],
             route_table_id=(self.public_route_table.id if public else self.private_route_table.id),
@@ -893,6 +1068,8 @@ class OciRegion:
 
     def configure_network(self):
         _ = self.vcn
+        if not self._vcn_ipv6_cidr:
+            self._enable_vcn_ipv6(self.vcn)
         _ = self.security_list
         # NOTE: private subnet using nat gateway
         _ = self.nat_gateway
@@ -929,7 +1106,7 @@ class OciRegion:
                 "'hydra prepare-regions --cloud-provider oci'."
             )
 
-    def _subnet_dns_label(self, public: bool) -> str:
+    def _subnet_dns_label(self, public: bool, nic_index: int = 0) -> str:
         """Create a deterministic RFC-compliant subnet DNS label.
 
         Labels must be <=15 characters, alphanumeric, start with a letter and be
@@ -937,6 +1114,8 @@ class OciRegion:
         """
         visibility = "public" if public else "private"
         label_source = f"{self.region_name}-{visibility}"
+        if nic_index > 0:
+            label_source += f"-nic{nic_index}"
         checksum = hashlib.sha1(label_source.encode("utf-8")).hexdigest()[:7]
         base = self._dns_label_from_name(visibility)
         return f"{base[:7]}{checksum}"

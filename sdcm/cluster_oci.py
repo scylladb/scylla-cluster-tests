@@ -20,6 +20,10 @@ from typing import Dict, List
 
 from sdcm import cluster
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
+from sdcm.provision.network_configuration import (
+    NetworkInterface,
+    network_interfaces_count,
+)
 from sdcm.provision.oci.provisioner import OciProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
 from sdcm.provision.helpers.certificate import CA_CERT_FILE, CA_KEY_FILE, create_certificate
@@ -28,6 +32,12 @@ from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
 from sdcm.utils.net import resolve_ip_to_dns
+from sdcm.utils.oci_utils import (
+    SECONDARY_VNICS_SCRIPT,
+    SECONDARY_VNICS_SCRIPT_PATH,
+    SECONDARY_VNICS_SERVICE,
+    SECONDARY_VNICS_SERVICE_UNIT_TMPL,
+)
 
 LOGGER = logging.getLogger(__name__)
 SPOT_TERMINATION_CHECK_DELAY = 15
@@ -63,6 +73,8 @@ class OciNode(cluster.BaseNode):
         self.parent_cluster = parent_cluster
         self._instance = oci_instance
         self._instance_type = oci_instance.instance_type
+        self._ipv6_map: dict | None = None
+        self._cached_network_interfaces: list | None = None
         name = f"{node_prefix}-{self.region}-{node_index}".lower()
         ssh_login_info = {
             "hostname": None,
@@ -84,6 +96,148 @@ class OciNode(cluster.BaseNode):
         # NOTE: cloud-init gets checked by sdcm/provision/helpers/cloud_init
         pass
 
+    def init(self) -> None:
+        nic_count = network_interfaces_count(self.parent_cluster.params)
+        if nic_count > 1:
+            provisioner = self.parent_cluster.provisioners[self.dc_idx]
+            provisioner.attach_secondary_vnics(
+                name=self._instance.name,
+                nic_count=nic_count,
+                node_type=self.parent_cluster.node_type or "scylla-db",
+            )
+        scylla_network_config = self.parent_cluster.params.get("scylla_network_config")
+        if scylla_network_config:
+            self._set_network_configuration_safe()
+        super().init()
+        # After SSH is up, refresh/rebuild network configuration with OS-level data
+        if scylla_network_config:
+            if nic_count > 1:
+                self._configure_secondary_vnics_os()
+            if not self.scylla_network_configuration:
+                # IPv6 wasn't available from API pre-init; discover from OS now that SSH is up
+                self._ipv6_map = self._discover_ipv6_from_os()
+                if self._ipv6_map:
+                    self.log.info("Discovered IPv6 addresses on %s: %s", self.name, self._ipv6_map)
+                self._invalidate_network_interfaces_cache()
+                self._set_network_configuration_safe()
+                if self.scylla_network_configuration:
+                    self.refresh_ip_address()
+            else:
+                self.refresh_network_interfaces_info()
+            self._wait_for_private_dns_records()
+
+    def _wait_for_private_dns_records(self, timeout: int = 300, interval: int = 10) -> None:
+        """Wait until every private DNS name this node gets configured with resolves on the node.
+
+        OCI publishes the private DNS record of a VNIC asynchronously, and the secondary VNICs are
+        attached by SCT only once the instance is already running, so their records show up later
+        than the primary one. Scylla aborts at startup when it cannot resolve its own
+        'listen_address' / 'broadcast_rpc_address' and reports it as an opaque
+        "Couldn't resolve broadcast_rpc_address", so wait for the records to appear here instead.
+        """
+        if not self.use_dns_names or not (config := self.scylla_network_configuration):
+            return
+        dns_names = sorted(
+            {interface.dns_private_name for interface in config.network_interfaces if interface.dns_private_name}
+        )
+        if not dns_names:
+            return
+        self.log.info("Waiting for the private DNS records of %s: %s", self.name, ", ".join(dns_names))
+        for dns_name in dns_names:
+            if self.check_dns_ready(timeout=timeout, interval=interval, dns_host=dns_name):
+                continue
+            raise CreateOciNodeError(
+                f"Private DNS record '{dns_name}' of node '{self.name}' is still unresolvable after "
+                f"{timeout}s. Scylla cannot start without resolving its own 'listen_address' and "
+                f"'broadcast_rpc_address'."
+            )
+
+    def _set_network_configuration_safe(self):
+        """Build and validate network config; set None on failure (e.g. IPv6 not yet available)."""
+        try:
+            config = self._build_scylla_network_configuration()
+            if config:
+                config.test_communication  # validate that addresses resolve
+            self.scylla_network_configuration = config
+        except (IndexError, KeyError) as exc:
+            self.log.warning("Cannot resolve network configuration on %s: %s", self.name, exc)
+            self.scylla_network_configuration = None
+
+    def _discover_ipv6_from_os(self) -> dict:
+        """Discover global-scope IPv6 addresses from the node OS via SSH.
+
+        Returns a dict mapping interface name to list of IPv6 addresses.
+        """
+        result = self.remoter.run(
+            "ip -6 -j addr show scope global",
+            ignore_status=True,
+        )
+        if result.exit_status != 0 or not result.stdout.strip():
+            return {}
+        try:
+            ifaces = json.loads(result.stdout.strip())
+            ipv6_map = {}
+            for iface in ifaces:
+                ifname = iface.get("ifname", "")
+                addr_info = iface.get("addr_info", [])
+                addrs = [a["local"] for a in addr_info if a.get("family") == "inet6" and a.get("local")]
+                if addrs:
+                    ipv6_map[ifname] = addrs
+            return ipv6_map
+        except (json.JSONDecodeError, KeyError):
+            return {}
+
+    def _build_network_interfaces(self) -> list:
+        """Build NetworkInterface list from OCI VNIC attachments.
+
+        Uses self._ipv6_map (populated by _discover_and_set_network_configuration) as
+        fallback when the OCI API doesn't return IPv6 addresses for a VNIC.
+        """
+        provisioner = self.parent_cluster.provisioners[self.dc_idx]
+        instance = provisioner._vm_provider._resolve_instance(self._instance.name)  # noqa: SLF001
+        if not instance:
+            return []
+
+        devices = self.network_configuration if self.remoter else {}
+        attachments = provisioner._vm_provider.get_vnic_attachments(instance.id)  # noqa: SLF001
+
+        # Collect (vnic, attachment) pairs and sort so the primary VNIC comes first
+        vnic_pairs = []
+        for attachment in attachments:
+            vnic = provisioner.get_vnic_details(attachment.vnic_id)
+            vnic_pairs.append((vnic, attachment))
+        vnic_pairs.sort(key=lambda pair: (not getattr(pair[0], "is_primary", False), pair[1].nic_index or 0))
+
+        interfaces = []
+        for device_index, (vnic, attachment) in enumerate(vnic_pairs):
+            private_ip = vnic.private_ip if vnic.private_ip else ""
+            public_ip = vnic.public_ip if vnic.public_ip else None
+            dns_name = provisioner.get_vnic_private_dns_name(attachment.vnic_id)
+            mac_address = vnic.mac_address if hasattr(vnic, "mac_address") else None
+            # OCI API returns MACs in uppercase; ip-link returns lowercase
+            device_name = devices.get(mac_address.lower(), "") if mac_address and devices else ""
+
+            ipv6_addresses = provisioner.get_vnic_ipv6_addresses(attachment.vnic_id)
+            if not ipv6_addresses and device_name and self._ipv6_map:
+                ipv6_addresses = self._ipv6_map.get(device_name, [])
+
+            interfaces.append(
+                NetworkInterface(
+                    ipv4_public_address=public_ip,
+                    ipv6_public_addresses=ipv6_addresses,
+                    ipv4_private_addresses=[private_ip] if private_ip else [],
+                    ipv6_private_address=ipv6_addresses[0] if ipv6_addresses else "",
+                    dns_private_name=dns_name,
+                    dns_public_name=None,
+                    device_index=device_index,
+                    device_name=device_name,
+                    mac_address=mac_address,
+                    use_dns_names=self.use_dns_names,
+                )
+            )
+
+        return interfaces
+
     @cached_property
     def tags(self) -> Dict[str, str]:
         return {
@@ -93,10 +247,80 @@ class OciNode(cluster.BaseNode):
 
     @property
     def network_interfaces(self):
-        pass
+        """Return cached NetworkInterface list, rebuilding from OCI API only on first call or after invalidation."""
+        if self._cached_network_interfaces is None:
+            self._cached_network_interfaces = self._build_network_interfaces()
+        return self._cached_network_interfaces
+
+    def _invalidate_network_interfaces_cache(self):
+        self._cached_network_interfaces = None
 
     def refresh_network_interfaces_info(self):
-        pass
+        self._invalidate_network_interfaces_cache()
+        super().refresh_network_interfaces_info()
+
+    def _configure_secondary_vnics_os(self):
+        """Configure OS-level addresses and routing for secondary VNICs.
+
+        OCI leaves secondary VNICs completely unconfigured in the guest OS, and they need
+        policy-based routing on top of that to avoid asymmetric routing. Installs a boot
+        script which queries IMDS and configures every secondary VNIC, then runs it right
+        away. The systemd service makes the configuration survive reboots.
+        """
+        self.log.info("Configuring OS-level routing for secondary VNICs on %s", self.name)
+        primary_ip = self._instance.private_ip_address
+        nic_count = network_interfaces_count(self.parent_cluster.params)
+
+        # Install a self-contained boot script that discovers and configures secondary VNICs
+        self.remoter.sudo(
+            f"bash -c 'cat > {SECONDARY_VNICS_SCRIPT_PATH}' << 'SCTEOF'\n{SECONDARY_VNICS_SCRIPT}\nSCTEOF"
+        )
+        self.remoter.sudo(f"chmod 755 {SECONDARY_VNICS_SCRIPT_PATH}")
+
+        # Install and enable the systemd service so the script runs on every boot
+        service_unit = SECONDARY_VNICS_SERVICE_UNIT_TMPL.format(
+            script_path=SECONDARY_VNICS_SCRIPT_PATH, nic_count=nic_count, primary_ip=primary_ip
+        )
+        service_path = f"/etc/systemd/system/{SECONDARY_VNICS_SERVICE}.service"
+        self.remoter.sudo(f"bash -c 'cat > {service_path}' << 'SCTEOF'\n{service_unit}\nSCTEOF")
+        self.remoter.sudo("systemctl daemon-reload")
+        self.remoter.sudo(f"systemctl enable {SECONDARY_VNICS_SERVICE}.service")
+
+        # NOTE: run the script now to apply immediately. Failures must not be swallowed: a node with
+        #       half-configured VNICs stays reachable over its primary interface and only breaks much
+        #       later, as a confusing connectivity or streaming error.
+        self.remoter.sudo(f"{SECONDARY_VNICS_SCRIPT_PATH} {nic_count} {primary_ip}")
+
+    def start_network_interface(self, interface_name=None):
+        super().start_network_interface(interface_name=interface_name)
+        # NOTE: taking a secondary VNIC down flushes its IPv6 addresses and the policy
+        #       routes/rules of its dedicated routing table. The 'sct-secondary-vnics'
+        #       service is a 'oneshot' which normally runs only at boot, so re-run it
+        #       here to re-apply the configuration once the interface is back up.
+        if self.parent_cluster.extra_network_interface:
+            self.remoter.sudo(f"systemctl restart {SECONDARY_VNICS_SERVICE}.service")
+
+    @cached_property
+    def private_dns_name(self) -> str:
+        if self.scylla_network_configuration:
+            return self.scylla_network_configuration.dns_private_name
+        return self._resolve_private_dns_name()
+
+    def _refresh_instance_state(self):
+        if self.scylla_network_configuration:
+            self.refresh_network_interfaces_info()
+            public_ipv4_addresses = [
+                iface.ipv4_public_address
+                for iface in self.scylla_network_configuration.network_interfaces
+                if iface.ipv4_public_address
+            ]
+            private_ipv4_addresses = [
+                iface.ipv4_private_addresses[0]
+                for iface in self.scylla_network_configuration.network_interfaces
+                if iface.ipv4_private_addresses
+            ]
+            return public_ipv4_addresses, private_ipv4_addresses
+        return ([self._instance.public_ip_address], [self._instance.private_ip_address])
 
     @retrying(n=6, sleep_time=1)
     def _set_keep_alive(self) -> bool:
@@ -106,10 +330,6 @@ class OciNode(cluster.BaseNode):
     @retrying(n=6, sleep_time=1)
     def _set_keep_duration(self, duration_in_hours: int) -> None:
         self._instance.add_tags({"keep": str(duration_in_hours)})
-
-    def _refresh_instance_state(self):
-        ip_tuple = ([self._instance.public_ip_address], [self._instance.private_ip_address])
-        return ip_tuple
 
     @property
     def vm_region(self):
@@ -169,10 +389,6 @@ class OciNode(cluster.BaseNode):
         self._instance.terminate(wait=True)
         super().destroy()
 
-    def _get_ipv6_ip_address(self):
-        # TODO: implement it
-        return ""
-
     @property
     def image(self):
         return self._instance.image
@@ -183,8 +399,8 @@ class OciNode(cluster.BaseNode):
     def _get_private_ip_address(self) -> str | None:
         return self._instance.private_ip_address
 
-    @cached_property
-    def private_dns_name(self) -> str:
+    def _resolve_private_dns_name(self) -> str:
+        """Resolve private DNS name without scylla_network_configuration (fallback path)."""
         instance_private_dns = getattr(getattr(self, "_instance", None), "private_dns_name", None)
         if instance_private_dns:
             return instance_private_dns
@@ -314,6 +530,7 @@ class OciCluster(cluster.BaseCluster):
             params=params,
             region_names=region_names,
             node_type=node_type,
+            extra_network_interface=network_interfaces_count(params) > 1,
         )
         self.log.debug("OciCluster constructor")
 

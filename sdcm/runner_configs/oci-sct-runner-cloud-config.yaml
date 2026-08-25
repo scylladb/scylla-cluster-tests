@@ -26,3 +26,11 @@ runcmd:
       > /home/ubuntu/.ssh/authorized_keys 2>/dev/null || true
   - chmod 600 /home/ubuntu/.ssh/authorized_keys
   - chown -R ubuntu:ubuntu /home/ubuntu
+  # Assign the VNIC's IPv6 address and default route in the guest OS
+  - |
+    VNICS=$(curl -sf -H "Authorization: Bearer Oracle" http://169.254.169.254/opc/v2/vnics/) || true
+    IPV6=$(echo "$VNICS" | python3 -c "import json,sys;print(json.load(sys.stdin)[0].get('ipv6Addresses',[''])[0])" 2>/dev/null)
+    GW=$(echo "$VNICS" | python3 -c "import json,sys;print(json.load(sys.stdin)[0].get('ipv6VirtualRouterIp',''))" 2>/dev/null)
+    IFACE=$(ip -o -4 route show default | awk '{print $5}' | head -1)
+    [ -n "$IPV6" ] && ip -6 addr add "$IPV6/128" dev "$IFACE" 2>/dev/null || true
+    [ -n "$GW" ] && ip -6 route add default via "$GW" dev "$IFACE" 2>/dev/null || true

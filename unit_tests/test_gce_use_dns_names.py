@@ -309,3 +309,18 @@ def test_use_dns_names_none_backend_does_not_raise(monkeypatch):
 def test_use_dns_names_azure_raises(azure_base_env):
     with pytest.raises(ValueError, match="use_dns_names is not supported for azure backend"):
         SCTConfiguration()
+
+
+@pytest.fixture()
+def oci_base_env(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "oci")
+    monkeypatch.setenv("SCT_OCI_REGION_NAME", '["us-phoenix-1"]')
+    monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
+
+
+def test_use_dns_names_oci_does_not_raise(oci_base_env):
+    try:
+        SCTConfiguration()
+    except ValueError as exc:
+        if "use_dns_names" in str(exc):
+            pytest.fail(f"use_dns_names raised ValueError for oci backend: {exc}")

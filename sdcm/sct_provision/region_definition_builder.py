@@ -127,7 +127,7 @@ class DefinitionBuilder(abc.ABC):
         }
         user_data = self._get_user_data_objects(node_type=node_type, instance_name=name)
         mapper = self.SCT_PARAM_MAPPER[node_type]
-        use_public_ip = ssh_connection_ip_type(self.params) == "public" or node_type == "monitor"
+        use_public_ip = ssh_connection_ip_type(self.params) in ("public", "ipv6") or node_type == "monitor"
         local_ssd_count = self.params.get(mapper.local_ssd_count) if mapper.local_ssd_count else 0
         pd_standard_disk_size = self.params.get(mapper.pd_standard_disk_size) if mapper.pd_standard_disk_size else 0
         pd_ssd_disk_size = self.params.get(mapper.pd_ssd_disk_size) if mapper.pd_ssd_disk_size else 0
