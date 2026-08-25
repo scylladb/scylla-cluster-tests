@@ -19,6 +19,7 @@ sizing_db:
   # OCI DenseIO.E5 at 32 vCPUs provides only 192 GB (12 GB/OCPU fixed ratio).
   # Lowered from >=256 to >=192 so OCI can match; other clouds still pick >=256 naturally.
   memory: '>=192'
+  arch: x86_64
 sizing_loader:
   vcpu: 32
   memory: '>=64'

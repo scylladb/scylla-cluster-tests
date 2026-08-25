@@ -6,6 +6,7 @@ stress_read_cmd: "cassandra-stress read cl=QUORUM n=1200300 -schema 'replication
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 2
   memory: '>=16'
+  arch: x86_64
 sizing_loader:
   vcpu: 2
   memory: '>=4'

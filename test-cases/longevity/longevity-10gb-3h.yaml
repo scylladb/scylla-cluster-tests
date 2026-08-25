@@ -26,6 +26,8 @@ argus_use_ssh_tunnel: true
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 8
   memory: '>=64'
+  # arch pinned: this config backs the AWS sanity trigger job, whose AMI is supplied by id (x86_64)
+  arch: x86_64
 sizing_loader:
   vcpu: 4
   memory: '>=16'

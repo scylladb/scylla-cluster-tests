@@ -33,6 +33,7 @@ n_loaders: 1
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 2
   memory: '>=16'
+  arch: x86_64
 
 # sct-runner needs nested virtualization (KVM) to host minicloud's QEMU VMs. Only the
 # c8i/m8i/r8i families support NestedVirtualization on AWS. 5 VMs x 4GiB = 20GiB of

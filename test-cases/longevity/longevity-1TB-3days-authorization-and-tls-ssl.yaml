@@ -19,6 +19,7 @@ seeds_num: 3
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 8
   memory: '>=64'
+  arch: x86_64
 
 sizing_loader:
   vcpu: 8

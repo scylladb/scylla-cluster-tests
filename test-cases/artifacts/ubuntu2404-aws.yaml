@@ -28,6 +28,7 @@ use_preinstalled_scylla: false
 sizing_db:
   vcpu: 2
   memory: '>=16'
+  arch: x86_64
 root_disk_size_db: 50
 instance_provision: 'spot'
 instance_provision_fallback_on_demand: true
