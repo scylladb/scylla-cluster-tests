@@ -23,11 +23,11 @@ round_robin: true
 n_db_nodes: 6
 n_loaders: 4
 
-sizing_db:  # no GCE/Azure/OCI match (12 vCPU tier unavailable on those clouds)
+sizing_db:  # i8ge.3xlarge -- the arm i8ge equivalent of the original i3en.3xlarge
+            # (same vCPU/memory/local-disk shape); no arch pin needed, arm is the AWS default
   vcpu: 12
   memory: '>=96'
-  arch: x86_64
-  local_disk_gb: '>=6000'  # ~80% of i3en.3xlarge's 7500GB
+  local_disk_gb: '>=6000'  # ~80% of i8ge.3xlarge's 7500GB
 sizing_loader:
   vcpu: 8
   memory: '>=16'
