@@ -9,6 +9,7 @@ n_loaders: 1
 sizing_db:
   vcpu: 2
   memory: '>=16'
+  arch: x86_64
 
 agent:
   enabled: true

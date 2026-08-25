@@ -16,6 +16,7 @@ region_aware_loader: true
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 4
   memory: '>=32'
+  arch: x86_64
 
 nemesis_class_name: 'NoOpMonkey'
 nemesis_selector: ''

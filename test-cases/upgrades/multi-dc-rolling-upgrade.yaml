@@ -7,6 +7,7 @@ stress_after_cluster_upgrade: cassandra-stress read no-warmup cl=QUORUM n=302004
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 8
   memory: '>=64'
+  arch: x86_64
 rack_aware_loader: true
 n_db_nodes: '3 3'
 n_loaders: '1 1'

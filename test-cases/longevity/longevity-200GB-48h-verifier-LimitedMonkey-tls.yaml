@@ -16,6 +16,7 @@ n_loaders: 1
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 8
   memory: '>=64'
+  arch: x86_64
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'limited'
