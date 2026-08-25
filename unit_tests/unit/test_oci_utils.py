@@ -13,11 +13,17 @@
 
 """Unit tests for OCI utilities."""
 
+import ast
+import subprocess
+import tempfile
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from sdcm.utils.oci_utils import (
+    SECONDARY_VNICS_SCRIPT,
+    SECONDARY_VNICS_SCRIPT_PATH,
+    SECONDARY_VNICS_SERVICE_UNIT_TMPL,
     build_hostname_label,
     filter_oci_by_tags,
     get_ubuntu_image_ocid,
@@ -313,3 +319,43 @@ def test_build_hostname_label_is_stable_and_unique() -> None:
     name_b = "test-oci-node-b"
     assert build_hostname_label(name_a) == build_hostname_label(name_a)
     assert build_hostname_label(name_a) != build_hostname_label(name_b)
+
+
+def test_secondary_vnics_script_starts_with_the_shebang():
+    """The shebang must be the very first line of the file written to the node.
+
+    The script is a raw string so that the '\\' line continuation inside the curl call
+    survives, but that also means a leading '\\' is not a continuation: it becomes line 1
+    and displaces the shebang. The kernel then cannot exec the file, /bin/sh takes over,
+    and dash dies on 'set -o pipefail'.
+    """
+    assert SECONDARY_VNICS_SCRIPT.startswith("#!/bin/bash\n"), SECONDARY_VNICS_SCRIPT[:40]
+
+
+def test_secondary_vnics_script_is_valid_bash():
+    """'bash -n' the rendered script, so a syntax error cannot reach a node."""
+    with tempfile.NamedTemporaryFile("w", suffix=".sh") as script_file:
+        script_file.write(SECONDARY_VNICS_SCRIPT)
+        script_file.flush()
+        result = subprocess.run(["bash", "-n", script_file.name], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+
+
+def test_secondary_vnics_script_embedded_python_is_valid():
+    """The inlined Python must parse and must not contain a single quote.
+
+    It is passed as 'python3 -c '...'', so any single quote in it would terminate the
+    shell string and split the program in two.
+    """
+    start = SECONDARY_VNICS_SCRIPT.index("python3 -c '\n") + len("python3 -c '")
+    embedded = SECONDARY_VNICS_SCRIPT[start : SECONDARY_VNICS_SCRIPT.index('\n\' "$EXPECTED_VNICS"')]
+    assert "'" not in embedded, [line for line in embedded.splitlines() if "'" in line]
+    ast.parse(embedded)
+
+
+def test_secondary_vnics_service_unit_renders_execstart():
+    unit = SECONDARY_VNICS_SERVICE_UNIT_TMPL.format(
+        script_path=SECONDARY_VNICS_SCRIPT_PATH, nic_count=2, primary_ip="10.0.1.10"
+    )
+    assert unit.startswith("[Unit]"), unit[:40]
+    assert f"ExecStart={SECONDARY_VNICS_SCRIPT_PATH} 2 10.0.1.10" in unit

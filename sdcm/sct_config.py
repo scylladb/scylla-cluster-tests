@@ -3187,7 +3187,7 @@ class SCTConfiguration(BaseModel):
 
         # 16 Validate use_dns_names
         if self.get("use_dns_names"):
-            if cluster_backend and cluster_backend not in ("aws", "gce"):
+            if cluster_backend and cluster_backend not in ("aws", "gce", "oci"):
                 raise ValueError(f"use_dns_names is not supported for {cluster_backend} backend")
 
         # 17 Validate scylla network configuration mandatory values
