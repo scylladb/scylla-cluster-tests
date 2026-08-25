@@ -51,6 +51,10 @@ monitor_map = ConfigParamsMap(
 
 mapper: Dict[NodeTypeType, ConfigParamsMap] = {
     "scylla-db": db_map,
+    "oracle-db": db_map.derive(
+        image_id="gce_image_db_oracle",
+        type="gce_instance_type_db_oracle",
+    ),
     "loader": loader_map,
     "monitor": monitor_map,
 }

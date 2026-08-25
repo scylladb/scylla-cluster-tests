@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2022 ScyllaDB
 import abc
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import cache
 from typing import List, Dict, Type, Any
 from pathlib import Path
@@ -60,6 +60,10 @@ class ConfigParamsMap:
     root_disk_type: str | None = None  # Maps to gce_root_disk_type_* parameters
     pd_standard_disk_size: str | None = None  # Maps to gce_pd_standard_disk_size_* parameters
     pd_ssd_disk_size: str | None = None  # Maps to gce_pd_ssd_disk_size_* parameters
+
+    def derive(self, **overrides) -> "ConfigParamsMap":
+        """Return a copy of this map with selected fields overridden."""
+        return replace(self, **overrides)
 
 
 class DefinitionBuilder(abc.ABC):

@@ -1,0 +1,9 @@
+user_prefix: 'gemini-basic-3h-gce'
+
+# No need for sizing overrides.
+# Default sizing resolves as:
+#   db (2 vcpu / >=16G) -> n2d-highmem-2 (local SSD attached)
+#   oracle (8 vcpu / >=60G) -> z3-highmem-8-highlssd (built-in local SSD)
+# Oracle inherits gce_n_local_ssd_disk_db from db; this is safe on z3 because
+# create_instance() skips attached local SSDs for z3-highmem types, which already
+#  include local SSD.

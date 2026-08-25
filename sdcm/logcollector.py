@@ -57,6 +57,7 @@ from sdcm.utils.common import (
     search_test_id_in_latest,
     filter_aws_instances_by_type,
     filter_gce_instances_by_type,
+    gce_meta_to_dict,
     get_sct_root_path,
     normalize_ipv6_url,
     create_remote_storage_dir,
@@ -1849,7 +1850,7 @@ class Collector:
                     global_ip=self.get_gce_ip_address(instance),
                     tags={
                         **self.tags,
-                        "NodeType": "scylla-db",
+                        "NodeType": gce_meta_to_dict(instance.metadata).get("NodeType", "scylla-db"),
                     },
                 )
             )

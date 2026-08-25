@@ -81,3 +81,35 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config(monkeypatch
     actual_region_definition.definitions[0].user_data = instance_definition.user_data
     # ssh_key is not shown, if actual looks the same as expected possibly ssh_key differ
     assert instance_definition == actual_region_definition.definitions[0]
+
+
+def test_oracle_db_instance_definition(monkeypatch, provisioner_dir):
+    """oracle-db must map to oracle params and use the oracle-specific node name prefix."""
+    test_config = TestConfig()
+    test_config.set_test_id_only("3923f974-bf0e-4c3c-9f52-3f6473b8a0b6")
+    env = {
+        "SCT_CLUSTER_BACKEND": "azure",
+        "SCT_TEST_ID": test_config.test_id(),
+        "SCT_CONFIG_FILES": f'["{provisioner_dir.absolute()}/azure_default_config.yaml"]',
+        "SCT_AZURE_REGION_NAME": "eastus",
+        "SCT_N_DB_NODES": "3",
+        "SCT_USER_PREFIX": "unit",
+        "SCT_AZURE_IMAGE_DB": "/fake/image/db",
+        "SCT_DB_TYPE": "mixed_scylla",
+        "SCT_N_TEST_ORACLE_DB_NODES": "1",
+        "SCT_ORACLE_SCYLLA_VERSION": "",
+        "SCT_AZURE_IMAGE_DB_ORACLE": "/fake/image/db-oracle",
+        "SCT_AZURE_INSTANCE_TYPE_DB_ORACLE": "Standard_L8s_v3",
+    }
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+    config = SCTConfiguration()
+    prefix = config.get("user_prefix")
+    builder = region_definition_builder.get_builder(params=config, test_config=test_config)
+    definition = builder.build_instance_definition(region="eastus", node_type="oracle-db", index=1)
+
+    assert definition.name == f"{prefix}-oracle-db-node-{test_config.test_id()[:8]}-eastus-1"
+    assert definition.image_id == "/fake/image/db-oracle"
+    assert definition.type == "Standard_L8s_v3"
+    assert definition.tags["NodeType"] == "oracle-db"

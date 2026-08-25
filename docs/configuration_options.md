@@ -346,7 +346,7 @@ Format version of the user-data to use for scylla images,<br>default to what tag
 
 ## **oracle_scylla_version** / SCT_ORACLE_SCYLLA_VERSION
 
-Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'<br>Automatically looks up cloud images for formal versions.<br>WARNING: can't be used together with 'ami_id_db_oracle' and 'oci_image_db_oracle'
+Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'<br>Automatically looks up cloud images for formal versions.<br>WARNING: can't be used together with the backend's oracle image param<br>('ami_id_db_oracle', 'gce_image_db_oracle', 'azure_image_db_oracle' or 'oci_image_db_oracle')
 
 **default:** 2026.1
 
@@ -1636,6 +1636,15 @@ gce image to use for db nodes
 **type:** str (appendable)
 
 
+## **gce_image_db_oracle** / SCT_GCE_IMAGE_DB_ORACLE
+
+GCE image to use for oracle (2nd ref cluster) DB node(s). If not set and 'oracle_scylla_version' is provided, it will be resolved automatically.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **gce_image_monitor** / SCT_GCE_IMAGE_MONITOR
 
 gce image to use for monitor nodes
@@ -2230,6 +2239,15 @@ Instance type for database nodes in Google Compute Engine
 - `n2-standard-8`: k8s-gke
 
 
+## **gce_instance_type_db_oracle** / SCT_GCE_INSTANCE_TYPE_DB_ORACLE
+
+Instance type for the oracle (2nd ref cluster) DB nodes in Google Compute Engine
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **gce_root_disk_type_db** / SCT_GCE_ROOT_DISK_TYPE_DB
 
 Root disk type for database nodes in Google Compute Engine
@@ -2362,6 +2380,15 @@ The Azure virtual machine size to be used for Oracle database nodes.
 ## **azure_image_db** / SCT_AZURE_IMAGE_DB
 
 The Azure image to be used for database nodes.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **azure_image_db_oracle** / SCT_AZURE_IMAGE_DB_ORACLE
+
+The Azure image to be used for oracle (2nd ref cluster) DB nodes. If not set and 'oracle_scylla_version' is provided, it will be resolved automatically.
 
 **default:** N/A
 

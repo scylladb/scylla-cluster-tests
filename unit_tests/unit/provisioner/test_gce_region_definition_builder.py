@@ -78,3 +78,32 @@ def test_root_disk_type_flows_into_instance_definition(
         assert defn.root_disk_type == expected_disk_type, (
             f"Expected root_disk_type='{expected_disk_type}' for NodeType='{node_type}', got '{defn.root_disk_type}'"
         )
+
+
+def test_oracle_db_instance_definition(make_config):
+    """oracle-db must use oracle GCE params and the oracle-specific node name prefix."""
+    config, test_config = make_config(
+        {
+            "SCT_DB_TYPE": "mixed_scylla",
+            "SCT_N_TEST_ORACLE_DB_NODES": "1",
+            "SCT_AMI_ID_DB_SCYLLA_DESC": "unit",
+            "SCT_ORACLE_SCYLLA_VERSION": "",
+            "SCT_GCE_IMAGE_DB_ORACLE": (
+                "https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/fake-oracle"
+            ),
+            "SCT_GCE_INSTANCE_TYPE_DB_ORACLE": "z3-highmem-8-standardlssd",
+        }
+    )
+    fake_ssh_key = MagicMock()
+    fake_ssh_key.name = "fake-key"
+    fake_ssh_key.public_key = b"ssh-ed25519 AAAA fake"
+
+    with patch("sdcm.sct_provision.region_definition_builder.KeyStore") as mock_ks:
+        mock_ks.return_value.get_ssh_key_pair.return_value = fake_ssh_key
+        builder = region_definition_builder.get_builder(params=config, test_config=test_config)
+        definition = builder.build_instance_definition(region="us-east1", node_type="oracle-db", index=1)
+
+    assert definition.name == f"unit-oracle-db-node-{test_config.test_id()[:8]}-0-1"
+    assert definition.image_id.endswith("fake-oracle")
+    assert definition.type == "z3-highmem-8-standardlssd"
+    assert definition.tags["NodeType"] == "oracle-db"

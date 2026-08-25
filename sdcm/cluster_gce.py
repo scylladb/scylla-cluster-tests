@@ -736,6 +736,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
         add_disks=None,
         params=None,
         gce_datacenter=None,
+        node_type="scylla-db",
     ):
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "db-cluster")
@@ -756,7 +757,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
             add_disks=add_disks,
             params=params,
             gce_region_names=gce_datacenter,
-            node_type="scylla-db",
+            node_type=node_type,
             provisioners=provisioners,
         )
         self.version = "2.1"

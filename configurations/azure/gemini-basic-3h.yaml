@@ -1,0 +1,6 @@
+user_prefix: 'gemini-basic-3h-azure'
+
+# No need for sizing overrides.
+# Default sizing resolves as:
+#   db (2 vcpu / >=16G) -> Standard_L2s_v4
+#   oracle (8 vcpu / >=60G) -> Standard_L8s_v3 (includes NVMe)

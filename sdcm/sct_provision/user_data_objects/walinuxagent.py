@@ -25,7 +25,7 @@ class EnableWaLinuxAgent(SctUserDataObject):
 
     @property
     def is_applicable(self) -> bool:
-        return self.node_type == "scylla-db" and self.params.get("cluster_backend") == "azure"
+        return self.node_type in ("scylla-db", "oracle-db") and self.params.get("cluster_backend") == "azure"
 
     @property
     def script_to_run(self) -> str:
