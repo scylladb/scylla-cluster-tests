@@ -11,7 +11,6 @@ n_loaders: 1
 sizing_db:  # instance type is defined in the jenkins job (with default value in the jenkinsfile for the cloud longevity); no OCI match (DenseIO min 16 vCPUs)
   vcpu: 2
   memory: '>=16'
-  arch: x86_64
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'limited'
