@@ -1,9 +1,8 @@
 test_duration: 255
 n_db_nodes: '3 3 3'
 n_loaders: '3 1 1'
-sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
-  vcpu: 8
-  memory: '>=64'
+instance_type_db: 'i4i.2xlarge'
+instance_type_loader: 'c6i.xlarge'
 
 user_prefix: 'long-custom-d2-wrkld1-3dc'
 enterprise_disable_kms: true

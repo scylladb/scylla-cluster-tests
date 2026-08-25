@@ -2,17 +2,9 @@ test_duration: 1440
 
 n_db_nodes: '3 3 3 3 3'
 n_loaders: '5 1 1 1 1'
-sizing_db:
-  vcpu: 96
-  # OCI DenseIO.E5 at 96 vCPUs provides only 576 GB (12 GB/OCPU fixed ratio).
-  # Lowered from >=768 to >=576 so OCI can match; other clouds still pick >=768 naturally.
-  memory: '>=576'
-sizing_loader:  # no GCE match (e2 family tops out at 32 vCPUs)
-  vcpu: 64
-  memory: '>=128'
-sizing_monitor:
-  vcpu: 8
-  memory: '>=32'
+instance_type_db: 'i4i.24xlarge'
+instance_type_loader: 'c6i.16xlarge'
+instance_type_monitor: 't3.2xlarge'
 
 user_prefix: 'upgrd-ltncy-rgrssn-custom-d2w1-5dc'
 enterprise_disable_kms: true
