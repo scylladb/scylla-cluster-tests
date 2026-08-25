@@ -19,11 +19,11 @@ n_loaders: 2
 seeds_num: 3
 simulated_racks: 3
 
-sizing_db:
-  vcpu: 16
-  # OCI DenseIO.E5 at 16 vCPUs provides only 96 GB (12 GB/OCPU fixed ratio).
-  # Lowered from >=128 to >=96 so OCI can match; other clouds still pick >=128 naturally.
-  memory: '>=96'
+sizing_db:  # aligned with longevity-100gb-4h.yaml (i7i.2xlarge); arch pinned because this
+            # config backs the AWS sanity trigger job, whose AMI is supplied by id (x86_64)
+  vcpu: 8
+  memory: '>=64'
+  arch: x86_64
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '032'
