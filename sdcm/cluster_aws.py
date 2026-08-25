@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import ipaddress
 import json
 import logging
 import random
@@ -36,8 +35,6 @@ from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
 from sdcm.provision.network_configuration import (
     NetworkInterface,
-    NetworkInterfaceNotFound,
-    ScyllaNetworkConfiguration,
     is_ip_ssh_connections_ipv6,
     network_interfaces_count,
     ssh_connection_ip_type,
@@ -848,31 +845,6 @@ class AWSNode(cluster.BaseNode):
 
     def _get_ipv6_ip_address(self) -> Optional[str]:
         return self.scylla_network_configuration.interface_ipv6_address
-
-    def get_all_ip_addresses(self):
-        # BaseNode returns primary-NIC addresses only (see _refresh_instance_state: index [0]).
-        # In split-network configs rpc_address/broadcast_rpc_address may live on a secondary NIC and
-        # is what nodetool gossipinfo reports as RPC_ADDRESS, so nodes must be findable by it.
-        ips = super().get_all_ip_addresses()
-        for address_getter in (
-            lambda: self.scylla_network_configuration.rpc_address,
-            lambda: self.scylla_network_configuration.broadcast_rpc_address,
-        ):
-            try:
-                extra_address = address_getter()
-            except NetworkInterfaceNotFound:
-                # scylla_network_config's "nic" doesn't match an actual interface on this node;
-                # skip this address rather than failing the whole cluster's ip-to-node map.
-                continue
-            if not extra_address or extra_address == ScyllaNetworkConfiguration.LISTEN_ALL:
-                continue
-            try:
-                ipaddress.ip_address(extra_address)
-            except ValueError:
-                continue  # DNS name (use_dns/use_dns_names), not an IP address
-            if extra_address not in ips:
-                ips.append(extra_address)
-        return ips
 
     def _refresh_instance_state(self):
         self._wait_public_ip()

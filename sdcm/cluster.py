@@ -83,7 +83,11 @@ from sdcm.provision.helpers.certificate import (
     JKS_TRUSTSTORE_FILE,
     TLSAssets,
 )
-from sdcm.provision.network_configuration import ScyllaNetworkConfiguration, network_interfaces_count
+from sdcm.provision.network_configuration import (
+    NetworkInterfaceNotFound,
+    ScyllaNetworkConfiguration,
+    network_interfaces_count,
+)
 from sdcm.remote import (
     RemoteCmdRunnerBase,
     LOCALRUNNER,
@@ -1304,10 +1308,30 @@ class BaseNode(AutoSshContainerMixin):
         return self._ipv6_ip_address_cached
 
     def _get_ipv6_ip_address(self) -> Optional[str]:
-        raise NotImplementedError()
+        if self.scylla_network_configuration:
+            return self.scylla_network_configuration.interface_ipv6_address
+        return None
 
     def get_all_ip_addresses(self):
-        return [ip for ip in (self.private_ip_address, self.public_ip_address, self.ipv6_ip_address) if ip]
+        ips = [ip for ip in (self.private_ip_address, self.public_ip_address, self.ipv6_ip_address) if ip]
+        if self.scylla_network_configuration:
+            for address_getter in (
+                lambda: self.scylla_network_configuration.rpc_address,
+                lambda: self.scylla_network_configuration.broadcast_rpc_address,
+            ):
+                try:
+                    extra_address = address_getter()
+                except (NetworkInterfaceNotFound, AttributeError):
+                    continue
+                if not extra_address or extra_address == ScyllaNetworkConfiguration.LISTEN_ALL:
+                    continue
+                try:
+                    ipaddress.ip_address(extra_address)
+                except ValueError:
+                    continue
+                if extra_address not in ips:
+                    ips.append(extra_address)
+        return ips
 
     def _wait_public_ip(self):
         public_ips, _ = self._refresh_instance_state()
