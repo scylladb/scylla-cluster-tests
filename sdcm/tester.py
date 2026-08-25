@@ -83,6 +83,11 @@ from sdcm.provision.aws.az_resolver import (
     run_pre_flight_capacity_probe,
 )
 from sdcm.provision.common.fallback import is_az_fallback_enabled, is_region_fallback_enabled
+from sdcm.provision.common.oracle import (
+    ORACLE_IMAGE_PARAMS,
+    ORACLE_INSTANCE_TYPE_PARAMS,
+    ORACLE_USER_PREFIX_SUFFIX,
+)
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, RegionAMINotFoundError, is_capacity_error
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.region_fallback import (
@@ -789,8 +794,10 @@ class ClusterTester(unittest.TestCase):
                     "gemini_version": gemini_version,
                     "gemini_write_errors": results.get("write_errors", -1),
                     "gemini_write_ops": results.get("write_ops", -1),
-                    "oracle_node_ami_id": self.params.get("ami_id_db_oracle"),
-                    "oracle_node_instance_type": self.params.get("instance_type_db_oracle"),
+                    "oracle_node_ami_id": self.params.get(ORACLE_IMAGE_PARAMS.get(self.params.get("cluster_backend"))),
+                    "oracle_node_instance_type": self.params.get(
+                        ORACLE_INSTANCE_TYPE_PARAMS.get(self.params.get("cluster_backend"))
+                    ),
                     "oracle_node_scylla_version": self.cs_db_cluster.params.artifact_scylla_version
                     if self.cs_db_cluster
                     else "N/A",
@@ -1780,6 +1787,20 @@ class ClusterTester(unittest.TestCase):
         else:
             self.monitors = NoMonitorSet()
 
+        if db_type == "mixed_scylla":
+            self.cs_db_cluster = self._create_oracle_cluster(
+                ScyllaGCECluster,
+                common_params,
+                user_prefix,
+                gce_image=self.params.get("gce_image_db_oracle"),
+                gce_image_type=self.params.get("gce_root_disk_type_db"),
+                gce_image_size=db_info.get("disk_size") or self.params.get("root_disk_size_db"),
+                gce_instance_type=self.params.get("gce_instance_type_db_oracle"),
+                gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_db"),
+                add_disks=cluster_additional_disks,
+                provisioners=provisioners,
+            )
+
     def get_cluster_azure(self, loader_info, db_info, monitor_info):
         regions = self.params.get("azure_region_name")
         test_id = str(TestConfig().test_id())
@@ -1850,6 +1871,33 @@ class ClusterTester(unittest.TestCase):
         else:
             self.monitors = NoMonitorSet()
 
+        db_type = self.params.get("db_type")
+        if db_type == "mixed_scylla":
+            self.cs_db_cluster = self._create_oracle_cluster(
+                ScyllaAzureCluster,
+                common_params,
+                user_prefix,
+                image_id=self.params.get("azure_image_db_oracle"),
+                root_disk_size=db_info["disk_size"],
+                instance_type=self.params.get("azure_instance_type_db_oracle"),
+                provisioners=provisioners,
+                user_name=self.params.get("azure_image_username"),
+            )
+
+    def _create_oracle_cluster(self, cluster_class, common_params: dict, user_prefix: str, **backend_kwargs):
+        """Create the oracle cluster used when db_type is mixed_scylla."""
+        self.test_config.mixed_cluster(True)
+
+        oracle_user_prefix = user_prefix + ORACLE_USER_PREFIX_SUFFIX
+        cluster_params = common_params | {"user_prefix": oracle_user_prefix}
+
+        return cluster_class(
+            n_nodes=self.params.get("n_test_oracle_db_nodes"),
+            node_type="oracle-db",
+            **backend_kwargs,
+            **cluster_params,
+        )
+
     def get_cluster_oci(self, loader_info, db_info, monitor_info):
         regions = self.params.get("oci_region_name")
         if isinstance(regions, str):
@@ -1917,17 +1965,15 @@ class ClusterTester(unittest.TestCase):
 
         db_type = self.params.get("db_type")
         if db_type == "mixed_scylla":
-            self.test_config.mixed_cluster(True)
-            oracle_image = self.params.get("oci_image_db_oracle") or oci_image
-            self.cs_db_cluster = ScyllaOciCluster(
-                image_id=oracle_image,
+            self.cs_db_cluster = self._create_oracle_cluster(
+                ScyllaOciCluster,
+                common_params,
+                user_prefix,
+                image_id=self.params.get("oci_image_db_oracle"),
                 root_disk_size=db_info["disk_size"],
                 instance_type=self.params.get("oci_instance_type_db_oracle"),
                 provisioners=provisioners,
-                n_nodes=self.params.get("n_test_oracle_db_nodes"),
                 user_name=self.params.get("oci_image_username"),
-                node_type="oracle-db",
-                **(common_params | {"user_prefix": user_prefix + "-oracle"}),
             )
 
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
@@ -2191,15 +2237,14 @@ class ClusterTester(unittest.TestCase):
                     **(common_params | {"user_prefix": user_prefix + "-cassandra-oracle"}),
                 )
             elif db_type == "mixed_scylla":
-                self.test_config.mixed_cluster(True)
-                return ScyllaAWSCluster(
+                return self._create_oracle_cluster(
+                    ScyllaAWSCluster,
+                    common_params,
+                    user_prefix,
                     ec2_ami_id=self.params.get("ami_id_db_oracle").split(),
                     ec2_ami_username=self.params.get("ami_db_scylla_user"),
                     ec2_instance_type=self.params.get("instance_type_db_oracle"),
                     ec2_block_device_mappings=db_info["device_mappings"],
-                    n_nodes=self.params.get("n_test_oracle_db_nodes"),
-                    node_type="oracle-db",
-                    **(common_params | {"user_prefix": user_prefix + "-oracle"}),
                 )
             elif db_type == "cloud_scylla":
                 cloud_credentials = self.params.get("cloud_credentials_path")

@@ -6,6 +6,8 @@ azure_region_name:
 user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
 
 azure_instance_type_db: ''
+azure_instance_type_db_oracle: ''
+azure_image_db_oracle: ''
 azure_instance_type_loader: ''
 azure_instance_type_monitor: ''
 
@@ -23,7 +25,6 @@ ami_loader_user: 'ubuntu'
 ami_monitor_user: 'ubuntu'
 
 ami_id_db_scylla: ''
-ami_id_db_oracle: ''
 
 use_preinstalled_scylla: true
 

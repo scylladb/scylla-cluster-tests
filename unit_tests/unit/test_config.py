@@ -15,7 +15,7 @@ import logging
 import os
 import unittest.mock
 from collections import namedtuple
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
@@ -1495,3 +1495,97 @@ def test_nvme_self_test_type_env_override(monkeypatch):
     monkeypatch.setenv("SCT_NVME_SELF_TEST_TYPE", "2")
     conf = sct_config.SCTConfiguration()
     assert conf.get("nvme_self_test_type") == 2
+
+
+def _fake_oracle_conf(params: dict, region_names=None):
+    conf = MagicMock()
+    conf.get.side_effect = params.get
+    conf.region_names = region_names or []
+    return conf
+
+
+def test_aws_oracle_image_resolver_joins_amis_per_region():
+    conf = _fake_oracle_conf({"instance_type_db_oracle": "i4i.large"}, region_names=["us-east-1", "eu-west-1"])
+    ami = MagicMock()
+    ami.image_id = "ami-fake"
+    with (
+        patch.object(sct_config, "get_arch_from_instance_type", return_value="x86_64"),
+        patch.object(sct_config, "get_scylla_ami_versions", return_value=[ami]),
+    ):
+        result = sct_config._resolve_oracle_images_aws(conf, "2026.1")
+
+    assert result == "ami-fake ami-fake"
+
+
+def test_oci_oracle_image_resolver_joins_image_ocids_per_region():
+    conf = _fake_oracle_conf({"oci_region_name": ["us-phoenix-1", "us-ashburn-1"]})
+    fake_image = ["OCI", "fake-name", "ocid1.image.fake"]
+    with patch.object(sct_config.oci_utils, "get_scylla_images_by_version", return_value=[fake_image]):
+        result = sct_config._resolve_oracle_images_oci(conf, "2026.2.0")
+
+    assert result == "ocid1.image.fake ocid1.image.fake"
+
+
+def test_gce_oracle_image_resolver_returns_global_self_link():
+    # gce images are global: a single self_link, not per-region values
+    conf = _fake_oracle_conf({})
+    gce_image = MagicMock()
+    gce_image.name = "scylla-enterprise-2026-1-0"
+    gce_image.self_link = "https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/fake"
+    with patch.object(sct_config, "get_scylla_gce_images_versions", return_value=[gce_image]):
+        result = sct_config._resolve_oracle_images_gce(conf, "2026.1")
+
+    assert result == gce_image.self_link
+
+
+def test_azure_oracle_image_resolver_joins_image_ids_per_region():
+    conf = _fake_oracle_conf(
+        {"azure_region_name": ["eastus", "westus2"], "azure_instance_type_db_oracle": "Standard_L8s_v3"}
+    )
+    azure_image = MagicMock()
+    azure_image.name = "fake-image"
+    azure_image.id = "/communityGalleries/fake/images/scylla/versions/2026.1.0"
+    with (
+        patch.object(
+            sct_config.azure_utils,
+            "get_arch_from_azure_instance_type",
+            return_value=sct_config.azure_utils.VmArch.X86,
+        ),
+        patch.object(sct_config.azure_utils, "get_released_scylla_images", return_value=[azure_image]),
+    ):
+        result = sct_config._resolve_oracle_images_azure(conf, "2026.1")
+
+    assert result == f"{azure_image.id} {azure_image.id}"
+
+
+@pytest.mark.parametrize(
+    "db_type,expected_len",
+    [
+        ("scylla", 33),  # 35 - 2 (azure)
+        ("mixed_scylla", 26),  # 35 - 2 (azure) - 7 (oracle suffix)
+    ],
+)
+def test_mixed_scylla_run_reserves_user_prefix_room_for_oracle_suffix(monkeypatch, db_type, expected_len):
+    """the oracle node prefix is user_prefix + '-oracle', so mixed runs must cap
+    user_prefix 7 chars shorter to keep node names inside the platform limits"""
+    user_prefix = "longevity-5gb-1h-ToggleAuditRulesNemesisSyslog"
+    env = {
+        "SCT_CLUSTER_BACKEND": "azure",
+        "SCT_USER_PREFIX": user_prefix,
+        "SCT_AZURE_REGION_NAME": "eastus",
+        "SCT_AZURE_IMAGE_DB": "/fake/image/db",
+        "SCT_AZURE_INSTANCE_TYPE_DB": "Standard_L8s_v3",
+        "SCT_DB_TYPE": db_type,
+        "SCT_N_TEST_ORACLE_DB_NODES": "1",
+        "SCT_AMI_ID_DB_SCYLLA_DESC": "unit",
+        # the oracle image is given explicitly, so version resolution stays off (no Azure calls)
+        "SCT_ORACLE_SCYLLA_VERSION": "",
+        "SCT_AZURE_IMAGE_DB_ORACLE": "/fake/image/db-oracle",
+        "SCT_AZURE_INSTANCE_TYPE_DB_ORACLE": "Standard_L8s_v3",
+    }
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    conf = sct_config.SCTConfiguration()
+    conf.verify_configuration()
+
+    assert conf.user_prefix == user_prefix[:expected_len]

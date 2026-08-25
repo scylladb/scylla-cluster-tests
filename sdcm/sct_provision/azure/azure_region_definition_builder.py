@@ -36,7 +36,15 @@ monitor_map = ConfigParamsMap(
     root_disk_size="root_disk_size_monitor",
 )
 
-mapper: Dict[NodeTypeType, ConfigParamsMap] = {"scylla-db": db_map, "loader": loader_map, "monitor": monitor_map}
+mapper: Dict[NodeTypeType, ConfigParamsMap] = {
+    "scylla-db": db_map,
+    "oracle-db": db_map.derive(
+        image_id="azure_image_db_oracle",
+        type="azure_instance_type_db_oracle",
+    ),
+    "loader": loader_map,
+    "monitor": monitor_map,
+}
 
 
 class AzureDefinitionBuilder(DefinitionBuilder):

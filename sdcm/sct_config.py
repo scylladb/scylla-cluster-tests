@@ -50,6 +50,7 @@ from sdcm.utils.cloud_api_utils import get_cloud_rest_credentials_from_file
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
+from sdcm.provision.common.oracle import ORACLE_IMAGE_PARAMS, ORACLE_USER_PREFIX_SUFFIX
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
 from sdcm.utils.common import (
@@ -618,6 +619,112 @@ def simulated_racks_enabled(params) -> bool:
     return (params.get("simulated_racks") or 0) > 1 and sum(params.get("n_db_nodes") or []) > 1
 
 
+def _resolve_oracle_images_aws(conf, oracle_scylla_version: str) -> str:
+    """Resolve oracle_scylla_version to per-region AMI IDs (space-joined) on AWS."""
+    ami_list = []
+    for region in conf.region_names:
+        aws_arch = get_arch_from_instance_type(conf.get("instance_type_db_oracle"), region_name=region)
+        try:
+            if ":" in oracle_scylla_version:
+                ami = get_branched_ami(scylla_version=oracle_scylla_version, region_name=region, arch=aws_arch)[0]
+            else:
+                ami = get_scylla_ami_versions(version=oracle_scylla_version, region_name=region, arch=aws_arch)[0]
+        except Exception as ex:  # noqa: BLE001
+            raise ValueError(
+                f"AMIs for oracle_scylla_version='{oracle_scylla_version}' not found in {region} arch={aws_arch}"
+            ) from ex
+        conf.log.debug("Found AMI %s for oracle_scylla_version='%s' in %s", ami.image_id, oracle_scylla_version, region)
+        ami_list.append(ami)
+
+    return " ".join(ami.image_id for ami in ami_list)
+
+
+def _resolve_oracle_images_azure(conf, oracle_scylla_version: str) -> str:
+    """Resolve oracle_scylla_version to per-region Azure image IDs (space-joined)"""
+    oracle_azure_images = []
+    azure_arch = azure_utils.get_arch_from_azure_instance_type(conf.get("azure_instance_type_db_oracle"))
+    for region in conf.get("azure_region_name"):
+        try:
+            if ":" in oracle_scylla_version:
+                azure_image = azure_utils.get_scylla_images(
+                    scylla_version=oracle_scylla_version, region_name=region, arch=azure_arch
+                )[0]
+            else:
+                if azure_arch != azure_utils.VmArch.X86:
+                    raise ValueError(
+                        f"Azure released images (community gallery) do not support "
+                        f"arch={azure_arch.value}. Use a branch version "
+                        f"(e.g. 'master:latest') for ARM instances."
+                    )
+                azure_image = azure_utils.get_released_scylla_images(
+                    scylla_version=oracle_scylla_version, region_name=region, arch=azure_arch
+                )[0]
+        except Exception as ex:  # noqa: BLE001
+            raise ValueError(
+                f"Azure Image for oracle_scylla_version='{oracle_scylla_version}' not found in {region}"
+                f" (arch={azure_arch.value})"
+            ) from ex
+        conf.log.debug(
+            "Found Azure Image %s for oracle_scylla_version='%s' in %s (arch=%s)",
+            azure_image.name,
+            oracle_scylla_version,
+            region,
+            azure_arch.value,
+        )
+        oracle_azure_images.append(azure_image)
+
+    return " ".join(getattr(image, "id", None) or getattr(image, "unique_id", None) for image in oracle_azure_images)
+
+
+def _resolve_oracle_images_gce(conf, oracle_scylla_version: str) -> str:
+    """Resolve oracle_scylla_version to a global GCE image self_link"""
+    try:
+        if ":" in oracle_scylla_version:
+            gce_image = get_branched_gce_images(scylla_version=oracle_scylla_version)[0]
+        else:
+            gce_image = get_scylla_gce_images_versions(version=oracle_scylla_version)[0]
+    except Exception as ex:  # noqa: BLE001
+        raise ValueError(f"GCE image for oracle_scylla_version='{oracle_scylla_version}' was not found") from ex
+
+    conf.log.debug("Found GCE image %s for oracle_scylla_version='%s'", gce_image.name, oracle_scylla_version)
+    return gce_image.self_link
+
+
+def _resolve_oracle_images_oci(conf, oracle_scylla_version: str) -> str:
+    """Resolve oracle_scylla_version to per-region image OCIDs (space-joined) on OCI"""
+    oci_oracle_images = []
+    oci_region_names = conf.get("oci_region_name") or []
+    if not isinstance(oci_region_names, list):
+        oci_region_names = [oci_region_names]
+
+    for region in oci_region_names:
+        try:
+            if ":" in oracle_scylla_version:
+                oci_image = oci_utils.get_scylla_images_by_branch(oracle_scylla_version, region)[0]
+            else:
+                oci_image = oci_utils.get_scylla_images_by_version(oracle_scylla_version, region)[0]
+        except Exception as ex:  # noqa: BLE001
+            raise ValueError(
+                f"OCI Image for oracle_scylla_version='{oracle_scylla_version}' not found in {region}"
+            ) from ex
+        conf.log.debug(
+            "Found OCI Image %s for oracle_scylla_version='%s' in %s", oci_image[1], oracle_scylla_version, region
+        )
+        oci_oracle_images.append(oci_image)
+
+    return " ".join(image[2] for image in oci_oracle_images)
+
+
+# backend -> resolver turning oracle_scylla_version into the value for
+# ORACLE_IMAGE_PARAMS[backend]; backends missing here keep ignoring oracle_scylla_version
+_ORACLE_IMAGE_RESOLVERS = {
+    "aws": _resolve_oracle_images_aws,
+    "azure": _resolve_oracle_images_azure,
+    "gce": _resolve_oracle_images_gce,
+    "oci": _resolve_oracle_images_oci,
+}
+
+
 class SCTConfiguration(BaseModel):
     """
     Class the hold the SCT configuration
@@ -785,7 +892,8 @@ class SCTConfiguration(BaseModel):
     oracle_scylla_version: String = SctField(
         description="""Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'
                  Automatically looks up cloud images for formal versions.
-                 WARNING: can't be used together with 'ami_id_db_oracle' and 'oci_image_db_oracle'""",
+                 WARNING: can't be used together with the backend's oracle image param
+                 ('ami_id_db_oracle', 'gce_image_db_oracle', 'azure_image_db_oracle' or 'oci_image_db_oracle')""",
         appendable=False,
     )
     scylla_linux_distro: String = SctField(
@@ -1265,6 +1373,10 @@ class SCTConfiguration(BaseModel):
     gce_image_db: String = SctField(
         description="gce image to use for db nodes",
     )
+    gce_image_db_oracle: String = SctField(
+        description="GCE image to use for oracle (2nd ref cluster) DB node(s). "
+        "If not set and 'oracle_scylla_version' is provided, it will be resolved automatically.",
+    )
     gce_image_monitor: String = SctField(
         description="gce image to use for monitor nodes",
     )
@@ -1487,6 +1599,9 @@ class SCTConfiguration(BaseModel):
     gce_instance_type_db: String = SctField(
         description="Instance type for database nodes in Google Compute Engine",
     )
+    gce_instance_type_db_oracle: String = SctField(
+        description="Instance type for the oracle (2nd ref cluster) DB nodes in Google Compute Engine",
+    )
     gce_root_disk_type_db: String = SctField(
         description="Root disk type for database nodes in Google Compute Engine",
     )
@@ -1528,6 +1643,10 @@ class SCTConfiguration(BaseModel):
     )
     azure_image_db: String = SctField(
         description="The Azure image to be used for database nodes.",
+    )
+    azure_image_db_oracle: String = SctField(
+        description="The Azure image to be used for oracle (2nd ref cluster) DB nodes. "
+        "If not set and 'oracle_scylla_version' is provided, it will be resolved automatically.",
     )
     azure_image_monitor: String = SctField(
         description="The Azure image to be used for monitor nodes.",
@@ -3239,56 +3358,11 @@ class SCTConfiguration(BaseModel):
 
         # 6.1) handle oracle_scylla_version if exists
         if (oracle_scylla_version := self.get("oracle_scylla_version")) and self.get("db_type") == "mixed_scylla":
-            if not self.get("ami_id_db_oracle") and self.get("cluster_backend") == "aws":
-                ami_list = []
-                for region in region_names:
-                    aws_arch = get_arch_from_instance_type(self.get("instance_type_db_oracle"), region_name=region)
-                    try:
-                        if ":" in oracle_scylla_version:
-                            ami = get_branched_ami(
-                                scylla_version=oracle_scylla_version, region_name=region, arch=aws_arch
-                            )[0]
-                        else:
-                            ami = get_scylla_ami_versions(
-                                version=oracle_scylla_version, region_name=region, arch=aws_arch
-                            )[0]
-                    except Exception as ex:  # noqa: BLE001
-                        raise ValueError(
-                            f"AMIs for oracle_scylla_version='{oracle_scylla_version}' not found in {region} arch={aws_arch}"
-                        ) from ex
-
-                    self.log.debug(
-                        "Found AMI %s for oracle_scylla_version='%s' in %s", ami.image_id, oracle_scylla_version, region
-                    )
-                    ami_list.append(ami)
-                self["ami_id_db_oracle"] = " ".join(ami.image_id for ami in ami_list)
-            elif self.get("cluster_backend") == "aws":
-                raise ValueError("'oracle_scylla_version' and 'ami_id_db_oracle' can't used together")
-            elif not self.get("oci_image_db_oracle") and self.get("cluster_backend") == "oci":
-                oci_oracle_images = []
-                oci_region_names = self.get("oci_region_name") or []
-                if not isinstance(oci_region_names, list):
-                    oci_region_names = [oci_region_names]
-                for region in oci_region_names:
-                    try:
-                        if ":" in oracle_scylla_version:
-                            oci_image = oci_utils.get_scylla_images_by_branch(oracle_scylla_version, region)[0]
-                        else:
-                            oci_image = oci_utils.get_scylla_images_by_version(oracle_scylla_version, region)[0]
-                    except Exception as ex:  # noqa: BLE001
-                        raise ValueError(
-                            f"OCI Image for oracle_scylla_version='{oracle_scylla_version}' not found in {region}"
-                        ) from ex
-                    self.log.debug(
-                        "Found OCI Image %s for oracle_scylla_version='%s' in %s",
-                        oci_image[1],
-                        oracle_scylla_version,
-                        region,
-                    )
-                    oci_oracle_images.append(oci_image)
-                self["oci_image_db_oracle"] = " ".join(image[2] for image in oci_oracle_images)
-            elif self.get("cluster_backend") == "oci":
-                raise ValueError("'oracle_scylla_version' and 'oci_image_db_oracle' can't used together")
+            if resolver := _ORACLE_IMAGE_RESOLVERS.get(self.get("cluster_backend")):
+                oracle_image_param = ORACLE_IMAGE_PARAMS[self.get("cluster_backend")]
+                if self.get(oracle_image_param):
+                    raise ValueError(f"'oracle_scylla_version' and '{oracle_image_param}' can't used together")
+                self[oracle_image_param] = resolver(self, oracle_scylla_version)
 
         # 6.2) handle vector_store_version if exists
         if vs_version := self.get("vector_store_version"):
@@ -3343,6 +3417,9 @@ class SCTConfiguration(BaseModel):
         if self.get("cluster_backend") == "oci":
             # OCI node names include region (up to 14 chars) and must fit X.509 CN 64-char limit
             prefix_max_len -= 10
+        if self.get("db_type") == "mixed_scylla" and self.get("cluster_backend") in ("gce", "azure", "oci"):
+            # reserve space for the '-oracle' suffix so generated names stay within backend limits
+            prefix_max_len -= len(ORACLE_USER_PREFIX_SUFFIX)
         if (self.get("simulated_regions") or 0) > 1:
             # another shortening for simulated regions due added simulated dc suffix
             prefix_max_len -= 3
@@ -3851,6 +3928,7 @@ class SCTConfiguration(BaseModel):
             },
             "gce": {
                 "db": "gce_instance_type_db",
+                "db_oracle": "gce_instance_type_db_oracle",
                 "loader": "gce_instance_type_loader",
                 "monitor": "gce_instance_type_monitor",
             },

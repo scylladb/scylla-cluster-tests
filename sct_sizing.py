@@ -321,6 +321,7 @@ def sizing_preview(  # noqa: PLR0912, PLR0914, PLR0915
         },
         "gce": {
             "db": "gce_instance_type_db",
+            "db_oracle": "gce_instance_type_db_oracle",
             "loader": "gce_instance_type_loader",
             "monitor": "gce_instance_type_monitor",
         },

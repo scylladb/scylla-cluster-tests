@@ -11,9 +11,11 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
+import pytest
 import yaml
 
 from sdcm.provision.user_data import UserDataObject, UserDataBuilder
+from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
 
 
 class ExampleUserDataObject(UserDataObject):
@@ -110,3 +112,23 @@ def test_only_done_runcmd_in_yaml_when_no_applicable_user_data_objects():
     assert not loaded_yaml["packages"]
     assert not loaded_yaml["write_files"]
     assert loaded_yaml["runcmd"] == ["mkdir -p /var/lib/sct/cloud-init && touch /var/lib/sct/cloud-init/done"]
+
+
+@pytest.mark.parametrize(
+    "node_type,backend,expected",
+    [
+        ("scylla-db", "azure", True),
+        ("oracle-db", "azure", True),  # azure oracle nodes need the agent enabled too
+        ("loader", "azure", False),
+        ("oracle-db", "aws", False),
+    ],
+)
+def test_walinuxagent_applicability(node_type, backend, expected):
+    user_data_object = EnableWaLinuxAgent(
+        test_config=None,
+        params={"cluster_backend": backend},
+        instance_name="unit-node-1",
+        node_type=node_type,
+    )
+
+    assert user_data_object.is_applicable is expected

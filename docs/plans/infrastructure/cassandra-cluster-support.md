@@ -22,7 +22,7 @@ This gap matters beyond any single use case. A two-cluster setup (Cassandra + Sc
 
 Gemini is currently the **only multi-cluster configuration in SCT**, which makes it the natural place to introduce dual-cluster support. Gemini's original design intent was to compare Scylla against a **reference Cassandra implementation** to catch Scylla-specific bugs. Today, however, the oracle cluster is **another Scylla instance** (`ScyllaAWSCluster` with `node_type="oracle-db"`), which defeats this purpose — any bug present in both clusters is invisible.
 
-Additionally, oracle cluster support is **AWS-only**. The `get_cluster_gce()`, `get_cluster_azure()`, and `get_cluster_docker()` methods in `sdcm/tester.py` have no `mixed_scylla` or `mixed` handling, so multi-cluster tests cannot run on GCE, Azure, or Docker backends.
+Additionally, the Scylla oracle cluster is supported on AWS, OCI, GCE and Azure, while the Cassandra oracle (`mixed_cassandra`) remains **AWS-only**. The `get_cluster_docker()` method in `sdcm/tester.py` has no `mixed_scylla` or `mixed` handling, so multi-cluster tests cannot run on the Docker backend.
 
 This plan introduces a **modern Cassandra cluster** (Cassandra 4.1 or 5.0) as a first-class SCT cluster type, with Gemini oracle as the initial use case to validate the implementation across all cloud providers and Docker.
 

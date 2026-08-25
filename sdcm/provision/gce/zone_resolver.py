@@ -69,7 +69,7 @@ _MACHINE_TYPE_PARAM_GATES: tuple[tuple[str, Callable[[object], bool]], ...] = (
     ("gce_instance_type_loader", _has_loaders),
     ("gce_instance_type_monitor", _has_monitor),
     ("zero_token_instance_type_db", _has_zero_token),
-    ("instance_type_db_oracle", _has_oracle),
+    ("gce_instance_type_db_oracle", _has_oracle),
     ("instance_type_db_target", _always),
     ("nemesis_grow_shrink_instance_type", _always),
     ("instance_type_vector_store", _has_vector_store),
