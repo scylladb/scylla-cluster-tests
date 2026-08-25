@@ -9,7 +9,9 @@ stress_cmd: ["cassandra-stress write cl=QUORUM duration=240m -schema 'replicatio
 n_db_nodes: 6
 n_loaders: 50
 
-instance_type_db: 'i4i.metal'
+sizing_db:  # halved per soyacz: cluster load was ~30% at the original size (PR #15847 review)
+  vcpu: 64
+  memory: '>=512'
 sizing_loader:
   vcpu: 2
   memory: '>=4'

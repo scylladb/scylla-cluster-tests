@@ -29,7 +29,6 @@ simulated_racks: 0
 sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 4
   memory: '>=32'
-  arch: x86_64
 sizing_loader:
   vcpu: 16
   memory: '>=32'
