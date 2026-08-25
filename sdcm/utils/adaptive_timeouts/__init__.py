@@ -212,7 +212,14 @@ def adaptive_timeout(
                     metrics=load_metrics,
                     operation=operation.name,
                     duration=duration,
+<<<<<<< HEAD
                     timeout=timeout,
+||||||| parent of 82dc0e37a (feat(adaptive_timeouts): report hard_timeout to Argus results table)
+                    timeout=soft_timeout,
+=======
+                    timeout=soft_timeout,
+                    hard_timeout=hard_timeout,
+>>>>>>> 82dc0e37a (feat(adaptive_timeouts): report hard_timeout to Argus results table)
                     timeout_occurred=timeout_occurred,
                 )
         except Exception as exc:  # noqa: BLE001
