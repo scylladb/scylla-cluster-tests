@@ -48,12 +48,12 @@ test_duration: 90
 user_prefix: 'minicloud-rolling-upgrade'
 
 # Runs for the whole test, and the keyspace name is what metric_has_data() queries on.
-write_stress_during_entire_test: "cassandra-stress write no-warmup cl=QUORUM n=200000 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=10 -pop seq=1..200000 -log interval=5"
+write_stress_during_entire_test: "cassandra-stress write no-warmup cl=QUORUM n=200000 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=10 -pop seq=1..200000 -log interval=5"
 verify_stress_after_cluster_upgrade: "cassandra-stress read no-warmup cl=QUORUM n=200000 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=10 -pop seq=1..200000 -log interval=5"
 
 # Written with CL=ALL before any node is upgraded, so a later validation failure is unambiguous.
 prepare_write_stress:
-  - "cassandra-stress write no-warmup cl=QUORUM n=200000 -schema 'keyspace=keyspace1 replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..200000"
+  - "cassandra-stress write no-warmup cl=QUORUM n=200000 -schema 'keyspace=keyspace1 replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10 -pop seq=1..200000"
   - "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=100 -clustering-row-size=1024 -concurrency=4 -rows-per-request=10 -consistency-level=all"
 
 stress_cmd_read_cl_quorum: "cassandra-stress read no-warmup cl=QUORUM duration=2m -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10 -pop seq=1..200000"
