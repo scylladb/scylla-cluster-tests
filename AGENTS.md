@@ -241,6 +241,7 @@ Nemesis are chaos operations that test database resilience. For a comprehensive 
 - Start with existing test cases in `test-cases/` as templates
 - Use configuration fragments from `configurations/` for common settings
 - Network configs are in `configurations/network_config/`
+- If the test deliberately pins a setting (compaction strategy, compression, TTL, `gc_grace_seconds`, a `scylla.yaml` option), exclude the nemesis that rewrite it by name in `nemesis_selector`, e.g. `'not ModifyTableCompressionMonkey'`. Otherwise a nemesis silently undoes the setting mid-run. See [Turning Off Nemesis That Break the Test's Goal](docs/nemesis.md#turning-off-nemesis-that-break-the-tests-goal).
 
 ### Development Workflow
 1. Create feature branch from master
