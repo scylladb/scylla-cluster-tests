@@ -6468,11 +6468,12 @@ class BaseMonitorSet:
         return Path(get_data_dir_path("monitoring-dash-template.json"))
 
     def configure_overview_template(self, node: BaseNode):
-        def find_overview_row(row):
-            return (
-                row["class"] == "row"
+        def contains_alert_table(group):
+            return any(
+                row.get("class") == "row"
                 and len(row.get("panels", [])) > 0
                 and row["panels"][0].get("class", "") == "alert_table"
+                for row in group.get("rows", [])
             )
 
         with remote_file(
@@ -6482,39 +6483,37 @@ class BaseMonitorSet:
             sct_addon_template = json.load(self.monitoring_template.open("rt"))
             template = json.load(file)
             try:
-                template["dashboard"]["title"] = (
+                template["dashboard"]["spec/title"] = (
                     f"[{self.json_file_params_for_replace['$test_name']}] SCT Metrics & Cluster Overview"
                 )
             except KeyError:
                 LOGGER.warning("Unable to set title for overview dashboard - key not found")
 
-            row, index = next(
-                ((row, i) for i, row in enumerate(template["dashboard"]["rows"]) if find_overview_row(row)), (None, -1)
-            )
-            if row:
-                before = template["dashboard"]["rows"][: index + 1]
-                after = template["dashboard"]["rows"][index + 1 :]
-                rows = [*before, *sct_addon_template["rows"], *after]
-            template["dashboard"]["rows"] = rows
-            for variable in sct_addon_template["variables"]:
-                template["dashboard"]["templating"]["list"].append(variable)
+            rows = template["dashboard"]["rows"]
+            index = next((i for i, group in enumerate(rows) if contains_alert_table(group)), -1)
+            if index < 0:
+                LOGGER.warning("Unable to find the cluster overview row - appending SCT rows at the end")
+                index = len(rows) - 1
+            template["dashboard"]["rows"] = [*rows[: index + 1], *sct_addon_template["rows"], *rows[index + 1 :]]
+
+            template["dashboard"].setdefault("spec/variables", []).extend(sct_addon_template["variables"])
 
             try:
                 variable = next(
                     var
-                    for var in template["dashboard"]["templating"]["list"]
-                    if var.get("class", "") == "by_template_var"
+                    for var in template["dashboard"]["spec/variables"]
+                    if var.get("kind", "") == "CustomVariable" and var.get("spec", {}).get("name", "") == "by"
                 )
-                for value in variable["options"]:
+                for value in variable["spec"]["options"]:
                     value["selected"] = False
-                variable["current"]["text"] = "Instance"
-                variable["current"]["value"] = "instance"
-                by_instance_option = next(opt for opt in variable["options"] if opt["text"] == "Instance")
+                variable["spec"]["current"]["text"] = "Instance"
+                variable["spec"]["current"]["value"] = "instance"
+                by_instance_option = next(opt for opt in variable["spec"]["options"] if opt["text"] == "Instance")
                 by_instance_option["selected"] = True
             except (StopIteration, KeyError):
                 LOGGER.warning("Unable to change defaults for the template", exc_info=True)
 
-            template["dashboard"]["annotations"] = sct_addon_template["annotations"]
+            template["dashboard"].setdefault("spec/annotations", []).extend(sct_addon_template["annotations"])
 
             file.seek(0)
             file.truncate()
@@ -6525,6 +6524,24 @@ class BaseMonitorSet:
             ./generate-dashboards.sh -F -v {self.monitor_branch or self.monitoring_version or "master"} -P "sct-tests"
         """)
         node.remoter.run(f"bash -ce '{script}'")
+
+    @staticmethod
+    def _build_xcloud_scrape_config(promproxy_config):
+        """Build the scrape job from the Scylla Cloud promproxy config."""
+        scrape_configs = (yaml.safe_load(promproxy_config) or {}).get("scrape_configs") or []
+        return scrape_configs[0] if scrape_configs else None
+
+    @staticmethod
+    def _build_xcloud_cluster_relabel_config(xcloud_scrape_config):
+        """Create a relabel rule that adds the Scylla Cloud cluster label to SCT-scraped metrics."""
+        if match := re.search(r"/cluster/(\d+)/", xcloud_scrape_config.get("metrics_path") or ""):
+            return {
+                "source_labels": ["cluster"],
+                "regex": "^$",
+                "target_label": "cluster",
+                "replacement": f"#{match[1]}",
+            }
+        return None
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # noqa: PLR0914
         cloud_prom_bearer_token = self.params.get("cloud_prom_bearer_token")
