@@ -1,2 +1,15 @@
+test_metadata:
+  description: >-
+    Enterprise ICS longevity overlay running a basic ~3-hour IncrementalCompactionStrategy
+    cassandra-stress write workload on a ~10GB dataset. Note: this test has not been run in a while.
+  test_type: longevity
+  tier: ondemand
+  duration_class: short
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  features: []
+  team_ownership: storage-qa
+
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
              ]

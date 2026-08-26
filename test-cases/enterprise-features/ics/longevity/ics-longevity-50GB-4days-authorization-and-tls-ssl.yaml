@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Enterprise ICS longevity overlay validating IncrementalCompactionStrategy with multiple
+    compression algorithms, an MV profile, plus TLS and role-based authorization, on a ~50GB
+    dataset over ~4 days. Note: this test has not been run in a while.
+  test_type: longevity
+  tier: ondemand
+  duration_class: long
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  features:
+    - tls-ssl
+    - authorization
+  team_ownership: storage-qa
+
 prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=100000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native  -rate threads=500 -pop seq=1..100000000"]
 
 stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=5760m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native  -rate threads=20 -pop seq=1..100000000 -log interval=5",

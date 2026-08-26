@@ -1,3 +1,22 @@
+test_metadata:
+  description: >-
+    Longevity test validating encryption-at-rest combined with client/server TLS and role-based
+    authorization on a ~50GB dataset, running mixed cassandra-stress workloads (including an MV
+    profile) for ~1 day on a 6-node single-DC cluster with SisyphusMonkey nemesis.
+  test_type: longevity
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  features:
+    - encryption-at-rest
+    - tls-ssl
+    - authorization
+  team_ownership: storage-qa
+
 test_duration: 1940
 prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=100000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..100000000"]
 

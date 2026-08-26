@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Elasticity performance test that fills a cluster to ~90% disk utilization, runs a mixed
+    workload at ~50% load, then scales the cluster out and back in using smaller instance types
+    (i4i.4xlarge -> i4i.large) to measure elasticity behavior under shrink.
+  test_type: features
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  features:
+    - elasticity
+    - tablets
+  team_ownership: storage-qa
+
 # Test case for ScyllaDB elasticity at 90% utilization
 # The test writes approximately 3 TB of data to fill the cluster at around 90% utilization.
 # After the cluster is filled, a mixed workload is run at approximately 50% load.

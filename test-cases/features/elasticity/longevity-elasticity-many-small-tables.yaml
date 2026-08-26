@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Elasticity feature test validating cluster behavior at ~90% disk utilization spread across 500
+    small tables, populated and stressed in 4 batches of 125 tables with combined write/read load
+    via a templated cassandra-stress user profile.
+  test_type: features
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  features:
+    - elasticity
+    - tablets
+  team_ownership: storage-qa
+
 # This is a test case for having 90% disk utilization with a lot of small tables.
 # The data is split equally among 500 tables.
 # The dataset size is aligned with 'i4i.xlarge' and RF = 3 = number-of-DB-nodes.

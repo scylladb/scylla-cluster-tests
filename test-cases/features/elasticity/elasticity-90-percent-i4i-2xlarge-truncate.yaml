@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Elasticity feature test that fills a cluster to ~90% disk utilization, truncates one of the
+    populated keyspaces, then runs a mixed cassandra-stress workload to validate space reclamation
+    and stability at high disk utilization.
+  test_type: features
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  features:
+    - elasticity
+    - tablets
+  team_ownership: storage-qa
+
 # Test case for ScyllaDB elasticity at 90% utilization
 # The test writes approximately 1.5 TB of data to fill the cluster at around 90% utilization.
 # A 3rd of the data is written to a keyspace that is truncated after all writes are done.

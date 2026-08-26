@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Longevity test validating KMS (Key Management Service) encryption at rest on GCE, including key
+    rotation, while running a cassandra-stress write workload with SisyphusMonkey nemesis on a
+    3-node single-DC cluster for ~4 hours.
+  test_type: longevity
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - gce
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  features:
+    - kms
+  team_ownership: storage-qa
+
 test_duration: 255
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
              ]

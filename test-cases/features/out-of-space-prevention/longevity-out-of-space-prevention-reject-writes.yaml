@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Out-of-space prevention feature test that fills a cluster to ~90% disk usage plus an extra ~15%
+    write burst, validating that the cluster correctly rejects writes rather than crashing as it
+    approaches disk capacity.
+  test_type: features
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  features: []
+  team_ownership: storage-qa
+
 # Maintained by Storage QA
 
 test_duration: 1440
