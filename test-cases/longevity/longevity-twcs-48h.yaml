@@ -16,6 +16,8 @@ n_loaders: 3
 instance_type_db: 'i8ge.xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
+# the table is altered to TWCS by post_prepare_cql_cmds; keep it for the whole run
+nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
 nemesis_seed: '025'
 nemesis_interval: 15
 nemesis_during_prepare: false

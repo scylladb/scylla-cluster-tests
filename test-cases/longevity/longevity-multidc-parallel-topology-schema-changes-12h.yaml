@@ -67,7 +67,8 @@ simulated_racks: 0
 instance_type_db: 'i7i.xlarge'
 
 nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']
-nemesis_selector: ["topology_changes", "schema_changes and not disruptive"]
+# keyspace1.standard2 is created with LCS and Zstd compression in pre_create_keyspace; keep them for the whole run
+nemesis_selector: ["topology_changes", "schema_changes and not disruptive and not ModifyTableCompactionMonkey and not ModifyTableCompressionMonkey"]
 nemesis_seed: '253 328'
 nemesis_interval: 10
 nemesis_during_prepare: false

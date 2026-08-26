@@ -16,6 +16,8 @@ round_robin: true
 instance_type_db: 'i4i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
+# the table is created with TWCS and a TTL by TWCSLongevityTest; keep them for the whole run
+nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableDefaultTimeToLiveMonkey and not ModifyTableTwcsWindowSizeMonkey'
 nemesis_seed: '024'
 nemesis_interval: 15
 nemesis_during_prepare: false
