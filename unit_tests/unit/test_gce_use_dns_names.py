@@ -151,7 +151,7 @@ def test_gce_refresh_network_interfaces_info():
     node = FakeRefreshNode(scylla_network_configuration=MagicMock(), network_interfaces=[MagicMock()])
     GCENode.refresh_network_interfaces_info(node)
 
-    assert not hasattr(node, "network_configuration") or "network_configuration" not in node.__dict__
+    assert "network_configuration" not in node.__dict__
     assert node.scylla_network_configuration.network_interfaces == node.network_interfaces
 
 

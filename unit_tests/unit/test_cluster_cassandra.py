@@ -73,17 +73,6 @@ def cassandra_cluster(make_cassandra_cluster):
     return make_cassandra_cluster()
 
 
-def _make_cluster(result_map: dict, make_cassandra_cluster) -> BaseCassandraCluster:
-    node = MagicMock()
-    node.ip_address = "1.2.3.4"
-    node.remoter = FakeRemoter(hostname="1.2.3.4")
-    node.remoter.result_map = result_map
-
-    cluster = make_cassandra_cluster()
-    cluster.nodes = [node]
-    return cluster
-
-
 @pytest.mark.parametrize(
     "total_ram_mb,expected_max,expected_new",
     [
@@ -102,11 +91,6 @@ def test_compute_jvm_heap_sizes(total_ram_mb, expected_max, expected_new):
     max_heap, heap_new = compute_jvm_heap_mb(total_ram_mb)
     assert max_heap == expected_max
     assert heap_new == expected_new
-
-
-def test_compute_jvm_heap_min_2gb_on_large_system():
-    max_heap, _ = compute_jvm_heap_mb(4096)
-    assert max_heap >= 2048
 
 
 def test_parallel_startup_is_false(cassandra_cluster):
@@ -162,8 +146,8 @@ def test_zero_nodes_returns_empty(cassandra_cluster):
 
 def test_dump_schema_excludes_create_keyspace(make_cassandra_cluster):
     """Test stripping CREATE KEYSPACE block when include_keyspace_stmt=False."""
-    cluster = _make_cluster(
-        {r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_OUTPUT, stderr="", exited=0)}, make_cassandra_cluster
+    cluster = make_cassandra_cluster(
+        result_map={r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_OUTPUT, stderr="", exited=0)}
     )
     result = cluster.dump_schema("ks")
     assert "CREATE TABLE" in result
@@ -172,8 +156,8 @@ def test_dump_schema_excludes_create_keyspace(make_cassandra_cluster):
 
 def test_dump_schema_include_keyspace_stmt(make_cassandra_cluster):
     """Test that full output returned unchanged when include_keyspace_stmt=True."""
-    cluster = _make_cluster(
-        {r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_OUTPUT, stderr="", exited=0)}, make_cassandra_cluster
+    cluster = make_cassandra_cluster(
+        result_map={r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_OUTPUT, stderr="", exited=0)}
     )
     assert cluster.dump_schema("ks", include_keyspace_stmt=True) == _DESCRIBE_OUTPUT
 
@@ -181,8 +165,8 @@ def test_dump_schema_include_keyspace_stmt(make_cassandra_cluster):
 def test_dump_schema_command_failure_raises_runtime_error(make_cassandra_cluster):
     """Test that RuntimeError is raised containing the stderr message."""
     stderr_msg = "Keyspace 'foo' not found"
-    cluster = _make_cluster(
-        {r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout="", stderr=stderr_msg, exited=1)}, make_cassandra_cluster
+    cluster = make_cassandra_cluster(
+        result_map={r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout="", stderr=stderr_msg, exited=1)}
     )
     with pytest.raises(RuntimeError, match=stderr_msg):
         cluster.dump_schema("foo")
@@ -191,11 +175,8 @@ def test_dump_schema_command_failure_raises_runtime_error(make_cassandra_cluster
 def test_dump_schema_banner_with_semicolons_does_not_confuse_stripper(make_cassandra_cluster):
     """regression: banner lines containing ';' before CREATE KEYSPACE must not be mistaken
     for the end of the CREATE KEYSPACE statement."""
-    cluster = _make_cluster(
-        {
-            r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_OUTPUT_WITH_BANNER, stderr="", exited=0),
-        },
-        make_cassandra_cluster,
+    cluster = make_cassandra_cluster(
+        result_map={r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_OUTPUT_WITH_BANNER, stderr="", exited=0)}
     )
     result = cluster.dump_schema("ks", include_keyspace_stmt=False)
     assert "CREATE TABLE" in result
@@ -252,11 +233,8 @@ _DESCRIBE_SCYLLA_SAFE = (
 
 def test_dump_schema_strips_cassandra_only_options(make_cassandra_cluster):
     """Test that cassandra-only options are removed; Scylla-compatible options are preserved."""
-    cluster = _make_cluster(
-        {
-            r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_WITH_CASSANDRA_OPTIONS, stderr="", exited=0),
-        },
-        make_cassandra_cluster,
+    cluster = make_cassandra_cluster(
+        result_map={r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_WITH_CASSANDRA_OPTIONS, stderr="", exited=0)}
     )
     result = cluster.dump_schema("ks")
     for option in ("bloom_filter_fp_chance", "compaction", "compression", "gc_grace_seconds"):
@@ -267,11 +245,10 @@ def test_dump_schema_strips_cassandra_only_options(make_cassandra_cluster):
 
 def test_dump_schema_handles_leading_cassandra_only_option(make_cassandra_cluster):
     """Test that when first option of WITH is Cassandra-only, the next clause is rewritten to WITH."""
-    cluster = _make_cluster(
-        {
-            r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_WITH_LEADING_CASSANDRA_OPTION, stderr="", exited=0),
-        },
-        make_cassandra_cluster,
+    cluster = make_cassandra_cluster(
+        result_map={
+            r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_WITH_LEADING_CASSANDRA_OPTION, stderr="", exited=0)
+        }
     )
     result = cluster.dump_schema("ks")
     assert "additional_write_policy" not in result
@@ -291,11 +268,8 @@ def test_dump_schema_handles_leading_cassandra_only_option(make_cassandra_cluste
 
 def test_dump_schema_idempotent_on_scylla_safe_schema(make_cassandra_cluster):
     """Test that schema with no Cassandra-only options passes through unchanged."""
-    cluster = _make_cluster(
-        {
-            r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_SCYLLA_SAFE, stderr="", exited=0),
-        },
-        make_cassandra_cluster,
+    cluster = make_cassandra_cluster(
+        result_map={r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_SCYLLA_SAFE, stderr="", exited=0)}
     )
     result = cluster.dump_schema("ks")
     assert "CREATE KEYSPACE" not in result
@@ -310,8 +284,8 @@ def test_dump_schema_strips_speculative_retry(make_cassandra_cluster):
         "    AND speculative_retry = '99p'\n"
         "    AND gc_grace_seconds = 864000;\n"
     )
-    cluster = _make_cluster(
-        {r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=output, stderr="", exited=0)}, make_cassandra_cluster
+    cluster = make_cassandra_cluster(
+        result_map={r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=output, stderr="", exited=0)}
     )
     result = cluster.dump_schema("ks", include_keyspace_stmt=True)
     assert "speculative_retry" not in result
@@ -326,8 +300,8 @@ def test_dump_schema_rewrites_compression_class_to_sstable_compression(make_cass
         "    AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}\n"
         "    AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy'};\n"
     )
-    cluster = _make_cluster(
-        {r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=output, stderr="", exited=0)}, make_cassandra_cluster
+    cluster = make_cassandra_cluster(
+        result_map={r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=output, stderr="", exited=0)}
     )
     result = cluster.dump_schema("ks", include_keyspace_stmt=True)
     # compression dict: 'class' must be rewritten to 'sstable_compression'
@@ -346,9 +320,10 @@ def test_dump_schema_rewrites_compression_enabled_false_to_disabled(make_cassand
         "    AND compression = {'enabled': 'false'}\n"
         "    AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy'};\n"
     )
-    result = _make_cluster(
-        {r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=output, stderr="", exited=0)}, make_cassandra_cluster
-    ).dump_schema("keyspace1", include_keyspace_stmt=True)
+    cluster = make_cassandra_cluster(
+        result_map={r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=output, stderr="", exited=0)}
+    )
+    result = cluster.dump_schema("keyspace1", include_keyspace_stmt=True)
     assert "compression = {'sstable_compression': ''}" in result
     assert "'enabled'" not in result
     assert "compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy'}" in result

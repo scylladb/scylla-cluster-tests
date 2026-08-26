@@ -11,20 +11,72 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+"""Tests for job selection and parameter building against a synthetic matrix.
+
+These use an in-memory matrix (not configurations/triggers/perf-regression.yaml) so they
+exercise filter_jobs()/build_job_parameters() logic and stay green when the real matrix
+changes — see PR #15380 discussion.
+"""
+
 from pathlib import Path
 
 import pytest
+import yaml
 
 from sdcm.utils.trigger_matrix import build_job_parameters, filter_jobs, load_matrix_config
 
-PERF_YAML = Path(__file__).parents[3] / "configurations" / "triggers" / "perf-regression.yaml"
+
+def write_matrix(tmp_path, data) -> Path:
+    path = tmp_path / "matrix.yaml"
+    path.write_text(yaml.dump(data))
+    return path
 
 
 @pytest.fixture()
-def perf_config():
-    if not PERF_YAML.exists():
-        pytest.skip("perf-regression.yaml not found")
-    return load_matrix_config(PERF_YAML)
+def perf_config(tmp_path):
+    path = write_matrix(
+        tmp_path,
+        {
+            "jobs": [
+                {
+                    "job_name": "aws-perf-i8g-tablets-master",
+                    "backend": "aws",
+                    "labels": ["master-2weeks"],
+                },
+                {
+                    "job_name": "gce-perf-latte-1",
+                    "backend": "gce",
+                    "labels": ["gce-custom-monthly"],
+                    "pre_release": ["rc1"],
+                },
+                {
+                    "job_name": "gce-perf-latte-2",
+                    "backend": "gce",
+                    "labels": ["gce-custom-monthly"],
+                    "pre_release": ["rc1"],
+                },
+                {
+                    "job_name": "aws-rolling-upgrade",
+                    "backend": "aws",
+                    "params": {
+                        "rolling_upgrade_test": "true",
+                        "new_scylla_repo": "http://downloads.scylladb.com/deb/scylla/{branch_id}/deb/"
+                        "unstable/scylladb-{branch}/scylla.list",
+                    },
+                },
+                {
+                    "job_name": "gce-rolling-upgrade",
+                    "backend": "gce",
+                    "params": {
+                        "rolling_upgrade_test": "true",
+                        "new_scylla_repo": "http://downloads.scylladb.com/deb/scylla/{branch_id}/deb/"
+                        "unstable/scylladb-{branch}/scylla.list",
+                    },
+                },
+            ]
+        },
+    )
+    return load_matrix_config(path)
 
 
 def test_master_2weeks_selects_expected_jobs(perf_config):
@@ -79,8 +131,8 @@ def test_rolling_upgrade_jobs_resolve_new_scylla_repo(perf_config):
     rolling_upgrade_jobs = [
         job for job in perf_config.jobs if str(job.params.get("rolling_upgrade_test", "")).lower() == "true"
     ]
-    assert len(rolling_upgrade_jobs) == 4, (
-        f"Expected 4 rolling_upgrade_test jobs in perf-regression.yaml, found {len(rolling_upgrade_jobs)}"
+    assert len(rolling_upgrade_jobs) == 2, (
+        f"Expected 2 rolling_upgrade_test jobs in the synthetic matrix, found {len(rolling_upgrade_jobs)}"
     )
 
     for job in rolling_upgrade_jobs:
