@@ -8,7 +8,7 @@ the abstract base class ``ModifyTableBaseMonkey``.
 import abc
 import logging
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Iterable, Sequence
 
 from sdcm.exceptions import UnsupportedNemesis
 from sdcm.nemesis import NemesisBaseClass
@@ -24,14 +24,109 @@ from test_lib.compaction import (
 LOGGER = logging.getLogger(__name__)
 
 
+class TableInitialProperties:
+    """Stores each table's properties from before any ModifyTable nemesis changed them.
+
+    A property is "explicitly configured" if it was already different from ScyllaDB's
+    default before any nemesis ran. Tests set such properties on purpose (for example
+    ZSTD compression or ICS compaction) and expect them to stay the same for the whole
+    run. This check works no matter how the property was set — ``pre_create_keyspace``,
+    stress ``-schema`` options, user profiles, or custom test code — because it only
+    looks at the resulting schema, not at how it got there.
+
+    ``defaults`` is read once, from a canary table created with no WITH options, so it
+    always matches the ScyllaDB version under test. ``initial`` stores each table's row
+    from ``system_schema.tables`` the first time the table is seen, and is never
+    updated again. This way, a later nemesis ALTER can never look like something the
+    test configured — as long as ``refresh()`` runs before the table is modified, which
+    ``ModifyTableBaseMonkey`` guarantees.
+    """
+
+    CANARY_KEYSPACE = "sct_modify_table_canary"
+
+    def __init__(self):
+        self.defaults: dict | None = None
+        self.initial: dict[str, dict] = {}
+
+    def refresh(self, cluster, node) -> None:
+        """Save each new table's current properties, and read the defaults on the first call."""
+        with cluster.cql_connection_patient(node) as session:
+            if self.defaults is None:
+                self.defaults = self._fetch_defaults(session, replication_factor=cluster.racks_count)
+            for row in session.execute("SELECT * FROM system_schema.tables"):
+                row_dict = row._asdict()
+                self.initial.setdefault(f"{row_dict['keyspace_name']}.{row_dict['table_name']}", row_dict)
+
+    def _fetch_defaults(self, session, replication_factor: int) -> dict:
+        """Create a canary table with no explicit options, read its schema row, then delete it.
+
+        ``replication_factor`` must equal the per-DC rack count, or the CREATE KEYSPACE
+        is rejected when ``rf_rack_valid_keyspaces`` is enforced.
+        """
+        session.execute(
+            f"CREATE KEYSPACE IF NOT EXISTS {self.CANARY_KEYSPACE} "
+            "WITH replication = {'class': 'NetworkTopologyStrategy', "
+            f"'replication_factor': {replication_factor}}}"
+        )
+        try:
+            session.execute(f"CREATE TABLE IF NOT EXISTS {self.CANARY_KEYSPACE}.defaults (pk int PRIMARY KEY)")
+            row = session.execute(
+                "SELECT * FROM system_schema.tables "
+                f"WHERE keyspace_name = '{self.CANARY_KEYSPACE}' AND table_name = 'defaults'"
+            ).one()
+            return row._asdict()
+        finally:
+            session.execute(f"DROP KEYSPACE IF EXISTS {self.CANARY_KEYSPACE}")
+
+    def is_explicitly_configured(self, keyspace_table: str, properties: Iterable[str]) -> bool:
+        """Return True if any of the given properties was non-default before nemeses ran."""
+        if (initial := self.initial.get(keyspace_table)) is None:
+            # We have no record of this table, so protect it to be safe.
+            return True
+        return any(initial.get(prop) != self.defaults.get(prop) for prop in properties)
+
+
 class ModifyTableBaseMonkey(NemesisBaseClass, abc.ABC):
     """
     Abstract base class for all ModifyTable nemesis operations.
+
+    A table is skipped if the test already configured the property this monkey wants
+    to change. See ``TableInitialProperties`` for how that is detected.
     """
+
+    # Every disruption builds a fresh monkey instance, so the pre-nemesis properties
+    # live on the class to be shared by all ModifyTable monkeys for the whole run.
+    table_initial_properties = TableInitialProperties()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.random = self.runner.random
+
+    def _filter_out_explicitly_configured(self, ks_cfs: list[str], properties: Sequence[str]) -> list[str]:
+        """Drop tables where any of ``properties`` was explicitly configured by the test."""
+        self.table_initial_properties.refresh(self.runner.cluster, self.runner.target_node)
+        return [
+            table for table in ks_cfs if not self.table_initial_properties.is_explicitly_configured(table, properties)
+        ]
+
+    def _pick_target_table(self, properties: Sequence[str], filter_out_table_with_counter: bool = False) -> str:
+        """Pick a random non-system table where none of ``properties`` is explicitly configured."""
+        ks_cfs = self.runner.cluster.get_non_system_ks_cf_list(
+            db_node=self.runner.target_node,
+            filter_out_table_with_counter=filter_out_table_with_counter,
+            filter_out_mv=True,
+        )  # not allowed to modify MV
+        if not ks_cfs:
+            raise UnsupportedNemesis(
+                "Non-system keyspace and table are not found. ModifyTableProperties nemesis can't be run"
+            )
+        allowed = self._filter_out_explicitly_configured(ks_cfs, properties)
+        if not allowed:
+            raise UnsupportedNemesis(
+                f"All non-system tables have {', '.join(properties)} explicitly configured by the test; "
+                "skipping to preserve the intended settings"
+            )
+        return self.random.choice(allowed)
 
     def modify_table_property(
         self,
@@ -50,17 +145,8 @@ class ModifyTableBaseMonkey(NemesisBaseClass, abc.ABC):
         InfoEvent("ModifyTableProperties%s %s" % (disruption_name, self.runner.target_node)).publish()
 
         if not keyspace_table:
-            ks_cfs = self.runner.cluster.get_non_system_ks_cf_list(
-                db_node=self.runner.target_node,
-                filter_out_table_with_counter=filter_out_table_with_counter,
-                filter_out_mv=True,
-            )  # not allowed to modify MV
-
-            keyspace_table = self.random.choice(ks_cfs) if ks_cfs else ks_cfs
-
-        if not keyspace_table:
-            raise UnsupportedNemesis(
-                "Non-system keyspace and table are not found. ModifyTableProperties nemesis can't be run"
+            keyspace_table = self._pick_target_table(
+                properties=(name,), filter_out_table_with_counter=filter_out_table_with_counter
             )
 
         cmd = f"ALTER TABLE {keyspace_table} WITH {name} = {val};"
@@ -194,14 +280,9 @@ class ModifyTableCompactionMonkey(ModifyTableBaseMonkey):
 
         if prop_val["class"] == "TimeWindowCompactionStrategy":
             # Pick the table upfront so both the compaction and TTL changes target the same table.
-            ks_cfs = self.runner.cluster.get_non_system_ks_cf_list(
-                db_node=self.runner.target_node,
-                filter_out_table_with_counter=True,
-                filter_out_mv=True,
+            keyspace_table = self._pick_target_table(
+                properties=("compaction", "default_time_to_live"), filter_out_table_with_counter=True
             )
-            if not ks_cfs:
-                raise UnsupportedNemesis("No non-system user tables found")
-            keyspace_table = self.random.choice(ks_cfs)
 
             # Max allowed TTL - 49 days (4300000) (to be compatible with default TWCS settings)
             # Set compaction BEFORE default_time_to_live.  The table may currently have TWCS
@@ -304,14 +385,9 @@ class ModifyTableDefaultTimeToLiveMonkey(ModifyTableBaseMonkey):
         default_max_ttl = 4300000
 
         runner = self.runner
-        ks_cfs = runner.cluster.get_non_system_ks_cf_list(
-            db_node=runner.target_node, filter_out_table_with_counter=True, filter_out_mv=True
+        keyspace_table = self._pick_target_table(
+            properties=("default_time_to_live",), filter_out_table_with_counter=True
         )
-
-        if not ks_cfs:
-            raise UnsupportedNemesis("No non-system user tables found")
-
-        keyspace_table = self.random.choice(ks_cfs)
         keyspace, table = keyspace_table.split(".")
         compaction_strategy = get_compaction_strategy(node=runner.target_node, keyspace=keyspace, table=table)
 
@@ -503,7 +579,24 @@ class ModifyTableTwcsWindowSizeMonkey(ModifyTableBaseMonkey):
         if not all_ks_cs_with_twcs:
             raise UnsupportedNemesis("No table found with TWCS")
 
-        target_ks_cs_with_settings = self.random.choice(all_ks_cs_with_twcs)
+        # This monkey rewrites compaction, default_time_to_live and gc_grace_seconds, so
+        # tables where the test explicitly configured any of them (typically the TWCS
+        # tables themselves) are off limits; only TWCS tables produced by other nemeses
+        # (e.g. ModifyTableCompactionMonkey) remain eligible.
+        allowed = set(
+            self._filter_out_explicitly_configured(
+                [item["name"] for item in all_ks_cs_with_twcs],
+                properties=("compaction", "default_time_to_live", "gc_grace_seconds"),
+            )
+        )
+        candidates = [item for item in all_ks_cs_with_twcs if item["name"] in allowed]
+        if not candidates:
+            raise UnsupportedNemesis(
+                "All TWCS tables have their compaction settings explicitly configured by the test; "
+                "skipping to preserve the intended settings"
+            )
+
+        target_ks_cs_with_settings = self.random.choice(candidates)
 
         ks_cs_settings = self.set_new_twcs_settings(target_ks_cs_with_settings)
         keyspace, table = ks_cs_settings["name"].split(".")
