@@ -13,10 +13,71 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      # Check out the base repository, never the PR head. `pull_request_target`
+      # runs with repository secrets and a write token, so every script this
+      # workflow executes has to come from the trusted base branch - checking
+      # out a fork's code here would hand both to anyone who opens a PR.
+      - name: Checkout base repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          allow-unsafe-pr-checkout: true
+          persist-credentials: false
+
+      # Overlay the PR's SKILL.md files as *data*: they get linted and sent to
+      # an LLM, never executed, and nothing outside skills/ comes from the PR.
+      - name: Sync SKILL.md files from PR head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          names="$(mktemp)"
+          content="$(mktemp)"
+
+          # A 404 means the PR removed skills/ entirely, which is legitimate.
+          # Any other failure must not be mistaken for "no skills to review",
+          # or the next step would happily report that all 0 skills passed.
+          if ! gh api "repos/${REPO}/contents/skills?ref=${HEAD_SHA}" \
+                 --jq '.[] | select(.type == "dir") | .name' > "$names" 2>"$names.err"; then
+            if grep -q "Not Found" "$names.err"; then
+              echo "::notice::No skills/ directory at ${HEAD_SHA}"
+              : > "$names"
+            else
+              echo "::error::Failed to list skills/ at ${HEAD_SHA}"
+              cat "$names.err" >&2
+              exit 1
+            fi
+          fi
+
+          # Drop the base branch's skills so skills deleted or renamed by the
+          # PR are not reviewed as if they were still there.
+          rm -rf skills
+          mkdir -p skills
+
+          synced=0
+          while read -r name; do
+            [ -n "$name" ] || continue
+            # Reject anything that is not a plain directory name, so a crafted
+            # entry cannot make us write outside skills/.
+            case "$name" in
+              *[!A-Za-z0-9._-]* | . | ..)
+                echo "::warning::Skipping unexpected skill directory name: $name"
+                continue
+                ;;
+            esac
+            # </dev/null so gh can never consume the loop's input stream.
+            # A missing SKILL.md is fine - the directory just isn't a skill.
+            if gh api "repos/${REPO}/contents/skills/${name}/SKILL.md?ref=${HEAD_SHA}" \
+                 --header 'Accept: application/vnd.github.raw' \
+                 > "$content" 2>/dev/null </dev/null; then
+              mkdir -p "skills/${name}"
+              cp "$content" "skills/${name}/SKILL.md"
+              synced=$((synced + 1))
+            fi
+          done < "$names"
+
+          echo "Synced $synced SKILL.md file(s) from ${HEAD_SHA}"
 
       - name: SkillForge lint and security scan
         id: skillforge
@@ -81,9 +142,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
-          DIRS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
-            --jq '[.[].filename | select(startswith("skills/")) | split("/")[0:2] | join("/")] | unique | .[]')
+          # Keep only well-formed skills/<name> paths. This value is expanded
+          # unquoted as command arguments below, so a directory name must not
+          # be able to smuggle in anything else.
+          DIRS=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/files" --paginate \
+            --jq '.[].filename | select(startswith("skills/")) | split("/")[0:2] | join("/")' \
+            | grep -E '^skills/[A-Za-z0-9._-]+$' | sort -u || true)
           # Use space-separated single line for GITHUB_OUTPUT (multiline breaks the format)
           DIRS_ONELINE=$(echo "$DIRS" | tr '\n' ' ' | xargs)
           echo "skill_dirs=$DIRS_ONELINE" >> "$GITHUB_OUTPUT"
@@ -101,8 +167,11 @@ jobs:
         if: steps.auth.outputs.available == 'true' && steps.changed.outputs.skill_dirs != ''
         continue-on-error: true
         id: judge
-        run: python .github/scripts/skill-quality-judge.py ${{ steps.changed.outputs.skill_dirs }}
+        # SKILL_DIRS is intentionally unquoted: it is a space-separated list
+        # of directories, already restricted to a safe character set above.
+        run: python .github/scripts/skill-quality-judge.py $SKILL_DIRS
         env:
+          SKILL_DIRS: ${{ steps.changed.outputs.skill_dirs }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SKILL_QUALITY_THRESHOLD: "70"
           SKILL_REVIEW_REPORT: /tmp/skill-review-report.md
@@ -112,6 +181,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
           SKILLFORGE_OUTCOME: ${{ steps.skillforge.outcome }}
           JUDGE_OUTCOME: ${{ steps.judge.outcome }}
           AUTH_AVAILABLE: ${{ steps.auth.outputs.available }}
@@ -169,14 +239,14 @@ jobs:
           "
           fi
 
-          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+          EXISTING=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
             --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" | head -1)
 
           if [ -n "$EXISTING" ]; then
-            gh api "repos/${{ github.repository }}/issues/comments/${EXISTING}" \
+            gh api "repos/${REPO}/issues/comments/${EXISTING}" \
               -X PATCH -f body="$BODY"
           else
-            gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$BODY"
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$BODY"
           fi
 
       - name: Fail if any review step failed
