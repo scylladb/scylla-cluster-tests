@@ -1,5 +1,6 @@
 user_prefix: 'longevity-operator-twcs-48h'
-nemesis_selector: 'kubernetes'
+# longevity-twcs-48h.yaml sets TWCS, default_time_to_live and compression; keep them for the whole run
+nemesis_selector: 'kubernetes and not ModifyTableCompactionMonkey and not ModifyTableCompressionMonkey and not ModifyTableDefaultTimeToLiveMonkey and not ModifyTableTwcsWindowSizeMonkey'
 
 n_db_nodes: 5
 k8s_n_scylla_pods_per_cluster: 4
