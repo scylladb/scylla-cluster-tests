@@ -1,7 +1,7 @@
 test_duration: 360
 
 # workloads
-write_stress_during_entire_test: cassandra-stress write no-warmup cl=QUORUM n=20100200 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..20100200 -log interval=5
+write_stress_during_entire_test: cassandra-stress write no-warmup cl=QUORUM n=20100200 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..20100200 -log interval=5
 verify_stress_after_cluster_upgrade: cassandra-stress read no-warmup cl=QUORUM n=20100200 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..20100200 -log interval=5
 # Preload/validation workload that runs BEFORE any nodes are upgraded.
 # The first command is the standard prepare write stress, the second is scylla-bench using CL=ALL
