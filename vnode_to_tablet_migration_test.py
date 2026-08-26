@@ -16,12 +16,23 @@
 import logging
 import re
 import time
+from collections.abc import Callable
 from enum import StrEnum
 
 from longevity_test import LongevityTest
-from sdcm.cluster import DB_LOG_PATTERN_RESHARDING_FINISH, DB_LOG_PATTERN_RESHARDING_START
+from sdcm.cluster import (
+    DB_LOG_PATTERN_RESHARDING_FINISH,
+    DB_LOG_PATTERN_RESHARDING_START,
+    BaseNode,
+    NodeSetupFailed,
+    NodeSetupTimeout,
+)
+from sdcm.sct_events import Severity
+from sdcm.sct_events.filters import EventsSeverityChangerFilter
+from sdcm.sct_events.group_common_events import suppress_expected_unavailability_errors
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import InfoEvent
-from sdcm.utils.decorators import latency_calculator_decorator
+from sdcm.utils.decorators import latency_calculator_decorator, retrying
 from sdcm.utils.tablets.common import wait_tablets_balanced
 from sdcm.wait import wait_for, wait_for_log_lines
 
@@ -31,6 +42,7 @@ LOGGER = logging.getLogger(__name__)
 class NodeMigrationStatus(StrEnum):
     USES_VNODES = "uses vnodes"
     MIGRATING = "migrating to tablets"
+    MIGRATING_TO_VNODES = "migrating to vnodes"
     USES_TABLETS = "uses tablets"
 
 
@@ -109,98 +121,176 @@ class VnodeToTabletMigrationTest(LongevityTest):
     """Test vnode to tablet migration scenarios."""
 
     def restart_node_after_migration(self, node) -> None:
-        """Restart a node after migrate-to-tablets upgrade, waiting for resharding to complete.
+        """Restart a node after a migrate-to-tablets upgrade or downgrade, waiting for resharding.
 
-        After the upgrade the node reshards all data on startup. For large datasets
-        (hundreds of GB) this can take 15+ minutes. This method monitors the scylla
-        log for resharding start/finish and logs the elapsed duration so slow reshards
-        are visible in test output.
+        After the upgrade (or rollback) the node reshards all data on startup.  For large
+        datasets (hundreds of GB) this can take 15+ minutes.  This method monitors the
+        scylla log for resharding start/finish so slow reshards are visible in test output.
+
+        The same resharding log patterns fire for both forward (vnodes→tablets) and
+        reverse (tablets→vnodes) resharding, so this method is safe to use in both
+        directions.
 
         Args:
             node: The DB node to restart.
         """
-        reshard_timeout = 3600
+        reshard_timeout = 7200
         self.log.info(
-            "Restarting node %s after migrate-to-tablets upgrade (reshard_timeout=%ds)", node.name, reshard_timeout
+            "Restarting node %s after migration state change (reshard_timeout=%ds)", node.name, reshard_timeout
         )
-        node.run_nodetool("drain")
-        node.stop_scylla(verify_down=True)
-
-        with wait_for_log_lines(
-            node=node,
-            start_line_patterns=[DB_LOG_PATTERN_RESHARDING_START],
-            end_line_patterns=[DB_LOG_PATTERN_RESHARDING_FINISH],
-            start_timeout=600,
-            end_timeout=reshard_timeout,
-            error_msg_ctx=f"Resharding on {node.name} after tablet migration",
+        # Downgrade CRITICAL→WARNING for this node while it is intentionally DN during resharding.
+        # ClusterHealthValidator fires NodeStatus(CRITICAL) for every non-UN node it sees; without
+        # this filter the health check run by the nemesis thread kills the test before the node recovers.
+        # suppress_expected_unavailability_errors() silences the accompanying RPC/log noise.
+        with (
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=ClusterHealthValidatorEvent.NodeStatus,
+                regex=rf".*{re.escape(node.name)}.*status is",
+                extra_time_to_expiration=60,
+            ),
+            suppress_expected_unavailability_errors(),
         ):
-            node.start_scylla(verify_up=False, timeout=reshard_timeout * 2)
+            node.run_nodetool("drain")
+            node.stop_scylla(verify_down=True)
 
-        node.wait_db_up(timeout=reshard_timeout)
-        self.db_cluster.wait_for_nodes_up_and_normal(nodes=[node], timeout=reshard_timeout)
-        node.wait_node_fully_start(timeout=reshard_timeout)
+            with wait_for_log_lines(
+                node=node,
+                start_line_patterns=[DB_LOG_PATTERN_RESHARDING_START],
+                end_line_patterns=[DB_LOG_PATTERN_RESHARDING_FINISH],
+                start_timeout=600,
+                end_timeout=reshard_timeout,
+                error_msg_ctx=f"Resharding on {node.name} after migration state change",
+            ):
+                node.start_scylla(verify_up=False, timeout=reshard_timeout * 2)
 
-    def _perform_migration_steps(self) -> None:
-        """Execute the full vnode-to-tablet migration procedure.
+            node.wait_db_up(timeout=reshard_timeout)
+            self.db_cluster.wait_for_nodes_up_and_normal(nodes=[node], timeout=reshard_timeout)
+            node.wait_node_fully_start(timeout=reshard_timeout)
 
-        1. Start migration for all user keyspaces.
-        2. Rolling restart — for each node: run migrate-to-tablets upgrade, drain/stop/start.
-        3. Finalize migration for all user keyspaces.
-        4. Verify migrated keyspaces use tablets via system.tablets.
-        5. Wait for pow2 tablet layout convergence to complete.
-        6. Wait for all tablet topology operations to quiesce.
+    def _start_migration(self, keyspaces: list[str]) -> None:
+        """Start tablet migration for all given keyspaces and verify all nodes use vnodes.
+
+        Runs 'migrate-to-tablets start <ks>' for each keyspace from the coordinator
+        (data_nodes[0]) and asserts that every node reports USES_VNODES immediately
+        after, confirming the migration is in the preparation phase.
+
+        Args:
+            keyspaces: User keyspaces to migrate.
         """
-        coordinator_node = self.db_cluster.data_nodes[0]
-        keyspaces = self.db_cluster.get_test_keyspaces()
         if not keyspaces:
             raise AssertionError(
                 "No user keyspaces found to migrate. Ensure prepare_write_cmd populates at least one keyspace."
             )
-        self.log.info("User keyspaces to migrate to tablets: %s", keyspaces)
-
+        coordinator_node = self.db_cluster.data_nodes[0]
         InfoEvent(message=f"Starting tablet migration for keyspaces: {keyspaces}").publish()
         for ks in keyspaces:
             coordinator_node.run_nodetool(f"migrate-to-tablets start {ks}")
             migration_status = get_nodetool_migrate_to_tablets_status(coordinator_node, ks)
             for node in self.db_cluster.data_nodes:
                 assert migration_status[node.host_id] == NodeMigrationStatus.USES_VNODES, (
-                    f"[ks={ks}] Expected {NodeMigrationStatus.USES_VNODES!r} for {node.host_id}, got {migration_status[node.host_id]!r}"
+                    f"[ks={ks}] Expected {NodeMigrationStatus.USES_VNODES!r} for {node.host_id}, "
+                    f"got {migration_status[node.host_id]!r}"
                 )
 
-        InfoEvent(message="Rolling restart with migrate-to-tablets upgrade").publish()
-        for node in self.db_cluster.data_nodes:
-            wait_for(
-                func=lambda n=node: not n.running_nemesis,
-                step=30,
-                timeout=600,
-                text=f"Waiting for nemesis on {node.name} to finish before upgrade",
-            )
-            with self.nemesis_allocator.nodes_running_nemesis(node, "vnode_to_tablet_migration"):
-                self.log.info("Preparing node %s (ip=%s) for tablet migration", node.name, node.ip_address)
-                node.run_nodetool("migrate-to-tablets upgrade")
-                self.log.info("Verify that the node status changed from vnodes to migrating to tablets")
-                for ks in keyspaces:
-                    migration_status = get_nodetool_migrate_to_tablets_status(node, ks)
-                    assert migration_status[node.host_id] == NodeMigrationStatus.MIGRATING, (
-                        f"[ks={ks}] Expected {NodeMigrationStatus.MIGRATING!r} for {node.host_id}, got {migration_status[node.host_id]!r}"
-                    )
-                self.restart_node_after_migration(node)
-                self.log.info("Node %s is back up and normal after restart", node.name)
+    def _upgrade_node_to_tablets(self, node, keyspaces: list[str]) -> None:
+        """Upgrade a single node from vnodes to tablets storage.
 
-            self.log.info("Waiting for node %s status to change to 'uses tablets'", node.name)
+        Waits for any running nemesis to complete, marks the node for upgrade,
+        verifies it enters the 'migrating to tablets' state, drains and restarts
+        for resharding, then waits for the node to report 'uses tablets' for all
+        keyspaces.  Sleeps 300 s afterward to let the cluster stabilize.
+
+        Args:
+            node: The DB node to upgrade.
+            keyspaces: User keyspaces being migrated.
+        """
+        wait_for(
+            func=lambda n=node: not n.running_nemesis,
+            step=30,
+            timeout=600,
+            text=f"Waiting for nemesis on {node.name} to finish before upgrade",
+        )
+        with self.nemesis_allocator.nodes_running_nemesis(node, "vnode_to_tablet_migration"):
+            self.log.info("Upgrading node %s (ip=%s) to tablets", node.name, node.ip_address)
+            node.run_nodetool("migrate-to-tablets upgrade")
+            self.log.info("Verifying node %s status changed to 'migrating to tablets'", node.name)
             for ks in keyspaces:
-                wait_for(
-                    func=lambda n=node, k=ks: get_nodetool_migrate_to_tablets_status(n, k)[n.host_id]
-                    == NodeMigrationStatus.USES_TABLETS,
-                    step=60,
-                    timeout=3600,
-                    text=f"Waiting for node {node.name} to reach {NodeMigrationStatus.USES_TABLETS!r} for keyspace {ks}",
-                    throw_exc=True,
+                migration_status = get_nodetool_migrate_to_tablets_status(node, ks)
+                assert migration_status[node.host_id] == NodeMigrationStatus.MIGRATING, (
+                    f"[ks={ks}] Expected {NodeMigrationStatus.MIGRATING!r} for {node.host_id}, "
+                    f"got {migration_status[node.host_id]!r}"
                 )
+            self.restart_node_after_migration(node)
+            self.log.info("Node %s is back up and normal after restart", node.name)
 
-            self.log.info("Waiting 300 seconds for cluster to stabilize before migrating next node")
-            time.sleep(300)
+        self.log.info("Waiting for node %s status to reach 'uses tablets' for all keyspaces", node.name)
+        for ks in keyspaces:
+            wait_for(
+                func=lambda n=node, k=ks: get_nodetool_migrate_to_tablets_status(n, k)[n.host_id]
+                == NodeMigrationStatus.USES_TABLETS,
+                step=60,
+                timeout=3600,
+                text=f"Waiting for {node.name} to reach {NodeMigrationStatus.USES_TABLETS!r} for ks={ks}",
+                throw_exc=True,
+            )
+        self.log.info("Waiting 10 minutes for cluster to stabilize after upgrading node %s", node.name)
+        time.sleep(600)
 
+    def _rollback_node_to_vnodes(self, node, keyspaces: list[str]) -> None:
+        """Roll back a single node from tablets back to vnodes storage.
+
+        Sends the downgrade command.  If any keyspace puts the node in
+        'migrating to vnodes' state, drains and restarts to complete the reverse
+        resharding (the same log patterns fire as for the forward direction).
+        Verifies the node reports 'uses vnodes' for all keyspaces and passes a
+        health check before returning.
+
+        Args:
+            node: The DB node to roll back.
+            keyspaces: User keyspaces being migrated.
+        """
+        self.log.info("Rolling back node %s (ip=%s) to vnodes", node.name, node.ip_address)
+        node.run_nodetool("migrate-to-tablets downgrade")
+
+        # A node fully on tablets enters 'migrating to vnodes' and needs a restart.
+        # A node mid-upgrade may skip directly to 'uses vnodes' (no restart needed).
+        needs_restart = any(
+            get_nodetool_migrate_to_tablets_status(node, ks).get(node.host_id)
+            == NodeMigrationStatus.MIGRATING_TO_VNODES
+            for ks in keyspaces
+        )
+        if needs_restart:
+            self.log.info("Node %s is 'migrating to vnodes' — restarting for reverse resharding", node.name)
+            self.restart_node_after_migration(node)
+
+        self.log.info("Waiting for node %s status to reach 'uses vnodes' for all keyspaces", node.name)
+        for ks in keyspaces:
+            wait_for(
+                func=lambda n=node, k=ks: get_nodetool_migrate_to_tablets_status(n, k)[n.host_id]
+                == NodeMigrationStatus.USES_VNODES,
+                step=60,
+                timeout=3600,
+                text=f"Waiting for {node.name} to reach {NodeMigrationStatus.USES_VNODES!r} for ks={ks}",
+                throw_exc=True,
+            )
+        node.check_node_health()
+        self.log.info("Node %s successfully rolled back to vnodes", node.name)
+
+    def _finalize_migration(self, keyspaces: list[str]) -> None:
+        """Finalize a forward tablet migration for all given keyspaces and verify cluster state.
+
+        Sends 'migrate-to-tablets finalize' for each keyspace, waits for all tablet
+        topology operations to quiesce on every node, asserts each keyspace appears in
+        system.tablets, then waits for pow2 tablet layout convergence to complete.
+
+        Use this only when all nodes have been upgraded to tablets.  For finalizing
+        a rollback (cluster returning to vnodes), use _finalize_rollback() instead.
+
+        Args:
+            keyspaces: User keyspaces that were migrated.
+        """
+        coordinator_node = self.db_cluster.data_nodes[0]
         InfoEvent(message="Finalizing tablet migration").publish()
         for ks in keyspaces:
             coordinator_node.run_nodetool(f"migrate-to-tablets finalize {ks}")
@@ -218,13 +308,163 @@ class VnodeToTabletMigrationTest(LongevityTest):
         wait_for(
             func=lambda: all([is_keyspace_pow2_converged(coordinator_node, ks) for ks in keyspaces]),
             step=60,
-            timeout=7200,
+            timeout=21600,
             text="Waiting for pow2 tablet layout convergence on all keyspaces",
             throw_exc=True,
         )
 
         InfoEvent(message="Waiting for tablet migration to fully complete").publish()
-        wait_tablets_balanced(self.db_cluster.data_nodes[0], timeout=7200)
+        wait_tablets_balanced(self.db_cluster.data_nodes[0], timeout=21600)
+
+    def _finalize_rollback(self, keyspaces: list[str]) -> None:
+        """Finalize a rollback for all given keyspaces, returning the cluster to vnodes.
+
+        Required by the migration protocol after rolling back nodes: the finalize
+        command clears migration state so the cluster is fully back on vnodes.
+
+        Unlike _finalize_migration(), this method does NOT check system.tablets
+        because the cluster is expected to be on vnodes after this call.
+
+        Args:
+            keyspaces: User keyspaces whose migration is being rolled back.
+        """
+        coordinator_node = self.db_cluster.data_nodes[0]
+        InfoEvent(message="Finalizing rollback to clear migration state").publish()
+        for ks in keyspaces:
+            coordinator_node.run_nodetool(f"migrate-to-tablets finalize {ks}")
+
+        InfoEvent(message="Waiting for rollback to fully complete").publish()
+        for ks in keyspaces:
+            wait_for(
+                func=lambda k=ks: all(
+                    get_nodetool_migrate_to_tablets_status(coordinator_node, k)[n.host_id]
+                    == NodeMigrationStatus.USES_VNODES
+                    for n in self.db_cluster.data_nodes
+                ),
+                step=60,
+                timeout=3600,
+                text=f"Waiting for all nodes to reach {NodeMigrationStatus.USES_VNODES!r} for ks={ks}",
+                throw_exc=True,
+            )
+
+        InfoEvent(message="Rollback finalized — cluster is back on vnodes").publish()
+
+    def _terminate_and_replace_node(self, node) -> BaseNode:
+        """Terminate a data node and replace it following the Replace Dead Node procedure.
+
+        Follows the same logic as NemesisRunner._terminate_and_replace_node:
+        1. Terminate the given node (destroy VM).
+        2. Wait 5 minutes for the cluster to detect the dead node.
+        3. Assert the node is DN in nodetool status.
+        4. Provision a new node with replacement_host_id set to the dead node's host_id
+           (SCT writes replace_node_first_boot into scylla.yaml before starting Scylla).
+        5. Wait for bootstrap to complete and node to be UP/Normal.
+        6. Wait for the old node to be removed from gossip.
+
+        Args:
+            node: The DB node to terminate and replace.
+        """
+        old_node_ip = node.ip_address
+        host_id = node.host_id
+
+        def get_node_state(node_ip: str) -> str | None:
+            """Gets node state by IP address from nodetool status response."""
+            status = self.db_cluster.get_nodetool_status()
+            states = [val["state"] for dc in status.values() for ip, val in dc.items() if ip == node_ip]
+            return states[0] if states else None
+
+        InfoEvent(message=f"StartEvent - Terminate node {node.name} and wait 5 minutes").publish()
+        with suppress_expected_unavailability_errors():
+            self.db_cluster.terminate_node(node)
+            time.sleep(300)  # Let the cluster live with a missing node for a while
+            assert get_node_state(old_node_ip) == "DN", "Terminated node state should be DN"
+        InfoEvent(message="FinishEvent - target_node was terminated, adding replacement node").publish()
+
+        new_node = self.db_cluster.add_nodes(count=1, dc_idx=node.dc_idx, enable_auto_bootstrap=True, rack=node.rack)[0]
+        self.monitors.reconfigure_scylla_monitoring()
+        new_node.replacement_host_id = host_id
+        try:
+            self.db_cluster.wait_for_init(node_list=[new_node], timeout=3600, check_node_health=False)
+        except (NodeSetupFailed, NodeSetupTimeout):
+            self.log.warning("Setup of replacement node '%s' failed, terminating it", new_node.name)
+            self.db_cluster.terminate_node(new_node)
+            raise
+        self.db_cluster.clean_replacement_node_options(new_node)
+        self.db_cluster.set_seeds()
+        self.db_cluster.update_seed_provider()
+        self.db_cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
+        new_node.wait_node_fully_start()
+        InfoEvent(message=f"FinishEvent - replacement node {new_node.name} is up and normal").publish()
+
+        # Wait until cluster removes the old node from gossip.
+        # Default ring_delay_ms is 300000 ms; retrying 20x with 20s sleep covers this window.
+        @retrying(n=20, sleep_time=20, allowed_exceptions=(AssertionError,))
+        def wait_for_old_node_to_be_removed():
+            state = get_node_state(old_node_ip)
+            if old_node_ip == new_node.ip_address:
+                assert state == "UN", f"New node with same IP as removed one should be UN but was: {state}"
+            else:
+                assert state is None, f"Old node should have been removed from status but it wasn't. State was: {state}"
+
+        wait_for_old_node_to_be_removed()
+        return new_node
+
+    def _terminate_node_during_resharding(self, node, keyspaces: list[str]) -> BaseNode:
+        """Upgrade a node to tablets, wait for resharding to start, then terminate and replace it.
+
+        This simulates a node failure during the resharding phase of the migration.
+        The node is upgraded and restarted, and once resharding begins (detected via
+        the scylla log) it is given 30 seconds to make progress before being terminated
+        and replaced using the Replace Dead Node procedure.
+
+        Args:
+            node: The DB node to upgrade, terminate mid-resharding, and replace.
+            keyspaces: User keyspaces being migrated.
+        """
+        wait_for(
+            func=lambda n=node: not n.running_nemesis,
+            step=30,
+            timeout=600,
+            text=f"Waiting for nemesis on {node.name} to finish before mid-resharding termination",
+        )
+        with self.nemesis_allocator.nodes_running_nemesis(node, "vnode_to_tablet_migration"):
+            self.log.info("Starting upgrade on %s before mid-resharding termination", node.name)
+            node.run_nodetool("migrate-to-tablets upgrade")
+            for ks in keyspaces:
+                migration_status = get_nodetool_migrate_to_tablets_status(node, ks)
+                assert migration_status[node.host_id] == NodeMigrationStatus.MIGRATING, (
+                    f"[ks={ks}] Expected {NodeMigrationStatus.MIGRATING!r} for {node.host_id}, "
+                    f"got {migration_status[node.host_id]!r}"
+                )
+
+            node.run_nodetool("drain")
+            node.stop_scylla(verify_down=True)
+
+            resharding_start_watcher = node.follow_system_log(patterns=[DB_LOG_PATTERN_RESHARDING_START])
+            node.start_scylla(verify_up=False, timeout=7200)
+
+            wait_for(
+                func=lambda: list(resharding_start_watcher),
+                step=5,
+                timeout=600,
+                text=f"Waiting for resharding to start on {node.name}",
+                throw_exc=True,
+            )
+            self.log.info("Resharding started on %s — waiting 30s before terminating", node.name)
+            time.sleep(30)
+
+            InfoEvent(message=f"Terminating node {node.name} mid-resharding").publish()
+            return self._terminate_and_replace_node(node)
+
+    def _common_test_setup(self) -> None:
+        """Shared setup for all vnode-to-tablet migration test methods"""
+        InfoEvent(message="Filling database with data before migration").publish()
+        self.run_pre_create_keyspace()
+        self.run_pre_create_schema()
+        self.run_prepare_write_cmd()
+
+        if not self.params.get("prepare_write_cmd") or not self.params.get("nemesis_during_prepare"):
+            self.db_cluster.start_nemesis()
 
     @latency_calculator_decorator(
         legend="Pre-migration baseline (vnodes)",
@@ -250,32 +490,47 @@ class VnodeToTabletMigrationTest(LongevityTest):
         cycle_name="during_migration",
         workload_type="mixed",
     )
-    def run_migration(self):
-        """Run stress concurrently with migration and measure the performance impact.
+    def run_migration(self, migration_steps: Callable[[], None]):
+        """Run stress concurrently with a migration phase and measure the performance impact.
 
-        Stress starts first so the cluster is under load throughout the migration.
-        The latency_calculator_decorator captures the full migration window in HDR.
+        Starts the stress workload first so the cluster is under load throughout the
+        entire migration window.  The latency_calculator_decorator captures the full
+        window in HDR.
+
+        The concurrent mixed CL=QUORUM stress also acts as a continuous
+        data-integrity check: any corruption introduced by an upgrade/rollback
+        cycle surfaces as a stress error caught by verify_stress_thread().
+
+        Args:
+            migration_steps: Zero-argument callable containing the ordered sequence of
+                             migration building-block calls (_start_migration,
+                             _upgrade_node_to_tablets, _rollback_node_to_vnodes,
+                             _finalize_migration, _finalize_rollback, etc.).
         """
         stress_queue = []
         self.assemble_and_run_all_stress_cmd(
             stress_queue, self.params.get("stress_cmd"), self.params.get("keyspace_num")
         )
-        self._perform_migration_steps()
+        migration_steps()
         self.kill_stress_thread()
         for stress in stress_queue:
             self.verify_stress_thread(stress)
         return stress_queue
 
     @latency_calculator_decorator(
-        legend="Post-migration (tablets)",
+        legend="Post-phase benchmark",
         cycle_name="post_migration",
         workload_type="mixed",
     )
     def run_post_migration_benchmark(self):
-        """Run stress on tablets after migration to compare with the pre-migration baseline.
+        """Run stress after the migration phase to compare with the pre-migration baseline.
 
-        The latency_calculator_decorator collects HDR histogram data for this time window
-        and reports P90/P99 latencies and throughput to Argus.
+        For tests that end on tablets this measures tablet performance.
+        For tests that end on vnodes (full rollback) this verifies performance
+        has returned to the vnodes baseline.
+
+        The latency_calculator_decorator collects HDR histogram data for this time
+        window and reports P90/P99 latencies and throughput to Argus.
         """
         stress_queue = []
         round_robin = self.params.get("round_robin")
@@ -285,31 +540,154 @@ class VnodeToTabletMigrationTest(LongevityTest):
             self.verify_stress_thread(stress)
         return stress_queue
 
-    def test_vnode_to_tablet_migration(self):
-        """
-        Test vnode to tablet migration procedure with performance measurement.
-
-        1. Fill the database with data via prepare_write_cmd.
-        2. Run pre-migration benchmark: stress on vnodes to establish a baseline.
-        3. Run migration with concurrent stress:
-               nodetool migrate-to-tablets start <ks>  (once per keyspace)
-               rolling restart with migrate-to-tablets upgrade per node
-               nodetool migrate-to-tablets finalize <ks>  (once per keyspace)
-               wait for all tablet topology operations to quiesce
-               verify migrated keyspaces use tablets via system.tablets
-        4. Run post-migration benchmark: stress on tablets to compare with baseline.
-
-        Each phase (pre, during, post) is wrapped with latency_calculator_decorator
-        which records HDR histograms and publishes P90/P99 latency and throughput
-        tables to Argus for before/during/after comparison.
-        """
+    def _common_test_setup(self) -> None:
+        """Shared setup for all vnode-to-tablet migration test methods"""
         InfoEvent(message="Filling database with data before migration").publish()
         self.run_pre_create_keyspace()
         self.run_pre_create_schema()
         self.run_prepare_write_cmd()
 
+    def test_vnode_to_tablet_migration(self):
+        """Test migration with a mid-flight single-node rollback before finalization.
+
+        1. Fill the database via prepare_write_cmd.
+        2. Pre-migration benchmark: stress on vnodes to establish a baseline.
+        3. Migration phase (concurrent mixed CL=QUORUM stress throughout):
+               a. Start migration for all user keyspaces.
+               b. Upgrade all nodes to tablets one at a time.
+               c. Roll back node[0] to vnodes.
+               d. Re-upgrade node[0] to tablets.
+               e. Finalize migration (all nodes on tablets).
+               f. Wait for pow2 tablet layout convergence.
+        4. Post-phase benchmark: stress on tablets to compare with the baseline.
+
+        Each phase (pre, during, post) is wrapped with latency_calculator_decorator
+        which records HDR histograms and publishes P90/P99 latency and throughput
+        tables to Argus for before/during/after comparison.
+        """
+        self._common_test_setup()
+        keyspaces = self.db_cluster.get_test_keyspaces()
+        data_nodes = self.db_cluster.data_nodes
+
+        def migration_steps():
+            self._start_migration(keyspaces)
+            for node in data_nodes:
+                self._upgrade_node_to_tablets(node, keyspaces)
+
+            InfoEvent(message="Rolling back node[0] before finalize, then re-upgrading").publish()
+            self._rollback_node_to_vnodes(data_nodes[0], keyspaces)
+            self._upgrade_node_to_tablets(data_nodes[0], keyspaces)
+            self._finalize_migration(keyspaces)
+
         self.run_pre_migration_benchmark()
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
         self.db_cluster.start_nemesis()
-        self.run_migration()
+        self.run_migration(migration_steps)
+        self.run_post_migration_benchmark()
+
+    def test_vnode_to_tablet_migration_full_rollback(self):
+        """Test migration reversibility by upgrading all nodes then rolling them all back.
+
+        1. Fill the database via prepare_write_cmd.
+        2. Pre-migration benchmark: stress on vnodes to establish a baseline.
+        3. Migration phase (concurrent mixed CL=QUORUM stress throughout):
+               a. Start migration for all user keyspaces.
+               b. Upgrade all nodes to tablets one at a time.
+               c. Roll back all nodes to vnodes (last upgraded first).
+               d. Finalize rollback — clears migration state, cluster returns to vnodes.
+        4. Post-phase benchmark: stress on vnodes, verifying performance returned to baseline.
+
+        Each phase (pre, during, post) is wrapped with latency_calculator_decorator
+        which records HDR histograms and publishes P90/P99 latency and throughput
+        tables to Argus for before/during/after comparison.
+        """
+        self._common_test_setup()
+        keyspaces = self.db_cluster.get_test_keyspaces()
+        data_nodes = self.db_cluster.data_nodes
+
+        def migration_steps():
+            self._start_migration(keyspaces)
+            for node in data_nodes:
+                self._upgrade_node_to_tablets(node, keyspaces)
+
+            InfoEvent(message="All nodes upgraded — rolling back entire cluster to vnodes").publish()
+            for node in reversed(data_nodes):
+                self._rollback_node_to_vnodes(node, keyspaces)
+            self._finalize_rollback(keyspaces)
+
+        self.run_pre_migration_benchmark()
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
+        self.db_cluster.start_nemesis()
+        self.run_migration(migration_steps)
+        self.run_post_migration_benchmark()
+
+    def test_vnode_to_tablet_migration_with_node_replace(self):
+        """This test is in WIP blocked by https://github.com/scylladb/scylladb/pull/30727"""
+        """Test node replacement during all three phases of vnode-to-tablet migration.
+
+        Replaces a node at each stage to verify the migration procedure is resilient
+        to node failures throughout the process (SCYLLADB-2864):
+
+        1. Fill the database via prepare_write_cmd.
+        2. Pre-migration benchmark: stress on vnodes to establish a baseline.
+        3. Migration phase (concurrent mixed CL=QUORUM stress throughout):
+               a. Start migration for all user keyspaces.
+               b. Upgrade nodes[0..2] to tablets.
+               c. Phase 1 — replace a node BEFORE it is migrated (still on vnodes):
+                  terminate and replace nodes[3].
+               d. Upgrade nodes[4] to tablets.
+               e. Phase 2 — replace a node DURING resharding: start upgrade on
+                  nodes[5], wait for resharding to begin, wait 30 s, then
+                  terminate and replace mid-resharding.
+               f. Upgrade all replacement nodes that joined on vnodes.
+               g. Phase 3 — replace a node AFTER it is migrated (uses tablets,
+                  before finalize): terminate and replace nodes[0] (original, on-tablets).
+               h. Upgrade the Phase 3 replacement if needed.
+               i. Finalize migration.
+        4. Post-phase benchmark: stress on tablets after successful migration.
+
+        Each phase (pre, during, post) is wrapped with latency_calculator_decorator
+        which records HDR histograms and publishes P90/P99 latency and throughput
+        tables to Argus for before/during/after comparison.
+        """
+        self._common_test_setup()
+        keyspaces = self.db_cluster.get_test_keyspaces()
+        data_nodes = self.db_cluster.data_nodes
+
+        def migration_steps():
+            self._start_migration(keyspaces)
+
+            # Upgrade first 3 nodes normally
+            for node in data_nodes[:3]:
+                self._upgrade_node_to_tablets(node, keyspaces)
+
+            # Phase 1: Replace a node that has not been migrated yet (still on vnodes)
+            InfoEvent(message="Phase 1 - Replacing a node before migration (vnodes)").publish()
+            replacement_done_1 = self._terminate_and_replace_node(data_nodes[3])
+
+            # Upgrade nodes[4] normally
+            self._upgrade_node_to_tablets(data_nodes[4], keyspaces)
+
+            # Phase 2: Start upgrade on nodes[5], terminate mid-resharding, replace
+            InfoEvent(message="Phase 2 - Replacing a node during resharding").publish()
+            replacement_done_2 = self._terminate_node_during_resharding(data_nodes[5], keyspaces)
+
+            # Upgrade Phase 1 and Phase 2 replacements (both joined on vnodes)
+            self._upgrade_node_to_tablets(replacement_done_1, keyspaces)
+            self._upgrade_node_to_tablets(replacement_done_2, keyspaces)
+
+            # Phase 3: Replace a node that already uses tablets (before finalize).
+            # Use data_nodes[0] — original node, already upgraded to tablets, not replaced in Phase 1 or 2.
+            InfoEvent(message="Phase 3 - Replacing a node after migration (tablets, pre-finalize)").publish()
+            replacement_done_3 = self._terminate_and_replace_node(data_nodes[0])
+
+            # Upgrade the Phase 3 replacement
+            self._upgrade_node_to_tablets(replacement_done_3, keyspaces)
+
+            self._finalize_migration(keyspaces)
+
+        self.run_pre_migration_benchmark()
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
+        self.db_cluster.start_nemesis()
+        self.run_migration(migration_steps)
         self.run_post_migration_benchmark()
