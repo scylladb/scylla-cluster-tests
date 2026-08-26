@@ -3682,8 +3682,8 @@ instances:
   family: z3-highmem-highlssd
   vcpus: 16
   memory_gb: 128.0
-  local_disk_gb: 12000.0
-  local_disk_count: 4
+  local_disk_gb: 6000.0
+  local_disk_count: 2
   arch: x86_64
   price_per_hour:
     europe-west6: 3.011599225
@@ -3731,8 +3731,8 @@ instances:
   family: z3-highmem-highlssd
   vcpus: 192
   memory_gb: 1536.0
-  local_disk_gb: 144000.0
-  local_disk_count: 24
+  local_disk_gb: 72000.0
+  local_disk_count: 12
   arch: x86_64
   price_per_hour:
     europe-west6: 36.139190695
@@ -3780,8 +3780,8 @@ instances:
   family: z3-highmem-highlssd
   vcpus: 22
   memory_gb: 176.0
-  local_disk_gb: 18000.0
-  local_disk_count: 6
+  local_disk_gb: 9000.0
+  local_disk_count: 3
   arch: x86_64
   price_per_hour:
     europe-west6: 4.247798249
@@ -3829,8 +3829,8 @@ instances:
   family: z3-highmem-highlssd
   vcpus: 32
   memory_gb: 256.0
-  local_disk_gb: 24000.0
-  local_disk_count: 8
+  local_disk_gb: 12000.0
+  local_disk_count: 4
   arch: x86_64
   price_per_hour:
     europe-west6: 6.023198449
@@ -3878,8 +3878,8 @@ instances:
   family: z3-highmem-highlssd
   vcpus: 44
   memory_gb: 352.0
-  local_disk_gb: 36000.0
-  local_disk_count: 12
+  local_disk_gb: 18000.0
+  local_disk_count: 6
   arch: x86_64
   price_per_hour:
     europe-west6: 8.495596498
@@ -3927,8 +3927,8 @@ instances:
   family: z3-highmem-highlssd
   vcpus: 8
   memory_gb: 64.0
-  local_disk_gb: 6000.0
-  local_disk_count: 2
+  local_disk_gb: 3000.0
+  local_disk_count: 1
   arch: x86_64
   price_per_hour:
     europe-west6: 1.505799612
@@ -3976,8 +3976,8 @@ instances:
   family: z3-highmem-highlssd
   vcpus: 88
   memory_gb: 704.0
-  local_disk_gb: 72000.0
-  local_disk_count: 24
+  local_disk_gb: 36000.0
+  local_disk_count: 12
   arch: x86_64
   price_per_hour:
     europe-west6: 16.991192995
@@ -4025,8 +4025,8 @@ instances:
   family: z3-highmem-standardlssd
   vcpus: 14
   memory_gb: 112.0
-  local_disk_gb: 6000.0
-  local_disk_count: 2
+  local_disk_gb: 3000.0
+  local_disk_count: 1
   arch: x86_64
   price_per_hour:
     europe-west9: 2.052392839
@@ -4074,8 +4074,8 @@ instances:
   family: z3-highmem-standardlssd
   vcpus: 176
   memory_gb: 1408.0
-  local_disk_gb: 48000.0
-  local_disk_count: 16
+  local_disk_gb: 36000.0
+  local_disk_count: 12
   arch: x86_64
   price_per_hour:
     europe-west9: 25.58358434
@@ -4123,8 +4123,8 @@ instances:
   family: z3-highmem-standardlssd
   vcpus: 22
   memory_gb: 176.0
-  local_disk_gb: 12000.0
-  local_disk_count: 4
+  local_disk_gb: 6000.0
+  local_disk_count: 2
   arch: x86_64
   price_per_hour:
     europe-west9: 3.388632974
@@ -4172,8 +4172,8 @@ instances:
   family: z3-highmem-standardlssd
   vcpus: 44
   memory_gb: 352.0
-  local_disk_gb: 24000.0
-  local_disk_count: 8
+  local_disk_gb: 9000.0
+  local_disk_count: 3
   arch: x86_64
   price_per_hour:
     europe-west9: 6.395896085
@@ -4221,8 +4221,8 @@ instances:
   family: z3-highmem-standardlssd
   vcpus: 88
   memory_gb: 704.0
-  local_disk_gb: 48000.0
-  local_disk_count: 16
+  local_disk_gb: 18000.0
+  local_disk_count: 6
   arch: x86_64
   price_per_hour:
     europe-west9: 12.79179217
