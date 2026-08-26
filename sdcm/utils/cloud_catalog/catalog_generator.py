@@ -223,18 +223,18 @@ _Z3_METAL_DISK_SIZE_GIB = 6000.0
 # z3 local SSD partition counts per instance (from GCE docs).
 # Used as fallback when the API doesn't return bundled_local_ssds.
 _Z3_PARTITION_COUNTS: dict[str, int] = {
-    "z3-highmem-8-highlssd": 2,
-    "z3-highmem-16-highlssd": 4,
-    "z3-highmem-22-highlssd": 6,
-    "z3-highmem-32-highlssd": 8,
-    "z3-highmem-44-highlssd": 12,
-    "z3-highmem-88-highlssd": 24,
-    "z3-highmem-192-highlssd-metal": 24,
-    "z3-highmem-14-standardlssd": 2,
-    "z3-highmem-22-standardlssd": 4,
-    "z3-highmem-44-standardlssd": 8,
-    "z3-highmem-88-standardlssd": 16,
-    "z3-highmem-176-standardlssd": 16,
+    "z3-highmem-8-highlssd": 1,
+    "z3-highmem-16-highlssd": 2,
+    "z3-highmem-22-highlssd": 3,
+    "z3-highmem-32-highlssd": 4,
+    "z3-highmem-44-highlssd": 6,
+    "z3-highmem-88-highlssd": 12,
+    "z3-highmem-192-highlssd-metal": 12,
+    "z3-highmem-14-standardlssd": 1,
+    "z3-highmem-22-standardlssd": 2,
+    "z3-highmem-44-standardlssd": 3,
+    "z3-highmem-88-standardlssd": 6,
+    "z3-highmem-176-standardlssd": 12,
 }
 
 # GCE resource-based pricing: per-vCPU/hr and per-GB-RAM/hr rates (USD, us-east1).
