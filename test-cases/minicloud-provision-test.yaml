@@ -35,7 +35,7 @@ test_duration: 60
 
 # Lightweight workload to verify the cluster is functional after provisioning.
 # Not a stress test — just confirms nodes accept writes and reads end-to-end.
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5",
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5",
              ]
 
 # Pre-test data load: write small dataset then verify reads work.
