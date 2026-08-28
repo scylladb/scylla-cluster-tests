@@ -133,6 +133,7 @@ n_test_oracle_db_nodes: 1
 oracle_scylla_version: '2026.1'
 append_scylla_args_oracle: '--enable-cache false'
 instance_type_db_oracle: ''
+aws_instance_type_db_alternatives: []
 run_gemini_in_rolling_upgrade: false
 
 # cloud-agnostic instance sizing constraints (resolved per-cloud by _resolve_instance_sizes)

@@ -21,6 +21,7 @@ from sdcm import cluster
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, attach_failed_region
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
+from sdcm.provision.aws.utils import split_instance_types
 from sdcm.provision.common.provision_plan import ProvisionPlan
 from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder
 from sdcm.provision.common.provisioner import TagsType
@@ -67,6 +68,9 @@ class ClusterBase(BaseModel):
     _NODE_TYPE = None
     _NODE_PREFIX = None
     _INSTANCE_TYPE_PARAM_NAME = None
+    # Optional fleet-only param holding a comma-separated list of interchangeable instance types
+    # offered to EC2 Fleet in addition to _INSTANCE_TYPE_PARAM_NAME. None means "no alternatives".
+    _INSTANCE_TYPE_ALTERNATIVES_PARAM_NAME = None
     _NODE_NUM_PARAM_NAME = None
     _INSTANCE_PARAMS_BUILDER = None
     _USER_PARAM = None
@@ -199,6 +203,23 @@ class ClusterBase(BaseModel):
         return self.params.get(self._INSTANCE_TYPE_PARAM_NAME)
 
     @property
+    def _instance_types(self) -> List[str]:
+        """Instance types offered to EC2 Fleet, primary first.
+
+        The primary ``instance_type_*`` is always first. Clusters that define a
+        fleet-only alternatives param (currently only DB, via ``aws_instance_type_db_alternatives``)
+        append their interchangeable alternatives here, de-duplicated. Only the EC2 Fleet
+        provisioning path consumes entries beyond the first; every other code path uses
+        ``_instance_type``.
+        """
+        types = [self._instance_type]
+        if self._INSTANCE_TYPE_ALTERNATIVES_PARAM_NAME:
+            for alt in split_instance_types(self.params.get(self._INSTANCE_TYPE_ALTERNATIVES_PARAM_NAME)):
+                if alt not in types:
+                    types.append(alt)
+        return types
+
+    @property
     def _test_duration(self) -> int:
         return self.params.get("test_duration")
 
@@ -212,7 +233,13 @@ class ClusterBase(BaseModel):
             provisioner=AWSInstanceProvisioner(),
         ).provision_plan
 
-    def _instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
+    def _instance_parameters(self, region_id: int, availability_zone: int = 0) -> List[AWSInstanceParams]:
+        """Build one instance parameter set per configured instance type.
+
+        The builder resolves `InstanceType` to the preferred type, so the remaining configured types
+        are applied as copies. The list is ordered by preference and only the EC2 Fleet path uses
+        more than the first entry.
+        """
         params_builder = self._INSTANCE_PARAMS_BUILDER(
             params=self.params,
             region_id=region_id,
@@ -220,9 +247,15 @@ class ClusterBase(BaseModel):
             availability_zone=availability_zone,
             placement_group=self.placement_group_name,
         )
-        return AWSInstanceParams(
+        base_parameters = AWSInstanceParams(
             **params_builder.model_dump(exclude_none=True, exclude_unset=True, exclude_defaults=True)
         )
+        return [
+            base_parameters
+            if instance_type == base_parameters.InstanceType
+            else base_parameters.model_copy(update={"InstanceType": instance_type})
+            for instance_type in self._instance_types
+        ]
 
     def _provision_az_instances(self, region_id, az_id, instance_parameters, node_tags, node_names, node_count):
         """Provision one (region, az) batch and tag capacity errors with region/AZ for fallback."""
@@ -263,6 +296,7 @@ class DBCluster(ClusterBase):
     _NODE_TYPE = "scylla-db"
     _NODE_PREFIX = "db"
     _INSTANCE_TYPE_PARAM_NAME = "instance_type_db"
+    _INSTANCE_TYPE_ALTERNATIVES_PARAM_NAME = "aws_instance_type_db_alternatives"
     _NODE_NUM_PARAM_NAME = "n_db_nodes"
     _ZEROTOKEN_NODE_NUM_PARAM_NAME = "n_db_zero_token_nodes"
     _ZEROTOKEN_NODE_INSTANCE_TYPE_PARAM_NAME = "zero_token_instance_type_db"
@@ -293,7 +327,7 @@ class DBCluster(ClusterBase):
             install_agent=bool(agent_config.get("enabled") and agent_config.get("binary_url")),
         ).to_string()
 
-    def _zero_token_instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
+    def _zero_token_instance_parameters(self, region_id: int, availability_zone: int = 0) -> List[AWSInstanceParams]:
         params_builder = self._ZERO_TOKEN_INSTANCE_PARAMS_BUILDER(
             params=self.params,
             region_id=region_id,
@@ -301,9 +335,11 @@ class DBCluster(ClusterBase):
             availability_zone=availability_zone,
             placement_group=self.placement_group_name,
         )
-        return AWSInstanceParams(
+        base_parameters = AWSInstanceParams(
             **params_builder.model_dump(exclude_none=True, exclude_unset=True, exclude_defaults=True)
         )
+        # Zero-token nodes use the single zero_token_instance_type_db literal (no fleet alternatives).
+        return [base_parameters]
 
     def _az_nodes(self, region_id: int) -> Tuple[List[int], List[int]]:
         az_token_nodes = [0] * len(self._azs)

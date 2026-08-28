@@ -52,6 +52,7 @@ from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
+from sdcm.provision.aws.utils import split_instance_types
 from sdcm.utils.common import (
     ami_built_by_scylla,
     get_ami_tags,
@@ -1155,6 +1156,17 @@ class SCTConfiguration(BaseModel):
     )
     instance_type_db: String = SctField(
         description="AWS image type of the db node",
+    )
+    aws_instance_type_db_alternatives: StringOrList = SctField(
+        description=(
+            "List of additional, interchangeable AWS DB instance types "
+            "(e.g. ['i7ie.large', 'i4i.large', 'i3en.large']) offered ONLY to EC2 Fleet (spot) provisioning "
+            "as alternatives to instance_type_db, so a large spot request can be satisfied from more "
+            "than one capacity pool. instance_type_db remains the single primary type used by every "
+            "other code path (validation, AMI/arch lookup, AZ selection, non-fleet provisioning). "
+            "Only list types with CPU/memory/disk characteristics equivalent to instance_type_db - "
+            "SCT does not verify this. AWS-only."
+        ),
     )
     instance_type_db_oracle: String = SctField(
         description="AWS image type of the oracle node",
@@ -4479,10 +4491,13 @@ class SCTConfiguration(BaseModel):
     def _instance_type_validation(self):
         backend = self.get("cluster_backend")
 
-        # Validate main instance types (db, loader, monitor) are available in the target region
+        # Validate main instance types (db, loader, monitor) are available in the target region.
+        # aws_instance_type_db_alternatives is a list of EC2 Fleet-only alternatives,
+        # so every listed type must also be available in the target region.
         if backend == "aws":
             instance_type_params = [
                 "instance_type_db",
+                "aws_instance_type_db_alternatives",
                 "instance_type_loader",
                 "instance_type_monitor",
                 "instance_type_db_target",
@@ -4492,10 +4507,11 @@ class SCTConfiguration(BaseModel):
             for param_name in instance_type_params:
                 if instance_type := self.get(param_name):
                     for region in self.region_names:
-                        assert aws_check_instance_type_supported(instance_type, region), (
-                            f"Instance type '{instance_type}' (param: {param_name}) "
-                            f"is not supported in region '{region}'"
-                        )
+                        for single_instance_type in split_instance_types(instance_type):
+                            assert aws_check_instance_type_supported(single_instance_type, region), (
+                                f"Instance type '{single_instance_type}' (param: {param_name}) "
+                                f"is not supported in region '{region}'"
+                            )
 
         # Validate nemesis_grow_shrink_instance_type
         if instance_type := self.get("nemesis_grow_shrink_instance_type"):
