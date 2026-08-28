@@ -281,3 +281,73 @@ class TestHealthChecker:
         error_event = events[0]
         assert error_event.severity == Severity.ERROR
         assert "Test exception" in error_event.error
+
+
+# the initial (empty) schema version a bootstrapping node advertises before it catches up with group0 schema;
+# SYSTEM.PEERS may keep it until the next schema change (SCYLLADB-4037)
+EMPTY_SCHEMA_VERSION = "59adb24e-f3cd-3e02-97f0-5b395827453f"
+AGREED_SCHEMA_VERSION = "cbe15453-33f3-3387-aaf1-4120548f41e8"
+OTHER_SCHEMA_VERSION = "657aac4c-63fd-11f1-aca2-12efe961f2b9"
+
+
+def _peers_entry(schema_version: str) -> dict:
+    return {
+        "data_center": "datacenter1",
+        "host_id": UUID("b231fe54-8093-4d5c-9a35-b5e34dc81500"),
+        "rack": "rack1",
+        "release_version": "3.0.8",
+        "rpc_address": "127.0.0.2",
+        "schema_version": UUID(schema_version),
+    }
+
+
+def _normal_gossip(*schema_versions: str) -> dict:
+    """Gossip info for node1/node2/node3, all in NORMAL status."""
+    return {
+        node: {"schema": schema_version, "status": "NORMAL", "dc": "datacenter1"}
+        for node, schema_version in zip((node1, node2, node3), schema_versions)
+    }
+
+
+def test_check_schema_version_peers_lag_demoted_to_warning_when_gossip_agrees():
+    gossip_info = _normal_gossip(AGREED_SCHEMA_VERSION, AGREED_SCHEMA_VERSION, AGREED_SCHEMA_VERSION)
+    peers_info = {
+        node2: _peers_entry(AGREED_SCHEMA_VERSION),
+        node3: _peers_entry(EMPTY_SCHEMA_VERSION),
+    }
+
+    events = list(check_schema_version(gossip_info, peers_info, NODES_STATUS, node1))
+    assert events, "expected events for the lagging SYSTEM.PEERS row"
+    assert all(event.severity == Severity.WARNING for event in events), (
+        f"peers-vs-gossip lag must not raise ERROR when gossip agrees: {[str(event) for event in events]}"
+    )
+    assert any(EMPTY_SCHEMA_VERSION in event.message for event in events)
+
+
+def test_check_schema_version_peers_mismatch_stays_error_when_gossip_disagrees():
+    gossip_info = _normal_gossip(AGREED_SCHEMA_VERSION, OTHER_SCHEMA_VERSION, AGREED_SCHEMA_VERSION)
+    peers_info = {
+        node2: _peers_entry(AGREED_SCHEMA_VERSION),
+        node3: _peers_entry(AGREED_SCHEMA_VERSION),
+    }
+
+    events = list(check_schema_version(gossip_info, peers_info, NODES_STATUS, node1))
+    assert any(event.severity == Severity.ERROR and "Wrong Schema version" in event.error for event in events), (
+        "peers-vs-gossip mismatch must stay ERROR when gossip itself disagrees"
+    )
+
+
+def test_check_schema_agreement_in_gossip_and_peers_tolerates_peers_lag():
+    class PeersLagNode(Node):
+        @staticmethod
+        def get_peers_info():
+            return {
+                node2: _peers_entry(AGREED_SCHEMA_VERSION),
+                node3: _peers_entry(EMPTY_SCHEMA_VERSION),
+            }
+
+    with unittest.mock.patch("time.sleep") as mocked_sleep:
+        err = check_schema_agreement_in_gossip_and_peers(PeersLagNode("127.0.0.1", "node-0"), 3)
+
+    assert mocked_sleep.call_count == 0, "peers lag under gossip agreement must not consume retries"
+    assert err == "", "peers lag under gossip agreement must not be reported as an error"
