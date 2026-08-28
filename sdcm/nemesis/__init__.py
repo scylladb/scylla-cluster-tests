@@ -70,7 +70,13 @@ from sdcm.cluster_k8s import (
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
 from sdcm.logcollector import save_kallsyms_map
-from sdcm.mgmt.common import TaskStatus, ScyllaManagerError, get_persistent_snapshots, ObjectStorageUploadMode
+from sdcm.mgmt.common import (
+    TaskStatus,
+    TERMINAL_TASK_STATUSES,
+    ScyllaManagerError,
+    get_persistent_snapshots,
+    ObjectStorageUploadMode,
+)
 from sdcm.mgmt.backup import run_manager_backup
 from sdcm.mgmt.argus_report import report_manager_backup_results_to_argus
 from sdcm.mgmt.helpers import get_dc_name_from_ks_statement, get_schema_create_statements_from_snapshot
@@ -182,6 +188,7 @@ from sdcm.exceptions import (
     BootstrapStreamErrorFailure,
     QuotaConfigurationFailure,
     NemesisStressFailure,
+    WaitForTimeoutError,
 )
 from test_lib.compaction import (
     CompactionStrategy,
@@ -3023,6 +3030,7 @@ class NemesisRunner:
             #
             # self.tester.set_ks_strategy_to_network_and_rf_according_to_cluster(
             #    keyspace=chosen_snapshot_info["keyspace_name"], repair_after_alter=False)
+        restore_task = None
         try:
             restore_task = mgr_cluster.create_restore_task(
                 restore_data=True, location_list=location_list, snapshot_tag=chosen_snapshot_tag
@@ -3045,12 +3053,47 @@ class NemesisRunner:
                     "Data verification stress command, triggered by the 'mgmt_restore' nemesis, has failed"
                 )
         finally:
-            self.log.info("Cleaning up restored keyspace '%s'", chosen_snapshot_info["keyspace_name"])
-            drop_ks_stmt = f'DROP KEYSPACE IF EXISTS "{chosen_snapshot_info["keyspace_name"]}";'
+            self._stop_unfinished_restore_task(restore_task)
+            keyspace_name = chosen_snapshot_info["keyspace_name"]
+            self.log.info("Cleaning up restored keyspace '%s'", keyspace_name)
+            drop_ks_stmt = f'DROP KEYSPACE IF EXISTS "{keyspace_name}";'
             try:
                 self.target_node.run_cqlsh(drop_ks_stmt)
             except Exception as drop_err:  # noqa: BLE001
                 self.log.warning("Failed to drop restored keyspace: %s", drop_err)
+
+    def _stop_unfinished_restore_task(self, restore_task) -> None:
+        """Stop a Manager restore task that hasn't reached a final status yet.
+
+        A WaitForTimeoutError from wait_and_get_final_status only means SCT gave up waiting; the
+        task may still be RUNNING. This method issues an sctool stop and waits for a terminal
+        status so the task is no longer touching the keyspace before the caller cleans it up.
+
+        Best effort only: every failure here is logged and swallowed rather than masking the
+        original error that brought us into the finally block.
+        """
+        if restore_task is None:
+            return
+        try:
+            status = restore_task.status
+            if status in TERMINAL_TASK_STATUSES:
+                return
+            self.log.warning(
+                "Restore task %s is still in %s state - stopping it",
+                restore_task.id,
+                status,
+            )
+            try:
+                restore_task.stop()
+            except WaitForTimeoutError:
+                pass
+            restore_task.wait_for_status(list_status=TERMINAL_TASK_STATUSES, timeout=600, step=30)
+        except Exception as stop_err:  # noqa: BLE001
+            self.log.warning(
+                "Failed to stop the restore task %s: %s",
+                restore_task.id,
+                stop_err,
+            )
 
     def _delete_existing_backups(self, mgr_cluster):
         deleted_tasks = []
