@@ -252,7 +252,7 @@ def parse_smart_log_output(device_path: str, raw_output: str) -> NvmeSmartLog | 
     try:
         data = json.loads(raw_output)
         return _parse_smart_log_json(device_path, data)
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         pass
 
     # Fall back to human-readable key:value parsing
@@ -383,7 +383,7 @@ def parse_error_log_output(raw_output: str) -> list[NvmeErrorLogEntry]:
     try:
         data = json.loads(raw_output)
         return _parse_error_log_json(data)
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         pass
 
     # Fall back to human-readable parsing
@@ -506,7 +506,7 @@ def parse_self_test_log_output(device_path: str, raw_output: str) -> NvmeSelfTes
     try:
         data = json.loads(raw_output)
         return _parse_self_test_log_json(device_path, data)
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         pass
 
     # Fall back to human-readable parsing
