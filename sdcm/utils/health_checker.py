@@ -154,6 +154,17 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
         return
 
     debug_message = f"Gossip info: {gossip_info}\nSYSTEM.PEERS info: {peers_details}"
+
+    active_schema_versions = {
+        node_values["schema"]
+        for node_values in gossip_info.values()
+        if node_values["status"] not in current_node.GOSSIP_STATUSES_FILTER_OUT
+    }
+    # gossip is the source of truth for schema agreement: SYSTEM.PEERS.schema_version can lag
+    # behind it until the next schema change (SCYLLADB-4037), so a peers-vs-gossip
+    # mismatch is only a WARNING while gossip agrees on all nodes
+    gossip_schema_agreed = len(active_schema_versions) <= 1
+
     # Validate schema version
     for node, node_info in gossip_info.items():
         # SYSTEM.PEERS table includes peers of the current node, so the node itcurrent_node doesn't exist in the list
@@ -177,14 +188,23 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
 
         if node_info["schema"] != str(peers_details[node]["schema_version"]):
             LOGGER.debug(debug_message)
-            yield ClusterHealthValidatorEvent.NodeSchemaVersion(
-                severity=Severity.ERROR,
-                node=current_node.name,
-                error=f"Current node {current_node}. Wrong Schema version. "
-                f"Node {node}{is_target} schema version in SYSTEM.PEERS is "
-                f"{peers_details[node]['schema_version']}, "
-                f"but schema version in gossip {node_info['schema']}",
+            mismatch_details = (
+                f"Node {node}{is_target} schema version in SYSTEM.PEERS is {peers_details[node]['schema_version']}, "
+                f"but schema version in gossip {node_info['schema']}"
             )
+            if gossip_schema_agreed:
+                event_kwargs = {
+                    "severity": Severity.WARNING,
+                    "message": f"Current node {current_node}. {mismatch_details}. Gossip schema versions agree on "
+                    "all nodes, so this is the known transient SYSTEM.PEERS lag that self-heals on the "
+                    "next schema change (https://scylladb.atlassian.net/browse/SCYLLADB-4037)",
+                }
+            else:
+                event_kwargs = {
+                    "severity": Severity.ERROR,
+                    "error": f"Current node {current_node}. Wrong Schema version. {mismatch_details}",
+                }
+            yield ClusterHealthValidatorEvent.NodeSchemaVersion(node=current_node.name, **event_kwargs)
 
     # Validate that all nodes in SYSTEM.PEERS exist in gossip
     not_in_gossip = list(set(peers_details.keys()) - set(gossip_info.keys()))
@@ -198,13 +218,7 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
         )
 
     # Validate that same schema on all nodes in the gossip
-    schema_version_on_all_nodes = [
-        values["schema"]
-        for values in gossip_info.values()
-        if values["status"] not in current_node.GOSSIP_STATUSES_FILTER_OUT
-    ]
-
-    if len(set(schema_version_on_all_nodes)) > 1:
+    if not gossip_schema_agreed:
         LOGGER.debug(debug_message)
         gossip_info_str = "\n".join(
             f"{node}: {schema_version['schema']}" for node, schema_version in gossip_info.items()
@@ -267,10 +281,14 @@ def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_H
             if not (data["status"] == "NORMAL" and current_node in peers_info):
                 continue
             if data["schema"] != str(peers_info[current_node]["schema_version"]):
-                current_err = f"{message_pref} Schema version is not same in the gossip and peers for {current_node}"
-                LOGGER.warning(current_err)
-                err += f"{current_err}\n"
-                continue
+                # gossip already agrees here, so a lagging SYSTEM.PEERS row is the known transient
+                # raft-topology artifact that self-heals on the next schema change
+                # (SCYLLADB-4037) - not a failure
+                LOGGER.warning(
+                    "%s Schema version in SYSTEM.PEERS lags behind the agreed gossip version for %s",
+                    message_pref,
+                    current_node,
+                )
         break  # Everything is OK, break the cycle.
     if not err:
         LOGGER.debug("Schema agreement has been completed on all nodes")
