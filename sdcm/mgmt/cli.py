@@ -28,6 +28,7 @@ from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2Failure
 from sdcm import wait
 from sdcm.mgmt.common import (
     TaskStatus,
+    TERMINAL_TASK_STATUSES,
     ScyllaManagerError,
     HostStatus,
     HostSsl,
@@ -420,6 +421,7 @@ class ManagerTask:
         if only_final:
             list_final_status = [TaskStatus.ERROR_FINAL, TaskStatus.DONE]
         else:
+<<<<<<< HEAD
             list_final_status = [
                 TaskStatus.ERROR,
                 TaskStatus.ERROR_FINAL,
@@ -428,6 +430,21 @@ class ManagerTask:
                 TaskStatus.ABORTED,
             ]
         LOGGER.debug("Waiting for task: {} getting to a final status ({})..".format(self.id, str(list_final_status)))
+||||||| parent of 9535a4c7f (fix(nemesis): stop mgmt restore task before dropping the keyspace)
+            list_final_status = [
+                TaskStatus.ERROR,
+                TaskStatus.ERROR_FINAL,
+                TaskStatus.STOPPED,
+                TaskStatus.DONE,
+                TaskStatus.ABORTED,
+            ]
+        LOGGER.debug(f"Waiting for task: {self.id} getting to a final status ({list_final_status!s})..")
+=======
+            # ERROR is included here (unlike TERMINAL_TASK_STATUSES) because this helper only needs
+            # to stop waiting once any error surfaces, even a retryable "ERROR (#/4)".
+            list_final_status = [*TERMINAL_TASK_STATUSES, TaskStatus.ERROR]
+        LOGGER.debug(f"Waiting for task: {self.id} getting to a final status ({list_final_status!s})..")
+>>>>>>> 9535a4c7f (fix(nemesis): stop mgmt restore task before dropping the keyspace)
         res = self.wait_for_status(list_status=list_final_status, timeout=timeout, step=step)
         if not res:
             raise ScyllaManagerError("Unexpected result on waiting for task {} status".format(self.id))
