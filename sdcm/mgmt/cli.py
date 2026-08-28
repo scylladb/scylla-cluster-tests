@@ -29,6 +29,7 @@ from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2Failure
 from sdcm import wait
 from sdcm.mgmt.common import (
     TaskStatus,
+    TERMINAL_TASK_STATUSES,
     ScyllaManagerError,
     HostStatus,
     HostSsl,
@@ -423,13 +424,9 @@ class ManagerTask:
         if only_final:
             list_final_status = [TaskStatus.ERROR_FINAL, TaskStatus.DONE]
         else:
-            list_final_status = [
-                TaskStatus.ERROR,
-                TaskStatus.ERROR_FINAL,
-                TaskStatus.STOPPED,
-                TaskStatus.DONE,
-                TaskStatus.ABORTED,
-            ]
+            # ERROR is included here (unlike TERMINAL_TASK_STATUSES) because this helper only needs
+            # to stop waiting once any error surfaces, even a retryable "ERROR (#/4)".
+            list_final_status = [*TERMINAL_TASK_STATUSES, TaskStatus.ERROR]
         LOGGER.debug(f"Waiting for task: {self.id} getting to a final status ({list_final_status!s})..")
         res = self.wait_for_status(list_status=list_final_status, timeout=timeout, step=step)
         if not res:
