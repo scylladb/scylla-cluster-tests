@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from sdcm.provision.common.provisioner import ProvisionParameters, InstanceProvisionerBase, InstanceParamsBase, TagsType
 from sdcm.sct_events.events_device import get_events_main_device
 from sdcm.sct_events.system import SpotProvisionOutcomeEvent
+from sdcm.test_config import TestConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -99,3 +100,22 @@ class ProvisionPlan(BaseModel):
             # Without this the event dies still flagged ready-to-publish and SctEvent.__del__ warns
             # "has not been published or dumped" once per cluster. The outcome is already in the log above.
             event.dont_publish()
+            # A log line alone is not measurable - the whole point of this event is to make the
+            # spot-vs-on-demand split reportable. Stash it for sct.py to submit to Argus once provisioning
+            # finishes; doing it here would mean initialising an Argus client inside the provisioning hot
+            # path, where a network failure could take the run down with it.
+            TestConfig.SPOT_PROVISION_OUTCOMES.append(
+                {
+                    "requested": event.requested,
+                    "realized": event.realized,
+                    "downgraded": event.downgraded,
+                    "region": event.region,
+                    "availability_zone": event.availability_zone,
+                    "instance_type": event.instance_type,
+                    "count": event.count,
+                    "severity": event.severity.name,
+                    # the field text only - str(event) already carries an event-type/severity prefix, and
+                    # sct.py adds its own when building the Argus payload
+                    "message": event.msgfmt.format(event).split(": ", 1)[-1],
+                }
+            )

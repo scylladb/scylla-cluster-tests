@@ -163,6 +163,7 @@ from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.oci_peering import OciVcnPeering
 from sdcm.utils.get_username import get_username
 from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
+from sdcm.test_config import TestConfig
 from sdcm.utils.aws_utils import AwsArchType, get_arch_from_instance_type
 from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
@@ -468,6 +469,52 @@ def provision_resources(backend, test_name: str, config: str):
         LOGGER.error("Unable to provision resources - aborting the test...", exc_info=True)
         _report_provision_error_to_argus(exc, params=params, test_config=test_config, backend=backend)
         sys.exit(1)
+
+    _report_spot_provision_outcomes_to_argus(params=params, test_config=test_config)
+
+
+def _report_spot_provision_outcomes_to_argus(params, test_config) -> None:
+    """Submit the spot-vs-on-demand provisioning outcomes recorded during provisioning to Argus.
+
+    This process has no events device, so SpotProvisionOutcomeEvent cannot reach Argus through the normal
+    pipeline - and without it the spend split stays unmeasured, which is the point of recording it at all.
+    Runs after provisioning has already succeeded and swallows every error: reporting must never turn a
+    healthy cluster into a failed run.
+    """
+    outcomes = list(TestConfig.SPOT_PROVISION_OUTCOMES)
+    if not outcomes:
+        return
+    TestConfig.SPOT_PROVISION_OUTCOMES.clear()
+
+    try:
+        if test_config is None:
+            test_config = get_test_config()
+        test_config.init_argus_client(params)
+        client = test_config.argus_client()
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Unable to init Argus client for spot provisioning outcomes", exc_info=True)
+        return
+
+    for outcome in outcomes:
+        event_payload: RawEventPayload = {
+            "run_id": str(test_config.test_id()),
+            "severity": outcome["severity"],
+            "ts": time.time(),
+            "message": f"(SpotProvisionOutcomeEvent Severity.{outcome['severity']}) {outcome['message']}",
+            "event_type": "SpotProvisionOutcomeEvent",
+            "received_timestamp": None,
+            "nemesis_name": None,
+            "duration": None,
+            "node": None,
+            "target_node": None,
+            "known_issue": None,
+            "nemesis_status": None,
+        }
+        try:
+            client.submit_event(event_payload)
+        except Exception as argus_exc:  # noqa: BLE001
+            LOGGER.warning("Failed to submit spot provisioning outcome to Argus: %s", argus_exc)
+    LOGGER.info("Submitted %d spot provisioning outcome(s) to Argus", len(outcomes))
 
 
 def _report_provision_error_to_argus(

@@ -62,6 +62,12 @@ class TestConfig(metaclass=Singleton):
     DECODING_QUEUE = None
     RESOLVED_PLACEMENT_FILENAME = "resolved_placement.yaml"
 
+    # Spot-vs-on-demand outcomes recorded during provisioning. `hydra provision-resources` runs in its own
+    # process with no events device, so SpotProvisionOutcomeEvent cannot reach Argus the normal way; the
+    # provisioning layer appends payloads here and sct.py submits them once provisioning is done. Kept as
+    # plain dicts so the provisioning layer needs no Argus import.
+    SPOT_PROVISION_OUTCOMES: list = []
+
     _test_id = None
     _test_name = None
     _logdir = None

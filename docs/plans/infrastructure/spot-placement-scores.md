@@ -49,10 +49,19 @@ diversification matters more than region choice — which is why this integrates
 
 ## What Was Implemented
 
-**Observability (measure first).** `SpotProvisionOutcomeEvent` (`sdcm/sct_events/system.py`) is published once
+**Observability (measure first).** `SpotProvisionOutcomeEvent` (`sdcm/sct_events/system.py`) is emitted once
 per provisioning step from `ProvisionPlan.provision_instances()`, recording requested vs realized provision
-type, region, AZ, instance type and count, with a `downgraded` flag. This is the acceptance criterion for
-everything else: without it, no saving is provable.
+type, region, AZ, instance type and count, with a `downgraded` flag. A downgrade or a total failure is
+`WARNING`; getting what was asked for is `NORMAL`.
+
+Reaching Argus takes an explicit handoff, because AWS upfront provisioning runs in `sct.py
+provision-resources` - a separate process that never starts an events device, so the normal event pipeline is
+not available there. `ProvisionPlan` records outcomes on `TestConfig.SPOT_PROVISION_OUTCOMES` (plain dicts, so
+the provisioning layer needs no Argus import) and `sct.py::_report_spot_provision_outcomes_to_argus` submits
+them once provisioning has succeeded, reusing the `submit_event(RawEventPayload)` pattern already used by
+`_report_provision_error_to_argus`. Submission is deliberately after provisioning and swallows every error:
+reporting must never turn a healthy cluster into a failed run. Without this the split would exist only in a
+provision-stage log nobody aggregates - and the split is the acceptance criterion for everything else.
 
 **Scoring module.** `sdcm/provision/aws/spot_placement_score.py` — `get_scores()` (TTL-cached, paginated,
 region-chunked, fail-soft), plus `rank_az_letters()` and `rank_regions()`.

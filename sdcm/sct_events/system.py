@@ -143,7 +143,10 @@ class SpotProvisionOutcomeEvent(InformationalEvent):
         instance_type: str | None = None,
         count: int = 0,
     ):
-        super().__init__(severity=Severity.NORMAL if realized else Severity.WARNING)
+        downgraded = bool(realized) and realized != requested
+        # A silent spot->on-demand downgrade is the thing this event exists to surface, so it must not sit at
+        # NORMAL where nothing will ever show it. Getting what was asked for is unremarkable.
+        super().__init__(severity=Severity.NORMAL if realized and not downgraded else Severity.WARNING)
 
         self.requested = requested
         self.realized = realized or "none"
@@ -151,7 +154,7 @@ class SpotProvisionOutcomeEvent(InformationalEvent):
         self.availability_zone = availability_zone
         self.instance_type = instance_type or "unknown"
         self.count = count
-        self.downgraded = bool(realized) and realized != requested
+        self.downgraded = downgraded
 
     @property
     def msgfmt(self) -> str:

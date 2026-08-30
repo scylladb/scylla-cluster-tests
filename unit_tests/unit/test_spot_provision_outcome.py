@@ -21,6 +21,8 @@ import gc
 import logging
 from unittest.mock import MagicMock, patch
 
+import sct
+
 import pytest
 
 from sdcm.provision.common.provision_plan import ProvisionPlan
@@ -28,6 +30,7 @@ from sdcm.provision.common.provisioner import InstanceProvisionerBase, Provision
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import add_severity_limit_rules, max_severity
 from sdcm.sct_events.system import SpotProvisionOutcomeEvent
+from sdcm.test_config import TestConfig
 
 
 class _StubProvisioner(InstanceProvisionerBase):
@@ -119,7 +122,7 @@ def test_on_demand_only_plan_reports_no_downgrade():
     "requested, realized, downgraded, severity",
     [
         ("Spot", "Spot", False, Severity.NORMAL),
-        ("Spot", "OnDemand", True, Severity.NORMAL),
+        ("Spot", "OnDemand", True, Severity.WARNING),
         ("OnDemand", "OnDemand", False, Severity.NORMAL),
         ("Spot", None, False, Severity.WARNING),
     ],
@@ -186,3 +189,65 @@ def test_downgrade_and_failure_logged_at_warning(caplog, results):
 
     record = next(r for r in caplog.records if "Spot provisioning outcome" in r.message)
     assert record.levelno == logging.WARNING
+
+
+class TestArgusHandoff:
+    """`provision-resources` has no events device, so outcomes reach Argus via an explicit handoff.
+
+    Without this the spot-vs-on-demand split - the entire point of the event - stays unmeasured, visible
+    only in a provision-stage log nobody aggregates.
+    """
+
+    @staticmethod
+    def _provision(results, node_count=3):
+        TestConfig.SPOT_PROVISION_OUTCOMES.clear()
+        _run_real(_plan("Spot", "OnDemand", results=results))
+
+    def test_outcome_is_recorded_for_handoff(self):
+        self._provision([["i-1"]])
+        assert len(TestConfig.SPOT_PROVISION_OUTCOMES) == 1
+        assert TestConfig.SPOT_PROVISION_OUTCOMES[0]["realized"] == "Spot"
+
+    def test_downgrade_recorded_with_warning_severity(self):
+        """A silent downgrade at NORMAL would be invisible in Argus - that is the case being measured."""
+        self._provision([[], ["i-1"]])
+        outcome = TestConfig.SPOT_PROVISION_OUTCOMES[0]
+        assert outcome["downgraded"] is True
+        assert outcome["severity"] == "WARNING"
+
+    def test_message_is_not_double_prefixed(self):
+        self._provision([["i-1"]])
+        assert TestConfig.SPOT_PROVISION_OUTCOMES[0]["message"].count("SpotProvisionOutcomeEvent") == 0
+
+    def test_submitter_drains_and_submits(self):
+        self._provision([[], ["i-1"]])
+        test_config = MagicMock()
+        client = MagicMock()
+        test_config.argus_client.return_value = client
+        sct._report_spot_provision_outcomes_to_argus(params=MagicMock(), test_config=test_config)
+
+        assert client.submit_event.call_count == 1
+        payload = client.submit_event.call_args[0][0]
+        assert payload["event_type"] == "SpotProvisionOutcomeEvent"
+        assert payload["severity"] == "WARNING"
+        assert "downgraded=True" in payload["message"]
+        assert TestConfig.SPOT_PROVISION_OUTCOMES == [], "must drain, or a retry double-reports"
+
+    def test_argus_failure_never_breaks_provisioning(self):
+        """Provisioning already succeeded by this point; reporting must not turn it into a failure."""
+        self._provision([["i-1"]])
+        test_config = MagicMock()
+        test_config.init_argus_client.side_effect = RuntimeError("argus down")
+        sct._report_spot_provision_outcomes_to_argus(params=MagicMock(), test_config=test_config)
+
+    def test_submit_event_failure_is_swallowed(self):
+        self._provision([["i-1"]])
+        test_config = MagicMock()
+        test_config.argus_client.return_value.submit_event.side_effect = RuntimeError("boom")
+        sct._report_spot_provision_outcomes_to_argus(params=MagicMock(), test_config=test_config)
+
+    def test_nothing_submitted_when_no_outcomes(self):
+        TestConfig.SPOT_PROVISION_OUTCOMES.clear()
+        test_config = MagicMock()
+        sct._report_spot_provision_outcomes_to_argus(params=MagicMock(), test_config=test_config)
+        test_config.init_argus_client.assert_not_called()
