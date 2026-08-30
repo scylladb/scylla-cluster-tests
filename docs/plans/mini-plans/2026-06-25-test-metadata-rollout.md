@@ -170,11 +170,16 @@ These files have no active pipeline or are deprecated:
 - `test-cases/features/uda_udf.yaml`
 - `test-cases/jepsen/jepsen.yaml`
 - `test-cases/jepsen/jepsen_with_raft.yaml`
+
+Already handled — deleted outright, since nothing referenced them any more:
 - `test-cases/longevity/longevity-100GB-48h-cloud-CloudLimitedChaosMonkey-tls.yaml`
-- `test-cases/longevity/longevity-ycsb-a-100M.yaml`
-- `test-cases/longevity/longevity-ycsb-a-10M.yaml`
-- `test-cases/longevity/longevity-ycsb-a-1B.yaml`
-- `test-cases/longevity/longevity-ycsb-a-1M.yaml`
+
+Already handled — moved to `test-cases/quarantined/` along with the ndbench and
+nosqlbench cases, which are equally unused:
+- `test-cases/quarantined/longevity-ycsb-a-100M.yaml`
+- `test-cases/quarantined/longevity-ycsb-a-10M.yaml`
+- `test-cases/quarantined/longevity-ycsb-a-1B.yaml`
+- `test-cases/quarantined/longevity-ycsb-a-1M.yaml`
 
 ---
 
