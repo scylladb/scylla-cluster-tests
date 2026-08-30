@@ -16,6 +16,12 @@ class NodeExporterSetup:
             f"https://github.com/prometheus/node_exporter/releases/download/v{NODE_EXPORTER_VERSION}/{tarball}"
         )
         download_cmd = curl_with_retry(download_url, retry=8, follow_redirects=True, fail_early=True, output=tarball)
+        # --collector.processes is off by default in node_exporter; it adds node_procs_running /
+        # node_procs_blocked, the run-queue view that tells a merely busy host from a CPU starved one
+        # (SCT-601). The pressure collector (PSI, node_pressure_cpu_waiting_seconds_total) is enabled
+        # by default and is deliberately not among the --no-collector flags below.
+        # This lands on the loaders and the monitors, and on DB nodes only when they have no
+        # scylla-node-exporter of their own - see BaseScyllaCluster node setup.
         remoter.sudo(
             shell_script_cmd(f"""
             if ! id node_exporter > /dev/null 2>&1; then
@@ -42,7 +48,7 @@ class NodeExporterSetup:
             User=node_exporter
             Group=node_exporter
             Type=simple
-            ExecStart=/usr/local/bin/node_exporter --no-collector.interrupts --no-collector.hwmon --no-collector.bcache --no-collector.btrfs --no-collector.fibrechannel --no-collector.infiniband --no-collector.ipvs --no-collector.nfs --no-collector.nfsd --no-collector.powersupplyclass --no-collector.rapl --no-collector.tapestats --no-collector.thermal_zone --no-collector.udp_queues --no-collector.zfs
+            ExecStart=/usr/local/bin/node_exporter --collector.processes --no-collector.interrupts --no-collector.hwmon --no-collector.bcache --no-collector.btrfs --no-collector.fibrechannel --no-collector.infiniband --no-collector.ipvs --no-collector.nfs --no-collector.nfsd --no-collector.powersupplyclass --no-collector.rapl --no-collector.tapestats --no-collector.thermal_zone --no-collector.udp_queues --no-collector.zfs
 
             [Install]
             WantedBy=multi-user.target
