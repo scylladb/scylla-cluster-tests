@@ -29,7 +29,12 @@ stress_cmd: [
 
 round_robin: true
 n_db_nodes: '3 3'
-instance_type_db: 'i4i.4xlarge'
+sizing_db:
+  vcpu: 16
+  # OCI DenseIO.E5 at 16 vCPUs provides only 96 GB (12 GB/OCPU fixed ratio).
+  # Lowered from >=128 to >=96 so OCI can match; other clouds still pick >=128 naturally.
+  memory: '>=96'
+  local_disk_gb: '>=3000'  # ~80% of i4i.4xlarge's 3750GB
 n_loaders: '2 2'
 
 rack_aware_loader: true
