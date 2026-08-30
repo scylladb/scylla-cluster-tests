@@ -1,3 +1,5 @@
+# Quarantined: the ndbench longevity configs are not in use and their
+# pipelines have been removed. See jenkins-pipelines/quarantined/README.md.
 test_metadata:
   description: >-
     4-hour scale test driven by ndbench on a 192-node, 2-region cluster (96 nodes each in us-east-1

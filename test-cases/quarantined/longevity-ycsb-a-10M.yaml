@@ -1,3 +1,5 @@
+# Quarantined: the YCSB longevity configs are not in use - no jenkinsfile
+# references them. See jenkins-pipelines/quarantined/README.md.
 # [Ivan]: I am currently testing CRDB vs ScyllaDB with YCSB workloads.
 #         This scenario shows how to load and run YCSB workload A against Scylla.
 #         It can be run with Jenkins BYO as in https://jenkins.scylladb.com/view/staging/job/scylla-staging/job/ivan/job/ivan-byo-longevity/23/:
@@ -25,7 +27,25 @@
 #
 #         10900 seconds = 7 days * 24 hours a day * 60 minutes an hour
 #         3600  seconds = 60 minutes
-test_duration: 3600
+
+test_metadata:
+  description: >-
+    YCSB workload A load phase with 10M records against a 3-node cluster, using the Scylla native YCSB
+    binding and a pre-created ycsb keyspace, with no nemesis. The mid-size step of the YCSB comparison
+    family, run on demand rather than from a pipeline.
+  test_type: longevity
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: write
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
+test_duration: 1800
 
 pre_create_keyspace: [
   "CREATE KEYSPACE ycsb WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 3 };",
@@ -35,11 +55,11 @@ pre_create_keyspace: [
 # there is no sense to use more than 1 loader for 3 nodes cluster
 prepare_write_cmd:
   - >-
-    bin/ycsb load scylla -P workloads/workloada -threads 84 -p recordcount=100000000
+    bin/ycsb load scylla -P workloads/workloada -threads 84 -p recordcount=10000000
     -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
     -p readproportion=0 -p updateproportion=0
     -p fieldcount=10 -p fieldlength=128
-    -p insertstart=0 -p insertcount=100000000
+    -p insertstart=0 -p insertcount=10000000
     -p cassandra.coreconnections=14 -p cassandra.maxconnections=14
     -p cassandra.username=cassandra -p cassandra.password=cassandra
 
@@ -60,7 +80,7 @@ prepare_write_cmd:
 # or at least
 #   -p scylla.readconsistencylevel=QUORUM -p scylla.writeconsistencylevel=ONE
 #
-# $ bin/ycsb run scylla -s -t -P workloads/workloada -target 120000 -threads 840 -p recordcount=100000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p scylla.coreconnections=280 -p scylla.maxconnections=280 -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.hosts=10.0.2.51,10.0.3.133,10.0.3.67 -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE -p scylla.tokenaware=true
+# $ bin/ycsb run scylla -s -t -P workloads/workloada -target 120000 -threads 840 -p recordcount=10000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p scylla.coreconnections=280 -p scylla.maxconnections=280 -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.hosts=10.0.2.51,10.0.3.133,10.0.3.67 -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE -p scylla.tokenaware=true
 stress_cmd: [
 ]
 
@@ -80,5 +100,5 @@ sizing_loader:  # no GCE match (e2 family tops out at 32 vCPUs); >= used since 3
 
 nemesis_class_name: 'NoOpMonkey'
 
-user_prefix: 'longevity-ycsb-a-100M'
+user_prefix: 'longevity-ycsb-a-10M-8h'
 space_node_threshold: 64424

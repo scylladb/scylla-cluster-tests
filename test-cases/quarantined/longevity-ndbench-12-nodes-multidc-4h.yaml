@@ -1,3 +1,27 @@
+# Quarantined: the ndbench longevity configs are not in use and their
+# pipelines have been removed. See jenkins-pipelines/quarantined/README.md.
+test_metadata:
+  description: >-
+    4-hour test driven by ndbench on a 12-node, 2-region cluster (6 nodes each in us-east-1 and
+    eu-west-1) with 4 rack- and region-aware loaders, rate-limited reads and writes at LOCAL_QUORUM,
+    internode encryption and compression, and no nemesis. The small counterpart to the 192-node
+    ndbench configuration.
+  test_type: longevity
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - ndbench
+  workload: mixed
+  nemesis_labels:
+    - NoOpMonkey
+  features:
+    - multi-dc
+    - rack-aware
+    - tls-ssl
+  team_ownership: core-test-infra
+
 test_duration: 240
 
 prepare_write_cmd: >-
