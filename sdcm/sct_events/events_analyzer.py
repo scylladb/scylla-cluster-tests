@@ -40,7 +40,7 @@ LOADERS_EVENTS = {
 # GCE reports a host-maintenance live migration as a `GceInstanceEvent` with `type ==
 # GCE_LIVE_MIGRATION_EVENT_TYPE`, at Severity.CRITICAL (see sdcm/cluster_gce.py). On loader
 # nodes this is a known-benign, transient cloud infrastructure event -- not an indication the
-# test/cluster is broken -- so it should be logged rather than aborting the test (SCT-863).
+# test/cluster is broken -- so it should be logged rather than aborting the test.
 # Every other CRITICAL event, including this same event type for db/monitor nodes and any
 # other GceInstanceEvent, must keep aborting the test as before.
 GCE_LIVE_MIGRATION_EVENT_TYPE = "migrateOnHostMaintenance"
