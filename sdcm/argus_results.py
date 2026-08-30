@@ -44,6 +44,18 @@ LATENCY_ERROR_THRESHOLDS = {
     "default": {"percentile_90": 5, "percentile_99": 10},
 }
 
+# Loader-side CPU during the step (SCT-601). A client-observed P99 spike with flat server-side
+# metrics is not necessarily a ScyllaDB problem - reported next to the latencies so that two runs can
+# be compared at a glance instead of digging through Prometheus. No validation rules on purpose:
+# these are diagnostics, a hot loader is a hint about the latency figures, not a failure of its own.
+LOADER_LOAD_COLUMNS = [
+    ColumnMetadata(name="Loader CPU busy max", unit="%", type=ResultType.FLOAT, higher_is_better=False),
+    ColumnMetadata(name="Loader CPU steal max", unit="%", type=ResultType.FLOAT, higher_is_better=False),
+    ColumnMetadata(name="Loader CPU pressure max", unit="%", type=ResultType.FLOAT, higher_is_better=False),
+    ColumnMetadata(name="Loader load1 max", unit="", type=ResultType.FLOAT, higher_is_better=False),
+]
+LOADER_LOAD_COLUMN_NAMES = [column.name for column in LOADER_LOAD_COLUMNS]
+
 
 class LatencyCalculatorMixedResult(StaticGenericResultTable):
     class Meta:
@@ -61,6 +73,7 @@ class LatencyCalculatorMixedResult(StaticGenericResultTable):
             ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
+            *LOADER_LOAD_COLUMNS,
         ]
 
 
@@ -77,6 +90,7 @@ class LatencyCalculatorWriteResult(StaticGenericResultTable):
             ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
+            *LOADER_LOAD_COLUMNS,
         ]
 
 
@@ -93,6 +107,7 @@ class LatencyCalculatorReadResult(StaticGenericResultTable):
             ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
+            *LOADER_LOAD_COLUMNS,
         ]
 
 
@@ -109,6 +124,7 @@ class LatencyCalculatorReadDiskOnlyResult(StaticGenericResultTable):
             ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
+            *LOADER_LOAD_COLUMNS,
         ]
 
 
@@ -388,6 +404,10 @@ def send_result_to_argus(  # noqa: PLR0914
             continue
         result_table.add_result(column="duration", row=row_name, value=result["duration_in_sec"], status=Status.UNSET)
         result_table.add_result(column="start time", row=row_name, value=start_time, status=Status.UNSET)
+        for column in LOADER_LOAD_COLUMN_NAMES:
+            # a metric with no data is left out, not reported as 0 - see collect_loader_load()
+            if (loader_load := result.get(column)) is not None:
+                result_table.add_result(column=column, row=row_name, value=loader_load, status=Status.UNSET)
         if overview_screenshot:
             result_table.add_result(column="Overview", row=row_name, value=overview_screenshot[0], status=Status.UNSET)
         if qa_screenshot:
@@ -406,6 +426,11 @@ def send_result_to_argus(  # noqa: PLR0914
         result_table_summary.add_result(
             column="start time", row=summary_row_name, value=start_time, status=Status.UNSET
         )
+        for column in LOADER_LOAD_COLUMN_NAMES:
+            if (loader_load := result.get(column)) is not None:
+                result_table_summary.add_result(
+                    column=column, row=summary_row_name, value=loader_load, status=Status.UNSET
+                )
         if overview_screenshot:
             result_table_summary.add_result(
                 column="Overview", row=summary_row_name, value=overview_screenshot[0], status=Status.UNSET

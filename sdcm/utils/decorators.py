@@ -294,6 +294,10 @@ def latency_calculator_decorator(  # noqa: PLR0915
                 result = (
                     latency.collect_latency(monitor, start, end, workload, cluster, all_nodes_list) if monitor else {}
                 )
+                # loader-side CPU over the same window: a client-observed spike with flat server-side
+                # metrics is only attributable if the loaders can be implicated or cleared (SCT-601)
+                if monitor and getattr(tester, "loaders", None):
+                    result.update(latency.collect_loader_load(monitor, start, end, tester.loaders.nodes))
                 result["screenshots"] = screenshots
                 result["duration"] = f"{datetime.timedelta(seconds=int(end - start))}"
                 result["duration_in_sec"] = int(end - start)
