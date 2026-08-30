@@ -2004,6 +2004,19 @@ class SCTConfiguration(BaseModel):
         "Recommended for low-latency: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch' "
         "(requires Java 21+, which cassandra-stress 3.20.6+ ships with).",
     )
+    loader_cpu_diagnostics: Boolean = SctField(
+        description="Run a 1 Hz CPU diagnostics sampler on the loaders (per-CPU utilization including "
+        "%steal, PSI CPU pressure, per-process CPU and context switches of the stress tool). The log is "
+        "streamed into the loader log directory and collected into the run log archive as "
+        "'loader-cpu.log'. Use it to tell loader-side CPU contention apart from a server-side stall "
+        "behind a client-observed latency spike. Not supported on k8s backends.",
+    )
+    loader_cpu_diagnostics_per_thread: Boolean = SctField(
+        description="Add per-thread CPU samples to the loader CPU diagnostics log, for the hottest "
+        "threads of the stress tool only and every 10th sample only - a cassandra-stress run has "
+        "hundreds of threads, sampling all of them every second would produce hundreds of MB per run. "
+        "Requires 'loader_cpu_diagnostics'.",
+    )
     stress_cmd_mv: StringOrList = SctField(
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
     )
@@ -4109,6 +4122,7 @@ class SCTConfiguration(BaseModel):
 
         self._validate_placement_group_required_values()
         self._instance_type_validation()
+        self._verify_loader_cpu_diagnostics()
 
         if (teardown_validators := self.get("teardown_validators.rackaware")) and teardown_validators.get(
             "enabled", False
@@ -4474,6 +4488,18 @@ class SCTConfiguration(BaseModel):
             value = self.get(field_name)
             assert value is not None and not (isinstance(value, str) and not value.strip()), (
                 f"{field_name} missing from config for {backend}"
+            )
+
+    def _verify_loader_cpu_diagnostics(self):
+        """Warn when per-thread sampling was asked for without the sampler that would do it.
+
+        A warning and not an error: the pair is a diagnostic, and a run must not fail over how its
+        diagnostics were configured.
+        """
+        if self.get("loader_cpu_diagnostics_per_thread") and not self.get("loader_cpu_diagnostics"):
+            self.log.warning(
+                "loader_cpu_diagnostics_per_thread has no effect without loader_cpu_diagnostics, "
+                "no loader CPU samples will be collected at all"
             )
 
     def _instance_type_validation(self):

@@ -3629,6 +3629,24 @@ Extra JVM options passed to cassandra-stress via JVM_OPTS environment variable. 
 **type:** str (appendable)
 
 
+## **loader_cpu_diagnostics** / SCT_LOADER_CPU_DIAGNOSTICS
+
+Run a 1 Hz CPU diagnostics sampler on the loaders (per-CPU utilization including %steal, PSI CPU pressure, per-process CPU and context switches of the stress tool). The log is streamed into the loader log directory and collected into the run log archive as 'loader-cpu.log'. Use it to tell loader-side CPU contention apart from a server-side stall behind a client-observed latency spike. Not supported on k8s backends.
+
+**default:** False
+
+**type:** bool
+
+
+## **loader_cpu_diagnostics_per_thread** / SCT_LOADER_CPU_DIAGNOSTICS_PER_THREAD
+
+Add per-thread CPU samples to the loader CPU diagnostics log, for the hottest threads of the stress tool only and every 10th sample only - a cassandra-stress run has hundreds of threads, sampling all of them every second would produce hundreds of MB per run. Requires 'loader_cpu_diagnostics'.
+
+**default:** False
+
+**type:** bool
+
+
 ## **stress_cmd_mv** / SCT_STRESS_CMD_MV
 
 cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list

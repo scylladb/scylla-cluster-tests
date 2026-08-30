@@ -39,6 +39,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.loaders import HDRFileMissed
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.loader_cpu_diagnostics_setup import REMOTE_LOG_PATH as LOADER_CPU_DIAGNOSTICS_LOG_PATH
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.decorators import retrying
 
@@ -70,6 +71,8 @@ class SSHLoggerBase(LoggerBase):
     RETRIEVE_LOG_MESSAGE_TEMPLATE = "SSHLogger reading {log_file} from {since}"
     VERBOSE_RETRIEVE = True
     READINESS_CHECK_DELAY = 10  # seconds
+    # set it in a subclass that runs alongside another SSH logger on the same node, see _remote_file_id
+    LOGGER_FILE_ID = ""
 
     def __init__(self, node: BaseNode, target_log_file: str):
         super().__init__(target_log_file=target_log_file)
@@ -84,7 +87,9 @@ class SSHLoggerBase(LoggerBase):
 
     def stop(self, timeout: float | None = None) -> None:
         self._termination_event.set()
-        self._remoter.run(f"kill -9 -{self.remote_pid}", ignore_status=True)
+        # guarded: an empty pid would run `kill -9 -`, which only fails silently thanks to ignore_status
+        if remote_pid := self.remote_pid:
+            self._remoter.run(f"kill -9 -{remote_pid}", ignore_status=True)
         if self._thread.running():
             self._thread.cancel()
 
@@ -102,12 +107,23 @@ class SSHLoggerBase(LoggerBase):
         return self._remoter.is_up()
 
     @property
+    def _remote_file_id(self) -> str:
+        """Identifies the remote helper files (pid file, command script) of this logger.
+
+        Keyed on the SCT pid alone the files would be shared by every SSH logger attached to the
+        same node, so a second logger would overwrite the pid file of the first one and stopping
+        either would kill the other one's remote command. LOGGER_FILE_ID keeps them apart and is
+        empty for the system log logger, which keeps its historical file names.
+        """
+        return f"{os.getpid()}_{self.LOGGER_FILE_ID}" if self.LOGGER_FILE_ID else f"{os.getpid()}"
+
+    @property
     def remote_pid(self) -> str:
         """
         Returns the PID of the remote logger process.
         This is used to ensure that the logger is running and to manage its lifecycle.
         """
-        remote_pid_file = f"/tmp/logger_{os.getpid()}.pid"
+        remote_pid_file = f"/tmp/logger_{self._remote_file_id}.pid"
         if not self._remoter.run(f"test -f {remote_pid_file}", ignore_status=True).ok:
             return ""
         return self._remoter.run(f"cat {remote_pid_file}").stdout.strip()
@@ -118,11 +134,12 @@ class SSHLoggerBase(LoggerBase):
         )
         try:
             # Write the remote PID to a file before running the logger command
-            remote_pid_file = f"/tmp/logger_{os.getpid()}.pid"
+            remote_pid_file = f"/tmp/logger_{self._remote_file_id}.pid"
+            remote_cmd_file = f"/tmp/logger_cmd_{self._remote_file_id}.sh"
             cmd = self._logger_cmd_template.format(since=f'--since "{since}" ' if since else "")
             remote_cmd = (
-                f"cat <<'EOF' > /tmp/logger_cmd_{os.getpid()}.sh\n{cmd}\nEOF\n"
-                f"setsid bash /tmp/logger_cmd_{os.getpid()}.sh & echo $! > {remote_pid_file}; wait"
+                f"cat <<'EOF' > {remote_cmd_file}\n{cmd}\nEOF\n"
+                f"setsid bash {remote_cmd_file} & echo $! > {remote_pid_file}; wait"
             )
             self._remoter.run(
                 cmd=remote_cmd,
@@ -360,6 +377,78 @@ class SSHScyllaFileLogger(SSHGeneralFileLogger):
     @cached_property
     def _logger_cmd_template(self) -> str:
         return f"{super()._logger_cmd_template} | grep scylla"
+
+
+class LoaderCpuFileLogger(SSHGeneralFileLogger):
+    """Stream the loader CPU diagnostics sampler log (SCT-601) off a loader host.
+
+    Streamed rather than pulled at teardown: perf loaders get terminated (and spot loaders can go
+    away mid-run), while the interesting samples are exactly the last ones before a failure.
+    Inherits the readiness check of the parent, so it simply waits until the sampler service has
+    created the file instead of failing when it is started before the loader setup.
+    """
+
+    REMOTE_LOG_PATH = LOADER_CPU_DIAGNOSTICS_LOG_PATH
+    LOGGER_FILE_ID = "loader_cpu"
+    VERBOSE_RETRIEVE = False
+    # the teardown command must never outlive a wedged connection, see stop()
+    STOP_TIMEOUT = 30  # seconds
+
+    def __init__(self, node: BaseNode, target_log_file: str):
+        super().__init__(node=node, target_log_file=target_log_file)
+        self._stop_lock = Lock()
+        self._stopped = False
+
+    def stop(self, timeout: float | None = None) -> None:
+        """Stop the remote tail by its command line, not by killing its process group.
+
+        The parent runs `kill -9 -<pid>` on the pid it wrote for this logger. That pid's process
+        group can include the shell serving the SSH channel, so the kill takes down the connection
+        it is issued over: the remoter to that loader is wedged, this logger's worker stays blocked
+        in the dead SSH read, and because `concurrent.futures` joins its worker threads at
+        interpreter exit, the whole run then cannot exit. Run 8597ebfd hung for 6.5 hours that way,
+        after the test itself had finished.
+
+        `pkill -f` on the tail's own command line ends only the tail - the same approach
+        :class:`HDRHistogramFileLogger` uses, and the reason it never leaked a worker. `sudo` is
+        needed because the tail runs as root.
+
+        Idempotent and bounded: the flag makes a second call (the teardown calls this from both
+        `stop_task_threads` and `wait_till_tasks_threads_are_stopped`) a pure no-op that issues no
+        remote command at all, and the timeout keeps a wedged remoter from blocking teardown.
+        """
+        with self._stop_lock:
+            if self._stopped:
+                return
+            self._stopped = True
+        self._termination_event.set()
+        try:
+            self._remoter.run(
+                f"sudo pkill -f 'tail -f {self.REMOTE_LOG_PATH}'",
+                ignore_status=True,
+                verbose=False,
+                timeout=self.STOP_TIMEOUT,
+            )
+        except Exception:  # noqa: BLE001  # teardown must not fail over a diagnostics logger
+            self._log.warning("Failed to stop the loader CPU diagnostics tail, its worker may leak", exc_info=True)
+        if self._thread is not None and self._thread.running():
+            self._thread.cancel()
+
+    @property
+    def _logger_cmd_template(self) -> str:
+        """Tail the sampler log, resuming where the local copy left off.
+
+        A plain property, not the cached_property of the parent: the offset has to be recomputed on
+        every reconnect. The parent tails from `-c +0` unconditionally, which re-reads the whole
+        remote file after every SSH reconnect - for a 1 Hz log over a multi-hour run that means
+        megabytes of duplicated samples. The sampler only ever appends, so a byte offset is a safe
+        resume point.
+        """
+        try:
+            offset = os.path.getsize(self._target_log_file)
+        except OSError:  # not created yet, or gone
+            offset = 0
+        return f"sudo tail -f {self.REMOTE_LOG_PATH} -c +{offset + 1}"
 
 
 class CommandLoggerBase(LoggerBase):

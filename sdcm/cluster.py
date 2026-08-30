@@ -61,6 +61,10 @@ from cassandra.policies import WhiteListRoundRobinPolicy, RackAwareRoundRobinPol
 from cassandra.query import SimpleStatement
 from argus.common.enums import ResourceState
 from argus.client.sct.types import LogLink
+from sdcm.loader_cpu_diagnostics_setup import (
+    LOCAL_LOG_NAME as LOADER_CPU_DIAGNOSTICS_LOCAL_LOG_NAME,
+    LoaderCpuDiagnosticsSetup,
+)
 from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.db_log_reader import DbLogReader
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
@@ -193,7 +197,7 @@ from sdcm.utils.ldap import (
     LDAP_PORT,
     DEFAULT_PWD_SUFFIX,
 )
-from sdcm.utils.remote_logger import get_system_logging_thread
+from sdcm.utils.remote_logger import LoaderCpuFileLogger, get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
@@ -442,6 +446,7 @@ class BaseNode(AutoSshContainerMixin):
 
         self._spot_monitoring_thread = None
         self._journal_thread = None
+        self._loader_cpu_diagnostics_thread = None
         self._docker_log_process = None
         self._public_ip_address_cached = None
         self._private_ip_address_cached = None
@@ -1493,6 +1498,22 @@ class BaseNode(AutoSshContainerMixin):
                 message="Got no logging daemon by unknown reason",
             ).publish_or_dump()
 
+    def start_loader_cpu_diagnostics_thread(self):
+        """Stream the loader CPU diagnostics sampler log into the loader log directory (SCT-601).
+
+        Started before the sampler itself is installed by the loader setup - the logger waits for the
+        remote file to show up, so the ordering does not matter.
+        """
+        if not self.parent_cluster.params.get("loader_cpu_diagnostics"):
+            return
+        if self.is_kubernetes():
+            self.log.warning("loader_cpu_diagnostics is not supported on k8s backends, skipping it")
+            return
+        self._loader_cpu_diagnostics_thread = LoaderCpuFileLogger(
+            self, os.path.join(self.logdir, LOADER_CPU_DIAGNOSTICS_LOCAL_LOG_NAME)
+        )
+        self._loader_cpu_diagnostics_thread.start()
+
     def start_coredump_thread(self):
         self._coredump_thread = CoredumpExportSystemdThread(self, self._maximum_number_of_cores_to_publish)
         self._coredump_thread.start()
@@ -1697,6 +1718,7 @@ class BaseNode(AutoSshContainerMixin):
             self.start_db_log_reader_thread()
         elif self.node_type == "loader":
             self.start_coredump_thread()
+            self.start_loader_cpu_diagnostics_thread()
         elif self.node_type == "monitor":
             # TODO: start alert manager thread here when start_task_threads will be run after node setup
             # self.start_alert_manager_thread()
@@ -1728,6 +1750,8 @@ class BaseNode(AutoSshContainerMixin):
             self._alert_manager.stop()
         if self._journal_thread:
             self._journal_thread.stop(timeout=5)
+        if self._loader_cpu_diagnostics_thread:
+            self._loader_cpu_diagnostics_thread.stop(timeout=5)
 
     @log_run_info
     def wait_till_tasks_threads_are_stopped(self, timeout: float = 120):
@@ -1753,6 +1777,8 @@ class BaseNode(AutoSshContainerMixin):
                 self.log.warning("Coredump thread still alive after 300s, abandoning")
         if self._journal_thread:
             self._journal_thread.stop(timeout // 10)
+        if self._loader_cpu_diagnostics_thread:
+            self._loader_cpu_diagnostics_thread.stop(timeout // 10)
         if self._scylla_manager_journal_thread:
             self.stop_scylla_manager_log_capture(timeout // 10)
         self._decoding_backtraces_thread = None
@@ -6861,6 +6887,9 @@ class BaseLoaderSet:
 
         node_exporter_setup = NodeExporterSetup()
         node_exporter_setup.install(node)
+
+        if self.params.get("loader_cpu_diagnostics") and not node.is_kubernetes():
+            LoaderCpuDiagnosticsSetup.install(node, per_thread=self.params.get("loader_cpu_diagnostics_per_thread"))
 
         if self.params.get("bare_loaders"):
             node.log.info("Don't install anything because bare loaders requested")
