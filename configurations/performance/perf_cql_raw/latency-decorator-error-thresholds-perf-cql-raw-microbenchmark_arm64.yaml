@@ -1,0 +1,29 @@
+# Thresholds are deliberately null until perf-cql-raw has a baseline of its own.
+#
+# The numbers this file started from were copied from the perf-simple-query thresholds, and they
+# do not carry over: perf-simple-query drives the query processor in process, while perf-cql-raw
+# talks the CQL protocol to an embedded server over a socket, so it does strictly more work per
+# operation. It also runs with different resources (--smp 2 -m 2G against --smp 1 -m 1G).
+#
+# Null is not the same as deleting this file. sdcm/argus_results.py falls back to
+# ValidationRule(best_pct=5) when a metric has no entry at all, which would flag every run
+# against a baseline that does not exist yet. An explicit null produces a ValidationRule with no
+# limit, so results are recorded in Argus without being validated.
+#
+# To set real values: let the weekly jobs collect a few runs, take the stable numbers from the
+# Argus graphs for this test, and replace each null with a fixed_limit slightly above them.
+latency_decorator_error_thresholds:
+  write:
+      allocs_per_op:
+        fixed_limit: null
+      cpu_cycles_per_op:
+        fixed_limit: null
+      instructions_per_op:
+        fixed_limit: null
+  read:
+      allocs_per_op:
+        fixed_limit: null
+      cpu_cycles_per_op:
+        fixed_limit: null
+      instructions_per_op:
+        fixed_limit: null
