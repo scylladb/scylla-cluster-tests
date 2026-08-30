@@ -145,3 +145,55 @@ class TestEventsSeverityChangerFilter(unittest.TestCase):
         self.assertEqual(event.severity, Severity.ERROR)
         db_events_filter.eval_filter(event)
         self.assertEqual(event.severity, Severity.NORMAL)
+
+    def test_eval_filter_gce_first_boot_bind_race(self):
+        """SCT-545/SCT-411: GCE first-boot posix_listen EADDRNOTAVAIL races (e.g. transient
+        Prometheus API server bind failures) should be downgraded to WARNING by the filters
+        published from `enable_default_filters()` for the "gce" backend."""
+        startup_failed_filter = EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*init - Startup failed:.*Cannot assign requested address",
+        )
+        prometheus_bind_filter = EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*init - Could not start Prometheus API server.*Cannot assign requested address",
+        )
+
+        prometheus_bind_event = DatabaseLogEvent.DATABASE_ERROR().add_info(
+            node="rolling-upgrade-ubuntu-db-node-b3848dee-0-5",
+            line_number=1,
+            line="2026-06-27T03:17:49.539Z rolling-upgrade-ubuntu-db-node-b3848dee-0-5 !ERR | scylla[1669] "
+            "[shard 0:strm] init - Could not start Prometheus API server on 10.128.0.47:9180: "
+            "std::system_error (error system:99, posix_listen failed for address 10.128.0.47:9180: "
+            "Cannot assign requested address)",
+        )
+        self.assertEqual(prometheus_bind_event.severity, Severity.ERROR)
+        # EventsSeverityChangerFilter.eval_filter() always returns False (it never "consumes"/hides
+        # the event) — its only effect on a match is the in-place severity rewrite.
+        startup_failed_filter.eval_filter(prometheus_bind_event.clone())  # unrelated regex: no-op
+        self.assertEqual(prometheus_bind_event.severity, Severity.ERROR)
+        prometheus_bind_filter.eval_filter(prometheus_bind_event)
+        self.assertEqual(prometheus_bind_event.severity, Severity.WARNING)
+
+        startup_failed_event = DatabaseLogEvent.DATABASE_ERROR().add_info(
+            node="rolling-upgrade-ubuntu-db-node-b3848dee-0-5",
+            line_number=2,
+            line="2026-06-27T03:17:49.546Z rolling-upgrade-ubuntu-db-node-b3848dee-0-5 !ERR | scylla[1669] "
+            "[shard 0:main] init - Startup failed: std::system_error (error system:99, posix_listen "
+            "failed for address 10.128.0.47:9180: Cannot assign requested address)",
+        )
+        self.assertEqual(startup_failed_event.severity, Severity.ERROR)
+        startup_failed_filter.eval_filter(startup_failed_event)
+        self.assertEqual(startup_failed_event.severity, Severity.WARNING)
+
+        # a real "Startup failed" for an unrelated reason must not be swallowed
+        unrelated_event = DatabaseLogEvent.DATABASE_ERROR().add_info(
+            node="node1",
+            line_number=3,
+            line="!ERR | scylla[1] [shard 0:main] init - Startup failed: std::runtime_error (config file not found)",
+        )
+        startup_failed_filter.eval_filter(unrelated_event)
+        prometheus_bind_filter.eval_filter(unrelated_event)
+        self.assertEqual(unrelated_event.severity, Severity.ERROR)
