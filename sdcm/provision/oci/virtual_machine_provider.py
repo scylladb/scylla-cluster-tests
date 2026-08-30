@@ -615,7 +615,7 @@ class VirtualMachineProvider:
             instance_id=instance_id,
         ).data
         active = [a for a in attachments if a.lifecycle_state == "ATTACHED"]
-        active.sort(key=lambda a: (a.nic_index or 0))
+        active.sort(key=lambda a: a.nic_index or 0)
         return active
 
     def get_vnic_details(self, vnic_id: str):
