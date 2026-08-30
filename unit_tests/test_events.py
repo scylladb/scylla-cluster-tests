@@ -489,6 +489,39 @@ class SctEventsTests(BaseEventsTest):
         assert "Authentication error" in error_log_content
         assert "topology change coordinator fiber got error" not in error_log_content
 
+    @pytest.mark.integration
+    def test_default_filters_gce_first_boot_bind_race(self):
+        """SCT-545/SCT-411: GCE first-boot posix_listen EADDRNOTAVAIL races should be
+        downgraded to WARNING globally, so they don't fail otherwise-passing runs."""
+        with environment(SCT_CLUSTER_BACKEND="gce"):
+            enable_default_filters(SCTConfiguration())
+
+        with self.wait_for_n_events(self.get_events_logger(), count=2):
+            DatabaseLogEvent.DATABASE_ERROR().add_info(
+                node="A",
+                line_number=22,
+                line="2026-06-27T03:17:49.539Z rolling-upgrade-ubuntu-db-node-b3848dee-0-5 !ERR | scylla[1669] "
+                "[shard 0:strm] init - Could not start Prometheus API server on 10.128.0.47:9180: "
+                "std::system_error (error system:99, posix_listen failed for address 10.128.0.47:9180: "
+                "Cannot assign requested address)",
+            ).publish()
+
+            DatabaseLogEvent.DATABASE_ERROR().add_info(
+                node="A",
+                line_number=23,
+                line="2026-06-27T03:17:49.546Z rolling-upgrade-ubuntu-db-node-b3848dee-0-5 !ERR | scylla[1669] "
+                "[shard 0:main] init - Startup failed: std::system_error (error system:99, posix_listen failed "
+                "for address 10.128.0.47:9180: Cannot assign requested address)",
+            ).publish()
+
+        warnings_log_content = self.get_event_log_file("warning.log")
+        assert "Could not start Prometheus API server" in warnings_log_content
+        assert "init - Startup failed" in warnings_log_content
+
+        error_log_content = self.get_event_log_file("error.log")
+        assert "Could not start Prometheus API server" not in error_log_content
+        assert "init - Startup failed" not in error_log_content
+
     def test_failed_stall_during_filter(self):
         with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=3):
             with (
@@ -878,3 +911,28 @@ class SctEventsTests(BaseEventsTest):
         assert nemesis_event.errors_formatted == ""
         self.assertEqual(nemesis_event.severity, Severity.NORMAL)
         self.assertEqual(nemesis_event.duration_formatted, "15s")
+
+
+class SctEventsNonGceDefaultFiltersTest(BaseEventsTest):
+    """Kept in a class of its own: `enable_default_filters()` publishes process-wide filters that
+    live for as long as the events device does (per test class here), so the "gce" filters
+    published by `SctEventsTests` must not leak into this negative test."""
+
+    @pytest.mark.integration
+    def test_default_filters_non_gce_backend_keeps_bind_race_as_error(self):
+        """The GCE-specific first-boot bind-race filter must not apply on other backends."""
+        with environment(SCT_CLUSTER_BACKEND="docker"):
+            enable_default_filters(SCTConfiguration())
+
+        with self.wait_for_n_events(self.get_events_logger(), count=1):
+            DatabaseLogEvent.DATABASE_ERROR().add_info(
+                node="A",
+                line_number=22,
+                line="2026-06-27T03:17:49.539Z some-non-gce-node !ERR | scylla[1669] "
+                "[shard 0:strm] init - Could not start Prometheus API server on 10.128.0.47:9180: "
+                "std::system_error (error system:99, posix_listen failed for address 10.128.0.47:9180: "
+                "Cannot assign requested address)",
+            ).publish()
+
+        error_log_content = self.get_event_log_file("error.log")
+        assert "Could not start Prometheus API server" in error_log_content
