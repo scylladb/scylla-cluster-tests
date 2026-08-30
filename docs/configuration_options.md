@@ -1350,7 +1350,7 @@ AMS AMI id to use for monitor node
 **type:** str (appendable)
 
 **backend overrides:**
-- `scylladb-monitor-4-16-0-amd64-2026-08-26t09-38-48z`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+- `scylladb-monitor-4-16-0-amd64-2026-08-30t08-46-39z`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
 
 
 ## **ami_id_db_cassandra** / SCT_AMI_ID_DB_CASSANDRA
@@ -1645,7 +1645,7 @@ gce image to use for monitor nodes
 **type:** str (appendable)
 
 **backend overrides:**
-- `https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylladb-monitor-4-16-0-amd64-2026-08-26t09-38-48z`: gce, gce-siren, k8s-gke
+- `https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylladb-monitor-4-16-0-amd64-2026-08-30t08-46-39z`: gce, gce-siren, k8s-gke
 
 
 ## **scylla_network_config** / SCT_SCYLLA_NETWORK_CONFIG
