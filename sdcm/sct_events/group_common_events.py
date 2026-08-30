@@ -310,20 +310,6 @@ def ignore_compaction_stopped_exceptions():
 
 
 @contextmanager
-def ignore_ignore_runtime_errors():
-    # These are actually INFO logs, but they get caught by RUNTIME_ERROR filter
-    with ExitStack() as stack:
-        stack.enter_context(
-            EventsSeverityChangerFilter(
-                new_severity=Severity.NORMAL,
-                event_class=DatabaseLogEvent,
-                regex=r".*ignoring error response: std::runtime_error.*",
-            )
-        )
-        yield
-
-
-@contextmanager
 def ignore_large_collection_warning():
     with ExitStack() as stack:
         stack.enter_context(DbEventsFilter(db_event=DatabaseLogEvent.WARNING, line="Writing large collection"))
@@ -652,7 +638,6 @@ NODE_UNAVAILABLE_CONTEXTS: list[Callable[[], ContextManager]] = [
     ignore_ycsb_connection_refused,
     ignore_stream_mutation_fragments_errors,
     ignore_compaction_stopped_exceptions,
-    ignore_ignore_runtime_errors,
     ignore_hints_sending_errors,
 ]
 
