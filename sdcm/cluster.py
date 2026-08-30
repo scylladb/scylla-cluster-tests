@@ -1326,7 +1326,7 @@ class BaseNode(AutoSshContainerMixin):
             ):
                 try:
                     extra_address = address_getter()
-                except (NetworkInterfaceNotFound, AttributeError):
+                except NetworkInterfaceNotFound, AttributeError:
                     continue
                 if not extra_address or extra_address == ScyllaNetworkConfiguration.LISTEN_ALL:
                     continue

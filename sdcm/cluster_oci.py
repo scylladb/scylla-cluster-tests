@@ -188,7 +188,7 @@ class OciNode(cluster.BaseNode):
                 if addrs:
                     ipv6_map[ifname] = addrs
             return ipv6_map
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             return {}
 
     def _build_network_interfaces(self) -> list:
