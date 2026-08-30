@@ -163,6 +163,27 @@ def enable_default_filters(sct_config: SCTConfiguration):
             new_severity=Severity.WARNING, event_class=DatabaseLogEvent.DATABASE_ERROR, regex=r".*Startup failed.*"
         ).publish()
 
+    # On GCE, the network interface's IP can become bind-capable asynchronously after boot.
+    # scylla's very first startup (triggered by scylla-image-setup.service, before SCT's own
+    # test logic runs) can therefore fail to posix_listen() on its own address with
+    # EADDRNOTAVAIL ("Cannot assign requested address"), aborting either the whole startup or
+    # just the Prometheus API server. systemd retries and the node comes up cleanly within a
+    # few seconds/minutes, well before any test workload starts. Downgrade to WARNING globally
+    # so this transient, self-recovering infra race does not fail otherwise-passing runs.
+    # https://scylladb.atlassian.net/browse/SCT-545
+    # https://scylladb.atlassian.net/browse/SCT-411
+    if sct_config.get("cluster_backend") == "gce":
+        EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*init - Startup failed:.*Cannot assign requested address",
+        ).publish()
+        EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*init - Could not start Prometheus API server.*Cannot assign requested address",
+        ).publish()
+
     if sct_config.get("new_scylla_repo") or sct_config.get("new_version"):
         # scylladb/scylla-enterprise#3814
         # scylladb/scylla-enterprise#3092
