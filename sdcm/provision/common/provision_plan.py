@@ -95,3 +95,7 @@ class ProvisionPlan(BaseModel):
             has_device = False
         if has_device:
             event.publish_or_dump(warn_not_ready=False)
+        else:
+            # Without this the event dies still flagged ready-to-publish and SctEvent.__del__ warns
+            # "has not been published or dumped" once per cluster. The outcome is already in the log above.
+            event.dont_publish()

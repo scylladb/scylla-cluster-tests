@@ -17,6 +17,8 @@ A spot request that fails falls through to on-demand and the run continues, so w
 run "configured for spot" can be billed on-demand with nothing noting it. These tests pin that record down.
 """
 
+import gc
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -57,6 +59,19 @@ def _run(plan, instance_type="i4i.2xlarge"):
             instance_parameters=instance_params, node_count=6, node_tags=[{}] * 6, node_names=["n"] * 6
         )
     return instances, mock_event
+
+
+def _run_real(plan, instance_type="i4i.2xlarge"):
+    """Run the plan WITHOUT patching the event class.
+
+    `_run` replaces SpotProvisionOutcomeEvent with a MagicMock, so `event.downgraded` is a truthy Mock and any
+    assertion about log level would pass regardless. Anything checking real event behaviour must use this.
+    """
+    instance_params = MagicMock()
+    instance_params.InstanceType = instance_type
+    return plan.provision_instances(
+        instance_parameters=instance_params, node_count=6, node_tags=[{}] * 6, node_names=["n"] * 6
+    )
 
 
 def test_event_records_spot_success():
@@ -138,3 +153,36 @@ def test_event_message_is_greppable():
 def test_missing_instance_type_does_not_break_the_event():
     event = SpotProvisionOutcomeEvent(requested="Spot", realized="Spot", region="eu-west-1", availability_zone="a")
     assert event.instance_type == "unknown"
+
+
+def test_no_internal_warning_when_no_events_device(caplog):
+    """`provision-resources` runs in a process with no events device.
+
+    Two noise regressions have come from this path already: publishing with a `default_logger` printed a
+    NORMAL outcome as ERROR, and skipping publication entirely left the event flagged ready-to-publish so
+    `SctEvent.__del__` warned "has not been published or dumped" once per cluster.
+    """
+    with caplog.at_level(logging.DEBUG):
+        _run_real(_plan("Spot", "OnDemand", results=[["i-123"]]))
+        gc.collect()
+
+    assert "[SCT internal warning]" not in caplog.text
+    assert "Unable to get events main device" not in caplog.text
+
+
+def test_outcome_logged_at_info_when_not_downgraded(caplog):
+    with caplog.at_level(logging.INFO, logger="sdcm.provision.common.provision_plan"):
+        _run_real(_plan("Spot", "OnDemand", results=[["i-123"]]))
+
+    record = next(r for r in caplog.records if "Spot provisioning outcome" in r.message)
+    assert record.levelno == logging.INFO
+
+
+@pytest.mark.parametrize("results", [[[], ["i-1"]], [[], []]])
+def test_downgrade_and_failure_logged_at_warning(caplog, results):
+    """A silent spot->on-demand downgrade is the thing being measured; it must not hide at INFO."""
+    with caplog.at_level(logging.INFO, logger="sdcm.provision.common.provision_plan"):
+        _run_real(_plan("Spot", "OnDemand", results=results))
+
+    record = next(r for r in caplog.records if "Spot provisioning outcome" in r.message)
+    assert record.levelno == logging.WARNING
