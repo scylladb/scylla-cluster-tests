@@ -2679,6 +2679,29 @@ class BaseNode(AutoSshContainerMixin):
             self.remoter.sudo(update_cmd, ignore_status=ignore_status)
         self.remoter.sudo(install_cmd, ignore_status=ignore_status)
 
+    def remove_package(self, package_name: str, ignore_status: bool = True) -> None:
+        """Uninstall a package, tolerating it not being installed at all."""
+        if self.distro.is_rhel_like:
+            pkg_mgr = next(
+                (
+                    mgr
+                    for mgr in ["microdnf", "yum", "dnf"]
+                    if self.remoter.run(f"test -e /usr/bin/{mgr}", ignore_status=True).ok
+                ),
+                None,
+            )
+            if not pkg_mgr:
+                raise NodeSetupFailed(
+                    node=self,
+                    error_msg="No supported RPM package manager found (expected one of: microdnf, yum, dnf)",
+                )
+            remove_cmd = rpm_cmd(pkg_mgr, f"remove -y {package_name}")
+        elif self.distro.is_sles:
+            remove_cmd = f"zypper remove -y {package_name}"
+        else:
+            remove_cmd = apt_cmd(f"remove -y {package_name}")
+        self.remoter.sudo(remove_cmd, ignore_status=ignore_status)
+
     def install_manager_agent(self, package_path: Optional[str] = None) -> None:
         package_name = "scylla-manager-agent"
         package_version = None
@@ -7178,6 +7201,13 @@ class BaseMonitorSet:
         else:
             manager_scylla_backend_version = self.params.get("manager_scylla_backend_version")
             scylla_repo = get_manager_scylla_backend(manager_scylla_backend_version, node.distro)
+        # The monitoring image ships its own, independently versioned scylla-node-exporter
+        # (epoch based, e.g. `1:1.11.1-2`). The manager backend is an older Scylla release
+        # whose `scylla` package still pins it exactly -- `Depends: scylla-node-exporter
+        # (= 2025.4.10-...)` -- and the package manager will not downgrade across the epoch,
+        # so the install dies with "held broken packages". Drop it first; install_scylla
+        # pulls the matching version back in as a dependency.
+        node.remove_package("scylla-node-exporter")
         node.install_scylla(scylla_repo=scylla_repo)
         package_path = self.params.get("scylla_mgmt_pkg")
         if package_path:
