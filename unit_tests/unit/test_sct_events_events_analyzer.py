@@ -78,7 +78,7 @@ class TestEventsAnalyzer(EventsUtilsMixin):
 
     def test_kill_test_not_called_for_gce_live_migration_of_loader(self):
         """A GCE host-maintenance live migration of a loader node is a known-benign, transient
-        cloud event (SCT-863) and must not abort the test."""
+        cloud event and must not abort the test."""
         start_events_analyzer(_registry=self.events_processes_registry)
         events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
 
@@ -96,7 +96,7 @@ class TestEventsAnalyzer(EventsUtilsMixin):
             events_analyzer.stop(timeout=1)
 
     def test_kill_test_called_for_gce_live_migration_of_db_node(self):
-        """The same live-migration event on a db node must still abort the test: the SCT-863
+        """The same live-migration event on a db node must still abort the test: the benign-event
         exemption is specific to loader nodes only."""
         start_events_analyzer(_registry=self.events_processes_registry)
         events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
