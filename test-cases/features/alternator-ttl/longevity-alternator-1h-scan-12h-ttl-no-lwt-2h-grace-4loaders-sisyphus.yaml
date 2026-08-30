@@ -38,7 +38,10 @@ round_robin: true
 dynamodb_primarykey_type: HASH_AND_RANGE
 
 n_loaders: 4
-instance_type_db: 'i4i.2xlarge'
+sizing_db:
+  vcpu: '>=8'
+  memory: '>=64'
+  local_disk_gb: '>=1500'  # ~80% of i4i.2xlarge's 1875GB
 n_db_nodes: 6
 
 nemesis_class_name: 'SisyphusMonkey'
