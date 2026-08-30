@@ -13,8 +13,15 @@
 
 from unittest.mock import MagicMock, patch
 
+import botocore.session
 import pytest
-from botocore.exceptions import ClientError
+from botocore.exceptions import (
+    ClientError,
+    EndpointConnectionError,
+    NoCredentialsError,
+)
+
+from sdcm.provision.aws.constants import SPOT_FLEET_ALLOCATION_STRATEGY
 
 from sdcm.provision.aws import spot_placement_score
 from sdcm.provision.aws.spot_placement_score import (
@@ -206,3 +213,25 @@ def test_more_than_ten_regions_issues_multiple_calls(mock_ec2):
     assert mock_ec2.get_spot_placement_scores.call_count == 2
     requested = [call.kwargs["RegionNames"] for call in mock_ec2.get_spot_placement_scores.call_args_list]
     assert [len(chunk) for chunk in requested] == [10, 2]
+
+
+def test_transport_errors_fall_back_to_given_order(mock_ec2):
+    """BotoCoreError subclasses are NOT ClientError. Scoring is on by default for AWS and runs on every
+    provisioning path, so missing these would turn a transient network blip into a provisioning abort."""
+    mock_ec2.get_spot_placement_scores.side_effect = EndpointConnectionError(endpoint_url="https://ec2")
+
+    assert get_scores(["i4i.large"], 6, ["eu-west-1"]) == []
+    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b", "c"]) == ["a", "b", "c"]
+
+
+def test_credentials_error_falls_back_to_given_order(mock_ec2):
+    mock_ec2.get_spot_placement_scores.side_effect = NoCredentialsError()
+    assert rank_regions(["i4i.large"], 6, ["eu-west-1", "eu-west-2"]) == ["eu-west-1", "eu-west-2"]
+
+
+def test_fleet_allocation_strategy_is_valid_for_request_spot_fleet():
+    """RequestSpotFleet takes camelCase ('capacityOptimized'); the hyphenated spelling belongs to the
+    different CreateFleet API. botocore does not validate enums client-side, so the wrong value would only
+    fail against real AWS with InvalidParameterValue."""
+    shape = botocore.session.get_session().get_service_model("ec2").shape_for("SpotFleetRequestConfigData")
+    assert SPOT_FLEET_ALLOCATION_STRATEGY in shape.members["AllocationStrategy"].enum

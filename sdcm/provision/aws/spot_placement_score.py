@@ -26,15 +26,18 @@ Scores are a *relative* ranking, never a go/no-go verdict. Two caveats from the 
 A high per-AZ score also "assumes that your fleet request will be configured to use a single Availability Zone
 and the capacity-optimized allocation strategy" - see `SPOT_FLEET_ALLOCATION_STRATEGY` in `constants.py`.
 
-Every failure path returns an empty result so callers fall back to their previous ordering: the scores are an
-optimization and must never be able to fail a test run. In particular `ec2:GetSpotPlacementScores` is a distinct
-IAM action, and runners can lag a policy rollout.
+Every AWS failure path returns an empty result so callers fall back to their previous ordering: the scores are
+an optimization and must never be able to fail a test run. That means catching both `ClientError` (API-level:
+`AccessDenied` for the distinct `ec2:GetSpotPlacementScores` IAM action, which runners can lag) and
+`BotoCoreError` (transport-level: endpoint/DNS/timeout/credential failures, which are NOT `ClientError`
+subclasses). Since scoring is enabled by default for AWS, a miss here would turn a transient network blip into
+a provisioning abort.
 """
 
 import logging
 from dataclasses import dataclass
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 from cachetools import TTLCache, cached
 from cachetools.keys import hashkey
 
@@ -90,7 +93,10 @@ def _zone_id_to_letter(region: str) -> dict[str, str]:
         response = AwsRegion(region_name=region).client.describe_availability_zones(
             Filters=[{"Name": "region-name", "Values": [region]}]
         )
-    except ClientError as exc:
+    except (BotoCoreError, ClientError) as exc:
+        # BotoCoreError covers the transport-level failures (EndpointConnectionError, ConnectTimeoutError,
+        # NoCredentialsError, ...) which are NOT ClientError subclasses. Catching only ClientError would let a
+        # transient DNS/endpoint blip abort provisioning - a failure mode that did not exist before this module.
         LOGGER.warning("Spot placement scores: cannot map AZ IDs in %s: %s", region, exc)
         return {}
     return {zone["ZoneId"]: zone["ZoneName"][len(region) :] for zone in response["AvailabilityZones"]}
@@ -117,8 +123,9 @@ def _query_scores(instance_types: list[str], target_capacity: int, regions: list
                 request["NextToken"] = next_token
             try:
                 response = client.get_spot_placement_scores(**request)
-            except ClientError as exc:
-                code = exc.response.get("Error", {}).get("Code")
+            except (BotoCoreError, ClientError) as exc:
+                # See the note in `_zone_id_to_letter`: transport errors are BotoCoreError, not ClientError.
+                code = exc.response.get("Error", {}).get("Code") if isinstance(exc, ClientError) else None
                 if code in _PERMISSION_ERROR_CODES:
                     LOGGER.warning(
                         "Spot placement scores unavailable (%s): the ec2:GetSpotPlacementScores permission is "

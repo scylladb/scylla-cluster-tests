@@ -70,11 +70,25 @@ configs are skipped — an AZ letter must be valid in every region, so no single
 better-scoring, VPC-peered region *before* the first attempt, instead of waiting for the configured region to
 fail. Useful for `region: random` jobs that land badly.
 
-**Duration policy.** `SCTConfiguration._apply_duration_based_provision_policy()` sets spot at or below
-`spot_max_test_duration` (default 720 min = 12h) and on_demand above it — but **only when
-`instance_provision` was not set explicitly**. Provenance is captured during `__init__` from the user config
-files and the `SCT_*` environment, before the merge flattens the layers; values inherited from `defaults/` are
-not explicit. This is what keeps the 36 `perf-v17` jobs on-demand.
+**Duration policy.** `SCTConfiguration._apply_duration_based_provision_policy()` resolves spot at or below
+`spot_max_test_duration` (default 720 min = 12h) and on_demand above it. It uses
+`effective_test_duration()`, which mirrors `ClusterTester._init_test_duration`: when `stress_duration` is set
+it, not `test_duration`, drives real runtime (`prepare_stress_duration` defaults to 300, so a job passing only
+`stress_duration` can run for days while `test_duration` still reads 60).
+
+It applies in two cases:
+
+* **`instance_provision: auto`** — the opt-in. **This is required for the policy to do anything under
+  Jenkins.** `vars/runSctTest.groovy` exports `SCT_INSTANCE_PROVISION` whenever the `provision_type` job
+  parameter is non-empty, and *every* pipeline defaults that parameter to a concrete value (`'spot'` or
+  `'on_demand'`). So in CI the value is always "explicitly set" and the second case below never fires. A job
+  adopts duration-based selection by setting `provision_type: 'auto'`.
+* the value was never set outside `defaults/` — covers local/`hydra` runs.
+
+Any other explicit value wins, which is what keeps the 36 `perf-v17` jobs on-demand. Provenance is captured
+during `__init__` from the user config files and the `SCT_*` environment, before the merge flattens the layers;
+values inherited from `defaults/` are not explicit. `auto` is always resolved to a concrete value at config
+load — including on backends without spot, where it becomes `on_demand` — so nothing downstream sees it.
 
 **Debug/CI CLI.** `hydra spot-placement-scores` for inspection and `hydra pick-spot-region` (prints
 `SPOT_REGION=<region>`) for CI use.

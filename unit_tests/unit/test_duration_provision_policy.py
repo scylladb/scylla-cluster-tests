@@ -160,3 +160,60 @@ class TestProvenanceCapture:
         """End-to-end guard for the perf-job case: long test, explicitly pinned spot, must stay spot."""
         config = self._load(monkeypatch, SCT_TEST_DURATION="7200", SCT_INSTANCE_PROVISION="spot")
         assert config.get("instance_provision") == "spot"
+
+
+class TestEffectiveDuration:
+    """`stress_duration`, not `test_duration`, drives real runtime when set (see tester._init_test_duration)."""
+
+    def test_uses_test_duration_when_no_stress_duration(self):
+        config = _make_config(test_duration=240, stress_duration=0, prepare_stress_duration=300)
+        assert config.effective_test_duration() == 240
+
+    def test_stress_duration_dominates(self):
+        config = _make_config(test_duration=5, stress_duration=2880, prepare_stress_duration=300)
+        assert config.effective_test_duration() == 300 + 2880 + 60
+
+    def test_long_stress_run_is_not_classified_as_spot(self):
+        """The bug this guards: test_duration=5 with stress_duration=2880 is a ~54h run that read as 'spot'."""
+        config = _make_config(test_duration=5, stress_duration=2880, prepare_stress_duration=300)
+        config._apply_duration_based_provision_policy()
+        assert config.get("instance_provision") == "on_demand"
+
+
+class TestAutoProvisionType:
+    """'auto' is the opt-in that makes the policy reachable under Jenkins.
+
+    Every pipeline defaults the `provision_type` job param to a concrete value, and runSctTest.groovy exports
+    SCT_INSTANCE_PROVISION whenever it is non-empty - so without 'auto' the value is always "explicitly set"
+    in CI and the policy would never fire there.
+    """
+
+    def test_auto_resolves_to_spot_for_short_test(self):
+        config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=90)
+        config._apply_duration_based_provision_policy()
+        assert config.get("instance_provision") == "spot"
+
+    def test_auto_resolves_to_on_demand_for_long_test(self):
+        config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=7200)
+        config._apply_duration_based_provision_policy()
+        assert config.get("instance_provision") == "on_demand"
+
+    def test_auto_wins_over_explicitness(self):
+        """'auto' arriving via SCT_INSTANCE_PROVISION is explicit, but explicitly means 'you decide'."""
+        config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=60)
+        config._apply_duration_based_provision_policy()
+        assert config.get("instance_provision") != "auto"
+
+    @pytest.mark.parametrize("backend", ["oci", "docker", "k8s-eks"])
+    def test_auto_resolves_on_backends_without_spot(self, backend):
+        """'auto' must never survive to the step-11 validation, which rejects it."""
+        config = _make_config(
+            explicit={"instance_provision"}, instance_provision="auto", cluster_backend=backend, test_duration=60
+        )
+        config._apply_duration_based_provision_policy()
+        assert config.get("instance_provision") == "on_demand"
+
+    def test_auto_resolves_even_without_a_duration(self):
+        config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=0)
+        config._apply_duration_based_provision_policy()
+        assert config.get("instance_provision") == "spot"

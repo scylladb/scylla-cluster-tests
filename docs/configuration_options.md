@@ -700,11 +700,11 @@ Scylla will print kernel callstack to logs if True, otherwise, it will try and m
 
 ## **instance_provision** / SCT_INSTANCE_PROVISION
 
-instance_provision: spot|on_demand|spot_fleet
+instance_provision: spot|on_demand|spot_fleet|auto. 'auto' defers the choice to `spot_max_test_duration`: spot at or below the threshold, on_demand above it. Because every Jenkins pipeline gives the `provision_type` job parameter a concrete default, 'auto' is the opt-in a job needs for duration-based selection to apply at all. Resolved to a concrete value at config load, so nothing downstream ever sees 'auto'.
 
 **default:** spot
 
-**type:** Literal['spot', 'on_demand', 'spot_fleet', 'spot_low_price']
+**type:** Literal['spot', 'on_demand', 'spot_fleet', 'spot_low_price', 'auto']
 
 **backend overrides:**
 - `on_demand`: oci, k8s-gke, k8s-eks

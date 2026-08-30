@@ -1039,8 +1039,12 @@ class SCTConfiguration(BaseModel):
         description="""Scylla will print kernel callstack to logs if True, otherwise, it will try and may print a message
          that it failed to.""",
     )
-    instance_provision: Literal["spot", "on_demand", "spot_fleet", "spot_low_price"] = SctField(
-        description="instance_provision: spot|on_demand|spot_fleet",
+    instance_provision: Literal["spot", "on_demand", "spot_fleet", "spot_low_price", "auto"] = SctField(
+        description="instance_provision: spot|on_demand|spot_fleet|auto. 'auto' defers the choice to "
+        "`spot_max_test_duration`: spot at or below the threshold, on_demand above it. Because every Jenkins "
+        "pipeline gives the `provision_type` job parameter a concrete default, 'auto' is the opt-in a job needs "
+        "for duration-based selection to apply at all. Resolved to a concrete value at config load, so nothing "
+        "downstream ever sees 'auto'.",
     )
     instance_provision_fallback_on_demand: Boolean = SctField(
         description="instance_provision_fallback_on_demand: create instance on_demand provision type if instance with selected "
@@ -3694,26 +3698,64 @@ class SCTConfiguration(BaseModel):
         """
         return param_name in getattr(self, "_explicitly_set_params", set())
 
-    def _apply_duration_based_provision_policy(self) -> None:
-        """Default `instance_provision` from `test_duration` unless it was set explicitly.
+    def effective_test_duration(self) -> int:
+        """Minutes the test is actually expected to run.
 
-        Short tests are cheap to lose and expensive to run on-demand, so they default to spot; long ones default
-        to on_demand because spot interruption exposure grows with runtime (a reclaimed node currently fails the
-        whole run - see SCT-707). An explicit value always wins, which is what keeps the performance jobs that
-        pin `on_demand` on-demand.
+        Mirrors `ClusterTester._init_test_duration` (and `vars/getJobTimeouts.groovy`): when `stress_duration`
+        is set it, not `test_duration`, drives the real runtime. Reading `test_duration` alone badly
+        underestimates such runs - `prepare_stress_duration` defaults to 300, so a job passing only
+        `stress_duration` can run for days while `test_duration` still reads 60.
         """
+        stress_duration = self.get("stress_duration")
+        if stress_duration:
+            prepare = int(self.get("prepare_stress_duration") or 0)
+            return prepare + int(stress_duration) + TestConfig.TEST_WARMUP_TEARDOWN
+        return int(self.get("test_duration") or 0)
+
+    def _apply_duration_based_provision_policy(self) -> None:
+        """Derive `instance_provision` from the effective test duration.
+
+        Short tests are cheap to lose and expensive to run on-demand, so they resolve to spot; long ones resolve
+        to on_demand because spot interruption exposure grows with runtime (a reclaimed node currently fails the
+        whole run - see SCT-707).
+
+        Applies in two cases:
+          * `instance_provision: auto` - an explicit request to be decided by duration. This is the opt-in every
+            Jenkins job needs, because `vars/runSctTest.groovy` exports SCT_INSTANCE_PROVISION whenever the
+            `provision_type` job parameter is non-empty, and every pipeline defaults that parameter to a concrete
+            value ('spot' or 'on_demand'). Without `auto` the value is always "explicitly set" under Jenkins and
+            this policy would never fire there at all.
+          * the value was never set outside `defaults/` - covers local/hydra runs.
+
+        Any other explicit value wins, which is what keeps the perf jobs that pin `on_demand` on-demand.
+        """
+        requested_auto = self.get("instance_provision") == "auto"
         if self.get("cluster_backend") not in ("aws", "gce", "azure"):
+            if requested_auto:
+                # Spot is unavailable or unsupported here (OCI DenseIO, k8s, docker), and 'auto' must never
+                # reach the step-11 validation unresolved. on_demand is the choice that works everywhere.
+                self.log.info(
+                    "instance_provision='auto' on backend '%s', which has no spot support; using 'on_demand'",
+                    self.get("cluster_backend"),
+                )
+                self["instance_provision"] = "on_demand"
             return
-        if self.is_explicitly_set("instance_provision"):
+
+        if not requested_auto and self.is_explicitly_set("instance_provision"):
             self.log.info(
-                "instance_provision='%s' was set explicitly; duration-based provision policy not applied",
+                "instance_provision='%s' was set explicitly; duration-based provision policy not applied "
+                "(use instance_provision/provision_type 'auto' to opt into duration-based selection)",
                 self.get("instance_provision"),
             )
             return
 
         threshold = self.get("spot_max_test_duration")
-        test_duration = self.get("test_duration")
+        test_duration = self.effective_test_duration()
         if not threshold or not test_duration:
+            if requested_auto:
+                # 'auto' must never survive into provisioning - nothing downstream understands it.
+                self.log.warning("instance_provision='auto' but no usable duration; falling back to 'spot'")
+                self["instance_provision"] = "spot"
             return
 
         desired = "on_demand" if int(test_duration) > int(threshold) else "spot"
@@ -3730,7 +3772,7 @@ class SCTConfiguration(BaseModel):
             return
 
         self.log.info(
-            "Duration-based provision policy: instance_provision '%s' -> '%s' (test_duration=%s min %s "
+            "Duration-based provision policy: instance_provision '%s' -> '%s' (effective duration=%s min %s "
             "threshold=%s min). Set instance_provision explicitly to override.",
             current,
             desired,

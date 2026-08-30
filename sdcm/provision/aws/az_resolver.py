@@ -295,7 +295,7 @@ class AZResolver:
         instance_types = self.required_instance_types()
 
         candidates = []
-        for region in self._ordered_fallback_regions(exclude={current_region}, instance_types=instance_types):
+        for region in self._ordered_fallback_regions(exclude={current_region}):
             if not self._is_region_peered(current_region, region):
                 LOGGER.info("Region fallback: skipping %s (no active VPC peering with %s)", region, current_region)
                 continue
@@ -309,7 +309,11 @@ class AZResolver:
                     cardinality,
                 )
                 continue
-            letters = self._rank_letters_by_spot_score([region], letters)
+            # Deliberately NOT score-ranking AZs per candidate region here. `get_scores` is cached per
+            # (types, capacity, regions) tuple, so ranking each candidate separately is a distinct cache key
+            # and costs one GetSpotPlacementScores call per region - 8 calls just to build a list we may never
+            # use. It is also redundant: relocating calls `switch_region` then `resolve()`, which ranks AZs for
+            # the region actually chosen. Region *ordering* above is already one batched call.
             candidates.append((region, letters[:cardinality]))
         return candidates
 
@@ -326,18 +330,18 @@ class AZResolver:
         """
         margin = int(self._params.get("spot_score_region_relocation_margin") or 0)
         region_names = self._region_names()
-        instance_types = self.required_instance_types()
+        scored_types = self.scored_instance_types()
         if (
             margin <= 0
             or not is_spot_placement_scoring_enabled(self._params)
             or len(region_names) != 1
-            or not instance_types
+            or not scored_types
         ):
             return None
         current_region = region_names[0]
 
         scored = get_scores(
-            instance_types=instance_types,
+            instance_types=scored_types,
             target_capacity=self.spot_target_capacity(),
             regions=[current_region, *(r for r in AWS_SUPPORTED_REGIONS if r != current_region)],
             single_az=False,
@@ -368,13 +372,19 @@ class AZResolver:
         )
         return None
 
-    def _ordered_fallback_regions(self, exclude: set[str], instance_types: list[str]) -> list[str]:
-        """Candidate regions for relocation, spot-score-ordered when enabled."""
+    def _ordered_fallback_regions(self, exclude: set[str]) -> list[str]:
+        """Candidate regions for relocation, spot-score-ordered when enabled.
+
+        Scores the DB types only (`scored_instance_types`) - see that method for why mixing roles into one
+        query flattens the result. Callers still filter regions by the full required-type offerings separately.
+        """
         regions = [region for region in AWS_SUPPORTED_REGIONS if region not in exclude]
         if not is_spot_placement_scoring_enabled(self._params) or len(regions) < 2:
             return regions
         ranked = rank_regions(
-            instance_types=instance_types, target_capacity=self.spot_target_capacity(), regions=regions
+            instance_types=self.scored_instance_types(),
+            target_capacity=self.spot_target_capacity(),
+            regions=regions,
         )
         if ranked != regions:
             LOGGER.info("Spot placement scores reordered region fallback candidates: %s -> %s", regions, ranked)
@@ -393,7 +403,7 @@ class AZResolver:
         instance_types = [instance_type for instance_type in [self._params.get("instance_type_db")] if instance_type]
 
         candidates = []
-        for region in self._ordered_fallback_regions(exclude=in_use_regions, instance_types=instance_types):
+        for region in self._ordered_fallback_regions(exclude=in_use_regions):
             if not all(self._is_region_peered(staying, region) for staying in staying_regions):
                 LOGGER.info(
                     "Region fallback (DC %d): skipping %s (no active VPC peering with all staying DCs %s)",
@@ -414,7 +424,8 @@ class AZResolver:
                     required_az_count,
                 )
                 continue
-            supported_letters = self._rank_letters_by_spot_score([region], supported_letters)
+            # see get_region_fallback_candidates: AZ ranking per candidate region is redundant and costs an
+            # API call each; the relocated DC gets ranked by `resolve()` once it is actually switched to.
             candidates.append((region, supported_letters[:required_az_count]))
         return candidates
 
@@ -469,11 +480,30 @@ class AZResolver:
         additional = sorted(common - set(configured_first))
         return configured_first + additional
 
+    def scored_instance_types(self) -> list[str]:
+        """Instance types to ask `GetSpotPlacementScores` about - DB types only.
+
+        The API treats `InstanceTypes` as *interchangeable alternatives* for one homogeneous request ("can you
+        place N of any of these"), not as "I need all of these". Passing DB + loader + monitor types together
+        would let a small, plentiful type (e.g. a t3 monitor) answer for the whole request, flattening scores
+        across AZs and destroying the ranking. DB nodes are also where the capacity risk and the cost actually
+        are, so they are what we score.
+        """
+        selected = []
+        for key in ("instance_type_db", "zero_token_instance_type_db", "instance_type_db_target"):
+            if (instance_type := self._params.get(key)) and instance_type not in selected:
+                selected.append(instance_type)
+        return selected
+
     def spot_target_capacity(self) -> int:
-        """Total instance count a spot placement score request should be sized for."""
-        total = sum(
-            _node_count_total(self._params.get(key)) for key, gate in _NODE_COUNT_PARAM_GATES if gate(self._params)
-        )
+        """Instance count the spot placement score request should be sized for.
+
+        Counts DB nodes only, matching `scored_instance_types()` - asking for the whole cluster's node count
+        while scoring only DB types would overstate the request.
+        """
+        total = _node_count_total(self._params.get("n_db_nodes"))
+        if _has_zero_token(self._params):
+            total += _node_count_total(self._params.get("n_db_zero_token_nodes"))
         return max(total, 1)
 
     def _rank_letters_by_spot_score(self, region_names: list[str], letters: list[str]) -> list[str]:
@@ -490,7 +520,7 @@ class AZResolver:
             return letters
 
         ranked = rank_az_letters(
-            instance_types=self.required_instance_types(),
+            instance_types=self.scored_instance_types(),
             target_capacity=self.spot_target_capacity(),
             region=region_names[0],
             az_letters=letters,

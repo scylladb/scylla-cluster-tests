@@ -24,6 +24,7 @@ import pytest
 from sdcm.provision.common.provision_plan import ProvisionPlan
 from sdcm.provision.common.provisioner import InstanceProvisionerBase, ProvisionParameters
 from sdcm.sct_events import Severity
+from sdcm.sct_events.base import add_severity_limit_rules, max_severity
 from sdcm.sct_events.system import SpotProvisionOutcomeEvent
 
 
@@ -114,6 +115,10 @@ def test_event_severity_and_downgrade_flag(requested, realized, downgraded, seve
     )
     assert event.downgraded is downgraded
     assert event.severity is severity
+    # severities.yaml caps this event type; a cap below the constructed severity would silently clamp it,
+    # making the WARNING-on-total-failure branch unreachable in practice.
+    add_severity_limit_rules([])  # load defaults/severities.yaml
+    assert max_severity(event).value >= severity.value
 
 
 def test_event_message_is_greppable():

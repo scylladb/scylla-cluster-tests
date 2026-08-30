@@ -522,13 +522,45 @@ class TestSpotPlacementScoreOrdering:
         assert is_spot_placement_scoring_enabled(self._spot_params()) is True
         assert is_spot_placement_scoring_enabled(self._spot_params(instance_provision="spot_fleet")) is True
 
-    def test_target_capacity_sums_gated_node_counts(self):
+    def test_target_capacity_counts_db_nodes_only(self):
+        """Capacity must match `scored_instance_types()`, which is DB-only - see that method for why."""
         resolver = AZResolver(self._spot_params(n_db_nodes=6, n_loaders=2, n_monitor_nodes=1))
-        assert resolver.spot_target_capacity() == 9
+        assert resolver.spot_target_capacity() == 6
 
     def test_target_capacity_handles_multi_dc_strings(self):
         resolver = AZResolver(self._spot_params(n_db_nodes="3 3", n_loaders="1 1", n_monitor_nodes=1))
-        assert resolver.spot_target_capacity() == 9
+        assert resolver.spot_target_capacity() == 6
+
+    def test_target_capacity_includes_zero_token_nodes(self):
+        resolver = AZResolver(
+            self._spot_params(n_db_nodes=6, n_db_zero_token_nodes=2, use_zero_nodes=True, n_loaders=2)
+        )
+        assert resolver.spot_target_capacity() == 8
+
+    def test_scored_types_exclude_loader_and_monitor(self):
+        """GetSpotPlacementScores treats InstanceTypes as interchangeable alternatives, so mixing a small
+        plentiful monitor type into the query would let it answer for the whole request and flatten scores."""
+        resolver = AZResolver(
+            self._spot_params(
+                instance_type_db="i4i.large", instance_type_loader="t3.small", instance_type_monitor="t3.small"
+            )
+        )
+        assert resolver.scored_instance_types() == ["i4i.large"]
+        assert "t3.small" in resolver.required_instance_types()  # still used for the offerings filter
+
+    def test_region_fallback_does_not_score_az_per_candidate(self, mock_aws_region_cls):
+        """One GetSpotPlacementScores call per candidate region is wasted work - each is a distinct cache
+        key, and `resolve()` re-ranks AZs for whichever region is actually switched to."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a", "us-west-2b"]
+        params = self._spot_params(availability_zone="a")
+        with (
+            patch("sdcm.provision.aws.az_resolver.rank_regions", side_effect=lambda **kw: kw["regions"]),
+            patch.object(AZResolver, "_is_region_peered", return_value=True),
+            patch("sdcm.provision.aws.az_resolver.rank_az_letters") as mock_rank_az,
+        ):
+            AZResolver(params).get_region_fallback_candidates()
+
+        mock_rank_az.assert_not_called()
 
     def test_target_capacity_is_at_least_one(self):
         resolver = AZResolver(self._spot_params(n_db_nodes=0, n_loaders=0, n_monitor_nodes=0))
