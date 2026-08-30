@@ -40,7 +40,7 @@ all encoded in `sdcm/provision/aws/spot_placement_score.py`:
 | `RegionName.N` max 10 entries | Region lists are chunked (`_chunk_regions`). |
 | Response is the top 10 placements | Unscored AZs/regions keep their order and go **last** — absent ≠ bad. |
 | Response reports `AvailabilityZoneId` (`euw1-az3`), not names | Translated per-account via `describe_availability_zones`; the mapping is shuffled per account and must never be hardcoded. |
-| `ec2:GetSpotPlacementScores` is a distinct IAM action | Every failure path returns `[]` so callers keep their previous ordering. Runners can lag a policy rollout. |
+| `ec2:GetSpotPlacementScores` is a distinct IAM action | Every failure path returns `[]` so callers keep their previous ordering. Verified available for a personal IAM user and for the Okta dev role; the Jenkins `qa-aws-*` credentials are a separate identity and unverified (see below). |
 
 Measured effect of type diversification, target capacity 6: `i4i.2xlarge` alone tops out at **3**; with
 `i4i.4xlarge`/`i7i.2xlarge`/`i8g.2xlarge` added, `us-west-2` scores **9** in all four AZs. Type
@@ -114,6 +114,33 @@ region-fallback ordering and the optional upfront relocation.
 Note also that three region lists disagree: `AWS_SUPPORTED_REGIONS` (8, includes `eu-west-1`/`us-east-1`, omits
 `ca-central-1`), `getJenkinsLabels.groovy` (7, the inverse), and the `jenkins_labels` map. Reconciling them is
 follow-up work.
+
+## IAM
+
+`ec2:GetSpotPlacementScores` is a distinct action, not covered by `ec2:Describe*`. Three identities matter,
+and they are not the same:
+
+| Identity | Used for | Status |
+|---|---|---|
+| Personal IAM user (e.g. `arn:aws:iam::…:user/<name>`) | local `hydra` runs | **verified working** |
+| Okta dev role | developer access | **verified working** |
+| Jenkins `qa-aws-secret-key-id` / `qa-aws-secret-access-key` | **every CI run** — bound by 15 pipelines in `vars/` | **unverified** |
+
+The CI credentials are what actually matter for scheduled jobs, and they are neither of the identities that
+were checked. Provisioned nodes get an instance profile, but the *provisioning* code itself authenticates with
+those Jenkins credentials, so that is the identity making the API call.
+
+To check:
+
+```bash
+AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=… \
+  aws ec2 get-spot-placement-scores --instance-types i4i.large --target-capacity 1 \
+  --single-availability-zone --region-names eu-west-1
+```
+
+This is not a merge blocker either way: without the permission every call returns `[]`, one warning is logged,
+and placement falls back to exactly the pre-PR ordering. The only consequence is that the feature quietly does
+nothing in CI until the grant is in place.
 
 ## GCE Equivalent (not implemented)
 
