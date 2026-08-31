@@ -254,10 +254,19 @@ class AddRemoveDcNemesis(NemesisBaseClass):
             )
 
     def decommission_new_nodes(self) -> None:
-        """Decommission temporary datacenter nodes and clear local node tracking."""
-        with self.runner.action_log_scope(f"Decommission nodes in the new datacenter {self.new_dc_name}"):
-            self.runner.decommission_nodes(self.new_nodes)
-        self.new_nodes = []
+        """Decommission temporary datacenter nodes and untrack the ones that left the cluster.
+
+        Tracking is pruned in a ``finally`` block, based on cluster membership: a decommissioned
+        node is removed from ``cluster.nodes`` by ``terminate_node()``, so a failure raised after
+        that point (e.g. the monitoring reconfiguration that follows termination) cannot leave an
+        already-terminated node queued for a second, doomed decommission in ``finalizer()``.
+        A node whose decommission really failed is still in the cluster and stays tracked.
+        """
+        try:
+            with self.runner.action_log_scope(f"Decommission nodes in the new datacenter {self.new_dc_name}"):
+                self.runner.decommission_nodes(self.new_nodes)
+        finally:
+            self.new_nodes = [node for node in self.new_nodes if node in self.runner.cluster.nodes]
 
     def finalizer(self, exc_type, *_):
         """Clean up the validation keyspace and temporary nodes on regular exits.
