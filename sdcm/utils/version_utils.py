@@ -529,7 +529,10 @@ def get_scylla_docker_repo_from_version(scylla_version: str):
 
     scylladb/scylla-enterprise-nightly is not supported anymore: pre-2025.1.0 enterprise
     versions no longer have an actively publishing nightly docker repo, so any version
-    that would have routed there now raises ValueError instead.
+    that would have routed there now raises ValueError instead. scylladb/scylla-enterprise
+    (the release repo, returned below for release-version inputs in the same pre-2025.1.0
+    range) is deprecated as well, see SCT-882; still returned here pending a follow-up to
+    drop it too.
 
     :param scylla_version: scylla version string
 
@@ -563,6 +566,7 @@ def get_scylla_docker_repo_from_version(scylla_version: str):
                 return "scylladb/scylla-nightly"
         elif "6.2.99" < comparable_version < "2025.1.0~dev":
             if comparable_version.isReleaseVersion():
+                # scylladb/scylla-enterprise is deprecated too, see SCT-882
                 return "scylladb/scylla-enterprise"
     except ValueError:
         pass
