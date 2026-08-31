@@ -3393,6 +3393,20 @@ class NemesisRunner:
             # Example: snapshot
             keyspace_table.extend([k_c.split(".") for k_c in ks_cf])
 
+        if ComparableScyllaVersion(self.target_node.scylla_version) >= "2026.2.0":
+            # Since https://github.com/scylladb/scylladb/commit/39baa1870e2cd84304ec453a12955fdb0a0abc61
+            # (first released in 2026.2.0), `nodetool listsnapshots` reports a secondary index's
+            # backing view under its logical index name instead of the view's physical name
+            # (which carries a "_index" suffix, e.g. "users_address_ind_index" -> "users_address_ind").
+            with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
+                index_backing_views = {
+                    (row.keyspace_name, f"{row.index_name}_index")
+                    for row in session.execute("SELECT keyspace_name, index_name FROM system_schema.indexes")
+                }
+            keyspace_table = [
+                [ks, cf[: -len("_index")]] if (ks, cf) in index_backing_views else [ks, cf] for ks, cf in keyspace_table
+            ]
+
         snapshot_content_list = [[elem.keyspace_name, elem.table_name] for elem in snapshot_content]
         if sorted(keyspace_table) != sorted(snapshot_content_list):
             raise AssertionError(
