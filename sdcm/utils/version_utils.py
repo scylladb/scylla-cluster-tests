@@ -37,6 +37,7 @@ from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events.system import ScyllaRepoEvent
 from sdcm.utils.decorators import retrying
 from sdcm.utils.features import get_enabled_features
+from sdcm.utils.session import create_retry_session
 
 # Examples of ScyllaDB version strings:
 #   - 666.development-0.20200205.2816404f575
@@ -662,6 +663,54 @@ def resolve_latest_repo_symlink(url: str) -> str:
     return resolved_url
 
 
+class NoPublishingBranchError(ValueError):
+    """Raised when every branch under a product's S3 prefix has been probed and none
+    currently publishes a relocatable/latest pointer.
+
+    Kept distinct from a generic ValueError so callers (and tests) can tell "nobody
+    currently publishes, this is an environmental condition" apart from a bug in the
+    discovery logic itself, which should surface as whatever error it naturally raises.
+    """
+
+
+def _latest_branch_with_relocatables(product: str) -> str:
+    """Find the newest branch under `unstable/{product}/` that still publishes relocatables.
+
+    Branch names are discovered from S3 instead of hard-coded, since the branch that
+    publishes a given product's nightly relocatables changes over time as new release
+    branches take over from older ones.
+    """
+    s3_client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION, config=Config(signature_version=UNSIGNED))
+
+    prefix = f"unstable/{product}/"
+    branches = []
+    response = s3_client.list_objects_v2(Bucket=SCYLLA_REPO_BUCKET, Prefix=prefix, Delimiter="/")
+    continuation_token = "BEGIN"
+    while continuation_token:
+        for common_prefix in response.get("CommonPrefixes", []):
+            branch = common_prefix.get("Prefix", "").rstrip("/").rsplit("/", 1)[-1]
+            branch_id = branch.replace("branch-", "").replace("enterprise-", "")
+            try:
+                branches.append((ComparableScyllaVersion(branch_id), branch))
+            except ValueError:
+                LOGGER.debug("Skipping unparseable branch `%s' under unstable/%s/", branch, product)
+        if continuation_token := response.get("NextContinuationToken"):
+            response = s3_client.list_objects_v2(
+                Bucket=SCYLLA_REPO_BUCKET,
+                Prefix=prefix,
+                Delimiter="/",
+                ContinuationToken=continuation_token,
+            )
+
+    for _, branch in sorted(branches, key=lambda item: item[0], reverse=True):
+        if _list_repo_file_etag(
+            s3_client=s3_client, prefix=f"unstable/{product}/{branch}/relocatable/latest/00-Build.txt"
+        ):
+            return branch
+
+    raise NoPublishingBranchError(f"No branch under unstable/{product}/ publishes relocatables in {SCYLLA_REPO_BUCKET}")
+
+
 def get_specific_tag_of_docker_image(docker_repo: str, architecture: Literal["x86_64", "aarch64"] = "x86_64") -> str:
     """
     Get the latest docker image tag from ScyllaDB S3 storage for given nightly docker repo.
@@ -669,7 +718,8 @@ def get_specific_tag_of_docker_image(docker_repo: str, architecture: Literal["x8
     :param docker_repo: docker repository name, e.g. 'scylladb/scylla-nightly'
     :param architecture: architecture of the docker image, either 'x86_64' or 'aarch64' (default: 'x86_64')
     :return: docker image tag string if found
-    :raises ValueError: if docker repo is not supported or tag info cannot be found
+    :raises ValueError: if docker repo is not supported, no branch publishes relocatables,
+        or tag info cannot be found
     """
 
     if docker_repo == "scylladb/scylla-nightly":
@@ -677,18 +727,14 @@ def get_specific_tag_of_docker_image(docker_repo: str, architecture: Literal["x8
         branch = "master"
     elif docker_repo == "scylladb/scylla-enterprise-nightly":
         product = "scylla-enterprise"
-        # The `enterprise` rolling branch stopped producing builds when
-        # enterprise development folded into the unified releases, and its
-        # relocatables are gone from downloads.scylladb.com. `enterprise-2024.1`
-        # is the only branch still publishing scylla-enterprise-nightly images.
-        branch = "enterprise-2024.1"
+        branch = _latest_branch_with_relocatables(product)
     else:
         raise ValueError(f"SCT doesn't support getting latest from {docker_repo}")
 
     build_url = (
         f"https://s3.amazonaws.com/downloads.scylladb.com/unstable/{product}/{branch}/relocatable/latest/00-Build.txt"
     )
-    res = requests.get(build_url)
+    res = create_retry_session().get(build_url, timeout=SCYLLA_URL_RESPONSE_TIMEOUT)
     res.raise_for_status()
     # example of 00-Build.txt content: (each line is formatted as 'key: value`)
     #
