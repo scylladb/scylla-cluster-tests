@@ -49,7 +49,7 @@ from argus.common.sct_types import RawEventPayload
 import sct_sizing
 import sct_ssh
 import sct_scan_issues
-from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.cluster_cloud import extract_short_test_id_from_name
 from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
@@ -1519,6 +1519,55 @@ def list_repos(dist_type, dist_version):
         tbl.add_row(version_prefix, repo_url)
 
     click.echo(rich_table_to_string(tbl, title="Scylla Repos"))
+
+
+@cli.command("list-cloud-zones", help="List ScyllaDB Cloud availability zones of a provider region")
+@click.option(
+    "--xcloud-env",
+    type=str,
+    default="staging",
+    help="ScyllaDB Cloud environment to query. Defaults to staging",
+)
+@click.option("--cloud-provider", type=click.Choice(["aws", "gce"]), default="aws", help="Cloud provider to query")
+@click.option("--region", type=str, required=True, help="Region to query, eg: us-east-1, us-east1")
+@click.option(
+    "--instance-type",
+    type=str,
+    default=None,
+    help="Only list zones where this instance type can be deployed, eg: i4i.large",
+)
+def list_cloud_zones(xcloud_env, cloud_provider, region, instance_type):
+    add_file_logger()
+
+    credentials = KeyStore().get_cloud_rest_credentials(xcloud_env)
+    api_client = ScyllaCloudAPIClient(api_url=credentials["base_url"], auth_token=credentials["api_token"])
+
+    provider_id = api_client.cloud_provider_ids[CloudProviderType.from_sct_backend(cloud_provider)]
+    region_id = api_client.get_region_id_by_name(cloud_provider_id=provider_id, region_name=region)
+
+    instance_type_id = None
+    if instance_type:
+        instance_type_id = api_client.get_instance_id_by_name(
+            cloud_provider_id=provider_id, region_id=region_id, instance_type_name=instance_type
+        )
+    zones = api_client.get_availability_zones(
+        cloud_provider_id=provider_id, region_id=region_id, instance_type_id=instance_type_id
+    )
+
+    if not zones:
+        click.secho(f"No availability zones found for '{cloud_provider}' region '{region}'!", fg="yellow")
+        return
+
+    # the AZ id is what 'xcloud_availability_zones' expects; the name is the account-specific alias
+    tbl = Table("AZ ID", "AZ name", show_lines=False)
+    for zone in zones:
+        tbl.add_row(zone["id"], zone["name"])
+
+    title = f"ScyllaDB Cloud availability zones ({xcloud_env}, {cloud_provider}, {region})"
+    if instance_type:
+        title += f" for {instance_type}"
+    click.echo(rich_table_to_string(tbl, title=title))
+    click.secho(f"Use the AZ ID column as SCT_XCLOUD_AVAILABILITY_ZONES, eg: {zones[0]['id']}", fg="green")
 
 
 @cli.command("get-scylla-base-versions", help="Get Scylla base versions of upgrade")

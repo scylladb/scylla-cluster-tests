@@ -48,7 +48,6 @@ from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.keystore import KeyStore
 from sdcm.utils.cloud_api_utils import (
     get_cloud_rest_credentials_from_file,
-    aws_region_to_az_id_prefix,
     expand_availability_zones,
     parse_availability_zones,
 )
@@ -5250,7 +5249,7 @@ class SCTConfiguration(BaseModel):
         if loaders >= zones:
             raise ValueError("Rack-aware validation requires zones without loaders.")
 
-    def _validate_xcloud_availability_zones(self):
+    def _validate_xcloud_availability_zones(self, cloud_api_client, provider_id: int, region_id: int):
         """Validate the AZ placement knob against node count, scaling config and the target region"""
         zones = parse_availability_zones(self.get("xcloud_availability_zones"))
         if not zones:
@@ -5262,24 +5261,27 @@ class SCTConfiguration(BaseModel):
             )
         expand_availability_zones(zones, self.get("n_db_nodes")[0])
 
-        # zones from another region are only rejected by Siren after provisioning starts, with an
-        # opaque "general error creating the cluster", so catch the mismatch here instead
-        cloud_provider = self.get("xcloud_provider")
-        is_aws = cloud_provider == "aws"
+        # zones outside the region, and zones that cannot host the DB instance type, are only rejected by Siren
+        # after provisioning starts, with a generic "general error creating the cluster" error.
+        # So checking them against the account real zone list here instead
+        is_aws = self.get("xcloud_provider") == "aws"
         region_name = self.region_names[0] if is_aws else self.gce_datacenters[0]
-        expected_prefix = aws_region_to_az_id_prefix(region_name) if is_aws else region_name
+        instance_type = self.get("instance_type_db" if is_aws else "gce_instance_type_db")
+        instance_type_id = cloud_api_client.get_instance_id_by_name(
+            cloud_provider_id=provider_id, region_id=region_id, instance_type_name=instance_type
+        )
+        available_zones = cloud_api_client.get_availability_zones(
+            cloud_provider_id=provider_id, region_id=region_id, instance_type_id=instance_type_id
+        )
 
-        if (not is_aws) or expected_prefix:
-            zone_prefix = f"{expected_prefix}-"
-            mismatched = [zone for zone in zones if not zone.startswith(zone_prefix)]
-            if mismatched:
-                provider = "AWS" if is_aws else "GCE"
-                zone_kind = "availability zone IDs" if is_aws else "zone names"
-                example = f"{expected_prefix}-az1" if is_aws else f"{region_name}-b"
-                raise ValueError(
-                    f"'xcloud_availability_zones' {mismatched} does not belong to region '{region_name}'. "
-                    f"{provider} {zone_kind} for this region start with '{zone_prefix}' (e.g. '{example}')."
-                )
+        available_zone_ids = {zone["id"] for zone in available_zones}
+        mismatched = [zone for zone in zones if zone not in available_zone_ids]
+        if mismatched:
+            available = ", ".join(f"{zone['id']} ({zone['name']})" for zone in available_zones)
+            raise ValueError(
+                f"'xcloud_availability_zones' {mismatched} cannot be used in region '{region_name}' with "
+                f"instance type '{instance_type}'. Available zones: {available}."
+            )
 
     def _validate_cloud_backend_parameters(self):
         cloud_api_client = ScyllaCloudAPIClient(
@@ -5339,7 +5341,7 @@ class SCTConfiguration(BaseModel):
         elif rf > min(n_nodes):
             raise ValueError(f"xcloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
 
-        self._validate_xcloud_availability_zones()
+        self._validate_xcloud_availability_zones(cloud_api_client, provider_id, region_id)
 
         # validate Vector Search parameters for cloud backend
         # TODO: update after Vector Search moves out of Beta for Scylla Cloud and limitations are changed/no longer apply

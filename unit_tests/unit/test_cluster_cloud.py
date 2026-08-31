@@ -616,34 +616,64 @@ def test_rackaware_verification_non_xcloud_unchanged():
 )
 def test_xcloud_az_validation_rejects_bad_config(values, error):
     with pytest.raises(ValueError, match=error):
-        SCTConfiguration._validate_xcloud_availability_zones(_fake_conf(values))
+        SCTConfiguration._validate_xcloud_availability_zones(_fake_conf(values), MagicMock(), 1, 1)
 
 
 @pytest.mark.parametrize(
-    "region,zones,raises",
+    "zones,raises",
     [
-        ("eu-west-1", "use1-az1,use1-az2,use1-az4", True),
-        ("eu-west-1", "euw1-az1,euw1-az2,euw1-az3", False),
-        ("us-east-1", "use1-az1,use1-az2,use1-az4", False),
-        ("ap-southeast-1", "apse1-az1,apse1-az2,apse1-az3", False),
-        ("us-gov-west-1", "usgw1-az1,usgw1-az2,usgw1-az3", False),
+        ("use1-az1,use1-az2,use1-az4", False),  # all three can host the configured instance type
+        ("use1-az1,use1-az2,use1-az3", True),  # use1-az3 exists but cannot host the instance type
+        ("euw1-az1,euw1-az2,euw1-az3", True),  # zones of another region entirely
     ],
 )
-def test_xcloud_az_validation_checks_region_prefix(region, zones, raises):
+def test_xcloud_az_validation_checks_zones_are_available(zones, raises):
     conf = _fake_conf(
-        {"xcloud_availability_zones": zones, "n_db_nodes": [3], "xcloud_provider": "aws"},
-        region_names=(region,),
+        {
+            "xcloud_availability_zones": zones,
+            "n_db_nodes": [3],
+            "xcloud_provider": "aws",
+            "instance_type_db": "i4i.large",
+        }
     )
+    api_client = MagicMock()
+    api_client.get_availability_zones.return_value = [
+        {"id": "use1-az1", "name": "us-east-1c"},
+        {"id": "use1-az2", "name": "us-east-1d"},
+        {"id": "use1-az4", "name": "us-east-1a"},
+    ]
+
     if raises:
-        with pytest.raises(ValueError, match="does not belong to region"):
-            SCTConfiguration._validate_xcloud_availability_zones(conf)
+        with pytest.raises(ValueError, match="cannot be used in region"):
+            SCTConfiguration._validate_xcloud_availability_zones(conf, api_client, 1, 1)
     else:
-        SCTConfiguration._validate_xcloud_availability_zones(conf)
+        SCTConfiguration._validate_xcloud_availability_zones(conf, api_client, 1, 1)
 
 
 def _make_api_client():
     with patch.object(ScyllaCloudAPIClient, "_create_session", return_value=MagicMock()):
         return ScyllaCloudAPIClient(api_url="https://api.example.com", auth_token="token")
+
+
+def test_get_availability_zones_resolves_cloud_account_and_sorts():
+    client = _make_api_client()
+    active_accounts = [
+        {"id": 201, "cloudProviderId": 2, "state": "ACTIVE"},
+        {"id": 2, "cloudProviderId": 1, "state": "ACTIVE"},
+    ]
+    unsorted_zones = [{"id": "use1-az4", "name": "us-east-1a"}, {"id": "use1-az1", "name": "us-east-1c"}]
+
+    with (
+        patch.object(client, "get_current_account_id", return_value=7),
+        patch.object(client, "get_active_accounts", return_value=active_accounts),
+        patch.object(client, "request", return_value=unsorted_zones) as request_mock,
+    ):
+        zones = client.get_availability_zones(cloud_provider_id=1, region_id=3, instance_type_id=62)
+
+    assert [zone["id"] for zone in zones] == ["use1-az1", "use1-az4"]
+    request_mock.assert_called_once_with(
+        "GET", "/account/7/cloud-account/2/region/3/zones", params={"instanceTypeId": 62}
+    )
 
 
 def _minimal_create_kwargs():

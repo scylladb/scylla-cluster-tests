@@ -15,6 +15,11 @@ hydra conf unit_tests/test_configs/minimal_test_case.yaml --backend gce
 # listing resource used in cloud (AWS/GCE)
 hydra list-resources --test-id n3vik6-ssu84ld --user bentsi
 
+# list ScyllaDB Cloud availability zones of a region, to pick AZ ids for xcloud_availability_zones
+hydra list-cloud-zones --xcloud-env staging --cloud-provider aws --region us-east-1
+# only the zones where a given instance type can be deployed
+hydra list-cloud-zones --xcloud-env staging --cloud-provider aws --region us-east-1 --instance-type i4i.large
+
 
 # cleanup resources
 hydra clean-resources --post-behavior
