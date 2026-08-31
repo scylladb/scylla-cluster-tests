@@ -127,7 +127,6 @@ for each team. This allows parallel tracking without dependency on a parent issu
 - `test-cases/upgrades/` (8 files)
 - `test-cases/scale/` (7 files)
 - `test-cases/kafka/` (2 files)
-- `test-cases/load/admission_control_overload_test.yaml`
 - `test-cases/features/` remaining (3 files): 2mv-backpressure-4d, gce-multiple-dc-shutdown-30mins, google-cloud-snitch-multi-dc
 - Root-level: PR-provision-test.yaml, PR-provision-test-docker.yaml, cassandra-aws-provision-test.yaml, cassandra-docker-provision-test.yaml, simple-data-validation-latte.yaml, agent-test-aws.yaml
 
@@ -180,6 +179,9 @@ nosqlbench cases, which are equally unused:
 - `test-cases/quarantined/longevity-ycsb-a-10M.yaml`
 - `test-cases/quarantined/longevity-ycsb-a-1B.yaml`
 - `test-cases/quarantined/longevity-ycsb-a-1M.yaml`
+
+Also quarantined, since its test implementation no longer exists:
+- `test-cases/quarantined/admission_control_overload_test.yaml`
 
 ---
 
