@@ -7,6 +7,7 @@ from sdcm.utils.version_utils import (
     get_branched_repo,
     get_relocatable_pkg_url,
     get_specific_tag_of_docker_image,
+    NoPublishingBranchError,
 )
 
 
@@ -14,7 +15,15 @@ from sdcm.utils.version_utils import (
 @pytest.mark.integration
 @pytest.mark.parametrize("docker_repo", ["scylladb/scylla-nightly", "scylladb/scylla-enterprise-nightly"])
 def test_get_specific_tag_of_docker_image(docker_repo):
-    assert get_specific_tag_of_docker_image(docker_repo=docker_repo) != "latest"
+    try:
+        tag = get_specific_tag_of_docker_image(docker_repo=docker_repo)
+    except NoPublishingBranchError:
+        pytest.skip(
+            f"no branch currently publishes relocatables in S3 for {docker_repo} — "
+            "infra/CI-external condition, not a code defect, see SCT-882"
+        )
+    else:
+        assert tag != "latest"
 
 
 def _generate_test_params_for_get_branched_repo():
