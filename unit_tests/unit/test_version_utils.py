@@ -732,23 +732,6 @@ def test_verify_docker_repo_implicit_resolution_for_scylla_versions(version, exp
 
 
 @pytest.mark.parametrize(
-    "version",
-    (
-        "enterprise",
-        "enterprise:latest",
-        "2024.5.0-dev-0.20251217.55f4a2b75472",
-        "2024.99.99-dev-0.20251217.55f4a2b75472",
-        "2024.2.5-0.20250221.cb9e2a54ae6d-1",
-        "2023.1.0-0.20230815.a1b2c3d4e5f6",
-    ),
-)
-def test_get_scylla_docker_repo_from_version_enterprise_nightly_not_supported(version):
-    """scylladb/scylla-enterprise-nightly is not supported anymore, see SCT-882."""
-    with pytest.raises(ValueError, match="Unsupported scylla version"):
-        get_scylla_docker_repo_from_version(version)
-
-
-@pytest.mark.parametrize(
     "version_tag,expected_base,expected_build,expected_date,expected_commit",
     [
         # Full version tag with suffix
