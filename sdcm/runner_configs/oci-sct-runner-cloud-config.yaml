@@ -1,5 +1,15 @@
 #cloud-config
 
+# The boot volume is launched larger than the image it comes from (see OciSctRunner._create_instance).
+# Growing the volume does not grow the filesystem: without this the extra space stays outside the root
+# partition and `df' keeps reporting the image's original size.
+growpart:
+  mode: auto
+  devices: ['/']
+  ignore_growroot_disabled: false
+
+resize_rootfs: true
+
 # Remove opc user early
 bootcmd:
   - userdel -f -r opc 2>/dev/null || true

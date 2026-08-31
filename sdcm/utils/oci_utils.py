@@ -26,7 +26,7 @@ import time
 
 import oci
 from oci.core import BlockstorageClient, ComputeClient, VirtualNetworkClient
-from oci.core.models import Image, Instance
+from oci.core.models import Image, Instance, InstanceSourceViaImageDetails
 from oci.exceptions import ServiceError
 from oci.identity import IdentityClient
 from oci.object_storage import ObjectStorageClient
@@ -37,6 +37,9 @@ from sdcm.provision.provisioner import VmArch
 from sdcm.utils.metaclasses import Singleton
 
 LOGGER = logging.getLogger(__name__)
+
+# OCI refuses to create a boot volume smaller than this.
+MIN_BOOT_VOLUME_SIZE_IN_GBS = 50
 
 OCI_RETRY_STRATEGY = oci.retry.RetryStrategyBuilder(
     max_attempts_check=True,
@@ -933,6 +936,28 @@ def build_hostname_label(name: str, default_hostname: str = "node") -> str:
     max_base_len = 63 - len(suffix)
     hostname = hostname[:max_base_len].strip("-") or default_hostname
     return f"{hostname}{suffix}"
+
+
+def build_image_source_details(
+    image_id: str, root_disk_size_gb: int | None, name: str = ""
+) -> InstanceSourceViaImageDetails:
+    """Pair an image with an explicit boot volume size.
+
+    `LaunchInstanceDetails' has no root disk field, so a bare `image_id' makes OCI size the boot volume
+    from the image itself and silently drop whatever root disk size was configured. OCI also refuses
+    anything under `MIN_BOOT_VOLUME_SIZE_IN_GBS', so a smaller request is raised to that floor rather
+    than failing the launch.
+    """
+    requested_gb = root_disk_size_gb or MIN_BOOT_VOLUME_SIZE_IN_GBS
+    boot_volume_size_in_gbs = max(requested_gb, MIN_BOOT_VOLUME_SIZE_IN_GBS)
+    if boot_volume_size_in_gbs != requested_gb:
+        LOGGER.info(
+            "Requested %sG root disk%s is under the OCI %sG boot volume minimum, using the minimum",
+            requested_gb,
+            f" for '{name}'" if name else "",
+            MIN_BOOT_VOLUME_SIZE_IN_GBS,
+        )
+    return InstanceSourceViaImageDetails(image_id=image_id, boot_volume_size_in_gbs=boot_volume_size_in_gbs)
 
 
 def _get_images(region: str | None = None):
