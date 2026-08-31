@@ -26,18 +26,20 @@ Scores are a *relative* ranking, never a go/no-go verdict. Two caveats from the 
 A high per-AZ score also "assumes that your fleet request will be configured to use a single Availability Zone
 and the capacity-optimized allocation strategy" - see `SPOT_FLEET_ALLOCATION_STRATEGY` in `constants.py`.
 
-Every AWS failure path returns an empty result so callers fall back to their previous ordering: the scores are
-an optimization and must never be able to fail a test run. That means catching both `ClientError` (API-level:
-`AccessDenied` for the distinct `ec2:GetSpotPlacementScores` IAM action, which runners can lag) and
-`BotoCoreError` (transport-level: endpoint/DNS/timeout/credential failures, which are NOT `ClientError`
-subclasses). Since scoring is enabled by default for AWS, a miss here would turn a transient network blip into
-a provisioning abort.
+Every failure path returns an empty result so callers fall back to their previous ordering: the scores are an
+optimization and must never be able to fail a test run. The error handling is deliberately total, because the
+exception surface is wider than it first appears - `ClientError` (API-level, e.g. `AccessDenied` for the
+distinct `ec2:GetSpotPlacementScores` IAM action, which runners can lag), `BotoCoreError` (transport-level:
+endpoint/DNS/timeout/credentials), and `botocore.parsers.ResponseParserError`, which subclasses plain
+`Exception` and fires whenever the endpoint returns a non-XML body. Since scoring is enabled by default for
+AWS and runs on every provisioning path, a miss here turns a blip - or an endpoint that simply does not
+implement the action - into a provisioning abort.
 """
 
 import logging
 from dataclasses import dataclass
 
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import ClientError
 from cachetools import TTLCache, cached
 from cachetools.keys import hashkey
 
@@ -93,10 +95,12 @@ def _zone_id_to_letter(region: str) -> dict[str, str]:
         response = AwsRegion(region_name=region).client.describe_availability_zones(
             Filters=[{"Name": "region-name", "Values": [region]}]
         )
-    except (BotoCoreError, ClientError) as exc:
-        # BotoCoreError covers the transport-level failures (EndpointConnectionError, ConnectTimeoutError,
-        # NoCredentialsError, ...) which are NOT ClientError subclasses. Catching only ClientError would let a
-        # transient DNS/endpoint blip abort provisioning - a failure mode that did not exist before this module.
+    except Exception as exc:  # noqa: BLE001
+        # Deliberately total. This function's whole contract is "never break the caller", and the exception
+        # surface is wider than it looks: ClientError (API), BotoCoreError (transport - EndpointConnectionError,
+        # ConnectTimeoutError, NoCredentialsError), and botocore.parsers.ResponseParserError, which subclasses
+        # plain Exception and is raised whenever the endpoint returns a non-XML body (a proxy/gateway error
+        # page, a truncated response, or an endpoint that does not implement the action at all).
         LOGGER.warning("Spot placement scores: cannot map AZ IDs in %s: %s", region, exc)
         return {}
     return {zone["ZoneId"]: zone["ZoneName"][len(region) :] for zone in response["AvailabilityZones"]}
@@ -123,8 +127,10 @@ def _query_scores(instance_types: list[str], target_capacity: int, regions: list
                 request["NextToken"] = next_token
             try:
                 response = client.get_spot_placement_scores(**request)
-            except (BotoCoreError, ClientError) as exc:
-                # See the note in `_zone_id_to_letter`: transport errors are BotoCoreError, not ClientError.
+            except Exception as exc:  # noqa: BLE001
+                # Deliberately total - see the note in `_zone_id_to_letter`. Notably this must catch
+                # botocore.parsers.ResponseParserError (a bare Exception subclass), or an endpoint that does
+                # not implement GetSpotPlacementScores aborts provisioning instead of degrading.
                 code = exc.response.get("Error", {}).get("Code") if isinstance(exc, ClientError) else None
                 if code in _PERMISSION_ERROR_CODES:
                     LOGGER.warning(
@@ -152,9 +158,28 @@ def get_scores(
 ) -> list[PlacementScore]:
     """Score `regions` (or their AZs when `single_az`) for placing `target_capacity` spot instances.
 
-    Results are ordered best-first. Returns [] when scores cannot be obtained for any reason, which every caller
-    must treat as "keep the existing order".
+    Results are ordered best-first. Returns [] when scores cannot be obtained for ANY reason, which every
+    caller must treat as "keep the existing order".
+
+    The outer guard makes that contract independent of the internals: individual steps handle their own errors,
+    but a single unhandled surprise here would abort provisioning on every AWS run, since scoring is enabled by
+    default and `AZResolver.resolve()` sits on every provisioning path.
     """
+    try:
+        return _get_scores(
+            instance_types=instance_types,
+            target_capacity=target_capacity,
+            regions=regions,
+            single_az=single_az,
+        )
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Spot placement scores unavailable (unexpected %s): %s", type(exc).__name__, exc)
+        return []
+
+
+def _get_scores(
+    instance_types: list[str], target_capacity: int, regions: list[str], single_az: bool = True
+) -> list[PlacementScore]:
     if not instance_types or not regions or target_capacity < 1:
         return []
 

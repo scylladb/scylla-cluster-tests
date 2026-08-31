@@ -23,6 +23,8 @@ from botocore.exceptions import (
 
 from sdcm.provision.aws.constants import SPOT_FLEET_ALLOCATION_STRATEGY
 
+from botocore.parsers import ResponseParserError
+
 from sdcm.provision.aws import spot_placement_score
 from sdcm.provision.aws.spot_placement_score import (
     PlacementScore,
@@ -235,3 +237,44 @@ def test_fleet_allocation_strategy_is_valid_for_request_spot_fleet():
     fail against real AWS with InvalidParameterValue."""
     shape = botocore.session.get_session().get_service_model("ec2").shape_for("SpotFleetRequestConfigData")
     assert SPOT_FLEET_ALLOCATION_STRATEGY in shape.members["AllocationStrategy"].enum
+
+
+def test_response_parser_error_falls_back_to_given_order(mock_ec2):
+    """`ResponseParserError` subclasses plain Exception - neither ClientError nor BotoCoreError.
+
+    It fires whenever the endpoint returns a non-XML body: a proxy/gateway error page, a truncated
+    response, or an endpoint that does not implement the action (which is how the moto-backed
+    integration test caught this - it aborted provisioning for every spot run).
+    """
+    mock_ec2.get_spot_placement_scores.side_effect = ResponseParserError("invalid XML received")
+
+    assert get_scores(["i4i.large"], 6, ["eu-west-1"]) == []
+    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b", "c"]) == ["a", "b", "c"]
+    assert rank_regions(["i4i.large"], 6, ["eu-west-1", "eu-west-2"]) == ["eu-west-1", "eu-west-2"]
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        ResponseParserError("bad xml"),
+        ValueError("something unexpected"),
+        KeyError("missing"),
+        RuntimeError("boom"),
+    ],
+)
+def test_any_exception_degrades_rather_than_raising(mock_ec2, exc):
+    """The contract is total: scoring is an optimization and must never fail a provisioning run."""
+    mock_ec2.get_spot_placement_scores.side_effect = exc
+    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b"]) == ["a", "b"]
+
+
+def test_zone_id_lookup_failure_degrades(mock_ec2):
+    """The AZ-id -> letter lookup is a second API call, with the same total-failure contract."""
+    mock_ec2.get_spot_placement_scores.return_value = {"SpotPlacementScores": [_score("eu-west-1", "euw1-az1", 9)]}
+    with patch.object(spot_placement_score, "_zone_id_to_letter", side_effect=ResponseParserError("bad xml")):
+        # the real _zone_id_to_letter swallows this itself; assert the caller survives either way
+        try:
+            result = rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b"])
+        except ResponseParserError:
+            pytest.fail("_zone_id_to_letter failure must not propagate to the caller")
+    assert result == ["a", "b"]
