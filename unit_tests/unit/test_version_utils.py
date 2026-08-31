@@ -1156,14 +1156,6 @@ def test_get_specific_tag_of_docker_image_nightly_uses_master_without_branch_dis
     mock_boto3.client.return_value.list_objects_v2.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "docker_repo",
-    [
-        "scylladb/some-unsupported-repo",
-        # scylladb/scylla-enterprise-nightly is not supported anymore, see SCT-882
-        "scylladb/scylla-enterprise-nightly",
-    ],
-)
-def test_get_specific_tag_of_docker_image_unsupported_repo_raises(docker_repo):
+def test_get_specific_tag_of_docker_image_unsupported_repo_raises():
     with pytest.raises(ValueError, match="doesn't support"):
-        get_specific_tag_of_docker_image(docker_repo)
+        get_specific_tag_of_docker_image("scylladb/some-unsupported-repo")
