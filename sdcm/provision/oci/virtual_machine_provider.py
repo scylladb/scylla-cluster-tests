@@ -41,7 +41,7 @@ from sdcm.provision.provisioner import (
 )
 from sdcm.provision.user_data import UserDataBuilder
 from sdcm.utils.oci_region import OciRegion
-from sdcm.utils.oci_utils import OciService, build_hostname_label
+from sdcm.utils.oci_utils import OciService, build_hostname_label, build_image_source_details
 from sdcm.utils.parallel_object import ParallelObject
 
 LOGGER = logging.getLogger(__name__)
@@ -297,7 +297,9 @@ class VirtualMachineProvider:
             "compartment_id": self._compartment_id,
             "availability_domain": self._get_availability_domain(definition),
             "display_name": definition.name,
-            "image_id": definition.image_id,
+            "source_details": build_image_source_details(
+                image_id=definition.image_id, root_disk_size_gb=definition.root_disk_size, name=definition.name
+            ),
             "shape": shape_type,
             "shape_config": shape_config_obj,
             "create_vnic_details": self._build_primary_vnic_details(

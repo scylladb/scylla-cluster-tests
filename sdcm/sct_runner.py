@@ -100,6 +100,7 @@ from sdcm.utils.oci_utils import (
     OciService,
     build_hostname_label,
     list_instances_oci,
+    build_image_source_details,
     oci_public_addresses,
     wait_for_instance_state,
     wait_for_image_state,
@@ -1710,11 +1711,20 @@ class OciSctRunner(SctRunner):
             "user_data": base64.b64encode(cloud_init_script.encode()).decode(),
         }
 
+        # Without explicit source details OCI sizes the boot volume from the image (50G), regardless of
+        # `root_disk_size_runner' / `--root-disk-size-gb', which left OCI runners with roughly a third of
+        # the space their AWS/GCE/Azure counterparts get and ran them out of disk during log collection.
+        source_details = build_image_source_details(
+            image_id=base_image,
+            root_disk_size_gb=root_disk_size_gb or self.instance_root_disk_size(test_duration),
+            name=instance_name,
+        )
+
         instance_details = LaunchInstanceDetails(
             availability_domain=full_ad,
             compartment_id=oci_region.compartment_id,
             display_name=instance_name,
-            image_id=base_image,
+            source_details=source_details,
             shape=shape_type,
             shape_config=shape_config,
             create_vnic_details=vnic_details,
