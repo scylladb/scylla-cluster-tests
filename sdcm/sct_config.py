@@ -2355,7 +2355,11 @@ class SCTConfiguration(BaseModel):
     )
     nvme_self_test_type: int = SctField(
         description="NVMe device self-test type to run: 1 (short, ~2 min) or 2 (extended, may take hours). "
-        "Only used when collect_nvme_diagnostics is enabled.",
+        "Only used when collect_nvme_diagnostics is enabled. "
+        "Honored only on controllers that advertise Device Self-test support (Identify Controller "
+        "OACS bit 4); unsupported controllers are skipped without issuing the command. "
+        "This has no effect on AWS: neither instance-store (Nitro SSD) nor EBS implements "
+        "Device Self-test, so on AWS the diagnostics rely on SMART counters and the error log instead.",
     )
     use_scylla_doctor_on_failure: Boolean = SctField(
         description="Run scylla-doctor on test failure to collect additional diagnostics",
