@@ -11,11 +11,14 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
+import base64
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
+from sdcm.keystore import SSHKey
 from sdcm.sct_runner import (
     list_sct_runners,
     clean_sct_runners,
@@ -26,6 +29,8 @@ from sdcm.sct_runner import (
     AzureSctRunner,
     OciSctRunner,
 )
+
+BASE_IMAGE_OCID = "ocid1.image.oc1.iad.aaaaaaaatestimage"
 
 
 class TestListSctRunners:
@@ -404,3 +409,93 @@ class TestFindRunnerInstance:
     def test_keep_tag_calculation_from_duration(self, elapsed_hours, duration_minutes, expected):
         """Test the keep tag value: elapsed_hours + duration_minutes / 60 + 6 hours buffer."""
         assert str(elapsed_hours + int(duration_minutes / 60) + 6) == expected
+
+
+# --- OCI runner boot volume sizing ---
+#
+# LaunchInstanceDetails has no root disk field: a bare `image_id' makes OCI inherit the image's own
+# size (50G) and silently ignore both `root_disk_size_runner' and `--root-disk-size-gb'. The size has
+# to travel in `source_details' instead, and the guest has to grow its filesystem onto it.
+
+
+@pytest.fixture
+def oci_runner():
+    """Build a real OciSctRunner with only its cloud boundaries mocked.
+
+    OciService and OciRegion are the network boundary; key_pair reaches the remote keystore.
+    Everything else, including the availability-domain mapping, runs for real.
+    """
+    oci_region = MagicMock(compartment_id="ocid1.compartment.oc1..test")
+    oci_region.availability_domains = ["us-ashburn-1-AD-1", "us-ashburn-1-AD-2", "us-ashburn-1-AD-3"]
+    ssh_key = SSHKey(name="scylla_test_id_ed25519", public_key=b"ssh-ed25519 AAAATEST", private_key=b"dummy\n")
+
+    with (
+        patch("sdcm.sct_runner.OciService"),
+        patch("sdcm.sct_runner.OciRegion", return_value=oci_region),
+        patch.object(OciSctRunner, "key_pair", ssh_key),
+    ):
+        yield OciSctRunner(region_name="us-ashburn-1", availability_zone="a", params=None)
+
+
+@pytest.fixture
+def launch_oci_runner(oci_runner):
+    """Return a factory that runs _create_instance and gives back the details OCI was asked to launch."""
+
+    def _launch(**kwargs):
+        with (
+            patch("sdcm.sct_runner.wait_for_instance_state", return_value=MagicMock()),
+            patch("sdcm.sct_runner.oci_public_addresses", return_value=["1.2.3.4"]),
+        ):
+            oci_runner._create_instance(
+                instance_type="VM.Standard.E4.Flex-2-8",
+                base_image=BASE_IMAGE_OCID,
+                tags={"TestId": "test-id"},
+                instance_name="sct-runner-test",
+                **kwargs,
+            )
+        return oci_runner.compute_client.launch_instance.call_args.args[0]
+
+    return _launch
+
+
+@pytest.mark.parametrize(
+    "test_duration,root_disk_size_gb,expected_gb",
+    [
+        pytest.param(600, 0, 80, id="regular-test-gets-default-80g"),
+        pytest.param(3 * 24 * 60, 0, 120, id="test-over-1.5-days-gets-extra-40g"),
+        pytest.param(600, 250, 250, id="explicit-size-overrides-default"),
+    ],
+)
+def test_create_instance_sizes_boot_volume_from_duration_and_override(
+    test_duration, root_disk_size_gb, expected_gb, launch_oci_runner
+):
+    """Test that the requested root disk size reaches OCI as an explicit boot volume size."""
+    details = launch_oci_runner(test_duration=test_duration, root_disk_size_gb=root_disk_size_gb)
+
+    assert details.source_details.boot_volume_size_in_gbs == expected_gb
+
+
+def test_create_instance_passes_image_through_source_details_only(launch_oci_runner):
+    """Test that the image is carried by source_details, leaving the deprecated image_id unset.
+
+    The two are mutually exclusive on LaunchInstanceDetails, so keeping image_id would either be
+    rejected by OCI or drop the boot volume size.
+    """
+    details = launch_oci_runner(test_duration=600)
+
+    assert details.image_id is None
+    assert details.source_details.image_id == BASE_IMAGE_OCID
+    assert details.source_details.source_type == "image"
+
+
+def test_create_instance_user_data_grows_root_filesystem(launch_oci_runner):
+    """Test that cloud-init is told to grow the root filesystem onto the enlarged boot volume.
+
+    A bigger volume is inert on its own: without growpart the partition keeps the image's size.
+    """
+    details = launch_oci_runner(test_duration=600)
+    cloud_config = yaml.safe_load(base64.b64decode(details.metadata["user_data"]).decode())
+
+    assert cloud_config["growpart"]["mode"] == "auto"
+    assert "/" in cloud_config["growpart"]["devices"]
+    assert cloud_config["resize_rootfs"] is True
