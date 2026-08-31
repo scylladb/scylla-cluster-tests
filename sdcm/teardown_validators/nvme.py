@@ -30,6 +30,11 @@ class NvmeValidator(TeardownValidator):
     """Run NVMe self-tests and health checks on all DB nodes during teardown.
 
     Controlled by ``teardown_validators.nvme.enabled`` (standard validator config).
+
+    Self-tests only run where the controller advertises Device Self-test support.
+    AWS implements it on neither instance-store nor EBS, so on that backend this
+    validator does the health collection only - see sdcm.utils.nvme_diagnostics
+    for the measurements and the reason.
     """
 
     validator_name = "nvme"
