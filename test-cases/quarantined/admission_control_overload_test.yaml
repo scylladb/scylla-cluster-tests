@@ -1,3 +1,6 @@
+# Quarantined: the AdmissionControlOverloadTest implementation was removed in
+# 95db65f672 ("improvement(treewide): Remove unused tests", Aug 2025), so this
+# config and its pipeline could not run. See jenkins-pipelines/quarantined/README.md.
 test_metadata:
   description: >-
     Admission-control overload test: 12 loaders deliberately overwhelm a single i4i.large node with
