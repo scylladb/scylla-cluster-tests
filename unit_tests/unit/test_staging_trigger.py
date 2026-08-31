@@ -1233,7 +1233,8 @@ class TestAutoSetDockerImageTrigger:
         _auto_set_docker_image(params)
         assert params["scylla_docker_image"] == "custom"
 
-    def test_enterprise_nightly(self):
+    def test_enterprise_nightly_not_supported(self):
+        """scylladb/scylla-enterprise-nightly is not supported anymore, see SCT-882."""
         params = {"scylla_version": "enterprise:latest"}
         _auto_set_docker_image(params)
-        assert params["scylla_docker_image"] == "scylladb/scylla-enterprise-nightly"
+        assert "scylla_docker_image" not in params

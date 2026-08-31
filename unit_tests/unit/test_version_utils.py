@@ -20,7 +20,6 @@ from sdcm.utils.version_utils import (
     ComparableScyllaOperatorVersion,
     ComparableScyllaVersion,
     MethodVersionNotFound,
-    NoPublishingBranchError,
     RepositoryDetails,
     ScyllaFileType,
     SCYLLA_VERSION_GROUPED_RE,
@@ -719,10 +718,6 @@ def test_comparable_scylla_operator_versions_to_str(version_string_input, versio
         ("2024.1.1", "scylladb/scylla-enterprise"),
         ("2024.2.13", "scylladb/scylla-enterprise"),
         ("2024.2.14", "scylladb/scylla-enterprise"),
-        ("enterprise", "scylladb/scylla-enterprise-nightly"),
-        ("enterprise:latest", "scylladb/scylla-enterprise-nightly"),
-        ("2024.5.0-dev-0.20251217.55f4a2b75472", "scylladb/scylla-enterprise-nightly"),
-        ("2024.99.99-dev-0.20251217.55f4a2b75472", "scylladb/scylla-enterprise-nightly"),
         ("2025.1.0", "scylladb/scylla"),
         ("2025.2.99", "scylladb/scylla"),
         ("2025.4.0", "scylladb/scylla"),
@@ -734,6 +729,23 @@ def test_comparable_scylla_operator_versions_to_str(version_string_input, versio
 )
 def test_verify_docker_repo_implicit_resolution_for_scylla_versions(version, expected_repo):
     assert get_scylla_docker_repo_from_version(version) == expected_repo
+
+
+@pytest.mark.parametrize(
+    "version",
+    (
+        "enterprise",
+        "enterprise:latest",
+        "2024.5.0-dev-0.20251217.55f4a2b75472",
+        "2024.99.99-dev-0.20251217.55f4a2b75472",
+        "2024.2.5-0.20250221.cb9e2a54ae6d-1",
+        "2023.1.0-0.20230815.a1b2c3d4e5f6",
+    ),
+)
+def test_get_scylla_docker_repo_from_version_enterprise_nightly_not_supported(version):
+    """scylladb/scylla-enterprise-nightly is not supported anymore, see SCT-882."""
+    with pytest.raises(ValueError, match="Unsupported scylla version"):
+        get_scylla_docker_repo_from_version(version)
 
 
 @pytest.mark.parametrize(
@@ -997,14 +1009,11 @@ def test_azure_version_routing_logic(version_string, should_use_released, is_ful
     "version,expected_repo",
     [
         # Full version tags → nightly repos
-        ("2024.2.5-0.20250221.cb9e2a54ae6d-1", "scylladb/scylla-enterprise-nightly"),
         ("2026.1.0~dev-0.20260119.4cde34f6f20b", "scylladb/scylla-nightly"),
         ("5.2.0-dev-0.20220829.67c91e8bcd61", "scylladb/scylla-nightly"),
-        ("2023.1.0-0.20230815.a1b2c3d4e5f6", "scylladb/scylla-enterprise-nightly"),
         # Branch/latest versions
         ("latest", "scylladb/scylla-nightly"),
         ("master:latest", "scylladb/scylla-nightly"),
-        ("enterprise:latest", "scylladb/scylla-enterprise-nightly"),
         # Simple versions
         ("5.2.1", "scylladb/scylla"),  # Release version
         ("2024.2.0", "scylladb/scylla-enterprise"),  # Release version
@@ -1147,78 +1156,6 @@ def test_get_gemini_version(output, expected):
     assert get_gemini_version(output) == expected
 
 
-def _make_list_objects_v2_side_effect(branch_prefixes, existing_branches):
-    """Build a `list_objects_v2` side_effect dispatching on the call's `Prefix`/`Delimiter`.
-
-    :param branch_prefixes: list of `unstable/{product}/{branch}/` prefixes returned as
-        `CommonPrefixes` for the branch-listing call.
-    :param existing_branches: set of branch names whose `00-Build.txt` existence probe
-        should report the file as present.
-    """
-
-    def side_effect(**kwargs):
-        if kwargs.get("Delimiter") == "/":
-            return {"CommonPrefixes": [{"Prefix": prefix} for prefix in branch_prefixes]}
-        prefix = kwargs.get("Prefix", "")
-        for branch in existing_branches:
-            if f"/{branch}/relocatable/latest/00-Build.txt" in prefix:
-                return {"KeyCount": 1, "Contents": [{"ETag": f"etag-{branch}"}]}
-        return {"KeyCount": 0, "Contents": []}
-
-    return side_effect
-
-
-@patch("sdcm.utils.version_utils.create_retry_session")
-@patch("sdcm.utils.version_utils.boto3")
-def test_get_specific_tag_of_docker_image_enterprise_picks_newest_publishing_branch(mock_boto3, mock_create_session):
-    mock_s3 = MagicMock()
-    mock_boto3.client.return_value = mock_s3
-    mock_s3.list_objects_v2.side_effect = _make_list_objects_v2_side_effect(
-        branch_prefixes=[
-            "unstable/scylla-enterprise/enterprise/",
-            "unstable/scylla-enterprise/enterprise-2024.1/",
-            "unstable/scylla-enterprise/enterprise-2025.1/",
-        ],
-        existing_branches={"enterprise-2024.1"},
-    )
-
-    mock_response = MagicMock()
-    mock_response.content = b"docker-image-name: scylla-enterprise-nightly:2024.1.x\n"
-    mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
-    mock_create_session.return_value = mock_session
-
-    result = get_specific_tag_of_docker_image("scylladb/scylla-enterprise-nightly")
-
-    assert result == "2024.1.x"
-    called_url = mock_session.get.call_args[0][0]
-    assert "enterprise-2024.1" in called_url
-    assert "enterprise-2025.1" not in called_url
-    assert "unstable/scylla-enterprise/enterprise/" not in called_url
-
-
-@patch("sdcm.utils.version_utils.create_retry_session")
-@patch("sdcm.utils.version_utils.boto3")
-def test_get_specific_tag_of_docker_image_enterprise_raises_when_no_branch_publishes(mock_boto3, mock_create_session):
-    mock_s3 = MagicMock()
-    mock_boto3.client.return_value = mock_s3
-    mock_s3.list_objects_v2.side_effect = _make_list_objects_v2_side_effect(
-        branch_prefixes=[
-            "unstable/scylla-enterprise/enterprise/",
-            "unstable/scylla-enterprise/enterprise-2024.1/",
-            "unstable/scylla-enterprise/enterprise-2025.1/",
-        ],
-        existing_branches=set(),
-    )
-    mock_session = MagicMock()
-    mock_create_session.return_value = mock_session
-
-    with pytest.raises(NoPublishingBranchError, match="publishes relocatables"):
-        get_specific_tag_of_docker_image("scylladb/scylla-enterprise-nightly")
-
-    mock_session.get.assert_not_called()
-
-
 @patch("sdcm.utils.version_utils.create_retry_session")
 @patch("sdcm.utils.version_utils.boto3")
 def test_get_specific_tag_of_docker_image_nightly_uses_master_without_branch_discovery(mock_boto3, mock_create_session):
@@ -1236,6 +1173,14 @@ def test_get_specific_tag_of_docker_image_nightly_uses_master_without_branch_dis
     mock_boto3.client.return_value.list_objects_v2.assert_not_called()
 
 
-def test_get_specific_tag_of_docker_image_unsupported_repo_raises():
+@pytest.mark.parametrize(
+    "docker_repo",
+    [
+        "scylladb/some-unsupported-repo",
+        # scylladb/scylla-enterprise-nightly is not supported anymore, see SCT-882
+        "scylladb/scylla-enterprise-nightly",
+    ],
+)
+def test_get_specific_tag_of_docker_image_unsupported_repo_raises(docker_repo):
     with pytest.raises(ValueError, match="doesn't support"):
-        get_specific_tag_of_docker_image("scylladb/some-unsupported-repo")
+        get_specific_tag_of_docker_image(docker_repo)
