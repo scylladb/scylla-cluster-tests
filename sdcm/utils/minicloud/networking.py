@@ -62,6 +62,12 @@ def _ensure_tun_in_firewalld_trusted_zone() -> None:
     clears runtime zone bindings.
     """
     if shutil.which("firewall-cmd") is None:
+        LOGGER.info(
+            "firewall-cmd is not available here - if this host runs firewalld, %s must be moved "
+            "into the %s zone from the host (scripts/minicloud-firewalld-zone.sh)",
+            TUN_NAME,
+            FIREWALLD_TRUSTED_ZONE,
+        )
         return
 
     firewalld_cmd = ["sudo", "-n", "firewall-cmd"]
