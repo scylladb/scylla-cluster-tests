@@ -60,6 +60,65 @@ class VirtualMachineProvider:
         self._identity_client = self._oci_service.get_identity_client(self._region)
         self._network_client = self._oci_service.get_network_client(self._region)
         self._bs_client = self._oci_service.get_block_storage_client(self._region)
+        self._availability_domains: Optional[List] = None
+
+    def _list_availability_domains(self) -> List:
+        """Availability domains of the compartment, sorted by name. Cached, the list never changes."""
+        if self._availability_domains is None:
+            ads = self._identity_client.list_availability_domains(self._compartment_id).data
+            self._availability_domains = sorted(ads, key=lambda x: x.name)
+        return self._availability_domains
+
+    def _az_list(self) -> List[str]:
+        """AZ identifiers this provider is configured with. self._az may hold a list, i.e. "a,b,c"."""
+        return [x.strip() for x in str(self._az).split(",")]
+
+    @staticmethod
+    def _match_availability_domain(az: str, ads: List) -> Optional[str]:
+        """Resolve a single AZ identifier ("1", "a" or a full AD name) to a full AD name."""
+        # Check if it's already a full AD name
+        for ad in ads:
+            if ad.name == az:
+                return ad.name
+
+        # Try index mapping
+        index = -1
+        if az.isdigit():
+            index = int(az) - 1
+        elif len(az) == 1 and az.isalpha():
+            index = ord(az.lower()) - ord("a")
+        if 0 <= index < len(ads):
+            return ads[index].name
+
+        # Try suffix matching
+        for ad in ads:
+            if ad.name.endswith(str(az)):
+                return ad.name
+
+        return None
+
+    def _availability_domains_in_scope(self) -> set:
+        """Full names of the availability domains this provider is responsible for.
+
+        An empty set means "not scoped to any AD", i.e. the whole region.
+        """
+        if not str(self._az).strip():
+            return set()
+        ads = self._list_availability_domains()
+        in_scope = set()
+        for az in self._az_list():
+            if ad_name := self._match_availability_domain(az, ads):
+                in_scope.add(ad_name)
+            else:
+                LOGGER.warning(
+                    "Failed to resolve the '%s' availability zone (derived from configuration '%s') "
+                    "in the '%s' region. Available domains: %s",
+                    az,
+                    self._az,
+                    self._region,
+                    [ad.name for ad in ads],
+                )
+        return in_scope
 
     def _get_availability_domain(self, definition: Optional[InstanceDefinition] = None) -> str:
         """
@@ -67,9 +126,8 @@ class VirtualMachineProvider:
         Uses self._az which can be a single value ("1"), a list ("1,2,3"), or letters ("a,b,c").
         If a list is provided, distributes based on definition's NodeIndex.
         """
-        ads = self._identity_client.list_availability_domains(self._compartment_id).data
-        ads.sort(key=lambda x: x.name)
-        az_list = [x.strip() for x in str(self._az).split(",")]
+        ads = self._list_availability_domains()
+        az_list = self._az_list()
         az_to_use = az_list[0]
         if definition and len(az_list) > 1:
             try:
@@ -85,24 +143,8 @@ class VirtualMachineProvider:
                     az_to_use,
                 )
 
-        # Check if it's already a full AD name
-        for ad in ads:
-            if ad.name == az_to_use:
-                return ad.name
-
-        # Try index mapping
-        index = -1
-        if az_to_use.isdigit():
-            index = int(az_to_use) - 1
-        elif len(az_to_use) == 1 and az_to_use.isalpha():
-            index = ord(az_to_use.lower()) - ord("a")
-        if 0 <= index < len(ads):
-            return ads[index].name
-
-        # Try suffix matching
-        for ad in ads:
-            if ad.name.endswith(str(az_to_use)):
-                return ad.name
+        if ad_name := self._match_availability_domain(az_to_use, ads):
+            return ad_name
 
         raise ProvisionError(
             f"Invalid or not found Availability Zone identifier '{az_to_use}' (derived from configuration '{self._az}') "
@@ -166,13 +208,22 @@ class VirtualMachineProvider:
         ).data
 
     def list_instances(self, test_id: str) -> List[Instance]:
-        """List instances in the compartment, optionally filtered by tags (test_id)."""
+        """List instances of this provider's availability domains, optionally filtered by tags (test_id).
+
+        NOTE: the OCI compute API is regional, so instances must be filtered by availability domain
+              here. Without it every per-AD provider of a region reports all the region's instances,
+              and callers which merge multiple providers get each instance as many times as there
+              are ADs in use.
+        """
+        ads_in_scope = self._availability_domains_in_scope()
         all_instances = oci.pagination.list_call_get_all_results(
             self._compute_client.list_instances, compartment_id=self._compartment_id
         ).data
         filtered = []
         for inst in all_instances:
             if inst.lifecycle_state == Instance.LIFECYCLE_STATE_TERMINATED:
+                continue
+            if ads_in_scope and inst.availability_domain not in ads_in_scope:
                 continue
             tags = (inst.defined_tags or {}).get(TAG_NAMESPACE, {})
             if test_id and tags.get("TestId") != test_id and test_id not in inst.display_name:

@@ -12,7 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 import uuid
-from unittest.mock import Mock
+from unittest.mock import patch, Mock
 
 import pytest
 
@@ -59,6 +59,33 @@ def test_create_collecting_nodes(test_id, tmp_path_factory):
     assert len(collector.monitor_set) == len(monitor_nodes)
     for collecting_node, v_m in zip(collector.monitor_set, monitor_nodes):
         assert collecting_node.name == v_m.name
+
+
+def test_create_collecting_nodes_deduplicates_overlapping_provisioners(test_id, tmp_path_factory):
+    """Test that a node discovered by several provisioners is collected only once.
+
+    Provisioners of the same region may report overlapping sets of instances (OCI discovers one
+    provisioner per availability domain of a region). Duplicated nodes make the parallel collectors
+    of a cluster run against the same host at once, racing for the same remote archive paths and
+    corrupting them.
+    """
+    test_dir = tmp_path_factory.mktemp("log-collector-duplicates")
+    prepare_fake_region(test_id, "region_1", n_db_nodes=3, n_loaders=2, n_monitor_nodes=1)
+    collector = Collector(
+        test_id=test_id, test_dir=test_dir, params={"cluster_backend": "fake", "use_cloud_manager": False}
+    )
+    provisioner = provisioner_factory.discover_provisioners(backend="fake", test_id=test_id)[0]
+
+    with patch.object(provisioner_factory, "discover_provisioners", return_value=[provisioner] * 3):
+        collector.create_collecting_nodes()
+
+    for cluster_set in (collector.db_cluster, collector.loader_set, collector.monitor_set):
+        names = [node.name for node in cluster_set]
+        assert len(names) == len(set(names)), f"Duplicated nodes to collect logs from: {names}"
+
+    expected = {v_m.name for v_m in provisioner.list_instances()}
+    collected = {node.name for node in collector.db_cluster + collector.loader_set + collector.monitor_set}
+    assert collected == expected
 
 
 def test_base_sct_log_collector_raises_when_no_local_files(tmp_path):
