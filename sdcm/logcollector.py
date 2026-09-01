@@ -1913,7 +1913,14 @@ class Collector:
     def create_collecting_nodes(self):
         try:
             provisioners = provisioner_factory.discover_provisioners(backend=self.backend, test_id=self.test_id)
-            instances = sum([provisioner.list_instances() for provisioner in provisioners], [])
+            # NOTE: discovered provisioners may report overlapping sets of instances, i.e. when there is
+            #       one provisioner per availability zone of the same region. Collecting one node more
+            #       than once makes the parallel collectors race for the same remote archive paths and
+            #       corrupt them, so keep a single entry per instance name.
+            instances = {}
+            for provisioner in provisioners:
+                for instance in provisioner.list_instances():
+                    instances.setdefault(instance.name, instance)
             collecting_nodes = [
                 CollectingNode(
                     name=instance.name,
@@ -1926,7 +1933,7 @@ class Collector:
                     global_ip=instance.public_ip_address,
                     tags=instance.tags,
                 )
-                for instance in instances
+                for instance in instances.values()
             ]
             for c_node in collecting_nodes:
                 match c_node.tags.get("NodeType"):
