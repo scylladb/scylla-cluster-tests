@@ -1,2 +1,2 @@
 minicloud:
-  image: ghcr.io/scylladb/minicloud:0.3.5
+  image: ghcr.io/scylladb/minicloud:0.3.6
