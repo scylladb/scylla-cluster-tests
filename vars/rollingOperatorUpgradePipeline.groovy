@@ -58,7 +58,7 @@ def call(Map pipelineParams) {
                    description: 'if true, install haproxy ingress controller and use it',
                    name: 'k8s_enable_sni')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
-                   description: 'spot|on_demand|spot_fleet',
+                   description: 'spot|on_demand|spot_fleet|auto (auto: resolved by test duration, threshold spot_max_test_duration)',
                    name: 'provision_type')
             choice(choices: ["${pipelineParams.get('post_behavior_db_nodes', 'destroy')}", 'keep', 'keep-on-failure'],
                    name: 'post_behavior_db_nodes')

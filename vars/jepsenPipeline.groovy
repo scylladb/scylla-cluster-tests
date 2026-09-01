@@ -59,7 +59,7 @@ def call(Map pipelineParams) {
                    description: 'Test ID of an existing cluster to reuse. When set, provisioning is skipped and the existing cluster is used.',
                    name: 'reuse_cluster')
             string(defaultValue: "${pipelineParams.get('provision_type', 'on_demand')}",
-                   description: 'spot|on_demand|spot_fleet',
+                   description: 'spot|on_demand|spot_fleet|auto (auto: resolved by test duration, threshold spot_max_test_duration)',
                    name: 'provision_type')
             string(defaultValue: "${pipelineParams.get('instance_provision_fallback_on_demand', 'false')}",
                    description: 'true|false',

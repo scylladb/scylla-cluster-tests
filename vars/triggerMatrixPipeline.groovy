@@ -58,7 +58,7 @@ def call(Map pipelineParams = [:]) {
             string(name: 'availability_zone', defaultValue: '',
                    description: 'Availability zone for jobs that do not set one in the matrix. Jobs with their own "availability_zone" param keep it.')
             string(name: 'provision_type', defaultValue: '',
-                   description: 'spot | on_demand | spot_fleet')
+                   description: 'spot | on_demand | spot_fleet|auto (auto: resolved by test duration, threshold spot_max_test_duration)')
             string(name: 'scylla_ami_id', defaultValue: '',
                    description: 'Scylla AMI ID — passed to AWS jobs. Use with backend=aws to run only AWS jobs.')
             string(name: 'gce_image_db', defaultValue: '',
