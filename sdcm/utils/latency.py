@@ -10,11 +10,22 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+import logging
+import re
 import statistics
 from typing import Any
 
 from sdcm.argus_results import LATENCY_ERROR_THRESHOLDS
 from sdcm.db_stats import PrometheusDBStats
+
+LOGGER = logging.getLogger(__name__)
+
+# node_exporter scrapes the loaders in the same job as the DB nodes, on this port
+NODE_EXPORTER_PORT = 9100
+# range vector for the loader rates: long enough to cover at least two scrapes of any interval SCT
+# uses. It smooths a sub-second stall away on purpose - these figures answer "were the loaders hot
+# during this step", the loader-cpu.log sampler answers "what happened in that second".
+LOADER_LOAD_RATE_WINDOW = "1m"
 
 
 def avg(values):
@@ -86,6 +97,86 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):  
                 if sequence:
                     res[metric] = float(format(avg(sequence) / 1000, ".2f"))
 
+    return res
+
+
+def _loader_instances_filter(loader_nodes) -> str:
+    """A Prometheus regex matching the node_exporter `instance` labels of the given loaders.
+
+    Every address a loader may have been registered under is included: the monitor builds the scrape
+    targets from one of them, and which one depends on the backend and on ip_ssh_connections.
+    """
+    instances = []
+    for node in loader_nodes:
+        for attr in ("ip_address", "private_ip_address", "public_ip_address"):
+            try:
+                address = getattr(node, attr, None)
+            except Exception:  # noqa: BLE001  # a cloud lookup of an already terminated node
+                continue
+            if not address:
+                continue
+            # IPv6 targets are registered in their bracketed form
+            targets = [f"{address}:{NODE_EXPORTER_PORT}"]
+            if ":" in address:
+                targets.append(f"[{address}]:{NODE_EXPORTER_PORT}")
+            for target in targets:
+                if target not in instances:
+                    instances.append(target)
+    return "|".join(re.escape(instance) for instance in instances)
+
+
+def collect_loader_load(monitor_node, start, end, loader_nodes) -> dict[str, float]:
+    """Peak loader-side CPU figures over a latency step window (SCT-601).
+
+    A client-observed P99 spike with flat server-side metrics is not necessarily a ScyllaDB problem -
+    the loaders themselves can be CPU starved. Reported per step next to the latencies so that two
+    runs can be compared directly instead of having to dig through Prometheus afterwards:
+
+    - **busy**: the hottest loader's CPU utilization.
+    - **steal**: CPU the hypervisor took away - a noisy neighbour or a credit-limited instance.
+    - **pressure**: PSI, the share of time at least one task was stalled waiting for a CPU. The
+      clearest "this loader was starved" signal, and it is high exactly when steal is not.
+    - **load1**: the coarse signal that used to be the only one available, kept for comparison
+      against past runs.
+
+    A metric whose query returned nothing is left out rather than reported as 0 - no data must not
+    read as an idle loader.
+    """
+    if not loader_nodes:
+        return {}
+    instances = _loader_instances_filter(loader_nodes)
+    if not instances:
+        LOGGER.warning("None of the loaders has an address to match node_exporter metrics with")
+        return {}
+
+    labels = f'instance=~"{instances}"'
+    queries = {
+        "Loader CPU busy max": f"100 - (avg by (instance) "
+        f'(rate(node_cpu_seconds_total{{mode="idle",{labels}}}[{LOADER_LOAD_RATE_WINDOW}])) * 100)',
+        "Loader CPU steal max": f"avg by (instance) "
+        f'(rate(node_cpu_seconds_total{{mode="steal",{labels}}}[{LOADER_LOAD_RATE_WINDOW}])) * 100',
+        "Loader CPU pressure max": f"rate(node_pressure_cpu_waiting_seconds_total{{{labels}}}"
+        f"[{LOADER_LOAD_RATE_WINDOW}]) * 100",
+        "Loader load1 max": f"node_load1{{{labels}}}",
+    }
+
+    prometheus = PrometheusDBStats(host=monitor_node.external_address)
+    res = {}
+    for metric, query in queries.items():
+        try:
+            query_res = prometheus.query(query, start, end)
+        except Exception:  # noqa: BLE001  # diagnostics must not fail the latency reporting
+            LOGGER.warning("Failed to query '%s' for %s", query, metric, exc_info=True)
+            continue
+        values = [
+            float(value[-1])
+            for entry in query_res
+            for value in entry.get("values") or []
+            if value[-1].lower() not in ("nan", "+inf", "-inf")
+        ]
+        if values:
+            res[metric] = float(format(max(values), ".2f"))
+    LOGGER.debug("Loader load during the step: %s", res)
     return res
 
 

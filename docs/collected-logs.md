@@ -50,6 +50,7 @@ Each loader node directory contains:
 | `cloud-init.log` | Cloud-init execution log |
 | `cloud-init-output.log` | Cloud-init stdout/stderr |
 | `console_output.log` | Serial console output (when kernel panic checker is enabled) |
+| `loader-cpu.log` | Loader CPU/thread diagnostics samples (when `loader_cpu_diagnostics` is enabled) |
 
 ## Monitor Node Logs
 

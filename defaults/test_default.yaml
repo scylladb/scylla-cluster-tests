@@ -253,6 +253,9 @@ service_level_shares: [1000]
 
 use_hdrhistogram: false
 
+loader_cpu_diagnostics: false
+loader_cpu_diagnostics_per_thread: false
+
 stop_on_hw_perf_failure: false
 
 
