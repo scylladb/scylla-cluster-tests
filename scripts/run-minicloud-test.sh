@@ -144,4 +144,8 @@ echo "=== configs: ${CONFIGS[*]} ==="
 
 "${RUNNER[@]}" start-minicloud -b "$BACKEND" "${CONFIG_ARGS[@]}"
 
+# minicloud0 exists now.
+# In hydra mode, apply the firewalld zone from the host; direct mode already handled it.
+scripts/minicloud-firewalld-zone.sh
+
 "${RUNNER[@]}" run-test "$TEST" --backend "$BACKEND" "${CONFIG_ARGS[@]}"

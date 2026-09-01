@@ -189,6 +189,8 @@ def call(Map params) {
         ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} start-minicloud -b "${params.backend}"
     else
         ./docker/env/hydra.sh start-minicloud -b "${params.backend}"
+        # local-agent only: hydra has no firewall-cmd, so assign minicloud0 to trusted zone on the host.
+        ./scripts/minicloud-firewalld-zone.sh
     fi
     """
 }

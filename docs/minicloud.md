@@ -131,8 +131,13 @@ Guest IMDS traffic is DNATed through the TUN device into the host INPUT chain, a
 zone blocks it.  If that traffic is blocked, guests still boot, but never receive their SSH key,
 so login fails with `AuthenticationError`.
 
-Startup applies this automatically at runtime and re-applies it on every run, because
-`firewall-cmd --reload` clears the setting.
+`scripts/minicloud-firewalld-zone.sh` applies this at runtime and is re-run on every start,
+because `firewall-cmd --reload` clears the setting. It runs on the host rather than inside the
+hydra container: the TUN device can be created from the container (it is privileged and shares
+the host's network namespace), but firewalld is a host daemon accessed over D-Bus and
+`firewall-cmd` is not in the hydra image. `scripts/run-minicloud-test.sh` and the *Start
+Minicloud* pipeline stage both call it; a direct (non-containerised) `sct.py start-minicloud`
+does the same work in `sdcm/utils/minicloud/networking.py`.
 If you configure networking with a boot-time unit, that unit must include:
 `firewall-cmd --zone=trusted --change-interface=minicloud0`.
 
@@ -239,7 +244,7 @@ the regular `clean-resources` path.
 | `SnapshotNotFound` from `ListSnapshotBlocks` | dev AMI whose snapshot is not shared with the QA account - use a released version |
 | "memory per shard too low" in a guest's Scylla log | `minicloud_lightweight_memory` set below ~3 GiB |
 | start aborts with "could not extract minicloud-setup.sh" or "minicloud-setup.sh failed" | host networking could not be configured - pre-create the `minicloud0` device or grant passwordless sudo |
-| guests boot and get DHCP, but SSH fails with `AuthenticationError` until the timeout | the host firewall blocks the guests' IMDS requests, so no SSH key was injected - on firewalld hosts the start moves `minicloud0` into the `trusted` zone itself; hitting this means it could not (no `firewall-cmd`-compatible firewall, or no passwordless sudo) |
+| guests boot and get DHCP, but SSH fails with `AuthenticationError` until the timeout | the host firewall blocks the guests' IMDS requests, so no SSH key was injected - on firewalld hosts `scripts/minicloud-firewalld-zone.sh` moves `minicloud0` into the `trusted` zone at every start and fails the build when it cannot, so either the script never ran - check that the *Start Minicloud* stage called it, or run it by hand on the host - or the block comes from a non-firewalld firewall (ufw, plain nftables), which the script deliberately leaves alone |
 | `clean-resources` refuses to run: "minicloud is not reachable" | the container died; collect its logs (`docker logs minicloud`) - cleanup against a fresh emulator would only pretend to succeed |
 
 The container's own log is the emulator's view of the run: `docker logs minicloud`, and
@@ -294,8 +299,9 @@ independent of minicloud; see [sct-pipelines](./sct-pipelines.md).
 A lab agent serving `minicloud-kvm-builders-v1` needs: the agent user in `kvm` and `docker`
 groups (restart the agent process after `usermod`, reconnecting is not enough); `minicloud0`
 pre-created by a boot-time unit (preferred - no sudo needed at run time) or passwordless sudo;
-on firewalld hosts, `minicloud0` in the `trusted` zone (done by the run itself given sudo, or
-by the boot-time unit - see [Running locally](#running-locally));
+on firewalld hosts, `minicloud0` in the `trusted` zone (done on the agent by
+`scripts/minicloud-firewalld-zone.sh` given passwordless sudo, or by the boot-time unit - see
+[Running locally](#running-locally));
 `USER`/`HOME` set and `$HOME` writable with >=80 GiB free; `numExecutors=1` + exclusive mode,
 which is what serialises the host singletons (port 5000, the container name, `minicloud0`);
 egress to docker.io, ghcr.io, github.com, amazonaws.com, argus.scylladb.com,
