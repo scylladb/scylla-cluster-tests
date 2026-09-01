@@ -40,9 +40,12 @@ start_support_versions = {
 }
 start_support_backend = {"azure": {"scylla": "5.2", "enterprise": "2023.1"}}
 
-# list of version that are available, but aren't supported, and we should test upgrades from
+# list of versions that are available, but aren't supported, and we shouldn't test upgrades from
 unsupported_versions = [
     "5.3",
+    # images of this release have a baked-in unstable repo snapshot which was already pruned from S3,
+    # so the rollback step of the rolling upgrade test can't reinstall it back (SCYLLADB-3508)
+    "2025.2",
 ]
 
 

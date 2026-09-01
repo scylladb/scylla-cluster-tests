@@ -257,6 +257,10 @@ def test_upgrade_matrix_stages(test_case):
     - When target_rc_only is True, it simulates that only RC versions exist for the target branch
     - When target_rc_only is False, it simulates that stable releases exist for the target branch
     - The upgrade matrix should return appropriate versions based on upgrade compatibility rules
+
+    ``unsupported_versions`` is emptied for the duration of the test so the cases keep describing
+    the selection algorithm alone: skipping a specific release (see ``test_unsupported_version_is_skipped``)
+    is an operational decision that changes over time and must not silently rewrite these expectations.
     """
     target_branch = test_case["target_branch"]
     target_rc_only = test_case["target_rc_only"]
@@ -277,11 +281,33 @@ def test_upgrade_matrix_stages(test_case):
     with (
         patch("utils.get_supported_scylla_base_versions.get_all_versions", return_value=mock_versions),
         patch("utils.get_supported_scylla_base_versions.get_s3_scylla_repos_mapping", return_value=mock_repo_map),
+        patch("utils.get_supported_scylla_base_versions.unsupported_versions", []),
     ):
         version_list = general_test(
             scylla_repo, linux_distro, base_version_all_sts_versions=base_version_all_sts_versions
         )
     assert set(version_list) == expected_version_set
+
+
+def test_unsupported_version_is_skipped():
+    """A release listed in ``unsupported_versions`` is never returned as an upgrade base version.
+
+    2025.2 is skipped that way: its images carry a baked-in unstable repo snapshot that is pruned
+    from S3 by now, so the rollback step of the rolling upgrade test cannot reinstall it (SCYLLADB-3508).
+    """
+    target_branch = "2026.1"
+    supported_versions = ["2024.1", "2024.2", "2025.1", "2025.2", "2025.3", "2025.4", "2026.1"]
+    scylla_repo = url_base + f"/branch-{target_branch}/deb/unified/latest/scylladb-{target_branch}/scylla.list"
+    mock_repo_map = {v: f"mock_url/{v}" for v in supported_versions}
+
+    with (
+        patch("utils.get_supported_scylla_base_versions.get_all_versions", return_value=supported_versions),
+        patch("utils.get_supported_scylla_base_versions.get_s3_scylla_repos_mapping", return_value=mock_repo_map),
+        patch("utils.get_supported_scylla_base_versions.unsupported_versions", ["2025.2"]),
+    ):
+        version_list = general_test(scylla_repo, "ubuntu-focal", base_version_all_sts_versions=True)
+
+    assert set(version_list) == {"2025.1", "2025.3", "2025.4", "2026.1"}
 
 
 def test_master_all_sts_versions():
@@ -304,6 +330,8 @@ def test_master_all_sts_versions():
             return_value=["2024.1", "2024.2", "2025.1", "2025.2", "2025.3", "2025.4", "2026.1"],
         ),
         patch("utils.get_supported_scylla_base_versions.get_s3_scylla_repos_mapping", return_value=mock_repo_map),
+        # keep this an algorithm test: the real skip list changes over time, see test_unsupported_version_is_skipped
+        patch("utils.get_supported_scylla_base_versions.unsupported_versions", []),
     ):
         version_detector = UpgradeBaseVersion(scylla_repo, linux_distro, None, base_version_all_sts_versions=True)
         version_detector.set_start_support_version(None)
