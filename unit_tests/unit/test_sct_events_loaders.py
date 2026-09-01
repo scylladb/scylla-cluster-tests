@@ -262,41 +262,65 @@ class TestScyllaBenchEvent:
 
 
 class TestYcsbStressEvent:
-    def test_subevents(self):
-        assert issubclass(YcsbStressEvent.failure, YcsbStressEvent)
-        assert issubclass(YcsbStressEvent.error, YcsbStressEvent)
-        assert not hasattr(YcsbStressEvent, "timeout")
-        assert issubclass(YcsbStressEvent.start, YcsbStressEvent)
-        assert issubclass(YcsbStressEvent.finish, YcsbStressEvent)
-
-    def test_without_errors(self):
-        event = YcsbStressEvent.error(node=[], stress_cmd="c-s", log_file_name="1.log")
-        assert event.severity == Severity.ERROR
-        assert event.node == "[]"
-        assert event.stress_cmd == "c-s"
-        assert event.log_file_name == "1.log"
-        assert not event.errors
-        event.event_id = "68067fe2-4c9e-421c-97b5-12db8d7ba71d"
-        assert str(event) == (
-            "(YcsbStressEvent Severity.ERROR) period_type=not-set "
-            "event_id=68067fe2-4c9e-421c-97b5-12db8d7ba71d: type=error node=[]\nstress_cmd=c-s"
+    def test_continuous_event_without_error(self):
+        begin_event_timestamp = 1623596860.1202102
+        ycsb_event = YcsbStressEvent(
+            node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False
         )
-        assert event == pickle.loads(pickle.dumps(event))
-
-    def test_with_errors(self):
-        event = YcsbStressEvent.failure(node="node1", errors=["e1", "e2"])
-        assert event.severity == Severity.CRITICAL
-        assert event.node == "node1"
-        assert event.stress_cmd is None
-        assert event.log_file_name is None
-        assert event.errors == ["e1", "e2"]
-        event.event_id = "225676a7-ddd1-4f4d-bae8-1cf5b35d0955"
-        assert str(event) == (
-            "(YcsbStressEvent Severity.CRITICAL) period_type=not-set "
-            "event_id=225676a7-ddd1-4f4d-bae8-1cf5b35d0955:"
-            " type=failure node=node1\nerrors:\n\ne1\ne2"
+        ycsb_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
+        begin_event = ycsb_event.begin_event()
+        begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
+        assert str(begin_event) == (
+            "(YcsbStressEvent Severity.NORMAL) period_type=begin "
+            "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd"
         )
-        assert event == pickle.loads(pickle.dumps(event))
+        assert begin_event.event_timestamp == begin_event_timestamp
+        assert begin_event.timestamp == begin_event_timestamp
+        assert begin_event == pickle.loads(pickle.dumps(begin_event))
+
+        ycsb_event.end_event()
+        ycsb_event.event_timestamp = ycsb_event.end_timestamp = 1623596861.1202102
+        assert str(ycsb_event) == (
+            "(YcsbStressEvent Severity.NORMAL) period_type=end "
+            "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=1s: "
+            "node=node\nstress_cmd=stress_cmd"
+        )
+        ycsb_event.log_file_name = "log_file_name"
+        assert ycsb_event == pickle.loads(pickle.dumps(ycsb_event))
+
+    def test_continuous_event_with_error(self):
+        begin_event_timestamp = 1623596860.1202102
+        ycsb_event = YcsbStressEvent(
+            node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False
+        )
+        ycsb_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
+        begin_event = ycsb_event.begin_event()
+        begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
+        assert str(begin_event) == (
+            "(YcsbStressEvent Severity.NORMAL) period_type=begin "
+            "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd"
+        )
+        assert begin_event.event_timestamp == begin_event_timestamp
+        assert begin_event.timestamp == begin_event_timestamp
+        assert begin_event == pickle.loads(pickle.dumps(begin_event))
+
+        try:
+            raise ValueError("Stress command completed with bad status 1")
+        except Exception as exc:  # noqa: BLE001
+            ycsb_event.severity = Severity.ERROR
+            ycsb_event.add_error([str(exc)])
+
+        ycsb_event.end_event()
+        ycsb_event.end_timestamp = ycsb_event.event_timestamp = 1623596960.1202102
+
+        assert str(ycsb_event) == (
+            "(YcsbStressEvent Severity.ERROR) period_type=end "
+            "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=1m40s: "
+            "node=node\nstress_cmd=stress_cmd\nerrors:"
+            "\n\nStress command completed with bad status 1"
+        )
+        ycsb_event.log_file_name = "log_file_name"
+        assert ycsb_event == pickle.loads(pickle.dumps(ycsb_event))
 
 
 class TestCDCReaderStressEvent:

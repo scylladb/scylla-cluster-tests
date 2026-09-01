@@ -281,14 +281,17 @@ class TestSctEvents(RealEventsTest):
         assert "error that shouldn't be lowered" in log_content
 
     def test_ycsb_filter(self):
-        with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
+        with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=3):
             with EventsFilter(
                 event_class=YcsbStressEvent, regex=".*Internal server error: exceptions::unavailable_exception.*"
             ):
-                YcsbStressEvent.error(
+                ycsb_event = YcsbStressEvent(
                     node="Node alternator-3h-silence--loader-node-bb90aa05-2"
                     " [34.251.153.122 | 10.0.220.55] (seed: False)",
                     stress_cmd="ycsb",
+                )
+                ycsb_event.begin_event()
+                ycsb_event.add_error(
                     errors=[
                         "237951 [Thread-47] ERROR site.ycsb.db.DynamoDBClient"
                         " -com.amazonaws.AmazonServiceException: Internal server error:"
@@ -296,18 +299,23 @@ class TestSctEvents(RealEventsTest):
                         " level for cl LOCAL_ONE. Requires 1, alive 0) (Service: AmazonDynamoDBv2;"
                         " Status Code: 500; Error Code: Internal Server Error; Request ID: null)"
                     ],
-                ).publish()
+                )
+                ycsb_event.severity = Severity.ERROR
+                ycsb_event.end_event()
                 TestFrameworkEvent(source="", source_method="").publish()
 
         log_content = self.get_event_log_file("events.log")
-
+        print(log_content)
         assert "TestFrameworkEvent" in log_content
-        assert "YcsbStressEvent" not in log_content
+        assert "YcsbStressEvent Severity.ERROR" not in log_content
 
-        with self.wait_for_n_events(self.get_events_logger(), count=1):
-            YcsbStressEvent.error(
+        with self.wait_for_n_events(self.get_events_logger(), count=2):
+            ycsb_event = YcsbStressEvent(
                 node="Node alternator-3h-silence--loader-node-bb90aa05-2 [34.251.153.122 | 10.0.220.55] (seed: False)",
                 stress_cmd="ycsb",
+            )
+            ycsb_event.begin_event()
+            ycsb_event.add_error(
                 errors=[
                     "237951 [Thread-47] ERROR site.ycsb.db.DynamoDBClient"
                     " -com.amazonaws.AmazonServiceException: Internal server error:"
@@ -315,7 +323,8 @@ class TestSctEvents(RealEventsTest):
                     " level for cl LOCAL_ONE. Requires 1, alive 0) (Service: AmazonDynamoDBv2;"
                     " Status Code: 500; Error Code: Internal Server Error; Request ID: null)"
                 ],
-            ).publish()
+            )
+            ycsb_event.end_event()
 
         log_content = self.get_event_log_file("events.log")
 

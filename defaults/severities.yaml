@@ -59,15 +59,6 @@ DatabaseLogEvent.RAFT_TOPOLOGY_SENDING_ERROR: WARNING
 DatabaseLogEvent.TABLET_SPLIT: DEBUG
 DatabaseLogEvent.TABLET_MERGE: DEBUG
 IndexSpecialColumnErrorEvent: ERROR
-CassandraHarryEvent.failure: CRITICAL
-CassandraHarryEvent.error: ERROR
-CassandraHarryEvent.timeout: ERROR
-CassandraHarryEvent.start: NORMAL
-CassandraHarryEvent.finish: NORMAL
-YcsbStressEvent.failure: CRITICAL
-YcsbStressEvent.error: ERROR
-YcsbStressEvent.start: NORMAL
-YcsbStressEvent.finish: NORMAL
 NdBenchStressEvent.failure: CRITICAL
 NdBenchStressEvent.error: ERROR
 NdBenchStressEvent.start: NORMAL
@@ -132,6 +123,8 @@ CassandraStressEvent: CRITICAL
 CqlStressCassandraStressEvent: CRITICAL
 LatteStressEvent: CRITICAL
 GeminiStressEvent: CRITICAL
+YcsbStressEvent: CRITICAL
+CassandraHarryEvent: CRITICAL
 ScyllaServerStatusEvent: NORMAL
 BootstrapEvent: NORMAL
 RepairEvent: NORMAL

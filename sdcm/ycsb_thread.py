@@ -22,6 +22,8 @@ from functools import cached_property
 from textwrap import dedent
 
 from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.sct_events import Severity
+from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.remote import FailuresWatcher
 from sdcm.reporting.tooling_reporter import YcsbVersionReporter
 from sdcm.sct_events.loaders import YcsbStressEvent
@@ -458,22 +460,18 @@ class YcsbStressThread(DockerBasedStressThread):
 
         def raise_event_callback(sentinel, line):
             if line:
-                YcsbStressEvent.error(
-                    node=cmd_runner_name,
-                    stress_cmd=stress_cmd,
-                    errors=[
-                        line,
-                    ],
-                ).publish()
+                ycsb_event.add_error([line])
+                ycsb_event.severity = Severity.ERROR
 
         LOGGER.debug("running: %s", stress_cmd)
         stress_cmd = stress_cmd.replace("bin/ycsb", "bin/ycsb.sh")
         node_cmd = f"cd /usr/local/share/scylla-ycsb && {stress_cmd}"
 
-        YcsbStressEvent.start(node=cmd_runner_name, stress_cmd=stress_cmd).publish()
+        # Create a continuous event instance
+        ycsb_event = YcsbStressEvent(node=cmd_runner_name, stress_cmd=stress_cmd, log_file_name=log_file_name)
+        ycsb_event.begin_event()  # Sets period_type=begin and publishes
 
         result = {}
-        ycsb_failure_event = ycsb_finish_event = None
         LOGGER.debug(f"starting YCSB stress command: {node_cmd}")
         with YcsbStatsPublisher(loader, loader_idx, ycsb_log_filename=log_file_name):
             try:
@@ -497,23 +495,13 @@ class YcsbStressThread(DockerBasedStressThread):
             except Exception as exc:
                 LOGGER.exception(f"YCSB stress command failed: {exc}")
                 errors_str = format_stress_cmd_error(exc)
-                ycsb_failure_event = YcsbStressEvent.failure(
-                    node=cmd_runner_name,
-                    stress_cmd=self.stress_cmd,
-                    log_file_name=log_file_name,
-                    errors=[
-                        errors_str,
-                    ],
-                )
-                ycsb_failure_event.publish()
+                ycsb_event.add_error([errors_str])
+                ycsb_event.severity = Severity.ERROR
                 raise
             finally:
                 LOGGER.debug("YCSB stress command finished, cleaning up")
-                ycsb_finish_event = YcsbStressEvent.finish(
-                    node=cmd_runner_name, stress_cmd=stress_cmd, log_file_name=log_file_name
-                )
-                ycsb_finish_event.publish()
+                ycsb_event.end_event()  # Sets period_type=end and publishes with same event_id
                 if self.params["use_hdrhistogram"]:
                     self._terminate_hdr_loggers(contextes, loader_idx, cpu_idx)
         LOGGER.debug("YCSB stress command done")
-        return loader, result, ycsb_failure_event or ycsb_finish_event
+        return loader, result, ycsb_event
