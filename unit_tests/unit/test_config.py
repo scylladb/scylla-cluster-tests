@@ -1621,3 +1621,155 @@ def test_cs_safepoint_logging_allowed_on_docker_based_loaders(monkeypatch):
     conf = sct_config.SCTConfiguration()
 
     conf._verify_cs_safepoint_logging("aws")
+
+
+# ---------------------------------------------------------------------------
+# scylla_network_config validation (SCTConfiguration step 17)
+#
+# These pin every rule in the step-17 block so it can be refactored into a
+# per-backend rule table without changing behaviour. Three of the configs below
+# have been sitting unused in unit_tests/test_configs/ since PR #6575 added
+# them; the tests that referenced them were lost along the way.
+# ---------------------------------------------------------------------------
+
+_AWS_NETWORK_CONFIG_ENV = {
+    "SCT_CLUSTER_BACKEND": "aws",
+    "SCT_AMI_ID_DB_SCYLLA": "ami-dummy",
+    "SCT_INSTANCE_TYPE_DB": "i4i.large",
+}
+
+_GCE_NETWORK_CONFIG_ENV = {
+    "SCT_CLUSTER_BACKEND": "gce",
+    "SCT_GCE_DATACENTER": "us-east1",
+    "SCT_GCE_INSTANCE_TYPE_DB": "n2-highmem-2",
+    "SCT_GCE_IMAGE_DB": (
+        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9"
+    ),
+    "SCT_SCYLLA_VERSION": "5.4.0",
+}
+
+
+def _setup_network_config_env(monkeypatch, base_env, config_files):
+    """Point SCTConfiguration at `config_files` on the given backend.
+
+    The step-17 checks run inside SCTConfiguration.__init__, but image resolution runs first and
+    would reach out to the cloud, so it is stubbed here. `scylla_network_config` is a plain list
+    field with no string coercion, so it can only be supplied through a config file, never through
+    an SCT_* environment variable.
+    """
+    for key, value in base_env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_CONFIG_FILES", config_files)
+    monkeypatch.setattr(sct_config, "convert_name_to_ami_if_needed", lambda value, region_names: value)
+    monkeypatch.setattr(
+        sct_config,
+        "get_scylla_gce_images_versions",
+        lambda version: [MagicMock(self_link="fake-link", name="scylla-5-4-0")],
+    )
+    monkeypatch.setattr(sct_config, "get_branch_version", lambda *args, **kwargs: "5.4.0")
+
+
+def test_scylla_network_config_missing_address_raises(monkeypatch):
+    """Every one of the five addresses is mandatory; rpc_address is absent from this config."""
+    _setup_network_config_env(
+        monkeypatch,
+        _AWS_NETWORK_CONFIG_ENV,
+        "unit_tests/test_configs/network_config_interface_not_defined.yaml",
+    )
+
+    with pytest.raises(ValueError, match="Interface address\\(es\\) were not defined: rpc_address"):
+        sct_config.SCTConfiguration()
+
+
+def test_scylla_network_config_missing_mandatory_param_raises(monkeypatch):
+    """'public' is mandatory per address, and the first address in this config omits it."""
+    _setup_network_config_env(
+        monkeypatch,
+        _AWS_NETWORK_CONFIG_ENV,
+        "unit_tests/test_configs/network_config_interface_param_not_defined.yaml",
+    )
+
+    with pytest.raises(ValueError, match="'public' parameter value for first address is not defined"):
+        sct_config.SCTConfiguration()
+
+
+def test_scylla_network_config_public_ipv4_on_secondary_nic_raises_on_aws(monkeypatch):
+    """A public IPv4 has to sit on nic 0: EC2 only associates one on device index 0."""
+    _setup_network_config_env(
+        monkeypatch,
+        _AWS_NETWORK_CONFIG_ENV,
+        "unit_tests/test_configs/network_config_interface_param_public_not_primary.yaml",
+    )
+
+    with pytest.raises(ValueError, match="it has to be primary network interface"):
+        sct_config.SCTConfiguration()
+
+
+def test_scylla_network_config_public_ipv4_on_secondary_nic_raises_on_gce(monkeypatch):
+    """The public-IPv4-on-nic-0 rule is backend-independent today.
+
+    It is worded after the EC2 limitation, but GCE relies on it too: build_network_interfaces()
+    in sdcm/provision/gce/instance_provider.py only attaches an AccessConfig to nic 0. Pinned here
+    so extracting a per-backend rule table does not silently drop it for GCE.
+    """
+    _setup_network_config_env(
+        monkeypatch,
+        _GCE_NETWORK_CONFIG_ENV,
+        "unit_tests/test_configs/network_config_interface_param_public_not_primary.yaml",
+    )
+
+    with pytest.raises(ValueError, match="it has to be primary network interface"):
+        sct_config.SCTConfiguration()
+
+
+def test_scylla_network_config_use_dns_on_secondary_nic_raises_on_gce(monkeypatch):
+    """GCE publishes a private DNS record for nic 0 only, so use_dns on nic 1 is rejected."""
+    _setup_network_config_env(
+        monkeypatch,
+        _GCE_NETWORK_CONFIG_ENV,
+        "unit_tests/test_configs/network_config_use_dns_on_secondary_nic.yaml",
+    )
+
+    with pytest.raises(ValueError, match="GCE creates a private DNS record for the primary network interface only"):
+        sct_config.SCTConfiguration()
+
+
+def test_scylla_network_config_use_dns_on_secondary_nic_accepted_on_aws(monkeypatch):
+    """The use_dns rule is GCE-only: the same config is valid on AWS."""
+    _setup_network_config_env(
+        monkeypatch,
+        _AWS_NETWORK_CONFIG_ENV,
+        "unit_tests/test_configs/network_config_use_dns_on_secondary_nic.yaml",
+    )
+
+    conf = sct_config.SCTConfiguration()
+
+    assert [address["nic"] for address in conf.scylla_network_config if address["address"] == "rpc_address"] == [1]
+
+
+def test_scylla_network_config_multiple_nics_multi_region_raises(monkeypatch):
+    """Secondary interfaces live in a per-region subnet, so multi-NIC multi-region is rejected."""
+    _setup_network_config_env(
+        monkeypatch,
+        _AWS_NETWORK_CONFIG_ENV | {"SCT_AMI_ID_DB_SCYLLA": "ami-dummy ami-dummy2"},
+        '["unit_tests/test_configs/minimal_test_case.yaml", "configurations/network_config/two_interfaces.yaml"]',
+    )
+    monkeypatch.setenv("SCT_REGION_NAME", '["eu-west-1", "us-east-1"]')
+    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
+
+    with pytest.raises(ValueError, match="Multiple network interfaces aren't supported for multi region use cases"):
+        sct_config.SCTConfiguration()
+
+
+def test_scylla_network_config_multiple_nics_single_region_accepted(monkeypatch):
+    """Positive control for the rules above: two interfaces in one region is a valid config."""
+    _setup_network_config_env(
+        monkeypatch,
+        _AWS_NETWORK_CONFIG_ENV,
+        '["unit_tests/test_configs/minimal_test_case.yaml", "configurations/network_config/two_interfaces.yaml"]',
+    )
+
+    conf = sct_config.SCTConfiguration()
+
+    assert {address["nic"] for address in conf.scylla_network_config} == {0, 1}
