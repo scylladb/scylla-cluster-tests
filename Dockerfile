@@ -49,10 +49,12 @@ COPY --from=apt_repos /etc/apt/keyrings/docker.asc /etc/apt/keyrings/docker.asc
 COPY --from=apt_repos /etc/apt/sources.list.d/docker.list /etc/apt/sources.list.d/docker.list
 COPY --from=apt_repos /usr/share/keyrings/cloud.google.gpg /usr/share/keyrings/cloud.google.gpg
 COPY --from=apt_repos /etc/apt/sources.list.d/google-cloud-sdk.list /etc/apt/sources.list.d/google-cloud-sdk.list
+# The google-cloud-sdk* names were transitional since 467.0.0 and have now been
+# dropped from the cloud-sdk repo; google-cloud-cli* are the only ones published.
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     apt-get install -y --no-install-recommends \
-        google-cloud-sdk \
-        google-cloud-sdk-gke-gcloud-auth-plugin \
+        google-cloud-cli \
+        google-cloud-cli-gke-gcloud-auth-plugin \
         binutils \
         curl \
         gettext \
