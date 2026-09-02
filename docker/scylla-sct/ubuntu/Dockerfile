@@ -4,7 +4,7 @@ FROM ${SOURCE_IMAGE}
 
 ENV USER scylla-test
 SHELL ["/bin/bash", "-c"]
-# Install sudo and other tools, disable autostart of scylla-server and scylla-housekeeping services,
+# Install sudo and other tools, disable autostart of the scylla-server service,
 # remove the login banner and add a new user.
 #
 # Password for the user is `test' and encrypted using openssl command:
@@ -33,9 +33,7 @@ RUN apt-get update && \
         docker-ce-cli && \
     rm -rf /var/lib/apt/lists/* && \
     echo "autostart=false" >> /etc/supervisord.conf.d/scylla-server.conf && \
-    echo "user=scylla" >> /etc/supervisord.conf.d/scylla-server.conf && \
-    echo "autostart=false" >> /etc/supervisord.conf.d/scylla-housekeeping.conf && \
-    echo "user=scylla" >> /etc/supervisord.conf.d/scylla-housekeeping.conf
+    echo "user=scylla" >> /etc/supervisord.conf.d/scylla-server.conf
 
 COPY ./etc/scylla-manager.conf /etc/supervisord.conf.d/scylla-manager.conf
 COPY ./etc/sshd.conf /etc/supervisord.conf.d/sshd.conf

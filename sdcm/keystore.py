@@ -262,9 +262,6 @@ class KeyStore:
     def get_qa_ssh_keys(self):
         return [self.get_ssh_key_pair(name="scylla_test_id_ed25519")]
 
-    def get_housekeeping_db_credentials(self):
-        return self.get_json("housekeeping-db.json")
-
     def get_ldap_ms_ad_credentials(self):
         return self.get_json("ldap_ms_ad.json")
 
