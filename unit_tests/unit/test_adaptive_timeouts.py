@@ -35,6 +35,7 @@ from sdcm.utils.adaptive_timeouts import (
     Operations,
     adaptive_timeout,
     TABLETS_HARD_TIMEOUT,
+    TIMEOUT_CONTENTION_FACTOR,
 )
 from unit_tests.lib.fake_cluster import DummyDbCluster
 
@@ -209,16 +210,54 @@ def test_tablets_decommission_timeout_is_calculated_from_data_size(
         operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
     ) as timeout:
         # node_data_size_mb=102400, expected_throughput=69/2*3=103.5 → estimated≈989.4s
-        # hard = int(estimated) * 4 + 600 (10-minute overhead) = 4556
+        # hard = int((estimated * 4 + 600) * 1.3 contention factor)
         throughput = _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
         estimated = int(102400 / throughput)
-        expected_hard = estimated * 4 + _STREAMING_OVERHEAD
+        expected_hard = int((estimated * 4 + _STREAMING_OVERHEAD) * TIMEOUT_CONTENTION_FACTOR)
         assert timeout == expected_hard
 
     soft_timeout_mock.assert_not_called()
     hard_timeout_mock.assert_not_called()
     metrics = adaptive_timeout_store.get(operation=Operations.DECOMMISSION.name)
     assert metrics[0].get("tablets_enabled") is True
+
+
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_tablets_decommission_timeout_applies_contention_factor(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
+):
+    """The soft and hard timeouts both include a contention factor to account for reduced
+    effective throughput under concurrent foreground load. Applying the same factor to both
+    keeps the hard timeout above the soft timeout at any data size.
+    See: https://scylladb.atlassian.net/browse/SCT-681
+    """
+    mock_tablets_feature.return_value = True
+    # Mock small data size (~3GB) to simulate a freshly bootstrapped node (SCT-681 scenario)
+    with mock.patch("sdcm.utils.adaptive_timeouts.TimeoutMonitor") as timeout_monitor_mock:
+        with mock.patch.object(
+            NodeLoadInfoService, "node_data_size_mb", new_callable=mock.PropertyMock, return_value=3000
+        ):
+            with adaptive_timeout(
+                operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
+            ) as timeout:
+                # node_data_size_mb=3000, expected_throughput=69/2*3=103.5 → estimated≈28
+                throughput = _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
+                estimated = int(3000 / throughput)
+                expected_soft = int((estimated * 2 + _STREAMING_OVERHEAD) * TIMEOUT_CONTENTION_FACTOR)
+                expected_hard = int((estimated * 4 + _STREAMING_OVERHEAD) * TIMEOUT_CONTENTION_FACTOR)
+                assert timeout == expected_hard
+                assert expected_hard > expected_soft
+        # Verify TimeoutMonitor receives both contention-factored soft and hard values
+        timeout_monitor_mock.assert_called_once_with(
+            Operations.DECOMMISSION.name,
+            expected_soft,
+            expected_hard,
+            start_time=mock.ANY,
+        )
+
+    soft_timeout_mock.assert_not_called()
+    hard_timeout_mock.assert_not_called()
 
 
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
