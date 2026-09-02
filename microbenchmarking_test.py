@@ -85,6 +85,10 @@ class PerfCqlRawTest(MicrobenchmarkTest):
     * The standard ports, plus memory and cpus. The node's own scylla-server already holds
       native_transport_port 9042 and api_port 10000, so it is stopped for the duration of the run
       and started again afterwards.
+    * I/O scheduler properties. Outside developer mode scylla refuses to start unless one of
+      --io-properties / --io-properties-file is given, so the node's own iotune output is passed
+      in. It describes the data disk while --workdir is on /tmp, which is fine: seastar registers
+      a placeholder queue for devid 0 and routes any unconfigured device to it.
 
     The command line matches what the tool's developers run, so results stay comparable with
     theirs. Changing RESOURCE_OPTIONS or DURATION invalidates the Argus baseline, which is why
@@ -92,7 +96,12 @@ class PerfCqlRawTest(MicrobenchmarkTest):
     """
 
     WORKDIR = "/tmp/scylla-perf-cql-raw-workdir"
-    RESOURCE_OPTIONS = "--smp 2 --cpus 0,1 -m 2G"
+    IO_PROPERTIES_FILE = "/etc/scylla.d/io_properties.yaml"
+    # -m must cover 1 GiB per shard plus the 50 MiB per shard scylla takes out of it for wasm
+    # UDFs, or it refuses to start: 2G over 2 shards left 974 MiB/shard and died. 3G leaves
+    # 1486 MiB/shard. The instance must be big enough for that too - seastar reserves a flat
+    # 1.5 GiB for the OS, which is why the test-cases ask for xlarge rather than large.
+    RESOURCE_OPTIONS = "--smp 2 --cpus 0,1 -m 3G"
     DURATION = 60
 
     # Only long standing options are set, so this stays valid across the scylla versions the
@@ -112,6 +121,7 @@ endpoint_snitch: SimpleSnitch
     def run_workload(self, workload: str) -> None:
         node = self.db_cluster.nodes[0]
         scylla_bin = node.add_install_prefix("/usr/bin/scylla")
+        io_properties_file = node.add_install_prefix(self.IO_PROPERTIES_FILE)
         result_file = "perf-cql-raw-result.json"
         conf_file = f"{self.WORKDIR}/conf/scylla.yaml"
 
@@ -129,6 +139,7 @@ endpoint_snitch: SimpleSnitch
             results = node.remoter.run(
                 f"{scylla_bin} perf-cql-raw --json-result {result_file}"
                 f" --workdir {self.WORKDIR} --options-file {conf_file}"
+                f" --io-properties-file {io_properties_file}"
                 f" {self.RESOURCE_OPTIONS} --workload {workload} --duration {self.DURATION}"
             )
             if results.ok:
