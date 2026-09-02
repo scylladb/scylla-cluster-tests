@@ -10,10 +10,13 @@ import logging
 import time
 from typing import Any, Dict
 
+from cassandra import OperationTimedOut
+
 from sdcm.exceptions import UnsupportedNemesis
 from sdcm.nemesis import NemesisBaseClass
 from sdcm.sct_events.system import InfoEvent
 from sdcm.utils.common import generate_random_string
+from sdcm.utils.decorators import retrying
 from test_lib.compaction import (
     CompactionStrategy,
     calculate_allowed_twcs_ttl,
@@ -65,8 +68,22 @@ class ModifyTableBaseMonkey(NemesisBaseClass, abc.ABC):
 
         cmd = f"ALTER TABLE {keyspace_table} WITH {name} = {val};"
         self.runner.actions_log.info(f"Modify table property on {keyspace_table}: {name} = {val}")
-        with self.runner.cluster.cql_connection_patient(self.runner.target_node) as session:
-            session.execute(cmd)
+
+        # Schema changes can time out when topology-changing nemeses run concurrently (e.g. an isolated
+        # node stalling raft topology operations). Retry the ALTER TABLE on CQL timeout with an increased
+        # per-request timeout to give the operation enough headroom to complete.
+        @retrying(
+            n=3,
+            sleep_time=30,
+            allowed_exceptions=(OperationTimedOut,),
+            message=f"Retrying ALTER TABLE on {keyspace_table} after CQL timeout",
+        )
+        def _execute_alter():
+            with self.runner.cluster.cql_connection_patient(self.runner.target_node) as session:
+                session.default_timeout = 300  # increase timeout for schema changes during parallel topology operation
+                session.execute(cmd)
+
+        _execute_alter()
 
 
 # ---------------------------------------------------------------------------
