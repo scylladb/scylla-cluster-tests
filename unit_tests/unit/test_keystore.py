@@ -128,7 +128,6 @@ FAKE_GCP_SERVICE_ACCOUNTS = [
 FAKE_SCYLLADB_UPLOAD = {"bucket": "uploads", "key": "fake-key"}
 FAKE_QA_USERS = [{"username": "qa_user_1", "password": "pass1"}]
 FAKE_ACL_GRANTEES = [{"id": "user1", "permission": "FULL_CONTROL"}]
-FAKE_HOUSEKEEPING_DB = {"host": "db.example.com", "user": "admin", "password": "dbpass"}
 FAKE_LDAP_MS_AD = {"host": "ldap.example.com", "user": "admin", "password": "ldappass"}
 FAKE_BACKUP_AZURE_BLOB = {"account_name": "sctbackup", "account_key": "fake-key"}
 FAKE_DOCKER_HUB = {"username": "docker_user", "password": "docker_pass"}
@@ -168,7 +167,6 @@ def _populate_bucket(s3_resource):
         "scylladb_upload.json": FAKE_SCYLLADB_UPLOAD,
         "qa_users.json": FAKE_QA_USERS,
         "bucket-users.json": FAKE_ACL_GRANTEES,
-        "housekeeping-db.json": FAKE_HOUSEKEEPING_DB,
         "ldap_ms_ad.json": FAKE_LDAP_MS_AD,
         "backup_azure_blob.json": FAKE_BACKUP_AZURE_BLOB,
         "docker.json": FAKE_DOCKER_HUB,
@@ -361,9 +359,6 @@ class TestCredentialGetters:
 
     def test_acl_grantees(self, ks):
         assert ks.get_acl_grantees() == FAKE_ACL_GRANTEES
-
-    def test_housekeeping_db(self, ks):
-        assert ks.get_housekeeping_db_credentials() == FAKE_HOUSEKEEPING_DB
 
     def test_ldap_ms_ad(self, ks):
         assert ks.get_ldap_ms_ad_credentials() == FAKE_LDAP_MS_AD

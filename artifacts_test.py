@@ -24,14 +24,11 @@ import requests
 
 from sdcm.argus_results import send_iotune_results_to_argus
 from sdcm.sct_events import Severity
-from sdcm.sct_events.database import ScyllaHousekeepingServiceEvent
 from sdcm.provision.helpers.certificate import c_s_transport_str
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.tester import ClusterTester
 from sdcm.utils.adaptive_timeouts import NodeLoadInfoServices
-from sdcm.utils.housekeeping import HousekeepingDB
 from sdcm.utils.common import get_latest_scylla_release
-from sdcm.utils.decorators import retrying
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.perftune_validator import PerftuneOutputChecker
 from sdcm.utils.validators.iotune import IOTuneValidator
@@ -50,78 +47,11 @@ BACKENDS = {
 
 
 class ArtifactsTest(ClusterTester):
-    REPO_TABLE = "housekeeping.repo"
-    CHECK_VERSION_TABLE = "housekeeping.checkversion"
-
-    def setUp(self) -> None:
-        super().setUp()
-
-        self.housekeeping = HousekeepingDB.from_keystore_creds()
-        self.housekeeping.connect()
-
-    def tearDown(self) -> None:
-        if getattr(self, "housekeeping", None):
-            self.housekeeping.close()
-
-        super().tearDown()
-
     @contextmanager
     def logged_subtest(self, action: str) -> Iterator[None]:
         with self.actions_log.action_scope(action):
             with self.subTest(msg=action):
                 yield
-
-    # since this logic id depended on code run by SCT to mark uuid as test, since commit 617026aa, this code it run in the background
-    # and not being waited for, so we need to compensate for it here with retries
-    @retrying(n=15, sleep_time=10, allowed_exceptions=(AssertionError,))
-    def check_scylla_version_in_housekeepingdb(
-        self, prev_id: int, expected_status_code: str, new_row_expected: bool, backend: str
-    ) -> int:
-        """
-        Validate reported version
-        prev_id: check if new version is created
-        """
-        self.actions_log.info("Validating scylla version in housekeepingdb")
-        assert self.node.uuid, "Node UUID wasn't created"
-
-        row = self.housekeeping.get_most_recent_record(
-            query=f"SELECT id, version, ip, statuscode FROM {self.CHECK_VERSION_TABLE} WHERE uuid = %s",
-            args=(self.node.uuid,),
-        )
-        self.log.debug("Last row in %s for uuid '%s': %s", self.CHECK_VERSION_TABLE, self.node.uuid, row)
-
-        assert row, f"No rows found in {self.CHECK_VERSION_TABLE} for uuid '{self.node.uuid}'"
-
-        public_ip_address = self.node.host_public_ip_address if backend == "docker" else self.node.public_ip_address
-        self.log.debug("public_ip_address = %s", public_ip_address)
-
-        # Validate public IP address
-        if self.params.get("ip_ssh_connections") != "private":
-            assert public_ip_address == row[2], (
-                f"Wrong IP address is saved in '{self.CHECK_VERSION_TABLE}' table: "
-                f"expected {self.node.public_ip_address}, got: {row[2]}"
-            )
-
-        # Validate reported node version
-        assert row[1] == self.node.scylla_version, (
-            f"Wrong version is saved in '{self.CHECK_VERSION_TABLE}' table: "
-            f"expected {self.node.public_ip_address}, got: {row[2]}"
-        )
-
-        # Validate expected status code
-        assert row[3] == expected_status_code, (
-            f"Wrong statuscode is saved in '{self.CHECK_VERSION_TABLE}' table: "
-            f"expected {expected_status_code}, got: {row[3]}"
-        )
-
-        if prev_id:
-            # Validate row id
-            if new_row_expected:
-                assert row[0] > prev_id, f"New row wasn't saved in {self.CHECK_VERSION_TABLE}"
-            else:
-                assert row[0] == prev_id, f"New row was saved in {self.CHECK_VERSION_TABLE} unexpectedly"
-        self.actions_log.info("Scylla version in housekeepingdb is validated")
-        return row[0] if row else 0
 
     @property
     def node(self):
@@ -179,37 +109,6 @@ class ArtifactsTest(ClusterTester):
             assert "broadcast_address" in host and "host_id" in host, (
                 f"system.local: {host}, doesn't have 'broadcast_address' or 'host_id'"
             )
-
-    def check_housekeeping_service_status(self, backend: str):
-        housekeeping_service_name = "scylla-housekeeping" if backend == "docker" else "scylla-housekeeping-restart"
-        status_out = self.node.get_service_status(housekeeping_service_name, ignore_status=True)
-        # When the test runs with OEL81 operation system error "TMOUT: readonly variable" is printed from /etc/bashrc.
-        # Ignore it
-        if status_out.stderr and "TMOUT" not in status_out.stderr:
-            ScyllaHousekeepingServiceEvent(
-                message=f"scylla-housekeeping-restart service error: {status_out.stderr}", severity=Severity.ERROR
-            ).publish()
-            return
-
-        status = status_out.stdout.strip()
-        # Expected output:
-        #     "scylla-housekeeping-restart.service: Succeeded" - ubuntu, centos
-        #     "RUNNING" - docker
-        #     "Started Scylla Housekeeping restart mode" - other
-        #     "Started scylla-housekeeping-restart.service - Scylla Housekeeping restart mode" - ubuntu24
-        if (
-            "scylla-housekeeping-restart.service: Succeeded" in status
-            or "Started Scylla Housekeeping restart mode" in status
-            or "Started scylla-housekeeping-restart.service - Scylla Housekeeping restart mode" in status
-            or "RUNNING" in status
-        ):
-            ScyllaHousekeepingServiceEvent(
-                message="scylla-housekeeping-restart service running", severity=Severity.NORMAL
-            ).publish()
-        else:
-            ScyllaHousekeepingServiceEvent(
-                message=f"scylla-housekeeping-restart service is not running: {status}", severity=Severity.ERROR
-            ).publish()
 
     def verify_users(self):
         # We can't ship the image with Scylla internal users inside. So we
@@ -407,8 +306,6 @@ class ArtifactsTest(ClusterTester):
             with self.logged_subtest("verify users"):
                 self.verify_users()
 
-        expected_housekeeping_status_code = "cr" if backend == "docker" else "r"
-
         if self.params.get("use_preinstalled_scylla") and backend != "docker":
             with self.logged_subtest("check the cluster name"):
                 self.check_cluster_name()
@@ -483,22 +380,6 @@ class ArtifactsTest(ClusterTester):
                     )
                     raise
 
-            # TODO: implement after the new provision will be added
-            # Task: https://trello.com/c/BIdIUwyT/4096-housekeeping-implemented-a-test-that-checks-i-value-when-scylla-
-            # is-first-installed
-
-            # Scylla service is stopping/starting after installation and re-configuration.
-            # To validate version after installation, we need to perform validation before re-config.
-            # For that the test should be changed to be able to call "add_nodes" function from BaseCluster.
-            # if not self.node.is_nonroot_install:
-            #     self.log.info("Validate version after install")
-            #     self.check_housekeeping_service_status()
-            #     self.check_scylla_version_in_housekeepingdb(prev_id=0,
-            #                                                 expected_status_code='i',
-            #                                                 new_row_expected=False,
-            #                                                 backend=backend)
-
-        version_id_after_stop = 0
         with self.logged_subtest("check Scylla server after stop/start"):
             self.node.stop_scylla(verify_down=True)
             self.node.start_scylla(verify_up=True)
@@ -506,30 +387,9 @@ class ArtifactsTest(ClusterTester):
             # So we don't need to stop and to start it again
             self.check_scylla()
 
-            if not self.node.is_nonroot_install and backend != "docker":
-                self.log.info("Validate version after stop/start")
-                with self.actions_log.action_scope("Validate version after stop/start"):
-                    self.check_housekeeping_service_status(backend=backend)
-                    version_id_after_stop = self.check_scylla_version_in_housekeepingdb(
-                        prev_id=0,
-                        expected_status_code=expected_housekeeping_status_code,
-                        new_row_expected=False,
-                        backend=backend,
-                    )
-
         with self.logged_subtest("check Scylla server after restart"):
             self.node.restart_scylla(verify_up_after=True)
             self.check_scylla()
-
-            if not self.node.is_nonroot_install and backend != "docker":
-                self.log.info("Validate version after restart")
-                self.check_housekeeping_service_status(backend=backend)
-                self.check_scylla_version_in_housekeepingdb(
-                    prev_id=version_id_after_stop,
-                    expected_status_code=expected_housekeeping_status_code,
-                    new_row_expected=True,
-                    backend=backend,
-                )
 
         if backend != "docker":
             with self.logged_subtest("Check the output of perftune.py"):

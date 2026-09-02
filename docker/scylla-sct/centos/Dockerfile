@@ -5,7 +5,7 @@ FROM ${SOURCE_IMAGE}
 ENV USER scylla-test
 SHELL ["/bin/bash", "-c"]
 
-# Install sudo and other tools, disable autostart of scylla-server and scylla-housekeeping services,
+# Install sudo and other tools, disable autostart of the scylla-server service,
 # remove the login banner and add a new user.
 #
 # Password for the user is `test' and encrypted using openssl command:
@@ -29,8 +29,6 @@ RUN microdnf -y update && \
     microdnf clean all && \
     echo "autostart=false" >> /etc/supervisord.conf.d/scylla-server.conf && \
     echo "user=scylla" >> /etc/supervisord.conf.d/scylla-server.conf && \
-    echo "autostart=false" >> /etc/supervisord.conf.d/scylla-housekeeping.conf && \
-    echo "user=scylla" >> /etc/supervisord.conf.d/scylla-housekeeping.conf && \
     sed -i "\:/dev/stderr:d" /etc/bashrc && \
     useradd -G wheel -p 00hzYw5m.HyAY $USER && \
     echo "$USER  ALL=(ALL)       NOPASSWD: ALL" >> /etc/sudoers && \

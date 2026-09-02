@@ -497,7 +497,6 @@ class BaseNode(AutoSshContainerMixin):
         self.replacement_host_id = None
 
         self._kernel_version = None
-        self._uuid = None
         self.scylla_network_configuration = None
         self._datacenter_name = None
         self._node_rack = None
@@ -2023,31 +2022,6 @@ class BaseNode(AutoSshContainerMixin):
             text = "%s: Waiting for JMX service to be down" % self.name
         wait.wait_for(func=lambda: not self.jmx_up(), step=60, text=text, timeout=timeout, throw_exc=True)
 
-    @property
-    def uuid(self):
-        if not self._uuid and not self.is_nonroot_install:
-            uuid_path = "/var/lib/scylla-housekeeping/housekeeping.uuid"
-            uuid_result = self.remoter.run("test -e %s" % uuid_path, ignore_status=True, verbose=True)
-            uuid_exists = uuid_result.ok
-            if uuid_exists:
-                result = self.remoter.run("cat %s" % uuid_path, verbose=True)
-                self._uuid = result.stdout.strip()
-        return self._uuid
-
-    def _report_housekeeping_uuid(self):
-        """
-        report uuid of test db nodes to ScyllaDB
-        """
-        mark_path = "/var/lib/scylla-housekeeping/housekeeping.uuid.marked"
-        cmd = 'curl "https://i6a5h9l1kl.execute-api.us-east-1.amazonaws.com/prod/check_version?uu=%s&mark=scylla"'
-        try:
-            mark_exists = self.remoter.run("test -e %s" % mark_path, ignore_status=True, verbose=False).ok
-            if self.uuid and not mark_exists:
-                self.remoter.run(cmd % self.uuid, ignore_status=True)
-                self.remoter.sudo("touch %s" % mark_path, verbose=False, user="scylla")
-        except Exception as details:  # noqa: BLE001
-            self.log.error("Failed to report housekeeping uuid. Error details: %s", details)
-
     def wait_db_up(self, verbose=True, timeout=3600):
         text = None
         if verbose:
@@ -2056,7 +2030,6 @@ class BaseNode(AutoSshContainerMixin):
         wait.wait_for(
             func=self.db_up, step=5, text=text, timeout=timeout, throw_exc=True, stop_event=self.stop_wait_db_up_event
         )
-        threading.Thread(target=self._report_housekeeping_uuid, daemon=True).start()
 
     def is_manager_agent_up(self, port=None):
         port = port if port else self.MANAGER_AGENT_PORT
@@ -3028,14 +3001,14 @@ class BaseNode(AutoSshContainerMixin):
             if package_version < packaging.version.parse("3"):
                 install_cmds = dedent("""
                     tar xvfz ./unified_package.tar.gz
-                    ./install.sh --housekeeping
+                    ./install.sh
                     rm -f /tmp/scylla.yaml
                 """)
             else:
                 install_cmds = dedent("""
                     tar xvfz ./unified_package.tar.gz
                     cd ./scylla-*
-                    ./install.sh --housekeeping
+                    ./install.sh
                     cd -
                     rm -f /tmp/scylla.yaml
                 """)
