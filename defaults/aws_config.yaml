@@ -5,7 +5,7 @@ region_name:
 user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
 instance_type_loader: ''
 instance_type_monitor: ''
-ami_id_loader: 'resolve:ssm:/aws/service/canonical/ubuntu/server/26.04/stable/current/amd64/hvm/ebs-gp3/ami-id'
+ami_id_loader: 'resolve:ssm:/aws/service/canonical/ubuntu/server/26.04/stable/current/{arch}/hvm/ebs-gp3/ami-id'
 # manual on updating monitor images see: docs/monitoring-images.md
 ami_id_monitor: 'scylladb-monitor-4-16-0-amd64-2026-08-30t08-46-39z'
 
