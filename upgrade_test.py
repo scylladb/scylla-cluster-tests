@@ -341,13 +341,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     scylla_pkg_ver += f" {scylla_pkg}-machine-image"
             with self.actions_log.action_scope("updating packages"):
                 if node.distro.is_rhel_like:
-<<<<<<< HEAD
-                    node.remoter.run(r"sudo yum update {}\* -y".format(scylla_pkg_ver))
-||||||| parent of 1b1b5303d (fix(upgrade): retry package manager commands in node upgrade and rollback)
-                    node.remoter.run(rf"sudo yum update {scylla_pkg_ver}\* -y")
-=======
-                    node.remoter.run(rf"sudo yum update {scylla_pkg_ver}\* -y", retry=3, timeout=600)
->>>>>>> 1b1b5303d (fix(upgrade): retry package manager commands in node upgrade and rollback)
+                    node.remoter.run(r"sudo yum update {}\* -y".format(scylla_pkg_ver), retry=3, timeout=600)
                 else:
                     node.remoter.sudo("apt-get update", retry=3, timeout=600)
                     node.remoter.sudo(
