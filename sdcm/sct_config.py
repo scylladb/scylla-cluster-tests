@@ -29,7 +29,7 @@ from textwrap import dedent
 
 import yaml
 import copy
-from typing import List, Union, Set, Literal, get_origin, get_args, ClassVar
+from typing import List, Union, Set, Literal, Callable, get_origin, get_args, ClassVar
 from functools import cached_property, lru_cache
 
 from distutils.util import strtobool
@@ -729,6 +729,89 @@ _ORACLE_IMAGE_RESOLVERS = {
     "gce": _resolve_oracle_images_gce,
     "oci": _resolve_oracle_images_oci,
 }
+
+# The addresses `scylla_network_config` must configure, and the parameters every entry needs.
+SCYLLA_NETWORK_CONFIG_ADDRESSES = (
+    "listen_address",
+    "rpc_address",
+    "broadcast_rpc_address",
+    "broadcast_address",
+    "test_communication",
+)
+SCYLLA_NETWORK_CONFIG_REQUIRED_PARAMS = ("address", "ip_type", "public", "nic")
+
+# Ordinals for the mandatory-parameter error message. `scylla_network_config` configures five
+# addresses; anything past that falls back to a plain index instead of raising KeyError, which is
+# what a missing parameter on the fourth or fifth address used to do.
+_ORDINALS = ("first", "second", "third", "fourth", "fifth")
+
+
+def _ordinal(position: int) -> str:
+    """Render a 1-based position as an English ordinal, or as '#N' beyond the known ones."""
+    return _ORDINALS[position - 1] if 1 <= position <= len(_ORDINALS) else f"#{position}"
+
+
+@dataclasses.dataclass(frozen=True)
+class ScyllaNetworkConfigRule:
+    """One constraint on a single `scylla_network_config` address entry.
+
+    Rules are declared per backend so a platform limitation cannot be mistaken for a universal
+    one. `applies_to` lists the backends the rule constrains; `None` means every backend.
+    """
+
+    name: str
+    applies_to: tuple[str, ...] | None
+    violated_by: Callable[[dict], bool]
+    message: Callable[[dict], str]
+
+    def check(self, address_config: dict, cluster_backend: str | None) -> None:
+        """Raise ValueError when `address_config` violates this rule on `cluster_backend`."""
+        if self.applies_to is not None and cluster_backend not in self.applies_to:
+            return
+        if self.violated_by(address_config):
+            raise ValueError(self.message(address_config))
+
+
+# Checked in order against every address entry. Keep the messages naming the offending address:
+# they are the only thing the user sees.
+SCYLLA_NETWORK_CONFIG_RULES = (
+    ScyllaNetworkConfigRule(
+        name="ipv6_not_implemented_on_gce",
+        # Interim guard. GCE subnets can be dual-stack, but SCT provisions IPv4-only interfaces on
+        # GCE (sdcm.provision.gce.instance_provider.build_network_interfaces) and GCENode reports no
+        # IPv6 address, so ScyllaNetworkConfiguration.get_ip_by_address_config() would hand back
+        # None and the run would fail long after the config that caused it. Remove this rule once
+        # GCE assigns IPv6, the way aws and oci already do.
+        applies_to=("gce",),
+        violated_by=lambda config: config["ip_type"] == "ipv6",
+        message=lambda config: (
+            f"'ip_type: ipv6' is set for '{config['address']}' but IPv6 is not implemented on the gce "
+            "backend: GCE nodes are provisioned with IPv4-only interfaces, so the address would "
+            "resolve to nothing. Use 'ip_type: ipv4', or run this configuration on aws or oci"
+        ),
+    ),
+    ScyllaNetworkConfigRule(
+        name="public_ipv4_only_on_primary_nic",
+        # EC2 associates a public IPv4 with device index 0 only, and GCE matches it:
+        # sdcm.provision.gce.instance_provider.build_network_interfaces attaches the sole
+        # AccessConfig to nic 0. Applies everywhere until a backend is shown not to need it.
+        applies_to=None,
+        violated_by=lambda config: config["ip_type"] == "ipv4" and config["nic"] == 1 and config["public"] is True,
+        message=lambda config: (
+            "If ipv4 and public is True it has to be primary network interface, it means device index (nic) is 0"
+        ),
+    ),
+    ScyllaNetworkConfigRule(
+        name="dns_name_only_on_primary_nic",
+        applies_to=("gce",),
+        violated_by=lambda config: config["nic"] != 0 and bool(config.get("use_dns")),
+        message=lambda config: (
+            "GCE creates a private DNS record for the primary network interface only, so a DNS name "
+            "on a secondary interface resolves back to the primary one. Set 'use_dns: false' for "
+            f"'{config['address']}' or move it to nic 0"
+        ),
+    ),
+)
 
 
 class SCTConfiguration(BaseModel):
@@ -3523,55 +3606,7 @@ class SCTConfiguration(BaseModel):
                 raise ValueError(f"use_dns_names is not supported for {cluster_backend} backend")
 
         # 17 Validate scylla network configuration mandatory values
-        if scylla_network_config := self.get("scylla_network_config"):
-            check_list = {
-                "listen_address": None,
-                "rpc_address": None,
-                "broadcast_rpc_address": None,
-                "broadcast_address": None,
-                "test_communication": None,
-            }
-            number2word = {1: "first", 2: "second", 3: "third"}
-            nics = set()
-            for i, address_config in enumerate(scylla_network_config):
-                for param in ["address", "ip_type", "public", "nic"]:
-                    if address_config.get(param) is None:
-                        raise ValueError(
-                            f"'{param}' parameter value for {number2word[i + 1]} address is not defined. It is must parameter"
-                        )
-
-                if (
-                    address_config["ip_type"] == "ipv4"
-                    and address_config["nic"] == 1
-                    and address_config["public"] is True
-                ):
-                    raise ValueError(
-                        "If ipv4 and public is True it has to be primary network interface, it means device index (nic) is 0"
-                    )
-
-                if (
-                    self.get("cluster_backend") == "gce"
-                    and address_config["nic"] != 0
-                    and address_config.get("use_dns")
-                ):
-                    raise ValueError(
-                        "GCE creates a private DNS record for the primary network interface only, so a DNS name "
-                        "on a secondary interface resolves back to the primary one. Set 'use_dns: false' for "
-                        f"'{address_config['address']}' or move it to nic 0"
-                    )
-
-                nics.add(address_config["nic"])
-                if address_config["address"] not in check_list:
-                    continue
-
-                check_list[address_config["address"]] = True
-
-            if not_defined_address := ",".join([key for key, value in check_list.items() if value is None]):
-                raise ValueError(f"Interface address(es) were not defined: {not_defined_address}")
-
-            regions = self.gce_datacenters if self.get("cluster_backend") == "gce" else self.region_names
-            if len(nics) > 1 and len(regions) >= 2:
-                raise ValueError("Multiple network interfaces aren't supported for multi region use cases")
+        self._validate_scylla_network_config(cluster_backend=cluster_backend)
 
         # 18 Validate K8S TLS+SNI values
         if self.get("k8s_enable_sni") and not self.get("k8s_enable_tls"):
@@ -4251,6 +4286,43 @@ class SCTConfiguration(BaseModel):
                 default,
             )
             return default
+
+    def _validate_scylla_network_config(self, cluster_backend: str | None) -> None:
+        """Validate `scylla_network_config` against the rules that apply to `cluster_backend`.
+
+        Per-address constraints live in SCYLLA_NETWORK_CONFIG_RULES so each one records the
+        backends it belongs to; the checks that span the whole list stay here.
+        """
+        if not (scylla_network_config := self.get("scylla_network_config")):
+            return
+
+        configured_addresses = set()
+        nics = set()
+
+        for position, address_config in enumerate(scylla_network_config, start=1):
+            for param in SCYLLA_NETWORK_CONFIG_REQUIRED_PARAMS:
+                if address_config.get(param) is None:
+                    raise ValueError(
+                        f"'{param}' parameter value for {_ordinal(position)} address is not defined. "
+                        f"It is must parameter"
+                    )
+
+            for rule in SCYLLA_NETWORK_CONFIG_RULES:
+                rule.check(address_config=address_config, cluster_backend=cluster_backend)
+
+            nics.add(address_config["nic"])
+            configured_addresses.add(address_config["address"])
+
+        if not_defined_address := ",".join(
+            address for address in SCYLLA_NETWORK_CONFIG_ADDRESSES if address not in configured_addresses
+        ):
+            raise ValueError(f"Interface address(es) were not defined: {not_defined_address}")
+
+        # A secondary interface lives in a subnet of its own region, so it cannot follow the
+        # cluster across regions.
+        regions = self.gce_datacenters if cluster_backend == "gce" else self.region_names
+        if len(nics) > 1 and len(regions) >= 2:
+            raise ValueError("Multiple network interfaces aren't supported for multi region use cases")
 
     def _validate_perf_gradual_throttle_steps(self):
         """Validate perf_gradual_throttle_steps configuration parameter."""
