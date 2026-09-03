@@ -68,7 +68,7 @@ Three things to carry over deliberately:
 
 - **OCI implemented IPv6; it did not reject it.** An earlier draft of this plan proposed rejecting
   `ip_type: ipv6` on GCE outright. That would diverge from the pattern the team just set. The reject
-  becomes an explicit *interim guard* here, removed when [Follow-up B](#follow-up-b-implement-ipv6-on-gce) lands.
+  becomes an explicit *interim guard* here, removed when [Follow-up B](#follow-up-b-implement-ipv6-on-gce--sct-922) lands.
 - **The OS-discovery fallback is a good idea and cheap on GCE.** `GCENode.network_configuration`
   already shells out to `ip -j link` and parses JSON, so `_discover_ipv6_from_os()` is a small
   extension of an existing habit rather than new machinery.
@@ -78,8 +78,8 @@ Three things to carry over deliberately:
 
 ### Explicitly out of scope
 
-- **`use_public_ip` is ignored on GCE** — see [Follow-up A](#follow-up-a-honour-use_public_ip-on-gce-cloud-nat).
-- **Full IPv6 support on GCE** — see [Follow-up B](#follow-up-b-implement-ipv6-on-gce).
+- **`use_public_ip` is ignored on GCE** — see [Follow-up A](#follow-up-a-honour-use_public_ip-on-gce-cloud-nat--sct-921).
+- **Full IPv6 support on GCE** — see [Follow-up B](#follow-up-b-implement-ipv6-on-gce--sct-922).
 
 Both, and the resolved item below, belong in a scope comment on SCT-310 before this PR opens.
 
@@ -111,6 +111,8 @@ Both, and the resolved item below, belong in a scope comment on SCT-310 before t
    `stack_type` / `ipv6_access_type` / `ipv6_cidr_range` and `NetworkInterface` exposes
    `ipv6_access_configs`, so the platform limitation the warning claims does not exist.
 4. **Comment on SCT-310** recording what already landed, and file Follow-ups A and B.
+   Done 2026-09-03: scope comment posted, [SCT-921](https://scylladb.atlassian.net/browse/SCT-921)
+   and [SCT-922](https://scylladb.atlassian.net/browse/SCT-922) filed and linked to SCT-310.
 
 ## Files to Modify
 
@@ -143,9 +145,9 @@ Unchanged but referenced for verification:
 - [ ] GCE single-NIC path unaffected: a plain GCE sanity longevity completes
 - [ ] `uv run sct.py pre-commit` passes
 
-## Follow-up A: honour `use_public_ip` on GCE (Cloud NAT)
+## Follow-up A: honour `use_public_ip` on GCE (Cloud NAT) — [SCT-921](https://scylladb.atlassian.net/browse/SCT-921)
 
-Tracked separately from the work above; recorded here so the ticket can be filed from it.
+Filed as [SCT-921](https://scylladb.atlassian.net/browse/SCT-921) on 2026-09-03, from this section.
 
 ### What is wrong
 
@@ -206,10 +208,11 @@ so the change has to move that assumption, not just the code.
 - Do any GCE jobs set `ip_ssh_connections: public` or `test_communication.public: true` today, and
   would they keep working (they should — they would just set `use_public_ip=True`)?
 
-## Follow-up B: implement IPv6 on GCE
+## Follow-up B: implement IPv6 on GCE — [SCT-922](https://scylladb.atlassian.net/browse/SCT-922)
 
-The GCE counterpart of SCT-582, following `63a5510dd` layer for layer. Removes the interim guard
-added in this PR's step 3.
+Filed as [SCT-922](https://scylladb.atlassian.net/browse/SCT-922) on 2026-09-03, from this section. The GCE
+counterpart of SCT-582, following `63a5510dd` layer for layer. Removes the interim guard added in
+this PR's step 3.
 
 ### Shape of the fix
 
