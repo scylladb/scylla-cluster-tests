@@ -4,25 +4,9 @@ Provides a ``base_runner`` fixture with a pre-configured ``TestRunner``
 that individual test modules can extend for their specific needs.
 """
 
-from unittest.mock import MagicMock
-
 import pytest
 
-from unit_tests.unit.nemesis import TestRunner
-
-
-def make_mock_node(name="node1", rack="rack1", is_seed=False):
-    """Create a ``MagicMock`` that behaves like a minimal cluster node.
-
-    Monkey code calls arbitrary methods on every node in ``data_nodes``
-    (``run_nodetool``, ``stop_scylla``, ``get_list_of_sstables``, …), so a
-    plain dataclass is not sufficient — ``MagicMock`` auto-stubs all of them.
-    """
-    node = MagicMock()
-    node.name = name
-    node.rack = rack
-    node.is_seed = is_seed
-    return node
+from unit_tests.unit.nemesis import TestRunner, make_mock_node
 
 
 @pytest.fixture()

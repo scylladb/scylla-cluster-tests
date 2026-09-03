@@ -12,21 +12,9 @@ from sdcm.nemesis.monkey.node_isolation import (
     refuse_connection_from_banned_node,
     switch_target_node_to_another_rack,
 )
+from unit_tests.unit.nemesis import make_mock_node, sudo_commands
 
 pytestmark = pytest.mark.usefixtures("events")
-
-
-def _node(name="node1", rack="rack1", dc_idx=0):
-    node = MagicMock()
-    node.name = name
-    node.rack = rack
-    node.dc_idx = dc_idx
-    return node
-
-
-def _sudo_commands(node):
-    """Flatten node.remoter.sudo call args/kwargs into the plain command strings issued."""
-    return [call.args[0] if call.args else call.kwargs.get("cmd") for call in node.remoter.sudo.call_args_list]
 
 
 def _working_node(runner):
@@ -50,9 +38,9 @@ def _instant_wait_for(func, step=1, text=None, timeout=None, throw_exc=True, sto
 
 def test_is_single_node_in_rack(base_runner):
     """A node counts as alone only when no other data node shares both its rack and dc."""
-    target = _node("node1", rack="rack1", dc_idx=0)
-    peer_same_rack = _node("node2", rack="rack1", dc_idx=0)
-    peer_other_dc = _node("node3", rack="rack1", dc_idx=1)
+    target = make_mock_node("node1", rack="rack1", dc_idx=0)
+    peer_same_rack = make_mock_node("node2", rack="rack1", dc_idx=0)
+    peer_other_dc = make_mock_node("node3", rack="rack1", dc_idx=1)
     base_runner.cluster.data_nodes = [target, peer_same_rack, peer_other_dc]
 
     assert not is_single_node_in_rack(base_runner, target)
@@ -66,11 +54,11 @@ def test_switch_target_node_to_another_rack(base_runner):
     base_runner.cluster.params = {"rack_aware_loader": True}
     base_runner.target_node.parent_cluster.racks_count = 2
     base_runner.loaders = MagicMock()
-    base_runner.loaders.nodes = [_node("loader1", rack="rack1")]
+    base_runner.loaders.nodes = [make_mock_node("loader1", rack="rack1")]
     base_runner.set_target_node = MagicMock()
     base_runner.cluster.nodes = [
-        _node("node1", rack="rack1"),
-        _node("node2", rack="rack2"),
+        make_mock_node("node1", rack="rack1"),
+        make_mock_node("node2", rack="rack2"),
     ]
 
     switch_target_node_to_another_rack(base_runner)
@@ -177,10 +165,8 @@ def test_open_driver_issue_triggers_rack_switch(mock_skip_per_issues, runner):
 
     runner.cluster.params.get.return_value = True  # rack_aware_loader on
     runner.target_node.parent_cluster.racks_count = 2
-    loader = _node("loader1", rack="rack1")
-    loader.ip_address = "10.0.0.2"
-    runner.loaders.nodes = [loader]
-    runner.cluster.nodes = [runner.target_node, _node("node-other-rack", rack="rack2")]
+    runner.loaders.nodes = [make_mock_node("loader1", rack="rack1", ip_address="10.0.0.2")]
+    runner.cluster.nodes = [runner.target_node, make_mock_node("node-other-rack", rack="rack2")]
     runner.set_target_node = MagicMock()
 
     refuse_connection_from_banned_node(runner, use_iptables=True)
@@ -279,7 +265,7 @@ def test_iptables_path_blocks_and_unblocks_every_scylla_port(runner):
 
     runner.node_allocator.run_nemesis.assert_called_once_with(nemesis_label="block_scylla_ports")
 
-    commands = _sudo_commands(runner.target_node)
+    commands = sudo_commands(runner.target_node.remoter)
     for port in (7000, 7001, 9042, 9142, 19042, 19142):
         for table, action in (("iptables", "A"), ("iptables", "D"), ("ip6tables", "A"), ("ip6tables", "D")):
             assert commands.count(f"{table} -{action} INPUT -p tcp --dport {port} -j DROP") == 1
@@ -293,6 +279,41 @@ def test_iptables_path_blocks_and_unblocks_every_scylla_port(runner):
     )
 
 
+def test_loader_unblock_is_skipped_when_removal_destroyed_the_target_node(runner):
+    """SCT-920: ``ExitStack`` unwinds LIFO, so ``_finalizer`` — pushed *after*
+    ``block_loaders_payload_for_scylla_node`` was entered — runs *before* that context
+    manager's cleanup. ``_finalizer`` calls ``_remove_node_add_node``, which terminates the
+    target instance and calls ``BaseNode.destroy()``, dropping ``node.remoter`` to ``None``.
+
+    The loader-unblock cleanup must notice the node is gone and skip, instead of raising
+    ``AttributeError: 'NoneType' object has no attribute 'is_up'`` and reporting a false
+    nemesis failure for a disruption that actually succeeded.
+    """
+    target = runner.target_node
+    target_remoter = target.remoter  # captured: `destroy()` will null out target.remoter
+    runner.loaders.nodes = [make_mock_node("loader1", rack="rack1", ip_address="10.0.0.2")]
+
+    def _destroy_target_node(**_):
+        """Mirror what BaseNode.destroy() does to a node terminated by removenode."""
+        target.remoter = None
+        target.destroyed = True
+
+    runner._remove_node_add_node.side_effect = _destroy_target_node
+
+    IsolateNodeWithIptableRuleNemesis(runner).disrupt()
+
+    runner._remove_node_add_node.assert_called_once()
+    commands = sudo_commands(target_remoter)
+    for port in (9042, 9142, 19042, 19142):
+        rule = f"INPUT -s 10.0.0.2 -p tcp --dport {port} -j DROP"
+        # loaders were blocked while the node was alive ...
+        assert commands.count(f"iptables -A {rule}") == 1
+        assert commands.count(f"ip6tables -A {rule}") == 1
+        # ... but no unblock is attempted on the terminated instance
+        assert f"iptables -D {rule}" not in commands
+        assert f"ip6tables -D {rule}" not in commands
+
+
 def test_sigstop_path_pauses_scylla_and_only_blocks_gossip_ports_during_removal(runner):
     """``IsolateNodeWithProcessSignalNemesis`` (use_iptables=False) must SIGSTOP/SIGCONT
     the scylla process, and additionally DROP only the inter-node ports (7000/7001)
@@ -302,7 +323,7 @@ def test_sigstop_path_pauses_scylla_and_only_blocks_gossip_ports_during_removal(
 
     runner.node_allocator.run_nemesis.assert_called_once_with(nemesis_label="pause_scylla_with_sigstop")
 
-    commands = _sudo_commands(runner.target_node)
+    commands = sudo_commands(runner.target_node.remoter)
     assert commands.count("pkill --signal SIGSTOP -e scylla") == 1
     assert commands.count("pkill --signal SIGCONT -e scylla") == 1
 
