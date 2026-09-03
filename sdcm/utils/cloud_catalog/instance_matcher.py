@@ -40,7 +40,7 @@ _ALIAS_TO_FIELD = {
 }
 
 # Arch normalisation map (shorthand → canonical)
-_ARCH_ALIASES = {
+ARCH_ALIASES = {
     "arm64": "arm64",
     "arm": "arm64",
     "x86_64": "x86_64",
@@ -227,9 +227,9 @@ def _parse_arch(raw) -> Constraint:
         ValueError: If the architecture string is not recognised.
     """
     key = str(raw).strip().lower()
-    if key not in _ARCH_ALIASES:
-        raise ValueError(f"Unknown architecture {raw!r}. Known values: {sorted(_ARCH_ALIASES)}")
-    return Constraint("arch", "eq", _ARCH_ALIASES[key])
+    if key not in ARCH_ALIASES:
+        raise ValueError(f"Unknown architecture {raw!r}. Known values: {sorted(ARCH_ALIASES)}")
+    return Constraint("arch", "eq", ARCH_ALIASES[key])
 
 
 def parse_constraints(raw: dict) -> list:
@@ -533,7 +533,7 @@ def select_instance(
     parsed_arch_constraint = next((c for c in parsed if c.field == "arch"), None)
 
     if arch is not None:
-        effective_arch = _ARCH_ALIASES.get(arch.strip().lower(), arch)
+        effective_arch = ARCH_ALIASES.get(arch.strip().lower(), arch)
     elif parsed_arch_constraint is not None:
         effective_arch = parsed_arch_constraint.value
     else:
