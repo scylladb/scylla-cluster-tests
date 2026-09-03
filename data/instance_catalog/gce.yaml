@@ -1134,8 +1134,8 @@ instances:
   family: n2
   vcpus: 96
   memory_gb: 96.0
-  local_disk_gb: 1500.0
-  local_disk_count: 4
+  local_disk_gb: 3000.0
+  local_disk_count: 8
   arch: x86_64
   price_per_hour:
     africa-south1: 4.419456
@@ -1183,8 +1183,8 @@ instances:
   family: n2
   vcpus: 128
   memory_gb: 864.0
-  local_disk_gb: 1500.0
-  local_disk_count: 4
+  local_disk_gb: 3000.0
+  local_disk_count: 8
   arch: x86_64
   price_per_hour:
     africa-south1: 9.897184
@@ -1624,8 +1624,8 @@ instances:
   family: n2
   vcpus: 96
   memory_gb: 768.0
-  local_disk_gb: 1500.0
-  local_disk_count: 4
+  local_disk_gb: 3000.0
+  local_disk_count: 8
   arch: x86_64
   price_per_hour:
     africa-south1: 8.075808
@@ -1673,8 +1673,8 @@ instances:
   family: n2
   vcpus: 128
   memory_gb: 512.0
-  local_disk_gb: 1500.0
-  local_disk_count: 4
+  local_disk_gb: 3000.0
+  local_disk_count: 8
   arch: x86_64
   price_per_hour:
     africa-south1: 7.981952
@@ -2114,8 +2114,8 @@ instances:
   family: n2
   vcpus: 96
   memory_gb: 384.0
-  local_disk_gb: 1500.0
-  local_disk_count: 4
+  local_disk_gb: 3000.0
+  local_disk_count: 8
   arch: x86_64
   price_per_hour:
     africa-south1: 5.986464
@@ -2160,11 +2160,11 @@ instances:
     europe-central2: 5.640768
     us-west3: 5.599296
 - instance_type: n2d-highcpu-128
-  family: n2
+  family: n2d
   vcpus: 128
   memory_gb: 128.0
-  local_disk_gb: 1500.0
-  local_disk_count: 4
+  local_disk_gb: 3000.0
+  local_disk_count: 8
   arch: x86_64
   price_per_hour:
     africa-south1: 5.126784
@@ -2209,7 +2209,7 @@ instances:
     us-west8: 3.992064
     australia-southeast1: 5.66464
 - instance_type: n2d-highcpu-16
-  family: n2
+  family: n2d
   vcpus: 16
   memory_gb: 16.0
   local_disk_gb: 1500.0
@@ -2258,7 +2258,7 @@ instances:
     us-west8: 0.499008
     australia-southeast1: 0.70808
 - instance_type: n2d-highcpu-2
-  family: n2
+  family: n2d
   vcpus: 2
   memory_gb: 2.0
   local_disk_gb: 1500.0
@@ -2307,11 +2307,11 @@ instances:
     us-west8: 0.062376
     australia-southeast1: 0.08851
 - instance_type: n2d-highcpu-224
-  family: n2
+  family: n2d
   vcpus: 224
   memory_gb: 224.0
-  local_disk_gb: 1500.0
-  local_disk_count: 4
+  local_disk_gb: 3000.0
+  local_disk_count: 8
   arch: x86_64
   price_per_hour:
     africa-south1: 8.971872
@@ -2356,7 +2356,7 @@ instances:
     us-west8: 6.986112
     australia-southeast1: 9.91312
 - instance_type: n2d-highcpu-32
-  family: n2
+  family: n2d
   vcpus: 32
   memory_gb: 32.0
   local_disk_gb: 1500.0
@@ -2405,7 +2405,7 @@ instances:
     us-west8: 0.998016
     australia-southeast1: 1.41616
 - instance_type: n2d-highcpu-4
-  family: n2
+  family: n2d
   vcpus: 4
   memory_gb: 4.0
   local_disk_gb: 1500.0
@@ -2454,7 +2454,7 @@ instances:
     us-west8: 0.124752
     australia-southeast1: 0.17702
 - instance_type: n2d-highcpu-48
-  family: n2
+  family: n2d
   vcpus: 48
   memory_gb: 48.0
   local_disk_gb: 1500.0
@@ -2503,7 +2503,7 @@ instances:
     us-west8: 1.497024
     australia-southeast1: 2.12424
 - instance_type: n2d-highcpu-64
-  family: n2
+  family: n2d
   vcpus: 64
   memory_gb: 64.0
   local_disk_gb: 1500.0
@@ -2552,7 +2552,7 @@ instances:
     us-west8: 1.996032
     australia-southeast1: 2.83232
 - instance_type: n2d-highcpu-8
-  family: n2
+  family: n2d
   vcpus: 8
   memory_gb: 8.0
   local_disk_gb: 1500.0
@@ -2601,7 +2601,7 @@ instances:
     us-west8: 0.249504
     australia-southeast1: 0.35404
 - instance_type: n2d-highcpu-80
-  family: n2
+  family: n2d
   vcpus: 80
   memory_gb: 80.0
   local_disk_gb: 1500.0
@@ -2650,11 +2650,11 @@ instances:
     us-west8: 2.49504
     australia-southeast1: 3.5404
 - instance_type: n2d-highcpu-96
-  family: n2
+  family: n2d
   vcpus: 96
   memory_gb: 96.0
-  local_disk_gb: 1500.0
-  local_disk_count: 4
+  local_disk_gb: 3000.0
+  local_disk_count: 8
   arch: x86_64
   price_per_hour:
     africa-south1: 3.845088
@@ -2699,7 +2699,7 @@ instances:
     us-west8: 2.994048
     australia-southeast1: 4.24848
 - instance_type: n2d-highmem-16
-  family: n2
+  family: n2d
   vcpus: 16
   memory_gb: 128.0
   local_disk_gb: 1500.0
@@ -2748,7 +2748,7 @@ instances:
     us-west8: 0.91184
     australia-southeast1: 1.29384
 - instance_type: n2d-highmem-2
-  family: n2
+  family: n2d
   vcpus: 2
   memory_gb: 16.0
   local_disk_gb: 1500.0
@@ -2797,7 +2797,7 @@ instances:
     us-west8: 0.11398
     australia-southeast1: 0.16173
 - instance_type: n2d-highmem-32
-  family: n2
+  family: n2d
   vcpus: 32
   memory_gb: 256.0
   local_disk_gb: 1500.0
@@ -2846,7 +2846,7 @@ instances:
     us-west8: 1.82368
     australia-southeast1: 2.58768
 - instance_type: n2d-highmem-4
-  family: n2
+  family: n2d
   vcpus: 4
   memory_gb: 32.0
   local_disk_gb: 1500.0
@@ -2895,7 +2895,7 @@ instances:
     us-west8: 0.22796
     australia-southeast1: 0.32346
 - instance_type: n2d-highmem-48
-  family: n2
+  family: n2d
   vcpus: 48
   memory_gb: 384.0
   local_disk_gb: 1500.0
@@ -2944,7 +2944,7 @@ instances:
     us-west8: 2.73552
     australia-southeast1: 3.88152
 - instance_type: n2d-highmem-64
-  family: n2
+  family: n2d
   vcpus: 64
   memory_gb: 512.0
   local_disk_gb: 1500.0
@@ -2993,7 +2993,7 @@ instances:
     us-west8: 3.64736
     australia-southeast1: 5.17536
 - instance_type: n2d-highmem-8
-  family: n2
+  family: n2d
   vcpus: 8
   memory_gb: 64.0
   local_disk_gb: 1500.0
@@ -3042,7 +3042,7 @@ instances:
     us-west8: 0.45592
     australia-southeast1: 0.64692
 - instance_type: n2d-highmem-80
-  family: n2
+  family: n2d
   vcpus: 80
   memory_gb: 640.0
   local_disk_gb: 1500.0
@@ -3091,11 +3091,11 @@ instances:
     us-west8: 4.5592
     australia-southeast1: 6.4692
 - instance_type: n2d-highmem-96
-  family: n2
+  family: n2d
   vcpus: 96
   memory_gb: 768.0
-  local_disk_gb: 1500.0
-  local_disk_count: 4
+  local_disk_gb: 3000.0
+  local_disk_count: 8
   arch: x86_64
   price_per_hour:
     africa-south1: 7.013568
@@ -3140,11 +3140,11 @@ instances:
     us-west8: 5.47104
     australia-southeast1: 7.76304
 - instance_type: n2d-standard-128
-  family: n2
+  family: n2d
   vcpus: 128
   memory_gb: 512.0
-  local_disk_gb: 1500.0
-  local_disk_count: 4
+  local_disk_gb: 3000.0
+  local_disk_count: 8
   arch: x86_64
   price_per_hour:
     africa-south1: 6.937344
@@ -3189,7 +3189,7 @@ instances:
     us-west8: 5.407488
     australia-southeast1: 7.67296
 - instance_type: n2d-standard-16
-  family: n2
+  family: n2d
   vcpus: 16
   memory_gb: 64.0
   local_disk_gb: 1500.0
@@ -3238,7 +3238,7 @@ instances:
     us-west8: 0.675936
     australia-southeast1: 0.95912
 - instance_type: n2d-standard-2
-  family: n2
+  family: n2d
   vcpus: 2
   memory_gb: 8.0
   local_disk_gb: 1500.0
@@ -3287,11 +3287,11 @@ instances:
     us-west8: 0.084492
     australia-southeast1: 0.11989
 - instance_type: n2d-standard-224
-  family: n2
+  family: n2d
   vcpus: 224
   memory_gb: 896.0
-  local_disk_gb: 1500.0
-  local_disk_count: 4
+  local_disk_gb: 3000.0
+  local_disk_count: 8
   arch: x86_64
   price_per_hour:
     africa-south1: 12.140352
@@ -3336,7 +3336,7 @@ instances:
     us-west8: 9.463104
     australia-southeast1: 13.42768
 - instance_type: n2d-standard-32
-  family: n2
+  family: n2d
   vcpus: 32
   memory_gb: 128.0
   local_disk_gb: 1500.0
@@ -3385,7 +3385,7 @@ instances:
     us-west8: 1.351872
     australia-southeast1: 1.91824
 - instance_type: n2d-standard-4
-  family: n2
+  family: n2d
   vcpus: 4
   memory_gb: 16.0
   local_disk_gb: 1500.0
@@ -3434,7 +3434,7 @@ instances:
     us-west8: 0.168984
     australia-southeast1: 0.23978
 - instance_type: n2d-standard-48
-  family: n2
+  family: n2d
   vcpus: 48
   memory_gb: 192.0
   local_disk_gb: 1500.0
@@ -3483,7 +3483,7 @@ instances:
     us-west8: 2.027808
     australia-southeast1: 2.87736
 - instance_type: n2d-standard-64
-  family: n2
+  family: n2d
   vcpus: 64
   memory_gb: 256.0
   local_disk_gb: 1500.0
@@ -3532,7 +3532,7 @@ instances:
     us-west8: 2.703744
     australia-southeast1: 3.83648
 - instance_type: n2d-standard-8
-  family: n2
+  family: n2d
   vcpus: 8
   memory_gb: 32.0
   local_disk_gb: 1500.0
@@ -3581,7 +3581,7 @@ instances:
     us-west8: 0.337968
     australia-southeast1: 0.47956
 - instance_type: n2d-standard-80
-  family: n2
+  family: n2d
   vcpus: 80
   memory_gb: 320.0
   local_disk_gb: 1500.0
@@ -3630,11 +3630,11 @@ instances:
     us-west8: 3.37968
     australia-southeast1: 4.7956
 - instance_type: n2d-standard-96
-  family: n2
+  family: n2d
   vcpus: 96
   memory_gb: 384.0
-  local_disk_gb: 1500.0
-  local_disk_count: 4
+  local_disk_gb: 3000.0
+  local_disk_count: 8
   arch: x86_64
   price_per_hour:
     africa-south1: 5.203008
@@ -3678,6 +3678,438 @@ instances:
     europe-west10: 5.2250784
     us-west8: 4.055616
     australia-southeast1: 5.75472
+- instance_type: n4a-highcpu-1
+  family: n4a-highcpu
+  vcpus: 1
+  memory_gb: 2.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.03248
+    asia-southeast1: 0.0341
+    europe-west1: 0.03702
+    europe-west2: 0.03248
+    europe-west3: 0.03248
+    europe-west4: 0.03576
+    us-central1: 0.03832
+    us-east1: 0.03248
+    us-east4: 0.03576
+    us-west1: 0.04006
+- instance_type: n4a-highcpu-16
+  family: n4a-highcpu
+  vcpus: 16
+  memory_gb: 32.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.51968
+    asia-southeast1: 0.5456
+    europe-west1: 0.59232
+    europe-west2: 0.51968
+    europe-west3: 0.51968
+    europe-west4: 0.57216
+    us-central1: 0.61312
+    us-east1: 0.51968
+    us-east4: 0.57216
+    us-west1: 0.64096
+- instance_type: n4a-highcpu-2
+  family: n4a-highcpu
+  vcpus: 2
+  memory_gb: 4.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.06496
+    asia-southeast1: 0.0682
+    europe-west1: 0.07404
+    europe-west2: 0.06496
+    europe-west3: 0.06496
+    europe-west4: 0.07152
+    us-central1: 0.07664
+    us-east1: 0.06496
+    us-east4: 0.07152
+    us-west1: 0.08012
+- instance_type: n4a-highcpu-32
+  family: n4a-highcpu
+  vcpus: 32
+  memory_gb: 64.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 1.03936
+    asia-southeast1: 1.0912
+    europe-west1: 1.18464
+    europe-west2: 1.03936
+    europe-west3: 1.03936
+    europe-west4: 1.14432
+    us-central1: 1.22624
+    us-east1: 1.03936
+    us-east4: 1.14432
+    us-west1: 1.28192
+- instance_type: n4a-highcpu-4
+  family: n4a-highcpu
+  vcpus: 4
+  memory_gb: 8.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.12992
+    asia-southeast1: 0.1364
+    europe-west1: 0.14808
+    europe-west2: 0.12992
+    europe-west3: 0.12992
+    europe-west4: 0.14304
+    us-central1: 0.15328
+    us-east1: 0.12992
+    us-east4: 0.14304
+    us-west1: 0.16024
+- instance_type: n4a-highcpu-48
+  family: n4a-highcpu
+  vcpus: 48
+  memory_gb: 96.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 1.55904
+    asia-southeast1: 1.6368
+    europe-west1: 1.77696
+    europe-west2: 1.55904
+    europe-west3: 1.55904
+    europe-west4: 1.71648
+    us-central1: 1.83936
+    us-east1: 1.55904
+    us-east4: 1.71648
+    us-west1: 1.92288
+- instance_type: n4a-highcpu-64
+  family: n4a-highcpu
+  vcpus: 64
+  memory_gb: 128.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 2.07872
+    asia-southeast1: 2.1824
+    europe-west1: 2.36928
+    europe-west2: 2.07872
+    europe-west3: 2.07872
+    europe-west4: 2.28864
+    us-central1: 2.45248
+    us-east1: 2.07872
+    us-east4: 2.28864
+    us-west1: 2.56384
+- instance_type: n4a-highcpu-8
+  family: n4a-highcpu
+  vcpus: 8
+  memory_gb: 16.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.25984
+    asia-southeast1: 0.2728
+    europe-west1: 0.29616
+    europe-west2: 0.25984
+    europe-west3: 0.25984
+    europe-west4: 0.28608
+    us-central1: 0.30656
+    us-east1: 0.25984
+    us-east4: 0.28608
+    us-west1: 0.32048
+- instance_type: n4a-highmem-1
+  family: n4a-highmem
+  vcpus: 1
+  memory_gb: 8.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.05054
+    asia-southeast1: 0.05306
+    europe-west1: 0.0576
+    europe-west2: 0.05054
+    europe-west3: 0.05054
+    europe-west4: 0.05562
+    us-central1: 0.05962
+    us-east1: 0.05054
+    us-east4: 0.05562
+    us-west1: 0.06232
+- instance_type: n4a-highmem-16
+  family: n4a-highmem
+  vcpus: 16
+  memory_gb: 128.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.80864
+    asia-southeast1: 0.84896
+    europe-west1: 0.9216
+    europe-west2: 0.80864
+    europe-west3: 0.80864
+    europe-west4: 0.88992
+    us-central1: 0.95392
+    us-east1: 0.80864
+    us-east4: 0.88992
+    us-west1: 0.99712
+- instance_type: n4a-highmem-2
+  family: n4a-highmem
+  vcpus: 2
+  memory_gb: 16.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.10108
+    asia-southeast1: 0.10612
+    europe-west1: 0.1152
+    europe-west2: 0.10108
+    europe-west3: 0.10108
+    europe-west4: 0.11124
+    us-central1: 0.11924
+    us-east1: 0.10108
+    us-east4: 0.11124
+    us-west1: 0.12464
+- instance_type: n4a-highmem-32
+  family: n4a-highmem
+  vcpus: 32
+  memory_gb: 256.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 1.61728
+    asia-southeast1: 1.69792
+    europe-west1: 1.8432
+    europe-west2: 1.61728
+    europe-west3: 1.61728
+    europe-west4: 1.77984
+    us-central1: 1.90784
+    us-east1: 1.61728
+    us-east4: 1.77984
+    us-west1: 1.99424
+- instance_type: n4a-highmem-4
+  family: n4a-highmem
+  vcpus: 4
+  memory_gb: 32.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.20216
+    asia-southeast1: 0.21224
+    europe-west1: 0.2304
+    europe-west2: 0.20216
+    europe-west3: 0.20216
+    europe-west4: 0.22248
+    us-central1: 0.23848
+    us-east1: 0.20216
+    us-east4: 0.22248
+    us-west1: 0.24928
+- instance_type: n4a-highmem-48
+  family: n4a-highmem
+  vcpus: 48
+  memory_gb: 384.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 2.42592
+    asia-southeast1: 2.54688
+    europe-west1: 2.7648
+    europe-west2: 2.42592
+    europe-west3: 2.42592
+    europe-west4: 2.66976
+    us-central1: 2.86176
+    us-east1: 2.42592
+    us-east4: 2.66976
+    us-west1: 2.99136
+- instance_type: n4a-highmem-64
+  family: n4a-highmem
+  vcpus: 64
+  memory_gb: 512.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 3.23456
+    asia-southeast1: 3.39584
+    europe-west1: 3.6864
+    europe-west2: 3.23456
+    europe-west3: 3.23456
+    europe-west4: 3.55968
+    us-central1: 3.81568
+    us-east1: 3.23456
+    us-east4: 3.55968
+    us-west1: 3.98848
+- instance_type: n4a-highmem-8
+  family: n4a-highmem
+  vcpus: 8
+  memory_gb: 64.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.40432
+    asia-southeast1: 0.42448
+    europe-west1: 0.4608
+    europe-west2: 0.40432
+    europe-west3: 0.40432
+    europe-west4: 0.44496
+    us-central1: 0.47696
+    us-east1: 0.40432
+    us-east4: 0.44496
+    us-west1: 0.49856
+- instance_type: n4a-standard-1
+  family: n4a-standard
+  vcpus: 1
+  memory_gb: 4.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.04388
+    asia-southeast1: 0.04748
+    europe-west1: 0.04238
+    europe-west2: 0.04388
+    europe-west3: 0.04542
+    europe-west4: 0.04042
+    us-central1: 0.0385
+    us-east1: 0.0385
+    us-east4: 0.0385
+    us-west1: 0.0385
+- instance_type: n4a-standard-16
+  family: n4a-standard
+  vcpus: 16
+  memory_gb: 64.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.70208
+    asia-southeast1: 0.75968
+    europe-west1: 0.67808
+    europe-west2: 0.70208
+    europe-west3: 0.72672
+    europe-west4: 0.64672
+    us-central1: 0.616
+    us-east1: 0.616
+    us-east4: 0.616
+    us-west1: 0.616
+- instance_type: n4a-standard-2
+  family: n4a-standard
+  vcpus: 2
+  memory_gb: 8.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.08776
+    asia-southeast1: 0.09496
+    europe-west1: 0.08476
+    europe-west2: 0.08776
+    europe-west3: 0.09084
+    europe-west4: 0.08084
+    us-central1: 0.077
+    us-east1: 0.077
+    us-east4: 0.077
+    us-west1: 0.077
+- instance_type: n4a-standard-32
+  family: n4a-standard
+  vcpus: 32
+  memory_gb: 128.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 1.40416
+    asia-southeast1: 1.51936
+    europe-west1: 1.35616
+    europe-west2: 1.40416
+    europe-west3: 1.45344
+    europe-west4: 1.29344
+    us-central1: 1.232
+    us-east1: 1.232
+    us-east4: 1.232
+    us-west1: 1.232
+- instance_type: n4a-standard-4
+  family: n4a-standard
+  vcpus: 4
+  memory_gb: 16.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.17552
+    asia-southeast1: 0.18992
+    europe-west1: 0.16952
+    europe-west2: 0.17552
+    europe-west3: 0.18168
+    europe-west4: 0.16168
+    us-central1: 0.154
+    us-east1: 0.154
+    us-east4: 0.154
+    us-west1: 0.154
+- instance_type: n4a-standard-48
+  family: n4a-standard
+  vcpus: 48
+  memory_gb: 192.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 2.10624
+    asia-southeast1: 2.27904
+    europe-west1: 2.03424
+    europe-west2: 2.10624
+    europe-west3: 2.18016
+    europe-west4: 1.94016
+    us-central1: 1.848
+    us-east1: 1.848
+    us-east4: 1.848
+    us-west1: 1.848
+- instance_type: n4a-standard-64
+  family: n4a-standard
+  vcpus: 64
+  memory_gb: 256.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 2.80832
+    asia-southeast1: 3.03872
+    europe-west1: 2.71232
+    europe-west2: 2.80832
+    europe-west3: 2.90688
+    europe-west4: 2.58688
+    us-central1: 2.464
+    us-east1: 2.464
+    us-east4: 2.464
+    us-west1: 2.464
+- instance_type: n4a-standard-8
+  family: n4a-standard
+  vcpus: 8
+  memory_gb: 32.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour:
+    africa-south1: 0.35104
+    asia-southeast1: 0.37984
+    europe-west1: 0.33904
+    europe-west2: 0.35104
+    europe-west3: 0.36336
+    europe-west4: 0.32336
+    us-central1: 0.308
+    us-east1: 0.308
+    us-east4: 0.308
+    us-west1: 0.308
 - instance_type: z3-highmem-16-highlssd
   family: z3-highmem-highlssd
   vcpus: 16
@@ -3689,6 +4121,7 @@ instances:
     europe-west6: 3.011599225
     asia-southeast1: 2.754362583
     europe-central2: 2.780993256
+    europe-north2: 2.419055279
     asia-east1: 2.563817383
     us-central1: 2.303862247
     us-east1: 2.303862247
@@ -3704,6 +4137,7 @@ instances:
     asia-northeast3: 2.969008889
     europe-north1: 2.536059479
     me-central1: 2.79919275
+    northamerica-south1: 2.511209865
     us-east4: 2.369615671
     europe-west8: 2.67248027
     northamerica-northeast1: 2.536059479
@@ -3738,6 +4172,7 @@ instances:
     europe-west6: 36.139190695
     asia-southeast1: 33.052350999
     europe-central2: 33.371919071
+    europe-north2: 29.028663347
     asia-east1: 30.765808591
     us-central1: 27.646346959
     us-east1: 27.646346959
@@ -3753,6 +4188,7 @@ instances:
     asia-northeast3: 35.628106663
     europe-north1: 30.432713751
     me-central1: 33.590312995
+    northamerica-south1: 30.134518377
     us-east4: 28.435388055
     europe-west8: 32.06976324
     northamerica-northeast1: 30.432713751
@@ -3787,6 +4223,7 @@ instances:
     europe-west6: 4.247798249
     asia-southeast1: 3.877659511
     europe-central2: 3.922495864
+    europe-north2: 3.412502378
     asia-east1: 3.607440682
     us-central1: 3.25000237
     us-east1: 3.25000237
@@ -3802,6 +4239,7 @@ instances:
     asia-northeast3: 4.189236537
     europe-north1: 3.577492743
     me-central1: 3.948753044
+    northamerica-south1: 3.542502605
     us-east4: 3.348632507
     europe-west8: 3.770002837
     northamerica-northeast1: 3.577492743
@@ -3836,6 +4274,7 @@ instances:
     europe-west6: 6.023198449
     asia-southeast1: 5.508725166
     europe-central2: 5.561986512
+    europe-north2: 4.838110558
     asia-east1: 5.127634765
     us-central1: 4.607724493
     us-east1: 4.607724493
@@ -3851,6 +4290,7 @@ instances:
     asia-northeast3: 5.938017777
     europe-north1: 5.072118958
     me-central1: 5.598385499
+    northamerica-south1: 5.02241973
     us-east4: 4.739231342
     europe-west8: 5.34496054
     northamerica-northeast1: 5.072118958
@@ -3885,6 +4325,7 @@ instances:
     europe-west6: 8.495596498
     asia-southeast1: 7.755319022
     europe-central2: 7.844991728
+    europe-north2: 6.825004757
     asia-east1: 7.214881364
     us-central1: 6.50000474
     us-east1: 6.50000474
@@ -3900,6 +4341,7 @@ instances:
     asia-northeast3: 8.378473074
     europe-north1: 7.154985486
     me-central1: 7.897506089
+    northamerica-south1: 7.08500521
     us-east4: 6.697265014
     europe-west8: 7.540005674
     northamerica-northeast1: 7.154985486
@@ -3933,7 +4375,8 @@ instances:
   price_per_hour:
     europe-west6: 1.505799612
     asia-southeast1: 1.390496628
-    europe-central2: 1.281908691
+    europe-central2: 1.209527639
+    europe-north2: 1.281908691
     asia-east1: 1.151931123
     us-central1: 1.151931123
     us-east1: 1.151931123
@@ -3948,7 +4391,8 @@ instances:
     northamerica-northeast2: 1.484504444
     asia-northeast3: 1.26802974
     europe-north1: 1.399596375
-    me-central1: 1.184807836
+    me-central1: 1.255604932
+    northamerica-south1: 1.184807836
     us-east4: 1.336240135
     europe-west8: 1.26802974
     northamerica-northeast1: 1.359278741
@@ -3983,6 +4427,7 @@ instances:
     europe-west6: 16.991192995
     asia-southeast1: 15.510638043
     europe-central2: 15.689983455
+    europe-north2: 13.650009513
     asia-east1: 14.429762727
     us-central1: 13.000009479
     us-east1: 13.000009479
@@ -3998,6 +4443,7 @@ instances:
     asia-northeast3: 16.756946147
     europe-north1: 14.309970971
     me-central1: 15.795012178
+    northamerica-south1: 14.170010421
     us-east4: 13.394530027
     europe-west8: 15.080011348
     northamerica-northeast1: 14.309970971
@@ -4048,9 +4494,11 @@ instances:
     asia-northeast2: 2.277334832
     us-west3: 2.12619004
     southamerica-west1: 2.530104854
+    northamerica-south1: 1.928541508
     asia-south2: 1.892725844
     europe-central2: 2.137478688
     us-south1: 2.087778893
+    europe-north2: 1.857769259
     africa-south1: 2.212989407
     europe-west2: 2.036732672
     asia-northeast1: 2.277334832
@@ -4097,9 +4545,11 @@ instances:
     asia-northeast2: 28.385125171
     us-west3: 26.503805903
     southamerica-west1: 31.538382748
+    northamerica-south1: 24.039746869
     asia-south2: 23.568827439
     europe-central2: 26.645720335
     us-south1: 26.024680258
+    europe-north2: 23.157553273
     africa-south1: 27.632571335
     europe-west2: 25.379198991
     asia-northeast1: 28.385125171
@@ -4146,9 +4596,11 @@ instances:
     asia-northeast2: 3.761839277
     us-west3: 3.510236012
     southamerica-west1: 4.177366337
+    northamerica-south1: 3.184146441
     asia-south2: 3.143363704
     europe-central2: 3.527975316
     us-south1: 3.447057635
+    europe-north2: 3.067296899
     africa-south1: 3.618454979
     europe-west2: 3.369660148
     asia-northeast1: 3.761839277
@@ -4195,9 +4647,11 @@ instances:
     asia-northeast2: 7.096281293
     us-west3: 6.625951476
     southamerica-west1: 7.884595687
+    northamerica-south1: 6.009936717
     asia-south2: 5.89220686
     europe-central2: 6.661430084
     us-south1: 6.506170064
+    europe-north2: 5.789388318
     africa-south1: 6.908142834
     europe-west2: 6.344799748
     asia-northeast1: 7.096281293
@@ -4244,9 +4698,11 @@ instances:
     asia-northeast2: 14.192562586
     us-west3: 13.251902952
     southamerica-west1: 15.769191374
+    northamerica-south1: 12.019873434
     asia-south2: 11.78441372
     europe-central2: 13.322860168
     us-south1: 13.012340129
+    europe-north2: 11.578776637
     africa-south1: 13.816285668
     europe-west2: 12.689599496
     asia-northeast1: 14.192562586
