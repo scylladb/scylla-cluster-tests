@@ -1002,6 +1002,7 @@ class ScyllaLogCollector(LogCollector):
                 "|| true )"
             ),
         ),
+        FileLog(name="async_profiles_*.tar.gz", search_locally=True),
     ]
 
     cmd = "test -f /etc/scylla/ssl_conf/{0} && cat /etc/scylla/ssl_conf/{0}"
