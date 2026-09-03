@@ -35,6 +35,13 @@ DISK_TYPE_PD_STANDARD = "pd-standard"
 DISK_TYPE_PD_SSD = "pd-ssd"
 DISK_TYPE_PD_BALANCED = "pd-balanced"
 DISK_TYPE_LOCAL_SSD = "local-ssd"
+DISK_TYPE_HYPERDISK_BALANCED = "hyperdisk-balanced"
+
+# Machine families whose boot disk must be Hyperdisk. GCE rejects every pd-* type
+# on these, so the configured root disk type cannot apply.
+HYPERDISK_ONLY_FAMILIES = frozenset({"n4", "n4a", "c4", "c4a", "z3"})
+
+BUNDLED_LOCAL_SSD_FAMILIES = frozenset({"z3"})
 
 # Disk interfaces
 DISK_INTERFACE_NVME = "NVME"
