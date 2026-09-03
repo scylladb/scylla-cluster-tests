@@ -229,18 +229,22 @@ def _get_scores(
 
 def rank_az_letters(
     instance_types: list[str], target_capacity: int, region: str, az_letters: list[str], min_score: int = 0
-) -> list[str]:
+) -> list[str] | None:
     """Reorder `az_letters` in `region` best-first by spot placement score.
 
     Unscored letters keep their relative order and go last - a letter absent from the response was outside the
     top 10, not proven bad. Letters scoring below `min_score` are dropped; `min_score=0` (the default) never
     drops anything, matching the API's "recommendation only" contract.
+
+    Returns `None` when scores are unavailable, which callers must treat as "keep the existing order". That is
+    deliberately distinct from an empty list, which means scores WERE available and no AZ met `min_score` -
+    conflating the two would let a configured minimum be silently ignored precisely when it rejects everything.
     """
     if not az_letters:
         return []
     scores = get_scores(instance_types=instance_types, target_capacity=target_capacity, regions=[region])
     if not scores:
-        return list(az_letters)
+        return None
 
     by_letter = {item.az_letter: item.score for item in scores if item.az_letter}
     scored = [letter for letter in az_letters if letter in by_letter and by_letter[letter] >= min_score]

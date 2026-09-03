@@ -4509,7 +4509,7 @@ Order availability zones and region-fallback candidates by `ec2:GetSpotPlacement
 
 ## **spot_placement_score_min** / SCT_SPOT_PLACEMENT_SCORE_MIN
 
-Drop availability zones scoring below this value (1-10) from spot placement candidates. Default 0 keeps every AZ, which matches the AWS contract that a score is a recommendation and not a guarantee. Note AWS returns structurally low scores when fewer than 3 instance types are requested, so a non-zero value here is only safe alongside instance-type diversification.
+Drop availability zones scoring below this value (1-10) from spot placement candidates. Default 0 keeps every AZ, which matches the AWS contract that a score is a recommendation and not a guarantee. Note AWS returns structurally low scores when fewer than 3 instance types are requested, so a non-zero value here is only safe alongside instance-type diversification. If no AZ reaches the threshold, provisioning fails rather than silently ignoring the setting.
 
 **default:** 0
 

@@ -2496,7 +2496,8 @@ class SCTConfiguration(BaseModel):
         description="Drop availability zones scoring below this value (1-10) from spot placement candidates. Default 0 "
         "keeps every AZ, which matches the AWS contract that a score is a recommendation and not a guarantee. "
         "Note AWS returns structurally low scores when fewer than 3 instance types are requested, so a non-zero "
-        "value here is only safe alongside instance-type diversification.",
+        "value here is only safe alongside instance-type diversification. If no AZ reaches the threshold, "
+        "provisioning fails rather than silently ignoring the setting.",
     )
     spot_score_overrides_configured_az: Boolean = SctField(
         description="Let the spot placement score override an explicitly configured `availability_zone` rather than only "
@@ -3706,11 +3707,15 @@ class SCTConfiguration(BaseModel):
         underestimates such runs - `prepare_stress_duration` defaults to 300, so a job passing only
         `stress_duration` can run for days while `test_duration` still reads 60.
         """
+        # `abs()` mirrors the normalization in step 13 of __init__, which runs *after* this policy: a
+        # negative `stress_duration` is treated there as a typo and made positive, so reading the raw value
+        # here would decide on a duration the run never has. e.g. stress=-421 + prepare=300 reads as -61
+        # (spot) but actually runs 781 min (on_demand).
         stress_duration = self.get("stress_duration")
         if stress_duration:
-            prepare = int(self.get("prepare_stress_duration") or 0)
-            return prepare + int(stress_duration) + TestConfig.TEST_WARMUP_TEARDOWN
-        return int(self.get("test_duration") or 0)
+            prepare = abs(int(self.get("prepare_stress_duration") or 0))
+            return prepare + abs(int(stress_duration)) + TestConfig.TEST_WARMUP_TEARDOWN
+        return abs(int(self.get("test_duration") or 0))
 
     def _apply_duration_based_provision_policy(self) -> None:
         """Derive `instance_provision` from the effective test duration.

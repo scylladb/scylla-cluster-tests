@@ -150,7 +150,8 @@ def test_client_errors_fall_back_to_given_order(mock_ec2, error_code):
     mock_ec2.get_spot_placement_scores.side_effect = _client_error(error_code)
 
     assert get_scores(["i4i.large"], 6, ["eu-west-1"]) == []
-    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b", "c"]) == ["a", "b", "c"]
+    # None (not []) signals "unavailable" so a min_score rejecting everything stays distinguishable
+    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b", "c"]) is None
     assert rank_regions(["i4i.large"], 6, ["eu-west-1", "eu-west-2"]) == ["eu-west-1", "eu-west-2"]
 
 
@@ -223,12 +224,13 @@ def test_transport_errors_fall_back_to_given_order(mock_ec2):
     mock_ec2.get_spot_placement_scores.side_effect = EndpointConnectionError(endpoint_url="https://ec2")
 
     assert get_scores(["i4i.large"], 6, ["eu-west-1"]) == []
-    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b", "c"]) == ["a", "b", "c"]
+    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b", "c"]) is None
 
 
 def test_credentials_error_falls_back_to_given_order(mock_ec2):
     mock_ec2.get_spot_placement_scores.side_effect = NoCredentialsError()
     assert rank_regions(["i4i.large"], 6, ["eu-west-1", "eu-west-2"]) == ["eu-west-1", "eu-west-2"]
+    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b"]) is None
 
 
 def test_fleet_allocation_strategy_is_valid_for_request_spot_fleet():
@@ -249,7 +251,8 @@ def test_response_parser_error_falls_back_to_given_order(mock_ec2):
     mock_ec2.get_spot_placement_scores.side_effect = ResponseParserError("invalid XML received")
 
     assert get_scores(["i4i.large"], 6, ["eu-west-1"]) == []
-    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b", "c"]) == ["a", "b", "c"]
+    # None (not []) signals "unavailable" so a min_score rejecting everything stays distinguishable
+    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b", "c"]) is None
     assert rank_regions(["i4i.large"], 6, ["eu-west-1", "eu-west-2"]) == ["eu-west-1", "eu-west-2"]
 
 
@@ -265,7 +268,7 @@ def test_response_parser_error_falls_back_to_given_order(mock_ec2):
 def test_any_exception_degrades_rather_than_raising(mock_ec2, exc):
     """The contract is total: scoring is an optimization and must never fail a provisioning run."""
     mock_ec2.get_spot_placement_scores.side_effect = exc
-    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b"]) == ["a", "b"]
+    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b"]) is None
 
 
 def test_zone_id_lookup_failure_degrades(mock_ec2):
@@ -277,4 +280,25 @@ def test_zone_id_lookup_failure_degrades(mock_ec2):
             result = rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b"])
         except ResponseParserError:
             pytest.fail("_zone_id_to_letter failure must not propagate to the caller")
-    assert result == ["a", "b"]
+    assert result is None
+
+
+def test_all_azs_below_min_score_returns_empty_not_input(mock_ec2):
+    """Empty must be distinguishable from None, or a configured minimum is silently ignored.
+
+    Returning the input list here would mean `spot_placement_score_min` is honoured when it drops *some*
+    AZs but not when it drops *all* of them - the one case it exists to catch.
+    """
+    mock_ec2.get_spot_placement_scores.return_value = {
+        "SpotPlacementScores": [
+            _score("eu-west-1", "euw1-az3", 1),
+            _score("eu-west-1", "euw1-az1", 2),
+            _score("eu-west-1", "euw1-az2", 1),
+        ]
+    }
+    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", ["a", "b", "c"], min_score=8) == []
+
+
+def test_empty_input_returns_empty(mock_ec2):
+    assert rank_az_letters(["i4i.large"], 6, "eu-west-1", [], min_score=8) == []
+    mock_ec2.get_spot_placement_scores.assert_not_called()

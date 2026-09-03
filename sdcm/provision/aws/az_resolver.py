@@ -519,18 +519,31 @@ class AZResolver:
             LOGGER.debug("Spot placement scores: skipping AZ ranking for multi-region config %s", region_names)
             return letters
 
+        min_score = int(self._params.get("spot_placement_score_min") or 0)
         ranked = rank_az_letters(
             instance_types=self.scored_instance_types(),
             target_capacity=self.spot_target_capacity(),
             region=region_names[0],
             az_letters=letters,
-            min_score=int(self._params.get("spot_placement_score_min") or 0),
+            min_score=min_score,
         )
+        # None means the scores could not be obtained - keep the caller's order, as if scoring were off.
+        if ranked is None:
+            return letters
+        # An empty list means scores WERE obtained and nothing cleared `spot_placement_score_min`. Falling back
+        # to `letters` here would silently ignore the configured minimum in exactly the case it is meant to
+        # catch, so fail loudly instead. Only reachable with min_score > 0, which is opt-in (default 0).
+        if not ranked:
+            raise NoValidAvailabilityZoneError(
+                f"No availability zone in {region_names[0]} reached spot_placement_score_min={min_score} "
+                f"for {self.scored_instance_types()} (candidates were {letters}); lower the threshold, "
+                f"diversify instance types, or pick another region."
+            )
         if ranked != letters:
             LOGGER.info(
                 "Spot placement scores reordered AZ candidates in %s: %s -> %s", region_names[0], letters, ranked
             )
-        return ranked or letters
+        return ranked
 
     def _region_names(self) -> list[str]:
         if regions := getattr(self._params, "region_names", None):

@@ -217,3 +217,30 @@ class TestAutoProvisionType:
         config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=0)
         config._apply_duration_based_provision_policy()
         assert config.get("instance_provision") == "spot"
+
+
+class TestNegativeDurationNormalization:
+    """`abs()` mirrors step 13 of SCTConfiguration.__init__, which normalizes durations AFTER the policy runs.
+
+    Reading the raw value would decide on a duration the run never has: stress=-421 + prepare=300 reads as
+    -61 (spot) but the run is actually 781 min, which must be on_demand.
+    """
+
+    def test_negative_stress_duration_uses_magnitude(self):
+        config = _make_config(test_duration=5, stress_duration=-421, prepare_stress_duration=300)
+        assert config.effective_test_duration() == 781
+
+    def test_negative_stress_duration_selects_on_demand(self):
+        config = _make_config(test_duration=5, stress_duration=-421, prepare_stress_duration=300)
+        config._apply_duration_based_provision_policy()
+        assert config.get("instance_provision") == "on_demand"
+
+    def test_negative_prepare_duration_uses_magnitude(self):
+        config = _make_config(test_duration=5, stress_duration=421, prepare_stress_duration=-300)
+        assert config.effective_test_duration() == 781
+
+    def test_negative_test_duration_uses_magnitude(self):
+        config = _make_config(test_duration=-900, stress_duration=0)
+        assert config.effective_test_duration() == 900
+        config._apply_duration_based_provision_policy()
+        assert config.get("instance_provision") == "on_demand"

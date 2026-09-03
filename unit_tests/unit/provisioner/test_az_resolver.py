@@ -707,3 +707,26 @@ class TestSpotPlacementScoreOrdering:
 
         assert params["availability_zone"] in {"b", "c"}
         assert "does not support all required instance types" in caplog.text
+
+    def test_min_score_rejecting_every_az_fails_loudly(self, mock_aws_region_cls):
+        """A configured minimum that nothing meets must not silently fall back to the unfiltered list."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a", spot_placement_score_min=8)
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters", return_value=[]):
+            with pytest.raises(NoValidAvailabilityZoneError, match="spot_placement_score_min=8"):
+                AZResolver(params).resolve()
+
+    def test_unavailable_scores_are_not_treated_as_rejection(self, mock_aws_region_cls):
+        """None means 'could not ask' - that must keep the existing order, never raise."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+        ]
+        params = self._spot_params(availability_zone="a", spot_placement_score_min=8)
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters", return_value=None):
+            AZResolver(params).resolve()
+        assert params["availability_zone"] == "a"
