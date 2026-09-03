@@ -32,8 +32,11 @@ from sdcm.provision.gce.capacity_errors import is_config_error
 from sdcm.provision.gce.disk_provider import DiskProvider
 from sdcm.provision.gce.network_provider import NetworkProvider
 from sdcm.provision.gce.constants import (
+    DISK_TYPE_HYPERDISK_BALANCED,
     DISK_TYPE_PD_STANDARD,
     DISK_TYPE_LOCAL_SSD,
+    BUNDLED_LOCAL_SSD_FAMILIES,
+    HYPERDISK_ONLY_FAMILIES,
     GCE_MAX_NETWORK_INTERFACES,
     GCE_MIN_NETWORK_INTERFACES,
     GCE_SUPPORTED_NETWORK_INTERFACES,
@@ -100,6 +103,12 @@ def build_network_interfaces(
                 )
             )
     return interfaces
+
+
+def resolve_root_disk_type(instance_type: str, configured: str | None) -> str:
+    if instance_type.split("-", maxsplit=1)[0] in HYPERDISK_ONLY_FAMILIES:
+        return DISK_TYPE_HYPERDISK_BALANCED
+    return configured or DISK_TYPE_PD_STANDARD
 
 
 class VirtualMachineProvider:
@@ -326,11 +335,12 @@ class VirtualMachineProvider:
     ):
         """Build instance configuration and initiate creation (non-blocking)."""
         # Disk configuration based on machine type
-        is_z3 = "z3-highmem" in definition.type
-        root_disk_type = "hyperdisk-balanced" if is_z3 else (definition.root_disk_type or DISK_TYPE_PD_STANDARD)
+        family = definition.type.split("-", maxsplit=1)[0]
+        has_bundled_local_ssds = family in BUNDLED_LOCAL_SSD_FAMILIES
+        root_disk_type = resolve_root_disk_type(definition.type, definition.root_disk_type)
         data_disks = (
             [d for d in (definition.data_disks or []) if d.type != DISK_TYPE_LOCAL_SSD]
-            if is_z3
+            if has_bundled_local_ssds
             else definition.data_disks
         )
 
@@ -366,7 +376,7 @@ class VirtualMachineProvider:
 
         # Scheduling
         instance.scheduling = compute_v1.Scheduling()
-        if is_z3:
+        if has_bundled_local_ssds:
             instance.scheduling.on_host_maintenance = "MIGRATE"
             instance.disks = [d for d in disks if "-data-local-ssd-" not in d.device_name]
         elif pricing_model.is_spot():
