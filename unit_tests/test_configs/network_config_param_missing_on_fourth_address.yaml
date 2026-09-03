@@ -1,0 +1,12 @@
+# 'public' is missing from the fourth address. Before the step-17 rules were extracted this
+# raised a bare KeyError, because the ordinal lookup used for the message only covered three.
+test_duration: 5
+n_db_nodes: 3
+n_loaders: 1
+user_prefix: 'network-config-unit-test'
+scylla_network_config:
+- {address: listen_address, ip_type: ipv4, public: false, use_dns: false, nic: 0}
+- {address: rpc_address, ip_type: ipv4, public: false, use_dns: false, nic: 0}
+- {address: broadcast_rpc_address, ip_type: ipv4, public: false, use_dns: false, nic: 0}
+- {address: broadcast_address, ip_type: ipv4, use_dns: false, nic: 0}
+- {address: test_communication, ip_type: ipv4, public: false, use_dns: false, nic: 0}
