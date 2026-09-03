@@ -21,6 +21,16 @@ UpgradeTest.__test__ = False
 pytestmark = pytest.mark.usefixtures("events")
 
 
+@pytest.fixture(autouse=True)
+def _stub_rollback_context_filters():
+    """``_rollback_node``'s event filters read the live tester object, which unit tests do not create."""
+    with (
+        mock.patch("sdcm.sct_events.group_common_events.TestConfig"),
+        mock.patch("sdcm.sct_events.group_common_events.SkipPerIssues", return_value=False),
+    ):
+        yield
+
+
 def _build_fake_self(*, upgrade_rollback_mode, orig_ver, new_ver):
     """Build a MagicMock standing in for ``self`` in ``UpgradeTest._rollback_node``."""
     fake_self = MagicMock()
