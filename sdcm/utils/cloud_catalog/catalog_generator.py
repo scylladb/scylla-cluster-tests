@@ -212,10 +212,21 @@ def generate_aws_catalog(  # noqa: PLR0914
 
 # Known local SSD specs for GCE families that have local NVMe.
 # GCE machine-type API does not expose local SSD info; these are from docs.
-_GCE_LOCAL_SSD_SPECS: dict[str, dict[str, Any]] = {
-    "n2": {"local_disk_gb": 1500.0, "local_disk_count": 4},
-    "n2d": {"local_disk_gb": 375.0, "local_disk_count": 1},
-}
+_GCE_LOCAL_SSD_FAMILIES = frozenset({"n2", "n2d"})
+
+_GCE_LOCAL_SSD_DISK_GB = 375.0
+
+_GCE_LOCAL_SSD_BASELINE_DISKS = 4
+
+_GCE_LOCAL_SSD_MIN_DISKS: tuple[tuple[int, int], ...] = ((16, 1), (48, 2), (80, 4), (224, 8))
+
+
+def gce_local_ssd_disk_count(vcpus: int) -> int:
+    minimum = next((disks for max_vcpus, disks in _GCE_LOCAL_SSD_MIN_DISKS if vcpus <= max_vcpus), 8)
+    return max(minimum, _GCE_LOCAL_SSD_BASELINE_DISKS)
+
+
+_GCE_SUBFAMILY_FAMILIES = {"n4a"}
 
 _Z3_DISK_SIZE_GIB = 3000.0
 _Z3_METAL_DISK_SIZE_GIB = 6000.0
@@ -260,6 +271,11 @@ _GCE_SECTION_MAP: dict[str, list[str]] = {
         "n2d-machine-types",  # contains n2d-standard-*
         "n2d-standard-machine-types",  # contains n2d-highmem-*
         "n2d-high-memory-machine-types",  # contains n2d-highcpu-*
+    ],
+    "n4a": [
+        "n4a-machine-types",
+        "n4a-standard-machine-types",
+        "n4a-high-memory-machine-types",
     ],
 }
 
@@ -453,7 +469,7 @@ def _extract_section_on_demand_prices(  # noqa: PLR0914
         (m.start(), m.group(1)) for m in re.finditer(r'"[\w\s/]+ \(([\w-]+\d\w*)\)"', section) if m.start() > 3000
     ]
     price_entries = [(m.start(), float(m.group(1))) for m in re.finditer(r"\$(\d+\.\d+) / 1 hour", section)]
-    type_pattern = r"((?:e2|n2|n2d|c3|c4|t2a)-(?:standard|highcpu|highmem)-\d+)"
+    type_pattern = r"((?:e2|n2|n2d|n4|n4a|n4d|c3|c4|c4a|t2a)-(?:standard|highcpu|highmem)-\d+)"
     type_positions = [(m.start(), m.group(1)) for m in re.finditer(type_pattern, section)]
 
     events: list[tuple[str, int, str | float]] = []
@@ -539,6 +555,11 @@ def generate_gce_catalog(  # noqa: PLR0914
         request = compute_v1.ListMachineTypesRequest(project=project, zone=zone)
         page_result = client.list(request=request)
 
+        gce_arch_map = {
+            compute_v1.MachineType.Architecture.ARM64.name: "arm64",
+            compute_v1.MachineType.Architecture.X86_64.name: "x86_64",
+        }
+
         for machine_type in page_result:
             name = machine_type.name
             family = next((f for f in families if name.startswith(f)), None)
@@ -547,6 +568,16 @@ def generate_gce_catalog(  # noqa: PLR0914
 
             vcpus = machine_type.guest_cpus
             memory_gb = round(machine_type.memory_mb / 1024, 2)
+
+            arch = gce_arch_map.get(machine_type.architecture)
+            if arch is None:
+                arch = "x86_64"
+                LOG.warning(
+                    "GCE reported architecture %r for %s, falling back to %s",
+                    machine_type.architecture,
+                    name,
+                    arch,
+                )
 
             if name.startswith("z3"):
                 bundled = getattr(machine_type, "bundled_local_ssds", None)
@@ -561,11 +592,15 @@ def generate_gce_catalog(  # noqa: PLR0914
                 else:
                     continue
             else:
-                ssd_spec = _GCE_LOCAL_SSD_SPECS.get(family, {})
-                local_disk_gb = float(ssd_spec.get("local_disk_gb", 0))
-                local_disk_count = int(ssd_spec.get("local_disk_count", 0))
+                if family in _GCE_LOCAL_SSD_FAMILIES:
+                    local_disk_count = gce_local_ssd_disk_count(vcpus)
+                    local_disk_gb = local_disk_count * _GCE_LOCAL_SSD_DISK_GB
+                else:
+                    local_disk_count = 0
+                    local_disk_gb = 0.0
 
-            arch = "arm64" if family in ("t2a",) else "x86_64"
+                if family in _GCE_SUBFAMILY_FAMILIES:
+                    family = "-".join(name.split("-")[:2])
 
             price: float | dict[str, float] | None = z3_prices.get(name) or general_prices.get(name)
 
