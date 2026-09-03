@@ -7,6 +7,56 @@ from sdcm.nemesis import NemesisRunner
 from sdcm.nemesis.registry import NemesisRegistry
 
 
+def make_mock_node(name="node1", rack="rack1", is_seed=False, dc_idx=0, ip_address=None):
+    """Create a ``MagicMock`` that behaves like a minimal *live* cluster node.
+
+    Nemesis code calls arbitrary methods on every node it touches (``run_nodetool``,
+    ``stop_scylla``, ``get_list_of_sstables``, ...), so a plain dataclass is not
+    sufficient - ``MagicMock`` auto-stubs all of them.
+
+    ``destroyed`` and ``remoter.is_up()`` are pinned explicitly rather than left to
+    auto-stubbing: a bare ``MagicMock`` attribute is truthy, so an auto-stubbed node reads
+    as *destroyed*, which would make every "skip cleanup on a destroyed node" guard bypass
+    the code under test and let the assertions pass vacuously.
+
+    Args:
+        name: Node name, as reported by ``node.name``.
+        rack: Rack the node belongs to.
+        is_seed: Whether the node is a seed node.
+        dc_idx: Index of the data center the node belongs to.
+        ip_address: Node IP. Left auto-stubbed when ``None``, since most tests never
+            read it and a shared default would give every node the same address.
+
+    Returns:
+        MagicMock: A mock configured to look like a live node.
+    """
+    node = MagicMock()
+    node.name = name
+    node.rack = rack
+    node.is_seed = is_seed
+    node.dc_idx = dc_idx
+    node.destroyed = False
+    node.remoter.is_up.return_value = True
+    if ip_address is not None:
+        node.ip_address = ip_address
+    return node
+
+
+def sudo_commands(remoter):
+    """Flatten a mock remoter's ``sudo`` calls into the plain command strings issued.
+
+    Takes the remoter rather than the node so it still works for a node destroyed
+    mid-test, since ``BaseNode.destroy()`` sets ``node.remoter`` to ``None``.
+
+    Args:
+        remoter: Mock remoter whose ``sudo`` calls should be collected.
+
+    Returns:
+        list: Commands passed to ``sudo``, positionally or via the ``cmd`` keyword.
+    """
+    return [call.args[0] if call.args else call.kwargs.get("cmd") for call in remoter.sudo.call_args_list]
+
+
 class TestRunner:
     """Lightweight mock runner for nemesis unit tests.
 
