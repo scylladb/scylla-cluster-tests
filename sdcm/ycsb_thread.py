@@ -399,16 +399,19 @@ class YcsbStressThread(DockerBasedStressThread):
             alternator_port = self.params.get("alternator_port")
             dns_cmd = f"python3 /dns_server.py {self.db_node_to_query(loader)} {alternator_port}"
             dns_image = self.params.get("stress_image.alternator-dns")
+            docker_network = self.params.get("docker_network")
+            use_dns_routing = self.params.get("alternator_use_dns_routing")
             dns_options, cpu_options = "", ""
+            network_options = "--network=host" if not use_dns_routing and not docker_network else ""
             if self.stress_num > 1:
                 cpu_options = f'--cpuset-cpus="{cpu_idx}"'
-            if self.params.get("alternator_use_dns_routing"):
+            if use_dns_routing:
                 dns = RemoteDocker(
                     loader,
                     dns_image,
                     command_line=dns_cmd,
                     extra_docker_opts=f"--cap-add=NET_BIND_SERVICE --label shell_marker={self.shell_marker}",
-                    docker_network=self.params.get("docker_network"),
+                    docker_network=docker_network,
                 )
                 dns_ip = dns.internal_ip_address
                 # Wait for the DNS server to be ready (port 53/tcp)
@@ -425,7 +428,8 @@ class YcsbStressThread(DockerBasedStressThread):
                     time.sleep(1)
                 dns_options += f"--dns {dns_ip} --dns-option use-vc"
             extra_docker_opts = (
-                f"{dns_options} {cpu_options} --entrypoint /bin/bash --label shell_marker={self.shell_marker}"
+                f"{network_options} {dns_options} {cpu_options} "
+                f"--entrypoint /bin/bash --label shell_marker={self.shell_marker}"
             )
             if self.params["use_hdrhistogram"]:
                 hdr_files_directory = self._prepare_directory_for_hdr_files_on_loader_node(loader_idx, cpu_idx)
@@ -436,7 +440,7 @@ class YcsbStressThread(DockerBasedStressThread):
                 self.docker_image_name,
                 command_line="-c 'tail -f /dev/null'",
                 extra_docker_opts=extra_docker_opts,
-                docker_network=self.params.get("docker_network"),
+                docker_network=docker_network,
             )
             cmd_runner_name = str(loader)
 

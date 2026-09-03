@@ -1,9 +1,9 @@
 test_metadata:
   description: >-
     The canonical provisioning smoke test for SCT itself: a constraint-sized 3-node cluster with
-    forced io-tune is preloaded with scylla-bench (with data validation), then runs a one-minute
-    cassandra-stress write under a non-disruptive SisyphusMonkey. Used by the pull-request job and by
-    the documented manual runs on every cloud backend.
+    forced io-tune is preloaded with scylla-bench and YCSB (with data validation), then runs
+    one-minute cassandra-stress, cql-stress and gemini writes under a non-disruptive SisyphusMonkey.
+    Used by the pull-request job and by the documented manual runs on every cloud backend.
   test_type: longevity
   tier: sanity
   duration_class: short
@@ -14,7 +14,10 @@ test_metadata:
     - xcloud
   stress_tools:
     - cassandra-stress
+    - cql-stress-cassandra-stress
+    - gemini
     - scylla-bench
+    - ycsb
   workload: write
   nemesis_labels:
     - SisyphusMonkey
@@ -28,14 +31,23 @@ data_validation: |
   max_partitions_in_test_table: 10
   partition_range_with_data_validation: 0-5
 
+pre_create_keyspace: [
+  "CREATE KEYSPACE ycsb WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 3 };",
+  "CREATE TABLE ycsb.usertable (y_id varchar primary key, field0 varchar, field1 varchar, field2 varchar, field3 varchar, field4 varchar, field5 varchar, field6 varchar, field7 varchar, field8 varchar, field9 varchar);"
+]
+
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5",
+             "cql-stress-cassandra-stress write cl=QUORUM duration=1m -schema 'keyspace=cqlstress replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -pop seq=1..1000000 -log interval=5",
+             "gemini --duration 3m --warmup 10s --concurrency 4 --mode write --dataset-size small",
              ]
 
 prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -max-rate=300 -replication-factor=3 -partition-count=10 -clustering-row-count=100 -clustering-row-size=5120 -concurrency=7 -rows-per-request=10",
-                     "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=10 -clustering-row-count=100 -clustering-row-size=5120 -rows-per-request=10 -concurrency=7 -max-rate=32000 -duration=1m"
+                     "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=10 -clustering-row-count=100 -clustering-row-size=5120 -rows-per-request=10 -concurrency=7 -max-rate=32000 -duration=1m",
+                     "bin/ycsb load scylla -P workloads/workloada -threads 10 -p recordcount=5000 -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE -p readproportion=0 -p updateproportion=0 -p fieldcount=10 -p fieldlength=128 -p insertstart=0 -p insertcount=5000"
                     ]
 
 n_loaders: 1
+alternator_use_dns_routing: false
 sizing_db:
   vcpu: '>=2'
   memory: '>=16.0'
