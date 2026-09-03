@@ -28,7 +28,28 @@ from sdcm.provision.provisioner import (
 )
 from sdcm.provision.gce.disk_provider import DiskProvider
 from sdcm.provision.gce.network_provider import NetworkProvider
+<<<<<<< HEAD
 from sdcm.provision.gce.constants import DISK_TYPE_PD_STANDARD, DISK_TYPE_LOCAL_SSD
+||||||| parent of fafc02ca4 (feature(gce): give n4a and z3 the boot disk and local disks they require)
+from sdcm.provision.gce.constants import (
+    DISK_TYPE_PD_STANDARD,
+    DISK_TYPE_LOCAL_SSD,
+    GCE_MAX_NETWORK_INTERFACES,
+    GCE_MIN_NETWORK_INTERFACES,
+    GCE_SUPPORTED_NETWORK_INTERFACES,
+)
+=======
+from sdcm.provision.gce.constants import (
+    DISK_TYPE_HYPERDISK_BALANCED,
+    DISK_TYPE_PD_STANDARD,
+    DISK_TYPE_LOCAL_SSD,
+    BUNDLED_LOCAL_SSD_FAMILIES,
+    HYPERDISK_ONLY_FAMILIES,
+    GCE_MAX_NETWORK_INTERFACES,
+    GCE_MIN_NETWORK_INTERFACES,
+    GCE_SUPPORTED_NETWORK_INTERFACES,
+)
+>>>>>>> fafc02ca4 (feature(gce): give n4a and z3 the boot disk and local disks they require)
 from sdcm.provision.gce.utils import tags_to_gce_labels, normalize_instance_name
 from sdcm.utils.gce_utils import (
     get_gce_compute_instances_client,
@@ -47,6 +68,86 @@ def _is_zone_exhausted(error: BaseException) -> bool:
     return ZONE_EXHAUSTED_MARKER in str(error)
 
 
+<<<<<<< HEAD
+||||||| parent of fafc02ca4 (feature(gce): give n4a and z3 the boot disk and local disks they require)
+def max_network_interfaces(vcpu_count: int) -> int:
+    """Number of NICs a machine type can carry: one per vCPU, floor of 2, ceiling of 8."""
+    return max(GCE_MIN_NETWORK_INTERFACES, min(vcpu_count, GCE_MAX_NETWORK_INTERFACES))
+
+
+def build_network_interfaces(
+    network_provider: NetworkProvider, region: str, count: int
+) -> List[compute_v1.NetworkInterface]:
+    """Build `count` network interfaces, all in the same VPC network.
+
+    The primary interface keeps the auto-mode subnet and carries the public IP; every extra
+    interface is placed in its own dedicated regional subnet and stays private, which is what
+    `scylla_network_config` validation already assumes (public IPv4 only on nic 0).
+    """
+    interfaces = []
+    for index in range(count):
+        if index == 0:
+            access = compute_v1.AccessConfig(
+                type_=compute_v1.AccessConfig.Type.ONE_TO_ONE_NAT.name,
+                name="External NAT",
+                network_tier=compute_v1.AccessConfig.NetworkTier.PREMIUM.name,
+            )
+            interfaces.append(
+                compute_v1.NetworkInterface(network=network_provider.get_network_url(), access_configs=[access])
+            )
+        else:
+            interfaces.append(
+                compute_v1.NetworkInterface(
+                    network=network_provider.get_network_url(),
+                    subnetwork=network_provider.get_subnetwork_url(region=region, index=index),
+                )
+            )
+    return interfaces
+
+
+=======
+def max_network_interfaces(vcpu_count: int) -> int:
+    """Number of NICs a machine type can carry: one per vCPU, floor of 2, ceiling of 8."""
+    return max(GCE_MIN_NETWORK_INTERFACES, min(vcpu_count, GCE_MAX_NETWORK_INTERFACES))
+
+
+def build_network_interfaces(
+    network_provider: NetworkProvider, region: str, count: int
+) -> List[compute_v1.NetworkInterface]:
+    """Build `count` network interfaces, all in the same VPC network.
+
+    The primary interface keeps the auto-mode subnet and carries the public IP; every extra
+    interface is placed in its own dedicated regional subnet and stays private, which is what
+    `scylla_network_config` validation already assumes (public IPv4 only on nic 0).
+    """
+    interfaces = []
+    for index in range(count):
+        if index == 0:
+            access = compute_v1.AccessConfig(
+                type_=compute_v1.AccessConfig.Type.ONE_TO_ONE_NAT.name,
+                name="External NAT",
+                network_tier=compute_v1.AccessConfig.NetworkTier.PREMIUM.name,
+            )
+            interfaces.append(
+                compute_v1.NetworkInterface(network=network_provider.get_network_url(), access_configs=[access])
+            )
+        else:
+            interfaces.append(
+                compute_v1.NetworkInterface(
+                    network=network_provider.get_network_url(),
+                    subnetwork=network_provider.get_subnetwork_url(region=region, index=index),
+                )
+            )
+    return interfaces
+
+
+def resolve_root_disk_type(instance_type: str, configured: str | None) -> str:
+    if instance_type.split("-", maxsplit=1)[0] in HYPERDISK_ONLY_FAMILIES:
+        return DISK_TYPE_HYPERDISK_BALANCED
+    return configured or DISK_TYPE_PD_STANDARD
+
+
+>>>>>>> fafc02ca4 (feature(gce): give n4a and z3 the boot disk and local disks they require)
 class VirtualMachineProvider:
     """Provider for creating and managing GCE VM instances."""
 
@@ -243,11 +344,12 @@ class VirtualMachineProvider:
     ):
         """Build instance configuration and initiate creation (non-blocking)."""
         # Disk configuration based on machine type
-        is_z3 = "z3-highmem" in definition.type
-        root_disk_type = "hyperdisk-balanced" if is_z3 else (definition.root_disk_type or DISK_TYPE_PD_STANDARD)
+        family = definition.type.split("-", maxsplit=1)[0]
+        has_bundled_local_ssds = family in BUNDLED_LOCAL_SSD_FAMILIES
+        root_disk_type = resolve_root_disk_type(definition.type, definition.root_disk_type)
         data_disks = (
             [d for d in (definition.data_disks or []) if d.type != DISK_TYPE_LOCAL_SSD]
-            if is_z3
+            if has_bundled_local_ssds
             else definition.data_disks
         )
 
@@ -283,7 +385,7 @@ class VirtualMachineProvider:
 
         # Scheduling
         instance.scheduling = compute_v1.Scheduling()
-        if is_z3:
+        if has_bundled_local_ssds:
             instance.scheduling.on_host_maintenance = "MIGRATE"
             instance.disks = [d for d in disks if "-data-local-ssd-" not in d.device_name]
         elif pricing_model.is_spot():
