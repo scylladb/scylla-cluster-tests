@@ -32,7 +32,7 @@ roles:
     implicit_constraints:
       local_disk_count: 0
     arch_source: fixed
-    arch: x86_64
+    arch: arm64
   monitor:
     category: compute
     implicit_constraints:
@@ -106,7 +106,10 @@ clouds:
         - c7i
         - c7i-flex
         - c6i
+        - c7g
         - c6g
+        - m7g
+        - m6g
       monitor:
         - t3
         - m6i
@@ -123,16 +126,21 @@ clouds:
       db:
         - z3-highmem-highlssd
         - z3-highmem-standardlssd
+        - n2d
         - n2
       db_oracle:
         - z3-highmem-highlssd
         - z3-highmem-standardlssd
+        - n2d
         - n2
       zero_token:
         - z3-highmem-highlssd
         - z3-highmem-standardlssd
+        - n2d
         - n2
       loader:
+        - n4a-highcpu
+        - n4a-standard
         - e2-standard
         - e2-highcpu
       monitor:

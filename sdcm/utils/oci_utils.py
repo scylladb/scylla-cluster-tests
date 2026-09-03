@@ -75,6 +75,15 @@ def vmarch_to_oci(arch: VmArch) -> str:
         raise ValueError(f"Unsupported architecture: {arch}")
 
 
+_OCI_ARM_SHAPE_RE = re.compile(r"\.Standard\.A\d+\.", re.IGNORECASE)
+
+
+def get_arch_from_oci_shape(shape: str | None) -> VmArch:
+    if shape and _OCI_ARM_SHAPE_RE.search(shape):
+        return VmArch.ARM
+    return VmArch.X86
+
+
 # Supported OCI regions for SCT
 SUPPORTED_REGIONS = [
     "us-ashburn-1",
@@ -220,6 +229,7 @@ def get_platform_image_ocid(
     operating_system: str = "Oracle Linux",
     version: str = "8",
     shape: str | None = None,
+    arch: VmArch = VmArch.X86,
 ) -> str:
     """Get the latest platform image OCID for the specified OS and version.
 
@@ -255,20 +265,23 @@ def get_platform_image_ocid(
         **kwargs,
     )
 
-    amd64_images = []
+    want_arm = arch is VmArch.ARM
+    matching_images = []
     while current_image := next(images, None):
         current_image_name = current_image.display_name.lower()
-        # Filter for amd64/x86_64 images (exclude ARM)
-        if "aarch64" not in current_image_name and "arm" not in current_image_name:
-            amd64_images.append(current_image)
-    if not amd64_images:
+        is_arm_image = "aarch64" in current_image_name or "arm" in current_image_name
+        if is_arm_image == want_arm:
+            matching_images.append(current_image)
+    if not matching_images:
         shape_msg = f" compatible with shape {shape}" if shape else ""
-        raise ValueError(f"No {operating_system} {version} amd64 image{shape_msg} found in region {region}")
+        raise ValueError(
+            f"No {operating_system} {version} {vmarch_to_oci(arch)} image{shape_msg} found in region {region}"
+        )
 
-    latest_image = amd64_images[0]
+    latest_image = matching_images[0]
     LOGGER.info(
         "Found %d images. Pick latest %s %s image: %s (OCID: %s)",
-        len(amd64_images),
+        len(matching_images),
         operating_system,
         version,
         latest_image.display_name,
@@ -277,13 +290,19 @@ def get_platform_image_ocid(
     return latest_image.id
 
 
-def get_ubuntu_image_ocid(compartment_id: str, region: str | None = None, version: str = "24.04") -> str:
+def get_ubuntu_image_ocid(
+    compartment_id: str,
+    region: str | None = None,
+    version: str = "24.04",
+    arch: VmArch = VmArch.X86,
+) -> str:
     """Get the latest Ubuntu image OCID for the specified region.
 
     Args:
         compartment_id: The compartment OCID (used for API call context)
         region: OCI region name
         version: Ubuntu version (default: "24.04")
+        arch: VM architecture to filter by
 
     Returns:
         OCID of the latest Ubuntu image
@@ -296,6 +315,7 @@ def get_ubuntu_image_ocid(compartment_id: str, region: str | None = None, versio
         region=region,
         operating_system="Canonical Ubuntu",
         version=version,
+        arch=arch,
     )
 
 
