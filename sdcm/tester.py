@@ -3072,6 +3072,14 @@ class ClusterTester(unittest.TestCase):
         elif stress_cmd.startswith("nosqlbench"):
             params["stop_test_on_failure"] = stop_test_on_failure
             return self.run_nosqlbench_thread(**params)
+        elif stress_cmd.startswith("gemini"):
+            return self.run_gemini(
+                cmd=stress_cmd.removeprefix("gemini").strip(),
+                duration=duration,
+                stress_num=stress_num,
+                round_robin=round_robin,
+                stop_test_on_failure=stop_test_on_failure,
+            )
         elif stress_cmd.startswith("table_compare"):
             return self.run_table_compare_thread(**params)
         elif stress_cmd.startswith("python_thread"):
@@ -3363,7 +3371,7 @@ class ClusterTester(unittest.TestCase):
             params=self.params,
         ).run()
 
-    def run_gemini(self, cmd, duration=None):
+    def run_gemini(self, cmd, duration=None, stress_num=1, round_robin=False, stop_test_on_failure=True, **_):
         if duration:
             timeout = self.get_duration(duration)
         elif self._stress_duration:
@@ -3371,6 +3379,7 @@ class ClusterTester(unittest.TestCase):
             cmd = apply_gemini_stress_duration(cmd, self._stress_duration)
         else:
             timeout = get_timeout_from_stress_cmd(cmd) or self.get_duration(duration)
+        stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
         return GeminiStressThread(
             test_cluster=self.db_cluster,
             oracle_cluster=self.cs_db_cluster,
@@ -3378,6 +3387,9 @@ class ClusterTester(unittest.TestCase):
             stress_cmd=cmd,
             timeout=timeout,
             params=self.params,
+            stress_num=stress_num,
+            round_robin=round_robin,
+            stop_test_on_failure=stop_test_on_failure,
         ).run()
 
     def run_python_thread(self, stress_cmd, duration=None, **_):

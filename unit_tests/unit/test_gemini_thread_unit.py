@@ -11,11 +11,13 @@
 #
 # Copyright (c) 2024 ScyllaDB
 
+import json
 from unittest.mock import patch
 
 import pytest
 
 from sdcm.gemini_thread import GeminiStressThread
+from sdcm.sct_events import Severity
 from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 
@@ -140,3 +142,58 @@ def test_generate_gemini_command_no_schema_by_default(gemini_thread_unit):
     """Without schema_path, --schema must not appear in the generated command."""
     cmd = gemini_thread_unit.generate_gemini_command()
     assert "--schema=" not in cmd, f"--schema should not appear by default: {cmd}"
+
+
+class _FakeDockerNode:
+    def __init__(self, name):
+        self.name = name
+
+
+class _FakeDocker:
+    def __init__(self, name):
+        self.node = _FakeDockerNode(name)
+
+
+def _gemini_summary(tmp_path, name, result):
+    path = tmp_path / name
+    path.write_text(json.dumps({"result": result}), encoding="utf-8")
+    return str(path)
+
+
+def test_parse_results_reports_gemini_error_counters(gemini_thread_unit, tmp_path):
+    summary = _gemini_summary(tmp_path, "clean.json", {"write_errors": 3, "read_errors": 0, "errors": []})
+
+    with patch.object(GeminiStressThread, "get_results", return_value=[(_FakeDocker("loader-1"), None, summary)]):
+        results, errors = gemini_thread_unit.parse_results()
+
+    assert results == [{"write_errors": 3, "read_errors": 0, "errors": []}]
+    assert [msg for _, msg in errors["loader-1"]] == ["gemini write_errors: 3"]
+    assert all(severity == Severity.ERROR for severity, _ in errors["loader-1"])
+
+
+def test_parse_results_passes_a_clean_gemini_run(gemini_thread_unit, tmp_path):
+    summary = _gemini_summary(tmp_path, "ok.json", {"write_errors": 0, "read_errors": 0, "errors": []})
+
+    with patch.object(GeminiStressThread, "get_results", return_value=[(_FakeDocker("loader-1"), None, summary)]):
+        results, errors = gemini_thread_unit.parse_results()
+
+    assert results and not errors
+
+
+def test_parse_results_reports_a_missing_summary_file(gemini_thread_unit):
+    with patch.object(GeminiStressThread, "get_results", return_value=[(_FakeDocker("loader-1"), None, "")]):
+        results, errors = gemini_thread_unit.parse_results()
+
+    assert not results
+    assert errors["loader-1"] == [(Severity.ERROR, "gemini results aren't available")]
+
+
+def test_parse_results_reports_an_unparsable_summary(gemini_thread_unit, tmp_path):
+    path = tmp_path / "broken.json"
+    path.write_text("not json at all", encoding="utf-8")
+
+    with patch.object(GeminiStressThread, "get_results", return_value=[(_FakeDocker("loader-1"), None, str(path))]):
+        results, errors = gemini_thread_unit.parse_results()
+
+    assert not results
+    assert "could not parse gemini summary" in errors["loader-1"][0][1]
