@@ -1863,6 +1863,9 @@ def _write_junit_xml(junit_xml_path, tasks, failures, total, failed_count, skipp
     click.echo(f"JUnit XML report written to {junit_xml_path}")
 
 
+MAX_LINT_WORKERS = 8
+
+
 @cli.command("lint-pipelines", help="Validate configurations from Jenkins pipeline files")
 @click.option("--pipeline-dir", default="jenkins-pipelines", help="Root directory of pipeline files")
 @click.option("--pipeline-file", default=None, help="Validate a single pipeline file (ad-hoc mode)")
@@ -1902,7 +1905,7 @@ def lint_pipelines(pipeline_dir, pipeline_file, workers, include_filter, exclude
         click.echo("No pipeline files to validate.")
         sys.exit(0)
 
-    worker_count = workers or os.cpu_count() or 4
+    worker_count = workers or min(os.cpu_count() or 4, MAX_LINT_WORKERS)
     show_progress = sys.stderr.isatty()
 
     failed_count = 0
