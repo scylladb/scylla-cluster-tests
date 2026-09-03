@@ -167,6 +167,13 @@ and already present on the perf-regression trigger.
 The two matrices are deliberately in **opposite phase**: tier1's heavier half shares a weekend with
 rolling-upgrade's lighter half.
 
+**Never use `*/N` in day-of-month.** The step restarts at day 1 of every month, so the interval is not
+kept across the month boundary and the run count varies with month length: `*/14` fires on days 1, 15
+and 29 — three runs a month, the last only two days before the next first — and `*/21` fires on days 1
+and 22, twice a month. When a schedule is *not* AND-ed with a day-of-week, spell the days out instead;
+`perf-regression.yaml` uses `00 6 1,16 * *` for `master-2weeks` (exactly two runs a month) and
+`0 23 1 * *` for `master-3weeks`.
+
 ### Backend Filtering
 
 ```bash
