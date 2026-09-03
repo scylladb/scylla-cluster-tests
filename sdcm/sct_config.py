@@ -101,12 +101,119 @@ from sdcm.kafka.kafka_config import SctKafkaConfiguration
 from sdcm.mgmt.common import AgentBackupParameters
 from sdcm.utils.version_utils import parse_scylla_version_tag
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
-from sdcm.utils.cloud_catalog.instance_matcher import NoMatchingInstanceError, select_instance
+from sdcm.utils.cloud_catalog.instance_matcher import ARCH_ALIASES, NoMatchingInstanceError, select_instance
 from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS, nested_env_subkey
 
-_SIZING_RESOLUTION_CACHE: dict[tuple, str] = {}
+_SIZING_RESOLUTION_CACHE: dict[tuple, tuple[str, str]] = {}
 
 LOGGER = logging.getLogger(__name__)
+
+_ARCH_IMAGE_MARKERS: dict[str, dict[str, str]] = {
+    "{arch}": {"x86_64": "amd64", "arm64": "arm64", "aarch64": "arm64"},
+    "{arch_sku}": {"x86_64": "server", "arm64": "server-arm64", "aarch64": "server-arm64"},
+}
+
+
+_LOADER_IMAGE_PARAMS: dict[str, tuple[str, str, str]] = {
+    "aws": ("ami_id_loader", "instance_type_loader", "region_name"),
+    "azure": ("azure_image_loader", "azure_instance_type_loader", "azure_region_name"),
+    "gce": ("gce_image_loader", "gce_instance_type_loader", "gce_datacenter"),
+    "oci": ("oci_image_loader", "oci_instance_type_loader", "oci_region_name"),
+}
+
+# every backend that inherits one of the cloud defaults files above, so a backend
+# such as k8s-eks resolves the marker its inherited ami_id_loader carries
+_BACKEND_TO_IMAGE_CLOUD: dict[str, str] = {
+    "aws": "aws",
+    "aws-siren": "aws",
+    "k8s-eks": "aws",
+    "k8s-local-kind-aws": "aws",
+    "gce": "gce",
+    "gce-siren": "gce",
+    "k8s-gke": "gce",
+    "azure": "azure",
+    "oci": "oci",
+}
+
+_ARM_INSTANCE_TYPE_PATTERNS: dict[str, tuple[str, ...]] = {
+    "aws": (r"^\w+\d+g[a-z]*\.", r"^a1\."),
+    "gce": (r"^(t2a|c4a|n4a|x4a)-",),
+    "azure": (r"^Standard_\w*?\d+p[a-z]*_v\d+$",),
+    "oci": (r"^(BM|VM)\.Standard\.A\d+\.", r"^A\d+\.Flex"),
+}
+
+
+def is_arm_instance_type(cloud: str, instance_type: str) -> bool:
+    return any(re.match(pattern, instance_type) for pattern in _ARM_INSTANCE_TYPE_PATTERNS.get(cloud, ()))
+
+
+_SIZING_SKIP_BACKENDS = frozenset({"docker", "baremetal", "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"})
+
+_BACKEND_TO_CLOUD: dict[str, str] = {
+    "aws": "aws",
+    "aws-siren": "aws",
+    "k8s-eks": "aws",
+    "gce": "gce",
+    "gce-siren": "gce",
+    "k8s-gke": "gce",
+    "azure": "azure",
+    "oci": "oci",
+}
+
+_AMD64_ONLY_STRESS_TOOLS: dict[str, tuple[str, ...]] = {
+    "harry": ("cassandra-harry",),
+    "kcl": ("hydra-kcl",),
+    "ndbench": ("ndbench",),
+    "nosqlbench": ("nosqlbench",),
+}
+
+_YCSB_COMMAND_MARKER = "bin/ycsb"
+
+_SIZING_ROLE_PARAMS: dict[str, dict[str, str]] = {
+    "aws": {
+        "db": "instance_type_db",
+        "db_oracle": "instance_type_db_oracle",
+        "zero_token": "zero_token_instance_type_db",
+        "loader": "instance_type_loader",
+        "monitor": "instance_type_monitor",
+    },
+    "gce": {
+        "db": "gce_instance_type_db",
+        "db_oracle": "gce_instance_type_db_oracle",
+        "loader": "gce_instance_type_loader",
+        "monitor": "gce_instance_type_monitor",
+    },
+    "azure": {
+        "db": "azure_instance_type_db",
+        "db_oracle": "azure_instance_type_db_oracle",
+        "loader": "azure_instance_type_loader",
+        "monitor": "azure_instance_type_monitor",
+    },
+    "oci": {
+        "db": "oci_instance_type_db",
+        "db_oracle": "oci_instance_type_db_oracle",
+        "loader": "oci_instance_type_loader",
+        "monitor": "oci_instance_type_monitor",
+    },
+}
+
+
+def backend_to_cloud(backend: str | None, xcloud_provider: str | None = None) -> str | None:
+    if backend == "xcloud":
+        return xcloud_provider or None
+    return _BACKEND_TO_CLOUD.get(str(backend))
+
+
+def substitute_arch_markers(template: str, arch: str) -> str:
+    resolved = template
+    for marker, values in _ARCH_IMAGE_MARKERS.items():
+        if marker in resolved:
+            if arch not in values:
+                raise ValueError(
+                    f"Cannot resolve {marker} in {template!r} for arch {arch!r}. Known values: {sorted(values)}"
+                )
+            resolved = resolved.replace(marker, values[arch])
+    return resolved
 
 
 def _nested_env_subkey(env_key: str, field_env: str, sep: str) -> str | None:
@@ -1256,7 +1363,14 @@ class SCTConfiguration(BaseModel):
         default=None, description="Cloud-agnostic instance sizing constraints for db_oracle nodes"
     )
     sizing_loader: dict | None = SctField(
-        default=None, description="Cloud-agnostic instance sizing constraints for loader nodes"
+        default=None,
+        description=(
+            "Cloud-agnostic instance sizing constraints for loader nodes. "
+            "Loaders default to Arm. A stress tool whose loader image is published for linux/amd64 "
+            "only (cassandra-harry, hydra-kcl, ndbench, nosqlbench, and the alternator DNS sidecar "
+            "used by YCSB when alternator_use_dns_routing is set) sets arch to x86_64 for you. "
+            "Set arch here to pick the architecture yourself"
+        ),
     )
     sizing_monitor: dict | None = SctField(
         default=None, description="Cloud-agnostic instance sizing constraints for monitor nodes"
@@ -3100,6 +3214,7 @@ class SCTConfiguration(BaseModel):
                         raise ValueError(f"{region} isn't supported, use: {self.aws_supported_regions}")
 
         # 3) overwrite with environment variables
+        self._constrain_loader_arch_to_stress_tools(env)
         self._resolve_instance_sizes(env)
         merge_dicts_append_strings(self, env)
 
@@ -3140,6 +3255,9 @@ class SCTConfiguration(BaseModel):
 
         # snapshot the original AMI params before resolution, so AWS region fallback can
         # re-resolve them for a relocated region
+        self._validate_loader_arch_supports_stress_tools()
+        self._resolve_loader_image_arch()
+
         self._ami_params_snapshot = {key: self.get(key) for key in self.ami_id_params}
 
         # 5) overwrite AMIs
@@ -3927,52 +4045,12 @@ class SCTConfiguration(BaseModel):
         Raises:
             ValueError: If a constraint dict cannot be resolved to any instance.
         """
-        SKIP_BACKENDS = {"docker", "baremetal", "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"}
-        BACKEND_TO_CLOUD = {
-            "aws": "aws",
-            "aws-siren": "aws",
-            "k8s-eks": "aws",
-            "gce": "gce",
-            "gce-siren": "gce",
-            "k8s-gke": "gce",
-            "azure": "azure",
-            "oci": "oci",
-            "xcloud": env.get("xcloud_provider", None),
-        }
-        ROLE_PARAMS = {
-            "aws": {
-                "db": "instance_type_db",
-                "db_oracle": "instance_type_db_oracle",
-                "zero_token": "zero_token_instance_type_db",
-                "loader": "instance_type_loader",
-                "monitor": "instance_type_monitor",
-            },
-            "gce": {
-                "db": "gce_instance_type_db",
-                "db_oracle": "gce_instance_type_db_oracle",
-                "loader": "gce_instance_type_loader",
-                "monitor": "gce_instance_type_monitor",
-            },
-            "azure": {
-                "db": "azure_instance_type_db",
-                "db_oracle": "azure_instance_type_db_oracle",
-                "loader": "azure_instance_type_loader",
-                "monitor": "azure_instance_type_monitor",
-            },
-            "oci": {
-                "db": "oci_instance_type_db",
-                "db_oracle": "oci_instance_type_db_oracle",
-                "loader": "oci_instance_type_loader",
-                "monitor": "oci_instance_type_monitor",
-            },
-        }
-
         backend = (env.get("cluster_backend") if env else None) or self.get("cluster_backend")
-        if backend in SKIP_BACKENDS:
+        if backend in _SIZING_SKIP_BACKENDS:
             self.log.info("Skipping instance size resolution for backend %s", backend)
             return
 
-        cloud = BACKEND_TO_CLOUD.get(backend)
+        cloud = backend_to_cloud(backend, (env.get("xcloud_provider") if env else None) or self.get("xcloud_provider"))
         if not cloud:
             self.log.warning("Unknown backend %s — skipping instance size resolution", backend)
             return
@@ -3986,7 +4064,7 @@ class SCTConfiguration(BaseModel):
         }
 
         db_type = (env.get("db_type") if env else None) or self.get("db_type") or ""
-        role_params = ROLE_PARAMS.get(cloud, {})
+        role_params = _SIZING_ROLE_PARAMS.get(cloud, {})
         for role, param_name in role_params.items():
             if role == "db_oracle" and db_type not in ("mixed_scylla", "mixed_cassandra"):
                 continue
@@ -4009,14 +4087,16 @@ class SCTConfiguration(BaseModel):
                 self.log.info("Using agnostic fallback %s for %s", fallback_param, param_name)
             if isinstance(value, dict):
                 cache_key = (role, cloud, tuple(sorted(value.items())))
-                resolved = _SIZING_RESOLUTION_CACHE.get(cache_key)
+                cached = _SIZING_RESOLUTION_CACHE.get(cache_key)
+                resolved, resolved_arch = cached if cached else (None, None)
                 if resolved is None:
                     try:
                         catalog_dir = pathlib.Path(__file__).parent.parent / "data" / "instance_catalog"
                         catalog = InstanceCatalog.from_directory(catalog_dir)
                         result = select_instance(catalog, role, cloud, value)
                         resolved = result.instance_type
-                        _SIZING_RESOLUTION_CACHE[cache_key] = resolved
+                        resolved_arch = result.arch
+                        _SIZING_RESOLUTION_CACHE[cache_key] = (resolved, resolved_arch)
                     except NoMatchingInstanceError as exc:
                         if is_fallback:
                             self.log.warning("Agnostic fallback for %s found no match: %s", param_name, exc)
@@ -4037,6 +4117,10 @@ class SCTConfiguration(BaseModel):
                             continue
                         raise ValueError(f"Invalid constraint for {param_name}: {exc}") from exc
                 self.log.info("Resolved %s: %s → %s", param_name, value, resolved)
+                if resolved_arch:
+                    if not hasattr(self, "_sizing_resolved_arch"):
+                        self._sizing_resolved_arch = {}
+                    self._sizing_resolved_arch[role] = resolved_arch
                 if env is not None and param_name in env:
                     env[param_name] = resolved
                 else:
@@ -4251,6 +4335,140 @@ class SCTConfiguration(BaseModel):
                 default,
             )
             return default
+
+    def _image_cloud(self) -> str | None:
+        backend = self.get("cluster_backend")
+        if backend == "xcloud":
+            provider = self.get("xcloud_provider")
+            return provider if provider in _LOADER_IMAGE_PARAMS else None
+        return _BACKEND_TO_IMAGE_CLOUD.get(backend)
+
+    def _resolve_loader_image_arch(self) -> None:
+        cloud = self._image_cloud()
+        if not cloud:
+            return
+        image_param, instance_param, region_param = _LOADER_IMAGE_PARAMS[cloud]
+        template = self.get(image_param) or ""
+        if not any(marker in template for marker in _ARCH_IMAGE_MARKERS):
+            return
+        regions = self.get(region_param) or []
+        if isinstance(regions, str):
+            regions = regions.split()
+        instance_type = self.get(instance_param) or ""
+        loader_arch = self._get_loader_arch(cloud, instance_type, (regions or [""])[0])
+        if loader_arch is None:
+            if is_arm_instance_type(cloud, instance_type):
+                raise ValueError(
+                    f"Cannot resolve {image_param}: architecture of Arm {cloud} loader instance type "
+                    f"'{instance_type}' is unknown, so an amd64 image would be selected. "
+                    f"Set sizing_loader.arch or add '{instance_type}' to the {cloud} instance catalog."
+                )
+            self.log.warning(
+                "Could not detect architecture for %s instance type '%s', defaulting to x86_64", cloud, instance_type
+            )
+            loader_arch = "x86_64"
+        elif loader_arch == "x86_64" and is_arm_instance_type(cloud, instance_type):
+            raise ValueError(
+                f"Cannot resolve {image_param}: {cloud} loader instance type '{instance_type}' is Arm "
+                f"but its architecture resolved to x86_64."
+            )
+        resolved = substitute_arch_markers(template, loader_arch)
+        if remaining := [marker for marker in _ARCH_IMAGE_MARKERS if marker in resolved]:
+            raise ValueError(f"Cannot resolve {image_param}: markers {remaining} survived in {resolved!r}")
+        self.log.info("Resolved %s for arch=%s: %s", image_param, loader_arch, resolved)
+        self[image_param] = resolved
+
+    def _stress_commands(self, env: dict | None = None) -> list[str]:
+        commands: list[str] = []
+        pending = [(env.get(param) if env and param in env else self.get(param)) for param in self.stress_cmd_params]
+        while pending:
+            value = pending.pop()
+            if isinstance(value, str):
+                commands.append(value)
+            elif isinstance(value, (list, tuple)):
+                pending.extend(value)
+        return commands
+
+    def _amd64_only_stress_tools(self, env: dict | None = None) -> list[str]:
+        commands = self._stress_commands(env)
+        tools = [
+            tool
+            for tool, markers in _AMD64_ONLY_STRESS_TOOLS.items()
+            if any(marker in command for command in commands for marker in markers)
+        ]
+        dns_routing = (
+            env.get("alternator_use_dns_routing")
+            if env and "alternator_use_dns_routing" in env
+            else self.get("alternator_use_dns_routing")
+        )
+        if dns_routing and any(_YCSB_COMMAND_MARKER in command for command in commands):
+            tools.append("alternator-dns")
+        return sorted(tools)
+
+    def _constrain_loader_arch_to_stress_tools(self, env: dict | None = None) -> None:
+        if self._sizing_role_arch("loader") or (
+            env and isinstance(env.get("sizing_loader"), dict) and env["sizing_loader"].get("arch")
+        ):
+            return
+        if not (tools := self._amd64_only_stress_tools(env)):
+            return
+        env_sizing_loader = env.get("sizing_loader") if env else None
+        sizing_loader = dict(
+            env_sizing_loader if isinstance(env_sizing_loader, dict) else (self.get("sizing_loader") or {})
+        )
+        if not sizing_loader:
+            return
+        sizing_loader["arch"] = "x86_64"
+        if isinstance(env_sizing_loader, dict):
+            env["sizing_loader"] = sizing_loader
+        self["sizing_loader"] = sizing_loader
+        self.log.info("Constraining loaders to x86_64, amd64-only stress tool images in use: %s", ", ".join(tools))
+
+    def _validate_loader_arch_supports_stress_tools(self) -> None:
+        if not (tools := self._amd64_only_stress_tools()):
+            return
+        cloud = backend_to_cloud(self.get("cluster_backend"), self.get("xcloud_provider"))
+        if not cloud:
+            return
+        instance_param = _SIZING_ROLE_PARAMS.get(cloud, {}).get("loader")
+        instance_type = (self.get(instance_param) or "") if instance_param else ""
+        if instance_type and is_arm_instance_type(cloud, instance_type):
+            raise ValueError(
+                f"Loader instance type '{instance_type}' is Arm, but these stress tools only publish "
+                f"linux/amd64 images: {', '.join(tools)}. Use an x86_64 loader instance type, "
+                f"or set sizing_loader with vcpu/memory constraints so the arch is chosen for you."
+            )
+
+    def _sizing_role_arch(self, role: str) -> str | None:
+        requested_arch = (self.get(f"sizing_{role}") or {}).get("arch")
+        if requested_arch:
+            return ARCH_ALIASES.get(str(requested_arch).strip().lower(), requested_arch)
+        return None
+
+    def _aws_instance_arch(self, instance_type: str, region_name: str) -> str | None:
+        try:
+            return get_arch_from_instance_type(instance_type, region_name=region_name)
+        except Exception:  # noqa: BLE001
+            self.log.warning(
+                "Could not detect architecture for aws instance type '%s' in %s",
+                instance_type,
+                region_name,
+            )
+            return None
+
+    def _get_loader_arch(self, cloud: str, instance_type: str, region_name: str) -> str | None:
+        if instance_type:
+            catalog_dir = pathlib.Path(__file__).parent.parent / "data" / "instance_catalog"
+            try:
+                if instance_info := InstanceCatalog.from_directory(catalog_dir).get_instance(cloud, instance_type):
+                    return instance_info.arch
+            except (FileNotFoundError, ValueError) as exc:
+                self.log.warning("Could not load instance catalog for %s arch lookup: %s", cloud, exc)
+            if cloud == "aws" and (aws_arch := self._aws_instance_arch(instance_type, region_name)):
+                return aws_arch
+        if sizing_resolved_arch := getattr(self, "_sizing_resolved_arch", {}).get("loader"):
+            return sizing_resolved_arch
+        return self._sizing_role_arch("loader")
 
     def _validate_perf_gradual_throttle_steps(self):
         """Validate perf_gradual_throttle_steps configuration parameter."""

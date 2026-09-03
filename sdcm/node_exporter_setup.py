@@ -4,6 +4,13 @@ from sdcm.utils.curl import curl_with_retry
 
 NODE_EXPORTER_VERSION = "1.8.2"
 
+NODE_EXPORTER_ARCHITECTURES = {
+    "x86_64": "amd64",
+    "amd64": "amd64",
+    "aarch64": "arm64",
+    "arm64": "arm64",
+}
+
 
 class NodeExporterSetup:
     @staticmethod
@@ -11,7 +18,14 @@ class NodeExporterSetup:
         assert node or remoter, "node or remoter much be pass to this function"
         if node:
             remoter = node.remoter
-        tarball = f"node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+        machine = remoter.run("uname -m", verbose=False).stdout.strip()
+        if not (arch := NODE_EXPORTER_ARCHITECTURES.get(machine)):
+            raise ValueError(
+                f"node_exporter has no release for machine '{machine}'. "
+                f"Known values: {sorted(NODE_EXPORTER_ARCHITECTURES)}"
+            )
+        release = f"node_exporter-{NODE_EXPORTER_VERSION}.linux-{arch}"
+        tarball = f"{release}.tar.gz"
         download_url = (
             f"https://github.com/prometheus/node_exporter/releases/download/v{NODE_EXPORTER_VERSION}/{tarball}"
         )
@@ -23,7 +37,7 @@ class NodeExporterSetup:
             fi
             {download_cmd}
             tar -xzvf {tarball}
-            mv node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin
+            mv {release}/node_exporter /usr/local/bin
             # Restore SELinux context so the binary can be executed as a service on RHEL-based systems
             if command -v restorecon > /dev/null 2>&1; then
                 restorecon -v /usr/local/bin/node_exporter

@@ -20,6 +20,7 @@ and querying cloud instance type information from YAML files.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
@@ -201,8 +202,11 @@ class InstanceCatalog:
         return catalog
 
     @classmethod
+    @lru_cache(maxsize=None)
     def from_directory(cls, dir_path: Path) -> InstanceCatalog:
         """Load and merge all *.yaml files from a directory.
+
+        The result is cached per directory. Callers must treat it as read only.
 
         Args:
             dir_path: Directory containing YAML catalog files.

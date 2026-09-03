@@ -20,12 +20,18 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from pathlib import Path
+
+from sdcm.provision.provisioner import VmArch
+from sdcm.sct_config import is_arm_instance_type
+from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
 from sdcm.utils.oci_utils import (
     SECONDARY_VNICS_SCRIPT,
     SECONDARY_VNICS_SCRIPT_PATH,
     SECONDARY_VNICS_SERVICE_UNIT_TMPL,
     build_hostname_label,
     filter_oci_by_tags,
+    get_arch_from_oci_shape,
     get_ubuntu_image_ocid,
     list_instances_oci,
     OciService,
@@ -179,6 +185,33 @@ def test_get_ubuntu_image_ocid_filters_arm(mock_page_iterator, mock_get_client):
 
     assert result == "ocid1.image.oc1..ubuntu2404-amd64"
     mock_page_iterator.assert_called_once()
+
+
+@patch("sdcm.utils.oci_utils.OciService.get_compute_client")
+@patch("oci.pagination.list_call_get_all_results_generator")
+def test_get_ubuntu_image_ocid_arm_arch_returns_arm_image(mock_page_iterator, mock_get_client):
+    mock_client = MagicMock()
+    mock_arm_image = MagicMock()
+    mock_arm_image.id = "ocid1.image.oc1..ubuntu2404-aarch64"
+    mock_arm_image.display_name = "Canonical-Ubuntu-24.04-aarch64-2024.01.01-0"
+    mock_amd64_image = MagicMock()
+    mock_amd64_image.id = "ocid1.image.oc1..ubuntu2404-amd64"
+    mock_amd64_image.display_name = "Canonical-Ubuntu-24.04-2024.01.01-0"
+    mock_page_iterator.return_value = iter([mock_arm_image, mock_amd64_image])
+    mock_get_client.return_value = mock_client
+
+    result = get_ubuntu_image_ocid("compartment-id", arch=VmArch.ARM)
+
+    assert result == "ocid1.image.oc1..ubuntu2404-aarch64"
+    mock_page_iterator.assert_called_once()
+
+
+def test_get_arch_from_oci_shape():
+    assert get_arch_from_oci_shape("VM.Standard.A1.Flex") is VmArch.ARM
+    assert get_arch_from_oci_shape("VM.Standard.A4.Flex") is VmArch.ARM
+    assert get_arch_from_oci_shape("VM.Standard.E5.Flex") is VmArch.X86
+    assert get_arch_from_oci_shape("VM.DenseIO.E5.Flex") is VmArch.X86
+    assert get_arch_from_oci_shape(None) is VmArch.X86
 
 
 @patch("sdcm.utils.oci_utils.OciService.get_compute_client")
@@ -359,3 +392,20 @@ def test_secondary_vnics_service_unit_renders_execstart():
     )
     assert unit.startswith("[Unit]"), unit[:40]
     assert f"ExecStart={SECONDARY_VNICS_SCRIPT_PATH} 2 10.0.1.10" in unit
+
+
+def test_oci_shape_arch_agrees_with_the_catalog_and_the_config_matcher():
+    catalog = InstanceCatalog.from_directory(Path("data/instance_catalog"))
+    checked = 0
+    for instance in catalog.instances:
+        if instance.cloud != "oci":
+            continue
+        checked += 1
+        is_arm = instance.arch in ("arm64", "aarch64")
+        assert (get_arch_from_oci_shape(instance.instance_type) is VmArch.ARM) is is_arm, (
+            f"get_arch_from_oci_shape disagrees with the catalog for {instance.instance_type}"
+        )
+        assert is_arm_instance_type("oci", instance.instance_type) is is_arm, (
+            f"is_arm_instance_type disagrees with the catalog for {instance.instance_type}"
+        )
+    assert checked, "no OCI instances were checked"

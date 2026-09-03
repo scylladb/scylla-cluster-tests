@@ -26,6 +26,7 @@ from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.curl import curl_with_retry
 from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
+from sdcm.stress.base import ParseResults
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.reporting.tooling_reporter import GeminiVersionReporter
@@ -66,7 +67,7 @@ class GeminiEventsPublisher(FileFollowerThread):
 class GeminiStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.gemini"
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         test_cluster: BaseCluster | BaseScyllaCluster,
         oracle_cluster: BaseCluster | None,
@@ -74,8 +75,19 @@ class GeminiStressThread(DockerBasedStressThread):
         stress_cmd: str,
         timeout=None,
         params=None,
+        stress_num=1,
+        round_robin=False,
+        stop_test_on_failure=True,
     ):
-        super().__init__(loader_set=loaders, stress_cmd=stress_cmd, timeout=timeout, params=params)
+        super().__init__(
+            loader_set=loaders,
+            stress_cmd=stress_cmd,
+            timeout=timeout,
+            params=params,
+            stress_num=stress_num,
+            round_robin=round_robin,
+            stop_test_on_failure=stop_test_on_failure,
+        )
         self.test_cluster = test_cluster
         self.oracle_cluster = oracle_cluster
         self.gemini_commands = []
@@ -304,6 +316,29 @@ class GeminiStressThread(DockerBasedStressThread):
                     parsed_results.append(res)
 
         return parsed_results
+
+    def parse_results(self) -> ParseResults:
+        results = []
+        errors = {}
+
+        for docker, _, local_gemini_result_file in self.get_results():
+            loader_name = docker.node.name
+            if not local_gemini_result_file:
+                errors.setdefault(loader_name, []).append((Severity.ERROR, "gemini results aren't available"))
+                continue
+            with open(local_gemini_result_file, encoding="utf-8") as local_file:
+                summary = self.parse_gemini_summary_json(local_file.read())
+            if not summary:
+                errors.setdefault(loader_name, []).append(
+                    (Severity.ERROR, f"could not parse gemini summary from {local_gemini_result_file}")
+                )
+                continue
+            results.append(summary)
+            for error_type in ("write_errors", "read_errors", "errors"):
+                if reported := summary.get(error_type):
+                    errors.setdefault(loader_name, []).append((Severity.ERROR, f"gemini {error_type}: {reported}"))
+
+        return results, errors
 
     @staticmethod
     def verify_gemini_results(results):
