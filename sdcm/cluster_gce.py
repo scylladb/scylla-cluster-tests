@@ -362,10 +362,13 @@ class GCENode(cluster.BaseNode):
 
     @cache
     def _get_ipv6_ip_address(self):
-        self.log.warning(
-            "On GCE, VPC networks only support IPv4 unicast traffic. "
-            "They do not support IPv6 traffic within the network."
-        )
+        # GCE subnets can carry IPv6 (Subnetwork.stack_type / ipv6_access_type), so the network is
+        # not the limitation the previous message here claimed. SCT simply does not provision it:
+        # build_network_interfaces() creates IPv4-only interfaces, which is why
+        # `scylla_network_config` rejects 'ip_type: ipv6' on this backend. Every GCE node reaches
+        # this through get_all_ip_addresses(), so it stays at debug level -- there is nothing for
+        # the reader of a GCE run log to act on.
+        self.log.debug("Node %s: IPv6 is not provisioned on the gce backend", self.name)
         return ""
 
     @cached_property

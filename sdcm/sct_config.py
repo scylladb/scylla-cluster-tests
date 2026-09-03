@@ -776,6 +776,21 @@ class ScyllaNetworkConfigRule:
 # they are the only thing the user sees.
 SCYLLA_NETWORK_CONFIG_RULES = (
     ScyllaNetworkConfigRule(
+        name="ipv6_not_implemented_on_gce",
+        # Interim guard. GCE subnets can be dual-stack, but SCT provisions IPv4-only interfaces on
+        # GCE (sdcm.provision.gce.instance_provider.build_network_interfaces) and GCENode reports no
+        # IPv6 address, so ScyllaNetworkConfiguration.get_ip_by_address_config() would hand back
+        # None and the run would fail long after the config that caused it. Remove this rule once
+        # GCE assigns IPv6, the way aws and oci already do.
+        applies_to=("gce",),
+        violated_by=lambda config: config["ip_type"] == "ipv6",
+        message=lambda config: (
+            f"'ip_type: ipv6' is set for '{config['address']}' but IPv6 is not implemented on the gce "
+            "backend: GCE nodes are provisioned with IPv4-only interfaces, so the address would "
+            "resolve to nothing. Use 'ip_type: ipv4', or run this configuration on aws or oci"
+        ),
+    ),
+    ScyllaNetworkConfigRule(
         name="public_ipv4_only_on_primary_nic",
         # EC2 associates a public IPv4 with device index 0 only, and GCE matches it:
         # sdcm.provision.gce.instance_provider.build_network_interfaces attaches the sole

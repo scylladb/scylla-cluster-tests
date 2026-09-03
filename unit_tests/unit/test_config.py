@@ -1649,6 +1649,13 @@ _GCE_NETWORK_CONFIG_ENV = {
 }
 
 
+_OCI_NETWORK_CONFIG_ENV = {
+    "SCT_CLUSTER_BACKEND": "oci",
+    "SCT_OCI_REGION_NAME": "us-phoenix-1",
+    "SCT_OCI_IMAGE_DB": "ocid1.image.oc1.phx.dummy",
+}
+
+
 def _setup_network_config_env(monkeypatch, base_env, config_files):
     """Point SCTConfiguration at `config_files` on the given backend.
 
@@ -1762,6 +1769,38 @@ def test_scylla_network_config_use_dns_on_secondary_nic_accepted_on_aws(monkeypa
     conf = sct_config.SCTConfiguration()
 
     assert [address["nic"] for address in conf.scylla_network_config if address["address"] == "rpc_address"] == [1]
+
+
+def test_scylla_network_config_ipv6_raises_on_gce(monkeypatch):
+    """GCE has no IPv6 provisioning, so an ipv6 address is rejected at config time.
+
+    Without this the run got as far as resolving the address, where
+    ScyllaNetworkConfiguration.get_ip_by_address_config() returned None and the failure surfaced
+    far from the config that caused it.
+    """
+    _setup_network_config_env(
+        monkeypatch,
+        _GCE_NETWORK_CONFIG_ENV,
+        '["unit_tests/test_configs/minimal_test_case.yaml", '
+        '"configurations/network_config/all_addresses_ipv6_public.yaml"]',
+    )
+
+    with pytest.raises(ValueError, match="'ip_type: ipv6' is set for 'listen_address'"):
+        sct_config.SCTConfiguration()
+
+
+def test_scylla_network_config_ipv6_accepted_on_oci(monkeypatch):
+    """The ipv6 guard is GCE-only: OCI implements IPv6 and must keep accepting the same config."""
+    _setup_network_config_env(
+        monkeypatch,
+        _OCI_NETWORK_CONFIG_ENV,
+        '["unit_tests/test_configs/minimal_test_case.yaml", '
+        '"configurations/network_config/all_addresses_ipv6_public.yaml"]',
+    )
+
+    conf = sct_config.SCTConfiguration()
+
+    assert {address["ip_type"] for address in conf.scylla_network_config} == {"ipv6"}
 
 
 def test_scylla_network_config_multiple_nics_multi_region_raises(monkeypatch):
