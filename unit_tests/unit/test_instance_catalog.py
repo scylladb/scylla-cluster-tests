@@ -15,6 +15,11 @@ from pathlib import Path
 
 import pytest
 
+from sdcm.utils.cloud_catalog.catalog_generator import (
+    _GCE_LOCAL_SSD_DISK_GB,
+    _GCE_LOCAL_SSD_FAMILIES,
+    gce_local_ssd_disk_count,
+)
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo
 
 
@@ -254,3 +259,36 @@ def test_instance_type_info_is_dataclass():
     )
     assert info.price_per_hour is None
     assert info.instance_type == "t3.micro"
+
+
+@pytest.mark.parametrize(
+    "vcpus, expected",
+    [(2, 4), (8, 4), (16, 4), (32, 4), (48, 4), (64, 4), (80, 4), (96, 8), (128, 8), (224, 8)],
+)
+def test_gce_local_ssd_disk_count_stays_within_the_allowed_set(vcpus, expected):
+    assert gce_local_ssd_disk_count(vcpus) == expected
+
+
+def test_every_gce_local_ssd_entry_declares_a_legal_disk_count():
+    def allowed(vcpus):
+        if vcpus <= 16:
+            return {1, 2, 4, 8, 16, 24}
+        if vcpus <= 48:
+            return {2, 4, 8, 16, 24}
+        if vcpus <= 80:
+            return {4, 8, 16, 24}
+        return {8, 16, 24}
+
+    catalog = InstanceCatalog.from_directory(Path("data/instance_catalog"))
+    checked = 0
+    for instance in catalog.instances:
+        if instance.cloud != "gce" or instance.family not in _GCE_LOCAL_SSD_FAMILIES:
+            continue
+        checked += 1
+        assert instance.local_disk_count in allowed(instance.vcpus), (
+            f"{instance.instance_type} declares {instance.local_disk_count} local SSDs for {instance.vcpus} vCPU"
+        )
+        assert instance.local_disk_gb == instance.local_disk_count * _GCE_LOCAL_SSD_DISK_GB, (
+            f"{instance.instance_type} local_disk_gb does not match its disk count"
+        )
+    assert checked, "no GCE local-SSD instances were checked"
