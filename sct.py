@@ -1561,6 +1561,501 @@ def lint_yamls(backend, exclude: str, include: str):
     sys.exit(1 if failed else 0)
 
 
+<<<<<<< HEAD
+||||||| parent of cf3a79e81 (perf(lint): cache the instance catalog and cap the lint worker pool)
+def _validate_single_pipeline(pipeline_path, env):
+    """Worker function for lint-pipelines ProcessPoolExecutor."""
+    # Deferred import: runs in worker process to avoid importing heavy deps in main process
+    from sdcm.utils.lint.validator import validate_pipeline  # noqa: PLC0415
+
+    return str(pipeline_path), validate_pipeline(Path(pipeline_path), env)
+
+
+def _discover_and_parse_pipelines(pipeline_dir, pipeline_file, include_filter, exclude_filter):
+    """Discover pipeline files, parse them, and build validation environments."""
+    original_env = {**os.environ}
+
+    include_re = re.compile(include_filter) if include_filter else None
+    exclude_re = re.compile(exclude_filter) if exclude_filter else None
+
+    if pipeline_file:
+        pipeline_files = [Path(pipeline_file)]
+    else:
+        pipeline_files = discover_pipeline_files(Path(pipeline_dir))
+
+    if include_re:
+        pipeline_files = [f for f in pipeline_files if include_re.search(str(f))]
+    if exclude_re:
+        pipeline_files = [f for f in pipeline_files if not exclude_re.search(str(f))]
+
+    tasks = []
+    skipped = 0
+    for path in pipeline_files:
+        config = parse_jenkinsfile(path)
+        if config is None:
+            skipped += 1
+            continue
+        env = build_env(config)
+        merged_env = {**original_env, **env}
+        tasks.append((str(path), merged_env))
+
+    return tasks, skipped
+
+
+def _write_junit_xml(junit_xml_path, tasks, failures, total, failed_count, skipped):
+    """Write lint-pipelines results as JUnit XML report."""
+    testsuite = ET.Element(
+        "testsuite", name="lint-pipelines", tests=str(total), failures=str(failed_count), skipped=str(skipped)
+    )
+    for path_str, _ in tasks:
+        testcase = ET.SubElement(testsuite, "testcase", name=path_str, classname="lint-pipelines")
+        if path_str in failures:
+            failure = ET.SubElement(testcase, "failure", message="Validation failed")
+            failure.text = failures[path_str]
+    tree = ET.ElementTree(testsuite)
+    ET.indent(tree)
+    tree.write(junit_xml_path, xml_declaration=True, encoding="unicode")
+    click.echo(f"JUnit XML report written to {junit_xml_path}")
+
+
+@cli.command("lint-pipelines", help="Validate configurations from Jenkins pipeline files")
+@click.option("--pipeline-dir", default="jenkins-pipelines", help="Root directory of pipeline files")
+@click.option("--pipeline-file", default=None, help="Validate a single pipeline file (ad-hoc mode)")
+@click.option("--workers", default=None, type=int, help="Number of parallel workers (default: CPU count)")
+@click.option("-i", "--include", "include_filter", default="", help="Regex filter to include specific pipeline files")
+@click.option("-e", "--exclude", "exclude_filter", default="", help="Regex filter to exclude specific pipeline files")
+@click.option(
+    "--junit-xml", "junit_xml_path", default=None, type=click.Path(), help="Write JUnit XML report to this path"
+)
+def lint_pipelines(pipeline_dir, pipeline_file, workers, include_filter, exclude_filter, junit_xml_path):
+    scylla_qa_internal_path = Path(__file__).resolve().parent / "scylla-qa-internal"
+    if not scylla_qa_internal_path.exists():
+        click.echo("scylla-qa-internal not found, trying to clone...")
+        try:
+            clone_repo(
+                remoter=LOCALRUNNER,
+                repo_url="git@github.com:scylladb/scylla-qa-internal.git",
+                destination_dir_name=str(scylla_qa_internal_path),
+                clone_as_root=False,
+                branch="master",
+            )
+            click.echo("Successfully cloned scylla-qa-internal")
+        except Exception as exc:  # noqa: BLE001
+            click.echo(
+                f"Warning: Could not clone scylla-qa-internal: {exc}. "
+                "Pipelines referencing its configs may fail validation."
+            )
+
+    tasks, skipped = _discover_and_parse_pipelines(
+        pipeline_dir,
+        pipeline_file,
+        include_filter,
+        exclude_filter,
+    )
+
+    if not tasks:
+        click.echo("No pipeline files to validate.")
+        sys.exit(0)
+
+    worker_count = workers or os.cpu_count() or 4
+    show_progress = sys.stderr.isatty()
+
+    failed_count = 0
+    passed_count = 0
+    failures = {}
+    chunksize = max(1, len(tasks) // (worker_count * 4))
+    paths, envs = zip(*tasks) if tasks else ([], [])
+    with ProcessPoolExecutor(max_workers=worker_count) as process_pool:
+        results = process_pool.map(_validate_single_pipeline, paths, envs, chunksize=chunksize)
+
+        for path, (is_error, error_msg) in results:
+            if is_error:
+                failed_count += 1
+                failures[path] = error_msg
+                click.secho(f"FAIL: {path}", fg="red", bold=True)
+                for line in error_msg.strip().splitlines():
+                    click.secho(f"  {line}", fg="red")
+                click.echo()
+            else:
+                passed_count += 1
+            if show_progress:
+                print(
+                    f"\r  [{passed_count + failed_count}/{len(tasks)}] validated...",
+                    end="",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+    if show_progress:
+        print(file=sys.stderr)
+
+    total = passed_count + failed_count
+    click.echo("---")
+    summary = f"{passed_count}/{total} pipelines passed"
+    if skipped:
+        summary += f" ({skipped} skipped)"
+    if failed_count:
+        summary += f" ({failed_count} failed)"
+    click.secho(summary, fg="green" if failed_count == 0 else "red")
+
+    if junit_xml_path:
+        _write_junit_xml(junit_xml_path, tasks, failures, total, failed_count, skipped)
+
+    sys.exit(1 if failed_count else 0)
+
+
+@cli.command("lint-test-docs", help="Validate test_metadata sections in test-case YAML files")
+@click.option("--test-case-dir", default="test-cases", help="Root directory of test cases")
+@click.option("--missing-only", is_flag=True, help="Only report test cases missing test_metadata")
+@click.option("--test-case-file", default=None, type=click.Path(exists=True), help="Validate a single file")
+def lint_test_docs(test_case_dir, missing_only, test_case_file):
+    taxonomy_path = Path("docs/pipeline-labels/taxonomy.yaml")
+
+    if test_case_file:
+        files = [Path(test_case_file)]
+    else:
+        files = sorted(Path(test_case_dir).rglob("*.yaml"))
+
+    if not files:
+        click.echo("No test-case YAML files found.")
+        sys.exit(0)
+
+    failed_count = 0
+    passed_count = 0
+    missing_count = 0
+
+    for path in files:
+        result = lint_test_metadata(path, taxonomy_path if taxonomy_path.exists() else None)
+
+        if missing_only:
+            if result.missing:
+                missing_count += 1
+                click.secho(str(path), fg="yellow")
+            continue
+
+        if not result.passed:
+            failed_count += 1
+            click.secho(f"FAIL: {path}", fg="red", bold=True)
+            for err in result.errors:
+                click.secho(f"  ERROR: {err}", fg="red")
+            for warn in result.warnings:
+                click.secho(f"  WARN:  {warn}", fg="yellow")
+            click.echo()
+        else:
+            passed_count += 1
+            if result.warnings:
+                click.secho(f"WARN: {path}", fg="yellow")
+                for warn in result.warnings:
+                    click.secho(f"  WARN:  {warn}", fg="yellow")
+                click.echo()
+
+    if missing_only:
+        click.echo(f"{missing_count} test cases missing test_metadata (out of {len(files)} total)")
+        sys.exit(0)
+
+    total = passed_count + failed_count
+    click.echo("---")
+    summary = f"{passed_count}/{total} test cases passed"
+    if failed_count:
+        summary += f" ({failed_count} failed)"
+    click.secho(summary, fg="green" if failed_count == 0 else "red")
+    sys.exit(1 if failed_count else 0)
+
+
+@cli.command(
+    "preview-job-description", help="Preview the Jenkins job description that would be generated for a pipeline file"
+)
+@click.argument("jenkinsfile", type=click.Path(exists=True))
+def preview_job_description(jenkinsfile):
+    jenkins_file = Path(jenkinsfile)
+    text_description = JenkinsPipelines.get_job_description(jenkins_file)
+
+    content = jenkins_file.read_text()
+    pipeline_params = {}
+    for key in ("backend", "test_name", "test_config", "region"):
+        match = re.search(rf"{key}:\s*['\"]([^'\"]+)['\"]", content)
+        if match:
+            pipeline_params[key] = match.group(1)
+
+    if text_description:
+        description = text_description
+    elif pipeline_params:
+        parts = []
+        if "test_name" in pipeline_params:
+            parts.append(f"test: {pipeline_params['test_name']}")
+        if "backend" in pipeline_params:
+            parts.append(f"backend: {pipeline_params['backend']}")
+        if "region" in pipeline_params:
+            parts.append(f"region: {pipeline_params['region']}")
+        if "test_config" in pipeline_params:
+            parts.append(f"config: {pipeline_params['test_config']}")
+        description = " | ".join(parts)
+    else:
+        sct_jenkinsfile = (
+            jenkins_file.relative_to(Path(__file__).resolve().parent) if jenkins_file.is_absolute() else jenkins_file
+        )
+        description = str(sct_jenkinsfile)
+
+    metadata_block = JenkinsPipelines.get_metadata_description(jenkins_file)
+    if metadata_block:
+        description = f"{description}\n\n{metadata_block}"
+
+    if not description.strip():
+        click.secho("No description content found.", fg="yellow")
+        sys.exit(1)
+
+    click.echo(description)
+
+
+=======
+def _validate_single_pipeline(pipeline_path, env):
+    """Worker function for lint-pipelines ProcessPoolExecutor."""
+    # Deferred import: runs in worker process to avoid importing heavy deps in main process
+    from sdcm.utils.lint.validator import validate_pipeline  # noqa: PLC0415
+
+    return str(pipeline_path), validate_pipeline(Path(pipeline_path), env)
+
+
+def _discover_and_parse_pipelines(pipeline_dir, pipeline_file, include_filter, exclude_filter):
+    """Discover pipeline files, parse them, and build validation environments."""
+    original_env = {**os.environ}
+
+    include_re = re.compile(include_filter) if include_filter else None
+    exclude_re = re.compile(exclude_filter) if exclude_filter else None
+
+    if pipeline_file:
+        pipeline_files = [Path(pipeline_file)]
+    else:
+        pipeline_files = discover_pipeline_files(Path(pipeline_dir))
+
+    if include_re:
+        pipeline_files = [f for f in pipeline_files if include_re.search(str(f))]
+    if exclude_re:
+        pipeline_files = [f for f in pipeline_files if not exclude_re.search(str(f))]
+
+    tasks = []
+    skipped = 0
+    for path in pipeline_files:
+        config = parse_jenkinsfile(path)
+        if config is None:
+            skipped += 1
+            continue
+        env = build_env(config)
+        merged_env = {**original_env, **env}
+        tasks.append((str(path), merged_env))
+
+    return tasks, skipped
+
+
+def _write_junit_xml(junit_xml_path, tasks, failures, total, failed_count, skipped):
+    """Write lint-pipelines results as JUnit XML report."""
+    testsuite = ET.Element(
+        "testsuite", name="lint-pipelines", tests=str(total), failures=str(failed_count), skipped=str(skipped)
+    )
+    for path_str, _ in tasks:
+        testcase = ET.SubElement(testsuite, "testcase", name=path_str, classname="lint-pipelines")
+        if path_str in failures:
+            failure = ET.SubElement(testcase, "failure", message="Validation failed")
+            failure.text = failures[path_str]
+    tree = ET.ElementTree(testsuite)
+    ET.indent(tree)
+    tree.write(junit_xml_path, xml_declaration=True, encoding="unicode")
+    click.echo(f"JUnit XML report written to {junit_xml_path}")
+
+
+MAX_LINT_WORKERS = 8
+
+
+@cli.command("lint-pipelines", help="Validate configurations from Jenkins pipeline files")
+@click.option("--pipeline-dir", default="jenkins-pipelines", help="Root directory of pipeline files")
+@click.option("--pipeline-file", default=None, help="Validate a single pipeline file (ad-hoc mode)")
+@click.option("--workers", default=None, type=int, help="Number of parallel workers (default: CPU count)")
+@click.option("-i", "--include", "include_filter", default="", help="Regex filter to include specific pipeline files")
+@click.option("-e", "--exclude", "exclude_filter", default="", help="Regex filter to exclude specific pipeline files")
+@click.option(
+    "--junit-xml", "junit_xml_path", default=None, type=click.Path(), help="Write JUnit XML report to this path"
+)
+def lint_pipelines(pipeline_dir, pipeline_file, workers, include_filter, exclude_filter, junit_xml_path):
+    scylla_qa_internal_path = Path(__file__).resolve().parent / "scylla-qa-internal"
+    if not scylla_qa_internal_path.exists():
+        click.echo("scylla-qa-internal not found, trying to clone...")
+        try:
+            clone_repo(
+                remoter=LOCALRUNNER,
+                repo_url="git@github.com:scylladb/scylla-qa-internal.git",
+                destination_dir_name=str(scylla_qa_internal_path),
+                clone_as_root=False,
+                branch="master",
+            )
+            click.echo("Successfully cloned scylla-qa-internal")
+        except Exception as exc:  # noqa: BLE001
+            click.echo(
+                f"Warning: Could not clone scylla-qa-internal: {exc}. "
+                "Pipelines referencing its configs may fail validation."
+            )
+
+    tasks, skipped = _discover_and_parse_pipelines(
+        pipeline_dir,
+        pipeline_file,
+        include_filter,
+        exclude_filter,
+    )
+
+    if not tasks:
+        click.echo("No pipeline files to validate.")
+        sys.exit(0)
+
+    worker_count = workers or min(os.cpu_count() or 4, MAX_LINT_WORKERS)
+    show_progress = sys.stderr.isatty()
+
+    failed_count = 0
+    passed_count = 0
+    failures = {}
+    chunksize = max(1, len(tasks) // (worker_count * 4))
+    paths, envs = zip(*tasks) if tasks else ([], [])
+    with ProcessPoolExecutor(max_workers=worker_count) as process_pool:
+        results = process_pool.map(_validate_single_pipeline, paths, envs, chunksize=chunksize)
+
+        for path, (is_error, error_msg) in results:
+            if is_error:
+                failed_count += 1
+                failures[path] = error_msg
+                click.secho(f"FAIL: {path}", fg="red", bold=True)
+                for line in error_msg.strip().splitlines():
+                    click.secho(f"  {line}", fg="red")
+                click.echo()
+            else:
+                passed_count += 1
+            if show_progress:
+                print(
+                    f"\r  [{passed_count + failed_count}/{len(tasks)}] validated...",
+                    end="",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+    if show_progress:
+        print(file=sys.stderr)
+
+    total = passed_count + failed_count
+    click.echo("---")
+    summary = f"{passed_count}/{total} pipelines passed"
+    if skipped:
+        summary += f" ({skipped} skipped)"
+    if failed_count:
+        summary += f" ({failed_count} failed)"
+    click.secho(summary, fg="green" if failed_count == 0 else "red")
+
+    if junit_xml_path:
+        _write_junit_xml(junit_xml_path, tasks, failures, total, failed_count, skipped)
+
+    sys.exit(1 if failed_count else 0)
+
+
+@cli.command("lint-test-docs", help="Validate test_metadata sections in test-case YAML files")
+@click.option("--test-case-dir", default="test-cases", help="Root directory of test cases")
+@click.option("--missing-only", is_flag=True, help="Only report test cases missing test_metadata")
+@click.option("--test-case-file", default=None, type=click.Path(exists=True), help="Validate a single file")
+def lint_test_docs(test_case_dir, missing_only, test_case_file):
+    taxonomy_path = Path("docs/pipeline-labels/taxonomy.yaml")
+
+    if test_case_file:
+        files = [Path(test_case_file)]
+    else:
+        files = sorted(Path(test_case_dir).rglob("*.yaml"))
+
+    if not files:
+        click.echo("No test-case YAML files found.")
+        sys.exit(0)
+
+    failed_count = 0
+    passed_count = 0
+    missing_count = 0
+
+    for path in files:
+        result = lint_test_metadata(path, taxonomy_path if taxonomy_path.exists() else None)
+
+        if missing_only:
+            if result.missing:
+                missing_count += 1
+                click.secho(str(path), fg="yellow")
+            continue
+
+        if not result.passed:
+            failed_count += 1
+            click.secho(f"FAIL: {path}", fg="red", bold=True)
+            for err in result.errors:
+                click.secho(f"  ERROR: {err}", fg="red")
+            for warn in result.warnings:
+                click.secho(f"  WARN:  {warn}", fg="yellow")
+            click.echo()
+        else:
+            passed_count += 1
+            if result.warnings:
+                click.secho(f"WARN: {path}", fg="yellow")
+                for warn in result.warnings:
+                    click.secho(f"  WARN:  {warn}", fg="yellow")
+                click.echo()
+
+    if missing_only:
+        click.echo(f"{missing_count} test cases missing test_metadata (out of {len(files)} total)")
+        sys.exit(0)
+
+    total = passed_count + failed_count
+    click.echo("---")
+    summary = f"{passed_count}/{total} test cases passed"
+    if failed_count:
+        summary += f" ({failed_count} failed)"
+    click.secho(summary, fg="green" if failed_count == 0 else "red")
+    sys.exit(1 if failed_count else 0)
+
+
+@cli.command(
+    "preview-job-description", help="Preview the Jenkins job description that would be generated for a pipeline file"
+)
+@click.argument("jenkinsfile", type=click.Path(exists=True))
+def preview_job_description(jenkinsfile):
+    jenkins_file = Path(jenkinsfile)
+    text_description = JenkinsPipelines.get_job_description(jenkins_file)
+
+    content = jenkins_file.read_text()
+    pipeline_params = {}
+    for key in ("backend", "test_name", "test_config", "region"):
+        match = re.search(rf"{key}:\s*['\"]([^'\"]+)['\"]", content)
+        if match:
+            pipeline_params[key] = match.group(1)
+
+    if text_description:
+        description = text_description
+    elif pipeline_params:
+        parts = []
+        if "test_name" in pipeline_params:
+            parts.append(f"test: {pipeline_params['test_name']}")
+        if "backend" in pipeline_params:
+            parts.append(f"backend: {pipeline_params['backend']}")
+        if "region" in pipeline_params:
+            parts.append(f"region: {pipeline_params['region']}")
+        if "test_config" in pipeline_params:
+            parts.append(f"config: {pipeline_params['test_config']}")
+        description = " | ".join(parts)
+    else:
+        sct_jenkinsfile = (
+            jenkins_file.relative_to(Path(__file__).resolve().parent) if jenkins_file.is_absolute() else jenkins_file
+        )
+        description = str(sct_jenkinsfile)
+
+    metadata_block = JenkinsPipelines.get_metadata_description(jenkins_file)
+    if metadata_block:
+        description = f"{description}\n\n{metadata_block}"
+
+    if not description.strip():
+        click.secho("No description content found.", fg="yellow")
+        sys.exit(1)
+
+    click.echo(description)
+
+
+>>>>>>> cf3a79e81 (perf(lint): cache the instance catalog and cap the lint worker pool)
 @cli.command(help="Check test configuration file")
 @click.argument("config_file", type=str, default="")
 @click.option("-b", "--backend", type=click.Choice(available_backends), default="aws")
