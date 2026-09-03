@@ -40,6 +40,14 @@ instances:
   local_disk_count: 2
   arch: arm64
   price_per_hour: 0.734
+- instance_type: Standard_D16ps_v6
+  family: Standard_D
+  vcpus: 16
+  memory_gb: 64.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour: 0.562
 - instance_type: Standard_D16s_v4
   family: Standard_D
   vcpus: 16
@@ -96,6 +104,14 @@ instances:
   local_disk_count: 1
   arch: arm64
   price_per_hour: 0.0918
+- instance_type: Standard_D2ps_v6
+  family: Standard_D
+  vcpus: 2
+  memory_gb: 8.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour: 0.0702
 - instance_type: Standard_D2s_v4
   family: Standard_D
   vcpus: 2
@@ -152,6 +168,14 @@ instances:
   local_disk_count: 4
   arch: arm64
   price_per_hour: 1.469
+- instance_type: Standard_D32ps_v6
+  family: Standard_D
+  vcpus: 32
+  memory_gb: 128.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour: 1.123
 - instance_type: Standard_D32s_v4
   family: Standard_D
   vcpus: 32
@@ -208,6 +232,14 @@ instances:
   local_disk_count: 6
   arch: arm64
   price_per_hour: 2.203
+- instance_type: Standard_D48ps_v6
+  family: Standard_D
+  vcpus: 48
+  memory_gb: 192.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour: 1.685
 - instance_type: Standard_D48s_v4
   family: Standard_D
   vcpus: 48
@@ -264,6 +296,14 @@ instances:
   local_disk_count: 1
   arch: arm64
   price_per_hour: 0.184
+- instance_type: Standard_D4ps_v6
+  family: Standard_D
+  vcpus: 4
+  memory_gb: 16.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour: 0.14
 - instance_type: Standard_D4s_v4
   family: Standard_D
   vcpus: 4
@@ -320,6 +360,14 @@ instances:
   local_disk_count: 8
   arch: arm64
   price_per_hour: 2.938
+- instance_type: Standard_D64ps_v6
+  family: Standard_D
+  vcpus: 64
+  memory_gb: 256.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour: 2.246
 - instance_type: Standard_D64s_v4
   family: Standard_D
   vcpus: 64
@@ -376,6 +424,14 @@ instances:
   local_disk_count: 1
   arch: arm64
   price_per_hour: 0.367
+- instance_type: Standard_D8ps_v6
+  family: Standard_D
+  vcpus: 8
+  memory_gb: 32.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour: 0.281
 - instance_type: Standard_D8s_v4
   family: Standard_D
   vcpus: 8
@@ -424,6 +480,14 @@ instances:
   local_disk_count: 12
   arch: arm64
   price_per_hour: 4.406
+- instance_type: Standard_D96ps_v6
+  family: Standard_D
+  vcpus: 96
+  memory_gb: 384.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour: 3.37
 - instance_type: Standard_D96s_v5
   family: Standard_D
   vcpus: 96
