@@ -1216,7 +1216,67 @@ Enable running Gemini workload during rolling upgrade test. Default is false.
 
 **default:** N/A
 
+<<<<<<< HEAD
 **type:** boolean
+||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
+**type:** dict
+
+
+## **sizing_db_oracle** / SCT_SIZING_DB_ORACLE
+
+Cloud-agnostic instance sizing constraints for db_oracle nodes
+
+**default:** {'vcpu': 8, 'memory': '>=60'}
+
+**type:** dict
+
+
+## **sizing_loader** / SCT_SIZING_LOADER
+
+Cloud-agnostic instance sizing constraints for loader nodes
+
+**default:** {'vcpu': 4, 'memory': '>=8'}
+
+**type:** dict
+
+
+## **sizing_monitor** / SCT_SIZING_MONITOR
+
+Cloud-agnostic instance sizing constraints for monitor nodes
+
+**default:** {'vcpu': 2, 'memory': '>=8'}
+
+**type:** dict
+=======
+**type:** dict
+
+
+## **sizing_db_oracle** / SCT_SIZING_DB_ORACLE
+
+Cloud-agnostic instance sizing constraints for db_oracle nodes
+
+**default:** {'vcpu': 8, 'memory': '>=60'}
+
+**type:** dict
+
+
+## **sizing_loader** / SCT_SIZING_LOADER
+
+Cloud-agnostic instance sizing constraints for loader nodes. Loaders default to Arm. A stress tool whose loader image is published for linux/amd64 only (cassandra-harry, hydra-kcl, ndbench, nosqlbench, and the alternator DNS sidecar used by YCSB when alternator_use_dns_routing is set) sets arch to x86_64 for you. Set arch here to pick the architecture yourself
+
+**default:** {'vcpu': 4, 'memory': '>=8'}
+
+**type:** dict
+
+
+## **sizing_monitor** / SCT_SIZING_MONITOR
+
+Cloud-agnostic instance sizing constraints for monitor nodes
+
+**default:** {'vcpu': 2, 'memory': '>=8'}
+
+**type:** dict
+>>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
 
 
 ## **instance_type_loader** / SCT_INSTANCE_TYPE_LOADER
@@ -1326,6 +1386,16 @@ AMS AMI id to use for loader node
 
 **type:** str (appendable)
 
+<<<<<<< HEAD
+||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
+**backend overrides:**
+- `resolve:ssm:/aws/service/canonical/ubuntu/server/26.04/stable/current/amd64/hvm/ebs-gp3/ami-id`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+
+=======
+**backend overrides:**
+- `resolve:ssm:/aws/service/canonical/ubuntu/server/26.04/stable/current/{arch}/hvm/ebs-gp3/ami-id`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+
+>>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
 
 ## **ami_id_monitor** / SCT_AMI_ID_MONITOR
 
@@ -1569,6 +1639,16 @@ Supported: us-east1 - means that the zone will be selected automatically or you 
 
 **type:** str (appendable)
 
+<<<<<<< HEAD
+||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
+**backend overrides:**
+- `https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2604-lts-amd64`: gce, gce-siren, k8s-gke
+
+=======
+**backend overrides:**
+- `https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2604-lts-{arch}`: gce, gce-siren, k8s-gke
+
+>>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
 
 ## **gce_image_username** / SCT_GCE_IMAGE_USERNAME
 
@@ -1776,6 +1856,16 @@ Supported: eastus
 
 **type:** str (appendable)
 
+<<<<<<< HEAD
+||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
+**backend overrides:**
+- `Canonical:ubuntu-26_04-lts:server:latest`: azure
+
+=======
+**backend overrides:**
+- `Canonical:ubuntu-26_04-lts:{arch_sku}:latest`: azure
+
+>>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
 
 ## **azure_image_username** / SCT_AZURE_IMAGE_USERNAME
 

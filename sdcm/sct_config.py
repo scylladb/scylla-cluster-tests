@@ -88,8 +88,135 @@ from sdcm.test_config import TestConfig
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
 from sdcm.mgmt.common import AgentBackupParameters
 from sdcm.utils.version_utils import parse_scylla_version_tag
+<<<<<<< HEAD
+||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
+from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
+from sdcm.utils.cloud_catalog.instance_matcher import NoMatchingInstanceError, select_instance
+=======
+from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
+from sdcm.utils.cloud_catalog.instance_matcher import ARCH_ALIASES, NoMatchingInstanceError, select_instance
+>>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
 from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS, nested_env_subkey
 
+<<<<<<< HEAD
+||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
+_SIZING_RESOLUTION_CACHE: dict[tuple, str] = {}
+
+LOGGER = logging.getLogger(__name__)
+
+=======
+_SIZING_RESOLUTION_CACHE: dict[tuple, tuple[str, str]] = {}
+
+LOGGER = logging.getLogger(__name__)
+
+_ARCH_IMAGE_MARKERS: dict[str, dict[str, str]] = {
+    "{arch}": {"x86_64": "amd64", "arm64": "arm64", "aarch64": "arm64"},
+    "{arch_sku}": {"x86_64": "server", "arm64": "server-arm64", "aarch64": "server-arm64"},
+}
+
+
+_LOADER_IMAGE_PARAMS: dict[str, tuple[str, str, str]] = {
+    "aws": ("ami_id_loader", "instance_type_loader", "region_name"),
+    "azure": ("azure_image_loader", "azure_instance_type_loader", "azure_region_name"),
+    "gce": ("gce_image_loader", "gce_instance_type_loader", "gce_datacenter"),
+    "oci": ("oci_image_loader", "oci_instance_type_loader", "oci_region_name"),
+}
+
+# every backend that inherits one of the cloud defaults files above, so a backend
+# such as k8s-eks resolves the marker its inherited ami_id_loader carries
+_BACKEND_TO_IMAGE_CLOUD: dict[str, str] = {
+    "aws": "aws",
+    "aws-siren": "aws",
+    "k8s-eks": "aws",
+    "k8s-local-kind-aws": "aws",
+    "gce": "gce",
+    "gce-siren": "gce",
+    "k8s-gke": "gce",
+    "azure": "azure",
+    "oci": "oci",
+}
+
+_ARM_INSTANCE_TYPE_PATTERNS: dict[str, tuple[str, ...]] = {
+    "aws": (r"^\w+\d+g[a-z]*\.", r"^a1\."),
+    "gce": (r"^(t2a|c4a|n4a|x4a)-",),
+    "azure": (r"^Standard_\w*?\d+p[a-z]*_v\d+$",),
+    "oci": (r"^(BM|VM)\.Standard\.A\d+\.", r"^A\d+\.Flex"),
+}
+
+
+def is_arm_instance_type(cloud: str, instance_type: str) -> bool:
+    return any(re.match(pattern, instance_type) for pattern in _ARM_INSTANCE_TYPE_PATTERNS.get(cloud, ()))
+
+
+_SIZING_SKIP_BACKENDS = frozenset({"docker", "baremetal", "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"})
+
+_BACKEND_TO_CLOUD: dict[str, str] = {
+    "aws": "aws",
+    "aws-siren": "aws",
+    "k8s-eks": "aws",
+    "gce": "gce",
+    "gce-siren": "gce",
+    "k8s-gke": "gce",
+    "azure": "azure",
+    "oci": "oci",
+}
+
+_AMD64_ONLY_STRESS_TOOLS: dict[str, tuple[str, ...]] = {
+    "harry": ("cassandra-harry",),
+    "kcl": ("hydra-kcl",),
+    "ndbench": ("ndbench",),
+    "nosqlbench": ("nosqlbench",),
+}
+
+_YCSB_COMMAND_MARKER = "bin/ycsb"
+
+_SIZING_ROLE_PARAMS: dict[str, dict[str, str]] = {
+    "aws": {
+        "db": "instance_type_db",
+        "db_oracle": "instance_type_db_oracle",
+        "zero_token": "zero_token_instance_type_db",
+        "loader": "instance_type_loader",
+        "monitor": "instance_type_monitor",
+    },
+    "gce": {
+        "db": "gce_instance_type_db",
+        "db_oracle": "gce_instance_type_db_oracle",
+        "loader": "gce_instance_type_loader",
+        "monitor": "gce_instance_type_monitor",
+    },
+    "azure": {
+        "db": "azure_instance_type_db",
+        "db_oracle": "azure_instance_type_db_oracle",
+        "loader": "azure_instance_type_loader",
+        "monitor": "azure_instance_type_monitor",
+    },
+    "oci": {
+        "db": "oci_instance_type_db",
+        "db_oracle": "oci_instance_type_db_oracle",
+        "loader": "oci_instance_type_loader",
+        "monitor": "oci_instance_type_monitor",
+    },
+}
+
+
+def backend_to_cloud(backend: str | None, xcloud_provider: str | None = None) -> str | None:
+    if backend == "xcloud":
+        return xcloud_provider or None
+    return _BACKEND_TO_CLOUD.get(str(backend))
+
+
+def substitute_arch_markers(template: str, arch: str) -> str:
+    resolved = template
+    for marker, values in _ARCH_IMAGE_MARKERS.items():
+        if marker in resolved:
+            if arch not in values:
+                raise ValueError(
+                    f"Cannot resolve {marker} in {template!r} for arch {arch!r}. Known values: {sorted(values)}"
+                )
+            resolved = resolved.replace(marker, values[arch])
+    return resolved
+
+>>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
 
 def _nested_env_subkey(env_key: str, field_env: str, sep: str) -> str | None:
     """Return the nested sub-key of *env_key* for *field_env* under separator *sep*, or None if it doesn't nest under it.
@@ -826,6 +953,981 @@ class SCTConfiguration(dict):
             If reuse_cluster is set it should hold test_id of the cluster that will be reused.
             `reuse_cluster: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71`
          """,
+<<<<<<< HEAD
+||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
+    )
+    nemesis_filter_seeds: Boolean = SctField(
+        description="""If true runs the nemesis only on non seed nodes""",
+    )
+
+    # Stress Commands
+    stress_cmd: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. multiple commands can passed as a list",
+    )
+    gemini_schema_url: String = SctField(
+        description="""Path to a local schema JSON file or a remote URL (http/https) that Gemini will use.
+                    Local files are uploaded to the loader via send_files and mounted into the Gemini Docker
+                    container via --schema.
+                    Remote URLs are downloaded on the loader node with curl and then mounted the same way.""",
+    )
+    gemini_cmd: String = SctField(
+        description="gemini command to run (for now used only in GeminiTest)",
+    )
+    gemini_seed: int = SctField(
+        description="Seed number for gemini command",
+    )
+    gemini_log_cql_statements: Boolean = SctField(
+        description="Log CQL statements to file",
+    )
+    gemini_table_options: list = SctField(
+        description="table options for created table. example: ['cdc={'enabled': true}'], ['cdc={'enabled': true}', 'compaction={'class': 'IncrementalCompactionStrategy'}']",
+    )
+    run_gemini_in_rolling_upgrade: Boolean = SctField(
+        description="Enable running Gemini workload during rolling upgrade test. Default is false.",
+    )
+    # AWS config options
+    sizing_db: dict | None = SctField(
+        default=None, description="Cloud-agnostic instance sizing constraints for db nodes"
+    )
+    sizing_db_oracle: dict | None = SctField(
+        default=None, description="Cloud-agnostic instance sizing constraints for db_oracle nodes"
+    )
+    sizing_loader: dict | None = SctField(
+        default=None, description="Cloud-agnostic instance sizing constraints for loader nodes"
+    )
+    sizing_monitor: dict | None = SctField(
+        default=None, description="Cloud-agnostic instance sizing constraints for monitor nodes"
+    )
+    instance_type_loader: String = SctField(
+        description="AWS image type of the loader node",
+    )
+    instance_type_monitor: String = SctField(
+        description="AWS image type of the monitor node",
+    )
+    instance_type_db: String = SctField(
+        description="AWS image type of the db node",
+    )
+    instance_type_db_oracle: String = SctField(
+        description="AWS image type of the oracle node",
+    )
+    instance_type_db_target: String = SctField(
+        description="Target AWS instance type for platform migration (e.g., i8g.2xlarge for ARM)",
+    )
+    target_db_image_ids: Annotated[list[str], IgnoredType] = Field(default=[], exclude=True)
+    instance_type_runner: String = SctField(
+        description="instance type of the sct-runner node",
+    )
+    region_name: StringOrList = SctField(
+        description="AWS regions to use",
+        appendable=False,
+    )
+    use_placement_group: Boolean = SctField(
+        description="if true, create 'cluster' placement group for test case "
+        "for low-latency network performance achievement",
+    )
+    ami_id_db_scylla: String = SctField(
+        description="AMS AMI id to use for scylla db node",
+    )
+    ami_id_loader: String = SctField(
+        description="AMS AMI id to use for loader node",
+    )
+    ami_id_monitor: String = SctField(
+        description="AMS AMI id to use for monitor node",
+    )
+    ami_id_db_cassandra: String = SctField(
+        description="AMS AMI id to use for cassandra node",
+    )
+    ami_id_db_oracle: String = SctField(
+        description="AMS AMI id to use for oracle node",
+    )
+    ami_id_vector_store: String = SctField(
+        description="AMS AMI id to use for vector store node",
+    )
+    instance_type_vector_store: String = SctField(
+        description="AWS/GCP cloud provider instance type for Vector Store nodes",
+    )
+    root_disk_size_db: int = SctField(
+        description="",
+    )
+    root_disk_size_monitor: int = SctField(
+        description="",
+    )
+    root_disk_size_loader: int = SctField(
+        description="",
+    )
+    root_disk_size_runner: int = SctField(
+        description="root disk size in Gb for sct-runner",
+    )
+    ami_db_scylla_user: String = SctField(
+        description="",
+    )
+    ami_monitor_user: String = SctField(
+        description="",
+    )
+    ami_loader_user: String = SctField(
+        description="",
+    )
+    ami_db_cassandra_user: String = SctField(
+        description="",
+    )
+    ami_vector_store_user: String = SctField(
+        description="",
+    )
+    spot_max_price: float = SctField(
+        description="The max percentage of the on demand price we set for spot/fleet instances",
+    )
+    extra_network_interface: Boolean = SctField(
+        description="if true, create extra network interface on each node",
+    )
+    aws_instance_profile_name_db: String = SctField(
+        description="This is the name of the instance profile to set on all db instances",
+    )
+    aws_instance_profile_name_loader: String = SctField(
+        description="This is the name of the instance profile to set on all loader instances",
+    )
+    backup_bucket_backend: String = SctField(
+        description="the backend to be used for backup (e.g., 's3', 'gcs' or 'azure')",
+    )
+    backup_bucket_location: StringOrList = SctField(
+        description="the bucket name to be used for backup (e.g., 'manager-backup-tests')",
+    )
+    backup_bucket_region: String = SctField(
+        description="the AWS region of a bucket to be used for backup (e.g., 'eu-west-1')",
+    )
+    use_prepared_loaders: Boolean = SctField(
+        description="If True, we use prepared VMs for loader (instead of using docker images)",
+    )
+    scylla_d_overrides_files: StringOrList = SctField(
+        description="list of files that should upload to /etc/scylla.d/ directory to override scylla config files",
+        appendable=True,
+    )
+    gce_project: String = SctField(
+        description="gcp project name to use",
+    )
+    gce_datacenter: StringOrList = SctField(
+        description="Supported regions: us-east1, us-east4, us-west1, us-central1. Specifying just the region "
+        "(e.g., us-east1) means the zone will be selected automatically, or you can mention the zone "
+        "explicitly (e.g., us-east1-b)",
+        appendable=False,
+    )
+    gce_network: String = SctField(
+        description="gce network to use",
+    )
+    gce_image_db: String = SctField(
+        description="gce image to use for db nodes",
+    )
+    gce_image_db_oracle: String = SctField(
+        description="GCE image to use for oracle (2nd ref cluster) DB node(s). "
+        "If not set and 'oracle_scylla_version' is provided, it will be resolved automatically.",
+    )
+    gce_image_monitor: String = SctField(
+        description="gce image to use for monitor nodes",
+    )
+    scylla_network_config: list = SctField(
+        description="""Configure Scylla networking with single or multiple NIC/IP combinations.
+              It must be defined for listen_address and rpc_address. For each address mandatory parameters are:
+              - address: listen_address/rpc_address/broadcast_rpc_address/broadcast_address/test_communication
+              - ip_type: ipv4 or ipv6
+              - public: false or true
+              - nic: number of NIC. 0, 1
+              Supported for AWS and GCE meanwhile""",
+    )
+    gce_image_loader: String = SctField(
+        description="Google Compute Engine image to use for loader nodes",
+    )
+    gce_image_username: String = SctField(
+        description="Username for the Google Compute Engine image",
+    )
+    gce_instance_type_loader: String = SctField(
+        description="Instance type for loader nodes in Google Compute Engine",
+    )
+    gce_root_disk_type_loader: String = SctField(
+        description="Root disk type for loader nodes in Google Compute Engine",
+    )
+    gce_n_local_ssd_disk_loader: int = SctField(
+        description="Number of local SSD disks for loader nodes in Google Compute Engine",
+    )
+    gce_instance_type_monitor: String = SctField(
+        description="Instance type for monitor nodes in Google Compute Engine",
+    )
+    gce_root_disk_type_monitor: String = SctField(
+        description="Root disk type for monitor nodes in Google Compute Engine",
+    )
+    validate_large_collections: Boolean = SctField(
+        description="Flag to validate large collections in the database",
+    )
+    run_commit_log_check_thread: Boolean = SctField(
+        description="Flag to run a thread that checks commit logs",
+    )
+    teardown_validators: DictOrStr = SctField(
+        description="Validators to use during teardown phase",
+    )
+    use_capacity_reservation: Boolean = SctField(
+        description="Flag to use capacity reservation for instances",
+    )
+    use_dedicated_host: Boolean = SctField(
+        description="Flag to allocate dedicated hosts for the instances for the entire duration of the test run (AWS only)",
+    )
+    aws_dedicated_host_ids: StringOrList = SctField(
+        description="List of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)",
+    )
+    post_behavior_dedicated_host: Literal["keep", "destroy"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the dedicated hosts at the end of the test.
+
+        'destroy' - Destroy hosts (default)
+        'keep' - Keep hosts allocated
+        """,
+    )
+    bisect_start_date: String = SctField(
+        description="Start date for bisecting test runs to find regressions",
+    )
+    bisect_end_date: String = SctField(
+        description="End date for bisecting test runs to find regressions",
+    )
+    kafka_backend: Literal["localstack", "vm", "msk"] | None = SctField(
+        description="Type of Kafka backend to use",
+    )
+    kafka_connectors: list[SctKafkaConfiguration] = SctField(
+        description="Kafka connectors to use",
+    )
+    # Amazon EMR options (for spark-migrator testing)
+    emr_release_label: String = SctField(
+        description="EMR release version (e.g., 'emr-7.8.0'). When set, an EMR cluster is provisioned alongside the Scylla cluster.",
+    )
+    emr_instance_type_master: String = SctField(
+        description="Instance type for EMR master node (e.g., 'm5.xlarge')",
+    )
+    emr_instance_type_core: String = SctField(
+        description="Instance type for EMR core nodes",
+    )
+    emr_instance_count_core: int = SctField(
+        description="Number of EMR core nodes",
+    )
+    emr_instance_type_task: String = SctField(
+        description="Instance type for EMR task nodes (optional, uses Spot instances)",
+    )
+    emr_instance_count_task: int = SctField(
+        description="Number of EMR task nodes",
+    )
+    emr_spot_bid_percentage: int = SctField(
+        description="Max Spot price as percentage of On-Demand for EMR task nodes (default: 100)",
+    )
+    emr_applications: list = SctField(
+        description="List of EMR applications to install (default: ['Spark'])",
+    )
+    emr_spark_migrator_jar_path: String = SctField(
+        description="S3 path or local path to the spark-migrator JAR file",
+    )
+    emr_spark_migrator_release: String = SctField(
+        description="scylla-migrator release tag (e.g., 'v1.1.2'). When set, JAR is auto-downloaded "
+        "from GitHub releases and uploaded to S3. Takes precedence over emr_spark_migrator_jar_path.",
+    )
+    emr_log_uri: String = SctField(
+        description="S3 URI for EMR cluster logs (e.g., 's3://sct-emr-spark-migrator-{region}/logs/')",
+    )
+    emr_keep_alive: Boolean = SctField(
+        description="Whether EMR cluster stays alive after job completion (default: true for reuse during testing)",
+    )
+    emr_install_spark4_via_bootstrap: Boolean = SctField(
+        description="Legacy fallback: install Spark 4.x via an EMR bootstrap action and submit the migrator "
+        "through script-runner.jar (for emr-7.x releases). Default value is false - i.e. deployment of native Spark "
+        "on an `emr-spark-8.x` release label.",
+    )
+    # spark-migrator external-source options (for Cassandra-to-Scylla migration)
+    migrator_source_hosts: StringOrList = SctField(
+        description="CQL contact-point IPs for the source Cassandra/Scylla cluster. "
+        "Mutually exclusive with migrator_source_test_id.",
+    )
+    migrator_source_keyspace: String = SctField(
+        description="Keyspace to migrate from on the source cluster",
+    )
+    migrator_source_table: String = SctField(
+        description="Table to migrate from on the source cluster",
+    )
+    migrator_source_test_id: String = SctField(
+        description="SCT test_id of a running source cluster. When set, source host IPs are auto-discovered "
+        "via EC2 tags (NodeType=cs-db). Mutually exclusive with migrator_source_hosts.",
+    )
+    migrator_target_keyspace: String = SctField(
+        description="Keyspace to migrate into on the target Scylla cluster. Defaults to migrator_source_keyspace.",
+    )
+    migrator_target_table: String = SctField(
+        description="Table to migrate into on the target Scylla cluster. Defaults to migrator_source_table.",
+    )
+    migrator_run_validator: Boolean = SctField(
+        description="Run the spark-migrator validator after migration to do a row-by-row comparison",
+    )
+    migrator_step_timeout_minutes: int = SctField(
+        description="Time in minutes to wait for the spark-migrator migration EMR step. Default 360.",
+    )
+    validator_step_timeout_minutes: int = SctField(
+        description="Time in minutes to wait for the spark-migrator validator EMR step. Default 60.",
+    )
+
+    run_scylla_doctor: Boolean = SctField(
+        description="Flag to run Scylla Doctor tool",
+    )
+    scylla_doctor_version: String = SctField(
+        description="""Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.10')
+                to hardcode the version, or leave empty to use the latest available version. For stability,
+                artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.""",
+    )
+    scylla_doctor_full_tarball_url: String = SctField(
+        description="""Direct URL to a full edition Scylla Doctor tarball in S3. When set, bypasses the
+                standard version-based S3 lookup and downloads SD directly from this URL.
+                Use for testing unofficial or pre-release SD versions.
+                Example: 'https://s3.amazonaws.com/my-bucket/scylla-doctor-1.11-rc1.tar.gz'""",
+    )
+    run_scylla_doctor_only: Boolean = SctField(
+        description="""When true, the artifact test runs only the Scylla Doctor validation
+                (install, collect vitals, analyze, verify) and skips all other artifact checks
+                such as stop/start, cassandra-stress, etc. Useful for fast SD
+                release gating. Implies run_scylla_doctor=true.""",
+    )
+    scylla_doctor_edition: Literal["basic", "full"] = SctField(
+        description="""Scylla Doctor edition to use. Allowed values: 'basic', 'full'.
+                'basic' fetches the free/open-source edition via HTTP.
+                'full' fetches the full/enterprise edition from a private S3 bucket.""",
+    )
+
+    skip_test_stages: DictOrStr = SctField(
+        description="Skip selected stages of a test scenario",
+    )
+    use_zero_nodes: Boolean = SctField(
+        description="If True, enable support in SCT of zero nodes (configuration, nemesis)",
+    )
+    n_db_zero_token_nodes: IntOrList = SctField(
+        description="Number of zero token nodes in cluster. Value should be set as '0 1 1' "
+        "for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions",
+    )
+    zero_token_instance_type_db: String = SctField(
+        description="Instance type for zero token node",
+    )
+    sct_aws_account_id: String = SctField(
+        description="AWS account id on behalf of which the test is run",
+    )
+    latency_decorator_error_thresholds: DictOrStr = SctField(
+        description="Error thresholds for latency decorator. "
+        "Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}",
+    )
+    workload_name: String = SctField(
+        description="Workload name, can be: write|read|mixed|unset. "
+        "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true). "
+        "If unset, workload is taken from test name.",
+    )
+    adaptive_timeout_store_metrics: Boolean = SctField(
+        description="Store adaptive timeout metrics in Argus. Disabled for performance tests only.",
+    )
+    adaptive_timeout_multipliers: Annotated[AdaptiveTimeoutMultipliers, BeforeValidator(dict_or_str_or_pydantic)] = (
+        SctField(
+            description="Optional dict of adaptive-timeout multipliers keyed by operation name "
+            "(from Operations enum value[0], e.g. decommission, remove_node, new_node, repair, etc.). "
+            "If the current operation key is absent, multiplier 1.0 is used.<br>"
+            "YAML example:<br>"
+            "adaptive_timeout_multipliers:<br>"
+            "  decommission: 4<br>"
+            "  new_node: 2<br>"
+            "Environment variable examples:<br>"
+            "SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS=\"{'decommission': 4, 'new_node': 2}\"<br>"
+            "Or dot-notation: SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4<br>"
+            "Or double-underscore (bash-exportable): SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__decommission=4",
+        )
+    )
+
+    # Google Compute Engine options
+    gce_n_local_ssd_disk_monitor: int = SctField(
+        description="Number of local SSD disks for monitor nodes in Google Compute Engine",
+    )
+    gce_instance_type_db: String = SctField(
+        description="Instance type for database nodes in Google Compute Engine",
+    )
+    gce_instance_type_db_oracle: String = SctField(
+        description="Instance type for the oracle (2nd ref cluster) DB nodes in Google Compute Engine",
+    )
+    gce_root_disk_type_db: String = SctField(
+        description="Root disk type for database nodes in Google Compute Engine",
+    )
+    gce_n_local_ssd_disk_db: int = SctField(
+        description="Number of local SSD disks for database nodes in Google Compute Engine",
+    )
+    gce_pd_standard_disk_size_db: int = SctField(
+        description="The size of the standard persistent disk in GB used for GCE database nodes",
+    )
+    gce_pd_ssd_disk_size_db: int = SctField(
+        description="",
+    )
+    gce_setup_hybrid_raid: Boolean = SctField(
+        description="If True, SCT configures a hybrid RAID of NVMEs and an SSD for scylla's data",
+    )
+    gce_pd_ssd_disk_size_loader: int = SctField(
+        description="",
+    )
+    gce_pd_ssd_disk_size_monitor: int = SctField(
+        description="",
+    )
+
+    # azure options
+    azure_region_name: StringOrList = SctField(
+        description="Azure region(s) where the resources will be deployed. Supports single or multiple regions.",
+        appendable=False,
+    )
+    azure_instance_type_loader: String = SctField(
+        description="The Azure virtual machine size to be used for loader nodes.",
+    )
+    azure_instance_type_monitor: String = SctField(
+        description="The Azure virtual machine size to be used for monitor nodes.",
+    )
+    azure_instance_type_db: String = SctField(
+        description="The Azure virtual machine size to be used for database nodes.",
+    )
+    azure_instance_type_db_oracle: String = SctField(
+        description="The Azure virtual machine size to be used for Oracle database nodes.",
+    )
+    azure_image_db: String = SctField(
+        description="The Azure image to be used for database nodes.",
+    )
+    azure_image_db_oracle: String = SctField(
+        description="The Azure image to be used for oracle (2nd ref cluster) DB nodes. "
+        "If not set and 'oracle_scylla_version' is provided, it will be resolved automatically.",
+    )
+    azure_image_monitor: String = SctField(
+        description="The Azure image to be used for monitor nodes.",
+    )
+    azure_image_loader: String = SctField(
+        description="The Azure image to be used for loader nodes.",
+    )
+    azure_image_username: String = SctField(
+        description="The username for the Azure image.",
+    )
+    azure_provision_stuck_vm_timeout: int = SctField(
+        gt=0,
+        description="""
+              Seconds to wait for an Azure VM to reach the 'Succeeded' provisioning state before
+              treating it as stuck (accepted by Azure but never started by the host - SCT-434) and
+              recreating it. Detection is gated on the polled instanceView provisioning state.
+        """,
+    )
+    azure_provision_stuck_vm_recreate_attempts: int = SctField(
+        ge=0,
+        description="""
+              How many times to recreate a stuck Azure VM (full node: VM, NIC and public IP) onto
+              fresh capacity before giving up with a non-retryable error.
+        """,
+    )
+    azure_provision_stuck_vm_total_timeout: int = SctField(
+        gt=0,
+        description="""
+              Total timeout (seconds) for the whole stuck-VM recovery attempts.
+              Recovery stops with a non-retryable error when either this timeout or
+              'azure_provision_stuck_vm_recreate_attempts' is exhausted. This way a degraded Azure
+              region cannot keep provisioning running until the CI stage times out SCT.
+              This value must be at least 'azure_provision_stuck_vm_timeout', otherwise SCT may
+              give up during the initial wait without making even one recreate attempt.
+        """,
+    )
+
+    # Oracle Cloud (OCI) options
+    oci_region_name: StringOrList = SctField(
+        description="OCI region where the resources will be deployed",
+        appendable=False,
+    )
+    oci_instance_type_loader: String = SctField(
+        description=(
+            "Oracle Cloud instance shape to use for loader node(s). "
+            "Usage of flex shapes allows setting of the ocpus, memory. "
+            "Format is following: <shape-name>:<ocpus>:<ram>"
+=======
+    )
+    nemesis_filter_seeds: Boolean = SctField(
+        description="""If true runs the nemesis only on non seed nodes""",
+    )
+
+    # Stress Commands
+    stress_cmd: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. multiple commands can passed as a list",
+    )
+    gemini_schema_url: String = SctField(
+        description="""Path to a local schema JSON file or a remote URL (http/https) that Gemini will use.
+                    Local files are uploaded to the loader via send_files and mounted into the Gemini Docker
+                    container via --schema.
+                    Remote URLs are downloaded on the loader node with curl and then mounted the same way.""",
+    )
+    gemini_cmd: String = SctField(
+        description="gemini command to run (for now used only in GeminiTest)",
+    )
+    gemini_seed: int = SctField(
+        description="Seed number for gemini command",
+    )
+    gemini_log_cql_statements: Boolean = SctField(
+        description="Log CQL statements to file",
+    )
+    gemini_table_options: list = SctField(
+        description="table options for created table. example: ['cdc={'enabled': true}'], ['cdc={'enabled': true}', 'compaction={'class': 'IncrementalCompactionStrategy'}']",
+    )
+    run_gemini_in_rolling_upgrade: Boolean = SctField(
+        description="Enable running Gemini workload during rolling upgrade test. Default is false.",
+    )
+    # AWS config options
+    sizing_db: dict | None = SctField(
+        default=None, description="Cloud-agnostic instance sizing constraints for db nodes"
+    )
+    sizing_db_oracle: dict | None = SctField(
+        default=None, description="Cloud-agnostic instance sizing constraints for db_oracle nodes"
+    )
+    sizing_loader: dict | None = SctField(
+        default=None,
+        description=(
+            "Cloud-agnostic instance sizing constraints for loader nodes. "
+            "Loaders default to Arm. A stress tool whose loader image is published for linux/amd64 "
+            "only (cassandra-harry, hydra-kcl, ndbench, nosqlbench, and the alternator DNS sidecar "
+            "used by YCSB when alternator_use_dns_routing is set) sets arch to x86_64 for you. "
+            "Set arch here to pick the architecture yourself"
+        ),
+    )
+    sizing_monitor: dict | None = SctField(
+        default=None, description="Cloud-agnostic instance sizing constraints for monitor nodes"
+    )
+    instance_type_loader: String = SctField(
+        description="AWS image type of the loader node",
+    )
+    instance_type_monitor: String = SctField(
+        description="AWS image type of the monitor node",
+    )
+    instance_type_db: String = SctField(
+        description="AWS image type of the db node",
+    )
+    instance_type_db_oracle: String = SctField(
+        description="AWS image type of the oracle node",
+    )
+    instance_type_db_target: String = SctField(
+        description="Target AWS instance type for platform migration (e.g., i8g.2xlarge for ARM)",
+    )
+    target_db_image_ids: Annotated[list[str], IgnoredType] = Field(default=[], exclude=True)
+    instance_type_runner: String = SctField(
+        description="instance type of the sct-runner node",
+    )
+    region_name: StringOrList = SctField(
+        description="AWS regions to use",
+        appendable=False,
+    )
+    use_placement_group: Boolean = SctField(
+        description="if true, create 'cluster' placement group for test case "
+        "for low-latency network performance achievement",
+    )
+    ami_id_db_scylla: String = SctField(
+        description="AMS AMI id to use for scylla db node",
+    )
+    ami_id_loader: String = SctField(
+        description="AMS AMI id to use for loader node",
+    )
+    ami_id_monitor: String = SctField(
+        description="AMS AMI id to use for monitor node",
+    )
+    ami_id_db_cassandra: String = SctField(
+        description="AMS AMI id to use for cassandra node",
+    )
+    ami_id_db_oracle: String = SctField(
+        description="AMS AMI id to use for oracle node",
+    )
+    ami_id_vector_store: String = SctField(
+        description="AMS AMI id to use for vector store node",
+    )
+    instance_type_vector_store: String = SctField(
+        description="AWS/GCP cloud provider instance type for Vector Store nodes",
+    )
+    root_disk_size_db: int = SctField(
+        description="",
+    )
+    root_disk_size_monitor: int = SctField(
+        description="",
+    )
+    root_disk_size_loader: int = SctField(
+        description="",
+    )
+    root_disk_size_runner: int = SctField(
+        description="root disk size in Gb for sct-runner",
+    )
+    ami_db_scylla_user: String = SctField(
+        description="",
+    )
+    ami_monitor_user: String = SctField(
+        description="",
+    )
+    ami_loader_user: String = SctField(
+        description="",
+    )
+    ami_db_cassandra_user: String = SctField(
+        description="",
+    )
+    ami_vector_store_user: String = SctField(
+        description="",
+    )
+    spot_max_price: float = SctField(
+        description="The max percentage of the on demand price we set for spot/fleet instances",
+    )
+    extra_network_interface: Boolean = SctField(
+        description="if true, create extra network interface on each node",
+    )
+    aws_instance_profile_name_db: String = SctField(
+        description="This is the name of the instance profile to set on all db instances",
+    )
+    aws_instance_profile_name_loader: String = SctField(
+        description="This is the name of the instance profile to set on all loader instances",
+    )
+    backup_bucket_backend: String = SctField(
+        description="the backend to be used for backup (e.g., 's3', 'gcs' or 'azure')",
+    )
+    backup_bucket_location: StringOrList = SctField(
+        description="the bucket name to be used for backup (e.g., 'manager-backup-tests')",
+    )
+    backup_bucket_region: String = SctField(
+        description="the AWS region of a bucket to be used for backup (e.g., 'eu-west-1')",
+    )
+    use_prepared_loaders: Boolean = SctField(
+        description="If True, we use prepared VMs for loader (instead of using docker images)",
+    )
+    scylla_d_overrides_files: StringOrList = SctField(
+        description="list of files that should upload to /etc/scylla.d/ directory to override scylla config files",
+        appendable=True,
+    )
+    gce_project: String = SctField(
+        description="gcp project name to use",
+    )
+    gce_datacenter: StringOrList = SctField(
+        description="Supported regions: us-east1, us-east4, us-west1, us-central1. Specifying just the region "
+        "(e.g., us-east1) means the zone will be selected automatically, or you can mention the zone "
+        "explicitly (e.g., us-east1-b)",
+        appendable=False,
+    )
+    gce_network: String = SctField(
+        description="gce network to use",
+    )
+    gce_image_db: String = SctField(
+        description="gce image to use for db nodes",
+    )
+    gce_image_db_oracle: String = SctField(
+        description="GCE image to use for oracle (2nd ref cluster) DB node(s). "
+        "If not set and 'oracle_scylla_version' is provided, it will be resolved automatically.",
+    )
+    gce_image_monitor: String = SctField(
+        description="gce image to use for monitor nodes",
+    )
+    scylla_network_config: list = SctField(
+        description="""Configure Scylla networking with single or multiple NIC/IP combinations.
+              It must be defined for listen_address and rpc_address. For each address mandatory parameters are:
+              - address: listen_address/rpc_address/broadcast_rpc_address/broadcast_address/test_communication
+              - ip_type: ipv4 or ipv6
+              - public: false or true
+              - nic: number of NIC. 0, 1
+              Supported for AWS and GCE meanwhile""",
+    )
+    gce_image_loader: String = SctField(
+        description="Google Compute Engine image to use for loader nodes",
+    )
+    gce_image_username: String = SctField(
+        description="Username for the Google Compute Engine image",
+    )
+    gce_instance_type_loader: String = SctField(
+        description="Instance type for loader nodes in Google Compute Engine",
+    )
+    gce_root_disk_type_loader: String = SctField(
+        description="Root disk type for loader nodes in Google Compute Engine",
+    )
+    gce_n_local_ssd_disk_loader: int = SctField(
+        description="Number of local SSD disks for loader nodes in Google Compute Engine",
+    )
+    gce_instance_type_monitor: String = SctField(
+        description="Instance type for monitor nodes in Google Compute Engine",
+    )
+    gce_root_disk_type_monitor: String = SctField(
+        description="Root disk type for monitor nodes in Google Compute Engine",
+    )
+    validate_large_collections: Boolean = SctField(
+        description="Flag to validate large collections in the database",
+    )
+    run_commit_log_check_thread: Boolean = SctField(
+        description="Flag to run a thread that checks commit logs",
+    )
+    teardown_validators: DictOrStr = SctField(
+        description="Validators to use during teardown phase",
+    )
+    use_capacity_reservation: Boolean = SctField(
+        description="Flag to use capacity reservation for instances",
+    )
+    use_dedicated_host: Boolean = SctField(
+        description="Flag to allocate dedicated hosts for the instances for the entire duration of the test run (AWS only)",
+    )
+    aws_dedicated_host_ids: StringOrList = SctField(
+        description="List of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)",
+    )
+    post_behavior_dedicated_host: Literal["keep", "destroy"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the dedicated hosts at the end of the test.
+
+        'destroy' - Destroy hosts (default)
+        'keep' - Keep hosts allocated
+        """,
+    )
+    bisect_start_date: String = SctField(
+        description="Start date for bisecting test runs to find regressions",
+    )
+    bisect_end_date: String = SctField(
+        description="End date for bisecting test runs to find regressions",
+    )
+    kafka_backend: Literal["localstack", "vm", "msk"] | None = SctField(
+        description="Type of Kafka backend to use",
+    )
+    kafka_connectors: list[SctKafkaConfiguration] = SctField(
+        description="Kafka connectors to use",
+    )
+    # Amazon EMR options (for spark-migrator testing)
+    emr_release_label: String = SctField(
+        description="EMR release version (e.g., 'emr-7.8.0'). When set, an EMR cluster is provisioned alongside the Scylla cluster.",
+    )
+    emr_instance_type_master: String = SctField(
+        description="Instance type for EMR master node (e.g., 'm5.xlarge')",
+    )
+    emr_instance_type_core: String = SctField(
+        description="Instance type for EMR core nodes",
+    )
+    emr_instance_count_core: int = SctField(
+        description="Number of EMR core nodes",
+    )
+    emr_instance_type_task: String = SctField(
+        description="Instance type for EMR task nodes (optional, uses Spot instances)",
+    )
+    emr_instance_count_task: int = SctField(
+        description="Number of EMR task nodes",
+    )
+    emr_spot_bid_percentage: int = SctField(
+        description="Max Spot price as percentage of On-Demand for EMR task nodes (default: 100)",
+    )
+    emr_applications: list = SctField(
+        description="List of EMR applications to install (default: ['Spark'])",
+    )
+    emr_spark_migrator_jar_path: String = SctField(
+        description="S3 path or local path to the spark-migrator JAR file",
+    )
+    emr_spark_migrator_release: String = SctField(
+        description="scylla-migrator release tag (e.g., 'v1.1.2'). When set, JAR is auto-downloaded "
+        "from GitHub releases and uploaded to S3. Takes precedence over emr_spark_migrator_jar_path.",
+    )
+    emr_log_uri: String = SctField(
+        description="S3 URI for EMR cluster logs (e.g., 's3://sct-emr-spark-migrator-{region}/logs/')",
+    )
+    emr_keep_alive: Boolean = SctField(
+        description="Whether EMR cluster stays alive after job completion (default: true for reuse during testing)",
+    )
+    emr_install_spark4_via_bootstrap: Boolean = SctField(
+        description="Legacy fallback: install Spark 4.x via an EMR bootstrap action and submit the migrator "
+        "through script-runner.jar (for emr-7.x releases). Default value is false - i.e. deployment of native Spark "
+        "on an `emr-spark-8.x` release label.",
+    )
+    # spark-migrator external-source options (for Cassandra-to-Scylla migration)
+    migrator_source_hosts: StringOrList = SctField(
+        description="CQL contact-point IPs for the source Cassandra/Scylla cluster. "
+        "Mutually exclusive with migrator_source_test_id.",
+    )
+    migrator_source_keyspace: String = SctField(
+        description="Keyspace to migrate from on the source cluster",
+    )
+    migrator_source_table: String = SctField(
+        description="Table to migrate from on the source cluster",
+    )
+    migrator_source_test_id: String = SctField(
+        description="SCT test_id of a running source cluster. When set, source host IPs are auto-discovered "
+        "via EC2 tags (NodeType=cs-db). Mutually exclusive with migrator_source_hosts.",
+    )
+    migrator_target_keyspace: String = SctField(
+        description="Keyspace to migrate into on the target Scylla cluster. Defaults to migrator_source_keyspace.",
+    )
+    migrator_target_table: String = SctField(
+        description="Table to migrate into on the target Scylla cluster. Defaults to migrator_source_table.",
+    )
+    migrator_run_validator: Boolean = SctField(
+        description="Run the spark-migrator validator after migration to do a row-by-row comparison",
+    )
+    migrator_step_timeout_minutes: int = SctField(
+        description="Time in minutes to wait for the spark-migrator migration EMR step. Default 360.",
+    )
+    validator_step_timeout_minutes: int = SctField(
+        description="Time in minutes to wait for the spark-migrator validator EMR step. Default 60.",
+    )
+
+    run_scylla_doctor: Boolean = SctField(
+        description="Flag to run Scylla Doctor tool",
+    )
+    scylla_doctor_version: String = SctField(
+        description="""Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.10')
+                to hardcode the version, or leave empty to use the latest available version. For stability,
+                artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.""",
+    )
+    scylla_doctor_full_tarball_url: String = SctField(
+        description="""Direct URL to a full edition Scylla Doctor tarball in S3. When set, bypasses the
+                standard version-based S3 lookup and downloads SD directly from this URL.
+                Use for testing unofficial or pre-release SD versions.
+                Example: 'https://s3.amazonaws.com/my-bucket/scylla-doctor-1.11-rc1.tar.gz'""",
+    )
+    run_scylla_doctor_only: Boolean = SctField(
+        description="""When true, the artifact test runs only the Scylla Doctor validation
+                (install, collect vitals, analyze, verify) and skips all other artifact checks
+                such as stop/start, cassandra-stress, etc. Useful for fast SD
+                release gating. Implies run_scylla_doctor=true.""",
+    )
+    scylla_doctor_edition: Literal["basic", "full"] = SctField(
+        description="""Scylla Doctor edition to use. Allowed values: 'basic', 'full'.
+                'basic' fetches the free/open-source edition via HTTP.
+                'full' fetches the full/enterprise edition from a private S3 bucket.""",
+    )
+
+    skip_test_stages: DictOrStr = SctField(
+        description="Skip selected stages of a test scenario",
+    )
+    use_zero_nodes: Boolean = SctField(
+        description="If True, enable support in SCT of zero nodes (configuration, nemesis)",
+    )
+    n_db_zero_token_nodes: IntOrList = SctField(
+        description="Number of zero token nodes in cluster. Value should be set as '0 1 1' "
+        "for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions",
+    )
+    zero_token_instance_type_db: String = SctField(
+        description="Instance type for zero token node",
+    )
+    sct_aws_account_id: String = SctField(
+        description="AWS account id on behalf of which the test is run",
+    )
+    latency_decorator_error_thresholds: DictOrStr = SctField(
+        description="Error thresholds for latency decorator. "
+        "Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}",
+    )
+    workload_name: String = SctField(
+        description="Workload name, can be: write|read|mixed|unset. "
+        "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true). "
+        "If unset, workload is taken from test name.",
+    )
+    adaptive_timeout_store_metrics: Boolean = SctField(
+        description="Store adaptive timeout metrics in Argus. Disabled for performance tests only.",
+    )
+    adaptive_timeout_multipliers: Annotated[AdaptiveTimeoutMultipliers, BeforeValidator(dict_or_str_or_pydantic)] = (
+        SctField(
+            description="Optional dict of adaptive-timeout multipliers keyed by operation name "
+            "(from Operations enum value[0], e.g. decommission, remove_node, new_node, repair, etc.). "
+            "If the current operation key is absent, multiplier 1.0 is used.<br>"
+            "YAML example:<br>"
+            "adaptive_timeout_multipliers:<br>"
+            "  decommission: 4<br>"
+            "  new_node: 2<br>"
+            "Environment variable examples:<br>"
+            "SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS=\"{'decommission': 4, 'new_node': 2}\"<br>"
+            "Or dot-notation: SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4<br>"
+            "Or double-underscore (bash-exportable): SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__decommission=4",
+        )
+    )
+
+    # Google Compute Engine options
+    gce_n_local_ssd_disk_monitor: int = SctField(
+        description="Number of local SSD disks for monitor nodes in Google Compute Engine",
+    )
+    gce_instance_type_db: String = SctField(
+        description="Instance type for database nodes in Google Compute Engine",
+    )
+    gce_instance_type_db_oracle: String = SctField(
+        description="Instance type for the oracle (2nd ref cluster) DB nodes in Google Compute Engine",
+    )
+    gce_root_disk_type_db: String = SctField(
+        description="Root disk type for database nodes in Google Compute Engine",
+    )
+    gce_n_local_ssd_disk_db: int = SctField(
+        description="Number of local SSD disks for database nodes in Google Compute Engine",
+    )
+    gce_pd_standard_disk_size_db: int = SctField(
+        description="The size of the standard persistent disk in GB used for GCE database nodes",
+    )
+    gce_pd_ssd_disk_size_db: int = SctField(
+        description="",
+    )
+    gce_setup_hybrid_raid: Boolean = SctField(
+        description="If True, SCT configures a hybrid RAID of NVMEs and an SSD for scylla's data",
+    )
+    gce_pd_ssd_disk_size_loader: int = SctField(
+        description="",
+    )
+    gce_pd_ssd_disk_size_monitor: int = SctField(
+        description="",
+    )
+
+    # azure options
+    azure_region_name: StringOrList = SctField(
+        description="Azure region(s) where the resources will be deployed. Supports single or multiple regions.",
+        appendable=False,
+    )
+    azure_instance_type_loader: String = SctField(
+        description="The Azure virtual machine size to be used for loader nodes.",
+    )
+    azure_instance_type_monitor: String = SctField(
+        description="The Azure virtual machine size to be used for monitor nodes.",
+    )
+    azure_instance_type_db: String = SctField(
+        description="The Azure virtual machine size to be used for database nodes.",
+    )
+    azure_instance_type_db_oracle: String = SctField(
+        description="The Azure virtual machine size to be used for Oracle database nodes.",
+    )
+    azure_image_db: String = SctField(
+        description="The Azure image to be used for database nodes.",
+    )
+    azure_image_db_oracle: String = SctField(
+        description="The Azure image to be used for oracle (2nd ref cluster) DB nodes. "
+        "If not set and 'oracle_scylla_version' is provided, it will be resolved automatically.",
+    )
+    azure_image_monitor: String = SctField(
+        description="The Azure image to be used for monitor nodes.",
+    )
+    azure_image_loader: String = SctField(
+        description="The Azure image to be used for loader nodes.",
+    )
+    azure_image_username: String = SctField(
+        description="The username for the Azure image.",
+    )
+    azure_provision_stuck_vm_timeout: int = SctField(
+        gt=0,
+        description="""
+              Seconds to wait for an Azure VM to reach the 'Succeeded' provisioning state before
+              treating it as stuck (accepted by Azure but never started by the host - SCT-434) and
+              recreating it. Detection is gated on the polled instanceView provisioning state.
+        """,
+    )
+    azure_provision_stuck_vm_recreate_attempts: int = SctField(
+        ge=0,
+        description="""
+              How many times to recreate a stuck Azure VM (full node: VM, NIC and public IP) onto
+              fresh capacity before giving up with a non-retryable error.
+        """,
+    )
+    azure_provision_stuck_vm_total_timeout: int = SctField(
+        gt=0,
+        description="""
+              Total timeout (seconds) for the whole stuck-VM recovery attempts.
+              Recovery stops with a non-retryable error when either this timeout or
+              'azure_provision_stuck_vm_recreate_attempts' is exhausted. This way a degraded Azure
+              region cannot keep provisioning running until the CI stage times out SCT.
+              This value must be at least 'azure_provision_stuck_vm_timeout', otherwise SCT may
+              give up during the initial wait without making even one recreate attempt.
+        """,
+    )
+
+    # Oracle Cloud (OCI) options
+    oci_region_name: StringOrList = SctField(
+        description="OCI region where the resources will be deployed",
+        appendable=False,
+    )
+    oci_instance_type_loader: String = SctField(
+        description=(
+            "Oracle Cloud instance shape to use for loader node(s). "
+            "Usage of flex shapes allows setting of the ocpus, memory. "
+            "Format is following: <shape-name>:<ocpus>:<ram>"
+>>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
         ),
         dict(
             name="test_id",
@@ -3347,6 +4449,13 @@ class SCTConfiguration(dict):
                         raise ValueError(f"{region} isn't supported, use: {self.aws_supported_regions}")
 
         # 3) overwrite with environment variables
+<<<<<<< HEAD
+||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
+        self._resolve_instance_sizes(env)
+=======
+        self._constrain_loader_arch_to_stress_tools(env)
+        self._resolve_instance_sizes(env)
+>>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
         merge_dicts_append_strings(self, env)
 
         # All keystore sources are now merged, so export them before any of the
@@ -3384,6 +4493,21 @@ class SCTConfiguration(dict):
 
         self._apply_resolved_placement()
 
+<<<<<<< HEAD
+||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
+        # snapshot the original AMI params before resolution, so AWS region fallback can
+        # re-resolve them for a relocated region
+        self._ami_params_snapshot = {key: self.get(key) for key in self.ami_id_params}
+
+=======
+        # snapshot the original AMI params before resolution, so AWS region fallback can
+        # re-resolve them for a relocated region
+        self._validate_loader_arch_supports_stress_tools()
+        self._resolve_loader_image_arch()
+
+        self._ami_params_snapshot = {key: self.get(key) for key in self.ami_id_params}
+
+>>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
         # 5) overwrite AMIs
         for key in self.ami_id_params:
             if param := self.get(key):
@@ -4086,6 +5210,228 @@ class SCTConfiguration(dict):
 
         return environment_vars
 
+<<<<<<< HEAD
+||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
+    def _resolve_instance_sizes(self, env: dict | None = None) -> None:  # noqa: PLR0914
+        """Resolve constraint dicts for instance-type params to literal type strings.
+
+        If *env* is provided (pre-merge env vars), resolution happens in *env*
+        in-place so the dict is replaced by a string before it hits the Pydantic
+        model (which only accepts strings for instance-type fields).  When *env*
+        is None, values are read from and written to ``self``.
+
+        Raises:
+            ValueError: If a constraint dict cannot be resolved to any instance.
+        """
+        SKIP_BACKENDS = {"docker", "baremetal", "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"}
+        BACKEND_TO_CLOUD = {
+            "aws": "aws",
+            "aws-siren": "aws",
+            "k8s-eks": "aws",
+            "gce": "gce",
+            "gce-siren": "gce",
+            "k8s-gke": "gce",
+            "azure": "azure",
+            "oci": "oci",
+            "xcloud": env.get("xcloud_provider", None),
+        }
+        ROLE_PARAMS = {
+            "aws": {
+                "db": "instance_type_db",
+                "db_oracle": "instance_type_db_oracle",
+                "zero_token": "zero_token_instance_type_db",
+                "loader": "instance_type_loader",
+                "monitor": "instance_type_monitor",
+            },
+            "gce": {
+                "db": "gce_instance_type_db",
+                "db_oracle": "gce_instance_type_db_oracle",
+                "loader": "gce_instance_type_loader",
+                "monitor": "gce_instance_type_monitor",
+            },
+            "azure": {
+                "db": "azure_instance_type_db",
+                "db_oracle": "azure_instance_type_db_oracle",
+                "loader": "azure_instance_type_loader",
+                "monitor": "azure_instance_type_monitor",
+            },
+            "oci": {
+                "db": "oci_instance_type_db",
+                "db_oracle": "oci_instance_type_db_oracle",
+                "loader": "oci_instance_type_loader",
+                "monitor": "oci_instance_type_monitor",
+            },
+        }
+
+        backend = (env.get("cluster_backend") if env else None) or self.get("cluster_backend")
+        if backend in SKIP_BACKENDS:
+            self.log.info("Skipping instance size resolution for backend %s", backend)
+            return
+
+        cloud = BACKEND_TO_CLOUD.get(backend)
+        if not cloud:
+            self.log.warning("Unknown backend %s — skipping instance size resolution", backend)
+            return
+
+        AGNOSTIC_FALLBACK = {
+            "db": "sizing_db",
+            "db_oracle": "sizing_db_oracle",
+            "zero_token": "sizing_db",
+            "loader": "sizing_loader",
+            "monitor": "sizing_monitor",
+        }
+
+        db_type = (env.get("db_type") if env else None) or self.get("db_type") or ""
+        role_params = ROLE_PARAMS.get(cloud, {})
+        for role, param_name in role_params.items():
+            if role == "db_oracle" and db_type not in ("mixed_scylla", "mixed_cassandra"):
+                continue
+            is_fallback = False
+            if env is not None and param_name in env:
+                value = env[param_name]
+            else:
+                value = self.get(param_name)
+            if isinstance(value, str) and value:
+                continue
+            if not value:
+                fallback_param = AGNOSTIC_FALLBACK.get(role)
+                if not fallback_param or fallback_param == param_name:
+                    continue
+                fallback_value = (env.get(fallback_param) if env else None) or self.get(fallback_param)
+                if not isinstance(fallback_value, dict):
+                    continue
+                value = fallback_value
+                is_fallback = True
+                self.log.info("Using agnostic fallback %s for %s", fallback_param, param_name)
+            if isinstance(value, dict):
+                cache_key = (role, cloud, tuple(sorted(value.items())))
+                resolved = _SIZING_RESOLUTION_CACHE.get(cache_key)
+                if resolved is None:
+                    try:
+                        catalog_dir = pathlib.Path(__file__).parent.parent / "data" / "instance_catalog"
+                        catalog = InstanceCatalog.from_directory(catalog_dir)
+                        result = select_instance(catalog, role, cloud, value)
+                        resolved = result.instance_type
+                        _SIZING_RESOLUTION_CACHE[cache_key] = resolved
+                    except NoMatchingInstanceError as exc:
+                        if is_fallback:
+                            self.log.warning("Agnostic fallback for %s found no match: %s", param_name, exc)
+                            if env is not None:
+                                env.pop(param_name, None)
+                            continue
+                        raise ValueError(f"Cannot resolve {param_name}: {exc}") from exc
+                    except FileNotFoundError as exc:
+                        self.log.warning("Instance catalog not found for %s: %s", param_name, exc)
+                        if env is not None:
+                            env.pop(param_name, None)
+                        continue
+                    except ValueError as exc:
+                        if is_fallback:
+                            self.log.warning("Agnostic fallback for %s has invalid constraints: %s", param_name, exc)
+                            if env is not None:
+                                env.pop(param_name, None)
+                            continue
+                        raise ValueError(f"Invalid constraint for {param_name}: {exc}") from exc
+                self.log.info("Resolved %s: %s → %s", param_name, value, resolved)
+                if env is not None and param_name in env:
+                    env[param_name] = resolved
+                else:
+                    setattr(self, param_name, resolved)
+
+=======
+    def _resolve_instance_sizes(self, env: dict | None = None) -> None:  # noqa: PLR0914
+        """Resolve constraint dicts for instance-type params to literal type strings.
+
+        If *env* is provided (pre-merge env vars), resolution happens in *env*
+        in-place so the dict is replaced by a string before it hits the Pydantic
+        model (which only accepts strings for instance-type fields).  When *env*
+        is None, values are read from and written to ``self``.
+
+        Raises:
+            ValueError: If a constraint dict cannot be resolved to any instance.
+        """
+        backend = (env.get("cluster_backend") if env else None) or self.get("cluster_backend")
+        if backend in _SIZING_SKIP_BACKENDS:
+            self.log.info("Skipping instance size resolution for backend %s", backend)
+            return
+
+        cloud = backend_to_cloud(backend, (env.get("xcloud_provider") if env else None) or self.get("xcloud_provider"))
+        if not cloud:
+            self.log.warning("Unknown backend %s — skipping instance size resolution", backend)
+            return
+
+        AGNOSTIC_FALLBACK = {
+            "db": "sizing_db",
+            "db_oracle": "sizing_db_oracle",
+            "zero_token": "sizing_db",
+            "loader": "sizing_loader",
+            "monitor": "sizing_monitor",
+        }
+
+        db_type = (env.get("db_type") if env else None) or self.get("db_type") or ""
+        role_params = _SIZING_ROLE_PARAMS.get(cloud, {})
+        for role, param_name in role_params.items():
+            if role == "db_oracle" and db_type not in ("mixed_scylla", "mixed_cassandra"):
+                continue
+            is_fallback = False
+            if env is not None and param_name in env:
+                value = env[param_name]
+            else:
+                value = self.get(param_name)
+            if isinstance(value, str) and value:
+                continue
+            if not value:
+                fallback_param = AGNOSTIC_FALLBACK.get(role)
+                if not fallback_param or fallback_param == param_name:
+                    continue
+                fallback_value = (env.get(fallback_param) if env else None) or self.get(fallback_param)
+                if not isinstance(fallback_value, dict):
+                    continue
+                value = fallback_value
+                is_fallback = True
+                self.log.info("Using agnostic fallback %s for %s", fallback_param, param_name)
+            if isinstance(value, dict):
+                cache_key = (role, cloud, tuple(sorted(value.items())))
+                cached = _SIZING_RESOLUTION_CACHE.get(cache_key)
+                resolved, resolved_arch = cached if cached else (None, None)
+                if resolved is None:
+                    try:
+                        catalog_dir = pathlib.Path(__file__).parent.parent / "data" / "instance_catalog"
+                        catalog = InstanceCatalog.from_directory(catalog_dir)
+                        result = select_instance(catalog, role, cloud, value)
+                        resolved = result.instance_type
+                        resolved_arch = result.arch
+                        _SIZING_RESOLUTION_CACHE[cache_key] = (resolved, resolved_arch)
+                    except NoMatchingInstanceError as exc:
+                        if is_fallback:
+                            self.log.warning("Agnostic fallback for %s found no match: %s", param_name, exc)
+                            if env is not None:
+                                env.pop(param_name, None)
+                            continue
+                        raise ValueError(f"Cannot resolve {param_name}: {exc}") from exc
+                    except FileNotFoundError as exc:
+                        self.log.warning("Instance catalog not found for %s: %s", param_name, exc)
+                        if env is not None:
+                            env.pop(param_name, None)
+                        continue
+                    except ValueError as exc:
+                        if is_fallback:
+                            self.log.warning("Agnostic fallback for %s has invalid constraints: %s", param_name, exc)
+                            if env is not None:
+                                env.pop(param_name, None)
+                            continue
+                        raise ValueError(f"Invalid constraint for {param_name}: {exc}") from exc
+                self.log.info("Resolved %s: %s → %s", param_name, value, resolved)
+                if resolved_arch:
+                    if not hasattr(self, "_sizing_resolved_arch"):
+                        self._sizing_resolved_arch = {}
+                    self._sizing_resolved_arch[role] = resolved_arch
+                if env is not None and param_name in env:
+                    env[param_name] = resolved
+                else:
+                    setattr(self, param_name, resolved)
+
+>>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
     def get(self, key: str | None):
         """
         get the value of test configuration parameter by the name
@@ -4275,6 +5621,456 @@ class SCTConfiguration(dict):
         if backtrace_decoding_disable_regex := self.get("backtrace_decoding_disable_regex"):
             re.compile(backtrace_decoding_disable_regex)
 
+<<<<<<< HEAD
+||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
+        self._validate_perf_gradual_throttle_steps()
+
+        self._verify_migrator_source_params()
+        self._verify_emr_spark_mode()
+
+        if (nvme_test_type := self.get("nvme_self_test_type")) not in (1, 2):
+            raise ValueError(f"nvme_self_test_type must be 1 (short) or 2 (extended), got {nvme_test_type!r}")
+
+    def _get_normalized_arch(self, instance_type: str, region_name: str, default: str = "x86_64") -> str:
+        """Detect architecture from AWS instance type and normalize to Scylla package naming.
+
+        Args:
+            instance_type: AWS instance type (e.g. "i4i.large", "im4gn.xlarge").
+            region_name: AWS region to query.
+            default: Fallback architecture when detection fails.
+
+        Returns:
+            Normalized architecture string: "x86_64" or "aarch64".
+        """
+        try:
+            arch = get_arch_from_instance_type(instance_type, region_name=region_name)
+            # Normalize AWS arch naming ("arm64") to Scylla package naming ("aarch64")
+            if arch == "arm64":
+                arch = "aarch64"
+            return arch
+        except Exception:  # noqa: BLE001
+            self.log.warning(
+                "Could not detect architecture from instance type '%s' in %s, defaulting to '%s'",
+                instance_type,
+                region_name,
+                default,
+            )
+            return default
+
+    # perf_gradual_throttle_steps dict-entry fields: (key, is_valid, description-for-error-message)
+    _THROTTLE_STEP_FIELD_CHECKS: ClassVar[tuple] = (
+        ("threads", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
+        ("concurrency", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
+        ("rate", lambda v: isinstance(v, str), "a string"),
+        ("duration", lambda v: isinstance(v, str) and v, "a non-empty string"),
+        ("wait_no_compactions", lambda v: isinstance(v, bool), "a boolean"),
+    )
+
+    @staticmethod
+    def _validate_throttle_step_dict(workload: str, step_idx: int, step: dict) -> None:
+        """Validate a single dict-format perf_gradual_throttle_steps entry."""
+        if not step:
+            raise ValueError(
+                f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                f"dict must have at least one key (threads, concurrency, or rate)"
+            )
+        for key, is_valid, description in SCTConfiguration._THROTTLE_STEP_FIELD_CHECKS:
+            if key in step and not is_valid(step[key]):
+                raise ValueError(
+                    f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                    f"'{key}' must be {description}, got {step[key]!r}"
+                )
+
+    def _validate_perf_gradual_throttle_steps(self):
+        """Validate perf_gradual_throttle_steps configuration parameter."""
+        if not (performance_throughput_params := self.get("perf_gradual_throttle_steps")):
+            return
+
+        for workload, params in performance_throughput_params.items():
+            if not isinstance(params, list):
+                raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
+
+            # Validate each step - can be string, int (backward compatible), or dict (new format)
+            # Convert integers to strings for backward compatibility
+            for step_idx, step in enumerate(params):
+                if isinstance(step, int):
+                    # Integer format - convert to string for backward compatibility
+                    params[step_idx] = str(step)
+                elif isinstance(step, str):
+                    # String format for backward compatibility (cassandra-stress)
+                    continue
+                elif isinstance(step, dict):
+                    self._validate_throttle_step_dict(workload, step_idx, step)
+                else:
+                    raise ValueError(
+                        f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                        f"each step must be a string, int, or dict, got {type(step).__name__}"
+                    )
+
+            # Validate perf_gradual_threads if using string format or if dict steps don't have threads
+            has_dict_steps = any(isinstance(step, dict) for step in params)
+            all_dict_steps_have_threads = all(
+                isinstance(step, dict) and "threads" in step for step in params if isinstance(step, dict)
+            )
+
+            # Only require perf_gradual_threads if using string format or dict without threads
+            if not has_dict_steps or not all_dict_steps_have_threads:
+                if not (gradual_threads := self.get("perf_gradual_threads")):
+                    raise ValueError(
+                        "perf_gradual_threads should be defined when using string format "
+                        "or when dict steps don't specify threads"
+                    )
+
+                if workload not in gradual_threads:
+                    raise ValueError(
+                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter"
+                    )
+
+                if not isinstance(gradual_threads[workload], list | int):
+                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
+
+                if isinstance(gradual_threads[workload], int):
+                    gradual_threads[workload] = [gradual_threads[workload]]
+
+                for thread_count in gradual_threads[workload]:
+                    if not isinstance(thread_count, int):
+                        raise ValueError(
+                            f"Invalid thread count type for '{workload}': {thread_count} "
+                            f"(type: {type(thread_count).__name__})"
+                        )
+
+                # The value of perf_gradual_threads[load] must be either:
+                #   - a single-element list (applied to all throttle steps) or integer
+                #   - a list with the same length as perf_gradual_throttle_steps[workload] (one thread count per step).
+                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
+                    raise ValueError(
+                        f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
+                        f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
+                    )
+
+    def _validate_docker_simulated_racks(self) -> None:
+        """Reject `simulated_racks` on Docker images that predate the --dc/--rack entrypoint arguments.
+
+        On Docker a rack is injected as a `--dc`/`--rack` entrypoint argument at container creation.
+        Scylla 2026.1 is the first release whose entrypoint accepts them and writes
+        `cassandra-rackdc.properties` before the first boot; older images forward the arguments
+        verbatim to the Scylla binary, which rejects them and exits, so the container never comes up.
+
+        The configuration is unrunnable, so fail here rather than at container creation: an error
+        naming the version requirement beats a container that dies on startup with no explanation.
+        A Docker test-case that must run on older images sets `simulated_racks: 1` itself.
+        """
+        scylla_version = self.get("scylla_version") or ""
+        try:
+            image_version = ComparableScyllaVersion(scylla_version)
+        except ValueError:
+            # Branched versions ('master:latest' and friends) are not comparable and are always new enough.
+            self.log.debug(
+                "Cannot determine whether Scylla docker image '%s' supports the --rack entrypoint argument "
+                "(scylla_version=%r); assuming it does.",
+                self.get("docker_image"),
+                scylla_version,
+            )
+            return
+        if image_version < DOCKER_RACK_ARG_MIN_VERSION:
+            raise ValueError(
+                f"simulated_racks={self.get('simulated_racks')} is not supported on Scylla {scylla_version} "
+                f"(docker backend): the --dc/--rack entrypoint arguments were added in "
+                f"{DOCKER_RACK_ARG_MIN_VERSION}. Use a 2026.1+ image or set simulated_racks: 1."
+            )
+
+=======
+        self._validate_perf_gradual_throttle_steps()
+
+        self._verify_migrator_source_params()
+        self._verify_emr_spark_mode()
+
+        if (nvme_test_type := self.get("nvme_self_test_type")) not in (1, 2):
+            raise ValueError(f"nvme_self_test_type must be 1 (short) or 2 (extended), got {nvme_test_type!r}")
+
+    def _get_normalized_arch(self, instance_type: str, region_name: str, default: str = "x86_64") -> str:
+        """Detect architecture from AWS instance type and normalize to Scylla package naming.
+
+        Args:
+            instance_type: AWS instance type (e.g. "i4i.large", "im4gn.xlarge").
+            region_name: AWS region to query.
+            default: Fallback architecture when detection fails.
+
+        Returns:
+            Normalized architecture string: "x86_64" or "aarch64".
+        """
+        try:
+            arch = get_arch_from_instance_type(instance_type, region_name=region_name)
+            # Normalize AWS arch naming ("arm64") to Scylla package naming ("aarch64")
+            if arch == "arm64":
+                arch = "aarch64"
+            return arch
+        except Exception:  # noqa: BLE001
+            self.log.warning(
+                "Could not detect architecture from instance type '%s' in %s, defaulting to '%s'",
+                instance_type,
+                region_name,
+                default,
+            )
+            return default
+
+    # perf_gradual_throttle_steps dict-entry fields: (key, is_valid, description-for-error-message)
+    _THROTTLE_STEP_FIELD_CHECKS: ClassVar[tuple] = (
+        ("threads", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
+        ("concurrency", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
+        ("rate", lambda v: isinstance(v, str), "a string"),
+        ("duration", lambda v: isinstance(v, str) and v, "a non-empty string"),
+        ("wait_no_compactions", lambda v: isinstance(v, bool), "a boolean"),
+    )
+
+    @staticmethod
+    def _validate_throttle_step_dict(workload: str, step_idx: int, step: dict) -> None:
+        """Validate a single dict-format perf_gradual_throttle_steps entry."""
+        if not step:
+            raise ValueError(
+                f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                f"dict must have at least one key (threads, concurrency, or rate)"
+            )
+        for key, is_valid, description in SCTConfiguration._THROTTLE_STEP_FIELD_CHECKS:
+            if key in step and not is_valid(step[key]):
+                raise ValueError(
+                    f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                    f"'{key}' must be {description}, got {step[key]!r}"
+                )
+
+    def _image_cloud(self) -> str | None:
+        backend = self.get("cluster_backend")
+        if backend == "xcloud":
+            provider = self.get("xcloud_provider")
+            return provider if provider in _LOADER_IMAGE_PARAMS else None
+        return _BACKEND_TO_IMAGE_CLOUD.get(backend)
+
+    def _resolve_loader_image_arch(self) -> None:
+        cloud = self._image_cloud()
+        if not cloud:
+            return
+        image_param, instance_param, region_param = _LOADER_IMAGE_PARAMS[cloud]
+        template = self.get(image_param) or ""
+        if not any(marker in template for marker in _ARCH_IMAGE_MARKERS):
+            return
+        regions = self.get(region_param) or []
+        if isinstance(regions, str):
+            regions = regions.split()
+        instance_type = self.get(instance_param) or ""
+        loader_arch = self._get_loader_arch(cloud, instance_type, (regions or [""])[0])
+        if loader_arch is None:
+            if is_arm_instance_type(cloud, instance_type):
+                raise ValueError(
+                    f"Cannot resolve {image_param}: architecture of Arm {cloud} loader instance type "
+                    f"'{instance_type}' is unknown, so an amd64 image would be selected. "
+                    f"Set sizing_loader.arch or add '{instance_type}' to the {cloud} instance catalog."
+                )
+            self.log.warning(
+                "Could not detect architecture for %s instance type '%s', defaulting to x86_64", cloud, instance_type
+            )
+            loader_arch = "x86_64"
+        elif loader_arch == "x86_64" and is_arm_instance_type(cloud, instance_type):
+            raise ValueError(
+                f"Cannot resolve {image_param}: {cloud} loader instance type '{instance_type}' is Arm "
+                f"but its architecture resolved to x86_64."
+            )
+        resolved = substitute_arch_markers(template, loader_arch)
+        if remaining := [marker for marker in _ARCH_IMAGE_MARKERS if marker in resolved]:
+            raise ValueError(f"Cannot resolve {image_param}: markers {remaining} survived in {resolved!r}")
+        self.log.info("Resolved %s for arch=%s: %s", image_param, loader_arch, resolved)
+        self[image_param] = resolved
+
+    def _stress_commands(self, env: dict | None = None) -> list[str]:
+        commands: list[str] = []
+        pending = [(env.get(param) if env and param in env else self.get(param)) for param in self.stress_cmd_params]
+        while pending:
+            value = pending.pop()
+            if isinstance(value, str):
+                commands.append(value)
+            elif isinstance(value, (list, tuple)):
+                pending.extend(value)
+        return commands
+
+    def _amd64_only_stress_tools(self, env: dict | None = None) -> list[str]:
+        commands = self._stress_commands(env)
+        tools = [
+            tool
+            for tool, markers in _AMD64_ONLY_STRESS_TOOLS.items()
+            if any(marker in command for command in commands for marker in markers)
+        ]
+        dns_routing = (
+            env.get("alternator_use_dns_routing")
+            if env and "alternator_use_dns_routing" in env
+            else self.get("alternator_use_dns_routing")
+        )
+        if dns_routing and any(_YCSB_COMMAND_MARKER in command for command in commands):
+            tools.append("alternator-dns")
+        return sorted(tools)
+
+    def _constrain_loader_arch_to_stress_tools(self, env: dict | None = None) -> None:
+        if self._sizing_role_arch("loader") or (
+            env and isinstance(env.get("sizing_loader"), dict) and env["sizing_loader"].get("arch")
+        ):
+            return
+        if not (tools := self._amd64_only_stress_tools(env)):
+            return
+        env_sizing_loader = env.get("sizing_loader") if env else None
+        sizing_loader = dict(
+            env_sizing_loader if isinstance(env_sizing_loader, dict) else (self.get("sizing_loader") or {})
+        )
+        if not sizing_loader:
+            return
+        sizing_loader["arch"] = "x86_64"
+        if isinstance(env_sizing_loader, dict):
+            env["sizing_loader"] = sizing_loader
+        self["sizing_loader"] = sizing_loader
+        self.log.info("Constraining loaders to x86_64, amd64-only stress tool images in use: %s", ", ".join(tools))
+
+    def _validate_loader_arch_supports_stress_tools(self) -> None:
+        if not (tools := self._amd64_only_stress_tools()):
+            return
+        cloud = backend_to_cloud(self.get("cluster_backend"), self.get("xcloud_provider"))
+        if not cloud:
+            return
+        instance_param = _SIZING_ROLE_PARAMS.get(cloud, {}).get("loader")
+        instance_type = (self.get(instance_param) or "") if instance_param else ""
+        if instance_type and is_arm_instance_type(cloud, instance_type):
+            raise ValueError(
+                f"Loader instance type '{instance_type}' is Arm, but these stress tools only publish "
+                f"linux/amd64 images: {', '.join(tools)}. Use an x86_64 loader instance type, "
+                f"or set sizing_loader with vcpu/memory constraints so the arch is chosen for you."
+            )
+
+    def _sizing_role_arch(self, role: str) -> str | None:
+        requested_arch = (self.get(f"sizing_{role}") or {}).get("arch")
+        if requested_arch:
+            return ARCH_ALIASES.get(str(requested_arch).strip().lower(), requested_arch)
+        return None
+
+    def _aws_instance_arch(self, instance_type: str, region_name: str) -> str | None:
+        try:
+            return get_arch_from_instance_type(instance_type, region_name=region_name)
+        except Exception:  # noqa: BLE001
+            self.log.warning(
+                "Could not detect architecture for aws instance type '%s' in %s",
+                instance_type,
+                region_name,
+            )
+            return None
+
+    def _get_loader_arch(self, cloud: str, instance_type: str, region_name: str) -> str | None:
+        if instance_type:
+            catalog_dir = pathlib.Path(__file__).parent.parent / "data" / "instance_catalog"
+            try:
+                if instance_info := InstanceCatalog.from_directory(catalog_dir).get_instance(cloud, instance_type):
+                    return instance_info.arch
+            except (FileNotFoundError, ValueError) as exc:
+                self.log.warning("Could not load instance catalog for %s arch lookup: %s", cloud, exc)
+            if cloud == "aws" and (aws_arch := self._aws_instance_arch(instance_type, region_name)):
+                return aws_arch
+        if sizing_resolved_arch := getattr(self, "_sizing_resolved_arch", {}).get("loader"):
+            return sizing_resolved_arch
+        return self._sizing_role_arch("loader")
+
+    def _validate_perf_gradual_throttle_steps(self):
+        """Validate perf_gradual_throttle_steps configuration parameter."""
+        if not (performance_throughput_params := self.get("perf_gradual_throttle_steps")):
+            return
+
+        for workload, params in performance_throughput_params.items():
+            if not isinstance(params, list):
+                raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
+
+            # Validate each step - can be string, int (backward compatible), or dict (new format)
+            # Convert integers to strings for backward compatibility
+            for step_idx, step in enumerate(params):
+                if isinstance(step, int):
+                    # Integer format - convert to string for backward compatibility
+                    params[step_idx] = str(step)
+                elif isinstance(step, str):
+                    # String format for backward compatibility (cassandra-stress)
+                    continue
+                elif isinstance(step, dict):
+                    self._validate_throttle_step_dict(workload, step_idx, step)
+                else:
+                    raise ValueError(
+                        f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                        f"each step must be a string, int, or dict, got {type(step).__name__}"
+                    )
+
+            # Validate perf_gradual_threads if using string format or if dict steps don't have threads
+            has_dict_steps = any(isinstance(step, dict) for step in params)
+            all_dict_steps_have_threads = all(
+                isinstance(step, dict) and "threads" in step for step in params if isinstance(step, dict)
+            )
+
+            # Only require perf_gradual_threads if using string format or dict without threads
+            if not has_dict_steps or not all_dict_steps_have_threads:
+                if not (gradual_threads := self.get("perf_gradual_threads")):
+                    raise ValueError(
+                        "perf_gradual_threads should be defined when using string format "
+                        "or when dict steps don't specify threads"
+                    )
+
+                if workload not in gradual_threads:
+                    raise ValueError(
+                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter"
+                    )
+
+                if not isinstance(gradual_threads[workload], list | int):
+                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
+
+                if isinstance(gradual_threads[workload], int):
+                    gradual_threads[workload] = [gradual_threads[workload]]
+
+                for thread_count in gradual_threads[workload]:
+                    if not isinstance(thread_count, int):
+                        raise ValueError(
+                            f"Invalid thread count type for '{workload}': {thread_count} "
+                            f"(type: {type(thread_count).__name__})"
+                        )
+
+                # The value of perf_gradual_threads[load] must be either:
+                #   - a single-element list (applied to all throttle steps) or integer
+                #   - a list with the same length as perf_gradual_throttle_steps[workload] (one thread count per step).
+                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
+                    raise ValueError(
+                        f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
+                        f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
+                    )
+
+    def _validate_docker_simulated_racks(self) -> None:
+        """Reject `simulated_racks` on Docker images that predate the --dc/--rack entrypoint arguments.
+
+        On Docker a rack is injected as a `--dc`/`--rack` entrypoint argument at container creation.
+        Scylla 2026.1 is the first release whose entrypoint accepts them and writes
+        `cassandra-rackdc.properties` before the first boot; older images forward the arguments
+        verbatim to the Scylla binary, which rejects them and exits, so the container never comes up.
+
+        The configuration is unrunnable, so fail here rather than at container creation: an error
+        naming the version requirement beats a container that dies on startup with no explanation.
+        A Docker test-case that must run on older images sets `simulated_racks: 1` itself.
+        """
+        scylla_version = self.get("scylla_version") or ""
+        try:
+            image_version = ComparableScyllaVersion(scylla_version)
+        except ValueError:
+            # Branched versions ('master:latest' and friends) are not comparable and are always new enough.
+            self.log.debug(
+                "Cannot determine whether Scylla docker image '%s' supports the --rack entrypoint argument "
+                "(scylla_version=%r); assuming it does.",
+                self.get("docker_image"),
+                scylla_version,
+            )
+            return
+        if image_version < DOCKER_RACK_ARG_MIN_VERSION:
+            raise ValueError(
+                f"simulated_racks={self.get('simulated_racks')} is not supported on Scylla {scylla_version} "
+                f"(docker backend): the --dc/--rack entrypoint arguments were added in "
+                f"{DOCKER_RACK_ARG_MIN_VERSION}. Use a 2026.1+ image or set simulated_racks: 1."
+            )
+
+>>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get("docker_image")
         scylla_version = self.get("scylla_version")

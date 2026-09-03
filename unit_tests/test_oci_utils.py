@@ -17,9 +17,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from pathlib import Path
+
+from sdcm.provision.provisioner import VmArch
+from sdcm.sct_config import is_arm_instance_type
+from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
 from sdcm.utils.oci_utils import (
     build_hostname_label,
     filter_oci_by_tags,
+    get_arch_from_oci_shape,
     get_ubuntu_image_ocid,
     list_instances_oci,
     OciService,
@@ -177,6 +183,33 @@ def test_get_ubuntu_image_ocid_filters_arm(mock_page_iterator, mock_get_client):
 
 @patch("sdcm.utils.oci_utils.OciService.get_compute_client")
 @patch("oci.pagination.list_call_get_all_results_generator")
+def test_get_ubuntu_image_ocid_arm_arch_returns_arm_image(mock_page_iterator, mock_get_client):
+    mock_client = MagicMock()
+    mock_arm_image = MagicMock()
+    mock_arm_image.id = "ocid1.image.oc1..ubuntu2404-aarch64"
+    mock_arm_image.display_name = "Canonical-Ubuntu-24.04-aarch64-2024.01.01-0"
+    mock_amd64_image = MagicMock()
+    mock_amd64_image.id = "ocid1.image.oc1..ubuntu2404-amd64"
+    mock_amd64_image.display_name = "Canonical-Ubuntu-24.04-2024.01.01-0"
+    mock_page_iterator.return_value = iter([mock_arm_image, mock_amd64_image])
+    mock_get_client.return_value = mock_client
+
+    result = get_ubuntu_image_ocid("compartment-id", arch=VmArch.ARM)
+
+    assert result == "ocid1.image.oc1..ubuntu2404-aarch64"
+    mock_page_iterator.assert_called_once()
+
+
+def test_get_arch_from_oci_shape():
+    assert get_arch_from_oci_shape("VM.Standard.A1.Flex") is VmArch.ARM
+    assert get_arch_from_oci_shape("VM.Standard.A4.Flex") is VmArch.ARM
+    assert get_arch_from_oci_shape("VM.Standard.E5.Flex") is VmArch.X86
+    assert get_arch_from_oci_shape("VM.DenseIO.E5.Flex") is VmArch.X86
+    assert get_arch_from_oci_shape(None) is VmArch.X86
+
+
+@patch("sdcm.utils.oci_utils.OciService.get_compute_client")
+@patch("oci.pagination.list_call_get_all_results_generator")
 def test_get_ubuntu_image_ocid_not_found(mock_page_iterator, mock_get_client):
     """Test when no matching image is found."""
     mock_client = MagicMock()
@@ -313,3 +346,104 @@ def test_build_hostname_label_is_stable_and_unique() -> None:
     name_b = "test-oci-node-b"
     assert build_hostname_label(name_a) == build_hostname_label(name_a)
     assert build_hostname_label(name_a) != build_hostname_label(name_b)
+<<<<<<< HEAD:unit_tests/test_oci_utils.py
+||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance):unit_tests/unit/test_oci_utils.py
+
+
+def test_secondary_vnics_script_starts_with_the_shebang():
+    """The shebang must be the very first line of the file written to the node.
+
+    The script is a raw string so that the '\\' line continuation inside the curl call
+    survives, but that also means a leading '\\' is not a continuation: it becomes line 1
+    and displaces the shebang. The kernel then cannot exec the file, /bin/sh takes over,
+    and dash dies on 'set -o pipefail'.
+    """
+    assert SECONDARY_VNICS_SCRIPT.startswith("#!/bin/bash\n"), SECONDARY_VNICS_SCRIPT[:40]
+
+
+def test_secondary_vnics_script_is_valid_bash():
+    """'bash -n' the rendered script, so a syntax error cannot reach a node."""
+    with tempfile.NamedTemporaryFile("w", suffix=".sh") as script_file:
+        script_file.write(SECONDARY_VNICS_SCRIPT)
+        script_file.flush()
+        result = subprocess.run(["bash", "-n", script_file.name], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+
+
+def test_secondary_vnics_script_embedded_python_is_valid():
+    """The inlined Python must parse and must not contain a single quote.
+
+    It is passed as 'python3 -c '...'', so any single quote in it would terminate the
+    shell string and split the program in two.
+    """
+    start = SECONDARY_VNICS_SCRIPT.index("python3 -c '\n") + len("python3 -c '")
+    embedded = SECONDARY_VNICS_SCRIPT[start : SECONDARY_VNICS_SCRIPT.index('\n\' "$EXPECTED_VNICS"')]
+    assert "'" not in embedded, [line for line in embedded.splitlines() if "'" in line]
+    ast.parse(embedded)
+
+
+def test_secondary_vnics_service_unit_renders_execstart():
+    unit = SECONDARY_VNICS_SERVICE_UNIT_TMPL.format(
+        script_path=SECONDARY_VNICS_SCRIPT_PATH, nic_count=2, primary_ip="10.0.1.10"
+    )
+    assert unit.startswith("[Unit]"), unit[:40]
+    assert f"ExecStart={SECONDARY_VNICS_SCRIPT_PATH} 2 10.0.1.10" in unit
+=======
+
+
+def test_secondary_vnics_script_starts_with_the_shebang():
+    """The shebang must be the very first line of the file written to the node.
+
+    The script is a raw string so that the '\\' line continuation inside the curl call
+    survives, but that also means a leading '\\' is not a continuation: it becomes line 1
+    and displaces the shebang. The kernel then cannot exec the file, /bin/sh takes over,
+    and dash dies on 'set -o pipefail'.
+    """
+    assert SECONDARY_VNICS_SCRIPT.startswith("#!/bin/bash\n"), SECONDARY_VNICS_SCRIPT[:40]
+
+
+def test_secondary_vnics_script_is_valid_bash():
+    """'bash -n' the rendered script, so a syntax error cannot reach a node."""
+    with tempfile.NamedTemporaryFile("w", suffix=".sh") as script_file:
+        script_file.write(SECONDARY_VNICS_SCRIPT)
+        script_file.flush()
+        result = subprocess.run(["bash", "-n", script_file.name], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+
+
+def test_secondary_vnics_script_embedded_python_is_valid():
+    """The inlined Python must parse and must not contain a single quote.
+
+    It is passed as 'python3 -c '...'', so any single quote in it would terminate the
+    shell string and split the program in two.
+    """
+    start = SECONDARY_VNICS_SCRIPT.index("python3 -c '\n") + len("python3 -c '")
+    embedded = SECONDARY_VNICS_SCRIPT[start : SECONDARY_VNICS_SCRIPT.index('\n\' "$EXPECTED_VNICS"')]
+    assert "'" not in embedded, [line for line in embedded.splitlines() if "'" in line]
+    ast.parse(embedded)
+
+
+def test_secondary_vnics_service_unit_renders_execstart():
+    unit = SECONDARY_VNICS_SERVICE_UNIT_TMPL.format(
+        script_path=SECONDARY_VNICS_SCRIPT_PATH, nic_count=2, primary_ip="10.0.1.10"
+    )
+    assert unit.startswith("[Unit]"), unit[:40]
+    assert f"ExecStart={SECONDARY_VNICS_SCRIPT_PATH} 2 10.0.1.10" in unit
+
+
+def test_oci_shape_arch_agrees_with_the_catalog_and_the_config_matcher():
+    catalog = InstanceCatalog.from_directory(Path("data/instance_catalog"))
+    checked = 0
+    for instance in catalog.instances:
+        if instance.cloud != "oci":
+            continue
+        checked += 1
+        is_arm = instance.arch in ("arm64", "aarch64")
+        assert (get_arch_from_oci_shape(instance.instance_type) is VmArch.ARM) is is_arm, (
+            f"get_arch_from_oci_shape disagrees with the catalog for {instance.instance_type}"
+        )
+        assert is_arm_instance_type("oci", instance.instance_type) is is_arm, (
+            f"is_arm_instance_type disagrees with the catalog for {instance.instance_type}"
+        )
+    assert checked, "no OCI instances were checked"
+>>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance):unit_tests/unit/test_oci_utils.py
