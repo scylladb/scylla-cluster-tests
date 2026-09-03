@@ -8,14 +8,8 @@ from typing import Callable, Dict, TYPE_CHECKING
 from sdcm.exceptions import DatacenterNotResolvedError
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import is_system_keyspace, LOGGER
-<<<<<<< HEAD
-from sdcm.utils.tablets.common import wait_no_tablets_migration_running
-||||||| parent of b20dbc7d7 (fix(nemesis): use existing retry/decorator machinery instead of a hand-rolled loop)
-from sdcm.utils.tablets.common import wait_tablets_balanced
-=======
 from sdcm.utils.decorators import retrying, Retry
-from sdcm.utils.tablets.common import wait_tablets_balanced
->>>>>>> b20dbc7d7 (fix(nemesis): use existing retry/decorator machinery instead of a hand-rolled loop)
+from sdcm.utils.tablets.common import wait_no_tablets_migration_running
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
