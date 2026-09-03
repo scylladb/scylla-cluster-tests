@@ -1694,6 +1694,22 @@ def test_scylla_network_config_missing_mandatory_param_raises(monkeypatch):
         sct_config.SCTConfiguration()
 
 
+def test_scylla_network_config_missing_mandatory_param_on_fourth_address_raises(monkeypatch):
+    """A missing parameter past the third address reports the address, not a bare KeyError.
+
+    scylla_network_config configures five addresses, so this is where a typo is most likely to
+    land, and it used to be the one spot that produced no usable message at all.
+    """
+    _setup_network_config_env(
+        monkeypatch,
+        _AWS_NETWORK_CONFIG_ENV,
+        "unit_tests/test_configs/network_config_param_missing_on_fourth_address.yaml",
+    )
+
+    with pytest.raises(ValueError, match="'public' parameter value for fourth address is not defined"):
+        sct_config.SCTConfiguration()
+
+
 def test_scylla_network_config_public_ipv4_on_secondary_nic_raises_on_aws(monkeypatch):
     """A public IPv4 has to sit on nic 0: EC2 only associates one on device index 0."""
     _setup_network_config_env(
