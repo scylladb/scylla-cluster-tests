@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo
+from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo, RoleConfig, SizingConfig
 from sdcm.utils.cloud_catalog.instance_matcher import (
     Constraint,
     NoMatchingInstanceError,
@@ -407,6 +407,37 @@ def test_select_monitor(test_catalog):
 def test_select_gce(test_catalog):
     result = select_instance(test_catalog, "db", "gce", {"vcpu": 8})
     assert result.instance_type == "z3-highmem-8"
+
+
+def test_select_explicit_arch_constraint_overrides_fixed_role_arch(test_catalog):
+    test_catalog.instances.append(
+        InstanceTypeInfo("c7g.xlarge", "aws", "c7g", 4, 8.0, 0, 0, "arm64", 0.15),
+    )
+    test_catalog.instances.append(
+        InstanceTypeInfo("e2-standard-4", "gce", "e2-standard", 4, 16.0, 0, 0, "x86_64", 0.13)
+    )
+    test_catalog.sizing_config = SizingConfig(
+        roles={
+            "loader": RoleConfig(
+                category="compute",
+                implicit_constraints={"local_disk_count": 0},
+                arch_source="fixed",
+                arch="arm64",
+            )
+        },
+        sort_order=["preferred_family_rank", "vcpus", "price_per_hour"],
+        flex_defaults={"mem_per_vcpu": 4.0},
+        cloud_defaults=test_catalog.cloud_defaults,
+        preferred_families=test_catalog.preferred_families,
+    )
+
+    aws_result = select_instance(test_catalog, "loader", "aws", {"vcpu": 4})
+    assert aws_result.instance_type == "c7g.xlarge"
+    assert aws_result.arch == "arm64"
+
+    gce_result = select_instance(test_catalog, "loader", "gce", {"vcpu": 4, "arch": "x86_64"})
+    assert gce_result.instance_type == "e2-standard-4"
+    assert gce_result.arch == "x86_64"
 
 
 def test_select_no_match_raises(test_catalog):
