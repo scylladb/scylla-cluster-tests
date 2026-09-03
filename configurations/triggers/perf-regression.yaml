@@ -19,13 +19,18 @@ cron_triggers:
       job_folder: "scylla-master"
       labels_selector: "alternator-weekly"
       requested_by_user: "radoslawcybulski"
-  - schedule: "00 6 */14 * *"
+  # 1st and 16th of the month, 06:00 UTC — exactly 2 runs/month.
+  # NOT "*/14": day-of-month steps restart every month, so */14 fires on days
+  # 1, 15 AND 29 (3 runs/month), with the 29th only 2-3 days before the next 1st.
+  - schedule: "00 6 1,16 * *"
     params:
       scylla_version: "{branch}:latest"
       job_folder: "scylla-master"
       labels_selector: "master-2weeks"
       requested_by_user: "juliayakovlev"
-  - schedule: "0 23 */21 * *"
+  # 1st of the month, 23:00 UTC — 1 run/month.
+  # Was "*/21", which fires on days 1 and 22, i.e. 2 runs/month.
+  - schedule: "0 23 1 * *"
     params:
       scylla_version: "{branch}:latest"
       job_folder: "scylla-master"
