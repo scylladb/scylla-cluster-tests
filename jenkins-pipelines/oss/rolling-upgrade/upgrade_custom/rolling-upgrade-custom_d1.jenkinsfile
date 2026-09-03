@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 rollingUpgradePipeline(
     backend: 'gce',
     linux_distro: 'ubuntu-focal',
-    base_versions: '',
+    base_versions: '2025.1',  // SCYLLADB-3508: upgrade only from 2025.1 itself
     test_name: 'upgrade_test.UpgradeCustomTest.test_custom_profile_rolling_upgrade',
     test_config: '''["test-cases/upgrades/customer-profile/rolling-upgrade-custom-d1.yaml", "configurations/auth_cassandra.yaml"]''',
 )

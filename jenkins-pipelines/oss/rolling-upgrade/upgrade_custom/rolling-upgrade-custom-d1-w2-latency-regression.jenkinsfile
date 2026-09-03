@@ -7,7 +7,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 rollingUpgradePipeline(
     backend: 'gce',
     region: 'us-east1',
-    base_versions: '',
+    base_versions: '2025.1',  // SCYLLADB-3508: upgrade only from 2025.1 itself
     linux_distro: 'ubuntu-jammy',
     test_name: 'upgrade_test.UpgradeTest.test_cluster_upgrade_latency_regression',
     test_config: '''["test-cases/upgrades/rolling-upgrade-latency-regression.yaml", "configurations/auth_cassandra.yaml"]''',
