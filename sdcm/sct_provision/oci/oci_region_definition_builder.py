@@ -14,6 +14,7 @@ import logging
 from typing import Dict
 
 from sdcm.utils.oci_utils import (
+    get_arch_from_oci_shape,
     get_oci_compartment_id,
     get_ubuntu_image_ocid,
 )
@@ -92,6 +93,7 @@ class OciDefinitionBuilder(DefinitionBuilder):
                 compartment_id=get_oci_compartment_id(),
                 region=region,
                 version=ubuntu_version,
+                arch=get_arch_from_oci_shape(definition.type),
             )
 
         if "db" in node_type:

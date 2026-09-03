@@ -1222,7 +1222,7 @@ Cloud-agnostic instance sizing constraints for db_oracle nodes
 
 ## **sizing_loader** / SCT_SIZING_LOADER
 
-Cloud-agnostic instance sizing constraints for loader nodes
+Cloud-agnostic instance sizing constraints for loader nodes. Loaders default to Arm. A stress tool whose loader image is published for linux/amd64 only (cassandra-harry, hydra-kcl, ndbench, nosqlbench, and the alternator DNS sidecar used by YCSB when alternator_use_dns_routing is set) sets arch to x86_64 for you. Set arch here to pick the architecture yourself
 
 **default:** {'vcpu': 4, 'memory': '>=8'}
 
@@ -1338,7 +1338,7 @@ AMS AMI id to use for loader node
 **type:** str (appendable)
 
 **backend overrides:**
-- `resolve:ssm:/aws/service/canonical/ubuntu/server/26.04/stable/current/amd64/hvm/ebs-gp3/ami-id`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+- `resolve:ssm:/aws/service/canonical/ubuntu/server/26.04/stable/current/{arch}/hvm/ebs-gp3/ami-id`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
 
 
 ## **ami_id_monitor** / SCT_AMI_ID_MONITOR
@@ -1678,7 +1678,7 @@ Google Compute Engine image to use for loader nodes
 **type:** str (appendable)
 
 **backend overrides:**
-- `https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2604-lts-amd64`: gce, gce-siren, k8s-gke
+- `https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2604-lts-{arch}`: gce, gce-siren, k8s-gke
 
 
 ## **gce_image_username** / SCT_GCE_IMAGE_USERNAME
@@ -2416,7 +2416,7 @@ The Azure image to be used for loader nodes.
 **type:** str (appendable)
 
 **backend overrides:**
-- `Canonical:ubuntu-26_04-lts:server:latest`: azure
+- `Canonical:ubuntu-26_04-lts:{arch_sku}:latest`: azure
 
 
 ## **azure_image_username** / SCT_AZURE_IMAGE_USERNAME
