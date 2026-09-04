@@ -54,6 +54,8 @@ from sdcm.cluster_cloud import extract_short_test_id_from_name
 from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
+from sdcm.provision.aws.spot_placement_score import get_scores as get_spot_placement_scores
+from sdcm.provision.aws.spot_placement_score import rank_regions as rank_spot_regions
 from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis.monkey.runners import SisyphusMonkey
@@ -161,6 +163,7 @@ from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.oci_peering import OciVcnPeering
 from sdcm.utils.get_username import get_username
 from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
+from sdcm.test_config import TestConfig
 from sdcm.utils.aws_utils import AwsArchType, get_arch_from_instance_type
 from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
@@ -466,6 +469,52 @@ def provision_resources(backend, test_name: str, config: str):
         LOGGER.error("Unable to provision resources - aborting the test...", exc_info=True)
         _report_provision_error_to_argus(exc, params=params, test_config=test_config, backend=backend)
         sys.exit(1)
+
+    _report_spot_provision_outcomes_to_argus(params=params, test_config=test_config)
+
+
+def _report_spot_provision_outcomes_to_argus(params, test_config) -> None:
+    """Submit the spot-vs-on-demand provisioning outcomes recorded during provisioning to Argus.
+
+    This process has no events device, so SpotProvisionOutcomeEvent cannot reach Argus through the normal
+    pipeline - and without it the spend split stays unmeasured, which is the point of recording it at all.
+    Runs after provisioning has already succeeded and swallows every error: reporting must never turn a
+    healthy cluster into a failed run.
+    """
+    outcomes = list(TestConfig.SPOT_PROVISION_OUTCOMES)
+    if not outcomes:
+        return
+    TestConfig.SPOT_PROVISION_OUTCOMES.clear()
+
+    try:
+        if test_config is None:
+            test_config = get_test_config()
+        test_config.init_argus_client(params)
+        client = test_config.argus_client()
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Unable to init Argus client for spot provisioning outcomes", exc_info=True)
+        return
+
+    for outcome in outcomes:
+        event_payload: RawEventPayload = {
+            "run_id": str(test_config.test_id()),
+            "severity": outcome["severity"],
+            "ts": time.time(),
+            "message": f"(SpotProvisionOutcomeEvent Severity.{outcome['severity']}) {outcome['message']}",
+            "event_type": "SpotProvisionOutcomeEvent",
+            "received_timestamp": None,
+            "nemesis_name": None,
+            "duration": None,
+            "node": None,
+            "target_node": None,
+            "known_issue": None,
+            "nemesis_status": None,
+        }
+        try:
+            client.submit_event(event_payload)
+        except Exception as argus_exc:  # noqa: BLE001
+            LOGGER.warning("Failed to submit spot provisioning outcome to Argus: %s", argus_exc)
+    LOGGER.info("Submitted %d spot provisioning outcome(s) to Argus", len(outcomes))
 
 
 def _report_provision_error_to_argus(
@@ -2872,6 +2921,60 @@ def prepare_regions(cloud_provider, regions):
         else:
             raise Exception(f"Unsupported Cloud provider: `{cloud_provider}")
         region.configure()
+
+
+@cli.command("spot-placement-scores", help="Show AWS spot placement scores for instance types across regions/AZs")
+@click.option("--types", required=True, help="Comma-separated instance types. AWS scores 1-2 types artificially low")
+@click.option("--count", default=6, type=int, help="Target capacity (number of instances) to score for")
+@click.option("--regions", default="", help="Comma-separated regions; defaults to all SCT-supported AWS regions")
+@click.option("--per-region", is_flag=True, help="Score whole regions instead of individual AZs")
+def spot_placement_scores(types, count, regions, per_region):
+    """Print spot placement scores, best-first, for manual placement inspection.
+
+    Read-only: it calls `ec2:GetSpotPlacementScores` and launches nothing.
+    """
+    add_file_logger()
+
+    instance_types = [item.strip() for item in types.split(",") if item.strip()]
+    region_names = [item.strip() for item in regions.split(",") if item.strip()] or list(AWS_SUPPORTED_REGIONS)
+
+    scores = get_spot_placement_scores(
+        instance_types=instance_types, target_capacity=count, regions=region_names, single_az=not per_region
+    )
+    if not scores:
+        click.echo(
+            "No scores returned. Either the ec2:GetSpotPlacementScores permission is missing, or AWS returned "
+            "nothing for this query - see the log above."
+        )
+        sys.exit(1)
+    for item in scores:
+        click.echo(f"{item.location}\t{item.score}")
+
+
+@cli.command("pick-spot-region", help="Print the AWS region with the best spot placement score (for CI use)")
+@click.option("--types", required=True, help="Comma-separated instance types the test will launch")
+@click.option("--count", default=6, type=int, help="Target capacity (number of instances) to score for")
+@click.option("--candidates", default="", help="Comma-separated regions to choose among; defaults to all supported")
+def pick_spot_region(types, count, candidates):
+    """Print the best-scoring region as `SPOT_REGION=<region>`, for Jenkins builder-label selection.
+
+    SCT logging also writes to stdout, so the answer is emitted with a marker prefix for callers to grep rather
+    than relying on line position. Callers must treat a non-zero exit or a missing marker as "score
+    unavailable" and fall back to their own choice: this must never block a job from starting.
+    """
+    add_file_logger()
+
+    instance_types = [item.strip() for item in types.split(",") if item.strip()]
+    region_names = [item.strip() for item in candidates.split(",") if item.strip()] or list(AWS_SUPPORTED_REGIONS)
+
+    scores = get_spot_placement_scores(
+        instance_types=instance_types, target_capacity=count, regions=region_names, single_az=False
+    )
+    if not scores:
+        click.echo("No spot placement scores available; caller should fall back to its own region choice.", err=True)
+        sys.exit(1)
+    ranked = rank_spot_regions(instance_types=instance_types, target_capacity=count, regions=region_names)
+    click.echo(f"SPOT_REGION={ranked[0]}")
 
 
 @cli.command("configure-aws-peering", help="Configure all required resources for SCT to run in multi-dc")

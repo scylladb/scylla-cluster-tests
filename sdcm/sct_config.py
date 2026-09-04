@@ -1039,8 +1039,12 @@ class SCTConfiguration(BaseModel):
         description="""Scylla will print kernel callstack to logs if True, otherwise, it will try and may print a message
          that it failed to.""",
     )
-    instance_provision: Literal["spot", "on_demand", "spot_fleet", "spot_low_price"] = SctField(
-        description="instance_provision: spot|on_demand|spot_fleet",
+    instance_provision: Literal["spot", "on_demand", "spot_fleet", "spot_low_price", "auto"] = SctField(
+        description="instance_provision: spot|on_demand|spot_fleet|auto. 'auto' defers the choice to "
+        "`spot_max_test_duration`: spot at or below the threshold, on_demand above it. Because every Jenkins "
+        "pipeline gives the `provision_type` job parameter a concrete default, 'auto' is the opt-in a job needs "
+        "for duration-based selection to apply at all. Resolved to a concrete value at config load, so nothing "
+        "downstream ever sees 'auto'.",
     )
     instance_provision_fallback_on_demand: Boolean = SctField(
         description="instance_provision_fallback_on_demand: create instance on_demand provision type if instance with selected "
@@ -2482,6 +2486,35 @@ class SCTConfiguration(BaseModel):
         "and global images make any supported region eligible. Only applies during initial setup. "
         "Supported backends: AWS, GCE.",
     )
+    use_spot_placement_scores: Boolean = SctField(
+        description="Order availability zones and region-fallback candidates by `ec2:GetSpotPlacementScores` instead of "
+        "alphabetically, so spot requests go to the AZ/region most likely to have capacity. Scores only reorder "
+        "candidates that already passed the instance-type-offering filter; they never veto one. Ignored for "
+        "`instance_provision: on_demand`, and silently ignored when the IAM permission is missing. AWS-only.",
+    )
+    spot_placement_score_min: int = SctField(
+        description="Drop availability zones scoring below this value (1-10) from spot placement candidates. Default 0 "
+        "keeps every AZ, which matches the AWS contract that a score is a recommendation and not a guarantee. "
+        "Note AWS returns structurally low scores when fewer than 3 instance types are requested, so a non-zero "
+        "value here is only safe alongside instance-type diversification. If no AZ reaches the threshold, "
+        "provisioning fails rather than silently ignoring the setting.",
+    )
+    spot_score_overrides_configured_az: Boolean = SctField(
+        description="Let the spot placement score override an explicitly configured `availability_zone` rather than only "
+        "ordering the AZs backfilled around it. Off by default so existing AZ pins keep their meaning.",
+    )
+    spot_score_region_relocation_margin: int = SctField(
+        description="Relocate the cluster to a better-scoring region BEFORE the first provisioning attempt, when that "
+        "region's spot placement score exceeds the configured region's by at least this many points (1-10). "
+        "Useful for `region: random` jobs that land on a poor region by chance. 0 (default) disables it, "
+        "leaving region relocation purely reactive. Only relocates to VPC-peered regions with an equivalent "
+        "AMI; note the SCT runner stays in the original region, so the cluster is reached over the peering.",
+    )
+    spot_max_test_duration: int = SctField(
+        description="Duration (min) up to which `instance_provision` defaults to spot; longer tests default to on_demand, "
+        "since interruption exposure grows with runtime. Only applies when `instance_provision` was not set "
+        "explicitly by a test case, env var or CLI - an explicit value always wins.",
+    )
     num_nodes_to_rollback: int = SctField(
         description="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade",
     )
@@ -3065,12 +3098,19 @@ class SCTConfiguration(BaseModel):
         merge_dicts_append_strings(self, files)
 
         # 2) load the config files
+        user_config_keys: set[str] = set()
         if config_files:
             for conf_file in list(config_files):
                 if not os.path.exists(conf_file):
                     raise FileNotFoundError(f"Couldn't find config file: {conf_file}")
             files = anyconfig.load(list(config_files))
+            # Record which keys the user actually set, before the merge makes them indistinguishable from the
+            # `defaults/` values. Only user config files count here - the backend defaults loaded in step 1 are
+            # not an explicit choice.
+            user_config_keys = set(files.keys())
             merge_dicts_append_strings(self, files)
+        # `env` is the SCT_* environment (Jenkins job params and the `hydra`/`sct.py` CLI both land here)
+        self._explicitly_set_params = user_config_keys | set(env.keys())
 
         regions_data = self.get("regions_data") or {}
         if regions_data:
@@ -3450,6 +3490,9 @@ class SCTConfiguration(BaseModel):
         # and some platfrom don't support special characters in the instance names (docker, AWS and such)
         self["user_prefix"] = re.sub(r"[^a-zA-Z0-9-]", "-", self.get("user_prefix"))
 
+        # 10.5) derive instance_provision from test duration when it was not chosen explicitly
+        self._apply_duration_based_provision_policy()
+
         # 11) validate that supported instance_provision selected
         if self.get("instance_provision") not in ["spot", "on_demand", "spot_fleet"]:
             raise ValueError(f"Selected instance_provision type '{self.get('instance_provision')}' is not supported!")
@@ -3647,6 +3690,102 @@ class SCTConfiguration(BaseModel):
 
         self.log.debug("Total nodes: %s", total_nodes)
         return total_nodes
+
+    def is_explicitly_set(self, param_name: str) -> bool:
+        """Indicates whether `param_name` came from a user config file, an SCT_* env var, or the CLI.
+
+        Values inherited from `defaults/` are NOT explicit: they are what a duration-based policy is allowed to
+        override. Provenance is captured during `__init__`, before the merge flattens the layers.
+        """
+        return param_name in getattr(self, "_explicitly_set_params", set())
+
+    def effective_test_duration(self) -> int:
+        """Minutes the test is actually expected to run.
+
+        Mirrors `ClusterTester._init_test_duration` (and `vars/getJobTimeouts.groovy`): when `stress_duration`
+        is set it, not `test_duration`, drives the real runtime. Reading `test_duration` alone badly
+        underestimates such runs - `prepare_stress_duration` defaults to 300, so a job passing only
+        `stress_duration` can run for days while `test_duration` still reads 60.
+        """
+        # `abs()` mirrors the normalization in step 13 of __init__, which runs *after* this policy: a
+        # negative `stress_duration` is treated there as a typo and made positive, so reading the raw value
+        # here would decide on a duration the run never has. e.g. stress=-421 + prepare=300 reads as -61
+        # (spot) but actually runs 781 min (on_demand).
+        stress_duration = self.get("stress_duration")
+        if stress_duration:
+            prepare = abs(int(self.get("prepare_stress_duration") or 0))
+            return prepare + abs(int(stress_duration)) + TestConfig.TEST_WARMUP_TEARDOWN
+        return abs(int(self.get("test_duration") or 0))
+
+    def _apply_duration_based_provision_policy(self) -> None:
+        """Derive `instance_provision` from the effective test duration.
+
+        Short tests are cheap to lose and expensive to run on-demand, so they resolve to spot; long ones resolve
+        to on_demand because spot interruption exposure grows with runtime (a reclaimed node currently fails the
+        whole run - see SCT-707).
+
+        Applies in two cases:
+          * `instance_provision: auto` - an explicit request to be decided by duration. This is the opt-in every
+            Jenkins job needs, because `vars/runSctTest.groovy` exports SCT_INSTANCE_PROVISION whenever the
+            `provision_type` job parameter is non-empty, and every pipeline defaults that parameter to a concrete
+            value ('spot' or 'on_demand'). Without `auto` the value is always "explicitly set" under Jenkins and
+            this policy would never fire there at all.
+          * the value was never set outside `defaults/` - covers local/hydra runs.
+
+        Any other explicit value wins, which is what keeps the perf jobs that pin `on_demand` on-demand.
+        """
+        requested_auto = self.get("instance_provision") == "auto"
+        if self.get("cluster_backend") not in ("aws", "gce", "azure"):
+            if requested_auto:
+                # Spot is unavailable or unsupported here (OCI DenseIO, k8s, docker), and 'auto' must never
+                # reach the step-11 validation unresolved. on_demand is the choice that works everywhere.
+                self.log.info(
+                    "instance_provision='auto' on backend '%s', which has no spot support; using 'on_demand'",
+                    self.get("cluster_backend"),
+                )
+                self["instance_provision"] = "on_demand"
+            return
+
+        if not requested_auto and self.is_explicitly_set("instance_provision"):
+            self.log.info(
+                "instance_provision='%s' was set explicitly; duration-based provision policy not applied "
+                "(use instance_provision/provision_type 'auto' to opt into duration-based selection)",
+                self.get("instance_provision"),
+            )
+            return
+
+        threshold = self.get("spot_max_test_duration")
+        test_duration = self.effective_test_duration()
+        if not threshold or not test_duration:
+            if requested_auto:
+                # 'auto' must never survive into provisioning - nothing downstream understands it.
+                self.log.warning("instance_provision='auto' but no usable duration; falling back to 'spot'")
+                self["instance_provision"] = "spot"
+            return
+
+        desired = "on_demand" if int(test_duration) > int(threshold) else "spot"
+        current = self.get("instance_provision")
+        # spot_fleet is a spot variant; leave it alone rather than flattening it to plain spot
+        if current == desired or (desired == "spot" and current == "spot_fleet"):
+            self.log.info(
+                "Duration-based provision policy: keeping instance_provision='%s' (test_duration=%s min, "
+                "threshold=%s min)",
+                current,
+                test_duration,
+                threshold,
+            )
+            return
+
+        self.log.info(
+            "Duration-based provision policy: instance_provision '%s' -> '%s' (effective duration=%s min %s "
+            "threshold=%s min). Set instance_provision explicitly to override.",
+            current,
+            desired,
+            test_duration,
+            ">" if desired == "on_demand" else "<=",
+            threshold,
+        )
+        self["instance_provision"] = desired
 
     def _apply_resolved_placement(self) -> None:
         """Apply region/AZ selected in a previous provisioning step.

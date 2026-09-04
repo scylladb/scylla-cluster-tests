@@ -33,6 +33,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Multi-Cloud Provisioning Resilience | `draft` | [multi-cloud-provisioning-resilience.md](infrastructure/multi-cloud-provisioning-resilience.md) |
 | AWS Capacity AZ Fallback | `draft` | [aws-capacity-az-fallback.md](infrastructure/aws-capacity-az-fallback.md) |
 | NVMe Diagnostics Collection | `draft` | [nvme-diagnostics-collection.md](infrastructure/nvme-diagnostics-collection.md) |
+| Spot Placement Scores (SCT-850) | `implemented` | [spot-placement-scores.md](infrastructure/spot-placement-scores.md) |
 
 ### Nemesis — Chaos engineering, disruptors
 
