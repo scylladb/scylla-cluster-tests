@@ -44,12 +44,12 @@ class IpAddressProvider:
             pass
 
     def get_or_create(
-        self, instance_definitions: List[InstanceDefinition], version: str = "IPV4"
+        self, instance_definitions: List[InstanceDefinition], version: str = "IPV4", index: int = 0
     ) -> List[PublicIPAddress]:
         addresses = []
         pollers = []
         for definition in instance_definitions:
-            ip_name = self._get_ip_name(definition.name, version)
+            ip_name = self._get_ip_name(definition.name, version, index)
             if ip_name in self._cache:
                 addresses.append(self._cache[ip_name])
                 continue
@@ -88,8 +88,8 @@ class IpAddressProvider:
             addresses.append(address)
         return addresses
 
-    def get(self, name: str = "default", version: str = "IPV4") -> PublicIPAddress:
-        ip_name = self._get_ip_name(name, version)
+    def get(self, name: str = "default", version: str = "IPV4", index: int = 0) -> PublicIPAddress:
+        ip_name = self._get_ip_name(name, version, index)
         try:
             return self._cache[ip_name]
         except KeyError:
@@ -110,5 +110,9 @@ class IpAddressProvider:
         self._cache = {}
 
     @staticmethod
-    def _get_ip_name(name: str, version: str):
+    def _get_ip_name(name: str, version: str, index: int = 0):
+        """Name of the Public IP resource of a NIC: '<vm>-ipv4' for the primary one,
+        '<vm>-nic<index>-ipv4' for the rest."""
+        if index:
+            return f"{name}-nic{index}-{version.lower()}"
         return f"{name}-{version.lower()}"
