@@ -222,7 +222,7 @@ class FakeVirtualNetwork:
             "location": parameters["location"],
             "etag": 'W/"821c1ea3-6313-4798-859b-63ba15e882cc"',
             "properties": {
-                "addressSpace": {"addressPrefixes": [parameters["address_space"]["address_prefixes"]]},
+                "addressSpace": {"addressPrefixes": list(parameters["address_space"]["address_prefixes"])},
                 "subnets": [],
                 "virtualNetworkPeerings": [],
                 "resourceGuid": "e9660f35-9f2b-4134-8b0e-309bd9b3792c",
@@ -273,7 +273,11 @@ class FakeSubnet:
             "etag": 'W/"821c1ea3-6313-4798-859b-63ba15e882cc"',
             "type": "Microsoft.Network/virtualNetworks/subnets",
             "properties": {
-                "addressPrefix": subnet_parameters["address_prefix"],
+                **(
+                    {"addressPrefixes": list(subnet_parameters["address_prefixes"])}
+                    if "address_prefixes" in subnet_parameters
+                    else {"addressPrefix": subnet_parameters["address_prefix"]}
+                ),
                 "networkSecurityGroup": {"id": subnet_parameters["network_security_group"]["id"]},
                 "ipConfigurations": [],
                 "delegations": [],
