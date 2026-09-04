@@ -18,6 +18,7 @@ from unittest.mock import Mock
 import pytest
 
 from sdcm.cluster_azure import AzureNode, Ipv6AddressNotFoundError
+from sdcm.sct_runner import AzureSctRunner
 
 
 def azure_ip_configuration(private_ip: str, version: str = "IPv4", public_ip: str = None):
@@ -249,3 +250,38 @@ class TestIpv6AddressResolution:
         ipv6_node.remoter = None
 
         assert ipv6_node._discover_ipv6_from_os() == {}
+
+
+class TestAzureRunnerNetworkInterfaces:
+    """The SCT runner gets a routable IPv6 only when the test configuration enables IPv6."""
+
+    @staticmethod
+    def runner(params: dict):
+        runner = AzureSctRunner.__new__(AzureSctRunner)
+        runner.params = params
+        return runner
+
+    def test_ipv4_only_run_gets_no_ipv6(self):
+        (interface,) = self.runner({})._network_interfaces()
+
+        assert interface == {"subnet": "default", "public_ip": True, "ipv6": False, "public_ipv6": False}
+
+    def test_ipv6_run_gets_a_routable_ipv6(self):
+        params = {
+            "scylla_network_config": [{"address": "test_communication", "ip_type": "ipv6", "public": True, "nic": 0}]
+        }
+
+        (interface,) = self.runner(params)._network_interfaces()
+
+        assert interface["ipv6"] is True
+        assert interface["public_ipv6"] is True, "the runner reaches the nodes from outside their subnet"
+
+    def test_runner_always_has_exactly_one_interface(self):
+        """'scylla_network_config' describes the DB nodes; the runner never needs more than one."""
+        params = {
+            "scylla_network_config": [
+                {"address": "listen_address", "ip_type": "ipv4", "public": False, "nic": nic} for nic in (0, 1, 2)
+            ]
+        }
+
+        assert len(self.runner(params)._network_interfaces()) == 1
