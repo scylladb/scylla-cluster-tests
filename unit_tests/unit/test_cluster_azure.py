@@ -17,7 +17,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from sdcm.cluster_azure import AzureNode
+from sdcm.cluster_azure import AzureNode, Ipv6AddressNotFoundError
 
 
 def azure_ip_configuration(private_ip: str, version: str = "IPv4", public_ip: str = None):
@@ -172,3 +172,103 @@ def test_interfaces_are_cached_until_invalidated(node):
     node._invalidate_network_interfaces_cache()
     node.network_interfaces
     assert node._instance._provisioner.network_interfaces.call_count == 2
+
+
+class TestIpv6AddressResolution:
+    """`AzureNode._get_ipv6_ip_address` while Azure has not published the address yet.
+
+    With 'test_communication' set to 'ip_type: ipv6', this address is what SCT opens its SSH
+    connection to, so it is resolved before the node has a remoter at all - the OS fallback
+    cannot be reached and the Azure API is the only source.
+    """
+
+    IPV6_PARAMS = {
+        "scylla_network_config": [{"address": "test_communication", "ip_type": "ipv6", "public": True, "nic": 0}]
+    }
+
+    @staticmethod
+    def ipv6_nic():
+        return azure_nic(
+            "00-0D-3A-11-11-11",
+            [
+                azure_ip_configuration("10.0.0.4", public_ip="20.1.2.3"),
+                azure_ip_configuration("fd00:db8:5c7::4", version="IPv6", public_ip="2603:1030::1"),
+            ],
+        )
+
+    @staticmethod
+    def ipv4_nic():
+        return azure_nic("00-0D-3A-11-11-11", [azure_ip_configuration("10.0.0.4", public_ip="20.1.2.3")])
+
+    @pytest.fixture(name="ipv6_node")
+    def fixture_ipv6_node(self, node):
+        node.name = "azure-node-1"
+        node.destroyed = False
+        node.scylla_network_configuration = None
+        node.parent_cluster = Mock(params=self.IPV6_PARAMS)
+        return node
+
+    def test_address_is_taken_from_the_api(self, ipv6_node):
+        configure(ipv6_node, [self.ipv6_nic()], {})
+
+        assert ipv6_node._get_ipv6_ip_address() == "2603:1030::1"
+
+    def test_the_address_is_found_without_a_remoter(self, ipv6_node):
+        """The regression test: this used to raise AttributeError on the absent remoter."""
+        ipv6_node.remoter = None
+        configure(ipv6_node, [self.ipv6_nic()], {})
+
+        assert ipv6_node._get_ipv6_ip_address() == "2603:1030::1"
+
+    def test_a_missing_address_fails_loudly(self, ipv6_node):
+        ipv6_node.remoter = None
+        configure(ipv6_node, [self.ipv4_nic()], {})
+
+        with pytest.raises(Ipv6AddressNotFoundError):
+            ipv6_node._get_ipv6_ip_address()
+
+    def test_an_ipv4_only_run_needs_no_address(self, ipv6_node):
+        """No IPv6 in the configuration means no address and, above all, no waiting for one."""
+        ipv6_node.remoter = None
+        ipv6_node.parent_cluster = Mock(params={})
+        configure(ipv6_node, [self.ipv4_nic()], {})
+
+        assert ipv6_node._get_ipv6_ip_address() == ""
+
+    def test_a_destroyed_node_reports_no_address(self, ipv6_node):
+        """`destroy()` drops the remoter; log collection and Argus still read the addresses."""
+        ipv6_node.remoter = None
+        ipv6_node.destroyed = True
+        configure(ipv6_node, [self.ipv4_nic()], {})
+
+        assert ipv6_node._get_ipv6_ip_address() == ""
+
+    def test_the_os_is_not_queried_without_a_remoter(self, ipv6_node):
+        ipv6_node.remoter = None
+
+        assert ipv6_node._discover_ipv6_from_os() == {}
+
+
+class TestOsIpv6Fallback:
+    """The last resort when the API publishes nothing: what the OS itself holds."""
+
+    @staticmethod
+    def node_with(node, devices: dict, primary_device: str):
+        node.remoter = Mock()
+        node._discover_ipv6_from_os = Mock(return_value=devices)
+        node._cached_network_interfaces = [Mock(device_name=primary_device)]
+        return node
+
+    def test_the_primary_interface_is_reported(self, node):
+        """A secondary NIC carries a ULA of its own, so the interface has to be chosen, not guessed."""
+        devices = {"eth1": ["fd00:db8:5c7:1::4"], "eth0": ["fd00:db8:5c7::4"]}
+
+        assert self.node_with(node, devices, "eth0")._os_ipv6_address() == "fd00:db8:5c7::4"
+
+    def test_an_unknown_primary_device_falls_back_deterministically(self, node):
+        devices = {"eth1": ["fd00:db8:5c7:1::4"], "eth0": ["fd00:db8:5c7::4"]}
+
+        assert self.node_with(node, devices, "")._os_ipv6_address() == "fd00:db8:5c7::4"
+
+    def test_no_address_at_all_is_empty(self, node):
+        assert self.node_with(node, {}, "eth0")._os_ipv6_address() == ""
