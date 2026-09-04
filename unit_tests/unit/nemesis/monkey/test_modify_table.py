@@ -1,20 +1,23 @@
 """Tests for sdcm.nemesis.monkey.modify_table module.
 
 Tests focus on deterministic behavior: CQL structure, error paths,
-method delegation, and the pure arithmetic in set_new_twcs_settings.
+method delegation, the pure arithmetic in set_new_twcs_settings, and the
+explicitly-configured-property protection (SCT-100).
 Randomly-generated values are not asserted on.
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from sdcm.exceptions import UnsupportedNemesis
 from sdcm.nemesis.monkey.modify_table import (
+    ModifyTableBaseMonkey,
     ModifyTableCommentMonkey,
     ModifyTableCompactionMonkey,
     ModifyTableDefaultTimeToLiveMonkey,
     ModifyTableTwcsWindowSizeMonkey,
+    TableInitialProperties,
 )
 from test_lib.compaction import CompactionStrategy, TimeWindowCompactionProperties
 from unit_tests.unit.nemesis import TestRunner
@@ -28,10 +31,26 @@ _MODULE = "sdcm.nemesis.monkey.modify_table"
 pytestmark = pytest.mark.usefixtures("events")
 
 
+@pytest.fixture(autouse=True)
+def table_initial_properties():
+    """Give every test its own registry, since the base monkey keeps it on the class.
+
+    ``refresh()`` is stubbed out — how the registry captures schema state is covered
+    by test_table_initial_properties.py.  Here tests declare the pre-nemesis state
+    directly in ``initial`` and only exercise the monkeys' table selection.
+    """
+    registry = TableInitialProperties()
+    registry.defaults = {}
+    registry.refresh = MagicMock()
+    ModifyTableBaseMonkey.table_initial_properties = registry
+    return registry
+
+
 @pytest.fixture()
-def runner(base_runner):
-    """``base_runner`` with a single non-system table for modify-table tests."""
+def runner(base_runner, table_initial_properties):
+    """``base_runner`` with a single eligible non-system table for modify-table tests."""
     base_runner.cluster.get_non_system_ks_cf_list.return_value = ["ks1.tbl1"]
+    table_initial_properties.initial["ks1.tbl1"] = {}
     return base_runner
 
 
@@ -153,7 +172,7 @@ def test_default_ttl_raises_unsupported_when_no_tables():
     """Raise UnsupportedNemesis when no non-system tables exist."""
     monkey = ModifyTableDefaultTimeToLiveMonkey(TestRunner(ks_cfs=[]))
 
-    with pytest.raises(UnsupportedNemesis, match="No non-system user tables found"):
+    with pytest.raises(UnsupportedNemesis, match="Non-system keyspace and table are not found"):
         monkey.disrupt()
 
 
@@ -279,3 +298,95 @@ def test_twcs_settings(runner, randint_return, unit, initial_size, expected):
     assert result == expected
     # invariant: gc is always half of dttl
     assert result["gc"] == result["dttl"] // 2
+
+
+# ---------------------------------------------------------------------------
+# Tests for the explicitly-configured-property protection (SCT-100)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def two_table_runner(base_runner, table_initial_properties):
+    """``base_runner`` with two non-system tables, so one of them can be excluded.
+
+    Both start with default properties; a test marks ``ks1.configured`` by putting
+    the property value it cares about into the registry's pre-nemesis snapshot.
+    """
+    base_runner.cluster.get_non_system_ks_cf_list.return_value = ["ks1.configured", "ks1.free"]
+    table_initial_properties.initial = {"ks1.configured": {}, "ks1.free": {}}
+    return base_runner
+
+
+def test_explicitly_configured_table_is_skipped(two_table_runner, table_initial_properties):
+    """A table whose property is explicitly configured is excluded from selection."""
+    table_initial_properties.initial["ks1.configured"] = {"comment": "set by the test"}
+    monkey = ModifyTableCommentMonkey(two_table_runner)
+
+    monkey.modify_table_property(name="comment", val="'x'")
+
+    assert monkey.runner.executed[-1] == "ALTER TABLE ks1.free WITH comment = 'x';"
+
+
+def test_exclusion_is_property_specific(two_table_runner, table_initial_properties):
+    """A table excluded for one property is still fair game for other properties."""
+    table_initial_properties.initial["ks1.configured"] = {"compression": {"sstable_compression": "ZstdCompressor"}}
+    monkey = ModifyTableCommentMonkey(two_table_runner)
+
+    monkey.modify_table_property(name="comment", val="'x'")
+
+    assert monkey.runner.executed[-1] == "ALTER TABLE ks1.configured WITH comment = 'x';"
+
+
+def test_all_tables_configured_raises_unsupported(two_table_runner, table_initial_properties):
+    """Raise UnsupportedNemesis instead of overwriting intentional settings."""
+    table_initial_properties.initial["ks1.configured"] = {"comment": "set by the test"}
+    table_initial_properties.initial["ks1.free"] = {"comment": "set by the test too"}
+    monkey = ModifyTableCommentMonkey(two_table_runner)
+
+    with pytest.raises(UnsupportedNemesis, match="explicitly configured"):
+        monkey.modify_table_property(name="comment", val="'x'")
+    assert not monkey.runner.executed
+
+
+def test_selection_refreshes_the_registry(two_table_runner, table_initial_properties):
+    """The registry is refreshed before every pick, so the pre-nemesis snapshot is
+    taken before the first ALTER and new tables keep being captured later on."""
+    monkey = ModifyTableCommentMonkey(two_table_runner)
+
+    monkey.modify_table_property(name="comment", val="'x'")
+
+    table_initial_properties.refresh.assert_called_once_with(two_table_runner.cluster, two_table_runner.target_node)
+
+
+def test_default_ttl_skips_configured_table(two_table_runner, table_initial_properties):
+    """ModifyTableDefaultTimeToLiveMonkey's own selection path respects the exclusion."""
+    table_initial_properties.initial["ks1.configured"] = {"default_time_to_live": 1000}
+    with patch(f"{_MODULE}.get_compaction_strategy", return_value=CompactionStrategy.SIZE_TIERED):
+        monkey = ModifyTableDefaultTimeToLiveMonkey(two_table_runner)
+        monkey.disrupt()
+
+    assert monkey.runner.executed[-1] == "ALTER TABLE ks1.free WITH default_time_to_live = 4300000;"
+
+
+def test_compaction_twcs_skips_ttl_configured_table(two_table_runner, table_initial_properties):
+    """The TWCS path sets both compaction and TTL, so a configured TTL excludes a table."""
+    table_initial_properties.initial["ks1.configured"] = {"default_time_to_live": 1000}
+    monkey = ModifyTableCompactionMonkey(two_table_runner)
+    # Force the TWCS lambda to be picked
+    monkey.random.choice = lambda seq: seq[2] if callable(seq[0]) else seq[0]
+
+    monkey.disrupt()
+
+    stmts = monkey.runner.executed
+    assert len(stmts) == 2
+    assert all("ks1.free" in stmt for stmt in stmts)
+
+
+def test_twcs_window_monkey_skips_explicitly_configured_tables(twcs_runner, table_initial_properties):
+    """TWCS window monkey must not touch TWCS tables the test configured itself."""
+    table_initial_properties.initial["ks1.tbl1"] = {"compaction": {"class": "TimeWindowCompactionStrategy"}}
+    monkey = ModifyTableTwcsWindowSizeMonkey(twcs_runner)
+
+    with pytest.raises(UnsupportedNemesis, match="All TWCS tables"):
+        monkey.disrupt()
+    assert not monkey.runner.executed
