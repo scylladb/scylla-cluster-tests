@@ -1,0 +1,15 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+perfRegressionParallelPipeline(
+    backend: "aws",
+    region: "us-east-1",
+    test_name: "fts_test.FtsSearchTest",
+    test_config: "test-cases/fts-search/fts-search-test.yaml",
+    sub_tests: ["test_fts_search"],
+    scylla_version: "master:latest",
+    // 'test_duration' (600) plus the usual margin for provisioning and teardown.
+    timeout: [time: 720, unit: "MINUTES"]
+)

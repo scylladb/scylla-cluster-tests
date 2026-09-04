@@ -11,6 +11,8 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import types
+
 import pytest
 
 from sdcm import sct_abs_path
@@ -100,6 +102,8 @@ def test_find_latte_fn_names(cmd, items):
         ("latte run /foo/bar.rn %smulti_get -q -r 500", "read"),
         ("latte run /foo/bar.rn %sdo_get_all -q -r 500", "read"),
         ("latte run /foo/bar.rn %sget_all,get_single -q -r 500", "read"),
+        ("latte run /foo/bar.rn %ssearch -q -r 500", "read"),
+        ("latte run /foo/bar.rn %sdo_search -q -r 500", "read"),
         ("latte run /foo/bar.rn %scounter_read -q -r 500", "counter_read"),
         ("latte run /foo/bar.rn %sread,write -q -r 500", "mixed"),
         ("latte run /foo/bar.rn %swrite:1,read:2 -q -r 500", "mixed"),
@@ -139,3 +143,57 @@ def test_find_latte_tags(cmd, items):
     assert len(result) == len(items), f"Expected: {items}, Actual: {result}"
     for item in items:
         assert item in result
+
+
+class _FakeRunner:
+    """Records what would be copied into the loader container.
+
+    'test -f' answers "already there" so the rune script directory is skipped and only the
+    per-invocation staging shows up; the 'latte schema' call answers like a successful run.
+    """
+
+    def __init__(self):
+        self.sent = []
+
+    def run(self, *_, **__):
+        return type("FakeResult", (), {"ok": True, "stdout": "", "stderr": ""})
+
+    def send_files(self, local_path, remote_path, **__):
+        self.sent.append((local_path, remote_path))
+
+
+def _staging_thread(extra_files_to_stage):
+    loader_set = types.SimpleNamespace(
+        get_db_auth=lambda: None,
+        test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=lambda: object()),
+    )
+    return LatteStressThread(
+        loader_set=loader_set,
+        stress_cmd="latte run -f load data_dir/latte/fts_search/fts.rn -d 100",
+        timeout=60,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": "docker", "client_encrypt": False, "latte_schema_parameters": {}},
+        extra_files_to_stage=extra_files_to_stage,
+    )
+
+
+def test_extra_files_are_staged_into_the_loader_container():
+    """'build_stress_cmd' is the only point at which per-invocation data can reach the container:
+    the 'RemoteDocker' runner is created and destroyed per latte invocation, so anything staged
+    earlier is gone by the time the command runs."""
+    runner = _FakeRunner()
+
+    _staging_thread([("/local/documents_000.tsv", "/tmp/fts/ds/documents_000.tsv")]).build_stress_cmd(
+        runner, loader=None, hosts="10.0.0.1"
+    )
+
+    assert runner.sent == [("/local/documents_000.tsv", "/tmp/fts/ds/documents_000.tsv")]
+
+
+def test_no_extra_files_stages_nothing():
+    """The default has to stay empty: every existing caller passes no files at all."""
+    runner = _FakeRunner()
+
+    _staging_thread(None).build_stress_cmd(runner, loader=None, hosts="10.0.0.1")
+
+    assert runner.sent == []

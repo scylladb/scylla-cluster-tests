@@ -1,0 +1,50 @@
+# Default FTS plan: a sanity run on real data.
+#
+# Used by test-cases/fts-search/fts-search-test.yaml. Small on purpose -- it answers "does the
+# whole pipeline work end to end against a real corpus?", not "how fast is BM25?". Use
+# large_config.yaml (or a plan on S3, see below) for actual performance numbers.
+#
+# The corpus still comes from S3: `base_url` points at the same 10M-document dataset the full
+# plan uses, this plan just loads 5 of its 100 shards. Two load steps rather than one so the
+# rebuild-on-a-bigger-corpus path (drop index -> load more shards -> rebuild) is covered too, plus
+# five no-load rebuilds on the same, final corpus to sample index-build-time variance in isolation
+# from load time (see docs/fts-search-test.md "Repeated builds on the same data").
+#
+# To run a different plan without touching this file, point `search_test_config` at it -- a path
+# relative to the SCT root, and a full S3 URL is downloaded into this directory:
+#   SCT_SEARCH_TEST_CONFIG=data_dir/latte/fts_search/large_config.yaml
+#   SCT_SEARCH_TEST_CONFIG=s3://full-text-search-sct/fts/config/my_plan.yaml
+datasets:
+  - name: 10M_20tok
+    base_url: s3://full-text-search-sct/fts/10M_20tok
+    max_index_wait_secs: 1800
+    defaults:
+      limit: 5
+      concurrency: 32
+      rate: 0
+      duration: 30s
+      expected_p99_read_ms: 10
+    steps:
+      # ~100k documents: one rate-limited query for latency, one unthrottled for throughput.
+      - shards: [0]
+      - shards: []
+      - shards: []
+        queries:
+          - set: term_common
+            concurrency: 1
+            rate: 50
+          - set: term_common
+      # ~500k documents, on top of the shard above.
+      - shards: [1..4]
+        queries:
+          - set: term_common
+            concurrency: 1
+            rate: 50
+          - set: term_common
+          # A slow query set as well, so more than one expected-latency table is exercised.
+          - set: natural
+            expected_p99_read_ms: 50
+      # Warm rebuilds on the same ~500k-document corpus: an empty 'shards' list makes
+      # _load_step_shards a no-op, so each of these is only an index build.
+      - shards: []
+      - shards: []

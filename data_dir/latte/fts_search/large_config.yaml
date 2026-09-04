@@ -1,0 +1,85 @@
+datasets:
+  - name: 10M_20tok
+    base_url: s3://full-text-search-sct/fts/10M_20tok
+    max_index_wait_secs: 1800
+    defaults:
+      limit: 5
+      concurrency: 32
+      rate: 0
+      duration: 30s
+      expected_p99_read_ms: 10
+    steps:
+      - shards: [0]
+        queries:
+          - set: term_common
+            concurrency: 1
+            rate: 50
+          - set: term_common
+      - shards: [1..9]
+        queries:
+          - set: term_common
+            concurrency: 1
+            rate: 50
+          - set: term_common
+      - shards: [10..99]
+        queries:
+          - set: term_common
+            concurrency: 1
+            rate: 50
+          - set: term_common
+          - set: term_common
+            limit: 100
+          - set: term_medium
+          - set: term_rare
+          - set: boolean_and
+            expected_p99_read_ms: 50
+          - set: boolean_or
+            expected_p99_read_ms: 50
+          - set: boolean_not
+            expected_p99_read_ms: 50
+          - set: phrase
+            expected_p99_read_ms: 50
+          - set: natural
+            expected_p99_read_ms: 50
+  - name: 10M_400tok
+    base_url: s3://full-text-search-sct/fts/10M_400tok
+    max_index_wait_secs: 1800
+    defaults:
+      limit: 5
+      concurrency: 64
+      rate: 0
+      duration: 30s
+      expected_p99_read_ms: 10
+    steps:
+      - shards: [0]
+        queries:
+          - set: term_common
+            concurrency: 1
+            rate: 50
+          - set: term_common
+      - shards: [1..9]
+        queries:
+          - set: term_common
+            concurrency: 1
+            rate: 50
+          - set: term_common
+      - shards: [10..99]
+        queries:
+          - set: term_common
+            concurrency: 1
+            rate: 50
+          - set: term_common
+          - set: term_common
+            limit: 100
+          - set: term_medium
+          - set: term_rare
+          - set: boolean_and
+            expected_p99_read_ms: 50
+          - set: boolean_or
+            expected_p99_read_ms: 50
+          - set: boolean_not
+            expected_p99_read_ms: 50
+          - set: phrase
+            expected_p99_read_ms: 50
+          - set: natural
+            expected_p99_read_ms: 50

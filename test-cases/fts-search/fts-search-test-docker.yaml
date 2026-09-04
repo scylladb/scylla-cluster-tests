@@ -1,0 +1,89 @@
+# Local correctness run of fts_test.FtsSearchTest.test_fts_search on the docker backend.
+#
+# Purpose: validate the *orchestration* of the FTS test (schema reset, shard
+# staging, index build timing from vector-store's 'full scan' log lines, per-query-set search,
+# Argus reporting with the expected_p99_read_ms table split) without provisioning AWS.
+# The numbers this produces are meaningless -- 300 synthetic documents on a containerised Scylla.
+# Use test-cases/fts-search/fts-search-test.yaml for actual performance runs.
+#
+# Prerequisites:
+#   1. Build the vector-store image (needs 'fulltext_index' support):
+#        cd <vector-store-repo> && docker build -t local/vector-store:fts .
+#   2. Generate the tiny dataset (not tracked in git; a one-off after a fresh clone):
+#        python3 data_dir/latte/fts_search/generate_local_dataset.py
+#
+# Run:
+#   ./docker/env/hydra.sh run-test fts_test.FtsSearchTest.test_fts_search --backend docker \
+#     --config test-cases/fts-search/fts-search-test-docker.yaml
+# What to check afterwards is in docs/fts-search-test.md.
+#
+# Argus: outside Jenkins JOB_NAME is unset, so init_argus_client falls back to
+# ReplayOnlyArgusSCTClient -- every submission is captured as JSONL in the run
+# logdir and nothing is posted. `enable_argus` is deliberately left at its
+# default of true so that latte's "schema once per script" behaviour matches a
+# real run (see latte_thread.py:197).
+
+test_metadata:
+  description: >-
+    Local correctness run of the full-text search (BM25) performance test on the docker backend.
+    Loads a tiny synthetic dataset, builds a fulltext_index against a locally built vector-store
+    image, and runs latte query sets. Validates the test orchestration and Argus reporting rather
+    than producing meaningful performance numbers.
+  test_type: performance
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - docker
+  stress_tools:
+    - latte
+  workload: read
+  nemesis_labels: []
+  features:
+    - tablets
+
+test_duration: 180
+
+# Required: latency_calculator_decorator returns early without it.
+use_hdrhistogram: true
+
+n_db_nodes: 1
+n_loaders: 1
+# No monitoring stack locally: latency_calculator_decorator degrades gracefully without it, so the
+# HDR results (from latte's .hdr files), the reactor stall counters (from the db logs) and the Argus
+# rows are still collected -- only the Grafana screenshots and the Prometheus based metrics (the
+# server side Scylla latencies) are absent. It also keeps the run from uploading the screenshots to
+# the shared 's3://cloudius-jenkins-test' bucket. Set it to 1 when the dashboards are needed.
+n_monitor_nodes: 0
+n_vector_store_nodes: 1
+
+# Clean up after ourselves. 'execute_post_behavior' defaults to false because in Jenkins a separate
+# pipeline stage destroys the resources -- there is no such stage behind a local run, so without this
+# every run leaves its db and vector-store containers running (tester.py: "Resources will continue to
+# run"). 'keep-on-failure' rather than 'destroy' so a failed run stays open for inspection.
+execute_post_behavior: true
+post_behavior_db_nodes: 'keep-on-failure'
+post_behavior_loader_nodes: 'keep-on-failure'
+post_behavior_monitor_nodes: 'keep-on-failure'
+post_behavior_vector_store_nodes: 'keep-on-failure'
+
+# Scylla Manager is rejected outright on the docker backend
+# (sct_config.py:_validate_docker_backend_parameters).
+use_mgmt: false
+
+# On the docker backend `scylla_version` is used as the image tag.
+docker_image: 'scylladb/scylla-nightly'
+scylla_version: 'latest'
+
+# The docker backend takes a prebuilt image only -- it has no equivalent of the AWS source-build
+# path, so build the fork locally and point at it here. Do NOT set vector_store_source_repo or
+# vector_store_source_ref: they request a source build, which sct_config.py rejects on this backend.
+vector_store_docker_image: 'local/vector-store'
+vector_store_version: 'fts'
+
+user_prefix: 'fts-docker-local'
+
+search_test_config: 'data_dir/latte/fts_search/local_config.yaml'
+
+latte_schema_parameters:
+  keyspace: 'fts_bench'
+  table: 'documents'

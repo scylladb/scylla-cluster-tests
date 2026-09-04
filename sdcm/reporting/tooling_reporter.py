@@ -369,11 +369,34 @@ class YcsbVersionReporter(ToolReporterBase):
 class VectorStoreVersionReporter(ToolReporterBase):
     TOOL_NAME = "vector-store"
 
-    def __init__(self, vector_store_client: VectorStoreClient, argus_client: ArgusSCTClient = None) -> None:
+    def __init__(
+        self,
+        vector_store_client: VectorStoreClient,
+        argus_client: ArgusSCTClient = None,
+        source_repo: str = "",
+        source_sha: str = "",
+        source_ref: str = "",
+    ) -> None:
+        """`source_repo`/`source_sha`/`source_ref` describe a source build, empty for AMI runs.
+
+        They come from VectorStoreNodeMixin.get_vector_store_source_build_info().
+        """
         super().__init__(runner=None, command_prefix=None, argus_client=argus_client)
         self.vector_store_client = vector_store_client
+        self.source_repo = source_repo
+        self.source_sha = source_sha
+        self.source_ref = source_ref
 
     def _collect_version_info(self):
         info = self.vector_store_client.get_info()
         LOGGER.info("%s: Collected vector-store info: %s", self, info)
         self.version = info.get("version", "#FAILED_CHECK_LOGS")
+
+        # For a source build the reported version comes from 'git describe' against whatever the
+        # branch happens to be tagged with, so on its own it does not identify what was tested.
+        # Record the repo, the ref and the exact commit too, or results can't be traced to a build.
+        if self.source_sha:
+            self.revision_id = self.source_sha
+            self.additional_data = f"{self.source_repo}@{self.source_ref or self.source_sha}"
+            if self.source_ref:
+                self.version = f"{self.version} ({self.source_ref})"
