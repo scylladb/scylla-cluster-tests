@@ -22,8 +22,10 @@ from invoke import Result
 
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import AdaptiveTimeoutMultipliers, SCTConfiguration
+from sdcm.test_config import TestConfig
 from sdcm.utils.adaptive_timeouts.load_info_store import (
     AdaptiveTimeoutStore,
+    ArgusAdaptiveTimeoutStore,
     NodeLoadInfoService,
     NodeLoadInfoServices,
     _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC,
@@ -56,10 +58,22 @@ class MemoryAdaptiveTimeoutStore(AdaptiveTimeoutStore):
         self._data = {}
 
     def store(
-        self, metrics: dict[str, Any], operation: str, duration: int, timeout: int, timeout_occurred: bool
+        self,
+        metrics: dict[str, Any],
+        operation: str,
+        duration: int,
+        timeout: int,
+        timeout_occurred: bool,
+        hard_timeout: int | None = None,
     ) -> None:
         metrics.update(
-            {"operation": operation, "duration": duration, "timeout": timeout, "timeout_occurred": timeout_occurred}
+            {
+                "operation": operation,
+                "duration": duration,
+                "timeout": timeout,
+                "hard_timeout": hard_timeout,
+                "timeout_occurred": timeout_occurred,
+            }
         )
         key = str(uuid.uuid4())
         self._data[key] = metrics
@@ -196,7 +210,9 @@ def test_decommission_timeout_is_calculated_and_stored(publish_or_dump, fake_nod
     ) as timeout:
         assert timeout == 7200  # based on data size
     publish_or_dump.assert_not_called()
-    assert adaptive_timeout_store.get(operation=Operations.DECOMMISSION.name, timeout_occurred=False)
+    metrics = adaptive_timeout_store.get(operation=Operations.DECOMMISSION.name, timeout_occurred=False)
+    assert metrics
+    assert metrics[0]["hard_timeout"] is None  # non-tablet decommission has no hard timeout
 
 
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
@@ -219,6 +235,7 @@ def test_tablets_decommission_timeout_is_calculated_from_data_size(
     hard_timeout_mock.assert_not_called()
     metrics = adaptive_timeout_store.get(operation=Operations.DECOMMISSION.name)
     assert metrics[0].get("tablets_enabled") is True
+    assert metrics[0]["hard_timeout"] == expected_hard
 
 
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
@@ -552,3 +569,48 @@ def test_sct_config_with_multipliers_is_json_serializable(monkeypatch):
     # Verify the multipliers are present and correctly serialized in the output
     parsed = json.loads(json_str)
     assert parsed["adaptive_timeout_multipliers"] == {"decommission": 5.0, "new_node": 5.0}
+
+
+# ===== ArgusAdaptiveTimeoutStore hard_timeout reporting tests =====
+
+
+@mock.patch("sdcm.utils.adaptive_timeouts.load_info_store.submit_results_to_argus")
+def test_argus_store_reports_hard_timeout_when_set(mock_submit):
+    with (
+        mock.patch.object(TestConfig, "argus_client_ready", return_value=True),
+        mock.patch.object(TestConfig, "argus_client", return_value=mock.Mock()),
+    ):
+        ArgusAdaptiveTimeoutStore().store(
+            metrics={"cpu_load_5": 1.5},
+            operation="DECOMMISSION",
+            duration=100.4,
+            timeout=200.6,
+            timeout_occurred=False,
+            hard_timeout=400.9,
+        )
+
+    mock_submit.assert_called_once()
+    table = mock_submit.call_args[0][1]
+    hard_timeout_cells = [cell for cell in table.results if cell.column == "hard_timeout"]
+    assert len(hard_timeout_cells) == 1
+    assert hard_timeout_cells[0].value == 400  # truncated to int, like the soft timeout column
+
+
+@mock.patch("sdcm.utils.adaptive_timeouts.load_info_store.submit_results_to_argus")
+def test_argus_store_reports_no_hard_timeout_when_not_set(mock_submit):
+    with (
+        mock.patch.object(TestConfig, "argus_client_ready", return_value=True),
+        mock.patch.object(TestConfig, "argus_client", return_value=mock.Mock()),
+    ):
+        ArgusAdaptiveTimeoutStore().store(
+            metrics={},
+            operation="SOFT_TIMEOUT",
+            duration=10,
+            timeout=20,
+            timeout_occurred=False,
+        )
+
+    mock_submit.assert_called_once()
+    table = mock_submit.call_args[0][1]
+    hard_timeout_cells = [cell for cell in table.results if cell.column == "hard_timeout"]
+    assert not hard_timeout_cells  # no cell reported when there's no hard timeout

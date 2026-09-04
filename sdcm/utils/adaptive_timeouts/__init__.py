@@ -381,6 +381,7 @@ def adaptive_timeout(  # noqa: PLR0914
                     operation=operation.name,
                     duration=duration,
                     timeout=soft_timeout,
+                    hard_timeout=hard_timeout,
                     timeout_occurred=timeout_occurred,
                 )
         except Exception as exc:  # noqa: BLE001
