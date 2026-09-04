@@ -95,6 +95,20 @@ class LatteStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
     SCHEMA_CMD_CALL_COUNTER = {}
 
+    def __init__(self, *args, extra_files_to_stage=None, **kwargs):
+        """*extra_files_to_stage* is a list of '(local_path, remote_path)' pairs to copy into the
+        loader container before the run.
+
+        'build_stress_cmd' already ships every top-level file of the rune script's directory, which
+        covers whatever a script needs on every invocation. This is for data that only one
+        invocation needs: a dataset shard, say, too big to keep in the tree and gone again before
+        the next command runs. Nothing needs cleaning up afterwards -- the 'RemoteDocker' command
+        runner of '_run_stress' is created and destroyed per latte invocation, so the container is
+        the cleanup context.
+        """
+        super().__init__(*args, **kwargs)
+        self.extra_files_to_stage: list[tuple[str, str]] = extra_files_to_stage or []
+
     def set_stress_operation(self, stress_cmd):
         return get_latte_operation_type(self.stress_cmd)
 
@@ -155,6 +169,9 @@ class LatteStressThread(DockerBasedStressThread):
                 remote_path = str(Path(script_name).parent / src_file.name)
                 if not cmd_runner.run(f"test -f {remote_path}", ignore_status=True, verbose=False).ok:
                     cmd_runner.send_files(str(src_file), remote_path)
+
+        for local_path, remote_path in self.extra_files_to_stage:
+            cmd_runner.send_files(local_path, remote_path, verbose=False)
 
         ssl_config = self._build_ssl_config(cmd_runner, loader)
 
