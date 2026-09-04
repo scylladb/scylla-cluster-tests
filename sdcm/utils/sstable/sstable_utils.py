@@ -22,6 +22,11 @@ class SstableUtils:
 
     REMOTE_SSTABLEDUMP_PATH = "/var/tmp/sstabledump.json"
 
+    # How many sstables to pass to a single "scylla sstable dump-statistics --sstables ..." call.
+    # Bounds the command-line length and the size of the returned JSON while still amortizing the
+    # process/SSH startup cost across many sstables.
+    SSTABLE_DUMP_BATCH_SIZE = 100
+
     def __init__(
         self,
         propagation_delay_in_seconds: int = 0,
@@ -247,6 +252,10 @@ class SstableUtils:
         return True  # Successfully dumped SSTable
 
     def _are_tombstones_in_sstabledump(self, sstable: str, remote_json_path: str = REMOTE_SSTABLEDUMP_PATH) -> bool:
+        # Operates on an already-dumped "Data.db" JSON (see `_run_sstabledump`); it exists for the
+        # data-dump callers that also need the tombstone contents. For a cheap yes/no check over many
+        # sstables (no full data dump), prefer `filter_out_sstables_with_tombstones`, which reads only
+        # "Statistics.db".
         # Check if tombstones exist in the dumped sstable JSON
         check_tombstones_cmd = f"sudo jq -e '.. | .tombstone? | select(. != null)' {remote_json_path} > /dev/null"
         result = self.db_node.remoter.run(check_tombstones_cmd, verbose=False, ignore_status=True)
@@ -366,6 +375,109 @@ class SstableUtils:
                 self.log.debug("Invalid deletion_time format: %s", tombstone_info["deletion_time"])
                 raise
         return None  # No deletion_time found
+
+    def filter_out_sstables_with_tombstones(self, sstables: list) -> list:
+        """
+        Return only the sstables that contain no tombstones.
+
+        Deleting an sstable that holds a tombstone can resurrect the data it shadows, so such sstables
+        must be excluded from any destroy/corruption selection that is followed by a repair.
+
+        Tombstone presence is decided from the tiny "Statistics.db" component (a few KBs, independent
+        of the "Data.db" size) via ``scylla sstable dump-statistics``: its
+        "estimated_tombstone_drop_time" histogram is only populated for tombstones/deletions (and
+        expiring cells), so an empty histogram reliably means the sstable is clean.
+
+        IMPORTANT - this is an *offline* check by contract: the caller must guarantee that the sstable
+        set cannot change under it while the dump runs. The current caller
+        (``NemesisRunner._destroy_data_and_restart_scylla``) stops Scylla on the target node before
+        listing and dumping, so no compaction can remove an sstable mid-check and there is no race to
+        guard against. A future caller that needs this on a live node must first make the set stable
+        itself - stop the node, or at least ``nodetool disableautocompaction`` for the keyspace/table.
+        Everything here therefore fails loudly (missing entry, bad JSON, dump error) instead of
+        silently degrading, so a real Scylla/tooling problem cannot be mistaken for an expected race.
+
+        Note on the (intentional) overlap with the other tombstone helpers in this class:
+        ``count_sstable_tombstones``, ``_are_tombstones_in_sstabledump`` and
+        ``get_compacted_tombstone_deletion_info`` also answer tombstone-related questions, but they do
+        so by dumping the full "Data.db" (``dump-data`` / ``sstabledump``) because they need the actual
+        tombstone *count* or per-tombstone *deletion dates/keys*. This path is deliberately kept
+        separate and reads only the statistics metadata, so it is the preferred check when a plain
+        yes/no answer is needed over many/large sstables (e.g. selecting sstables to destroy) - do NOT
+        reroute it onto the expensive data-dump path.
+        Semantic note: the statistics histogram (like ``count_sstable_tombstones``) also accounts for
+        TTL/expiring cells, which is broader than ``_are_tombstones_in_sstabledump`` (tombstone objects
+        only). That broader definition is intended here - TTL cells past gc_grace can also resurrect
+        data when their sstable is deleted.
+
+        :param sstables: List of sstable "-Data.db" file paths.
+        :return: The subset of ``sstables`` with no tombstones.
+        """
+        if not sstables:
+            return []
+        status_by_sstable = self._get_sstables_tombstone_status(sstables)
+        filtered = [sstable for sstable in sstables if not status_by_sstable[sstable]]
+        self.log.debug(
+            "Filtered sstables without tombstones for %s: %s of %s", self.ks_cf, len(filtered), len(sstables)
+        )
+        return filtered
+
+    def _get_sstables_tombstone_status(self, sstables: list) -> dict:
+        """
+        Resolve, for each sstable, whether it contains tombstones - batching the statistics dump.
+
+        ``scylla sstable dump-statistics --sstables`` accepts multiple paths and returns a per-sstable
+        entry, so the whole table is processed with a handful of processes instead of one per sstable.
+        Sstables are chunked (``SSTABLE_DUMP_BATCH_SIZE``) to bound the command-line length and the
+        size of the dumped JSON.
+
+        :param sstables: List of sstable "-Data.db" file paths.
+        :return: Mapping of sstable path -> bool (True if it contains tombstones).
+        """
+        status = {}
+        for start in range(0, len(sstables), self.SSTABLE_DUMP_BATCH_SIZE):
+            chunk = sstables[start : start + self.SSTABLE_DUMP_BATCH_SIZE]
+            status.update(self._dump_statistics_chunk(chunk))
+        return status
+
+    def _dump_statistics_chunk(self, sstables: list) -> dict:
+        """
+        Run a single batched ``dump-statistics`` for ``sstables`` and return {path: has_tombstones}.
+
+        The parsing targets exactly one format - the output of the ``scylla sstable`` tool shipped
+        with the Scylla version under test. Entries are keyed by the sstable path as it was passed
+        on the command line, under a top-level ``"sstables"`` wrapper, and the histogram is a plain
+        ``{local_deletion_time: cell_count}`` map under ``"stats"`` (verified against Scylla 2026.3;
+        keys may be fractional). Anything else - a failing dump, non-JSON output, a missing key -
+        raises, see the offline-by-contract note on ``filter_out_sstables_with_tombstones``::
+
+            {
+              "sstables": {
+                "/var/lib/scylla/data/ks1/table1-.../mt-..._-big-Data.db": {
+                  "offsets": {...}, "validation": {...}, "compaction": {...},
+                  "stats": {
+                    "min_local_deletion_time": 1787205554,
+                    "max_local_deletion_time": 2147483647,
+                    "estimated_tombstone_drop_time": {"1787205554.4691358": 81, "1787205580": 48}
+                  },
+                  "serialization_header": {...}
+                }
+              }
+            }
+
+        An sstable written without any deletion (e.g. a plain cassandra-stress write load) has an
+        empty ``"estimated_tombstone_drop_time": {}`` - that is the only case considered clean.
+        """
+        dump_cmd = _generate_sstable_dump_command(self.db_node, "dump-statistics", self.keyspace, self.table)
+        result = self.db_node.remoter.run(f'sudo bash -c "{dump_cmd} {" ".join(sstables)}"', verbose=False)
+        dumped = json.loads(result.stdout, strict=False)["sstables"]
+        return {sstable: self._entry_has_tombstones(sstable, dumped[sstable]) for sstable in sstables}
+
+    def _entry_has_tombstones(self, sstable: str, entry: dict) -> bool:
+        """Classify a single dumped statistics ``entry`` by its "estimated_tombstone_drop_time"."""
+        has_tombstones = bool(entry["stats"]["estimated_tombstone_drop_time"])
+        self.log.debug("SSTable %s contains tombstones: %s", sstable, has_tombstones)
+        return has_tombstones
 
     def corrupt_sstables(self, sstables_to_corrupt_count: int = 1):
         """
