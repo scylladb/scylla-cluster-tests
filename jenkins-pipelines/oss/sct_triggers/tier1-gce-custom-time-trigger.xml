@@ -45,7 +45,10 @@ stress_duration=$stress_duration</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../tier1/longevity-large-partition-200k-pks-4days-gce-test</projects>
+          <projects>
+              ../tier1/longevity-large-partition-200k-pks-4days-gce-test,
+              ../tier1/longevity-asymmetric-cluster-12h-test
+          </projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
