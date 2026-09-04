@@ -368,6 +368,56 @@ class FakeNetworkInterface:
                 elements.append(NetworkInterface.from_dict(json.load(file_obj)))
         return elements
 
+    @staticmethod
+    def _ip_configuration(
+        resource_group_name: str, network_interface_name: str, index: int, config: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Build one ipConfiguration, mirroring what Azure returns for the given request."""
+        base_id = (
+            f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}"
+            f"/providers/Microsoft.Network/networkInterfaces/{network_interface_name}"
+        )
+        version = config.get("private_ip_address_version", "IPv4")
+        # keep the address recognisable per subnet, so a test can tell the NICs of a node apart:
+        # the 'default' subnet holds the primary NIC, 'nic<N>' the secondary one of index N
+        subnet_name = config["subnet"]["id"].rsplit("/", 1)[-1]
+        subnet_index = int(subnet_name.removeprefix("nic")) if subnet_name.startswith("nic") else 0
+        properties = {
+            "privateIPAllocationMethod": "Dynamic",
+            "privateIPAddressVersion": version,
+            "subnet": {"id": config["subnet"]["id"]},
+            "primary": config.get("primary", index == 0),
+            "provisioningState": "Succeeded",
+        }
+        if version == "IPv6":
+            properties["privateIPAddress"] = f"fd00:db8:5c7:{subnet_index}::4"
+        else:
+            properties["privateIPAddress"] = f"10.0.{subnet_index}.4"
+        if public_ip := config.get("public_ip_address"):
+            properties["publicIPAddress"] = {
+                "id": public_ip["id"],
+                "name": public_ip["id"].split("/", -1)[-1],
+                "type": "Microsoft.Network/publicIPAddresses",
+                "sku": {"name": "Standard", "tier": "Regional"},
+                "properties": {
+                    "publicIPAllocationMethod": "Static",
+                    "publicIPAddressVersion": version,
+                    "ipConfiguration": {"id": f"{base_id}/ipConfigurations/{config['name']}"},
+                    "ipTags": [],
+                    "idleTimeoutInMinutes": 4,
+                    "resourceGuid": "cbf93df3-72ac-4c54-8bc1-71c9ebfb1907",
+                    "provisioningState": "Succeeded",
+                    "deleteOption": "Delete",
+                },
+            }
+        return {
+            "id": f"{base_id}/ipConfigurations/{config['name']}",
+            "name": config["name"],
+            "etag": 'W/"a1a80a74-a244-4e0b-9883-41eb47fa633e"',
+            "type": "Microsoft.Network/networkInterfaces/ipConfigurations",
+            "properties": properties,
+        }
+
     def begin_create_or_update(
         self, resource_group_name: str, network_interface_name: str, parameters: Dict[str, Any]
     ) -> WaitableObject:
@@ -380,45 +430,8 @@ class FakeNetworkInterface:
             "etag": 'W/"a1a80a74-a244-4e0b-9883-41eb47fa633e"',
             "properties": {
                 "ipConfigurations": [
-                    {
-                        "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups"
-                        f"/{resource_group_name}/providers/Microsoft.Network/networkInterfaces/"
-                        f"{network_interface_name}/ipConfigurations/{parameters['ip_configurations'][0]['name']}",
-                        "name": parameters["ip_configurations"][0]["name"],
-                        "etag": 'W/"a1a80a74-a244-4e0b-9883-41eb47fa633e"',
-                        "type": "Microsoft.Network/networkInterfaces/ipConfigurations",
-                        "properties": {
-                            "privateIPAddress": "10.0.0.4",
-                            "privateIPAllocationMethod": "Dynamic",
-                            "privateIPAddressVersion": "IPv4",
-                            "subnet": {"id": parameters["ip_configurations"][0]["subnet"]["id"]},
-                            "primary": True,
-                            "publicIPAddress": {
-                                "id": parameters["ip_configurations"][0]["public_ip_address"]["id"],
-                                "name": parameters["ip_configurations"][0]["public_ip_address"]["id"].split("/", -1)[
-                                    -1
-                                ],
-                                "type": "Microsoft.Network/publicIPAddresses",
-                                "sku": {"name": "Basic", "tier": "Regional"},
-                                "properties": {
-                                    "publicIPAllocationMethod": "Dynamic",
-                                    "publicIPAddressVersion": "IPv4",
-                                    "ipConfiguration": {
-                                        "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups"
-                                        f"/{resource_group_name}/providers/Microsoft.Network/networkInterfaces"
-                                        f"/{network_interface_name}/ipConfigurations"
-                                        f"/{parameters['ip_configurations'][0]['name']}"
-                                    },
-                                    "ipTags": [],
-                                    "idleTimeoutInMinutes": 4,
-                                    "resourceGuid": "cbf93df3-72ac-4c54-8bc1-71c9ebfb1907",
-                                    "provisioningState": "Succeeded",
-                                    "deleteOption": "Delete",
-                                },
-                            },
-                            "provisioningState": "Succeeded",
-                        },
-                    }
+                    self._ip_configuration(resource_group_name, network_interface_name, index, config)
+                    for index, config in enumerate(parameters["ip_configurations"])
                 ],
                 "tapConfigurations": [],
                 "dnsSettings": {
