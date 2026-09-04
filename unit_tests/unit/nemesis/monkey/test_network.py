@@ -240,8 +240,32 @@ def test_rate_limit_returns_string_with_suffix(mock_prom_class, runner):
 
 
 # ---------------------------------------------------------------------------
-# UnsupportedNemesis guards
+# precheck guards
 # ---------------------------------------------------------------------------
+
+EXTRA_INTERFACE_MONKEYS = [
+    pytest.param(RandomInterruptionNetworkMonkey, id="random-interruption"),
+    pytest.param(BlockNetworkMonkey, id="block"),
+    pytest.param(StopStartInterfacesNetworkMonkey, id="stop-start"),
+]
+
+
+@pytest.mark.parametrize("monkey_class", EXTRA_INTERFACE_MONKEYS)
+def test_precheck_skips_when_no_extra_interface(runner, monkey_class):
+    """precheck() skips monkeys requiring extra_network_interface when it's absent."""
+    runner.cluster.extra_network_interface = False
+
+    assert monkey_class(runner).precheck(node=runner.cluster.data_nodes[0]) == (
+        "for this nemesis to work, you need to set `extra_network_interface: True`"
+    )
+
+
+@pytest.mark.parametrize("monkey_class", EXTRA_INTERFACE_MONKEYS)
+def test_precheck_keeps_when_extra_interface_set(runner, monkey_class):
+    """precheck() keeps the nemesis when extra_network_interface is configured."""
+    runner.cluster.extra_network_interface = True
+
+    assert monkey_class(runner).precheck(node=runner.cluster.data_nodes[0]) is None
 
 
 @pytest.mark.parametrize(
@@ -249,14 +273,14 @@ def test_rate_limit_returns_string_with_suffix(mock_prom_class, runner):
     [
         pytest.param(RandomInterruptionNetworkMonkey, id="random-interruption"),
         pytest.param(BlockNetworkMonkey, id="block"),
-        pytest.param(StopStartInterfacesNetworkMonkey, id="stop-start"),
     ],
 )
-def test_raises_when_no_extra_interface(runner, monkey_class):
-    """Verify monkeys requiring extra_network_interface raise UnsupportedNemesis when it's absent."""
+def test_precheck_keeps_on_kubernetes_without_extra_interface(runner, monkey_class):
+    """On k8s the Chaos Mesh path is used, so no secondary interface is required."""
+    runner._is_it_on_kubernetes.return_value = True
     runner.cluster.extra_network_interface = False
-    with pytest.raises(UnsupportedNemesis, match="extra_network_interface"):
-        monkey_class(runner).disrupt()
+
+    assert monkey_class(runner).precheck(node=runner.cluster.data_nodes[0]) is None
 
 
 @pytest.mark.parametrize(
