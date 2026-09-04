@@ -158,6 +158,11 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
         with cleanup_step("EMR clusters"):
             clean_emr_clusters(tags_dict, regions=aws_regions, dry_run=dry_run)
     if cluster_backend in ("aws", "k8s-eks", ""):
+        with cleanup_step("AWS spot fleet requests"):
+            # Cancel matching fleet requests before the instance pass: a request left active keeps
+            # asynchronously launching instances, so cancel it (terminating its instances) first and
+            # let AWS settle before scanning for instances to terminate.
+            clean_spot_fleet_requests_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         with cleanup_step("AWS instances"):
             clean_instances_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         with cleanup_step("AWS capacity reservations"):
@@ -400,6 +405,61 @@ def clean_orphan_block_volumes_oci(tags_dict: dict, dry_run: bool = False, regio
                 region=region,
                 logger=LOGGER,
             )
+
+
+def clean_spot_fleet_requests_aws(tags_dict: dict, regions=None, dry_run=False):
+    """Cancel Spot Fleet Requests matching ``tags_dict`` (and terminate their instances).
+
+    Spot Fleet Requests are tagged with the standard SCT tags at creation (``ResourceType``
+    ``spot-fleet-request``), so - like every other resource - they can be discovered by tag and
+    cancelled here regardless of why they were left behind. This matters because a request can
+    outlive the process that created it (e.g. a Jenkins stage timeout kills the provisioning
+    process); AWS keeps fulfilling it in the background and it would otherwise keep launching
+    instances after the instance-cleanup pass already ran. See SCT-779.
+
+    ``DescribeSpotFleetRequests`` has no server-side tag filter, so requests are listed per region
+    and matched client-side.
+    """
+    assert tags_dict, "tags_dict not provided (can't clean all spot fleet requests)"
+    regions = regions or all_aws_regions(cached=True)
+
+    active_states = ("submitted", "active", "modifying")
+    any_cancelled = False
+    for region in regions:
+        client: EC2Client = boto3.client("ec2", region_name=region)
+        request_ids = []
+        try:
+            paginator = client.get_paginator("describe_spot_fleet_requests")
+            for page in paginator.paginate():
+                for config in page.get("SpotFleetRequestConfigs") or []:
+                    if config.get("SpotFleetRequestState") not in active_states:
+                        continue
+                    request_tags = aws_tags_to_dict(config.get("Tags"))
+                    if all(
+                        request_tags.get(key) in value if isinstance(value, list) else request_tags.get(key) == value
+                        for key, value in tags_dict.items()
+                    ):
+                        request_ids.append(config["SpotFleetRequestId"])
+        except ClientError as exc:
+            LOGGER.warning("Failed to list spot fleet requests in %s: %s", region, exc)
+            continue
+
+        if not request_ids:
+            LOGGER.info("There are no spot fleet requests to cancel in AWS region %s", region)
+            continue
+
+        LOGGER.info("Going to cancel spot fleet requests in %s: %s", region, request_ids)
+        if not dry_run:
+            try:
+                client.cancel_spot_fleet_requests(SpotFleetRequestIds=request_ids, TerminateInstances=True)
+                any_cancelled = True
+            except ClientError as exc:
+                LOGGER.warning("Failed to cancel spot fleet requests %s in %s: %s", request_ids, region, exc)
+
+    if any_cancelled:
+        # Instances launched by a request that only just got cancelled may still be starting up;
+        # give AWS a moment before the instance-cleanup pass runs so they get picked up too.
+        time.sleep(30)
 
 
 def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
