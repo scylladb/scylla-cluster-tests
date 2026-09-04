@@ -8,6 +8,11 @@ from sdcm.cluster import BaseNode
 LOGGER = logging.getLogger(__name__)
 
 
+def is_node_destroyed(node: BaseNode) -> bool:
+    """Whether the node object outlived the instance it represents."""
+    return node.destroyed or not node.remoter
+
+
 @contextlib.contextmanager
 def block_scylla_ports(target_node: BaseNode, ports: list[int] | None = None):
     ports = ports or [7001, 7000, 9042, 9142, 19042, 19142]
@@ -20,6 +25,10 @@ def block_scylla_ports(target_node: BaseNode, ports: list[int] | None = None):
         target_node.remoter.sudo(f"ip6tables -A INPUT -p tcp --dport {port} -j DROP")
         target_node.remoter.sudo(f"ip6tables -A OUTPUT -p tcp --dport {port} -j DROP")
     yield
+
+    if is_node_destroyed(target_node):
+        target_node.log.debug("Node %s was destroyed, skipping iptables cleanup", target_node.name)
+        return
     target_node.log.debug("Remove all iptable rules %s", target_node.name)
     for port in ports:
         target_node.remoter.sudo(f"iptables -D INPUT -p tcp --dport {port} -j DROP")
@@ -34,6 +43,10 @@ def pause_scylla_with_sigstop(target_node: BaseNode):
     target_node.log.debug("Send signal SIGSTOP to scylla process on node %s", target_node.name)
     target_node.remoter.sudo("pkill --signal SIGSTOP -e scylla", timeout=60)
     yield
+
+    if is_node_destroyed(target_node):
+        target_node.log.debug("Node %s was destroyed, skipping SIGCONT", target_node.name)
+        return
     target_node.log.debug("Send signal SIGCONT to scylla process on node %s", target_node.name)
     target_node.remoter.sudo(cmd="pkill --signal SIGCONT -e scylla", timeout=60)
 
@@ -61,7 +74,11 @@ def block_loaders_payload_for_scylla_node(scylla_node: BaseNode, loader_nodes: l
             f"ip6tables -A INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True
         )
     yield
-    # if scylla_node is alive, then delete the iptables rules
+
+    if is_node_destroyed(scylla_node):
+        scylla_node.log.debug("Node %s was destroyed, skipping iptables cleanup", scylla_node.name)
+        return
+
     if scylla_node.remoter.is_up():
         for port in ports:
             scylla_node.remoter.sudo(
