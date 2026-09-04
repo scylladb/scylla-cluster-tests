@@ -1,0 +1,169 @@
+# Dual-engine performance test: 60% logstor / 40% LSM (ops split)
+#
+# Runs two concurrent Latte workloads against a single cluster:
+#   - Logstor table (ks_logstor.t_logstor): 360k op/s (108k write / 252k read) — 60%
+#   - LSM table    (ks_lsm.t_lsm):          240k op/s (72k write  / 168k read) — 40%
+#   - Total:                                 600k op/s
+#
+# Each engine has its own keyspace/table, distinct HDR tags, and a separate
+# Argus latency series:
+#   fn--logstor_write, fn--logstor_read  (logstor engine)
+#   fn--lsm_write,     fn--lsm_read      (default LSM engine)
+#
+# Row shape: 10 columns × 200 bytes, key size 48 bytes, 500M rows per table.
+# Access pattern: random uniform (no hot set, no cache warmup).
+# Storage engine config: enable_logstor.yaml (logstor_disk_size_in_mb left unchanged).
+#
+# Driven by:  PerformanceRegressionPredefinedStepsTest.test_dual_engine_mixed_gradual_increase_load
+# Config stack example:
+#   perf-regression-predefined-throughput-steps.yaml
+#   disable_kms.yaml
+#   disable_speculative_retry.yaml
+#   latency-decorator-error-thresholds-steps-ent-tablets.yaml
+#   enable_logstor.yaml
+#   logstor_lsm_dual_60_40.yaml
+
+# ─── Throttle steps ───────────────────────────────────────────────────────────
+# A single 60-minute measured step at 600k total op/s (360k logstor, 240k lsm).
+# Per-loader rates are kept in write_rate / read_rate for each engine; these are
+# substituted via $logstor_write_rate etc. by the dual-engine orchestration.
+perf_gradual_throttle_steps:
+  dual_engine_mixed:
+    - threads: 16
+      concurrency: 12
+      rate: '600000'
+      logstor_write_rate: '108000'
+      logstor_read_rate: '252000'
+      lsm_write_rate: '72000'
+      lsm_read_rate: '168000'
+      duration: '60m'
+
+perf_gradual_step_duration: {"dual_engine_mixed": '60m'}
+
+# ─── Latency thresholds ───────────────────────────────────────────────────────
+# latency-decorator-error-thresholds-steps-ent-tablets.yaml has no entry for the
+# step names this test produces (lsm_600000 / logstor_600000), so without this
+# override both would fall back to the generic mixed.default P99 <= 10ms limit
+# from defaults/test_default.yaml and fail Argus result validation. Disabled
+# here until real-world baselines for this dual-engine workload are known.
+latency_decorator_error_thresholds:
+  mixed:
+    lsm_600000:
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    logstor_600000:
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+
+# No cache warmup: uniform random workload — no hot set to warm
+stress_cmd_cache_warmup: []
+
+# ─── Schema ──────────────────────────────────────────────────────────────────
+# A single latte schema call creates BOTH the LSM and logstor tables.
+# Per-engine keyspace/table names and the storage_engine clause are embedded
+# in the dual-engine rune script; no global storage_engine is set here.
+prepare_stress_cmd: >-
+  latte schema
+  -P column_count=10 -P column_size=200 -P key_size=48
+  -P speculative_retry="\"NONE\"" -P replication_factor=2
+  -P lsm_keyspace="\"ks_lsm\"" -P lsm_table="\"t_lsm\""
+  -P logstor_keyspace="\"ks_logstor\"" -P logstor_table="\"t_logstor\""
+  -P min_per_shard_tablet_count=64
+  data_dir/latte/latte_cs_alike_dual_engine.rn
+
+# ─── Populate ────────────────────────────────────────────────────────────────
+# Populate 500M rows in each table.
+# LSM population uses lsm_write; logstor uses logstor_write.
+# Both run concurrently on the single loader.
+prepare_write_cmd:
+  # LSM table: 500M rows, CL=ALL, sequential fill
+  - >-
+    latte run --function lsm_write --consistency ALL --duration 500000000
+    --threads 32 --concurrency 32 --rate 250000
+    --start-cycle 1 --end-cycle 500000000
+    -P lsm_row_count=500000000 -P lsm_offset=0
+    -P column_count=10 -P column_size=200 -P key_size=48
+    -P lsm_keyspace="\"ks_lsm\"" -P lsm_table="\"t_lsm\""
+    data_dir/latte/latte_cs_alike_dual_engine.rn
+  # Logstor table: 500M rows, CL=ALL, sequential fill
+  - >-
+    latte run --function logstor_write --consistency ALL --duration 500000000
+    --threads 32 --concurrency 32 --rate 250000
+    --start-cycle 1 --end-cycle 500000000
+    -P logstor_row_count=500000000 -P logstor_offset=0
+    -P column_count=10 -P column_size=200 -P key_size=48
+    -P logstor_keyspace="\"ks_logstor\"" -P logstor_table="\"t_logstor\""
+    data_dir/latte/latte_cs_alike_dual_engine.rn
+
+# ─── Measured mixed step: all four commands in the registered stress_cmd_m key ─
+# The dual-engine test method partitions this list by function-name prefix:
+#   logstor_* → logstor Workload (60% ops, 360k op/s total)
+#   lsm_*     → LSM Workload     (40% ops, 240k op/s total)
+# Rates per command: logstor 108k write + 252k read; lsm 72k write + 168k read.
+stress_cmd_m:
+  # logstor commands (60% = 360k op/s)
+  - >-
+    latte run --function logstor_write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency --rate $logstor_write_rate
+    --start-cycle 1
+    -P logstor_row_count=500000000 -P logstor_offset=0 -P distribution="\"random\""
+    -P column_count=10 -P column_size=200 -P key_size=48
+    -P logstor_keyspace="\"ks_logstor\"" -P logstor_table="\"t_logstor\""
+    data_dir/latte/latte_cs_alike_dual_engine.rn
+  - >-
+    latte run --function logstor_read --consistency ONE --duration $duration
+    --threads $threads --concurrency $concurrency --rate $logstor_read_rate
+    --start-cycle 1
+    -P logstor_row_count=500000000 -P logstor_offset=0 -P distribution="\"random\""
+    -P column_count=10 -P column_size=200 -P key_size=48
+    -P logstor_keyspace="\"ks_logstor\"" -P logstor_table="\"t_logstor\""
+    data_dir/latte/latte_cs_alike_dual_engine.rn
+  # lsm commands (40% = 240k op/s)
+  - >-
+    latte run --function lsm_write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency --rate $lsm_write_rate
+    --start-cycle 1
+    -P lsm_row_count=500000000 -P lsm_offset=0 -P distribution="\"random\""
+    -P column_count=10 -P column_size=200 -P key_size=48
+    -P lsm_keyspace="\"ks_lsm\"" -P lsm_table="\"t_lsm\""
+    data_dir/latte/latte_cs_alike_dual_engine.rn
+  - >-
+    latte run --function lsm_read --consistency ONE --duration $duration
+    --threads $threads --concurrency $concurrency --rate $lsm_read_rate
+    --start-cycle 1
+    -P lsm_row_count=500000000 -P lsm_offset=0 -P distribution="\"random\""
+    -P column_count=10 -P column_size=200 -P key_size=48
+    -P lsm_keyspace="\"ks_lsm\"" -P lsm_table="\"t_lsm\""
+    data_dir/latte/latte_cs_alike_dual_engine.rn
+
+# ─── Schema parameters ────────────────────────────────────────────────────────
+# No global storage_engine or keyspace/table — all per-command via inline -P flags.
+latte_schema_parameters:
+  replication_factor: 2
+  column_count: 10
+  column_size: 200
+  key_size: 48
+  speculative_retry: 'NONE'
+  lsm_keyspace: 'ks_lsm'
+  lsm_table: 't_lsm'
+  logstor_keyspace: 'ks_logstor'
+  logstor_table: 't_logstor'
+  min_per_shard_tablet_count: 64
+
+perf_stress_keyspace: ks_logstor
+perf_stress_table: t_logstor
+
+# Disable rack-aware loader (uniform workload, not pinned to a rack)
+rack_aware_loader: false
