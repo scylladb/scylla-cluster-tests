@@ -1,0 +1,297 @@
+//! Full-text search (BM25) workload - schema, load, build_index and search phases.
+//!
+//! Origin: scylladb/vector-store, latte/full-text-search/. This copy is the one test runs use --
+//! LatteStressThread resolves .rn paths inside the SCT tree and copies the whole containing
+//! directory into the loader container, so the script cannot be loaded from the vector-store repo
+//! directly. Mirror any change back to vector-store, and keep the phase names and -P parameter
+//! names in sync with fts_test.py, which invokes them.
+//!
+//! Usage:
+//!   latte schema             fts.rn <node>
+//!   latte schema             fts.rn <node> -P schema_cleanup=true  # full reset
+//!   latte schema             fts.rn <node> -P drop_index=true      # drop index only
+//!   latte load               fts.rn <node> \
+//!       --threads 1 --concurrency 10
+//!   latte run -f load        fts.rn <node> -d <doc_count> \
+//!       --threads 1 --concurrency 10
+//!   latte run -f build_index fts.rn <node> -d 1
+//!   latte run -f search      fts.rn <node> -d 60s --concurrency 32 \
+//!       -P 'fts_data_dir="<dir>/"'
+//!
+//! Schema is idempotent (CREATE TABLE IF NOT EXISTS). Use schema_cleanup=true
+//! to drop the table, or drop_index=true to drop just the FTS index.
+
+use latte::*;
+
+mod metrics;
+
+// Schema / table
+const KEYSPACE = latte::param!("keyspace", "fts_bench");
+const TABLE = latte::param!("table", "documents");
+const INDEX_NAME = latte::param!("index_name", "documents_fts_idx");
+const REPLICATION_FACTOR = latte::param!("replication_factor", 1);
+const TARGET_COLUMN = latte::param!("target_column", "body");
+const INDEX_OPTIONS = latte::param!("index_options", "");
+const WITH_INDEX = latte::param!("with_index", false);
+const SCHEMA_CLEANUP = latte::param!("schema_cleanup", false);
+const DROP_INDEX = latte::param!("drop_index", false);
+const MAX_INDEX_WAIT_SECS = latte::param!("max_index_wait_secs", 600);
+const MIN_SUCCESSFUL_PROBES = latte::param!("min_successful_probes", 3);
+// Number of indexed documents. When provided (> 0), indexing throughput is
+// reported alongside index build time. Omit or set to 0 to skip throughput.
+const DOCUMENT_COUNT = latte::param!("document_count", 0);
+
+// Dataset files
+const FTS_DATA_DIR = latte::param!("fts_data_dir", "./");
+const DOCUMENTS_FILE = latte::param!("documents_file", "documents.tsv");
+const QUERIES_FILE = latte::param!("queries_file", "queries_natural.tsv");
+const QRELS_FILE = latte::param!("qrels_file", "qrels_natural.tsv");
+
+// Search
+const SEARCH_LIMIT = latte::param!("search_limit", 5);
+const COMPUTE_ACCURACY = latte::param!("compute_accuracy", true);
+
+// Prepared statement names
+const INSERT = "insert";
+const PROBE = "probe";
+const SEARCH = "search";
+
+/// Create the full-text index if absent. Idempotent (IF NOT EXISTS), called
+/// from `schema`, `prepare` (load context), or `prepare` (build_index context).
+async fn create_index(db) {
+    let options_clause = if INDEX_OPTIONS == "" { "" } else { ` WITH OPTIONS = ${INDEX_OPTIONS}` };
+    db.execute(`CREATE CUSTOM INDEX IF NOT EXISTS ${INDEX_NAME} ON ${KEYSPACE}.${TABLE}(${TARGET_COLUMN}) USING 'fulltext_index'${options_clause}`).await?;
+    Ok(())
+}
+
+pub async fn schema(db) {
+    if SCHEMA_CLEANUP {
+        db.execute(`DROP TABLE IF EXISTS ${KEYSPACE}.${TABLE}`).await?;
+        return;
+    }
+
+    db.execute(`CREATE KEYSPACE IF NOT EXISTS ${KEYSPACE} WITH REPLICATION = \
+        {'class': 'NetworkTopologyStrategy', 'replication_factor': '${REPLICATION_FACTOR}'}`).await?;
+    db.execute(`CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE} (doc_id text PRIMARY KEY, ${TARGET_COLUMN} text)`).await?;
+
+    if DROP_INDEX {
+        db.execute(`DROP INDEX IF EXISTS ${KEYSPACE}.${INDEX_NAME}`).await?;
+    }
+    if WITH_INDEX {
+        create_index(db).await?;
+    }
+}
+
+fn join_path(dir, name) {
+    if dir == "" || dir.ends_with("/") { dir + name } else { dir + "/" + name }
+}
+
+pub async fn prepare(db) {
+    let has_load = false;
+    let has_build_index = false;
+    let has_search = false;
+
+    if !is_none(db.data.get("functions_to_invoke")) {
+        for item in db.data.functions_to_invoke {
+            let name = item.0;
+            if name == "load" { has_load = true; }
+            if name == "build_index" { has_build_index = true; }
+            if name == "search" { has_search = true; }
+        }
+    } else {
+        has_load = true;
+    }
+
+    if has_load {
+        db.execute(`CREATE KEYSPACE IF NOT EXISTS ${KEYSPACE} WITH REPLICATION = \
+            {'class': 'NetworkTopologyStrategy', 'replication_factor': '${REPLICATION_FACTOR}'}`).await?;
+        db.execute(`CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE} (doc_id text PRIMARY KEY, ${TARGET_COLUMN} text)`).await?;
+        if WITH_INDEX {
+            create_index(db).await?;
+        }
+
+        let path = join_path(FTS_DATA_DIR, DOCUMENTS_FILE);
+        let it = fs::read_split_lines_iter(path, ["\t"])?;
+        db.data.documents = [];
+        while let Some(entry) = it.next() {
+            let raw = entry?;
+            if !raw.is_empty() {
+                db.data.documents.push(#{ "id": raw[0], "body": raw[1] });
+            }
+        }
+        db.load_cycle_count = db.data.documents.len();
+        println!("Loaded {} documents from {}", db.data.documents.len(), path);
+        db.prepare(INSERT, `INSERT INTO ${KEYSPACE}.${TABLE} (doc_id, ${TARGET_COLUMN}) VALUES (:doc_id, :body)`).await?;
+    }
+
+    if has_build_index {
+        db.execute(`DROP INDEX IF EXISTS ${KEYSPACE}.${INDEX_NAME}`).await?;
+        create_index(db).await?;
+        db.data.index_build_start = latte::now_timestamp();
+        db.data.index_ready = false;
+        db.data.index_ready_elapsed = 0.0;
+        db.prepare(PROBE, `SELECT doc_id FROM ${KEYSPACE}.${TABLE} WHERE BM25(${TARGET_COLUMN}, 'probe') > 0 ORDER BY BM25(${TARGET_COLUMN}, 'probe') LIMIT 1`).await?;
+        db.declare_metric("index_ready_seconds", "lower");
+        if DOCUMENT_COUNT > 0 {
+            db.declare_metric("indexing_throughput_docs_per_sec", "higher");
+        }
+    }
+
+    if has_search {
+        let queries_path = join_path(FTS_DATA_DIR, QUERIES_FILE);
+        let it = fs::read_split_lines_iter(queries_path, ["\t"])?;
+        db.data.queries = [];
+        while let Some(entry) = it.next() {
+            let raw = entry?;
+            if !raw.is_empty() {
+                db.data.queries.push(#{ "id": raw[0], "text": raw[1] });
+            }
+        }
+        println!("Loaded {} queries from {}", db.data.queries.len(), queries_path);
+
+        if COMPUTE_ACCURACY {
+            let qrels_path = join_path(FTS_DATA_DIR, QRELS_FILE);
+            let qit = fs::read_split_lines_iter(qrels_path, ["\t"])?;
+            db.data.qrels = [];
+            while let Some(entry) = qit.next() {
+                let raw = entry?;
+                if !raw.is_empty() {
+                    db.data.qrels.push(#{ "query_id": raw[0], "doc_id": raw[1], "grade": raw[2].parse::<i64>()? });
+                }
+            }
+            println!("Loaded {} qrels from {}", db.data.qrels.len(), qrels_path);
+
+            db.data.qrels_by_query = [];
+            for _ in 0..db.data.queries.len() {
+                db.data.qrels_by_query.push([]);
+            }
+            for qrel in db.data.qrels {
+                for j in 0..db.data.queries.len() {
+                    if db.data.queries[j].id == qrel.query_id {
+                        db.data.qrels_by_query[j].push(#{ "doc_id": qrel.doc_id, "grade": qrel.grade });
+                        break;
+                    }
+                }
+            }
+            db.data.qrels = [];
+
+            db.declare_metric("recall", "higher");
+            db.declare_metric("precision", "higher");
+            db.declare_metric("mrr", "higher");
+            db.declare_metric("ndcg", "higher");
+        }
+
+        println!("Search limit: {}", SEARCH_LIMIT);
+
+        db.prepare(SEARCH, `SELECT doc_id FROM ${KEYSPACE}.${TABLE} WHERE BM25(${TARGET_COLUMN}, :q) > 0 ORDER BY BM25(${TARGET_COLUMN}, :q) LIMIT ${SEARCH_LIMIT}`).await?;
+
+        db.set_report_field("dataset", FTS_DATA_DIR);
+        db.set_report_field("queries_file", QUERIES_FILE);
+        db.set_report_field("compute_accuracy", `${COMPUTE_ACCURACY}`);
+
+        db.declare_metric("result_count", "higher");
+
+        db.data.failed_bitmap = [];
+        for _ in 0..db.data.queries.len() {
+            db.data.failed_bitmap.push(false);
+        }
+    }
+}
+
+pub async fn load(db, i) {
+    let row = db.data.documents[i % db.data.documents.len()];
+    db.execute_prepared(INSERT, #{ "doc_id": row.id, "body": row.body }).await?;
+}
+
+pub async fn build_index(db, i) {
+    if db.data.index_ready { // done in warmup
+        let elapsed = db.data.index_ready_elapsed;
+        db.record_metric("index_ready_seconds", elapsed);
+        if DOCUMENT_COUNT > 0 && elapsed > 0.0 {
+            db.record_metric("indexing_throughput_docs_per_sec", DOCUMENT_COUNT as f64 / elapsed);
+        }
+        return Ok(());
+    }
+    let start = db.data.index_build_start;
+    let max_wait = MAX_INDEX_WAIT_SECS;
+    let consecutive_ok = 0;
+    let streak_start = start;
+    // NOTE: this loop has no pacing of its own -- latte exposes no sleep to rune scripts. While the
+    //       index is missing the probe fails and latte's own retry backoff paces the loop, but once
+    //       the probes start succeeding and the streak is still short the loop spins as fast as the
+    //       DB answers. It probes a LIMIT 1 single-term query, so the load is small, but keep in
+    //       mind it lands on the cluster whose index build time is being measured here. Add a sleep
+    //       binding to latte before making this loop do anything heavier.
+    loop {
+        match db.execute_prepared_with_result(PROBE, #{}).await {
+            Ok(_) => {
+                if consecutive_ok == 0 {
+                    streak_start = latte::now_timestamp();
+                }
+                consecutive_ok += 1;
+                if consecutive_ok >= MIN_SUCCESSFUL_PROBES {
+                    let elapsed = (streak_start - start) as f64;
+                    db.data.index_ready_elapsed = elapsed;
+                    db.data.index_ready = true;
+                    db.record_metric("index_ready_seconds", elapsed);
+                    if DOCUMENT_COUNT > 0 && elapsed > 0.0 {
+                        db.record_metric("indexing_throughput_docs_per_sec", DOCUMENT_COUNT as f64 / elapsed);
+                    }
+                    return Ok(());
+                }
+            }
+            Err(e) => {
+                consecutive_ok = 0;
+                let err_msg = format!("{}", e);
+                if !(err_msg.contains("QueryRetriesExceeded")
+                    && (latte::now_timestamp() - start) < max_wait) {
+                    return Err(e);
+                }
+            }
+        }
+    }
+}
+
+pub async fn search(db, i) {
+    if db.data.queries.len() == 0 {
+        return Ok(());
+    }
+    let idx = latte::hash(i) % db.data.queries.len();
+    let query = db.data.queries[idx];
+
+    match db.execute_prepared_with_result(SEARCH, #{ "q": query.text }).await {
+        Err(e) => {
+            if !db.data.failed_bitmap[idx] {
+                println!("WARNING: query failed [idx={} id=\"{}\" text=\"{}\" error={}]",
+                         idx, query.id, query.text, e);
+                db.data.failed_bitmap[idx] = true;
+            }
+            return Ok(());
+        }
+        Ok(rows) => {
+            let returned_ids = [];
+            for row in rows {
+                returned_ids.push(row.doc_id);
+            }
+            db.record_metric("result_count", returned_ids.len() as f64);
+
+            if COMPUTE_ACCURACY {
+                let relevant_ids = [];
+                let relevances = [];
+                for qrel in db.data.qrels_by_query[idx] {
+                    if qrel.grade > 0 {
+                        relevant_ids.push(qrel.doc_id);
+                    }
+                    relevances.push(#{ "doc_id": qrel.doc_id, "grade": qrel.grade });
+                }
+                if relevances.len() > 0 {
+                    db.record_metric("recall", metrics::recall_at_k(returned_ids, relevant_ids, SEARCH_LIMIT));
+                    db.record_metric("precision", metrics::precision_at_k(returned_ids, relevant_ids, SEARCH_LIMIT));
+                    db.record_metric("mrr", metrics::reciprocal_rank(returned_ids, relevant_ids));
+                    db.record_metric("ndcg", metrics::ndcg_at_k(returned_ids, relevances, SEARCH_LIMIT));
+                }
+            }
+        }
+    }
+    Ok(())
+}

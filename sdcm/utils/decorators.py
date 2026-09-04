@@ -192,6 +192,8 @@ def latency_calculator_decorator(  # noqa: PLR0915
     cycle_name: Optional[str] = None,
     workload_type: Optional[str] = None,
     row_name: Optional[str] = None,
+    error_thresholds: Optional[dict] = None,
+    extra_columns: Optional[list] = None,
 ):
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
@@ -203,6 +205,14 @@ def latency_calculator_decorator(  # noqa: PLR0915
     are absent from the results, the rest is collected as usual.
 
     :param func: Remote method to run.
+    :param error_thresholds: overrides the 'latency_decorator_error_thresholds' test param for this
+        call, e.g. when a caller computes its own validation rule instead of relying on a value
+        configured for the whole test (see fts_test.py, whose expected latency comes from its plan).
+    :param extra_columns: additional 'argus.client.generic_result.ColumnMetadata' appended to the
+        result table's schema. The decorated function's return value may then include an
+        'extra_values' dict of {column name: value}, submitted once per row alongside the usual
+        latency cells. Ignored (as is 'extra_values') unless both are supplied, so existing callers
+        are unaffected.
     :return: Wrapped method.
     """
     # calling this import here, because of circular import
@@ -315,7 +325,12 @@ def latency_calculator_decorator(  # noqa: PLR0915
                 result["cycle_hdr_throughput"] = round(hdr_throughput)
                 result["reactor_stalls_stats"] = reactor_stall_stats
                 LOGGER.debug("Reactor stalls stats: %s", reactor_stall_stats)
-                error_thresholds = tester.params.get("latency_decorator_error_thresholds")
+                thresholds_config = (
+                    error_thresholds
+                    if error_thresholds is not None
+                    else tester.params.get("latency_decorator_error_thresholds")
+                )
+                extra_values = res.get("extra_values") if isinstance(res, dict) else None
                 if "steady" in func_name.lower():
                     if "Steady State" not in latency_results:
                         latency_results["Steady State"] = result
@@ -327,7 +342,9 @@ def latency_calculator_decorator(  # noqa: PLR0915
                             cycle=row_name or 0,
                             result=result,
                             start_time=start,
-                            error_thresholds=error_thresholds,
+                            error_thresholds=thresholds_config,
+                            extra_columns=extra_columns,
+                            extra_values=extra_values,
                         )
                 else:
                     latency_results[func_name]["cycles"].append(result)
@@ -341,7 +358,9 @@ def latency_calculator_decorator(  # noqa: PLR0915
                         cycle=row_name or len(latency_results[func_name]["cycles"]),
                         result=result,
                         start_time=start,
-                        error_thresholds=error_thresholds,
+                        error_thresholds=thresholds_config,
+                        extra_columns=extra_columns,
+                        extra_values=extra_values,
                     )
                     LOGGER.debug("Saved in Argus")
 
