@@ -229,6 +229,10 @@ def network_interfaces_count(params):
 
 
 DEFAULT_AZURE_SUBNET_NAME = "default"
+# Azure VNet IPv6 space must come from a private (ULA) range: an internet-routable IPv6 is a
+# separate, billed Public IP resource attached to the ipConfiguration, never the VNet address.
+AZURE_IPV6_ADDRESS_SPACE = "fd00:db8:5c7::/48"
+AZURE_IPV6_SUBNET_PREFIX_TMPL = "fd00:db8:5c7:{index}::/64"  # Azure requires exactly a /64
 AZURE_SECONDARY_SUBNET_NAME_TMPL = "nic{index}"
 
 

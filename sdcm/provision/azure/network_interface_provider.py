@@ -59,11 +59,49 @@ class NetworkInterfaceProvider:
         ]
         return [nic for _, nic in sorted(nics, key=lambda item: item[0])]
 
+    @staticmethod
+    def _ip_configurations(nic_name: str, subnet_id: str, interface: Dict, addresses: Dict[str, str | None]) -> List:
+        """ipConfigurations of one NIC: an IPv4 one, and an IPv6 one when the NIC asks for it.
+
+        Azure requires the primary ipConfiguration to be IPv4, so the IPv6 one is always secondary.
+        """
+
+        def with_public_ip(config: Dict, address: str | None) -> Dict:
+            if address is not None:
+                config["public_ip_address"] = {"id": address, "properties": {"deleteOption": "Delete"}}
+            return config
+
+        configurations = [
+            with_public_ip(
+                {
+                    "name": nic_name,
+                    "subnet": {"id": subnet_id},
+                    "primary": True,
+                    "private_ip_address_version": "IPv4",
+                },
+                addresses.get("ipv4"),
+            )
+        ]
+        if interface["ipv6"]:
+            configurations.append(
+                with_public_ip(
+                    {
+                        "name": f"{nic_name}-ipv6",
+                        "subnet": {"id": subnet_id},
+                        "primary": False,
+                        "private_ip_address_version": "IPv6",
+                    },
+                    addresses.get("ipv6"),
+                )
+            )
+        return configurations
+
     def get_or_create(self, plans: Dict[str, List[Dict]]) -> Dict[str, List[NetworkInterface]]:
         """Creates or gets (if already exists) the network interfaces of every given VM.
 
         'plans' maps a VM name to its interfaces in device-index order, each an entry of
-        {"subnet_id": ..., "address_id": <public IP id, or None for a NIC without one>}.
+        {"interface": <NIC spec>, "subnet_id": ..., "addresses": {"ipv4": id, "ipv6": id}}. It is
+        per VM because node types differ: only DB nodes take the secondary interfaces.
 
         Azure can only attach a NIC to a deallocated VM, so every NIC a VM will ever have is
         created here, before the VM itself.
@@ -76,22 +114,11 @@ class NetworkInterfaceProvider:
                     continue
                 parameters = {
                     "location": self._region,
-                    "ip_configurations": [
-                        {
-                            "name": nic_name,
-                            "subnet": {
-                                "id": entry["subnet_id"],
-                            },
-                            "primary": True,
-                        }
-                    ],
+                    "ip_configurations": self._ip_configurations(
+                        nic_name, entry["subnet_id"], entry["interface"], entry["addresses"]
+                    ),
                     "enable_accelerated_networking": True,
                 }
-                if entry["address_id"] is not None:
-                    parameters["ip_configurations"][0]["public_ip_address"] = {
-                        "id": entry["address_id"],
-                        "properties": {"deleteOption": "Delete"},
-                    }
                 LOGGER.info("Creating nic %s in resource group %s...", nic_name, self._resource_group_name)
                 poller = self._azure_service.network.network_interfaces.begin_create_or_update(
                     resource_group_name=self._resource_group_name,

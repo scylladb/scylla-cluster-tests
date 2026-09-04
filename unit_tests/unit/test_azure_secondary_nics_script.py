@@ -153,3 +153,56 @@ def test_rerunning_does_not_stack_duplicate_rules(run_script):
 
     assert commands.count("rule add from 10.0.1.4 lookup 101 priority 101") == 1
     assert "rule del from 10.0.1.4 lookup 101" in commands
+
+
+def imds_dual_stack_interface(mac: str, private_ip: str, subnet: str, ipv6_address: str, ipv6_subnet: str) -> dict:
+    interface = imds_interface(mac, private_ip, subnet)
+    interface["ipv6"] = {
+        "ipAddress": [{"privateIpAddress": ipv6_address}],
+        "subnet": [{"address": ipv6_subnet, "prefix": "64"}],
+    }
+    return interface
+
+
+def test_dual_stack_secondary_nic_gets_ipv6_address_rule_and_routes(run_script):
+    result, commands = run_script(
+        [
+            imds_dual_stack_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0", "fd00:db8:5c7::4", "fd00:db8:5c7::"),
+            imds_dual_stack_interface(SECONDARY_MAC, "10.0.1.4", "10.0.1.0", "fd00:db8:5c7:1::4", "fd00:db8:5c7:1::"),
+        ],
+        expected_nics=2,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "-6 addr replace fd00:db8:5c7:1::4/128 dev eth1" in commands
+    assert "-6 rule add from fd00:db8:5c7:1::4 lookup 101 priority 101" in commands
+    assert "-6 route replace fd00:db8:5c7:1::/64 dev eth1 table 101" in commands
+    # Azure publishes no IPv6 gateway, so it is derived as the first address of the subnet prefix
+    assert "-6 route replace default via fd00:db8:5c7:1::1 dev eth1 table 101" in commands
+
+
+def test_ipv4_only_nic_issues_no_ipv6_command(run_script):
+    result, commands = run_script(
+        [
+            imds_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0"),
+            imds_interface(SECONDARY_MAC, "10.0.1.4", "10.0.1.0"),
+        ],
+        expected_nics=2,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not [command for command in commands if command.startswith("-6")]
+
+
+def test_ipv4_routing_is_unaffected_by_the_ipv6_configuration(run_script):
+    result, commands = run_script(
+        [
+            imds_dual_stack_interface(PRIMARY_MAC, "10.0.0.4", "10.0.0.0", "fd00:db8:5c7::4", "fd00:db8:5c7::"),
+            imds_dual_stack_interface(SECONDARY_MAC, "10.0.1.4", "10.0.1.0", "fd00:db8:5c7:1::4", "fd00:db8:5c7:1::"),
+        ],
+        expected_nics=2,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "rule add from 10.0.1.4 lookup 101 priority 101" in commands
+    assert "route replace default via 10.0.1.1 dev eth1 table 101" in commands

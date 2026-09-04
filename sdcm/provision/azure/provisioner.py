@@ -270,25 +270,37 @@ class AzureProvisioner(Provisioner):
 
         self._rg_provider.get_or_create()
         sec_group_id = self._network_sec_group_provider.get_or_create(security_rules=ScyllaOpenPorts).id
-        vnet_name = self._vnet_provider.get_or_create().name
+        vnet_name = self._vnet_provider.get_or_create(ipv6=self._ipv6_enabled).name
 
         subnet_ids = [
             self._subnet_provider.get_or_create(
-                vnet_name, sec_group_id, subnet_name=interface["subnet"], index=index
+                vnet_name,
+                sec_group_id,
+                subnet_name=interface["subnet"],
+                index=index,
+                ipv6=interface["ipv6"],
             ).id
             for index, interface in enumerate(self._network_interfaces)
         ]
 
-        # A public IPv4 address is only created for an interface configured to carry one, and only
-        # for a node that asked for public access at all.
+        # A public address is only created for an interface configured to carry one, and only for a
+        # node that asked for public access at all. An Azure IPv6 Public IP is billed, so an
+        # interface without 'public_ipv6' gets a VNet-local address only.
         plans = {definition.name: [] for definition in definitions}
         for index, interface in enumerate(self._network_interfaces):
-            public_definitions = definitions if interface["public_ip"] else []
-            self._ip_provider.get_or_create(instance_definitions=public_definitions, version="IPV4", index=index)
+            for version, wanted in (("IPV4", interface["public_ip"]), ("IPV6", interface["public_ipv6"])):
+                self._ip_provider.get_or_create(
+                    instance_definitions=definitions if wanted else [], version=version, index=index
+                )
             for definition in definitions:
-                address = self._ip_provider.get(definition.name, index=index) if interface["public_ip"] else None
+                addresses = {}
+                for version, key in (("IPV4", "public_ip"), ("IPV6", "public_ipv6")):
+                    address = (
+                        self._ip_provider.get(definition.name, version=version, index=index) if interface[key] else None
+                    )
+                    addresses[version.lower()] = getattr(address, "id", None)
                 plans[definition.name].append(
-                    {"subnet_id": subnet_ids[index], "address_id": getattr(address, "id", None)}
+                    {"interface": interface, "subnet_id": subnet_ids[index], "addresses": addresses}
                 )
 
         names = [definition.name for definition in definitions]
@@ -297,6 +309,11 @@ class AzureProvisioner(Provisioner):
         return self._vm_provider.get_or_create(
             definitions=definitions, nics_ids=nics_ids, pricing_model=pricing_model, deadline=deadline
         )
+
+    @property
+    def _ipv6_enabled(self) -> bool:
+        """True when any configured network interface asks for IPv6."""
+        return any(interface["ipv6"] for interface in self._network_interfaces)
 
     def network_interfaces(self, name: str) -> List[NetworkInterface]:
         """Azure NICs of a VM, ordered by device index."""
@@ -310,7 +327,8 @@ class AzureProvisioner(Provisioner):
         """
         addresses = []
         for index, _ in enumerate(self._nic_provider.get_all(name) or [None]):
-            addresses.append(self._ip_provider.get(name, index=index))
+            for version in ("IPV4", "IPV6"):
+                addresses.append(self._ip_provider.get(name, version=version, index=index))
         return addresses
 
     def _validate_network_interfaces_count(self, instance_type: str) -> None:

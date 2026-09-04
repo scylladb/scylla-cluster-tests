@@ -23,7 +23,11 @@ from sdcm.kernel_panic_checker import AzureKernelPanicChecker
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
-from sdcm.provision.network_configuration import NetworkInterface, network_interfaces_count
+from sdcm.provision.network_configuration import (
+    NetworkInterface,
+    azure_network_interfaces,
+    network_interfaces_count,
+)
 from sdcm.utils.azure_utils import (
     SECONDARY_NICS_SCRIPT,
     SECONDARY_NICS_SCRIPT_PATH,
@@ -38,6 +42,10 @@ SPOT_TERMINATION_CHECK_DELAY = 15
 
 
 class CreateAzureNodeError(Exception):
+    pass
+
+
+class Ipv6AddressNotFoundError(Exception):
     pass
 
 
@@ -299,9 +307,57 @@ class AzureNode(cluster.BaseNode):
         self._instance.terminate(wait=True)
         super().destroy()
 
-    def _get_ipv6_ip_address(self):
-        # todo: fix it
+    def _get_ipv6_ip_address(self) -> str:
+        """Routable IPv6 address of the node, empty when the run did not ask for IPv6.
+
+        Prefers what the API reports, and asks the OS only as a fallback - which needs SSH, so
+        before the node has a remoter a missing address is an error rather than an empty string.
+        """
+        if self.scylla_network_configuration:
+            if address := self.scylla_network_configuration.interface_ipv6_address:
+                return address
+        if address := self._api_ipv6_address():
+            return address
+        if not any(interface["ipv6"] for interface in azure_network_interfaces(self.parent_cluster.params)):
+            return ""
+        if not self.remoter and not self.destroyed:
+            # No SSH yet, and the OS fallback below needs it. This is the node-init path:
+            # `ip_ssh_connections` resolves to 'ipv6' whenever 'test_communication' does, so this
+            # address is what the SSH connection is about to be opened to. Returning "" here would
+            # hand SSH an empty hostname and fail much later, as a connection timeout.
+            raise Ipv6AddressNotFoundError(
+                f"No routable IPv6 address for {self.name}: the Azure API reports none on its "
+                f"primary NIC and the OS cannot be asked before SSH is up"
+            )
+        return next(iter(self._discover_ipv6_from_os().values()), [""])[0]
+
+    def _api_ipv6_address(self) -> str:
+        """Routable IPv6 of the primary NIC per the Azure API, empty while it is not published."""
+        interfaces = self.network_interfaces
+        if interfaces and interfaces[0].ipv6_public_addresses:
+            return interfaces[0].ipv6_public_addresses[0]
         return ""
+
+    def _discover_ipv6_from_os(self) -> dict:
+        """Global-scope IPv6 addresses seen by the node OS, keyed by interface name."""
+        if not self.remoter or self.destroyed:
+            return {}
+        result = self.remoter.run("ip -6 -j addr show scope global", ignore_status=True)
+        if result.exit_status != 0 or not result.stdout.strip():
+            return {}
+        try:
+            ipv6_map = {}
+            for interface in json.loads(result.stdout.strip()):
+                addresses = [
+                    address["local"]
+                    for address in interface.get("addr_info", [])
+                    if address.get("family") == "inet6" and address.get("local")
+                ]
+                if addresses:
+                    ipv6_map[interface.get("ifname", "")] = addresses
+            return ipv6_map
+        except json.JSONDecodeError, KeyError:
+            return {}
 
     @property
     def image(self):

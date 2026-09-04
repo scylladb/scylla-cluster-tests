@@ -41,14 +41,14 @@ def nic_specs(count: int) -> list[dict]:
 
 @pytest.fixture(name="make_provisioner")
 def fixture_make_provisioner(azure_service):
-    def _make(nic_count: int):
+    def _make(nic_count: int, specs: list[dict] = None):
         return provisioner_factory.create_provisioner(
             backend="azure",
             test_id=str(uuid.uuid4()),
             region=REGION,
             availability_zone="a",
             azure_service=azure_service,
-            azure_network_interfaces=nic_specs(nic_count),
+            azure_network_interfaces=specs or nic_specs(nic_count),
         )
 
     return _make
@@ -231,3 +231,68 @@ def test_unknown_vm_size_does_not_block_provisioning(make_provisioner, caplog):
 
     assert len(nic_names(provisioner, instance.name)) == 2
     assert "does not report 'MaxNetworkInterfaces'" in caplog.text
+
+
+class TestIpv6:
+    """IPv6 is opt-in: an Azure IPv6 Public IP is billed, so nothing IPv6 may appear by default."""
+
+    @staticmethod
+    def ipv6_specs(public_ipv6: bool = True) -> list[dict]:
+        return [
+            {"subnet": "default", "public_ip": True, "ipv6": True, "public_ipv6": public_ipv6},
+            {"subnet": "nic1", "public_ip": False, "ipv6": True, "public_ipv6": False},
+        ]
+
+    def test_ipv6_interface_gets_a_second_ip_configuration(self, make_provisioner):
+        provisioner = make_provisioner(2, specs=self.ipv6_specs())
+        instance = provisioner.get_or_create_instance(definition("ipv6-vm"), PricingModel.ON_DEMAND)
+
+        for nic in provisioner._nic_provider.get_all(instance.name):  # noqa: SLF001
+            versions = [config.private_ip_address_version for config in nic.ip_configurations]
+            assert versions == ["IPv4", "IPv6"], "an IPv4 configuration must stay primary on Azure"
+            assert nic.ip_configurations[0].primary is True
+
+    def test_routable_ipv6_is_only_created_where_asked_for(self, make_provisioner):
+        provisioner = make_provisioner(2, specs=self.ipv6_specs())
+        instance = provisioner.get_or_create_instance(definition("ipv6-public-vm"), PricingModel.ON_DEMAND)
+
+        primary, secondary = provisioner._nic_provider.get_all(instance.name)  # noqa: SLF001
+        assert primary.ip_configurations[1].public_ip_address is not None
+        assert secondary.ip_configurations[1].public_ip_address is None
+
+    def test_vnet_local_ipv6_needs_no_public_ip_resource(self, make_provisioner):
+        provisioner = make_provisioner(2, specs=self.ipv6_specs(public_ipv6=False))
+        instance = provisioner.get_or_create_instance(definition("ula-only-vm"), PricingModel.ON_DEMAND)
+
+        for nic in provisioner._nic_provider.get_all(instance.name):  # noqa: SLF001
+            assert nic.ip_configurations[1].private_ip_address_version == "IPv6"
+            assert nic.ip_configurations[1].public_ip_address is None
+
+    def test_subnets_are_dual_stack_only_for_ipv6_interfaces(self, make_provisioner, azure_service):
+        specs = [
+            {"subnet": "default", "public_ip": True, "ipv6": True, "public_ipv6": True},
+            {"subnet": "nic1", "public_ip": False, "ipv6": False, "public_ipv6": False},
+        ]
+        provisioner = make_provisioner(2, specs=specs)
+        provisioner.get_or_create_instance(definition("mixed-vm"), PricingModel.ON_DEMAND)
+        resource_group = provisioner.resource_group_name
+
+        dual_stack = azure_service.network.subnets.get(resource_group, "default", "default")
+        ipv4_only = azure_service.network.subnets.get(resource_group, "default", "nic1")
+        assert dual_stack.address_prefixes == ["10.0.0.0/24", "fd00:db8:5c7:0::/64"]
+        assert ipv4_only.address_prefix == "10.0.1.0/24"
+        assert not ipv4_only.address_prefixes
+
+    def test_vnet_carries_ipv6_space_only_when_requested(self, make_provisioner, azure_service):
+        provisioner = make_provisioner(2, specs=self.ipv6_specs())
+        provisioner.get_or_create_instance(definition("ipv6-vnet-vm"), PricingModel.ON_DEMAND)
+
+        vnet = azure_service.network.virtual_networks.get(provisioner.resource_group_name, "default")
+        assert vnet.address_space.address_prefixes == ["10.0.0.0/16", "fd00:db8:5c7::/48"]
+
+    def test_ipv4_only_run_leaves_the_vnet_single_stack(self, make_provisioner, azure_service):
+        provisioner = make_provisioner(2)
+        provisioner.get_or_create_instance(definition("ipv4-vnet-vm"), PricingModel.ON_DEMAND)
+
+        vnet = azure_service.network.virtual_networks.get(provisioner.resource_group_name, "default")
+        assert vnet.address_space.address_prefixes == ["10.0.0.0/16"]

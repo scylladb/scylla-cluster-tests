@@ -167,11 +167,22 @@ class AzureService(metaclass=Singleton):
         rotated_key = key_client.rotate_key(name=key_name)
         return rotated_key.id
 
+    def _get_ip_configuration_dicts(self, network_interface_id: str) -> list[dict]:
+        """Every ipConfiguration of a NIC.
+
+        A dual-stack NIC has two, and only reading the first one would leave the IPv6 Public IP
+        resource behind on cleanup.
+        """
+        return [
+            configuration["properties"]
+            for configuration in self.get_by_id(
+                resource_id=network_interface_id,
+                api_version=API_VERSIONS["Microsoft.Network/networkInterfaces"],
+            ).properties["ipConfigurations"]
+        ]
+
     def _get_ip_configuration_dict(self, network_interface_id: str) -> dict:
-        return self.get_by_id(
-            resource_id=network_interface_id,
-            api_version=API_VERSIONS["Microsoft.Network/networkInterfaces"],
-        ).properties["ipConfigurations"][0]["properties"]
+        return self._get_ip_configuration_dicts(network_interface_id)[0]
 
     def get_virtual_machine_ips(self, virtual_machine: VirtualMachine) -> VirtualMachineIPs:
         ip_configuration = self._get_ip_configuration_dict(
@@ -205,13 +216,14 @@ class AzureService(metaclass=Singleton):
                     api_version=API_VERSIONS["Microsoft.Network/networkInterfaces"],
                 )
             )
-            if public_ip := self._get_ip_configuration_dict(network_interface_id=iface.id).get("publicIPAddress"):
-                resources.append(
-                    self.get_by_id(
-                        resource_id=public_ip["id"],
-                        api_version=API_VERSIONS["Microsoft.Network/publicIPAddresses"],
+            for configuration in self._get_ip_configuration_dicts(network_interface_id=iface.id):
+                if public_ip := configuration.get("publicIPAddress"):
+                    resources.append(
+                        self.get_by_id(
+                            resource_id=public_ip["id"],
+                            api_version=API_VERSIONS["Microsoft.Network/publicIPAddresses"],
+                        )
                     )
-                )
         return resources
 
     def delete_resource(self, resource: Resource) -> None:
@@ -399,16 +411,16 @@ def run(*command):
         failures.append(" ".join(command) + ": " + (result.stderr.strip() or str(result.returncode)))
 
 
-def replace_rule(selector, table):
+def replace_rule(family, selector, table):
     # "ip rule" has no "replace" counterpart, and every "del" removes a single match, so drain
     # whatever a previous run of this script stacked up before adding the rule back exactly once.
     for _ in range(16):
-        drained = subprocess.run(["ip", "rule", "del"] + selector + ["lookup", table], capture_output=True, check=False)
+        drained = subprocess.run(family + ["rule", "del"] + selector + ["lookup", table], capture_output=True, check=False)
         if drained.returncode:
             break
     else:
         failures.append("failed to drain the duplicate ip rules for " + " ".join(selector))
-    run(*(["ip", "rule", "add"] + selector + ["lookup", table, "priority", table]))
+    run(*(family + ["rule", "add"] + selector + ["lookup", table, "priority", table]))
 
 
 def resolve_iface(mac):
@@ -451,9 +463,27 @@ for idx, interface in enumerate(interfaces):
     # the device must be up before any address or route referencing it gets installed
     run("ip", "link", "set", "dev", iface, "up")
     run("ip", "addr", "replace", private_ip + "/" + str(subnet["prefix"]), "dev", iface)
-    replace_rule(["from", private_ip], table)
+    replace_rule(["ip"], ["from", private_ip], table)
     run("ip", "route", "replace", cidr, "dev", iface, "table", table)
     run("ip", "route", "replace", "default", "via", gateway, "dev", iface, "table", table)
+
+    # IPv6, when the NIC has a dual-stack ipConfiguration. Azure IMDS publishes no IPv6 gateway
+    # field, unlike the OCI one, so it is derived the same way as the IPv4 one: Azure reserves the
+    # first usable address of every subnet prefix as the gateway.
+    ipv6 = interface.get("ipv6", {})
+    ipv6_subnets = ipv6.get("subnet", [])
+    for address in ipv6.get("ipAddress", []):
+        if not (ipv6_address := address.get("privateIpAddress", "")):
+            continue
+        run("ip", "-6", "addr", "replace", ipv6_address + "/128", "dev", iface)
+        replace_rule(["ip", "-6"], ["from", ipv6_address], table)
+    for ipv6_subnet in ipv6_subnets:
+        if not (ipv6_subnet.get("address") and ipv6_subnet.get("prefix")):
+            continue
+        ipv6_cidr = ipv6_subnet["address"] + "/" + str(ipv6_subnet["prefix"])
+        ipv6_gateway = str(ipaddress.ip_network(ipv6_cidr, strict=False)[1])
+        run("ip", "-6", "route", "replace", ipv6_cidr, "dev", iface, "table", table)
+        run("ip", "-6", "route", "replace", "default", "via", ipv6_gateway, "dev", iface, "table", table)
 
     configured += 1
 
