@@ -148,7 +148,7 @@ class ScyllaConfigMixin(BaseModel):
               - ip_type: ipv4 or ipv6
               - public: false or true
               - nic: number of NIC. 0, 1
-              Supported for AWS and GCE meanwhile""",
+              Supported for the AWS, GCE, OCI and Azure backends""",
     )
     scylla_repo: String = SctField(
         description="Url to the repo of scylla version to install scylla. Can provide specific version after a colon "
