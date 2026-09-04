@@ -139,6 +139,19 @@ class TaskStatus:
         return set(getattr(cls, name) for name in dir(cls) if name.isupper())
 
 
+# Statuses a task can no longer leave. ERROR is deliberately excluded: the manager reports
+# "ERROR (#/4)" while retries are still pending and only "ERROR (4/4)" maps to ERROR_FINAL,
+# so a task in ERROR can still resume. Callers that must know whether a task is truly finished
+# (e.g. before dropping a restored keyspace) use this strict list; callers that only need to
+# stop waiting append TaskStatus.ERROR.
+TERMINAL_TASK_STATUSES = [
+    TaskStatus.DONE,
+    TaskStatus.ERROR_FINAL,
+    TaskStatus.STOPPED,
+    TaskStatus.ABORTED,
+]
+
+
 # ---------------------------------------------------------------------------
 # Data model classes (alphabetical)
 # ---------------------------------------------------------------------------
