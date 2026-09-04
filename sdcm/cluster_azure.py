@@ -23,6 +23,13 @@ from sdcm.kernel_panic_checker import AzureKernelPanicChecker
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
+from sdcm.provision.network_configuration import network_interfaces_count
+from sdcm.utils.azure_utils import (
+    SECONDARY_NICS_SCRIPT,
+    SECONDARY_NICS_SCRIPT_PATH,
+    SECONDARY_NICS_SERVICE,
+    SECONDARY_NICS_SERVICE_UNIT_TMPL,
+)
 from sdcm.utils.decorators import retrying
 from sdcm.utils.net import resolve_ip_to_dns
 
@@ -87,6 +94,44 @@ class AzureNode(cluster.BaseNode):
         self.remoter.sudo("systemctl disable auditd", ignore_status=True)
         self.remoter.sudo("systemctl mask auditd", ignore_status=True)
         self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
+        if network_interfaces_count(self.parent_cluster.params) > 1:
+            self._configure_secondary_nics_os()
+
+    def _configure_secondary_nics_os(self):
+        """Configure OS-level addresses and routing for the secondary NICs.
+
+        Azure gives a secondary NIC an address over DHCP but no routing policy, so a reply sourced
+        from its address would leave through the primary NIC's default route and be dropped.
+        Installs a boot script which queries IMDS and configures every secondary NIC, then runs it
+        right away. The systemd service makes the configuration survive reboots.
+        """
+        self.log.info("Configuring OS-level routing for secondary NICs on %s", self.name)
+        nic_count = network_interfaces_count(self.parent_cluster.params)
+
+        self.remoter.sudo(f"bash -c 'cat > {SECONDARY_NICS_SCRIPT_PATH}' << 'SCTEOF'\n{SECONDARY_NICS_SCRIPT}\nSCTEOF")
+        self.remoter.sudo(f"chmod 755 {SECONDARY_NICS_SCRIPT_PATH}")
+
+        service_unit = SECONDARY_NICS_SERVICE_UNIT_TMPL.format(
+            script_path=SECONDARY_NICS_SCRIPT_PATH, nic_count=nic_count
+        )
+        service_path = f"/etc/systemd/system/{SECONDARY_NICS_SERVICE}.service"
+        self.remoter.sudo(f"bash -c 'cat > {service_path}' << 'SCTEOF'\n{service_unit}\nSCTEOF")
+        self.remoter.sudo("systemctl daemon-reload")
+        self.remoter.sudo(f"systemctl enable {SECONDARY_NICS_SERVICE}.service")
+
+        # NOTE: run the script now to apply immediately. Failures must not be swallowed: a node with
+        #       half-configured NICs stays reachable over its primary interface and only breaks much
+        #       later, as a confusing connectivity or streaming error.
+        self.remoter.sudo(f"{SECONDARY_NICS_SCRIPT_PATH} {nic_count}")
+
+    def start_network_interface(self, interface_name=None):
+        super().start_network_interface(interface_name=interface_name)
+        # NOTE: taking a secondary NIC down flushes its addresses and the policy routes/rules of its
+        #       dedicated routing table. The 'sct-secondary-nics' service is a 'oneshot' which
+        #       normally runs only at boot, so re-run it here to re-apply the configuration once the
+        #       interface is back up.
+        if self.parent_cluster.extra_network_interface:
+            self.remoter.sudo(f"systemctl restart {SECONDARY_NICS_SERVICE}.service")
 
     def _create_kernel_panic_checker(self):
         return AzureKernelPanicChecker(
