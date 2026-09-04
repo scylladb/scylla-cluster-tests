@@ -436,52 +436,40 @@ ipConfiguration and no IPv6 Public IP. The ULA/Public IP split maps cleanly onto
 
 ---
 
-### Phase 7: On-demand IPv6 for the shared region resources and the SCT runner
+### Phase 7: On-demand IPv6 for the SCT runner
 
 **Importance**: Critical
-**Description**: The runner sits in the shared, long-lived `SCT-<region>` VNet, which is IPv4-only,
-so it cannot reach a DB node over IPv6 even after Phase 6. Give it IPv6 **only when the test config
-enables it**. A runner is created fresh for a single test and receives that test's full
-`SCTConfiguration` (`sct.py:2958` builds it and passes it through `get_sct_runner()` into
-`AzureSctRunner.__init__`), so `azure_ipv6_enabled(params)` is always evaluated against the config
-the runner will actually serve. That makes the conditional safe with no runtime check to fall back
-on, and no unconditional dual-stack shared infrastructure is needed.
+**Description**: Give the Azure SCT runner an IPv6 address **only when the test config enables it**.
 
-Rather than upgrading the existing `default` subnet, the dual-stack resources are added **alongside**
-it: the IPv6 address space is added to the shared VNet and a second subnet (`sct-subnet-ipv6`) is
-created on demand, the way the OCI runner already lazily creates its public subnet
-(`sdcm/sct_runner.py:1657-1671`). Runners that do not need IPv6 keep landing on the untouched
-`default` subnet, so an IPv4-only region is never modified and no Public IP is billed for them.
+**Adaptation Notes**: this phase was planned around the premise that the runner lives in the
+shared, long-lived `SCT-<region>` VNet and that making it dual-stack would need `AzureRegion`
+changes and a `prepare-regions --ipv6` flag. That premise was wrong. Only the *image builder* path
+of `AzureSctRunner._create_instance()` uses `AzureRegion`; the runner itself goes through
+`provisioner_factory.create_provisioner(backend="azure", test_id=...)`
+(`sdcm/sct_runner.py:1328-1348`) into a per-test resource group, exactly like the test nodes. So the
+runner inherits everything Phase 6 built and the phase reduces to handing its provisioner a NIC
+spec. `AzureRegion`, `configure()` and `prepare-regions` are untouched, and the "can IPv6 space be
+added to an existing shared VNet" investigation is moot: the resource group is created per test.
+
+A runner shares its resource group with the nodes of its test, so asking for IPv6 on the runner also
+makes the VNet dual-stack before the first node is created, rather than leaving a single-stack VNet
+that the node provisioning would then find already existing and not upgrade.
 
 **Dependencies**: Phase 6
 
 **Deliverables**:
-- `sdcm/utils/azure_region.py`: `sct_ipv6_subnet_name`, `create_sct_ipv6_subnet()` and an
-  `ensure_ipv6_address_space()` that adds the IPv6 prefix to the shared VNet idempotently. The
-  existing `create_sct_virtual_network()` / `create_sct_subnet()` are left IPv4-only and unchanged.
-- `sdcm/utils/azure_region.py:configure()` gains an `ipv6: bool = False` parameter, surfaced as
-  `hydra prepare-regions --cloud-provider azure --ipv6`, so a region can be pre-provisioned ahead of
-  a scheduled IPv6 job instead of paying the creation latency on the first run.
-- `sdcm/sct_runner.py:AzureSctRunner._create_instance()`: when `azure_ipv6_enabled(self.params)`,
-  ensure the dual-stack subnet exists, place the runner NIC on it and request an IPv6
-  ipConfiguration with an IPv6 Public IP. Otherwise the code path is byte-for-byte what it is today.
-- `docs/sct-runners.md`: the IPv6 opt-in and the `--ipv6` flag.
-
-**Needs Investigation**: whether Azure permits adding an IPv6 address space to an existing VNet that
-already has IPv4 subnets with attached NICs. Adding a *subnet* is uncontroversial; adding the
-address space to a live VNet is the open question. If it is rejected, the fallback is a separate
-dual-stack VNet in the same shared resource group, which the runner joins instead — still additive,
-still leaving the IPv4 VNet untouched.
+- `AzureSctRunner._network_interfaces()`: one NIC, dual-stack with a routable IPv6 Public IP when
+  `azure_ipv6_enabled(self.params)`, passed to the runner's provisioner. `azure_network_interfaces`
+  describes the DB nodes, so the runner never takes more than one interface from it.
+- `docs/sct-runners.md`: the IPv6 opt-in and what enables it.
 
 **Definition of Done**:
-- [ ] With IPv6 disabled, creating an Azure runner touches no IPv6 resource and leaves the shared
-      region resources bit-identical to before this phase
-- [ ] With IPv6 enabled, a newly created Azure SCT runner has a global IPv6 address
-- [ ] The runner reaches a DB node's public IPv6 on port 22 and 9042
-- [ ] `hydra prepare-regions --cloud-provider azure --ipv6 -r <region>` is idempotent on both a fresh
-      and a pre-existing region, and without `--ipv6` changes nothing about IPv6
-- [ ] Existing IPv4-only runners keep working unchanged
-- [ ] `uv run sct.py pre-commit` passes
+- [x] With IPv6 disabled, creating an Azure runner touches no IPv6 resource
+- [x] With IPv6 enabled, the runner's NIC carries an IPv6 ipConfiguration with a Public IP
+- [x] The runner takes exactly one interface regardless of how many the DB nodes have
+- [ ] The runner reaches a DB node's public IPv6 on port 22 and 9042 (needs a live Azure run)
+- [x] Existing IPv4-only runners keep working unchanged
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -614,14 +602,14 @@ so a NIC-count change forces a full VM recreate and any post-hoc NIC repair is i
 NIC count before creating any resource (Phase 3) so a bad count fails in seconds rather than after a
 VM exists.
 
-### Risk: IPv6 address space cannot be added to an existing shared VNet
+### Risk: a single-stack VNet is created before the IPv6 nodes need it
 
-**Likelihood**: Medium
-**Impact**: The shared `SCT-<region>` VNet cannot be given IPv6 space, blocking Phase 7 and therefore
-IPv6 runner connectivity.
-**Mitigation**: Flagged as "Needs Investigation" in Phase 7. Fallback is a separate dual-stack VNet in
-the same shared resource group that IPv6 runners join. Either way the change is additive and the
-IPv4-only path is untouched, so IPv4 runs and already-running runners are unaffected.
+**Likelihood**: Low
+**Impact**: `VirtualNetworkProvider.get_or_create()` returns an existing VNet untouched, so whoever
+creates the resource group first fixes its address space. A runner created without IPv6 would leave
+the test's nodes unable to get one.
+**Mitigation**: The runner derives its NIC spec from the same `azure_ipv6_enabled()` as the nodes and
+shares their resource group, so an IPv6 run makes the VNet dual-stack with its very first call.
 
 ### Risk: unnecessary IPv6 Public IP spend
 
@@ -691,6 +679,6 @@ same as AWS and GCE.
 | Phase 4: guest-OS secondary NIC config | — | Not started |
 | Phase 5: `AzureNode` interface introspection | — | Not started |
 | Phase 6: IPv6 for DB nodes | — | Not started |
-| Phase 7: on-demand IPv6 for region resources and runner | — | Not started |
+| Phase 7: on-demand IPv6 for the SCT runner | — | Not started |
 | Phase 8: monitoring connectivity | — | Not started |
 | Phase 9: test configs, CI, docs | — | Not started |
