@@ -4240,7 +4240,7 @@ Collect NVMe SMART logs, error logs, and self-test results from DB nodes during 
 
 ## **nvme_self_test_type** / SCT_NVME_SELF_TEST_TYPE
 
-NVMe device self-test type to run: 1 (short, ~2 min) or 2 (extended, may take hours). Only used when collect_nvme_diagnostics is enabled.
+NVMe device self-test type to run: 1 (short, ~2 min) or 2 (extended, may take hours). Only used when collect_nvme_diagnostics is enabled. Honored only on controllers that advertise Device Self-test support (Identify Controller OACS bit 4); unsupported controllers are skipped without issuing the command. This has no effect on AWS: neither instance-store (Nitro SSD) nor EBS implements Device Self-test, so on AWS the diagnostics rely on SMART counters and the error log instead.
 
 **default:** 1
 

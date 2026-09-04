@@ -989,6 +989,10 @@ class ScyllaLogCollector(LogCollector):
         ),
         CommandLog(
             name="nvme_self_test_log.log",
+            # Reading log page 06h from a controller that does not implement
+            # Device Self-test is rejected, and the rejected command is recorded
+            # in the device Error Information Log. Gate the read on OACS bit 4
+            # so collection does not leave errors behind on AWS Nitro SSDs.
             command=(
                 "( command -v nvme > /dev/null 2>&1 && "
                 "for dev in $(sudo nvme list -o json 2>/dev/null "
@@ -998,7 +1002,12 @@ class ScyllaLogCollector(LogCollector):
                 "[print(ns.get('DevicePath',ns.get('device',ns.get('NameSpace','')))) "
                 "for item in devs "
                 "for ns in (item.get('Namespaces',[item]) if isinstance(item,dict) and 'Namespaces' in item else [item])]"
-                '" 2>/dev/null); do echo "=== $dev ==="; sudo nvme self-test-log $dev 2>&1; done '
+                '" 2>/dev/null); do echo "=== $dev ==="; '
+                "if sudo nvme id-ctrl $dev -o json 2>/dev/null "
+                '| python3 -c "import sys,json; '
+                "sys.exit(0 if json.load(sys.stdin).get('oacs',0) & 16 else 1)"
+                '" 2>/dev/null; then sudo nvme self-test-log $dev 2>&1; '
+                'else echo "device self-test not supported by controller (OACS bit 4 clear)"; fi; done '
                 "|| true )"
             ),
         ),

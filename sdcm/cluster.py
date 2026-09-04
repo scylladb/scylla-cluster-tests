@@ -169,7 +169,7 @@ from sdcm.utils.version_utils import (
 )
 from sdcm.utils.net import get_my_ip, to_inet_ntop_format
 from sdcm.utils.node import build_node_api_command
-from sdcm.utils.nvme_diagnostics import install_nvme_cli, collect_all_smart_logs
+from sdcm.utils.nvme_diagnostics import install_nvme_cli, collect_all_smart_logs, store_baseline_smart_logs
 from sdcm.wait import wait_for_log_lines
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent, add_severity_limit_rules, max_severity
@@ -6415,6 +6415,10 @@ class BaseScyllaCluster:
         if not baseline_logs:
             node.log.info("NVMe diagnostics: no NVMe data disks found, skipping")
             return
+
+        # Error and media counters are lifetime totals, so the teardown health
+        # check compares against this baseline instead of against zero.
+        store_baseline_smart_logs(node, baseline_logs)
 
         for smart_log in baseline_logs:
             node.log.info(

@@ -24,13 +24,38 @@ This module provides functions to:
 All functions accept a ``node`` argument that exposes ``.remoter`` (with ``.run()`` / ``.sudo()``)
 and ``.log`` for logging. Device discovery returns an empty list (never raises) when no NVMe
 devices are present, making it safe for docker and EBS-only backends.
+
+Output format
+-------------
+Log pages are read as raw bytes (``nvme get-log ... -b``) and decoded at the fixed offsets the
+NVMe Base Specification defines. The layouts are stable across spec revisions; only the way
+nvme-cli renders them changes, and it has changed repeatedly - inline value descriptions
+("status_field : 0x2001 (Invalid Command Opcode: ...)"), the temperature unit order flipping
+between 1.x and 2.x, and a field rename due in 3.0. Reading the page directly removes that whole
+dependency. The contract is a length check: either the page was read in full or it was not.
+Device discovery still uses ``nvme list -o json``, which is not a log page.
+
+Self-test availability
+----------------------
+Device Self-test is optional in the NVMe spec and is advertised by Identify Controller OACS
+bit 4. It is *not* available on AWS - neither on instance-store (Nitro SSD) nor on EBS - so
+``nvme_self_test_type`` has no effect there and the self-test code paths never run. See
+supports_self_test() for the measurements and the reason. Support elsewhere is probed at
+runtime, so the feature activates by itself on hardware that does implement it.
+
+What remains usable everywhere is the passive evidence: the SMART counters that AWS does
+populate (``media_errors``, ``critical_warning``, ``available_spare``, ``percentage_used``,
+data/command counters) and the Error Information Log. Note that AWS leaves ``temperature``,
+``power_on_hours``, ``power_cycles``, ``unsafe_shutdowns`` and ``controller_busy_time`` at
+placeholder zeros, so those must not be used as health signals on that backend.
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import logging
-import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -120,19 +145,27 @@ class NvmeSmartLog:
 
 @dataclass
 class NvmeErrorLogEntry:
-    """A single entry from the NVMe Error Information Log."""
+    """A single entry from the NVMe Error Information Log (Log Identifier 01h)."""
 
     error_count: int = 0
     submission_queue_id: int = 0
     command_id: int = 0
+    # Bits 15:1 of the on-disk Status Field; bit 0 is split out as phase_tag.
     status_field: int = 0
+    phase_tag: int = 0
     parm_error_location: int = 0
     lba: int = 0
     nsid: int = 0
+    # "Vendor Specific Information Available": the log page identifier holding
+    # extra vendor data (0h = none), not the vendor data itself.
     vendor_specific: int = 0
     transport_type: int = 0
     command_specific: int = 0
-    opcode: int = 0
+    # csi and opcode are only meaningful when log_page_version is 1; None means
+    # the controller did not report them rather than "opcode 0".
+    command_set_indicator: int | None = None
+    opcode: int | None = None
+    log_page_version: int = 0
 
 
 @dataclass
@@ -233,398 +266,170 @@ def _parse_device_entry(entry: dict) -> NvmeDevice | None:
     )
 
 
-def parse_smart_log_output(device_path: str, raw_output: str) -> NvmeSmartLog | None:
-    """Parse the output of ``nvme smart-log <device>`` (human-readable format).
+# ---------------------------------------------------------------------------
+# Log page parsing
+#
+# Log page layouts are fixed by the NVMe Base Specification and are stable
+# across revisions; only the way nvme-cli renders them changes between its
+# versions. Parsing the raw pages therefore removes a whole class of bugs that
+# text/JSON scraping is prone to: inline value descriptions
+# ("status_field : 0x2001 (Invalid Command Opcode: ...)"), the temperature unit
+# order flipping between nvme-cli 1.x and 2.x, and the field renaming due in
+# nvme-cli 3.0.
+#
+# Offsets below were cross-checked against libnvme v1.16 (struct nvme_smart_log,
+# struct nvme_error_log_page, struct nvme_st_result), the Linux kernel's
+# include/linux/nvme.h and SPDK's include/spdk/nvme_spec.h, which agree.
+# ---------------------------------------------------------------------------
 
-    Handles both the human-readable key/value format and JSON output.
+# Get Log Page - Log Page Identifiers.
+LOG_PAGE_ERROR_INFORMATION = 0x01
+LOG_PAGE_SMART_HEALTH = 0x02
+LOG_PAGE_DEVICE_SELF_TEST = 0x06
 
-    Args:
-        device_path: The NVMe device path (e.g. "/dev/nvme0n1").
-        raw_output: Raw command output from ``nvme smart-log``.
+SMART_LOG_PAGE_LEN = 512
+ERROR_LOG_ENTRY_LEN = 64
+SELF_TEST_LOG_PAGE_LEN = 564
+SELF_TEST_RESULT_LEN = 28
+SELF_TEST_MAX_RESULTS = 20
+IDENTIFY_CONTROLLER_LEN = 4096
 
-    Returns:
-        NvmeSmartLog instance, or None if parsing fails completely.
+# Identify Controller offsets.
+IDCTRL_OACS_OFFSET = 256  # Optional Admin Command Support, 2 bytes
+IDCTRL_ELPE_OFFSET = 262  # Error Log Page Entries, 1 byte, 0's based
+
+# OACS bit 4: "Device Self-test command supported". The same bit gates log page
+# 06h, so one read covers both the trigger and the result read.
+OACS_DEVICE_SELF_TEST = 0x10
+
+# Error Information Log Entry: csi and opcode only carry meaning when the entry's
+# Log Page Version is 1h. Controllers predating that revision leave those bytes
+# reserved, and nvme-cli prints them regardless - which is why the collected
+# artifacts showed "opcode=0x00" on hardware that never populated the field.
+ERROR_LOG_PAGE_VERSION_WITH_OPCODE = 0x1
+
+# Self-test result code 0xf means "entry not used" (no test recorded).
+SELF_TEST_RESULT_NOT_USED = 0xF
+
+
+def _le_uint(buf: bytes, offset: int, size: int) -> int:
+    """Read a little-endian unsigned integer of ``size`` bytes at ``offset``."""
+    return int.from_bytes(buf[offset : offset + size], "little")
+
+
+def parse_smart_log_page(device_path: str, buf: bytes) -> NvmeSmartLog:
+    """Parse the SMART / Health Information log page (02h, 512 bytes).
+
+    Composite Temperature is in Kelvin by definition, so no unit guessing is
+    needed. Data Units Read/Written are counted in thousands of 512-byte units
+    and Controller Busy Time in minutes; both are reported raw, exactly as
+    nvme-cli does.
     """
-    if not raw_output or not raw_output.strip():
-        return None
-
-    # Try JSON first (if user passed -o json)
-    try:
-        data = json.loads(raw_output)
-        return _parse_smart_log_json(device_path, data)
-    except json.JSONDecodeError, ValueError:
-        pass
-
-    # Fall back to human-readable key:value parsing
-    return _parse_smart_log_text(device_path, raw_output)
-
-
-def _parse_smart_log_json(device_path: str, data: dict) -> NvmeSmartLog:
-    """Parse SMART log from JSON output."""
     return NvmeSmartLog(
         device_path=device_path,
-        critical_warning=data.get("critical_warning", 0),
-        temperature_kelvin=data.get("temperature", data.get("temperature_sensor_1", 0)),
-        available_spare=data.get("avail_spare", data.get("available_spare", 100)),
-        available_spare_threshold=data.get("spare_thresh", data.get("available_spare_threshold", 0)),
-        percentage_used=data.get("percent_used", data.get("percentage_used", 0)),
-        data_units_read=data.get("data_units_read", 0),
-        data_units_written=data.get("data_units_written", 0),
-        host_read_commands=data.get("host_read_commands", data.get("host_reads", 0)),
-        host_write_commands=data.get("host_write_commands", data.get("host_writes", 0)),
-        controller_busy_time=data.get("controller_busy_time", 0),
-        power_cycles=data.get("power_cycles", 0),
-        power_on_hours=data.get("power_on_hours", 0),
-        unsafe_shutdowns=data.get("unsafe_shutdowns", 0),
-        media_errors=data.get("media_errors", 0),
-        num_err_log_entries=data.get("num_err_log_entries", 0),
+        critical_warning=buf[0],
+        temperature_kelvin=_le_uint(buf, 1, 2),
+        available_spare=buf[3],
+        available_spare_threshold=buf[4],
+        percentage_used=buf[5],
+        data_units_read=_le_uint(buf, 32, 16),
+        data_units_written=_le_uint(buf, 48, 16),
+        host_read_commands=_le_uint(buf, 64, 16),
+        host_write_commands=_le_uint(buf, 80, 16),
+        controller_busy_time=_le_uint(buf, 96, 16),
+        power_cycles=_le_uint(buf, 112, 16),
+        power_on_hours=_le_uint(buf, 128, 16),
+        unsafe_shutdowns=_le_uint(buf, 144, 16),
+        media_errors=_le_uint(buf, 160, 16),
+        num_err_log_entries=_le_uint(buf, 176, 16),
     )
 
 
-# Regex patterns for human-readable smart-log output.
-# Lines look like: "critical_warning                        : 0" or
-#                  "temperature                             : 315 K (42 Celsius)"
-_SMART_KEY_VALUE_RE = re.compile(r"^\s*(.+?)\s*:\s*(.+?)\s*$", re.MULTILINE)
+def parse_error_log_entry(buf: bytes) -> NvmeErrorLogEntry | None:
+    """Parse one 64-byte Error Information Log entry.
 
-# Map from human-readable field names to NvmeSmartLog attribute names.
-# nvme-cli uses slightly different names across versions, so we handle variants.
-_SMART_FIELD_MAP = {
-    "critical_warning": "critical_warning",
-    "critical warning": "critical_warning",
-    "temperature": "temperature_kelvin",
-    "available spare": "available_spare",
-    "available_spare": "available_spare",
-    "available spare threshold": "available_spare_threshold",
-    "available_spare_threshold": "available_spare_threshold",
-    "percentage used": "percentage_used",
-    "percentage_used": "percentage_used",
-    "percent_used": "percentage_used",
-    "data units read": "data_units_read",
-    "data_units_read": "data_units_read",
-    "data units written": "data_units_written",
-    "data_units_written": "data_units_written",
-    "host read commands": "host_read_commands",
-    "host_read_commands": "host_read_commands",
-    "host_reads": "host_read_commands",
-    "host write commands": "host_write_commands",
-    "host_write_commands": "host_write_commands",
-    "host_writes": "host_write_commands",
-    "controller busy time": "controller_busy_time",
-    "controller_busy_time": "controller_busy_time",
-    "power cycles": "power_cycles",
-    "power_cycles": "power_cycles",
-    "power on hours": "power_on_hours",
-    "power_on_hours": "power_on_hours",
-    "unsafe shutdowns": "unsafe_shutdowns",
-    "unsafe_shutdowns": "unsafe_shutdowns",
-    "media errors": "media_errors",
-    "media_errors": "media_errors",
-    "media and data integrity errors": "media_errors",
-    "num err log entries": "num_err_log_entries",
-    "num_err_log_entries": "num_err_log_entries",
-    "number of error log entries": "num_err_log_entries",
-    "number of error information log entries": "num_err_log_entries",
-}
-
-
-# Hex values as printed by nvme-cli, e.g. "0x1" or "0x00001234".
-_HEX_VALUE_RE = re.compile(r"0[xX]([\da-fA-F]+)")
-
-
-def _extract_numeric(value_str: str) -> int:
-    """Extract the first integer from a value string.
-
-    Handles formats like "315 K (42 Celsius)", "100%", "0", "1,234", etc.
-    nvme-cli prints some fields (e.g. ``critical_warning``) in hex, so "0x1"
-    must be parsed as a whole - a plain digit search would return 0 for it and
-    silently hide the warning.
+    Returns None for an entry the spec defines as invalid: an Error Count of 0h
+    marks an unused slot or a lost entry. ``nvme get-log`` always returns every
+    slot the controller supports, most of them unused, so this is what keeps the
+    collected artifact down to the entries that carry information.
     """
-    # Remove commas used as thousands separator
-    cleaned = value_str.replace(",", "").strip()
-    hex_match = _HEX_VALUE_RE.match(cleaned)
-    if hex_match:
-        return int(hex_match.group(1), 16)
-    # Find first integer-like token
-    match = re.search(r"\d+", cleaned)
-    return int(match.group()) if match else 0
-
-
-def _parse_smart_log_text(device_path: str, raw_output: str) -> NvmeSmartLog:
-    """Parse SMART log from human-readable text output."""
-    kwargs: dict = {"device_path": device_path}
-
-    for match in _SMART_KEY_VALUE_RE.finditer(raw_output):
-        key = match.group(1).lower().strip()
-        value_str = match.group(2).strip()
-
-        attr_name = _SMART_FIELD_MAP.get(key)
-        if attr_name:
-            kwargs[attr_name] = _extract_numeric(value_str)
-
-    return NvmeSmartLog(**kwargs)
-
-
-def parse_error_log_output(raw_output: str) -> list[NvmeErrorLogEntry]:
-    """Parse the output of ``nvme error-log <device>``.
-
-    Handles both JSON and human-readable formats.
-
-    Args:
-        raw_output: Raw command output from ``nvme error-log``.
-
-    Returns:
-        List of NvmeErrorLogEntry instances. Returns empty list if no errors
-        or parsing fails.
-    """
-    if not raw_output or not raw_output.strip():
-        return []
-
-    # Try JSON first
-    try:
-        data = json.loads(raw_output)
-        return _parse_error_log_json(data)
-    except json.JSONDecodeError, ValueError:
-        pass
-
-    # Fall back to human-readable parsing
-    return _parse_error_log_text(raw_output)
-
-
-def _parse_error_log_json(data: list | dict) -> list[NvmeErrorLogEntry]:
-    """Parse error log entries from JSON output."""
-    entries_list = data if isinstance(data, list) else data.get("errors", [])
-    results = []
-    for entry in entries_list:
-        results.append(
-            NvmeErrorLogEntry(
-                error_count=entry.get("error_count", entry.get("err_count", 0)),
-                submission_queue_id=entry.get("sqid", 0),
-                command_id=entry.get("cmdid", entry.get("cid", 0)),
-                status_field=entry.get("status_field", entry.get("status", 0)),
-                parm_error_location=entry.get("parm_error_location", entry.get("pel", 0)),
-                lba=entry.get("lba", 0),
-                nsid=entry.get("nsid", 0),
-                vendor_specific=entry.get("vs", entry.get("vendor_specific", 0)),
-                transport_type=entry.get("trtype", entry.get("transport_type", 0)),
-                command_specific=entry.get("cs", entry.get("command_specific", 0)),
-                opcode=entry.get("opcode", entry.get("opc", 0)),
-            )
-        )
-    return results
-
-
-# Regex for error log entries in text format.
-# Each entry starts with "Entry[N]" or "Error Log Entry N:" followed by key:value lines.
-# nvme-cli pads the index ("Entry[ 0]"), so spaces inside the brackets are allowed.
-_ERROR_ENTRY_HEADER_RE = re.compile(r"(?:Entry\[\s*|\bError Log Entry\s*)(\d+)", re.IGNORECASE)
-_ERROR_ENTRY_SPLIT_RE = re.compile(r"(?:Entry\[\s*\d+\s*\]|\bError Log Entry\s*\d+)", re.IGNORECASE)
-_ERROR_KEY_VALUE_RE = re.compile(r"^\s*(.+?)\s*:\s*(0x[\da-fA-F]+|\d+)\s*$", re.MULTILINE)
-
-
-def _parse_error_log_text(raw_output: str) -> list[NvmeErrorLogEntry]:
-    """Parse error log from human-readable text output."""
-    # Split on entry headers
-    entries = _ERROR_ENTRY_SPLIT_RE.split(raw_output)
-    results = []
-
-    for entry_text in entries[1:]:  # Skip text before first entry
-        entry = _parse_single_error_entry(entry_text)
-        if entry:
-            results.append(entry)
-
-    return results
-
-
-_ERROR_FIELD_MAP = {
-    "error count": "error_count",
-    "error_count": "error_count",
-    "sqid": "submission_queue_id",
-    "submission queue id": "submission_queue_id",
-    "cmdid": "command_id",
-    "cid": "command_id",
-    "command id": "command_id",
-    "status field": "status_field",
-    "status_field": "status_field",
-    "status": "status_field",
-    "parm error location": "parm_error_location",
-    "parm_error_location": "parm_error_location",
-    "parameter error location": "parm_error_location",
-    "lba": "lba",
-    "nsid": "nsid",
-    "namespace id": "nsid",
-    "vs": "vendor_specific",
-    "vendor specific": "vendor_specific",
-    "trtype": "transport_type",
-    "transport type": "transport_type",
-    "cs": "command_specific",
-    "command specific": "command_specific",
-    "opcode": "opcode",
-    "opc": "opcode",
-}
-
-
-def _parse_hex_or_int(value_str: str) -> int:
-    """Parse a value that may be hex (0x...) or decimal."""
-    value_str = value_str.strip()
-    if value_str.startswith(("0x", "0X")):
-        return int(value_str, 16)
-    return int(value_str)
-
-
-def _parse_single_error_entry(entry_text: str) -> NvmeErrorLogEntry | None:
-    """Parse a single error log entry from text."""
-    kwargs: dict = {}
-    for match in _ERROR_KEY_VALUE_RE.finditer(entry_text):
-        key = match.group(1).lower().strip()
-        value_str = match.group(2).strip()
-
-        attr_name = _ERROR_FIELD_MAP.get(key)
-        if attr_name:
-            kwargs[attr_name] = _parse_hex_or_int(value_str)
-
-    if not kwargs:
-        return None
-    return NvmeErrorLogEntry(**kwargs)
-
-
-def parse_self_test_log_output(device_path: str, raw_output: str) -> NvmeSelfTestLog | None:
-    """Parse the output of ``nvme self-test-log <device>``.
-
-    Handles both JSON and human-readable formats.
-
-    Args:
-        device_path: The NVMe device path.
-        raw_output: Raw command output from ``nvme self-test-log``.
-
-    Returns:
-        NvmeSelfTestLog instance, or None if parsing fails completely.
-    """
-    if not raw_output or not raw_output.strip():
+    error_count = _le_uint(buf, 0, 8)
+    if error_count == 0:
         return None
 
-    # Try JSON first
-    try:
-        data = json.loads(raw_output)
-        return _parse_self_test_log_json(device_path, data)
-    except json.JSONDecodeError, ValueError:
-        pass
+    # Bits 15:1 are the Status Field; bit 0 is the Phase Tag.
+    status = _le_uint(buf, 12, 2)
+    log_page_version = buf[63]
+    extended_fields_valid = log_page_version == ERROR_LOG_PAGE_VERSION_WITH_OPCODE
 
-    # Fall back to human-readable parsing
-    return _parse_self_test_log_text(device_path, raw_output)
+    return NvmeErrorLogEntry(
+        error_count=error_count,
+        submission_queue_id=_le_uint(buf, 8, 2),
+        command_id=_le_uint(buf, 10, 2),
+        status_field=status >> 1,
+        phase_tag=status & 0x1,
+        parm_error_location=_le_uint(buf, 14, 2),
+        lba=_le_uint(buf, 16, 8),
+        nsid=_le_uint(buf, 24, 4),
+        vendor_specific=buf[28],
+        transport_type=buf[29],
+        command_set_indicator=buf[30] if extended_fields_valid else None,
+        opcode=buf[31] if extended_fields_valid else None,
+        command_specific=_le_uint(buf, 32, 8),
+        log_page_version=log_page_version,
+    )
 
 
-def _parse_self_test_log_json(device_path: str, data: dict) -> NvmeSelfTestLog:
-    """Parse self-test log from JSON output."""
-    current_op = data.get("current_operation", data.get("crnt_dev_selftest_oprn", 0))
-    current_completion = data.get("current_completion", data.get("crnt_dev_selftest_compln", 0))
+def parse_error_log_page(buf: bytes) -> list[NvmeErrorLogEntry]:
+    """Parse the Error Information log page (01h) into its populated entries."""
+    entries = []
+    for offset in range(0, len(buf) - ERROR_LOG_ENTRY_LEN + 1, ERROR_LOG_ENTRY_LEN):
+        entry = parse_error_log_entry(buf[offset : offset + ERROR_LOG_ENTRY_LEN])
+        if entry is not None:
+            entries.append(entry)
+    return entries
 
+
+def parse_self_test_log_page(device_path: str, buf: bytes) -> NvmeSelfTestLog:
+    """Parse the Device Self-test log page (06h, 564 bytes).
+
+    Byte 0 holds the operation currently running (0 = none) in bits 3:0, byte 1
+    its completion percentage in bits 6:0, and 20 result entries of 28 bytes
+    follow from offset 4. Entries marked "not used" (result code 0xf) are
+    skipped.
+    """
     results = []
-    for entry in data.get("results", data.get("self_test_result", [])):
+    for index in range(SELF_TEST_MAX_RESULTS):
+        offset = 4 + index * SELF_TEST_RESULT_LEN
+        entry = buf[offset : offset + SELF_TEST_RESULT_LEN]
+        if len(entry) < SELF_TEST_RESULT_LEN:
+            break
+
+        # Device Self-test Status: bits 3:0 result, bits 7:4 the test type run.
+        dsts = entry[0]
+        result_code = dsts & 0xF
+        if result_code == SELF_TEST_RESULT_NOT_USED:
+            continue
+
         results.append(
             NvmeSelfTestResult(
-                result_code=entry.get("result", entry.get("dsts", 0) & 0x0F),
-                self_test_code=entry.get("self_test_code", entry.get("code", 0)),
-                segment_number=entry.get("segment", entry.get("seg", 0)),
-                power_on_hours=entry.get("power_on_hours", entry.get("poh", 0)),
-                nsid=entry.get("nsid", 0),
-                failing_lba=entry.get("failing_lba", entry.get("flba", 0)),
-                status_code_type=entry.get("sct", entry.get("status_code_type", 0)),
-                status_code=entry.get("sc", entry.get("status_code", 0)),
+                result_code=result_code,
+                self_test_code=dsts >> 4,
+                segment_number=entry[1],
+                power_on_hours=_le_uint(entry, 4, 8),
+                nsid=_le_uint(entry, 12, 4),
+                failing_lba=_le_uint(entry, 16, 8),
+                status_code_type=entry[24],
+                status_code=entry[25],
             )
         )
 
     return NvmeSelfTestLog(
         device_path=device_path,
-        current_operation=current_op,
-        current_completion=current_completion,
+        current_operation=buf[0] & 0xF,
+        current_completion=buf[1] & 0x7F,
         results=results,
     )
-
-
-# nvme-cli prints "Current operation" in hex ("Current operation : 0x2"), so both
-# notations must be accepted - otherwise an in-progress test is read as "no test".
-_SELF_TEST_CURRENT_OP_RE = re.compile(
-    r"(?:current\s+operation|crnt_dev_selftest_oprn)\s*:\s*(0x[\da-fA-F]+|\d+)", re.IGNORECASE
-)
-_SELF_TEST_COMPLETION_RE = re.compile(
-    r"(?:current\s+completion|crnt_dev_selftest_compln)\s*:\s*(0x[\da-fA-F]+|\d+)", re.IGNORECASE
-)
-_SELF_TEST_RESULT_HEADER_RE = re.compile(r"(?:Self Test Result\s*\[|Result\s*\[)\s*(\d+)\s*\]", re.IGNORECASE)
-
-
-def _parse_self_test_log_text(device_path: str, raw_output: str) -> NvmeSelfTestLog:
-    """Parse self-test log from human-readable text output."""
-    current_op = 0
-    current_completion = 0
-
-    op_match = _SELF_TEST_CURRENT_OP_RE.search(raw_output)
-    if op_match:
-        current_op = _parse_hex_or_int(op_match.group(1))
-
-    comp_match = _SELF_TEST_COMPLETION_RE.search(raw_output)
-    if comp_match:
-        current_completion = _parse_hex_or_int(comp_match.group(1))
-
-    # Split on result entry headers
-    entries = re.split(r"(?:Self Test Result|Result)\s*\[\s*\d+\s*\]", raw_output, flags=re.IGNORECASE)
-    results = []
-
-    for entry_text in entries[1:]:  # Skip text before first result
-        result = _parse_single_self_test_result(entry_text)
-        if result:
-            results.append(result)
-
-    return NvmeSelfTestLog(
-        device_path=device_path,
-        current_operation=current_op,
-        current_completion=current_completion,
-        results=results,
-    )
-
-
-_SELF_TEST_FIELD_MAP = {
-    "result": "result_code",
-    "device self-test status": "result_code",
-    "operation result": "result_code",
-    "dsts": "result_code",
-    "self test code": "self_test_code",
-    "self_test_code": "self_test_code",
-    "code": "self_test_code",
-    "segment number": "segment_number",
-    "seg": "segment_number",
-    "segment": "segment_number",
-    "power on hours": "power_on_hours",
-    "power on hours (poh)": "power_on_hours",
-    "power_on_hours": "power_on_hours",
-    "poh": "power_on_hours",
-    "nsid": "nsid",
-    "namespace id": "nsid",
-    "namespace identifier": "nsid",
-    "failing lba": "failing_lba",
-    "flba": "failing_lba",
-    "sct": "status_code_type",
-    "status code type": "status_code_type",
-    "sc": "status_code",
-    "status code": "status_code",
-}
-
-_SELF_TEST_KEY_VALUE_RE = re.compile(r"^\s*(.+?)\s*:\s*(0x[\da-fA-F]+|\d+)\s*$", re.MULTILINE)
-
-
-def _parse_single_self_test_result(entry_text: str) -> NvmeSelfTestResult | None:
-    """Parse a single self-test result entry from text."""
-    kwargs: dict = {}
-    for match in _SELF_TEST_KEY_VALUE_RE.finditer(entry_text):
-        key = match.group(1).lower().strip()
-        value_str = match.group(2).strip()
-
-        attr_name = _SELF_TEST_FIELD_MAP.get(key)
-        if attr_name:
-            kwargs[attr_name] = _parse_hex_or_int(value_str)
-
-    if not kwargs:
-        return None
-    return NvmeSelfTestResult(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -725,6 +530,132 @@ def is_nvme_cli_available(node: "BaseNode") -> bool:
     return result.ok
 
 
+def _read_raw(node: "BaseNode", command: str, length: int, what: str) -> bytes | None:
+    """Run an nvme-cli command that emits binary and return its bytes.
+
+    The payload is base64-encoded on the node because the remoter returns text.
+    The length check is the entire contract: either the structure was read in
+    full or it was not. There is no notion of a "missing field" in a fixed-layout
+    NVMe structure, so nothing here can silently degrade into a healthy-looking
+    default the way scraping formatted output could.
+
+    Args:
+        node: SCT node with remoter.
+        command: nvme-cli command emitting binary on stdout (without ``sudo``).
+        length: Exact number of bytes the structure must contain.
+        what: Human-readable name used in log messages.
+
+    Returns:
+        Exactly ``length`` bytes, or None if the read failed or came up short.
+    """
+    result = node.remoter.sudo(f"{command} | base64 -w0", ignore_status=True, timeout=NVME_CMD_TIMEOUT)
+    if result.failed:
+        node.log.warning("Reading %s failed: %s", what, result.stderr.strip())
+        return None
+
+    try:
+        buf = base64.b64decode(result.stdout.strip(), validate=True)
+    except (binascii.Error, ValueError) as exc:
+        node.log.warning("Reading %s returned undecodable output: %s", what, exc)
+        return None
+
+    if len(buf) != length:
+        # nvme writes its diagnostics to stderr, so it still explains a short read
+        # even though the pipeline's exit status comes from base64.
+        node.log.warning(
+            "Reading %s returned %d bytes, expected %d: %s",
+            what,
+            len(buf),
+            length,
+            result.stderr.strip(),
+        )
+        return None
+
+    return buf
+
+
+def read_log_page(node: "BaseNode", device_path: str, log_id: int, length: int) -> bytes | None:
+    """Read a raw NVMe log page via ``nvme get-log``."""
+    return _read_raw(
+        node,
+        f"nvme get-log {device_path} --log-id={log_id} --log-len={length} -b",
+        length,
+        what=f"log page {log_id:#04x} on {device_path}",
+    )
+
+
+def read_identify_controller(node: "BaseNode", device_path: str) -> bytes | None:
+    """Read the raw Identify Controller data structure.
+
+    Identify is mandatory for every NVMe controller, so unlike an optional
+    command it can never be rejected as an unsupported opcode - which is why it
+    is safe to use for capability probing: it cannot add an Error Information
+    Log entry the way probing with the real command would.
+    """
+    return _read_raw(
+        node,
+        f"nvme id-ctrl {device_path} -b",
+        IDENTIFY_CONTROLLER_LEN,
+        what=f"Identify Controller for {device_path}",
+    )
+
+
+def supports_self_test(node: "BaseNode", device_path: str) -> bool:
+    """Check whether a controller implements the Device Self-test command.
+
+    Issuing ``nvme device-self-test`` against a controller that does not
+    support it is not free: the rejected admin command is recorded in the
+    device's Error Information Log and increments ``num_err_log_entries``,
+    so the diagnostic would manufacture the very anomaly it reports. The same
+    OACS bit gates log page 06h, so this also decides whether the self-test log
+    can be read at all.
+
+    On AWS neither NVMe disk type supports it. Measured on i4i.4xlarge:
+
+        /dev/nvme0n1  "Amazon Elastic Block Store"          OACS bit 4 clear
+        /dev/nvme1n1  "Amazon EC2 NVMe Instance Storage"    oacs=0x8
+
+    Both are presented by the Nitro card rather than by the physical SSD's
+    own controller, so the media operation a self-test performs has nothing
+    to act on - EBS is network-attached and has no local medium at all. AWS
+    monitors and retires the physical drives itself; the guest was never
+    meant to run media diagnostics. Other instance families and other cloud
+    backends are unverified, hence the runtime probe rather than a hardcoded
+    backend check.
+
+    Args:
+        node: SCT node with remoter.
+        device_path: NVMe device path (e.g. "/dev/nvme0n1").
+
+    Returns:
+        True only when the controller advertises self-test support. Any
+        failure to determine it returns False, so we never probe blindly.
+    """
+    buf = read_identify_controller(node, device_path)
+    if buf is None:
+        node.log.warning("Could not read OACS for %s, assuming no self-test support", device_path)
+        return False
+
+    oacs = _le_uint(buf, IDCTRL_OACS_OFFSET, 2)
+    supported = bool(oacs & OACS_DEVICE_SELF_TEST)
+    if not supported:
+        node.log.debug("Device self-test not supported on %s (oacs=%#x)", device_path, oacs)
+    return supported
+
+
+def error_log_entry_count(node: "BaseNode", device_path: str) -> int | None:
+    """Number of Error Information Log entries the controller holds.
+
+    Identify Controller ELPE is 0's based. Asking ``get-log`` for more entries
+    than the controller supports can be rejected outright, so the page length
+    has to come from the device rather than from a fixed guess.
+    """
+    buf = read_identify_controller(node, device_path)
+    if buf is None:
+        return None
+    return buf[IDCTRL_ELPE_OFFSET] + 1
+
+
 def list_nvme_devices(node: "BaseNode") -> list[NvmeDevice]:
     """Discover NVMe devices on a node using ``nvme list -o json``.
 
@@ -764,43 +695,44 @@ def get_smart_log(node: "BaseNode", device_path: str) -> NvmeSmartLog | None:
     Returns:
         NvmeSmartLog instance, or None on failure.
     """
-    result = node.remoter.sudo(
-        f"nvme smart-log {device_path}",
-        ignore_status=True,
-        timeout=NVME_CMD_TIMEOUT,
-    )
-    if result.failed:
-        node.log.warning("'nvme smart-log %s' failed: %s", device_path, result.stderr)
+    buf = read_log_page(node, device_path, LOG_PAGE_SMART_HEALTH, SMART_LOG_PAGE_LEN)
+    if buf is None:
         return None
 
-    return parse_smart_log_output(device_path, result.stdout)
+    return parse_smart_log_page(device_path, buf)
 
 
-def get_error_log(node: "BaseNode", device_path: str, max_entries: int = 64) -> list[NvmeErrorLogEntry]:
-    """Collect error log for a single NVMe device.
+def get_error_log(node: "BaseNode", device_path: str, max_entries: int | None = None) -> list[NvmeErrorLogEntry]:
+    """Collect the populated Error Information Log entries for a device.
 
     Args:
         node: SCT node with remoter.
         device_path: NVMe device path (e.g. "/dev/nvme0n1").
-        max_entries: Maximum number of error log entries to retrieve.
+        max_entries: Number of entries to request. Defaults to the count the
+            controller reports via Identify Controller ELPE.
 
     Returns:
-        List of NvmeErrorLogEntry instances. Empty list on failure.
+        List of NvmeErrorLogEntry instances, unused slots omitted. Empty list
+        on failure.
     """
-    result = node.remoter.sudo(
-        f"nvme error-log {device_path} -e {max_entries}",
-        ignore_status=True,
-        timeout=NVME_CMD_TIMEOUT,
-    )
-    if result.failed:
-        node.log.warning("'nvme error-log %s' failed: %s", device_path, result.stderr)
+    if max_entries is None:
+        max_entries = error_log_entry_count(node, device_path)
+        if max_entries is None:
+            return []
+
+    buf = read_log_page(node, device_path, LOG_PAGE_ERROR_INFORMATION, max_entries * ERROR_LOG_ENTRY_LEN)
+    if buf is None:
         return []
 
-    return parse_error_log_output(result.stdout)
+    return parse_error_log_page(buf)
 
 
 def run_self_test(node: "BaseNode", device_path: str, test_type: SelfTestType = SelfTestType.SHORT) -> bool:
     """Trigger a device self-test on an NVMe device.
+
+    Controllers that do not implement the command are skipped rather than
+    probed: see supports_self_test() for why issuing it blindly corrupts the
+    very error-log counters this module reports on.
 
     Args:
         node: SCT node with remoter.
@@ -810,6 +742,10 @@ def run_self_test(node: "BaseNode", device_path: str, test_type: SelfTestType = 
     Returns:
         True if the self-test was triggered successfully, False otherwise.
     """
+    if not supports_self_test(node, device_path):
+        node.log.info("Skipping self-test on %s: controller does not support it", device_path)
+        return False
+
     result = node.remoter.sudo(
         f"nvme device-self-test -s {int(test_type)} {device_path}",
         ignore_status=True,
@@ -817,7 +753,7 @@ def run_self_test(node: "BaseNode", device_path: str, test_type: SelfTestType = 
     )
     if result.failed:
         node.log.warning(
-            "'nvme device-self-test' on %s failed (may not be supported): %s",
+            "'nvme device-self-test' on %s failed: %s",
             device_path,
             result.stderr,
         )
@@ -867,16 +803,11 @@ def get_self_test_log(node: "BaseNode", device_path: str) -> NvmeSelfTestLog | N
     Returns:
         NvmeSelfTestLog instance, or None on failure.
     """
-    result = node.remoter.sudo(
-        f"nvme self-test-log {device_path}",
-        ignore_status=True,
-        timeout=NVME_CMD_TIMEOUT,
-    )
-    if result.failed:
-        node.log.warning("'nvme self-test-log %s' failed: %s", device_path, result.stderr)
+    buf = read_log_page(node, device_path, LOG_PAGE_DEVICE_SELF_TEST, SELF_TEST_LOG_PAGE_LEN)
+    if buf is None:
         return None
 
-    return parse_self_test_log_output(device_path, result.stdout)
+    return parse_self_test_log_page(device_path, buf)
 
 
 def collect_all_smart_logs(node: "BaseNode") -> list[NvmeSmartLog]:
@@ -909,6 +840,29 @@ def collect_all_smart_logs(node: "BaseNode") -> list[NvmeSmartLog]:
     return smart_logs
 
 
+# Node attribute holding the SMART logs captured at node setup, keyed by device
+# path. Error and media counters are lifetime totals, so only the growth since
+# this baseline says anything about the test that just ran.
+NVME_BASELINE_ATTR = "nvme_baseline_smart_logs"
+
+
+def store_baseline_smart_logs(node: "BaseNode", smart_logs: list[NvmeSmartLog]) -> None:
+    """Record the node's SMART logs as the baseline for later delta checks."""
+    setattr(node, NVME_BASELINE_ATTR, {log.device_path: log for log in smart_logs})
+
+
+def get_baseline_smart_log(node: "BaseNode", device_path: str) -> NvmeSmartLog | None:
+    """Return the baseline SMART log for a device, or None if none was captured.
+
+    A missing baseline is normal: node setup skips it when nvme-cli could not be
+    installed, and reused clusters never ran it at all.
+    """
+    baseline = getattr(node, NVME_BASELINE_ATTR, None)
+    if not isinstance(baseline, dict):
+        return None
+    return baseline.get(device_path)
+
+
 # ---------------------------------------------------------------------------
 # Health check thresholds
 # ---------------------------------------------------------------------------
@@ -937,12 +891,13 @@ def check_nvme_health(
 
     Collects SMART logs for all NVMe data disks on the node and evaluates
     them against health thresholds. Automatically collects error logs when
-    media errors or error log entries are detected.
+    media errors or error log entries appeared during the test.
 
     Severity mapping:
         - critical_warning != 0 -> CRITICAL
-        - media_errors > 0 -> ERROR
-        - num_err_log_entries > 0 -> WARNING (also collects error log)
+        - media_errors above the setup baseline -> ERROR
+        - num_err_log_entries above the setup baseline -> WARNING
+          (also collects error log)
         - percentage_used > threshold -> WARNING
         - available_spare < available_spare_threshold -> WARNING
         - temperature > threshold -> WARNING
@@ -985,23 +940,33 @@ def _check_single_device_health(
             error=f"NVMe {device}: critical_warning={smart_log.critical_warning} (non-zero indicates hardware issue)",
         )
 
-    # media_errors > 0 -> ERROR
-    if smart_log.has_media_errors:
+    # media_errors and num_err_log_entries are lifetime counters: a fresh cloud
+    # instance can already carry entries from before the test started. Only the
+    # growth over the setup baseline says something happened during this run.
+    baseline = get_baseline_smart_log(current_node, device)
+    new_media_errors = smart_log.media_errors - (baseline.media_errors if baseline else 0)
+    new_error_entries = smart_log.num_err_log_entries - (baseline.num_err_log_entries if baseline else 0)
+
+    # media errors appeared during the test -> ERROR
+    if new_media_errors > 0:
         yield ClusterHealthValidatorEvent.NvmeHealth(
             severity=Severity.ERROR,
             node=current_node.name,
-            error=f"NVMe {device}: media_errors={smart_log.media_errors}",
+            error=(f"NVMe {device}: {new_media_errors} new media_errors during test (total={smart_log.media_errors})"),
         )
         _collect_error_log_with_timestamp(current_node, device)
 
-    # num_err_log_entries > 0 -> WARNING (also collect error log)
-    if smart_log.has_error_log_entries:
+    # error log entries appeared during the test -> WARNING (also collect error log)
+    if new_error_entries > 0:
         yield ClusterHealthValidatorEvent.NvmeHealth(
             severity=Severity.WARNING,
             node=current_node.name,
-            message=f"NVMe {device}: num_err_log_entries={smart_log.num_err_log_entries}",
+            message=(
+                f"NVMe {device}: {new_error_entries} new error log entries during test "
+                f"(total={smart_log.num_err_log_entries})"
+            ),
         )
-        if not smart_log.has_media_errors:
+        if new_media_errors <= 0:
             # Only collect if not already collected above
             _collect_error_log_with_timestamp(current_node, device)
 
@@ -1038,28 +1003,35 @@ def _check_single_device_health(
 def _collect_error_log_with_timestamp(node: "BaseNode", device_path: str) -> None:
     """Collect NVMe error log and save with timestamp for post-mortem analysis.
 
-    Saves the raw error log output to the node's log directory with a
-    timestamped filename for correlation with test events.
+    Saves a summary of the populated error log entries to the node's log
+    directory with a timestamped filename for correlation with test events.
+    The full unparsed output is collected separately as ``nvme_error_log.log``.
     """
     timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
     device_name = device_path.replace("/dev/", "")
     filename = f"nvme_error_log_{device_name}_{timestamp}.log"
 
-    entries = get_error_log(node, device_path)
-    if not entries:
-        node.log.debug("NVMe error log for %s is empty", device_path)
-        return
-
-    lines = []
-    for entry in entries:
-        lines.append(
-            f"error_count={entry.error_count} sqid={entry.submission_queue_id} "
-            f"cmdid={entry.command_id} status=0x{entry.status_field:04x} "
-            f"lba=0x{entry.lba:x} nsid={entry.nsid} opcode=0x{entry.opcode:02x}"
-        )
-    content = "\n".join(lines) + "\n"
-
+    # This runs inside the teardown health check, so a collection failure must
+    # never take the health check down with it.
     try:
+        # get_error_log already drops the unused slots: the spec defines an
+        # Error Count of 0h as an invalid entry.
+        entries = get_error_log(node, device_path)
+        if not entries:
+            node.log.debug("NVMe error log for %s has no populated entries", device_path)
+            return
+
+        lines = []
+        for entry in entries:
+            # opcode is only reported when the entry's log page version is 1
+            opcode = "n/a" if entry.opcode is None else f"0x{entry.opcode:02x}"
+            lines.append(
+                f"error_count={entry.error_count} sqid={entry.submission_queue_id} "
+                f"cmdid={entry.command_id} status=0x{entry.status_field:04x} "
+                f"lba=0x{entry.lba:x} nsid={entry.nsid} opcode={opcode}"
+            )
+        content = "\n".join(lines) + "\n"
+
         log_dir = node.logdir
         if log_dir:
             filepath = f"{log_dir}/{filename}"
@@ -1067,7 +1039,7 @@ def _collect_error_log_with_timestamp(node: "BaseNode", device_path: str) -> Non
                 fobj.write(content)
             node.log.info("NVMe error log saved to %s (%d entries)", filepath, len(entries))
     except Exception as exc:  # noqa: BLE001
-        node.log.warning("Failed to save NVMe error log: %s", exc)
+        node.log.warning("Failed to collect NVMe error log for %s: %s", device_path, exc)
 
 
 # ---------------------------------------------------------------------------
