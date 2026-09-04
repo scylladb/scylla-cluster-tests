@@ -23,7 +23,14 @@ from typing import List, Any, Dict
 from azure.core.exceptions import ResourceNotFoundError, AzureError, ODataV4Error, _HttpResponseCommonAPI
 from azure.mgmt.network.models import NetworkSecurityGroup, Subnet, PublicIPAddress, NetworkInterface, VirtualNetwork
 from azure.mgmt.resource.resources.models import ResourceGroup
-from azure.mgmt.compute.models import VirtualMachine, Image, InstanceViewStatus, RunCommandResult
+from azure.mgmt.compute.models import (
+    Image,
+    InstanceViewStatus,
+    ResourceSku,
+    ResourceSkuCapabilities,
+    RunCommandResult,
+    VirtualMachine,
+)
 
 
 def snake_case_to_camel_case(string):
@@ -817,12 +824,41 @@ class FakeGalleryImageVersions:
             raise ResourceNotFoundError("No gallery images found") from None
 
 
+class FakeResourceSkus:
+    """Minimal 'resource_skus' listing: enough to answer how many NICs a VM size accepts.
+
+    Values match what Azure reports for these sizes, so a test that asks for more NICs than a size
+    can carry fails here the same way it would against the real API.
+    """
+
+    MAX_NETWORK_INTERFACES = {
+        "Standard_D2_v4": 2,
+        "Standard_F4s_v2": 2,
+        "Standard_L8s_v3": 4,
+        "Standard_L16s_v3": 8,
+    }
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def list(self, filter: str = None) -> List[ResourceSku]:  # noqa: A002
+        return [
+            ResourceSku(
+                name=name,
+                resource_type="virtualMachines",
+                capabilities=[ResourceSkuCapabilities(name="MaxNetworkInterfaces", value=str(value))],
+            )
+            for name, value in self.MAX_NETWORK_INTERFACES.items()
+        ]
+
+
 class Compute:
     def __init__(self, path) -> None:
         self.path: Path = path
         self.virtual_machines = FakeVirtualMachines(self.path)
         self.images = FakeImages(self.path)
         self.gallery_image_versions = FakeGalleryImageVersions(self.path)
+        self.resource_skus = FakeResourceSkus(self.path)
 
 
 class FakeResourceManagementClient:

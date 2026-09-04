@@ -18,7 +18,10 @@ import uuid
 import pytest
 
 from sdcm.keystore import KeyStore
-from sdcm.provision.provisioner import InstanceDefinition, PricingModel, provisioner_factory
+from sdcm.provision.azure.provisioner import AZURE_SUPPORTED_NETWORK_INTERFACES
+from sdcm.provision.provisioner import InstanceDefinition, PricingModel, ProvisionError, provisioner_factory
+from sdcm.utils.azure_utils import max_network_interfaces
+from unit_tests.unit.provisioner.fake_azure_service import FakeResourceSkus
 
 REGION = "eastus"
 
@@ -51,12 +54,12 @@ def fixture_make_provisioner(azure_service):
     return _make
 
 
-def definition(name: str) -> InstanceDefinition:
+def definition(name: str, instance_type: str = "Standard_L8s_v3") -> InstanceDefinition:
     return InstanceDefinition(
         name=name,
         image_id="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers"
         "/Microsoft.Compute/images/scylla-4.4.4",
-        type="Standard_D2_v4",
+        type=instance_type,
         user_name="tester",
         ssh_key=KeyStore().get_ssh_key_pair(name="scylla_test_id_ed25519"),
         tags={"test-tag": "test_value"},
@@ -165,3 +168,66 @@ def test_no_ipv6_resource_is_created_for_an_ipv4_only_node(make_provisioner):
     for nic in provisioner._nic_provider.get_all(instance.name):  # noqa: SLF001
         versions = [config.private_ip_address_version for config in nic.ip_configurations]
         assert versions == ["IPv4"]
+
+
+def test_more_nics_than_the_vm_size_allows_is_rejected(make_provisioner):
+    """Standard_D2_v4 carries 2 NICs, so a third one must fail before any resource is created."""
+    provisioner = make_provisioner(3)
+    with pytest.raises(ProvisionError, match="supports at most 2 network interface"):
+        provisioner.get_or_create_instance(
+            definition("too-many-nics-vm", instance_type="Standard_D2_v4"), PricingModel.ON_DEMAND
+        )
+
+
+def test_nic_count_at_the_vm_size_limit_is_accepted(make_provisioner):
+    provisioner = make_provisioner(2)
+    instance = provisioner.get_or_create_instance(
+        definition("at-limit-vm", instance_type="Standard_D2_v4"), PricingModel.ON_DEMAND
+    )
+
+    assert len(nic_names(provisioner, instance.name)) == 2
+
+
+class TestMaxNetworkInterfaces:
+    """Reading the per-VM-size NIC limit out of the Azure SKU listing."""
+
+    def test_reads_the_capability_of_the_requested_size(self, azure_service):
+        assert max_network_interfaces("Standard_L8s_v3", REGION, azure_service) == 4
+
+    def test_returns_none_for_a_size_absent_from_the_location(self, azure_service):
+        assert max_network_interfaces("Standard_NotAThing_v9", REGION, azure_service) is None
+
+    def test_the_listing_is_cached_per_size_and_location(self, azure_service, monkeypatch):
+        """Listing a region's SKUs is a slow call, so it must happen once per size and location."""
+        max_network_interfaces.cache_clear()
+        calls = []
+        original = FakeResourceSkus.list
+        # patched on the class: FakeAzureService.compute hands out a new Compute object every access
+        monkeypatch.setattr(
+            FakeResourceSkus,
+            "list",
+            lambda self, *args, **kwargs: calls.append(1) or original(self, *args, **kwargs),
+        )
+
+        for _ in range(3):
+            assert max_network_interfaces("Standard_L8s_v3", REGION, azure_service) == 4
+
+        assert len(calls) == 1
+
+
+def test_more_nics_than_sct_supports_is_rejected(make_provisioner):
+    """SCT carves one /24 per NIC out of the test VNet, and Azure caps a VM at 8 NICs anyway."""
+    provisioner = make_provisioner(AZURE_SUPPORTED_NETWORK_INTERFACES + 1)
+    with pytest.raises(ProvisionError, match="SCT supports at most 8"):
+        provisioner.get_or_create_instance(definition("over-sct-cap-vm"), PricingModel.ON_DEMAND)
+
+
+def test_unknown_vm_size_does_not_block_provisioning(make_provisioner, caplog):
+    """A size Azure does not report a limit for must warn, not guess a limit and fail the run."""
+    provisioner = make_provisioner(2)
+    instance = provisioner.get_or_create_instance(
+        definition("unknown-size-vm", instance_type="Standard_Unlisted_v1"), PricingModel.ON_DEMAND
+    )
+
+    assert len(nic_names(provisioner, instance.name)) == 2
+    assert "does not report 'MaxNetworkInterfaces'" in caplog.text

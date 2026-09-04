@@ -17,7 +17,7 @@ import logging
 import time
 import random
 from typing import NamedTuple, TYPE_CHECKING
-from functools import cached_property
+from functools import cached_property, lru_cache
 from itertools import chain
 
 from azure.identity import ClientSecretCredential
@@ -302,6 +302,26 @@ def list_instances_azure(
         LOGGER.info("Done. Found total of %s instances.", len(instances))
 
     return instances
+
+
+@lru_cache
+def max_network_interfaces(instance_type: str, location: str, azure_service: AzureService = None) -> int | None:
+    """Number of NICs an Azure VM size accepts, or None when the size is unknown in the location.
+
+    Azure publishes it as the 'MaxNetworkInterfaces' capability of the VM size SKU. Cached because
+    listing the SKUs of a region is a slow call and the answer never changes during a run.
+    """
+    azure_service = azure_service or AzureService()
+    skus = azure_service.compute.resource_skus.list(filter=f"location eq '{location}'")
+    for sku in skus:
+        if sku.resource_type != "virtualMachines" or sku.name != instance_type:
+            continue
+        for capability in sku.capabilities or []:
+            if capability.name == "MaxNetworkInterfaces":
+                return int(capability.value)
+        # the SKU exists but does not publish the capability, so SCT must not guess a limit
+        return None
+    return None
 
 
 def azure_check_instance_type_available(instance_type: str, location: str) -> bool:

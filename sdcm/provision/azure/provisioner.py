@@ -40,6 +40,7 @@ from sdcm.provision.provisioner import (
     VmInstance,
     PricingModel,
     OperationPreemptedError,
+    ProvisionError,
     StuckVMProvisioningError,
     ProvisionUnrecoverableError,
 )
@@ -47,12 +48,16 @@ from sdcm.provision.network_configuration import DEFAULT_AZURE_SUBNET_NAME
 from sdcm.provision.security import ScyllaOpenPorts
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InstanceProvisionStuckEvent
-from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.azure_utils import AzureService, max_network_interfaces
 
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_STUCK_VM_RECREATE_ATTEMPTS = 3
 DEFAULT_STUCK_VM_TOTAL_TIMEOUT = 4500
+
+# SCT carves one 10.0.<index>.0/24 out of the test VNet's 10.0.0.0/16 per network interface, and
+# Azure itself caps a VM at 8 NICs, so anything above that cannot be provisioned in any case.
+AZURE_SUPPORTED_NETWORK_INTERFACES = 8
 
 
 class AzureProvisioner(Provisioner):
@@ -258,6 +263,11 @@ class AzureProvisioner(Provisioner):
         self, definitions: List[InstanceDefinition], pricing_model: PricingModel, deadline: float | None = None
     ) -> List[VirtualMachine]:
         """Provision all Azure resources needed for the given VM definitions."""
+        # validate before creating anything, so an impossible layout fails in seconds instead of
+        # after a resource group, a VNet and a set of NICs already exist
+        for definition in definitions:
+            self._validate_network_interfaces_count(definition.type)
+
         self._rg_provider.get_or_create()
         sec_group_id = self._network_sec_group_provider.get_or_create(security_rules=ScyllaOpenPorts).id
         vnet_name = self._vnet_provider.get_or_create().name
@@ -298,6 +308,35 @@ class AzureProvisioner(Provisioner):
         for index, _ in enumerate(self._nic_provider.get_all(name) or [None]):
             addresses.append(self._ip_provider.get(name, index=index))
         return addresses
+
+    def _validate_network_interfaces_count(self, instance_type: str) -> None:
+        """Reject a NIC count the VM size cannot carry, before the create call."""
+        count = len(self._network_interfaces)
+        if count <= 1:
+            return
+
+        if count > AZURE_SUPPORTED_NETWORK_INTERFACES:
+            raise ProvisionError(
+                f"{count} network interfaces were requested, but SCT supports at most "
+                f"{AZURE_SUPPORTED_NETWORK_INTERFACES} on Azure. Reduce the number of items in "
+                f"'azure_network_interfaces'."
+            )
+
+        allowed = max_network_interfaces(instance_type, self._region, self._azure_service)
+        if allowed is None:
+            LOGGER.warning(
+                "Azure does not report 'MaxNetworkInterfaces' for VM size '%s' in %s, "
+                "cannot validate the requested %s network interfaces",
+                instance_type,
+                self._region,
+                count,
+            )
+            return
+        if count > allowed:
+            raise ProvisionError(
+                f"VM size '{instance_type}' supports at most {allowed} network interface(s), but {count} were "
+                f"requested. Reduce the number of items in 'azure_network_interfaces' or pick a larger VM size."
+            )
 
     def _reset_resource_providers(self) -> None:
         """Rebuild IP/NIC/VM providers so they rediscover live resources (caches may be stale)."""
