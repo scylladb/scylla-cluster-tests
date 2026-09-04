@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, List, Callable
+from typing import Callable, List, Optional, TextIO
 from abc import abstractmethod, ABCMeta
 from datetime import datetime
 import shlex
@@ -283,6 +283,27 @@ class OutputWatcher(StreamWatcher):
         self.log.debug("<%s>: %s", self.hostname, line.rstrip("\n"))
 
 
+class PendingLine:
+    """The tail of a stream which has no line end yet, written out once the stream is over.
+
+    'invoke' offers a watcher no end of stream hook, but it reads each stream in a thread of its own
+    and 'StreamWatcher' is a 'threading.local', so an instance of this -- created per reader thread --
+    is finalized when that thread ends, which is exactly when the stream is over.
+    """
+
+    def __init__(self, file_object: TextIO, format_line: Callable[[str], str]):
+        self.file_object = file_object
+        self.format_line = format_line
+        self.text = ""
+
+    def __del__(self):
+        if self.text and not self.file_object.closed:
+            self.file_object.write(self.format_line(self.text))
+            # NOTE: the file is line buffered, so a tail with no line end of its own would sit in the
+            #       buffer until the file gets closed -- which is not guaranteed to ever happen.
+            self.file_object.flush()
+
+
 class LogWriteWatcher(StreamWatcher):
     def __init__(self, log_file: str):
         super().__init__()
@@ -291,17 +312,26 @@ class LogWriteWatcher(StreamWatcher):
         # open fail with line buffering, so prom stats would be as accuracte as possible
 
         self.file_object = open(self.log_file, "a+", encoding="utf-8", buffering=1)
+        # NOTE: 'invoke' watches stdout and stderr in a thread each, so this -- like every attribute
+        #       here -- is per stream, which is exactly what the line buffering needs.
+        self.pending_line = PendingLine(self.file_object, self._format_line)
 
     def _format_line(self, line: str) -> str:
         return line
 
     def submit(self, stream: str) -> list:
+        # NOTE: the stream is read in fixed size chunks (see 'invoke.runners.Runner.read_chunk_size'), so its
+        #       new part usually ends in the middle of a line. Keep that tail for the next 'submit' call --
+        #       same approach as 'OutputWatcher.submit' above -- so that '_format_line' only ever decides on a
+        #       whole line. Deciding on a fragment turns one stress tool line into 2 log lines.
+        #       A last line with no line end of its own is written out by 'PendingLine' instead, once
+        #       the stream is over.
         stream_buffer = stream[self.len :]
-        lines = stream_buffer.splitlines(True)
-        formatted_lines = [self._format_line(line) for line in lines]
-        self.file_object.write("".join(formatted_lines))
-
-        self.len = len(stream)
+        split_at = max(stream_buffer.rfind("\n"), stream_buffer.rfind("\r")) + 1
+        self.pending_line.text = stream_buffer[split_at:]
+        self.len += split_at
+        if complete_part := stream_buffer[:split_at]:
+            self.file_object.write("".join(self._format_line(line) for line in complete_part.splitlines(True)))
         return []
 
     def submit_line(self, line: str):
