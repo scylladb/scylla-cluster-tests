@@ -308,6 +308,16 @@
       "created": "2026-06-28",
       "phases_total": 8,
       "phases_done": 0
+    },
+    {
+      "id": "azure-multi-vnic-support",
+      "title": "Azure Multi-VNIC Support",
+      "file": "infrastructure/azure-multi-vnic-support.md",
+      "domain": "cluster",
+      "status": "draft",
+      "created": "2026-09-04",
+      "phases_total": 9,
+      "phases_done": 0
     }
   ]
 }
