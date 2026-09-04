@@ -19,6 +19,7 @@ from typing import Dict, List
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
+from azure.mgmt.network.models import PublicIPAddress
 from azure.mgmt.resource.resources.models import ResourceGroup
 from invoke import Result
 
@@ -42,6 +43,7 @@ from sdcm.provision.provisioner import (
     StuckVMProvisioningError,
     ProvisionUnrecoverableError,
 )
+from sdcm.provision.network_configuration import DEFAULT_AZURE_SUBNET_NAME
 from sdcm.provision.security import ScyllaOpenPorts
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InstanceProvisionStuckEvent
@@ -63,6 +65,12 @@ class AzureProvisioner(Provisioner):
         super().__init__(test_id, region, availability_zone)
         # NOTE: Enable Azure KMS by default, disable only if configured explicitly
         self._enable_azure_kms = not config.get("enterprise_disable_kms")
+        # NIC specs of the test configuration, one per device index. Only creation needs them:
+        # teardown discovers the NICs a VM actually has, so a provisioner built without a
+        # configuration (discover_regions()) can still clean multi-NIC nodes up.
+        self._network_interfaces = config.get("azure_network_interfaces") or [
+            {"subnet": DEFAULT_AZURE_SUBNET_NAME, "public_ip": True, "ipv6": False, "public_ipv6": False}
+        ]
         stuck_vm_timeout = config.get("azure_provision_stuck_vm_timeout")
         self._stuck_vm_timeout = stuck_vm_timeout if stuck_vm_timeout is not None else DEFAULT_STUCK_VM_TIMEOUT
         stuck_vm_recreate_attempts = config.get("azure_provision_stuck_vm_recreate_attempts")
@@ -232,23 +240,19 @@ class AzureProvisioner(Provisioner):
         self._vm_provider.delete(name, wait=True)
         self._cache.pop(name, None)
 
-        try:
-            nic = self._nic_provider.get(name)
-        except KeyError:
-            nic = None
-        if nic is not None:
+        for nic in self._nic_provider.get_all(name):
             self._azure_service.network.network_interfaces.begin_delete(self._resource_group_name, nic.name).wait()
             self._nic_provider.delete(nic)
 
-        ip_address = self._ip_provider.get(name)
-        if getattr(ip_address, "id", None):
-            try:
-                self._azure_service.network.public_ip_addresses.begin_delete(
-                    self._resource_group_name, ip_address.name
-                ).wait()
-            except ResourceNotFoundError:
-                pass
-        self._ip_provider.delete(ip_address)
+        for ip_address in self._public_ip_addresses(name):
+            if getattr(ip_address, "id", None):
+                try:
+                    self._azure_service.network.public_ip_addresses.begin_delete(
+                        self._resource_group_name, ip_address.name
+                    ).wait()
+                except ResourceNotFoundError:
+                    pass
+            self._ip_provider.delete(ip_address)
 
     def _provision_resources(
         self, definitions: List[InstanceDefinition], pricing_model: PricingModel, deadline: float | None = None
@@ -257,18 +261,43 @@ class AzureProvisioner(Provisioner):
         self._rg_provider.get_or_create()
         sec_group_id = self._network_sec_group_provider.get_or_create(security_rules=ScyllaOpenPorts).id
         vnet_name = self._vnet_provider.get_or_create().name
-        subnet_id = self._subnet_provider.get_or_create(vnet_name, sec_group_id).id
-        self._ip_provider.get_or_create(instance_definitions=definitions, version="IPV4")
-        ip_addresses_ids = [self._ip_provider.get(definition.name).id for definition in definitions]
-        self._nic_provider.get_or_create(
-            subnet_id,
-            ip_addresses_ids=ip_addresses_ids,
-            names=[definition.name for definition in definitions],
-        )
-        nics_ids = [self._nic_provider.get(definition.name).id for definition in definitions]
+
+        subnet_ids = [
+            self._subnet_provider.get_or_create(
+                vnet_name, sec_group_id, subnet_name=interface["subnet"], index=index
+            ).id
+            for index, interface in enumerate(self._network_interfaces)
+        ]
+
+        # A public IPv4 address is only created for an interface configured to carry one, and only
+        # for a node that asked for public access at all.
+        plans = {definition.name: [] for definition in definitions}
+        for index, interface in enumerate(self._network_interfaces):
+            public_definitions = definitions if interface["public_ip"] else []
+            self._ip_provider.get_or_create(instance_definitions=public_definitions, version="IPV4", index=index)
+            for definition in definitions:
+                address = self._ip_provider.get(definition.name, index=index) if interface["public_ip"] else None
+                plans[definition.name].append(
+                    {"subnet_id": subnet_ids[index], "address_id": getattr(address, "id", None)}
+                )
+
+        names = [definition.name for definition in definitions]
+        self._nic_provider.get_or_create(plans)
+        nics_ids = [[nic.id for nic in self._nic_provider.get_all(name)] for name in names]
         return self._vm_provider.get_or_create(
             definitions=definitions, nics_ids=nics_ids, pricing_model=pricing_model, deadline=deadline
         )
+
+    def _public_ip_addresses(self, name: str) -> List[PublicIPAddress]:
+        """Public IP resources of a VM, one per NIC that carries one.
+
+        Derived from the NICs the VM actually has rather than from the test configuration, so it
+        also covers a provisioner discovered without one.
+        """
+        addresses = []
+        for index, _ in enumerate(self._nic_provider.get_all(name) or [None]):
+            addresses.append(self._ip_provider.get(name, index=index))
+        return addresses
 
     def _reset_resource_providers(self) -> None:
         """Rebuild IP/NIC/VM providers so they rediscover live resources (caches may be stale)."""
@@ -284,8 +313,10 @@ class AzureProvisioner(Provisioner):
             return
         self._vm_provider.delete(name, wait=wait)
         del self._cache[name]
-        self._nic_provider.delete(self._nic_provider.get(name))
-        self._ip_provider.delete(self._ip_provider.get(name))
+        for nic in self._nic_provider.get_all(name):
+            self._nic_provider.delete(nic)
+        for ip_address in self._public_ip_addresses(name):
+            self._ip_provider.delete(ip_address)
 
     def reboot_instance(self, name: str, wait: bool, hard: bool = False) -> None:
         self._vm_provider.reboot(name, wait, hard)

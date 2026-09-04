@@ -41,17 +41,32 @@ class SubnetProvider:
         except ResourceNotFoundError:
             pass
 
-    def get_or_create(self, vnet_name: str, network_sec_group_id: str, subnet_name: str = "default") -> Subnet:
+    @staticmethod
+    def address_prefix(index: int) -> str:
+        """IPv4 prefix of the subnet holding the NIC of the given device index.
+
+        Carved out of the VNet's 10.0.0.0/16 so that every NIC index gets a distinct /24 and the
+        primary NIC keeps the 10.0.0.0/24 it has always used.
+        """
+        return f"10.0.{index}.0/24"
+
+    def get_or_create(
+        self,
+        vnet_name: str,
+        network_sec_group_id: str,
+        subnet_name: str = "default",
+        index: int = 0,
+    ) -> Subnet:
         cache_name = f"{vnet_name}-{subnet_name}"
         if cache_name in self._cache:
             return self._cache[cache_name]
-        LOGGER.info("Creating subnet in resource group %s...", self._resource_group_name)
+        LOGGER.info("Creating subnet %s in resource group %s...", subnet_name, self._resource_group_name)
         self._azure_service.network.subnets.begin_create_or_update(
             resource_group_name=self._resource_group_name,
             virtual_network_name=vnet_name,
             subnet_name=subnet_name,
             subnet_parameters={
-                "address_prefix": "10.0.0.0/24",
+                "address_prefix": self.address_prefix(index),
                 "network_security_group": {
                     "id": network_sec_group_id,
                 },
