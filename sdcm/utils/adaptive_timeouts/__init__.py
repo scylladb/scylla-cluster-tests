@@ -35,25 +35,53 @@ def _get_operation_timeout_factor(params, operation: "Operations") -> float:
 TABLETS_SOFT_TIMEOUT = 1 * 60 * 60
 TABLETS_HARD_TIMEOUT = 3 * 60 * 60
 _STREAMING_OVERHEAD = 600  # add 10 minutes overhead for operations other than streaming
+_BARRIER_OVERHEAD_PER_NODE = 60  # raft topology barriers wait for every node at each stage
+_TABLET_OVERHEAD = 2  # group0 stage transitions per migrated tablet
+_LOAD_THROUGHPUT_PENALTY = 3  # streaming gets ~1/4 of the disk bandwidth on a fully loaded node
+_RBNO_FACTOR = 2  # repair-based streaming is considerably slower than plain streaming
+
+
+def _is_decommission_repair_based(node: "BaseNode") -> bool:
+    enabled = node.get_scylla_config_param("enable_repair_based_node_ops", verbose=False)
+    allowed = node.get_scylla_config_param("allowed_repair_based_node_ops", verbose=False)
+    if not enabled or not allowed:
+        return False
+    return enabled.strip().strip('"') == "true" and "decommission" in allowed.strip().strip('"').split(",")
 
 
 def _get_decommission_timeout(
     node: "BaseNode", tablets_enabled: bool = False
 ) -> tuple[tuple[int, int | None], dict[str, Any]]:
-    """Calculate timeout for decommission operation based on node load info. Still experimental, used to gather historical data."""
+    """Calculate decommission timeout from node load info.
+
+    Tablets:
+        soft = _STREAMING_OVERHEAD + (streaming_time + barrier_overhead + tablets_overhead) * rbno_factor
+        hard = 2 * soft
+        streaming_time   = data_size_mb / (expected_throughput / (1 + 3 * cpu_load)), cpu_load = load5 / shards in [0, 1]
+          this results in 100% throughput at 0% load, reducing to 25% throughput at 100% load
+        barrier_overhead = 60 * nodes in cluster
+        tablets_overhead = 2 * tablet replicas on the node
+        rbno_factor      = 2 when decommission is in allowed_repair_based_node_ops, else 1
+    Vnodes: rough estimation from previous runs, ~9h for 1TB, 2h minimum, no hard timeout.
+    """
     try:
         node_info_service = NodeLoadInfoServices().get(node)
         node_info = node_info_service.as_dict()
         LOGGER.debug(f"Estimating decommission timeout with {node_info=}")
         if tablets_enabled:
             node_info["tablets_enabled"] = True
-            estimated = int(node_info_service.node_data_size_mb / node_info_service.expected_throughput)
-            soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
+            cpu_load = min(node_info_service.cpu_load_5 / node_info_service.shards_count, 1.0)
+            effective_throughput = node_info_service.expected_throughput / (1 + _LOAD_THROUGHPUT_PENALTY * cpu_load)
+            streaming_time = node_info_service.node_data_size_mb / effective_throughput
+            barrier_overhead = _BARRIER_OVERHEAD_PER_NODE * len(node.parent_cluster.nodes)
+            tablets_overhead = _TABLET_OVERHEAD * node_info_service.tablets_count
+            rbno_factor = _RBNO_FACTOR if _is_decommission_repair_based(node) else 1
+            soft_timeout = int(
+                _STREAMING_OVERHEAD + (streaming_time + barrier_overhead + tablets_overhead) * rbno_factor
+            )
             return (soft_timeout, soft_timeout * 2), node_info
         else:
-            # For non-tablet cases, calculate based on data size
-            # rough estimation from previous runs almost 9h for 1TB
-            soft_timeout = max(int(node_info_service.node_data_size_mb * 0.03), 7200)  # 2 hours minimum
+            soft_timeout = max(int(node_info_service.node_data_size_mb * 0.03), 7200)
             return (soft_timeout, None), node_info
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Failed to calculate decommission timeout: \n%s \nDefaulting to 6 hours", exc)
