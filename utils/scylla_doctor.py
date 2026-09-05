@@ -31,6 +31,7 @@ class ScyllaDoctor:
     SCYLLA_DOCTOR_OFFLINE_BUCKET_PREFIX = "downloads/scylla-doctor/tar/"
     SCYLLA_DOCTOR_OFFLINE_BIN = "scylla_doctor.pyz"
     SCYLLA_DOCTOR_OFFLINE_CONF = "scylla_doctor.conf"
+    RUN_TIMEOUT = 20 * 60
     SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS = dedent("""
         [GossipInfoCollector]
         ; Doesn't work with systemd-user service
@@ -137,9 +138,9 @@ class ScyllaDoctor:
         if self.python3_path:
             sd_command = f"{self.python3_path} {sd_command}"
         if not self.node.is_nonroot_install:
-            result = self.node.remoter.sudo(sd_command, verbose=False)
+            result = self.node.remoter.sudo(sd_command, verbose=False, timeout=self.RUN_TIMEOUT)
         else:
-            result = self.node.remoter.run(f"bash -lce '{sd_command}'", verbose=False)
+            result = self.node.remoter.run(f"bash -lce '{sd_command}'", verbose=False, timeout=self.RUN_TIMEOUT)
         return result.stdout.strip()
 
     @cached_property
