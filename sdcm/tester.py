@@ -255,6 +255,9 @@ except ImportError:
 
 TEST_LOG = logging.getLogger(__name__)
 
+# timeout for the full scylla-doctor collection during failure handling
+SCYLLA_DOCTOR_TEARDOWN_TIMEOUT = 30 * 60
+
 PYTHON_THREAD_LIST = (KafkaCDCReaderThread, KafkaProducerThread, KafkaValidatorThread)
 
 
@@ -4231,15 +4234,26 @@ class ClusterTester(unittest.TestCase):
                 # per node and can take tens of minutes per node, so a serial pass over a large
                 # cluster (e.g. 60 nodes) previously took 40+ minutes. Workers are capped to avoid
                 # spawning an unbounded number of threads/SSH sessions on very large clusters.
-                with ThreadPoolExecutor(max_workers=min(len(ready_nodes), 20)) as executor:
-                    for future in as_completed(
-                        executor.submit(run_scylla_doctor_on_node, node) for node in ready_nodes
-                    ):
+                # Timed out nodes are reported and skipped so tearDown can continue collecting logs
+                executor = ThreadPoolExecutor(max_workers=min(len(ready_nodes), 20))
+                futures = {executor.submit(run_scylla_doctor_on_node, node): node for node in ready_nodes}
+                try:
+                    for future in as_completed(futures, timeout=SCYLLA_DOCTOR_TEARDOWN_TIMEOUT):
                         # run_scylla_doctor_on_node handles its own errors; guard against unexpected ones.
                         try:
                             future.result()
                         except Exception as exc:  # noqa: BLE001
-                            self.log.warning("Unexpected error running scylla-doctor on a node: %s", exc)
+                            self.log.warning(
+                                "Unexpected error running scylla-doctor on node %s: %s", futures[future].name, exc
+                            )
+                except TimeoutError:
+                    self.log.warning(
+                        "scylla-doctor did not finish within %s seconds on nodes %s, giving up on them",
+                        SCYLLA_DOCTOR_TEARDOWN_TIMEOUT,
+                        [node.name for future, node in futures.items() if not future.done()],
+                    )
+                finally:
+                    executor.shutdown(wait=False, cancel_futures=True)
             except Exception as exc:  # noqa: BLE001
                 self.log.warning("Unexpected error when collecting scylla-doctor info: %s", exc)
 
