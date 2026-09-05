@@ -659,3 +659,21 @@ def test_run_analysis_phase_report_not_created(mock_node, mock_test_config):
 
     with pytest.raises(ScyllaDoctorException, match="Analysis report file"):
         doc.run_analysis_phase()
+
+
+# --- run() timeout tests ---
+
+
+@pytest.mark.parametrize(
+    "is_nonroot_install,remoter_method",
+    [
+        pytest.param(False, "sudo", id="root_install_runs_via_sudo"),
+        pytest.param(True, "run", id="nonroot_install_runs_via_login_shell"),
+    ],
+)
+def test_run_passes_run_timeout_to_the_remoter(doctor, is_nonroot_install, remoter_method):
+    """Doctor commands must be time-bounded to avoid hanging on an unresponsive Scylla."""
+    doctor.node.is_nonroot_install = is_nonroot_install
+    doctor.run(sd_command="scylla-doctor --save-vitals node.vitals.json")
+    _args, kwargs = getattr(doctor.node.remoter, remoter_method).call_args
+    assert kwargs["timeout"] == ScyllaDoctor.RUN_TIMEOUT

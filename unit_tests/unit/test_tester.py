@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 import json
 import logging
+import threading
 import time
 import types
 import unittest.mock
@@ -807,3 +808,54 @@ def test_get_cluster_docker_nonzero_monitor_nodes_builds_monitor_set_docker(tmp_
 
     cluster_docker_mock.MonitorSetDocker.assert_called_once()
     assert tester.monitors is cluster_docker_mock.MonitorSetDocker.return_value
+
+
+# --- scylla-doctor gather_failure_statistics tests ---
+
+
+def _make_ready_node(name):
+    node = MagicMock()
+    node.name = name
+    node.is_nonroot_install = False
+    node._is_node_ready_run_scylla_commands.return_value = True
+    node.run_nodetool.return_value = MagicMock(ok=True, stdout="nodetool output", stderr="")
+    return node
+
+
+def test_gather_failure_statistics_scylla_doctor_stuck_node_does_not_block_teardown(tmp_path, monkeypatch, caplog):
+    """A scylla-doctor run that never returns on one node must not stall the rest of tearDown."""
+    release = threading.Event()
+    stuck_node, fast_node = _make_ready_node("stuck-node"), _make_ready_node("fast-node")
+
+    def fake_scylla_doctor(node, test_config, offline_install):  # noqa: ARG001
+        doctor = MagicMock(json_result_file="", scylla_logs_file="", is_full_edition=False)
+        doctor.install_scylla_doctor.side_effect = release.wait if node.name == "stuck-node" else None
+        return doctor
+
+    monkeypatch.setattr("utils.scylla_doctor.ScyllaDoctor", fake_scylla_doctor)
+    monkeypatch.setattr("sdcm.tester.SCYLLA_DOCTOR_TEARDOWN_TIMEOUT", 1)
+
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_scylla_doctor_stuck_node")
+    tester.logdir = str(tmp_path)
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [stuck_node, fast_node]
+    tester.params = MagicMock()
+    tester.params.get.side_effect = lambda key, default=None: {"use_scylla_doctor_on_failure": True}.get(key, default)
+
+    worker = threading.Thread(target=tester.gather_failure_statistics, daemon=True)
+    with caplog.at_level(logging.INFO):
+        worker.start()
+        worker.join(timeout=15)
+        finished = not worker.is_alive()
+    release.set()  # let the stuck doctor thread go so it does not outlive the test
+    worker.join(timeout=15)
+
+    assert finished, "gather_failure_statistics was still blocked on the stuck node after 15 s"
+    assert "Scylla-doctor completed for node fast-node" in caplog.text
+    assert "Failure statistics collection completed" in caplog.text
+    assert [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING and "stuck-node" in record.getMessage()
+    ], "the node whose scylla-doctor never finished was not reported"
