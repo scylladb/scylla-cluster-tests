@@ -26,11 +26,7 @@ even for names defined in ``types`` or ``helpers``: ``from .types import f`` bin
 ``unit_tests/unit/test_lint_patch_targets.py`` enforces this for the pipeline linter.
 """
 
-from sdcm.sct_config.config import (
-    SCTConfiguration,
-    TestConfig,  # incidental re-export that sdcm/cluster_cassandra.py relies on
-    init_and_verify_sct_config,
-)
+from sdcm.sct_config.config import SCTConfiguration, init_and_verify_sct_config
 from sdcm.sct_config.defaults import AWS_SUPPORTED_REGIONS, BACKEND_IMAGE_FIELD, available_backends
 from sdcm.sct_config.helpers import count_regions, simulated_racks_enabled
 from sdcm.sct_config.types import (
@@ -52,7 +48,6 @@ __all__ = [
     "SCTConfiguration",
     "SctField",
     "StringOrList",
-    "TestConfig",
     "available_backends",
     "boolean_or_space_separated_booleans",
     "count_regions",

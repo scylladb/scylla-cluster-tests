@@ -28,6 +28,7 @@ import pathlib
 
 import pytest
 
+from sdcm import sct_abs_path
 from sdcm.utils.lint.validator import _CLOUD_API_PATCHES
 
 
@@ -59,12 +60,14 @@ def test_no_call_site_shadows_the_patch_target(target):
     module_path, _, attr = target.rpartition(".")
 
     shadowing = []
-    for path in sorted(pathlib.Path("sdcm").rglob("*.py")):
+    sdcm_root = pathlib.Path(sct_abs_path("sdcm"))
+    assert sdcm_root.is_dir(), f"cannot find the sdcm package at {sdcm_root}"
+    for path in sorted(sdcm_root.rglob("*.py")):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:
             continue
-        module_name = str(path.with_suffix("")).replace("/", ".")
+        module_name = str(path.relative_to(sdcm_root.parent).with_suffix("")).replace("/", ".")
         if module_name == module_path:
             continue
         imports_it = any(
