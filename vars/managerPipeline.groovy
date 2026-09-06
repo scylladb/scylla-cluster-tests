@@ -454,14 +454,16 @@ def call(Map pipelineParams) {
                                         [$class: 'StringParameterValue', name: 'target_scylla_mgmt_server_address', value: params.scylla_mgmt_address],
                                         [$class: 'StringParameterValue', name: 'target_scylla_mgmt_agent_address', value: params.scylla_mgmt_agent_address],
                                         [$class: 'StringParameterValue', name: 'TARGET_MANAGER_VERSION', value: params.manager_version],
-                                        [$class: 'StringParameterValue', name: 'provision_type', value: params.provision_type]
+                                        [$class: 'StringParameterValue', name: 'provision_type', value: params.provision_type],
+                                        [$class: 'StringParameterValue', name: 'requested_by_user', value: params.requested_by_user]
                                     ]
                                 } else {
                                     repoParams = [
                                         [$class: 'StringParameterValue', name: 'scylla_mgmt_address', value: params.scylla_mgmt_address],
                                         [$class: 'StringParameterValue', name: 'scylla_mgmt_agent_address', value: params.scylla_mgmt_agent_address],
                                         [$class: 'StringParameterValue', name: 'manager_version', value: params.manager_version],
-                                        [$class: 'StringParameterValue', name: 'provision_type', value: params.provision_type]
+                                        [$class: 'StringParameterValue', name: 'provision_type', value: params.provision_type],
+                                        [$class: 'StringParameterValue', name: 'requested_by_user', value: params.requested_by_user]
                                     ]
                                 }
                                 triggerJob(fullJobPath, repoParams)

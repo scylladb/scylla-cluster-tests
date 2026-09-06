@@ -22,6 +22,11 @@ def call(List jobs) {
             string(name: "post_behavior_k8s_cluster",
                    defaultValue: "destroy",
                    description: "keep|keep-on-failure|destroy")
+            // Forwarded to every triggered job by the params.collect{} below, so the
+            // downstream run keeps the requester of the trigger that started it.
+            string(name: "requested_by_user",
+                   defaultValue: "",
+                   description: "Actual user requesting job start, for automated job builds (e.g. through Argus)")
         }
         stages {
             stage("Trigger Tests") {
