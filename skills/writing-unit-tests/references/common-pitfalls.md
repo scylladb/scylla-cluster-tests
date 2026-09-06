@@ -244,6 +244,11 @@ Note the import site is `sdcm.sct_config.config`, not `sdcm.sct_config`: the con
 `sdcm/sct_config/` package and `__init__.py` deliberately does not re-export these names, so
 patching `sdcm.sct_config.<name>` raises `AttributeError` rather than silently doing nothing.
 
+This holds even for names *defined* inside the package. `config.py` does
+`from sdcm.sct_config.types import dict_or_str`, so the effective patch target is
+`sdcm.sct_config.config.dict_or_str` — patching `...types.dict_or_str` replaces an
+attribute no caller reads. Always patch where the name is **called**, not where it is defined.
+
 ---
 
 ### P-11: Using `patch("module.Class")` for Widely-Imported Classes
