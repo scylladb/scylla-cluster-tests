@@ -19,7 +19,7 @@ from collections import namedtuple
 import pytest
 import yaml
 
-from sdcm import sct_config
+from sdcm.sct_config import config as sct_config
 from sdcm.keystore import KeyStore
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_latest_scylla_release
@@ -913,7 +913,7 @@ def test_vector_store_ami_name_resolved_to_ami_id(monkeypatch):
             return f"ami-{param}"
         return param
 
-    with unittest.mock.patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=fake_convert):
+    with unittest.mock.patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=fake_convert):
         sct_config.SCTConfiguration()
 
     assert "vector-store-1-5-0-arm64-2026-03-17t07-07-32z" in resolved_names, (

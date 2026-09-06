@@ -94,7 +94,7 @@ reviews:
         - Exception only for cyclic dependencies (must have explanatory comment)
         - Group: stdlib, third-party, internal (separated by blank lines)
 
-    - path: "sdcm/sct_config.py"
+    - path: "sdcm/sct_config/**"
       instructions: |
         Configuration changes (AGENTS.md "Configuration Changes"):
         - Every new config option MUST have a default in defaults/*.yaml
