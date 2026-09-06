@@ -22,9 +22,6 @@ def call(List jobs) {
             string(name: "post_behavior_k8s_cluster",
                    defaultValue: "destroy",
                    description: "keep|keep-on-failure|destroy")
-            string(name: "post_behavior_k8s_cluster",
-                    defaultValue: "destroy",
-                    description: "keep|keep-on-failure|destroy")
         }
         stages {
             stage("Trigger Tests") {
