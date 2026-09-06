@@ -260,7 +260,7 @@ def gce_base_env(monkeypatch):
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "5.4.0")
     monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
     monkeypatch.setattr(
-        "sdcm.sct_config.get_scylla_gce_images_versions",
+        "sdcm.sct_config.config.get_scylla_gce_images_versions",
         lambda version: [MagicMock(self_link="fake-link", name="scylla-5-4-0")],
     )
 
