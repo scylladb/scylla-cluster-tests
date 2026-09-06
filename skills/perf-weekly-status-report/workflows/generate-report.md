@@ -48,7 +48,7 @@ Step-by-step process for generating the Gmail-compatible HTML performance report
    - `build_number`
    - `packages[]` (installed packages)
 
-**Exit criteria:** JSON data collected for all 16 tests.
+**Exit criteria:** JSON data collected for all 20 tests.
 
 ## Phase 1a: Ask Build Type (if not specified)
 
@@ -537,7 +537,7 @@ argus run list --test-id d6ebf1a5-135f-43fc-a7ba-0716b60dfa94 --limit 1 \
 DAYS=${DAYS:-7}
 AFTER=$(date -d "${DAYS} days ago" +%s)
 
-# 2. Collect data for one test (repeat for all 16)
+# 2. Collect data for one test (repeat for all 20)
 argus run list \
   --test-id d6ebf1a5-135f-43fc-a7ba-0716b60dfa94 \
   --after $AFTER \
@@ -547,7 +547,7 @@ argus run list \
 
 # 3. Filter master (~dev) versions (in Python/jq)
 # Keep only runs where scylla_version matches ^\d{4}\.\d+\.\d+.+dev$
-# Expect most of the 16 tests to yield zero master runs -- that is normal.
+# Expect most of the 20 tests to yield zero master runs -- that is normal.
 
 # 4. Fetch results per filtered run
 argus run results \

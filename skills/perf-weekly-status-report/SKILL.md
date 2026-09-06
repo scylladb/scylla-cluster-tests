@@ -60,7 +60,7 @@ This violates the repo-wide rule that commands must be non-interactive, and in a
 argus run list --test-id <ANY_TEST_ID> --limit 1 --url https://argus.scylladb.com
 ```
 
-If the output contains `Waiting for login...`, tell the user a browser login is required and wait for it to complete before proceeding. Never launch the 16-test collection loop as the first Argus call -- a login prompt mid-fan-out produces confusing partial failures.
+If the output contains `Waiting for login...`, tell the user a browser login is required and wait for it to complete before proceeding. Never launch the 20-test collection loop as the first Argus call -- a login prompt mid-fan-out produces confusing partial failures.
 
 ### Gmail-Compatible HTML
 
@@ -254,6 +254,20 @@ These are the enterprise performance tests tracked in the weekly report:
 | simple-query-weekly-microbenchmark_arm64-write | dcc1afa0-2225-468c-9f45-5cfc8486f7f8 | Microbenchmarks |
 | simple-query-weekly-microbenchmark_x86_64 | 03464849-60e8-46c8-91b9-955cdeb07ea6 | Microbenchmarks |
 | simple-query-weekly-microbenchmark_x86_64-write | 6e745123-cb53-482b-836c-0609bd36a4e6 | Microbenchmarks |
+| cql-raw-weekly-microbenchmark_arm64 | 474ac937-cbc7-45d1-9375-746b8328f51b | Microbenchmarks |
+| cql-raw-weekly-microbenchmark_arm64-write | 68b9d59b-bf4e-4aa1-abea-032e0fd7fa8d | Microbenchmarks |
+| cql-raw-weekly-microbenchmark_x86_64 | e62a078f-924b-4662-a77b-bd9daa6e2241 | Microbenchmarks |
+| cql-raw-weekly-microbenchmark_x86_64-write | 006ddbcc-b344-4bb5-ac1b-374588305aa4 | Microbenchmarks |
+
+Test names in this table are the Jenkins job names with the `scylla-enterprise-perf-` prefix
+stripped; the jobs live under `scylla-enterprise/perf-regression/` and their pipeline definitions
+under `jenkins-pipelines/performance/branch-perf-v17/scylla-enterprise/perf-regression/`.
+
+> **`cql-raw` vs `simple-query`:** these are different tests, not architecture variants of one.
+> `cql-raw` runs `microbenchmarking_test.PerfCqlRawTest`, `simple-query` runs `PerfSimpleQueryTest`.
+> Beware the `scylla-staging/yulia/...` copies of the cql-raw jobs: they default `test_name` to
+> `PerfSimpleQueryTest`, so a staging run can silently be a different test. Confirm via the run's
+> `test_method` field before treating a cql-raw run as a cql-raw result.
 
 **Most of this registry is usually empty for a given week, and that is expected.** These tests are not all scheduled weekly, and several run predominantly on release branches -- their runs get filtered out by the master-only rule. It is normal for whole categories (i8g Vnodes, i4i Tablets, i4i Vnodes) to contribute zero rows because they only ran release builds such as `2026.2.2` / `2026.1.9`.
 
