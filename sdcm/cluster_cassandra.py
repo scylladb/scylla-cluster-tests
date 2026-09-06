@@ -28,7 +28,7 @@ from sdcm.cassandra_exporter_setup import CassandraExporterSetup
 from sdcm.exceptions import KillNemesis, NodeNotReady
 from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.remote.remote_file import remote_file, dict_to_yaml_file, yaml_file_to_dict
-from sdcm.sct_config import TestConfig
+from sdcm.test_config import TestConfig
 from sdcm.utils.common import raise_exception_in_thread
 from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.decorators import log_run_info, optional_stage
