@@ -4,7 +4,7 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 artifactsPipeline(
-    test_config: 'test-cases/artifacts/debian11.yaml',
+    test_config: 'test-cases/artifacts/debian13.yaml',
     backend: 'gce',
     provision_type: 'spot',
 
