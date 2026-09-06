@@ -1,0 +1,5 @@
+jobs:
+  - name: "artifacts-debian11-test"
+    reason: "Debian 11 (bullseye) is EOL; GCP removed the debian-11 image family (SCT-943)"
+  - name: "artifacts-debian11-nonroot-test"
+    reason: "Debian 11 (bullseye) is EOL; GCP removed the debian-11 image family (SCT-943)"
