@@ -62,6 +62,7 @@ def is_ignored_field(field) -> bool:
 
 
 def _str(value: str | None) -> str | None:
+    """Pass through a string (or None) unchanged; reject any other type."""
     if value is None:
         return value
     if isinstance(value, str):
@@ -122,6 +123,7 @@ StringOrList = Annotated[
 
 
 def int_or_space_separated_ints(value: str | int | list[int]) -> list[int] | None:
+    """Coerce an int, a list of ints, or a space-separated string of ints into a list of ints."""
     if value is None:
         return None
     try:
@@ -202,6 +204,7 @@ BooleanOrList = Annotated[
 
 
 def dict_or_str(value: dict | str | None) -> dict | None:
+    """Coerce a dict, or a Python/YAML literal string holding a mapping, into a dict."""
     if value is None:
         return None
     elif isinstance(value, str):
@@ -272,6 +275,7 @@ class AdaptiveTimeoutMultipliers(RootModel):
     @model_validator(mode="before")
     @classmethod
     def _validate_operations(cls, value):
+        """Reject multiplier keys that are not known adaptive-timeout operation names."""
         if not isinstance(value, dict):
             return value
 
@@ -290,6 +294,7 @@ class AdaptiveTimeoutMultipliers(RootModel):
 
 
 def dict_or_str_or_pydantic(value: dict | str | BaseModel | None) -> dict | BaseModel | None:
+    """Like `dict_or_str`, but also passes an already-built pydantic model through untouched."""
     if value is None:
         return None
     if isinstance(value, str):
@@ -308,6 +313,7 @@ DictOrStrOrPydantic = Annotated[dict | str | BaseModel, BeforeValidator(dict_or_
 
 
 def _boolean(value):
+    """Coerce a bool, or a truthy/falsy string such as "true"/"no"/"1", into a bool."""
     if value is None:
         return None
     elif isinstance(value, bool):
@@ -350,6 +356,7 @@ class SctField(FieldInfo):
     """
 
     def __init__(self, *args, **kwargs):
+        """Default the field to None and move SCT-specific keys into `json_schema_extra`."""
         kwargs.setdefault("default", None)
         extra = {k: v for k, v in kwargs.items() if k in ("appendable",)}
         kwargs.setdefault("json_schema_extra", extra)
