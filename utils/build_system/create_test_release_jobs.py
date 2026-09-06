@@ -16,6 +16,7 @@ import logging
 from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape as xml_escape
 
 import jenkins
 import yaml
@@ -59,7 +60,9 @@ class JenkinsPipelines:
 
     def create_directory(self, name: Path | str, display_name: str, description: str = ""):
         try:
-            dir_xml_data = DIR_TEMPLATE % dict(sct_display_name=display_name, sct_description=description)
+            dir_xml_data = DIR_TEMPLATE % dict(
+                sct_display_name=xml_escape(display_name), sct_description=xml_escape(description)
+            )
             new_path = str(Path(self.base_job_dir) / name)
 
             if self.jenkins.job_exists(new_path):
@@ -122,8 +125,8 @@ class JenkinsPipelines:
             description = f"{description}\n\n{metadata_block}"
 
         xml_data = JOB_TEMPLATE % dict(
-            sct_display_name=f"{base_name}{job_name_suffix}",
-            sct_description=description,
+            sct_display_name=xml_escape(f"{base_name}{job_name_suffix}"),
+            sct_description=xml_escape(description),
             sct_repo=self.sct_repo,
             sct_branch_name=self.sct_branch_name,
             sct_jenkinsfile=sct_jenkinsfile,
@@ -436,8 +439,8 @@ class JenkinsPipelines:
                 for backend in meta["supported_backends"]:
                     ET.SubElement(backends_elem, "backend").text = str(backend)
             return ET.tostring(root, encoding="unicode", xml_declaration=True)
-        except OSError, KeyError, ValueError, TypeError:
-            LOGGER.debug("Could not inject testMetadata XML from %s", jenkins_file, exc_info=True)
+        except OSError, KeyError, ValueError, TypeError, ET.ParseError:
+            LOGGER.warning("Could not inject testMetadata XML from %s", jenkins_file, exc_info=True)
             return xml_data
 
     def create_job_tree(
