@@ -66,16 +66,14 @@ def _nested_env_subkey(env_key: str, field_env: str, sep: str) -> str | None:
 
 
 def is_config_option_appendable(option_name: str, model: type[BaseModel]) -> bool:
+    """True if *option_name* supports the `++` append syntax in config files and env vars."""
     for field_name, field in model.model_fields.items():
         if is_ignored_field(field):
             continue
         if field_name == option_name:
-            break
-    else:
-        raise ValueError(f"Option {option_name} not found in {model.__name__} fields")
-
-    # type: ignore[union-attr]
-    return field.json_schema_extra and field.json_schema_extra.get("appendable", False)
+            extra = field.json_schema_extra
+            return bool(extra and extra.get("appendable", False))
+    raise ValueError(f"Option {option_name} not found in {model.__name__} fields")
 
 
 def merge_dicts_append_strings(d1, d2, model: type[BaseModel]):
