@@ -19,7 +19,7 @@ from unittest.mock import patch
 import pytest
 from botocore.exceptions import ClientError
 
-from sdcm import sct_config
+from sdcm.sct_config import config as sct_config
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo
 
 
@@ -149,7 +149,7 @@ def test_dict_constraint_resolved_to_instance_type(monkeypatch):
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB.vcpu", "8")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("instance_type_db") == "i8g.2xlarge"
@@ -161,7 +161,7 @@ def test_literal_instance_type_passes_through_unchanged(monkeypatch):
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("instance_type_db") == "i4i.large"
@@ -180,7 +180,7 @@ def test_docker_backend_skips_resolution(monkeypatch):
         catalog_loaded.append(path)
         return real_from_dir(path)
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", side_effect=tracking_from_dir):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", side_effect=tracking_from_dir):
         sct_config.SCTConfiguration()
 
     assert not catalog_loaded, "catalog should not be loaded for docker backend"
@@ -193,7 +193,7 @@ def test_missing_vcpu_in_constraint_raises_value_error(monkeypatch):
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB.memory", "64")
 
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)),
         pytest.raises(ValueError, match="Invalid constraint for instance_type_db"),
     ):
         sct_config.SCTConfiguration()
@@ -206,7 +206,7 @@ def test_no_matching_instance_raises_value_error(monkeypatch):
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB.vcpu", "9999")
 
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)),
         pytest.raises(ValueError, match="Cannot resolve instance_type_db"),
     ):
         sct_config.SCTConfiguration()
@@ -219,7 +219,7 @@ def test_env_var_dot_notation_vcpu_and_memory_resolved(monkeypatch):
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB.vcpu", "8")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB.memory", "64")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("instance_type_db") == "i8g.2xlarge"
@@ -233,7 +233,7 @@ def test_env_var_double_underscore_notation_vcpu_and_memory_resolved(monkeypatch
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB__VCPU", "8")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB__MEMORY", "64")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("instance_type_db") == "i8g.2xlarge"
@@ -248,7 +248,7 @@ def test_missing_catalog_directory_logs_warning_and_skips(monkeypatch, caplog):
     sct_config._SIZING_RESOLUTION_CACHE.clear()
 
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", side_effect=FileNotFoundError("not found")),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", side_effect=FileNotFoundError("not found")),
         caplog.at_level(logging.WARNING, logger="sdcm.sct_config"),
     ):
         conf = sct_config.SCTConfiguration()
@@ -270,7 +270,7 @@ def test_resolve_instance_sizes_method_direct(monkeypatch):
         "instance_type_db": {"vcpu": "8"},
     }
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)):
         conf._resolve_instance_sizes(fake_env)
 
     assert fake_env["instance_type_db"] == "i8g.2xlarge"
@@ -283,8 +283,8 @@ def test_aws_loader_ami_resolves_amd64_for_x86_instance_type(monkeypatch):
     monkeypatch.setenv("SCT_INSTANCE_TYPE_LOADER", "c6i.xlarge")
 
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_LOADER_X86)),
-        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_LOADER_X86)),
+        patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
     ):
         conf = sct_config.SCTConfiguration()
 
@@ -300,8 +300,8 @@ def test_aws_loader_ami_resolves_arm64_for_arm_instance_type(monkeypatch):
     monkeypatch.setenv("SCT_INSTANCE_TYPE_LOADER", "c7g.xlarge")
 
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_LOADER_ARM)),
-        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_LOADER_ARM)),
+        patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
     ):
         conf = sct_config.SCTConfiguration()
 
@@ -318,8 +318,8 @@ def test_aws_loader_ami_not_overridden_when_explicitly_set(monkeypatch):
     monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-custom-loader")
 
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_LOADER_X86)),
-        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_LOADER_X86)),
+        patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
     ):
         conf = sct_config.SCTConfiguration()
 
@@ -331,7 +331,7 @@ def test_azure_loader_image_resolves_x86_sku_for_x86_instance_type(monkeypatch):
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_AZURE_INSTANCE_TYPE_LOADER", "Standard_F4s_v2")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AZURE_LOADER_X86)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AZURE_LOADER_X86)):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("azure_image_loader") == "Canonical:ubuntu-26_04-lts:server:latest"
@@ -342,7 +342,7 @@ def test_azure_loader_image_resolves_arm_sku_for_arm_instance_type(monkeypatch):
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_AZURE_INSTANCE_TYPE_LOADER", "Standard_D4ps_v6")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AZURE_LOADER_ARM)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AZURE_LOADER_ARM)):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("azure_image_loader") == "Canonical:ubuntu-26_04-lts:server-arm64:latest"
@@ -353,7 +353,7 @@ def test_gce_loader_image_resolves_amd64_for_x86_instance_type(monkeypatch):
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n2-standard-8")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_INSTANCE)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_INSTANCE)):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("gce_image_loader").endswith("/ubuntu-2604-lts-amd64")
@@ -364,7 +364,7 @@ def test_gce_loader_image_resolves_arm64_for_arm_instance_type(monkeypatch):
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n4a-standard-4")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_LOADER_ARM)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_LOADER_ARM)):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("gce_image_loader").endswith("/ubuntu-2604-lts-arm64")
@@ -376,7 +376,7 @@ def test_gce_loader_image_not_overridden_when_explicitly_set(monkeypatch):
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n4a-standard-4")
     monkeypatch.setenv("SCT_GCE_IMAGE_LOADER", "https://example.com/custom-loader-image")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_LOADER_ARM)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_LOADER_ARM)):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("gce_image_loader") == "https://example.com/custom-loader-image"
@@ -390,8 +390,8 @@ def test_aws_family_backends_resolve_the_loader_ami_arch_marker(monkeypatch, bac
     monkeypatch.setenv("SCT_INSTANCE_TYPE_LOADER", "c7g.xlarge")
 
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_LOADER_ARM)),
-        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_LOADER_ARM)),
+        patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
     ):
         conf = sct_config.SCTConfiguration()
 
@@ -405,7 +405,7 @@ def test_gce_family_backends_resolve_the_loader_image_arch_marker(monkeypatch, b
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n4a-standard-4")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_LOADER_ARM)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_LOADER_ARM)):
         conf = sct_config.SCTConfiguration()
 
     assert "{arch}" not in conf.get("gce_image_loader")
@@ -421,9 +421,9 @@ def test_aws_arch_lookup_failure_falls_back_instead_of_raising(monkeypatch):
     boto_error = ClientError({"Error": {"Code": "UnauthorizedOperation", "Message": "denied"}}, "DescribeInstanceTypes")
 
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_LOADER_ARM)),
-        patch("sdcm.sct_config.get_arch_from_instance_type", side_effect=boto_error),
-        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_LOADER_ARM)),
+        patch("sdcm.sct_config.config.get_arch_from_instance_type", side_effect=boto_error),
+        patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
     ):
         conf = sct_config.SCTConfiguration()
 
@@ -448,8 +448,8 @@ def test_xcloud_resolves_the_loader_image_arch_marker(
 
     catalog = _make_catalog(_AWS_LOADER_ARM if provider == "aws" else _GCE_LOADER_ARM)
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=catalog),
-        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=catalog),
+        patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
     ):
         conf = sct_config.SCTConfiguration()
 
@@ -466,9 +466,9 @@ def test_arm_loader_instance_with_undetectable_arch_raises(monkeypatch):
     boto_error = ClientError({"Error": {"Code": "UnauthorizedOperation", "Message": "denied"}}, "DescribeInstanceTypes")
 
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_LOADER_ARM)),
-        patch("sdcm.sct_config.get_arch_from_instance_type", side_effect=boto_error),
-        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_LOADER_ARM)),
+        patch("sdcm.sct_config.config.get_arch_from_instance_type", side_effect=boto_error),
+        patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda value, regions: value),
         pytest.raises(ValueError, match="c9g.xlarge"),
     ):
         sct_config.SCTConfiguration()
@@ -481,7 +481,7 @@ def test_arm_loader_instance_resolved_as_x86_raises(monkeypatch):
 
     mislabelled = dataclasses.replace(_GCE_LOADER_ARM, arch="x86_64")
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(mislabelled)),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(mislabelled)),
         pytest.raises(ValueError, match="n4a-standard-4"),
     ):
         sct_config.SCTConfiguration()
@@ -493,7 +493,7 @@ def test_literal_loader_instance_type_wins_over_sizing_arch_hint(monkeypatch):
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n2-standard-8")
     monkeypatch.setenv("SCT_SIZING_LOADER__arch", "arm64")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_INSTANCE)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_INSTANCE)):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("gce_image_loader").endswith("/ubuntu-2604-lts-amd64")
@@ -553,7 +553,7 @@ def test_amd64_only_stress_tools_detected_from_stress_commands(monkeypatch, stre
     monkeypatch.setenv("SCT_ALTERNATOR_USE_DNS_ROUTING", "false")
 
     with patch(
-        "sdcm.sct_config.InstanceCatalog.from_directory",
+        "sdcm.sct_config.config.InstanceCatalog.from_directory",
         return_value=_make_catalog(_GCE_INSTANCE, _GCE_LOADER_ARM),
     ):
         conf = sct_config.SCTConfiguration()
@@ -568,7 +568,7 @@ def test_ycsb_with_dns_routing_requires_the_amd64_only_dns_image(monkeypatch):
     monkeypatch.setenv("SCT_ALTERNATOR_USE_DNS_ROUTING", "true")
 
     with patch(
-        "sdcm.sct_config.InstanceCatalog.from_directory",
+        "sdcm.sct_config.config.InstanceCatalog.from_directory",
         return_value=_make_catalog(_GCE_INSTANCE, _GCE_LOADER_ARM),
     ):
         conf = sct_config.SCTConfiguration()
@@ -583,7 +583,7 @@ def test_ycsb_without_dns_routing_keeps_arm_loaders(monkeypatch):
     monkeypatch.setenv("SCT_ALTERNATOR_USE_DNS_ROUTING", "false")
 
     with patch(
-        "sdcm.sct_config.InstanceCatalog.from_directory",
+        "sdcm.sct_config.config.InstanceCatalog.from_directory",
         return_value=_make_catalog(_GCE_INSTANCE, _GCE_LOADER_ARM),
     ):
         conf = sct_config.SCTConfiguration()
@@ -597,7 +597,7 @@ def test_amd64_only_stress_tool_constrains_sizing_loader_to_x86(monkeypatch):
     monkeypatch.setenv("SCT_STRESS_CMD", "cassandra-harry -mode cql3")
 
     with patch(
-        "sdcm.sct_config.InstanceCatalog.from_directory",
+        "sdcm.sct_config.config.InstanceCatalog.from_directory",
         return_value=_make_catalog(_GCE_INSTANCE, _GCE_LOADER_ARM),
     ):
         conf = sct_config.SCTConfiguration()
@@ -614,7 +614,7 @@ def test_explicit_arm_sizing_loader_with_an_amd64_only_stress_tool_raises(monkey
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n4a-standard-4")
 
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_LOADER_ARM)),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_LOADER_ARM)),
         pytest.raises(ValueError, match="linux/amd64"),
     ):
         sct_config.SCTConfiguration()
@@ -627,7 +627,7 @@ def test_literal_arm_loader_with_an_amd64_only_stress_tool_raises(monkeypatch):
     monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_LOADER", "n4a-standard-4")
 
     with (
-        patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_LOADER_ARM)),
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_GCE_LOADER_ARM)),
         pytest.raises(ValueError, match="ndbench"),
     ):
         sct_config.SCTConfiguration()
@@ -641,7 +641,7 @@ def test_env_sizing_loader_constraints_survive_the_x86_constraint(monkeypatch):
     monkeypatch.setenv("SCT_SIZING_LOADER__memory", ">=32")
 
     with patch(
-        "sdcm.sct_config.InstanceCatalog.from_directory",
+        "sdcm.sct_config.config.InstanceCatalog.from_directory",
         return_value=_make_catalog(_GCE_INSTANCE, _GCE_LOADER_ARM),
     ):
         conf = sct_config.SCTConfiguration()
@@ -672,7 +672,7 @@ def test_oci_loader_image_resolves_the_arch_marker(monkeypatch):
     monkeypatch.setenv("SCT_OCI_INSTANCE_TYPE_LOADER", "VM.Standard.A1.Flex:4:16")
     monkeypatch.setenv("SCT_OCI_IMAGE_LOADER", "ubuntu-24.04-{arch}")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_OCI_LOADER_ARM)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_OCI_LOADER_ARM)):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("oci_image_loader") == "ubuntu-24.04-arm64"
@@ -684,7 +684,7 @@ def test_oci_loader_image_without_a_marker_is_left_alone(monkeypatch):
     monkeypatch.setenv("SCT_OCI_INSTANCE_TYPE_LOADER", "VM.Standard.A1.Flex:4:16")
     monkeypatch.setenv("SCT_OCI_IMAGE_LOADER", "ocid1.image.oc1.phx.aaaaaaaa")
 
-    with patch("sdcm.sct_config.InstanceCatalog.from_directory", return_value=_make_catalog(_OCI_LOADER_ARM)):
+    with patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_OCI_LOADER_ARM)):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("oci_image_loader") == "ocid1.image.oc1.phx.aaaaaaaa"

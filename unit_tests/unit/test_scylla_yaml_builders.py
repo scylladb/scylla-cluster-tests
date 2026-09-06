@@ -613,7 +613,7 @@ def run_scylla_yaml_config_case(
     )
 
     with (
-        patch("sdcm.sct_config.get_scylla_ami_versions", return_value=[scylla_ami_version_output]),
+        patch("sdcm.sct_config.config.get_scylla_ami_versions", return_value=[scylla_ami_version_output]),
         patch("sdcm.provision.scylla_yaml.certificate_builder.install_client_certificate", return_value=None),
     ):
         monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")

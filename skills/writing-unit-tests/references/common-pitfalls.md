@@ -228,17 +228,21 @@ When code uses `from sdcm.utils.common import func`, patching only `sdcm.utils.c
 ❌ **Bad:**
 ```python
 with patch("sdcm.utils.common.convert_name_to_ami_if_needed", return_value="ami-fake"):
-    config = SCTConfiguration()  # sdcm.sct_config still has the real reference
+    config = SCTConfiguration()  # sdcm.sct_config.config still has the real reference
 ```
 
 ✅ **Good — patch both source and import site:**
 ```python
 with (
     patch("sdcm.utils.common.convert_name_to_ami_if_needed", return_value="ami-fake"),
-    patch("sdcm.sct_config.convert_name_to_ami_if_needed", return_value="ami-fake"),
+    patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", return_value="ami-fake"),
 ):
     config = SCTConfiguration()
 ```
+
+Note the import site is `sdcm.sct_config.config`, not `sdcm.sct_config`: the config lives in the
+`sdcm/sct_config/` package and `__init__.py` deliberately does not re-export these names, so
+patching `sdcm.sct_config.<name>` raises `AttributeError` rather than silently doing nothing.
 
 ---
 
