@@ -90,6 +90,7 @@ export SCT_REUSE_CLUSTER=$(cat ~/sct-results/latest/test_id)
 
 **Main Framework (`sdcm/`):**
 
+<<<<<<< HEAD
 The `sdcm/` directory is the heart of the SCT framework. Here's a detailed breakdown of its structure:
 
 #### Core Files
@@ -189,6 +190,37 @@ The `sdcm/` directory is the heart of the SCT framework. Here's a detailed break
   - `k8s/` - Kubernetes utilities
   - `ldap.py` - LDAP authentication utilities
   - And many more specialized utilities
+||||||| parent of bd2dbde48 (refactor(sct_config): repoint patch targets and docs at the package)
+| Area | Key Files | Purpose |
+|------|-----------|---------|
+| Cluster management | `cluster.py`, `cluster_aws.py`, `cluster_gce.py`, `cluster_azure.py`, `cluster_docker.py`, `cluster_k8s/` | Base classes and backend-specific implementations |
+| Test base | `tester.py` | Base test class, setup/teardown, reporting |
+| Nemesis (chaos) | `nemesis/` package — see [docs/nemesis.md](docs/nemesis.md) | `NemesisBaseClass`, `NemesisRunner`, `NemesisRegistry`, auto-discovery |
+| Configuration | `sct_config.py` | Parameter handling; precedence: CLI > env vars > config files > defaults |
+| Stress tools | `stress/`, `*_thread.py` | Wrappers for cassandra-stress, scylla-bench, YCSB, gemini, latte |
+| Remote execution | `remote/` | SSH, Docker, and K8s command runners |
+| Provisioning | `provision/` | Cloud-specific infra provisioning (AWS, Azure, GCE) |
+| Monitoring | `monitorstack/`, `prometheus.py`, `db_stats.py` | Prometheus/Grafana metrics, log collection |
+| Events | `sct_events/` | Event generation, filtering, and test flow control |
+| REST clients | `rest/` | Scylla storage service, compaction manager, RAFT API |
+| Manager | `mgmt/` | Scylla Manager CLI and operations (backup, repair) |
+| Utilities | `utils/` | Cloud utils, version utils, Docker utils, and more |
+=======
+| Area | Key Files | Purpose |
+|------|-----------|---------|
+| Cluster management | `cluster.py`, `cluster_aws.py`, `cluster_gce.py`, `cluster_azure.py`, `cluster_docker.py`, `cluster_k8s/` | Base classes and backend-specific implementations |
+| Test base | `tester.py` | Base test class, setup/teardown, reporting |
+| Nemesis (chaos) | `nemesis/` package — see [docs/nemesis.md](docs/nemesis.md) | `NemesisBaseClass`, `NemesisRunner`, `NemesisRegistry`, auto-discovery |
+| Configuration | `sdcm/sct_config/` | Parameter handling; precedence: CLI > env vars > config files > defaults |
+| Stress tools | `stress/`, `*_thread.py` | Wrappers for cassandra-stress, scylla-bench, YCSB, gemini, latte |
+| Remote execution | `remote/` | SSH, Docker, and K8s command runners |
+| Provisioning | `provision/` | Cloud-specific infra provisioning (AWS, Azure, GCE) |
+| Monitoring | `monitorstack/`, `prometheus.py`, `db_stats.py` | Prometheus/Grafana metrics, log collection |
+| Events | `sct_events/` | Event generation, filtering, and test flow control |
+| REST clients | `rest/` | Scylla storage service, compaction manager, RAFT API |
+| Manager | `mgmt/` | Scylla Manager CLI and operations (backup, repair) |
+| Utilities | `utils/` | Cloud utils, version utils, Docker utils, and more |
+>>>>>>> bd2dbde48 (refactor(sct_config): repoint patch targets and docs at the package)
 
 **Configuration System:**
 - `test-cases/` - Test configuration YAML files
