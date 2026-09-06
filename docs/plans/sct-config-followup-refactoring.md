@@ -1,15 +1,15 @@
 ---
-status: draft
+status: in_progress
 domain: config
 created: 2026-03-01
-last_updated: 2026-03-17
-owner: null
+last_updated: 2026-09-06
+owner: fruch
 ---
 # Splitting `sct_config.py` into a Module
 
 ## Problem Statement
 
-`sdcm/sct_config.py` is a ~4,500-line monolith containing 430+ configuration fields, validation logic, image resolution, helper functions, and backend-specific defaults — all in a single class and file. This makes it extremely hard for both humans and LLMs to review, maintain, or extend.
+`sdcm/sct_config.py` is a ~5,400-line monolith containing 537 configuration fields, validation logic, image resolution, helper functions, and backend-specific defaults — all in a single class and file. This makes it extremely hard for both humans and LLMs to review, maintain, or extend.
 
 [PR #13104](https://github.com/scylladb/scylla-cluster-tests/pull/13104) migrated `SCTConfiguration` from a custom `dict` to a Pydantic `BaseModel`, providing a foundation for further refactoring. This plan focuses specifically on **splitting the monolithic file into a well-organized package**.
 
@@ -17,57 +17,78 @@ owner: null
 
 Key pain points from the PR #13104 review ([comment by @soyacz](https://github.com/scylladb/scylla-cluster-tests/pull/13104#issuecomment-3971791016), [response by @pehala](https://github.com/scylladb/scylla-cluster-tests/pull/13104#issuecomment-3971881663)):
 
-1. **Monolithic file**: 4,500+ lines in a single file with 430+ configuration fields cannot be reasonably reviewed or maintained.
+1. **Monolithic file**: 5,400+ lines in a single file with 537 configuration fields cannot be reasonably reviewed or maintained.
 2. **Single class owns everything**: All fields, all validation, all image resolution, all backend defaults live in one class — making it impossible to test or mock individual parts.
 3. **Validation coupled to structure**: The flat "wide" config means all validation must live in one place, growing linearly with every new field.
 4. **Hard to mock in tests**: Without structural separation, tests that only need a few config fields must construct or mock the entire configuration object.
 
 ## Current State
 
-### File: `sdcm/sct_config.py` (~4,500 lines)
+### File: `sdcm/sct_config.py` (~5,390 lines)
 
-> **Note**: Line numbers reference the current `master` branch as of commit `eb82fef`. They will shift as PR #13104 and other changes are merged, but the logical sections remain the same.
+> **Note**: Line numbers reference `upstream/master` at commit `d2bff8c102` (2026-09-06) and are
+> indicative only — they shift constantly. The logical sections are what matter.
 
-**Class structure:**
-- `SCTConfiguration(dict)` — line 237 (current master), migrated to `SCTConfiguration(BaseModel)` in PR #13104
-- `config_options` list — lines 262–2798 (~2,500 lines of field definitions), converted to Pydantic field annotations in PR #13104
-- Class-level attributes — lines 2800–3050: `required_params`, `backend_required_params`, `defaults_config_files`, `stress_cmd_params`, `ami_id_params`, `aws_supported_regions`
+**Module level (lines 1–732), before the class:**
+- Imports (18–105), including 25 `sdcm.*` modules — this is what makes the module expensive to import.
+- Type aliases and their `BeforeValidator` converters (162–485): `String`, `StringOrList`, `IntOrList`,
+  `BooleanOrList`, `DictOrStr`, `DictOrStrOrPydantic`, `Boolean`, plus `IgnoredType`, `InputType`,
+  `is_ignored_field` and the `AdaptiveTimeoutMultipliers` RootModel.
+- `SctField` (488–523), the custom `FieldInfo` carrying `appendable`.
+- Backend constants (526–565): `available_backends`, `AWS_SUPPORTED_REGIONS`, `BACKEND_IMAGE_FIELD` —
+  these are **already** module level, not class attributes.
+- Helpers (112–160, 448–483, 568–626): `_nested_env_subkey`, the keystore-env tracking pair,
+  `is_config_option_appendable`, `merge_dicts_append_strings`, `count_regions`,
+  `_load_docker_images_defaults_cached`, `simulated_racks_enabled`.
+- Oracle image resolvers (628–732): `_resolve_oracle_images_{aws,azure,gce,oci}` and
+  `_ORACLE_IMAGE_RESOLVERS`.
 
-**`__init__` method** (lines 3052–3527, ~475 lines) performs these steps sequentially:
-1. **Lines 3052–3074**: Initialize instance variables, load environment variables
-2. **Lines 3076–3088**: Load default and user-provided YAML config files
-3. **Lines 3090–3116**: Handle region data for AWS/GCE/Azure
-4. **Lines 3117–3152**: Merge environment variables, set billing project, convert AMI names
-5. **Lines 3154–3256**: **Image resolution** — resolve `scylla_version` to cloud images via external APIs
-6. **Lines 3258–3305**: **Oracle/Vector Store image resolution** — similar external API calls
-7. **Lines 3308–3341**: Resolve repo symlinks, build `user_prefix`
-8. **Lines 3342–3527**: **Inline validation** — 12 numbered validation blocks plus capacity reservation
+**Class `SCTConfiguration(BaseModel)` — line 734:**
+- Field definitions — 739–2749 (~2,000 lines, **537** fields as of this commit).
+- Class-level lookup tables — 2750–2993, eight `Annotated[..., IgnoredType]` attributes:
+  `required_params`, `backend_required_params`, `defaults_config_files`,
+  `per_provider_multi_region_params`, `xcloud_per_provider_required_params`, `stress_cmd_params`,
+  `ami_id_params`, `aws_supported_regions`. These are real Pydantic fields, not `ClassVar`s: they
+  appear in `model_dump()`, and Pydantic deep-copies their mutable defaults per instance, which
+  `_check_backend_defaults` relies on when it mutates `self.backend_required_params`.
+- `__init__` — 3036–3599 (~560 lines): YAML loading, region data, env-var merge, cloud image
+  resolution, repo symlinks, `user_prefix`, then inline validation.
+- Methods — 3002–5385: dict-compat accessors, properties, `_load_environment_variables`,
+  `_resolve_instance_sizes`, `verify_configuration` and its ~25 `_validate_*` helpers,
+  `get_version_based_on_conf`, and the `dump_help_config_*` doc generators.
 
-**Validation methods** (lines 3788–3832, plus ~700 lines of `_validate_*` helpers):
-- `verify_configuration()` — delegates to `_check_unexpected_sct_variables()`, `_validate_sct_variable_values()`, `_check_per_backend_required_values()`, etc.
-- Various `_validate_*` methods scattered across multiple sections
+**Orchestrator** — `init_and_verify_sct_config()` at 5382.
 
-**Properties** (lines 3542–3620):
-- `total_db_nodes`, `region_names`, `gce_datacenters`, `cloud_provider_params`, `cloud_env_credentials`
+### Coupling that constrains the split
 
-**Orchestrator function** (line 4488):
-```python
-def init_and_verify_sct_config() -> SCTConfiguration:
-    sct_config = SCTConfiguration()
-    sct_config.log_config()
-    sct_config.verify_configuration()
-    sct_config.verify_configuration_urls_validity()
-    sct_config.get_version_based_on_conf()
-    sct_config.update_config_based_on_version()
-    sct_config.check_required_files()
-    return sct_config
-```
+Discovered while executing Phase 1; every one of these is a silent failure if missed.
 
-**Module-level utility functions** (lines 80–235):
-- Type converters: `_str()`, `_file()`, `str_or_list()`, `str_or_list_or_eval()`, `int_or_space_separated_ints()`, `dict_or_str()`, `dict_or_str_or_pydantic()`, `boolean()`
-- Config helpers: `is_config_option_appendable()`, `merge_dicts_append_strings()`
+1. **~49 monkeypatch targets are strings** of the form `"sdcm.sct_config.<name>"`, in production
+   code (`sdcm/utils/lint/validator.py`'s `_CLOUD_API_PATCHES`) and across 9 test modules, plus 16
+   `patch.object(sct_config, ...)` statements in `unit_tests/unit/test_config.py`. They name
+   third-party functions (`convert_name_to_ami_if_needed`, `KeyStore`, `get_branched_ami`, …) that
+   the config module merely imports. Moving the call sites into a submodule makes those patches
+   target a module nobody reads — they do not error, they simply stop working, and a unit test
+   then falls through to a real cloud API call.
+   *Mitigation*: keep the package `__init__.py` narrow — re-export only what the repo imports, so a
+   stale patch raises `AttributeError` loudly instead of silently no-op'ing.
+2. **`is_config_option_appendable()` reads `SCTConfiguration.model_fields`**, so any `helpers`
+   module holding it would import `config` — a cycle. *Mitigation*: pass the model class as a
+   parameter.
+3. **`pathlib.Path(__file__).parent.parent / "data" / "instance_catalog"`** resolves one directory
+   wrong as soon as the file moves into a package, and `_resolve_instance_sizes` swallows the
+   resulting `FileNotFoundError` with a warning — constraint-based sizing would silently stop
+   resolving on every run. *Mitigation*: `sct_abs_path()`, plus a regression test.
+4. **Two path patterns stop matching a package**: `.pre-commit-config.yaml`'s `update-conf-docs`
+   hook (`files: (?x)(sdcm/sct_config.py|...)`) and `.coderabbit.yaml`'s `path:`. The first means
+   the generated `docs/configuration_options.md` silently rots.
+5. **`logging.getLogger(__name__)`** changes every config log line, and one test pins
+   `caplog.at_level(..., logger="sdcm.sct_config")`. *Mitigation*: hardcode the logger name.
+6. **Importing a submodule does not bypass `__init__`**, so `types.py` is not yet a cheap leaf for
+   other packages; the deliberate function-level imports in `sdcm/test_metadata.py` and
+   `sdcm/utils/lint/validator.py` must stay.
 
-### Configuration field groupings (430+ fields)
+### Configuration field groupings (537 fields)
 
 Grouped by domain (using heuristics from @fruch):
 
@@ -229,7 +250,16 @@ nemesis:
 
 ### Recommendation
 
-**Start with Approach A (Mixins)** to achieve the immediate goal of splitting the file into manageable modules, then evaluate Approach B (Nested Sub-Models) via a PoC for a subset of fields (e.g., nemesis fields).
+**Decided: Approach A (Mixins)**, backed by @soyacz, with Approach B evaluated later as the
+Phase 5 PoC rather than as a prerequisite. @pehala's position — that the nested structure is the
+change that actually enables the split — is recorded in the PR discussion and is what Phase 5
+exists to test with evidence rather than argument.
+
+Phases 1 & 2 have since shipped without needing either approach: the package split and the
+type/helper/defaults extraction are orthogonal to how the *fields* are organised. That is the
+concrete evidence that the file split does not depend on nesting. What Phase 3 will show is
+whether flat mixins alone get validation down to a reviewable size, or whether the wide class
+remains the binding constraint — which is exactly the question Phase 5 then answers.
 
 Rationale:
 - Approach A has **zero breaking changes** — no YAML updates, no consumer code changes
@@ -239,72 +269,52 @@ Rationale:
 
 ## Implementation Phases
 
-### Phase 1: Create Package and Extract Types/Helpers
+### Phases 1 & 2: Create the Package, Extract Types, Helpers and Defaults — DONE
 
-**Objective**: Convert `sdcm/sct_config.py` into a `sdcm/sct_config/` package. Extract module-level utility functions and custom types into their own files.
-
-**Implementation:**
-
-1. Create `sdcm/sct_config/` directory
-2. Create `sdcm/sct_config/__init__.py` with re-exports for backward compatibility:
-   ```python
-   from sdcm.sct_config.config import SCTConfiguration
-   from sdcm.sct_config.config import init_and_verify_sct_config
-   ```
-3. Move the existing file to `sdcm/sct_config/config.py`
-4. Extract module-level functions into `sdcm/sct_config/types.py`:
-   - Type definitions: `String`, `ExistingFile`, `StringOrList`, `IntOrList`, `BooleanOrList`, `DictOrStr`, `DictOrStrOrPydantic`, `MultitenantValue`
-   - Converter functions: `_str()`, `_file()`, `str_or_list_or_eval()`, `int_or_space_separated_ints()`, `dict_or_str()`, `dict_or_str_or_pydantic()`, `boolean()`
-   - `SctField` definition
-5. Extract into `sdcm/sct_config/helpers.py`:
-   - `is_config_option_appendable()`
-   - `merge_dicts_append_strings()`
-   - `IgnoredType`, `is_ignored_field()`
+**Objective**: Convert `sdcm/sct_config.py` into a `sdcm/sct_config/` package and lift out
+everything that is not the configuration model itself. Shipped together as one PR because both are
+pure moves over the same file.
 
 **Resulting structure:**
 ```
 sdcm/sct_config/
-├── __init__.py       # Re-exports (backward compatible)
-├── config.py         # SCTConfiguration class (everything else for now)
-├── types.py          # Custom Pydantic types, converters, SctField
-└── helpers.py        # merge_dicts_append_strings, appendable logic
+├── __init__.py       # narrow public re-exports
+├── config.py         # SCTConfiguration + init_and_verify_sct_config (~4.6K lines)
+├── types.py          # Annotated aliases, converters, IgnoredType/InputType, SctField,
+│                     # AdaptiveTimeoutMultipliers  (no sdcm.* imports)
+├── helpers.py        # appendable merge, env sub-key parsing, count_regions,
+│                     # docker-image defaults cache, simulated_racks_enabled
+└── defaults.py       # available_backends, AWS_SUPPORTED_REGIONS, BACKEND_IMAGE_FIELD
+                      # and the eight requirement tables
 ```
 
-**Definition of Done:**
-- [ ] `from sdcm.sct_config import SCTConfiguration` works unchanged
-- [ ] `from sdcm.sct_config import init_and_verify_sct_config` works unchanged
-- [ ] All existing tests pass without changes
-- [ ] Pre-commit and linting pass
+**Decisions worth carrying into Phase 3:**
 
-**Dependencies**: PR #13104 merged
+- `__init__.py` re-exports **only** the names the repo imports (`SCTConfiguration`,
+  `init_and_verify_sct_config`, `available_backends`, `AWS_SUPPORTED_REGIONS`,
+  `BACKEND_IMAGE_FIELD`, `count_regions`, `simulated_racks_enabled`, `AdaptiveTimeoutMultipliers`,
+  the four converters, `SctField`/`StringOrList`/`IntOrList`, and `TestConfig`). Everything else is
+  deliberately absent so stale patch targets fail loudly. **Do not** add `from .config import *`.
+- The eight class-level tables stay class fields, assigned from `defaults.py` constants. Turning
+  them into direct module references is a behaviour change (see Current State §Coupling).
+- `is_config_option_appendable(option_name, model)` and
+  `merge_dicts_append_strings(d1, d2, model)` take the model class explicitly.
+- Both loggers are named `"sdcm.sct_config"` literally, not `__name__`.
+- The catalog directory uses `sct_abs_path()`, guarded by
+  `test_catalog_directory_resolves_to_a_real_directory`.
 
----
-
-### Phase 2: Extract Defaults and Backend Configuration
-
-**Objective**: Move class-level data attributes (backend lists, required params, default config file paths) out of the `SCTConfiguration` class into a dedicated module.
-
-**What moves:**
-- `available_backends` list (lines 242–260)
-- `required_params` list (lines 2800–2810)
-- `backend_required_params` dict (lines 2813–2950)
-- `defaults_config_files` dict (lines 2952–2974)
-- `per_provider_multi_region_params` dict (lines 2976–2979)
-- `xcloud_per_provider_required_params` dict (lines 2981–2993)
-- `stress_cmd_params` list (lines 2995–3032)
-- `ami_id_params` list (lines 3033–3040)
-- `aws_supported_regions` list (lines 3041–3050)
-
-**Target file**: `sdcm/sct_config/defaults.py`
-
-The `SCTConfiguration` class will import these as needed. They remain accessible via the class for backward compatibility.
+**Also updated**: 49 string patch targets + 16 `patch.object` statements, the
+`.pre-commit-config.yaml` and `.coderabbit.yaml` path patterns, doc prose, and the stale patch
+target taught by `skills/writing-unit-tests/references/common-pitfalls.md`.
 
 **Definition of Done:**
-- [ ] `sdcm/sct_config/defaults.py` contains all data constants
-- [ ] `config.py` reduced by ~250 lines
-- [ ] All existing tests pass without changes
+- [x] `from sdcm.sct_config import SCTConfiguration` / `init_and_verify_sct_config` work unchanged
+- [x] `SCTConfiguration.model_fields` — 537 fields, order byte-identical to before
+- [x] `docs/configuration_options.md` regenerates with no diff
+- [x] `sct.py conf -b docker <test case>` dumps a byte-identical config
+- [x] Unit tests, pre-commit and `lint-pipelines` (1136/1136) pass
 
-**Dependencies**: Phase 1
+**Dependencies**: PR #13104 (merged)
 
 ---
 
@@ -476,8 +486,7 @@ sdcm/sct_config/
 
 | Phase | Unit Tests | Integration Tests | Manual Tests |
 |-------|-----------|------------------|-------------|
-| Phase 1 | Import tests; verify all fields accessible | Existing test suite passes | Verify no import regressions |
-| Phase 2 | Verify defaults accessible from new module | Existing test suite passes | — |
+| Phases 1–2 | Import tests; field count and order unchanged | Existing test suite passes | Config dump diffed against `master` |
 | Phase 3 | Each mixin tested independently for field presence | Existing test suite passes | Verify no import regressions |
 | Phase 4 | Validator tests per mixin | Existing test suite passes | Verify error messages match |
 | Phase 5 | PoC: flat+nested YAML loading, nested access, mocking | Docker backend config loading | — |
@@ -487,6 +496,12 @@ sdcm/sct_config/
 Each phase must pass:
 - `uv run sct.py unit-tests`
 - `uv run sct.py pre-commit`
+- `uv run sct.py lint-pipelines` — the only thing that exercises `_CLOUD_API_PATCHES`; a stale
+  patch target there falls through to real cloud calls
+- `grep -rn '"sdcm\.sct_config\.[a-z_]' --include=*.py .` names no moved function
+- `docs/configuration_options.md` regenerates with no unexpected diff (field **order** shifts once
+  mixins land in Phase 3 — that diff is expected and should be reviewed, not suppressed)
+- A config dump (`sct.py conf -b docker <test case>`) diffed against `master` for the same inputs
 - At least one artifact test (AWS or Docker) to verify end-to-end config loading
 
 ## Success Criteria
