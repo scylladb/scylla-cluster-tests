@@ -255,3 +255,16 @@ def test_non_rolling_upgrade_strips_new_scylla_repo_from_defaults():
     defaults = {"new_scylla_repo": "http://downloads/master/rpm/scylla.repo"}
     params = build_job_parameters(job, defaults, "master:latest", {})
     assert "new_scylla_repo" not in params
+
+
+def test_rolling_upgrade_jobs_have_matching_jenkinsfile():
+    """SCT-943: every job in rolling-upgrade.yaml must have a matching pipeline file
+    on disk — guards against a trigger pointing at a job whose Jenkinsfile was deleted
+    (e.g. an EOL Debian release removed without updating the trigger config).
+    """
+    pipelines_dir = Path(__file__).parent.parent.parent / "jenkins-pipelines" / "oss" / "rolling-upgrade"
+    config = load_matrix_config(ROLLING_UPGRADE_YAML)
+    for job in config.jobs:
+        stem = job.job_name.split("/")[-1].removesuffix("-test")
+        jenkinsfile = pipelines_dir / f"{stem}.jenkinsfile"
+        assert jenkinsfile.exists(), f"Job {job.job_name} has no matching Jenkinsfile at {jenkinsfile}"
