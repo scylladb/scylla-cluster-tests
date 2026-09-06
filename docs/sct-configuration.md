@@ -15,11 +15,11 @@ SCT uses a **Pydantic-based configuration system** that provides:
 
 ### Configuration Class
 
-The `SCTConfiguration` class in `sdcm/sct_config.py` is a Pydantic `BaseModel` that defines all available configuration options:
+The `SCTConfiguration` class in `sdcm/sct_config/config.py` is a Pydantic `BaseModel` that defines all available configuration options:
 
 ```python
 from pydantic import BaseModel
-from sdcm.sct_config import SctField, StringOrList, IntOrList
+from sdcm.sct_config.types import SctField, StringOrList, IntOrList
 
 class SCTConfiguration(BaseModel):
     test_duration: int = SctField(
@@ -200,7 +200,7 @@ See the full list in the [PR description](../README.md).
 
 ### Step 1: Add Field to SCTConfiguration
 
-Edit `sdcm/sct_config.py` and add your field to the `SCTConfiguration` class:
+Edit `sdcm/sct_config/config.py` and add your field to the `SCTConfiguration` class:
 
 ```python
 class SCTConfiguration(BaseModel):
@@ -286,7 +286,7 @@ class SCTConfiguration(BaseModel):
 ### Complete Example
 
 ```python
-# In sdcm/sct_config.py
+# In sdcm/sct_config/config.py
 from typing import Literal
 
 class SCTConfiguration(BaseModel):
@@ -444,7 +444,12 @@ scylla-cluster-tests/
 │   ├── nemesis/                # Nemesis configurations
 │   └── ...
 └── sdcm/
-    └── sct_config.py           # Main configuration class
+    └── sct_config/             # Configuration package
+        ├── __init__.py         # Public re-exports
+        ├── config.py           # SCTConfiguration class
+        ├── types.py            # Custom Pydantic types and SctField
+        ├── helpers.py          # Merge/append and env-key helpers
+        └── defaults.py         # Backend lists and requirement tables
 ```
 
 ## Best Practices

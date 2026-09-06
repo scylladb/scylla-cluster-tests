@@ -19,7 +19,7 @@ from collections import namedtuple
 import pytest
 import yaml
 
-from sdcm import sct_config
+from sdcm.sct_config import config as sct_config
 from sdcm.keystore import KeyStore
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_latest_scylla_release
@@ -913,7 +913,7 @@ def test_vector_store_ami_name_resolved_to_ami_id(monkeypatch):
             return f"ami-{param}"
         return param
 
-    with unittest.mock.patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=fake_convert):
+    with unittest.mock.patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=fake_convert):
         sct_config.SCTConfiguration()
 
     assert "vector-store-1-5-0-arm64-2026-03-17t07-07-32z" in resolved_names, (
@@ -938,6 +938,482 @@ def test_env_var_whitespace_is_stripped(monkeypatch, raw_value, expected):
     assert conf.get("scylla_version") == expected
 
 
+<<<<<<< HEAD
+||||||| parent of bd2dbde48 (refactor(sct_config): repoint patch targets and docs at the package)
+def _make_aws_conf(monkeypatch, **env):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-source-scylla")
+    monkeypatch.setenv("SCT_REGION_NAME", "us-east-1")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_IGNORE_RESOLVED_PLACEMENT", "1")
+    monkeypatch.delenv("SCT_TEST_ID", raising=False)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+    conf = sct_config.SCTConfiguration()
+    # start each test from a clean AMI slate so resolve_amis only touches what the test sets up
+    for key in conf.ami_id_params:
+        conf[key] = ""
+
+    conf._ami_params_snapshot = {}
+    conf.target_db_image_ids = []
+    return conf
+
+
+def test_resolve_amis_reresolves_name_intent_via_convert(monkeypatch):
+    conf = _make_aws_conf(monkeypatch)
+    conf._ami_params_snapshot = {"ami_id_loader": "resolve:ssm:/some/loader/path"}
+    conf["ami_id_loader"] = "ami-loader-east"
+
+    with patch("sdcm.sct_config.convert_name_to_ami_if_needed", return_value="ami-loader-west") as mock_convert:
+        conf.resolve_amis(["eu-west-1"], source_region="us-east-1")
+
+    mock_convert.assert_called_once_with("resolve:ssm:/some/loader/path", ("eu-west-1",))
+    assert conf["ami_id_loader"] == "ami-loader-west"
+
+
+def test_resolve_amis_remaps_explicit_ami_via_find_equivalent(monkeypatch):
+    conf = _make_aws_conf(monkeypatch)
+    conf._ami_params_snapshot = {"ami_id_db_scylla": "ami-source-scylla"}
+    conf["ami_id_db_scylla"] = "ami-source-scylla"
+
+    with patch(
+        "sdcm.sct_config.find_equivalent_ami",
+        return_value=[{"region": "eu-west-1", "ami_id": "ami-target-scylla"}],
+    ) as mock_equiv:
+        conf.resolve_amis(["eu-west-1"], source_region="us-east-1")
+
+    mock_equiv.assert_called_once_with("ami-source-scylla", "us-east-1", target_regions=["eu-west-1"])
+    assert conf["ami_id_db_scylla"] == "ami-target-scylla"
+
+
+def test_resolve_amis_raises_region_ineligible_when_no_equivalent(monkeypatch):
+    conf = _make_aws_conf(monkeypatch)
+    conf._ami_params_snapshot = {"ami_id_db_scylla": "ami-source-scylla"}
+    conf["ami_id_db_scylla"] = "ami-source-scylla"
+
+    with patch("sdcm.sct_config.find_equivalent_ami", return_value=[]):
+        with pytest.raises(RegionAMINotFoundError):
+            conf.resolve_amis(["eu-west-1"], source_region="us-east-1")
+
+
+@pytest.fixture(name="placement_logdir")
+def fixture_placement_logdir(monkeypatch, tmp_path):
+    """Point base_logdir at a tmp dir to not touch ~/sct-results."""
+    monkeypatch.setenv("_SCT_LOGDIR", str(tmp_path))
+    return tmp_path
+
+
+def test_write_then_read_resolved_placement_round_trips(placement_logdir):  # noqa: ARG001
+    TestConfig.write_resolved_placement("tid-1", region_name="eu-west-1", availability_zone="b")
+    data = TestConfig.read_resolved_placement("tid-1")
+    assert data["test_id"] == "tid-1"
+    assert data["region_name"] == "eu-west-1"
+    assert data["availability_zone"] == "b"
+
+
+def test_read_resolved_placement_returns_none_on_test_id_mismatch(placement_logdir):  # noqa: ARG001
+    path = TestConfig.resolved_placement_file_path("tid-2")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        yaml.safe_dump({"test_id": "some-other-id", "region_name": "eu-west-1", "availability_zone": "b"}, handle)
+    assert TestConfig.read_resolved_placement("tid-2") is None
+
+
+@pytest.mark.parametrize(
+    "test_id, original_region, region_name, availability_zone, expected",
+    [
+        (
+            "tid-pa",
+            "us-east-1",
+            "eu-west-1",
+            "b",
+            {"test_id": "tid-pa", "region_name": "eu-west-1", "availability_zone": "b"},
+        ),
+        ("tid-pb", "us-east-1", "us-east-1", "a", None),
+        ("tid-pc", None, None, None, None),
+    ],
+    ids=["region_changed_writes", "unchanged_noop", "missing_noop"],
+)
+def test_persist_resolved_placement_writes_only_when_region_changed(
+    placement_logdir, test_id, original_region, region_name, availability_zone, expected
+):  # noqa: ARG001
+    TestConfig.persist_resolved_placement_if_changed(
+        test_id, original_region=original_region, region_name=region_name, availability_zone=availability_zone
+    )
+    assert TestConfig.read_resolved_placement(test_id) == expected
+
+
+def _set_aws_overlay_env(monkeypatch, test_id, original_region="us-east-1"):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_REGION_NAME", original_region)
+    monkeypatch.setenv("SCT_TEST_ID", test_id)
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.delenv("SCT_IGNORE_RESOLVED_PLACEMENT", raising=False)
+
+
+def test_overlay_beats_env_when_test_id_matches(monkeypatch, placement_logdir):  # noqa: ARG001
+    test_id = "11111111-1111-1111-1111-111111111111"
+    _set_aws_overlay_env(monkeypatch, test_id, original_region="us-east-1")
+    TestConfig.write_resolved_placement(test_id, region_name="eu-west-1", availability_zone="b")
+
+    # relocation re-resolves region-bound AMIs; ami-dummy is explicit so it goes through find_equivalent_ami
+    with patch(
+        "sdcm.sct_config.find_equivalent_ami",
+        return_value=[{"region": "eu-west-1", "ami_id": "ami-dummy-west"}],
+    ):
+        conf = sct_config.SCTConfiguration()
+
+    # region_names is env-first, so the overlay must have rewritten SCT_REGION_NAME
+    assert conf.region_names == ["eu-west-1"]
+    assert os.environ["SCT_REGION_NAME"] == "eu-west-1"
+    assert conf["availability_zone"] == "b"
+    # AMIs must have been re-resolved for the relocated region
+    assert conf["ami_id_db_scylla"] == "ami-dummy-west"
+
+
+def test_resolved_placement_with_amis_applies_directly_and_skips_re_resolution(monkeypatch, placement_logdir):  # noqa: ARG001
+    """When the handoff carries resolved AMIs, apply them verbatim and do not re-resolve."""
+    test_id = "22222222-2222-2222-2222-222222222222"
+    _set_aws_overlay_env(monkeypatch, test_id, original_region="us-east-1")
+    TestConfig.write_resolved_placement(
+        test_id,
+        region_name="eu-west-1",
+        availability_zone="b",
+        amis={"ami_id_db_scylla": "ami-persisted-west"},
+    )
+
+    with patch(
+        "sdcm.sct_config.find_equivalent_ami",
+        return_value=[{"region": "eu-west-1", "ami_id": "ami-reresolved"}],
+    ):
+        conf = sct_config.SCTConfiguration()
+
+    assert conf.region_names == ["eu-west-1"]
+    assert conf["availability_zone"] == "b"
+    assert conf["ami_id_db_scylla"] == "ami-persisted-west"
+
+
+def _set_gce_overlay_env(monkeypatch, test_id, original_datacenter):
+    """Env for a GCE run whose placement handoff should be picked up at config load."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    _set_gce_instance_types(monkeypatch)
+    monkeypatch.setenv(
+        "SCT_GCE_IMAGE_DB",
+        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
+    )
+    monkeypatch.setenv("SCT_GCE_DATACENTER", original_datacenter)
+    monkeypatch.setenv("SCT_TEST_ID", test_id)
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.delenv("SCT_IGNORE_RESOLVED_PLACEMENT", raising=False)
+
+
+def test_gce_resolved_placement_applies_relocated_datacenter(monkeypatch, placement_logdir):  # noqa: ARG001
+    """A GCE region-fallback relocation is picked up by the next hydra command (the Run Test step).
+
+    GCE carries the region in `gce_datacenter` rather than AWS's `region_name`/AMIs, and
+    `gce_datacenters` is env-first - so the overlay has to rewrite SCT_GCE_DATACENTER, not just the
+    config value, or the split provision->run pipeline snaps back to the original region.
+    """
+    test_id = "33333333-3333-3333-3333-333333333333"
+    _set_gce_overlay_env(monkeypatch, test_id, original_datacenter="us-east1")
+    TestConfig.write_resolved_placement(test_id, region_name="us-west1", availability_zone="c")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert os.environ["SCT_GCE_DATACENTER"] == "us-west1"
+    assert conf.gce_datacenters == ["us-west1"]
+    assert conf["availability_zone"] == "c"
+    assert os.environ["SCT_AVAILABILITY_ZONE"] == "c"
+
+
+def test_gce_resolved_placement_applies_relocated_multi_dc(monkeypatch, placement_logdir):  # noqa: ARG001
+    """The handoff round-trips a multi-DC placement, so per-DC relocation survives the step boundary."""
+    test_id = "44444444-4444-4444-4444-444444444444"
+    _set_gce_overlay_env(monkeypatch, test_id, original_datacenter="us-east1 us-west1")
+    TestConfig.write_resolved_placement(test_id, region_name="us-east1 us-east4", availability_zone="b")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.gce_datacenters == ["us-east1", "us-east4"]  # only the exhausted DC moved
+    assert os.environ["SCT_GCE_DATACENTER"] == "us-east1 us-east4"
+
+
+def test_gce_resolved_placement_ignored_when_disabled(monkeypatch, placement_logdir):  # noqa: ARG001
+    """SCT_IGNORE_RESOLVED_PLACEMENT keeps the configured GCE region, handoff file or not."""
+    test_id = "55555555-5555-5555-5555-555555555555"
+    _set_gce_overlay_env(monkeypatch, test_id, original_datacenter="us-east1")
+    TestConfig.write_resolved_placement(test_id, region_name="us-west1", availability_zone="c")
+    monkeypatch.setenv("SCT_IGNORE_RESOLVED_PLACEMENT", "1")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.gce_datacenters == ["us-east1"]
+    assert os.environ["SCT_GCE_DATACENTER"] == "us-east1"
+
+
+@pytest.mark.parametrize(
+    "release_label, expected_error",
+    [
+        ("emr-7.12.0", "not a native Spark 4.X release"),
+        ("emr-spark-8.0.0", None),
+    ],
+)
+def test_verify_emr_spark_mode_native_release_label(monkeypatch, release_label, expected_error):
+    """Native Spark mode validates emr-spark-* releases and rejects non-spark release labels."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_EMR_RELEASE_LABEL", release_label)
+
+    conf = sct_config.SCTConfiguration()
+    if expected_error is None:
+        conf.verify_configuration()
+    else:
+        with pytest.raises(ValueError, match=expected_error):
+            conf.verify_configuration()
+
+
+=======
+def _make_aws_conf(monkeypatch, **env):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-source-scylla")
+    monkeypatch.setenv("SCT_REGION_NAME", "us-east-1")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_IGNORE_RESOLVED_PLACEMENT", "1")
+    monkeypatch.delenv("SCT_TEST_ID", raising=False)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+    conf = sct_config.SCTConfiguration()
+    # start each test from a clean AMI slate so resolve_amis only touches what the test sets up
+    for key in conf.ami_id_params:
+        conf[key] = ""
+
+    conf._ami_params_snapshot = {}
+    conf.target_db_image_ids = []
+    return conf
+
+
+def test_resolve_amis_reresolves_name_intent_via_convert(monkeypatch):
+    conf = _make_aws_conf(monkeypatch)
+    conf._ami_params_snapshot = {"ami_id_loader": "resolve:ssm:/some/loader/path"}
+    conf["ami_id_loader"] = "ami-loader-east"
+
+    with patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", return_value="ami-loader-west") as mock_convert:
+        conf.resolve_amis(["eu-west-1"], source_region="us-east-1")
+
+    mock_convert.assert_called_once_with("resolve:ssm:/some/loader/path", ("eu-west-1",))
+    assert conf["ami_id_loader"] == "ami-loader-west"
+
+
+def test_resolve_amis_remaps_explicit_ami_via_find_equivalent(monkeypatch):
+    conf = _make_aws_conf(monkeypatch)
+    conf._ami_params_snapshot = {"ami_id_db_scylla": "ami-source-scylla"}
+    conf["ami_id_db_scylla"] = "ami-source-scylla"
+
+    with patch(
+        "sdcm.sct_config.config.find_equivalent_ami",
+        return_value=[{"region": "eu-west-1", "ami_id": "ami-target-scylla"}],
+    ) as mock_equiv:
+        conf.resolve_amis(["eu-west-1"], source_region="us-east-1")
+
+    mock_equiv.assert_called_once_with("ami-source-scylla", "us-east-1", target_regions=["eu-west-1"])
+    assert conf["ami_id_db_scylla"] == "ami-target-scylla"
+
+
+def test_resolve_amis_raises_region_ineligible_when_no_equivalent(monkeypatch):
+    conf = _make_aws_conf(monkeypatch)
+    conf._ami_params_snapshot = {"ami_id_db_scylla": "ami-source-scylla"}
+    conf["ami_id_db_scylla"] = "ami-source-scylla"
+
+    with patch("sdcm.sct_config.config.find_equivalent_ami", return_value=[]):
+        with pytest.raises(RegionAMINotFoundError):
+            conf.resolve_amis(["eu-west-1"], source_region="us-east-1")
+
+
+@pytest.fixture(name="placement_logdir")
+def fixture_placement_logdir(monkeypatch, tmp_path):
+    """Point base_logdir at a tmp dir to not touch ~/sct-results."""
+    monkeypatch.setenv("_SCT_LOGDIR", str(tmp_path))
+    return tmp_path
+
+
+def test_write_then_read_resolved_placement_round_trips(placement_logdir):  # noqa: ARG001
+    TestConfig.write_resolved_placement("tid-1", region_name="eu-west-1", availability_zone="b")
+    data = TestConfig.read_resolved_placement("tid-1")
+    assert data["test_id"] == "tid-1"
+    assert data["region_name"] == "eu-west-1"
+    assert data["availability_zone"] == "b"
+
+
+def test_read_resolved_placement_returns_none_on_test_id_mismatch(placement_logdir):  # noqa: ARG001
+    path = TestConfig.resolved_placement_file_path("tid-2")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        yaml.safe_dump({"test_id": "some-other-id", "region_name": "eu-west-1", "availability_zone": "b"}, handle)
+    assert TestConfig.read_resolved_placement("tid-2") is None
+
+
+@pytest.mark.parametrize(
+    "test_id, original_region, region_name, availability_zone, expected",
+    [
+        (
+            "tid-pa",
+            "us-east-1",
+            "eu-west-1",
+            "b",
+            {"test_id": "tid-pa", "region_name": "eu-west-1", "availability_zone": "b"},
+        ),
+        ("tid-pb", "us-east-1", "us-east-1", "a", None),
+        ("tid-pc", None, None, None, None),
+    ],
+    ids=["region_changed_writes", "unchanged_noop", "missing_noop"],
+)
+def test_persist_resolved_placement_writes_only_when_region_changed(
+    placement_logdir, test_id, original_region, region_name, availability_zone, expected
+):  # noqa: ARG001
+    TestConfig.persist_resolved_placement_if_changed(
+        test_id, original_region=original_region, region_name=region_name, availability_zone=availability_zone
+    )
+    assert TestConfig.read_resolved_placement(test_id) == expected
+
+
+def _set_aws_overlay_env(monkeypatch, test_id, original_region="us-east-1"):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_REGION_NAME", original_region)
+    monkeypatch.setenv("SCT_TEST_ID", test_id)
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.delenv("SCT_IGNORE_RESOLVED_PLACEMENT", raising=False)
+
+
+def test_overlay_beats_env_when_test_id_matches(monkeypatch, placement_logdir):  # noqa: ARG001
+    test_id = "11111111-1111-1111-1111-111111111111"
+    _set_aws_overlay_env(monkeypatch, test_id, original_region="us-east-1")
+    TestConfig.write_resolved_placement(test_id, region_name="eu-west-1", availability_zone="b")
+
+    # relocation re-resolves region-bound AMIs; ami-dummy is explicit so it goes through find_equivalent_ami
+    with patch(
+        "sdcm.sct_config.config.find_equivalent_ami",
+        return_value=[{"region": "eu-west-1", "ami_id": "ami-dummy-west"}],
+    ):
+        conf = sct_config.SCTConfiguration()
+
+    # region_names is env-first, so the overlay must have rewritten SCT_REGION_NAME
+    assert conf.region_names == ["eu-west-1"]
+    assert os.environ["SCT_REGION_NAME"] == "eu-west-1"
+    assert conf["availability_zone"] == "b"
+    # AMIs must have been re-resolved for the relocated region
+    assert conf["ami_id_db_scylla"] == "ami-dummy-west"
+
+
+def test_resolved_placement_with_amis_applies_directly_and_skips_re_resolution(monkeypatch, placement_logdir):  # noqa: ARG001
+    """When the handoff carries resolved AMIs, apply them verbatim and do not re-resolve."""
+    test_id = "22222222-2222-2222-2222-222222222222"
+    _set_aws_overlay_env(monkeypatch, test_id, original_region="us-east-1")
+    TestConfig.write_resolved_placement(
+        test_id,
+        region_name="eu-west-1",
+        availability_zone="b",
+        amis={"ami_id_db_scylla": "ami-persisted-west"},
+    )
+
+    with patch(
+        "sdcm.sct_config.config.find_equivalent_ami",
+        return_value=[{"region": "eu-west-1", "ami_id": "ami-reresolved"}],
+    ):
+        conf = sct_config.SCTConfiguration()
+
+    assert conf.region_names == ["eu-west-1"]
+    assert conf["availability_zone"] == "b"
+    assert conf["ami_id_db_scylla"] == "ami-persisted-west"
+
+
+def _set_gce_overlay_env(monkeypatch, test_id, original_datacenter):
+    """Env for a GCE run whose placement handoff should be picked up at config load."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    _set_gce_instance_types(monkeypatch)
+    monkeypatch.setenv(
+        "SCT_GCE_IMAGE_DB",
+        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
+    )
+    monkeypatch.setenv("SCT_GCE_DATACENTER", original_datacenter)
+    monkeypatch.setenv("SCT_TEST_ID", test_id)
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.delenv("SCT_IGNORE_RESOLVED_PLACEMENT", raising=False)
+
+
+def test_gce_resolved_placement_applies_relocated_datacenter(monkeypatch, placement_logdir):  # noqa: ARG001
+    """A GCE region-fallback relocation is picked up by the next hydra command (the Run Test step).
+
+    GCE carries the region in `gce_datacenter` rather than AWS's `region_name`/AMIs, and
+    `gce_datacenters` is env-first - so the overlay has to rewrite SCT_GCE_DATACENTER, not just the
+    config value, or the split provision->run pipeline snaps back to the original region.
+    """
+    test_id = "33333333-3333-3333-3333-333333333333"
+    _set_gce_overlay_env(monkeypatch, test_id, original_datacenter="us-east1")
+    TestConfig.write_resolved_placement(test_id, region_name="us-west1", availability_zone="c")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert os.environ["SCT_GCE_DATACENTER"] == "us-west1"
+    assert conf.gce_datacenters == ["us-west1"]
+    assert conf["availability_zone"] == "c"
+    assert os.environ["SCT_AVAILABILITY_ZONE"] == "c"
+
+
+def test_gce_resolved_placement_applies_relocated_multi_dc(monkeypatch, placement_logdir):  # noqa: ARG001
+    """The handoff round-trips a multi-DC placement, so per-DC relocation survives the step boundary."""
+    test_id = "44444444-4444-4444-4444-444444444444"
+    _set_gce_overlay_env(monkeypatch, test_id, original_datacenter="us-east1 us-west1")
+    TestConfig.write_resolved_placement(test_id, region_name="us-east1 us-east4", availability_zone="b")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.gce_datacenters == ["us-east1", "us-east4"]  # only the exhausted DC moved
+    assert os.environ["SCT_GCE_DATACENTER"] == "us-east1 us-east4"
+
+
+def test_gce_resolved_placement_ignored_when_disabled(monkeypatch, placement_logdir):  # noqa: ARG001
+    """SCT_IGNORE_RESOLVED_PLACEMENT keeps the configured GCE region, handoff file or not."""
+    test_id = "55555555-5555-5555-5555-555555555555"
+    _set_gce_overlay_env(monkeypatch, test_id, original_datacenter="us-east1")
+    TestConfig.write_resolved_placement(test_id, region_name="us-west1", availability_zone="c")
+    monkeypatch.setenv("SCT_IGNORE_RESOLVED_PLACEMENT", "1")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.gce_datacenters == ["us-east1"]
+    assert os.environ["SCT_GCE_DATACENTER"] == "us-east1"
+
+
+@pytest.mark.parametrize(
+    "release_label, expected_error",
+    [
+        ("emr-7.12.0", "not a native Spark 4.X release"),
+        ("emr-spark-8.0.0", None),
+    ],
+)
+def test_verify_emr_spark_mode_native_release_label(monkeypatch, release_label, expected_error):
+    """Native Spark mode validates emr-spark-* releases and rejects non-spark release labels."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_EMR_RELEASE_LABEL", release_label)
+
+    conf = sct_config.SCTConfiguration()
+    if expected_error is None:
+        conf.verify_configuration()
+    else:
+        with pytest.raises(ValueError, match=expected_error):
+            conf.verify_configuration()
+
+
+>>>>>>> bd2dbde48 (refactor(sct_config): repoint patch targets and docs at the package)
 @pytest.fixture(name="clean_keystore_exports")
 def fixture_clean_keystore_exports(monkeypatch):
     """Isolate the process-wide record of keystore env vars SCT exported itself.
