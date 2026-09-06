@@ -318,115 +318,87 @@ target taught by `skills/writing-unit-tests/references/common-pitfalls.md`.
 
 ---
 
-### Phase 3: Extract Field Definitions into Domain Mixins
+### Phase 3: Extract Field Definitions into Domain Mixins — DONE
 
-**Objective**: Split the ~2,500 lines of field definitions into domain-specific mixin classes, each in its own file. `SCTConfiguration` inherits from all mixins.
+Shipped in [PR #15972](https://github.com/scylladb/scylla-cluster-tests/pull/15972) alongside
+Phases 1-2. `config.py` went 5,390 -> 2,711 lines; no mixin module exceeds 250.
 
-**Proposed domain groups** (based on @fruch's categorization):
+**The grouping was already in the file.** `sct_config.py` carried section comments
+(`# AWS config options`, `# Nemesis config options`, `# LongevityTest`, ...) that its authors had
+maintained by hand. Those became the mixin boundaries, rather than a taxonomy invented for this
+plan. Only two regions had no section comment — the ~90-field leading block and the ~60-field tail
+— and those were assigned by name. The split was generated from the AST under an assertion that all
+539 class entries are accounted for: **523 options across 25 mixins**, plus 16 that stay on the
+assembler.
 
-| Mixin Class | File | Fields | Description |
-|------------|------|--------|-------------|
-| `CommonProvisioningMixin` | `mixins/provisioning.py` | ~80 | `cluster_backend`, `n_db_nodes`, `n_loaders`, `instance_type_*`, `region_name`, `availability_zone`, `root_disk_*`, `user_credentials_path` |
-| `AwsProvisioningMixin` | `mixins/aws.py` | ~25 | `ami_id_*`, `aws_instance_profile_*`, AWS region-specific fields |
-| `GceProvisioningMixin` | `mixins/gce.py` | ~20 | `gce_project`, `gce_datacenter`, `gce_instance_type_*`, `gce_image_*` |
-| `AzureProvisioningMixin` | `mixins/azure.py` | ~10 | `azure_region_name`, `azure_instance_type_*`, `azure_image_*` |
-| `K8sProvisioningMixin` | `mixins/kubernetes.py` | ~40 | `k8s_*`, `eks_*`, `gke_*` |
-| `DockerProvisioningMixin` | `mixins/docker.py` | ~15 | `docker_image`, `docker_network`, baremetal IP fields |
-| `XcloudProvisioningMixin` | `mixins/xcloud.py` | ~15 | `xcloud_*` fields |
-| `NemesisConfigMixin` | `mixins/nemesis.py` | ~12 | `nemesis_class_name`, `nemesis_interval`, `nemesis_seed` |
-| `StressConfigMixin` | `mixins/stress.py` | ~50 | `stress_cmd*`, `prepare_*_cmd`, `gemini_cmd` |
-| `ScyllaConfigMixin` | `mixins/scylla.py` | ~30 | `scylla_version`, `scylla_repo`, `append_scylla_yaml`, encryption, auth |
-| `TestLevelMixin` | `mixins/test_level.py` | ~25 | `test_duration`, `user_prefix`, `email_recipients`, longevity params |
-| `ManagerConfigMixin` | `mixins/manager.py` | ~10 | `mgmt_*` fields |
-| `MonitoringConfigMixin` | `mixins/monitoring.py` | ~10 | `monitor_*`, `email_*`, reporting fields |
-| `PerformanceConfigMixin` | `mixins/performance.py` | ~20 | `perf_*` fields |
-| `UpgradeConfigMixin` | `mixins/upgrade.py` | ~8 | `new_scylla_repo`, `new_version`, upgrade params |
-| `FeatureConfigMixin` | `mixins/features.py` | ~40 | `use_*` flags, `run_fullscan`, `vector_store_*`, misc |
+This is worth carrying into Phase 4: the file's own comments are a better source of domain
+boundaries than a fresh categorisation, and an exhaustiveness assertion turns "did I miss a field?"
+into a build error.
 
-**Assembled class:**
-```python
-# sdcm/sct_config/config.py
-class SCTConfiguration(
-    CommonProvisioningMixin,
-    AwsProvisioningMixin,
-    GceProvisioningMixin,
-    AzureProvisioningMixin,
-    K8sProvisioningMixin,
-    DockerProvisioningMixin,
-    XcloudProvisioningMixin,
-    NemesisConfigMixin,
-    StressConfigMixin,
-    ScyllaConfigMixin,
-    TestLevelMixin,
-    ManagerConfigMixin,
-    MonitoringConfigMixin,
-    PerformanceConfigMixin,
-    UpgradeConfigMixin,
-    FeatureConfigMixin,
-):
-    """SCT Configuration assembled from domain-specific mixins."""
-    ...
-```
+**Actual mixins**, in `CONFIG_GROUPS` order (cross-cutting, then per backend, then per test type):
 
-**Resulting structure:**
-```
-sdcm/sct_config/
-├── __init__.py
-├── config.py              # SCTConfiguration (assembler + __init__ + cross-domain logic)
-├── types.py               # Custom types and converters
-├── helpers.py             # Merge/append helpers
-├── defaults.py            # Backend defaults, required params
-└── mixins/
-    ├── __init__.py
-    ├── provisioning.py    # Common provisioning fields
-    ├── aws.py             # AWS-specific fields
-    ├── gce.py             # GCE-specific fields
-    ├── azure.py           # Azure-specific fields
-    ├── kubernetes.py      # K8s/EKS/GKE fields
-    ├── docker.py          # Docker/Baremetal fields
-    ├── xcloud.py          # XCloud fields
-    ├── nemesis.py         # Nemesis fields
-    ├── stress.py          # Stress command fields
-    ├── scylla.py          # Scylla config fields
-    ├── test_level.py      # Test-level parameters
-    ├── manager.py         # Scylla Manager fields
-    ├── monitoring.py      # Monitoring/reporting fields
-    ├── performance.py     # Performance test fields
-    ├── upgrade.py         # Upgrade test fields
-    └── features.py        # Feature flags and misc
-```
+| Group | Fields | Group | Fields | Group | Fields |
+|---|---|---|---|---|---|
+| `common` | 31 | `aws` | 65 | `longevity` | 23 |
+| `scylla` | 43 | `gce` | 10 | `performance` | 47 |
+| `security` | 12 | `azure` | 13 | `upgrade` | 25 |
+| `nemesis` | 12 | `oci` | 10 | `grow_cluster` | 3 |
+| `stress` | 16 | `kubernetes` | 44 | `refresh` | 6 |
+| `monitoring` | 16 | `docker` | 11 | `jepsen` | 4 |
+| `manager` | 22 | `baremetal` | 7 | `emr` | 13 |
+| `vector_store` | 4 | `xcloud` | 12 | `spark_migrator` | 23 |
+|  |  | `minicloud` | 51 |  |  |
 
-**Migration strategy:**
-1. Extract one mixin at a time (one PR per mixin or small group)
-2. Each mixin file contains field definitions + field-level validators
-3. Cross-field validators that span multiple mixins remain in `config.py`
-4. Validate with `uv run sct.py unit-tests` after each extraction
+Differences from the proposal above, all driven by what the code actually looks like:
 
-**Recommended extraction order** (start with least-connected mixins):
-1. `NemesisConfigMixin` — self-contained, few cross-field dependencies
-2. `StressConfigMixin` — large but self-contained
-3. `PerformanceConfigMixin` — small, self-contained
-4. `UpgradeConfigMixin` — small, self-contained
-5. `ManagerConfigMixin` — small, self-contained
-6. `MonitoringConfigMixin` — small, self-contained
-7. Per-backend mixins (AWS, GCE, Azure, Docker, K8s, XCloud) — may have cross-dependencies with provisioning
-8. `ScyllaConfigMixin` — some fields referenced by validators in other domains
-9. `CommonProvisioningMixin` — most interconnected, extract last (may need sub-splitting if >500 lines)
-10. `FeatureConfigMixin` — catch-all for remaining fields
+- 25 groups, not 16. `security`, `monitoring`, `vector_store`, `minicloud`, `emr`,
+  `spark_migrator`, `oci`, `grow_cluster`, `refresh` and `jepsen` are real, self-contained sections
+  in the file; folding them into a "features"/"misc" catch-all would have recreated the problem.
+- No `FeatureConfigMixin` catch-all. Every option has a domain, and the exhaustiveness assertion
+  is what proved it.
+- `baremetal` is its own mixin, not part of `docker`.
+- `test_level` does not exist: those options split between `common` and `monitoring`.
+
+**Stays on the assembler** (16 entries): runtime state (`multi_region_params`, `regions_data`,
+`artifact_scylla_version`, `is_enterprise`, `scylla_version_upgrade_target`, `target_db_image_ids`,
+`log`, `_THROTTLE_STEP_FIELD_CHECKS`) and the eight `IgnoredType` lookup tables. The tables must
+stay class *fields* assigned from `defaults.py` constants — Pydantic deep-copies mutable defaults
+per instance and `_check_backend_defaults` mutates them, so a module global would accumulate across
+every `SCTConfiguration()` in a process.
+
+**Grouped documentation.** `docs/configuration_options.md` was a flat list of 523 options and now
+carries a section per group. Both doc dumpers go through `_fields_by_group()`, which reads each
+mixin's `model_fields` — **not** `__dict__["__annotations__"]`: Python 3.14 defers annotation
+evaluation (PEP 649), so that key is absent until something forces it, and the first attempt
+silently filed all 523 options under "Other". Unclaimed fields still land in a trailing "Other"
+section so nothing can drop out of the docs unnoticed.
 
 **Definition of Done:**
-- [ ] All field definitions moved to mixin files
-- [ ] `config.py` contains only the assembler class, `__init__`, cross-domain validators, and orchestrator
-- [ ] No file in the package exceeds ~500 lines
-- [ ] All existing tests pass without changes
+- [x] All field definitions moved to mixin files
+- [x] `config.py` holds only the assembler, `__init__`, cross-domain validators and doc generation
+- [x] No file in the package exceeds ~500 lines except `config.py` (2,711 — Phase 4 territory)
+- [x] Field *set* byte-identical; order follows `CONFIG_GROUPS` by design
+- [x] A docker config dump compares key-for-key against master (244 keys, same values)
+- [x] All existing tests pass unmodified (4134 passed)
 
-**Dependencies**: Phase 2
+**Dependencies**: Phases 1-2
 
 ---
 
 ### Phase 4: Extract Validation Methods
 
 **Objective**: Move the `_validate_*` methods and `verify_configuration()` logic into domain-appropriate locations.
+
+**This is now where the remaining size lives.** After Phase 3, `config.py` is 2,711 lines:
+the ~560-line `__init__`, ~25 `_validate_*` methods, and the doc generators. The 25 mixins from
+Phase 3 give each validator an obvious destination — `_validate_docker_backend_parameters` to
+`DockerConfigMixin`, `_validate_placement_group_required_values` to `AwsConfigMixin`, and so on.
+
+Two things Phase 3 established that this phase should reuse:
+- Mixins are plain `BaseModel`s inheriting only from `BaseModel`, so a `@field_validator` on a
+  mixin runs on the assembled model with no extra wiring.
+- The exhaustiveness assertion pattern: enumerate what must move, assert nothing is left behind,
+  and let it fail the build rather than relying on review to spot a gap.
 
 **Implementation:**
 - Single-field validators → move into the mixin that owns the field (as `@field_validator`)
