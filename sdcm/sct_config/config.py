@@ -18,7 +18,13 @@ Handling Scylla-cluster-test configuration loading
 import os
 import random
 import re
+<<<<<<< HEAD
 import ast
+||||||| parent of b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
+import ast
+import dataclasses
+=======
+>>>>>>> b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
 import json
 import logging
 import getpass
@@ -27,19 +33,16 @@ import tempfile
 from textwrap import dedent
 
 import yaml
-import copy
 from typing import List, Union, Set, Literal, get_origin, get_args, ClassVar
 from functools import cached_property
 
-from distutils.util import strtobool
 import anyconfig
 from argus.client.sct.types import Package
 from packaging import version
-from pydantic import BaseModel, Field, ConfigDict, RootModel, fields as pydantic_fields, model_validator
+from pydantic import BaseModel, Field, ConfigDict, fields as pydantic_fields
 from pydantic.types import confloat
 from typing_extensions import Annotated
 from pydantic.functional_validators import BeforeValidator
-from pydantic.fields import FieldInfo
 from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
@@ -92,45 +95,279 @@ from sdcm.kafka.kafka_config import SctKafkaConfiguration
 from sdcm.mgmt.common import AgentBackupParameters
 from sdcm.utils.version_utils import parse_scylla_version_tag
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
+<<<<<<< HEAD
 from sdcm.utils.cloud_catalog.instance_matcher import NoMatchingInstanceError, select_instance
 from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS, nested_env_subkey
+||||||| parent of b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
+from sdcm.utils.cloud_catalog.instance_matcher import ARCH_ALIASES, NoMatchingInstanceError, select_instance
+from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS, nested_env_subkey
+=======
+from sdcm.utils.cloud_catalog.instance_matcher import ARCH_ALIASES, NoMatchingInstanceError, select_instance
+from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS
+from sdcm.sct_config.defaults import (
+    AMI_ID_PARAMS,
+    AWS_SUPPORTED_REGIONS,
+    BACKEND_REQUIRED_PARAMS,
+    DEFAULTS_CONFIG_FILES,
+    PER_PROVIDER_MULTI_REGION_PARAMS,
+    REQUIRED_PARAMS,
+    STRESS_CMD_PARAMS,
+    XCLOUD_PER_PROVIDER_REQUIRED_PARAMS,
+    available_backends,
+)
+from sdcm.sct_config.helpers import (
+    DOCKER_RACK_ARG_MIN_VERSION,
+    _load_docker_images_defaults_cached,
+    _nested_env_subkey,
+    is_config_option_appendable,
+    merge_dicts_append_strings,
+    simulated_racks_enabled,
+)
+from sdcm.sct_config.types import (
+    AdaptiveTimeoutMultipliers,
+    Boolean,
+    DictOrStr,
+    DictOrStrOrPydantic,
+    IgnoredType,
+    InputType,
+    IntOrList,
+    SctField,
+    String,
+    StringOrList,
+    _check_file_exists,
+    dict_or_str,
+    dict_or_str_or_pydantic,
+    is_ignored_field,
+)
+>>>>>>> b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
 
+<<<<<<< HEAD
 _SIZING_RESOLUTION_CACHE: dict[tuple, str] = {}
+||||||| parent of b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
+_SIZING_RESOLUTION_CACHE: dict[tuple, tuple[str, str]] = {}
+
+LOGGER = logging.getLogger(__name__)
+
+_ARCH_IMAGE_MARKERS: dict[str, dict[str, str]] = {
+    "{arch}": {"x86_64": "amd64", "arm64": "arm64", "aarch64": "arm64"},
+    "{arch_sku}": {"x86_64": "server", "arm64": "server-arm64", "aarch64": "server-arm64"},
+}
 
 
-def _nested_env_subkey(env_key: str, field_env: str, sep: str) -> str | None:
-    """Return the nested sub-key of *env_key* for *field_env* under separator *sep*, or None if it doesn't nest under it.
+_LOADER_IMAGE_PARAMS: dict[str, tuple[str, str, str]] = {
+    "aws": ("ami_id_loader", "instance_type_loader", "region_name"),
+    "azure": ("azure_image_loader", "azure_instance_type_loader", "azure_region_name"),
+    "gce": ("gce_image_loader", "gce_instance_type_loader", "gce_datacenter"),
+    "oci": ("oci_image_loader", "oci_instance_type_loader", "oci_region_name"),
+}
 
-    Delegates the anchored splitting itself to `nested_env_subkey` (see
-    sdcm.utils.nested_env_key) so that, e.g., SCT_SIZING_DB_ORACLE__vcpu is
-    never wrongly claimed by field `sizing_db`, and a single underscore inside
-    a field name (like SCT_INSTANCE_TYPE_DB) is never mistaken for a
-    separator.
+# every backend that inherits one of the cloud defaults files above, so a backend
+# such as k8s-eks resolves the marker its inherited ami_id_loader carries
+_BACKEND_TO_IMAGE_CLOUD: dict[str, str] = {
+    "aws": "aws",
+    "aws-siren": "aws",
+    "k8s-eks": "aws",
+    "k8s-local-kind-aws": "aws",
+    "gce": "gce",
+    "gce-siren": "gce",
+    "k8s-gke": "gce",
+    "azure": "azure",
+    "oci": "oci",
+}
 
-    *sep* is required: the caller is always iterating NESTED_ENV_SEPARATORS itself
-    (see `_load_environment_variables`, which needs "." matches applied before
-    "__" ones for deterministic last-write-wins precedence), so there is no
-    "check every separator" convenience mode here to keep in sync with that order.
+_ARM_INSTANCE_TYPE_PATTERNS: dict[str, tuple[str, ...]] = {
+    "aws": (r"^\w+\d+g[a-z]*\.", r"^a1\."),
+    "gce": (r"^(t2a|c4a|n4a|x4a)-",),
+    "azure": (r"^Standard_\w*?\d+p[a-z]*_v\d+$",),
+    "oci": (r"^(BM|VM)\.Standard\.A\d+\.", r"^A\d+\.Flex"),
+}
 
-    The "__" form is lower-cased (bash-exportable env vars are conventionally
-    upper-case, but sub-keys like operation names are lower-case); the "."
-    form keeps its existing case-preserving behaviour for backwards
-    compatibility. This means the two forms are NOT drop-in equivalents for
-    non-lowercase sub-keys consumed by case-sensitive lookups: prefer
-    uppercase sub-keys with "__" (they'll be lowered, matching the common
-    convention) rather than relying on ".", whose case is passed through
-    verbatim.
 
-    Only the first sub-key level is supported: a multi-level key like
-    SCT_STRESS_IMAGE__foo__bar resolves to sub-key "foo", silently dropping the
-    trailing "__bar" (same pre-existing limitation as the dot notation, e.g.
-    SCT_STRESS_IMAGE.foo.bar also resolves to "foo" -- not a regression from
-    adding "__" support, just previously undocumented).
-    """
-    sub_key = nested_env_subkey(env_key, field_env, sep)
-    if sub_key is None:
-        return None
-    return sub_key.lower() if sep == "__" else sub_key
+def is_arm_instance_type(cloud: str, instance_type: str) -> bool:
+    return any(re.match(pattern, instance_type) for pattern in _ARM_INSTANCE_TYPE_PATTERNS.get(cloud, ()))
+
+
+_SIZING_SKIP_BACKENDS = frozenset({"docker", "baremetal", "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"})
+
+_BACKEND_TO_CLOUD: dict[str, str] = {
+    "aws": "aws",
+    "aws-siren": "aws",
+    "k8s-eks": "aws",
+    "gce": "gce",
+    "gce-siren": "gce",
+    "k8s-gke": "gce",
+    "azure": "azure",
+    "oci": "oci",
+}
+
+_AMD64_ONLY_STRESS_TOOLS: dict[str, tuple[str, ...]] = {
+    "harry": ("cassandra-harry",),
+    "kcl": ("hydra-kcl",),
+    "ndbench": ("ndbench",),
+    "nosqlbench": ("nosqlbench",),
+}
+
+_YCSB_COMMAND_MARKER = "bin/ycsb"
+
+_SIZING_ROLE_PARAMS: dict[str, dict[str, str]] = {
+    "aws": {
+        "db": "instance_type_db",
+        "db_oracle": "instance_type_db_oracle",
+        "zero_token": "zero_token_instance_type_db",
+        "loader": "instance_type_loader",
+        "monitor": "instance_type_monitor",
+    },
+    "gce": {
+        "db": "gce_instance_type_db",
+        "db_oracle": "gce_instance_type_db_oracle",
+        "loader": "gce_instance_type_loader",
+        "monitor": "gce_instance_type_monitor",
+    },
+    "azure": {
+        "db": "azure_instance_type_db",
+        "db_oracle": "azure_instance_type_db_oracle",
+        "loader": "azure_instance_type_loader",
+        "monitor": "azure_instance_type_monitor",
+    },
+    "oci": {
+        "db": "oci_instance_type_db",
+        "db_oracle": "oci_instance_type_db_oracle",
+        "loader": "oci_instance_type_loader",
+        "monitor": "oci_instance_type_monitor",
+    },
+}
+
+
+def backend_to_cloud(backend: str | None, xcloud_provider: str | None = None) -> str | None:
+    if backend == "xcloud":
+        return xcloud_provider or None
+    return _BACKEND_TO_CLOUD.get(str(backend))
+
+
+def substitute_arch_markers(template: str, arch: str) -> str:
+    resolved = template
+    for marker, values in _ARCH_IMAGE_MARKERS.items():
+        if marker in resolved:
+            if arch not in values:
+                raise ValueError(
+                    f"Cannot resolve {marker} in {template!r} for arch {arch!r}. Known values: {sorted(values)}"
+                )
+            resolved = resolved.replace(marker, values[arch])
+    return resolved
+=======
+_SIZING_RESOLUTION_CACHE: dict[tuple, tuple[str, str]] = {}
+
+LOGGER = logging.getLogger("sdcm.sct_config")
+
+_ARCH_IMAGE_MARKERS: dict[str, dict[str, str]] = {
+    "{arch}": {"x86_64": "amd64", "arm64": "arm64", "aarch64": "arm64"},
+    "{arch_sku}": {"x86_64": "server", "arm64": "server-arm64", "aarch64": "server-arm64"},
+}
+
+
+_LOADER_IMAGE_PARAMS: dict[str, tuple[str, str, str]] = {
+    "aws": ("ami_id_loader", "instance_type_loader", "region_name"),
+    "azure": ("azure_image_loader", "azure_instance_type_loader", "azure_region_name"),
+    "gce": ("gce_image_loader", "gce_instance_type_loader", "gce_datacenter"),
+    "oci": ("oci_image_loader", "oci_instance_type_loader", "oci_region_name"),
+}
+
+# every backend that inherits one of the cloud defaults files above, so a backend
+# such as k8s-eks resolves the marker its inherited ami_id_loader carries
+_BACKEND_TO_IMAGE_CLOUD: dict[str, str] = {
+    "aws": "aws",
+    "aws-siren": "aws",
+    "k8s-eks": "aws",
+    "k8s-local-kind-aws": "aws",
+    "gce": "gce",
+    "gce-siren": "gce",
+    "k8s-gke": "gce",
+    "azure": "azure",
+    "oci": "oci",
+}
+
+_ARM_INSTANCE_TYPE_PATTERNS: dict[str, tuple[str, ...]] = {
+    "aws": (r"^\w+\d+g[a-z]*\.", r"^a1\."),
+    "gce": (r"^(t2a|c4a|n4a|x4a)-",),
+    "azure": (r"^Standard_\w*?\d+p[a-z]*_v\d+$",),
+    "oci": (r"^(BM|VM)\.Standard\.A\d+\.", r"^A\d+\.Flex"),
+}
+
+
+def is_arm_instance_type(cloud: str, instance_type: str) -> bool:
+    return any(re.match(pattern, instance_type) for pattern in _ARM_INSTANCE_TYPE_PATTERNS.get(cloud, ()))
+
+
+_SIZING_SKIP_BACKENDS = frozenset({"docker", "baremetal", "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"})
+
+_BACKEND_TO_CLOUD: dict[str, str] = {
+    "aws": "aws",
+    "aws-siren": "aws",
+    "k8s-eks": "aws",
+    "gce": "gce",
+    "gce-siren": "gce",
+    "k8s-gke": "gce",
+    "azure": "azure",
+    "oci": "oci",
+}
+
+_AMD64_ONLY_STRESS_TOOLS: dict[str, tuple[str, ...]] = {
+    "harry": ("cassandra-harry",),
+    "kcl": ("hydra-kcl",),
+    "ndbench": ("ndbench",),
+    "nosqlbench": ("nosqlbench",),
+}
+
+_YCSB_COMMAND_MARKER = "bin/ycsb"
+
+_SIZING_ROLE_PARAMS: dict[str, dict[str, str]] = {
+    "aws": {
+        "db": "instance_type_db",
+        "db_oracle": "instance_type_db_oracle",
+        "zero_token": "zero_token_instance_type_db",
+        "loader": "instance_type_loader",
+        "monitor": "instance_type_monitor",
+    },
+    "gce": {
+        "db": "gce_instance_type_db",
+        "db_oracle": "gce_instance_type_db_oracle",
+        "loader": "gce_instance_type_loader",
+        "monitor": "gce_instance_type_monitor",
+    },
+    "azure": {
+        "db": "azure_instance_type_db",
+        "db_oracle": "azure_instance_type_db_oracle",
+        "loader": "azure_instance_type_loader",
+        "monitor": "azure_instance_type_monitor",
+    },
+    "oci": {
+        "db": "oci_instance_type_db",
+        "db_oracle": "oci_instance_type_db_oracle",
+        "loader": "oci_instance_type_loader",
+        "monitor": "oci_instance_type_monitor",
+    },
+}
+
+
+def backend_to_cloud(backend: str | None, xcloud_provider: str | None = None) -> str | None:
+    if backend == "xcloud":
+        return xcloud_provider or None
+    return _BACKEND_TO_CLOUD.get(str(backend))
+
+
+def substitute_arch_markers(template: str, arch: str) -> str:
+    resolved = template
+    for marker, values in _ARCH_IMAGE_MARKERS.items():
+        if marker in resolved:
+            if arch not in values:
+                raise ValueError(
+                    f"Cannot resolve {marker} in {template!r} for arch {arch!r}. Known values: {sorted(values)}"
+                )
+            resolved = resolved.replace(marker, values[arch])
+    return resolved
+>>>>>>> b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
+
+
 
 
 # SCT_KEYSTORE_* env vars this process exported itself (see the keystore
@@ -148,6 +385,7 @@ def _is_self_exported_keystore_env(env_name: str) -> bool:
     return env_name in _KEYSTORE_ENV_EXPORTED and os.environ.get(env_name) == _KEYSTORE_ENV_EXPORTED[env_name]
 
 
+<<<<<<< HEAD
 class IgnoredType:
     pass
 
@@ -579,6 +817,683 @@ def simulated_racks_enabled(params) -> bool:
     n_db_nodes = params.get("n_db_nodes") or 0
     num_of_db_nodes = sum(n_db_nodes if isinstance(n_db_nodes, list) else [n_db_nodes])
     return (params.get("simulated_racks") or 0) > 1 and num_of_db_nodes > 1
+||||||| parent of b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
+class IgnoredType:
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
+class InputType:
+    """Metadata for Annotated type aliases that describes the accepted input format.
+
+    Attach this to a type alias so the doc generator can show what values users
+    may write in YAML / environment variables, which is often wider than the
+    normalised Python output type.
+
+    Example::
+
+        IntOrList = Annotated[
+            list[int],
+            BeforeValidator(int_or_space_separated_ints),
+            InputType("int | list[int] | space-separated ints"),
+        ]
+    """
+
+    description: str
+
+
+def is_ignored_field(field) -> bool:
+    """Check if a field is annotated with IgnoredType and should be skipped."""
+    return any(isinstance(m, type) and issubclass(m, IgnoredType) for m in getattr(field, "metadata", []))
+
+
+def _str(value: str | None) -> str | None:
+    if value is None:
+        return value
+    if isinstance(value, str):
+        return value
+    raise ValueError(f"{value} isn't a string, it is '{type(value)}'")
+
+
+String = Annotated[str | None, BeforeValidator(_str), Field(json_schema_extra={"appendable": True})]
+
+
+def _check_file_exists(value: str) -> None:
+    """Validate that a file path points to an existing file.
+
+    This is called at verification time (check_required_files), not during
+    config construction, so that YAML defaults can be loaded without the
+    referenced files needing to exist on disk yet.
+    """
+    file_path = pathlib.Path(value).expanduser()
+    if not file_path.is_file():
+        raise ValueError(f"{value} isn't an existing file")
+
+
+def str_or_list_or_eval(value: Union[str, List[str], None]) -> List[str] | None:
+    """Convert an environment variable into a Python's list.
+
+    Always returns list[str] | None. Single strings are wrapped in a list.
+    """
+
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            result = ast.literal_eval(value)
+            return result if isinstance(result, list) else [result]
+        except Exception:  # noqa: BLE001
+            pass
+        return [str(value)] if str(value) else []
+
+    if isinstance(value, list):
+        ret_values = []
+        for val in value:
+            try:
+                ret_values += [ast.literal_eval(val)]
+            except Exception:  # noqa: BLE001
+                ret_values += [str(val)]
+        return ret_values
+
+    raise ValueError(f"{value} isn't a string or a list")
+
+
+#: Config type that always returns list[str]. Accepts str, list[str], or evaluable expressions.
+StringOrList = Annotated[
+    list[str],
+    BeforeValidator(str_or_list_or_eval),
+    InputType("str | list[str]"),
+    Field(json_schema_extra={"appendable": True}),
+]
+
+
+def int_or_space_separated_ints(value: str | int | list[int]) -> list[int] | None:
+    if value is None:
+        return None
+    try:
+        return [int(value)]
+    except Exception:  # noqa: BLE001
+        pass
+
+    if isinstance(value, list):
+        # Handle list of ints or list of strings that can be converted to ints
+        try:
+            return [int(v) for v in value]
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"{value} isn't a list of integers") from exc
+
+    if isinstance(value, str):
+        try:
+            values = value.split()
+            return [int(v) for v in values]
+        except Exception:  # noqa: BLE001
+            pass
+
+    raise ValueError(f"{value} isn't int or list")
+
+
+#: Config type that always returns list[int]. Accepts int, list[int], or space-separated string of ints.
+IntOrList = Annotated[
+    list[int],
+    BeforeValidator(int_or_space_separated_ints),
+    InputType("int | list[int] | space-separated ints"),
+]
+
+
+def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -> list[bool] | None:  # noqa: PLR0911
+    """Convert value to a list of bools.
+
+    Accepts:
+    - None -> None
+    - bool -> [bool]
+    - list of bools -> list of bools
+    - list of strings (true/false/yes/no/1/0) -> list of bools
+    - space-separated string of boolean values -> list of bools
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, bool):
+        return [value]
+
+    if isinstance(value, list):
+        # Handle list of bools or list of strings that can be converted to bools
+        try:
+            result = []
+            for v in value:
+                if isinstance(v, bool):
+                    result.append(v)
+                else:
+                    result.append(bool(strtobool(str(v))))
+            return result
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"{value} isn't a list of booleans") from exc
+
+    if isinstance(value, str):
+        try:
+            values = value.split()
+            return [bool(strtobool(v)) for v in values]
+        except Exception:  # noqa: BLE001
+            pass
+
+    raise ValueError(f"{value} isn't bool or list")
+
+
+#: Config type that always returns list[bool]. Accepts bool, list[bool], or space-separated boolean strings.
+BooleanOrList = Annotated[
+    list[bool],
+    BeforeValidator(boolean_or_space_separated_booleans),
+    InputType("bool | list[bool] | space-separated booleans"),
+]
+
+
+def dict_or_str(value: dict | str | None) -> dict | None:
+    if value is None:
+        return None
+    elif isinstance(value, str):
+        try:
+            result = ast.literal_eval(value)
+            if isinstance(result, dict):
+                return result
+        except Exception:  # noqa: BLE001
+            pass
+
+        # ast.literal_eval() can fail on some strings (e.g. which contain lowercased booleans), try parsing such strings
+        # using yaml.safe_load()
+        try:
+            result = yaml.safe_load(value)
+            if isinstance(result, dict):
+                return result
+        except Exception:  # noqa: BLE001
+            pass
+
+        raise ValueError(f'"{value}" isn\'t a dict')
+
+    if isinstance(value, dict):
+        return value
+
+    raise ValueError(f'"{value}" isn\'t a dict')
+
+
+#: Config type that always returns dict. Accepts dict or string parseable as dict (via literal_eval or yaml).
+DictOrStr = Annotated[
+    dict,
+    BeforeValidator(dict_or_str),
+    InputType("dict | YAML/JSON string"),
+]
+
+
+class AdaptiveTimeoutMultipliers(RootModel):
+    """Per-operation multipliers for adaptive timeouts.
+
+    Keys must be valid operation names from Operations enum (operation.value[0]),
+    e.g. decommission, remove_node, new_node, repair, rebuild, etc.
+    Missing keys default to multiplier 1.
+
+    YAML config example::
+
+        adaptive_timeout_multipliers:
+          decommission: 4
+          new_node: 4
+          remove_node: 4
+
+    Environment variable examples:
+
+        SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS="{'decommission': 2, 'new_node': 3}"
+
+    Or using dot-notation (same pattern as SCT_STRESS_IMAGE.*):
+
+        SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4
+        SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.new_node=3
+
+    Or using double-underscore notation (bash-exportable, dots are invalid
+    in bash variable names):
+
+        SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__decommission=4
+        SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__new_node=3
+    """
+
+    root: dict[str, confloat(gt=0)] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_operations(cls, value):
+        if not isinstance(value, dict):
+            return value
+
+        # cyclic-import: Operations imports from sct_config indirectly via cluster
+        from sdcm.utils.adaptive_timeouts import Operations  # noqa: PLC0415
+
+        valid_keys = {op.value[0] for op in Operations}
+        for key in value.keys():
+            if key not in valid_keys:
+                raise ValueError(f"Unknown operation key '{key}'. Valid keys: {sorted(valid_keys)}")
+        return value
+
+    def get_multiplier(self, operation_key: str) -> float:
+        """Return multiplier for the given operation key, or 1.0 if not configured."""
+        return float(self.root.get(operation_key, 1.0))
+
+
+def dict_or_str_or_pydantic(value: dict | str | BaseModel | None) -> dict | BaseModel | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            return ast.literal_eval(value)
+        except Exception:  # noqa: BLE001
+            pass
+
+    if isinstance(value, (dict, BaseModel)):
+        return value
+
+    raise ValueError(f'"{value}" isn\'t a dict, str or Pydantic model')
+
+
+DictOrStrOrPydantic = Annotated[dict | str | BaseModel, BeforeValidator(dict_or_str_or_pydantic)]
+
+
+def _boolean(value):
+    if value is None:
+        return None
+    elif isinstance(value, bool):
+        return value
+    elif isinstance(value, str):
+        return bool(strtobool(value))
+    else:
+        raise ValueError(f"{type(value)} isn't a boolean")
+
+
+def is_config_option_appendable(option_name: str) -> bool:
+    for field_name, field in SCTConfiguration.model_fields.items():
+        if is_ignored_field(field):
+            continue
+        if field_name == option_name:
+            break
+    else:
+        raise ValueError(f"Option {option_name} not found in SCTConfiguration fields")
+
+    # type: ignore[union-attr]
+    return field.json_schema_extra and field.json_schema_extra.get("appendable", False)
+
+
+def merge_dicts_append_strings(d1, d2):
+    """
+    merge two dictionaries, while having option
+    to append string if the value starts with '++'
+    and append list if first item is '++'
+    """
+
+    for key, value in copy.deepcopy(d2).items():
+        if isinstance(value, str) and value.startswith("++"):
+            assert is_config_option_appendable(key), f"Option {key} is not appendable"
+            if key not in d1 or d1[key] is None:
+                d1[key] = ""
+            d1[key] += value[2:]
+            del d2[key]
+        if isinstance(value, list) and value and isinstance(value[0], str) and value[0].startswith("++"):
+            assert is_config_option_appendable(key), f"Option {key} is not appendable"
+            if key not in d1 or d1[key] is None:
+                d1[key] = []
+            d1[key].extend(value[1:])
+            del d2[key]
+
+    anyconfig.merge(d1, d2, ac_merge=anyconfig.MS_DICTS)
+
+
+Boolean = Annotated[bool, BeforeValidator(_boolean)]
+
+
+class SctField(FieldInfo):
+    """Custom field class for SCT configuration fields.
+
+    This class extends Pydantic's FieldInfo to support SCT-specific metadata.
+
+    Args:
+        *args: Positional arguments passed to Pydantic FieldInfo
+        **kwargs: Keyword arguments including:
+            - description (str): Field description for documentation
+            - default: Default value for the field
+            - appendable (bool): Whether this field supports the '++' append syntax
+                                 in configuration files. When True, values can be
+                                 appended using '++value' for strings or ['++', 'value']
+                                 for lists. Some types (String, StringOrList) are
+                                 appendable by default. Other types like version strings
+                                 or region names should set appendable=False.
+                                 See merge_dicts_append_strings() for implementation.
+            - Other Pydantic Field parameters (validation_alias, etc.)
+
+    Example:
+        ```python
+        my_field: str = SctField(
+            description="Example field",
+            appendable=True,  # Allow ++append syntax
+        )
+        ```
+    """
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("default", None)
+        extra = {k: v for k, v in kwargs.items() if k in ("appendable",)}
+        kwargs.setdefault("json_schema_extra", extra)
+        # remove extra keys from kwargs since we moved them to json_schema_extra
+        for key in extra:
+            kwargs.pop(key, None)
+        super().__init__(*args, **kwargs)
+
+
+available_backends: list[str] = [
+    "azure",
+    "baremetal",
+    "docker",
+    # TODO: remove 'aws-siren' and 'gce-siren' backends completely when
+    #       'siren-tests' project gets switched to the 'aws' and 'gce' ones.
+    #       Such a switch must be fast change.
+    "aws",
+    "aws-siren",
+    "k8s-local-kind-aws",
+    "k8s-eks",
+    "gce",
+    "gce-siren",
+    "k8s-local-kind-gce",
+    "k8s-gke",
+    "k8s-local-kind",
+    "xcloud",
+    "oci",
+]
+
+AWS_SUPPORTED_REGIONS: list[str] = [
+    "eu-west-1",
+    "eu-west-2",
+    "eu-west-3",
+    "us-west-2",
+    "us-east-1",
+    "us-east-2",
+    "eu-north-1",
+    "eu-central-1",
+]
+
+# Maps each cloud backend to the SCT config field that holds its machine image.
+# Used by the pipeline linter to generate placeholder values for validation.
+BACKEND_IMAGE_FIELD: dict[str, str] = {
+    "aws": "ami_id_db_scylla",
+    "gce": "gce_image_db",
+    "azure": "azure_image_db",
+    "docker": "docker_image",
+    "oci": "oci_image_db",
+}
+
+
+def count_regions(region_string: str) -> int:
+    """Count the number of regions in a region string.
+
+    Handles JSON arrays ('["us-east-1","eu-west-1"]'), space-separated
+    strings ('us-east-1 eu-west-1'), and single region strings.
+    """
+    if not region_string:
+        return 1
+    try:
+        regions = json.loads(region_string.replace("'", '"'))
+        if isinstance(regions, list):
+            return len(regions)
+    except json.JSONDecodeError, ValueError:
+        # Not a JSON array — fall through to treat as a plain string
+        pass
+    if " " in region_string:
+        return len(region_string.split())
+    return 1
+
+
+@lru_cache(maxsize=1)
+def _load_docker_images_defaults_cached():
+    """Load and cache docker image defaults from YAML files.
+
+    Cached at module level so repeated SCTConfiguration() instantiations
+    (e.g. in lint-pipelines workers) don't re-read and re-parse the same
+    YAML files from disk each time.
+    """
+    docker_images_dir = pathlib.Path(sct_abs_path("defaults/docker_images"))
+    if docker_images_dir.is_dir():
+        yaml_files = []
+        for root, _, files in os.walk(docker_images_dir):
+            yaml_files.extend([os.path.join(root, f) for f in files if f.endswith(".yaml")])
+        if yaml_files:
+            docker_images_defaults = anyconfig.load(yaml_files)
+            return {key: value.get("image") for key, value in docker_images_defaults.items()}
+    return None
+
+
+#: First Scylla release whose Docker image entrypoint accepts the `--dc`/`--rack` arguments.
+DOCKER_RACK_ARG_MIN_VERSION = "2026.1.0-dev"
+
+
+def simulated_racks_enabled(params) -> bool:
+    """True when simulated racks actually take effect.
+
+    Racks need both more than one rack and more than one DB node to spread over.  A single-node
+    cluster stays in one rack whatever `simulated_racks` says: the snitch auto-resolution leaves
+    `endpoint_snitch` alone, so nothing ever reads the rack.  It must therefore not pay any of the
+    cost of racks either -- in particular the Scylla >= 2026.1 requirement of the Docker
+    `--dc`/`--rack` entrypoint arguments, which older images reject outright.
+
+    Kept in one place because three call sites have to agree on it: the Docker version check and
+    the snitch auto-resolution in `SCTConfiguration.__init__`, and the `--dc`/`--rack` injection in
+    `NodeContainerMixin.node_container_run_args`.  `n_db_nodes` is the configured topology and is
+    never mutated at runtime, so growing a cluster does not change the answer mid-test.
+    """
+    return (params.get("simulated_racks") or 0) > 1 and sum(params.get("n_db_nodes") or []) > 1
+
+
+def _resolve_oracle_images_aws(conf, oracle_scylla_version: str) -> str:
+    """Resolve oracle_scylla_version to per-region AMI IDs (space-joined) on AWS."""
+    ami_list = []
+    for region in conf.region_names:
+        aws_arch = get_arch_from_instance_type(conf.get("instance_type_db_oracle"), region_name=region)
+        try:
+            if ":" in oracle_scylla_version:
+                ami = get_branched_ami(scylla_version=oracle_scylla_version, region_name=region, arch=aws_arch)[0]
+            else:
+                ami = get_scylla_ami_versions(version=oracle_scylla_version, region_name=region, arch=aws_arch)[0]
+        except Exception as ex:  # noqa: BLE001
+            raise ValueError(
+                f"AMIs for oracle_scylla_version='{oracle_scylla_version}' not found in {region} arch={aws_arch}"
+            ) from ex
+        conf.log.debug("Found AMI %s for oracle_scylla_version='%s' in %s", ami.image_id, oracle_scylla_version, region)
+        ami_list.append(ami)
+
+    return " ".join(ami.image_id for ami in ami_list)
+
+
+def _resolve_oracle_images_azure(conf, oracle_scylla_version: str) -> str:
+    """Resolve oracle_scylla_version to per-region Azure image IDs (space-joined)"""
+    oracle_azure_images = []
+    azure_arch = azure_utils.get_arch_from_azure_instance_type(conf.get("azure_instance_type_db_oracle"))
+    for region in conf.get("azure_region_name"):
+        try:
+            if ":" in oracle_scylla_version:
+                azure_image = azure_utils.get_scylla_images(
+                    scylla_version=oracle_scylla_version, region_name=region, arch=azure_arch
+                )[0]
+            else:
+                if azure_arch != azure_utils.VmArch.X86:
+                    raise ValueError(
+                        f"Azure released images (community gallery) do not support "
+                        f"arch={azure_arch.value}. Use a branch version "
+                        f"(e.g. 'master:latest') for ARM instances."
+                    )
+                azure_image = azure_utils.get_released_scylla_images(
+                    scylla_version=oracle_scylla_version, region_name=region, arch=azure_arch
+                )[0]
+        except Exception as ex:  # noqa: BLE001
+            raise ValueError(
+                f"Azure Image for oracle_scylla_version='{oracle_scylla_version}' not found in {region}"
+                f" (arch={azure_arch.value})"
+            ) from ex
+        conf.log.debug(
+            "Found Azure Image %s for oracle_scylla_version='%s' in %s (arch=%s)",
+            azure_image.name,
+            oracle_scylla_version,
+            region,
+            azure_arch.value,
+        )
+        oracle_azure_images.append(azure_image)
+
+    return " ".join(getattr(image, "id", None) or getattr(image, "unique_id", None) for image in oracle_azure_images)
+
+
+def _resolve_oracle_images_gce(conf, oracle_scylla_version: str) -> str:
+    """Resolve oracle_scylla_version to a global GCE image self_link"""
+    try:
+        if ":" in oracle_scylla_version:
+            gce_image = get_branched_gce_images(scylla_version=oracle_scylla_version)[0]
+        else:
+            gce_image = get_scylla_gce_images_versions(version=oracle_scylla_version)[0]
+    except Exception as ex:  # noqa: BLE001
+        raise ValueError(f"GCE image for oracle_scylla_version='{oracle_scylla_version}' was not found") from ex
+
+    conf.log.debug("Found GCE image %s for oracle_scylla_version='%s'", gce_image.name, oracle_scylla_version)
+    return gce_image.self_link
+
+
+def _resolve_oracle_images_oci(conf, oracle_scylla_version: str) -> str:
+    """Resolve oracle_scylla_version to per-region image OCIDs (space-joined) on OCI"""
+    oci_oracle_images = []
+    oci_region_names = conf.get("oci_region_name") or []
+    if not isinstance(oci_region_names, list):
+        oci_region_names = [oci_region_names]
+
+    for region in oci_region_names:
+        try:
+            if ":" in oracle_scylla_version:
+                oci_image = oci_utils.get_scylla_images_by_branch(oracle_scylla_version, region)[0]
+            else:
+                oci_image = oci_utils.get_scylla_images_by_version(oracle_scylla_version, region)[0]
+        except Exception as ex:  # noqa: BLE001
+            raise ValueError(
+                f"OCI Image for oracle_scylla_version='{oracle_scylla_version}' not found in {region}"
+            ) from ex
+        conf.log.debug(
+            "Found OCI Image %s for oracle_scylla_version='%s' in %s", oci_image[1], oracle_scylla_version, region
+        )
+        oci_oracle_images.append(oci_image)
+
+    return " ".join(image[2] for image in oci_oracle_images)
+
+
+# backend -> resolver turning oracle_scylla_version into the value for
+# ORACLE_IMAGE_PARAMS[backend]; backends missing here keep ignoring oracle_scylla_version
+_ORACLE_IMAGE_RESOLVERS = {
+    "aws": _resolve_oracle_images_aws,
+    "azure": _resolve_oracle_images_azure,
+    "gce": _resolve_oracle_images_gce,
+    "oci": _resolve_oracle_images_oci,
+}
+=======
+def _resolve_oracle_images_aws(conf, oracle_scylla_version: str) -> str:
+    """Resolve oracle_scylla_version to per-region AMI IDs (space-joined) on AWS."""
+    ami_list = []
+    for region in conf.region_names:
+        aws_arch = get_arch_from_instance_type(conf.get("instance_type_db_oracle"), region_name=region)
+        try:
+            if ":" in oracle_scylla_version:
+                ami = get_branched_ami(scylla_version=oracle_scylla_version, region_name=region, arch=aws_arch)[0]
+            else:
+                ami = get_scylla_ami_versions(version=oracle_scylla_version, region_name=region, arch=aws_arch)[0]
+        except Exception as ex:  # noqa: BLE001
+            raise ValueError(
+                f"AMIs for oracle_scylla_version='{oracle_scylla_version}' not found in {region} arch={aws_arch}"
+            ) from ex
+        conf.log.debug("Found AMI %s for oracle_scylla_version='%s' in %s", ami.image_id, oracle_scylla_version, region)
+        ami_list.append(ami)
+
+    return " ".join(ami.image_id for ami in ami_list)
+
+
+def _resolve_oracle_images_azure(conf, oracle_scylla_version: str) -> str:
+    """Resolve oracle_scylla_version to per-region Azure image IDs (space-joined)"""
+    oracle_azure_images = []
+    azure_arch = azure_utils.get_arch_from_azure_instance_type(conf.get("azure_instance_type_db_oracle"))
+    for region in conf.get("azure_region_name"):
+        try:
+            if ":" in oracle_scylla_version:
+                azure_image = azure_utils.get_scylla_images(
+                    scylla_version=oracle_scylla_version, region_name=region, arch=azure_arch
+                )[0]
+            else:
+                if azure_arch != azure_utils.VmArch.X86:
+                    raise ValueError(
+                        f"Azure released images (community gallery) do not support "
+                        f"arch={azure_arch.value}. Use a branch version "
+                        f"(e.g. 'master:latest') for ARM instances."
+                    )
+                azure_image = azure_utils.get_released_scylla_images(
+                    scylla_version=oracle_scylla_version, region_name=region, arch=azure_arch
+                )[0]
+        except Exception as ex:  # noqa: BLE001
+            raise ValueError(
+                f"Azure Image for oracle_scylla_version='{oracle_scylla_version}' not found in {region}"
+                f" (arch={azure_arch.value})"
+            ) from ex
+        conf.log.debug(
+            "Found Azure Image %s for oracle_scylla_version='%s' in %s (arch=%s)",
+            azure_image.name,
+            oracle_scylla_version,
+            region,
+            azure_arch.value,
+        )
+        oracle_azure_images.append(azure_image)
+
+    return " ".join(getattr(image, "id", None) or getattr(image, "unique_id", None) for image in oracle_azure_images)
+
+
+def _resolve_oracle_images_gce(conf, oracle_scylla_version: str) -> str:
+    """Resolve oracle_scylla_version to a global GCE image self_link"""
+    try:
+        if ":" in oracle_scylla_version:
+            gce_image = get_branched_gce_images(scylla_version=oracle_scylla_version)[0]
+        else:
+            gce_image = get_scylla_gce_images_versions(version=oracle_scylla_version)[0]
+    except Exception as ex:  # noqa: BLE001
+        raise ValueError(f"GCE image for oracle_scylla_version='{oracle_scylla_version}' was not found") from ex
+
+    conf.log.debug("Found GCE image %s for oracle_scylla_version='%s'", gce_image.name, oracle_scylla_version)
+    return gce_image.self_link
+
+
+def _resolve_oracle_images_oci(conf, oracle_scylla_version: str) -> str:
+    """Resolve oracle_scylla_version to per-region image OCIDs (space-joined) on OCI"""
+    oci_oracle_images = []
+    oci_region_names = conf.get("oci_region_name") or []
+    if not isinstance(oci_region_names, list):
+        oci_region_names = [oci_region_names]
+
+    for region in oci_region_names:
+        try:
+            if ":" in oracle_scylla_version:
+                oci_image = oci_utils.get_scylla_images_by_branch(oracle_scylla_version, region)[0]
+            else:
+                oci_image = oci_utils.get_scylla_images_by_version(oracle_scylla_version, region)[0]
+        except Exception as ex:  # noqa: BLE001
+            raise ValueError(
+                f"OCI Image for oracle_scylla_version='{oracle_scylla_version}' not found in {region}"
+            ) from ex
+        conf.log.debug(
+            "Found OCI Image %s for oracle_scylla_version='%s' in %s", oci_image[1], oracle_scylla_version, region
+        )
+        oci_oracle_images.append(oci_image)
+
+    return " ".join(image[2] for image in oci_oracle_images)
+
+
+# backend -> resolver turning oracle_scylla_version into the value for
+# ORACLE_IMAGE_PARAMS[backend]; backends missing here keep ignoring oracle_scylla_version
+_ORACLE_IMAGE_RESOLVERS = {
+    "aws": _resolve_oracle_images_aws,
+    "azure": _resolve_oracle_images_azure,
+    "gce": _resolve_oracle_images_gce,
+    "oci": _resolve_oracle_images_oci,
+}
+>>>>>>> b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
 
 
 class SCTConfiguration(BaseModel):
@@ -586,7 +1501,7 @@ class SCTConfiguration(BaseModel):
     Class the hold the SCT configuration
     """
 
-    log: ClassVar = logging.getLogger(__name__)
+    log: ClassVar = logging.getLogger("sdcm.sct_config")
 
     perf_simple_query_extra_command: String = SctField(
         description="Extra command line options to pass to perf_simple_query",
@@ -2389,6 +3304,7 @@ class SCTConfiguration(BaseModel):
         description="AWS region holding the KeyStore secrets when keystore_backend=secretsmanager (default: 'us-east-1')",
     )
 
+<<<<<<< HEAD
     required_params: Annotated[list, IgnoredType] = [
         "cluster_backend",
         "test_duration",
@@ -2632,6 +3548,259 @@ class SCTConfiguration(BaseModel):
         "ami_id_db_oracle",
         "ami_id_vector_store",
     ]
+||||||| parent of b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
+    required_params: Annotated[list, IgnoredType] = [
+        "cluster_backend",
+        "test_duration",
+        "n_db_nodes",
+        "n_loaders",
+        "use_preinstalled_scylla",
+        "user_credentials_path",
+        "root_disk_size_db",
+        "root_disk_size_monitor",
+        "root_disk_size_loader",
+    ]
+
+    # those can be added to a json scheme to validate / or write the validation code for it to be a bit clearer output
+    backend_required_params: Annotated[dict, IgnoredType] = {
+        "aws": [
+            "user_prefix",
+            "instance_type_loader",
+            "instance_type_monitor",
+            "instance_type_db",
+            "region_name",
+            "ami_id_db_scylla",
+            "ami_id_loader",
+            "ami_id_monitor",
+            "aws_root_disk_name_monitor",
+            "ami_db_scylla_user",
+            "ami_monitor_user",
+            "scylla_network_config",
+        ],
+        "gce": [
+            "user_prefix",
+            "gce_network",
+            "gce_image_db",
+            "gce_image_username",
+            "gce_instance_type_db",
+            "gce_root_disk_type_db",
+            "gce_n_local_ssd_disk_db",
+            "gce_instance_type_loader",
+            "gce_root_disk_type_loader",
+            "gce_instance_type_monitor",
+            "gce_root_disk_type_monitor",
+            "gce_datacenter",
+        ],
+        "azure": [
+            "user_prefix",
+            "azure_image_db",
+            "azure_image_username",
+            "azure_instance_type_db",
+            "azure_instance_type_loader",
+            "azure_instance_type_monitor",
+            "azure_region_name",
+        ],
+        "oci": [
+            "user_prefix",
+            "oci_image_db",
+            "oci_image_username",
+            "oci_instance_type_db",
+            "oci_instance_type_loader",
+            "oci_instance_type_monitor",
+            "oci_region_name",
+        ],
+        "docker": ["user_credentials_path", "scylla_version"],
+        "baremetal": ["s3_baremetal_config", "user_credentials_path"],
+        "aws-siren": [
+            "user_prefix",
+            "instance_type_loader",
+            "region_name",
+            "cloud_credentials_path",
+        ],
+        "gce-siren": [
+            "user_prefix",
+            "gce_network",
+            "gce_image_username",
+            "gce_instance_type_db",
+            "gce_root_disk_type_db",
+            "gce_n_local_ssd_disk_db",
+            "gce_instance_type_loader",
+            "gce_root_disk_type_loader",
+            "gce_instance_type_monitor",
+            "gce_root_disk_type_monitor",
+            "gce_datacenter",
+        ],
+        "k8s-local-kind": [
+            "user_credentials_path",
+            "scylla_version",
+            "scylla_mgmt_agent_version",
+            "k8s_scylla_operator_helm_repo",
+            "k8s_scylla_cluster_name",
+            "k8s_scylla_disk_gi",
+            "mini_k8s_version",
+            "mgmt_docker_image",
+        ],
+        "k8s-local-kind-aws": [
+            "user_credentials_path",
+            "scylla_version",
+            "scylla_mgmt_agent_version",
+            "k8s_scylla_operator_helm_repo",
+            "k8s_scylla_cluster_name",
+            "k8s_scylla_disk_gi",
+            "mini_k8s_version",
+            "mgmt_docker_image",
+        ],
+        "k8s-local-kind-gce": [
+            "user_credentials_path",
+            "scylla_version",
+            "scylla_mgmt_agent_version",
+            "k8s_scylla_operator_helm_repo",
+            "k8s_scylla_cluster_name",
+            "k8s_scylla_disk_gi",
+            "mini_k8s_version",
+            "mgmt_docker_image",
+        ],
+        "k8s-gke": [
+            "gke_cluster_version",
+            "gce_instance_type_db",
+            "gce_root_disk_type_db",
+            "gce_n_local_ssd_disk_db",
+            "user_credentials_path",
+            "scylla_version",
+            "scylla_mgmt_agent_version",
+            "k8s_scylla_operator_helm_repo",
+            "k8s_scylla_cluster_name",
+            "k8s_loader_cluster_name",
+            "gce_instance_type_loader",
+            "gce_image_monitor",
+            "gce_instance_type_monitor",
+            "gce_root_disk_type_monitor",
+            "gce_n_local_ssd_disk_monitor",
+            "mgmt_docker_image",
+        ],
+        "k8s-eks": [
+            "instance_type_loader",
+            "instance_type_monitor",
+            "instance_type_db",
+            "region_name",
+            "ami_id_db_scylla",
+            "ami_id_monitor",
+            "aws_root_disk_name_monitor",
+            "ami_db_scylla_user",
+            "ami_monitor_user",
+            "user_credentials_path",
+            "scylla_version",
+            "scylla_mgmt_agent_version",
+            "k8s_scylla_operator_docker_image",
+            "k8s_scylla_cluster_name",
+            "k8s_loader_cluster_name",
+            "mgmt_docker_image",
+            "eks_service_ipv4_cidr",
+            "eks_vpc_cni_version",
+            "eks_role_arn",
+            "eks_admin_arn",
+            "eks_cluster_version",
+            "eks_nodegroup_role_arn",
+        ],
+        "xcloud": ["user_prefix", "xcloud_provider", "scylla_version"],
+    }
+
+    defaults_config_files: Annotated[dict, IgnoredType] = {
+        "aws": [sct_abs_path("defaults/aws_config.yaml"), sct_abs_path("defaults/aws_emr_config.yaml")],
+        "gce": [sct_abs_path("defaults/gce_config.yaml")],
+        "azure": [sct_abs_path("defaults/azure_config.yaml")],
+        "oci": [sct_abs_path("defaults/oci_config.yaml")],
+        "docker": [sct_abs_path("defaults/docker_config.yaml")],
+        "baremetal": [sct_abs_path("defaults/baremetal_config.yaml")],
+        "aws-siren": [sct_abs_path("defaults/aws_config.yaml")],
+        "gce-siren": [sct_abs_path("defaults/gce_config.yaml")],
+        "k8s-local-kind": [sct_abs_path("defaults/k8s_local_kind_config.yaml")],
+        "k8s-local-kind-aws": [
+            sct_abs_path("defaults/aws_config.yaml"),
+            sct_abs_path("defaults/k8s_local_kind_aws_config.yaml"),
+            sct_abs_path("defaults/k8s_local_kind_config.yaml"),
+        ],
+        "k8s-local-kind-gce": [
+            sct_abs_path("defaults/k8s_local_kind_gce_config.yaml"),
+            sct_abs_path("defaults/k8s_local_kind_config.yaml"),
+        ],
+        "k8s-gke": [sct_abs_path("defaults/gce_config.yaml"), sct_abs_path("defaults/k8s_gke_config.yaml")],
+        "k8s-eks": [sct_abs_path("defaults/aws_config.yaml"), sct_abs_path("defaults/k8s_eks_config.yaml")],
+        "xcloud": [sct_abs_path("defaults/cloud_config.yaml")],
+    }
+
+    per_provider_multi_region_params: Annotated[dict, IgnoredType] = {
+        "aws": ["region_name", "ami_id_db_scylla", "ami_id_loader"],
+        "gce": ["gce_datacenter"],
+    }
+
+    xcloud_per_provider_required_params: Annotated[dict, IgnoredType] = {
+        # There are two types of Cloud clusters available - Standard and XCloud
+        # For XCloud clusters, the scaling policy (xcloud_scaling_config) includes instance type,
+        # so it won't be provided in the params
+        "standard": {
+            "aws": ["region_name", "instance_type_db"],
+            "gce": ["gce_datacenter", "gce_instance_type_db"],
+        },
+        "xcloud": {
+            "aws": ["region_name"],
+            "gce": ["gce_datacenter"],
+        },
+    }
+
+    stress_cmd_params: Annotated[list, IgnoredType] = [
+        # this list is used for variouse checks against stress commands, such as:
+        # 1. Check if all c-s profile files existing that are referred in the commands
+        # 2. Check what stress tools test is needed when loader is prepared
+        "gemini_cmd",
+        "stress_cmd",
+        "stress_read_cmd",
+        "stress_cmd_w",
+        "stress_cmd_r",
+        "stress_cmd_m",
+        "prepare_write_cmd",
+        "stress_cmd_no_mv",
+        "stress_cmd_no_mv_profile",
+        "prepare_stress_cmd",
+        "stress_cmd_1",
+        "stress_cmd_complex_prepare",
+        "prepare_write_stress",
+        "stress_cmd_read_10m",
+        "stress_cmd_read_cl_one",
+        "stress_cmd_complex_verify_read",
+        "stress_cmd_complex_verify_more",
+        "write_stress_during_entire_test",
+        "verify_data_after_entire_test",
+        "stress_cmd_read_cl_quorum",
+        "verify_stress_after_cluster_upgrade",
+        "stress_cmd_complex_verify_delete",
+        "stress_cmd_lwt_mixed",
+        "stress_cmd_lwt_de",
+        "stress_cmd_lwt_dc",
+        "stress_cmd_lwt_ue",
+        "stress_cmd_lwt_uc",
+        "stress_cmd_lwt_ine",
+        "stress_cmd_lwt_d",
+        "stress_cmd_lwt_u",
+        "stress_cmd_lwt_i",
+    ]
+    ami_id_params: Annotated[list, IgnoredType] = [
+        "ami_id_db_scylla",
+        "ami_id_loader",
+        "ami_id_monitor",
+        "ami_id_db_cassandra",
+        "ami_id_db_oracle",
+        "ami_id_vector_store",
+    ]
+=======
+    required_params: Annotated[list, IgnoredType] = REQUIRED_PARAMS
+    backend_required_params: Annotated[dict, IgnoredType] = BACKEND_REQUIRED_PARAMS
+    defaults_config_files: Annotated[dict, IgnoredType] = DEFAULTS_CONFIG_FILES
+    per_provider_multi_region_params: Annotated[dict, IgnoredType] = PER_PROVIDER_MULTI_REGION_PARAMS
+    xcloud_per_provider_required_params: Annotated[dict, IgnoredType] = XCLOUD_PER_PROVIDER_REQUIRED_PARAMS
+    stress_cmd_params: Annotated[list, IgnoredType] = STRESS_CMD_PARAMS
+    ami_id_params: Annotated[list, IgnoredType] = AMI_ID_PARAMS
+>>>>>>> b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
     aws_supported_regions: Annotated[list, IgnoredType] = AWS_SUPPORTED_REGIONS
 
     model_config = ConfigDict(
@@ -2704,7 +3873,7 @@ class SCTConfiguration(BaseModel):
 
         # 1) load the default backend config files
         files = anyconfig.load(list(backend_config_files))
-        merge_dicts_append_strings(self, files)
+        merge_dicts_append_strings(self, files, SCTConfiguration)
 
         # 2) load the config files
         if config_files:
@@ -2712,7 +3881,7 @@ class SCTConfiguration(BaseModel):
                 if not os.path.exists(conf_file):
                     raise FileNotFoundError(f"Couldn't find config file: {conf_file}")
             files = anyconfig.load(list(config_files))
-            merge_dicts_append_strings(self, files)
+            merge_dicts_append_strings(self, files, SCTConfiguration)
 
         regions_data = self.get("regions_data") or {}
         if regions_data:
@@ -2743,7 +3912,7 @@ class SCTConfiguration(BaseModel):
 
         # 3) overwrite with environment variables
         self._resolve_instance_sizes(env)
-        merge_dicts_append_strings(self, env)
+        merge_dicts_append_strings(self, env, SCTConfiguration)
 
         # All keystore sources are now merged, so export them before any of the
         # resolution below can construct a KeyStore (xcloud's release tag lookup does).
@@ -3654,7 +4823,7 @@ class SCTConfiguration(BaseModel):
                 resolved = _SIZING_RESOLUTION_CACHE.get(cache_key)
                 if resolved is None:
                     try:
-                        catalog_dir = pathlib.Path(__file__).parent.parent / "data" / "instance_catalog"
+                        catalog_dir = pathlib.Path(sct_abs_path("data/instance_catalog"))
                         catalog = InstanceCatalog.from_directory(catalog_dir)
                         result = select_instance(catalog, role, cloud, value)
                         resolved = result.instance_type
@@ -4656,9 +5825,25 @@ class SCTConfiguration(BaseModel):
             else:
                 help_text = ""
 
+<<<<<<< HEAD
             appendable = "\n* appendable" if is_config_option_appendable(field_name) else ""
             default = defaults.get(field_name, None)
             default_text = default if default else "N/A"
+||||||| parent of b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
+            appendable = " (appendable)" if is_config_option_appendable(field_name) else ""
+            if field_name in defaults:
+                default_text = cls._format_default_value_for_docs(defaults[field_name])
+            else:
+                default_text = "N/A"
+            backend_overrides = cls._get_backend_overrides_for_docs(field_name, defaults, backend_defaults)
+=======
+            appendable = " (appendable)" if is_config_option_appendable(field_name, cls) else ""
+            if field_name in defaults:
+                default_text = cls._format_default_value_for_docs(defaults[field_name])
+            else:
+                default_text = "N/A"
+            backend_overrides = cls._get_backend_overrides_for_docs(field_name, defaults, backend_defaults)
+>>>>>>> b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
 
             # Check if field supports k8s multitenancy
             multitenant_note = ""
