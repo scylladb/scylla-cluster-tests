@@ -52,8 +52,11 @@ through to a real cloud API call.
 
 - `sdcm/sct_config.py` → `sdcm/sct_config/config.py` (`git mv`, its own commit) plus the four new
   modules.
-- `sdcm/utils/lint/validator.py` — `_CLOUD_API_PATCHES` targets become `sdcm.sct_config.config.*`
-  (`_check_file_exists` becomes `sdcm.sct_config.types._check_file_exists`).
+- `sdcm/utils/lint/validator.py` — `_CLOUD_API_PATCHES` targets become `sdcm.sct_config.config.*`,
+  **including `_check_file_exists`**, even though it now lives in `types.py`: the target must name
+  the module that *calls* the name, and `config.py` does `from .types import _check_file_exists`,
+  which binds it in `config`'s own namespace. `unit_tests/unit/test_lint_patch_targets.py` now
+  enforces that rule statically.
 - 49 string patch targets across 9 `unit_tests/` files. In `unit_tests/unit/test_config.py` and
   `unit_tests/unit/test_instance_sizing_config.py`, also change
   `from sdcm import sct_config` → `from sdcm.sct_config import config as sct_config`; that one

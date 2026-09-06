@@ -18,8 +18,12 @@ The public surface is deliberately narrow: it re-exports only the names the rest
 imports from ``sdcm.sct_config``.  Names that ``config.py`` merely imports for its own use
 (``KeyStore``, ``convert_name_to_ami_if_needed``, ``get_branched_ami``, ...) are intentionally
 NOT re-exported here, so that a stale ``mock.patch("sdcm.sct_config.<name>")`` fails loudly with
-an AttributeError instead of silently patching an attribute no call site ever reads.  Patch
-``sdcm.sct_config.config.<name>`` (or ``sdcm.sct_config.types.<name>``) instead.
+an AttributeError instead of silently patching an attribute no call site ever reads.
+
+Patch the module whose code *calls* the name -- almost always ``sdcm.sct_config.config.<name>``,
+even for names defined in ``types`` or ``helpers``: ``from .types import f`` binds ``f`` in
+``config``'s namespace, so patching ``sdcm.sct_config.types.f`` leaves every call site untouched.
+``unit_tests/unit/test_lint_patch_targets.py`` enforces this for the pipeline linter.
 """
 
 from sdcm.sct_config.config import (
