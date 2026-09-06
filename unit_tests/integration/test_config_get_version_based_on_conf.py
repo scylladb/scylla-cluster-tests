@@ -246,9 +246,9 @@ def test_relocatable_version_resolves_unified_package(scylla_version, backend, e
         "scylla-unified-6.3.0~dev-0.20260101.abcdef123456.x86_64.tar.gz"
     )
     with (
-        unittest.mock.patch("sdcm.sct_config.latest_unified_package", return_value=fake_url),
+        unittest.mock.patch("sdcm.sct_config.config.latest_unified_package", return_value=fake_url),
         unittest.mock.patch(
-            "sdcm.sct_config.convert_name_to_ami_if_needed",
+            "sdcm.sct_config.config.convert_name_to_ami_if_needed",
             side_effect=lambda param, region_names: param,
         ),
     ):
@@ -275,7 +275,7 @@ def test_unified_package_aws_auto_resolves_ami(monkeypatch):
     )
 
     with unittest.mock.patch(
-        "sdcm.sct_config.convert_name_to_ami_if_needed",
+        "sdcm.sct_config.config.convert_name_to_ami_if_needed",
         side_effect=lambda param, region_names: param,
     ):
         conf = sct_config.SCTConfiguration()
@@ -301,7 +301,7 @@ def test_unified_package_aws_verify_passes_without_ami(monkeypatch):
 
     # Mock convert_name_to_ami_if_needed to pass through the SSM pattern (simulates AMI resolution)
     with unittest.mock.patch(
-        "sdcm.sct_config.convert_name_to_ami_if_needed",
+        "sdcm.sct_config.config.convert_name_to_ami_if_needed",
         side_effect=lambda param, region_names: param,
     ):
         conf = sct_config.SCTConfiguration()
@@ -320,7 +320,7 @@ def test_aws_ami_missing_scylla_version_tag(monkeypatch):
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-notags")
 
     # Mock get_ami_tags to return empty dict (AMI exists but has no tags)
-    with unittest.mock.patch("sdcm.sct_config.get_ami_tags", return_value={}):
+    with unittest.mock.patch("sdcm.sct_config.config.get_ami_tags", return_value={}):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
@@ -336,7 +336,7 @@ def test_gce_image_missing_scylla_version_tag(monkeypatch):
     monkeypatch.setenv("SCT_GCE_IMAGE_DB", "projects/test/global/images/scylla-test")
 
     # Mock get_gce_image_tags to return empty dict
-    with unittest.mock.patch("sdcm.sct_config.get_gce_image_tags", return_value={}):
+    with unittest.mock.patch("sdcm.sct_config.config.get_gce_image_tags", return_value={}):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
@@ -353,7 +353,7 @@ def test_azure_image_missing_scylla_version_tag(monkeypatch):
     )
 
     # Mock get_image_tags to return empty dict
-    with unittest.mock.patch("sdcm.sct_config.azure_utils.get_image_tags", return_value={}):
+    with unittest.mock.patch("sdcm.sct_config.config.azure_utils.get_image_tags", return_value={}):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
