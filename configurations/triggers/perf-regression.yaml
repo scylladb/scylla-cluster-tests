@@ -185,6 +185,36 @@ jobs:
       region: "us-east-1"
       microbenchmark: "true"
 
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_x86_64"
+    backend: "aws"
+    labels: []
+    params:
+      region: "us-east-1"
+      microbenchmark: "true"
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_x86_64-write"
+    backend: "aws"
+    labels: []
+    params:
+      region: "us-east-1"
+      microbenchmark: "true"
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_arm64"
+    backend: "aws"
+    arch: "aarch64"
+    labels: []
+    params:
+      region: "us-east-1"
+      microbenchmark: "true"
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_arm64-write"
+    backend: "aws"
+    arch: "aarch64"
+    labels: []
+    params:
+      region: "us-east-1"
+      microbenchmark: "true"
+
   # === Daily sanity perf (master-only) ===
 
   - job_name: "/scylla-master/perf-regression/perf-regression-predefined-throughput-steps-sanity-vnodes"
