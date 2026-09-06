@@ -141,6 +141,13 @@ jobs:
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   # --- Non-weekly jobs (triggered by scylla-pkg on release only) ---
+  #
+  # No debian-13 entry belongs here (SCT-943): a release (manual) trigger passes
+  # no labels_selector (see "Usage patterns" above), so it already selects every
+  # job in this file regardless of label — the weekly-labelled
+  # rolling-upgrade-debian13-test entry above already covers the release path.
+  # Adding a "release"-labelled twin here would be a byte-identical entry, not
+  # additional coverage.
 
   - job_name: "rolling-upgrade/rolling-upgrade-multidc-test"
     backend: "aws"
@@ -189,16 +196,6 @@ jobs:
       - "release"
       - "image"
       - "gce"
-    exclude_versions: []
-    params:
-      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
-
-  - job_name: "rolling-upgrade/rolling-upgrade-debian11-test"
-    backend: "gce"
-    region: "us-central1"
-    labels:
-      - "release"
-      - "deb"
     exclude_versions: []
     params:
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"

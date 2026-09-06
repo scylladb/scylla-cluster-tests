@@ -15,8 +15,8 @@ vars
 `-- artifactsPipeline.groovy
 jenkins-pipelines
 |-- artifacts-ami.jenkinsfile
-|-- artifacts-debian10.jenkinsfile
-|-- artifacts-debian11.jenkinsfile
+|-- artifacts-debian12.jenkinsfile
+|-- artifacts-debian13.jenkinsfile
 |-- artifacts-docker.jenkinsfile
 |-- artifacts-oel76.jenkinsfile
 |-- artifacts-ubuntu2004.jenkinsfile
@@ -56,14 +56,14 @@ and run one of the following commands:
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos8.yaml
 ```
 
-## Debian 10 (buster)
+## Debian 12 (bookworm)
 ```sh
-hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian10.yaml
+hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian12.yaml
 ```
 
-## Debian 11 (bullseye)
+## Debian 13 (trixie)
 ```sh
-hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian11.yaml
+hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian13.yaml
 ```
 
 ## RHEL 7
