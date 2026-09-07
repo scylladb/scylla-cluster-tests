@@ -323,41 +323,68 @@ target taught by `skills/writing-unit-tests/references/common-pitfalls.md`.
 Shipped in [PR #15972](https://github.com/scylladb/scylla-cluster-tests/pull/15972) alongside
 Phases 1-2. `config.py` went 5,390 -> 2,711 lines; no mixin module exceeds 250.
 
-**The grouping was already in the file.** `sct_config.py` carried section comments
-(`# AWS config options`, `# Nemesis config options`, `# LongevityTest`, ...) that its authors had
-maintained by hand. Those became the mixin boundaries, rather than a taxonomy invented for this
-plan. Only two regions had no section comment — the ~90-field leading block and the ~60-field tail
-— and those were assigned by name. The split was generated from the AST under an assertion that all
-539 class entries are accounted for: **523 options across 25 mixins**, plus 16 that stay on the
-assembler.
+**The section comments looked like the grouping, and weren't.** `sct_config.py` carried comments
+(`# AWS config options`, `# Nemesis config options`, `# LongevityTest`, ...) that read like
+maintained section boundaries, and the first split trusted them. They do not bound their sections:
+options had been appended to whichever comment happened to be last, so
 
-This is worth carrying into Phase 4: the file's own comments are a better source of domain
-boundaries than a fresh categorisation, and an exhaustiveness assertion turns "did I miss a field?"
-into a build error.
+- `# minicloud params` had accumulated **37 unrelated options** — log collection, `post_behavior_*`
+  teardown, upgrade stress, AZ fallback;
+- the AWS section held **every `gce_*` option**;
+- `# spark-migrator` held scylla-doctor and zero-token options.
+
+Grouping is now decided per option by **what it configures**, with the option's own description as
+the evidence. That is why the documentation audit below is part of the same work: an option whose
+description only restated its name could not be placed, and 19 options had no description at all.
+
+**Lessons for Phase 4**, which faces the same hazard with the `_validate_*` methods:
+
+1. Do not trust in-file section comments as structure. They drift silently, because appending to
+   the end of a file is easier than finding the right section, and nothing checks it.
+2. An exhaustiveness assertion turns "did I miss one?" into a build error. The split is generated
+   under an assertion that all 539 class entries are accounted for: **523 options across 28
+   mixins**, plus 16 that stay on the assembler.
+3. Encode the convention as a test, not a review comment. `test_option_groups.py` now asserts one
+   mixin per option, prefix/group agreement (with a commented exception list), and a description
+   that says more than the option's name. The original file failed all three, which is exactly how
+   the drift went unnoticed for years.
 
 **Actual mixins**, in `CONFIG_GROUPS` order (cross-cutting, then per backend, then per test type):
 
 | Group | Fields | Group | Fields | Group | Fields |
 |---|---|---|---|---|---|
-| `common` | 31 | `aws` | 65 | `longevity` | 23 |
-| `scylla` | 43 | `gce` | 10 | `performance` | 47 |
-| `security` | 12 | `azure` | 13 | `upgrade` | 25 |
-| `nemesis` | 12 | `oci` | 10 | `grow_cluster` | 3 |
-| `stress` | 16 | `kubernetes` | 44 | `refresh` | 6 |
-| `monitoring` | 16 | `docker` | 11 | `jepsen` | 4 |
-| `manager` | 22 | `baremetal` | 7 | `emr` | 13 |
-| `vector_store` | 4 | `xcloud` | 12 | `spark_migrator` | 23 |
-|  |  | `minicloud` | 51 |  |  |
+| `common` | 70 | `aws` | 25 | `longevity` | 13 |
+| `scylla` | 44 | `gce` | 23 | `performance` | 17 |
+| `nemesis` | 12 | `azure` | 13 | `upgrade` | 20 |
+| `stress` | 73 | `oci` | 10 | `grow_cluster` | 2 |
+| `monitoring` | 17 | `kubernetes` | 44 | `refresh` | 6 |
+| `logs` | 19 | `docker` | 2 | `jepsen` | 4 |
+| `manager` | 26 | `baremetal` | 7 | `emr` | 13 |
+| `aux_db` | 10 | `xcloud` | 12 | `spark_migrator` | 9 |
+| `alternator` | 10 | `minicloud` | 14 |  |  |
+| `vector_store` | 6 |  |  |  |  |
+| `kafka` | 2 |  |  |  |  |
 
-Differences from the proposal above, all driven by what the code actually looks like:
+Differences from the proposal above, all driven by what the options actually configure:
 
-- 25 groups, not 16. `security`, `monitoring`, `vector_store`, `minicloud`, `emr`,
-  `spark_migrator`, `oci`, `grow_cluster`, `refresh` and `jepsen` are real, self-contained sections
-  in the file; folding them into a "features"/"misc" catch-all would have recreated the problem.
-- No `FeatureConfigMixin` catch-all. Every option has a domain, and the exhaustiveness assertion
-  is what proved it.
-- `baremetal` is its own mixin, not part of `docker`.
+- 28 groups, not 16. `logs`, `aux_db`, `alternator` and `kafka` exist because those options had
+  nowhere sensible to go; `security`, `monitoring`, `vector_store`, `minicloud`, `emr`,
+  `spark_migrator`, `oci`, `grow_cluster`, `refresh` and `jepsen` are real self-contained domains.
+- No `FeatureConfigMixin` catch-all. Every option has a domain, and the exhaustiveness assertion is
+  what proved it.
+- No `security` group. Review pointed out it was a mixture: LDAP, encryption and the
+  authenticator/authorizer settings are Scylla features (→ `scylla`), while `keystore_*` and
+  `user_credentials_path` are SCT's own credentials (→ `common`).
+- `aux_db` is named for the role rather than for Gemini's "oracle", so migration tests that use a
+  Cassandra cluster fit the same group.
 - `test_level` does not exist: those options split between `common` and `monitoring`.
+- `minicloud` is described as an AWS-API-compatible environment rather than a backend, since it runs
+  with `cluster_backend: aws` plus an endpoint override. The naming is still open (see PR #15972).
+
+**Documentation is part of the grouping work.** 19 options had no description, 21 shared boilerplate
+with a sibling (all 13 cassandra-stress commands carried one identical paragraph), and 20 only
+restated their own name. All now say what they control; `docs/configuration_options.md` went from
+one flat list of 523 options to 28 browsable sections.
 
 **Stays on the assembler** (16 entries): runtime state (`multi_region_params`, `regions_data`,
 `artifact_scylla_version`, `is_enterprise`, `scylla_version_upgrade_target`, `target_db_image_ids`,
@@ -377,6 +404,7 @@ section so nothing can drop out of the docs unnoticed.
 - [x] All field definitions moved to mixin files
 - [x] `config.py` holds only the assembler, `__init__`, cross-domain validators and doc generation
 - [x] No file in the package exceeds ~500 lines except `config.py` (2,711 — Phase 4 territory)
+- [x] Every option documented, one mixin per option, prefixes agree with groups (guard test)
 - [x] Field *set* byte-identical; order follows `CONFIG_GROUPS` by design
 - [x] A docker config dump compares key-for-key against master (244 keys, same values)
 - [x] All existing tests pass unmodified (4134 passed)
