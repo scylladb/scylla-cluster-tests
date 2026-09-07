@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import contextlib
 import os
 import logging
 from pathlib import Path
@@ -44,6 +45,9 @@ class JenkinsPipelines:
         self.base_job_dir = base_job_dir
         self.sct_branch_name = sct_branch_name
         self.sct_repo = sct_repo
+        # (source file, error) for every job this run could not create/reconfigure.
+        # Collected instead of raised so one bad job can't hide the rest of the tree.
+        self.failures: list[tuple[Path, str]] = []
 
     def reconfig_job(self, new_path, dir_xml_data):
         self.jenkins.reconfig_job(new_path, dir_xml_data)
@@ -443,6 +447,31 @@ class JenkinsPipelines:
             LOGGER.warning("Could not inject testMetadata XML from %s", jenkins_file, exc_info=True)
             return xml_data
 
+    @contextlib.contextmanager
+    def _collect_failure(self, source_file: Path):
+        """Log and record a failing job, then carry on with the rest of the tree.
+
+        A single unrenderable job used to abort the whole walk, silently skipping every
+        folder ordered after it. Failures are collected here and re-raised together by
+        raise_on_failures(), so the run still goes red but reports all of them at once.
+        """
+        try:
+            yield
+        except Exception as ex:  # noqa: BLE001 - one bad job must not stop the tree
+            rel = source_file
+            with contextlib.suppress(ValueError):
+                rel = source_file.relative_to(self.base_sct_dir)
+            LOGGER.error("FAILED to create job from %s: %s: %s", rel, type(ex).__name__, ex, exc_info=True)
+            self.failures.append((rel, f"{type(ex).__name__}: {ex}"))
+
+    def raise_on_failures(self):
+        """Fail the run if any job could not be created, naming every one of them."""
+        if not self.failures:
+            return
+        summary = "\n".join(f"  {source} -> {error}" for source, error in self.failures)
+        LOGGER.error("%d job(s) could not be created:\n%s", len(self.failures), summary)
+        raise RuntimeError(f"{len(self.failures)} job(s) could not be created:\n{summary}")
+
     def create_job_tree(
         self,
         local_path: str | Path,
@@ -476,14 +505,17 @@ class JenkinsPipelines:
                 job_file = Path(root) / job_file  # noqa: PLW2901
                 if (job_file.suffix == ".jenkinsfile") and create_pipelines_jobs:
                     suffix = "" if job_file.stem.endswith("-trigger") else job_name_suffix
-                    self.create_pipeline_job(
-                        job_file,
-                        group_name=jenkins_path,
-                        job_name_suffix=suffix,
-                        defines={**defines, **self.locate_job_overrides(job_file.stem, job_overrides)},
-                    )
+                    with self._collect_failure(job_file):
+                        self.create_pipeline_job(
+                            job_file,
+                            group_name=jenkins_path,
+                            job_name_suffix=suffix,
+                            defines={**defines, **self.locate_job_overrides(job_file.stem, job_overrides)},
+                        )
                 if (job_file.suffix == ".xml") and create_freestyle_jobs:
-                    self.create_freestyle_job(job_file, group_name=jenkins_path, template_context=template_context)
+                    with self._collect_failure(job_file):
+                        self.create_freestyle_job(job_file, group_name=jenkins_path, template_context=template_context)
 
             if create_pipelines_jobs:
-                self.process_symlinks(Path(root), jenkins_path, job_name_suffix, defines)
+                with self._collect_failure(Path(root) / "_symlinks.yaml"):
+                    self.process_symlinks(Path(root), jenkins_path, job_name_suffix, defines)

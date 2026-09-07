@@ -7,6 +7,7 @@ which aborted the whole ``create-test-release-jobs`` run on the first offending
 job.
 """
 
+import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -78,3 +79,41 @@ def test_markup_in_test_metadata_description_is_escaped(jenkins_pipelines, tmp_p
 )
 def test_every_pipeline_renders_valid_xml(jenkins_pipelines, jenkins_file):
     ET.fromstring(_render(jenkins_pipelines, jenkins_file))
+
+
+def test_tree_walk_continues_past_a_failing_job(jenkins_pipelines, tmp_path, caplog):
+    """One unrenderable job must not stop the walk, and must be named in the log."""
+    pipelines = tmp_path / "jenkins-pipelines" / "oss" / "fake"
+    pipelines.mkdir(parents=True)
+    for name in ("aaa", "bbb", "ccc"):
+        (pipelines / f"{name}.jenkinsfile").write_text("longevityPipeline()\n", encoding="utf-8")
+
+    original = jenkins_pipelines.create_pipeline_job
+
+    def explode_on_bbb(jenkins_file, **kwargs):
+        if Path(jenkins_file).stem == "bbb":
+            raise ValueError("boom")
+        return original(jenkins_file, **kwargs)
+
+    jenkins_pipelines.create_pipeline_job = explode_on_bbb
+    jenkins_pipelines.base_sct_dir = tmp_path
+    with (
+        patch("utils.build_system.create_test_release_jobs.get_sct_root_path", return_value=tmp_path),
+        caplog.at_level(logging.ERROR),
+    ):
+        jenkins_pipelines.create_job_tree(tmp_path / "jenkins-pipelines" / "oss")
+
+    created = [call[0][0] for call in jenkins_pipelines.jenkins.create_job.call_args_list]
+    assert any(name.endswith("/aaa-test") for name in created)
+    assert any(name.endswith("/ccc-test") for name in created)
+    assert not any(name.endswith("/bbb-test") for name in created)
+
+    assert [str(source) for source, _ in jenkins_pipelines.failures] == ["jenkins-pipelines/oss/fake/bbb.jenkinsfile"]
+    assert "jenkins-pipelines/oss/fake/bbb.jenkinsfile" in caplog.text
+
+    with pytest.raises(RuntimeError, match="1 job\\(s\\) could not be created"):
+        jenkins_pipelines.raise_on_failures()
+
+
+def test_raise_on_failures_is_quiet_when_everything_worked(jenkins_pipelines):
+    jenkins_pipelines.raise_on_failures()
