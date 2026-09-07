@@ -11,29 +11,30 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-"""Grow cluster tests configuration options."""
+"""Kafka / CDC connectors configuration options."""
 
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel
 
+from sdcm.kafka.kafka_config import SctKafkaConfiguration
 from sdcm.sct_config.types import SctField
 
 
-class GrowClusterConfigMixin(BaseModel):
-    """Grow cluster tests.
+class KafkaConfigMixin(BaseModel):
+    """Kafka / CDC connectors.
 
-    Scaling the cluster up and down during a test.
+    Kafka deployment and connector configuration for CDC testing.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
 
     #: Section title used to group this mixin's options in the generated documentation.
-    config_group: ClassVar[str] = "Grow cluster tests"
+    config_group: ClassVar[str] = "Kafka / CDC connectors"
 
-    cassandra_stress_population_size: int = SctField(
-        description="The total population size over which the Cassandra stress tests are run.",
+    kafka_backend: Literal["localstack", "vm", "msk"] | None = SctField(
+        description="Type of Kafka backend to use",
     )
-    cassandra_stress_threads: int = SctField(
-        description="The number of threads used by Cassandra stress tests.",
+    kafka_connectors: list[SctKafkaConfiguration] = SctField(
+        description="Kafka Connect connector definitions to deploy, as a list of config dicts -- typically the Scylla CDC source connector.",
     )
