@@ -2710,6 +2710,7 @@ def create_operator_test_release_jobs(branch, username, password, sct_branch, sc
         create_freestyle_jobs=triggers,
         template_context={"release_version": get_latest_scylla_release(product="scylla-enterprise")},
     )
+    server.raise_on_failures()
 
 
 @cli.command("create-manager-test-release-jobs", help="Create pipeline jobs for a new scylla-manager branch/release")
@@ -2730,6 +2731,7 @@ def create_manager_test_release_jobs(branch, username, password, sct_branch, sct
         create_freestyle_jobs=triggers,
         template_context={"release_version": get_latest_scylla_release(product="scylla-enterprise")},
     )
+    server.raise_on_failures()
 
 
 @cli.command("create-qa-tools-jobs", help="Create pipeline jobs for a new scylla-operator branch/release")
@@ -2748,6 +2750,7 @@ def create_qa_tools_jobs(username, password, sct_branch, sct_repo, triggers):
     server.create_job_tree(
         f"{server.base_sct_dir}/jenkins-pipelines/qa", create_freestyle_jobs=triggers, job_name_suffix=""
     )
+    server.raise_on_failures()
 
 
 @cli.command("create-performance-jobs", help="Create pipeline jobs for performance")
@@ -2769,6 +2772,7 @@ def create_performance_jobs(username, password, sct_branch, sct_repo, triggers):
         create_freestyle_jobs=triggers,
         job_name_suffix="",
     )
+    server.raise_on_failures()
 
 
 @cli.command("create-nemesis-yaml")
@@ -2821,6 +2825,9 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
     if branch == "scylla-master":
         base_path = f"{server.base_sct_dir}/jenkins-pipelines/master-triggers"
         server.create_job_tree(base_path)
+
+    # every tree is walked before failing, so one bad job never hides the others
+    server.raise_on_failures()
 
 
 @cli.command(
