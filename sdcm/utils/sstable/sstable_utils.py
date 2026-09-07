@@ -401,10 +401,12 @@ def _generate_sstable_dump_command(node, command: str, keyspace: str, table: str
     :return: Base command string.
     """
     scylla_conf_dir = Path(node.add_install_prefix(SCYLLA_YAML_PATH)).parent
+    # without --memory option the sstable tool sizes itself from the total RAM and gets OOM-killed on small nodes
+    memory_option = f"--memory {memory} " if (memory := node.parent_cluster.params.get("sstable_dump_memory")) else ""
     return (
         f"SCYLLA_CONF={scylla_conf_dir} "
         f"{node.add_install_prefix('/usr/bin/scylla')} sstable {command} "
-        f"--keyspace {keyspace} --table {table} --sstables"
+        f"--keyspace {keyspace} --table {table} {memory_option}--sstables"
     )
 
 

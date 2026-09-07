@@ -11,13 +11,17 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""Tests for the S3 uploads which stream the files over an SSH session to the node."""
+"""Tests for sdcm.utils.sstable: the S3 uploads which stream the files over an SSH session to
+the node, and the commands built for the "scylla sstable" dump tool."""
 
 from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 from sdcm.cluster import BaseNode
 from sdcm.cluster_k8s import BasePodContainer
 from sdcm.utils.sstable.s3_uploader import upload_sstables_to_s3, upload_system_table_to_s3
+from sdcm.utils.sstable.sstable_utils import get_sstable_data_dump_command, get_sstable_metadata_dump_command
 
 TEST_ID = "4352b7b6-0630-4ceb-ac5b-3ba5bd44ceba"
 S3_LINK = "https://cloudius-jenkins-test.s3.amazonaws.com/fake-upload.tar.gz"
@@ -90,3 +94,27 @@ def test_upload_sstables_to_s3_uploads_from_ssh_node():
     assert any(cmd.startswith("nodetool snapshot -t sct-") for cmd in commands)
     assert any(cmd.startswith("find /var/lib/scylla/data ") for cmd in commands)
     assert any(cmd.startswith("nodetool clearsnapshot -t sct-") for cmd in commands)
+
+
+def make_sstable_dump_node(sstable_dump_memory: str = "1G") -> Mock:
+    """A node reporting a Scylla version new enough for the "scylla sstable" tool."""
+    node = Mock(spec=BaseNode)
+    node.is_enterprise = True
+    node.scylla_version = "2026.2"
+    node.add_install_prefix.side_effect = lambda path: path
+    node.parent_cluster = Mock(params={"sstable_dump_memory": sstable_dump_memory})
+    return node
+
+
+@pytest.mark.parametrize("dump_command_builder", [get_sstable_data_dump_command, get_sstable_metadata_dump_command])
+def test_dump_command_limits_memory_from_config_before_the_sstables_argument(dump_command_builder):
+    command = dump_command_builder(make_sstable_dump_node("2G"), keyspace="keyspace1", table="standard1")
+    assert "--memory 2G" in command
+    assert command.endswith("--sstables")
+    assert command.index("--memory") < command.index("--sstables")
+
+
+def test_dump_command_without_configured_memory_sets_no_limit():
+    command = get_sstable_data_dump_command(make_sstable_dump_node(""), keyspace="keyspace1", table="standard1")
+    assert "--memory" not in command
+    assert command.endswith("--sstables")

@@ -1031,6 +1031,15 @@ More arguments to append to oracle command line
 **type:** str (appendable)
 
 
+## **sstable_dump_memory** / SCT_SSTABLE_DUMP_MEMORY
+
+Memory limit passed as --memory to the 'scylla sstable' tool when SCT dumps sstables<br>(upgrade sstable check, encryption checks, tombstone counting). The tool is a Seastar application and<br>without a limit it sizes itself from the total RAM, which gets it OOM-killed next to a running<br>scylla-server on small nodes. Dumping one sstable needs less than 100 MiB. Empty value sets no limit.
+
+**default:** 1G
+
+**type:** str (appendable)
+
+
 ## **append_scylla_yaml** / SCT_APPEND_SCYLLA_YAML
 
 More configuration to append to /etc/scylla/scylla.yaml

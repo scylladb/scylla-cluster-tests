@@ -1274,6 +1274,12 @@ class SCTConfiguration(BaseModel):
     append_scylla_args_oracle: String = SctField(
         description="More arguments to append to oracle command line",
     )
+    sstable_dump_memory: String = SctField(
+        description="""Memory limit passed as --memory to the 'scylla sstable' tool when SCT dumps sstables
+                (upgrade sstable check, encryption checks, tombstone counting). The tool is a Seastar application and
+                without a limit it sizes itself from the total RAM, which gets it OOM-killed next to a running
+                scylla-server on small nodes. Dumping one sstable needs less than 100 MiB. Empty value sets no limit.""",
+    )
     append_scylla_yaml: DictOrStrOrPydantic = SctField(
         description="More configuration to append to /etc/scylla/scylla.yaml",
     )
