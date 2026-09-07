@@ -15,7 +15,7 @@ import json
 from unittest.mock import MagicMock, call
 
 import pytest
-from argus.client.generic_result import Cell, Status
+from argus.client.generic_result import Cell, ColumnMetadata, ResultType, Status
 
 from sdcm.argus_results import (
     ReactorStallStatsResult,
@@ -95,3 +95,76 @@ def test_send_iotune_results_to_argus_skips_when_no_run(run):
     send_iotune_results_to_argus(argus_client=argus_mock, results={}, node=MagicMock(), params={})
 
     argus_mock.submit_results.assert_not_called()
+
+
+def test_extra_columns_and_extra_values_are_reported_once_per_row():
+    """FTS-only usage: caller-supplied columns/values, without touching any existing table schema."""
+    argus_mock = MagicMock()
+    result = {
+        "screenshots": [],
+        "duration_in_sec": 30,
+        "reactor_stalls_stats": {},
+        "hdr_summary": {
+            "READ--fn--search": {
+                "percentile_90": 2.1,
+                "percentile_99": 4.5,
+                "throughput": 320,
+            }
+        },
+    }
+    extra_columns = [ColumnMetadata(name="query_example", unit="", type=ResultType.TEXT)]
+    extra_values = {"query_example": "hello world"}
+
+    send_result_to_argus(
+        argus_client=argus_mock,
+        workload="read",
+        name="fts_search_p99_10ms",
+        description="FTS BM25 full-text search query latency. Expected P99 read <= 10 ms.",
+        cycle="ds | 900 docs | term_common",
+        result=result,
+        start_time=1721564063.4528425,
+        extra_columns=extra_columns,
+        extra_values=extra_values,
+    )
+
+    (submitted_table,) = (c.args[0] for c in argus_mock.submit_results.call_args_list)
+    assert submitted_table.name == "read - fts_search_p99_10ms - latencies"
+    assert any(col.name == "query_example" for col in submitted_table.columns)
+    example_cells = [cell for cell in submitted_table.results if cell.column == "query_example"]
+    assert len(example_cells) == 1
+    assert example_cells[0].value == "hello world"
+    assert example_cells[0].row == "ds | 900 docs | term_common"
+
+
+def test_no_extra_columns_means_no_extra_columns_or_cells():
+    """Existing callers (extra_columns/extra_values omitted) must see the unmodified table schema."""
+    argus_mock = MagicMock()
+    result = {
+        "screenshots": [],
+        "duration_in_sec": 30,
+        "reactor_stalls_stats": {},
+        "hdr_summary": {"READ--fn--search": {"percentile_90": 2.1, "percentile_99": 4.5, "throughput": 320}},
+    }
+
+    send_result_to_argus(
+        argus_client=argus_mock,
+        workload="read",
+        name="some_cycle",
+        description="",
+        cycle="row-1",
+        result=result,
+    )
+
+    # NOTE: against a literal, not against a fresh 'LatencyCalculatorReadResult()'. Had the extra
+    #       columns leaked onto the shared class attribute, both sides would carry them and the
+    #       comparison would pass while asserting nothing.
+    (submitted_table,) = (c.args[0] for c in argus_mock.submit_results.call_args_list)
+    assert [col.name for col in submitted_table.columns] == [
+        "P90 read",
+        "P99 read",
+        "Throughput read",
+        "duration",
+        "start time",
+        "Overview",
+        "QA dashboard",
+    ]
