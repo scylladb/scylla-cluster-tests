@@ -19,16 +19,24 @@ only the source is split.
 
 ``CONFIG_GROUPS`` is the browse order used for the generated documentation and for the field
 order on the assembled model: cross-cutting concerns first, then per-backend, then per-test-type.
+
+A field's group is decided by what it configures, not by which file it happened to sit in.
+``unit_tests/unit/config/test_option_groups.py`` guards the conventions -- every option belongs to
+exactly one mixin, name prefixes agree with their group, and every option carries a description
+that says more than its own name.
 """
 
 from sdcm.sct_config.mixins.common import CommonConfigMixin
 from sdcm.sct_config.mixins.scylla import ScyllaConfigMixin
-from sdcm.sct_config.mixins.security import SecurityConfigMixin
 from sdcm.sct_config.mixins.nemesis import NemesisConfigMixin
 from sdcm.sct_config.mixins.stress import StressConfigMixin
 from sdcm.sct_config.mixins.monitoring import MonitoringConfigMixin
+from sdcm.sct_config.mixins.logs import LogsConfigMixin
 from sdcm.sct_config.mixins.manager import ManagerConfigMixin
+from sdcm.sct_config.mixins.aux_db import AuxDbConfigMixin
+from sdcm.sct_config.mixins.alternator import AlternatorConfigMixin
 from sdcm.sct_config.mixins.vector_store import VectorStoreConfigMixin
+from sdcm.sct_config.mixins.kafka import KafkaConfigMixin
 from sdcm.sct_config.mixins.aws import AwsConfigMixin
 from sdcm.sct_config.mixins.gce import GceConfigMixin
 from sdcm.sct_config.mixins.azure import AzureConfigMixin
@@ -51,12 +59,15 @@ from sdcm.sct_config.mixins.spark_migrator import SparkMigratorConfigMixin
 CONFIG_GROUPS = (
     CommonConfigMixin,
     ScyllaConfigMixin,
-    SecurityConfigMixin,
     NemesisConfigMixin,
     StressConfigMixin,
     MonitoringConfigMixin,
+    LogsConfigMixin,
     ManagerConfigMixin,
+    AuxDbConfigMixin,
+    AlternatorConfigMixin,
     VectorStoreConfigMixin,
+    KafkaConfigMixin,
     AwsConfigMixin,
     GceConfigMixin,
     AzureConfigMixin,
@@ -79,12 +90,15 @@ CONFIG_GROUPS = (
 __all__ = [
     "CommonConfigMixin",
     "ScyllaConfigMixin",
-    "SecurityConfigMixin",
     "NemesisConfigMixin",
     "StressConfigMixin",
     "MonitoringConfigMixin",
+    "LogsConfigMixin",
     "ManagerConfigMixin",
+    "AuxDbConfigMixin",
+    "AlternatorConfigMixin",
     "VectorStoreConfigMixin",
+    "KafkaConfigMixin",
     "AwsConfigMixin",
     "GceConfigMixin",
     "AzureConfigMixin",
