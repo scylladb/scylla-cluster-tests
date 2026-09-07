@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import io
 import os
 import re
 import logging
@@ -22,10 +23,13 @@ from functools import cache
 import itertools
 
 import docker
+from docker.api.client import APIClient
 from docker.errors import DockerException, NotFound, ImageNotFound, NullResource, BuildError
 from docker.models.images import Image
 from docker.models.containers import Container
+from docker.utils import socket as docker_socket
 from docker.utils.json_stream import json_stream
+from docker.utils.socket import consume_socket_output, demux_adaptor, frames_iter
 
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.base import CommandRunner
@@ -71,8 +75,51 @@ class ContainerAlreadyRegistered(DockerException):
     pass
 
 
+# docker-py frame reader must accept an io.BufferedReader from BufferedStreamAPIClient.
+# Save the original docker_socket.read before patching it, so this wrapper can call the
+# original implementation directly and avoid recursion.
+_unpatched_socket_read = docker_socket.read
+
+
+def _read_through_buffer(sock, n=4096):
+    if isinstance(sock, io.BufferedReader):
+        return sock.read(n)
+    return _unpatched_socket_read(sock, n)
+
+
+docker_socket.read = _read_through_buffer
+
+
+class BufferedStreamAPIClient(APIClient):
+    """API client that reads hijacked streams from the buffered HTTP reader.
+
+    This avoids losing the first exec/attach frame when it arrives together
+    with the '101 UPGRADED' headers (SCT-952, docker/docker-py#3332).
+    """
+
+    def _read_from_socket(self, response, stream, tty=True, demux=False):
+        buffered_reader = response.raw._fp.fp
+        if not isinstance(buffered_reader, io.BufferedReader):
+            return super()._read_from_socket(response, stream, tty=tty, demux=demux)
+
+        self._raise_for_status(response)
+        frames = frames_iter(buffered_reader, tty)
+        frames = (demux_adaptor(*frame) for frame in frames) if demux else (data for _, data in frames)
+
+        if stream:
+            return frames
+
+        try:
+            return consume_socket_output(frames, demux=demux)
+        finally:
+            response.close()
+
+
 # TODO: remove this wrapper when migrated to Docker Python module completely.
 class DockerClient(docker.DockerClient):
+    def __init__(self, *args, **kwargs):
+        self.api = BufferedStreamAPIClient(*args, **kwargs)
+
     def __call__(self, cmd, timeout=10):
         deprecation("consider to use Docker Python module instead of using Docker CLI commands")
 

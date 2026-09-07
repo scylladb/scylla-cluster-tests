@@ -14,14 +14,20 @@
 
 from __future__ import absolute_import
 
+import contextlib
+import http.client
+import io
 import os
+import socket
 import pytest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch, mock_open, sentinel
 from collections import namedtuple
 
 from sdcm.utils.docker_utils import (
     _Name,
     ContainerManager,
+    DockerClient,
     DockerException,
     NotFound,
     ImageNotFound,
@@ -29,6 +35,20 @@ from sdcm.utils.docker_utils import (
     Retry,
     ContainerAlreadyRegistered,
 )
+
+# Docker sends 101 upgrade headers, then multiplexed frames on the same connection.
+# http.client reads through an io.BufferedReader, so frame bytes can already be in that buffer.
+HIJACK_HEADERS = (
+    b"HTTP/1.1 101 UPGRADED\r\n"
+    b"Content-Type: application/vnd.docker.multiplexed-stream\r\n"
+    b"Connection: Upgrade\r\n"
+    b"Upgrade: tcp\r\n"
+    b"Api-Version: 1.49\r\n"
+    b"\r\n"
+)
+# Frame header: stream id 1, three padding bytes, then the payload length as a big-endian
+# uint32. The declared length has to match the payload, 0x10 for these 16 bytes.
+MKTEMP_FRAME = b"\x01\x00\x00\x00\x00\x00\x00\x10" + b"/tmp/tmp.abcdef\n"
 
 build_args = {}
 
@@ -728,3 +748,36 @@ class TestContainerManager:
 
         # Registered not labeled container not destroyed
         r_c2.remove.assert_not_called()
+
+
+@contextlib.contextmanager
+def hijacked_response(frames: bytes):
+    """Yield a response where headers and frames arrive in the same recv()."""
+    server, client = socket.socketpair()
+    try:
+        server.sendall(HIJACK_HEADERS + frames)
+        # signal EOF after the last frame
+        server.shutdown(socket.SHUT_WR)
+        http_response = http.client.HTTPResponse(client)
+        http_response.begin()
+        assert isinstance(http_response.fp, io.BufferedReader), "http.client must buffer the stream"
+
+        yield SimpleNamespace(
+            raw=SimpleNamespace(_fp=http_response),
+            raise_for_status=lambda: None,
+            close=lambda: None,
+        )
+    finally:
+        client.close()
+        server.close()
+
+
+def test_frame_buffered_with_the_headers_is_not_lost():
+    """Ensure a frame buffered with 101 headers is still read."""
+    docker_client = DockerClient(base_url="unix:///var/run/docker.sock", version="1.49")
+
+    with hijacked_response(MKTEMP_FRAME) as response:
+        stdout, stderr = docker_client.api._read_from_socket(response, stream=False, tty=False, demux=True)
+
+    assert stdout == b"/tmp/tmp.abcdef\n"
+    assert stderr is None
