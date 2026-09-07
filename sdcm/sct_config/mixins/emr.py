@@ -21,7 +21,9 @@ from sdcm.sct_config.types import Boolean, SctField, String
 
 
 class EmrConfigMixin(BaseModel):
-    """Amazon EMR (spark-migrator) configuration options.
+    """Amazon EMR (spark-migrator).
+
+    The EMR cluster that runs the Spark migrator job.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
@@ -29,29 +31,37 @@ class EmrConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Amazon EMR (spark-migrator)"
 
-    emr_release_label: String = SctField(
-        description="EMR release version (e.g., 'emr-7.8.0'). When set, an EMR cluster is provisioned alongside the Scylla cluster.",
+    emr_applications: list = SctField(
+        description="List of EMR applications to install (default: ['Spark'])",
+    )
+    emr_install_spark4_via_bootstrap: Boolean = SctField(
+        description="Legacy fallback: install Spark 4.x via an EMR bootstrap action and submit the migrator "
+        "through script-runner.jar (for emr-7.x releases). Default value is false - i.e. deployment of native Spark "
+        "on an `emr-spark-8.x` release label.",
+    )
+    emr_instance_count_core: int = SctField(
+        description="How many EMR core nodes to launch.",
+    )
+    emr_instance_count_task: int = SctField(
+        description="How many EMR task nodes to launch (compute only, no HDFS).",
+    )
+    emr_instance_type_core: String = SctField(
+        description="EC2 instance type for the EMR core nodes (they run both compute and HDFS).",
     )
     emr_instance_type_master: String = SctField(
         description="Instance type for EMR master node (e.g., 'm5.xlarge')",
     )
-    emr_instance_type_core: String = SctField(
-        description="Instance type for EMR core nodes",
-    )
-    emr_instance_count_core: int = SctField(
-        description="Number of EMR core nodes",
-    )
     emr_instance_type_task: String = SctField(
         description="Instance type for EMR task nodes (optional, uses Spot instances)",
     )
-    emr_instance_count_task: int = SctField(
-        description="Number of EMR task nodes",
+    emr_keep_alive: Boolean = SctField(
+        description="Whether EMR cluster stays alive after job completion (default: true for reuse during testing)",
     )
-    emr_spot_bid_percentage: int = SctField(
-        description="Max Spot price as percentage of On-Demand for EMR task nodes (default: 100)",
+    emr_log_uri: String = SctField(
+        description="S3 URI for EMR cluster logs (e.g., 's3://sct-emr-spark-migrator-{region}/logs/')",
     )
-    emr_applications: list = SctField(
-        description="List of EMR applications to install (default: ['Spark'])",
+    emr_release_label: String = SctField(
+        description="EMR release version (e.g., 'emr-7.8.0'). When set, an EMR cluster is provisioned alongside the Scylla cluster.",
     )
     emr_spark_migrator_jar_path: String = SctField(
         description="S3 path or local path to the spark-migrator JAR file",
@@ -60,14 +70,6 @@ class EmrConfigMixin(BaseModel):
         description="scylla-migrator release tag (e.g., 'v1.1.2'). When set, JAR is auto-downloaded "
         "from GitHub releases and uploaded to S3. Takes precedence over emr_spark_migrator_jar_path.",
     )
-    emr_log_uri: String = SctField(
-        description="S3 URI for EMR cluster logs (e.g., 's3://sct-emr-spark-migrator-{region}/logs/')",
-    )
-    emr_keep_alive: Boolean = SctField(
-        description="Whether EMR cluster stays alive after job completion (default: true for reuse during testing)",
-    )
-    emr_install_spark4_via_bootstrap: Boolean = SctField(
-        description="Legacy fallback: install Spark 4.x via an EMR bootstrap action and submit the migrator "
-        "through script-runner.jar (for emr-7.x releases). Default value is false - i.e. deployment of native Spark "
-        "on an `emr-spark-8.x` release label.",
+    emr_spot_bid_percentage: int = SctField(
+        description="Max Spot price as percentage of On-Demand for EMR task nodes (default: 100)",
     )
