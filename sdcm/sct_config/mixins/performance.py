@@ -17,11 +17,14 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from sdcm.sct_config.types import Boolean, DictOrStr, MultitenantValue, SctField, String, StringOrList
+from sdcm.sct_config.types import Boolean, DictOrStr, SctField, String
 
 
 class PerformanceConfigMixin(BaseModel):
-    """Performance regression tests configuration options.
+    """Performance regression tests.
+
+    Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram
+    settings.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
@@ -29,62 +32,21 @@ class PerformanceConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Performance regression tests"
 
-    perf_simple_query_extra_command: String = SctField(
-        description="Extra command line options to pass to perf_simple_query",
+    max_deviation: float = SctField(
+        description="Max relative difference between best and current throughput, if current throughput larger then best on max_rel_diff, it become new best one",
     )
-    stress_cmd_w: MultitenantValue(StringOrList) = SctField(
-        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    n_stress_process: int = SctField(
+        description="Number of stress processes per loader",
     )
-    stress_cmd_r: MultitenantValue(StringOrList) = SctField(
-        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    num_loaders_step: int = SctField(
+        description="Number of loaders which should be added per step",
     )
-    stress_cmd_m: MultitenantValue(StringOrList) = SctField(
-        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    num_threads_step: int = SctField(
+        description="Number of threads which should be added on per step",
     )
-    stress_cmd_read_disk: MultitenantValue(StringOrList) = SctField(
-        description="""cassandra-stress commands.
-                You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure.
-                multiple commands can passed as a list""",
-    )
-    stress_cmd_cache_warmup: MultitenantValue(StringOrList) = SctField(
-        description="""cassandra-stress commands for warm-up before read workload.
-            You can specify everything but the -node parameter, which is going to
-            be provided by the test suite infrastructure.
-            multiple commands can passed as a list""",
-    )
-    prepare_write_cmd: MultitenantValue(StringOrList) = SctField(
-        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
-    )
-    stress_before_migration: String = SctField(
-        description="Stress command to write data for post-migration validation",
-    )
-    verify_stress_after_migration: String = SctField(
-        description="Stress command to verify data after migration",
-    )
-    stress_cmd_no_mv: StringOrList = SctField(
-        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
-    )
-    stress_cmd_no_mv_profile: StringOrList = SctField(
-        description="",
-    )
-    cs_user_profiles: StringOrList = SctField(
-        description="cassandra-stress user-profiles list. Executed in test step",
-    )
-    prepare_cs_user_profiles: StringOrList = SctField(
-        description="cassandra-stress user-profiles list. Executed in prepare step",
-    )
-    cs_duration: String = SctField(
-        description="",
-    )
-    cs_debug: Boolean = SctField(
-        description="enable debug for cassandra-stress",
-    )
-    stress_cmd_mv: StringOrList = SctField(
-        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
-    )
-    prepare_stress_cmd: StringOrList = SctField(
-        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    perf_gradual_step_duration: DictOrStr = SctField(
+        description="Step duration of c-s load for gradual performance test per sub-test. "
+        "Example: {'read': '30m', 'write': None, 'mixed': '30m'}",
     )
     perf_gradual_threads: DictOrStr = SctField(
         description="Threads amount of stress load for gradual performance test per sub-test. "
@@ -94,43 +56,8 @@ class PerformanceConfigMixin(BaseModel):
         description="Used for gradual performance test. Define throttle for load step in ops. "
         "Example: {'read': ['100000', '150000'], 'mixed': ['300']}",
     )
-    perf_gradual_step_duration: DictOrStr = SctField(
-        description="Step duration of c-s load for gradual performance test per sub-test. "
-        "Example: {'read': '30m', 'write': None, 'mixed': '30m'}",
-    )
-    # PerformanceRegressionLWTTest
-    stress_cmd_lwt_i: StringOrList = SctField(
-        description="Stress command for LWT performance test for INSERT baseline",
-    )
-    stress_cmd_lwt_d: StringOrList = SctField(
-        description="Stress command for LWT performance test for DELETE baseline",
-    )
-    stress_cmd_lwt_u: StringOrList = SctField(
-        description="Stress command for LWT performance test for UPDATE baseline",
-    )
-    stress_cmd_lwt_ine: StringOrList = SctField(
-        description="Stress command for LWT performance test for INSERT with IF NOT EXISTS",
-    )
-    stress_cmd_lwt_uc: StringOrList = SctField(
-        description="Stress command for LWT performance test for UPDATE with IF <condition>",
-    )
-    stress_cmd_lwt_ue: StringOrList = SctField(
-        description="Stress command for LWT performance test for UPDATE with IF EXISTS",
-    )
-    stress_cmd_lwt_de: StringOrList = SctField(
-        description="Stress command for LWT performance test for DELETE with IF EXISTS",
-    )
-    stress_cmd_lwt_dc: StringOrList = SctField(
-        description="Stress command for LWT performance test for DELETE with IF <condition>",
-    )
-    stress_cmd_lwt_mixed: StringOrList = SctField(
-        description="Stress command for LWT performance test for mixed lwt load",
-    )
-    stress_cmd_lwt_mixed_baseline: StringOrList = SctField(
-        description="Stress command for LWT performance test for mixed lwt load baseline",
-    )
-    run_db_node_benchmarks: Boolean = SctField(
-        description="Flag for running db node benchmarks before the tests",
+    perf_simple_query_extra_command: String = SctField(
+        description="Extra command line options to pass to perf_simple_query",
     )
     perf_stress_keyspace: String = SctField(
         description="""Keyspace name used in performance gradual throughput tests.
@@ -142,29 +69,8 @@ class PerformanceConfigMixin(BaseModel):
         Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).
         For latte, if not set, falls back to the 'table' key in latte_schema_parameters.""",
     )
-    num_loaders_step: int = SctField(
-        description="Number of loaders which should be added per step",
-    )
-    stress_threads_start_num: int = SctField(
-        description="Number of threads for c-s command",
-    )
-    num_threads_step: int = SctField(
-        description="Number of threads which should be added on per step",
-    )
-    stress_step_duration: String = SctField(
-        description="Duration of time for stress round",
-    )
-    max_deviation: float = SctField(
-        description="Max relative difference between best and current throughput, if current throughput larger then best on max_rel_diff, it become new best one",
-    )
-    n_stress_process: int = SctField(
-        description="Number of stress processes per loader",
-    )
-    stress_process_step: int = SctField(
-        description="add/remove num of process on each round",
-    )
-    use_hdrhistogram: Boolean = SctField(
-        description="Enable hdr histogram logging for cs",
+    run_db_node_benchmarks: Boolean = SctField(
+        description="Flag for running db node benchmarks before the tests",
     )
     stop_on_hw_perf_failure: Boolean = SctField(
         description="""Stop sct performance test if hardware performance test failed
@@ -179,4 +85,16 @@ class PerformanceConfigMixin(BaseModel):
        after hw perf tests detect node with hw results not in margin with average
     If stop_on_hw_perf_failure is False, then sct performance test will be run
        even after hw perf tests detect node with hw results not in margin with average""",
+    )
+    stress_process_step: int = SctField(
+        description="add/remove num of process on each round",
+    )
+    stress_step_duration: String = SctField(
+        description="Duration of time for stress round",
+    )
+    stress_threads_start_num: int = SctField(
+        description="Number of threads for c-s command",
+    )
+    use_hdrhistogram: Boolean = SctField(
+        description="Enable hdr histogram logging for cs",
     )
