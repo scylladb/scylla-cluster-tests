@@ -21,7 +21,9 @@ from sdcm.sct_config.types import Boolean, IntOrList, SctField, String, StringOr
 
 
 class NemesisConfigMixin(BaseModel):
-    """Nemesis (chaos testing) configuration options.
+    """Nemesis (chaos testing).
+
+    Which disruptions run, how often, and how targets are selected.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
@@ -29,6 +31,9 @@ class NemesisConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Nemesis (chaos testing)"
 
+    nemesis_add_node_cnt: int = SctField(
+        description="""Add/remove nodes during GrowShrinkCluster nemesis""",
+    )
     nemesis_class_name: StringOrList = SctField(
         description="""
                 Nemesis class to use (possible types in sdcm.nemesis).
@@ -44,37 +49,26 @@ class NemesisConfigMixin(BaseModel):
                 longer supported. Use an explicit YAML list instead.
         """,
     )
-    nemesis_interval: int = SctField(
-        description="""Nemesis sleep interval to use if None provided specifically in the test""",
-    )
-    nemesis_sequence_sleep_between_ops: int = SctField(
-        description="""Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests""",
+    nemesis_double_load_during_grow_shrink_duration: int = SctField(
+        description="After growing (and before shrink) in GrowShrinkCluster nemesis it will double the load for provided duration.",
     )
     nemesis_during_prepare: Boolean = SctField(
         description="""Run nemesis during prepare stage of the test""",
     )
-    nemesis_seed: IntOrList = SctField(
-        description="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey""",
-    )
-    nemesis_add_node_cnt: int = SctField(
-        description="""Add/remove nodes during GrowShrinkCluster nemesis""",
+    nemesis_filter_seeds: Boolean = SctField(
+        description="""If true runs the nemesis only on non seed nodes""",
     )
     nemesis_grow_shrink_instance_type: String = SctField(
         description="""Instance type to use for adding/removing nodes during GrowShrinkCluster nemesis""",
     )
-    cluster_target_size: IntOrList = SctField(
-        description="""Used for scale test: max size of the cluster""",
+    nemesis_interval: int = SctField(
+        description="""Nemesis sleep interval to use if None provided specifically in the test""",
     )
-    space_node_threshold: int = SctField(
-        description="""
-             Space node threshold before starting nemesis (bytes)
-             The default value is 6GB (6x1024^3 bytes)
-             This value is supposed to reproduce
-             https://github.com/scylladb/scylla/issues/1140
-         """,
+    nemesis_multiply_factor: int = SctField(
+        description="Multiply the list of nemesis to execute by the specified factor",
     )
-    nemesis_filter_seeds: Boolean = SctField(
-        description="""If true runs the nemesis only on non seed nodes""",
+    nemesis_seed: IntOrList = SctField(
+        description="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey""",
     )
     nemesis_selector: StringOrList = SctField(
         description="""nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has
@@ -82,6 +76,10 @@ class NemesisConfigMixin(BaseModel):
         (In other words filters out all nemesis that doesn't ONE of these properties set to true)
         IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.""",
     )
-    nemesis_multiply_factor: int = SctField(
-        description="Multiply the list of nemesis to execute by the specified factor",
+    nemesis_sequence_sleep_between_ops: int = SctField(
+        description="""Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests""",
+    )
+    # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
+    sla: Boolean = SctField(
+        description="run SLA nemeses if the test is SLA only",
     )

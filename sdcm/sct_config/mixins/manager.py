@@ -20,11 +20,13 @@ from pydantic import BaseModel
 from pydantic.functional_validators import BeforeValidator
 
 from sdcm.mgmt.common import AgentBackupParameters
-from sdcm.sct_config.types import Boolean, DictOrStr, SctField, String, dict_or_str
+from sdcm.sct_config.types import Boolean, DictOrStr, SctField, String, StringOrList, dict_or_str
 
 
 class ManagerConfigMixin(BaseModel):
-    """Scylla Manager configuration options.
+    """Scylla Manager.
+
+    Scylla Manager server and agent: versions, repos and backup/restore settings.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
@@ -32,65 +34,40 @@ class ManagerConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Scylla Manager"
 
-    scylla_mgmt_address: String = SctField(
-        description="Url to the repo of scylla manager version to install for management tests",
+    backup_bucket_backend: String = SctField(
+        description="the backend to be used for backup (e.g., 's3', 'gcs' or 'azure')",
     )
-    scylla_mgmt_agent_address: String = SctField(
-        description="Url to the repo of scylla manager agent version to install for management tests",
+    backup_bucket_location: StringOrList = SctField(
+        description="the bucket name to be used for backup (e.g., 'manager-backup-tests')",
     )
-    manager_version: String = SctField(
-        description="Version of Scylla Manager server and agent to install",
-        appendable=False,
+    backup_bucket_region: String = SctField(
+        description="the AWS region of a bucket to be used for backup (e.g., 'eu-west-1')",
     )
-    target_manager_version: String = SctField(
-        description="Version of Scylla Manager server and agent to upgrade to",
-        appendable=False,
+    manager_backup_restore_method: String = SctField(
+        description="The object storage transfer method to use by Scylla Manager in backup or restore. Supported methods: native, rclone, auto.",
+    )
+    manager_prometheus_port: int = SctField(
+        description="Port to be used by the manager to contact Prometheus",
     )
     manager_scylla_backend_version: String = SctField(
         description="Version of ScyllaDB to install as Manager backend",
         appendable=False,
     )
-    scylla_mgmt_agent_version: String = SctField(
-        description="Version of Scylla Manager agent to install for management tests",
+    manager_version: String = SctField(
+        description="Version of Scylla Manager server and agent to install",
         appendable=False,
-    )
-    scylla_mgmt_pkg: String = SctField(
-        description="Url to the scylla manager packages to install for management tests",
-    )
-    manager_backup_restore_method: String = SctField(
-        description="The object storage transfer method to use by Scylla Manager in backup or restore. Supported methods: native, rclone, auto.",
-    )
-    use_cloud_manager: Boolean = SctField(
-        description="When define true, will install scylla cloud manager",
-    )
-    use_mgmt: Boolean = SctField(
-        description="When define true, will install scylla management",
-    )
-    agent: DictOrStr = SctField(
-        description="""
-            Configuration for SCT agent - a lightweight service for remote command execution.                 When enabled, replaces SSH-based command execution with RESTful API calls for DB nodes.
-            Configuration options:
-            - enabled: bool - enable agent (required)
-            - port: int - agent HTTP API port (default: 16000)
-            - binary_url: str - URL to download agent binary
-            - max_concurrent_jobs: int - max concurrent jobs per agent (default: 10)
-            - log_level: str - logging level (default: info)
-            - tls: bool - enable TLS for agent communication (default: false)""",
-    )
-    manager_prometheus_port: int = SctField(
-        description="Port to be used by the manager to contact Prometheus",
-    )
-    target_scylla_mgmt_server_address: String = SctField(
-        description="Url to the repo of scylla manager version used to upgrade the manager server",
-    )
-    target_scylla_mgmt_agent_address: String = SctField(
-        description="Url to the repo of scylla manager version used to upgrade the manager agents",
-    )
-    scylla_mgmt_upgrade_to_repo: String = SctField(
-        description="Url to the repo of scylla manager version to upgrade to for management tests",
     )
     mgmt_agent_backup_config: Annotated[AgentBackupParameters | None, BeforeValidator(dict_or_str)] = SctField(
         description="Manager agent backup general configuration: checkers, transfers, low_level_retries. For example, {'checkers': 100, 'transfers': 2, 'low_level_retries': 20}",
+    )
+    mgmt_docker_image: String = SctField(
+        description="Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'",
+    )
+    mgmt_nodetool_refresh_flags: String = SctField(
+        description="Nodetool refresh extra options like --load-and-stream or --primary-replica-only",
+    )
+    mgmt_prepare_snapshot_size: int = SctField(
+        description="Size of backup snapshot in Gb to be prepared for backup",
     )
     mgmt_restore_extra_params: String = SctField(
         description="Manager restore operation extra parameters: batch-size, parallel, etc. "
@@ -103,12 +80,41 @@ class ManagerConfigMixin(BaseModel):
     mgmt_skip_post_restore_stress_read: Boolean = SctField(
         description="Skip post-restore c-s verification read in the Manager restore benchmark tests",
     )
-    mgmt_nodetool_refresh_flags: String = SctField(
-        description="Nodetool refresh extra options like --load-and-stream or --primary-replica-only",
-    )
-    mgmt_prepare_snapshot_size: int = SctField(
-        description="Size of backup snapshot in Gb to be prepared for backup",
-    )
     mgmt_snapshots_preparer_params: DictOrStr = SctField(
         description="Custom parameters of c-s write operation used in snapshots preparer",
+    )
+    scylla_mgmt_address: String = SctField(
+        description="Url to the repo of scylla manager version to install for management tests",
+    )
+    scylla_mgmt_agent_address: String = SctField(
+        description="Url to the repo of scylla manager agent version to install for management tests",
+    )
+    scylla_mgmt_agent_version: String = SctField(
+        description="Version of Scylla Manager agent to install for management tests",
+        appendable=False,
+    )
+    scylla_mgmt_pkg: String = SctField(
+        description="Url to the scylla manager packages to install for management tests",
+    )
+    scylla_mgmt_upgrade_to_repo: String = SctField(
+        description="Url to the repo of scylla manager version to upgrade to for management tests",
+    )
+    scylla_repo_m: String = SctField(
+        description="Url to the repo of scylla version to install scylla from for management tests",
+    )
+    target_manager_version: String = SctField(
+        description="Version of Scylla Manager server and agent to upgrade to",
+        appendable=False,
+    )
+    target_scylla_mgmt_agent_address: String = SctField(
+        description="Url to the repo of scylla manager version used to upgrade the manager agents",
+    )
+    target_scylla_mgmt_server_address: String = SctField(
+        description="Url to the repo of scylla manager version used to upgrade the manager server",
+    )
+    use_cloud_manager: Boolean = SctField(
+        description="When define true, will install scylla cloud manager",
+    )
+    use_mgmt: Boolean = SctField(
+        description="When define true, will install scylla management",
     )
