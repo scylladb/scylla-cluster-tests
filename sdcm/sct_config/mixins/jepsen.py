@@ -21,7 +21,9 @@ from sdcm.sct_config.types import SctField, String, StringOrList
 
 
 class JepsenConfigMixin(BaseModel):
-    """Jepsen tests configuration options.
+    """Jepsen tests.
+
+    Jepsen consistency test runs.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """

@@ -21,7 +21,9 @@ from sdcm.sct_config.types import SctField, String, StringOrList
 
 
 class BaremetalConfigMixin(BaseModel):
-    """Baremetal backend configuration options.
+    """Baremetal backend.
+
+    Running against pre-existing hosts that SCT does not provision.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
@@ -29,9 +31,6 @@ class BaremetalConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Baremetal backend"
 
-    s3_baremetal_config: String = SctField(
-        description="Configuration for S3 in baremetal setups. This includes details such as endpoint URL, access key, secret key, and bucket name.",
-    )
     db_nodes_private_ip: StringOrList = SctField(
         description="Private IP addresses of DB nodes. Can be a single IP, a list of IPs, or an expression that evaluates to a list.",
     )
@@ -49,4 +48,7 @@ class BaremetalConfigMixin(BaseModel):
     )
     monitor_nodes_public_ip: StringOrList = SctField(
         description="Public IP addresses of monitor nodes. These IPs are used for accessing the monitoring tools from outside the private network. Can be a single IP, a list of IPs, or an expression that evaluates to a list.",
+    )
+    s3_baremetal_config: String = SctField(
+        description="Configuration for S3 in baremetal setups. This includes details such as endpoint URL, access key, secret key, and bucket name.",
     )

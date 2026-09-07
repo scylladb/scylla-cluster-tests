@@ -11,18 +11,20 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-"""Scylla installation and configuration configuration options."""
+"""Scylla installation and configuration."""
 
 from typing import ClassVar, Literal
 
 from pydantic import BaseModel
 
-from sdcm.sct_config.types import Boolean, DictOrStr, DictOrStrOrPydantic, SctField, String, StringOrList
-from sdcm.utils import alternator
+from sdcm.sct_config.types import Boolean, DictOrStrOrPydantic, SctField, String, StringOrList
 
 
 class ScyllaConfigMixin(BaseModel):
-    """Scylla installation and configuration configuration options.
+    """Scylla installation and configuration.
+
+    Which Scylla to install and how it is configured: repos, versions, distro,
+    `scylla.yaml`/command-line options, experimental features, authentication and encryption.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
@@ -30,11 +32,49 @@ class ScyllaConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Scylla installation and configuration"
 
-    force_run_iotune: Boolean = SctField(
-        description="Force running iotune on the DB nodes, regardless if image has predefined values",
+    append_scylla_args: String = SctField(
+        description="More arguments to append to scylla command line",
+    )
+    append_scylla_node_exporter_args: String = SctField(
+        description="More arguments to append to scylla-node-exporter command line",
+    )
+    append_scylla_setup_args: String = SctField(
+        description="More arguments to append to scylla_setup command line",
+    )
+    append_scylla_yaml: DictOrStrOrPydantic = SctField(
+        description="More configuration to append to /etc/scylla/scylla.yaml",
+    )
+    assert_linux_distro_features: StringOrList = SctField(
+        description="""List of distro features relevant to SCT test. Example: 'fips'.
+            This is used to assert that the distro features are supported by the scylla version being tested.
+            If the feature is not supported, the test will fail.""",
+        appendable=True,
+    )
+    authenticator: Literal[
+        "PasswordAuthenticator", "AllowAllAuthenticator", "com.scylladb.auth.SaslauthdAuthenticator"
+    ] = SctField(
+        description="which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator",
+    )
+    authenticator_password: String = SctField(
+        description="the password if PasswordAuthenticator is used",
+    )
+    authenticator_user: String = SctField(
+        description="the username if PasswordAuthenticator is used",
+    )
+    authorizer: Literal["AllowAllAuthorizer", "CassandraAuthorizer"] = SctField(
+        description="which authorizer scylla will use AllowAllAuthorizer/CassandraAuthorizer",
+    )
+    client_encrypt: Boolean = SctField(
+        description="when enable scylla will use encryption on the client side",
+    )
+    client_encrypt_mtls: Boolean = SctField(
+        description="when enabled scylla will enforce mutual authentication when client-to-node encryption is enabled",
     )
     db_type: String = SctField(
         description="Db type to install into db nodes, scylla/cassandra",
+    )
+    enable_kms_key_rotation: Boolean = SctField(
+        description="Allows to disable KMS keys rotation. Applicable to AWS, GCP, and Azure backends.",
     )
     endpoint_snitch: String = SctField(
         description="""
@@ -45,22 +85,74 @@ class ScyllaConfigMixin(BaseModel):
             'GoogleCloudSnitch'
          """,
     )
-    scylla_repo: String = SctField(
-        description="Url to the repo of scylla version to install scylla. Can provide specific version after a colon "
-        "e.g: `https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list:2021.1.18`",
+    enterprise_disable_kms: Boolean = SctField(
+        description="An escape hatch to disable KMS for enterprise run, when needed. We enable KMS by default since if we use Scylla 2023.1.3 and up",
     )
-    scylla_apt_keys: StringOrList = SctField(
-        description="APT keys for ScyllaDB repos",
+    experimental_features: StringOrList = SctField(
+        description="Scylla experimental features to enable in scylla.yaml, as a list of feature names (e.g. 'udf', 'alternator-streams').",
     )
-    unified_package: String = SctField(
-        description="Url to the unified package of scylla version to install scylla",
-    )
-    nonroot_offline_install: Boolean = SctField(
-        description="Install Scylla without required root privilege",
+    hinted_handoff: String = SctField(
+        description="when enable or disable scylla hinted handoff (enabled/disabled)",
     )
     install_mode: String = SctField(
         description="Scylla install mode, repo/offline/web",
         appendable=False,
+    )
+    internode_compression: String = SctField(
+        description="Scylla `internode_compression` in scylla.yaml: which inter-node traffic to compress -- 'all', 'dc' (between datacenters only) or 'none'.",
+    )
+    internode_encryption: String = SctField(
+        description="Scylla sub option of server_encryption_options: internode_encryption.",
+    )
+    jmx_heap_memory: int = SctField(
+        description="The total size of the memory allocated to JMX. Values in MB, so for 1GB enter 1024(MB).",
+    )
+    kms_key_rotation_interval: int = SctField(
+        description="The time interval in minutes which gets waited before the KMS key rotation happens."
+        " Applied when the AWS KMS service is configured to be used.",
+    )
+    ldap_server_type: String = SctField(
+        description="This option indicates which server is going to be used for LDAP operations. [openldap, ms_ad]",
+    )
+    nonroot_offline_install: Boolean = SctField(
+        description="Install Scylla without required root privilege",
+    )
+    peer_verification: Boolean = SctField(
+        description="enable peer verification for encrypted communication",
+    )
+    prepare_saslauthd: Boolean = SctField(
+        description="When defined true, will install and start saslauthd service",
+    )
+    scylla_apt_keys: StringOrList = SctField(
+        description="APT keys for ScyllaDB repos",
+    )
+    scylla_d_overrides_files: StringOrList = SctField(
+        description="list of files that should upload to /etc/scylla.d/ directory to override scylla config files",
+        appendable=True,
+    )
+    scylla_encryption_options: String = SctField(
+        description="options will be used for enable encryption at-rest for tables",
+    )
+    scylla_linux_distro: String = SctField(
+        description="Distro and family for the DB node image, e.g. 'ubuntu-jammy' or 'debian-bookworm'.",
+        appendable=False,
+    )
+    scylla_linux_distro_loader: String = SctField(
+        description="Distro and family for the loader node image. Independent of the DB nodes, so loaders can run a different distro.",
+        appendable=False,
+    )
+    scylla_network_config: list = SctField(
+        description="""Configure Scylla networking with single or multiple NIC/IP combinations.
+              It must be defined for listen_address and rpc_address. For each address mandatory parameters are:
+              - address: listen_address/rpc_address/broadcast_rpc_address/broadcast_address/test_communication
+              - ip_type: ipv4 or ipv6
+              - public: false or true
+              - nic: number of NIC. 0, 1
+              Supported for AWS and GCE meanwhile""",
+    )
+    scylla_repo: String = SctField(
+        description="Url to the repo of scylla version to install scylla. Can provide specific version after a colon "
+        "e.g: `https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list:2021.1.18`",
     )
     scylla_version: String = SctField(
         description="""Version of scylla to install, ex. '2.3.1'
@@ -68,127 +160,35 @@ class ScyllaConfigMixin(BaseModel):
                        WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'""",
         appendable=False,
     )
-    user_data_format_version: String = SctField(
-        description="""Format version of the user-data to use for scylla images,
-                       default to what tagged on the image used""",
-        appendable=False,
+    server_encrypt: Boolean = SctField(
+        description="when enable scylla will use encryption on the server side",
     )
-    oracle_user_data_format_version: String = SctField(
-        description="""Format version of the user-data to use for scylla images,
-                       default to what tagged on the image used""",
-        appendable=False,
+    server_encrypt_mtls: Boolean = SctField(
+        description="when enabled scylla will enforce mutual authentication when node-to-node encryption is enabled",
     )
-    oracle_scylla_version: String = SctField(
-        description="""Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'
-                 Automatically looks up cloud images for formal versions.
-                 WARNING: can't be used together with the backend's oracle image param
-                 ('ami_id_db_oracle', 'gce_image_db_oracle', 'azure_image_db_oracle' or 'oci_image_db_oracle')""",
-        appendable=False,
+    service_level_shares: list = SctField(
+        description="List if service level shares - how many server levels to create and test. Uses in SLA test. list of int, like: [100, 200]",
     )
-    scylla_linux_distro: String = SctField(
-        description="""The distro name and family name to use. Example: 'ubuntu-jammy' or 'debian-bookworm'.""",
-        appendable=False,
-    )
-    scylla_linux_distro_loader: String = SctField(
-        description="""The distro name and family name to use. Example: 'ubuntu-jammy' or 'debian-bookworm'.""",
-        appendable=False,
-    )
-    assert_linux_distro_features: StringOrList = SctField(
-        description="""List of distro features relevant to SCT test. Example: 'fips'.
-            This is used to assert that the distro features are supported by the scylla version being tested.
-            If the feature is not supported, the test will fail.""",
-        appendable=True,
-    )
-    scylla_repo_m: String = SctField(
-        description="Url to the repo of scylla version to install scylla from for management tests",
+    unified_package: String = SctField(
+        description="Url to the unified package of scylla version to install scylla",
     )
     update_db_packages: String = SctField(
         description="""A local directory of rpms to install a custom version on top of
                  the scylla installed (or from repo or from ami)""",
     )
-    experimental_features: StringOrList = SctField(
-        description="unlock specified experimental features",
+    use_ldap: Boolean = SctField(
+        description="When defined true, LDAP is going to be used.",
     )
-    server_encrypt: Boolean = SctField(
-        description="when enable scylla will use encryption on the server side",
+    use_ldap_authentication: Boolean = SctField(
+        description="Authenticate Scylla users against LDAP: starts an LDAP container and sets scylla.yaml to use it for authentication (who you are).",
     )
-    client_encrypt: Boolean = SctField(
-        description="when enable scylla will use encryption on the client side",
+    use_ldap_authorization: Boolean = SctField(
+        description="Authorize Scylla users through LDAP group membership: starts an LDAP container and sets scylla.yaml to use it for authorization (what you may do).",
     )
-    hinted_handoff: String = SctField(
-        description="when enable or disable scylla hinted handoff (enabled/disabled)",
+    use_preinstalled_scylla: Boolean = SctField(
+        description="Don't install/update ScyllaDB on DB nodes",
     )
-    nemesis_double_load_during_grow_shrink_duration: int = SctField(
-        description="After growing (and before shrink) in GrowShrinkCluster nemesis it will double the load for provided duration.",
-    )
-    authenticator: Literal[
-        "PasswordAuthenticator", "AllowAllAuthenticator", "com.scylladb.auth.SaslauthdAuthenticator"
-    ] = SctField(
-        description="which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator",
-    )
-    authenticator_user: String = SctField(
-        description="the username if PasswordAuthenticator is used",
-    )
-    authenticator_password: String = SctField(
-        description="the password if PasswordAuthenticator is used",
-    )
-    authorizer: Literal["AllowAllAuthorizer", "CassandraAuthorizer"] = SctField(
-        description="which authorizer scylla will use AllowAllAuthorizer/CassandraAuthorizer",
-    )
-    # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
-    sla: Boolean = SctField(
-        description="run SLA nemeses if the test is SLA only",
-    )
-    service_level_shares: list = SctField(
-        description="List if service level shares - how many server levels to create and test. Uses in SLA test. list of int, like: [100, 200]",
-    )
-    alternator_port: int = SctField(
-        description="Port to configure for alternator in scylla.yaml",
-    )
-    dynamodb_primarykey_type: Literal[tuple(x.value for x in alternator.enums.YCSBSchemaTypes.__members__.values())] = (
-        SctField(
-            description="Type of dynamodb table to create with range key or not",
-        )
-    )
-    alternator_write_isolation: String = SctField(
-        description="Set the write isolation for the alternator table, see https://github.com/scylladb/scylla/blob/master/docs/alternator/alternator.md#write-isolation-policies for more details",
-    )
-    alternator_use_dns_routing: Boolean = SctField(
-        description="If true, spawn a docker with a dns server for the ycsb loader to point to",
-    )
-    alternator_loadbalancing: Boolean = SctField(
-        description="If true, enable native load balancing for alternator",
-    )
-    alternator_test_table: DictOrStr = SctField(
-        description="""Dictionary of a test alternator table features:
-                name: str - the name of the table
-                lsi_name: str - the name of the local secondary index to create with a table
-                gsi_name: str - the name of the global secondary index to create with a table
-                tags: dict - the tags to apply to the created table
-                items: int - expected number of items in the table after prepare""",
-    )
-    alternator_enforce_authorization: Boolean = SctField(
-        description="If true, enable the authorization check in dynamodb api (alternator)",
-    )
-    alternator_access_key_id: String = SctField(description="the aws_access_key_id that would be used for alternator")
-    alternator_secret_access_key: String = SctField(
-        description="the aws_secret_access_key that would be used for alternator",
-    )
-    alternator_trust_all_certificates: Boolean = SctField(
-        description="If true, trust all TLS certificates for alternator connections (for testing with self-signed certs)",
-    )
-    region_aware_loader: Boolean = SctField(
-        description="When in multi region mode, run stress on loader that is located in the same region as db node",
-    )
-    append_scylla_args: String = SctField(
-        description="More arguments to append to scylla command line",
-    )
-    append_scylla_args_oracle: String = SctField(
-        description="More arguments to append to oracle command line",
-    )
-    append_scylla_yaml: DictOrStrOrPydantic = SctField(
-        description="More configuration to append to /etc/scylla/scylla.yaml",
-    )
-    append_scylla_node_exporter_args: String = SctField(
-        description="More arguments to append to scylla-node-exporter command line",
+    user_data_format_version: String = SctField(
+        description="user-data format version to send to the DB node images. Defaults to whatever the image is tagged with; set it only to override that.",
+        appendable=False,
     )
