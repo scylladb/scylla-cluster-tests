@@ -2,14 +2,14 @@
 
 ## Problem
 
-`sdcm/sct_config.py` had grown to ~5,400 lines: 537 Pydantic field definitions, eight
+`sdcm/sct_config.py` had grown to ~5,200 lines: 493 Pydantic field definitions, eight
 class-level lookup tables, a ~560-line `__init__`, and ~2,400 lines of loading, validation and
 doc-generation methods. It is past the point where a human or an LLM can review or extend it,
 which blocks the domain-mixin split described in
 [the follow-up refactoring plan](../sct-config-followup-refactoring.md).
 
 This is Phases 1-3 of that plan: turn the module into a package, lift out the parts that are not
-the configuration model itself, and split the ~2,000-line field block into domain mixins. Phase 4
+the configuration model itself, and split the ~2,000-line field block into domain mixins, and document every option. Phase 4
 (moving the `_validate_*` methods into their mixins) and Phase 5 (the nested sub-model PoC) follow
 separately.
 
@@ -30,28 +30,70 @@ separately.
 
 ### Domain mixins (Phase 3)
 
-All 479 user-facing options move into 25 mixins under `sdcm/sct_config/mixins/`, each a
+All 479 user-facing options move into 26 mixins under `sdcm/sct_config/mixins/`, each a
 `BaseModel` that `SCTConfiguration` inherits from. Fields stay **flat** —
 `config.nemesis_class_name` and every YAML key are unchanged; only the source is split.
 
-The boundaries are not invented: `sct_config.py` already carried section comments
-(`# AWS config options`, `# Nemesis config options`, `# LongevityTest`, …) marking the author's own
-grouping. Those become the mixins. The two regions with no section comments — the ~90-field leading
-block and the ~60-field tail — are assigned by name, and the split is generated from the AST with an
-assertion that all 493 entries are accounted for (479 options + 14 internal).
+**The file's section comments were not a usable source of grouping.** The first attempt split on
+them (`# AWS config options`, `# Nemesis config options`, `# LongevityTest`, …), assuming each
+comment bounded its section. It doesn't: options had been appended to whatever section happened to
+be last, so `# minicloud params` had accumulated 37 unrelated options (log collection,
+`post_behavior_*`, upgrade stress, AZ fallback), the AWS section held every `gce_*` option, and
+`# spark-migrator` held scylla-doctor and zero-token options. Grouping is now decided per option by
+**what it configures**, with the option's own description as the evidence — which is exactly why the
+documentation pass below is part of this work rather than a follow-up.
 
-Grouped in `CONFIG_GROUPS` browse order — cross-cutting, then per backend, then per test type:
+Groups, in `CONFIG_GROUPS` browse order — cross-cutting, then per backend, then per test type:
 
-- **Cross-cutting**: `common` (30), `scylla` (43), `security` (12), `nemesis` (12), `stress` (16),
-  `monitoring` (15), `manager` (22), `vector_store` (4)
-- **Backends**: `aws` (64), `gce` (9), `azure` (12), `oci` (10), `kubernetes` (45), `docker` (5),
-  `baremetal` (7), `xcloud` (11), `minicloud` (35)
-- **Test types**: `longevity` (23), `performance` (42), `upgrade` (25), `grow_cluster` (3),
-  `refresh` (6), `jepsen` (4), `emr` (12), `spark_migrator` (12)
+- **Cross-cutting**: `common` (68), `scylla` (44), `nemesis` (12), `stress` (70),
+  `monitoring` (16), `logs` (15), `manager` (26), `aux_db` (4), `alternator` (10),
+  `vector_store` (6), `kafka` (2)
+- **Backends**: `aws` (25), `gce` (21), `azure` (12), `oci` (10), `kubernetes` (45), `docker` (2),
+  `baremetal` (7), `xcloud` (11)
+- **Test types**: `longevity` (13), `performance` (16), `upgrade` (20), `grow_cluster` (2),
+  `refresh` (6), `jepsen` (4), `emr` (12)
 
-What stays on `SCTConfiguration`: the 14 internal entries (runtime state like `regions_data` and
+Four groups exist because the options were there but had nowhere sensible to go:
+
+- `logs` — log transport, NVMe diagnostics, scylla-doctor and the `post_behavior_*` teardown
+  options, which had been sitting under `# minicloud params`.
+- `aux_db` — the second DB cluster used for comparison or migration (the Gemini "oracle" cluster,
+  or a Cassandra cluster). Named for the role rather than for Gemini, per review feedback, so the
+  `cassandra_*` options no longer look like Docker-backend settings.
+- `alternator` — the DynamoDB-compatible API options, previously scattered.
+- `kafka` — CDC connector options that had ended up in the AWS section.
+
+`security` was dissolved per review: the LDAP/encryption/auth options are Scylla features and moved
+to `scylla`; `keystore_*` and `user_credentials_path` moved to `common`.
+
+What stays on `SCTConfiguration`: the 16 internal entries (runtime state like `regions_data` and
 `is_enterprise`, plus the eight `IgnoredType` lookup tables) and all the cross-domain loading,
 validation and doc-generation logic.
+
+### Documenting every option
+
+Grouping decisions are only as good as the descriptions they are made from, so the audit and the
+regrouping were done together:
+
+- **19 options had no description at all** and would have rendered blank in the generated docs:
+  the six `refresh` options, `root_disk_size_*`, the `ami_*_user` login names,
+  `gce_pd_ssd_disk_size_*`, `cs_duration` and `stress_cmd_no_mv_profile`. All now documented.
+- **21 options shared boilerplate with a sibling**, which made them impossible to tell apart or
+  place. The 13 cassandra-stress commands all carried the same paragraph; each now says its role
+  (write-only, read-only, mixed, pre-load, verify, …) and points at `stress_cmd` for the shared
+  format. `use_ldap_authentication` vs `use_ldap_authorization`, `user_credentials_path` vs
+  `cloud_credentials_path`, `scylla_linux_distro` vs `..._loader`, and
+  `user_data_format_version` vs the oracle variant were each given distinguishing text.
+- **20 descriptions only restated the option name** (`region_name`: "AWS regions to use") and now
+  say what the value means. `region_name` in particular now says it is the generic region option
+  despite the AWS-sounding text, and that GCE/Azure use their own.
+- `sct_ngrok_name` is marked DEPRECATED pointing at SCT-954; removal is that ticket's job, not this
+  PR's.
+
+`unit_tests/unit/config/test_option_groups.py` makes all three conventions permanent: every option
+belongs to exactly one mixin, an option's name prefix agrees with its group (with an explicit,
+commented exception list), and no option is undocumented or merely restates its own name. That is
+what stops the drift from recurring — the original file had failed all three checks.
 
 ### Grouped documentation (Phase 3)
 
@@ -96,7 +138,9 @@ through to a real cloud API call.
 ## Files to Modify
 
 - `sdcm/sct_config.py` → `sdcm/sct_config/config.py` (`git mv`, its own commit), plus `types.py`,
-  `helpers.py`, `defaults.py`, `__init__.py` and `mixins/` (25 modules + `__init__.py`).
+  `helpers.py`, `defaults.py`, `__init__.py` and `mixins/` (28 modules + `__init__.py`).
+- `unit_tests/unit/config/test_option_groups.py` — new, guards the grouping and documentation
+  conventions.
 - 49 string patch targets across 9 `unit_tests/` files. In `unit_tests/unit/test_config.py` and
   `unit_tests/unit/test_instance_sizing_config.py`, also change `from sdcm import sct_config` →
   `from sdcm.sct_config import config as sct_config`; that one line fixes their 16
@@ -112,7 +156,9 @@ through to a real cloud API call.
 
 - `SCTConfiguration.model_fields` — 493 entries, field **set** byte-identical to before the split;
   order now follows `CONFIG_GROUPS` (intended, and what regroups the docs).
-- `docs/configuration_options.md` — 479 options across 25 group sections, nothing in "Other".
+- `unit_tests/unit/config/test_option_groups.py` — 960 checks: one option per mixin, prefix/group
+  agreement, and a useful description for all 479 options.
+- `docs/configuration_options.md` — 479 options across 26 group sections, nothing in "Other".
 - `sct.py conf -b docker test-cases/longevity/longevity-10gb-3h.yaml` — dump parsed as YAML and
   compared key-by-key against the same command on master: 244 keys, same values, no additions or
   removals (only run-specific `test_id`/`user_prefix` differ).

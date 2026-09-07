@@ -21,7 +21,9 @@ from sdcm.sct_config.types import SctField, String, StringOrList
 
 
 class AzureConfigMixin(BaseModel):
-    """Azure backend configuration options.
+    """Azure backend.
+
+    Microsoft Azure provisioning.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
@@ -29,15 +31,17 @@ class AzureConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Azure backend"
 
-    azure_region_name: StringOrList = SctField(
-        description="Azure region(s) where the resources will be deployed. Supports single or multiple regions.",
-        appendable=False,
+    azure_image_db: String = SctField(
+        description="The Azure image to be used for database nodes.",
     )
-    azure_instance_type_loader: String = SctField(
-        description="The Azure virtual machine size to be used for loader nodes.",
+    azure_image_loader: String = SctField(
+        description="The Azure image to be used for loader nodes.",
     )
-    azure_instance_type_monitor: String = SctField(
-        description="The Azure virtual machine size to be used for monitor nodes.",
+    azure_image_monitor: String = SctField(
+        description="The Azure image to be used for monitor nodes.",
+    )
+    azure_image_username: String = SctField(
+        description="The username for the Azure image.",
     )
     azure_instance_type_db: String = SctField(
         description="The Azure virtual machine size to be used for database nodes.",
@@ -45,17 +49,18 @@ class AzureConfigMixin(BaseModel):
     azure_instance_type_db_oracle: String = SctField(
         description="The Azure virtual machine size to be used for Oracle database nodes.",
     )
-    azure_image_db: String = SctField(
-        description="The Azure image to be used for database nodes.",
+    azure_instance_type_loader: String = SctField(
+        description="The Azure virtual machine size to be used for loader nodes.",
     )
-    azure_image_monitor: String = SctField(
-        description="The Azure image to be used for monitor nodes.",
+    azure_instance_type_monitor: String = SctField(
+        description="The Azure virtual machine size to be used for monitor nodes.",
     )
-    azure_image_loader: String = SctField(
-        description="The Azure image to be used for loader nodes.",
-    )
-    azure_image_username: String = SctField(
-        description="The username for the Azure image.",
+    azure_provision_stuck_vm_recreate_attempts: int = SctField(
+        ge=0,
+        description="""
+              How many times to recreate a stuck Azure VM (full node: VM, NIC and public IP) onto
+              fresh capacity before giving up with a non-retryable error.
+        """,
     )
     azure_provision_stuck_vm_timeout: int = SctField(
         gt=0,
@@ -63,13 +68,6 @@ class AzureConfigMixin(BaseModel):
               Seconds to wait for an Azure VM to reach the 'Succeeded' provisioning state before
               treating it as stuck (accepted by Azure but never started by the host - SCT-434) and
               recreating it. Detection is gated on the polled instanceView provisioning state.
-        """,
-    )
-    azure_provision_stuck_vm_recreate_attempts: int = SctField(
-        ge=0,
-        description="""
-              How many times to recreate a stuck Azure VM (full node: VM, NIC and public IP) onto
-              fresh capacity before giving up with a non-retryable error.
         """,
     )
     azure_provision_stuck_vm_total_timeout: int = SctField(
@@ -82,4 +80,8 @@ class AzureConfigMixin(BaseModel):
               This value must be at least 'azure_provision_stuck_vm_timeout', otherwise SCT may
               give up during the initial wait without making even one recreate attempt.
         """,
+    )
+    azure_region_name: StringOrList = SctField(
+        description="Azure region(s) where the resources will be deployed. Supports single or multiple regions.",
+        appendable=False,
     )
