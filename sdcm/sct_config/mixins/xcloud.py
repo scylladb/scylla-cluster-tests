@@ -23,7 +23,9 @@ from sdcm.sct_config.types import SctField, String, dict_or_str
 
 
 class XcloudConfigMixin(BaseModel):
-    """Scylla Cloud (xcloud) backend configuration options.
+    """Scylla Cloud (xcloud) backend.
+
+    Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
@@ -31,20 +33,20 @@ class XcloudConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Scylla Cloud (xcloud) backend"
 
-    cloud_credentials_path: String = SctField(
-        description="""Path to your user credentials. qa key are downloaded automatically from S3 bucket""",
-    )
     cloud_cluster_id: int = SctField(
-        description="""scylla cloud cluster id""",
+        description="ID of an existing Scylla Cloud cluster to run against, instead of provisioning a new one.",
+    )
+    cloud_credentials_path: String = SctField(
+        description="Path to the SSH private key for nodes in a Scylla Cloud (siren) cluster, which SCT does not provision itself.",
     )
     cloud_prom_bearer_token: String = SctField(
         description="""scylla cloud promproxy bearer_token to federate monitoring data into our monitoring instance""",
     )
-    cloud_prom_path: String = SctField(
-        description="""scylla cloud promproxy path to federate monitoring data into our monitoring instance""",
-    )
     cloud_prom_host: String = SctField(
         description="""scylla cloud promproxy hostname to federate monitoring data into our monitoring instance""",
+    )
+    cloud_prom_path: String = SctField(
+        description="""scylla cloud promproxy path to federate monitoring data into our monitoring instance""",
     )
     xcloud_credentials_path: String = SctField(
         description="Path to Scylla Cloud credentials file, if stored locally",
@@ -57,13 +59,6 @@ class XcloudConfigMixin(BaseModel):
     )
     xcloud_replication_factor: int = SctField(
         description="Replication factor for Scylla Cloud cluster",
-    )
-    xcloud_vpc_peering: Annotated[dict, BeforeValidator(dict_or_str)] = SctField(
-        description="""Dictionary of VPC peering parameters for private connectivity between
-         SCT infrastructure and Scylla Cloud. The following parameters are used:
-         enabled: bool - indicates whether VPC peering is to be used
-         cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)
-         cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)""",
     )
     xcloud_scaling_config: Annotated[dict | None, BeforeValidator(dict_or_str)] = SctField(
         description="""Scaling policy configuration. The payload should follow the following structure:
@@ -88,4 +83,11 @@ class XcloudConfigMixin(BaseModel):
 
         For more details, see `scaling` parameter description in Cloud REST API documentation:
         https://cloud.docs.scylladb.com/stable/api.html#tag/Cluster/operation/createCluster""",
+    )
+    xcloud_vpc_peering: Annotated[dict, BeforeValidator(dict_or_str)] = SctField(
+        description="""Dictionary of VPC peering parameters for private connectivity between
+         SCT infrastructure and Scylla Cloud. The following parameters are used:
+         enabled: bool - indicates whether VPC peering is to be used
+         cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)
+         cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)""",
     )
