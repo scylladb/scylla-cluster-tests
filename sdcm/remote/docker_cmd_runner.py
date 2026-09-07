@@ -3,7 +3,7 @@ import tarfile
 from io import BytesIO
 from typing import TYPE_CHECKING
 from shlex import quote
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 
 from invoke.runners import Result
@@ -215,7 +215,7 @@ class DockerCmdRunner(CommandRunner):
                 self.run(f"rm -rf {quote(dst)}", ignore_status=True, verbose=False)
 
             tar_stream = self._create_tar_stream(src, dst)
-            dst_path = Path(dst)
+            dst_path = PurePosixPath(dst)
             extraction_dir = dst if dst.endswith("/") or not dst_path.suffix else str(dst_path.parent)
             self.run(f"mkdir -p {quote(extraction_dir)}", ignore_status=True, verbose=False)
             container.put_archive(path=extraction_dir, data=tar_stream)

@@ -165,11 +165,13 @@ class TestDockerCmdRunner:
             mock_create_tar.return_value = mock_tar_stream
             mock_run.return_value = MagicMock(ok=True)
 
-            result = self.runner.send_files(temp_file.name, "/dest/path")
+            result = self.runner.send_files(temp_file.name, "/etc/scylla/scylla.yaml")
 
         assert result
         mock_container.put_archive.assert_called_once()
-        mock_create_tar.assert_called_once_with(temp_file.name, "/dest/path")
+        _, put_archive_kwargs = mock_container.put_archive.call_args
+        assert put_archive_kwargs["path"] == "/etc/scylla"
+        mock_create_tar.assert_called_once_with(temp_file.name, "/etc/scylla/scylla.yaml")
 
     @patch("sdcm.remote.docker_cmd_runner.retrying")
     def test_receive_files(self, mock_retrying):

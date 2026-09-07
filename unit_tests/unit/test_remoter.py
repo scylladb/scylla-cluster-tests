@@ -545,3 +545,21 @@ class TestRemoteFile:
         assert remoter.rf_dst.startswith("/tmp/sct")
         assert remoter.rf_dst.endswith(os.path.basename(some_file))
         assert remoter.sf_data is None
+
+    def test_remote_file_empty_mktemp_raises(self):
+        """If 'mktemp' comes back with an empty result, remote_file() must raise clearly
+        instead of proceeding with dst="" into a 300s retry loop that always fails."""
+
+        class _EmptyMktempRunner(self.remoter_cls):
+            def run(self, cmd, *_, **__):
+                if cmd == "mktemp":
+                    return Result(stdout="")
+                return super().run(cmd, *_, **__)
+
+        remoter = _EmptyMktempRunner()
+        some_file = "/some/path/some.file"
+        with pytest.raises(RuntimeError, match="mktemp.*empty"):
+            with remote_file(
+                remoter=remoter, remote_path=some_file, preserve_ownership=False, preserve_permissions=False
+            ) as fobj:
+                fobj.write("test data")
