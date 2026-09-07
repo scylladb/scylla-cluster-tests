@@ -21,7 +21,9 @@ from sdcm.sct_config.types import SctField, String
 
 
 class DockerConfigMixin(BaseModel):
-    """Docker backend configuration options.
+    """Docker backend.
+
+    Running the cluster as local Docker containers.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
@@ -29,18 +31,9 @@ class DockerConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Docker backend"
 
-    mgmt_docker_image: String = SctField(
-        description="Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'",
-    )
     docker_image: String = SctField(
         description="Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version",
     )
     docker_network: String = SctField(
         description="Local docker network to use, if there's need to have db cluster connect to other services running in docker",
-    )
-    vector_store_docker_image: String = SctField(
-        description="Vector Store docker image repo, i.e. 'scylladb/vector-store', if omitted is calculated from vector_store_version",
-    )
-    vector_store_version: String = SctField(
-        description="Vector Store version / docker image tag",
     )
