@@ -76,6 +76,11 @@ def remote_file(
             LOGGER.debug("New content of `%s':\n%s", remote_path, content)
 
         remote_tempfile = remoter.run("mktemp").stdout.strip()
+        if not remote_tempfile:
+            raise RuntimeError(
+                f"'mktemp' on {remoter.hostname} returned an empty path; "
+                f"cannot update '{remote_path}' without a valid remote temporary file"
+            )
         remote_tempfile_move_cmd = shell_script_cmd(f"""\
             cat '{remote_tempfile}' > '{remote_path}'
             rm '{remote_tempfile}'
