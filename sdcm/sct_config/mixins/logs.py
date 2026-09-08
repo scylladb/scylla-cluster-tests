@@ -17,7 +17,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel
 
-from sdcm.sct_config.types import Boolean, DictOrStr, SctField, String
+from sdcm.sct_config.types import Boolean, DictOrStr, SctField
 
 
 class LogsConfigMixin(BaseModel):
@@ -98,34 +98,6 @@ class LogsConfigMixin(BaseModel):
         'keep-on-failure' - Keep instances if testrun failed
         """,
     )
-    run_scylla_doctor: Boolean = SctField(
-        description="Flag to run Scylla Doctor tool",
-    )
-    run_scylla_doctor_only: Boolean = SctField(
-        description="""When true, the artifact test runs only the Scylla Doctor validation
-                (install, collect vitals, analyze, verify) and skips all other artifact checks
-                such as stop/start, cassandra-stress, housekeeping, etc. Useful for fast SD
-                release gating. Implies run_scylla_doctor=true.""",
-    )
-    scylla_doctor_edition: Literal["basic", "full"] = SctField(
-        description="""Scylla Doctor edition to use. Allowed values: 'basic', 'full'.
-                'basic' fetches the free/open-source edition via HTTP.
-                'full' fetches the full/enterprise edition from a private S3 bucket.""",
-    )
-    scylla_doctor_full_tarball_url: String = SctField(
-        description="""Direct URL to a full edition Scylla Doctor tarball in S3. When set, bypasses the
-                standard version-based S3 lookup and downloads SD directly from this URL.
-                Use for testing unofficial or pre-release SD versions.
-                Example: 'https://s3.amazonaws.com/my-bucket/scylla-doctor-1.11-rc1.tar.gz'""",
-    )
-    scylla_doctor_version: String = SctField(
-        description="""Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.10')
-                to hardcode the version, or leave empty to use the latest available version. For stability,
-                artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.""",
-    )
     teardown_validators: DictOrStr = SctField(
         description="Validators to use during teardown phase",
-    )
-    use_scylla_doctor_on_failure: Boolean = SctField(
-        description="Run scylla-doctor on test failure to collect additional diagnostics",
     )

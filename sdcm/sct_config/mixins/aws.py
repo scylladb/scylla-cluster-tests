@@ -83,17 +83,8 @@ class AwsConfigMixin(BaseModel):
     extra_network_interface: Boolean = SctField(
         description="if true, create extra network interface on each node",
     )
-    root_disk_size_db: int = SctField(
-        description="Root (boot) disk size in GB for the DB nodes.",
-    )
-    root_disk_size_loader: int = SctField(
-        description="Root (boot) disk size in GB for the loader nodes.",
-    )
-    root_disk_size_monitor: int = SctField(
-        description="Root (boot) disk size in GB for the monitoring node.",
-    )
-    root_disk_size_runner: int = SctField(
-        description="root disk size in Gb for sct-runner",
+    sct_aws_account_id: String = SctField(
+        description="AWS account id on behalf of which the test is run",
     )
     spot_max_price: float = SctField(
         description="The max percentage of the on demand price we set for spot/fleet instances",

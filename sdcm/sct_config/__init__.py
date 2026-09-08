@@ -26,7 +26,13 @@ even for names defined in ``types`` or ``helpers``: ``from .types import f`` bin
 ``unit_tests/unit/test_lint_patch_targets.py`` enforces this for the pipeline linter.
 """
 
-from sdcm.sct_config.config import SCTConfiguration, init_and_verify_sct_config
+from sdcm.sct_config.config import (
+    SCTConfiguration,
+    backend_to_cloud,
+    init_and_verify_sct_config,
+    is_arm_instance_type,
+    substitute_arch_markers,
+)
 from sdcm.sct_config.defaults import AWS_SUPPORTED_REGIONS, BACKEND_IMAGE_FIELD, available_backends
 from sdcm.sct_config.helpers import count_regions, simulated_racks_enabled
 from sdcm.sct_config.types import (
@@ -49,11 +55,14 @@ __all__ = [
     "SctField",
     "StringOrList",
     "available_backends",
+    "backend_to_cloud",
     "boolean_or_space_separated_booleans",
     "count_regions",
     "dict_or_str",
     "init_and_verify_sct_config",
     "int_or_space_separated_ints",
+    "is_arm_instance_type",
     "simulated_racks_enabled",
     "str_or_list_or_eval",
+    "substitute_arch_markers",
 ]
