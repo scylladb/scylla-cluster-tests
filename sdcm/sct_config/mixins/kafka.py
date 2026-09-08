@@ -36,5 +36,31 @@ class KafkaConfigMixin(BaseModel):
         description="Type of Kafka backend to use",
     )
     kafka_connectors: list[SctKafkaConfiguration] = SctField(
-        description="Kafka Connect connector definitions to deploy, as a list of config dicts -- typically the Scylla CDC source connector.",
+        description="""
+            Kafka Connect connectors to deploy, as a list of connector definitions.
+
+            Each entry has a `source` (where to fetch the connector from -- a Confluent Hub
+            coordinate or a release URL), a unique `name`, and a `config` block whose keys are the
+            connector's own dotted options, passed through as-is.
+
+            Example -- the Scylla CDC source connector:
+
+                kafka_connectors:
+                  - source: 'hub:scylladb/scylla-cdc-source-connector:1.1.2'
+                    name: 'cdc-connector'
+                    config:
+                      connector.class: 'com.scylladb.cdc.debezium.connector.ScyllaConnector'
+                      scylla.name: 'test-cluster'
+                      scylla.table.names: 'keyspace1.table1'
+                      scylla.user: 'cassandra'
+                      scylla.password: 'cassandra'
+
+            See `docs/kafka.md` for how SCT deploys Kafka, and the connectors' own documentation
+            for the full option set:
+            https://github.com/scylladb/scylla-cdc-source-connector#configuration (source
+            connector) and
+            https://github.com/scylladb/kafka-connect-scylladb/blob/master/documentation/CONFIG.md
+            (sink connector). The accepted keys are modelled in
+            `sdcm.kafka.kafka_config.ConnectorConfiguration`.
+        """,
     )
