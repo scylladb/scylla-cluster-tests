@@ -425,6 +425,27 @@ def test_15b_image_id_by_scylla_version(monkeypatch):
     assert conf.gce_image_db == resolved_image_link
 
 
+def test_15c_image_id_by_scylla_version_branched_not_found_raises_value_error(monkeypatch):
+    # regression test: get_branched_gce_images() raises AssertionError (not IndexError) when no
+    # images match, since it asserts internally on an empty list before any [0] indexing happens.
+    # SCTConfiguration must translate that into a clean ValueError, not let AssertionError escape.
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    _set_gce_instance_types(monkeypatch)
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "master:latest")
+    monkeypatch.setenv("SCT_USER_PREFIX", "testing")
+    monkeypatch.setenv("SCT_GCE_IMAGE_DB", "")
+    monkeypatch.setenv("SCT_USE_PREINSTALLED_SCYLLA", "true")
+
+    with unittest.mock.patch.object(
+        sct_config,
+        "get_branched_gce_images",
+        side_effect=AssertionError("GCE images for scylla_version='master:latest' not found"),
+        clear=True,
+    ):
+        with pytest.raises(ValueError, match="GCE image for scylla_version='master:latest' was not found"):
+            sct_config.SCTConfiguration()
+
+
 def test_17_verify_scylla_bench_required_parameters_in_command(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
