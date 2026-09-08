@@ -44,6 +44,8 @@ A 3-phase lightweight workflow for writing a mini-plan for small, single-PR chan
 
 3. **Write the Approach section.** Bulleted list of steps in execution order. Each bullet should be a concrete action, not a vague goal.
 
+   Describe **behaviour, not code**: what should happen and why, not how it is written. No line numbers, no snippets of internal logic, no file-internal detail — reference code by symbol (`file.py:ClassName`) and leave the "how" to the PR (PAP-1, PAP-9). If the change has a lifecycle, state the whole sequence once as an arrow chain rather than spreading it over bullets (PAP-11).
+
 4. **Write the Files to Modify section.** For each file:
    - **Verify the path exists** using file-reading tools before listing it
    - Describe what changes in that file
@@ -76,6 +78,11 @@ A 3-phase lightweight workflow for writing a mini-plan for small, single-PR chan
    - progress.json entry
    - More than 4 sections
 
-4. **Run pre-commit (if available).** Execute `uv run sct.py pre-commit` to check formatting.
+4. **Check reviewability.** Run `wc -l` on the file:
+   - Over ~150 lines -> cut code detail first (PAP-1, PAP-9), then split out any separable effort into its own mini-plan (PAP-12), then drop investigation narrative and restated rules (PAP-10)
+   - `grep -nE ':[0-9]+' <file>` -> any hit is a line-number reference; replace it with a symbol reference (PAP-9)
+   - Any fenced code block that is not an interface, config format, or API contract -> replace with a prose description of the behaviour
+
+5. **Run pre-commit (if available).** Execute `uv run sct.py pre-commit` to check formatting.
 
 **Exit:** Mini-plan is validated, saved in `docs/plans/mini-plans/`, and ready to use.

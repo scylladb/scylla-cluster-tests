@@ -67,7 +67,11 @@ causing false negatives in cluster health reports during rolling restarts.
 
 ## Rules
 
-1. **File paths must be code-verified** -- use file-reading tools to confirm paths exist before listing them.
-2. **Verification must be concrete** -- every checkbox should be something a person can actually check or run.
-3. **No YAML frontmatter** -- mini-plans are intentionally lightweight.
-4. **No MASTER.md or progress.json** -- mini-plans are not tracked in the plan registry.
+1. **Describe behaviour, not code** -- the Approach section says what should happen and in what order, not how it is coded. No line numbers, no code snippets of internals, no file-internal detail (private attributes, import order, which helper calls which). Reference code by symbol: `file.py:ClassName`. See PAP-1, PAP-9 and PAP-10 in [anti-patterns.md](anti-patterns.md).
+2. **State the flow once, end to end** -- if the change has a lifecycle or a multi-step sequence, write it as a single arrow chain in Approach (e.g. `instance created -> rate calculated -> rate reported -> instance terminated -> cost computed -> cost reported -> run total sent`), not spread over the step bullets. See PAP-11.
+3. **File paths must be code-verified** -- use file-reading tools to confirm paths exist before listing them. Module-level paths only; "Files to Modify" is the one place file paths belong.
+4. **Keep it under ~150 lines** -- a mini-plan is a single-PR change. If it does not fit, either it is a full plan, or it is carrying code detail and separable efforts that should come out (PAP-10).
+5. **One concern per plan** -- if part of it could ship as its own effort, split it into its own mini-plan and reference it in one sentence. A cluster of open questions in one area is the signal that it is separable (PAP-12).
+6. **Verification must be concrete** -- every checkbox should be something a person can actually check or run.
+7. **No YAML frontmatter** -- mini-plans are intentionally lightweight.
+8. **No MASTER.md or progress.json** -- mini-plans are not tracked in the plan registry.

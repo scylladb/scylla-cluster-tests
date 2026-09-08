@@ -55,10 +55,12 @@ Before beginning Phase 1, determine whether this task needs a full plan or a min
 
 2. **Write the Current State section.** This is the most research-intensive section:
    - Reference specific files, classes, and methods (verify they exist)
-   - Describe how things currently work
+   - Reference by symbol (`file.py:ClassName`), **never by line number** — line refs go stale and pull reviewers into reviewing code instead of design (PAP-9)
+   - Describe how things currently work — the *behaviour* the code produces, not how it is written
    - Identify what needs to change
    - Document technical debt or limitations
    - **Never guess file names** — use tools to locate and verify
+   - Research findings ("I ran X and discovered Y") belong in the PR discussion; keep only the conclusion that changed the design
 
 3. **Write the Goals section.** Define 3-6 specific, measurable objectives:
    - Number each goal with a bold title
@@ -84,25 +86,29 @@ Before beginning Phase 1, determine whether this task needs a full plan or a min
 
 3. **For each phase, write:**
    - **Importance**: Critical/Important/Nice-to-have (see heuristics in templates)
-   - **Description**: What will be implemented and why
+   - **Description**: What will be implemented and why — the intended behaviour and the design decisions behind it, not the code. No line numbers, no snippets of internal logic, no file-internal detail (PAP-1, PAP-3, PAP-9)
    - **Dependencies**: Which phases must be complete first
    - **Deliverables**: Concrete outputs (files, features, configurations)
    - **Definition of Done**: Verifiable criteria using checkboxes — these serve as the success criteria for the phase
 
-4. **Mark uncertain steps.** If a requirement or dependency is unclear, mark it as "Needs Investigation" rather than making assumptions.
+   If the feature has a lifecycle or multi-step flow, state the end-to-end sequence **once**, in Goals or ahead of the phases — not reconstructed across per-phase descriptions (PAP-11).
 
-5. **Include a documentation update phase.** Every plan should have a phase (or phase deliverable) covering:
+4. **Check the plan is one concern.** If a group of phases could ship as an independent effort — especially if that is where the open questions cluster — split it into its own plan and reference it in one sentence where it constrains this one (PAP-12).
+
+5. **Mark uncertain steps.** If a requirement or dependency is unclear, mark it as "Needs Investigation" rather than making assumptions.
+
+6. **Include a documentation update phase.** Every plan should have a phase (or phase deliverable) covering:
    - Updated or new entries in `docs/` for user-facing changes
    - Configuration documentation regenerated via `uv run sct.py pre-commit`
    - README or guide updates if the feature changes user workflows
 
-6. **Include SCT-specific details:**
+7. **Include SCT-specific details:**
    - Backend-specific impact (which backends are affected?)
    - Configuration changes (`sdcm/sct_config.py` parameters)
    - Default values in `defaults/test_default.yaml`
    - Test case YAML files in `test-cases/`
 
-7. **Add separation lines** (`---`) between phases for readability.
+8. **Add separation lines** (`---`) between phases for readability.
 
 **Exit:** Implementation Phases section complete with Definition of Done for each phase.
 
@@ -155,22 +161,27 @@ Before beginning Phase 1, determine whether this task needs a full plan or a min
 
 2. **Verify all code references.** Every file path mentioned in Current State must point to a real file. Use file-reading tools to confirm.
 
-3. **Check phase dependencies.** Ensure no phase references work from a later phase. Foundational work comes first.
+3. **Check reviewability.** A plan nobody finishes reading gets no agreement (PAP-10):
+   - `grep -nE ':[0-9]+' <file>` — every hit is a line-number reference; replace it with a symbol reference (PAP-9)
+   - Every fenced code block must be an interface, config format, or API contract. Function bodies and control flow come out (PAP-1)
+   - `wc -l <file>` over ~400 lines — cut code detail, split separable efforts into their own plans, drop investigation narrative, and state each rule once instead of at every call site
 
-4. **Check for open questions.** If any requirement is unclear, it should be marked as "Needs Investigation" — not assumed.
+4. **Check phase dependencies.** Ensure no phase references work from a later phase. Foundational work comes first.
 
-5. **Check Definition of Done criteria.** Each criterion should be verifiable (someone can check it off), not vague ("it works").
+5. **Check for open questions.** If any requirement is unclear, it should be marked as "Needs Investigation" — not assumed.
 
-6. **Review against an existing plan.** Compare structure and quality with `docs/plans/infrastructure/health-check-optimization.md` or another reference plan.
+6. **Check Definition of Done criteria.** Each criterion should be verifiable (someone can check it off), not vague ("it works").
 
-7. **Verify filename.** Plan should be saved as `docs/plans/<kebab-case-name>.md` with a descriptive name.
+7. **Review against an existing plan.** Compare structure and quality with `docs/plans/infrastructure/health-check-optimization.md` or another reference plan.
 
-8. **Verify YAML frontmatter.** Confirm the plan starts with valid frontmatter containing `status`, `domain`, `created`, `last_updated`, and `owner` fields. See [frontmatter-fields.md](../references/frontmatter-fields.md) for valid values.
+8. **Verify filename.** Plan should be saved as `docs/plans/<kebab-case-name>.md` with a descriptive name.
 
-9. **Register in MASTER.md.** Add the plan to the correct domain table in `docs/plans/MASTER.md` with appropriate status.
+9. **Verify YAML frontmatter.** Confirm the plan starts with valid frontmatter containing `status`, `domain`, `created`, `last_updated`, and `owner` fields. See [frontmatter-fields.md](../references/frontmatter-fields.md) for valid values.
 
-10. **Add progress.json entry.** Add an entry to `docs/plans/progress.json` with the plan's id, title, file, domain, status, created date, phases_total, and phases_done.
+10. **Register in MASTER.md.** Add the plan to the correct domain table in `docs/plans/MASTER.md` with appropriate status.
 
-11. **Run pre-commit (if available).** Execute `uv run sct.py pre-commit` to verify no formatting issues. If unavailable, manually check trailing whitespace and end-of-file newlines.
+11. **Add progress.json entry.** Add an entry to `docs/plans/progress.json` with the plan's id, title, file, domain, status, created date, phases_total, and phases_done.
+
+12. **Run pre-commit (if available).** Execute `uv run sct.py pre-commit` to verify no formatting issues. If unavailable, manually check trailing whitespace and end-of-file newlines.
 
 **Exit:** All 7 sections present, code references verified, phases ordered correctly, plan saved in `docs/plans/`, registered in MASTER.md, and tracked in progress.json.

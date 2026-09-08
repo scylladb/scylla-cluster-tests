@@ -14,6 +14,20 @@ Common mistakes when writing SCT implementation plans. Each entry includes the s
 
 **Fix:** Use short code snippets (5-15 lines) only to illustrate interfaces, configuration formats, or API contracts. Describe behavior in prose; let the implementation phase produce the real code.
 
+**What belongs in a plan:**
+
+- **What should happen, and why** — the observable behaviour, the sequence of events, the contract with other systems
+- **Design decisions and their tradeoffs** — what was chosen, and what was rejected
+- **Module-level file paths** in "Files to Modify" / "Current State", so a reader knows where the work lands
+
+**What does not:**
+
+- **Line numbers** (`sct.py:1670`, `pricing.py:238`) — see PAP-9
+- **Code snippets of internals** — function bodies, control flow, error handling
+- **File-internal detail** — private attribute names, import order, which helper calls which. That is the implementer's job and the PR's review surface
+
+**Rule of thumb:** if a sentence would have to change because someone refactored a function *without changing its behaviour*, it does not belong in the plan.
+
 **Before:**
 ```markdown
 ### Phase 2: Implement Health Check
@@ -213,6 +227,99 @@ than adding a new enum parameter, to balance configurability with simplicity.
 
 ---
 
+### PAP-9: Line-Number References
+
+**Symptom:** The plan cites code by line number — `sct.py:1670`, `pricing.py:238`, "add after line 1842", "annotate `cluster_cloud.py:328` as out of scope".
+
+**Why it's wrong:** Line numbers go stale as soon as anything above them moves, so every plan review turns into a re-verification pass over references that carry no design meaning. Worse, they shift the reviewer's attention from *is this the right behaviour* to *is this the right line* — reviewers start reviewing a diff that has not been written yet. In [#15979](https://github.com/scylladb/scylla-cluster-tests/pull/15979) an automated reviewer used a stale line reference to "fix" a deliberate, lint-enforced construct.
+
+**Fix:** Reference code by stable symbol: `file.py:ClassName` or `file.py:method_name`. If the point does not need a symbol at all, just name the module.
+
+**Before:**
+```markdown
+- `sdcm/utils/cloud_catalog/pricing.py:11` imports `InstanceLifecycle` from
+  `sdcm/utils/cloud_monitor/common.py:34`, and `sct.py:1670` reads the arch.
+- Add the timeout at `pricing.py:238`.
+```
+
+**After:**
+```markdown
+- `sdcm/utils/cloud_catalog/pricing.py` — depends on `cloud_monitor.common` for
+  `InstanceLifecycle`, which makes it un-importable on its own
+- `sdcm/utils/cloud_catalog/pricing.py:AzurePricing` — Azure catalog fetch has no
+  request timeout
+```
+
+---
+
+### PAP-10: Plan Too Long to Review
+
+**Symptom:** The plan runs to several hundred lines. Reviewers comment on the first sections only, or say outright that they could not read all of it.
+
+**Why it's wrong:** A plan exists to get agreement on a design *before* code is written. A plan nobody finishes reading gets no agreement — it gets a rubber stamp or silence, and the disagreement surfaces later in implementation review, when changing course is expensive.
+
+**Fix:** Length is a symptom, not the disease. Cut the causes, in this order:
+
+1. **Code detail** — snippets, control flow, line numbers, file-internal names (PAP-1, PAP-3, PAP-9). This is usually most of the excess.
+2. **Separable efforts** — if a section could ship as its own plan, split it out and link it in one sentence. Open questions concentrated in one area are the tell.
+3. **Findings and investigation logs** — "I ran X and discovered Y" is valuable, but it belongs in the PR discussion or an issue, not in the plan. Keep the *conclusion* if it changed the design; drop the narrative.
+4. **Restated rules** — state a rule once, at the place that owns it, instead of at every call site that must honour it.
+
+**Rough budgets:** a mini-plan should fit in ~150 lines; a full 7-section plan in ~400. Over budget is a prompt to re-read this list, not a hard failure.
+
+---
+
+### PAP-11: Lifecycle Scattered Across Phases
+
+**Symptom:** The change has a lifecycle or a multi-step flow, but the plan only describes each step where that step's code gets written. The end-to-end sequence exists nowhere in one piece.
+
+**Why it's wrong:** Reviewers reason about a flow by following it. Made to reconstruct it from per-phase descriptions, they either give up or agree to something they have not actually understood — and gaps in the flow (a step with no owner, a value computed after the thing that needs it is gone) stay invisible. On [#15979](https://github.com/scylladb/scylla-cluster-tests/pull/15979) a reviewer had to write the sequence out himself in a comment to check the design held.
+
+**Fix:** State the whole sequence **once**, up front — in Goals or ahead of the phases for a full plan, in Approach for a mini-plan. One arrow chain is usually enough; use a diagram if branches matter (PAP-2). Then let each phase reference its position in that flow instead of re-describing it.
+
+**Before:**
+```markdown
+### Phase 2: Report rate on create
+Hook the create path and send the hourly rate.
+
+### Phase 4: Report cost on terminate
+Hook the terminate path, compute cost, send it.
+
+### Phase 6: Run total
+Sum and send at test end.
+```
+
+**After:**
+```markdown
+## Flow
+
+resource created -> rate calculated -> rate reported to Argus ->
+resource terminated -> cost computed from rate and duration ->
+cost reported -> run total sent at test end
+
+Rate calculation lives in a standalone module so out-of-band cleanup
+scripts can compute a cost for leaked resources they terminate.
+```
+
+---
+
+### PAP-12: Multiple Concerns in One Plan
+
+**Symptom:** The plan covers two or more efforts that could each ship on their own — and typically one of them is where all the unresolved questions sit.
+
+**Why it's wrong:** The ready half cannot be approved until the unready half is settled, so the whole plan stalls. It is also longer than either half needs to be, which triggers PAP-10. A reviewer's "shouldn't this be a separate task?" is the same observation arriving late.
+
+**Fix:** Split the separable effort into its own plan and reference it in **one sentence**, only where it explains a constraint on this one. The open questions move with it. Check for this before finalizing: for each group of phases, ask whether it would still make sense as a standalone PR chain if the rest were dropped.
+
+**Signals a split is due:**
+- Open questions cluster in one area rather than spreading evenly
+- One area's phases have no dependency on the others' — only on shared groundwork
+- A reviewer asks "is this a separate task/effort?"
+
+On [#15979](https://github.com/scylladb/scylla-cluster-tests/pull/15979) the approval-gate half moved to its own plan; the two open questions went with it, and the "not a complete plan" objection resolved without answering them.
+
+---
+
 ## Structure Anti-Patterns
 
 ### PAP-6: Missing "Current State" Code References
@@ -221,7 +328,7 @@ than adding a new enum parameter, to balance configurability with simplicity.
 
 **Why it's wrong:** Without code references, reviewers cannot verify the analysis is accurate. The implementer may look at the wrong code. The plan may describe outdated behavior.
 
-**Fix:** Every claim about current behavior must cite a specific file path and optionally a class or method. Verify each reference exists using file-reading tools.
+**Fix:** Every claim about current behavior must cite a specific file path and optionally a class or method. Verify each reference exists using file-reading tools. Cite by symbol, never by line number (PAP-9), and describe the *behaviour* the code produces rather than how it is written (PAP-1).
 
 **Before:**
 ```markdown
@@ -295,6 +402,10 @@ parallel execution in `BaseCluster.check_cluster_health`.
 | PAP-3 | Overly granular phases | Describe deliverables, not line-by-line changes |
 | PAP-4 | Vague or unmeasurable goals | Add measurable criteria or verifiable conditions |
 | PAP-5 | Conflicting requirements | Cross-check goals, phases, and risks for consistency |
+| PAP-9 | Line-number references | Cite `file.py:ClassName`, never `file.py:238` |
+| PAP-10 | Plan too long to review | Cut code detail, split separable efforts, drop investigation logs |
+| PAP-11 | Lifecycle scattered across phases | State the end-to-end sequence once, up front |
+| PAP-12 | Multiple concerns in one plan | Split the separable effort out; open questions move with it |
 | PAP-6 | Missing code references in Current State | Cite specific file paths, verify they exist |
 | PAP-7 | Phases without Definition of Done | Add checkbox criteria to every phase |
 | PAP-8 | Monolithic phase spanning multiple PRs | Split into single-PR-scoped phases |

@@ -1,12 +1,15 @@
 ---
 name: writing-plans
 description: >-
-  Use when asked to generate an implementation plan, draft a plan, save a plan,
-  or design a feature rollout for the SCT repository. Supports two formats:
-  full 7-section plans for multi-phase work (1K+ LOC, tracked in MASTER.md)
-  and lightweight mini-plans for single-PR changes (under 1K LOC, stored in
-  docs/plans/mini-plans/). Routes automatically based on PR plans label,
-  user input, or task size estimate.
+  Write, review, or restructure an implementation plan for the SCT repository.
+  Triggers: "create a plan", "write a plan", "draft a plan", "save a plan",
+  "make a plan for", "generate an implementation plan", "planning document",
+  "design doc", "implementation roadmap", "feature rollout", "mini-plan",
+  "break this into phases", "plan before implementing", or reviewing and
+  shortening an existing plan. Supports two formats: full 7-section plans for
+  multi-phase work (1K+ LOC, tracked in MASTER.md) and lightweight mini-plans
+  for single-PR changes (under 1K LOC, in docs/plans/mini-plans/). Routes
+  automatically based on PR plans label, user input, or task size estimate.
 ---
 
 # Writing Implementation Plans for SCT
@@ -21,11 +24,23 @@ Create well-structured implementation plans that follow SCT's 7-section format a
 
 This skill supplements — not replaces — the official instructions. Always read `docs/plans/INSTRUCTIONS.md` before writing a plan. If there is a conflict between this skill and `INSTRUCTIONS.md`, follow `INSTRUCTIONS.md`.
 
+### Behaviour Over Code
+
+**A plan describes intended behaviour and design goals — not the code that will implement them.**
+
+Write what should happen and why; leave the "how" to the PR. No line numbers, no snippets of internal logic, no file-internal detail. Test: if a sentence would have to change because someone refactored a function *without changing its behaviour*, it does not belong in the plan. This is the most common review complaint on SCT plans — see [PAP-1, PAP-9, PAP-10, PAP-11](references/anti-patterns.md) for what to cut and how.
+
+### One Plan, One Concern
+
+**If part of the plan could ship as its own independent effort, split it into its own plan.**
+
+A cluster of open questions in one area is the signal that the area is separable — and that it is blocking review of the part that is ready. See [PAP-12](references/anti-patterns.md).
+
 ### Code-Verified Current State
 
 **The Current State section must reference real files, classes, and methods.**
 
-Use file-reading tools to inspect actual code before writing Current State. Do not guess or hallucinate file names. Every path mentioned must resolve to an existing file in the repository.
+Use file-reading tools to inspect actual code before writing Current State. Do not guess or hallucinate file names. Every path mentioned must resolve to an existing file in the repository. Reference by symbol (`file.py:ClassName`), never by line number — see "Behaviour Over Code" above.
 
 ### PR-Scoped Phases
 
@@ -203,6 +218,7 @@ See [anti-patterns.md](references/anti-patterns.md) for the full catalog with be
 - [ ] Follows the 7-section structure from `docs/plans/INSTRUCTIONS.md`
 - [ ] Has a Problem Statement with measurable pain points
 - [ ] Has a Current State section with verified file/class/method references
+- [ ] Describes behaviour, not code: no line-number refs (`grep -nE ':[0-9]+'` clean), no snippets beyond interfaces/config/API contracts, lifecycle stated once, one concern per plan (≈400 lines)
 - [ ] Has numbered, measurable goals
 - [ ] Has PR-scoped implementation phases (≤200 LOC each) with Importance levels and Definition of Done
 - [ ] Includes a documentation update phase or deliverable (docs, config regeneration, guides)
@@ -220,6 +236,7 @@ See [anti-patterns.md](references/anti-patterns.md) for the full catalog with be
 - [ ] Has exactly 4 sections: Problem, Approach, Files to Modify, Verification
 - [ ] Has no YAML frontmatter
 - [ ] All file paths in "Files to Modify" are code-verified (or marked as new)
+- [ ] Describes behaviour, not code: no line numbers, no snippets of internal logic, lifecycle stated once, one concern per plan (≈150 lines)
 - [ ] Verification checklist has concrete, runnable checks
 - [ ] Includes `uv run sct.py pre-commit` in verification
 - [ ] Is saved as `docs/plans/mini-plans/YYYY-MM-DD-kebab-case-name.md`
