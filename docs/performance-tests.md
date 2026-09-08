@@ -124,3 +124,97 @@ To attribute a latency-step ERROR that happened at, say, `2026-06-09 17:10:55 UT
 
 Because the stall is usually visible on all loaders at once, compare the loaders against each other: a
 synchronized pause across independent JVMs points away from the loaders and towards the cluster or the network.
+
+## Small-dataset runs for cheap feature testing
+
+The predefined-throughput-steps pipelines populate ~650GB per node and run 30-minute throttle steps, so a
+single run takes many hours of loader and DB instance time. When the thing being tested is the *feature* -
+a new SCT option, a stress-command change, a pipeline wiring, a nemesis, a reporting change - and not the
+absolute numbers, two configuration files cut that down to a fast and cheap run:
+
+| file | what it overrides |
+|---|---|
+| `configurations/performance/perf-predefined-throughput-steps-small-dataset.yaml` | `prepare_write_cmd`, `stress_cmd_w`, `stress_cmd_r`, `stress_cmd_cache_warmup`, `stress_cmd_m`, `stress_cmd_read_disk` - the dataset of each, divided by 6 |
+| `configurations/performance/cassandra_stress_gradual_load_steps_small_dataset.yaml` | `perf_gradual_throttle_steps` - one throttled step plus `unthrottled` per load; `perf_gradual_step_duration` - 30m -> 10m (a copy of `cassandra_stress_gradual_load_steps_i8g.yaml`; `perf_gradual_threads` is left untouched) |
+
+### What the reduction is
+
+| stress command | full size | small dataset |
+|---|---|---|
+| `prepare_write_cmd`, `stress_cmd_read_disk` | 650,000,004 rows (~650GB) | 108,333,336 rows (~108GB) |
+| `stress_cmd_w` | 1,610,612,736 rows | 268,435,456 rows |
+| `stress_cmd_r`, `stress_cmd_cache_warmup`, `stress_cmd_m` | 20,000,000 rows | 3,333,336 rows |
+
+Everything else is deliberately unchanged: four commands per parameter (one per loader, `round_robin: true`),
+contiguous non-overlapping `-pop seq` ranges, `-col 'size=FIXED(1024) n=FIXED(1)'`, the `threads`/`throttle`
+rates and the `$threads` / `$throttle` / `$duration` placeholders the test substitutes per step. The commands
+therefore exercise exactly the same code paths as the full-size ones.
+
+The load ramp is shortened the same way - every load keeps its lowest rate and the final `unthrottled` step,
+and drops the intermediate ones:
+
+| load | full-size steps (ops) | small-dataset steps (ops) |
+|---|---|---|
+| `read` | 500000, 900000, 1200000, 1500000, unthrottled | 500000, unthrottled |
+| `mixed` | 250000, 480000, 600000, 750000, unthrottled | 250000, unthrottled |
+| `write` | 350000, 600000, unthrottled | 350000, unthrottled |
+| `read_disk_only` | 110000, 220000, 330000, 400000, unthrottled | 110000, unthrottled |
+
+In practice the population phase drops from ~72 min to ~12 min (four loaders at `throttle=37500/s`), and each
+of the read, mixed and read_disk_only workloads from 5x30m of load to 2x10m - the throttled step is still
+compared against the unthrottled one, which is what most feature checks need.
+
+### How to use them
+
+Both files are overrides layered on top of the base test case. `test_config` files are merged in order, so
+they must come *after* `test-cases/performance/perf-regression-predefined-throughput-steps.yaml` and after any
+`cassandra_stress_gradual_load_steps_*.yaml`:
+
+```groovy
+perfRegressionParallelPipeline(
+    backend: "aws",
+    region: "us-east-1",
+    test_name: "performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest",
+    test_config: '''["test-cases/performance/perf-regression-predefined-throughput-steps.yaml",
+                     "configurations/performance/cassandra_stress_gradual_load_steps_small_dataset.yaml",
+                     "configurations/performance/perf-predefined-throughput-steps-small-dataset.yaml",
+                     "configurations/disable_kms.yaml",
+                     "configurations/arm_instance_types/i8g_4xlarge.yaml"]''',
+    sub_tests: ["test_mixed_gradual_increase_load"],
+)
+```
+
+or locally:
+
+```bash
+SCT_CONFIG_FILES='["test-cases/performance/perf-regression-predefined-throughput-steps.yaml","configurations/performance/cassandra_stress_gradual_load_steps_small_dataset.yaml","configurations/performance/perf-predefined-throughput-steps-small-dataset.yaml"]' \
+  hydra run-test performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest --backend aws
+```
+
+The two files are independent - the steps one can be used alone to shorten a full-size run, and the dataset
+one alone to shrink a run that keeps the full 30m ramp.
+
+### Caveats
+
+These configurations are for **validating that something works**, not for measuring performance:
+
+- **The results are not comparable to the baseline runs** and must not be used for regression tracking or
+  reported as perf numbers. Fewer partitions, a smaller working set and shorter steps all move the throughput
+  and latency figures.
+- **The surviving throttle rates are not rescaled.** The rates that are kept (500000 / 250000 / 350000 /
+  110000 ops) and `perf_gradual_threads` are still the values derived from max-throughput measurements on the
+  full-size i8g runs, so a step that was "28% of max" there is a different fraction of max here. The
+  `unthrottled` step is the only one that keeps its meaning.
+- **There is no load ramp any more.** With one throttled step and one unthrottled step per load, a trend
+  across increasing load cannot be read out of the run at all - use the full step list for that.
+- **`read_disk_only` is no longer 100% disk.** That workload has no cache warmup and nothing that drops the
+  cache - it reads from disk only because the full-size data set is ~5x the node RAM (~650GB per node with
+  RF=3, against the 128GiB of an `i8g.4xlarge` / `i4i.4xlarge`). At ~108GB per node the data set is smaller
+  than the machine's memory and Scylla populates the cache on the write path, so a large part of it is already
+  resident when the population phase ends. The hit rate is not predictable - the row cache is only ~75-90GB
+  after the memory reserve and memtables, and each loader sweeps its quarter of the range sequentially, which
+  can thrash an LRU cache - but the workload is no longer the disk-bound read its name promises. Keep the
+  full-size data set for anything that depends on reading from disk.
+- **Two 10m steps are short for latency validation.** `latency_calculator_decorator` and the
+  `latency-decorator-error-thresholds-*` thresholds get a third of the samples per step and a fraction of the
+  steps, so a threshold breach in a small-dataset run is worth reproducing at full size before believing it.
