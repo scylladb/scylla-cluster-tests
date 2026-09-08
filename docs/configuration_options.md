@@ -700,11 +700,11 @@ Scylla will print kernel callstack to logs if True, otherwise, it will try and m
 
 ## **instance_provision** / SCT_INSTANCE_PROVISION
 
-instance_provision: spot|on_demand|spot_fleet
+instance_provision: spot|on_demand|spot_fleet|auto. 'auto' defers the choice to `spot_max_test_duration`: spot at or below the threshold, on_demand above it. Because every Jenkins pipeline gives the `provision_type` job parameter a concrete default, 'auto' is the opt-in a job needs for duration-based selection to apply at all. Resolved to a concrete value at config load, so nothing downstream ever sees 'auto'.
 
 **default:** spot
 
-**type:** Literal['spot', 'on_demand', 'spot_fleet', 'spot_low_price']
+**type:** Literal['spot', 'on_demand', 'spot_fleet', 'spot_low_price', 'auto']
 
 **backend overrides:**
 - `on_demand`: oci, k8s-gke, k8s-eks
@@ -4530,6 +4530,15 @@ Let the spot placement score override an explicitly configured `availability_zon
 Relocate the cluster to a better-scoring region BEFORE the first provisioning attempt, when that region's spot placement score exceeds the configured region's by at least this many points (1-10). Useful for `region: random` jobs that land on a poor region by chance. 0 (default) disables it, leaving region relocation purely reactive. Only relocates to VPC-peered regions with an equivalent AMI; note the SCT runner stays in the original region, so the cluster is reached over the peering.
 
 **default:** 0
+
+**type:** int
+
+
+## **spot_max_test_duration** / SCT_SPOT_MAX_TEST_DURATION
+
+Duration (min) up to which `instance_provision` defaults to spot; longer tests default to on_demand, since interruption exposure grows with runtime. Only applies when `instance_provision` was not set explicitly by a test case, env var or CLI - an explicit value always wins.
+
+**default:** 720
 
 **type:** int
 

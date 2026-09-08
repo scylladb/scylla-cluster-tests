@@ -40,7 +40,7 @@ def call(Map pipelineParams) {
                    description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
                    name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
-                   description: 'on_demand|spot_fleet|spot',
+                   description: 'on_demand|spot_fleet|spot|auto (auto: resolved by test duration, threshold spot_max_test_duration)',
                    name: 'provision_type')
 
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
