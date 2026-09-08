@@ -17,6 +17,7 @@ import pytest
 import yaml
 
 from sdcm.utils.trigger_matrix import (
+    DEFAULT_ARCH,
     BackendTarget,
     JobConfig,
     TriggerMatrixError,
@@ -124,6 +125,31 @@ def test_per_backend_leaves_an_explicit_build_alone():
     assert versions == {AWS_TARGET: AWS_BUILD, GCE_TARGET: AWS_BUILD}
     assert not unavailable
     mock_resolve.assert_not_called()
+
+
+def test_per_backend_drops_a_backend_missing_an_explicit_build():
+    """SCT-856: an explicit build that only AWS published must not be stamped onto GCE.
+
+    `per-backend` treats non-resolvable versions (explicit full/RC tags, plain release
+    versions) as already pinned and skips lookups entirely — unlike `aws-strict` and
+    `common`, which both call `version_exists_for_backend()` for the same input. That
+    lets a GCE job get triggered with a build GCE never published, and it later dies in
+    `SCTConfiguration.__init__` at the image lookup instead of being marked unavailable
+    here.
+    """
+    with patch("sdcm.utils.trigger_matrix.version_exists_for_backend") as mock_exists:
+        mock_exists.side_effect = lambda version, backend, region="", arch=DEFAULT_ARCH: backend == "aws"
+        versions, unavailable = resolve_versions_for_targets(
+            original_version=AWS_BUILD,
+            reference_version=AWS_BUILD,
+            targets=[AWS_TARGET, GCE_TARGET],
+            strategy="per-backend",
+        )
+
+    mock_exists.assert_any_call(AWS_BUILD, "gce", "", "x86_64")
+    assert versions == {AWS_TARGET: AWS_BUILD}
+    assert list(unavailable) == [GCE_TARGET]
+    assert AWS_BUILD in unavailable[GCE_TARGET]
 
 
 def test_per_backend_passes_the_request_through_for_backends_without_images():
