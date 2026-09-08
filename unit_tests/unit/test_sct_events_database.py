@@ -211,3 +211,15 @@ def test_index_special_column_error_event_msgfmt():
         "(IndexSpecialColumnErrorEvent Severity.ERROR) period_type=one-time "
         "event_id=ac449879-485a-4b06-8596-3fbe58881093: message=m1"
     )
+
+
+def test_log_event_message_carries_build_id_with_raw_backtrace():
+    """An undecoded backtrace is only useful later together with the build id it belongs to."""
+    event = DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 45 ms", 1)
+    event.raw_backtrace = "0x1234\n0x5678"
+    event.build_id = "abc123"
+
+    message = str(event)
+
+    assert "build_id=abc123" in message
+    assert "0x1234\n0x5678" in message

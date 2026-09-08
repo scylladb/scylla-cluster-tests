@@ -490,8 +490,6 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
 
         node.is_scylla_installed(raise_if_not_installed=True)
         self.check_aio_max_nr(node)
-        if self.test_config.BACKTRACE_DECODING:
-            node.install_scylla_debuginfo()
 
         if any([self.params.get("server_encrypt"), self.params.get("client_encrypt")]):
             self._generate_db_node_certs(node)
