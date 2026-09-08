@@ -18,7 +18,7 @@ import unittest.mock
 from contextlib import contextmanager
 
 from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, start_events_device, stop_events_device
-from sdcm.sct_events.events_device import start_events_main_device, get_events_main_device
+from sdcm.sct_events.events_device import SUB_POLLING_TIMEOUT, start_events_main_device, get_events_main_device
 from sdcm.sct_events.file_logger import get_events_logger
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
 from sdcm.sct_events.event_counter import get_events_counter
@@ -69,15 +69,34 @@ class EventsUtilsMixin:
 
     @contextmanager
     def wait_for_n_events(self, subscriber, count: int, timeout: float = 1, last_event_processing_delay: float = 0.5):
-        last_event_n = subscriber.events_counter + count
-        end_time = time.perf_counter() + timeout
+        """Wait for `subscriber` to receive `count` more events, tolerating a stalled publisher.
+
+        `timeout` is the patience for a *single* event rather than for the whole batch:
+        `EventsDevice` sends one event at a time and waits for a delivery confirmation on its own
+        SUB socket after each `send()`, giving up only after `SUB_POLLING_TIMEOUT`.  A confirmation
+        that gets lost -- routine when CI packs several pytest-xdist workers onto one builder --
+        therefore stalls the publisher for a whole second before it even sends the next event, so a
+        batch of `count` events can trickle in over `count * SUB_POLLING_TIMEOUT` no matter how
+        fast the subscriber is.  Restarting the countdown on every event received keeps a pipeline
+        that delivers nothing failing fast, while no longer failing one that is merely slow.
+        """
+        events_before = subscriber.events_counter
+        last_event_n = events_before + count
+        per_event_timeout = max(timeout, 2 * SUB_POLLING_TIMEOUT / 1000)
 
         yield
 
-        while time.perf_counter() < end_time and subscriber.events_counter < last_event_n:
+        end_time = time.perf_counter() + per_event_timeout
+        events_seen = subscriber.events_counter
+        while events_seen < last_event_n and time.perf_counter() < end_time:
             time.sleep(0.1)
+            if (events_now := subscriber.events_counter) > events_seen:
+                events_seen = events_now
+                end_time = time.perf_counter() + per_event_timeout
+
         assert last_event_n <= subscriber.events_counter, (
-            f"Subscriber {subscriber} didn't receive {count} events in {timeout} seconds"
+            f"Subscriber {subscriber} received {subscriber.events_counter - events_before} of {count} events "
+            f"and then stalled for {per_event_timeout} seconds"
         )
 
         # Give a chance to the subscriber to handle last event received.
