@@ -21,6 +21,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.cluster import BaseScyllaCluster, ClusterHealthCheckError
+from sdcm.utils.health_checker import NodeHealthCheckStats
 
 
 @pytest.fixture
@@ -31,7 +32,8 @@ def mock_node():
         node = MagicMock()
         node.name = name
         node.running_nemesis = running_nemesis
-        node.check_node_health = MagicMock()
+        # check_node_health returns its timing breakdown, as the real one does
+        node.check_node_health = MagicMock(return_value=NodeHealthCheckStats(node_name=name))
         return node
 
     return _make
