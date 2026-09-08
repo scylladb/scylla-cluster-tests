@@ -157,8 +157,12 @@ class CommonConfigMixin(BaseModel):
     force_run_iotune: Boolean = SctField(
         description="Force running iotune on the DB nodes, regardless if image has predefined values",
     )
-    instance_provision: Literal["spot", "on_demand", "spot_fleet", "spot_low_price"] = SctField(
-        description="instance_provision: spot|on_demand|spot_fleet",
+    instance_provision: Literal["spot", "on_demand", "spot_fleet", "spot_low_price", "auto"] = SctField(
+        description="instance_provision: spot|on_demand|spot_fleet|auto. 'auto' defers the choice to "
+        "`spot_max_test_duration`: spot at or below the threshold, on_demand above it. Because every Jenkins "
+        "pipeline gives the `provision_type` job parameter a concrete default, 'auto' is the opt-in a job needs "
+        "for duration-based selection to apply at all. Resolved to a concrete value at config load, so nothing "
+        "downstream ever sees 'auto'.",
     )
     instance_provision_fallback_on_demand: Boolean = SctField(
         description="instance_provision_fallback_on_demand: create instance on_demand provision type if instance with selected "
@@ -312,6 +316,11 @@ class CommonConfigMixin(BaseModel):
             (e.g. `{"setup": true}`). Used to reuse a cluster across runs or to shorten a debug
             cycle. See `docs/skip-test-stages.md` for the stage names and what each one covers.
         """,
+    )
+    spot_max_test_duration: int = SctField(
+        description="Duration (min) up to which `instance_provision` defaults to spot; longer tests default to on_demand, "
+        "since interruption exposure grows with runtime. Only applies when `instance_provision` was not set "
+        "explicitly by a test case, env var or CLI - an explicit value always wins.",
     )
     ssh_transport: Literal["libssh2", "fabric"] = SctField(
         description="""Set type of ssh library to use. Could be 'libssh2' (default) or 'fabric'""",

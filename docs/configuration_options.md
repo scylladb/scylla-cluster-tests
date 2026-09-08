@@ -32,7 +32,7 @@ concerns first, then one page per backend, then one per test type.
 
 | Group | Options | What it covers |
 |---|---:|---|
-| [General and provisioning](configuration_options/general-and-provisioning.md) | 71 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
+| [General and provisioning](configuration_options/general-and-provisioning.md) | 72 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 74 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
@@ -484,6 +484,7 @@ concerns first, then one page per backend, then one per test type.
 | [`sla`](configuration_options/nemesis-chaos-testing.md#sla) | `SCT_SLA` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
 | [`space_node_threshold`](configuration_options/longevity-tests.md#space_node_threshold) | `SCT_SPACE_NODE_THRESHOLD` | [Longevity tests](configuration_options/longevity-tests.md) |
 | [`spot_max_price`](configuration_options/aws-backend.md#spot_max_price) | `SCT_SPOT_MAX_PRICE` | [AWS backend](configuration_options/aws-backend.md) |
+| [`spot_max_test_duration`](configuration_options/general-and-provisioning.md#spot_max_test_duration) | `SCT_SPOT_MAX_TEST_DURATION` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`spot_placement_score_min`](configuration_options/aws-backend.md#spot_placement_score_min) | `SCT_SPOT_PLACEMENT_SCORE_MIN` | [AWS backend](configuration_options/aws-backend.md) |
 | [`spot_score_overrides_configured_az`](configuration_options/aws-backend.md#spot_score_overrides_configured_az) | `SCT_SPOT_SCORE_OVERRIDES_CONFIGURED_AZ` | [AWS backend](configuration_options/aws-backend.md) |
 | [`spot_score_region_relocation_margin`](configuration_options/aws-backend.md#spot_score_region_relocation_margin) | `SCT_SPOT_SCORE_REGION_RELOCATION_MARGIN` | [AWS backend](configuration_options/aws-backend.md) |
