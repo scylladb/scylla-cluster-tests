@@ -232,8 +232,6 @@ def substitute_arch_markers(template: str, arch: str) -> str:
     return resolved
 
 
-
-
 # SCT_KEYSTORE_* env vars this process exported itself (see the keystore
 # propagation at the end of SCTConfiguration.__init__), mapped to the value we
 # wrote.  The value matters, not just the name: environment variables outrank
@@ -365,6 +363,17 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     What stays here: the assembled model's own runtime state, the per-backend lookup tables, and
     the loading, validation and doc-generation logic that spans domains.
+
+    This class is still large, and deliberately so for now -- the field split landed first so the
+    validation split has somewhere to move things to. Still to come (SCT-525 phase 4):
+
+    - the ~25 ``_validate_*`` methods move into the mixin that owns the fields they check, leaving
+      only genuinely cross-domain checks here;
+    - much of that validation can then be expressed as Pydantic ``@field_validator`` /
+      ``@model_validator`` hooks on the mixins instead of hand-rolled checks driven from
+      ``verify_configuration()``, which should shrink it further;
+    - ``__init__`` is ~560 lines of loading, image resolution and inline validation, and is the
+      other half of that work.
     """
 
     log: ClassVar = logging.getLogger("sdcm.sct_config")
@@ -1794,7 +1803,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     def _get_loader_arch(self, cloud: str, instance_type: str, region_name: str) -> str | None:
         if instance_type:
-            catalog_dir = pathlib.Path(__file__).parent.parent / "data" / "instance_catalog"
+            catalog_dir = pathlib.Path(sct_abs_path("data/instance_catalog"))
             try:
                 if instance_info := InstanceCatalog.from_directory(catalog_dir).get_instance(cloud, instance_type):
                     return instance_info.arch
@@ -2587,14 +2596,137 @@ class SCTConfiguration(*CONFIG_GROUPS):
         return type_string
 
     @classmethod
-    def dump_help_config_markdown(cls):
-        """
-        Dump all configuration options with their defaults and help to string in markdown format
+    def _group_blurb(cls, group_title: str) -> str:
+        """The prose from a mixin's docstring, for the top of its documentation page.
 
-        :return: str
+        Everything between the summary line and the boilerplate "See ``sdcm.sct_config.mixins``"
+        pointer, dedented. This is how per-group guidance (e.g. which stress option belongs to
+        which tool) reaches the generated docs instead of only the source.
         """
+        mixin = next((m for m in CONFIG_GROUPS if m.config_group == group_title), None)
+        if not mixin or not mixin.__doc__:
+            return ""
+        body = dedent(mixin.__doc__).strip().splitlines()
+        body = body[1:]  # drop the summary line, it is already the page heading
+        out = []
+        for line in body:
+            if line.strip().startswith("See ``sdcm.sct_config.mixins``"):
+                break
+            out.append(line)
+        # docstrings mix RST double-backticks with markdown; the pages are markdown
+        return re.sub(r"(?<!`)``(?!`)([^`\n]+)(?<!`)``(?!`)", r"`\1`", "\n".join(out)).strip()
+
+    #: Where the per-group option pages live, relative to the repo root.
+    DOCS_DIR: ClassVar[str] = "docs/configuration_options"
+    #: The index page, kept at the historical path so existing links keep working.
+    DOCS_INDEX: ClassVar[str] = "docs/configuration_options.md"
+
+    @staticmethod
+    def _docs_slug(group_title: str) -> str:
+        """Filename stem for a group's page."""
+        return re.sub(r"[^a-z0-9]+", "-", group_title.lower()).strip("-")
+
+    @classmethod
+    def _docs_option_index(cls):
+        """-> {option_name: "<slug>.md#<anchor>"} for cross-linking between pages."""
+        return {
+            name: f"{cls._docs_slug(title)}.md#{name}" for title, fields in cls._fields_by_group() for name, _ in fields
+        }
+
+    @classmethod
+    def _link_option_mentions(cls, text: str, index: dict, self_page: str) -> str:
+        """Turn `option_name` / 'option_name' mentions in prose into links to that option."""
+
+        def repl(match):
+            name = match.group(2)
+            target = index.get(name)
+            if not target:
+                return match.group(0)
+            if target.startswith(f"{self_page}#"):
+                target = target[len(self_page) :]
+            return f"[`{name}`]({target})"
+
+        # only inside backticks or single quotes, so we never rewrite a real command line
+        return re.sub(r"(`|')([a-z][a-z0-9_]{3,})\1", repl, text)
+
+    @classmethod
+    def dump_help_config_markdown(cls):
+        """All options as one markdown string, grouped by domain (used by `sct.py conf-docs`)."""
+        pages = cls.dump_help_config_markdown_pages()
+        index = pages.pop(cls.DOCS_INDEX)
+        return index + "\n\n" + "\n\n".join(pages[k] for k in sorted(pages))
+
+    @classmethod
+    def dump_help_config_markdown_pages(cls) -> dict:  # noqa: PLR0914
+        """-> {path: markdown} for the index page and one page per option group.
+
+        Split per group because a single 5,000-line page is not browsable; the index keeps the
+        historical `docs/configuration_options.md` path so existing links still resolve.
+        """
+        defaults, backend_defaults = cls._get_defaults_for_docs()
+        groups = cls._fields_by_group()
+        option_index = cls._docs_option_index()
+
+        def strip_help_text(text, preserve_indent=False):
+            if preserve_indent:
+                output = [line.rstrip() for line in dedent(text).splitlines()]
+            else:
+                output = [l.strip() for l in text.splitlines()]
+            return "\n".join(output[1 if not output[0] else 0 : -1 if not output[-1] else None])
+
+        pages = {}
+
+        # ---- per-group pages -------------------------------------------------
+        for group_title, group_fields in groups:
+            slug = cls._docs_slug(group_title)
+            page = f"# {group_title}\n\n"
+            page += f"[← All configuration options]({pathlib.Path(cls.DOCS_INDEX).name})\n"
+
+            blurb = cls._group_blurb(group_title)
+            if blurb:
+                page += f"\n{blurb}\n"
+
+            page += f"\n**{len(group_fields)} options.** Jump to: "
+            page += " · ".join(f"[{name}](#{name})" for name, _ in group_fields)
+            page += "\n"
+
+            for field_name, field in group_fields:
+                help_text = "<br>".join(strip_help_text(field.description).splitlines()) if field.description else ""
+                appendable = " (appendable)" if is_config_option_appendable(field_name, cls) else ""
+                default_text = (
+                    cls._format_default_value_for_docs(defaults[field_name]) if field_name in defaults else "N/A"
+                )
+                backend_overrides = cls._get_backend_overrides_for_docs(field_name, defaults, backend_defaults)
+                field_metadata = getattr(field, "metadata", None)
+                input_type_meta = next((m for m in (field_metadata or []) if isinstance(m, InputType)), None)
+                output_type = cls.get_annotations_as_strings(field.annotation, field_metadata=field_metadata)
+                type_str = f"{input_type_meta.description} → {output_type}" if input_type_meta else output_type
+
+                page += (
+                    "\n\n"
+                    + dedent(f"""
+                    ## **{field_name}** / SCT_{field_name.upper()}
+
+                    {help_text}
+
+                    **default:** {default_text}
+
+                    **type:** {type_str}{appendable}
+                    """).strip()
+                )
+                if backend_overrides:
+                    page += f"\n\n**backend overrides:**\n{backend_overrides}"
+                page += "\n"
+
+            pages[f"{cls.DOCS_DIR}/{slug}.md"] = cls._link_option_mentions(page, option_index, f"{slug}.md")
+
+        # ---- index page ------------------------------------------------------
         header = """
             # scylla-cluster-tests configuration options
+
+            Every option can be set in a config file, or as an environment variable named
+            `SCT_<OPTION>` (upper-cased). Options are grouped by what they configure: cross-cutting
+            concerns first, then one page per backend, then one per test type.
 
             #### Appending with environment variables or with config files
             * **strings:** can be appended with adding `++` at the beginning of the string:
@@ -2618,69 +2750,34 @@ class SCTConfiguration(*CONFIG_GROUPS):
                    uppercase sub-keys with `__` (they'll be lowered, matching the common
                    convention) rather than the case-preserving dot form.
         """
-        defaults, backend_defaults = cls._get_defaults_for_docs()
+        index = strip_help_text(header, preserve_indent=True)
 
-        def strip_help_text(text, preserve_indent=False):
-            """
-            Strip all lines, and also remove empty lines from start or end.
+        total = sum(len(f) for _, f in groups)
+        index += f"\n\n## Groups\n\n{total} options across {len(groups)} groups.\n\n"
+        index += "| Group | Options | What it covers |\n|---|---:|---|\n"
+        for group_title, group_fields in groups:
+            slug = cls._docs_slug(group_title)
+            summary = (cls._group_blurb(group_title) or "").replace("\n", " ")
+            summary = " ".join(summary.split())
+            if len(summary) > 130:
+                summary = summary[:127].rsplit(" ", 1)[0] + "..."
+            index += (
+                f"| [{group_title}]({pathlib.Path(cls.DOCS_DIR).name}/{slug}.md) | {len(group_fields)} | {summary} |\n"
+            )
 
-            If *preserve_indent* is set, dedent to the common margin and keep each
-            line's *relative* indentation (so multi-line list-item continuations,
-            like the ones in *header* above, stay visually nested under their
-            bullet in the rendered markdown, matching this docstring's own
-            indentation) instead of flattening every line flush left.
-            """
-            if preserve_indent:
-                output = [line.rstrip() for line in dedent(text).splitlines()]
-            else:
-                output = [l.strip() for l in text.splitlines()]
-            return "\n".join(output[1 if not output[0] else 0 : -1 if not output[-1] else None])
+        index += "\n## All options, alphabetically\n\n"
+        index += "| Option | Environment variable | Group |\n|---|---|---|\n"
+        by_name = sorted(((name, title) for title, fields in groups for name, _ in fields), key=lambda kv: kv[0])
+        docs_dir = pathlib.Path(cls.DOCS_DIR).name
+        for name, group_title in by_name:
+            slug = cls._docs_slug(group_title)
+            index += (
+                f"| [`{name}`]({docs_dir}/{slug}.md#{name}) | `SCT_{name.upper()}` "
+                f"| [{group_title}]({docs_dir}/{slug}.md) |\n"
+            )
 
-        ret = strip_help_text(header, preserve_indent=True)
-
-        ret += "\n\n" + strip_help_text(
-            """
-            #### Options by group
-            The options below are grouped by domain -- cross-cutting concerns first, then one
-            section per backend, then one per test type. Each group mirrors a mixin module under
-            `sdcm/sct_config/mixins/`.
-        """,
-            preserve_indent=True,
-        )
-
-        for group_title, group_fields in cls._fields_by_group():
-            ret += f"\n\n# {group_title}\n"
-            for field_name, field in group_fields:
-                ret += "\n\n"
-                if description := field.description:
-                    help_text = "<br>".join(strip_help_text(description).splitlines())
-                else:
-                    help_text = ""
-
-                appendable = " (appendable)" if is_config_option_appendable(field_name, cls) else ""
-                if field_name in defaults:
-                    default_text = cls._format_default_value_for_docs(defaults[field_name])
-                else:
-                    default_text = "N/A"
-                backend_overrides = cls._get_backend_overrides_for_docs(field_name, defaults, backend_defaults)
-
-                field_metadata = getattr(field, "metadata", None)
-                input_type_meta = next((m for m in (field_metadata or []) if isinstance(m, InputType)), None)
-                output_type = cls.get_annotations_as_strings(field.annotation, field_metadata=field_metadata)
-                type_str = f"{input_type_meta.description} → {output_type}" if input_type_meta else output_type
-                ret += dedent(f"""
-                    ## **{field_name}** / SCT_{field_name.upper()}
-
-                    {help_text}
-
-                    **default:** {default_text}
-
-                    **type:** {type_str}{appendable}
-                    """).strip()
-                if backend_overrides:
-                    ret += f"\n\n**backend overrides:**\n{backend_overrides}"
-                ret += "\n"
-        return ret
+        pages[cls.DOCS_INDEX] = index
+        return pages
 
     @classmethod
     def dump_help_config_yaml(cls):

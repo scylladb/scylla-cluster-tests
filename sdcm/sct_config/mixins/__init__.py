@@ -28,6 +28,7 @@ that says more than its own name.
 
 from sdcm.sct_config.mixins.common import CommonConfigMixin
 from sdcm.sct_config.mixins.scylla import ScyllaConfigMixin
+from sdcm.sct_config.mixins.scylla_doctor import ScyllaDoctorConfigMixin
 from sdcm.sct_config.mixins.nemesis import NemesisConfigMixin
 from sdcm.sct_config.mixins.stress import StressConfigMixin
 from sdcm.sct_config.mixins.monitoring import MonitoringConfigMixin
@@ -63,6 +64,7 @@ CONFIG_GROUPS = (
     StressConfigMixin,
     MonitoringConfigMixin,
     LogsConfigMixin,
+    ScyllaDoctorConfigMixin,
     ManagerConfigMixin,
     AuxDbConfigMixin,
     AlternatorConfigMixin,
@@ -94,6 +96,7 @@ __all__ = [
     "StressConfigMixin",
     "MonitoringConfigMixin",
     "LogsConfigMixin",
+    "ScyllaDoctorConfigMixin",
     "ManagerConfigMixin",
     "AuxDbConfigMixin",
     "AlternatorConfigMixin",
