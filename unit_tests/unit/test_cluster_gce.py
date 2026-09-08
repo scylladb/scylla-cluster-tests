@@ -16,8 +16,9 @@
 from unittest.mock import MagicMock
 
 import pytest
+from google.cloud.compute_v1.types import Items, Metadata
 
-from sdcm.cluster_gce import GCECluster
+from sdcm.cluster_gce import GCECluster, gce_instance_node_index
 
 
 def _instance(name: str, zone: str) -> MagicMock:
@@ -144,3 +145,32 @@ def test_get_instances_by_name_ignores_other_regions():
     cluster.project = "test-project"
 
     assert GCECluster._get_instances_by_name(cluster, name="db-1", dc_idx=0) is None
+
+
+def _instance_with_index(name: str, node_index: str | None) -> MagicMock:
+    instance = _instance(name, "us-east1-a")
+    items = [] if node_index is None else [Items(key="NodeIndex", value=node_index)]
+    instance.metadata = Metadata(items=items)
+    return instance
+
+
+def test_instances_are_sorted_by_numeric_node_index():
+    """NodeIndex is a string in GCE metadata: sorted as text, node 10 would come before node 4."""
+    instances = [_instance_with_index(f"db-{index}", str(index)) for index in (10, 2, 4, 1, 7)]
+
+    assert sorted(instances, key=gce_instance_node_index) == [
+        instances[3],
+        instances[1],
+        instances[2],
+        instances[4],
+        instances[0],
+    ]
+
+
+@pytest.mark.parametrize("node_index", [pytest.param(None, id="missing"), pytest.param("not-a-number", id="garbage")])
+def test_instance_without_usable_node_index_sorts_first(node_index):
+    """A missing or unparsable NodeIndex must not blow up the comparison against numeric ones."""
+    broken = _instance_with_index("db-broken", node_index)
+    numbered = _instance_with_index("db-1", "1")
+
+    assert sorted([numbered, broken], key=gce_instance_node_index) == [broken, numbered]
