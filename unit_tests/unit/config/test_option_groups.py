@@ -67,7 +67,8 @@ PREFIX_CONVENTION = {
     "perf_": "performance",
     "keystore_": "common",
     "post_behavior_": "logs",
-    "scylla_doctor_": "logs",
+    "run_scylla_doctor": "scylla_doctor",
+    "scylla_doctor_": "scylla_doctor",
 }
 
 # Options whose name prefix says one thing and whose job says another. Each needs a reason.

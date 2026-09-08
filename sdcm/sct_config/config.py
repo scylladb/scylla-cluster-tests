@@ -393,6 +393,7 @@ def substitute_arch_markers(template: str, arch: str) -> str:
 >>>>>>> b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 def _nested_env_subkey(env_key: str, field_env: str, sep: str) -> str | None:
     """Return the nested sub-key of *env_key* for *field_env* under separator *sep*, or None if it doesn't nest under it.
 
@@ -464,6 +465,11 @@ def _nested_env_subkey(env_key: str, field_env: str, sep: str) -> str | None:
 >>>>>>> b5ed4bf03 (refactor(sct_config): extract types, helpers and defaults into modules)
 
 
+||||||| parent of 905145b03 (docs(sct_config): split the option reference by group, and finish the regrouping)
+
+
+=======
+>>>>>>> 905145b03 (docs(sct_config): split the option reference by group, and finish the regrouping)
 # SCT_KEYSTORE_* env vars this process exported itself (see the keystore
 # propagation at the end of SCTConfiguration.__init__), mapped to the value we
 # wrote.  The value matters, not just the name: environment variables outrank
@@ -1329,7 +1335,22 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     What stays here: the assembled model's own runtime state, the per-backend lookup tables, and
     the loading, validation and doc-generation logic that spans domains.
+<<<<<<< HEAD
 >>>>>>> 3bd271237 (refactor(sct_config): split field definitions into 25 domain mixins)
+||||||| parent of 905145b03 (docs(sct_config): split the option reference by group, and finish the regrouping)
+=======
+
+    This class is still large, and deliberately so for now -- the field split landed first so the
+    validation split has somewhere to move things to. Still to come (SCT-525 phase 4):
+
+    - the ~25 ``_validate_*`` methods move into the mixin that owns the fields they check, leaving
+      only genuinely cross-domain checks here;
+    - much of that validation can then be expressed as Pydantic ``@field_validator`` /
+      ``@model_validator`` hooks on the mixins instead of hand-rolled checks driven from
+      ``verify_configuration()``, which should shrink it further;
+    - ``__init__`` is ~560 lines of loading, image resolution and inline validation, and is the
+      other half of that work.
+>>>>>>> 905145b03 (docs(sct_config): split the option reference by group, and finish the regrouping)
     """
 
 <<<<<<< HEAD
@@ -7928,6 +7949,590 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if backtrace_decoding_disable_regex := self.get("backtrace_decoding_disable_regex"):
             re.compile(backtrace_decoding_disable_regex)
 
+<<<<<<< HEAD
+||||||| parent of 905145b03 (docs(sct_config): split the option reference by group, and finish the regrouping)
+        self._validate_perf_gradual_throttle_steps()
+
+        self._verify_migrator_source_params()
+        self._verify_emr_spark_mode()
+
+        if (nvme_test_type := self.get("nvme_self_test_type")) not in (1, 2):
+            raise ValueError(f"nvme_self_test_type must be 1 (short) or 2 (extended), got {nvme_test_type!r}")
+
+    def _get_normalized_arch(self, instance_type: str, region_name: str, default: str = "x86_64") -> str:
+        """Detect architecture from AWS instance type and normalize to Scylla package naming.
+
+        Args:
+            instance_type: AWS instance type (e.g. "i4i.large", "im4gn.xlarge").
+            region_name: AWS region to query.
+            default: Fallback architecture when detection fails.
+
+        Returns:
+            Normalized architecture string: "x86_64" or "aarch64".
+        """
+        try:
+            arch = get_arch_from_instance_type(instance_type, region_name=region_name)
+            # Normalize AWS arch naming ("arm64") to Scylla package naming ("aarch64")
+            if arch == "arm64":
+                arch = "aarch64"
+            return arch
+        except Exception:  # noqa: BLE001
+            self.log.warning(
+                "Could not detect architecture from instance type '%s' in %s, defaulting to '%s'",
+                instance_type,
+                region_name,
+                default,
+            )
+            return default
+
+    # perf_gradual_throttle_steps dict-entry fields: (key, is_valid, description-for-error-message)
+    _THROTTLE_STEP_FIELD_CHECKS: ClassVar[tuple] = (
+        ("threads", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
+        ("concurrency", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
+        ("rate", lambda v: isinstance(v, str), "a string"),
+        ("duration", lambda v: isinstance(v, str) and v, "a non-empty string"),
+        ("wait_no_compactions", lambda v: isinstance(v, bool), "a boolean"),
+    )
+
+    @staticmethod
+    def _validate_throttle_step_dict(workload: str, step_idx: int, step: dict) -> None:
+        """Validate a single dict-format perf_gradual_throttle_steps entry."""
+        if not step:
+            raise ValueError(
+                f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                f"dict must have at least one key (threads, concurrency, or rate)"
+            )
+        for key, is_valid, description in SCTConfiguration._THROTTLE_STEP_FIELD_CHECKS:
+            if key in step and not is_valid(step[key]):
+                raise ValueError(
+                    f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                    f"'{key}' must be {description}, got {step[key]!r}"
+                )
+
+    def _image_cloud(self) -> str | None:
+        backend = self.get("cluster_backend")
+        if backend == "xcloud":
+            provider = self.get("xcloud_provider")
+            return provider if provider in _LOADER_IMAGE_PARAMS else None
+        return _BACKEND_TO_IMAGE_CLOUD.get(backend)
+
+    def _resolve_loader_image_arch(self) -> None:
+        cloud = self._image_cloud()
+        if not cloud:
+            return
+        image_param, instance_param, region_param = _LOADER_IMAGE_PARAMS[cloud]
+        template = self.get(image_param) or ""
+        if not any(marker in template for marker in _ARCH_IMAGE_MARKERS):
+            return
+        regions = self.get(region_param) or []
+        if isinstance(regions, str):
+            regions = regions.split()
+        instance_type = self.get(instance_param) or ""
+        loader_arch = self._get_loader_arch(cloud, instance_type, (regions or [""])[0])
+        if loader_arch is None:
+            if is_arm_instance_type(cloud, instance_type):
+                raise ValueError(
+                    f"Cannot resolve {image_param}: architecture of Arm {cloud} loader instance type "
+                    f"'{instance_type}' is unknown, so an amd64 image would be selected. "
+                    f"Set sizing_loader.arch or add '{instance_type}' to the {cloud} instance catalog."
+                )
+            self.log.warning(
+                "Could not detect architecture for %s instance type '%s', defaulting to x86_64", cloud, instance_type
+            )
+            loader_arch = "x86_64"
+        elif loader_arch == "x86_64" and is_arm_instance_type(cloud, instance_type):
+            raise ValueError(
+                f"Cannot resolve {image_param}: {cloud} loader instance type '{instance_type}' is Arm "
+                f"but its architecture resolved to x86_64."
+            )
+        resolved = substitute_arch_markers(template, loader_arch)
+        if remaining := [marker for marker in _ARCH_IMAGE_MARKERS if marker in resolved]:
+            raise ValueError(f"Cannot resolve {image_param}: markers {remaining} survived in {resolved!r}")
+        self.log.info("Resolved %s for arch=%s: %s", image_param, loader_arch, resolved)
+        self[image_param] = resolved
+
+    def _stress_commands(self, env: dict | None = None) -> list[str]:
+        commands: list[str] = []
+        pending = [(env.get(param) if env and param in env else self.get(param)) for param in self.stress_cmd_params]
+        while pending:
+            value = pending.pop()
+            if isinstance(value, str):
+                commands.append(value)
+            elif isinstance(value, (list, tuple)):
+                pending.extend(value)
+        return commands
+
+    def _amd64_only_stress_tools(self, env: dict | None = None) -> list[str]:
+        commands = self._stress_commands(env)
+        tools = [
+            tool
+            for tool, markers in _AMD64_ONLY_STRESS_TOOLS.items()
+            if any(marker in command for command in commands for marker in markers)
+        ]
+        dns_routing = (
+            env.get("alternator_use_dns_routing")
+            if env and "alternator_use_dns_routing" in env
+            else self.get("alternator_use_dns_routing")
+        )
+        if dns_routing and any(_YCSB_COMMAND_MARKER in command for command in commands):
+            tools.append("alternator-dns")
+        return sorted(tools)
+
+    def _constrain_loader_arch_to_stress_tools(self, env: dict | None = None) -> None:
+        if self._sizing_role_arch("loader") or (
+            env and isinstance(env.get("sizing_loader"), dict) and env["sizing_loader"].get("arch")
+        ):
+            return
+        if not (tools := self._amd64_only_stress_tools(env)):
+            return
+        env_sizing_loader = env.get("sizing_loader") if env else None
+        sizing_loader = dict(
+            env_sizing_loader if isinstance(env_sizing_loader, dict) else (self.get("sizing_loader") or {})
+        )
+        if not sizing_loader:
+            return
+        sizing_loader["arch"] = "x86_64"
+        if isinstance(env_sizing_loader, dict):
+            env["sizing_loader"] = sizing_loader
+        self["sizing_loader"] = sizing_loader
+        self.log.info("Constraining loaders to x86_64, amd64-only stress tool images in use: %s", ", ".join(tools))
+
+    def _validate_loader_arch_supports_stress_tools(self) -> None:
+        if not (tools := self._amd64_only_stress_tools()):
+            return
+        cloud = backend_to_cloud(self.get("cluster_backend"), self.get("xcloud_provider"))
+        if not cloud:
+            return
+        instance_param = _SIZING_ROLE_PARAMS.get(cloud, {}).get("loader")
+        instance_type = (self.get(instance_param) or "") if instance_param else ""
+        if instance_type and is_arm_instance_type(cloud, instance_type):
+            raise ValueError(
+                f"Loader instance type '{instance_type}' is Arm, but these stress tools only publish "
+                f"linux/amd64 images: {', '.join(tools)}. Use an x86_64 loader instance type, "
+                f"or set sizing_loader with vcpu/memory constraints so the arch is chosen for you."
+            )
+
+    def _sizing_role_arch(self, role: str) -> str | None:
+        requested_arch = (self.get(f"sizing_{role}") or {}).get("arch")
+        if requested_arch:
+            return ARCH_ALIASES.get(str(requested_arch).strip().lower(), requested_arch)
+        return None
+
+    def _aws_instance_arch(self, instance_type: str, region_name: str) -> str | None:
+        try:
+            return get_arch_from_instance_type(instance_type, region_name=region_name)
+        except Exception:  # noqa: BLE001
+            self.log.warning(
+                "Could not detect architecture for aws instance type '%s' in %s",
+                instance_type,
+                region_name,
+            )
+            return None
+
+    def _get_loader_arch(self, cloud: str, instance_type: str, region_name: str) -> str | None:
+        if instance_type:
+            catalog_dir = pathlib.Path(__file__).parent.parent / "data" / "instance_catalog"
+            try:
+                if instance_info := InstanceCatalog.from_directory(catalog_dir).get_instance(cloud, instance_type):
+                    return instance_info.arch
+            except (FileNotFoundError, ValueError) as exc:
+                self.log.warning("Could not load instance catalog for %s arch lookup: %s", cloud, exc)
+            if cloud == "aws" and (aws_arch := self._aws_instance_arch(instance_type, region_name)):
+                return aws_arch
+        if sizing_resolved_arch := getattr(self, "_sizing_resolved_arch", {}).get("loader"):
+            return sizing_resolved_arch
+        return self._sizing_role_arch("loader")
+
+    def _validate_perf_gradual_throttle_steps(self):
+        """Validate perf_gradual_throttle_steps configuration parameter."""
+        if not (performance_throughput_params := self.get("perf_gradual_throttle_steps")):
+            return
+
+        for workload, params in performance_throughput_params.items():
+            if not isinstance(params, list):
+                raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
+
+            # Validate each step - can be string, int (backward compatible), or dict (new format)
+            # Convert integers to strings for backward compatibility
+            for step_idx, step in enumerate(params):
+                if isinstance(step, int):
+                    # Integer format - convert to string for backward compatibility
+                    params[step_idx] = str(step)
+                elif isinstance(step, str):
+                    # String format for backward compatibility (cassandra-stress)
+                    continue
+                elif isinstance(step, dict):
+                    self._validate_throttle_step_dict(workload, step_idx, step)
+                else:
+                    raise ValueError(
+                        f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                        f"each step must be a string, int, or dict, got {type(step).__name__}"
+                    )
+
+            # Validate perf_gradual_threads if using string format or if dict steps don't have threads
+            has_dict_steps = any(isinstance(step, dict) for step in params)
+            all_dict_steps_have_threads = all(
+                isinstance(step, dict) and "threads" in step for step in params if isinstance(step, dict)
+            )
+
+            # Only require perf_gradual_threads if using string format or dict without threads
+            if not has_dict_steps or not all_dict_steps_have_threads:
+                if not (gradual_threads := self.get("perf_gradual_threads")):
+                    raise ValueError(
+                        "perf_gradual_threads should be defined when using string format "
+                        "or when dict steps don't specify threads"
+                    )
+
+                if workload not in gradual_threads:
+                    raise ValueError(
+                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter"
+                    )
+
+                if not isinstance(gradual_threads[workload], list | int):
+                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
+
+                if isinstance(gradual_threads[workload], int):
+                    gradual_threads[workload] = [gradual_threads[workload]]
+
+                for thread_count in gradual_threads[workload]:
+                    if not isinstance(thread_count, int):
+                        raise ValueError(
+                            f"Invalid thread count type for '{workload}': {thread_count} "
+                            f"(type: {type(thread_count).__name__})"
+                        )
+
+                # The value of perf_gradual_threads[load] must be either:
+                #   - a single-element list (applied to all throttle steps) or integer
+                #   - a list with the same length as perf_gradual_throttle_steps[workload] (one thread count per step).
+                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
+                    raise ValueError(
+                        f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
+                        f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
+                    )
+
+    def _validate_docker_simulated_racks(self) -> None:
+        """Reject `simulated_racks` on Docker images that predate the --dc/--rack entrypoint arguments.
+
+        On Docker a rack is injected as a `--dc`/`--rack` entrypoint argument at container creation.
+        Scylla 2026.1 is the first release whose entrypoint accepts them and writes
+        `cassandra-rackdc.properties` before the first boot; older images forward the arguments
+        verbatim to the Scylla binary, which rejects them and exits, so the container never comes up.
+
+        The configuration is unrunnable, so fail here rather than at container creation: an error
+        naming the version requirement beats a container that dies on startup with no explanation.
+        A Docker test-case that must run on older images sets `simulated_racks: 1` itself.
+        """
+        scylla_version = self.get("scylla_version") or ""
+        try:
+            image_version = ComparableScyllaVersion(scylla_version)
+        except ValueError:
+            # Branched versions ('master:latest' and friends) are not comparable and are always new enough.
+            self.log.debug(
+                "Cannot determine whether Scylla docker image '%s' supports the --rack entrypoint argument "
+                "(scylla_version=%r); assuming it does.",
+                self.get("docker_image"),
+                scylla_version,
+            )
+            return
+        if image_version < DOCKER_RACK_ARG_MIN_VERSION:
+            raise ValueError(
+                f"simulated_racks={self.get('simulated_racks')} is not supported on Scylla {scylla_version} "
+                f"(docker backend): the --dc/--rack entrypoint arguments were added in "
+                f"{DOCKER_RACK_ARG_MIN_VERSION}. Use a 2026.1+ image or set simulated_racks: 1."
+            )
+
+=======
+        self._validate_perf_gradual_throttle_steps()
+
+        self._verify_migrator_source_params()
+        self._verify_emr_spark_mode()
+
+        if (nvme_test_type := self.get("nvme_self_test_type")) not in (1, 2):
+            raise ValueError(f"nvme_self_test_type must be 1 (short) or 2 (extended), got {nvme_test_type!r}")
+
+    def _get_normalized_arch(self, instance_type: str, region_name: str, default: str = "x86_64") -> str:
+        """Detect architecture from AWS instance type and normalize to Scylla package naming.
+
+        Args:
+            instance_type: AWS instance type (e.g. "i4i.large", "im4gn.xlarge").
+            region_name: AWS region to query.
+            default: Fallback architecture when detection fails.
+
+        Returns:
+            Normalized architecture string: "x86_64" or "aarch64".
+        """
+        try:
+            arch = get_arch_from_instance_type(instance_type, region_name=region_name)
+            # Normalize AWS arch naming ("arm64") to Scylla package naming ("aarch64")
+            if arch == "arm64":
+                arch = "aarch64"
+            return arch
+        except Exception:  # noqa: BLE001
+            self.log.warning(
+                "Could not detect architecture from instance type '%s' in %s, defaulting to '%s'",
+                instance_type,
+                region_name,
+                default,
+            )
+            return default
+
+    # perf_gradual_throttle_steps dict-entry fields: (key, is_valid, description-for-error-message)
+    _THROTTLE_STEP_FIELD_CHECKS: ClassVar[tuple] = (
+        ("threads", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
+        ("concurrency", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
+        ("rate", lambda v: isinstance(v, str), "a string"),
+        ("duration", lambda v: isinstance(v, str) and v, "a non-empty string"),
+        ("wait_no_compactions", lambda v: isinstance(v, bool), "a boolean"),
+    )
+
+    @staticmethod
+    def _validate_throttle_step_dict(workload: str, step_idx: int, step: dict) -> None:
+        """Validate a single dict-format perf_gradual_throttle_steps entry."""
+        if not step:
+            raise ValueError(
+                f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                f"dict must have at least one key (threads, concurrency, or rate)"
+            )
+        for key, is_valid, description in SCTConfiguration._THROTTLE_STEP_FIELD_CHECKS:
+            if key in step and not is_valid(step[key]):
+                raise ValueError(
+                    f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                    f"'{key}' must be {description}, got {step[key]!r}"
+                )
+
+    def _image_cloud(self) -> str | None:
+        backend = self.get("cluster_backend")
+        if backend == "xcloud":
+            provider = self.get("xcloud_provider")
+            return provider if provider in _LOADER_IMAGE_PARAMS else None
+        return _BACKEND_TO_IMAGE_CLOUD.get(backend)
+
+    def _resolve_loader_image_arch(self) -> None:
+        cloud = self._image_cloud()
+        if not cloud:
+            return
+        image_param, instance_param, region_param = _LOADER_IMAGE_PARAMS[cloud]
+        template = self.get(image_param) or ""
+        if not any(marker in template for marker in _ARCH_IMAGE_MARKERS):
+            return
+        regions = self.get(region_param) or []
+        if isinstance(regions, str):
+            regions = regions.split()
+        instance_type = self.get(instance_param) or ""
+        loader_arch = self._get_loader_arch(cloud, instance_type, (regions or [""])[0])
+        if loader_arch is None:
+            if is_arm_instance_type(cloud, instance_type):
+                raise ValueError(
+                    f"Cannot resolve {image_param}: architecture of Arm {cloud} loader instance type "
+                    f"'{instance_type}' is unknown, so an amd64 image would be selected. "
+                    f"Set sizing_loader.arch or add '{instance_type}' to the {cloud} instance catalog."
+                )
+            self.log.warning(
+                "Could not detect architecture for %s instance type '%s', defaulting to x86_64", cloud, instance_type
+            )
+            loader_arch = "x86_64"
+        elif loader_arch == "x86_64" and is_arm_instance_type(cloud, instance_type):
+            raise ValueError(
+                f"Cannot resolve {image_param}: {cloud} loader instance type '{instance_type}' is Arm "
+                f"but its architecture resolved to x86_64."
+            )
+        resolved = substitute_arch_markers(template, loader_arch)
+        if remaining := [marker for marker in _ARCH_IMAGE_MARKERS if marker in resolved]:
+            raise ValueError(f"Cannot resolve {image_param}: markers {remaining} survived in {resolved!r}")
+        self.log.info("Resolved %s for arch=%s: %s", image_param, loader_arch, resolved)
+        self[image_param] = resolved
+
+    def _stress_commands(self, env: dict | None = None) -> list[str]:
+        commands: list[str] = []
+        pending = [(env.get(param) if env and param in env else self.get(param)) for param in self.stress_cmd_params]
+        while pending:
+            value = pending.pop()
+            if isinstance(value, str):
+                commands.append(value)
+            elif isinstance(value, (list, tuple)):
+                pending.extend(value)
+        return commands
+
+    def _amd64_only_stress_tools(self, env: dict | None = None) -> list[str]:
+        commands = self._stress_commands(env)
+        tools = [
+            tool
+            for tool, markers in _AMD64_ONLY_STRESS_TOOLS.items()
+            if any(marker in command for command in commands for marker in markers)
+        ]
+        dns_routing = (
+            env.get("alternator_use_dns_routing")
+            if env and "alternator_use_dns_routing" in env
+            else self.get("alternator_use_dns_routing")
+        )
+        if dns_routing and any(_YCSB_COMMAND_MARKER in command for command in commands):
+            tools.append("alternator-dns")
+        return sorted(tools)
+
+    def _constrain_loader_arch_to_stress_tools(self, env: dict | None = None) -> None:
+        if self._sizing_role_arch("loader") or (
+            env and isinstance(env.get("sizing_loader"), dict) and env["sizing_loader"].get("arch")
+        ):
+            return
+        if not (tools := self._amd64_only_stress_tools(env)):
+            return
+        env_sizing_loader = env.get("sizing_loader") if env else None
+        sizing_loader = dict(
+            env_sizing_loader if isinstance(env_sizing_loader, dict) else (self.get("sizing_loader") or {})
+        )
+        if not sizing_loader:
+            return
+        sizing_loader["arch"] = "x86_64"
+        if isinstance(env_sizing_loader, dict):
+            env["sizing_loader"] = sizing_loader
+        self["sizing_loader"] = sizing_loader
+        self.log.info("Constraining loaders to x86_64, amd64-only stress tool images in use: %s", ", ".join(tools))
+
+    def _validate_loader_arch_supports_stress_tools(self) -> None:
+        if not (tools := self._amd64_only_stress_tools()):
+            return
+        cloud = backend_to_cloud(self.get("cluster_backend"), self.get("xcloud_provider"))
+        if not cloud:
+            return
+        instance_param = _SIZING_ROLE_PARAMS.get(cloud, {}).get("loader")
+        instance_type = (self.get(instance_param) or "") if instance_param else ""
+        if instance_type and is_arm_instance_type(cloud, instance_type):
+            raise ValueError(
+                f"Loader instance type '{instance_type}' is Arm, but these stress tools only publish "
+                f"linux/amd64 images: {', '.join(tools)}. Use an x86_64 loader instance type, "
+                f"or set sizing_loader with vcpu/memory constraints so the arch is chosen for you."
+            )
+
+    def _sizing_role_arch(self, role: str) -> str | None:
+        requested_arch = (self.get(f"sizing_{role}") or {}).get("arch")
+        if requested_arch:
+            return ARCH_ALIASES.get(str(requested_arch).strip().lower(), requested_arch)
+        return None
+
+    def _aws_instance_arch(self, instance_type: str, region_name: str) -> str | None:
+        try:
+            return get_arch_from_instance_type(instance_type, region_name=region_name)
+        except Exception:  # noqa: BLE001
+            self.log.warning(
+                "Could not detect architecture for aws instance type '%s' in %s",
+                instance_type,
+                region_name,
+            )
+            return None
+
+    def _get_loader_arch(self, cloud: str, instance_type: str, region_name: str) -> str | None:
+        if instance_type:
+            catalog_dir = pathlib.Path(sct_abs_path("data/instance_catalog"))
+            try:
+                if instance_info := InstanceCatalog.from_directory(catalog_dir).get_instance(cloud, instance_type):
+                    return instance_info.arch
+            except (FileNotFoundError, ValueError) as exc:
+                self.log.warning("Could not load instance catalog for %s arch lookup: %s", cloud, exc)
+            if cloud == "aws" and (aws_arch := self._aws_instance_arch(instance_type, region_name)):
+                return aws_arch
+        if sizing_resolved_arch := getattr(self, "_sizing_resolved_arch", {}).get("loader"):
+            return sizing_resolved_arch
+        return self._sizing_role_arch("loader")
+
+    def _validate_perf_gradual_throttle_steps(self):
+        """Validate perf_gradual_throttle_steps configuration parameter."""
+        if not (performance_throughput_params := self.get("perf_gradual_throttle_steps")):
+            return
+
+        for workload, params in performance_throughput_params.items():
+            if not isinstance(params, list):
+                raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
+
+            # Validate each step - can be string, int (backward compatible), or dict (new format)
+            # Convert integers to strings for backward compatibility
+            for step_idx, step in enumerate(params):
+                if isinstance(step, int):
+                    # Integer format - convert to string for backward compatibility
+                    params[step_idx] = str(step)
+                elif isinstance(step, str):
+                    # String format for backward compatibility (cassandra-stress)
+                    continue
+                elif isinstance(step, dict):
+                    self._validate_throttle_step_dict(workload, step_idx, step)
+                else:
+                    raise ValueError(
+                        f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                        f"each step must be a string, int, or dict, got {type(step).__name__}"
+                    )
+
+            # Validate perf_gradual_threads if using string format or if dict steps don't have threads
+            has_dict_steps = any(isinstance(step, dict) for step in params)
+            all_dict_steps_have_threads = all(
+                isinstance(step, dict) and "threads" in step for step in params if isinstance(step, dict)
+            )
+
+            # Only require perf_gradual_threads if using string format or dict without threads
+            if not has_dict_steps or not all_dict_steps_have_threads:
+                if not (gradual_threads := self.get("perf_gradual_threads")):
+                    raise ValueError(
+                        "perf_gradual_threads should be defined when using string format "
+                        "or when dict steps don't specify threads"
+                    )
+
+                if workload not in gradual_threads:
+                    raise ValueError(
+                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter"
+                    )
+
+                if not isinstance(gradual_threads[workload], list | int):
+                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
+
+                if isinstance(gradual_threads[workload], int):
+                    gradual_threads[workload] = [gradual_threads[workload]]
+
+                for thread_count in gradual_threads[workload]:
+                    if not isinstance(thread_count, int):
+                        raise ValueError(
+                            f"Invalid thread count type for '{workload}': {thread_count} "
+                            f"(type: {type(thread_count).__name__})"
+                        )
+
+                # The value of perf_gradual_threads[load] must be either:
+                #   - a single-element list (applied to all throttle steps) or integer
+                #   - a list with the same length as perf_gradual_throttle_steps[workload] (one thread count per step).
+                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
+                    raise ValueError(
+                        f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
+                        f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
+                    )
+
+    def _validate_docker_simulated_racks(self) -> None:
+        """Reject `simulated_racks` on Docker images that predate the --dc/--rack entrypoint arguments.
+
+        On Docker a rack is injected as a `--dc`/`--rack` entrypoint argument at container creation.
+        Scylla 2026.1 is the first release whose entrypoint accepts them and writes
+        `cassandra-rackdc.properties` before the first boot; older images forward the arguments
+        verbatim to the Scylla binary, which rejects them and exits, so the container never comes up.
+
+        The configuration is unrunnable, so fail here rather than at container creation: an error
+        naming the version requirement beats a container that dies on startup with no explanation.
+        A Docker test-case that must run on older images sets `simulated_racks: 1` itself.
+        """
+        scylla_version = self.get("scylla_version") or ""
+        try:
+            image_version = ComparableScyllaVersion(scylla_version)
+        except ValueError:
+            # Branched versions ('master:latest' and friends) are not comparable and are always new enough.
+            self.log.debug(
+                "Cannot determine whether Scylla docker image '%s' supports the --rack entrypoint argument "
+                "(scylla_version=%r); assuming it does.",
+                self.get("docker_image"),
+                scylla_version,
+            )
+            return
+        if image_version < DOCKER_RACK_ARG_MIN_VERSION:
+            raise ValueError(
+                f"simulated_racks={self.get('simulated_racks')} is not supported on Scylla {scylla_version} "
+                f"(docker backend): the --dc/--rack entrypoint arguments were added in "
+                f"{DOCKER_RACK_ARG_MIN_VERSION}. Use a 2026.1+ image or set simulated_racks: 1."
+            )
+
+>>>>>>> 905145b03 (docs(sct_config): split the option reference by group, and finish the regrouping)
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get("docker_image")
         scylla_version = self.get("scylla_version")
@@ -8511,14 +9116,137 @@ class SCTConfiguration(*CONFIG_GROUPS):
         return anyconfig.dumps(self.dict(), ac_parser="yaml")
 
     @classmethod
-    def dump_help_config_markdown(cls):
-        """
-        Dump all configuration options with their defaults and help to string in markdown format
+    def _group_blurb(cls, group_title: str) -> str:
+        """The prose from a mixin's docstring, for the top of its documentation page.
 
-        :return: str
+        Everything between the summary line and the boilerplate "See ``sdcm.sct_config.mixins``"
+        pointer, dedented. This is how per-group guidance (e.g. which stress option belongs to
+        which tool) reaches the generated docs instead of only the source.
         """
+        mixin = next((m for m in CONFIG_GROUPS if m.config_group == group_title), None)
+        if not mixin or not mixin.__doc__:
+            return ""
+        body = dedent(mixin.__doc__).strip().splitlines()
+        body = body[1:]  # drop the summary line, it is already the page heading
+        out = []
+        for line in body:
+            if line.strip().startswith("See ``sdcm.sct_config.mixins``"):
+                break
+            out.append(line)
+        # docstrings mix RST double-backticks with markdown; the pages are markdown
+        return re.sub(r"(?<!`)``(?!`)([^`\n]+)(?<!`)``(?!`)", r"`\1`", "\n".join(out)).strip()
+
+    #: Where the per-group option pages live, relative to the repo root.
+    DOCS_DIR: ClassVar[str] = "docs/configuration_options"
+    #: The index page, kept at the historical path so existing links keep working.
+    DOCS_INDEX: ClassVar[str] = "docs/configuration_options.md"
+
+    @staticmethod
+    def _docs_slug(group_title: str) -> str:
+        """Filename stem for a group's page."""
+        return re.sub(r"[^a-z0-9]+", "-", group_title.lower()).strip("-")
+
+    @classmethod
+    def _docs_option_index(cls):
+        """-> {option_name: "<slug>.md#<anchor>"} for cross-linking between pages."""
+        return {
+            name: f"{cls._docs_slug(title)}.md#{name}" for title, fields in cls._fields_by_group() for name, _ in fields
+        }
+
+    @classmethod
+    def _link_option_mentions(cls, text: str, index: dict, self_page: str) -> str:
+        """Turn `option_name` / 'option_name' mentions in prose into links to that option."""
+
+        def repl(match):
+            name = match.group(2)
+            target = index.get(name)
+            if not target:
+                return match.group(0)
+            if target.startswith(f"{self_page}#"):
+                target = target[len(self_page) :]
+            return f"[`{name}`]({target})"
+
+        # only inside backticks or single quotes, so we never rewrite a real command line
+        return re.sub(r"(`|')([a-z][a-z0-9_]{3,})\1", repl, text)
+
+    @classmethod
+    def dump_help_config_markdown(cls):
+        """All options as one markdown string, grouped by domain (used by `sct.py conf-docs`)."""
+        pages = cls.dump_help_config_markdown_pages()
+        index = pages.pop(cls.DOCS_INDEX)
+        return index + "\n\n" + "\n\n".join(pages[k] for k in sorted(pages))
+
+    @classmethod
+    def dump_help_config_markdown_pages(cls) -> dict:  # noqa: PLR0914
+        """-> {path: markdown} for the index page and one page per option group.
+
+        Split per group because a single 5,000-line page is not browsable; the index keeps the
+        historical `docs/configuration_options.md` path so existing links still resolve.
+        """
+        defaults, backend_defaults = cls._get_defaults_for_docs()
+        groups = cls._fields_by_group()
+        option_index = cls._docs_option_index()
+
+        def strip_help_text(text, preserve_indent=False):
+            if preserve_indent:
+                output = [line.rstrip() for line in dedent(text).splitlines()]
+            else:
+                output = [l.strip() for l in text.splitlines()]
+            return "\n".join(output[1 if not output[0] else 0 : -1 if not output[-1] else None])
+
+        pages = {}
+
+        # ---- per-group pages -------------------------------------------------
+        for group_title, group_fields in groups:
+            slug = cls._docs_slug(group_title)
+            page = f"# {group_title}\n\n"
+            page += f"[← All configuration options]({pathlib.Path(cls.DOCS_INDEX).name})\n"
+
+            blurb = cls._group_blurb(group_title)
+            if blurb:
+                page += f"\n{blurb}\n"
+
+            page += f"\n**{len(group_fields)} options.** Jump to: "
+            page += " · ".join(f"[{name}](#{name})" for name, _ in group_fields)
+            page += "\n"
+
+            for field_name, field in group_fields:
+                help_text = "<br>".join(strip_help_text(field.description).splitlines()) if field.description else ""
+                appendable = " (appendable)" if is_config_option_appendable(field_name, cls) else ""
+                default_text = (
+                    cls._format_default_value_for_docs(defaults[field_name]) if field_name in defaults else "N/A"
+                )
+                backend_overrides = cls._get_backend_overrides_for_docs(field_name, defaults, backend_defaults)
+                field_metadata = getattr(field, "metadata", None)
+                input_type_meta = next((m for m in (field_metadata or []) if isinstance(m, InputType)), None)
+                output_type = cls.get_annotations_as_strings(field.annotation, field_metadata=field_metadata)
+                type_str = f"{input_type_meta.description} → {output_type}" if input_type_meta else output_type
+
+                page += (
+                    "\n\n"
+                    + dedent(f"""
+                    ## **{field_name}** / SCT_{field_name.upper()}
+
+                    {help_text}
+
+                    **default:** {default_text}
+
+                    **type:** {type_str}{appendable}
+                    """).strip()
+                )
+                if backend_overrides:
+                    page += f"\n\n**backend overrides:**\n{backend_overrides}"
+                page += "\n"
+
+            pages[f"{cls.DOCS_DIR}/{slug}.md"] = cls._link_option_mentions(page, option_index, f"{slug}.md")
+
+        # ---- index page ------------------------------------------------------
         header = """
             # scylla-cluster-tests configuration options
+
+            Every option can be set in a config file, or as an environment variable named
+            `SCT_<OPTION>` (upper-cased). Options are grouped by what they configure: cross-cutting
+            concerns first, then one page per backend, then one per test type.
 
             #### Appending with environment variables or with config files
             * **strings:** can be appended with adding `++` at the beginning of the string:
@@ -8542,24 +9270,39 @@ class SCTConfiguration(*CONFIG_GROUPS):
                    uppercase sub-keys with `__` (they'll be lowered, matching the common
                    convention) rather than the case-preserving dot form.
         """
+<<<<<<< HEAD
         defaults = anyconfig.load(sct_abs_path("defaults/test_default.yaml"))
+||||||| parent of 905145b03 (docs(sct_config): split the option reference by group, and finish the regrouping)
+        defaults, backend_defaults = cls._get_defaults_for_docs()
+=======
+        index = strip_help_text(header, preserve_indent=True)
+>>>>>>> 905145b03 (docs(sct_config): split the option reference by group, and finish the regrouping)
 
-        def strip_help_text(text, preserve_indent=False):
-            """
-            Strip all lines, and also remove empty lines from start or end.
+        total = sum(len(f) for _, f in groups)
+        index += f"\n\n## Groups\n\n{total} options across {len(groups)} groups.\n\n"
+        index += "| Group | Options | What it covers |\n|---|---:|---|\n"
+        for group_title, group_fields in groups:
+            slug = cls._docs_slug(group_title)
+            summary = (cls._group_blurb(group_title) or "").replace("\n", " ")
+            summary = " ".join(summary.split())
+            if len(summary) > 130:
+                summary = summary[:127].rsplit(" ", 1)[0] + "..."
+            index += (
+                f"| [{group_title}]({pathlib.Path(cls.DOCS_DIR).name}/{slug}.md) | {len(group_fields)} | {summary} |\n"
+            )
 
-            If *preserve_indent* is set, dedent to the common margin and keep each
-            line's *relative* indentation (so multi-line list-item continuations,
-            like the ones in *header* above, stay visually nested under their
-            bullet in the rendered markdown, matching this docstring's own
-            indentation) instead of flattening every line flush left.
-            """
-            if preserve_indent:
-                output = [line.rstrip() for line in dedent(text).splitlines()]
-            else:
-                output = [l.strip() for l in text.splitlines()]
-            return "\n".join(output[1 if not output[0] else 0 : -1 if not output[-1] else None])
+        index += "\n## All options, alphabetically\n\n"
+        index += "| Option | Environment variable | Group |\n|---|---|---|\n"
+        by_name = sorted(((name, title) for title, fields in groups for name, _ in fields), key=lambda kv: kv[0])
+        docs_dir = pathlib.Path(cls.DOCS_DIR).name
+        for name, group_title in by_name:
+            slug = cls._docs_slug(group_title)
+            index += (
+                f"| [`{name}`]({docs_dir}/{slug}.md#{name}) | `SCT_{name.upper()}` "
+                f"| [{group_title}]({docs_dir}/{slug}.md) |\n"
+            )
 
+<<<<<<< HEAD
         ret = strip_help_text(header, preserve_indent=True)
 
 <<<<<<< HEAD
@@ -8684,6 +9427,56 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 ret += "\n"
 >>>>>>> 3bd271237 (refactor(sct_config): split field definitions into 25 domain mixins)
         return ret
+||||||| parent of 905145b03 (docs(sct_config): split the option reference by group, and finish the regrouping)
+        ret = strip_help_text(header, preserve_indent=True)
+
+        ret += "\n\n" + strip_help_text(
+            """
+            #### Options by group
+            The options below are grouped by domain -- cross-cutting concerns first, then one
+            section per backend, then one per test type. Each group mirrors a mixin module under
+            `sdcm/sct_config/mixins/`.
+        """,
+            preserve_indent=True,
+        )
+
+        for group_title, group_fields in cls._fields_by_group():
+            ret += f"\n\n# {group_title}\n"
+            for field_name, field in group_fields:
+                ret += "\n\n"
+                if description := field.description:
+                    help_text = "<br>".join(strip_help_text(description).splitlines())
+                else:
+                    help_text = ""
+
+                appendable = " (appendable)" if is_config_option_appendable(field_name, cls) else ""
+                if field_name in defaults:
+                    default_text = cls._format_default_value_for_docs(defaults[field_name])
+                else:
+                    default_text = "N/A"
+                backend_overrides = cls._get_backend_overrides_for_docs(field_name, defaults, backend_defaults)
+
+                field_metadata = getattr(field, "metadata", None)
+                input_type_meta = next((m for m in (field_metadata or []) if isinstance(m, InputType)), None)
+                output_type = cls.get_annotations_as_strings(field.annotation, field_metadata=field_metadata)
+                type_str = f"{input_type_meta.description} → {output_type}" if input_type_meta else output_type
+                ret += dedent(f"""
+                    ## **{field_name}** / SCT_{field_name.upper()}
+
+                    {help_text}
+
+                    **default:** {default_text}
+
+                    **type:** {type_str}{appendable}
+                    """).strip()
+                if backend_overrides:
+                    ret += f"\n\n**backend overrides:**\n{backend_overrides}"
+                ret += "\n"
+        return ret
+=======
+        pages[cls.DOCS_INDEX] = index
+        return pages
+>>>>>>> 905145b03 (docs(sct_config): split the option reference by group, and finish the regrouping)
 
     @classmethod
     def dump_help_config_yaml(cls):

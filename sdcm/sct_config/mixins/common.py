@@ -252,8 +252,17 @@ class CommonConfigMixin(BaseModel):
         `reuse_cluster: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71`
         """,
     )
-    sct_aws_account_id: String = SctField(
-        description="AWS account id on behalf of which the test is run",
+    root_disk_size_db: int = SctField(
+        description="Root (boot) disk size in GB for the DB nodes.",
+    )
+    root_disk_size_loader: int = SctField(
+        description="Root (boot) disk size in GB for the loader nodes.",
+    )
+    root_disk_size_monitor: int = SctField(
+        description="Root (boot) disk size in GB for the monitoring node.",
+    )
+    root_disk_size_runner: int = SctField(
+        description="root disk size in Gb for sct-runner",
     )
     sct_public_ip: String = SctField(
         description="""
@@ -285,13 +294,24 @@ class CommonConfigMixin(BaseModel):
         default=None, description="Cloud-agnostic instance sizing constraints for db_oracle nodes"
     )
     sizing_loader: dict | None = SctField(
-        default=None, description="Cloud-agnostic instance sizing constraints for loader nodes"
+        default=None,
+        description=(
+            "Cloud-agnostic instance sizing constraints for loader nodes. "
+            "Loaders default to Arm. A stress tool whose loader image is published for linux/amd64 "
+            "only (cassandra-harry, hydra-kcl, ndbench, nosqlbench, and the alternator DNS sidecar "
+            "used by YCSB when alternator_use_dns_routing is set) sets arch to x86_64 for you. "
+            "Set arch here to pick the architecture yourself"
+        ),
     )
     sizing_monitor: dict | None = SctField(
         default=None, description="Cloud-agnostic instance sizing constraints for monitor nodes"
     )
     skip_test_stages: DictOrStr = SctField(
-        description="Skip selected stages of a test scenario",
+        description="""
+            Skip selected stages of a test scenario, as a mapping of stage name to true/false
+            (e.g. `{"setup": true}`). Used to reuse a cluster across runs or to shorten a debug
+            cycle. See `docs/skip-test-stages.md` for the stage names and what each one covers.
+        """,
     )
     ssh_transport: Literal["libssh2", "fabric"] = SctField(
         description="""Set type of ssh library to use. Could be 'libssh2' (default) or 'fabric'""",
@@ -308,7 +328,12 @@ class CommonConfigMixin(BaseModel):
     )
     test_metadata: Annotated[TestMetadata | None, BeforeValidator(dict_or_str_or_pydantic)] = SctField(
         description=(
-            "Structured metadata for test documentation and labeling. Validated by pydantic model. Flows to Argus."
+            "Structured metadata for test documentation and labeling, embedded in the test-case "
+            "YAML and validated on config load by `sdcm.test_metadata.TestMetadata`. Flows to "
+            "Argus. Covers description, tier, test_type, stress_tools, nemesis_labels and "
+            "features; see `skills/reviewing-pipeline-docs/` for the field-by-field guide and "
+            "`skills/labeling-pipelines/references/taxonomy-values.md` for the accepted values. "
+            "`sct.py lint-test-docs` checks coverage."
         ),
     )
     test_method: String = SctField(
@@ -329,11 +354,6 @@ class CommonConfigMixin(BaseModel):
     )
     user_prefix: String = SctField(
         description="the prefix of the name of the cloud instances, defaults to username",
-    )
-    workload_name: String = SctField(
-        description="Workload name, can be: write|read|mixed|unset. "
-        "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true). "
-        "If unset, workload is taken from test name.",
     )
     zero_token_instance_type_db: String = SctField(
         description="Instance type for zero-token DB nodes -- nodes that join the ring for reads/writes but own no token range. Falls back to 'instance_type_db' when unset.",
