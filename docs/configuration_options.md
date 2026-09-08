@@ -44,7 +44,7 @@ concerns first, then one page per backend, then one per test type.
 | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) | 10 | Scylla's DynamoDB-compatible API: the endpoint, write isolation, load-balancing and the credentials the tests use against it. |
 | [Vector Store](configuration_options/vector-store.md) | 6 | The Vector Store service under test alongside Scylla. |
 | [Kafka / CDC connectors](configuration_options/kafka-cdc-connectors.md) | 2 | Kafka deployment and connector configuration for CDC testing. |
-| [AWS backend](configuration_options/aws-backend.md) | 22 | AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity reservations and dedicated hosts. |
+| [AWS backend](configuration_options/aws-backend.md) | 26 | AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity reservations and dedicated hosts. |
 | [GCE backend](configuration_options/gce-backend.md) | 23 | Google Compute Engine provisioning. |
 | [Azure backend](configuration_options/azure-backend.md) | 13 | Microsoft Azure provisioning. |
 | [OCI backend](configuration_options/oci-backend.md) | 10 | Oracle Cloud Infrastructure provisioning. |
@@ -484,6 +484,9 @@ concerns first, then one page per backend, then one per test type.
 | [`sla`](configuration_options/nemesis-chaos-testing.md#sla) | `SCT_SLA` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
 | [`space_node_threshold`](configuration_options/longevity-tests.md#space_node_threshold) | `SCT_SPACE_NODE_THRESHOLD` | [Longevity tests](configuration_options/longevity-tests.md) |
 | [`spot_max_price`](configuration_options/aws-backend.md#spot_max_price) | `SCT_SPOT_MAX_PRICE` | [AWS backend](configuration_options/aws-backend.md) |
+| [`spot_placement_score_min`](configuration_options/aws-backend.md#spot_placement_score_min) | `SCT_SPOT_PLACEMENT_SCORE_MIN` | [AWS backend](configuration_options/aws-backend.md) |
+| [`spot_score_overrides_configured_az`](configuration_options/aws-backend.md#spot_score_overrides_configured_az) | `SCT_SPOT_SCORE_OVERRIDES_CONFIGURED_AZ` | [AWS backend](configuration_options/aws-backend.md) |
+| [`spot_score_region_relocation_margin`](configuration_options/aws-backend.md#spot_score_region_relocation_margin) | `SCT_SPOT_SCORE_REGION_RELOCATION_MARGIN` | [AWS backend](configuration_options/aws-backend.md) |
 | [`ssh_transport`](configuration_options/general-and-provisioning.md#ssh_transport) | `SCT_SSH_TRANSPORT` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`sstable_file`](configuration_options/refresh-sstable-loading-tests.md#sstable_file) | `SCT_SSTABLE_FILE` | [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) |
 | [`sstable_md5`](configuration_options/refresh-sstable-loading-tests.md#sstable_md5) | `SCT_SSTABLE_MD5` | [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) |
@@ -565,6 +568,7 @@ concerns first, then one page per backend, then one per test type.
 | [`use_preinstalled_scylla`](configuration_options/scylla-installation-and-configuration.md#use_preinstalled_scylla) | `SCT_USE_PREINSTALLED_SCYLLA` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`use_prepared_loaders`](configuration_options/stress-commands-and-load-generation.md#use_prepared_loaders) | `SCT_USE_PREPARED_LOADERS` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`use_scylla_doctor_on_failure`](configuration_options/scylla-doctor.md#use_scylla_doctor_on_failure) | `SCT_USE_SCYLLA_DOCTOR_ON_FAILURE` | [Scylla Doctor](configuration_options/scylla-doctor.md) |
+| [`use_spot_placement_scores`](configuration_options/aws-backend.md#use_spot_placement_scores) | `SCT_USE_SPOT_PLACEMENT_SCORES` | [AWS backend](configuration_options/aws-backend.md) |
 | [`use_zero_nodes`](configuration_options/general-and-provisioning.md#use_zero_nodes) | `SCT_USE_ZERO_NODES` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`user_credentials_path`](configuration_options/general-and-provisioning.md#user_credentials_path) | `SCT_USER_CREDENTIALS_PATH` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`user_data_format_version`](configuration_options/scylla-installation-and-configuration.md#user_data_format_version) | `SCT_USER_DATA_FORMAT_VERSION` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
