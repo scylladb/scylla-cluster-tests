@@ -160,6 +160,11 @@ The bad example lacks specifics: no measurable problem, no root cause, no justif
 - What needs to change
 - Technical debt or limitations
 
+**Must not include**:
+- **Line numbers** — `pricing.py:238` is stale as soon as anything above it moves, and it turns plan review into diff review. Cite `file.py:ClassName` or `file.py:method_name` (PAP-9)
+- **File-internal detail** — private attribute names, import order, which helper calls which. Describe the *behaviour* the code produces, not how it is written (PAP-1)
+- **Investigation narrative** — "I ran X and found Y" belongs in the PR discussion. Keep only the conclusion, and only if it changed the design
+
 **Good example** (from `docs/plans/nemesis/nemesis-rework.md`):
 ```markdown
 ## Current State
