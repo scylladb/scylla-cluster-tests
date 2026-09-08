@@ -81,6 +81,7 @@ from sdcm.utils.trigger_matrix import (
     resolve_to_full_version,
     trigger_matrix as run_trigger_matrix,
 )
+from sdcm.utils.cloud_catalog.cost import estimate_run_cost
 from sdcm.utils.argus import (
     ReplayOnlyArgusSCTClient,
     argus_offline_collect_events,
@@ -1666,6 +1667,57 @@ def output_conf(config_files, backend):
         os.environ["SCT_CONFIG_FILES"] = config_files
     config = SCTConfiguration()
     click.secho(config.dump_config(), fg="green")
+    sys.exit(0)
+
+
+@cli.command("estimate-cost", help="Estimate a test run's instance-hour cost from its configuration")
+@click.argument("config_files", type=str, default="")
+@click.option("-b", "--backend", type=click.Choice(available_backends))
+@click.option("--duration", type=float, default=None, help="Override test_duration, in minutes")
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option(
+    "--output",
+    "output_file",
+    type=str,
+    default=None,
+    help="Write the JSON estimate to this file. Loading a config prints a lot to stdout, so a "
+    "pipeline should read the file rather than try to parse stdout.",
+)
+def estimate_cost(config_files, backend, duration, output_format, output_file):
+    """Print the estimated instance-hour cost of a run, before anything is provisioned.
+
+    Reads configuration only - no cloud API calls, no runner, no Argus - so it is safe to
+    call as a pipeline pre-flight step. Always exits 0: an unpriceable configuration
+    reports a null total rather than failing the caller.
+    """
+    add_file_logger()
+
+    if backend:
+        os.environ["SCT_CLUSTER_BACKEND"] = backend
+    if config_files:
+        os.environ["SCT_CONFIG_FILES"] = config_files
+    config = SCTConfiguration()
+
+    estimate = estimate_run_cost(config, duration_minutes=duration)
+
+    if output_file:
+        with open(output_file, "w", encoding="utf-8") as fobj:
+            json.dump(estimate.as_dict(), fobj)
+
+    if output_format == "json":
+        click.echo(json.dumps(estimate.as_dict()))
+        sys.exit(0)
+
+    total = f"${estimate.total:,.2f}" if estimate.total is not None else "unknown"
+    click.echo(f"Estimated cost: {total} over {estimate.duration_hours:.2f}h (on-demand rates)")
+    for role in estimate.roles:
+        cost = f"${role.cost:,.2f}" if role.cost is not None else "unknown"
+        click.echo(f"  {role.role:<10} {role.node_count:>3} x {role.instance_type:<22} {cost:>12}")
+    if estimate.is_spot:
+        click.echo("NOTE: run is configured for spot; priced at on-demand, so this is an upper bound.")
+    if estimate.partial:
+        unpriced = ", ".join(estimate.unpriced_roles) or "no roles resolved"
+        click.echo(f"WARNING: estimate is PARTIAL - no price for: {unpriced}")
     sys.exit(0)
 
 
