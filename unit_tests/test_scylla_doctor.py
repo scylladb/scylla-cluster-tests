@@ -677,3 +677,52 @@ def test_run_passes_run_timeout_to_the_remoter(doctor, is_nonroot_install, remot
     doctor.run(sd_command="scylla-doctor --save-vitals node.vitals.json")
     _args, kwargs = getattr(doctor.node.remoter, remoter_method).call_args
     assert kwargs["timeout"] == ScyllaDoctor.RUN_TIMEOUT
+
+
+# --- filter_out_failed_collectors / analyze_and_verify_results:
+# ScyllaLimitNOFILECollector tolerance (SCT-961) tests ---
+
+
+def test_filter_out_failed_collectors_ignores_scylla_limit_nofile(doctor):
+    """ScyllaLimitNOFILECollector failures must be tolerated (SCT-961 / SCYLLADB-4300)."""
+    assert doctor.filter_out_failed_collectors(collector="ScyllaLimitNOFILECollector") is True
+
+
+def test_analyze_and_verify_results_tolerates_only_scylla_limit_nofile(doctor):
+    """analyze_and_verify_results must tolerate ScyllaLimitNOFILECollector but no other failing collector."""
+    vitals_json = (
+        '{"ScyllaLimitNOFILECollector": {"status": 1, "data": {}, "output": [], '
+        '"message": "Cannot retrive \'LimitNOFILE\' value", "mask": []}, '
+        '"SomeOtherCollector": {"status": 0, "data": {}, "output": [], "message": "", "mask": []}}'
+    )
+    doctor.json_result_file = "test-node.local.vitals.json"
+
+    vitals_result = MagicMock()
+    vitals_result.stdout = vitals_json
+    doctor.node.remoter.sudo.side_effect = [vitals_result]
+
+    # Should not raise: the only failing collector is the tolerated one.
+    doctor.analyze_and_verify_results()
+
+
+def test_analyze_and_verify_results_still_fails_for_other_collectors(doctor):
+    """A genuinely failing, non-tolerated collector must still raise AssertionError."""
+    vitals_json = (
+        '{"ScyllaLimitNOFILECollector": {"status": 1, "data": {}, "output": [], '
+        '"message": "Cannot retrive \'LimitNOFILE\' value", "mask": []}, '
+        '"SomeOtherCollector": {"status": 1, "data": {}, "output": [], "message": "", "mask": []}}'
+    )
+    doctor.json_result_file = "test-node.local.vitals.json"
+
+    # First sudo call reads the vitals json; second sudo call is from self.version,
+    # accessed lazily when building the AssertionError message.
+    vitals_result = MagicMock()
+    vitals_result.stdout = vitals_json
+    version_result = MagicMock()
+    version_result.stdout = "1.13.0"
+    doctor.node.remoter.sudo.side_effect = [vitals_result, version_result]
+
+    with pytest.raises(AssertionError, match="SomeOtherCollector") as exc_info:
+        doctor.analyze_and_verify_results()
+
+    assert "ScyllaLimitNOFILECollector" not in str(exc_info.value)

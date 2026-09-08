@@ -801,6 +801,18 @@ class ScyllaDoctor:
         if collector == "FirewallRulesCollector":
             return True
 
+        # scylla-doctor 1.13's ScyllaLimitNOFILECollector cannot parse the systemd
+        # LimitNOFILE=infinity value shipped by scylladb/scylladb commit 78c859831972.
+        # This is a known scylla-doctor bug, not an SCT or product regression.
+        # Remove this branch once scylla_doctor_version is bumped past 1.13 with the collector fix.
+        # See SCT-961 / SCYLLADB-4300 / DOCTOR-119.
+        if collector == "ScyllaLimitNOFILECollector":
+            LOGGER.warning(
+                "Ignoring known, tolerated ScyllaLimitNOFILECollector failure "
+                "(scylla-doctor cannot parse LimitNOFILE=infinity). See SCT-961 / SCYLLADB-4300 / DOCTOR-119."
+            )
+            return True
+
         # https://github.com/scylladb/field-engineering/issues/2288
         # Docker containers lack many OS-level utilities (ip, iptables, ss, dmesg, timedatectl)
         # and don't have access to /proc/interrupts or cloud metadata endpoints.
