@@ -3356,7 +3356,7 @@ class SCTConfiguration(BaseModel):
                         # For simple versions like "5.2.1"
                         # gce_image.name format examples: scylla-4-3-6 or scylla-enterprise-2021-1-2
                         gce_image = get_scylla_gce_images_versions(version=scylla_version)[0]
-                except IndexError as ex:
+                except (IndexError, AssertionError) as ex:
                     raise ValueError(f"GCE image for scylla_version='{scylla_version}' was not found") from ex
 
                 self.log.debug("Found GCE image %s for scylla_version='%s'", gce_image.name, scylla_version)
