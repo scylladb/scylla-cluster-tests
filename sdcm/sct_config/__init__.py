@@ -27,8 +27,10 @@ even for names defined in ``types`` or ``helpers``: ``from .types import f`` bin
 
 from sdcm.sct_config.config import (
     SCTConfiguration,
+    backend_to_cloud,
     init_and_verify_sct_config,
     is_arm_instance_type,
+    substitute_arch_markers,
 )
 from sdcm.sct_config.defaults import AWS_SUPPORTED_REGIONS, available_backends
 from sdcm.sct_config.helpers import simulated_racks_enabled
@@ -52,6 +54,7 @@ __all__ = [
     "SctField",
     "StringOrList",
     "available_backends",
+    "backend_to_cloud",
     "boolean_or_space_separated_booleans",
     "dict_or_str",
     "init_and_verify_sct_config",
@@ -60,4 +63,5 @@ __all__ = [
     "is_multitenant_field",
     "simulated_racks_enabled",
     "str_or_list_or_eval",
+    "substitute_arch_markers",
 ]
