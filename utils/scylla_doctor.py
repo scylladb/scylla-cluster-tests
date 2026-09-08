@@ -805,11 +805,11 @@ class ScyllaDoctor:
         # LimitNOFILE=infinity value shipped by scylladb/scylladb commit 78c859831972.
         # This is a known scylla-doctor bug, not an SCT or product regression.
         # Remove this branch once scylla_doctor_version is bumped past 1.13 with the collector fix.
-        # See SCT-961 / SCYLLADB-4300.
+        # See SCT-961 / SCYLLADB-4300 / DOCTOR-119.
         if collector == "ScyllaLimitNOFILECollector":
             LOGGER.warning(
                 "Ignoring known, tolerated ScyllaLimitNOFILECollector failure "
-                "(scylla-doctor cannot parse LimitNOFILE=infinity). See SCT-961 / SCYLLADB-4300."
+                "(scylla-doctor cannot parse LimitNOFILE=infinity). See SCT-961 / SCYLLADB-4300 / DOCTOR-119."
             )
             return True
 
