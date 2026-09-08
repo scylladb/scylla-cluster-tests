@@ -13,12 +13,14 @@
 
 import dataclasses
 import logging
+import pathlib
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from botocore.exceptions import ClientError
 
+from sdcm import sct_abs_path
 from sdcm.sct_config import config as sct_config
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo
 
@@ -688,3 +690,24 @@ def test_oci_loader_image_without_a_marker_is_left_alone(monkeypatch):
         conf = sct_config.SCTConfiguration()
 
     assert conf.get("oci_image_loader") == "ocid1.image.oc1.phx.aaaaaaaa"
+
+
+def test_no_file_derived_paths_in_the_sct_config_package():
+    """`Path(__file__).parent...` silently resolves one level wrong inside the package.
+
+    `sct_config.py` became `sct_config/config.py`, so any path built by walking up from `__file__`
+    now lands in `sdcm/` instead of the repo root. `_resolve_instance_sizes` and `_get_loader_arch`
+    both did this, and both swallow the resulting FileNotFoundError with a warning -- so the only
+    symptom is sizing and loader-arch resolution quietly not working. Use `sct_abs_path()`.
+    """
+    package = pathlib.Path(sct_abs_path("sdcm/sct_config"))
+    offenders = [
+        f"{path.relative_to(package.parent.parent)}:{num}"
+        for path in sorted(package.rglob("*.py"))
+        for num, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if "__file__" in line and "sct_abs_path" not in line
+    ]
+    assert not offenders, (
+        f"paths derived from __file__ inside sdcm/sct_config/: {offenders}. "
+        f"Use sct_abs_path() -- it is anchored at the repo root, not at the module's location."
+    )

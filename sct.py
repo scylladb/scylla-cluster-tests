@@ -2093,9 +2093,25 @@ def conf_docs(output_format):
 
 @cli.command("update-conf-docs", help="Update the docs configuration markdown")
 def update_conf_docs():
-    markdown_file = Path(__name__).parent / "docs" / "configuration_options.md"
-    markdown_file.write_text(SCTConfiguration.dump_help_config_markdown())
-    click.secho(f"docs written into {markdown_file}")
+    root = Path(__name__).parent
+    pages = SCTConfiguration.dump_help_config_markdown_pages()
+
+    docs_dir = root / SCTConfiguration.DOCS_DIR
+    docs_dir.mkdir(parents=True, exist_ok=True)
+
+    written = set()
+    for rel_path, content in pages.items():
+        path = root / rel_path
+        path.write_text(content)
+        written.add(path.resolve())
+
+    # a renamed or removed group would otherwise leave an orphan page behind
+    for stale in docs_dir.glob("*.md"):
+        if stale.resolve() not in written:
+            stale.unlink()
+            click.secho(f"removed stale {stale}", fg="yellow")
+
+    click.secho(f"docs written: {len(pages)} pages under {docs_dir} (index: {root / SCTConfiguration.DOCS_INDEX})")
 
 
 @click.group(help="Group of commands for investigating testrun")

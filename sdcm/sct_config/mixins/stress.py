@@ -27,6 +27,37 @@ class StressConfigMixin(BaseModel):
     The load applied to the cluster: stress tool command lines, loader-side settings and stress
     duration.
 
+    **Which option belongs to which tool.** Options fall into two kinds, and the difference is not
+    obvious from the names.
+
+    *Tool-agnostic* -- every `stress_cmd*`, `prepare_*_cmd` and `stress_read_cmd` option is a
+    command line, and **the tool is whatever the command's first word is**. SCT reads it straight
+    off the string (see `SCTConfiguration.list_of_stress_tools`), so the same option runs
+    cassandra-stress, scylla-bench, gemini, latte, ycsb, cql-stress, nosqlbench, ndbench,
+    cassandra-harry or hydra-kcl depending only on what you put there:
+
+    ```yaml
+    stress_cmd: "cassandra-stress write cl=QUORUM n=1000000 ..."     # cassandra-stress
+    stress_cmd: "scylla-bench -workload=sequential -mode=write ..."  # scylla-bench
+    stress_cmd: "latte run --duration 30m ..."                       # latte
+    ```
+
+    Their names describe the *role* in the test (write, read, mixed, prepare, verify), not the tool.
+
+    *Tool-specific* -- these apply only when that tool is in use, and are ignored otherwise:
+
+    | Tool | Options |
+    |---|---|
+    | cassandra-stress | cs_user_profiles, prepare_cs_user_profiles, cs_duration, cs_debug, cs_extra_jvm_opts, cs_safepoint_logging, cs_populating_distribution, c_s_driver_version, user_profile_table_count, add_cs_user_profiles_extra_tables, stress_cmd_no_mv_profile |
+    | gemini | gemini_cmd, gemini_seed, gemini_schema_url, gemini_table_options, gemini_log_cql_statements |
+    | latte | latte_schema_parameters |
+    | cdc log reader | stress_cdclog_reader_cmd, stress_cdc_log_reader_batching_enable, store_cdclog_reader_stats_in_es |
+
+    Everything else here is loader-side and applies whatever the tool: stress_image, bare_loaders,
+    use_prepared_loaders, loader_swap_size, round_robin, region_aware_loader, rack_aware_loader,
+    the stress_multiplier options, stress_duration, prepare_stress_duration and
+    stop_test_on_stress_failure.
+
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
 

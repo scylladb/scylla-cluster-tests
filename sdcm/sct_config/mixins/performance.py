@@ -109,3 +109,8 @@ class PerformanceConfigMixin(BaseModel):
     use_hdrhistogram: Boolean = SctField(
         description="Enable hdr histogram logging for cs",
     )
+    workload_name: String = SctField(
+        description="Workload name, can be: write|read|mixed|unset. "
+        "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true). "
+        "If unset, workload is taken from test name.",
+    )
