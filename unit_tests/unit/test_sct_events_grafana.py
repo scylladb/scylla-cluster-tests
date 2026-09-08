@@ -69,23 +69,31 @@ class TestGrafana(EventsUtilsMixin):
             assert grafana_postman._registry == self.events_main_device._registry
             assert grafana_postman._registry == self.events_processes_registry
 
-            grafana_aggregator.time_window = 1
+            # The aggregator's default 90 s time window is kept as-is, so every event published
+            # below is aggregated inside one window and only the first `max_duplicates` of them
+            # are posted.  Shortening the window made the expected count depend on where the wall
+            # clock happened to fall while a batch was being delivered; the rollover between
+            # windows is covered by TestGrafanaAggregatorTimeWindow instead.
+            published_events = 3 * 10
+            expected_annotations = grafana_aggregator.max_duplicates
 
             set_grafana_url("http://localhost", _registry=self.events_processes_registry)
             with unittest.mock.patch("requests.post") as mock:
-                for runs in range(1, 4):
-                    with self.wait_for_n_events(grafana_annotator, count=10, timeout=1):
+                for _ in range(3):
+                    with self.wait_for_n_events(grafana_annotator, count=10):
                         for _ in range(10):
                             self.events_main_device.publish_event(
                                 ClusterHealthValidatorEvent.NodeStatus(severity=Severity.NORMAL)
                             )
-                    time.sleep(1)
+
+                # Nothing may be posted before the Grafana URL has been announced.
                 assert mock.call_count == 0
 
                 start_posting_grafana_annotations(_registry=self.events_processes_registry)
-                wait_for(lambda: mock.call_count == runs * 5, timeout=10, step=0.1, throw_exc=False)
+                wait_for(lambda: mock.call_count == expected_annotations, timeout=10, step=0.1, throw_exc=False)
 
-                assert mock.call_count == runs * 5
+                # Duplicates of the same annotation are capped at `max_duplicates` per time window.
+                assert mock.call_count == expected_annotations
                 assert mock.call_args.kwargs["json"]["tags"] == [
                     "ClusterHealthValidatorEvent",
                     "NORMAL",
@@ -93,9 +101,68 @@ class TestGrafana(EventsUtilsMixin):
                     "NodeStatus",
                 ]
 
+            # The suppressed duplicates still have to reach the aggregator, and only the first
+            # `max_duplicates` of them were posted, so wait for it to drain before counting.
+            wait_for(
+                lambda: grafana_aggregator.events_counter == published_events,
+                timeout=10,
+                step=0.1,
+                throw_exc=False,
+            )
+
             assert self.events_main_device.events_counter == grafana_annotator.events_counter
             assert grafana_annotator.events_counter == grafana_aggregator.events_counter
             assert grafana_postman.events_counter <= grafana_aggregator.events_counter
+        finally:
+            grafana_annotator.stop(timeout=1)
+            grafana_aggregator.stop(timeout=1)
+            grafana_postman.stop(timeout=1)
+
+
+class TestGrafanaAggregatorTimeWindow(EventsUtilsMixin):
+    """The duplicate cap is per time window, so a duplicate seen in the next one is posted again."""
+
+    time_window = 0.2
+
+    @classmethod
+    def setup_class(cls) -> None:
+        cls.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
+
+    @classmethod
+    def teardown_class(cls) -> None:
+        cls.teardown_events_processes()
+
+    def test_duplicate_in_the_next_time_window_is_posted_again(self):
+        start_grafana_pipeline(_registry=self.events_processes_registry)
+        grafana_annotator = get_events_process(EVENTS_GRAFANA_ANNOTATOR_ID, _registry=self.events_processes_registry)
+        grafana_aggregator = get_events_process(EVENTS_GRAFANA_AGGREGATOR_ID, _registry=self.events_processes_registry)
+        grafana_postman = get_grafana_postman(_registry=self.events_processes_registry)
+
+        time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
+
+        try:
+            # A single event fills a window, so no assertion here depends on a batch of events
+            # landing on the same side of a window boundary.
+            grafana_aggregator.max_duplicates = 1
+            grafana_aggregator.time_window = self.time_window
+
+            set_grafana_url("http://localhost", _registry=self.events_processes_registry)
+            start_posting_grafana_annotations(_registry=self.events_processes_registry)
+
+            with unittest.mock.patch("requests.post") as mock:
+                for _ in range(2):
+                    with self.wait_for_n_events(grafana_annotator, count=1):
+                        self.events_main_device.publish_event(
+                            ClusterHealthValidatorEvent.NodeStatus(severity=Severity.NORMAL)
+                        )
+                    # Outlast the window, so the next duplicate is counted against a fresh one.
+                    # `wait_for_n_events` already waited out `last_event_processing_delay` on top.
+                    time.sleep(self.time_window * 5)
+
+                wait_for(lambda: mock.call_count == 2, timeout=10, step=0.1, throw_exc=False)
+                assert mock.call_count == 2, (
+                    "a duplicate annotation seen after the time window expired must be posted again"
+                )
         finally:
             grafana_annotator.stop(timeout=1)
             grafana_aggregator.stop(timeout=1)
