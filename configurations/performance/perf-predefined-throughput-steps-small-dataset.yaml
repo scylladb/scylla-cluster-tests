@@ -1,0 +1,49 @@
+# Small-dataset variant of test-cases/performance/perf-regression-predefined-throughput-steps.yaml.
+# Every stress command keeps the original shape (4 loaders, round-robin, same rates and column sizes),
+# only the dataset is reduced by a factor of 6:
+#   prepare_write_cmd / stress_cmd_read_disk: 650,000,004 -> 108,333,336 rows (~650GB -> ~108GB)
+#   stress_cmd_w:                           1,610,612,736 -> 268,435,456 rows
+#   stress_cmd_r / cache_warmup / stress_cmd_m:  20,000,000 -> 3,333,336 rows
+
+prepare_write_cmd: [
+    "cassandra-stress write  cl=ALL n=27083334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..27083334",
+    "cassandra-stress write  cl=ALL n=27083334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=27083335..54166668",
+    "cassandra-stress write  cl=ALL n=27083334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=54166669..81250002",
+    "cassandra-stress write  cl=ALL n=27083334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=81250003..108333336"
+]
+
+stress_cmd_w:  [
+  "cassandra-stress write no-warmup cl=QUORUM n=67108864 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..67108864",
+  "cassandra-stress write no-warmup cl=QUORUM n=67108864 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=67108865..134217728",
+  "cassandra-stress write no-warmup cl=QUORUM n=67108864 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=134217729..201326592",
+  "cassandra-stress write no-warmup cl=QUORUM n=67108864 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=201326593..268435456"
+]
+
+stress_cmd_r: [
+  "cassandra-stress read no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..833334",
+  "cassandra-stress read no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=833335..1666668",
+  "cassandra-stress read no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1666669..2500002",
+  "cassandra-stress read no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=2500003..3333336"
+]
+
+stress_cmd_cache_warmup: [
+  "cassandra-stress read  cl=ALL n=833334 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..833334",
+  "cassandra-stress read  cl=ALL n=833334 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=833335..1666668",
+  "cassandra-stress read  cl=ALL n=833334 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1666669..2500002",
+  "cassandra-stress read  cl=ALL n=833334 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=2500003..3333336"
+]
+
+stress_cmd_m: [
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..833334",
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=833335..1666668",
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1666669..2500002",
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=2500003..3333336"
+]
+
+# Read the entire data set to ensure disk only reads
+stress_cmd_read_disk: [
+  "cassandra-stress read no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..27083334",
+  "cassandra-stress read no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=27083335..54166668",
+  "cassandra-stress read no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=54166669..81250002",
+  "cassandra-stress read no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=81250003..108333336"
+]
