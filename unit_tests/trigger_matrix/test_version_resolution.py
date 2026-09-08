@@ -112,9 +112,17 @@ def test_per_backend_skips_a_backend_without_images():
     assert "no image found for 'master:latest'" in unavailable[GCE_TARGET]
 
 
-def test_per_backend_leaves_an_explicit_build_alone():
-    """A version that already points at one build is passed through, no lookups needed."""
-    with patch("sdcm.utils.trigger_matrix._resolve_latest_version_for_backend") as mock_resolve:
+def test_per_backend_leaves_an_explicit_build_alone_when_published_everywhere():
+    """A version that already points at one build is passed through, no *resolve* lookups needed.
+
+    `version_exists_for_backend()` is still called per target to confirm the build is actually
+    published there (SCT-856) — only `_resolve_latest_version_for_backend()` is skipped, since
+    there is nothing to resolve for an already-pinned build.
+    """
+    with (
+        patch("sdcm.utils.trigger_matrix._resolve_latest_version_for_backend") as mock_resolve,
+        patch("sdcm.utils.trigger_matrix.version_exists_for_backend", return_value=True) as mock_exists,
+    ):
         versions, unavailable = resolve_versions_for_targets(
             original_version=AWS_BUILD,
             reference_version=AWS_BUILD,
@@ -125,6 +133,7 @@ def test_per_backend_leaves_an_explicit_build_alone():
     assert versions == {AWS_TARGET: AWS_BUILD, GCE_TARGET: AWS_BUILD}
     assert not unavailable
     mock_resolve.assert_not_called()
+    assert mock_exists.call_count == 2
 
 
 def test_per_backend_drops_a_backend_missing_an_explicit_build():
