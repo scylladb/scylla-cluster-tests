@@ -34,6 +34,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | AWS Capacity AZ Fallback | `draft` | [aws-capacity-az-fallback.md](infrastructure/aws-capacity-az-fallback.md) |
 | NVMe Diagnostics Collection | `draft` | [nvme-diagnostics-collection.md](infrastructure/nvme-diagnostics-collection.md) |
 | Azure Multi-VNIC Support | `complete` | [azure-multi-vnic-support.md](infrastructure/azure-multi-vnic-support.md) |
+| Spot Placement Scores (SCT-850) | `pending_pr` | [spot-placement-scores.md](infrastructure/spot-placement-scores.md) |
 
 ### Nemesis — Chaos engineering, disruptors
 

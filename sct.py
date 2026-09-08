@@ -54,6 +54,7 @@ from sdcm.cluster_cloud import extract_short_test_id_from_name
 from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
+from sdcm.provision.aws.spot_placement_score import get_scores as get_spot_placement_scores
 from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis.monkey.runners import SisyphusMonkey
@@ -2930,6 +2931,34 @@ def prepare_regions(cloud_provider, regions):
         else:
             raise Exception(f"Unsupported Cloud provider: `{cloud_provider}")
         region.configure()
+
+
+@cli.command("spot-placement-scores", help="Show AWS spot placement scores for instance types across regions/AZs")
+@click.option("--types", required=True, help="Comma-separated instance types. AWS scores 1-2 types artificially low")
+@click.option("--count", default=6, type=int, help="Target capacity (number of instances) to score for")
+@click.option("--regions", default="", help="Comma-separated regions; defaults to all SCT-supported AWS regions")
+@click.option("--per-region", is_flag=True, help="Score whole regions instead of individual AZs")
+def spot_placement_scores(types, count, regions, per_region):
+    """Print spot placement scores, best-first, for manual placement inspection.
+
+    Read-only: it calls `ec2:GetSpotPlacementScores` and launches nothing.
+    """
+    add_file_logger()
+
+    instance_types = [item.strip() for item in types.split(",") if item.strip()]
+    region_names = [item.strip() for item in regions.split(",") if item.strip()] or list(AWS_SUPPORTED_REGIONS)
+
+    scores = get_spot_placement_scores(
+        instance_types=instance_types, target_capacity=count, regions=region_names, single_az=not per_region
+    )
+    if not scores:
+        click.echo(
+            "No scores returned. Either the ec2:GetSpotPlacementScores permission is missing, or AWS returned "
+            "nothing for this query - see the log above."
+        )
+        sys.exit(1)
+    for item in scores:
+        click.echo(f"{item.location}\t{item.score}")
 
 
 @cli.command("configure-aws-peering", help="Configure all required resources for SCT to run in multi-dc")

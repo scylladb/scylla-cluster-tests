@@ -675,3 +675,28 @@ def test_cleanup_abandoned_region_never_raises_on_failure():
         patch("sdcm.provision.aws.utils.list_instances_aws", side_effect=RuntimeError("boom")),
     ):
         aws_utils.cleanup_abandoned_region("t-1", "us-east-1")  # must not raise
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RegionAMINotFoundError("no equivalent AMI in us-west-2"),
+        ClientError({"Error": {"Code": "UnauthorizedOperation"}}, "DescribeImages"),
+        RuntimeError("KMS alias re-prep blew up"),
+    ],
+    ids=["no_ami", "client_error", "unexpected"],
+)
+def test_upfront_spot_relocation_never_fails_provisioning(failure):
+    """Relocation is an opt-in optimization run before the first attempt; the configured region is always a
+    valid place to start. Anything `_switch_region` raises must degrade to "stay put" - otherwise a tuning
+    knob becomes a new way for runs to fail outright."""
+    params = _make_layout_params(spot_score_region_relocation_margin=3)
+    layout = SCTProvisionAWSLayout(params)
+
+    with (
+        patch.object(AZResolver, "get_preferred_spot_region", return_value=("us-west-2", ["a"])),
+        patch.object(SCTProvisionAWSLayout, "_switch_region", side_effect=failure),
+    ):
+        layout._relocate_to_preferred_spot_region()
+
+    assert params.region_names == ["us-east-1"], "the configured region must survive a failed relocation"
