@@ -413,6 +413,43 @@ section so nothing can drop out of the docs unnoticed.
 
 ---
 
+### Phase 3b: Documentation reference — DONE
+
+Shipped with Phase 3 in [PR #15972](https://github.com/scylladb/scylla-cluster-tests/pull/15972).
+Not in the original plan, but the grouping work forced it: an option whose description only
+restated its own name could not be placed in a group, so documenting and grouping had to happen
+together.
+
+**Every option is documented.** 19 had no description at all and rendered blank; 21 shared
+boilerplate with a sibling (all 13 cassandra-stress commands carried one identical paragraph); 20
+only restated their own name. All now say what they control.
+
+**The reference is split by group.** `docs/configuration_options.md` was a single 5,300-line page.
+It is now an index at the same path (so existing links still resolve) carrying the group table and
+an alphabetical list of every option with its `SCT_*` variable, plus one page per group under
+`docs/configuration_options/`. Each group page opens with its mixin's docstring, so per-group
+guidance lives with the code and reaches the docs automatically. Option names mentioned in prose
+become links to that option.
+
+Consequence for later phases: **mixin docstrings are user-facing documentation now**, and are
+written in markdown rather than RST. Phase 4 should keep that in mind when moving validators —
+a mixin that owns a validation rule is the right place to explain it.
+
+**Two findings worth keeping:**
+
+- Per-tool ownership was invisible. Every `stress_cmd*`/`prepare_*_cmd` option is tool-agnostic:
+  SCT reads the tool from the command's first word, so the same option runs cassandra-stress,
+  scylla-bench, gemini or latte. Only `cs_*`, `gemini_*`, `latte_*` and the cdc-reader options are
+  tool-specific. That is now written down instead of being folklore.
+- The `__file__`-derived path bug recurred. Master added a second
+  `Path(__file__).parent.parent / "data" / "instance_catalog"` while this work was in flight, and
+  it broke loader-arch resolution the same silent way as the first one — the `FileNotFoundError`
+  is swallowed with a warning. A test now fails on any `__file__`-derived path anywhere in the
+  package. **Any file moved out of its original directory needs this check**, which applies
+  directly to Phase 4.
+
+---
+
 ### Phase 4: Extract Validation Methods
 
 **Objective**: Move the `_validate_*` methods and `verify_configuration()` logic into domain-appropriate locations.
