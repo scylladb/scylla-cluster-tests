@@ -9,7 +9,7 @@ def call(List jobs) {
                    description: "Supported: us-east-1 | us-east-2 | us-west-2 | eu-west-1 | eu-west-2 | eu-west-3 | eu-north-1 | eu-central-1 | ca-central-1 | random (randomly select region)")
             string(name: "provision_type",
                    defaultValue: "spot",
-                   description: "spot|on_demand|spot_fleet")
+                   description: "spot|on_demand|spot_fleet|auto (auto: resolved by test duration, threshold spot_max_test_duration)")
             string(name: "post_behavior_db_nodes",
                    defaultValue: "destroy",
                    description: "keep|keep-on-failure|destroy")
