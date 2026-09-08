@@ -205,3 +205,46 @@ def test_as_dict_is_json_serialisable_and_keeps_nulls():
     assert "db" in payload["unpriced_roles"]
     db = next(r for r in payload["roles"] if r["role"] == "db")
     assert db["cost"] is None and db["price_per_hour"] is None
+
+
+# --- no cloud APIs ------------------------------------------------------------------
+
+
+def test_catalog_only_does_not_fall_through_to_a_pricing_api(monkeypatch):
+    def explode(*_args, **_kwargs):
+        raise AssertionError("a live pricing API was called")
+
+    monkeypatch.setattr("sdcm.utils.cloud_catalog.pricing.AWSPricing.get_on_demand_instance_price", explode)
+    # An instance type the catalog does not know: without catalog_only this would query AWS.
+    rate = get_hourly_rate("aws", "eu-west-1", "m5.24xlarge", catalog_only=True)
+    assert rate.price_per_hour is None
+    assert rate.source == "unknown"
+
+
+def test_estimate_never_calls_a_cloud_api(monkeypatch):
+    """The estimate runs on a builder before anything exists; it must not need the network.
+
+    Guards both directions: a catalog hit obviously must not call out, and a catalog *miss*
+    must report unknown rather than quietly falling through to a live pricing API.
+    """
+    calls = []
+
+    def record_boto(self, operation_name, *args, **kwargs):
+        calls.append(operation_name)
+        raise AssertionError(f"boto call during estimate: {operation_name}")
+
+    def record_http(self, method, url, *args, **kwargs):
+        calls.append(f"{method} {url}")
+        raise AssertionError(f"http call during estimate: {method} {url}")
+
+    monkeypatch.setattr("botocore.client.BaseClient._make_api_call", record_boto)
+    monkeypatch.setattr("requests.sessions.Session.request", record_http)
+
+    priced = estimate_run_cost(_aws_params())
+    assert priced.total is not None
+
+    unpriced = estimate_run_cost(_aws_params(instance_type_db="m5.24xlarge"))
+    assert unpriced.partial
+    assert "db" in unpriced.unpriced_roles
+
+    assert not calls

@@ -96,11 +96,30 @@ def _pricing_for(cloud: str):
     return {"aws": AWSPricing, "gce": GCEPricing, "azure": AzurePricing, "oci": OCIPricing}[cloud]()
 
 
-def get_hourly_rate(backend: str, region: str, instance_type: str, is_spot: bool = False) -> InstanceRate:
-    """Look up the hourly rate for one instance. Never raises, never blocks a test."""
+def get_hourly_rate(
+    backend: str, region: str, instance_type: str, is_spot: bool = False, catalog_only: bool = False
+) -> InstanceRate:
+    """Look up the hourly rate for one instance. Never raises, never blocks a test.
+
+    With `catalog_only`, answer purely from the checked-in catalog and report unknown on a
+    miss. The pricing classes fall through to live cloud pricing APIs when the catalog has no
+    entry, which is fine for a long-lived test process but not for a pre-flight estimate: that
+    runs on a builder before anything exists, and must not depend on a cloud API being
+    reachable to tell someone what a run will cost.
+    """
     cloud = BACKEND_TO_CLOUD.get(backend)
     if not cloud or not instance_type:
         return InstanceRate.unknown(is_spot=is_spot)
+
+    if catalog_only:
+        from sdcm.utils.cloud_catalog.pricing import _catalog_price  # noqa: PLC0415 — lazy, see _pricing_for
+
+        try:
+            raw = _catalog_price(cloud, region, instance_type)
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Catalog lookup failed for %s/%s in %s", cloud, instance_type, region, exc_info=True)
+            return InstanceRate.unknown(is_spot=is_spot)
+        return InstanceRate.from_raw(raw, is_spot=is_spot, source="catalog")
 
     lifecycle = InstanceLifecycle.SPOT if is_spot else InstanceLifecycle.ON_DEMAND
     try:
@@ -240,6 +259,9 @@ def estimate_run_cost(params: Any, duration_minutes: float | None = None) -> Run
     Spot rates are not knowable ahead of a run, so this deliberately prices everything at
     the on-demand rate and reports `is_spot` alongside: an upper bound is the safe
     direction for a number a gate may act on.
+
+    Rates come from the checked-in catalog only. No cloud pricing API is called, so this
+    cannot hang or fail on someone else's availability.
     """
     backend = str(params.get("cluster_backend") or "")
     cloud = BACKEND_TO_CLOUD.get(backend)
@@ -264,7 +286,7 @@ def estimate_run_cost(params: Any, duration_minutes: float | None = None) -> Run
         node_count = _sum_counts(params.get(count_param))
         if not instance_type or node_count <= 0:
             continue
-        rate = get_hourly_rate(backend, region, instance_type, is_spot=False)
+        rate = get_hourly_rate(backend, region, instance_type, is_spot=False, catalog_only=True)
         per_node = cost_for(rate, duration_hours * SECONDS_PER_HOUR)
         roles.append(
             RoleCost(
