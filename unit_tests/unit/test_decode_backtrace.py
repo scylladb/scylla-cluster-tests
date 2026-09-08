@@ -26,10 +26,16 @@ from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from unit_tests.lib.dummy_remote import DummyRemote
 from unit_tests.lib.fake_cluster import DummyNode
 
+DECODED_BY_SERVICE = "decoded-by-external"
+BUILD_ID = "abc123"
 
-class DecodeDummyNode(DummyNode):
-    def copy_scylla_debug_info(self, node_name, debug_file):
-        return "scylla_debug_info_file"
+
+def _service_response(success=True, stdout=DECODED_BY_SERVICE, stderr=""):
+    """Build a fake requests.Response for the backtrace service."""
+    response = MagicMock()
+    response.json.return_value = {"success": success, "stdout": stdout, "stderr": stderr}
+    response.raise_for_status.return_value = None
+    return response
 
 
 @pytest.fixture(name="test_config")
@@ -47,7 +53,7 @@ def test_config_fixture():
 @pytest.fixture(name="dummy_node")
 def dummy_node_fixture(tmp_path):
     """Fixture to create a dummy node for testing."""
-    dummy_node = DecodeDummyNode(
+    dummy_node = DummyNode(
         name="test_node",
         parent_cluster=None,
         base_logdir=tmp_path,
@@ -59,7 +65,7 @@ def dummy_node_fixture(tmp_path):
 @pytest.fixture(name="monitor_node")
 def monitor_node_fixture(tmp_path):
     """Fixture to create a monitor node for testing."""
-    monitor_node = DecodeDummyNode(
+    monitor_node = DummyNode(
         name="test_monitor_node",
         parent_cluster=None,
         base_logdir=tmp_path,
@@ -68,6 +74,29 @@ def monitor_node_fixture(tmp_path):
     yield monitor_node
 
     # Cleanup
+    monitor_node.termination_event.set()
+    monitor_node.stop_task_threads()
+    monitor_node.wait_till_tasks_threads_are_stopped()
+
+
+def _make_db_log_reader(dummy_node, decoding_queue, stall_decoding=True, disable_regex=None):
+    db_log_reader = DbLogReader(
+        system_log=dummy_node.system_log,
+        node_name=str(dummy_node),
+        remoter=dummy_node.remoter,
+        decoding_queue=decoding_queue,
+        system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+        log_lines=True,
+        backtrace_stall_decoding=stall_decoding,
+        backtrace_decoding_disable_regex=disable_regex,
+    )
+    db_log_reader._build_id = BUILD_ID
+    return db_log_reader
+
+
+def _run_decode_thread_over_log(monitor_node, db_log_reader):
+    monitor_node.start_decode_on_monitor_node_thread()
+    db_log_reader._read_and_publish_events()
     monitor_node.termination_event.set()
     monitor_node.stop_task_threads()
     monitor_node.wait_till_tasks_threads_are_stopped()
@@ -115,34 +144,19 @@ def test_reactor_stall_not_decoded_when_no_decoding_queue(
 def test_backtraces_decoded_when_enabled(
     test_config, dummy_node, monitor_node, events_function_scope, log_file, test_data_dir
 ):
-    """Backtraces are decoded to addr2line commands when decoding is enabled."""
+    """Backtraces flow from the db log reader through the decode thread to the published event."""
     dummy_node.system_log = str(test_data_dir / log_file)
+    db_log_reader = _make_db_log_reader(dummy_node, test_config.DECODING_QUEUE)
 
-    db_log_reader = DbLogReader(
-        system_log=dummy_node.system_log,
-        node_name=str(dummy_node),
-        remoter=dummy_node.remoter,
-        decoding_queue=test_config.DECODING_QUEUE,
-        system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
-        log_lines=True,
-        backtrace_stall_decoding=True,
-        backtrace_decoding_disable_regex=None,
-    )
-
-    monitor_node.start_decode_on_monitor_node_thread()
-    db_log_reader._read_and_publish_events()
-    monitor_node.termination_event.set()
-    monitor_node.stop_task_threads()
-    monitor_node.wait_till_tasks_threads_are_stopped()
+    with patch("sdcm.cluster.requests.post", return_value=_service_response()):
+        _run_decode_thread_over_log(monitor_node, db_log_reader)
 
     events = events_function_scope.published_events
 
     assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
     for event in events:
-        if event.get("backtrace") and event.get("raw_backtrace"):
-            assert event["backtrace"].strip() == "addr2line -Cpife scylla_debug_info_file {}".format(
-                " ".join(event["raw_backtrace"].split("\n"))
-            )
+        if event.get("raw_backtrace"):
+            assert event["backtrace"] == DECODED_BY_SERVICE
 
 
 @pytest.mark.parametrize(
@@ -190,26 +204,11 @@ def test_backtrace_decoding_configuration(
         event_filter: Lambda function to filter events for validation
         should_decode: Whether the filtered events should have decoded backtraces
     """
-    # Setup
     dummy_node.system_log = str(test_data_dir / "system.log")
+    db_log_reader = _make_db_log_reader(dummy_node, test_config.DECODING_QUEUE, stall_decoding, disable_regex)
 
-    # Create db_log_reader with specific configuration
-    db_log_reader = DbLogReader(
-        system_log=dummy_node.system_log,
-        node_name=str(dummy_node),
-        remoter=dummy_node.remoter,
-        decoding_queue=test_config.DECODING_QUEUE,
-        system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
-        log_lines=True,
-        backtrace_stall_decoding=stall_decoding,
-        backtrace_decoding_disable_regex=disable_regex,
-    )
-
-    monitor_node.start_decode_on_monitor_node_thread()
-    db_log_reader._read_and_publish_events()
-    monitor_node.termination_event.set()
-    monitor_node.stop_task_threads()
-    monitor_node.wait_till_tasks_threads_are_stopped()
+    with patch("sdcm.cluster.requests.post", return_value=_service_response()):
+        _run_decode_thread_over_log(monitor_node, db_log_reader)
 
     events = events_function_scope.published_events
 
@@ -218,7 +217,7 @@ def test_backtrace_decoding_configuration(
 
     for event in filtered_events:
         if should_decode:
-            assert event.get("backtrace") is not None, (
+            assert event.get("backtrace") == DECODED_BY_SERVICE, (
                 f"Event of type {event.get('type')} should have decoded backtrace"
             )
         else:
@@ -245,34 +244,28 @@ def _run_decode_with_queue_item(monitor_node, build_id, raw_backtrace):
 
     monitor_node.test_config = config
 
-    monitor_node.decode_backtrace()
+    # retries must not slow the unit tests down
+    with patch("time.sleep"):
+        monitor_node.decode_backtrace()
     return event
 
 
-def test_external_service_success_skips_local_addr2line(monitor_node):
-    """When external service succeeds, copy_scylla_debug_info and local addr2line are NOT called."""
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"success": True, "stdout": "decoded-by-external", "stderr": ""}
-    mock_response.raise_for_status.return_value = None
+def test_external_service_success_sets_decoded_backtrace(monitor_node):
+    """A successful service reply becomes the decoded backtrace; nothing is run on the monitor node."""
+    monitor_node.remoter = MagicMock()
 
-    with (
-        patch("sdcm.cluster.requests.post", return_value=mock_response) as mock_post,
-        patch.object(monitor_node, "copy_scylla_debug_info") as mock_copy,
-    ):
-        event = _run_decode_with_queue_item(monitor_node, "abc123", "0x1234\n0x5678")
+    with patch("sdcm.cluster.requests.post", return_value=_service_response()) as mock_post:
+        event = _run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1234\n0x5678")
 
-    assert event.backtrace == "decoded-by-external"
-    mock_copy.assert_not_called()
+    assert event.backtrace == DECODED_BY_SERVICE
+    assert event.build_id == BUILD_ID
     mock_post.assert_called_once()
+    monitor_node.remoter.run.assert_not_called()
 
 
 def test_external_service_post_request_payload(monitor_node):
     """Verify the POST request sends correct URL, build_id and input format."""
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"success": True, "stdout": "decoded", "stderr": ""}
-    mock_response.raise_for_status.return_value = None
-
-    with patch("sdcm.cluster.requests.post", return_value=mock_response) as mock_post:
+    with patch("sdcm.cluster.requests.post", return_value=_service_response()) as mock_post:
         _run_decode_with_queue_item(monitor_node, "abc123def", "0x1234\n0x5678")
 
     mock_post.assert_called_once_with(
@@ -283,27 +276,67 @@ def test_external_service_post_request_payload(monitor_node):
 
 
 @pytest.mark.parametrize(
-    "side_effect,description",
+    "side_effect,expected_calls",
     [
-        (requests.HTTPError(response=MagicMock(status_code=404)), "HTTP 404"),
-        (requests.Timeout("timed out"), "timeout"),
-        (requests.ConnectionError("connection refused"), "connection error"),
+        pytest.param(requests.HTTPError(response=MagicMock(status_code=404)), 3, id="http_404"),
+        pytest.param(
+            _service_response(success=False, stdout="", stderr="OSError: [Errno 28] No space left on device"),
+            1,
+            id="service_side_error_is_final",
+        ),
     ],
 )
-def test_external_service_failure_falls_back_to_local(monitor_node, side_effect, description):
-    """When external service fails (%s), fall back to local addr2line."""
-    with patch("sdcm.cluster.requests.post", side_effect=side_effect):
-        event = _run_decode_with_queue_item(monitor_node, "abc123", "0x1234\n0x5678")
+def test_external_service_failure_publishes_raw_backtrace(monitor_node, side_effect, expected_calls):
+    """When the service fails, the event keeps only its raw backtrace and nothing is decoded on the monitor."""
+    monitor_node.remoter = MagicMock()
 
-    assert event.backtrace is not None, f"Should fall back to local for {description}"
-    assert "addr2line" in event.backtrace
+    with (
+        patch("sdcm.cluster.requests.post", side_effect=[side_effect] * expected_calls) as mock_post,
+        patch("sdcm.cluster.FindIssuePerBacktrace") as mock_find_issue,
+    ):
+        event = _run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1234\n0x5678")
+
+    assert event.backtrace is None
+    assert event.raw_backtrace == "0x1234\n0x5678"
+    assert event.build_id == BUILD_ID, "the build id must stay with the raw backtrace so it can be decoded later"
+    assert mock_post.call_count == expected_calls
+    monitor_node.remoter.run.assert_not_called()
+    mock_find_issue.assert_not_called()
 
 
-def test_no_build_id_skips_external_service(monitor_node):
-    """When build_id is None, external service is never called."""
+def test_external_service_retries_transient_errors(monitor_node):
+    """Transient HTTP errors are retried and a later success is used."""
+    with patch(
+        "sdcm.cluster.requests.post",
+        side_effect=[requests.Timeout("timed out"), requests.ConnectionError("refused"), _service_response()],
+    ) as mock_post:
+        event = _run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1234\n0x5678")
+
+    assert event.backtrace == DECODED_BY_SERVICE
+    assert mock_post.call_count == 3
+
+
+def test_external_service_cooldown_skips_build_after_failure(monitor_node):
+    """After a final failure the service is not asked about the same build again while the cooldown lasts."""
+    with patch("sdcm.cluster.requests.post", return_value=_service_response(success=False)) as mock_post:
+        first = _run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1111")
+        second = _run_decode_with_queue_item(monitor_node, BUILD_ID, "0x2222")
+        other_build = _run_decode_with_queue_item(monitor_node, "def456", "0x3333")
+
+    assert first.backtrace is None
+    assert second.backtrace is None
+    assert other_build.backtrace is None
+    assert mock_post.call_count == 2, "one call per build id: the second event of abc123 must be skipped"
+
+
+def test_no_build_id_publishes_raw_backtrace(monitor_node):
+    """Without a build id there is nothing to decode against: no service call, nothing run on the monitor."""
+    monitor_node.remoter = MagicMock()
+
     with patch("sdcm.cluster.requests.post") as mock_post:
         event = _run_decode_with_queue_item(monitor_node, None, "0x1234\n0x5678")
 
     mock_post.assert_not_called()
-    assert event.backtrace is not None
-    assert "addr2line" in event.backtrace
+    monitor_node.remoter.run.assert_not_called()
+    assert event.backtrace is None
+    assert event.build_id is None
