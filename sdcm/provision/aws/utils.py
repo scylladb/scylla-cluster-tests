@@ -40,6 +40,7 @@ from mypy_boto3_ec2.type_defs import (
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.constants import (
+    SPOT_FLEET_ALLOCATION_STRATEGY,
     SPOT_REQUEST_TIMEOUT,
     SPOT_REQUEST_WAITING_TIME,
     STATUS_FULFILLED,
@@ -306,10 +307,14 @@ def create_spot_fleet_instance_request(
     instance_parameters: SpotFleetLaunchSpecificationTypeDef,
     valid_until: datetime.datetime = None,
 ) -> str:
+    # `capacity-optimized` is what `ec2:GetSpotPlacementScores` assumes when it scores an AZ (see
+    # `sdcm/provision/aws/spot_placement_score.py`). Without it AWS picks the cheapest pool rather than the
+    # deepest one, so the scores we rank AZs by would over-predict our actual fulfillment rate.
     params = SpotFleetRequestConfigDataTypeDef(
         LaunchSpecifications=[instance_parameters],
         IamFleetRole=fleet_role,
         TargetCapacity=count,
+        AllocationStrategy=SPOT_FLEET_ALLOCATION_STRATEGY,
     )
     if valid_until:
         params["ValidUntil"] = valid_until

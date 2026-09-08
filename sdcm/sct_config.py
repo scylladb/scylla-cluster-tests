@@ -2482,6 +2482,30 @@ class SCTConfiguration(BaseModel):
         "and global images make any supported region eligible. Only applies during initial setup. "
         "Supported backends: AWS, GCE.",
     )
+    use_spot_placement_scores: Boolean = SctField(
+        description="Order availability zones and region-fallback candidates by `ec2:GetSpotPlacementScores` instead of "
+        "alphabetically, so spot requests go to the AZ/region most likely to have capacity. Scores only reorder "
+        "candidates that already passed the instance-type-offering filter; they never veto one. Ignored for "
+        "`instance_provision: on_demand`, and silently ignored when the IAM permission is missing. AWS-only.",
+    )
+    spot_placement_score_min: int = SctField(
+        description="Drop availability zones scoring below this value (1-10) from spot placement candidates. Default 0 "
+        "keeps every AZ, which matches the AWS contract that a score is a recommendation and not a guarantee. "
+        "Note AWS returns structurally low scores when fewer than 3 instance types are requested, so a non-zero "
+        "value here is only safe alongside instance-type diversification. If no AZ reaches the threshold, "
+        "provisioning fails rather than silently ignoring the setting.",
+    )
+    spot_score_overrides_configured_az: Boolean = SctField(
+        description="Let the spot placement score override an explicitly configured `availability_zone` rather than only "
+        "ordering the AZs backfilled around it. Off by default so existing AZ pins keep their meaning.",
+    )
+    spot_score_region_relocation_margin: int = SctField(
+        description="Relocate the cluster to a better-scoring region BEFORE the first provisioning attempt, when that "
+        "region's spot placement score exceeds the configured region's by at least this many points (1-10). "
+        "Useful for `region: random` jobs that land on a poor region by chance. 0 (default) disables it, "
+        "leaving region relocation purely reactive. Only relocates to VPC-peered regions with an equivalent "
+        "AMI; note the SCT runner stays in the original region, so the cluster is reached over the peering.",
+    )
     num_nodes_to_rollback: int = SctField(
         description="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade",
     )
