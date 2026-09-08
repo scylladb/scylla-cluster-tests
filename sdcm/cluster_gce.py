@@ -68,6 +68,21 @@ class CreateGCENodeError(Exception):
     pass
 
 
+def gce_instance_node_index(instance: compute_v1.Instance) -> int:
+    """Node index an instance was created for, taken from its GCE metadata.
+
+    GCE metadata values are strings, so they have to be converted before sorting: sorted as text,
+    node 10 comes before node 4, while callers pair the resulting order with numeric node indexes.
+    An instance without a usable NodeIndex sorts first.
+    """
+    node_index = gce_meta_to_dict(instance.metadata).get("NodeIndex")
+    try:
+        return int(node_index)
+    except TypeError, ValueError:
+        LOGGER.warning("Instance %s has no usable NodeIndex metadata: %s", instance.name, node_index)
+        return 0
+
+
 class GCENode(cluster.BaseNode):
     """
     Wraps GCE instances, so that we can also control the instance through SSH.
@@ -653,12 +668,7 @@ class GCECluster(cluster.BaseCluster):
         if az_idx is not None and instances:
             instances = self._instances_in_az(instances, az_idx, dc_idx)
 
-        def sort_by_index(instance):
-            metadata = gce_meta_to_dict(instance.metadata)
-            return metadata.get("NodeIndex", 0)
-
-        instances = sorted(instances, key=sort_by_index)
-        return instances
+        return sorted(instances, key=gce_instance_node_index)
 
     def _instances_in_az(
         self, instances: list[compute_v1.Instance], az_idx: int, dc_idx: int
