@@ -249,7 +249,7 @@ my_new_option: "aws_specific_value"
 
 ### Step 4: Update Documentation
 
-The documentation in `docs/configuration_options.md` is **auto-generated** from the Pydantic model.
+The documentation in `docs/configuration_options.md` (index) and `docs/configuration_options/` (one page per option group) is **auto-generated** from the Pydantic model.
 
 To regenerate the documentation, run:
 
@@ -261,7 +261,7 @@ uv run sct.py pre-commit
 uv run python3 -c "from sdcm.sct_config import SCTConfiguration; SCTConfiguration.dump_help_config_markdown()"
 ```
 
-This will update `docs/configuration_options.md` with your new option.
+This will update the index and the group page your option belongs to.
 
 ### Step 5: Add Validation (Optional)
 
@@ -459,7 +459,7 @@ scylla-cluster-tests/
 3. **Document thoroughly**: Add clear descriptions to all fields
 4. **Always set defaults in YAML**: All configuration options MUST have defaults defined in `defaults/test_default.yaml` or backend-specific files - never in code
 5. **Test your changes**: Run `uv run sct.py unit-tests` to ensure your changes work
-6. **Update docs**: Run pre-commit to regenerate `docs/configuration_options.md`
+6. **Update docs**: Run pre-commit to regenerate the option pages
 
 ## Migration from Old System
 
