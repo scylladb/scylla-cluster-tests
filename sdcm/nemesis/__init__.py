@@ -14,6 +14,17 @@
 
 """
 Module containing logic for running disruptions on a test cluster
+
+Note (SCT-803): most `disrupt_*` methods do not check `termination_event` (or any
+other stop signal) inside long-running operations. Stopping mid-disruption relies
+almost entirely on asynchronous exception injection (`raise_exception_in_thread()`,
+see `BaseScyllaCluster.stop_nemesis()` in `sdcm/cluster.py`), which CPython only
+delivers at a bytecode boundary and can never reach a thread blocked in a C-level
+`Thread.join()`/lock acquire (e.g. an unbounded `nodetool repair` call). This is a
+known, broader gap tracked for follow-up under SCT-803; `disrupt_no_corrupt_repair`
+and `disrupt_abort_repair` are hardened against it directly (bounded via
+`ParallelObject` instead of a raw `ThreadPoolExecutor`), but most other methods
+are not.
 """
 
 import contextlib
@@ -35,7 +46,6 @@ from datetime import timedelta
 from typing import List, Optional, Callable, Union, Iterable, TYPE_CHECKING
 from functools import partial, cached_property
 from collections import defaultdict, Counter, namedtuple
-from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
 from cassandra import ConsistencyLevel, InvalidRequest
@@ -1679,22 +1689,31 @@ class NemesisRunner:
             self.cluster.wait_for_schema_agreement()
 
         self.log.debug("Start repair target_node in background")
-        with (
-            ignore_drop_table_during_repair_errors(),
-            ThreadPoolExecutor(max_workers=1, thread_name_prefix="NodeToolRepairThread") as thread_pool,
-        ):
-            thread = thread_pool.submit(partial(self.run_repair_nodetool, nodes=[self.target_node]))
-            try:
-                # drop test tables one by one during repair
-                for i in range(10):
-                    time.sleep(random.randint(0, 300))
-                    with self.cluster.cql_connection_patient(self.target_node, connect_timeout=600) as session:
-                        self.actions_log.info(f"Dropping table drop_table_during_repair_ks_{i}.standard1")
-                        session.execute(
-                            SimpleStatement(f"DROP TABLE drop_table_during_repair_ks_{i}.standard1"), timeout=300
-                        )
-            finally:
-                thread.result()
+
+        def drop_tables_during_repair():
+            # drop test tables one by one during repair
+            for i in range(10):
+                time.sleep(random.randint(0, 300))
+                with self.cluster.cql_connection_patient(self.target_node, connect_timeout=600) as session:
+                    self.actions_log.info(f"Dropping table drop_table_during_repair_ks_{i}.standard1")
+                    session.execute(
+                        SimpleStatement(f"DROP TABLE drop_table_during_repair_ks_{i}.standard1"), timeout=300
+                    )
+
+        repair_trigger = partial(self.run_repair_nodetool, nodes=[self.target_node])
+        # Bounded replacement for the previous raw, unbounded
+        # `with ThreadPoolExecutor(...) as thread_pool: ... finally: thread.result()`
+        # (see SCT-803): ParallelObject's clean_up() bounds the worker-thread join and
+        # arms the same hard-exit escalation stop_nemesis() uses if a worker ever gets
+        # stuck regardless. The timeout below is a generous upper bound derived from
+        # this method's own worst case (10 iterations of up to a 300s sleep plus a
+        # 300s DDL timeout for the drop loop, plus run_repair_nodetool's own default
+        # repair timeout, plus a buffer), not a behavioral tightening.
+        timeout = HOUR_IN_SEC * 3 + 10 * (300 + 300) + 3600
+        with ignore_drop_table_during_repair_errors():
+            ParallelObject(
+                objects=[repair_trigger, drop_tables_during_repair], num_workers=2, timeout=timeout
+            ).call_objects()
 
     def _major_compaction(self):
         with (
@@ -2144,18 +2163,20 @@ class NemesisRunner:
         """
         for node in nodes:
             with (
-                adaptive_timeout(Operations.REPAIR, node, timeout=timeout),
+                adaptive_timeout(Operations.REPAIR, node, timeout=timeout) as node_timeout,
                 self.action_log_scope(f"nodetool repair on {node.name} node"),
             ):
-                node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
+                node.run_nodetool(sub_cmd="repair", publish_event=publish_event, timeout=node_timeout)
 
         target_node = nodes[0]
         if is_tablets_feature_enabled(target_node):
             with (
-                adaptive_timeout(Operations.REPAIR, target_node, timeout=timeout),
+                adaptive_timeout(Operations.REPAIR, target_node, timeout=timeout) as cluster_repair_timeout,
                 self.action_log_scope("nodetool cluster repair", target=target_node.name),
             ):
-                target_node.run_nodetool(sub_cmd="cluster repair", publish_event=publish_event)
+                target_node.run_nodetool(
+                    sub_cmd="cluster repair", publish_event=publish_event, timeout=cluster_repair_timeout
+                )
 
     @latency_calculator_decorator(legend="Run repair process through Scylla manager", cycle_name="_mgmt_repair_cli")
     def run_repair_manager(self, ignore_down_hosts: bool = False, timeout=HOUR_IN_SEC * 3):
@@ -3260,8 +3281,12 @@ class NemesisRunner:
                 return True
             return False
 
-        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="NodeToolRepairThread") as thread_pool:
-            thread = thread_pool.submit(silenced_nodetool_repair_to_fail)
+        # `zero_jobs_log` is populated by abort_repair_streaming() below (it runs in its
+        # own ParallelObject worker thread) and read back here afterwards, mirroring how
+        # the original code shared it between the main thread and the repair-abort logic.
+        zero_jobs_log_holder = {}
+
+        def abort_repair_streaming():
             wait.wait_for(
                 func=repair_streaming_exists, timeout=300, step=1, throw_exc=True, text="Wait for repair starts"
             )
@@ -3286,7 +3311,7 @@ class NemesisRunner:
                 ):
                     # force_terminate_repair only aborts running repair tasks
                     # it is possible that it will be called just after a task has ended and just before the next task starts
-                    zero_jobs_log = self.target_node.follow_system_log(
+                    zero_jobs_log_holder["log"] = self.target_node.follow_system_log(
                         [r"repair - Started to abort repair jobs=\{\}, nr_jobs=0"]
                     )
 
@@ -3294,15 +3319,34 @@ class NemesisRunner:
                         "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
                         " http://127.0.0.1:10000/storage_service/force_terminate_repair"
                     )
+            time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
 
-                try:
-                    thread.result(timeout=120)
-                except TimeoutError:
-                    if list(zero_jobs_log):
-                        raise UnsupportedNemesis("No repair jobs running when terminate was called")
-                    else:
-                        raise
-                time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
+        # Bounded replacement for the previous raw, unbounded
+        # `with ThreadPoolExecutor(...) as thread_pool: ... thread.result(timeout=120)`
+        # (see SCT-803): ParallelObject's clean_up() bounds the worker-thread join and
+        # arms the same hard-exit escalation stop_nemesis() uses if a worker ever gets
+        # stuck regardless. The timeout below combines this method's own two staged
+        # waits (up to 300s to detect repair streaming, up to 120s for the repair to
+        # actually stop once aborted) plus a buffer -- ParallelObject applies a single
+        # shared timeout rather than the original's two distinct staged ones, so this is
+        # deliberately generous rather than a tightened bound.
+        repair_task_timeout = 300 + 120 + 60
+        repair_result, abort_result = ParallelObject(
+            objects=[silenced_nodetool_repair_to_fail, abort_repair_streaming],
+            num_workers=2,
+            timeout=repair_task_timeout,
+        ).run(lambda func: func(), ignore_exceptions=True)
+
+        if abort_result.exc:
+            raise abort_result.exc
+        if repair_result.exc:
+            # silenced_nodetool_repair_to_fail() is wrapped in @raise_event_on_failure,
+            # which swallows every exception it raises internally -- the only exception
+            # its future can surface here is TimeoutError, raised by ParallelObject's
+            # own future.result(timeout) if the repair hasn't stopped in time.
+            if isinstance(repair_result.exc, TimeoutError) and list(zero_jobs_log_holder.get("log", [])):
+                raise UnsupportedNemesis("No repair jobs running when terminate was called") from repair_result.exc
+            raise repair_result.exc
 
         self.log.debug("Execute a complete repair for target node")
         self.run_repair()
