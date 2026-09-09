@@ -81,7 +81,7 @@ from sdcm.utils.trigger_matrix import (
     resolve_to_full_version,
     trigger_matrix as run_trigger_matrix,
 )
-from sdcm.utils.cloud_catalog.cost import estimate_run_cost
+from sdcm.utils.cloud_catalog.cost import RunCostEstimate, estimate_run_cost
 from sdcm.utils.argus import (
     ReplayOnlyArgusSCTClient,
     argus_offline_collect_events,
@@ -1696,7 +1696,19 @@ def estimate_cost(config_files, backend, duration, output_format, output_file):
         os.environ["SCT_CLUSTER_BACKEND"] = backend
     if config_files:
         os.environ["SCT_CONFIG_FILES"] = config_files
-    config = SCTConfiguration()
+
+    try:
+        config = SCTConfiguration()
+    except Exception as exc:  # noqa: BLE001
+        # This runs as a pipeline pre-flight step. A configuration SCT cannot load is a real
+        # problem, but it is not this command's problem to report - the run is about to fail
+        # on it anyway, with a better message, from the code that actually needs the config.
+        # Failing here would only turn an advisory stage into a second, noisier failure.
+        click.echo(f"\nCannot estimate cost: configuration could not be loaded ({exc})\n")
+        if output_file:
+            with open(output_file, "w", encoding="utf-8") as fobj:
+                json.dump(RunCostEstimate.unavailable().as_dict(), fobj)
+        sys.exit(0)
 
     estimate = estimate_run_cost(config, duration_minutes=duration)
 

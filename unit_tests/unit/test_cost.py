@@ -248,3 +248,16 @@ def test_estimate_never_calls_a_cloud_api(monkeypatch):
     assert "db" in unpriced.unpriced_roles
 
     assert not calls
+
+
+def test_unavailable_estimate_is_well_formed():
+    """A configuration that will not load must still yield a usable, honest result.
+
+    `estimate-cost` runs as a pipeline pre-flight step, so it reports the failure and exits 0
+    rather than turning an advisory stage into a second, noisier build failure.
+    """
+    payload = RunCostEstimate.unavailable().as_dict()
+    assert payload["total"] is None
+    assert payload["partial"] is True
+    assert payload["roles"] == []
+    assert payload["currency"] == "USD"

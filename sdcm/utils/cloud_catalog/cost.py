@@ -201,6 +201,11 @@ class RunCostEstimate:
     roles: tuple[RoleCost, ...]
     partial: bool
 
+    @classmethod
+    def unavailable(cls) -> "RunCostEstimate":
+        """No estimate could be produced at all (e.g. the configuration would not load)."""
+        return cls(total=None, currency="USD", duration_hours=0.0, is_spot=False, roles=(), partial=True)
+
     @property
     def unpriced_roles(self) -> tuple[str, ...]:
         return tuple(r.role for r in self.roles if not r.known)
