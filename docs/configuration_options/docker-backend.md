@@ -4,12 +4,12 @@
 
 Running the cluster as local Docker containers.
 
-**2 options.** Jump to: [docker_image](#docker_image) · [docker_network](#docker_network)
+**2 options.**
 
 
 ## **docker_image** / SCT_DOCKER_IMAGE
 
-Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version
+Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from [`scylla_version`](scylla-installation-and-configuration.md#scylla_version)
 
 **default:** N/A
 

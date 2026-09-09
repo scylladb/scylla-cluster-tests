@@ -4,7 +4,7 @@
 
 Jepsen consistency test runs.
 
-**4 options.** Jump to: [jepsen_scylla_repo](#jepsen_scylla_repo) · [jepsen_test_cmd](#jepsen_test_cmd) · [jepsen_test_count](#jepsen_test_count) · [jepsen_test_run_policy](#jepsen_test_run_policy)
+**4 options.**
 
 
 ## **jepsen_scylla_repo** / SCT_JEPSEN_SCYLLA_REPO

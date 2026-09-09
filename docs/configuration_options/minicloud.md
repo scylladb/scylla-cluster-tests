@@ -6,7 +6,7 @@ Minicloud is an AWS-API-compatible environment rather than a cloud of its own: i
 `cluster_backend: aws` and an endpoint override, and these options control the local minicloud
 service.
 
-**14 options.** Jump to: [minicloud_container_cpus](#minicloud_container_cpus) · [minicloud_container_memory](#minicloud_container_memory) · [minicloud_container_name](#minicloud_container_name) · [minicloud_docker_image](#minicloud_docker_image) · [minicloud_endpoint_url](#minicloud_endpoint_url) · [minicloud_gcs_bucket](#minicloud_gcs_bucket) · [minicloud_keep_alive](#minicloud_keep_alive) · [minicloud_lightweight](#minicloud_lightweight) · [minicloud_lightweight_memory](#minicloud_lightweight_memory) · [minicloud_lightweight_vcpus](#minicloud_lightweight_vcpus) · [minicloud_regions](#minicloud_regions) · [minicloud_s3_passthrough_buckets](#minicloud_s3_passthrough_buckets) · [minicloud_skip_memory_check](#minicloud_skip_memory_check) · [minicloud_state_dir](#minicloud_state_dir)
+**14 options.**
 
 
 ## **minicloud_container_cpus** / SCT_MINICLOUD_CONTAINER_CPUS
@@ -38,7 +38,7 @@ Name of the minicloud docker container. Change it to run two emulators on one ho
 
 ## **minicloud_docker_image** / SCT_MINICLOUD_DOCKER_IMAGE
 
-Explicit minicloud image override. Empty means the renovate-managed default from defaults/docker_images/minicloud/ (exposed as stress_image.minicloud)
+Explicit minicloud image override. Empty means the renovate-managed default from defaults/docker_images/minicloud/ (exposed as [`stress_image`](stress-commands-and-load-generation.md#stress_image).minicloud)
 
 **default:** N/A
 
@@ -92,7 +92,7 @@ Memory allocation for lightweight minicloud deployments
 
 ## **minicloud_lightweight_vcpus** / SCT_MINICLOUD_LIGHTWEIGHT_VCPUS
 
-vCPUs per guest in lightweight mode. Scylla runs one shard per vCPU, so this multiplies with minicloud_lightweight_memory across every guest in the test — raise it only on a host with cores to spare
+vCPUs per guest in lightweight mode. Scylla runs one shard per vCPU, so this multiplies with [`minicloud_lightweight_memory`](#minicloud_lightweight_memory) across every guest in the test — raise it only on a host with cores to spare
 
 **default:** 1
 

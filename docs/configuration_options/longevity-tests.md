@@ -4,7 +4,7 @@
 
 Options specific to long-running longevity test scenarios.
 
-**13 options.** Jump to: [cluster_target_size](#cluster_target_size) · [compaction_strategy](#compaction_strategy) · [data_validation](#data_validation) · [post_prepare_cql_cmds](#post_prepare_cql_cmds) · [pre_create_keyspace](#pre_create_keyspace) · [pre_create_schema](#pre_create_schema) · [run_commit_log_check_thread](#run_commit_log_check_thread) · [run_full_partition_scan](#run_full_partition_scan) · [run_fullscan](#run_fullscan) · [run_tombstone_gc_verification](#run_tombstone_gc_verification) · [space_node_threshold](#space_node_threshold) · [sstable_size](#sstable_size) · [validate_large_collections](#validate_large_collections)
+**13 options.**
 
 
 ## **cluster_target_size** / SCT_CLUSTER_TARGET_SIZE

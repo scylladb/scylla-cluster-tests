@@ -5,7 +5,7 @@
 Scylla's DynamoDB-compatible API: the endpoint, write isolation, load-balancing and the
 credentials the tests use against it.
 
-**10 options.** Jump to: [alternator_access_key_id](#alternator_access_key_id) · [alternator_enforce_authorization](#alternator_enforce_authorization) · [alternator_loadbalancing](#alternator_loadbalancing) · [alternator_port](#alternator_port) · [alternator_secret_access_key](#alternator_secret_access_key) · [alternator_test_table](#alternator_test_table) · [alternator_trust_all_certificates](#alternator_trust_all_certificates) · [alternator_use_dns_routing](#alternator_use_dns_routing) · [alternator_write_isolation](#alternator_write_isolation) · [dynamodb_primarykey_type](#dynamodb_primarykey_type)
+**10 options.**
 
 
 ## **alternator_access_key_id** / SCT_ALTERNATOR_ACCESS_KEY_ID
