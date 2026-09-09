@@ -29,6 +29,7 @@ LOGGER = logging.getLogger(__name__)
 
 class DatabaseLogEvent(LogEvent, abstract=True):
     OVERSIZED_ALLOCATION: Type[LogEventProtocol]
+    SUSPECTED_CPU_BOTTLENECK: Type[LogEventProtocol]
     WARNING: Type[LogEventProtocol]
     NO_SPACE_ERROR: Type[LogEventProtocol]
     UNKNOWN_VERB: Type[LogEventProtocol]
@@ -89,6 +90,9 @@ class ReactorStalledMixin(Generic[T_log_event]):
 
 
 # cause this is warning level, it's need to be before WARNING being suppressed
+DatabaseLogEvent.add_subevent_type(
+    "SUSPECTED_CPU_BOTTLENECK", severity=Severity.ERROR, regex=r"Identified\sbottleneck\(s\):\sCPU"
+)
 DatabaseLogEvent.add_subevent_type(
     "OVERSIZED_ALLOCATION", severity=Severity.ERROR, regex="seastar_memory - oversized allocation:"
 )
@@ -211,6 +215,7 @@ DatabaseLogEvent.add_subevent_type("TABLET_SPLIT", severity=Severity.DEBUG, rege
 DatabaseLogEvent.add_subevent_type("TABLET_MERGE", severity=Severity.DEBUG, regex=r"Detected tablet merge for table")
 
 SYSTEM_ERROR_EVENTS = (
+    DatabaseLogEvent.SUSPECTED_CPU_BOTTLENECK(),
     DatabaseLogEvent.OVERSIZED_ALLOCATION(),
     DatabaseLogEvent.WARNING(),
     DatabaseLogEvent.NO_SPACE_ERROR(),
