@@ -6,7 +6,7 @@ The scylla-doctor diagnostic tool. It is both a subject under test (the artifact
 and assert on its findings) and a diagnostic collected on failure, which is why it is its own
 group rather than part of log collection.
 
-**4 options.** Jump to: [run_scylla_doctor](#run_scylla_doctor) · [scylla_doctor_edition](#scylla_doctor_edition) · [scylla_doctor_version](#scylla_doctor_version) · [use_scylla_doctor_on_failure](#use_scylla_doctor_on_failure)
+**4 options.**
 
 
 ## **run_scylla_doctor** / SCT_RUN_SCYLLA_DOCTOR

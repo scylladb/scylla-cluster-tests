@@ -4,7 +4,7 @@
 
 How logs and diagnostics are collected, and what happens to the resources when the test ends.
 
-**11 options.** Jump to: [collect_logs](#collect_logs) · [execute_post_behavior](#execute_post_behavior) · [logs_transport](#logs_transport) · [post_behavior_db_nodes](#post_behavior_db_nodes) · [post_behavior_dedicated_host](#post_behavior_dedicated_host) · [post_behavior_emr_cluster](#post_behavior_emr_cluster) · [post_behavior_k8s_cluster](#post_behavior_k8s_cluster) · [post_behavior_loader_nodes](#post_behavior_loader_nodes) · [post_behavior_monitor_nodes](#post_behavior_monitor_nodes) · [post_behavior_vector_store_nodes](#post_behavior_vector_store_nodes) · [teardown_validators](#teardown_validators)
+**11 options.**
 
 
 ## **collect_logs** / SCT_COLLECT_LOGS
