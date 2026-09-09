@@ -19,6 +19,7 @@ JSON and human-readable formats across different nvme-cli versions.
 
 from __future__ import annotations
 
+import base64
 import json
 from unittest.mock import MagicMock, PropertyMock
 
@@ -26,30 +27,46 @@ from unittest.mock import MagicMock, PropertyMock
 from sdcm.cluster import BaseScyllaCluster
 from sdcm.sct_events import Severity
 from sdcm.utils.nvme_diagnostics import (
+    ERROR_LOG_ENTRY_LEN,
+    IDCTRL_ELPE_OFFSET,
+    IDCTRL_OACS_OFFSET,
+    IDENTIFY_CONTROLLER_LEN,
+    LOG_PAGE_ERROR_INFORMATION,
+    LOG_PAGE_SMART_HEALTH,
+    OACS_DEVICE_SELF_TEST,
+    SELF_TEST_LOG_PAGE_LEN,
+    SELF_TEST_RESULT_LEN,
+    SMART_LOG_PAGE_LEN,
+    NvmeControllerInfo,
     NvmeDevice,
     NvmeSelfTestLog,
     NvmeSelfTestResult,
     NvmeSmartLog,
     SelfTestType,
     _check_single_device_health,
+    _collect_error_log_with_timestamp,
     abort_self_test,
     check_nvme_health,
     check_self_test_results,
     collect_all_smart_logs,
     filter_data_disks,
+    get_controller_info,
     get_error_log,
     get_self_test_log,
     get_smart_log,
     install_nvme_cli,
     is_nvme_cli_available,
     list_nvme_devices,
-    parse_error_log_output,
+    parse_error_log_entry,
+    parse_error_log_page,
+    parse_identify_controller,
     parse_nvme_list_output,
-    parse_self_test_log_output,
-    parse_smart_log_output,
+    parse_self_test_log_page,
+    parse_smart_log_page,
     poll_self_test_completion,
     run_self_test,
     run_self_test_on_all_devices,
+    store_baseline_smart_logs,
 )
 
 
@@ -115,92 +132,6 @@ NVME_LIST_JSON_FLAT = json.dumps(
 
 NVME_LIST_EMPTY_JSON = json.dumps({"Devices": []})
 
-SMART_LOG_TEXT_OUTPUT = """\
-Smart Log for NVME device:nvme1n1 namespace-id:ffffffff
-critical_warning                        : 0
-temperature                             : 315 K (42 Celsius)
-available_spare                         : 100%
-available_spare_threshold               : 10%
-percentage_used                         : 2%
-data_units_read                         : 1,234,567
-data_units_written                      : 9,876,543
-host_read_commands                      : 50,000,000
-host_write_commands                     : 30,000,000
-controller_busy_time                    : 120
-power_cycles                            : 15
-power_on_hours                          : 8760
-unsafe_shutdowns                        : 3
-media_errors                            : 0
-num_err_log_entries                     : 5
-"""
-
-SMART_LOG_TEXT_WITH_ERRORS = """\
-Smart Log for NVME device:nvme1n1 namespace-id:ffffffff
-critical_warning                        : 4
-temperature                             : 345 K (72 Celsius)
-available_spare                         : 5%
-available_spare_threshold               : 10%
-percentage_used                         : 95%
-data_units_read                         : 10,000,000
-data_units_written                      : 50,000,000
-host_read_commands                      : 100,000,000
-host_write_commands                     : 200,000,000
-controller_busy_time                    : 5000
-power_cycles                            : 50
-power_on_hours                          : 20000
-unsafe_shutdowns                        : 10
-media_errors                            : 42
-num_err_log_entries                     : 100
-"""
-
-SMART_LOG_JSON_OUTPUT = json.dumps(
-    {
-        "critical_warning": 0,
-        "temperature": 310,
-        "avail_spare": 95,
-        "spare_thresh": 10,
-        "percent_used": 5,
-        "data_units_read": 500000,
-        "data_units_written": 300000,
-        "host_read_commands": 10000000,
-        "host_write_commands": 8000000,
-        "controller_busy_time": 60,
-        "power_cycles": 8,
-        "power_on_hours": 4000,
-        "unsafe_shutdowns": 1,
-        "media_errors": 0,
-        "num_err_log_entries": 0,
-    }
-)
-
-ERROR_LOG_TEXT_OUTPUT = """\
-Error Log Entries for device:nvme1n1 entries:2
-Entry[0]
-error_count                    : 5
-submission queue id            : 0
-command id                     : 0x0012
-status field                   : 0x4004
-parm error location            : 0x0000
-lba                            : 0x00000000
-nsid                           : 1
-vs                             : 0
-transport type                 : 0
-command specific               : 0
-opcode                         : 0x02
-Entry[1]
-error_count                    : 4
-submission queue id            : 0
-command id                     : 0x000a
-status field                   : 0x4004
-parm error location            : 0x0000
-lba                            : 0x00001000
-nsid                           : 1
-vs                             : 0
-transport type                 : 0
-command specific               : 0
-opcode                         : 0x01
-"""
-
 # nvme-cli pads the entry index and prints hex values with a "0x" prefix
 ERROR_LOG_TEXT_PADDED_OUTPUT = """\
 Error Log Entries for device:nvme1n1 entries:2
@@ -234,61 +165,6 @@ opcode	: 0x1
 .................
 """
 
-ERROR_LOG_JSON_OUTPUT = json.dumps(
-    [
-        {
-            "error_count": 3,
-            "sqid": 0,
-            "cmdid": 18,
-            "status_field": 16388,
-            "parm_error_location": 0,
-            "lba": 0,
-            "nsid": 1,
-            "vs": 0,
-            "trtype": 0,
-            "cs": 0,
-            "opcode": 2,
-        },
-        {
-            "error_count": 2,
-            "sqid": 1,
-            "cmdid": 5,
-            "status_field": 16388,
-            "parm_error_location": 0,
-            "lba": 4096,
-            "nsid": 1,
-            "vs": 0,
-            "trtype": 0,
-            "cs": 0,
-            "opcode": 1,
-        },
-    ]
-)
-
-SELF_TEST_LOG_TEXT_OUTPUT = """\
-Device Self Test Log for NVME device:nvme1n1
-Current operation  : 0
-Current Completion : 0
-Self Test Result[0]
-Device Self-test Status             : 0
-Self Test Code                      : 1
-Segment Number                      : 0
-Power On Hours                      : 8760
-nsid                                : 1
-Failing LBA                         : 0
-SCT                                 : 0
-SC                                  : 0
-Self Test Result[1]
-Device Self-test Status             : 2
-Self Test Code                      : 2
-Segment Number                      : 1
-Power On Hours                      : 8500
-nsid                                : 1
-Failing LBA                         : 0x00001234
-SCT                                 : 0
-SC                                  : 0
-"""
-
 # Format printed by nvme-cli itself: hex values and its own field names
 SELF_TEST_LOG_TEXT_NVME_CLI_OUTPUT = """\
 Device Self Test Log for NVME device:nvme1n1
@@ -315,35 +191,6 @@ Self Test Result[1]:
   Status Code                  : 0x3
   Segment Number               : 0x2
 """
-
-SELF_TEST_LOG_JSON_OUTPUT = json.dumps(
-    {
-        "current_operation": 1,
-        "current_completion": 45,
-        "results": [
-            {
-                "result": 0,
-                "self_test_code": 1,
-                "segment": 0,
-                "power_on_hours": 9000,
-                "nsid": 1,
-                "failing_lba": 0,
-                "sct": 0,
-                "sc": 0,
-            },
-            {
-                "result": 1,
-                "self_test_code": 2,
-                "segment": 0,
-                "power_on_hours": 8900,
-                "nsid": 1,
-                "failing_lba": 512,
-                "sct": 1,
-                "sc": 3,
-            },
-        ],
-    }
-)
 
 SELF_TEST_LOG_IN_PROGRESS_TEXT = """\
 Device Self Test Log for NVME device:nvme1n1
@@ -412,246 +259,10 @@ def test_parse_nvme_list_output_whitespace_only():
 # ---------------------------------------------------------------------------
 
 
-def test_parse_smart_log_text_normal():
-    """Parse human-readable SMART log with normal values."""
-    smart = parse_smart_log_output("/dev/nvme1n1", SMART_LOG_TEXT_OUTPUT)
-    assert smart is not None
-    assert smart.device_path == "/dev/nvme1n1"
-    assert smart.critical_warning == 0
-    assert smart.temperature_kelvin == 315
-    assert smart.temperature_celsius == 42
-    assert smart.available_spare == 100
-    assert smart.available_spare_threshold == 10
-    assert smart.percentage_used == 2
-    assert smart.data_units_read == 1234567
-    assert smart.data_units_written == 9876543
-    assert smart.host_read_commands == 50000000
-    assert smart.host_write_commands == 30000000
-    assert smart.controller_busy_time == 120
-    assert smart.power_cycles == 15
-    assert smart.power_on_hours == 8760
-    assert smart.unsafe_shutdowns == 3
-    assert smart.media_errors == 0
-    assert smart.num_err_log_entries == 5
-    assert not smart.has_critical_warning
-    assert not smart.has_media_errors
-    assert smart.has_error_log_entries
-
-
-def test_parse_smart_log_text_with_errors():
-    """Parse SMART log showing critical conditions."""
-    smart = parse_smart_log_output("/dev/nvme1n1", SMART_LOG_TEXT_WITH_ERRORS)
-    assert smart is not None
-    assert smart.critical_warning == 4
-    assert smart.temperature_kelvin == 345
-    assert smart.temperature_celsius == 72
-    assert smart.available_spare == 5
-    assert smart.percentage_used == 95
-    assert smart.media_errors == 42
-    assert smart.num_err_log_entries == 100
-    assert smart.has_critical_warning
-    assert smart.has_media_errors
-    assert smart.has_error_log_entries
-
-
-def test_parse_smart_log_json():
-    """Parse JSON format SMART log."""
-    smart = parse_smart_log_output("/dev/nvme0n1", SMART_LOG_JSON_OUTPUT)
-    assert smart is not None
-    assert smart.device_path == "/dev/nvme0n1"
-    assert smart.critical_warning == 0
-    assert smart.temperature_kelvin == 310
-    assert smart.available_spare == 95
-    assert smart.available_spare_threshold == 10
-    assert smart.percentage_used == 5
-    assert smart.power_on_hours == 4000
-    assert smart.media_errors == 0
-    assert smart.num_err_log_entries == 0
-
-
-def test_parse_smart_log_empty_input():
-    """Empty input returns None."""
-    assert parse_smart_log_output("/dev/nvme0n1", "") is None
-    assert parse_smart_log_output("/dev/nvme0n1", None) is None
-
-
 def test_parse_smart_log_temperature_celsius_zero_kelvin():
     """Temperature conversion handles zero kelvin gracefully."""
     smart = NvmeSmartLog(device_path="/dev/nvme0n1", temperature_kelvin=0)
     assert smart.temperature_celsius == 0
-
-
-def test_parse_smart_log_text_hex_critical_warning():
-    """Hex values are parsed as hex, not as their leading "0"."""
-    output = (
-        "Smart Log for NVME device:nvme1n1 namespace-id:ffffffff\n"
-        "critical_warning                        : 0x1\n"
-        "temperature                             : 315 K (42 Celsius)\n"
-        "media_errors                            : 0xa\n"
-    )
-    smart = parse_smart_log_output("/dev/nvme1n1", output)
-    assert smart is not None
-    assert smart.critical_warning == 1
-    assert smart.media_errors == 10
-    assert smart.temperature_kelvin == 315
-
-
-# ---------------------------------------------------------------------------
-# Tests: parse_error_log_output
-# ---------------------------------------------------------------------------
-
-
-def test_parse_error_log_text():
-    """Parse human-readable error log with two entries."""
-    entries = parse_error_log_output(ERROR_LOG_TEXT_OUTPUT)
-    assert len(entries) == 2
-
-    assert entries[0].error_count == 5
-    assert entries[0].command_id == 0x0012
-    assert entries[0].status_field == 0x4004
-    assert entries[0].lba == 0
-    assert entries[0].nsid == 1
-    assert entries[0].opcode == 0x02
-
-    assert entries[1].error_count == 4
-    assert entries[1].command_id == 0x000A
-    assert entries[1].lba == 0x1000
-    assert entries[1].opcode == 0x01
-
-
-def test_parse_error_log_text_padded_entry_headers():
-    """Parse nvme-cli output where the entry index is padded ("Entry[ 0]")."""
-    entries = parse_error_log_output(ERROR_LOG_TEXT_PADDED_OUTPUT)
-    assert len(entries) == 2
-
-    assert entries[0].error_count == 7
-    assert entries[0].command_id == 0x12
-    assert entries[0].status_field == 0x4004
-    assert entries[0].nsid == 1
-    assert entries[0].opcode == 0x2
-
-    assert entries[1].error_count == 6
-    assert entries[1].command_id == 0xA
-    assert entries[1].lba == 0x1000
-    assert entries[1].opcode == 0x1
-
-
-def test_parse_error_log_json():
-    """Parse JSON format error log."""
-    entries = parse_error_log_output(ERROR_LOG_JSON_OUTPUT)
-    assert len(entries) == 2
-
-    assert entries[0].error_count == 3
-    assert entries[0].submission_queue_id == 0
-    assert entries[0].command_id == 18
-    assert entries[0].status_field == 16388
-    assert entries[0].lba == 0
-    assert entries[0].nsid == 1
-    assert entries[0].opcode == 2
-
-    assert entries[1].error_count == 2
-    assert entries[1].submission_queue_id == 1
-    assert entries[1].lba == 4096
-    assert entries[1].opcode == 1
-
-
-def test_parse_error_log_empty_input():
-    """Empty input returns empty list."""
-    assert parse_error_log_output("") == []
-    assert parse_error_log_output(None) == []
-
-
-def test_parse_error_log_no_entries():
-    """Output with header but no entries returns empty list."""
-    output = "Error Log Entries for device:nvme0n1 entries:0\n"
-    assert parse_error_log_output(output) == []
-
-
-# ---------------------------------------------------------------------------
-# Tests: parse_self_test_log_output
-# ---------------------------------------------------------------------------
-
-
-def test_parse_self_test_log_text():
-    """Parse human-readable self-test log with two result entries."""
-    log = parse_self_test_log_output("/dev/nvme1n1", SELF_TEST_LOG_TEXT_OUTPUT)
-    assert log is not None
-    assert log.device_path == "/dev/nvme1n1"
-    assert log.current_operation == 0
-    assert log.current_completion == 0
-    assert not log.test_in_progress
-    assert len(log.results) == 2
-
-    assert log.results[0].result_code == 0
-    assert log.results[0].self_test_code == 1
-    assert log.results[0].power_on_hours == 8760
-    assert log.results[0].passed
-
-    assert log.results[1].result_code == 2
-    assert log.results[1].self_test_code == 2
-    assert log.results[1].power_on_hours == 8500
-    assert log.results[1].failing_lba == 0x1234
-    assert not log.results[1].passed
-
-
-def test_parse_self_test_log_text_nvme_cli_format():
-    """Parse nvme-cli output: hex current operation and its own field names."""
-    log = parse_self_test_log_output("/dev/nvme1n1", SELF_TEST_LOG_TEXT_NVME_CLI_OUTPUT)
-    assert log is not None
-    assert log.current_operation == 2
-    assert log.current_completion == 67
-    assert log.test_in_progress
-    assert len(log.results) == 2
-
-    assert log.results[0].result_code == 0
-    assert log.results[0].self_test_code == 1
-    assert log.results[0].power_on_hours == 0x2238
-    assert log.results[0].nsid == 1
-    assert log.results[0].passed
-
-    assert log.results[1].result_code == 7
-    assert log.results[1].failing_lba == 0x1234
-    assert log.results[1].status_code_type == 1
-    assert log.results[1].status_code == 3
-    assert not log.results[1].passed
-
-
-def test_parse_self_test_log_json():
-    """Parse JSON format self-test log with test in progress."""
-    log = parse_self_test_log_output("/dev/nvme1n1", SELF_TEST_LOG_JSON_OUTPUT)
-    assert log is not None
-    assert log.current_operation == 1
-    assert log.current_completion == 45
-    assert log.test_in_progress
-    assert len(log.results) == 2
-
-    assert log.results[0].result_code == 0
-    assert log.results[0].self_test_code == 1
-    assert log.results[0].power_on_hours == 9000
-    assert log.results[0].passed
-
-    assert log.results[1].result_code == 1
-    assert log.results[1].self_test_code == 2
-    assert log.results[1].failing_lba == 512
-    assert log.results[1].status_code_type == 1
-    assert log.results[1].status_code == 3
-    assert not log.results[1].passed
-
-
-def test_parse_self_test_log_in_progress():
-    """Parse self-test log showing test in progress, no results."""
-    log = parse_self_test_log_output("/dev/nvme1n1", SELF_TEST_LOG_IN_PROGRESS_TEXT)
-    assert log is not None
-    assert log.current_operation == 2
-    assert log.current_completion == 67
-    assert log.test_in_progress
-    assert log.results == []
-
-
-def test_parse_self_test_log_empty_input():
-    """Empty input returns None."""
-    assert parse_self_test_log_output("/dev/nvme0n1", "") is None
-    assert parse_self_test_log_output("/dev/nvme0n1", None) is None
 
 
 # ---------------------------------------------------------------------------
@@ -814,6 +425,17 @@ def _make_mock_node():
     return node
 
 
+# A controller that advertises Device Self-test (OACS bit 4) and a 64-entry
+# Error Information Log. Callers read Identify once and pass this down, so the
+# tests hand it over the same way production code does.
+_SELF_TEST_CAPABLE = NvmeControllerInfo(oacs=OACS_DEVICE_SELF_TEST, error_log_entries=64)
+
+
+def _stub_controller_info(monkeypatch, info=_SELF_TEST_CAPABLE):
+    """Stub the single Identify read the error-log collector performs."""
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_controller_info", lambda n, d: info)
+
+
 def _make_result(stdout="", stderr="", exited=0):
     """Create a mock command result."""
     result = MagicMock()
@@ -918,17 +540,6 @@ def test_list_nvme_devices_command_fails():
     assert devices == []
 
 
-def test_get_smart_log_success():
-    """get_smart_log returns parsed SMART data."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result(stdout=SMART_LOG_TEXT_OUTPUT)
-
-    smart = get_smart_log(node, "/dev/nvme1n1")
-    assert smart is not None
-    assert smart.power_on_hours == 8760
-    assert smart.media_errors == 0
-
-
 def test_get_smart_log_failure():
     """get_smart_log returns None when command fails."""
     node = _make_mock_node()
@@ -938,22 +549,12 @@ def test_get_smart_log_failure():
     assert smart is None
 
 
-def test_get_error_log_success():
-    """get_error_log returns parsed entries."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result(stdout=ERROR_LOG_TEXT_OUTPUT)
-
-    entries = get_error_log(node, "/dev/nvme1n1")
-    assert len(entries) == 2
-
-
 def test_get_error_log_failure():
-    """get_error_log returns empty list when command fails."""
+    """A failed read returns None, which is not the same as an empty log."""
     node = _make_mock_node()
     node.remoter.sudo.return_value = _make_result(exited=1, stderr="error")
 
-    entries = get_error_log(node, "/dev/nvme99n1")
-    assert entries == []
+    assert get_error_log(node, "/dev/nvme99n1", 64) is None
 
 
 def test_run_self_test_success():
@@ -961,7 +562,7 @@ def test_run_self_test_success():
     node = _make_mock_node()
     node.remoter.sudo.return_value = _make_result()
 
-    result = run_self_test(node, "/dev/nvme1n1", SelfTestType.SHORT)
+    result = run_self_test(node, "/dev/nvme1n1", _SELF_TEST_CAPABLE, SelfTestType.SHORT)
     assert result is True
     node.remoter.sudo.assert_called_once_with(
         "nvme device-self-test -s 1 /dev/nvme1n1",
@@ -975,7 +576,7 @@ def test_run_self_test_extended():
     node = _make_mock_node()
     node.remoter.sudo.return_value = _make_result()
 
-    result = run_self_test(node, "/dev/nvme1n1", SelfTestType.EXTENDED)
+    result = run_self_test(node, "/dev/nvme1n1", _SELF_TEST_CAPABLE, SelfTestType.EXTENDED)
     assert result is True
     node.remoter.sudo.assert_called_once_with(
         "nvme device-self-test -s 2 /dev/nvme1n1",
@@ -984,13 +585,27 @@ def test_run_self_test_extended():
     )
 
 
-def test_run_self_test_not_supported():
-    """run_self_test returns False when device doesn't support self-test."""
+def test_run_self_test_command_rejected():
+    """run_self_test returns False when a supported controller rejects the command."""
     node = _make_mock_node()
     node.remoter.sudo.return_value = _make_result(exited=1, stderr="not supported")
 
-    result = run_self_test(node, "/dev/nvme1n1")
+    result = run_self_test(node, "/dev/nvme1n1", _SELF_TEST_CAPABLE)
     assert result is False
+
+
+def test_run_self_test_skipped_when_controller_lacks_support():
+    """The self-test command is never issued to a controller that does not implement it.
+
+    Issuing it anyway records an entry in the device Error Information Log and
+    increments num_err_log_entries, so the diagnostic would report an anomaly
+    it created itself.
+    """
+    node = _make_mock_node()
+    unsupported = NvmeControllerInfo(oacs=0x8, error_log_entries=64)
+
+    assert run_self_test(node, "/dev/nvme1n1", unsupported) is False
+    node.remoter.sudo.assert_not_called()
 
 
 def test_abort_self_test_success():
@@ -1017,16 +632,6 @@ def test_abort_self_test_failure():
     node.log.warning.assert_called()
 
 
-def test_get_self_test_log_success():
-    """get_self_test_log returns parsed log."""
-    node = _make_mock_node()
-    node.remoter.sudo.return_value = _make_result(stdout=SELF_TEST_LOG_TEXT_OUTPUT)
-
-    log = get_self_test_log(node, "/dev/nvme1n1")
-    assert log is not None
-    assert len(log.results) == 2
-
-
 def test_get_self_test_log_failure():
     """get_self_test_log returns None when command fails."""
     node = _make_mock_node()
@@ -1034,23 +639,6 @@ def test_get_self_test_log_failure():
 
     log = get_self_test_log(node, "/dev/nvme1n1")
     assert log is None
-
-
-def test_collect_all_smart_logs_full_pipeline():
-    """collect_all_smart_logs performs discovery -> filter -> collect."""
-    node = _make_mock_node()
-    # is_nvme_cli_available check (via run "which nvme")
-    node.remoter.run.return_value = _make_result(stdout="/usr/sbin/nvme")
-    # nvme list returns one EBS + one instance store
-    node.remoter.sudo.side_effect = [
-        _make_result(stdout=NVME_LIST_JSON_V2),  # nvme list
-        _make_result(stdout=SMART_LOG_TEXT_OUTPUT),  # smart-log for instance store
-    ]
-
-    smart_logs = collect_all_smart_logs(node)
-    # Only the instance store disk (not EBS) should be collected
-    assert len(smart_logs) == 1
-    assert smart_logs[0].device_path == "/dev/nvme1n1"
 
 
 def test_collect_all_smart_logs_no_devices():
@@ -1197,27 +785,29 @@ def test_threshold_critical_warning_yields_critical():
 
 
 def test_threshold_media_errors_yields_error():
-    """media_errors > 0 yields an ERROR event."""
+    """media_errors above the baseline yields an ERROR event."""
     node = _make_mock_node()
     node.logdir = "/tmp/opencode/test_logdir"
+    store_baseline_smart_logs(node, [_make_smart_log()])
     smart = _make_smart_log(media_errors=42)
     events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
 
     error_events = [e for e in events if e.severity == Severity.ERROR]
     assert len(error_events) == 1
-    assert "media_errors=42" in error_events[0].error
+    assert "42 new media_errors" in error_events[0].error
 
 
 def test_threshold_error_log_entries_yields_warning():
-    """num_err_log_entries > 0 yields a WARNING event."""
+    """num_err_log_entries above the baseline yields a WARNING event."""
     node = _make_mock_node()
     node.logdir = "/tmp/opencode/test_logdir"
+    store_baseline_smart_logs(node, [_make_smart_log()])
     smart = _make_smart_log(num_err_log_entries=5)
     events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
 
     warning_events = [e for e in events if e.severity == Severity.WARNING]
     assert len(warning_events) == 1
-    assert "num_err_log_entries=5" in warning_events[0].message
+    assert "5 new error log entries" in warning_events[0].message
 
 
 def test_threshold_percentage_used_above_threshold_yields_warning():
@@ -1273,6 +863,7 @@ def test_threshold_multiple_issues_yields_multiple_events():
     """A device with multiple issues yields one event per issue."""
     node = _make_mock_node()
     node.logdir = "/tmp/opencode/test_logdir"
+    store_baseline_smart_logs(node, [_make_smart_log()])
     smart = _make_smart_log(
         critical_warning=1,
         media_errors=10,
@@ -1348,10 +939,11 @@ def test_check_nvme_health_yields_events_for_errors(monkeypatch):
     node.parent_cluster.params.get.return_value = True
     node.logdir = "/tmp/opencode/test_logdir"
 
+    store_baseline_smart_logs(node, [_make_smart_log()])
     smart = _make_smart_log(media_errors=5)
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.is_nvme_cli_available", lambda n: True)
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.collect_all_smart_logs", lambda n: [smart])
-    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, **kw: [])
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: [])
 
     events = list(check_nvme_health(current_node=node))
     assert len(events) == 1
@@ -1506,8 +1098,12 @@ def test_run_self_test_on_all_devices_triggers_all_before_polling(monkeypatch):
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.list_nvme_devices", lambda n: disks)
     monkeypatch.setattr("sdcm.utils.nvme_diagnostics.filter_data_disks", lambda devices, **kwargs: disks)
     monkeypatch.setattr(
+        "sdcm.utils.nvme_diagnostics.get_controller_info",
+        lambda n, device_path: calls.append(("id-ctrl", device_path)) or _SELF_TEST_CAPABLE,
+    )
+    monkeypatch.setattr(
         "sdcm.utils.nvme_diagnostics.run_self_test",
-        lambda n, device_path, test_type: calls.append(("trigger", device_path)) is None,
+        lambda n, device_path, controller_info, test_type: calls.append(("trigger", device_path)) is None,
     )
     monkeypatch.setattr(
         "sdcm.utils.nvme_diagnostics.poll_self_test_completion",
@@ -1518,7 +1114,42 @@ def test_run_self_test_on_all_devices_triggers_all_before_polling(monkeypatch):
 
     assert result == []
     assert [device_path for action, device_path in calls if action == "trigger"] == [d.device_path for d in disks]
-    assert [action for action, _ in calls] == ["trigger"] * 3 + ["poll"] * 3
+    assert [action for action, _ in calls] == ["id-ctrl", "trigger"] * 3 + ["poll"] * 3
+    # exactly one Identify per device: the capability probe is not repeated
+    assert [device_path for action, device_path in calls if action == "id-ctrl"] == [d.device_path for d in disks]
+
+
+def test_run_self_test_on_all_devices_skips_device_with_unreadable_identify(monkeypatch):
+    """A device whose Identify cannot be read is skipped, not probed blindly.
+
+    Without OACS there is no way to know whether the self-test command is
+    implemented, and issuing it to a controller that does not implement it
+    adds an entry to the device Error Information Log.
+    """
+    node = _make_mock_node()
+    disk = NvmeDevice(
+        device_path="/dev/nvme1n1",
+        model="Amazon EC2 NVMe Instance Storage",
+        serial="AWS1",
+        firmware="0",
+        size_bytes=1900000000000,
+        used_bytes=0,
+        sector_size=512,
+        is_data_disk=True,
+    )
+    triggered = []
+
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.is_nvme_cli_available", lambda n: True)
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.list_nvme_devices", lambda n: [disk])
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.filter_data_disks", lambda devices, **kwargs: [disk])
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_controller_info", lambda n, device_path: None)
+    monkeypatch.setattr(
+        "sdcm.utils.nvme_diagnostics.run_self_test",
+        lambda n, device_path, controller_info, test_type: triggered.append(device_path) is None,
+    )
+
+    assert run_self_test_on_all_devices(node, SelfTestType.SHORT) == []
+    assert triggered == []
 
 
 def test_run_self_test_on_all_devices_no_devices(monkeypatch):
@@ -1529,3 +1160,511 @@ def test_run_self_test_on_all_devices_no_devices(monkeypatch):
 
     result = run_self_test_on_all_devices(node)
     assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Tests: baseline delta reporting
+# ---------------------------------------------------------------------------
+
+
+def test_error_entries_present_at_baseline_yield_no_event():
+    """Entries that already existed before the test are not reported as new.
+
+    A fresh cloud instance can arrive with a non-empty error log, so an absolute
+    "num_err_log_entries > 0" check fires on healthy nodes on every run.
+    """
+    node = _make_mock_node()
+    node.logdir = None
+    store_baseline_smart_logs(node, [_make_smart_log(num_err_log_entries=2, media_errors=1)])
+    smart = _make_smart_log(num_err_log_entries=2, media_errors=1)
+
+    assert list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS)) == []
+
+
+def test_error_entries_above_baseline_yield_warning(monkeypatch):
+    """Only growth over the baseline is reported, and it reports the delta."""
+    node = _make_mock_node()
+    node.logdir = None
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: [])
+    store_baseline_smart_logs(node, [_make_smart_log(num_err_log_entries=2)])
+    smart = _make_smart_log(num_err_log_entries=5)
+
+    events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
+
+    assert len(events) == 1
+    assert events[0].severity == Severity.WARNING
+    assert "3 new error log entries" in events[0].message
+    assert "total=5" in events[0].message
+
+
+def test_missing_baseline_skips_the_delta_checks(monkeypatch):
+    """With no baseline there is nothing to subtract, so nothing is reported.
+
+    A missing baseline is a normal case (nvme-cli not installable at setup,
+    reused clusters). Comparing the lifetime counters against zero would report
+    the device's whole history as errors from this run.
+    """
+    node = _make_mock_node()
+    node.logdir = None
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: [])
+    smart = _make_smart_log(num_err_log_entries=3, media_errors=2)
+
+    assert list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS)) == []
+
+
+# ---------------------------------------------------------------------------
+# Raw log page builders
+#
+# Pages are assembled at the offsets the NVMe Base Specification defines, so a
+# test failure means a parser offset drifted from the spec, not that a fixture
+# was captured from a differently-behaved nvme-cli.
+# ---------------------------------------------------------------------------
+
+
+def _put(buf: bytearray, offset: int, value: int, size: int) -> None:
+    buf[offset : offset + size] = value.to_bytes(size, "little")
+
+
+def _make_smart_page(**fields) -> bytes:
+    """Build a 512-byte SMART / Health Information log page (02h)."""
+    layout = {
+        "critical_warning": (0, 1),
+        "temperature_kelvin": (1, 2),
+        "available_spare": (3, 1),
+        "available_spare_threshold": (4, 1),
+        "percentage_used": (5, 1),
+        "data_units_read": (32, 16),
+        "data_units_written": (48, 16),
+        "host_read_commands": (64, 16),
+        "host_write_commands": (80, 16),
+        "controller_busy_time": (96, 16),
+        "power_cycles": (112, 16),
+        "power_on_hours": (128, 16),
+        "unsafe_shutdowns": (144, 16),
+        "media_errors": (160, 16),
+        "num_err_log_entries": (176, 16),
+    }
+    buf = bytearray(SMART_LOG_PAGE_LEN)
+    for name, value in fields.items():
+        offset, size = layout[name]
+        _put(buf, offset, value, size)
+    return bytes(buf)
+
+
+def _make_error_entry(**fields) -> bytes:
+    """Build one 64-byte Error Information Log entry (01h).
+
+    ``status_field`` and ``phase_tag`` are given separately and packed into the
+    single on-wire field, where bits 15:1 are the status and bit 0 the phase tag.
+    """
+    layout = {
+        "error_count": (0, 8),
+        "sqid": (8, 2),
+        "cmdid": (10, 2),
+        "parm_error_location": (14, 2),
+        "lba": (16, 8),
+        "nsid": (24, 4),
+        "vs": (28, 1),
+        "trtype": (29, 1),
+        "csi": (30, 1),
+        "opcode": (31, 1),
+        "cs": (32, 8),
+        "log_page_version": (63, 1),
+    }
+    buf = bytearray(ERROR_LOG_ENTRY_LEN)
+    _put(buf, 0, fields.pop("error_count", 1), 8)
+    status_field = fields.pop("status_field", 0)
+    phase_tag = fields.pop("phase_tag", 0)
+    _put(buf, 12, (status_field << 1) | phase_tag, 2)
+    for name, value in fields.items():
+        offset, size = layout[name]
+        _put(buf, offset, value, size)
+    return bytes(buf)
+
+
+def _make_self_test_page(current_operation=0, current_completion=0, results=()) -> bytes:
+    """Build a 564-byte Device Self-test log page (06h)."""
+    buf = bytearray(SELF_TEST_LOG_PAGE_LEN)
+    buf[0] = current_operation
+    buf[1] = current_completion
+    # Unused result slots are marked 0xf ("entry not used").
+    for index in range(20):
+        buf[4 + index * SELF_TEST_RESULT_LEN] = 0x0F
+    for index, res in enumerate(results):
+        offset = 4 + index * SELF_TEST_RESULT_LEN
+        buf[offset] = (res.get("self_test_code", 1) << 4) | res.get("result_code", 0)
+        buf[offset + 1] = res.get("segment_number", 0)
+        _put(buf, offset + 4, res.get("power_on_hours", 0), 8)
+        _put(buf, offset + 12, res.get("nsid", 0), 4)
+        _put(buf, offset + 16, res.get("failing_lba", 0), 8)
+        buf[offset + 24] = res.get("status_code_type", 0)
+        buf[offset + 25] = res.get("status_code", 0)
+    return bytes(buf)
+
+
+def _make_id_ctrl(oacs=0, elpe_zero_based=63) -> bytes:
+    buf = bytearray(IDENTIFY_CONTROLLER_LEN)
+    _put(buf, IDCTRL_OACS_OFFSET, oacs, 2)
+    buf[IDCTRL_ELPE_OFFSET] = elpe_zero_based
+    return bytes(buf)
+
+
+def _b64_result(payload: bytes):
+    return _make_result(stdout=base64.b64encode(payload).decode())
+
+
+# ---------------------------------------------------------------------------
+# Tests: SMART page parsing
+# ---------------------------------------------------------------------------
+
+
+def test_parse_smart_page_reads_spec_offsets():
+    """Every field is decoded from its spec-defined offset."""
+    page = _make_smart_page(
+        critical_warning=0x1,
+        temperature_kelvin=315,
+        available_spare=100,
+        available_spare_threshold=10,
+        percentage_used=2,
+        data_units_read=8041270,
+        data_units_written=12219712,
+        host_read_commands=52368094,
+        host_write_commands=49760027,
+        controller_busy_time=120,
+        power_cycles=15,
+        power_on_hours=8760,
+        unsafe_shutdowns=3,
+        media_errors=10,
+        num_err_log_entries=5,
+    )
+    smart = parse_smart_log_page("/dev/nvme1n1", page)
+
+    assert smart.device_path == "/dev/nvme1n1"
+    assert smart.critical_warning == 1
+    assert smart.temperature_kelvin == 315
+    assert smart.temperature_celsius == 42
+    assert smart.available_spare == 100
+    assert smart.available_spare_threshold == 10
+    assert smart.percentage_used == 2
+    assert smart.data_units_read == 8041270
+    assert smart.data_units_written == 12219712
+    assert smart.host_read_commands == 52368094
+    assert smart.host_write_commands == 49760027
+    assert smart.controller_busy_time == 120
+    assert smart.power_cycles == 15
+    assert smart.power_on_hours == 8760
+    assert smart.unsafe_shutdowns == 3
+    assert smart.media_errors == 10
+    assert smart.num_err_log_entries == 5
+
+
+def test_parse_smart_page_temperature_is_kelvin_by_definition():
+    """Composite Temperature is Kelvin on the wire, so no unit guessing is possible.
+
+    The text parser had to infer the unit, and nvme-cli 1.x/2.x disagree on the
+    order ("315 K (42 Celsius)" vs "42 C (315 K, 107 F)"), which silently made
+    the over-temperature check unreachable.
+    """
+    assert parse_smart_log_page("/dev/nvme1n1", _make_smart_page(temperature_kelvin=315)).temperature_celsius == 42
+
+
+def test_parse_smart_page_handles_128_bit_counters():
+    """The 16-byte counters are decoded whole, not truncated to 64 bits."""
+    huge = 2**100 + 12345
+    smart = parse_smart_log_page("/dev/nvme1n1", _make_smart_page(data_units_read=huge))
+    assert smart.data_units_read == huge
+
+
+# ---------------------------------------------------------------------------
+# Tests: error log page parsing
+# ---------------------------------------------------------------------------
+
+
+def test_parse_error_entry_splits_status_field_and_phase_tag():
+    """Bits 15:1 are the status field, bit 0 the phase tag.
+
+    0x2001 is the status the AWS Nitro controller reported for the rejected
+    'nvme device-self-test' - the value the previous text parser zeroed out.
+    """
+    entry = parse_error_log_entry(_make_error_entry(error_count=2, status_field=0x2001, phase_tag=1))
+
+    assert entry.status_field == 0x2001
+    assert entry.phase_tag == 1
+
+
+def test_parse_error_entry_reads_spec_offsets():
+    entry = parse_error_log_entry(
+        _make_error_entry(
+            error_count=2,
+            sqid=0,
+            cmdid=0x4,
+            status_field=0x2001,
+            parm_error_location=0x105,
+            lba=0xDEADBEEF,
+            nsid=0xFFFFFFFF,
+            vs=0x80,
+            trtype=1,
+            cs=0x1234,
+        )
+    )
+
+    assert entry.error_count == 2
+    assert entry.command_id == 0x4
+    assert entry.parm_error_location == 0x105
+    assert entry.lba == 0xDEADBEEF
+    assert entry.nsid == 0xFFFFFFFF
+    assert entry.vendor_specific == 0x80
+    assert entry.transport_type == 1
+    assert entry.command_specific == 0x1234
+
+
+def test_parse_error_entry_opcode_requires_log_page_version_1():
+    """csi and opcode are reserved bytes unless Log Page Version is 1h.
+
+    All 64 entries captured from an i4i node report log_page_version 0, so the
+    'opcode=0x00' nvme-cli prints there is a reserved byte, not an opcode.
+    """
+    without = parse_error_log_entry(_make_error_entry(csi=0x2, opcode=0x14, log_page_version=0))
+    assert without.opcode is None
+    assert without.command_set_indicator is None
+
+    with_version = parse_error_log_entry(_make_error_entry(csi=0x2, opcode=0x14, log_page_version=1))
+    assert with_version.opcode == 0x14
+    assert with_version.command_set_indicator == 0x2
+
+
+def test_parse_error_entry_zero_error_count_is_an_invalid_entry():
+    """Spec: an Error Count of 0h marks an unused slot or a lost entry."""
+    assert parse_error_log_entry(_make_error_entry(error_count=0, status_field=0x2001)) is None
+
+
+def test_parse_error_log_page_drops_unused_slots():
+    """A full page of slots yields only the populated entries.
+
+    'nvme get-log' always returns every slot the controller supports; a 64-slot
+    page with two real errors previously produced 64 rows in the collected
+    artifact, 62 of them identical zeros.
+    """
+    page = (
+        _make_error_entry(error_count=2, cmdid=0x4, status_field=0x2001)
+        + _make_error_entry(error_count=1, cmdid=0x14, status_field=0x2002)
+        + _make_error_entry(error_count=0) * 62
+    )
+    entries = parse_error_log_page(page)
+
+    assert len(entries) == 2
+    assert [e.status_field for e in entries] == [0x2001, 0x2002]
+
+
+# ---------------------------------------------------------------------------
+# Tests: self-test log page parsing
+# ---------------------------------------------------------------------------
+
+
+def test_parse_self_test_page_reads_results():
+    page = _make_self_test_page(
+        results=[
+            {"result_code": 0, "self_test_code": 1, "power_on_hours": 8760, "nsid": 1},
+            {
+                "result_code": 7,
+                "self_test_code": 2,
+                "segment_number": 3,
+                "power_on_hours": 8500,
+                "nsid": 1,
+                "failing_lba": 0x1234,
+                "status_code_type": 2,
+                "status_code": 0x81,
+            },
+        ]
+    )
+    log = parse_self_test_log_page("/dev/nvme1n1", page)
+
+    assert not log.test_in_progress
+    assert len(log.results) == 2
+    assert log.results[0].passed
+    assert log.results[0].self_test_code == 1
+    assert log.results[0].power_on_hours == 8760
+    assert log.results[1].result_code == 7
+    assert log.results[1].segment_number == 3
+    assert log.results[1].failing_lba == 0x1234
+    assert log.results[1].status_code == 0x81
+
+
+def test_parse_self_test_page_skips_unused_entries():
+    """Result code 0xf means the slot holds no test result."""
+    assert parse_self_test_log_page("/dev/nvme1n1", _make_self_test_page()).results == []
+
+
+def test_parse_self_test_page_reports_test_in_progress():
+    page = _make_self_test_page(current_operation=2, current_completion=45)
+    log = parse_self_test_log_page("/dev/nvme1n1", page)
+
+    assert log.test_in_progress
+    assert log.current_operation == 2
+    assert log.current_completion == 45
+
+
+# ---------------------------------------------------------------------------
+# Tests: raw page reads
+# ---------------------------------------------------------------------------
+
+
+def test_get_smart_log_reads_raw_log_page():
+    node = _make_mock_node()
+    node.remoter.sudo.return_value = _b64_result(_make_smart_page(temperature_kelvin=315, media_errors=2))
+
+    smart = get_smart_log(node, "/dev/nvme1n1")
+
+    assert smart.temperature_kelvin == 315
+    assert smart.media_errors == 2
+    node.remoter.sudo.assert_called_once_with(
+        f"nvme get-log /dev/nvme1n1 --log-id={LOG_PAGE_SMART_HEALTH} --log-len={SMART_LOG_PAGE_LEN} -b | base64 -w0",
+        ignore_status=True,
+        timeout=30,
+    )
+
+
+def test_get_smart_log_rejects_short_read():
+    """A truncated page is a failed read, never a partially-trusted one."""
+    node = _make_mock_node()
+    node.remoter.sudo.return_value = _b64_result(b"\x00" * 128)
+
+    assert get_smart_log(node, "/dev/nvme1n1") is None
+    node.log.warning.assert_called()
+
+
+def test_get_smart_log_rejects_undecodable_output():
+    node = _make_mock_node()
+    node.remoter.sudo.return_value = _make_result(stdout="not base64 !!!")
+
+    assert get_smart_log(node, "/dev/nvme1n1") is None
+    node.log.warning.assert_called()
+
+
+def test_get_error_log_sizes_the_page_from_elpe():
+    """The page length comes from the controller, not from a fixed guess.
+
+    Asking get-log for more entries than the controller supports can be
+    rejected outright, so ELPE (0's based) decides the length. The caller reads
+    Identify once and hands the count down.
+    """
+    node = _make_mock_node()
+    node.remoter.sudo.side_effect = [
+        _b64_result(_make_id_ctrl(elpe_zero_based=3)),  # id-ctrl -> 4 entries
+        _b64_result(_make_error_entry(error_count=2, status_field=0x2001) + _make_error_entry(error_count=0) * 3),
+    ]
+
+    controller_info = get_controller_info(node, "/dev/nvme1n1")
+    entries = get_error_log(node, "/dev/nvme1n1", controller_info.error_log_entries)
+
+    assert len(entries) == 1
+    assert entries[0].status_field == 0x2001
+    log_page_cmd = node.remoter.sudo.call_args_list[1][0][0]
+    assert f"--log-id={LOG_PAGE_ERROR_INFORMATION}" in log_page_cmd
+    assert f"--log-len={4 * ERROR_LOG_ENTRY_LEN}" in log_page_cmd
+
+
+def test_error_log_entry_count_is_zero_based():
+    assert parse_identify_controller(_make_id_ctrl(elpe_zero_based=63)).error_log_entries == 64
+
+
+def test_supports_self_test_reads_oacs_bit_4():
+    info = parse_identify_controller(_make_id_ctrl(oacs=OACS_DEVICE_SELF_TEST | 0x8))
+
+    assert info.supports_self_test is True
+
+
+def test_supports_self_test_false_for_aws_oacs():
+    """oacs=0x8 (Namespace Management only) is what AWS Nitro controllers report."""
+    assert parse_identify_controller(_make_id_ctrl(oacs=0x8)).supports_self_test is False
+
+
+def test_get_controller_info_reads_both_fields_in_one_identify():
+    """OACS and ELPE come from the same structure, so one read serves both."""
+    node = _make_mock_node()
+    node.remoter.sudo.return_value = _b64_result(_make_id_ctrl(oacs=OACS_DEVICE_SELF_TEST, elpe_zero_based=3))
+
+    info = get_controller_info(node, "/dev/nvme1n1")
+
+    assert info is not None
+    assert info.supports_self_test is True
+    assert info.error_log_entries == 4
+    node.remoter.sudo.assert_called_once()
+
+
+def test_get_controller_info_none_when_identify_unreadable():
+    node = _make_mock_node()
+    node.remoter.sudo.return_value = _make_result(exited=1, stderr="error")
+
+    assert get_controller_info(node, "/dev/nvme1n1") is None
+
+
+def test_get_self_test_log_reads_raw_log_page():
+    node = _make_mock_node()
+    node.remoter.sudo.return_value = _b64_result(
+        _make_self_test_page(results=[{"result_code": 0, "self_test_code": 1}])
+    )
+
+    log = get_self_test_log(node, "/dev/nvme1n1")
+
+    assert log is not None
+    assert len(log.results) == 1
+    assert f"--log-len={SELF_TEST_LOG_PAGE_LEN}" in node.remoter.sudo.call_args[0][0]
+
+
+def test_collected_artifact_marks_opcode_unavailable(monkeypatch, tmp_path):
+    """opcode is written as n/a when the controller did not report one."""
+    node = _make_mock_node()
+    node.logdir = str(tmp_path)
+    entry = parse_error_log_entry(_make_error_entry(error_count=2, cmdid=0x4, status_field=0x2001, opcode=0x14))
+    _stub_controller_info(monkeypatch)
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: [entry])
+
+    _collect_error_log_with_timestamp(node, "/dev/nvme1n1")
+
+    written = list(tmp_path.glob("nvme_error_log_nvme1n1_*.log"))
+    assert len(written) == 1
+    line = written[0].read_text().strip()
+    assert "status=0x2001" in line
+    assert "opcode=n/a" in line
+
+
+def test_collect_error_log_writes_nothing_when_no_populated_entries(monkeypatch, tmp_path):
+    """No artifact is produced when the page holds only unused slots."""
+    node = _make_mock_node()
+    node.logdir = str(tmp_path)
+    _stub_controller_info(monkeypatch)
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: [])
+
+    _collect_error_log_with_timestamp(node, "/dev/nvme1n1")
+
+    assert list(tmp_path.glob("nvme_error_log_*.log")) == []
+
+    node.log.warning.assert_not_called()
+
+
+def test_collect_error_log_warns_when_the_page_could_not_be_read(monkeypatch, tmp_path):
+    """A failed read is reported as such, not as a device with a clean log."""
+    node = _make_mock_node()
+    node.logdir = str(tmp_path)
+    _stub_controller_info(monkeypatch)
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: None)
+
+    _collect_error_log_with_timestamp(node, "/dev/nvme1n1")
+
+    assert list(tmp_path.glob("nvme_error_log_*.log")) == []
+    node.log.warning.assert_called_once()
+
+
+def test_collect_error_log_reads_nothing_when_identify_fails(monkeypatch, tmp_path):
+    """Without ELPE there is no defensible page length, so nothing is read."""
+    node = _make_mock_node()
+    node.logdir = str(tmp_path)
+    reads = []
+    _stub_controller_info(monkeypatch, info=None)
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, max_entries: reads.append(d))
+
+    _collect_error_log_with_timestamp(node, "/dev/nvme1n1")
+
+    assert reads == []
+    assert list(tmp_path.glob("nvme_error_log_*.log")) == []
