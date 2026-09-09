@@ -261,6 +261,9 @@ TEST_LOG = logging.getLogger(__name__)
 # timeout for the full scylla-doctor collection during failure handling
 SCYLLA_DOCTOR_TEARDOWN_TIMEOUT = 30 * 60
 
+# scylla-server helper that runs a system-wide `perf record`, rotating its output daily
+PERF_COLLECTOR_SERVICE = "scylla-perf-collector"
+
 PYTHON_THREAD_LIST = (KafkaCDCReaderThread, KafkaProducerThread, KafkaValidatorThread)
 
 
@@ -4276,6 +4279,51 @@ class ClusterTester(unittest.TestCase):
 
         self.log.info("Failure statistics collection completed")
 
+    def stop_perf_collector(self):
+        """Stop scylla-server's perf-collector helper on the DB nodes.
+
+        The helper (scylladb/scylladb#30076) runs a system-wide `perf record`, which keeps
+        sampling and writing to disk for as long as it runs, and only finalizes a recording
+        on its daily rotation or on exit. Teardown is where the perf data of a performance
+        run gets finalized and collected, so stop the collector before any of it happens
+        instead of leaving it recording over the teardown itself.
+
+        A node that has no such service (older Scylla) or no systemd to ask about it
+        (the containerized backends, and xcloud which exposes no ssh login info) is skipped.
+        Failing to stop it is logged and not raised: the measurement is already over by
+        teardown, and one unreachable node must not keep the collector running on the rest.
+        """
+        self._set_perf_collector_running(running=False)
+
+    def start_perf_collector(self):
+        """Start the perf-collector helper again on DB nodes that outlive the test.
+
+        A kept or reused cluster would otherwise stay without samples until its nodes are
+        rebooted, which is not what the next run on it, or whoever investigates it, expects.
+        """
+        self._set_perf_collector_running(running=True)
+
+    def _set_perf_collector_running(self, running: bool):
+        if not self.db_cluster:
+            return
+        action, doing = ("start", "starting") if running else ("stop", "stopping")
+
+        def on_node(node):
+            if node.is_kubernetes() or node.is_docker() or not node.ssh_login_info:
+                self.log.debug("%s: no systemd access, skipping %s", node.name, PERF_COLLECTOR_SERVICE)
+                return
+            try:
+                if not node.is_service_exists(service_name=PERF_COLLECTOR_SERVICE):
+                    self.log.debug("%s: %s service is not installed", node.name, PERF_COLLECTOR_SERVICE)
+                    return
+                self.log.info("%s: %s %s service", node.name, doing, PERF_COLLECTOR_SERVICE)
+                service_action = node.start_service if running else node.stop_service
+                service_action(service_name=PERF_COLLECTOR_SERVICE, ignore_status=True)
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("%s: failed to %s %s: %s", node.name, action, PERF_COLLECTOR_SERVICE, exc)
+
+        self.db_cluster.run_func_parallel(func=on_node)
+
     def save_schema(self):
         """
         Saves the node's schema including internal metadata.
@@ -4334,6 +4382,10 @@ class ClusterTester(unittest.TestCase):
         # diagnostic commands (gather_failure_statistics, validators) hang indefinitely.
         if self.db_cluster:
             self.stop_nemesis(self.db_cluster)
+        # After stop_nemesis() on purpose: a nemesis rebooting a node brings the collector
+        # back up with it (scylla_setup enables it at boot), so stopping it any earlier can be undone.
+        with silence(parent=self, name="Stopping perf-collector"):
+            self.stop_perf_collector()
         with silence(parent=self, name="Enabling teardown filters"):
             enable_teardown_filters()
         with silence(parent=self, name="Sending test end event"):
@@ -4378,6 +4430,10 @@ class ClusterTester(unittest.TestCase):
             self.collect_test_artifacts()
         time.sleep(1)  # Sleep is needed to let events from artifact collection being processed
         self.clean_resources()
+        # clean_resources() drops db_cluster once it is destroyed, so it is still set only for
+        # nodes that outlive the test (kept, kept on failure, or post behavior not executed)
+        with silence(parent=self, name="Starting perf-collector on the kept cluster"):
+            self.start_perf_collector()
         time.sleep(1)  # Sleep is needed to let final event being saved into files
         self.argus_collect_gemini_results()
         self.destroy_localhost()
