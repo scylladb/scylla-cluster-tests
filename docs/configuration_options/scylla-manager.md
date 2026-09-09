@@ -4,7 +4,7 @@
 
 Scylla Manager server and agent: versions, repos and backup/restore settings.
 
-**26 options.** Jump to: [backup_bucket_backend](#backup_bucket_backend) · [backup_bucket_location](#backup_bucket_location) · [backup_bucket_region](#backup_bucket_region) · [manager_backup_restore_method](#manager_backup_restore_method) · [manager_prometheus_port](#manager_prometheus_port) · [manager_scylla_backend_version](#manager_scylla_backend_version) · [manager_version](#manager_version) · [mgmt_agent_backup_config](#mgmt_agent_backup_config) · [mgmt_docker_image](#mgmt_docker_image) · [mgmt_nodetool_refresh_flags](#mgmt_nodetool_refresh_flags) · [mgmt_prepare_snapshot_size](#mgmt_prepare_snapshot_size) · [mgmt_restore_extra_params](#mgmt_restore_extra_params) · [mgmt_reuse_backup_snapshot_name](#mgmt_reuse_backup_snapshot_name) · [mgmt_skip_post_restore_stress_read](#mgmt_skip_post_restore_stress_read) · [mgmt_snapshots_preparer_params](#mgmt_snapshots_preparer_params) · [scylla_mgmt_address](#scylla_mgmt_address) · [scylla_mgmt_agent_address](#scylla_mgmt_agent_address) · [scylla_mgmt_agent_version](#scylla_mgmt_agent_version) · [scylla_mgmt_pkg](#scylla_mgmt_pkg) · [scylla_mgmt_upgrade_to_repo](#scylla_mgmt_upgrade_to_repo) · [scylla_repo_m](#scylla_repo_m) · [target_manager_version](#target_manager_version) · [target_scylla_mgmt_agent_address](#target_scylla_mgmt_agent_address) · [target_scylla_mgmt_server_address](#target_scylla_mgmt_server_address) · [use_cloud_manager](#use_cloud_manager) · [use_mgmt](#use_mgmt)
+**26 options.**
 
 
 ## **backup_bucket_backend** / SCT_BACKUP_BUCKET_BACKEND

@@ -5,7 +5,7 @@
 AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity
 reservations and dedicated hosts.
 
-**22 options.** Jump to: [ami_db_cassandra_user](#ami_db_cassandra_user) · [ami_db_scylla_user](#ami_db_scylla_user) · [ami_id_db_cassandra](#ami_id_db_cassandra) · [ami_id_db_oracle](#ami_id_db_oracle) · [ami_id_db_scylla](#ami_id_db_scylla) · [ami_id_db_scylla_desc](#ami_id_db_scylla_desc) · [ami_id_loader](#ami_id_loader) · [ami_id_monitor](#ami_id_monitor) · [ami_id_vector_store](#ami_id_vector_store) · [ami_loader_user](#ami_loader_user) · [ami_monitor_user](#ami_monitor_user) · [ami_vector_store_user](#ami_vector_store_user) · [aws_dedicated_host_ids](#aws_dedicated_host_ids) · [aws_fallback_to_next_availability_zone](#aws_fallback_to_next_availability_zone) · [aws_instance_profile_name_db](#aws_instance_profile_name_db) · [aws_instance_profile_name_loader](#aws_instance_profile_name_loader) · [extra_network_interface](#extra_network_interface) · [sct_aws_account_id](#sct_aws_account_id) · [spot_max_price](#spot_max_price) · [use_capacity_reservation](#use_capacity_reservation) · [use_dedicated_host](#use_dedicated_host) · [use_placement_group](#use_placement_group)
+**22 options.**
 
 
 ## **ami_db_cassandra_user** / SCT_AMI_DB_CASSANDRA_USER

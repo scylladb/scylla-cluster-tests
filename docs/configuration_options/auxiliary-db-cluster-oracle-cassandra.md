@@ -6,7 +6,7 @@ A second database cluster used for comparison or migration testing -- the 'oracl
 Gemini runs, or a Cassandra cluster in migration tests. Named for the role, not for Gemini,
 since other test types use it too.
 
-**10 options.** Jump to: [append_scylla_args_oracle](#append_scylla_args_oracle) · [cassandra_broadcast_rpc_public](#cassandra_broadcast_rpc_public) · [cassandra_num_tokens](#cassandra_num_tokens) · [cassandra_oracle_version](#cassandra_oracle_version) · [cassandra_version](#cassandra_version) · [docker_image_cassandra](#docker_image_cassandra) · [install_cassandra_exporter](#install_cassandra_exporter) · [n_test_oracle_db_nodes](#n_test_oracle_db_nodes) · [oracle_scylla_version](#oracle_scylla_version) · [oracle_user_data_format_version](#oracle_user_data_format_version)
+**10 options.**
 
 
 ## **append_scylla_args_oracle** / SCT_APPEND_SCYLLA_ARGS_ORACLE
@@ -56,7 +56,7 @@ Cassandra version / docker image tag, i.e. '4.1' or '5.0'
 
 ## **docker_image_cassandra** / SCT_DOCKER_IMAGE_CASSANDRA
 
-Cassandra docker image repo, i.e. 'cassandra'. Used when db_type is 'cassandra'.
+Cassandra docker image repo, i.e. 'cassandra'. Used when [`db_type`](scylla-installation-and-configuration.md#db_type) is 'cassandra'.
 
 **default:** cassandra
 
