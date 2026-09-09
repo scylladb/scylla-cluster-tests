@@ -261,3 +261,55 @@ def test_unavailable_estimate_is_well_formed():
     assert payload["partial"] is True
     assert payload["roles"] == []
     assert payload["currency"] == "USD"
+
+
+# --- flex shapes and unresolved roles -----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "instance_type, expected",
+    [
+        ("VM.Standard.E4.Flex:2", 0.098),  # catalogued form
+        ("VM.Standard.E4.Flex:2:8", 0.098),  # configured form: <shape>:<ocpus>:<memory_gb>
+        ("VM.Standard.E4.Flex:1:8", 0.049),
+    ],
+)
+def test_oci_flex_shapes_resolve_to_the_base_shape(instance_type, expected):
+    """OCI is priceable: flex shapes just need the memory suffix stripped.
+
+    Configs name them `<shape>:<ocpus>:<memory_gb>` while the catalog stores
+    `<shape>:<ocpus>`, so an exact-match-only lookup made every OCI run look unpriceable.
+    """
+    rate = get_hourly_rate("oci", "us-ashburn-1", instance_type, catalog_only=True)
+    assert rate.price_per_hour == pytest.approx(expected)
+
+
+def test_unknown_flex_shape_is_still_unknown():
+    assert get_hourly_rate("oci", "us-ashburn-1", "VM.Bogus.Flex:9:9", catalog_only=True).price_per_hour is None
+
+
+def test_configured_nodes_with_no_instance_type_are_reported_not_dropped():
+    """A role whose type never resolved must not vanish from the estimate.
+
+    Silently skipping it yields a confident-looking total that is missing an entire
+    cluster - far worse than admitting the gap.
+    """
+    est = estimate_run_cost(_aws_params(instance_type_db=""))
+    db = next(r for r in est.roles if r.role == "db")
+    assert db.node_count == 3
+    assert db.cost is None
+    assert est.partial
+    assert "db" in est.unpriced_roles
+
+
+def test_oracle_nodes_are_ignored_unless_the_run_is_mixed():
+    """`n_test_oracle_db_nodes` defaults to 1 even when no oracle cluster is used."""
+    plain = estimate_run_cost(_aws_params(n_test_oracle_db_nodes=1))
+    assert "db_oracle" not in {r.role for r in plain.roles}
+    assert not plain.partial
+
+    mixed = estimate_run_cost(
+        _aws_params(db_type="mixed_scylla", n_test_oracle_db_nodes=1, instance_type_db_oracle="i4i.4xlarge")
+    )
+    oracle = next(r for r in mixed.roles if r.role == "db_oracle")
+    assert oracle.cost == pytest.approx(1.373 * 1 * 2.0)

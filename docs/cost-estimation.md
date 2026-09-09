@@ -49,9 +49,12 @@ reads as "free" and is worse than admitting ignorance.
 
 Causes:
 
-- **OCI** has no usable public pricing, so OCI runs are always unknown.
 - **Instance types outside the catalog.** The catalog covers what SCT actually uses; an
-  unusual type will not be there.
+  unusual type will not be there. Currently the only gaps are the shared-core GCE types
+  (`e2-medium`, `e2-small`, `e2-micro`), which the catalog carries without a price.
+- **A role whose instance type never resolved.** It is listed as `(unresolved)` with its node
+  count, rather than dropped — an estimate missing an entire cluster is worse than one that
+  admits the gap.
 - **Backends with no cloud instances** — `docker`, `k8s-local-kind*`, `baremetal` — resolve no
   priceable roles at all.
 

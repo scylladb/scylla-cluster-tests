@@ -96,6 +96,26 @@ def _pricing_for(cloud: str):
     return {"aws": AWSPricing, "gce": GCEPricing, "azure": AzurePricing, "oci": OCIPricing}[cloud]()
 
 
+def _catalog_lookup(cloud: str, region: str, instance_type: str) -> float | None:
+    """Catalog price for an instance type, resolving memory-customised flex shapes.
+
+    OCI flex shapes are configured as `<shape>:<ocpus>:<memory_gb>` but catalogued as
+    `<shape>:<ocpus>`, so an exact lookup misses and the resource looks unpriceable. Fall
+    back to the base shape, which is what `sct sizing preview` already does. The price is
+    then the base shape's default memory allocation — an over-estimate for a shape trimmed
+    to less memory, which is the safe direction for an estimate.
+    """
+    from sdcm.utils.cloud_catalog.pricing import _catalog_price  # noqa: PLC0415 — lazy, see _pricing_for
+
+    price = _catalog_price(cloud, region, instance_type)
+    if price is not None:
+        return price
+    parts = instance_type.split(":")
+    if len(parts) == 3:
+        return _catalog_price(cloud, region, f"{parts[0]}:{parts[1]}")
+    return None
+
+
 def get_hourly_rate(
     backend: str, region: str, instance_type: str, is_spot: bool = False, catalog_only: bool = False
 ) -> InstanceRate:
@@ -112,10 +132,8 @@ def get_hourly_rate(
         return InstanceRate.unknown(is_spot=is_spot)
 
     if catalog_only:
-        from sdcm.utils.cloud_catalog.pricing import _catalog_price  # noqa: PLC0415 — lazy, see _pricing_for
-
         try:
-            raw = _catalog_price(cloud, region, instance_type)
+            raw = _catalog_lookup(cloud, region, instance_type)
         except Exception:  # noqa: BLE001
             LOGGER.warning("Catalog lookup failed for %s/%s in %s", cloud, instance_type, region, exc_info=True)
             return InstanceRate.unknown(is_spot=is_spot)
@@ -285,11 +303,30 @@ def estimate_run_cost(params: Any, duration_minutes: float | None = None) -> Run
         )
 
     region = _first_region(params.get(_REGION_PARAMS[cloud]))
+    # An oracle cluster only exists for mixed runs, but its node count parameter still
+    # defaults to 1 - the same condition sdcm/sct_config.py applies when resolving sizing.
+    db_type = str(params.get("db_type") or "")
     roles: list[RoleCost] = []
     for role, (type_param, count_param) in _ROLE_PARAMS[cloud].items():
+        if role == "db_oracle" and db_type not in ("mixed_scylla", "mixed_cassandra"):
+            continue
         instance_type = str(params.get(type_param) or "").strip()
         node_count = _sum_counts(params.get(count_param))
-        if not instance_type or node_count <= 0:
+        if node_count <= 0:
+            continue
+        if not instance_type:
+            # Nodes are configured but their instance type never resolved. Skipping the role
+            # would drop them from the total silently, which is how you get a confident-looking
+            # estimate that is missing the db cluster. Report it as unpriced instead.
+            roles.append(
+                RoleCost(
+                    role=role,
+                    instance_type="(unresolved)",
+                    node_count=node_count,
+                    rate=InstanceRate.unknown(),
+                    cost=None,
+                )
+            )
             continue
         rate = get_hourly_rate(backend, region, instance_type, is_spot=False, catalog_only=True)
         per_node = cost_for(rate, duration_hours * SECONDS_PER_HOUR)
