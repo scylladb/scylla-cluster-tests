@@ -1925,9 +1925,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @latency_calculator_decorator(legend="Run repair process with nodetool repair")
     def repair_nodetool_repair(self, node=None, publish_event=True):
+        """
+        Execute a repair using nodetool repair
+
+        The command timeout is the repair adaptive timeout (48h), so a stuck repair fails
+        instead of blocking the nemesis indefinitely. On expiry the command fails and a
+        SoftTimeoutEvent is emitted.
+        """
         node = node if node else self.target_node
-        with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48):
-            node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
+        with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48) as repair_timeout:
+            node.run_nodetool(
+                sub_cmd="repair",
+                publish_event=publish_event,
+                timeout=repair_timeout,
+                long_running=True,
+                retry=0,
+            )
 
     def repair_nodetool_rebuild(self):
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
