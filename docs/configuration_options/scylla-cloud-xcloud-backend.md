@@ -1,11 +1,13 @@
 # Scylla Cloud (xcloud) backend
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options.
 
 **12 options.**
 
+
+<a id="cloud_cluster_id"></a>
 
 ## **cloud_cluster_id** / SCT_CLOUD_CLUSTER_ID
 
@@ -16,6 +18,8 @@ ID of an existing Scylla Cloud cluster to run against, instead of provisioning a
 **type:** int
 
 
+<a id="cloud_credentials_path"></a>
+
 ## **cloud_credentials_path** / SCT_CLOUD_CREDENTIALS_PATH
 
 Path to the SSH private key for nodes in a Scylla Cloud (siren) cluster, which SCT does not provision itself.
@@ -24,6 +28,8 @@ Path to the SSH private key for nodes in a Scylla Cloud (siren) cluster, which S
 
 **type:** str (appendable)
 
+
+<a id="cloud_prom_bearer_token"></a>
 
 ## **cloud_prom_bearer_token** / SCT_CLOUD_PROM_BEARER_TOKEN
 
@@ -34,6 +40,8 @@ scylla cloud promproxy bearer_token to federate monitoring data into our monitor
 **type:** str (appendable)
 
 
+<a id="cloud_prom_host"></a>
+
 ## **cloud_prom_host** / SCT_CLOUD_PROM_HOST
 
 scylla cloud promproxy hostname to federate monitoring data into our monitoring instance
@@ -42,6 +50,8 @@ scylla cloud promproxy hostname to federate monitoring data into our monitoring 
 
 **type:** str (appendable)
 
+
+<a id="cloud_prom_path"></a>
 
 ## **cloud_prom_path** / SCT_CLOUD_PROM_PATH
 
@@ -52,6 +62,8 @@ scylla cloud promproxy path to federate monitoring data into our monitoring inst
 **type:** str (appendable)
 
 
+<a id="xcloud_availability_zones"></a>
+
 ## **xcloud_availability_zones** / SCT_XCLOUD_AVAILABILITY_ZONES
 
 Comma-separated availability zones for Scylla Cloud DB placement.<br>AWS values are AZ IDs (e.g., 'use1-az1,use1-az2,use1-az3'); GCE values are zone names<br>(e.g., 'us-east1-b,us-east1-c'). When set, SCT sends 'availabilityZoneIdsOverride' and forces placement.<br>Provide one zone per DB node, or provide a shorter list to cycle round-robin (node count must divide evenly).<br>Repeat the same zone to keep all nodes in one AZ. Leave empty (default) to let Scylla Cloud choose placement<br>(multi-AZ spread). Cannot be used with [`xcloud_scaling_config`](#xcloud_scaling_config).
@@ -60,6 +72,8 @@ Comma-separated availability zones for Scylla Cloud DB placement.<br>AWS values 
 
 **type:** str (appendable)
 
+
+<a id="xcloud_credentials_path"></a>
 
 ## **xcloud_credentials_path** / SCT_XCLOUD_CREDENTIALS_PATH
 
@@ -70,6 +84,8 @@ Path to Scylla Cloud credentials file, if stored locally
 **type:** str (appendable)
 
 
+<a id="xcloud_env"></a>
+
 ## **xcloud_env** / SCT_XCLOUD_ENV
 
 Scylla Cloud environment (e.g., lab).
@@ -78,6 +94,8 @@ Scylla Cloud environment (e.g., lab).
 
 **type:** str (appendable)
 
+
+<a id="xcloud_provider"></a>
 
 ## **xcloud_provider** / SCT_XCLOUD_PROVIDER
 
@@ -88,6 +106,8 @@ Cloud provider for Scylla Cloud deployment (aws, gce)
 **type:** str (appendable)
 
 
+<a id="xcloud_replication_factor"></a>
+
 ## **xcloud_replication_factor** / SCT_XCLOUD_REPLICATION_FACTOR
 
 Replication factor for Scylla Cloud cluster
@@ -96,6 +116,8 @@ Replication factor for Scylla Cloud cluster
 
 **type:** int
 
+
+<a id="xcloud_scaling_config"></a>
 
 ## **xcloud_scaling_config** / SCT_XCLOUD_SCALING_CONFIG
 
@@ -108,6 +130,8 @@ Scaling policy configuration. The payload should follow the following structure:
 **backend overrides:**
 - `{}`: xcloud
 
+
+<a id="xcloud_vpc_peering"></a>
 
 ## **xcloud_vpc_peering** / SCT_XCLOUD_VPC_PEERING
 
