@@ -399,3 +399,177 @@ class TestSaveSchema:
         assert mock_nodes[0].run_cqlsh.called
         assert not mock_nodes[1].run_cqlsh.called
         assert not mock_nodes[2].run_cqlsh.called
+
+
+def _perf_collector_tester(tmp_path, name, node_attrs=None):
+    """A tester with a single-node db_cluster whose run_func_parallel really runs the func."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / name)
+    tester.logdir = str(tmp_path)
+
+    mock_node = MagicMock()
+    mock_node.name = "perf-collector-node-1"
+    mock_node.is_kubernetes.return_value = False
+    mock_node.is_docker.return_value = False
+    mock_node.is_service_exists.return_value = True
+    mock_node.configure_mock(**(node_attrs or {}))
+
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [mock_node]
+    tester.db_cluster.run_func_parallel.side_effect = lambda func, node_list=None: [
+        func(node) for node in (node_list or tester.db_cluster.nodes)
+    ]
+    return tester, mock_node
+
+
+def test_stop_perf_collector_no_db_cluster(tmp_path):
+    """The teardown of a test that failed before the cluster came up must not raise."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_perf_collector_no_cluster")
+    tester.db_cluster = None
+    tester.logdir = str(tmp_path)
+
+    tester.stop_perf_collector()
+
+
+def test_stop_perf_collector_stops_the_service(tmp_path):
+    tester, mock_node = _perf_collector_tester(tmp_path, "test_perf_collector_stop")
+
+    tester.stop_perf_collector()
+
+    mock_node.stop_service.assert_called_once_with(service_name="scylla-perf-collector", ignore_status=True)
+
+
+def test_stop_perf_collector_skips_node_without_the_service(tmp_path):
+    """Older Scylla versions ship no perf-collector unit, which is not an error."""
+    tester, mock_node = _perf_collector_tester(
+        tmp_path, "test_perf_collector_missing", {"is_service_exists.return_value": False}
+    )
+
+    tester.stop_perf_collector()
+
+    mock_node.stop_service.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "node_attrs",
+    (
+        pytest.param({"is_kubernetes.return_value": True}, id="k8s-node"),
+        pytest.param({"is_docker.return_value": True}, id="docker-node"),
+        pytest.param({"ssh_login_info": None}, id="xcloud-node"),
+    ),
+)
+def test_stop_perf_collector_skips_nodes_without_systemd(tmp_path, node_attrs):
+    tester, mock_node = _perf_collector_tester(tmp_path, "test_perf_collector_no_systemd", node_attrs)
+
+    tester.stop_perf_collector()
+
+    mock_node.is_service_exists.assert_not_called()
+    mock_node.stop_service.assert_not_called()
+
+
+def test_stop_perf_collector_tolerates_an_unreachable_node(tmp_path):
+    """An unreachable node must not raise out of teardown, nor skip the remaining nodes."""
+    tester, unreachable_node = _perf_collector_tester(
+        tmp_path, "test_perf_collector_unreachable", {"is_service_exists.side_effect": Exception("connection refused")}
+    )
+    healthy_node = MagicMock()
+    healthy_node.name = "perf-collector-node-2"
+    healthy_node.is_kubernetes.return_value = False
+    healthy_node.is_docker.return_value = False
+    healthy_node.is_service_exists.return_value = True
+    tester.db_cluster.nodes = [unreachable_node, healthy_node]
+
+    tester.stop_perf_collector()
+
+    unreachable_node.stop_service.assert_not_called()
+    healthy_node.stop_service.assert_called_once_with(service_name="scylla-perf-collector", ignore_status=True)
+
+
+def test_start_perf_collector_starts_the_service(tmp_path):
+    tester, mock_node = _perf_collector_tester(tmp_path, "test_perf_collector_start")
+
+    tester.start_perf_collector()
+
+    mock_node.start_service.assert_called_once_with(service_name="scylla-perf-collector", ignore_status=True)
+    mock_node.stop_service.assert_not_called()
+
+
+def test_start_perf_collector_tolerates_an_unreachable_node(tmp_path):
+    tester, mock_node = _perf_collector_tester(
+        tmp_path,
+        "test_perf_collector_start_unreachable",
+        {"start_service.side_effect": Exception("connection refused")},
+    )
+
+    tester.start_perf_collector()
+
+    mock_node.start_service.assert_called_once()
+
+
+class PerfCollectorStoppedAfterTheNemesisTest(ClusterTesterForTests):
+    """A nemesis restarting scylla-server can bring the collector back, so the order matters.
+
+    On this branch the nemesis is stopped inside stop_resources(), so that is what the collector must follow.
+    """
+
+    def test(self):
+        self.teardown_calls = []
+        self.stop_resources = MagicMock(side_effect=lambda *_, **__: self.teardown_calls.append("stop_resources"))
+        self.stop_perf_collector = MagicMock(
+            side_effect=lambda *_, **__: self.teardown_calls.append("stop_perf_collector")
+        )
+        self.collect_logs = MagicMock(side_effect=lambda *_, **__: self.teardown_calls.append("collect_logs"))
+        self.start_perf_collector = MagicMock()
+
+    @pytest.fixture(autouse=True)
+    def validate(self, event_system):
+        yield
+
+        calls = [call for call in self.teardown_calls if call != "collect_logs"]
+        assert calls == ["stop_resources", "stop_perf_collector"]
+        if "collect_logs" in self.teardown_calls:
+            assert self.teardown_calls.index("collect_logs") > self.teardown_calls.index("stop_perf_collector")
+
+
+class PerfCollectorRestartedOnKeptClusterTest(ClusterTesterForTests):
+    """After log collection the collector is started again, but only where the nodes live on."""
+
+    cluster_kept = True
+
+    def test(self):
+        self.perf_node = MagicMock()
+        self.perf_node.name = "perf-collector-node-1"
+        self.perf_node.is_kubernetes.return_value = False
+        self.perf_node.is_docker.return_value = False
+        self.perf_node.is_service_exists.return_value = True
+
+        self.db_cluster = MagicMock()
+        self.db_cluster.nodes = [self.perf_node]
+        self.db_cluster.run_func_parallel.side_effect = lambda func, node_list=None: [
+            func(node) for node in (node_list or self.db_cluster.nodes)
+        ]
+        self.stop_resources = MagicMock()
+        self.save_schema = MagicMock()
+        self.collect_logs = MagicMock()
+        self.start_service_calls_before_clean_resources = None
+
+        def clean_resources():
+            # the collector must not be started again before the logs are collected
+            self.start_service_calls_before_clean_resources = self.perf_node.start_service.call_count
+            if not self.cluster_kept:
+                self.db_cluster = None
+
+        self.clean_resources = clean_resources
+
+    @pytest.fixture(autouse=True)
+    def validate(self, event_system):
+        yield
+
+        assert self.start_service_calls_before_clean_resources == 0
+        self.perf_node.stop_service.assert_called_once()
+        assert self.perf_node.start_service.called == self.cluster_kept
+
+
+class PerfCollectorNotRestartedOnDestroyedClusterTest(PerfCollectorRestartedOnKeptClusterTest):
+    cluster_kept = False
