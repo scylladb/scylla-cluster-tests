@@ -9204,7 +9204,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 out.append(line)
                 continue
             # headings carry the option's own anchor, and table rows are already linked
-            if in_fence or line.startswith(("#", "| ", "**default:**", "**type:**")):
+            if in_fence or line.startswith(("#", "| ", "<a id=", "**default:**", "**type:**")):
                 out.append(line)
                 continue
             linked = re.sub(r"(`|')([a-z][a-z0-9_]{3,})\1", link_quoted, line)
@@ -9244,7 +9244,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         for group_title, group_fields in groups:
             slug = cls._docs_slug(group_title)
             page = f"# {group_title}\n\n"
-            page += f"[← All configuration options]({pathlib.Path(cls.DOCS_INDEX).name})\n"
+            page += f"[← All configuration options](../{pathlib.Path(cls.DOCS_INDEX).name})\n"
 
             blurb = cls._group_blurb(group_title)
             if blurb:
@@ -9264,8 +9264,10 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 output_type = cls.get_annotations_as_strings(field.annotation, field_metadata=field_metadata)
                 type_str = f"{input_type_meta.description} → {output_type}" if input_type_meta else output_type
 
+                # explicit anchor: GitHub slugs this heading as "<name>--sct_<name>", so the bare
+                # "#<name>" used by the index and by every cross-link needs a target of its own
                 page += (
-                    "\n\n"
+                    f'\n\n<a id="{field_name}"></a>\n\n'
                     + dedent(f"""
                     ## **{field_name}** / SCT_{field_name.upper()}
 

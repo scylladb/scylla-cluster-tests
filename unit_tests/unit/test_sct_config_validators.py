@@ -1,0 +1,276 @@
+"""Tests for sct_config type-coercion validators."""
+
+import pytest
+
+from pydantic import ValidationError
+from sdcm.sct_config import (
+    SCTConfiguration,
+    boolean_or_space_separated_booleans,
+    dict_or_str,
+    int_or_space_separated_ints,
+    str_or_list_or_eval,
+)
+from sdcm.sct_config.types import strtobool
+
+
+# ---------------------------------------------------------------------------
+# int_or_space_separated_ints
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "input_val,expected",
+    [
+        (None, None),
+        (1, [1]),
+        (0, [0]),
+        (-5, [-5]),
+        ("3", [3]),
+        ("10", [10]),
+        ([1, 2, 3], [1, 2, 3]),
+        ([1], [1]),
+        (["1", "2", "3"], [1, 2, 3]),
+        ("1 2 3", [1, 2, 3]),
+        ("  4  5  6  ", [4, 5, 6]),
+        ("42", [42]),
+    ],
+)
+def test_int_or_space_separated_ints_valid(input_val, expected):
+    assert int_or_space_separated_ints(input_val) == expected
+
+
+@pytest.mark.parametrize(
+    "input_val",
+    [
+        "not_a_number",
+        "1 2 abc",
+        [1, "abc"],
+    ],
+)
+def test_int_or_space_separated_ints_invalid(input_val):
+    with pytest.raises((ValueError, TypeError)):
+        int_or_space_separated_ints(input_val)
+
+
+# ---------------------------------------------------------------------------
+# str_or_list_or_eval
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "input_val,expected",
+    [
+        (None, None),
+        ("hello", ["hello"]),
+        ("", []),
+        ("['cmd1', 'cmd2']", ["cmd1", "cmd2"]),
+        ("[1, 2]", [1, 2]),
+        ("3", [3]),
+        ("{'a': 1}", [{"a": 1}]),
+        (["a", "b"], ["a", "b"]),
+        (["['nested']", "plain"], [["nested"], "plain"]),
+    ],
+)
+def test_str_or_list_or_eval_valid(input_val, expected):
+    assert str_or_list_or_eval(input_val) == expected
+
+
+def test_str_or_list_or_eval_invalid():
+    with pytest.raises(ValueError):
+        str_or_list_or_eval(123)
+
+
+# ---------------------------------------------------------------------------
+# boolean_or_space_separated_booleans
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "input_val,expected",
+    [
+        (None, None),
+        (True, [True]),
+        (False, [False]),
+        ("true", [True]),
+        ("false", [False]),
+        ("true false", [True, False]),
+        ("yes no", [True, False]),
+        ([True], [True]),
+        ([False], [False]),
+        ([True, False], [True, False]),
+        (["true", "false"], [True, False]),
+    ],
+)
+def test_boolean_or_space_separated_booleans_valid(input_val, expected):
+    assert boolean_or_space_separated_booleans(input_val) == expected
+
+
+@pytest.mark.parametrize(
+    "input_val",
+    [
+        "not_a_bool",
+        123,
+    ],
+)
+def test_boolean_or_space_separated_booleans_invalid(input_val):
+    with pytest.raises(ValueError):
+        boolean_or_space_separated_booleans(input_val)
+
+
+# ---------------------------------------------------------------------------
+# dict_or_str
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "input_val,expected",
+    [
+        (None, None),
+        ({"key": "val"}, {"key": "val"}),
+        ("{'a': 1}", {"a": 1}),
+        ('{"b": 2}', {"b": 2}),
+        ("key: value", {"key": "value"}),
+    ],
+)
+def test_dict_or_str_valid(input_val, expected):
+    assert dict_or_str(input_val) == expected
+
+
+@pytest.mark.parametrize(
+    "input_val",
+    [
+        "[1, 2]",
+        "3",
+        "plain string",
+    ],
+)
+def test_dict_or_str_invalid(input_val):
+    with pytest.raises(ValueError):
+        dict_or_str(input_val)
+
+
+# ---------------------------------------------------------------------------
+# SCTConfiguration._as_list  (stress-cmd loop normalisation helper)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "input_val,expected",
+    [
+        (None, []),
+        ([], []),
+        (["cassandra-stress write"], ["cassandra-stress write"]),
+        (["cmd1", "cmd2"], ["cmd1", "cmd2"]),
+        # scalar string (e.g. gemini_cmd) must become a one-element list
+        ("gemini --duration 10m", ["gemini --duration 10m"]),
+    ],
+)
+def test_as_list(input_val, expected):
+    assert SCTConfiguration._as_list(input_val) == expected
+
+
+def test_list_of_stress_tools_with_scalar_gemini_cmd(monkeypatch):
+    """list_of_stress_tools must not iterate gemini_cmd char-by-char."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_GEMINI_CMD", "gemini --duration 10m")
+
+    conf = SCTConfiguration()
+    tools = conf.list_of_stress_tools
+    # "gemini" (the binary name) should appear — not individual characters
+    assert "gemini" in tools
+    assert "g" not in tools
+    assert "e" not in tools
+
+
+def test_list_of_stress_tools_with_list_stress_cmd(monkeypatch):
+    """list_of_stress_tools works correctly with list[str] stress_cmd values."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_STRESS_CMD", "cassandra-stress write n=1000000")
+
+    conf = SCTConfiguration()
+    tools = conf.list_of_stress_tools
+    assert "cassandra-stress" in tools
+
+
+# ---------------------------------------------------------------------------
+# effective_compression_ratio validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", [1.0, 0.68, 0.5, 0.01])
+def test_effective_compression_ratio_valid(monkeypatch, value):
+    """effective_compression_ratio accepts values in (0, 1.0]."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_EFFECTIVE_COMPRESSION_RATIO", str(value))
+
+    conf = SCTConfiguration()
+    assert conf.effective_compression_ratio == pytest.approx(value)
+
+
+@pytest.mark.parametrize(
+    "value, expected_match",
+    [
+        (0, "greater than 0"),
+        (-0.5, "greater than 0"),
+        (1.1, "less than or equal to 1"),
+        (2.0, "less than or equal to 1"),
+    ],
+)
+def test_effective_compression_ratio_invalid(monkeypatch, value, expected_match):
+    """effective_compression_ratio rejects 0, negative values, and values above 1.0."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_EFFECTIVE_COMPRESSION_RATIO", str(value))
+
+    with pytest.raises(ValidationError, match=expected_match):
+        SCTConfiguration()
+
+
+def test_stress_template_context_accepts_dict(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_STRESS_TEMPLATE_CONTEXT", '{"rows_total": "{{ effective_disk_size_bytes }}"}')
+
+    conf = SCTConfiguration()
+    assert conf.stress_template_context == {"rows_total": "{{ effective_disk_size_bytes }}"}
+
+
+def test_stress_template_context_accepts_yaml_string(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_STRESS_TEMPLATE_CONTEXT", "rows_total: '{{ effective_disk_size_bytes }}'")
+
+    conf = SCTConfiguration()
+    assert conf.stress_template_context == {"rows_total": "{{ effective_disk_size_bytes }}"}
+
+
+@pytest.mark.parametrize("value", ["y", "Yes", "T", "true", "ON", "1", " true "])
+def test_strtobool_accepts_truthy_spellings(value):
+    assert strtobool(value) is True
+
+
+@pytest.mark.parametrize("value", ["n", "No", "F", "false", "OFF", "0", " false "])
+def test_strtobool_accepts_falsy_spellings(value):
+    assert strtobool(value) is False
+
+
+@pytest.mark.parametrize("value", ["maybe", "", "2", "truthy"])
+def test_strtobool_rejects_anything_else(value):
+    """Same contract as the distutils version it replaces -- ValueError, not a silent False."""
+    with pytest.raises(ValueError, match="invalid truth value"):
+        strtobool(value)

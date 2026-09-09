@@ -1,11 +1,13 @@
 # Vector Store
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 The Vector Store service under test alongside Scylla.
 
 **6 options.**
 
+
+<a id="n_vector_store_nodes"></a>
 
 ## **n_vector_store_nodes** / SCT_N_VECTOR_STORE_NODES
 
@@ -16,6 +18,8 @@ Number of vector store nodes (0 = VS is disabled)
 **type:** int
 
 
+<a id="vector_store_docker_image"></a>
+
 ## **vector_store_docker_image** / SCT_VECTOR_STORE_DOCKER_IMAGE
 
 Vector Store docker image repo, i.e. 'scylladb/vector-store', if omitted is calculated from [`vector_store_version`](#vector_store_version)
@@ -24,6 +28,8 @@ Vector Store docker image repo, i.e. 'scylladb/vector-store', if omitted is calc
 
 **type:** str (appendable)
 
+
+<a id="vector_store_port"></a>
 
 ## **vector_store_port** / SCT_VECTOR_STORE_PORT
 
@@ -34,6 +40,8 @@ TCP port the Vector Store service listens on for its API.
 **type:** int
 
 
+<a id="vector_store_scylla_port"></a>
+
 ## **vector_store_scylla_port** / SCT_VECTOR_STORE_SCYLLA_PORT
 
 ScyllaDB connection port for Vector Store
@@ -43,6 +51,8 @@ ScyllaDB connection port for Vector Store
 **type:** int
 
 
+<a id="vector_store_threads"></a>
+
 ## **vector_store_threads** / SCT_VECTOR_STORE_THREADS
 
 Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)
@@ -51,6 +61,8 @@ Vector Store indexing threads (if not set, defaults to number of CPU cores on VS
 
 **type:** int
 
+
+<a id="vector_store_version"></a>
 
 ## **vector_store_version** / SCT_VECTOR_STORE_VERSION
 
