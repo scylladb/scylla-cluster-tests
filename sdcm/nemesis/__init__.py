@@ -1710,6 +1710,12 @@ class NemesisRunner:
         # 300s DDL timeout for the drop loop, plus run_repair_nodetool's own default
         # repair timeout, plus a buffer), not a behavioral tightening.
         timeout = HOUR_IN_SEC * 3 + 10 * (300 + 300) + 3600
+        # Unlike disrupt_abort_repair's ParallelObject call, this one keeps the default
+        # ignore_exceptions=False: neither repair_trigger (run_repair_nodetool) nor
+        # drop_tables_during_repair raises UnsupportedNemesis/MethodVersionNotFound (the
+        # specific exception types disrupt_abort_repair's manual re-raise exists to
+        # preserve), so there is nothing here that ParallelObjectException wrapping
+        # would mask.
         with ignore_drop_table_during_repair_errors():
             ParallelObject(
                 objects=[repair_trigger, drop_tables_during_repair], num_workers=2, timeout=timeout
