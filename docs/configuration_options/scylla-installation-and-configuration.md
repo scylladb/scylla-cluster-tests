@@ -5,7 +5,7 @@
 Which Scylla to install and how it is configured: repos, versions, distro,
 `scylla.yaml`/command-line options, experimental features, authentication and encryption.
 
-**44 options.** Jump to: [append_scylla_args](#append_scylla_args) · [append_scylla_node_exporter_args](#append_scylla_node_exporter_args) · [append_scylla_setup_args](#append_scylla_setup_args) · [append_scylla_yaml](#append_scylla_yaml) · [assert_linux_distro_features](#assert_linux_distro_features) · [authenticator](#authenticator) · [authenticator_password](#authenticator_password) · [authenticator_user](#authenticator_user) · [authorizer](#authorizer) · [client_encrypt](#client_encrypt) · [client_encrypt_mtls](#client_encrypt_mtls) · [db_type](#db_type) · [enable_kms_key_rotation](#enable_kms_key_rotation) · [endpoint_snitch](#endpoint_snitch) · [enterprise_disable_kms](#enterprise_disable_kms) · [experimental_features](#experimental_features) · [hinted_handoff](#hinted_handoff) · [install_mode](#install_mode) · [internode_compression](#internode_compression) · [internode_encryption](#internode_encryption) · [jmx_heap_memory](#jmx_heap_memory) · [kms_key_rotation_interval](#kms_key_rotation_interval) · [ldap_server_type](#ldap_server_type) · [nonroot_offline_install](#nonroot_offline_install) · [peer_verification](#peer_verification) · [prepare_saslauthd](#prepare_saslauthd) · [scylla_apt_keys](#scylla_apt_keys) · [scylla_d_overrides_files](#scylla_d_overrides_files) · [scylla_encryption_options](#scylla_encryption_options) · [scylla_linux_distro](#scylla_linux_distro) · [scylla_linux_distro_loader](#scylla_linux_distro_loader) · [scylla_network_config](#scylla_network_config) · [scylla_repo](#scylla_repo) · [scylla_version](#scylla_version) · [server_encrypt](#server_encrypt) · [server_encrypt_mtls](#server_encrypt_mtls) · [service_level_shares](#service_level_shares) · [unified_package](#unified_package) · [update_db_packages](#update_db_packages) · [use_ldap](#use_ldap) · [use_ldap_authentication](#use_ldap_authentication) · [use_ldap_authorization](#use_ldap_authorization) · [use_preinstalled_scylla](#use_preinstalled_scylla) · [user_data_format_version](#user_data_format_version)
+**44 options.**
 
 
 ## **append_scylla_args** / SCT_APPEND_SCYLLA_ARGS
@@ -184,7 +184,7 @@ Scylla [`internode_compression`](#internode_compression) in scylla.yaml: which i
 
 ## **internode_encryption** / SCT_INTERNODE_ENCRYPTION
 
-Scylla sub option of server_encryption_options: internode_encryption.
+Scylla sub option of server_encryption_options: [`internode_encryption`](#internode_encryption).
 
 **default:** all
 

@@ -5,7 +5,7 @@
 Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram
 settings.
 
-**18 options.** Jump to: [max_deviation](#max_deviation) · [n_stress_process](#n_stress_process) · [num_loaders_step](#num_loaders_step) · [num_threads_step](#num_threads_step) · [perf_gradual_step_duration](#perf_gradual_step_duration) · [perf_gradual_threads](#perf_gradual_threads) · [perf_gradual_throttle_steps](#perf_gradual_throttle_steps) · [perf_gradual_write_preload_data](#perf_gradual_write_preload_data) · [perf_simple_query_extra_command](#perf_simple_query_extra_command) · [perf_stress_keyspace](#perf_stress_keyspace) · [perf_stress_table](#perf_stress_table) · [run_db_node_benchmarks](#run_db_node_benchmarks) · [stop_on_hw_perf_failure](#stop_on_hw_perf_failure) · [stress_process_step](#stress_process_step) · [stress_step_duration](#stress_step_duration) · [stress_threads_start_num](#stress_threads_start_num) · [use_hdrhistogram](#use_hdrhistogram) · [workload_name](#workload_name)
+**18 options.**
 
 
 ## **max_deviation** / SCT_MAX_DEVIATION
@@ -73,7 +73,7 @@ Used for gradual performance test. Define throttle for load step in ops. Support
 
 ## **perf_gradual_write_preload_data** / SCT_PERF_GRADUAL_WRITE_PRELOAD_DATA
 
-If true, preload data (via prepare_write_cmd) before test_write_gradual_increase_load. Needed for LWT conditional-update workloads (e.g. UPDATE ... IF <cond>) that require existing rows to have a chance of applying; not needed for INSERT-based write workloads on a fresh table.
+If true, preload data (via [`prepare_write_cmd`](stress-commands-and-load-generation.md#prepare_write_cmd)) before test_write_gradual_increase_load. Needed for LWT conditional-update workloads (e.g. UPDATE ... IF <cond>) that require existing rows to have a chance of applying; not needed for INSERT-based write workloads on a fresh table.
 
 **default:** False
 
@@ -91,7 +91,7 @@ Extra command line options to pass to perf_simple_query
 
 ## **perf_stress_keyspace** / SCT_PERF_STRESS_KEYSPACE
 
-Keyspace name used in performance gradual throughput tests.<br>Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).<br>For latte, if not set, falls back to the 'keyspace' key in latte_schema_parameters.
+Keyspace name used in performance gradual throughput tests.<br>Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).<br>For latte, if not set, falls back to the 'keyspace' key in [`latte_schema_parameters`](stress-commands-and-load-generation.md#latte_schema_parameters).
 
 **default:** N/A
 
@@ -100,7 +100,7 @@ Keyspace name used in performance gradual throughput tests.<br>Required for all 
 
 ## **perf_stress_table** / SCT_PERF_STRESS_TABLE
 
-Table name used in performance gradual throughput tests.<br>Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).<br>For latte, if not set, falls back to the 'table' key in latte_schema_parameters.
+Table name used in performance gradual throughput tests.<br>Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).<br>For latte, if not set, falls back to the 'table' key in [`latte_schema_parameters`](stress-commands-and-load-generation.md#latte_schema_parameters).
 
 **default:** N/A
 
@@ -118,7 +118,7 @@ Flag for running db node benchmarks before the tests
 
 ## **stop_on_hw_perf_failure** / SCT_STOP_ON_HW_PERF_FAILURE
 
-Stop sct performance test if hardware performance test failed<br><br>Hardware performance tests runs on each node with sysbench and cassandra-fio tools.<br>Results stored in ES. HW perf tests run during cluster setups and not affect<br>SCT Performance tests. Results calculated as average among all results for certain<br>instance type or among all nodes during single run.<br>if results for a single node is not in margin 0.01 of<br>average result for all nodes, hw test considered as Failed.<br>If stop_on_hw_perf_failure is True, then sct performance test will be terminated<br>after hw perf tests detect node with hw results not in margin with average<br>If stop_on_hw_perf_failure is False, then sct performance test will be run<br>even after hw perf tests detect node with hw results not in margin with average
+Stop sct performance test if hardware performance test failed<br><br>Hardware performance tests runs on each node with sysbench and cassandra-fio tools.<br>Results stored in ES. HW perf tests run during cluster setups and not affect<br>SCT Performance tests. Results calculated as average among all results for certain<br>instance type or among all nodes during single run.<br>if results for a single node is not in margin 0.01 of<br>average result for all nodes, hw test considered as Failed.<br>If [`stop_on_hw_perf_failure`](#stop_on_hw_perf_failure) is True, then sct performance test will be terminated<br>after hw perf tests detect node with hw results not in margin with average<br>If [`stop_on_hw_perf_failure`](#stop_on_hw_perf_failure) is False, then sct performance test will be run<br>even after hw perf tests detect node with hw results not in margin with average
 
 **default:** False
 

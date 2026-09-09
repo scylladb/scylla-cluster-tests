@@ -4,7 +4,7 @@
 
 Scaling the cluster up and down during a test.
 
-**2 options.** Jump to: [cassandra_stress_population_size](#cassandra_stress_population_size) · [cassandra_stress_threads](#cassandra_stress_threads)
+**2 options.**
 
 
 ## **cassandra_stress_population_size** / SCT_CASSANDRA_STRESS_POPULATION_SIZE

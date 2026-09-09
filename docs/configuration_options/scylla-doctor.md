@@ -6,7 +6,7 @@ The scylla-doctor diagnostic tool. It is both a subject under test (the artifact
 and assert on its findings) and a diagnostic collected on failure, which is why it is its own
 group rather than part of log collection.
 
-**6 options.** Jump to: [run_scylla_doctor](#run_scylla_doctor) · [run_scylla_doctor_only](#run_scylla_doctor_only) · [scylla_doctor_edition](#scylla_doctor_edition) · [scylla_doctor_full_tarball_url](#scylla_doctor_full_tarball_url) · [scylla_doctor_version](#scylla_doctor_version) · [use_scylla_doctor_on_failure](#use_scylla_doctor_on_failure)
+**6 options.**
 
 
 ## **run_scylla_doctor** / SCT_RUN_SCYLLA_DOCTOR
@@ -20,7 +20,7 @@ Flag to run Scylla Doctor tool
 
 ## **run_scylla_doctor_only** / SCT_RUN_SCYLLA_DOCTOR_ONLY
 
-When true, the artifact test runs only the Scylla Doctor validation<br>(install, collect vitals, analyze, verify) and skips all other artifact checks<br>such as stop/start, cassandra-stress, etc. Useful for fast SD<br>release gating. Implies run_scylla_doctor=true.
+When true, the artifact test runs only the Scylla Doctor validation<br>(install, collect vitals, analyze, verify) and skips all other artifact checks<br>such as stop/start, cassandra-stress, etc. Useful for fast SD<br>release gating. Implies [`run_scylla_doctor`](#run_scylla_doctor)=true.
 
 **default:** False
 
