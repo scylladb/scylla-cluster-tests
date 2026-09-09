@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
+import threading
 import time
 import socket
 
@@ -28,8 +29,15 @@ from .libssh2_client.exceptions import (
     UnexpectedExit,
     Failure,
 )
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import TestFrameworkEvent
+
 from .base import RetryableNetworkException
 from .remote_base import RemoteCmdRunnerBase
+
+# Lightweight minicloud guest that cannot open an SSH channel is likely out of memory to fork sshd.
+# SCT retries past it, so the failure may only show up later on a non-retried command
+MINICLOUD_CHANNEL_TIMEOUT_ALERT_THRESHOLD = 10
 
 
 class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport="libssh2", default=True):
@@ -55,6 +63,9 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport="libssh2", defau
         SocketRecvError,
         socket.timeout,
     )
+    _minicloud_channel_timeouts: dict[str, int] = {}
+    _minicloud_channel_timeouts_lock = threading.Lock()
+    _minicloud_channel_timeout_alerted = False
 
     def _create_connection(self) -> LibSSH2Client:
         return LibSSH2Client(
@@ -79,9 +90,44 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport="libssh2", defau
                     pass
         return False
 
+    def _record_minicloud_channel_timeout(self) -> None:
+        """Surface repeated SSH channel timeouts across the minicloud guests as memory starvation."""
+        from sdcm.test_config import TestConfig  # noqa: PLC0415 - circular import avoidance
+        from sdcm.utils.minicloud.endpoint import is_minicloud_active  # noqa: PLC0415
+
+        params = getattr(TestConfig().tester_obj(), "params", None)
+        if not is_minicloud_active(params):
+            return
+
+        cls = RemoteLibSSH2CmdRunner
+        with cls._minicloud_channel_timeouts_lock:
+            counts = cls._minicloud_channel_timeouts
+            counts[self.hostname] = counts.get(self.hostname, 0) + 1
+
+            # the alert is based on the cluster-wide timeout total, not per guest
+            total = sum(counts.values())
+            if total < MINICLOUD_CHANNEL_TIMEOUT_ALERT_THRESHOLD or cls._minicloud_channel_timeout_alerted:
+                return
+            cls._minicloud_channel_timeout_alerted = True
+            breakdown = ", ".join(f"{host}={hits}" for host, hits in sorted(counts.items()))
+
+        TestFrameworkEvent(
+            source="RemoteLibSSH2CmdRunner",
+            source_method="_record_minicloud_channel_timeout",
+            message=(
+                f"{total} SSH channel timeouts across the minicloud guests ({breakdown}) - they are short of memory "
+                "to fork sshd. SCT retries them, but lack of resources may kill other commands that are not retried. "
+                "Consider reducing number of guests, or give guest OS more memory with minicloud_scylla_reserve_memory."
+            ),
+            severity=Severity.WARNING,
+        ).publish_or_dump()
+
     def _run_on_retryable_exception(self, exc: Exception, new_session: bool, suppress_errors: bool = False) -> bool:
         if not suppress_errors:
             self.log.error(exc, exc_info=exc)
+        inner = exc.exception if isinstance(exc, FailedToRunCommand) else exc
+        if isinstance(inner, OpenChannelTimeout):
+            self._record_minicloud_channel_timeout()
         if isinstance(exc, FailedToRunCommand) and not new_session:
             self.log.debug("Reestablish the session...")
             try:

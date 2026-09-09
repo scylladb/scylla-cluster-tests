@@ -14,8 +14,10 @@
 import os
 import getpass
 import threading
+from types import SimpleNamespace
 from typing import Union, Optional
 from logging import getLogger
+from unittest.mock import patch
 
 import pytest
 
@@ -31,7 +33,11 @@ from sdcm.remote import (
 )
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.remote.base import CommandRunner, Result
+from sdcm.remote.libssh2_client.exceptions import FailedToRunCommand, OpenChannelTimeout
 from sdcm.remote.remote_file import remote_file
+from sdcm.remote.remote_libssh_cmd_runner import MINICLOUD_CHANNEL_TIMEOUT_ALERT_THRESHOLD
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.cluster_k8s import KubernetesCluster
 
 
@@ -563,3 +569,115 @@ class TestRemoteFile:
                 remoter=remoter, remote_path=some_file, preserve_ownership=False, preserve_permissions=False
             ) as fobj:
                 fobj.write("test data")
+
+
+@pytest.fixture
+def _clean_minicloud_timeout_counters():
+    def reset():
+        RemoteLibSSH2CmdRunner._minicloud_channel_timeouts.clear()
+        RemoteLibSSH2CmdRunner._minicloud_channel_timeout_alerted = False
+
+    reset()
+    yield
+    reset()
+
+
+def _record_minicloud_timeouts(times, hostname="10.0.0.1", minicloud=True):
+    runner = SimpleNamespace(hostname=hostname)
+    with (
+        patch("sdcm.utils.minicloud.endpoint.is_minicloud_active", return_value=minicloud),
+        patch("sdcm.remote.remote_libssh_cmd_runner.TestFrameworkEvent") as event,
+    ):
+        for _ in range(times):
+            RemoteLibSSH2CmdRunner._record_minicloud_channel_timeout(runner)
+    return event
+
+
+def test_minicloud_channel_timeout_alert_activates_from_test_config(_clean_minicloud_timeout_counters):
+    """The remoter has no params of its own, so it must read them off TestConfig.
+
+    A yaml-only setup turns minicloud on through the minicloud_endpoint_url param with nothing
+    in the environment, so an env-only check would leave the alert silent for the whole run.
+    """
+    tester = SimpleNamespace(params={"minicloud_endpoint_url": "http://localhost:5000"})
+    runner = SimpleNamespace(hostname="10.0.0.7")
+    with (
+        patch.dict(os.environ, {}, clear=True),  # no SCT_MINICLOUD_ENDPOINT_URL anywhere
+        patch("sdcm.test_config.TestConfig") as test_config,
+        patch.object(TestFrameworkEvent, "publish_or_dump", autospec=True) as publish,
+    ):
+        test_config.return_value.tester_obj.return_value = tester
+        for _ in range(MINICLOUD_CHANNEL_TIMEOUT_ALERT_THRESHOLD):
+            RemoteLibSSH2CmdRunner._record_minicloud_channel_timeout(runner)
+
+    assert publish.call_count == 1
+
+
+def test_minicloud_channel_timeout_alert_survives_a_missing_tester(_clean_minicloud_timeout_counters):
+    """TestConfig has no tester before setUp runs - the hook must not explode there."""
+    runner = SimpleNamespace(hostname="10.0.0.8")
+    with (
+        patch.dict(os.environ, {}, clear=True),
+        patch("sdcm.test_config.TestConfig") as test_config,
+        patch.object(TestFrameworkEvent, "publish_or_dump", autospec=True) as publish,
+    ):
+        test_config.return_value.tester_obj.return_value = None
+        for _ in range(MINICLOUD_CHANNEL_TIMEOUT_ALERT_THRESHOLD):
+            RemoteLibSSH2CmdRunner._record_minicloud_channel_timeout(runner)
+
+    assert publish.call_count == 0
+
+
+def test_minicloud_channel_timeout_alert_counts_every_guest_together(_clean_minicloud_timeout_counters):
+    """Alerting is based on the cluster-wide timeout total across all guests."""
+    hosts = [f"10.0.0.{index}" for index in range(1, 9)]
+    with (
+        patch("sdcm.utils.minicloud.endpoint.is_minicloud_active", return_value=True),
+        patch.object(TestFrameworkEvent, "publish_or_dump", autospec=True) as publish,
+    ):
+        for _ in range(2):  # 16 timeouts, no single guest above 2
+            for host in hosts:
+                RemoteLibSSH2CmdRunner._record_minicloud_channel_timeout(SimpleNamespace(hostname=host))
+
+    message = publish.call_args.args[0].message
+    assert publish.call_count == 1
+    assert "10 SSH channel timeouts" in message
+    assert "10.0.0.1=2" in message
+
+
+def test_minicloud_channel_timeout_alert_silent_outside_minicloud(_clean_minicloud_timeout_counters):
+    event = _record_minicloud_timeouts(MINICLOUD_CHANNEL_TIMEOUT_ALERT_THRESHOLD * 2, minicloud=False)
+    assert event.call_count == 0
+
+
+def test_minicloud_channel_timeout_alert_fires_once_with_a_real_event(_clean_minicloud_timeout_counters):
+    runner = SimpleNamespace(hostname="10.0.0.9")
+    with (
+        patch("sdcm.utils.minicloud.endpoint.is_minicloud_active", return_value=True),
+        patch.object(TestFrameworkEvent, "publish_or_dump", autospec=True) as publish,
+    ):
+        for _ in range(MINICLOUD_CHANNEL_TIMEOUT_ALERT_THRESHOLD * 3):
+            RemoteLibSSH2CmdRunner._record_minicloud_channel_timeout(runner)
+
+    assert publish.call_count == 1
+    event = publish.call_args.args[0]
+    assert event.severity is Severity.WARNING
+    assert "10.0.0.9" in event.message
+    assert "minicloud_scylla_reserve_memory" in event.message
+
+
+def test_minicloud_channel_timeout_alert_counts_a_wrapped_open_channel_timeout(_clean_minicloud_timeout_counters):
+    """Ensure a wrapped OpenChannelTimeout is counted and retried."""
+    runner = SimpleNamespace(
+        hostname="10.0.0.5",
+        exception_retryable=RemoteLibSSH2CmdRunner.exception_retryable,
+        _is_error_retryable=lambda _: False,
+    )
+    runner._record_minicloud_channel_timeout = lambda: RemoteLibSSH2CmdRunner._record_minicloud_channel_timeout(runner)
+    wrapped = FailedToRunCommand(Result(), OpenChannelTimeout("Failed to open channel in 15 seconds"))
+
+    with patch("sdcm.utils.minicloud.endpoint.is_minicloud_active", return_value=True):
+        with pytest.raises(RetryableNetworkException):
+            RemoteLibSSH2CmdRunner._run_on_retryable_exception(runner, wrapped, new_session=True, suppress_errors=True)
+
+    assert RemoteLibSSH2CmdRunner._minicloud_channel_timeouts == {"10.0.0.5": 1}

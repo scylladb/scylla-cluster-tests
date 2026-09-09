@@ -26,6 +26,7 @@ from sdcm.utils.minicloud.config import (
     resolve_minicloud_regions,
 )
 from sdcm.utils.minicloud.endpoint import MINICLOUD_PORT, get_minicloud_endpoint, is_minicloud_active
+from sdcm.utils.minicloud.preflight import scylla_reserve_memory
 from sdcm.utils.minicloud.log_collection import (
     collect_minicloud_guest_serial_logs,
     collect_minicloud_logs,
@@ -55,6 +56,7 @@ __all__ = [
     "redact_docker_inspect",
     "resolve_minicloud_default_region",
     "resolve_minicloud_regions",
+    "scylla_reserve_memory",
     "set_minicloud_endpoint_env",
     "validate_minicloud_params",
 ]

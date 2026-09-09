@@ -82,6 +82,14 @@ class MinicloudConfigMixin(BaseModel):
         description="S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads). "
         "Backend-independent: GCE runs reach S3 for the same content",
     )
+    minicloud_scylla_reserve_memory: String = SctField(
+        description="Extra memory reserved by scylla-server for the guest OS on lightweight minicloud guests, "
+        "passed as --reserve-memory (for example, '3G'). Without this option, Scylla usually keeps about "
+        "~1.5GiB on guests below ~22GiB RAM, which may be too small for sshd and SCT helper tools; then sshd "
+        "cannot fork and one-shot commands can be OOM-killed. Empty (default) means do not pass this option. "
+        "Because this memory comes from Scylla own budget, tests must opt in. Ignored if append_scylla_args "
+        "already contains --memory or --reserve-memory",
+    )
     minicloud_skip_memory_check: Boolean = SctField(
         description="Skip the conservative host-memory preflight gate — for development machines "
         "whose owner knows the workload's real footprint; an oversized test then dies mid-run as "

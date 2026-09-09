@@ -30,6 +30,7 @@ from sdcm.utils.minicloud.networking import setup_host_networking
 from sdcm.utils.minicloud.preflight import (
     check_aws_credentials,
     check_host_memory,
+    check_scylla_memory_budget,
     parse_memory_gib,
     sum_node_counts,
 )
@@ -87,6 +88,7 @@ class MinicloudManager:
             raise MinicloudError("docker is not available on PATH. Install Docker to run minicloud in container mode.")
         if params is not None:
             self._check_host_memory(params)
+            self._check_scylla_memory_budget(params)
             if enforce_overlay:
                 validate_minicloud_params(params)
             else:
@@ -104,6 +106,10 @@ class MinicloudManager:
 
     def _check_host_memory(self, params) -> None:
         check_host_memory(self.config, params)
+
+    @staticmethod
+    def _check_scylla_memory_budget(params) -> None:
+        check_scylla_memory_budget(params)
 
     @staticmethod
     def _check_aws_credentials() -> None:
@@ -292,7 +298,11 @@ class MinicloudManager:
             raw = self._inspect_container(f"{{{{json .HostConfig.{field}}}}}")
             if not isinstance(raw, (int, float)):
                 continue
-            wanted = parse_memory_gib(wanted_value) if flag == "--memory" and wanted_value else float(wanted_value or 0)
+            wanted = (
+                parse_memory_gib(wanted_value, "minicloud_container_memory")
+                if flag == "--memory" and wanted_value
+                else float(wanted_value or 0)
+            )
             # format both through :g so the GiB->flag rounding docker was given is the same
             # rounding this comparison sees, and an unchanged config never looks like a change
             if f"{raw / divisor:g}" != f"{wanted:g}":
@@ -375,7 +385,10 @@ class MinicloudManager:
         if self.config.container_memory:
             # docker --memory speaks b/k/m/g, not the GiB form the rest of the minicloud config
             # uses, so convert rather than make the user remember two unit styles.
-            docker_cmd += ["--memory", f"{parse_memory_gib(self.config.container_memory):g}g"]
+            docker_cmd += [
+                "--memory",
+                f"{parse_memory_gib(self.config.container_memory, 'minicloud_container_memory'):g}g",
+            ]
         if self.config.container_cpus:
             docker_cmd += ["--cpus", str(self.config.container_cpus)]
 
