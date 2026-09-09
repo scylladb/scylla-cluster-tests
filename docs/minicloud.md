@@ -10,6 +10,11 @@ downloads), and on the GCE path GCS/Cloud Build for image export.
 Use it for provisioning-path development, artifact smoke tests, and any test whose value is in
 exercising SCT itself rather than real cloud hardware.
 
+Most production test-cases do not fit on one host as they stand. For the procedure that turns
+one into something that does - the guest-memory budget, the overlay pattern, which params each
+test type actually reads - see the
+[downscaling-for-minicloud](../skills/downscaling-for-minicloud/SKILL.md) skill.
+
 ## How activation works
 
 `is_minicloud_active()` (`sdcm/utils/minicloud/`) switches SCT into minicloud mode when any of
@@ -130,7 +135,11 @@ exit-137 failure mode above if you were wrong.
 
 Host prerequisites: KVM (`/dev/kvm` writable by your user), docker, ~80 GiB free in `$HOME` for
 the image cache, and AWS credentials for the passthrough buckets (GCP credentials additionally
-for the GCE path's image export). One-time network setup (the `minicloud0` TUN device carrying
+for the GCE path's image export). The AWS **image** path needs more than bucket access: it
+builds each guest disk over the EBS direct API, so the IAM identity also needs
+`ebs:ListSnapshotBlocks` and `ebs:GetSnapshotBlock` (the minicloud README carries a ready-made
+policy). Without them the first AWS run fails at image resolution, not at start-up.
+One-time network setup (the `minicloud0` TUN device carrying
 `10.127.0.1`) is created by the container's setup script under sudo, or pre-create it via a
 boot-time unit and no sudo is needed at run time. A networking-setup failure aborts the start -
 guests without `minicloud0` would pass API health checks and then be unreachable over SSH.
@@ -250,6 +259,7 @@ the regular `clean-resources` path.
 | container exit 143 | someone ran `docker stop minicloud` |
 | `InvalidAMIID.NotFound` on launch | AMI not cached and the container's `--aws-region` differs from where the AMI lives - or the AMI id is wrong |
 | `SnapshotNotFound` from `ListSnapshotBlocks` | dev AMI whose snapshot is not shared with the QA account - use a released version |
+| `AccessDeniedException` from `ListSnapshotBlocks`, and SCT then waits for nodes that never boot | the IAM identity has no EBS direct API permission at all - a different cause from `SnapshotNotFound` above. Grant `ebs:ListSnapshotBlocks` and `ebs:GetSnapshotBlock`. Note SCT's own log shows nothing useful here: only `minicloud.log` carries `failed to resolve image` / `background VM launch failed` |
 | "memory per shard too low" in a guest's Scylla log | `minicloud_lightweight_memory` set below ~3 GiB |
 | start aborts with "could not extract minicloud-setup.sh" or "minicloud-setup.sh failed" | host networking could not be configured - pre-create the `minicloud0` device or grant passwordless sudo |
 | guests boot and get DHCP, but SSH fails with `AuthenticationError` until the timeout | the host firewall blocks the guests' IMDS requests, so no SSH key was injected - on firewalld hosts `scripts/minicloud-firewalld-zone.sh` moves `minicloud0` into the `trusted` zone at every start and fails the build when it cannot, so either the script never ran - check that the *Start Minicloud* stage called it, or run it by hand on the host - or the block comes from a non-firewalld firewall (ufw, plain nftables), which the script deliberately leaves alone |
