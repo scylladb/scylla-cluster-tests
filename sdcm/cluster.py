@@ -6142,13 +6142,29 @@ class BaseScyllaCluster:
         # even started (e.g. stuck for the full stop_nemesis timeout, or longer, on an
         # untimed nodetool repair call) is in pre_existing_threads and would otherwise
         # be silently excluded here, defeating the whole point of this escalation for
-        # exactly the incident shape it exists to catch. Arming unconditionally on
-        # every currently-live ThreadPoolExecutor worker is safe even for the long-lived
-        # healthy executors discussed above: exit_process() (sdcm/utils/hard_exit.py)
-        # re-checks is_alive() on each implicated thread at the actual, later exit
-        # point, by which time teardown steps like stop_task_threads() will typically
-        # have already retired them, making this a no-op false-positive-free arm.
-        all_live_threads = [thread for thread in _threads_queues if thread.is_alive()]
+        # exactly the incident shape it exists to catch. But checking every live worker
+        # with no grace period at all reintroduces a lower-severity version of the same
+        # false-positive-noise problem new_stuck_threads' grace period (above) exists to
+        # avoid: long-lived healthy executors (SSHLoggerBase._child_thread's executor,
+        # TimeoutMonitor.executor, etc.) are essentially always alive at this point, so
+        # request_hard_exit() -- an ERROR-level log plus persistent global-state mutation
+        # -- would otherwise fire on virtually every stop_nemesis() call in real runs,
+        # not just genuine incidents. Give the whole process-wide set of live workers the
+        # same bounded join(timeout)-then-check grace period as new_stuck_threads above
+        # (same WORKER_JOIN_GRACE_PERIOD): an ordinary busy-but-healthy worker will
+        # typically finish or make progress within that short window and so won't arm,
+        # while a worker genuinely stuck for the better part of an hour (the
+        # SCT-575/SCT-803 incident shape) will trivially still be alive after it -- so
+        # this does not reintroduce the false-negative above. Safe either way even for
+        # any worker that does remain alive: exit_process() (sdcm/utils/hard_exit.py)
+        # re-checks is_alive() on each implicated thread at the actual, later exit point,
+        # by which time teardown steps like stop_task_threads() will typically have
+        # already retired it.
+        live_threads = [thread for thread in _threads_queues if thread.is_alive()]
+        arming_deadline = time.monotonic() + WORKER_JOIN_GRACE_PERIOD
+        for thread in live_threads:
+            thread.join(timeout=max(0, arming_deadline - time.monotonic()))
+        all_live_threads = [thread for thread in live_threads if thread.is_alive()]
         if all_live_threads:
             request_hard_exit(
                 escalation_reason

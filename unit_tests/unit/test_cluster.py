@@ -40,6 +40,7 @@ from sdcm.utils.common import (
     keyspace_min_max_tokens,
 )
 from sdcm.utils.distro import Distro
+from sdcm.utils.parallel_object import WORKER_JOIN_GRACE_PERIOD
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_config import SCTConfiguration
 from unit_tests.lib.dummy_remote import DummyRemote, LocalNode
@@ -1460,6 +1461,47 @@ def test_stop_nemesis_arms_hard_exit_for_worker_stuck_before_stop_nemesis_was_ca
     finally:
         block_forever.set()
         pre_existing_stuck_executor.shutdown(wait=True)
+
+
+def test_stop_nemesis_does_not_arm_hard_exit_for_worker_that_finishes_within_grace_period(
+    scylla_cluster_for_nemesis, events_function_scope
+):
+    """Noise-reduction regression test: arming request_hard_exit() unconditionally on
+    every currently-alive ThreadPoolExecutor worker (with no grace period at all) would
+    reintroduce a lower-severity version of the false-positive-noise problem
+    new_stuck_threads' grace period already guards against -- an ordinary
+    busy-but-healthy worker that is alive at the exact moment stop_nemesis() runs, but
+    finishes on its own shortly after, would still arm the hard exit and publish an
+    ERROR-level log plus mutate persistent global state, on effectively every
+    stop_nemesis() call in real runs (see e.g. SSHLoggerBase._child_thread's executor,
+    TimeoutMonitor.executor -- long-lived executors that are essentially always alive
+    at this point, and any other pool that just happens to be mid-task).
+
+    Simulate that: a ThreadPoolExecutor worker still busy with a short, legitimate task
+    when stop_nemesis() is called. shutdown(wait=False) is issued right after
+    submitting (mirroring a caller that has already moved on, e.g. via a `with
+    ThreadPoolExecutor(...)` block that just exited) so the worker thread itself -- not
+    just this one task -- actually terminates once the task and the queued shutdown
+    sentinel are both processed, well within WORKER_JOIN_GRACE_PERIOD.
+    request_hard_exit() must NOT fire for it.
+    """
+    already_set = threading.Event()
+    already_set.set()
+    stopped_thread = threading.Thread(target=already_set.wait, daemon=True)
+    stopped_thread.start()
+    stopped_thread.join(timeout=5)
+    scylla_cluster_for_nemesis.nemesis_threads = [stopped_thread]
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    executor.submit(time.sleep, WORKER_JOIN_GRACE_PERIOD / 10)
+    executor.shutdown(wait=False)
+
+    scylla_cluster_for_nemesis.stop_nemesis(timeout=0.1)
+
+    critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
+    assert len(critical_events) == 0, f"Expected no CRITICAL events, got {len(critical_events)}"
+    assert not hard_exit._hard_exit_reason
+    assert not hard_exit._hard_exit_threads
 
 
 def test_stop_nemesis_arms_hard_exit_for_both_new_and_pre_existing_stuck_workers(
