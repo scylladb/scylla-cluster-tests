@@ -1,11 +1,13 @@
 # Nemesis (chaos testing)
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 Which disruptions run, how often, and how targets are selected.
 
 **12 options.**
 
+
+<a id="nemesis_add_node_cnt"></a>
 
 ## **nemesis_add_node_cnt** / SCT_NEMESIS_ADD_NODE_CNT
 
@@ -17,6 +19,8 @@ Add/remove nodes during GrowShrinkCluster nemesis
 * supports k8s multitenancy - see [multitenancy docs](../k8s-multitenancy.md)
 
 
+<a id="nemesis_class_name"></a>
+
 ## **nemesis_class_name** / SCT_NEMESIS_CLASS_NAME
 
 Nemesis class to use (possible types in sdcm.nemesis).<br>Supported syntax:<br>- [`nemesis_class_name`](#nemesis_class_name): "NemesisName"<br>Run one nemesis in a single thread.<br>- [`nemesis_class_name`](#nemesis_class_name): ["NemesisA", "NemesisB"]<br>Run NemesisA and NemesisB each in their own thread.<br>- [`nemesis_class_name`](#nemesis_class_name): ["SisyphusMonkey", "SisyphusMonkey"]<br>Run two SisyphusMonkey threads in parallel.<br>Note: the former 'Class:N' count syntax (e.g. "ChaosMonkey:2") and<br>space-separated strings (e.g. "DisruptiveMonkey NonDisruptiveMonkey") are no<br>longer supported. Use an explicit YAML list instead.
@@ -27,6 +31,8 @@ Nemesis class to use (possible types in sdcm.nemesis).<br>Supported syntax:<br>-
 * supports k8s multitenancy - see [multitenancy docs](../k8s-multitenancy.md)
 
 
+<a id="nemesis_double_load_during_grow_shrink_duration"></a>
+
 ## **nemesis_double_load_during_grow_shrink_duration** / SCT_NEMESIS_DOUBLE_LOAD_DURING_GROW_SHRINK_DURATION
 
 After growing (and before shrink) in GrowShrinkCluster nemesis it will double the load for provided duration.
@@ -35,6 +41,8 @@ After growing (and before shrink) in GrowShrinkCluster nemesis it will double th
 
 **type:** int
 
+
+<a id="nemesis_during_prepare"></a>
 
 ## **nemesis_during_prepare** / SCT_NEMESIS_DURING_PREPARE
 
@@ -46,6 +54,8 @@ Run nemesis during prepare stage of the test
 * supports k8s multitenancy - see [multitenancy docs](../k8s-multitenancy.md)
 
 
+<a id="nemesis_filter_seeds"></a>
+
 ## **nemesis_filter_seeds** / SCT_NEMESIS_FILTER_SEEDS
 
 If true runs the nemesis only on non seed nodes
@@ -55,6 +65,8 @@ If true runs the nemesis only on non seed nodes
 **type:** bool | list[bool]
 * supports k8s multitenancy - see [multitenancy docs](../k8s-multitenancy.md)
 
+
+<a id="nemesis_grow_shrink_instance_type"></a>
 
 ## **nemesis_grow_shrink_instance_type** / SCT_NEMESIS_GROW_SHRINK_INSTANCE_TYPE
 
@@ -66,6 +78,8 @@ Instance type to use for adding/removing nodes during GrowShrinkCluster nemesis
 * appendable
 
 
+<a id="nemesis_interval"></a>
+
 ## **nemesis_interval** / SCT_NEMESIS_INTERVAL
 
 Nemesis sleep interval to use if None provided specifically in the test
@@ -75,6 +89,8 @@ Nemesis sleep interval to use if None provided specifically in the test
 **type:** int | list[int]
 * supports k8s multitenancy - see [multitenancy docs](../k8s-multitenancy.md)
 
+
+<a id="nemesis_multiply_factor"></a>
 
 ## **nemesis_multiply_factor** / SCT_NEMESIS_MULTIPLY_FACTOR
 
@@ -86,6 +102,8 @@ Multiply the list of nemesis to execute by the specified factor
 * supports k8s multitenancy - see [multitenancy docs](../k8s-multitenancy.md)
 
 
+<a id="nemesis_seed"></a>
+
 ## **nemesis_seed** / SCT_NEMESIS_SEED
 
 A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
@@ -95,6 +113,8 @@ A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
 **type:** int | list[int]
 * supports k8s multitenancy - see [multitenancy docs](../k8s-multitenancy.md)
 
+
+<a id="nemesis_selector"></a>
 
 ## **nemesis_selector** / SCT_NEMESIS_SELECTOR
 
@@ -106,6 +126,8 @@ A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
 * supports k8s multitenancy - see [multitenancy docs](../k8s-multitenancy.md)
 
 
+<a id="nemesis_sequence_sleep_between_ops"></a>
+
 ## **nemesis_sequence_sleep_between_ops** / SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS
 
 Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests
@@ -115,6 +137,8 @@ Sleep interval between nemesis operations for use in unique_sequence nemesis kin
 **type:** int | list[int]
 * supports k8s multitenancy - see [multitenancy docs](../k8s-multitenancy.md)
 
+
+<a id="sla"></a>
 
 ## **sla** / SCT_SLA
 

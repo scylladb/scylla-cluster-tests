@@ -1,11 +1,13 @@
 # Azure backend
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 Microsoft Azure provisioning.
 
 **12 options.**
 
+
+<a id="azure_image_db"></a>
 
 ## **azure_image_db** / SCT_AZURE_IMAGE_DB
 
@@ -17,6 +19,8 @@ The Azure image to be used for database nodes.
 * appendable
 
 
+<a id="azure_image_loader"></a>
+
 ## **azure_image_loader** / SCT_AZURE_IMAGE_LOADER
 
 The Azure image to be used for loader nodes.
@@ -26,6 +30,8 @@ The Azure image to be used for loader nodes.
 **type:** str
 * appendable
 
+
+<a id="azure_image_monitor"></a>
 
 ## **azure_image_monitor** / SCT_AZURE_IMAGE_MONITOR
 
@@ -37,6 +43,8 @@ The Azure image to be used for monitor nodes.
 * appendable
 
 
+<a id="azure_image_username"></a>
+
 ## **azure_image_username** / SCT_AZURE_IMAGE_USERNAME
 
 The username for the Azure image.
@@ -46,6 +54,8 @@ The username for the Azure image.
 **type:** str
 * appendable
 
+
+<a id="azure_instance_type_db"></a>
 
 ## **azure_instance_type_db** / SCT_AZURE_INSTANCE_TYPE_DB
 
@@ -57,6 +67,8 @@ The Azure virtual machine size to be used for database nodes.
 * appendable
 
 
+<a id="azure_instance_type_db_oracle"></a>
+
 ## **azure_instance_type_db_oracle** / SCT_AZURE_INSTANCE_TYPE_DB_ORACLE
 
 The Azure virtual machine size to be used for Oracle database nodes.
@@ -66,6 +78,8 @@ The Azure virtual machine size to be used for Oracle database nodes.
 **type:** str
 * appendable
 
+
+<a id="azure_instance_type_loader"></a>
 
 ## **azure_instance_type_loader** / SCT_AZURE_INSTANCE_TYPE_LOADER
 
@@ -77,6 +91,8 @@ The Azure virtual machine size to be used for loader nodes.
 * appendable
 
 
+<a id="azure_instance_type_monitor"></a>
+
 ## **azure_instance_type_monitor** / SCT_AZURE_INSTANCE_TYPE_MONITOR
 
 The Azure virtual machine size to be used for monitor nodes.
@@ -87,6 +103,8 @@ The Azure virtual machine size to be used for monitor nodes.
 * appendable
 
 
+<a id="azure_provision_stuck_vm_recreate_attempts"></a>
+
 ## **azure_provision_stuck_vm_recreate_attempts** / SCT_AZURE_PROVISION_STUCK_VM_RECREATE_ATTEMPTS
 
 How many times to recreate a stuck Azure VM (full node: VM, NIC and public IP) onto<br>fresh capacity before giving up with a non-retryable error.
@@ -95,6 +113,8 @@ How many times to recreate a stuck Azure VM (full node: VM, NIC and public IP) o
 
 **type:** int
 
+
+<a id="azure_provision_stuck_vm_timeout"></a>
 
 ## **azure_provision_stuck_vm_timeout** / SCT_AZURE_PROVISION_STUCK_VM_TIMEOUT
 
@@ -105,6 +125,8 @@ Seconds to wait for an Azure VM to reach the 'Succeeded' provisioning state befo
 **type:** int
 
 
+<a id="azure_provision_stuck_vm_total_timeout"></a>
+
 ## **azure_provision_stuck_vm_total_timeout** / SCT_AZURE_PROVISION_STUCK_VM_TOTAL_TIMEOUT
 
 Total timeout (seconds) for the whole stuck-VM recovery attempts.<br>Recovery stops with a non-retryable error when either this timeout or<br>[`azure_provision_stuck_vm_recreate_attempts`](#azure_provision_stuck_vm_recreate_attempts) is exhausted. This way a degraded Azure<br>region cannot keep provisioning running until the CI stage times out SCT.<br>This value must be at least [`azure_provision_stuck_vm_timeout`](#azure_provision_stuck_vm_timeout), otherwise SCT may<br>give up during the initial wait without making even one recreate attempt.
@@ -113,6 +135,8 @@ Total timeout (seconds) for the whole stuck-VM recovery attempts.<br>Recovery st
 
 **type:** int
 
+
+<a id="azure_region_name"></a>
 
 ## **azure_region_name** / SCT_AZURE_REGION_NAME
 
