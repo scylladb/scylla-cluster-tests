@@ -1,11 +1,10 @@
 from __future__ import absolute_import, annotations
 
-import atexit
 import logging
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from concurrent.futures.thread import _python_exit
+from concurrent.futures.thread import _threads_queues
 from functools import wraps
 from typing import Iterable, Callable, List
 
@@ -134,8 +133,30 @@ class ParallelObject:
         for future, _ in futures:
             future.cancel()
         self._thread_pool.shutdown(wait=False)
-        # we need to unregister internal function that waits for all threads to finish when interpreter exits
-        atexit.unregister(_python_exit)
+
+        # Since CPython bpo-39812 (3.9+), ThreadPoolExecutor worker threads are
+        # non-daemon and `daemon` cannot be flipped after start, so they used to be
+        # joined twice at interpreter shutdown with no timeout: once via
+        # concurrent.futures.thread._python_exit() (registered through the
+        # CPython-internal threading._register_atexit(), which is why calling
+        # the public atexit.unregister(_python_exit) here never actually removed
+        # it) and again via threading._shutdown_locks (Python <3.14; on 3.14+ that
+        # second join moved into the C-level _thread._shutdown(), which has no
+        # Python-level bypass -- os._exit() in sdcm.utils.hard_exit is what
+        # actually protects us there). Removing this pool's worker threads from
+        # both registries -- where they still exist -- is the only way to let
+        # CPython abandon them instead of joining them forever. This is safe here
+        # because clean_up() runs only after every result has already been
+        # collected or timed out and the pool has already been told to shut down
+        # above, so any still-running worker at this point is already an
+        # abandoned zombie as far as this code is concerned -- we are just making
+        # CPython agree.
+        shutdown_locks = getattr(threading, "_shutdown_locks", None)
+        for thread in self._thread_pool._threads:
+            _threads_queues.pop(thread, None)
+            tstate_lock = getattr(thread, "_tstate_lock", None)
+            if shutdown_locks is not None and tstate_lock is not None:
+                shutdown_locks.discard(tstate_lock)
 
     @staticmethod
     def run_named_tasks_in_parallel(
