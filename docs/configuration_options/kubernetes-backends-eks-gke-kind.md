@@ -1,11 +1,13 @@
 # Kubernetes backends (EKS/GKE/kind)
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 Scylla Operator deployments: EKS, GKE and local kind clusters.
 
 **45 options.**
 
+
+<a id="eks_admin_arn"></a>
 
 ## **eks_admin_arn** / SCT_EKS_ADMIN_ARN
 
@@ -17,6 +19,8 @@ ARN(s) of the IAM user or role to be granted cluster admin access
 * appendable
 
 
+<a id="eks_cluster_version"></a>
+
 ## **eks_cluster_version** / SCT_EKS_CLUSTER_VERSION
 
 Kubernetes version for the EKS control plane, e.g. '1.30'.
@@ -26,6 +30,8 @@ Kubernetes version for the EKS control plane, e.g. '1.30'.
 **type:** str
 * appendable
 
+
+<a id="eks_nodegroup_role_arn"></a>
 
 ## **eks_nodegroup_role_arn** / SCT_EKS_NODEGROUP_ROLE_ARN
 
@@ -37,6 +43,8 @@ ARN of the IAM role for EKS node groups
 * appendable
 
 
+<a id="eks_role_arn"></a>
+
 ## **eks_role_arn** / SCT_EKS_ROLE_ARN
 
 ARN of the IAM role for EKS
@@ -46,6 +54,8 @@ ARN of the IAM role for EKS
 **type:** str
 * appendable
 
+
+<a id="eks_service_ipv4_cidr"></a>
 
 ## **eks_service_ipv4_cidr** / SCT_EKS_SERVICE_IPV4_CIDR
 
@@ -57,6 +67,8 @@ CIDR block EKS allocates Kubernetes service IPs from, e.g. '10.100.0.0/16'.
 * appendable
 
 
+<a id="eks_vpc_cni_version"></a>
+
 ## **eks_vpc_cni_version** / SCT_EKS_VPC_CNI_VERSION
 
 Version of the EKS VPC CNI networking plugin to install.
@@ -66,6 +78,8 @@ Version of the EKS VPC CNI networking plugin to install.
 **type:** str
 * appendable
 
+
+<a id="gke_cluster_version"></a>
 
 ## **gke_cluster_version** / SCT_GKE_CLUSTER_VERSION
 
@@ -77,6 +91,8 @@ Specifies the version of the GKE cluster to be used.
 * appendable
 
 
+<a id="gke_k8s_release_channel"></a>
+
 ## **gke_k8s_release_channel** / SCT_GKE_K8S_RELEASE_CHANNEL
 
 K8S release channel name to be used. Expected values are: 'rapid', 'regular', 'stable' and '' (static / No channel).
@@ -86,6 +102,8 @@ K8S release channel name to be used. Expected values are: 'rapid', 'regular', 's
 **type:** str
 * appendable
 
+
+<a id="k8s_cert_manager_version"></a>
 
 ## **k8s_cert_manager_version** / SCT_K8S_CERT_MANAGER_VERSION
 
@@ -97,6 +115,8 @@ Specifies the version of the cert-manager to be used in K8S.
 * appendable
 
 
+<a id="k8s_connection_bundle_file"></a>
+
 ## **k8s_connection_bundle_file** / SCT_K8S_CONNECTION_BUNDLE_FILE
 
 Serverless configuration bundle file.
@@ -106,6 +126,8 @@ Serverless configuration bundle file.
 **type:** str
 * appendable
 
+
+<a id="k8s_db_node_service_type"></a>
 
 ## **k8s_db_node_service_type** / SCT_K8S_DB_NODE_SERVICE_TYPE
 
@@ -117,6 +139,8 @@ Defines the type of the K8S 'Service' objects type used for ScyllaDB pods. Empty
 * appendable
 
 
+<a id="k8s_db_node_to_client_broadcast_ip_type"></a>
+
 ## **k8s_db_node_to_client_broadcast_ip_type** / SCT_K8S_DB_NODE_TO_CLIENT_BROADCAST_IP_TYPE
 
 Defines the source of the IP address to be used for the 'broadcast_rpc_address' config option in the 'scylla.yaml' files. Empty value means 'do not set and allow scylla-operator to choose'.
@@ -126,6 +150,8 @@ Defines the source of the IP address to be used for the 'broadcast_rpc_address' 
 **type:** str
 * appendable
 
+
+<a id="k8s_db_node_to_node_broadcast_ip_type"></a>
 
 ## **k8s_db_node_to_node_broadcast_ip_type** / SCT_K8S_DB_NODE_TO_NODE_BROADCAST_IP_TYPE
 
@@ -137,6 +163,8 @@ Defines the source of the IP address to be used for the 'broadcast_address' conf
 * appendable
 
 
+<a id="k8s_deploy_monitoring"></a>
+
 ## **k8s_deploy_monitoring** / SCT_K8S_DEPLOY_MONITORING
 
 Determines if monitoring should be deployed alongside the Scylla cluster.
@@ -145,6 +173,8 @@ Determines if monitoring should be deployed alongside the Scylla cluster.
 
 **type:** bool
 
+
+<a id="k8s_enable_alternator"></a>
 
 ## **k8s_enable_alternator** / SCT_K8S_ENABLE_ALTERNATOR
 
@@ -155,6 +185,8 @@ Defines whether we enable the alternator feature using scylla-operator or not.
 **type:** bool
 
 
+<a id="k8s_enable_performance_tuning"></a>
+
 ## **k8s_enable_performance_tuning** / SCT_K8S_ENABLE_PERFORMANCE_TUNING
 
 Define whether performance tuning must run or not.
@@ -163,6 +195,8 @@ Define whether performance tuning must run or not.
 
 **type:** bool
 
+
+<a id="k8s_enable_sni"></a>
 
 ## **k8s_enable_sni** / SCT_K8S_ENABLE_SNI
 
@@ -173,6 +207,8 @@ Defines whether we install SNI and use it or not (serverless feature).
 **type:** bool
 
 
+<a id="k8s_enable_tls"></a>
+
 ## **k8s_enable_tls** / SCT_K8S_ENABLE_TLS
 
 Defines whether to enable the operator serverless options.
@@ -181,6 +217,8 @@ Defines whether to enable the operator serverless options.
 
 **type:** bool
 
+
+<a id="k8s_functional_test_dataset"></a>
 
 ## **k8s_functional_test_dataset** / SCT_K8S_FUNCTIONAL_TEST_DATASET
 
@@ -192,6 +230,8 @@ Defines whether dataset uses for pre-fill cluster in functional test. Defined in
 * appendable
 
 
+<a id="k8s_instance_type_auxiliary"></a>
+
 ## **k8s_instance_type_auxiliary** / SCT_K8S_INSTANCE_TYPE_AUXILIARY
 
 Instance type for the nodes of the K8S auxiliary/default node pool.
@@ -201,6 +241,8 @@ Instance type for the nodes of the K8S auxiliary/default node pool.
 **type:** str
 * appendable
 
+
+<a id="k8s_instance_type_monitor"></a>
 
 ## **k8s_instance_type_monitor** / SCT_K8S_INSTANCE_TYPE_MONITOR
 
@@ -212,6 +254,8 @@ Instance type for the nodes of the K8S monitoring node pool.
 * appendable
 
 
+<a id="k8s_loader_cluster_name"></a>
+
 ## **k8s_loader_cluster_name** / SCT_K8S_LOADER_CLUSTER_NAME
 
 Specifies the name of the loader cluster.
@@ -221,6 +265,8 @@ Specifies the name of the loader cluster.
 **type:** str
 * appendable
 
+
+<a id="k8s_loader_run_type"></a>
 
 ## **k8s_loader_run_type** / SCT_K8S_LOADER_RUN_TYPE
 
@@ -232,6 +278,8 @@ Defines how the loader pods must run. It may be either 'static' (default, run st
 * appendable
 
 
+<a id="k8s_local_volume_provisioner_type"></a>
+
 ## **k8s_local_volume_provisioner_type** / SCT_K8S_LOCAL_VOLUME_PROVISIONER_TYPE
 
 Defines the type of the K8S local volume provisioner to be deployed. It may be either 'static' or 'dynamic'. Details about 'dynamic': 'dynamic': https://github.com/scylladb/k8s-local-volume-provisioner; 'static': sdcm/k8s_configs/static-local-volume-provisioner.yaml
@@ -242,6 +290,8 @@ Defines the type of the K8S local volume provisioner to be deployed. It may be e
 * appendable
 
 
+<a id="k8s_log_api_calls"></a>
+
 ## **k8s_log_api_calls** / SCT_K8S_LOG_API_CALLS
 
 Defines whether the K8S API server logging must be enabled and its logs gathered. Be aware that it may be a really huge set of data.
@@ -250,6 +300,8 @@ Defines whether the K8S API server logging must be enabled and its logs gathered
 
 **type:** bool
 
+
+<a id="k8s_minio_storage_size"></a>
 
 ## **k8s_minio_storage_size** / SCT_K8S_MINIO_STORAGE_SIZE
 
@@ -261,6 +313,8 @@ Specifies the storage size for MinIO deployment in K8S.
 * appendable
 
 
+<a id="k8s_n_auxiliary_nodes"></a>
+
 ## **k8s_n_auxiliary_nodes** / SCT_K8S_N_AUXILIARY_NODES
 
 Number of nodes in the auxiliary pool.
@@ -269,6 +323,8 @@ Number of nodes in the auxiliary pool.
 
 **type:** int
 
+
+<a id="k8s_n_loader_pods_per_cluster"></a>
 
 ## **k8s_n_loader_pods_per_cluster** / SCT_K8S_N_LOADER_PODS_PER_CLUSTER
 
@@ -279,6 +335,8 @@ Number of loader pods per loader cluster.
 **type:** int
 
 
+<a id="k8s_n_monitor_nodes"></a>
+
 ## **k8s_n_monitor_nodes** / SCT_K8S_N_MONITOR_NODES
 
 Number of nodes in the monitoring pool that will be used for scylla-operator's deployed monitoring pods.
@@ -287,6 +345,8 @@ Number of nodes in the monitoring pool that will be used for scylla-operator's d
 
 **type:** int
 
+
+<a id="k8s_n_scylla_pods_per_cluster"></a>
 
 ## **k8s_n_scylla_pods_per_cluster** / SCT_K8S_N_SCYLLA_PODS_PER_CLUSTER
 
@@ -297,6 +357,8 @@ Number of Scylla pods per cluster.
 **type:** int
 
 
+<a id="k8s_tenants_num"></a>
+
 ## **k8s_tenants_num** / SCT_K8S_TENANTS_NUM
 
 Number of Scylla clusters to create in the K8S cluster (multitenancy).
@@ -305,6 +367,8 @@ Number of Scylla clusters to create in the K8S cluster (multitenancy).
 
 **type:** int
 
+
+<a id="k8s_scylla_cluster_name"></a>
 
 ## **k8s_scylla_cluster_name** / SCT_K8S_SCYLLA_CLUSTER_NAME
 
@@ -316,6 +380,8 @@ Specifies the name of the Scylla cluster to be deployed in K8S.
 * appendable
 
 
+<a id="k8s_scylla_cpu_limit"></a>
+
 ## **k8s_scylla_cpu_limit** / SCT_K8S_SCYLLA_CPU_LIMIT
 
 The CPU limit that will be set for each Scylla cluster deployed in K8S. If not set, then will be autocalculated. Example: '500m' or '2'
@@ -325,6 +391,8 @@ The CPU limit that will be set for each Scylla cluster deployed in K8S. If not s
 **type:** str
 * appendable
 
+
+<a id="k8s_scylla_disk_class"></a>
 
 ## **k8s_scylla_disk_class** / SCT_K8S_SCYLLA_DISK_CLASS
 
@@ -336,6 +404,8 @@ Specifies the disk class for Scylla pods.
 * appendable
 
 
+<a id="k8s_scylla_disk_gi"></a>
+
 ## **k8s_scylla_disk_gi** / SCT_K8S_SCYLLA_DISK_GI
 
 Specifies the disk size in GiB for Scylla pods.
@@ -344,6 +414,8 @@ Specifies the disk size in GiB for Scylla pods.
 
 **type:** int
 
+
+<a id="k8s_scylla_memory_limit"></a>
 
 ## **k8s_scylla_memory_limit** / SCT_K8S_SCYLLA_MEMORY_LIMIT
 
@@ -355,6 +427,8 @@ The memory limit that will be set for each Scylla cluster deployed in K8S. If no
 * appendable
 
 
+<a id="k8s_scylla_operator_chart_version"></a>
+
 ## **k8s_scylla_operator_chart_version** / SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION
 
 Version of 'scylla-operator' Helm chart to use. If not set then latest one will be used.
@@ -364,6 +438,8 @@ Version of 'scylla-operator' Helm chart to use. If not set then latest one will 
 **type:** str
 * appendable
 
+
+<a id="k8s_scylla_operator_docker_image"></a>
 
 ## **k8s_scylla_operator_docker_image** / SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE
 
@@ -375,6 +451,8 @@ Docker image to be used for installation of Scylla operator.
 * appendable
 
 
+<a id="k8s_scylla_operator_helm_repo"></a>
+
 ## **k8s_scylla_operator_helm_repo** / SCT_K8S_SCYLLA_OPERATOR_HELM_REPO
 
 Link to the Helm repository where to get 'scylla-operator' charts from.
@@ -384,6 +462,8 @@ Link to the Helm repository where to get 'scylla-operator' charts from.
 **type:** str
 * appendable
 
+
+<a id="k8s_scylla_operator_upgrade_chart_version"></a>
 
 ## **k8s_scylla_operator_upgrade_chart_version** / SCT_K8S_SCYLLA_OPERATOR_UPGRADE_CHART_VERSION
 
@@ -395,6 +475,8 @@ Version of 'scylla-operator' Helm chart to use for upgrade.
 * appendable
 
 
+<a id="k8s_scylla_operator_upgrade_docker_image"></a>
+
 ## **k8s_scylla_operator_upgrade_docker_image** / SCT_K8S_SCYLLA_OPERATOR_UPGRADE_DOCKER_IMAGE
 
 Docker image to be used for upgrade of Scylla operator.
@@ -404,6 +486,8 @@ Docker image to be used for upgrade of Scylla operator.
 **type:** str
 * appendable
 
+
+<a id="k8s_scylla_operator_upgrade_helm_repo"></a>
 
 ## **k8s_scylla_operator_upgrade_helm_repo** / SCT_K8S_SCYLLA_OPERATOR_UPGRADE_HELM_REPO
 
@@ -415,6 +499,8 @@ Link to the Helm repository where to get 'scylla-operator' charts for upgrade.
 * appendable
 
 
+<a id="k8s_scylla_utils_docker_image"></a>
+
 ## **k8s_scylla_utils_docker_image** / SCT_K8S_SCYLLA_UTILS_DOCKER_IMAGE
 
 Docker image to be used by Scylla operator to tune K8S nodes for performance. Used when [`k8s_enable_performance_tuning`](#k8s_enable_performance_tuning) is defined to 'True'. If not set then the default from operator will be used.
@@ -425,6 +511,8 @@ Docker image to be used by Scylla operator to tune K8S nodes for performance. Us
 * appendable
 
 
+<a id="k8s_use_chaos_mesh"></a>
+
 ## **k8s_use_chaos_mesh** / SCT_K8S_USE_CHAOS_MESH
 
 Enables chaos-mesh for K8S testing.
@@ -433,6 +521,8 @@ Enables chaos-mesh for K8S testing.
 
 **type:** bool
 
+
+<a id="mini_k8s_version"></a>
 
 ## **mini_k8s_version** / SCT_MINI_K8S_VERSION
 
