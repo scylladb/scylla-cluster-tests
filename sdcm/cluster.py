@@ -146,6 +146,7 @@ from sdcm.utils.install import InstallMode
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
 from sdcm.utils.health_checker import (
+    NodeHealthCheckStats,
     check_nodes_status,
     check_node_status_in_gossip_and_nodetool_status,
     check_schema_version,
@@ -3717,12 +3718,18 @@ class BaseNode(AutoSshContainerMixin):
                 else:
                     raise
 
-    def node_health_events(self) -> Iterator[ClusterHealthValidatorEvent]:
-        nodes_status = self.get_nodes_status()
-        peers_details = self.get_peers_info() or {}
-        gossip_info = self.get_gossip_info() or {}
-        group0_members = self.raft.get_group0_members()
-        tokenring_members = self.get_token_ring_members()
+    def node_health_events(self, stats: NodeHealthCheckStats | None = None) -> Iterator[ClusterHealthValidatorEvent]:
+        stats = stats if stats is not None else NodeHealthCheckStats(node_name=self.name)
+        with stats.measure("nodetool_status"):
+            nodes_status = self.get_nodes_status()
+        with stats.measure("peers"):
+            peers_details = self.get_peers_info() or {}
+        with stats.measure("gossip"):
+            gossip_info = self.get_gossip_info() or {}
+        with stats.measure("raft_group0"):
+            group0_members = self.raft.get_group0_members()
+        with stats.measure("token_ring"):
+            tokenring_members = self.get_token_ring_members()
 
         return itertools.chain(
             check_nodes_status(
@@ -3742,19 +3749,22 @@ class BaseNode(AutoSshContainerMixin):
             ),
         )
 
-    def check_node_health(self, retries: int = CHECK_NODE_HEALTH_RETRIES) -> None:
+    def check_node_health(self, retries: int = CHECK_NODE_HEALTH_RETRIES) -> NodeHealthCheckStats | None:
         # Task 1443: ClusterHealthCheck is bottle neck in scale test and create a lot of noise in 5000 tables test.
         # Disable it
         if not self.parent_cluster.params.get("cluster_health_check"):
-            return
+            return None
 
+        stats = NodeHealthCheckStats(node_name=self.name)
         for retry_n in range(1, retries + 1):
             LOGGER.debug("Check the health of the node `%s' [attempt #%d]", self.name, retry_n)
-            events = self.node_health_events()
+            stats.attempts = retry_n
+            events = self.node_health_events(stats=stats)
             event = next(events, None)
             if event is None:
                 LOGGER.debug("Node `%s' is healthy", self.name)
                 break
+            stats.causes.append(type(event).__name__)
             if retry_n == retries:  # publish health validation events on the last retry.
                 LOGGER.debug("One or more node `%s' health validation has failed", self.name)
                 event.publish()
@@ -3769,7 +3779,11 @@ class BaseNode(AutoSshContainerMixin):
                 CHECK_NODE_HEALTH_RETRY_DELAY,
                 self.name,
             )
-            time.sleep(CHECK_NODE_HEALTH_RETRY_DELAY)
+            with stats.measure_waiting():
+                time.sleep(CHECK_NODE_HEALTH_RETRY_DELAY)
+
+        stats.log_summary()
+        return stats
 
     def get_nodes_status(self, nodes: list[BaseNode] | None = None) -> dict[BaseNode, dict]:
         nodes_status = {}
@@ -5846,44 +5860,52 @@ class BaseScyllaCluster:
                     # and testing shows diminishing returns beyond 10 workers.
                     parallel_workers = max(1, parallel_workers)
 
-                    if parallel_workers == 1 or len(self.nodes) == 1:
-                        # Sequential execution for single worker or single node
-                        for node in self.nodes:
-                            node.check_node_health()
-                    else:
-                        # Parallel execution
-                        self.log.debug(
-                            "Running health checks on %d nodes with %d parallel workers",
-                            len(self.nodes),
-                            parallel_workers,
-                        )
-                        failed_nodes = []
-                        with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
-                            futures = {executor.submit(node.check_node_health): node for node in self.nodes}
-                            for future in as_completed(futures):
-                                node = futures[future]
-                                try:
-                                    future.result()
-                                except Exception as exc:  # noqa: BLE001
-                                    failed_nodes.append((node, exc))
-                                    # Log and publish error event for visibility in Argus
+                    node_stats = []
+                    check_started_at = time.perf_counter()
+
+                    try:
+                        if parallel_workers == 1 or len(self.nodes) == 1:
+                            # Sequential execution for single worker or single node
+                            for node in self.nodes:
+                                node_stats.append(node.check_node_health())
+                        else:
+                            # Parallel execution
+                            self.log.debug(
+                                "Running health checks on %d nodes with %d parallel workers",
+                                len(self.nodes),
+                                parallel_workers,
+                            )
+                            failed_nodes = []
+                            with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
+                                futures = {executor.submit(node.check_node_health): node for node in self.nodes}
+                                for future in as_completed(futures):
+                                    node = futures[future]
+                                    try:
+                                        node_stats.append(future.result())
+                                    except Exception as exc:  # noqa: BLE001
+                                        failed_nodes.append((node, exc))
+                                        # Log and publish error event for visibility in Argus
+                                        self.log.error(
+                                            "Health check for node %s generated an exception: %s",
+                                            node.name,
+                                            exc,
+                                        )
+                                        ClusterHealthValidatorEvent.ParallelHealthCheckFailure(
+                                            node=node,
+                                            error=f"Health check failed with exception: {exc}",
+                                            severity=Severity.ERROR,
+                                        ).publish()
+                            if failed_nodes:
+                                for node, exc in failed_nodes:
                                     self.log.error(
-                                        "Health check for node %s generated an exception: %s",
-                                        node.name,
-                                        exc,
+                                        "Health check failure details for %s: %s", node.name, exc, exc_info=exc
                                     )
-                                    ClusterHealthValidatorEvent.ParallelHealthCheckFailure(
-                                        node=node,
-                                        error=f"Health check failed with exception: {exc}",
-                                        severity=Severity.ERROR,
-                                    ).publish()
-                        if failed_nodes:
-                            for node, exc in failed_nodes:
-                                self.log.error("Health check failure details for %s: %s", node.name, exc, exc_info=exc)
-                            names = ", ".join(n.name for n, _ in failed_nodes)
-                            raise ClusterHealthCheckError(
-                                f"Health check failed on {len(failed_nodes)} node(s): {names}"
-                            ) from failed_nodes[0][1]
+                                names = ", ".join(n.name for n, _ in failed_nodes)
+                                raise ClusterHealthCheckError(
+                                    f"Health check failed on {len(failed_nodes)} node(s): {names}"
+                                ) from failed_nodes[0][1]
+                    finally:
+                        self._log_health_check_timing(node_stats, time.perf_counter() - check_started_at)
             else:
                 chc_event.message = "Test runs with parallel nemesis. Nodes health checks are disabled."
                 return
@@ -5892,6 +5914,37 @@ class BaseScyllaCluster:
             if partitions_attrs := self.test_config.tester_obj().partitions_attrs:
                 partitions_attrs.validate_rows_per_partitions()
             chc_event.message = "Cluster health check finished"
+
+    def _log_health_check_timing(self, node_stats: list[NodeHealthCheckStats | None], elapsed: float) -> None:
+        """Report where the health check spent its time, so optimizations can be sized against it.
+
+        Waiting is the delay between re-check attempts; working is the time gathering cluster state.
+        A high waiting share means nodes are retrying over a condition rather than doing real work.
+        """
+        node_stats = [stats for stats in node_stats if stats is not None]
+        if not node_stats:
+            return
+
+        working = sum(stats.working_time for stats in node_stats)
+        waiting = sum(stats.waiting_time for stats in node_stats)
+        retried = [stats for stats in node_stats if stats.attempts > 1]
+        self.log.debug(
+            "Cluster health check took %.1fs for %d node(s): %.1fs working, %.1fs waiting "
+            "(summed over nodes); %d node(s) needed more than one attempt",
+            elapsed,
+            len(node_stats),
+            working,
+            waiting,
+            len(retried),
+        )
+        if retried:
+            self.log.debug(
+                "Nodes that retried: %s",
+                ", ".join(
+                    f"{stats.node_name} ({stats.attempts} attempts, {stats.waiting_time:.1f}s waiting)"
+                    for stats in retried
+                ),
+            )
 
     def check_nodes_running_nemesis_count(self):
         nodes_running_nemesis = [node for node in self.nodes if node.running_nemesis]

@@ -13,7 +13,9 @@
 from __future__ import annotations
 import time
 import logging
-from typing import Generator, TYPE_CHECKING
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Generator, Iterator, TYPE_CHECKING
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
@@ -34,6 +36,62 @@ LOGGER = logging.getLogger(__name__)
 #
 # It's done this way to be able add a retry mechanism for the cluster health validation.
 HealthEventsGenerator = Generator[ClusterHealthValidatorEvent, None, None]
+
+
+@dataclass
+class NodeHealthCheckStats:
+    """Timing breakdown of one node's health check.
+
+    A node that disagrees with the cluster is re-checked with a delay between attempts, and the
+    state being checked is cluster-wide, so a single condition is detected by every node and every
+    node then waits for it to clear. Splitting the time into work (gathering cluster state) and
+    waiting (the delay between attempts) is what tells those two costs apart. See
+    docs/plans/infrastructure/health-check-optimization.md.
+    """
+
+    node_name: str
+    attempts: int = 0
+    #: wall-clock seconds per state-gathering operation, accumulated over all attempts
+    operation_time: dict[str, float] = field(default_factory=dict)
+    #: validator that rejected each attempt, in order; a trailing entry means the check failed
+    causes: list[str] = field(default_factory=list)
+    #: seconds spent sleeping between attempts
+    waiting_time: float = 0.0
+
+    @property
+    def working_time(self) -> float:
+        return sum(self.operation_time.values())
+
+    @contextmanager
+    def measure(self, operation: str) -> Iterator[None]:
+        """Accumulate the wall-clock time of one state-gathering operation."""
+        start = time.perf_counter()
+        try:
+            yield
+        finally:
+            self.operation_time[operation] = self.operation_time.get(operation, 0.0) + time.perf_counter() - start
+
+    @contextmanager
+    def measure_waiting(self) -> Iterator[None]:
+        """Accumulate the wall-clock time spent waiting between attempts."""
+        start = time.perf_counter()
+        try:
+            yield
+        finally:
+            self.waiting_time += time.perf_counter() - start
+
+    def log_summary(self) -> None:
+        operations = ", ".join(f"{name}={duration:.1f}s" for name, duration in self.operation_time.items())
+        LOGGER.debug(
+            "Health check timing for node `%s': %d attempt(s), %.1fs working, %.1fs waiting "
+            "(operations: %s; causes: %s)",
+            self.node_name,
+            self.attempts,
+            self.working_time,
+            self.waiting_time,
+            operations or "none",
+            ", ".join(self.causes) or "none",
+        )
 
 
 def check_nodes_status(nodes_status: dict, current_node, removed_nodes_list=()) -> HealthEventsGenerator:
