@@ -4,7 +4,7 @@
 
 Google Compute Engine provisioning.
 
-**23 options.** Jump to: [gce_datacenter](#gce_datacenter) · [gce_image_db](#gce_image_db) · [gce_image_db_oracle](#gce_image_db_oracle) · [gce_image_loader](#gce_image_loader) · [gce_image_monitor](#gce_image_monitor) · [gce_image_username](#gce_image_username) · [gce_instance_type_db](#gce_instance_type_db) · [gce_instance_type_db_oracle](#gce_instance_type_db_oracle) · [gce_instance_type_loader](#gce_instance_type_loader) · [gce_instance_type_monitor](#gce_instance_type_monitor) · [gce_n_local_ssd_disk_db](#gce_n_local_ssd_disk_db) · [gce_n_local_ssd_disk_loader](#gce_n_local_ssd_disk_loader) · [gce_n_local_ssd_disk_monitor](#gce_n_local_ssd_disk_monitor) · [gce_network](#gce_network) · [gce_pd_ssd_disk_size_db](#gce_pd_ssd_disk_size_db) · [gce_pd_ssd_disk_size_loader](#gce_pd_ssd_disk_size_loader) · [gce_pd_ssd_disk_size_monitor](#gce_pd_ssd_disk_size_monitor) · [gce_pd_standard_disk_size_db](#gce_pd_standard_disk_size_db) · [gce_project](#gce_project) · [gce_root_disk_type_db](#gce_root_disk_type_db) · [gce_root_disk_type_loader](#gce_root_disk_type_loader) · [gce_root_disk_type_monitor](#gce_root_disk_type_monitor) · [gce_setup_hybrid_raid](#gce_setup_hybrid_raid)
+**23 options.**
 
 
 ## **gce_datacenter** / SCT_GCE_DATACENTER

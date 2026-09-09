@@ -4,7 +4,7 @@
 
 Oracle Cloud Infrastructure provisioning.
 
-**10 options.** Jump to: [oci_image_db](#oci_image_db) · [oci_image_db_oracle](#oci_image_db_oracle) · [oci_image_loader](#oci_image_loader) · [oci_image_monitor](#oci_image_monitor) · [oci_image_username](#oci_image_username) · [oci_instance_type_db](#oci_instance_type_db) · [oci_instance_type_db_oracle](#oci_instance_type_db_oracle) · [oci_instance_type_loader](#oci_instance_type_loader) · [oci_instance_type_monitor](#oci_instance_type_monitor) · [oci_region_name](#oci_region_name)
+**10 options.**
 
 
 ## **oci_image_db** / SCT_OCI_IMAGE_DB

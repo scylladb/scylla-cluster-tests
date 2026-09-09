@@ -4,7 +4,7 @@
 
 How logs and diagnostics are collected, and what happens to the resources when the test ends.
 
-**13 options.** Jump to: [collect_logs](#collect_logs) · [collect_nvme_diagnostics](#collect_nvme_diagnostics) · [execute_post_behavior](#execute_post_behavior) · [logs_transport](#logs_transport) · [nvme_self_test_type](#nvme_self_test_type) · [post_behavior_db_nodes](#post_behavior_db_nodes) · [post_behavior_dedicated_host](#post_behavior_dedicated_host) · [post_behavior_emr_cluster](#post_behavior_emr_cluster) · [post_behavior_k8s_cluster](#post_behavior_k8s_cluster) · [post_behavior_loader_nodes](#post_behavior_loader_nodes) · [post_behavior_monitor_nodes](#post_behavior_monitor_nodes) · [post_behavior_vector_store_nodes](#post_behavior_vector_store_nodes) · [teardown_validators](#teardown_validators)
+**13 options.**
 
 
 ## **collect_logs** / SCT_COLLECT_LOGS
@@ -48,7 +48,7 @@ How to transport logs: syslog-ng, ssh or docker
 
 ## **nvme_self_test_type** / SCT_NVME_SELF_TEST_TYPE
 
-NVMe device self-test type to run: 1 (short, ~2 min) or 2 (extended, may take hours). Only used when collect_nvme_diagnostics is enabled. Honored only on controllers that advertise Device Self-test support (Identify Controller OACS bit 4); unsupported controllers are skipped without issuing the command. This has no effect on AWS: neither instance-store (Nitro SSD) nor EBS implements Device Self-test, so on AWS the diagnostics rely on SMART counters and the error log instead.
+NVMe device self-test type to run: 1 (short, ~2 min) or 2 (extended, may take hours). Only used when [`collect_nvme_diagnostics`](#collect_nvme_diagnostics) is enabled. Honored only on controllers that advertise Device Self-test support (Identify Controller OACS bit 4); unsupported controllers are skipped without issuing the command. This has no effect on AWS: neither instance-store (Nitro SSD) nor EBS implements Device Self-test, so on AWS the diagnostics rely on SMART counters and the error log instead.
 
 **default:** 1
 
