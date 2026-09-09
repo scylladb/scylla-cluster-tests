@@ -243,7 +243,7 @@ All flags are on `NemesisFlags` in `sdcm/nemesis/__init__.py`. Each defaults to 
 | `zero_node_changes` | Nemesis targets zero-token nodes |
 | `sla` | Nemesis is for SLA tests |
 | `enospc` | Nemesis causes disk-full (ENOSPC) |
-| `modify_table` | Nemesis modifies table properties |
+| `modify_table` | Nemesis modifies table properties and does not restore them. Tests that pin a property exclude these by class name in `nemesis_selector` (see docs/nemesis.md), so keep one property per class |
 | `supports_high_disk_utilization` | Nemesis is safe at 90% disk usage (default: `True`) |
 
 ## Decision Guide
