@@ -4,7 +4,7 @@
 
 The migration job itself: source and target keyspaces/tables and validation.
 
-**9 options.** Jump to: [migrator_run_validator](#migrator_run_validator) · [migrator_source_hosts](#migrator_source_hosts) · [migrator_source_keyspace](#migrator_source_keyspace) · [migrator_source_table](#migrator_source_table) · [migrator_source_test_id](#migrator_source_test_id) · [migrator_step_timeout_minutes](#migrator_step_timeout_minutes) · [migrator_target_keyspace](#migrator_target_keyspace) · [migrator_target_table](#migrator_target_table) · [validator_step_timeout_minutes](#validator_step_timeout_minutes)
+**9 options.**
 
 
 ## **migrator_run_validator** / SCT_MIGRATOR_RUN_VALIDATOR
@@ -18,7 +18,7 @@ Run the spark-migrator validator after migration to do a row-by-row comparison
 
 ## **migrator_source_hosts** / SCT_MIGRATOR_SOURCE_HOSTS
 
-CQL contact-point IPs for the source Cassandra/Scylla cluster. Mutually exclusive with migrator_source_test_id.
+CQL contact-point IPs for the source Cassandra/Scylla cluster. Mutually exclusive with [`migrator_source_test_id`](#migrator_source_test_id).
 
 **default:** N/A
 
@@ -45,7 +45,7 @@ Table to migrate from on the source cluster
 
 ## **migrator_source_test_id** / SCT_MIGRATOR_SOURCE_TEST_ID
 
-SCT test_id of a running source cluster. When set, source host IPs are auto-discovered via EC2 tags (NodeType=cs-db). Mutually exclusive with migrator_source_hosts.
+SCT [`test_id`](general-and-provisioning.md#test_id) of a running source cluster. When set, source host IPs are auto-discovered via EC2 tags (NodeType=cs-db). Mutually exclusive with [`migrator_source_hosts`](#migrator_source_hosts).
 
 **default:** N/A
 
@@ -66,7 +66,7 @@ Time in minutes to wait for the spark-migrator migration EMR step. Default 360.
 
 ## **migrator_target_keyspace** / SCT_MIGRATOR_TARGET_KEYSPACE
 
-Keyspace to migrate into on the target Scylla cluster. Defaults to migrator_source_keyspace.
+Keyspace to migrate into on the target Scylla cluster. Defaults to [`migrator_source_keyspace`](#migrator_source_keyspace).
 
 **default:** N/A
 
@@ -75,7 +75,7 @@ Keyspace to migrate into on the target Scylla cluster. Defaults to migrator_sour
 
 ## **migrator_target_table** / SCT_MIGRATOR_TARGET_TABLE
 
-Table to migrate into on the target Scylla cluster. Defaults to migrator_source_table.
+Table to migrate into on the target Scylla cluster. Defaults to [`migrator_source_table`](#migrator_source_table).
 
 **default:** N/A
 

@@ -9,7 +9,7 @@
 #
 # See LICENSE for more details.
 #
-# Copyright (c) 2020 ScyllaDB
+# Copyright (c) 2026 ScyllaDB
 
 """Domain mixins holding the SCTConfiguration field definitions.
 

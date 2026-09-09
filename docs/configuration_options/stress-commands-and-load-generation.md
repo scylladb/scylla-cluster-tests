@@ -31,12 +31,12 @@ Their names describe the *role* in the test (write, read, mixed, prepare, verify
 | latte | latte_schema_parameters |
 | cdc log reader | stress_cdclog_reader_cmd, stress_cdc_log_reader_batching_enable, store_cdclog_reader_stats_in_es |
 
-Everything else here is loader-side and applies whatever the tool: stress_image, bare_loaders,
-use_prepared_loaders, loader_swap_size, round_robin, region_aware_loader, rack_aware_loader,
-the stress_multiplier options, stress_duration, prepare_stress_duration and
-stop_test_on_stress_failure.
+Everything else here is loader-side and applies whatever the tool: [`stress_image`](#stress_image), [`bare_loaders`](#bare_loaders),
+[`use_prepared_loaders`](#use_prepared_loaders), [`loader_swap_size`](#loader_swap_size), [`round_robin`](#round_robin), [`region_aware_loader`](#region_aware_loader), [`rack_aware_loader`](#rack_aware_loader),
+the [`stress_multiplier`](#stress_multiplier) options, [`stress_duration`](#stress_duration), [`prepare_stress_duration`](#prepare_stress_duration) and
+[`stop_test_on_stress_failure`](#stop_test_on_stress_failure).
 
-**71 options.** Jump to: [add_cs_user_profiles_extra_tables](#add_cs_user_profiles_extra_tables) · [alternator_stress_rate](#alternator_stress_rate) · [alternator_write_always_lwt_stress_rate](#alternator_write_always_lwt_stress_rate) · [bare_loaders](#bare_loaders) · [batch_size](#batch_size) · [c_s_driver_version](#c_s_driver_version) · [cs_debug](#cs_debug) · [cs_duration](#cs_duration) · [cs_extra_jvm_opts](#cs_extra_jvm_opts) · [cs_populating_distribution](#cs_populating_distribution) · [cs_user_profiles](#cs_user_profiles) · [gemini_cmd](#gemini_cmd) · [gemini_log_cql_statements](#gemini_log_cql_statements) · [gemini_schema_url](#gemini_schema_url) · [gemini_seed](#gemini_seed) · [gemini_table_options](#gemini_table_options) · [keyspace_num](#keyspace_num) · [latte_schema_parameters](#latte_schema_parameters) · [loader_swap_size](#loader_swap_size) · [prepare_cs_user_profiles](#prepare_cs_user_profiles) · [prepare_stress_cmd](#prepare_stress_cmd) · [prepare_stress_duration](#prepare_stress_duration) · [prepare_verify_cmd](#prepare_verify_cmd) · [prepare_wait_no_compactions_timeout](#prepare_wait_no_compactions_timeout) · [prepare_write_cmd](#prepare_write_cmd) · [prepare_write_stress](#prepare_write_stress) · [rack_aware_loader](#rack_aware_loader) · [region_aware_loader](#region_aware_loader) · [round_robin](#round_robin) · [stop_test_on_stress_failure](#stop_test_on_stress_failure) · [store_cdclog_reader_stats_in_es](#store_cdclog_reader_stats_in_es) · [stress_before_migration](#stress_before_migration) · [stress_cdc_log_reader_batching_enable](#stress_cdc_log_reader_batching_enable) · [stress_cdclog_reader_cmd](#stress_cdclog_reader_cmd) · [stress_cmd](#stress_cmd) · [stress_cmd_1](#stress_cmd_1) · [stress_cmd_cache_warmup](#stress_cmd_cache_warmup) · [stress_cmd_complex_prepare](#stress_cmd_complex_prepare) · [stress_cmd_complex_verify_delete](#stress_cmd_complex_verify_delete) · [stress_cmd_complex_verify_more](#stress_cmd_complex_verify_more) · [stress_cmd_complex_verify_read](#stress_cmd_complex_verify_read) · [stress_cmd_lwt_d](#stress_cmd_lwt_d) · [stress_cmd_lwt_dc](#stress_cmd_lwt_dc) · [stress_cmd_lwt_de](#stress_cmd_lwt_de) · [stress_cmd_lwt_i](#stress_cmd_lwt_i) · [stress_cmd_lwt_ine](#stress_cmd_lwt_ine) · [stress_cmd_lwt_mixed](#stress_cmd_lwt_mixed) · [stress_cmd_lwt_mixed_baseline](#stress_cmd_lwt_mixed_baseline) · [stress_cmd_lwt_u](#stress_cmd_lwt_u) · [stress_cmd_lwt_uc](#stress_cmd_lwt_uc) · [stress_cmd_lwt_ue](#stress_cmd_lwt_ue) · [stress_cmd_m](#stress_cmd_m) · [stress_cmd_mv](#stress_cmd_mv) · [stress_cmd_no_mv](#stress_cmd_no_mv) · [stress_cmd_no_mv_profile](#stress_cmd_no_mv_profile) · [stress_cmd_r](#stress_cmd_r) · [stress_cmd_read_10m](#stress_cmd_read_10m) · [stress_cmd_read_60m](#stress_cmd_read_60m) · [stress_cmd_read_cl_one](#stress_cmd_read_cl_one) · [stress_cmd_read_cl_quorum](#stress_cmd_read_cl_quorum) · [stress_cmd_read_disk](#stress_cmd_read_disk) · [stress_cmd_w](#stress_cmd_w) · [stress_duration](#stress_duration) · [stress_image](#stress_image) · [stress_multiplier](#stress_multiplier) · [stress_multiplier_m](#stress_multiplier_m) · [stress_multiplier_r](#stress_multiplier_r) · [stress_multiplier_w](#stress_multiplier_w) · [stress_read_cmd](#stress_read_cmd) · [use_prepared_loaders](#use_prepared_loaders) · [user_profile_table_count](#user_profile_table_count)
+**71 options.**
 
 
 ## **add_cs_user_profiles_extra_tables** / SCT_ADD_CS_USER_PROFILES_EXTRA_TABLES
@@ -59,7 +59,7 @@ Number of operations per second to achieve in stress commands for alternator tes
 
 ## **alternator_write_always_lwt_stress_rate** / SCT_ALTERNATOR_WRITE_ALWAYS_LWT_STRESS_RATE
 
-Number of operations per second to achieve in stress commands for alternator testing, in write test with isolation set to always LWT. If non-zero, overwrites alternator_stress_rate.
+Number of operations per second to achieve in stress commands for alternator testing, in write test with isolation set to always LWT. If non-zero, overwrites [`alternator_stress_rate`](#alternator_stress_rate).
 
 **default:** N/A
 
@@ -599,7 +599,7 @@ Write-only stress command(s). See [`stress_cmd`](#stress_cmd) for the accepted f
 
 ## **stress_duration** / SCT_STRESS_DURATION
 
-Time in minutes, Time of execution for stress commands from stress_cmd parameters<br>and is used in test duration calculation
+Time in minutes, Time of execution for stress commands from [`stress_cmd`](#stress_cmd) parameters<br>and is used in test duration calculation
 
 **default:** 0
 

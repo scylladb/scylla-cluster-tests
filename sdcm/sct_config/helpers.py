@@ -9,7 +9,7 @@
 #
 # See LICENSE for more details.
 #
-# Copyright (c) 2020 ScyllaDB
+# Copyright (c) 2026 ScyllaDB
 
 """
 Helper functions for the SCT configuration: appendable-option merging, environment sub-key
