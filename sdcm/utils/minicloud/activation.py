@@ -69,11 +69,12 @@ def validate_minicloud_params(params) -> None:
     """Fail fast when a minicloud run is missing the configurations/minicloud.yaml overlay.
 
     The overlay is the single delivery mechanism for the params a minicloud run requires
-    (spot instances, public-IP SSH, KMS and iotune are all unsupported by the emulator).
-    Env exports cannot substitute for it — SCTConfiguration is built before the manager
-    starts — so a config list without the overlay would otherwise fail far from the cause:
-    spot-provisioning errors, SSH to unreachable public IPs, KMS calls against an endpoint
-    that serves no KMS API.
+    (spot instances, public-IP SSH, KMS, iotune, placement groups and capacity reservations
+    are all unsupported by the emulator). Env exports cannot substitute for it —
+    SCTConfiguration is built before the manager starts — so a config list without the overlay
+    would otherwise fail far from the cause: spot-provisioning errors, SSH to unreachable
+    public IPs, KMS calls against an endpoint that serves no KMS API, or a
+    GetPlacementGroupError twenty minutes into provisioning.
     """
     problems = []
     if params.get("instance_provision") != "on_demand":
@@ -84,6 +85,10 @@ def validate_minicloud_params(params) -> None:
         problems.append("enterprise_disable_kms is off (minicloud implements no KMS endpoint)")
     if params.get("force_run_iotune"):
         problems.append("force_run_iotune is on (iotune is pointless against emulated storage)")
+    if params.get("use_placement_group"):
+        problems.append("use_placement_group is on (minicloud implements no placement-group API)")
+    if params.get("use_capacity_reservation"):
+        problems.append("use_capacity_reservation is on (minicloud implements no capacity-reservation API)")
     if problems:
         raise MinicloudError(
             "minicloud is active but the run is missing its parameter overlay: "

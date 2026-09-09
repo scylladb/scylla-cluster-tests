@@ -132,6 +132,7 @@ def test_check_host_memory_counts_every_guest_pool(tmp_path):
         "n_db_nodes": 1,
         "n_loaders": 1,
         "n_monitor_nodes": 1,
+        "db_type": "mixed_scylla",
         "n_test_oracle_db_nodes": 1,
         "n_db_zero_token_nodes": 1,
         "n_vector_store_nodes": 1,
@@ -139,6 +140,27 @@ def test_check_host_memory_counts_every_guest_pool(tmp_path):
     with _meminfo_path_patch(16 * 1024 * 1024):
         with pytest.raises(MinicloudError, match="6 guest.*26.0GiB needed"):
             manager._check_host_memory(params)
+
+
+def test_check_host_memory_ignores_the_oracle_pool_unless_db_type_asks_for_it(tmp_path):
+    """n_test_oracle_db_nodes defaults to 1, but the cluster is only built for mixed_scylla.
+
+    Every _create_oracle_cluster() call site in tester.py is guarded by that db_type, so
+    counting the pool unconditionally charged an ordinary run a phantom guest - a whole
+    minicloud_lightweight_memory, enough to block a test that would have fit.
+    """
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
+    # 3 db + 1 loader + 1 monitor = 5 guests x 4GiB + 2GiB = 22GiB, which fits in 24GiB.
+    # Counting the default oracle node would make it 6 guests / 26GiB and fail.
+    params = {
+        "n_db_nodes": 3,
+        "n_loaders": 1,
+        "n_monitor_nodes": 1,
+        "db_type": "scylla",
+        "n_test_oracle_db_nodes": 1,
+    }
+    with _meminfo_path_patch(24 * 1024 * 1024):
+        manager._check_host_memory(params)
 
 
 def test_check_host_memory_counts_the_grown_cluster_not_the_initial_one(tmp_path):
