@@ -383,7 +383,9 @@ Key details:
 - When a run failed without a failed result table, state the real reason from `argus run events`
   (e.g. "OVERSIZED_ALLOCATION error in DB log (all result tables PASS)")
 - Status column uses the standard status badge (FAILED/ERROR)
-- Only shown when such runs exist -- otherwise the section is omitted entirely
+- Rendered whenever at least one such run exists; heading and table are omitted together only when
+  none does. The release example HTML has no such table because that period had every failure
+  linked to an issue -- use this markup, not the example, when the section is needed.
 - CapacityReservationError runs never appear here (they are excluded from the whole report)
 
 ## New Issues and Reproduced Issues Sections

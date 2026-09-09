@@ -240,8 +240,14 @@ Workload | Version | Status | Cause | Link.
   failure already re-run successfully in a later build does not appear
 - **Cause column**: same format as the Overview Cause column (value plus threshold, one line per metric)
 - The table heading is exactly "Failed, investigation in progress"
-- **Omit the whole section when it has no rows** -- do not render an empty table or a "none" placeholder
+- **Render the section whenever at least one run qualifies**, and omit it -- table and heading
+  together -- only when none does. Never render an empty table or a "none" placeholder.
 - Print this table to the user during the review step so they can investigate before finalizing the report
+
+> **The reference example does not contain this table, and that is not a signal to drop it.** The
+> period it covers happened to have every failure already linked to a Jira issue. A week with even
+> one unlinked failure must render the section. Take the markup from
+> [references/html-template.md](references/html-template.md) rather than from the example HTML.
 
 ### Version Display
 
@@ -460,7 +466,7 @@ Argus link in every row carries the rest.
 | [workflows/generate-report.md](workflows/generate-report.md) | Step-by-step process for generating the report |
 | [references/argus-data-format.md](references/argus-data-format.md) | Detailed Argus CLI output format documentation |
 | [references/html-template.md](references/html-template.md) | Gmail-compatible HTML template patterns |
-| [references/perf-weekly-status-report-release-example.html](references/perf-weekly-status-report-release-example.html) | Reference rendering of a **release** report -- open it before generating one |
+| [references/perf-weekly-status-report-release-example.html](references/perf-weekly-status-report-release-example.html) | Reference rendering of a **release** report -- open it before generating one. It shows the sections a report has when every failure is already linked to an issue; conditional sections (notably "Failed, investigation in progress") are absent there because that period had none, not because they were removed |
 
 ## Success Criteria
 
