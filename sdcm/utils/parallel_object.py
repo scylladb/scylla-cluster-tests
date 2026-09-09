@@ -178,19 +178,12 @@ class ParallelObject:
         # `_python_exit()`, which copies this same WeakKeyDictionary during interpreter
         # shutdown. Racing that copy unlocked can corrupt shutdown-time iteration.
         #
-        # `threading._shutdown_locks` (Python <3.14) is NOT covered by that same lock:
-        # CPython actually protects that set with its own separate internal lock
-        # (`threading._shutdown_locks_lock`), not `_global_shutdown_lock` -- so the
-        # `.discard()` call below is not perfectly synchronized against CPython's own
-        # mutation of that set on those versions. This repo supports Python 3.10-3.13
-        # (see pyproject.toml) where that set still exists, but this code cannot verify
-        # `_shutdown_locks_lock`'s name/existence is stable across all of them, so it is
-        # not acquired here. Accepted tradeoff: worst case, `.discard()` races CPython's
-        # own housekeeping of this set and the removal is a redundant no-op -- it does
-        # not corrupt anything, and it does not weaken this module's actual safety net,
-        # which is the hard-exit escalation below: that arms independently of whether
-        # this particular discard succeeds, so a thread that is genuinely still stuck is
-        # still caught regardless.
+        # `threading._shutdown_locks` was removed entirely in Python 3.14 (this repo's
+        # only supported version, see pyproject.toml): `getattr(threading,
+        # "_shutdown_locks", None)` below returns None on 3.14, so the `.discard()`
+        # call further below never actually executes -- this whole concern is moot on
+        # the Python version this code now runs on. It is kept only as a no-op guard
+        # in case a 3.14+ CPython release ever reintroduces an equivalent registry.
         #
         # Deadlock consideration: CPython's own `_python_exit()` only holds
         # `_global_shutdown_lock` briefly, to flip an internal `_shutdown` flag, and
