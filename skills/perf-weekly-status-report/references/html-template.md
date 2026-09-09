@@ -30,7 +30,7 @@ Only inline `style` attributes on supported elements survive. Use `<table>` for 
 <td align="center" style="padding:20px 10px;">
 
 <!-- Main content table (fixed width 700) -->
-<table width="700" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#333333;">
+<table width="950" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#333333;">
 
   <!-- Content rows go here -->
 
@@ -221,7 +221,7 @@ workload. Categories and tests with no runs are omitted.
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{workload}</td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- status badge --></td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- cause: "<metric> ERROR at <step> step (<value> <unit>, threshold <limit> <unit>)"; several metrics -> `<br>`-separated; empty when PASSED --></td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- issue keys or empty --></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- issue keys, or the Investigation in progress marker, or empty --></td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a></td>
 </tr>
 <!-- Subsequent workload row within same test: category and test cells are empty -->
@@ -339,54 +339,19 @@ Key styling details:
 <a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a>
 ```
 
-## "Failed, investigation in progress" Table
+## Unlinked Failure Marker (Issues column)
 
-Shows FAILED runs with no linked Argus issue, placed between "Issues Found in the Runs" and the
-Issues sections. Columns: Test | Workload | Version | Status | Cause | Link.
-Excludes CapacityReservationError runs (never reported at all) and superseded runs.
-**Omit the whole section when it has no rows** -- no empty table, no placeholder.
+A FAILED row whose run has no linked Argus issue carries this in its Issues cell instead of a link.
+There is no separate table for unlinked failures.
 
 ```html
-<tr><td height="15" style="font-size:1px;line-height:1px;">&nbsp;</td></tr>
-<tr>
-<td bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid #dee2e6;padding:15px;">
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333333;">
-<tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">Failed, investigation in progress</td></tr>
-</table>
-<table width="100%" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12px;border-color:#dee2e6;">
-<tr bgcolor="#343a40" style="background-color:#343a40;">
-  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Test</th>
-  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Workload</th>
-  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Version</th>
-  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Status</th>
-  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Cause</th>
-  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Link</th>
-</tr>
-<!-- Repeat for each unlinked failed run, alternating bgcolor #ffffff / #f8f9fa -->
-<tr bgcolor="#ffffff" style="background-color:#ffffff;">
-  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{test_name}</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{workload}</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{version}</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- status badge --></td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{cause}</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a></td>
-</tr>
-<!-- ... more rows as needed ... -->
-</table>
-</td>
-</tr>
+<td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><i style="color:#fd7e14;">Investigation in progress</i></td>
 ```
 
 Key details:
-- Cause column uses the same format as the Overview Cause column: metric, step, measured value and
-  threshold, one line per failed metric (`<br>`-separated)
-- When a run failed without a failed result table, state the real reason from `argus run events`
-  (e.g. "OVERSIZED_ALLOCATION error in DB log (all result tables PASS)")
-- Status column uses the standard status badge (FAILED/ERROR)
-- Rendered whenever at least one such run exists; heading and table are omitted together only when
-  none does. The release example HTML has no such table because that period had every failure
-  linked to an issue -- use this markup, not the example, when the section is needed.
-- CapacityReservationError runs never appear here (they are excluded from the whole report)
+- Italic amber (`#fd7e14`) -- reads as a pending action, distinct from the blue issue links
+- Only on FAILED rows; a PASSED row with no issue keeps an empty cell
+- Only the rows that reach the Overview (latest run per version/test/workload) can carry it
 
 ## New Issues and Reproduced Issues Sections
 
@@ -491,7 +456,7 @@ Key details:
 | Use full hex colors (`#ffffff`) | Use shorthand (`#fff`) or named colors |
 | Set `font-family` on each cell | Rely on inheritance from `<body>` |
 | Use `display:inline-block` on spans | Use `border-radius` |
-| Fixed `width="700"` on content table | Use `max-width` CSS |
+| Fixed `width="950"` on content table | Use `max-width` CSS |
 
 ## Color Reference
 

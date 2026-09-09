@@ -77,7 +77,10 @@ Gmail only supports inline CSS styles on elements. Never use `<style>` tags, `<l
 - Workload column shows the actual workload name (mixed, read, write, read_disk_only). **For microbenchmarks use "-"** since they don't have separate workloads
 - Status column shows just the status badge (PASSED/FAILED/ERROR/RUNNING) of the latest run -- no counts
 - **Cause column** shows why the run failed, and is empty for PASSED rows. See [Cause Column](#cause-column-failed-value-plus-error-threshold)
-- Issues column shows linked Jira issue keys as clickable links (comma-separated if multiple); empty for runs with no linked issues
+- **Issues column** shows linked Jira issue keys as clickable links (comma-separated if multiple).
+  When a FAILED row has **no** linked issue, it shows `Investigation in progress` instead --
+  italic amber (`#fd7e14`), not a link. PASSED rows with no issue stay empty. This is the only
+  place unlinked failures are reported; there is no separate table for them.
 - Link column shows an Argus link to the specific run for that workload
 - Each run covers a single workload, so each workload has its own run(s)
 
@@ -172,7 +175,7 @@ level and no `default` merge, defaulting to `ValidationRule(best_pct=5)` when un
 
 **Include runs with status `running` in the report if they match the version filter.**
 
-Running tests should appear in the Overview table with a RUNNING status badge (blue, `#17a2b8`). They are counted separately in the Summary (not as passed or failed). Determine the workload from partial results (`argus run results`) if available, or from Jenkins `sub_tests` positional mapping. Do not include running tests in the "Failed, investigation in progress" table.
+Running tests should appear in the Overview table with a RUNNING status badge (blue, `#17a2b8`). They are counted separately in the Summary (not as passed or failed). Determine the workload from partial results (`argus run results`) if available, or from Jenkins `sub_tests` positional mapping. Do not mark running tests `Investigation in progress` -- that marker is for FAILED rows only.
 
 ### Runs With No Results: Recover the Workload From Jenkins
 
@@ -204,6 +207,30 @@ This returns CRITICAL and ERROR events for the run. The common cause is AWS capa
 
 State the real reason (e.g. `CapacityReservationError`) rather than reporting a bare `ERROR`.
 
+### Manually Triggered Re-runs Are Not Part of the Weekly Picture
+
+**Exclude every run whose `started_by` is `avi`.** These are ad-hoc re-runs kicked off by hand
+during an investigation -- often a burst of partial runs on the same job across several builds --
+and they are not the scheduled weekly result. Counting them distorts both the totals and the
+failure picture.
+
+`started_by` comes from `argus run details`, not from `argus run list`. It has been wrong before, so
+confirm the classification against the Jenkins build causes before relying on it:
+
+```bash
+curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" \
+  "https://jenkins.scylladb.com/<job path>/<build>/api/json?tree=actions[causes[shortDescription,userId,userName]]"
+```
+
+A manual run reads `Started by user Avi Kivity`; a scheduled one reads
+`Started by upstream project "scylla-master/sct_triggers/perf-regression-trigger" build number N`
+(Argus attributes those to the job owner, which is not `avi`). Credentials come from the SCT
+KeyStore: `KeyStore().get_json("jenkins.json")` -> `username` / `password`.
+
+Other trigger values (`timer`, a job owner's username) are all kept.
+
+Report how many runs this dropped to the user in the review step.
+
 ### CapacityReservationError Runs: Never Reported
 
 **Exclude every run whose failure is CapacityReservationError from the report entirely** -- whether
@@ -211,8 +238,7 @@ or not it was re-run, and whether or not a later attempt also failed.
 
 These runs died during AWS provisioning. They carry no result tables and no signal about ScyllaDB;
 listing them makes an infrastructure outage look like a product regression and inflates the
-failure count. Drop them from the Overview, from the "Failed, investigation in progress" table and
-from the Summary totals alike.
+failure count. Drop them from the Overview and from the Summary totals alike.
 
 Detect them via `argus run events` -- the message contains:
 
@@ -226,28 +252,25 @@ that was cancelled and retried); count only the run that actually produced resul
 Report the number of excluded runs to the user in the review step -- the report itself stays silent
 about them.
 
-### "Failed, investigation in progress" Table
+### Unlinked Failures: Mark Them in the Issues Column
 
-**Show a table of all failed runs that have no linked Argus issue, placed between the "Issues Found
-in the Runs" section and the Issues sections.**
+**A FAILED run with no linked Argus issue is reported in the Test Overview's Issues column as
+`Investigation in progress` -- not in a section of its own.**
 
-This table tells the reader which failures nobody has filed a ticket for yet. Columns: Test |
-Workload | Version | Status | Cause | Link.
+```html
+<td style="...">P99 read ERROR at 700,000 op/s step (18,236.83 ms, threshold 50 ms)</td>
+<td style="..."><i style="color:#fd7e14;">Investigation in progress</i></td>
+```
 
-- **Include**: Any run that is FAILED (per the run-status rule above) where `argus issue list` returns `[]`
-- **Exclude**: CapacityReservationError runs (never reported at all)
-- **Exclude**: superseded runs -- apply the same latest-run-per-workload rule as the Overview, so a
-  failure already re-run successfully in a later build does not appear
-- **Cause column**: same format as the Overview Cause column (value plus threshold, one line per metric)
-- The table heading is exactly "Failed, investigation in progress"
-- **Render the section whenever at least one run qualifies**, and omit it -- table and heading
-  together -- only when none does. Never render an empty table or a "none" placeholder.
-- Print this table to the user during the review step so they can investigate before finalizing the report
+Keeping it in the row means the reader sees, in one pass, which failures are accounted for by a
+ticket and which are not -- no cross-referencing a second table. Earlier versions of this skill
+rendered a separate "Failed, investigation in progress" table; that section no longer exists.
 
-> **The reference example does not contain this table, and that is not a signal to drop it.** The
-> period it covers happened to have every failure already linked to a Jira issue. A week with even
-> one unlinked failure must render the section. Take the markup from
-> [references/html-template.md](references/html-template.md) rather than from the example HTML.
+The marker applies to the run shown in the row -- the latest run for that version/test/workload.
+A failure already superseded by a later passing run never reaches the table, so it is never marked.
+
+Still print the list of unlinked failures to the user during the review step, so they can
+investigate before the report is finalised.
 
 ### Version Display
 
@@ -257,9 +280,22 @@ The full version is constructed from the `packages[]` array: take `scylla-server
 
 The "short version" (e.g., `2026.3.0.dev`) is derived by normalizing `~` to `.` in the `scylla_version` field.
 
-**When the period spans more than one release version** (the norm for release reports -- e.g.
-`2026.3.0`, `2026.2.6`, `2026.1.12` and `2025.1.15` in one week), the Summary lists **every** full
-version, one per line, and the Overview gets one table per version. Group a run by its
+**When the period spans more than one version, the Overview gets one table per version -- on master
+as well as on release.** Master reports one product version (e.g. `2026.4.0~dev`) but roll through
+several builds a week; group by the **full** version (`2026.4.0.dev.20260830.dc4ad9bfdb94`), exactly
+as release groups by `2026.2.6`. The Summary lists **only the versions whose results are reported**,
+each with the number of tests it contributes, so the per-version counts add up to Total Tests:
+
+```
+Summary for Scylla version 2026.4.0.dev, builds:
+
+  2026.4.0.dev.20260902.5f352afcf41a (4 tests)
+  2026.4.0.dev.20260901.d0f9c3a48a11 (4 tests)
+  2026.4.0.dev.20260830.dc4ad9bfdb94 (13 tests)
+```
+
+A build that ran in the period but whose every run was superseded contributes no rows, so it is not
+listed. Do **not** add a Version column to the table -- the per-version heading already says it. Group a run by its
 `scylla_version`; for rolling-upgrade tests that is the upgrade target, so read the full version
 from the `scylla-server-upgrade-target` package rather than `scylla-server-target` (which holds the
 base version there). Microbenchmark runs often have no date/revision on `scylla-server-target` --
@@ -287,9 +323,11 @@ worth raising, not a quirk to work around silently.
 
 ### Table Width
 
-**Use width="700" for the main content table.**
+**Use width="950" for the main content table.**
 
-This provides better readability for tables with multiple columns.
+The Cause column carries long text -- metric, step, value and threshold, sometimes several lines --
+and 700px squeezes it into unreadable wrapping. 950px still fits inside a typical desktop Gmail
+reading pane. Inner tables stay at `width="100%"` so they follow the outer table.
 
 ### Output Location
 
@@ -449,12 +487,11 @@ Use `status` / `resolution` for the State column, and to support any "no progres
 The output HTML file must contain:
 
 1. **Header** -- Report title, date range, "Master (~dev) builds only" indicator
-2. **Summary** -- Title format: "Summary for Scylla version {full_version}" where full_version includes build date and revision hash (e.g., "2026.3.0.dev.20260612.91ada5517d59"). Body: Total tests run, passed count, failed count, error count, running count. **Counts are per run, not per test group.** Each workload is a separate run, so a test with 4 workloads (mixed, read, write, read_disk_only) counts as 4 runs. Microbenchmark tests count as 1 run each. Running tests are counted separately and not included in passed/failed totals.
+2. **Summary** -- Title format: "Summary for Scylla version(s) {full_version}", listing only the versions whose results are reported, each with its test count. Body: Total tests, passed, failed/error, running. **Counts follow the Overview: one per reported row -- the latest run per version, test and workload** -- so the per-version counts add up to Total Tests and the reader can reconcile the box against the table. Add a note line underneath giving the number of scheduled runs actually executed in the period and how many of those failed, so superseded re-runs are still visible: *"Latest run per version, test and workload; 52 scheduled runs in total were executed in the period (13 of them failed, the rest of the failures were superseded by a later run). Manually triggered ad-hoc re-runs are not included."*
 3. **Issues Found in the Runs** -- (formerly "Conclusion") Hierarchical bullet-point lines summarizing weekly results. Structure: top-level items are test names in bold (prefixed with `- `), sub-items are specific observations (prefixed with `&#8226;`). Version numbers must be bold. Do NOT mention CapacityReservationError runs (they are excluded from the report entirely). Do NOT mention issue numbers per test in the conclusion body -- issue references belong only in the warning banner; the Issues column in Overview and the Known Issues table provide the per-run linkage. **Per-version grouping:** When the report spans multiple versions, create a separate list per version with a bold version header (e.g., "Version 2026.2.3:"). When only a single version is present, omit the version header and list tests directly. **Warning banner** (optional): After collecting all issues, present the de-duplicated list to the user and ask which issues (if any) should be highlighted in a warning banner at the top of the section. If the user selects issues, render a yellow/red banner with `&#9888;` icon stating "No updates on [issues] during last week." A second `&#9888;` line lists the issues opened during the period ("New issues opened during last week: ..."). **Issue numbers in the banner must be clickable links** (e.g., `<a href="...">SCYLLADB-3459</a>`), not plain text. If the user selects none, omit the banner entirely. The agent MUST print the generated conclusion text to the user and ask for confirmation or edits BEFORE saving it into the final HTML report file. This ensures the user can review and adjust the conclusion wording.
-4. **Failed, investigation in progress** -- Table of FAILED runs with no linked Argus issue. Shown after "Issues Found in the Runs" when such runs exist, and **omitted entirely when there are none**. Columns: Test | Workload | Version | Status | Cause | Link. Excludes CapacityReservationError runs. Printed to the user during the review step for investigation before finalizing.
-5. **New Issues - Regression** -- Shown after "Failed, investigation in progress" when new issues exist. Lists Jira issues whose tickets were created during the report period (i.e., newly filed regressions). Classify by fetching each issue's `created` date from Jira (Atlassian MCP `getJiraIssue`) and comparing it to the report window; only ask the user if Jira is unreachable. If no new issues, this section is omitted.
-6. **Reproduced Issues** -- Always shown after New Issues (or after "Failed, investigation in progress" if no new issues). Lists issues linked to runs whose Jira tickets were created before the report period. If no reproduced issues, displays "No reproduced issues in this period."
-7. **Test Overview** -- Grouped by category, then test, then workload. Columns: Category | Test | Workload | Status | Cause | Issues | Link. Cause states the failed value and its error threshold, one line per failed metric; it is empty for PASSED rows. Issues column shows linked Jira keys as clickable links. Microbenchmarks use "-" as workload. **When multiple versions exist, create a separate table per version with a version label above it; when single version, show one table without a version label.**
+4. **New Issues - Regression** -- Shown after "Issues Found in the Runs" when new issues exist. Lists Jira issues whose tickets were created during the report period (i.e., newly filed regressions). Classify by fetching each issue's `created` date from Jira (Atlassian MCP `getJiraIssue`) and comparing it to the report window; only ask the user if Jira is unreachable. If no new issues, this section is omitted.
+5. **Reproduced Issues** -- Always shown after New Issues (or after "Issues Found in the Runs" if no new issues). Lists issues linked to runs whose Jira tickets were created before the report period. If no reproduced issues, displays "No reproduced issues in this period."
+6. **Test Overview** -- Grouped by category, then test, then workload. Columns: Category | Test | Workload | Status | Cause | Issues | Link. Cause states the failed value and its error threshold, one line per failed metric; it is empty for PASSED rows. Issues shows linked Jira keys, or `Investigation in progress` for a FAILED row with no ticket. Microbenchmarks use "-" as workload. **When multiple versions exist -- including several master builds -- create a separate table per version with the full version as a label above it; with a single version, show one table without a label.**
 
 There is **no "Detailed Results" section** -- the Cause column carries the failure detail, and the
 Argus link in every row carries the rest.
@@ -466,7 +503,8 @@ Argus link in every row carries the rest.
 | [workflows/generate-report.md](workflows/generate-report.md) | Step-by-step process for generating the report |
 | [references/argus-data-format.md](references/argus-data-format.md) | Detailed Argus CLI output format documentation |
 | [references/html-template.md](references/html-template.md) | Gmail-compatible HTML template patterns |
-| [references/perf-weekly-status-report-release-example.html](references/perf-weekly-status-report-release-example.html) | Reference rendering of a **release** report -- open it before generating one. It shows the sections a report has when every failure is already linked to an issue; conditional sections (notably "Failed, investigation in progress") are absent there because that period had none, not because they were removed |
+| [references/perf-weekly-status-report-release-example.html](references/perf-weekly-status-report-release-example.html) | Reference rendering of a **release** report -- four release versions, one Overview table each |
+| [references/perf-weekly-status-report-master-example.html](references/perf-weekly-status-report-master-example.html) | Reference rendering of a **master** report -- three `~dev` builds, one Overview table each, and a row carrying the `Investigation in progress` marker |
 
 ## Success Criteria
 
@@ -485,7 +523,8 @@ A valid weekly status report:
 - [ ] Running tests included in Overview with RUNNING badge (blue #17a2b8) when they match version filter
 - [ ] Overview columns: Category | Test | Workload | Status | Issues | Link (no Runs column, no Version column)
 - [ ] Overview Issues column: linked Jira keys as clickable links, comma-separated; empty for runs with no issues
-- [ ] Overview: separate table per version with version header when multiple versions; no version header when single version
+- [ ] Overview: separate table per FULL version (master builds included) with a version header when several exist; no header with a single version
+- [ ] Overview has no Version column -- the per-version heading carries it
 - [ ] Overview: one row per workload per version -- the LATEST run, earlier attempts not duplicated
 - [ ] Overview columns include Cause between Status and Issues; Cause empty on PASSED rows
 - [ ] Cause states metric, step, measured value AND configured threshold with units
@@ -497,7 +536,7 @@ A valid weekly status report:
 - [ ] "Issues Found in the Runs" section grouped by version when multiple versions present; single list when only one version
 - [ ] Argus link format uses `/test/` (singular), not `/tests/` (plural)
 - [ ] States the reporting period in the header
-- [ ] Table width is 700px
+- [ ] Main content table width is 950px; inner tables at 100%
 - [ ] Output file is NOT saved into the SCT repository (scratchpad/temp dir or home dir)
 - [ ] "Issues Found in the Runs" text is printed to the user for review/editing BEFORE being saved into the HTML report
 - [ ] "Issues Found in the Runs" uses hierarchical format: bold test names as top-level items, specific observations as sub-bullets
@@ -514,12 +553,13 @@ A valid weekly status report:
 - [ ] CapacityReservationError runs excluded from every section AND from the Summary counts
 - [ ] Aborted runs whose workload was re-run in a later build are excluded too
 - [ ] Count of excluded runs reported to the user, though the report itself stays silent about them
-- [ ] "Failed, investigation in progress" table shown for FAILED runs with no linked Argus issue
-- [ ] "Failed, investigation in progress" table includes Cause column in the same format as the Overview
-- [ ] "Failed, investigation in progress" section omitted entirely when it has no rows
-- [ ] "Failed, investigation in progress" table printed to user during the review step for investigation
+- [ ] FAILED rows with no linked Argus issue show `Investigation in progress` in the Issues column, in italic amber
+- [ ] Report contains NO separate "Failed, investigation in progress" section
+- [ ] The list of unlinked failures is still printed to the user during the review step
 - [ ] Categories with no runs are named in "Issues Found in the Runs", so "passed" is distinguishable from "never ran"
-- [ ] Summary lists every full version covered when the period spans multiple releases
+- [ ] Summary lists only the versions whose results are reported, each with its test count, and those add up to Total Tests
+- [ ] Summary counts follow the Overview rows (latest run per version/test/workload), with a note giving the total scheduled runs executed
+- [ ] Runs whose `started_by` is `avi` are excluded, and the classification was confirmed against Jenkins build causes
 - [ ] Tests whose `argus run results` endpoint errors out are still reported, with workload recovered from events and the fallback disclosed to the user
 - [ ] Data tables use `border="1"` plus per-cell borders (CSS-only cell borders get stripped)
 - [ ] Status badges use `bgcolor` on a `<td>`, not a bare `<span>`
