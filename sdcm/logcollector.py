@@ -387,6 +387,62 @@ class DirLog(FileLog):
         )
 
 
+class RemoteDirArchiveLog(BaseLogEntity):
+    """Archive a directory that lives on the remote node and fetch the archive.
+
+    Neither of the other entities can do this: `DirLog` only copies directories that
+    are already on the local side, and `CommandLog` cannot carry a binary payload,
+    since `collect_log_remotely()` merges stderr into the output file. The archiving
+    runs under sudo, so a directory written by a root-owned service can be collected.
+
+    Usage example:
+        RemoteDirArchiveLog(name="perf-data", remote_dir="/var/log/scylla-perf")
+    """
+
+    collect_timeout = 600
+
+    def __init__(self, name: str, remote_dir: str, **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.remote_dir = remote_dir.rstrip("/")
+
+    def collect(self, node, local_dst, remote_dst=None, local_search_path=None) -> Optional[str]:
+        if not node or not node.remoter or remote_dst is None:
+            return None
+
+        # one root command tells both whether there is anything to collect and how much: `find`
+        # fails on a missing directory and prints nothing for an empty one, which is the normal
+        # state of a node where the service never ran (the package creates the directory)
+        listing = node.remoter.sudo(
+            f"find '{self.remote_dir}' -type f -printf '%s\\n'", ignore_status=True, verbose=False
+        )
+        sizes = [int(size) for size in listing.stdout.split()] if listing.ok else []
+        if not sizes:
+            LOGGER.debug("Nothing to collect: `%s' is missing or empty on %s", self.remote_dir, node.name)
+            return None
+        LOGGER.info(
+            "Collecting `%s' from %s (%d files, %.1f MiB)",
+            self.remote_dir,
+            node.name,
+            len(sizes),
+            sum(sizes) / 2**20,
+        )
+
+        # the archive goes to the node's remote storage dir: the login user cannot write
+        # next to the source, and the source itself is owned by root
+        archive = LogCollector.archive_log_remotely(
+            node=node,
+            log_filename=self.remote_dir,
+            archive_name=self.name,
+            archive_dst=remote_dst,
+            use_sudo=True,
+        )
+        if not archive:
+            return None
+
+        LogCollector.receive_log(node=node, remote_log_path=archive, local_dir=local_dst, timeout=self.collect_timeout)
+        return str(Path(local_dst) / os.path.basename(archive))
+
+
 class PrometheusSnapshots(BaseMonitoringEntity):
     """Get Prometheus snapshot entity
 
@@ -839,18 +895,40 @@ class LogCollector:
         return log_filename if ok else None, is_file_remote
 
     @staticmethod
-    def archive_log_remotely(node, log_filename: str, archive_name: Optional[str] = None) -> Optional[str]:
+    def archive_log_remotely(
+        node,
+        log_filename: str,
+        archive_name: Optional[str] = None,
+        archive_dst: Optional[str] = None,
+        use_sudo: bool = False,
+    ) -> Optional[str]:
+        """Archive a file or a directory on the remote node, by default next to the source.
+
+        archive_dst: put the archive there instead, for a source directory the login user
+                     cannot write next to (e.g. anything under /var/log).
+        use_sudo: archive as root, for a source written by a root-owned service.
+        """
         if not node.remoter:
             return None
-        archive_dir, log_filename = os.path.split(log_filename)
-        archive_name = os.path.join(archive_dir, archive_name or log_filename) + ".tar.zst"
+        source_dir, log_filename = os.path.split(log_filename)
+        archive_name = os.path.join(archive_dst or source_dir, archive_name or log_filename) + ".tar.zst"
         node.install_package("zstd", ignore_status=True)
-        if not node.remoter.run(
-            f"tar --zstd --warning=no-file-changed -cf '{archive_name}' -C '{archive_dir}' '{log_filename}'",
+        run_cmd = node.remoter.sudo if use_sudo else node.remoter.run
+        result = run_cmd(
+            f"tar --zstd --warning=no-file-changed -cf '{archive_name}' -C '{source_dir}' '{log_filename}'",
             ignore_status=True,
-        ).ok:
+        )
+        # GNU tar exits with 1 when a file changed while it was being read (the warning is
+        # silenced, the exit code is not) - e.g. a recording that is still being written.
+        # The archive is complete otherwise, and check_archive() below still verifies it.
+        if result.exit_status not in (0, 1):
             LOGGER.error("Unable to archive log `%s' to `%s'", log_filename, archive_name)
             return None
+        if use_sudo:
+            # sudo's tar leaves the archive owned by root, and it is verified and fetched
+            # as the login user - say so here, or the failure surfaces as a misleading archive error
+            if not node.remoter.sudo(f"chmod a+r '{archive_name}'", ignore_status=True).ok:
+                LOGGER.warning("Unable to make `%s' readable by the login user, fetching it will fail", archive_name)
         if not check_archive(node.remoter, archive_name):
             return None
         return archive_name
@@ -1095,6 +1173,11 @@ class ScyllaLogCollector(LogCollector):
                 "|| true )"
             ),
         ),
+        # perf recordings of the scylla-perf-collector service (scylladb/scylladb#30076).
+        # `perf record --switch-output=1d` only finalizes a recording when it rotates or exits,
+        # so the run's own samples are readable here thanks to ClusterTester.stop_perf_collector(),
+        # which stops the service at the start of teardown - well before logs are collected.
+        RemoteDirArchiveLog(name="perf-data", remote_dir="/var/log/scylla-perf"),
     ]
 
     cmd = "test -f /etc/scylla/ssl_conf/{0} && cat /etc/scylla/ssl_conf/{0}"
