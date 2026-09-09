@@ -180,19 +180,41 @@ Also include runs with status `"running"`.
    This returns CRITICAL/ERROR events. Look for `CapacityReservationError` in the message text.
    This is more reliable than Jenkins console output, which often requires authentication (403).
 
-6. **Detect re-runs for CapacityReservationError failures.**
+6. **Drop every CapacityReservationError run.**
 
-   Group runs by test name + version. Within each group, sort by `build_number`. If a later build
-   exists for the same test + version with runs that passed for the same workloads, the earlier
-   CapacityReservationError run was successfully re-run. Exclude it from all report sections
-   (overview, detailed results, counts, uninvestigated table).
+   Any run whose `argus run events` output contains `CapacityReservationError` is excluded from the
+   report entirely -- from the Overview, from the "Failed, investigation in progress" table and from
+   the Summary counts. It does not matter whether it was re-run, or whether the re-run also failed:
+   these runs died in AWS provisioning and say nothing about ScyllaDB.
 
-   Note: There is no explicit "re-run of build #X" field in Argus. The link is inferred by
-   matching test + version + sequential build numbers.
+   Drop `aborted` runs the same way when the same workload was re-run in a later build (a cancelled
+   sub-test that was retried). Keep a count of everything excluded -- you report it to the user in
+   Phase 5a, but the report itself stays silent about it.
 
-**Exit criteria:** Data organized by category > test > workload > step, throughput tracker populated.
-Every master run in the window is accounted for -- including those with zero result tables.
-CapacityReservationError runs with successful re-runs are marked for exclusion.
+7. **Resolve the error threshold for every failed metric.** See "Error Thresholds" in SKILL.md.
+   For each run with a failed table, read `config_files` + `scm_revision_id` from
+   `argus run details`, then at that revision (`git show <sha>:<path>` -- the perf jobs run
+   `branch-perf-v17`, not the checked-out branch):
+
+   - load `latency_decorator_error_thresholds` from `defaults/test_default.yaml` (this is where the
+     per-workload `default` block with `P99 <op>: fixed_limit: 10` lives),
+   - deep-merge each `latency-decorator-error-thresholds-*.yaml` from `config_files` on top,
+   - resolve the step as `merged[workload]["default"] | merged[workload].get(step, {})` and read
+     `[metric]["fixed_limit"]`.
+
+   Reading only the test-specific file is the classic mistake -- steps it does not mention
+   (e.g. the i8g `1500000` read step) then look like they have no threshold, when they inherit 10 ms.
+
+8. **Decide FAILED from the run status only.** A run whose Argus `status` is `passed` is PASSED even
+   if one of its result tables reports FAIL/ERROR -- those were reviewed and dismissed. FAILED means
+   `status` is `failed` or `test_error`.
+
+9. **Keep only the latest run per (version, test, workload)** for the Overview and the
+   "Failed, investigation in progress" table. Earlier attempts still count in the Summary totals.
+
+**Exit criteria:** Data organized by category > test > workload > step. Every run in the window is
+accounted for -- including those with zero result tables. CapacityReservationError runs are marked
+for exclusion, thresholds are resolved, and each workload has one latest run selected.
 
 ## Phase 4a: Collect Issues
 
@@ -238,20 +260,21 @@ CapacityReservationError runs with successful re-runs are marked for exclusion.
 
 6. Store the classification for use in the HTML report generation.
 
-7. **Build the Uninvestigated Failures list.** For each run with status `failed` or `test_error`
-   that has no linked issues (empty `argus issue list`), add it to the uninvestigated list with:
+7. **Build the "Failed, investigation in progress" list.** For each FAILED run (run status
+   `failed` or `test_error`) that has no linked issues (empty `argus issue list`), add a row with:
    - Test name, workload, version, status
-   - Cause: determined from `argus run events` (e.g. "CapacityReservationError, not re-run") or
-     from failed result tables (e.g. "P99 ERROR at 750K step") or "All tables PASS, run marked failed"
-   - For CapacityReservationError re-runs that also failed, exclude intermediate attempts and keep
-     only the latest one, noting all build numbers in the cause (e.g. "CapacityReservationError,
-     re-run also failed (builds #57,#59,#61)")
+   - Cause: same format as the Overview Cause column -- metric, step, measured value and threshold,
+     one line per failed metric; or the real reason from `argus run events` when the run produced no
+     failed table (e.g. "OVERSIZED_ALLOCATION error in DB log (all result tables PASS)")
    - Argus link to the specific run
-   - Exclude CapacityReservationError runs that were successfully re-run (identified in Phase 4 step 6)
+   - Exclude CapacityReservationError runs (never reported at all)
+   - Exclude superseded runs -- apply the same latest-run-per-workload rule as the Overview
+
+   **Omit the whole section if the list is empty.** Do not render an empty table or a placeholder.
 
    **Important:** Issue linkage in Argus is manual and may change between data refreshes. When
    re-collecting data, always use `--no-cache` on `argus issue list` calls. A run that was previously
-   uninvestigated may now have an issue linked -- remove it from the uninvestigated list.
+   unlinked may now have an issue -- remove it from the list.
 
 **Exit criteria:** Issues collected and classified as new vs reproduced from Jira creation dates
 (user consulted only for unlinked failures or if Jira is unreachable).
@@ -262,16 +285,16 @@ CapacityReservationError runs with successful re-runs are marked for exclusion.
 
 1. Generate the HTML file with these sections:
    - Header (solid navy background `#1a237e`, title, date range). Subtitle text varies by build type: "Master (~dev) builds only" or "Release builds only".
-   - Summary box (total/passed/failed/running counts per run + Scylla version). **Count individual runs, not test groups.** Each workload is a separate run (e.g., a test with mixed/read/write/read_disk_only = 4 runs). Microbenchmarks = 1 run each. Total must equal Passed + Failed/Error + Running. **Exclude CapacityReservationError runs that were successfully re-run from all counts.**
-   - Conclusion (auto-generated hierarchical text summary)
-   - Uninvestigated Failures table (failed/test_error runs with no linked issue)
+   - Summary box (total/passed/failed/running counts per run + Scylla version(s)). **Count individual runs, not test groups.** Each workload is a separate run (e.g., a test with mixed/read/write/read_disk_only = 4 runs). Microbenchmarks = 1 run each. Total must equal Passed + Failed/Error + Running. **Exclude every CapacityReservationError run from all counts**, plus aborted runs that were re-run. When the period spans several release versions, list them all, one per line.
+   - "Issues Found in the Runs" (auto-generated hierarchical text summary; this section was previously called "Conclusion")
+   - "Failed, investigation in progress" table (FAILED runs with no linked issue) -- omitted when empty
    - New Issues - Regression (issues created during the period, if any)
    - Reproduced Issues (pre-existing issues seen again this week)
    - Overview table (grouped by workload, with Argus links in Link column)
    - Detailed results (per-category tables with metrics + Argus links)
 
-   **Conclusion section** (between Summary and Overview):
-   - Heading "Conclusion" must use same style as "Summary" heading: `font-size:16px;font-weight:bold;padding-bottom:10px;`
+   **"Issues Found in the Runs" section** (between Summary and Overview):
+   - Heading "Issues Found in the Runs" must use same style as "Summary" heading: `font-size:16px;font-weight:bold;padding-bottom:10px;`
    - **Warning banner** (optional): After collecting all issues from failed runs, present the
      de-duplicated list to the user and ask which issues (if any) should be highlighted in a
      warning banner. If the user selects issues, render a banner stating those issues had no
@@ -291,7 +314,7 @@ CapacityReservationError runs with successful re-runs are marked for exclusion.
    - Each top-level item and sub-item is rendered as its own table row
    - **Version numbers must be bold** in sub-items (e.g., `<b>2026.2.3</b>`)
    - Include: which workloads failed/passed for each test, specific failure details (metric, value)
-   - Do NOT mention CapacityReservationError runs in the Conclusion -- they are covered in the Uninvestigated Failures table. If a test only had CapacityReservationError runs, omit it from the Conclusion entirely.
+   - Do NOT mention CapacityReservationError runs -- they are excluded from the report entirely. If a test only had CapacityReservationError runs, omit it from this section too.
    - Do NOT mention registered tests with no runs
    - Example output structure:
      ```
@@ -304,42 +327,29 @@ CapacityReservationError runs with successful re-runs are marked for exclusion.
        * Read tests passed on both architectures.
      ```
    - Render in a white-background box with border
-   - **CRITICAL: Before saving the report, print the generated conclusion text to the user and ask them to confirm or provide edits.** Wait for user response. If the user provides changes, incorporate them. Only then write the final HTML file.
+   - **CRITICAL: Before saving the report, print the generated section text to the user and ask them to confirm or provide edits.** Wait for user response. If the user provides changes, incorporate them. Only then write the final HTML file.
 
-2. **Overview table structure:**
-   - Columns: Category | Test | Workload | Status | Link (NO version column, NO Runs column)
+2. **Test Overview table structure:**
+   - Columns: Category | Test | Workload | Status | Cause | Issues | Link (NO version column, NO Runs column)
    - Group by category first, then test, then workload
    - Category shown only on first row of that category (empty on subsequent)
    - Test shown only on first workload row for that test (empty on subsequent)
-   - Each run covers a single workload, so each workload has its own runs
+   - Each run covers a single workload; show **one row per workload -- the latest run**
    - **Microbenchmarks**: Use "-" as workload since they don't have separate workload results
    - Status column: just the status badge (PASSED/FAILED/ERROR) -- no counts
+   - Cause column: the failed metric, step, measured value and configured threshold, e.g.
+     `Throughput read ERROR at unthrottled step (571,128 op/s, threshold 580,000 op/s)`.
+     **Several failed metrics -> one per line, `<br>`-separated, never joined with `;`.**
+     Empty on PASSED rows.
+   - Issues column: linked Jira keys as clickable links, comma-separated; empty when none
    - Link column: Argus link to the specific run for that workload
-   - Full Scylla version is displayed in the Summary section title instead
+   - Full Scylla version is displayed in the Summary and above each per-version table
 
    **Important**: When fetching results for microbenchmark runs, if no workload-specific tables are found (e.g., no "workload - step - latencies" tables), treat the entire results array as belonging to workload="-". This ensures microbenchmarks appear in the overview table.
 
-3. **Detailed results structure (per category):**
-   - **CRITICAL**: The entire "Detailed Results" section is ONLY shown when there are actual failed result tables (table status `FAIL` or `ERROR`)
-   - Runs where status is `failed` but all result tables show `PASS`, and `test_error` runs with no result tables, must NOT appear in Detailed Results -- they belong in the Uninvestigated Failures table
-   - When all tests pass (or failures have no failed tables), completely omit the Detailed Results section from the report
-   - When failures with actual failed tables exist:
-     - First collect all failed result tables across all runs, grouped by category and test
-     - Only render category headings and test sub-headings that have at least one failed table
-     - Category heading with blue underline (`#007bff`)
-     - For each test with failed tables: sub-heading with test name and full version, NO status badge
-       Example: `predefined-throughput-steps-i8g-tablets (2026.3.0.dev.20260612.91ada5517d59)`
-      - **Failed Results table**:
-        - Columns: Workload | Step | P99 (ms) | Throughput (op/s) | Version | Link
-        - Shows all failed steps across ALL runs in the period
-        - P99 values highlighted in red bold
-      - **Max Throughput table** (ONLY for `predefined-throughput-steps` tests where the **unthrottled step itself** has status `FAIL` or `ERROR`):
-        - If all unthrottled steps pass (status `PASS`), **omit this table entirely** -- the throughput is as expected and does not need to be highlighted
-        - Columns: Workload | Max Throughput (run) | P99 (ms) | Status | Link
-        - One row per workload, using latest run's data
-        - Each workload has its own Argus link to its specific run
-        - Argus link format: `https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}` (singular `/test/`)
-        - NOT shown for nemesis or rolling-upgrade tests (they have no unthrottled steps)
+3. **No "Detailed Results" section.** The Cause column carries the failure detail and each row's
+   Argus link carries the rest, so the report ends after the Test Overview tables. Do not emit
+   Failed Results or Max Throughput tables.
 
 4. Key HTML rules for Gmail compatibility:
    - **Copy the table markup from [references/html-template.md](../references/html-template.md) -- do not invent your own.**
@@ -370,7 +380,7 @@ CapacityReservationError runs with successful re-runs are marked for exclusion.
    - Error: `#fd7e14` (orange)
    - No runs: `#6c757d` (gray)
 
-**Exit criteria:** Conclusion text printed to user and confirmed/edited. Issues classified (from Jira `created` dates; user asked only if Jira is unreachable). File `perf-weekly-status-report.html` written outside the SCT repo and renderable in a browser.
+**Exit criteria:** "Issues Found in the Runs" text printed to user and confirmed/edited. Issues classified (from Jira `created` dates; user asked only if Jira is unreachable). File `perf-weekly-status-report.html` written outside the SCT repo and renderable in a browser.
 
 ### Verify the rendering, don't assume it
 
@@ -397,7 +407,7 @@ Only when the user asks for an email draft.
 4. Match the established header wording so the series stays consistent:
    `ScyllaDB Enterprise - Performance Weekly Status` / `Period: YYYY-MM-DD to YYYY-MM-DD | Master (~dev) builds only`.
 5. Pass the report HTML as the draft's `htmlBody`, **and** supply a plain-text `body` that carries the
-   same Summary / Conclusion / Overview content -- some clients show only the text alternative.
+   same Summary / Issues / Overview content -- some clients show only the text alternative.
 6. **Create a draft only. Never send.** Sending on the user's behalf needs explicit per-message
    consent, and this report goes to a wide internal audience.
 
@@ -405,24 +415,26 @@ Only when the user asks for an email draft.
 > argument. Keep the generated HTML lean -- set `font-family` once on the outer table rather than
 > repeating it on all ~80 cells -- or the draft call becomes slow and expensive.
 
-## Phase 5a: Conclusion and Issues Review (Interactive)
+## Phase 5a: Issues Review (Interactive)
 
 **Entry criteria:** HTML report content is ready to be generated (all data collected and processed, issues collected from Phase 4a).
 
 Before writing the final HTML file, the agent MUST perform THREE interactive steps:
 
-### Step 1: Conclusion Review
+### Step 1: "Issues Found in the Runs" Review
 
-1. Print the auto-generated Conclusion bullet points to the user in plain text format (hierarchical structure)
-2. Also print the **Uninvestigated Failures** table (failed/test_error runs with no linked issue, including cause)
-3. Ask the user to confirm the conclusion or provide edits, and to investigate the uninvestigated failures
-4. Wait for user response
-5. If the user approves: proceed to Step 2
-6. If the user provides changes: incorporate the edits
+1. Print the auto-generated bullet points to the user in plain text format (hierarchical structure)
+2. Also print the **"Failed, investigation in progress"** table (FAILED runs with no linked issue, including cause)
+3. Report how many runs were excluded as CapacityReservationError / aborted-and-re-run, and name any
+   test whose `argus run results` endpoint errored out
+4. Ask the user to confirm the wording or provide edits, and to investigate the unlinked failures
+5. Wait for user response
+6. If the user approves: proceed to Step 2
+7. If the user provides changes: incorporate the edits
 
 Example interaction:
 ```
-Here is the generated Conclusion for the report:
+Here is the generated "Issues Found in the Runs" section for the report:
 
 - predefined-throughput-steps-i8g-tablets:
   * write workload failed with P99 latency regression at 600K op/s step (225.44ms).
@@ -432,20 +444,21 @@ Here is the generated Conclusion for the report:
   * write tests (arm64 and x86_64) both failed with ERROR on instructions_per_op (~8% regression).
   * Read tests passed on both architectures.
 
-Uninvestigated failures (no issue linked):
+Failed, investigation in progress (no issue linked):
 
 | Test | Workload | Version | Status | Cause | Link |
 |------|----------|---------|--------|-------|------|
-| predefined-throughput-steps-i8g-tablets | mixed | 2026.1.10 | failed | P99 ERROR at 750K step | Argus |
-| latency-650gb-with-nemesis-i8g-vnodes | mixed | 2026.2.3 | test_error | CapacityReservationError, not re-run | Argus |
+| predefined-throughput-steps-i8g-tablets | mixed | 2026.1.10 | FAILED | P99 read ERROR at 750,000 op/s step (812.40 ms, threshold 50 ms) | Argus |
 
-Would you like to use this conclusion as-is, or would you like to edit it?
+Excluded from the report: 7 CapacityReservationError runs, 1 aborted run that was re-run.
+
+Would you like to use this section as-is, or would you like to edit it?
 ```
 
 ### Step 2: Warning Banner Selection
 
 1. Present the de-duplicated list of all issues found on failed/errored runs
-2. Ask the user which issues (if any) should be highlighted in a warning banner at the top of the Conclusion
+2. Ask the user which issues (if any) should be highlighted in a warning banner at the top of the section
 3. Wait for user response
 4. If the user selects issues: generate a warning banner stating those issues had no updates during the report period
 5. If the user selects none (or there are no issues): omit the warning banner entirely
@@ -483,7 +496,7 @@ Which of these are NEW issues (Jira ticket created this week)?
 Please provide the keys (e.g., "PROJECT-789"), or "none" if all are reproduced.
 ```
 
-This ensures the user has final control over the conclusion wording, warning banner, and issue classification before they appear in the report.
+This ensures the user has final control over the section wording, warning banner, and issue classification before they appear in the report.
 
 ## Phase 6: Verify Output
 
@@ -496,28 +509,33 @@ This ensures the user has final control over the conclusion wording, warning ban
 5. Verify `width="700"` is used for main content table (not 1400)
 6. Verify `bgcolor` attributes present alongside `background-color`
 7. Verify overview table DOES contain Argus links in Link column
-8. Verify overview table has columns: Category | Test | Workload | Status | Link (no Runs column, no Version column)
+8. Verify overview table has columns: Category | Test | Workload | Status | Cause | Issues | Link (no Runs column, no Version column)
 9. Verify overview Status column shows just badge (PASSED/FAILED/ERROR) -- no counts
-10. Verify microbenchmarks appear in overview with "-" as workload
-11. Verify Summary title: "Summary for Scylla version {full_version}" with build date and revision hash
-12. Verify detailed section has per-workload Argus links (format: `/test/` singular)
-13. Verify full version with revision hash appears in Summary title (e.g., `2026.3.0.dev.20260612.91ada5517d59`)
-14. Verify Detailed Results section is completely omitted when all tests pass
-15. Verify Max Throughput table is omitted when all unthrottled steps pass (throughput as expected)
-16. Verify Conclusion text was shown to user before final save
-17. Verify Conclusion uses hierarchical format (bold test names + indented sub-bullets)
-18. Verify issues are split into "New Issues - Regression" and "Reproduced Issues" sections
-19. Verify issues were classified from Jira `created` dates (user asked only for unlinked failures)
-20. Verify report is NOT placed inside the SCT repository
-21. Verify every data table has `border="1"` plus per-cell `border:1px solid #dee2e6` (no CSS-only borders)
-22. Verify status badges use `bgcolor` on a `<td>`, not a bare `<span>` (`grep -c '<span[^>]*background-color'` must be 0)
-23. Verify the page was actually opened in a browser and the tables/badges checked visually
-24. Verify every master run in the window appears somewhere in the report, including runs with zero result tables
-25. Verify Uninvestigated Failures table is present when there are failed/test_error runs with no linked issues
-26. Verify Uninvestigated Failures table has columns: Test | Workload | Version | Status | Cause | Link
-27. Verify CapacityReservationError runs that were successfully re-run are excluded from all sections
-28. Verify test_error causes are determined via `argus run events`, not Jenkins console
-29. Verify Uninvestigated Failures table was printed to user during conclusion review
+10. Verify each Cause cell states value AND threshold, with multiple metrics on separate lines (`<br>`), and is empty on PASSED rows
+11. Verify no Cause reads "no threshold" -- an unlisted step inherits the 10 ms P99 default from `defaults/test_default.yaml`
+12. Verify microbenchmarks appear in overview with "-" as workload
+13. Verify Summary lists the full version(s) with build date and revision hash
+14. Verify per-workload Argus links use `/test/` (singular), not `/tests/` (plural)
+15. Verify the report contains NO "Detailed Results" section (`grep -c 'Detailed Results'` must be 0)
+16. Verify no run marked `passed` in Argus is shown as FAILED
+17. Verify "Issues Found in the Runs" text was shown to user before final save
+18. Verify it uses hierarchical format (bold test names + indented sub-bullets)
+19. Verify issues are split into "New Issues - Regression" and "Reproduced Issues" sections
+20. Verify issues were classified from Jira `created` dates (user asked only for unlinked failures)
+21. Verify report is NOT placed inside the SCT repository
+22. Verify every data table has `border="1"` plus per-cell `border:1px solid #dee2e6` (no CSS-only borders)
+23. Verify status badges use `bgcolor` on a `<td>`, not a bare `<span>` (`grep -c '<span[^>]*background-color'` must be 0)
+24. Verify the page was actually opened in a browser and the tables/badges checked visually
+25. Verify every run in the window is accounted for, including runs with zero result tables
+26. Verify no CapacityReservationError run appears anywhere, including in the counts
+     (`grep -ci capacityreservation` must be 0)
+27. Verify "Failed, investigation in progress" table is present when there are FAILED runs with no
+     linked issues, and that the section is omitted entirely when there are none
+28. Verify that table has columns: Test | Workload | Version | Status | Cause | Link
+29. Verify test_error causes are determined via `argus run events`, not Jenkins console
+30. Verify that table was printed to user during the review step
+31. Compare the rendering against
+     [references/perf-weekly-status-report-release-example.html](../references/perf-weekly-status-report-release-example.html)
 
 **Exit criteria:** Report is ready for email distribution.
 
@@ -560,11 +578,16 @@ argus run results \
 argus run events \
   --run-id <RUN_ID> \
   --url https://argus.scylladb.com
-#     Look for CapacityReservationError in event messages.
+#     Look for CapacityReservationError in event messages -- any run that has it is
+#     dropped from the report entirely (all sections AND the counts).
+#     A FailedResultEvent names the failing table, which also gives the workload when
+#     `argus run results` errors out server-side for that test.
 
-# 4c. Detect re-runs: group runs by test+version, sort by build_number.
-#     If a later build passed the same workloads, exclude the earlier
-#     CapacityReservationError run from the report.
+# 4c. Resolve error thresholds at the run's own SCT revision (jobs run branch-perf-v17):
+argus run details --run-id <RUN_ID> --url https://argus.scylladb.com   # config_files + scm_revision_id
+git -C <sct-repo> show <scm_revision_id>:defaults/test_default.yaml    # per-workload `default` block (P99 = 10 ms)
+git -C <sct-repo> show <scm_revision_id>:configurations/performance/latency-decorator-error-thresholds-<...>.yaml
+#     Effective limit = merged[workload]["default"] | merged[workload].get(step, {})
 
 # 5. Fetch issues for failed/errored runs (often returns [] -- linking is manual)
 argus issue list \
@@ -572,7 +595,8 @@ argus issue list \
   --url https://argus.scylladb.com
 
 # 6. Generate HTML report (output to $OUT, NOT to repo)
-# - Ask user to confirm conclusion text + uninvestigated failures table
+# - Ask user to confirm "Issues Found in the Runs" text + "Failed, investigation in progress" table
+# - Report how many runs were excluded (CapacityReservationError / aborted-and-re-run)
 # - Classify issues from Jira `created` dates (Atlassian MCP getJiraIssue)
 # - Write "$OUT/perf-weekly-status-report.html"
 

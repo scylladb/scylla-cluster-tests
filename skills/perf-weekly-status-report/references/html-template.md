@@ -94,9 +94,9 @@ Counts are **per run** (each workload = 1 run), not per test group. A test with 
 </tr>
 ```
 
-## Conclusion Box (hierarchical bullet points)
+## "Issues Found in the Runs" Box (hierarchical bullet points)
 
-The Conclusion section uses a white-background box with a heading table, an optional warning banner, and a content table (all inside the same `<td>`).
+This section was previously called "Conclusion". It uses a white-background box with a heading table, an optional warning banner, and a content table (all inside the same `<td>`).
 
 Structure: heading in one table, optional warning banner in a separate table, hierarchical bullets in another table.
 
@@ -115,14 +115,14 @@ When the user selects issues to highlight (from the interactive Step 2 prompt), 
 
 Key styling: yellow background (`#fff3cd`), red border (`2px solid #dc3545`), red bold text (`color:#dc3545`), warning icon (`&#9888;`). Uses `bgcolor` for Gmail fallback.
 
-### Full Conclusion Structure
+### Full Section Structure
 
 ```html
 <tr><td height="15" style="font-size:1px;line-height:1px;">&nbsp;</td></tr>
 <tr>
 <td bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid #dee2e6;padding:15px;">
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333333;">
-<tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">Conclusion</td></tr>
+<tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">Issues Found in the Runs</td></tr>
 </table>
 <!-- optional warning banner here (see above) -->
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#555555;">
@@ -198,9 +198,10 @@ it renders in most clients but has no fallback when the background is stripped.
 
 ## Data Tables
 
-### Overview Table (dark header, grouped by category/test/workload, with Issues and Link columns)
+### Overview Table (dark header, grouped by category/test/workload, with Cause, Issues and Link columns)
 
-Number of rows varies: one row per workload per test that had runs. Categories and tests with no runs are omitted.
+Number of rows varies: one row per workload per test that had runs -- the LATEST run for that
+workload. Categories and tests with no runs are omitted.
 
 ```html
 <table width="100%" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12px;border-color:#dee2e6;">
@@ -209,6 +210,7 @@ Number of rows varies: one row per workload per test that had runs. Categories a
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Test</th>
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Workload</th>
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Status</th>
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Cause</th>
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Issues</th>
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Link</th>
 </tr>
@@ -218,6 +220,7 @@ Number of rows varies: one row per workload per test that had runs. Categories a
   <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{test_name}</td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{workload}</td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- status badge --></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- cause: "<metric> ERROR at <step> step (<value> <unit>, threshold <limit> <unit>)"; several metrics -> `<br>`-separated; empty when PASSED --></td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- issue keys or empty --></td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a></td>
 </tr>
@@ -227,6 +230,7 @@ Number of rows varies: one row per workload per test that had runs. Categories a
   <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;"></td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{workload}</td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- status badge --></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- cause: "<metric> ERROR at <step> step (<value> <unit>, threshold <limit> <unit>)"; several metrics -> `<br>`-separated; empty when PASSED --></td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- issue keys or empty --></td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a></td>
 </tr>
@@ -237,6 +241,14 @@ Number of rows varies: one row per workload per test that had runs. Categories a
 NOTE: Each workload row has its own Argus link in the Link column. Version is in the Summary section.
 Argus URL format: `https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}` (singular `/test/`, NOT `/tests/`)
 Status column: just the badge (PASSED/FAILED/ERROR) -- no counts.
+Cause column: failed metric, step, measured value and configured threshold. Several failed metrics go
+on separate lines inside the cell (`<br>`), never joined with `;`. Empty on PASSED rows. Example:
+
+```html
+<td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">P99 read ERROR at 1,500,000 op/s step (916.98 ms, threshold 10 ms)<br>Throughput read ERROR at unthrottled step (1,611,034 op/s, threshold 1,670,000 op/s)</td>
+```
+
+There is no "Detailed Results" section -- the Cause column and the per-row Argus link replace it.
 
 ### Overview Section Heading and Per-Version Label
 
@@ -300,7 +312,7 @@ Key details:
 </table>
 ```
 
-### Hierarchical bullet list (Conclusion format)
+### Hierarchical bullet list ("Issues Found in the Runs" format)
 
 Uses two levels: bold test name at 15px indent, sub-bullets at 30px indent.
 Number of top-level items and sub-bullets varies per report.
@@ -319,7 +331,7 @@ Key styling details:
 - Top-level items: `padding:2px 0 2px 15px;` with `- <b>test name:</b>` format
 - Sub-items: `padding:2px 0 2px 30px;` with `&#8226; observation text.` format
 - Both levels are within the same `<table>` (no nested tables)
-- Wrapped in a white-background box with border (same container as the "Conclusion" heading)
+- Wrapped in a white-background box with border (same container as the "Issues Found in the Runs"usion" heading)
 
 ## Links
 
@@ -327,18 +339,19 @@ Key styling details:
 <a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a>
 ```
 
-## Uninvestigated Failures Table
+## "Failed, investigation in progress" Table
 
-Shows failed/test_error runs with no linked Argus issue, placed between the Conclusion and Issues sections.
-Columns: Test | Workload | Version | Status | Cause | Link.
-Excludes CapacityReservationError runs that were successfully re-run.
+Shows FAILED runs with no linked Argus issue, placed between "Issues Found in the Runs" and the
+Issues sections. Columns: Test | Workload | Version | Status | Cause | Link.
+Excludes CapacityReservationError runs (never reported at all) and superseded runs.
+**Omit the whole section when it has no rows** -- no empty table, no placeholder.
 
 ```html
 <tr><td height="15" style="font-size:1px;line-height:1px;">&nbsp;</td></tr>
 <tr>
 <td bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid #dee2e6;padding:15px;">
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333333;">
-<tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">Uninvestigated Failures (no issue linked)</td></tr>
+<tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">Failed, investigation in progress</td></tr>
 </table>
 <table width="100%" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12px;border-color:#dee2e6;">
 <tr bgcolor="#343a40" style="background-color:#343a40;">
@@ -349,7 +362,7 @@ Excludes CapacityReservationError runs that were successfully re-run.
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Cause</th>
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Link</th>
 </tr>
-<!-- Repeat for each uninvestigated run, alternating bgcolor #ffffff / #f8f9fa -->
+<!-- Repeat for each unlinked failed run, alternating bgcolor #ffffff / #f8f9fa -->
 <tr bgcolor="#ffffff" style="background-color:#ffffff;">
   <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{test_name}</td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{workload}</td>
@@ -365,10 +378,13 @@ Excludes CapacityReservationError runs that were successfully re-run.
 ```
 
 Key details:
-- Cause column values: "CapacityReservationError, not re-run", "P99 ERROR at <step>", "All tables PASS, run marked failed", etc.
+- Cause column uses the same format as the Overview Cause column: metric, step, measured value and
+  threshold, one line per failed metric (`<br>`-separated)
+- When a run failed without a failed result table, state the real reason from `argus run events`
+  (e.g. "OVERSIZED_ALLOCATION error in DB log (all result tables PASS)")
 - Status column uses the standard status badge (FAILED/ERROR)
-- Only shown when uninvestigated failures exist
-- CapacityReservationError runs that were re-run successfully are excluded
+- Only shown when such runs exist -- otherwise the section is omitted entirely
+- CapacityReservationError runs never appear here (they are excluded from the whole report)
 
 ## New Issues and Reproduced Issues Sections
 
