@@ -1,11 +1,13 @@
 # OCI backend
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 Oracle Cloud Infrastructure provisioning.
 
 **10 options.**
 
+
+<a id="oci_image_db"></a>
 
 ## **oci_image_db** / SCT_OCI_IMAGE_DB
 
@@ -16,6 +18,8 @@ Oracle Cloud image to use for DB node(s)
 **type:** str (appendable)
 
 
+<a id="oci_image_db_oracle"></a>
+
 ## **oci_image_db_oracle** / SCT_OCI_IMAGE_DB_ORACLE
 
 Oracle Cloud image to use for oracle (2nd ref cluster) DB node(s). If not set and [`oracle_scylla_version`](auxiliary-db-cluster-oracle-cassandra.md#oracle_scylla_version) is provided, it will be resolved automatically.
@@ -24,6 +28,8 @@ Oracle Cloud image to use for oracle (2nd ref cluster) DB node(s). If not set an
 
 **type:** str (appendable)
 
+
+<a id="oci_image_loader"></a>
 
 ## **oci_image_loader** / SCT_OCI_IMAGE_LOADER
 
@@ -34,6 +40,8 @@ Oracle Cloud image to use for the loader node(s). Empty value results into lates
 **type:** str (appendable)
 
 
+<a id="oci_image_monitor"></a>
+
 ## **oci_image_monitor** / SCT_OCI_IMAGE_MONITOR
 
 Oracle Cloud image to use for the monitor node. Empty value results into latest ubuntu image
@@ -42,6 +50,8 @@ Oracle Cloud image to use for the monitor node. Empty value results into latest 
 
 **type:** str (appendable)
 
+
+<a id="oci_image_username"></a>
 
 ## **oci_image_username** / SCT_OCI_IMAGE_USERNAME
 
@@ -55,6 +65,8 @@ Username used in the Oracle Cloud images utilized by the DB node(s)
 - `scyllaadm`: oci
 
 
+<a id="oci_instance_type_db"></a>
+
 ## **oci_instance_type_db** / SCT_OCI_INSTANCE_TYPE_DB
 
 Oracle Cloud instance shape to use for DB node(s). Usage of flex shapes allows setting of the ocpus, memory and nvme disks. Format is following: <shape-name>:<ocpus>:<ram>:<nvmes> . For DenseIO shapes it makes sense to specify only 'ocpus' part, because ram and amount of NVMe disks will be fixed based on the OCPUs count.
@@ -63,6 +75,8 @@ Oracle Cloud instance shape to use for DB node(s). Usage of flex shapes allows s
 
 **type:** str (appendable)
 
+
+<a id="oci_instance_type_db_oracle"></a>
 
 ## **oci_instance_type_db_oracle** / SCT_OCI_INSTANCE_TYPE_DB_ORACLE
 
@@ -73,6 +87,8 @@ Oracle Cloud instance shape to use for 'oracle' (2nd ref cluster) ScylladbDB clu
 **type:** str (appendable)
 
 
+<a id="oci_instance_type_loader"></a>
+
 ## **oci_instance_type_loader** / SCT_OCI_INSTANCE_TYPE_LOADER
 
 Oracle Cloud instance shape to use for loader node(s). Usage of flex shapes allows setting of the ocpus, memory. Format is following: <shape-name>:<ocpus>:<ram>
@@ -82,6 +98,8 @@ Oracle Cloud instance shape to use for loader node(s). Usage of flex shapes allo
 **type:** str (appendable)
 
 
+<a id="oci_instance_type_monitor"></a>
+
 ## **oci_instance_type_monitor** / SCT_OCI_INSTANCE_TYPE_MONITOR
 
 Oracle Cloud instance shape to use for monitor node. Usage of flex shapes allows setting of the ocpus, memory. Format is following: <shape-name>:<ocpus>:<ram>
@@ -90,6 +108,8 @@ Oracle Cloud instance shape to use for monitor node. Usage of flex shapes allows
 
 **type:** str (appendable)
 
+
+<a id="oci_region_name"></a>
 
 ## **oci_region_name** / SCT_OCI_REGION_NAME
 

@@ -1,11 +1,13 @@
 # Kafka / CDC connectors
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 Kafka deployment and connector configuration for CDC testing.
 
 **2 options.**
 
+
+<a id="kafka_backend"></a>
 
 ## **kafka_backend** / SCT_KAFKA_BACKEND
 
@@ -15,6 +17,8 @@ Type of Kafka backend to use
 
 **type:** Literal['localstack', 'vm', 'msk']
 
+
+<a id="kafka_connectors"></a>
 
 ## **kafka_connectors** / SCT_KAFKA_CONNECTORS
 
