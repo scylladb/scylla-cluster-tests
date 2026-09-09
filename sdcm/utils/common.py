@@ -1090,6 +1090,21 @@ def filter_k8s_clusters_by_tags(
     return filter_gce_by_tags(tags_dict={k: v for k, v in tags_dict.items() if k != "NodeType"}, instances=clusters)
 
 
+# Scylla Manager AMIs are built on top of a Scylla AMI and, as of the manager-promote job,
+# inherit its `scylla_version`/`environment=production` tags (plus a `branch` tag). They would
+# therefore match the Scylla AMI lookups below and, being newer than the real Scylla release
+# image, win the "latest" sort. They are not scylla-machine-image builds (no
+# `user_data_format_version` tag), so provisioning fails on them. Recognise them by the tag
+# only the Manager promote job sets.
+SCYLLA_MANAGER_AMI_TAG = "scylla_manager_version"
+
+
+def is_scylla_manager_ami(image: EC2Image) -> bool:
+    """Return True when *image* is a Scylla Manager AMI rather than a plain Scylla AMI."""
+    tags = {tag["Key"]: tag["Value"] for tag in image.tags or []}
+    return SCYLLA_MANAGER_AMI_TAG in tags or tags.get("Name", "").startswith("scylla-manager-")
+
+
 def _get_ami_versions(
     region_name: str,
     arch: AwsArchType,
@@ -1132,7 +1147,9 @@ def _get_ami_versions(
     images = [
         image
         for image in images
-        if image.tags and "debug" not in {i["Key"]: i["Value"] for i in image.tags}.get("Name", "")
+        if image.tags
+        and "debug" not in {i["Key"]: i["Value"] for i in image.tags}.get("Name", "")
+        and not is_scylla_manager_ami(image)
     ]
     return images
 
@@ -1496,7 +1513,11 @@ def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 
             ]
 
     images = sorted(itertools.chain.from_iterable(images), key=lambda x: x.creation_date, reverse=True)
-    images = [image for image in images if not (image.name.startswith("debug-") or "-debug-" in image.name)]
+    images = [
+        image
+        for image in images
+        if not (image.name.startswith("debug-") or "-debug-" in image.name) and not is_scylla_manager_ami(image)
+    ]
 
     assert images, f"AMIs for {scylla_version=} with {arch} architecture not found in {region_name}"
 
