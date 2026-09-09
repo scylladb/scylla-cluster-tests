@@ -148,3 +148,22 @@ def test_validate_minicloud_params_rejects_missing_overlay():
                 "enterprise_disable_kms": False,
             }
         )
+
+
+@pytest.mark.parametrize("param", ["use_placement_group", "use_capacity_reservation"])
+def test_validate_minicloud_params_rejects_unsupported_aws_placement_apis(param):
+    """Neither API exists in minicloud's EC2 surface, and both fail deep in provisioning.
+
+    The performance test-cases set them, and without this gate the run dies minutes in with a
+    GetPlacementGroupError naming a group that was never created — a long way from the config
+    that asked for it.
+    """
+    params = {
+        "instance_provision": "on_demand",
+        "ip_ssh_connections": "private",
+        "enterprise_disable_kms": True,
+        "force_run_iotune": False,
+        param: True,
+    }
+    with pytest.raises(MinicloudError, match=param):
+        validate_minicloud_params(params=params)

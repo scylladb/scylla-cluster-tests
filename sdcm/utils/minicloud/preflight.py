@@ -9,16 +9,22 @@ from sdcm.utils.minicloud.config import MinicloudConfig, MinicloudError
 
 LOGGER = logging.getLogger(__name__)
 
-# Every SCT param whose nodes become a minicloud QEMU guest, and therefore has to be part of
-# the host-memory arithmetic. Keep in sync with the node pools tester.py provisions.
+# Every SCT param whose nodes become a minicloud QEMU guest unconditionally, and therefore has
+# to be part of the host-memory arithmetic. Keep in sync with the node pools tester.py provisions.
 GUEST_NODE_COUNT_PARAMS = (
     "n_db_nodes",
     "n_loaders",
     "n_monitor_nodes",
-    "n_test_oracle_db_nodes",
     "n_db_zero_token_nodes",
     "n_vector_store_nodes",
 )
+
+# The oracle cluster is the one pool that is conditional: every _create_oracle_cluster() call
+# site in tester.py is guarded by db_type == "mixed_scylla". n_test_oracle_db_nodes nonetheless
+# defaults to 1, so counting it unconditionally budgets a phantom guest on every ordinary run -
+# a whole minicloud_lightweight_memory, enough to block a test that would have fit.
+ORACLE_NODE_COUNT_PARAM = "n_test_oracle_db_nodes"
+ORACLE_DB_TYPES = ("mixed_scylla",)
 
 
 def sum_node_counts(value) -> int:
@@ -72,6 +78,8 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
     # every pool that becomes a guest has to be counted, or a test with an oracle cluster,
     # zero-token nodes or a vector store passes the gate and still OOM-kills the container.
     guests = sum(sum_node_counts(params.get(name)) for name in GUEST_NODE_COUNT_PARAMS)
+    if params.get("db_type") in ORACLE_DB_TYPES:
+        guests += sum_node_counts(params.get(ORACLE_NODE_COUNT_PARAM))
     # n_db_nodes is only where the cluster *starts*. A test that grows it - the scale tests set
     # cluster_target_size, and longevity_test grows to it - peaks higher, and the peak is what has
     # to fit: a gate that sizes the initial cluster only would pass and then let the run die at the
