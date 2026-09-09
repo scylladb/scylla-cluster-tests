@@ -4,7 +4,7 @@
 
 Microsoft Azure provisioning.
 
-**13 options.** Jump to: [azure_image_db](#azure_image_db) · [azure_image_db_oracle](#azure_image_db_oracle) · [azure_image_loader](#azure_image_loader) · [azure_image_monitor](#azure_image_monitor) · [azure_image_username](#azure_image_username) · [azure_instance_type_db](#azure_instance_type_db) · [azure_instance_type_db_oracle](#azure_instance_type_db_oracle) · [azure_instance_type_loader](#azure_instance_type_loader) · [azure_instance_type_monitor](#azure_instance_type_monitor) · [azure_provision_stuck_vm_recreate_attempts](#azure_provision_stuck_vm_recreate_attempts) · [azure_provision_stuck_vm_timeout](#azure_provision_stuck_vm_timeout) · [azure_provision_stuck_vm_total_timeout](#azure_provision_stuck_vm_total_timeout) · [azure_region_name](#azure_region_name)
+**13 options.**
 
 
 ## **azure_image_db** / SCT_AZURE_IMAGE_DB

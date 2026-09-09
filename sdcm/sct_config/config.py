@@ -1510,6 +1510,14 @@ class SCTConfiguration(*CONFIG_GROUPS):
       ``verify_configuration()``, which should shrink it further;
     - ``__init__`` is ~560 lines of loading, image resolution and inline validation, and is the
       other half of that work.
+    - the per-backend requirement tables in ``sdcm.sct_config.defaults`` exist only for
+      validation, so they should follow their validators into the owning mixins.
+
+    ``unit_tests/unit/config/test_mixin_validators.py`` pins down what the assembled-mixin model
+    supports, so that work starts from demonstrated behaviour: field and model validators declared
+    on a mixin do run on the assembled class, validators from several mixins all run, and a mixin's
+    ``model_validator`` can read fields owned by other mixins -- so even genuinely cross-domain
+    rules need not come back to a central function.
     """
 
     log: ClassVar = logging.getLogger("sdcm.sct_config")
@@ -8379,19 +8387,51 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     @classmethod
     def _link_option_mentions(cls, text: str, index: dict, self_page: str) -> str:
-        """Turn `option_name` / 'option_name' mentions in prose into links to that option."""
+        """Turn mentions of other options in prose into links to those options.
 
-        def repl(match):
-            name = match.group(2)
+        Descriptions routinely point at each other ("overrides `stress_cmd`", "requires
+        migrator_source_hosts"), and those are the cross-references that make the reference usable.
+        Both quoted (`name`, 'name') and bare mentions are linked; bare ones only for names
+        containing an underscore, so ordinary prose words are never rewritten.
+
+        Fenced code blocks and already-formed links are left alone -- a sample command line must
+        stay copy-pasteable.
+        """
+
+        def target_for(name):
             target = index.get(name)
-            if not target:
-                return match.group(0)
-            if target.startswith(f"{self_page}#"):
-                target = target[len(self_page) :]
-            return f"[`{name}`]({target})"
+            if target and target.startswith(f"{self_page}#"):
+                return target[len(self_page) :]
+            return target
 
-        # only inside backticks or single quotes, so we never rewrite a real command line
-        return re.sub(r"(`|')([a-z][a-z0-9_]{3,})\1", repl, text)
+        def link_quoted(match):
+            name = match.group(2)
+            target = target_for(name)
+            return f"[`{name}`]({target})" if target else match.group(0)
+
+        def link_bare(match):
+            name = match.group(0)
+            target = target_for(name)
+            return f"[`{name}`]({target})" if target else name
+
+        bare_names = sorted((n for n in index if "_" in n), key=len, reverse=True)
+        bare_pattern = re.compile(rf"(?<![\w`/#.-])({'|'.join(map(re.escape, bare_names))})(?![\w`\]/-])")
+
+        out, in_fence = [], False
+        for line in text.splitlines():
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+                out.append(line)
+                continue
+            # headings carry the option's own anchor, and table rows are already linked
+            if in_fence or line.startswith(("#", "| ", "**default:**", "**type:**")):
+                out.append(line)
+                continue
+            linked = re.sub(r"(`|')([a-z][a-z0-9_]{3,})\1", link_quoted, line)
+            # protect the links we just made, plus any pre-existing ones, from the bare pass
+            parts = re.split(r"(\[[^\]]*\]\([^)]*\))", linked)
+            out.append("".join(p if i % 2 else bare_pattern.sub(link_bare, p) for i, p in enumerate(parts)))
+        return "\n".join(out)
 
     @classmethod
     def dump_help_config_markdown(cls):
@@ -8430,9 +8470,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
             if blurb:
                 page += f"\n{blurb}\n"
 
-            page += f"\n**{len(group_fields)} options.** Jump to: "
-            page += " · ".join(f"[{name}](#{name})" for name, _ in group_fields)
-            page += "\n"
+            page += f"\n**{len(group_fields)} options.**\n"
 
             for field_name, field in group_fields:
                 help_text = "<br>".join(strip_help_text(field.description).splitlines()) if field.description else ""
