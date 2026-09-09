@@ -405,6 +405,10 @@ minicloud_lightweight_memory: '4GiB'
 # One shard per vCPU. Both this and the memory above multiply across every guest in the test,
 # so the sct-runner (or dev host) has to be sized for the product.
 minicloud_lightweight_vcpus: 1
+# Extra OS memory for scylla-server via --reserve-memory.
+# By default, Scylla keeps about ~1.5 GiB on guests below ~22 GiB RAM, which can be too little
+# for sshd and SCT tools. Empty means do not pass this option (tests opt in).
+minicloud_scylla_reserve_memory: ''
 # Empty = no docker limit, the container may use the whole host. When set, this also becomes
 # the budget the preflight guest-memory gate measures against instead of host MemAvailable.
 minicloud_container_memory: ''

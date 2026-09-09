@@ -6,7 +6,7 @@ Minicloud is an AWS-API-compatible environment rather than a cloud of its own: i
 `cluster_backend: aws` and an endpoint override, and these options control the local minicloud
 service.
 
-**14 options.**
+**15 options.**
 
 
 <a id="minicloud_container_cpus"></a>
@@ -139,6 +139,17 @@ S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads). B
 **default:** scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com
 
 **type:** str | list[str] → list[str] (appendable)
+
+
+<a id="minicloud_scylla_reserve_memory"></a>
+
+## **minicloud_scylla_reserve_memory** / SCT_MINICLOUD_SCYLLA_RESERVE_MEMORY
+
+Extra memory reserved by scylla-server for the guest OS on lightweight minicloud guests, passed as --reserve-memory (for example, '3G'). Without this option, Scylla usually keeps about ~1.5GiB on guests below ~22GiB RAM, which may be too small for sshd and SCT helper tools; then sshd cannot fork and one-shot commands can be OOM-killed. Empty (default) means do not pass this option. Because this memory comes from Scylla own budget, tests must opt in. Ignored if [`append_scylla_args`](scylla-installation-and-configuration.md#append_scylla_args) already contains --memory or --reserve-memory
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 <a id="minicloud_skip_memory_check"></a>

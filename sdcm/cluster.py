@@ -204,6 +204,8 @@ from sdcm.utils.ldap import (
     DEFAULT_PWD_SUFFIX,
 )
 from sdcm.utils.remote_logger import get_system_logging_thread
+from sdcm.utils.minicloud.endpoint import is_minicloud_active
+from sdcm.utils.minicloud.preflight import scylla_reserve_memory
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
@@ -5495,11 +5497,36 @@ class BaseScyllaCluster:
         return "db_nodes_public_ip" if public_ip else "db_nodes_private_ip"
 
     def get_scylla_args(self):
-        return (
+        args = (
             self.params.get("append_scylla_args_oracle")
             if self.name.find("oracle") > 0
             else self.params.get("append_scylla_args")
         )
+        return self._append_minicloud_reserve_memory(args or "")
+
+    def _append_minicloud_reserve_memory(self, args: str) -> str:
+        """Leave the guest OS room to breathe on a lightweight minicloud guest.
+
+        Appended rather than configured, because append_scylla_args is one flat string: a
+        minicloud overlay that set it would replace whatever the test-case yaml put there,
+        silently dropping the abort-on-* guards every run relies on.
+        """
+        if not is_minicloud_active(self.params):
+            return args
+
+        tokens = args.split()
+        has_mem_arg = any(
+            token in ("-m", "--memory", "--reserve-memory") or token.startswith(("--memory=", "--reserve-memory="))
+            for token in tokens
+        )
+        if has_mem_arg:
+            return args
+
+        if not (reserve := scylla_reserve_memory(self.params)):
+            return args
+
+        self.log.info("minicloud: reserving %s of guest memory for the OS (--reserve-memory)", reserve)
+        return f"{args} --reserve-memory {reserve}".strip()
 
     def get_rack_nodes(self, rack: int) -> list:
         return sorted([node for node in self.nodes if node.rack == rack], key=lambda n: n.name)
