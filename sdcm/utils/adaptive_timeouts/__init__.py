@@ -46,8 +46,7 @@ def _get_decommission_timeout(
             node_info["tablets_enabled"] = True
             estimated = int(node_info_service.node_data_size_mb / node_info_service.expected_throughput)
             soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
-            hard_timeout = estimated * 4 + _STREAMING_OVERHEAD
-            return (soft_timeout, hard_timeout), node_info
+            return (soft_timeout, soft_timeout * 2), node_info
         else:
             # For non-tablet cases, calculate based on data size
             # rough estimation from previous runs almost 9h for 1TB
@@ -96,8 +95,7 @@ def _get_tablet_migration_timeout(
             node_info["tablets_enabled"] = True
             estimated = int(node_info_service.node_disk_size_mb * 0.9 / node_info_service.expected_throughput)
             soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
-            hard_timeout = estimated * 4 + _STREAMING_OVERHEAD
-            return (soft_timeout, hard_timeout), node_info
+            return (soft_timeout, soft_timeout * 2), node_info
         else:
             soft_timeout = max(int(node_info_service.node_disk_size_mb * 0.9 * 0.03), 7200)  # 2 hours minimum
             return (soft_timeout, None), node_info
