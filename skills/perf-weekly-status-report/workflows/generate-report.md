@@ -217,13 +217,15 @@ Also include runs with status `"running"`.
    Reading only the test-specific file is the classic mistake -- steps it does not mention
    (e.g. the i8g `1500000` read step) then look like they have no threshold, when they inherit 10 ms.
 
-9. **Decide FAILED from the run status only.** A run whose Argus `status` is `passed` is PASSED even
-   if one of its result tables reports FAIL/ERROR -- those were reviewed and dismissed. FAILED means
-   `status` is `failed` or `test_error`.
+9. **Badge the run's real Argus status; let the run status, not the tables, decide it.** Map
+   `passed` -> PASSED, `failed` -> FAILED, `test_error` -> ERROR (orange -- never folded into
+   FAILED; the two mean different things), `running` -> RUNNING (its own Summary line), `aborted` ->
+   excluded when the workload was re-run later, otherwise ABORTED. A run Argus marks `passed` stays
+   PASSED even if one of its result tables reports FAIL/ERROR -- those were reviewed and dismissed.
 
-10. **Keep only the latest run per (version, test, workload)** for the Overview. Earlier attempts
-    are not shown and are not counted in the Summary; the Summary's note line reports how many
-    scheduled runs actually ran and how many of those failed.
+10. **Keep only the latest run per (version, test, workload)** for the Overview. Earlier attempts are
+    neither shown nor counted; the Summary's note line -- how many scheduled runs actually ran and
+    how many of those failed -- is the only place they are accounted for.
 
 **Exit criteria:** Data organized by category > test > workload > step. Every run in the window is
 accounted for -- including those with zero result tables. CapacityReservationError runs are marked
@@ -233,7 +235,12 @@ for exclusion, thresholds are resolved, and each workload has one latest run sel
 
 **Entry criteria:** Filtered runs identified (from Phase 2).
 
-1. For each run with status `failed` or `test_error`, fetch linked issues:
+1. For each run with status `failed` or `test_error`, fetch linked issues. **Collect from every such
+   run that survived the exclusions, including ones superseded by a later attempt** -- an issue
+   linked to a failure a later run cleared is still an issue the week hit, and the New / Reproduced
+   tables are the week's issue ledger rather than a per-row index. They may therefore name a ticket
+   with no matching FAILED row in the Overview; say so in your summary to the user instead of
+   dropping it.
    ```bash
    argus issue list \
      --run-id <RUN_ID> \
@@ -296,12 +303,12 @@ for exclusion, thresholds are resolved, and each workload has one latest run sel
 1. Generate the HTML file with these sections:
    - Header (solid navy background `#1a237e`, title, date range). Subtitle text varies by build type: "Master (~dev) builds only" or "Release builds only".
    - Summary box. **Counts follow the Overview rows: the latest run per version, test and workload.** Total must equal Passed + Failed/Error + Running. Exclude manual re-runs, CapacityReservationError runs and aborted-then-re-run runs from the counts. List only the versions whose results are reported, one per line, each with its test count -- these add up to Total Tests. Add a note line giving the number of scheduled runs actually executed and how many failed.
-   - "Issues Found in the Runs" (auto-generated hierarchical text summary; this section was previously called "Conclusion")
-   - New Issues - Regression, then Reproduced Issues
+   - "Issues Found in the Runs" (warning banner; optional hierarchical summary. Previously called "Conclusion")
    - New Issues - Regression (issues created during the period, if any)
    - Reproduced Issues (pre-existing issues seen again this week)
-   - Overview table (grouped by workload, with Argus links in Link column)
-   - Detailed results (per-category tables with metrics + Argus links)
+   - Test Overview, one table per version (Cause and Issues columns, Argus link per row)
+
+   The report ends after the Test Overview. There is no Detailed Results section.
 
    **"Issues Found in the Runs" section** (between Summary and Overview):
    - Heading "Issues Found in the Runs" must use same style as "Summary" heading: `font-size:16px;font-weight:bold;padding-bottom:10px;`
@@ -317,7 +324,10 @@ for exclusion, thresholds are resolved, and each workload has one latest run sel
      </td></tr></table>
      ```
      This banner uses yellow background with red border and red bold text to stand out visually.
-   - Auto-generate **hierarchical** bullet-point lines summarizing the week's performance results
+   - The warning banner is the required content. The **hierarchical bullet-point summary is optional**
+     and usually omitted -- both reference renderings are banner-only, since the Cause and Issues
+     columns already carry the per-test detail. Add bullets only when the week needs narrative the
+     table cannot express. When you do:
    - Structure uses two levels:
      - **Top-level items**: Test name in bold, prefixed with `- ` (indented 15px from left)
      - **Sub-items**: Specific observations, prefixed with `&#8226;` bullet (indented 30px from left)
@@ -531,7 +541,8 @@ This ensures the user has final control over the section wording, warning banner
 13. Verify Summary lists the full version(s) with build date and revision hash
 14. Verify per-workload Argus links use `/test/` (singular), not `/tests/` (plural)
 15. Verify the report contains NO "Detailed Results" section (`grep -c 'Detailed Results'` must be 0)
-16. Verify no run marked `passed` in Argus is shown as FAILED
+16. Verify every badge matches the run's real Argus status -- no `test_error` rendered as FAILED, no
+     `passed` run shown as FAILED, no `running`/`aborted` run silently shown as PASSED
 17. Verify "Issues Found in the Runs" text was shown to user before final save
 18. Verify it uses hierarchical format (bold test names + indented sub-bullets)
 19. Verify issues are split into "New Issues - Regression" and "Reproduced Issues" sections

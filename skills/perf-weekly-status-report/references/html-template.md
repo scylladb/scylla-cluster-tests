@@ -190,8 +190,12 @@ above requires.
 <!-- Failed:  bgcolor="#dc3545" / background-color:#dc3545 -->
 <!-- Error:   bgcolor="#fd7e14" / background-color:#fd7e14 -->
 <!-- Running: bgcolor="#17a2b8" / background-color:#17a2b8 -->
-<!-- No Runs: bgcolor="#6c757d" / background-color:#6c757d -->
+<!-- Aborted: bgcolor="#6c757d" / background-color:#6c757d -->
 ```
+
+The badge shows the run's **real Argus status**: `passed` -> PASSED, `failed` -> FAILED,
+`test_error` -> **ERROR** (orange, never folded into FAILED -- a test that never produced a result
+is not a test that failed its checks), `running` -> RUNNING, `aborted` -> ABORTED.
 
 Avoid the older single-`<span>` form (`<span style="background-color:#28a745;color:#ffffff;...">`) --
 it renders in most clients but has no fallback when the background is stripped.

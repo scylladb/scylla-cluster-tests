@@ -86,7 +86,8 @@ Gmail only supports inline CSS styles on elements. Never use `<style>` tags, `<l
 
 **One row per workload per version: the LATEST run wins.** When a build re-ran a workload (or a
 sub-test was re-run in a later build), sort that workload's runs by `start_time` and keep the last
-one. Earlier attempts still count in the Summary totals but must not add extra overview rows.
+one. Earlier attempts are neither shown nor counted; the Summary's note line is the only place they
+are accounted for.
 
 **Per-version tables:** When the report spans multiple versions, create a separate Overview table for each version with a version label above it (e.g., "Version 2026.2.3"). When only a single version is present, show one table without a version label.
 
@@ -128,15 +129,26 @@ duration ERROR at decommission_nodes step (1,608 s, threshold 1,600 s)
 
 ### Result Status: the Argus Run Status Is Authoritative
 
-**A run whose Argus status is `passed` is PASSED, even if one of its result tables reports FAIL or
-ERROR.** Those table-level errors have already been reviewed and dismissed by whoever set the run
-status; re-flagging them as failures produces phantom regressions in the report.
+**Report the status Argus reports, and let the run status -- not the result tables -- decide it.**
 
-- FAILED <=> run `status` is `failed` or `test_error`.
-- PASSED <=> anything else, table statuses notwithstanding.
-- The same rule drives the Summary counts, so a `passed` run with an errored table counts as passed.
+**Show the run's real Argus status -- never fold one status into another.** `test_error` is an
+ERROR badge, not FAILED: the two mean different things (a test that ran and failed its checks vs a
+test that never produced a result), and collapsing them hides which is which.
 
-Cause text still comes from the failed result tables -- but only for runs that are genuinely failed.
+| Argus `status` | Badge | Colour | Counted as |
+|---|---|---|---|
+| `passed` | PASSED | `#28a745` green | passed |
+| `failed` | FAILED | `#dc3545` red | failed/error |
+| `test_error` | ERROR | `#fd7e14` orange | failed/error |
+| `running` | RUNNING | `#17a2b8` blue | running (its own line, neither passed nor failed) |
+| `aborted` | ABORTED | `#6c757d` gray | excluded when the workload was re-run later; otherwise its own line |
+
+A run's own status decides its badge, and **table statuses never override it**: a run Argus marks
+`passed` stays PASSED even if one of its result tables reports FAIL or ERROR. Those table-level
+errors have already been reviewed and dismissed by whoever set the run status; re-flagging them
+produces phantom regressions.
+
+Cause text still comes from the failed result tables -- but only for runs that are not `passed`.
 
 ### Error Thresholds: Resolve `default | step` Across TWO Files
 
@@ -473,6 +485,19 @@ Note: the Argus payload does NOT include Jira creation dates -- but you can look
 
 **`argus issue list` frequently returns `[]` even for failed runs.** Linking a run to a Jira ticket is a manual step in Argus, so an unlinked failure is normal, not a collection bug. When every failed run returns no issues, do not conclude there are no relevant issues -- ask the user whether a known ticket covers the failure, and say plainly in your summary that the attribution came from them rather than from Argus.
 
+### Issue Collection Spans Every Counted Run, Not Just the Reported Rows
+
+**Collect issues from every run that survived the exclusions -- including runs superseded by a later
+attempt -- even though only the latest run per version/test/workload reaches the Overview.**
+
+An issue linked to a failure that a later run cleared is still an issue the week hit, and the New /
+Reproduced tables are the week's issue ledger, not a per-row index. So the tables can legitimately
+name a ticket with no matching FAILED row in the Overview: for example a setUp failure that was
+re-run successfully an hour later. Note this in your summary to the user rather than dropping it.
+
+The `Investigation in progress` marker works the other way round -- it is a property of a rendered
+row, so only runs that reach the Overview can carry it.
+
 ### Resolve new vs reproduced from Jira, not from the user
 
 Fetch each issue's `created` field via the Atlassian MCP `getJiraIssue` tool (`fields: ["summary","status","created","resolution"]`) and compare it to the report window:
@@ -488,7 +513,7 @@ The output HTML file must contain:
 
 1. **Header** -- Report title, date range, "Master (~dev) builds only" indicator
 2. **Summary** -- Title format: "Summary for Scylla version(s) {full_version}", listing only the versions whose results are reported, each with its test count. Body: Total tests, passed, failed/error, running. **Counts follow the Overview: one per reported row -- the latest run per version, test and workload** -- so the per-version counts add up to Total Tests and the reader can reconcile the box against the table. Add a note line underneath giving the number of scheduled runs actually executed in the period and how many of those failed, so superseded re-runs are still visible: *"Latest run per version, test and workload; 52 scheduled runs in total were executed in the period (13 of them failed, the rest of the failures were superseded by a later run). Manually triggered ad-hoc re-runs are not included."*
-3. **Issues Found in the Runs** -- (formerly "Conclusion") Hierarchical bullet-point lines summarizing weekly results. Structure: top-level items are test names in bold (prefixed with `- `), sub-items are specific observations (prefixed with `&#8226;`). Version numbers must be bold. Do NOT mention CapacityReservationError runs (they are excluded from the report entirely). Do NOT mention issue numbers per test in the conclusion body -- issue references belong only in the warning banner; the Issues column in Overview and the Known Issues table provide the per-run linkage. **Per-version grouping:** When the report spans multiple versions, create a separate list per version with a bold version header (e.g., "Version 2026.2.3:"). When only a single version is present, omit the version header and list tests directly. **Warning banner** (optional): After collecting all issues, present the de-duplicated list to the user and ask which issues (if any) should be highlighted in a warning banner at the top of the section. If the user selects issues, render a yellow/red banner with `&#9888;` icon stating "No updates on [issues] during last week." A second `&#9888;` line lists the issues opened during the period ("New issues opened during last week: ..."). **Issue numbers in the banner must be clickable links** (e.g., `<a href="...">SCYLLADB-3459</a>`), not plain text. If the user selects none, omit the banner entirely. The agent MUST print the generated conclusion text to the user and ask for confirmation or edits BEFORE saving it into the final HTML report file. This ensures the user can review and adjust the conclusion wording.
+3. **Issues Found in the Runs** -- (formerly "Conclusion") The warning banner is the required content; the hierarchical bullet-point summary underneath it is **optional** and is usually omitted -- both reference renderings are banner-only, because the Cause and Issues columns already carry the per-test detail. Include bullets only when the week needs narrative the table cannot express. When included: top-level items are test names in bold (prefixed with `- `), sub-items are specific observations (prefixed with `&#8226;`), and version numbers are bold. Do NOT mention CapacityReservationError runs (they are excluded from the report entirely). Do NOT mention issue numbers per test in the conclusion body -- issue references belong only in the warning banner; the Issues column in Overview and the Known Issues table provide the per-run linkage. **Per-version grouping:** When the report spans multiple versions, create a separate list per version with a bold version header (e.g., "Version 2026.2.3:"). When only a single version is present, omit the version header and list tests directly. **Warning banner** (optional): After collecting all issues, present the de-duplicated list to the user and ask which issues (if any) should be highlighted in a warning banner at the top of the section. If the user selects issues, render a yellow/red banner with `&#9888;` icon stating "No updates on [issues] during last week." A second `&#9888;` line lists the issues opened during the period ("New issues opened during last week: ..."). **Issue numbers in the banner must be clickable links** (e.g., `<a href="...">SCYLLADB-3459</a>`), not plain text. If the user selects none, omit the banner entirely. The agent MUST print the generated conclusion text to the user and ask for confirmation or edits BEFORE saving it into the final HTML report file. This ensures the user can review and adjust the conclusion wording.
 4. **New Issues - Regression** -- Shown after "Issues Found in the Runs" when new issues exist. Lists Jira issues whose tickets were created during the report period (i.e., newly filed regressions). Classify by fetching each issue's `created` date from Jira (Atlassian MCP `getJiraIssue`) and comparing it to the report window; only ask the user if Jira is unreachable. If no new issues, this section is omitted.
 5. **Reproduced Issues** -- Always shown after New Issues (or after "Issues Found in the Runs" if no new issues). Lists issues linked to runs whose Jira tickets were created before the report period. If no reproduced issues, displays "No reproduced issues in this period."
 6. **Test Overview** -- Grouped by category, then test, then workload. Columns: Category | Test | Workload | Status | Cause | Issues | Link. Cause states the failed value and its error threshold, one line per failed metric; it is empty for PASSED rows. Issues shows linked Jira keys, or `Investigation in progress` for a FAILED row with no ticket. Microbenchmarks use "-" as workload. **When multiple versions exist -- including several master builds -- create a separate table per version with the full version as a label above it; with a single version, show one table without a label.**
@@ -520,7 +545,9 @@ A valid weekly status report:
 - [ ] Overview table: grouped by category/test/workload with Argus links in Link column
 - [ ] Overview table: microbenchmarks appear with "-" as workload
 - [ ] Overview Status column: just the status badge (PASSED/FAILED/ERROR/RUNNING) -- no counts
-- [ ] Running tests included in Overview with RUNNING badge (blue #17a2b8) when they match version filter
+- [ ] Every badge shows the run's real Argus status -- `test_error` renders as ERROR (orange #fd7e14), never folded into FAILED
+- [ ] Running tests included in Overview with RUNNING badge (blue #17a2b8) when they match version filter, counted on their own Summary line
+- [ ] Aborted runs: excluded when the workload was re-run later, otherwise shown with an ABORTED badge (gray #6c757d) rather than silently passing
 - [ ] Overview columns: Category | Test | Workload | Status | Issues | Link (no Runs column, no Version column)
 - [ ] Overview Issues column: linked Jira keys as clickable links, comma-separated; empty for runs with no issues
 - [ ] Overview: separate table per FULL version (master builds included) with a version header when several exist; no header with a single version
@@ -531,7 +558,7 @@ A valid weekly status report:
 - [ ] Cause with several failed metrics puts each metric on its own line (`<br>`), never joined with `;`
 - [ ] Thresholds resolved as `default | step` across `defaults/test_default.yaml` + the test's threshold YAML, read at the run's `scm_revision_id`
 - [ ] A step with no explicit override falls back to the default P99 limit (10 ms) -- never reported as "no threshold"
-- [ ] FAILED is decided by the Argus run status alone; a `passed` run with an errored result table stays PASSED
+- [ ] The run status alone decides the badge; a `passed` run with an errored result table stays PASSED
 - [ ] Report contains NO "Detailed Results" section
 - [ ] "Issues Found in the Runs" section grouped by version when multiple versions present; single list when only one version
 - [ ] Argus link format uses `/test/` (singular), not `/tests/` (plural)
@@ -539,8 +566,7 @@ A valid weekly status report:
 - [ ] Main content table width is 950px; inner tables at 100%
 - [ ] Output file is NOT saved into the SCT repository (scratchpad/temp dir or home dir)
 - [ ] "Issues Found in the Runs" text is printed to the user for review/editing BEFORE being saved into the HTML report
-- [ ] "Issues Found in the Runs" uses hierarchical format: bold test names as top-level items, specific observations as sub-bullets
-- [ ] Version numbers in that section are bold (e.g., `<b>2026.2.3</b>`)
+- [ ] "Issues Found in the Runs" carries the warning banner; hierarchical bullets are optional and, when present, use bold test names as top-level items with indented sub-bullets and bold version numbers
 - [ ] That section does not mention CapacityReservationError runs (they are excluded from the report entirely)
 - [ ] Warning banner: user asked to select which issues to highlight from the found issues list; omitted if user selects none or no issues found
 - [ ] Warning banner: issue numbers rendered as clickable links, not plain text
