@@ -21,7 +21,6 @@ package; use absolute imports if you ever need the stdlib one here.
 import ast
 import dataclasses
 import pathlib
-from distutils.util import strtobool
 from typing import List, Union
 
 import yaml
@@ -30,6 +29,27 @@ from pydantic.fields import FieldInfo
 from pydantic.functional_validators import BeforeValidator
 from pydantic.types import confloat
 from typing_extensions import Annotated
+
+
+#: Accepted string spellings of true/false, matching what `distutils.util.strtobool` accepted.
+_TRUTHY = frozenset({"y", "yes", "t", "true", "on", "1"})
+_FALSY = frozenset({"n", "no", "f", "false", "off", "0"})
+
+
+def strtobool(value: str) -> bool:
+    """Convert a truthy/falsy string to a bool.
+
+    Replaces `distutils.util.strtobool`: `distutils` left the standard library in Python 3.12, and
+    only resolves today through setuptools' shim -- so the import worked by accident of setuptools
+    being installed, while `pyproject.toml` still allows 3.12 and 3.13. Accepts exactly the same
+    spellings, and raises ValueError on anything else, as before.
+    """
+    normalised = str(value).strip().lower()
+    if normalised in _TRUTHY:
+        return True
+    if normalised in _FALSY:
+        return False
+    raise ValueError(f"invalid truth value {value!r}")
 
 
 class IgnoredType:
