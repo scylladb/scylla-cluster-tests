@@ -1,11 +1,13 @@
 # Upgrade tests
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade.
 
 **20 options.**
 
+
+<a id="disable_raft"></a>
 
 ## **disable_raft** / SCT_DISABLE_RAFT
 
@@ -16,6 +18,8 @@ Flag to disable Raft consensus for LWT operations.
 **type:** bool
 
 
+<a id="enable_tablets_on_upgrade"></a>
+
 ## **enable_tablets_on_upgrade** / SCT_ENABLE_TABLETS_ON_UPGRADE
 
 By default, the tablets feature is disabled. With this parameter, created for the upgrade test, the tablets feature will only be enabled after the upgrade
@@ -24,6 +28,8 @@ By default, the tablets feature is disabled. With this parameter, created for th
 
 **type:** bool
 
+
+<a id="enable_truncate_checks_on_node_upgrade"></a>
 
 ## **enable_truncate_checks_on_node_upgrade** / SCT_ENABLE_TRUNCATE_CHECKS_ON_NODE_UPGRADE
 
@@ -34,6 +40,8 @@ Enables or disables truncate checks on each node upgrade and rollback
 **type:** bool
 
 
+<a id="enable_views_with_tablets_on_upgrade"></a>
+
 ## **enable_views_with_tablets_on_upgrade** / SCT_ENABLE_VIEWS_WITH_TABLETS_ON_UPGRADE
 
 Enables creating materialized views in keyspaces using tablets by adding an experimental feature.It should not be used when upgrading to versions before 2025.1 and it should be used for upgradeswhere we create such views.
@@ -42,6 +50,8 @@ Enables creating materialized views in keyspaces using tablets by adding an expe
 
 **type:** bool
 
+
+<a id="large_partition_stress_during_upgrade"></a>
 
 ## **large_partition_stress_during_upgrade** / SCT_LARGE_PARTITION_STRESS_DURING_UPGRADE
 
@@ -53,6 +63,8 @@ Stress command to be run during rolling upgrade while nodes are being upgraded. 
 * appendable
 
 
+<a id="new_scylla_repo"></a>
+
 ## **new_scylla_repo** / SCT_NEW_SCYLLA_REPO
 
 URL to the Scylla repository for new versions.
@@ -62,6 +74,8 @@ URL to the Scylla repository for new versions.
 **type:** str
 * appendable
 
+
+<a id="new_version"></a>
 
 ## **new_version** / SCT_NEW_VERSION
 
@@ -73,6 +87,8 @@ Assign new upgrade version, use it to upgrade to specific minor release. eg: 3.0
 * appendable
 
 
+<a id="num_nodes_to_rollback"></a>
+
 ## **num_nodes_to_rollback** / SCT_NUM_NODES_TO_ROLLBACK
 
 Number of nodes to upgrade and rollback in test_generic_cluster_upgrade
@@ -82,6 +98,8 @@ Number of nodes to upgrade and rollback in test_generic_cluster_upgrade
 **type:** int
 
 
+<a id="run_gemini_in_rolling_upgrade"></a>
+
 ## **run_gemini_in_rolling_upgrade** / SCT_RUN_GEMINI_IN_ROLLING_UPGRADE
 
 Enable running Gemini workload during rolling upgrade test. Default is false.
@@ -90,6 +108,8 @@ Enable running Gemini workload during rolling upgrade test. Default is false.
 
 **type:** bool
 
+
+<a id="stress_after_cluster_upgrade"></a>
 
 ## **stress_after_cluster_upgrade** / SCT_STRESS_AFTER_CLUSTER_UPGRADE
 
@@ -101,6 +121,8 @@ Stress command to be run after full upgrade - usually used to read the dataset f
 * appendable
 
 
+<a id="stress_before_upgrade"></a>
+
 ## **stress_before_upgrade** / SCT_STRESS_BEFORE_UPGRADE
 
 Stress command to be run before upgrade starts (preload/validation stage). This workload runs before any nodes are upgraded and can use CL=ALL for data validation.
@@ -110,6 +132,8 @@ Stress command to be run before upgrade starts (preload/validation stage). This 
 **type:** str | list[str]
 * appendable
 
+
+<a id="stress_during_entire_upgrade"></a>
 
 ## **stress_during_entire_upgrade** / SCT_STRESS_DURING_ENTIRE_UPGRADE
 
@@ -121,6 +145,8 @@ Stress command to be run during the upgrade - user should take care for suitable
 * appendable
 
 
+<a id="target_upgrade_version"></a>
+
 ## **target_upgrade_version** / SCT_TARGET_UPGRADE_VERSION
 
 The target version to upgrade Scylla to.
@@ -130,6 +156,8 @@ The target version to upgrade Scylla to.
 **type:** str
 * appendable
 
+
+<a id="upgrade_node_packages"></a>
 
 ## **upgrade_node_packages** / SCT_UPGRADE_NODE_PACKAGES
 
@@ -141,6 +169,8 @@ Specifies the packages to be upgraded on the node.
 * appendable
 
 
+<a id="upgrade_node_system"></a>
+
 ## **upgrade_node_system** / SCT_UPGRADE_NODE_SYSTEM
 
 Upgrade system packages on nodes before upgrading Scylla. Enabled by default.
@@ -150,6 +180,8 @@ Upgrade system packages on nodes before upgrading Scylla. Enabled by default.
 **type:** bool
 
 
+<a id="upgrade_sstables"></a>
+
 ## **upgrade_sstables** / SCT_UPGRADE_SSTABLES
 
 Whether to upgrade sstables as part of upgrade_node or not
@@ -158,6 +190,8 @@ Whether to upgrade sstables as part of upgrade_node or not
 
 **type:** bool
 
+
+<a id="verify_data_after_entire_test"></a>
 
 ## **verify_data_after_entire_test** / SCT_VERIFY_DATA_AFTER_ENTIRE_TEST
 
@@ -169,6 +203,8 @@ Stress command to verify data integrity after the entire test.
 * appendable
 
 
+<a id="verify_stress_after_cluster_upgrade"></a>
+
 ## **verify_stress_after_cluster_upgrade** / SCT_VERIFY_STRESS_AFTER_CLUSTER_UPGRADE
 
 Stress command(s) run after every node has been upgraded, to verify the upgraded cluster. See [`stress_cmd`](stress-commands-and-load-generation.md#stress_cmd) for the format.
@@ -179,6 +215,8 @@ Stress command(s) run after every node has been upgraded, to verify the upgraded
 * appendable
 
 
+<a id="verify_stress_after_migration"></a>
+
 ## **verify_stress_after_migration** / SCT_VERIFY_STRESS_AFTER_MIGRATION
 
 Stress command to verify data after migration
@@ -188,6 +226,8 @@ Stress command to verify data after migration
 **type:** str
 * appendable
 
+
+<a id="write_stress_during_entire_test"></a>
 
 ## **write_stress_during_entire_test** / SCT_WRITE_STRESS_DURING_ENTIRE_TEST
 
