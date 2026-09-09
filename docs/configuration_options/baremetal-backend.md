@@ -4,7 +4,7 @@
 
 Running against pre-existing hosts that SCT does not provision.
 
-**7 options.** Jump to: [db_nodes_private_ip](#db_nodes_private_ip) · [db_nodes_public_ip](#db_nodes_public_ip) · [loaders_private_ip](#loaders_private_ip) · [loaders_public_ip](#loaders_public_ip) · [monitor_nodes_private_ip](#monitor_nodes_private_ip) · [monitor_nodes_public_ip](#monitor_nodes_public_ip) · [s3_baremetal_config](#s3_baremetal_config)
+**7 options.**
 
 
 ## **db_nodes_private_ip** / SCT_DB_NODES_PRIVATE_IP

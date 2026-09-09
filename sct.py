@@ -1606,7 +1606,8 @@ def update_conf_docs():
     written = set()
     for rel_path, content in pages.items():
         path = root / rel_path
-        path.write_text(content)
+        # trailing newline, or pre-commit's end-of-file-fixer rewrites every page on each run
+        path.write_text(content.rstrip("\n") + "\n")
         written.add(path.resolve())
 
     # a renamed or removed group would otherwise leave an orphan page behind

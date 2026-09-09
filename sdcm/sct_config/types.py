@@ -9,7 +9,7 @@
 #
 # See LICENSE for more details.
 #
-# Copyright (c) 2020 ScyllaDB
+# Copyright (c) 2026 ScyllaDB
 
 """
 Custom Pydantic types, input converters and the SctField descriptor used by the SCT configuration.
