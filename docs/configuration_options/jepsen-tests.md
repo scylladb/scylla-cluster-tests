@@ -1,11 +1,13 @@
 # Jepsen tests
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 Jepsen consistency test runs.
 
 **4 options.**
 
+
+<a id="jepsen_scylla_repo"></a>
 
 ## **jepsen_scylla_repo** / SCT_JEPSEN_SCYLLA_REPO
 
@@ -16,6 +18,8 @@ Link to the git repository with Jepsen Scylla tests
 **type:** str (appendable)
 
 
+<a id="jepsen_test_cmd"></a>
+
 ## **jepsen_test_cmd** / SCT_JEPSEN_TEST_CMD
 
 Jepsen test command (e.g., 'test-all')
@@ -25,6 +29,8 @@ Jepsen test command (e.g., 'test-all')
 **type:** str | list[str] → list[str] (appendable)
 
 
+<a id="jepsen_test_count"></a>
+
 ## **jepsen_test_count** / SCT_JEPSEN_TEST_COUNT
 
 Possible number of reruns of single Jepsen test command
@@ -33,6 +39,8 @@ Possible number of reruns of single Jepsen test command
 
 **type:** int
 
+
+<a id="jepsen_test_run_policy"></a>
 
 ## **jepsen_test_run_policy** / SCT_JEPSEN_TEST_RUN_POLICY
 

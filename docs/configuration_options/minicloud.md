@@ -1,6 +1,6 @@
 # Minicloud
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with
 `cluster_backend: aws` and an endpoint override, and these options control the local minicloud
@@ -8,6 +8,8 @@ service.
 
 **14 options.**
 
+
+<a id="minicloud_container_cpus"></a>
 
 ## **minicloud_container_cpus** / SCT_MINICLOUD_CONTAINER_CPUS
 
@@ -18,6 +20,8 @@ Cap the minicloud container's CPU allowance, in docker --cpus form (e.g. '8' or 
 **type:** str (appendable)
 
 
+<a id="minicloud_container_memory"></a>
+
 ## **minicloud_container_memory** / SCT_MINICLOUD_CONTAINER_MEMORY
 
 Cap the minicloud container's memory (e.g. '32GiB'). Empty means no docker limit, so the container can consume the whole host. Setting it also makes this, rather than the host's free memory, the budget the preflight guest-memory gate measures against
@@ -26,6 +30,8 @@ Cap the minicloud container's memory (e.g. '32GiB'). Empty means no docker limit
 
 **type:** str (appendable)
 
+
+<a id="minicloud_container_name"></a>
 
 ## **minicloud_container_name** / SCT_MINICLOUD_CONTAINER_NAME
 
@@ -36,6 +42,8 @@ Name of the minicloud docker container. Change it to run two emulators on one ho
 **type:** str (appendable)
 
 
+<a id="minicloud_docker_image"></a>
+
 ## **minicloud_docker_image** / SCT_MINICLOUD_DOCKER_IMAGE
 
 Explicit minicloud image override. Empty means the renovate-managed default from defaults/docker_images/minicloud/ (exposed as [`stress_image`](stress-commands-and-load-generation.md#stress_image).minicloud)
@@ -44,6 +52,8 @@ Explicit minicloud image override. Empty means the renovate-managed default from
 
 **type:** str (appendable)
 
+
+<a id="minicloud_endpoint_url"></a>
 
 ## **minicloud_endpoint_url** / SCT_MINICLOUD_ENDPOINT_URL
 
@@ -54,6 +64,8 @@ EC2 API endpoint URL for minicloud. When set, SCT adapts for minicloud limitatio
 **type:** str
 
 
+<a id="minicloud_gcs_bucket"></a>
+
 ## **minicloud_gcs_bucket** / SCT_MINICLOUD_GCS_BUCKET
 
 GCS bucket for minicloud GCE image staging. Empty means derive <project>-minicloud-staging and create it on demand
@@ -62,6 +74,8 @@ GCS bucket for minicloud GCE image staging. Empty means derive <project>-miniclo
 
 **type:** str (appendable)
 
+
+<a id="minicloud_keep_alive"></a>
 
 ## **minicloud_keep_alive** / SCT_MINICLOUD_KEEP_ALIVE
 
@@ -72,6 +86,8 @@ Leave the minicloud container running after the test instead of tearing it down 
 **type:** bool
 
 
+<a id="minicloud_lightweight"></a>
+
 ## **minicloud_lightweight** / SCT_MINICLOUD_LIGHTWEIGHT
 
 Enable lightweight mode for minicloud deployments
@@ -80,6 +96,8 @@ Enable lightweight mode for minicloud deployments
 
 **type:** bool
 
+
+<a id="minicloud_lightweight_memory"></a>
 
 ## **minicloud_lightweight_memory** / SCT_MINICLOUD_LIGHTWEIGHT_MEMORY
 
@@ -90,6 +108,8 @@ Memory allocation for lightweight minicloud deployments
 **type:** str (appendable)
 
 
+<a id="minicloud_lightweight_vcpus"></a>
+
 ## **minicloud_lightweight_vcpus** / SCT_MINICLOUD_LIGHTWEIGHT_VCPUS
 
 vCPUs per guest in lightweight mode. Scylla runs one shard per vCPU, so this multiplies with [`minicloud_lightweight_memory`](#minicloud_lightweight_memory) across every guest in the test — raise it only on a host with cores to spare
@@ -98,6 +118,8 @@ vCPUs per guest in lightweight mode. Scylla runs one shard per vCPU, so this mul
 
 **type:** int
 
+
+<a id="minicloud_regions"></a>
 
 ## **minicloud_regions** / SCT_MINICLOUD_REGIONS
 
@@ -108,6 +130,8 @@ Narrow the AWS regions minicloud prepares (default: every SCT-supported region; 
 **type:** str | list[str] → list[str] (appendable)
 
 
+<a id="minicloud_s3_passthrough_buckets"></a>
+
 ## **minicloud_s3_passthrough_buckets** / SCT_MINICLOUD_S3_PASSTHROUGH_BUCKETS
 
 S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads). Backend-independent: GCE runs reach S3 for the same content
@@ -117,6 +141,8 @@ S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads). B
 **type:** str | list[str] → list[str] (appendable)
 
 
+<a id="minicloud_skip_memory_check"></a>
+
 ## **minicloud_skip_memory_check** / SCT_MINICLOUD_SKIP_MEMORY_CHECK
 
 Skip the conservative host-memory preflight gate — for development machines whose owner knows the workload's real footprint; an oversized test then dies mid-run as a container OOM kill (exit 137)
@@ -125,6 +151,8 @@ Skip the conservative host-memory preflight gate — for development machines wh
 
 **type:** bool
 
+
+<a id="minicloud_state_dir"></a>
 
 ## **minicloud_state_dir** / SCT_MINICLOUD_STATE_DIR
 
