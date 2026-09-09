@@ -97,11 +97,6 @@ from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS, nested_env_subkey
 
 _SIZING_RESOLUTION_CACHE: dict[tuple, tuple[str, str]] = {}
 
-<<<<<<< HEAD
-||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
-LOGGER = logging.getLogger(__name__)
-
-=======
 LOGGER = logging.getLogger(__name__)
 
 _ARCH_IMAGE_MARKERS: dict[str, dict[str, str]] = {
@@ -211,7 +206,6 @@ def substitute_arch_markers(template: str, arch: str) -> str:
             resolved = resolved.replace(marker, values[arch])
     return resolved
 
->>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
 
 def _nested_env_subkey(env_key: str, field_env: str, sep: str) -> str | None:
     """Return the nested sub-key of *env_key* for *field_env* under separator *sep*, or None if it doesn't nest under it.
@@ -2903,13 +2897,6 @@ class SCTConfiguration(BaseModel):
 
         self._apply_resolved_placement()
 
-<<<<<<< HEAD
-||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
-        # snapshot the original AMI params before resolution, so AWS region fallback can
-        # re-resolve them for a relocated region
-        self._ami_params_snapshot = {key: self.get(key) for key in self.ami_id_params}
-
-=======
         # snapshot the original AMI params before resolution, so AWS region fallback can
         # re-resolve them for a relocated region
         self._validate_loader_arch_supports_stress_tools()
@@ -2917,7 +2904,6 @@ class SCTConfiguration(BaseModel):
 
         self._ami_params_snapshot = {key: self.get(key) for key in self.ami_id_params}
 
->>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
         # 5) overwrite AMIs
         for key in self.ami_id_params:
             if param := self.get(key):
@@ -3708,89 +3694,6 @@ class SCTConfiguration(BaseModel):
         Raises:
             ValueError: If a constraint dict cannot be resolved to any instance.
         """
-<<<<<<< HEAD
-        SKIP_BACKENDS = {"docker", "baremetal", "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"}
-        BACKEND_TO_CLOUD = {
-            "aws": "aws",
-            "aws-siren": "aws",
-            "k8s-eks": "aws",
-            "gce": "gce",
-            "gce-siren": "gce",
-            "k8s-gke": "gce",
-            "azure": "azure",
-            "oci": "oci",
-            "xcloud": env.get("xcloud_provider", None),
-        }
-        ROLE_PARAMS = {
-            "aws": {
-                "db": "instance_type_db",
-                "db_oracle": "instance_type_db_oracle",
-                "zero_token": "zero_token_instance_type_db",
-                "loader": "instance_type_loader",
-                "monitor": "instance_type_monitor",
-            },
-            "gce": {
-                "db": "gce_instance_type_db",
-                "loader": "gce_instance_type_loader",
-                "monitor": "gce_instance_type_monitor",
-            },
-            "azure": {
-                "db": "azure_instance_type_db",
-                "db_oracle": "azure_instance_type_db_oracle",
-                "loader": "azure_instance_type_loader",
-                "monitor": "azure_instance_type_monitor",
-            },
-            "oci": {
-                "db": "oci_instance_type_db",
-                "db_oracle": "oci_instance_type_db_oracle",
-                "loader": "oci_instance_type_loader",
-                "monitor": "oci_instance_type_monitor",
-            },
-        }
-
-||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
-        SKIP_BACKENDS = {"docker", "baremetal", "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"}
-        BACKEND_TO_CLOUD = {
-            "aws": "aws",
-            "aws-siren": "aws",
-            "k8s-eks": "aws",
-            "gce": "gce",
-            "gce-siren": "gce",
-            "k8s-gke": "gce",
-            "azure": "azure",
-            "oci": "oci",
-            "xcloud": env.get("xcloud_provider", None),
-        }
-        ROLE_PARAMS = {
-            "aws": {
-                "db": "instance_type_db",
-                "db_oracle": "instance_type_db_oracle",
-                "zero_token": "zero_token_instance_type_db",
-                "loader": "instance_type_loader",
-                "monitor": "instance_type_monitor",
-            },
-            "gce": {
-                "db": "gce_instance_type_db",
-                "db_oracle": "gce_instance_type_db_oracle",
-                "loader": "gce_instance_type_loader",
-                "monitor": "gce_instance_type_monitor",
-            },
-            "azure": {
-                "db": "azure_instance_type_db",
-                "db_oracle": "azure_instance_type_db_oracle",
-                "loader": "azure_instance_type_loader",
-                "monitor": "azure_instance_type_monitor",
-            },
-            "oci": {
-                "db": "oci_instance_type_db",
-                "db_oracle": "oci_instance_type_db_oracle",
-                "loader": "oci_instance_type_loader",
-                "monitor": "oci_instance_type_monitor",
-            },
-        }
-
-=======
->>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
         backend = (env.get("cluster_backend") if env else None) or self.get("cluster_backend")
         if backend in _SIZING_SKIP_BACKENDS:
             self.log.info("Skipping instance size resolution for backend %s", backend)
@@ -4085,100 +3988,6 @@ class SCTConfiguration(BaseModel):
             )
             return default
 
-<<<<<<< HEAD
-||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
-    # perf_gradual_throttle_steps dict-entry fields: (key, is_valid, description-for-error-message)
-    _THROTTLE_STEP_FIELD_CHECKS: ClassVar[tuple] = (
-        ("threads", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
-        ("concurrency", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
-        ("rate", lambda v: isinstance(v, str), "a string"),
-        ("duration", lambda v: isinstance(v, str) and v, "a non-empty string"),
-        ("wait_no_compactions", lambda v: isinstance(v, bool), "a boolean"),
-    )
-
-    @staticmethod
-    def _validate_throttle_step_dict(workload: str, step_idx: int, step: dict) -> None:
-        """Validate a single dict-format perf_gradual_throttle_steps entry."""
-        if not step:
-            raise ValueError(
-                f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
-                f"dict must have at least one key (threads, concurrency, or rate)"
-            )
-        for key, is_valid, description in SCTConfiguration._THROTTLE_STEP_FIELD_CHECKS:
-            if key in step and not is_valid(step[key]):
-                raise ValueError(
-                    f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
-                    f"'{key}' must be {description}, got {step[key]!r}"
-                )
-
-    def _validate_perf_gradual_throttle_steps(self):
-        """Validate perf_gradual_throttle_steps configuration parameter."""
-        if not (performance_throughput_params := self.get("perf_gradual_throttle_steps")):
-            return
-
-        for workload, params in performance_throughput_params.items():
-            if not isinstance(params, list):
-                raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
-
-            # Validate each step - can be string, int (backward compatible), or dict (new format)
-            # Convert integers to strings for backward compatibility
-            for step_idx, step in enumerate(params):
-                if isinstance(step, int):
-                    # Integer format - convert to string for backward compatibility
-                    params[step_idx] = str(step)
-                elif isinstance(step, str):
-                    # String format for backward compatibility (cassandra-stress)
-                    continue
-                elif isinstance(step, dict):
-                    self._validate_throttle_step_dict(workload, step_idx, step)
-                else:
-                    raise ValueError(
-                        f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
-                        f"each step must be a string, int, or dict, got {type(step).__name__}"
-                    )
-
-            # Validate perf_gradual_threads if using string format or if dict steps don't have threads
-            has_dict_steps = any(isinstance(step, dict) for step in params)
-            all_dict_steps_have_threads = all(
-                isinstance(step, dict) and "threads" in step for step in params if isinstance(step, dict)
-            )
-
-            # Only require perf_gradual_threads if using string format or dict without threads
-            if not has_dict_steps or not all_dict_steps_have_threads:
-                if not (gradual_threads := self.get("perf_gradual_threads")):
-                    raise ValueError(
-                        "perf_gradual_threads should be defined when using string format "
-                        "or when dict steps don't specify threads"
-                    )
-
-                if workload not in gradual_threads:
-                    raise ValueError(
-                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter"
-                    )
-
-                if not isinstance(gradual_threads[workload], list | int):
-                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
-
-                if isinstance(gradual_threads[workload], int):
-                    gradual_threads[workload] = [gradual_threads[workload]]
-
-                for thread_count in gradual_threads[workload]:
-                    if not isinstance(thread_count, int):
-                        raise ValueError(
-                            f"Invalid thread count type for '{workload}': {thread_count} "
-                            f"(type: {type(thread_count).__name__})"
-                        )
-
-                # The value of perf_gradual_threads[load] must be either:
-                #   - a single-element list (applied to all throttle steps) or integer
-                #   - a list with the same length as perf_gradual_throttle_steps[workload] (one thread count per step).
-                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
-                    raise ValueError(
-                        f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
-                        f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
-                    )
-
-=======
     # perf_gradual_throttle_steps dict-entry fields: (key, is_valid, description-for-error-message)
     _THROTTLE_STEP_FIELD_CHECKS: ClassVar[tuple] = (
         ("threads", lambda v: isinstance(v, int) and v > 0, "a positive integer"),
@@ -4404,7 +4213,6 @@ class SCTConfiguration(BaseModel):
                         f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
                     )
 
->>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
     def _validate_docker_simulated_racks(self) -> None:
         """Reject `simulated_racks` on Docker images that predate the --dc/--rack entrypoint arguments.
 
