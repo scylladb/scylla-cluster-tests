@@ -39,6 +39,7 @@ Each node directory (`db-node-<id>/`) contains:
 | `setup_scripts_errors.log` | Errors from node setup scripts |
 | `scylla_doctor.vitals.json` | Scylla Doctor health check results |
 | `kallsyms_<timestamp>` | Kernel symbol table (Azure/OCI, for stack trace symbolization) |
+| `perf-data.tar.zst` | `perf record` recordings of the `scylla-perf-collector` service (`/var/log/scylla-perf/perf.data.*`). The service is stopped at the start of teardown so the run's recording is finalized. Present only when the service is installed and recorded something |
 
 ## Loader Node Logs
 
