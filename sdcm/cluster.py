@@ -6061,6 +6061,16 @@ class BaseScyllaCluster:
         self.log.info("Set _nemesis_termination_event")
         self.log.debug("There are %s nemesis threads currently running", len(self.nemesis_threads))
 
+        # Nemesis disruption methods generally do not check termination_event (or any
+        # other stop signal) inside long-running operations -- stopping relies almost
+        # entirely on asynchronous exception injection (raise_exception_in_thread()
+        # below), which CPython only delivers at a bytecode boundary and can never reach
+        # a thread blocked in a C-level join()/lock acquire. disrupt_no_corrupt_repair
+        # and disrupt_abort_repair (sdcm/nemesis/__init__.py) are hardened against this
+        # directly; the escalation below is this method's own, complementary backstop
+        # for whatever else may still be blocked when this timeout expires. See SCT-803
+        # for the broader, tracked follow-up.
+        #
         # concurrent.futures.thread._threads_queues is process-wide: it tracks every
         # ThreadPoolExecutor worker thread in the whole process, including long-lived
         # ones that are supposed to stay alive for the entire test (e.g.
@@ -6068,8 +6078,12 @@ class BaseScyllaCluster:
         # TimeoutMonitor.executor in sdcm/utils/adaptive_timeouts/__init__.py -- both
         # sit blocked-but-alive in queue.get() for most/all of a test's duration by
         # design). Snapshot which of those are already alive *before* asking this
-        # nemesis to stop, so they can be excluded below: they are not newly stuck
-        # because of this stop_nemesis() call, they were already fine.
+        # nemesis to stop: used below to scope down *reporting* to genuinely new
+        # activity, so those long-lived, already-healthy executors don't spam a
+        # CRITICAL event on every nemesis stop. This snapshot must NOT be used to scope
+        # down *arming* the hard exit, though (see below): a worker that has been stuck
+        # since before this call started is exactly the SCT-575/SCT-803 incident shape
+        # (e.g. an untimed nodetool repair call) and must still be caught.
         pre_existing_threads = {thread for thread in _threads_queues if thread.is_alive()}
 
         self.nemesis_termination_event.set()
@@ -6093,23 +6107,24 @@ class BaseScyllaCluster:
         # Every live ThreadPoolExecutor worker thread in the process is tracked in
         # concurrent.futures.thread._threads_queues (the same registry
         # ParallelObject.clean_up() inspects). Checking that immediately, unscoped,
-        # would false-positive on almost every run: the long-lived executors above are
-        # essentially always alive at this point, and a freshly submitted worker may
-        # simply not have unwound yet even though it is perfectly healthy. Mirror
-        # ParallelObject.clean_up()'s join(timeout)-then-check grace period (same
-        # WORKER_JOIN_GRACE_PERIOD constant) for the second concern, and subtract
-        # pre_existing_threads for the first: only a worker that (a) was not already
-        # alive before this stop_nemesis() call and (b) is still alive after the grace
-        # period counts as genuinely stuck because of this call.
+        # would false-positive the *reporting* below on almost every run: the
+        # long-lived executors above are essentially always alive at this point, and a
+        # freshly submitted worker may simply not have unwound yet even though it is
+        # perfectly healthy. Mirror ParallelObject.clean_up()'s join(timeout)-then-check
+        # grace period (same WORKER_JOIN_GRACE_PERIOD constant) for the second concern,
+        # and subtract pre_existing_threads for the first: only a worker that (a) was
+        # not already alive before this stop_nemesis() call and (b) is still alive
+        # after the grace period is reported as a genuinely new anomaly.
         candidate_threads = [thread for thread in _threads_queues if thread not in pre_existing_threads]
         deadline = time.monotonic() + WORKER_JOIN_GRACE_PERIOD
         for thread in candidate_threads:
             thread.join(timeout=max(0, deadline - time.monotonic()))
-        stuck_threads = [thread for thread in candidate_threads if thread.is_alive()]
+        new_stuck_threads = [thread for thread in candidate_threads if thread.is_alive()]
 
-        if stuck_threads:
+        escalation_reason = None
+        if new_stuck_threads:
             escalation_reason = (
-                f"{len(stuck_threads)} ThreadPoolExecutor worker thread(s) still alive after "
+                f"{len(new_stuck_threads)} ThreadPoolExecutor worker thread(s) still alive after "
                 f"{timeout}s stop_nemesis timeout"
             )
             message = escalation_reason
@@ -6121,7 +6136,25 @@ class BaseScyllaCluster:
                 message=message,
                 severity=Severity.CRITICAL,
             ).publish_or_dump()
-            request_hard_exit(escalation_reason, stuck_threads)
+
+        # Arming is deliberately NOT scoped to new_stuck_threads/pre_existing_threads:
+        # a worker that was already alive and blocked *before* this stop_nemesis() call
+        # even started (e.g. stuck for the full stop_nemesis timeout, or longer, on an
+        # untimed nodetool repair call) is in pre_existing_threads and would otherwise
+        # be silently excluded here, defeating the whole point of this escalation for
+        # exactly the incident shape it exists to catch. Arming unconditionally on
+        # every currently-live ThreadPoolExecutor worker is safe even for the long-lived
+        # healthy executors discussed above: exit_process() (sdcm/utils/hard_exit.py)
+        # re-checks is_alive() on each implicated thread at the actual, later exit
+        # point, by which time teardown steps like stop_task_threads() will typically
+        # have already retired them, making this a no-op false-positive-free arm.
+        all_live_threads = [thread for thread in _threads_queues if thread.is_alive()]
+        if all_live_threads:
+            request_hard_exit(
+                escalation_reason
+                or (f"{len(all_live_threads)} ThreadPoolExecutor worker thread(s) still alive at stop_nemesis time"),
+                all_live_threads,
+            )
 
     def start_kms_key_rotation_thread(self) -> None:
         if self.params.get("cluster_backend") != "aws":
