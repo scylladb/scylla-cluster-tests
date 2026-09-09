@@ -4358,9 +4358,9 @@ class BaseCluster:
                     for idx in range(num):
                         nodes_per_az[idx % azs] += 1
                     for az_index in range(azs):
-                        # NOTE: OCI pre-provisioner places VMs using per-node round-robin
+                        # NOTE: OCI and GCE pre-provisioners place VMs using per-node round-robin
                         #       so rack must be 'None' to let the 'add_nodes' derive it from the 'node_index'.
-                        if self.params.get("simulated_racks") or self.params.get("cluster_backend") == "oci":
+                        if self.params.get("simulated_racks") or self.params.get("cluster_backend") in ("oci", "gce"):
                             rack = None
                         else:
                             rack = az_index
@@ -4373,7 +4373,7 @@ class BaseCluster:
                 for idx in range(n_nodes):
                     nodes_per_az[idx % azs] += 1
                 for az_index in range(azs):
-                    if self.params.get("simulated_racks") or self.params.get("cluster_backend") == "oci":
+                    if self.params.get("simulated_racks") or self.params.get("cluster_backend") in ("oci", "gce"):
                         rack = None
                     else:
                         rack = az_index

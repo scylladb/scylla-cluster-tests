@@ -24,7 +24,7 @@ from google.cloud import compute_v1
 
 from sdcm import sct_abs_path, cluster
 from sdcm.wait import exponential_retry
-from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
+from sdcm.utils.common import list_instances_gce
 from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
 from sdcm.utils.gce_utils import (
     GcloudContainerMixin,
@@ -37,7 +37,7 @@ from sdcm.utils.gce_utils import (
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
-from sdcm.cluster_gce import MonitorSetGCE
+from sdcm.cluster_gce import MonitorSetGCE, gce_instance_node_index
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.keystore import KeyStore
 from sdcm.remote import LOCALRUNNER
@@ -651,7 +651,9 @@ class MonitorSetGKE(MonitorSetGCE):
         pass
 
     # NOTE: setting and filtering of the "monitorid" tag is needed for the multi-tenant setup.
-    def _get_instances(self, dc_idx):
+    def _get_instances(self, dc_idx, az_idx=None):
+        # az_idx is accepted for signature compatibility with GCECluster: a GKE monitor set is
+        # always confined to a single zone, so there is nothing to filter by rack.
         if not self.monitor_id:
             raise ValueError("'monitor_id' must exist")
         instances_by_nodetype = list_instances_gce(tags_dict={"MonitorId": self.monitor_id, "NodeType": self.node_type})
@@ -672,9 +674,4 @@ class MonitorSetGKE(MonitorSetGCE):
                 if node_zone.id == node_nodetype.id:
                     instances.append(node_zone)
 
-        def sort_by_index(node):
-            metadata = gce_meta_to_dict(node.metadata)
-            return metadata.get("NodeIndex", 0)
-
-        instances = sorted(instances, key=sort_by_index)
-        return instances
+        return sorted(instances, key=gce_instance_node_index)
