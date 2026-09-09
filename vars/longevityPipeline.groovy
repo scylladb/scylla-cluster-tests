@@ -392,6 +392,24 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            // Deliberately before 'Create SCT Runner': nothing is provisioned yet, not even
+            // the runner, so the number is available while abandoning the run is still free.
+            // This is the point a future approval gate would hook into.
+            stage('Estimate Test Cost') {
+                steps {
+                    catchError(stageResult: 'SUCCESS') {
+                        timeout(time: 5, unit: 'MINUTES') {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        estimateTestCost(params, builder.region)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('BYO Scylladb [optional]') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
