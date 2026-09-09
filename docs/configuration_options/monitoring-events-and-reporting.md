@@ -1,11 +1,13 @@
 # Monitoring, events and reporting
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 The monitoring stack, event severities, Argus reporting and email reports.
 
 **16 options.**
 
+
+<a id="argus_email_report_template"></a>
 
 ## **argus_email_report_template** / SCT_ARGUS_EMAIL_REPORT_TEMPLATE
 
@@ -17,6 +19,8 @@ Path to the email report template used for sending argus email reports
 * appendable
 
 
+<a id="argus_use_ssh_tunnel"></a>
+
 ## **argus_use_ssh_tunnel** / SCT_ARGUS_USE_SSH_TUNNEL
 
 Enable SSH tunnel support in the Argus client connection
@@ -26,6 +30,8 @@ Enable SSH tunnel support in the Argus client connection
 **type:** bool
 
 
+<a id="backtrace_decoding"></a>
+
 ## **backtrace_decoding** / SCT_BACKTRACE_DECODING
 
 If True, all backtraces found in db nodes would be decoded automatically
@@ -34,6 +40,8 @@ If True, all backtraces found in db nodes would be decoded automatically
 
 **type:** bool
 
+
+<a id="backtrace_decoding_disable_regex"></a>
 
 ## **backtrace_decoding_disable_regex** / SCT_BACKTRACE_DECODING_DISABLE_REGEX
 
@@ -45,6 +53,8 @@ Regex pattern to disable backtrace decoding for specific event types. If an even
 * appendable
 
 
+<a id="backtrace_stall_decoding"></a>
+
 ## **backtrace_stall_decoding** / SCT_BACKTRACE_STALL_DECODING
 
 If True, reactor stall backtraces will be decoded. If False, reactor stalls are skipped during<br>backtrace decoding to reduce overhead in performance tests. Only applies when [`backtrace_decoding`](#backtrace_decoding) is True.
@@ -54,6 +64,8 @@ If True, reactor stall backtraces will be decoded. If False, reactor stalls are 
 **type:** bool
 
 
+<a id="download_from_s3"></a>
+
 ## **download_from_s3** / SCT_DOWNLOAD_FROM_S3
 
 Destination-source map of dirs/buckets to download from S3 before starting the test
@@ -62,6 +74,8 @@ Destination-source map of dirs/buckets to download from S3 before starting the t
 
 **type:** list
 
+
+<a id="email_recipients"></a>
 
 ## **email_recipients** / SCT_EMAIL_RECIPIENTS
 
@@ -73,6 +87,8 @@ list of email of send the performance regression test to
 * appendable
 
 
+<a id="email_subject_postfix"></a>
+
 ## **email_subject_postfix** / SCT_EMAIL_SUBJECT_POSTFIX
 
 Text appended to the subject of the test result email, to tell similar runs apart.
@@ -83,6 +99,8 @@ Text appended to the subject of the test result email, to tell similar runs apar
 * appendable
 
 
+<a id="enable_argus"></a>
+
 ## **enable_argus** / SCT_ENABLE_ARGUS
 
 Control reporting to argus
@@ -92,6 +110,8 @@ Control reporting to argus
 **type:** bool
 
 
+<a id="events_limit_in_email"></a>
+
 ## **events_limit_in_email** / SCT_EVENTS_LIMIT_IN_EMAIL
 
 Maximum number of events of each severity to include in the email report.
@@ -100,6 +120,8 @@ Maximum number of events of each severity to include in the email report.
 
 **type:** int
 
+
+<a id="max_events_severities"></a>
 
 ## **max_events_severities** / SCT_MAX_EVENTS_SEVERITIES
 
@@ -111,6 +133,8 @@ Limit severity level for event types
 * appendable
 
 
+<a id="monitor_branch"></a>
+
 ## **monitor_branch** / SCT_MONITOR_BRANCH
 
 The port of scylla management
@@ -121,6 +145,8 @@ The port of scylla management
 * appendable
 
 
+<a id="monitor_swap_size"></a>
+
 ## **monitor_swap_size** / SCT_MONITOR_SWAP_SIZE
 
 The size of the swap file for the monitors. Its size in bytes calculated by x * 1MB
@@ -129,6 +155,8 @@ The size of the swap file for the monitors. Its size in bytes calculated by x * 
 
 **type:** int
 
+
+<a id="print_kernel_callstack"></a>
 
 ## **print_kernel_callstack** / SCT_PRINT_KERNEL_CALLSTACK
 
@@ -139,6 +167,8 @@ Scylla will print kernel callstack to logs if True, otherwise, it will try and m
 **type:** bool
 
 
+<a id="sct_ngrok_name"></a>
+
 ## **sct_ngrok_name** / SCT_SCT_NGROK_NAME
 
 DEPRECATED (see SCT-954, unused for years): expose the SCT runner under this ngrok hostname instead of its own address.
@@ -148,6 +178,8 @@ DEPRECATED (see SCT-954, unused for years): expose the SCT runner under this ngr
 **type:** str
 * appendable
 
+
+<a id="scylla_rsyslog_setup"></a>
 
 ## **scylla_rsyslog_setup** / SCT_SCYLLA_RSYSLOG_SETUP
 

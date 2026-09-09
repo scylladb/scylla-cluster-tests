@@ -1,11 +1,13 @@
 # GCE backend
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 Google Compute Engine provisioning.
 
 **21 options.**
 
+
+<a id="gce_datacenter"></a>
 
 ## **gce_datacenter** / SCT_GCE_DATACENTER
 
@@ -15,6 +17,8 @@ Supported regions: us-east1, us-east4, us-west1, us-central1. Specifying just th
 
 **type:** str | list[str]
 
+
+<a id="gce_image_db"></a>
 
 ## **gce_image_db** / SCT_GCE_IMAGE_DB
 
@@ -26,6 +30,8 @@ gce image to use for db nodes
 * appendable
 
 
+<a id="gce_image_loader"></a>
+
 ## **gce_image_loader** / SCT_GCE_IMAGE_LOADER
 
 Google Compute Engine image to use for loader nodes
@@ -35,6 +41,8 @@ Google Compute Engine image to use for loader nodes
 **type:** str
 * appendable
 
+
+<a id="gce_image_monitor"></a>
 
 ## **gce_image_monitor** / SCT_GCE_IMAGE_MONITOR
 
@@ -46,6 +54,8 @@ gce image to use for monitor nodes
 * appendable
 
 
+<a id="gce_image_username"></a>
+
 ## **gce_image_username** / SCT_GCE_IMAGE_USERNAME
 
 Username for the Google Compute Engine image
@@ -55,6 +65,8 @@ Username for the Google Compute Engine image
 **type:** str
 * appendable
 
+
+<a id="gce_instance_type_db"></a>
 
 ## **gce_instance_type_db** / SCT_GCE_INSTANCE_TYPE_DB
 
@@ -66,6 +78,8 @@ Instance type for database nodes in Google Compute Engine
 * appendable
 
 
+<a id="gce_instance_type_loader"></a>
+
 ## **gce_instance_type_loader** / SCT_GCE_INSTANCE_TYPE_LOADER
 
 Instance type for loader nodes in Google Compute Engine
@@ -75,6 +89,8 @@ Instance type for loader nodes in Google Compute Engine
 **type:** str
 * appendable
 
+
+<a id="gce_instance_type_monitor"></a>
 
 ## **gce_instance_type_monitor** / SCT_GCE_INSTANCE_TYPE_MONITOR
 
@@ -86,6 +102,8 @@ Instance type for monitor nodes in Google Compute Engine
 * appendable
 
 
+<a id="gce_n_local_ssd_disk_db"></a>
+
 ## **gce_n_local_ssd_disk_db** / SCT_GCE_N_LOCAL_SSD_DISK_DB
 
 Number of local SSD disks for database nodes in Google Compute Engine
@@ -94,6 +112,8 @@ Number of local SSD disks for database nodes in Google Compute Engine
 
 **type:** int
 
+
+<a id="gce_n_local_ssd_disk_loader"></a>
 
 ## **gce_n_local_ssd_disk_loader** / SCT_GCE_N_LOCAL_SSD_DISK_LOADER
 
@@ -104,6 +124,8 @@ Number of local SSD disks for loader nodes in Google Compute Engine
 **type:** int
 
 
+<a id="gce_n_local_ssd_disk_monitor"></a>
+
 ## **gce_n_local_ssd_disk_monitor** / SCT_GCE_N_LOCAL_SSD_DISK_MONITOR
 
 Number of local SSD disks for monitor nodes in Google Compute Engine
@@ -112,6 +134,8 @@ Number of local SSD disks for monitor nodes in Google Compute Engine
 
 **type:** int
 
+
+<a id="gce_network"></a>
 
 ## **gce_network** / SCT_GCE_NETWORK
 
@@ -123,6 +147,8 @@ GCP VPC network the instances are attached to.
 * appendable
 
 
+<a id="gce_pd_ssd_disk_size_db"></a>
+
 ## **gce_pd_ssd_disk_size_db** / SCT_GCE_PD_SSD_DISK_SIZE_DB
 
 Size in GB of the persistent SSD disk attached to each DB node.
@@ -131,6 +157,8 @@ Size in GB of the persistent SSD disk attached to each DB node.
 
 **type:** int
 
+
+<a id="gce_pd_ssd_disk_size_loader"></a>
 
 ## **gce_pd_ssd_disk_size_loader** / SCT_GCE_PD_SSD_DISK_SIZE_LOADER
 
@@ -141,6 +169,8 @@ Size in GB of the persistent SSD disk attached to each loader.
 **type:** int
 
 
+<a id="gce_pd_ssd_disk_size_monitor"></a>
+
 ## **gce_pd_ssd_disk_size_monitor** / SCT_GCE_PD_SSD_DISK_SIZE_MONITOR
 
 Size in GB of the persistent SSD disk attached to the monitoring node.
@@ -150,6 +180,8 @@ Size in GB of the persistent SSD disk attached to the monitoring node.
 **type:** int
 
 
+<a id="gce_pd_standard_disk_size_db"></a>
+
 ## **gce_pd_standard_disk_size_db** / SCT_GCE_PD_STANDARD_DISK_SIZE_DB
 
 The size of the standard persistent disk in GB used for GCE database nodes
@@ -158,6 +190,8 @@ The size of the standard persistent disk in GB used for GCE database nodes
 
 **type:** int
 
+
+<a id="gce_project"></a>
 
 ## **gce_project** / SCT_GCE_PROJECT
 
@@ -169,6 +203,8 @@ GCP project that owns the provisioned resources.
 * appendable
 
 
+<a id="gce_root_disk_type_db"></a>
+
 ## **gce_root_disk_type_db** / SCT_GCE_ROOT_DISK_TYPE_DB
 
 Root disk type for database nodes in Google Compute Engine
@@ -178,6 +214,8 @@ Root disk type for database nodes in Google Compute Engine
 **type:** str
 * appendable
 
+
+<a id="gce_root_disk_type_loader"></a>
 
 ## **gce_root_disk_type_loader** / SCT_GCE_ROOT_DISK_TYPE_LOADER
 
@@ -189,6 +227,8 @@ Root disk type for loader nodes in Google Compute Engine
 * appendable
 
 
+<a id="gce_root_disk_type_monitor"></a>
+
 ## **gce_root_disk_type_monitor** / SCT_GCE_ROOT_DISK_TYPE_MONITOR
 
 Root disk type for monitor nodes in Google Compute Engine
@@ -198,6 +238,8 @@ Root disk type for monitor nodes in Google Compute Engine
 **type:** str
 * appendable
 
+
+<a id="gce_setup_hybrid_raid"></a>
 
 ## **gce_setup_hybrid_raid** / SCT_GCE_SETUP_HYBRID_RAID
 
