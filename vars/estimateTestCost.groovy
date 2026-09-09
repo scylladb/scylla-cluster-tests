@@ -49,26 +49,15 @@ Map call(Map params, String region) {
         """
         sh(script: cmd)
 
+        // The command prints the human-readable table itself; re-printing it here only
+        // doubled it in the log. Read the JSON purely for the build description and for
+        // whatever later decides to act on the number.
         def estimate = readJSON(file: estimate_file)
-        def total = estimate.total
-        if (total == null) {
-            echo "Estimated cost: unknown - no price for: ${estimate.unpriced_roles.join(', ')}"
-            return estimate
-        }
-
-        def summary = String.format("Estimated cost: \$%.2f over %.2fh", total as Double,
-                                    estimate.duration_hours as Double)
-        if (estimate.is_spot) {
-            summary += " (priced at on-demand; spot run, so this is an upper bound)"
-        }
+        def summary = estimate.total == null
+            ? "Estimated cost: unknown"
+            : String.format("Estimated cost: \$%.2f (on-demand)", estimate.total as Double)
         if (estimate.partial) {
-            summary += " [PARTIAL - no price for: ${estimate.unpriced_roles.join(', ')}]"
-        }
-        echo summary
-        estimate.roles.each { role ->
-            echo String.format("  %-10s %3d x %-24s %s", role.role, role.node_count as Integer,
-                               role.instance_type,
-                               role.cost == null ? "unknown" : String.format("\$%.2f", role.cost as Double))
+            summary += " [partial]"
         }
         currentBuild.description = ((currentBuild.description ?: '') + "\n" + summary).trim()
         return estimate

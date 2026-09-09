@@ -1709,15 +1709,26 @@ def estimate_cost(config_files, backend, duration, output_format, output_file):
         sys.exit(0)
 
     total = f"${estimate.total:,.2f}" if estimate.total is not None else "unknown"
-    click.echo(f"Estimated cost: {total} over {estimate.duration_hours:.2f}h (on-demand rates)")
-    for role in estimate.roles:
-        cost = f"${role.cost:,.2f}" if role.cost is not None else "unknown"
-        click.echo(f"  {role.role:<10} {role.node_count:>3} x {role.instance_type:<22} {cost:>12}")
-    if estimate.is_spot:
-        click.echo("NOTE: run is configured for spot; priced at on-demand, so this is an upper bound.")
+    headline = f"Estimated cost of this run: {total} (on-demand rates)"
     if estimate.partial:
-        unpriced = ", ".join(estimate.unpriced_roles) or "no roles resolved"
-        click.echo(f"WARNING: estimate is PARTIAL - no price for: {unpriced}")
+        missing = ", ".join(estimate.unpriced_roles) or "no roles resolved"
+        headline += f" -- PARTIAL, no price for: {missing}"
+    click.echo("")
+    click.echo(headline)
+    click.echo("")
+    if estimate.roles:
+        click.echo(f"  {'role':<10}{'nodes':>6}  {'instance type':<24}{'$/hour':>9}{'hours':>8}{'cost':>10}")
+        for role in estimate.roles:
+            rate = f"{role.rate.price_per_hour:.4f}" if role.rate.price_per_hour is not None else "-"
+            cost = f"${role.cost:,.2f}" if role.cost is not None else "unknown"
+            click.echo(
+                f"  {role.role:<10}{role.node_count:>6}  {role.instance_type:<24}"
+                f"{rate:>9}{estimate.duration_hours:>8.2f}{cost:>10}"
+            )
+        click.echo("")
+    click.echo("  Instance hours only, for the whole run - no storage, network or other charges.")
+    click.echo("  See docs/cost-estimation.md")
+    click.echo("")
     sys.exit(0)
 
 
