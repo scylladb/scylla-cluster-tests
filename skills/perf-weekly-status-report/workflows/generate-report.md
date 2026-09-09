@@ -270,7 +270,10 @@ for exclusion, thresholds are resolved, and each workload has one latest run sel
    - Exclude CapacityReservationError runs (never reported at all)
    - Exclude superseded runs -- apply the same latest-run-per-workload rule as the Overview
 
-   **Omit the whole section if the list is empty.** Do not render an empty table or a placeholder.
+   **Render the section whenever the list is non-empty**; omit heading and table together only when
+   it is empty. Do not render an empty table or a placeholder. The reference example HTML has no
+   such table because that period had every failure linked -- do not infer from it that the section
+   was dropped.
 
    **Important:** Issue linkage in Argus is manual and may change between data refreshes. When
    re-collecting data, always use `--no-cache` on `argus issue list` calls. A run that was previously
@@ -535,7 +538,10 @@ This ensures the user has final control over the section wording, warning banner
 29. Verify test_error causes are determined via `argus run events`, not Jenkins console
 30. Verify that table was printed to user during the review step
 31. Compare the rendering against
-     [references/perf-weekly-status-report-release-example.html](../references/perf-weekly-status-report-release-example.html)
+     [references/perf-weekly-status-report-release-example.html](../references/perf-weekly-status-report-release-example.html).
+     Treat it as a reference for markup and section order, not for which conditional sections exist:
+     it has no "Failed, investigation in progress" table because that period had no unlinked
+     failures, just as a week with no new tickets would carry no "New Issues - Regression" table.
 
 **Exit criteria:** Report is ready for email distribution.
 
