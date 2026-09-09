@@ -4,7 +4,7 @@
 
 Loading pre-built SSTables into a running cluster via nodetool refresh.
 
-**6 options.** Jump to: [flush_period](#flush_period) · [flush_times](#flush_times) · [skip_download](#skip_download) · [sstable_file](#sstable_file) · [sstable_md5](#sstable_md5) · [sstable_url](#sstable_url)
+**6 options.**
 
 
 ## **flush_period** / SCT_FLUSH_PERIOD
