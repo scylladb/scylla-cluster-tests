@@ -4,7 +4,7 @@
 
 The EMR cluster that runs the Spark migrator job.
 
-**12 options.** Jump to: [emr_applications](#emr_applications) · [emr_instance_count_core](#emr_instance_count_core) · [emr_instance_count_task](#emr_instance_count_task) · [emr_instance_type_core](#emr_instance_type_core) · [emr_instance_type_master](#emr_instance_type_master) · [emr_instance_type_task](#emr_instance_type_task) · [emr_keep_alive](#emr_keep_alive) · [emr_log_uri](#emr_log_uri) · [emr_release_label](#emr_release_label) · [emr_spark_migrator_jar_path](#emr_spark_migrator_jar_path) · [emr_spark_migrator_release](#emr_spark_migrator_release) · [emr_spot_bid_percentage](#emr_spot_bid_percentage)
+**12 options.**
 
 
 ## **emr_applications** / SCT_EMR_APPLICATIONS
@@ -105,7 +105,7 @@ S3 path or local path to the spark-migrator JAR file
 
 ## **emr_spark_migrator_release** / SCT_EMR_SPARK_MIGRATOR_RELEASE
 
-scylla-migrator release tag (e.g., 'v1.1.2'). When set, JAR is auto-downloaded from GitHub releases and uploaded to S3. Takes precedence over emr_spark_migrator_jar_path.
+scylla-migrator release tag (e.g., 'v1.1.2'). When set, JAR is auto-downloaded from GitHub releases and uploaded to S3. Takes precedence over [`emr_spark_migrator_jar_path`](#emr_spark_migrator_jar_path).
 
 **default:** N/A
 

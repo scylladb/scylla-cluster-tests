@@ -6,7 +6,7 @@ A second database cluster used for comparison or migration testing -- the 'oracl
 Gemini runs, or a Cassandra cluster in migration tests. Named for the role, not for Gemini,
 since other test types use it too.
 
-**4 options.** Jump to: [append_scylla_args_oracle](#append_scylla_args_oracle) · [n_test_oracle_db_nodes](#n_test_oracle_db_nodes) · [oracle_scylla_version](#oracle_scylla_version) · [oracle_user_data_format_version](#oracle_user_data_format_version)
+**4 options.**
 
 
 ## **append_scylla_args_oracle** / SCT_APPEND_SCYLLA_ARGS_ORACLE

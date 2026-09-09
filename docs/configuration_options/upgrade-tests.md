@@ -4,7 +4,7 @@
 
 Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade.
 
-**20 options.** Jump to: [disable_raft](#disable_raft) · [enable_tablets_on_upgrade](#enable_tablets_on_upgrade) · [enable_truncate_checks_on_node_upgrade](#enable_truncate_checks_on_node_upgrade) · [enable_views_with_tablets_on_upgrade](#enable_views_with_tablets_on_upgrade) · [large_partition_stress_during_upgrade](#large_partition_stress_during_upgrade) · [new_scylla_repo](#new_scylla_repo) · [new_version](#new_version) · [num_nodes_to_rollback](#num_nodes_to_rollback) · [run_gemini_in_rolling_upgrade](#run_gemini_in_rolling_upgrade) · [stress_after_cluster_upgrade](#stress_after_cluster_upgrade) · [stress_before_upgrade](#stress_before_upgrade) · [stress_during_entire_upgrade](#stress_during_entire_upgrade) · [target_upgrade_version](#target_upgrade_version) · [upgrade_node_packages](#upgrade_node_packages) · [upgrade_node_system](#upgrade_node_system) · [upgrade_sstables](#upgrade_sstables) · [verify_data_after_entire_test](#verify_data_after_entire_test) · [verify_stress_after_cluster_upgrade](#verify_stress_after_cluster_upgrade) · [verify_stress_after_migration](#verify_stress_after_migration) · [write_stress_during_entire_test](#write_stress_during_entire_test)
+**20 options.**
 
 
 ## **disable_raft** / SCT_DISABLE_RAFT
