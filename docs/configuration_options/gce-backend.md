@@ -1,11 +1,13 @@
 # GCE backend
 
-[← All configuration options](configuration_options.md)
+[← All configuration options](../configuration_options.md)
 
 Google Compute Engine provisioning.
 
 **21 options.**
 
+
+<a id="gce_datacenter"></a>
 
 ## **gce_datacenter** / SCT_GCE_DATACENTER
 
@@ -19,6 +21,8 @@ Supported regions: us-east1, us-east4, us-west1, us-central1. Specifying just th
 - `us-east1`: gce, gce-siren, k8s-gke
 
 
+<a id="gce_image_db"></a>
+
 ## **gce_image_db** / SCT_GCE_IMAGE_DB
 
 gce image to use for db nodes
@@ -27,6 +31,8 @@ gce image to use for db nodes
 
 **type:** str (appendable)
 
+
+<a id="gce_image_loader"></a>
 
 ## **gce_image_loader** / SCT_GCE_IMAGE_LOADER
 
@@ -40,6 +46,8 @@ Google Compute Engine image to use for loader nodes
 - `https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2604-lts-{arch}`: gce, gce-siren, k8s-gke
 
 
+<a id="gce_image_monitor"></a>
+
 ## **gce_image_monitor** / SCT_GCE_IMAGE_MONITOR
 
 gce image to use for monitor nodes
@@ -51,6 +59,8 @@ gce image to use for monitor nodes
 **backend overrides:**
 - `https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylladb-monitor-4-16-0-amd64-2026-08-30t08-46-39z`: gce, gce-siren, k8s-gke
 
+
+<a id="gce_image_username"></a>
 
 ## **gce_image_username** / SCT_GCE_IMAGE_USERNAME
 
@@ -64,6 +74,8 @@ Username for the Google Compute Engine image
 - `scylla-test`: gce, gce-siren, k8s-gke
 
 
+<a id="gce_instance_type_db"></a>
+
 ## **gce_instance_type_db** / SCT_GCE_INSTANCE_TYPE_DB
 
 Instance type for database nodes in Google Compute Engine
@@ -75,6 +87,8 @@ Instance type for database nodes in Google Compute Engine
 **backend overrides:**
 - `n2-standard-8`: k8s-gke
 
+
+<a id="gce_instance_type_loader"></a>
 
 ## **gce_instance_type_loader** / SCT_GCE_INSTANCE_TYPE_LOADER
 
@@ -88,6 +102,8 @@ Instance type for loader nodes in Google Compute Engine
 - `e2-standard-4`: k8s-gke
 
 
+<a id="gce_instance_type_monitor"></a>
+
 ## **gce_instance_type_monitor** / SCT_GCE_INSTANCE_TYPE_MONITOR
 
 Instance type for monitor nodes in Google Compute Engine
@@ -99,6 +115,8 @@ Instance type for monitor nodes in Google Compute Engine
 **backend overrides:**
 - `e2-medium`: k8s-gke
 
+
+<a id="gce_n_local_ssd_disk_db"></a>
 
 ## **gce_n_local_ssd_disk_db** / SCT_GCE_N_LOCAL_SSD_DISK_DB
 
@@ -112,6 +130,8 @@ Number of local SSD disks for database nodes in Google Compute Engine
 - `4`: gce, gce-siren, k8s-gke
 
 
+<a id="gce_n_local_ssd_disk_loader"></a>
+
 ## **gce_n_local_ssd_disk_loader** / SCT_GCE_N_LOCAL_SSD_DISK_LOADER
 
 Number of local SSD disks for loader nodes in Google Compute Engine
@@ -123,6 +143,8 @@ Number of local SSD disks for loader nodes in Google Compute Engine
 **backend overrides:**
 - `0`: gce, gce-siren, k8s-gke
 
+
+<a id="gce_n_local_ssd_disk_monitor"></a>
 
 ## **gce_n_local_ssd_disk_monitor** / SCT_GCE_N_LOCAL_SSD_DISK_MONITOR
 
@@ -136,6 +158,8 @@ Number of local SSD disks for monitor nodes in Google Compute Engine
 - `0`: gce, gce-siren, k8s-gke
 
 
+<a id="gce_network"></a>
+
 ## **gce_network** / SCT_GCE_NETWORK
 
 GCP VPC network the instances are attached to.
@@ -147,6 +171,8 @@ GCP VPC network the instances are attached to.
 **backend overrides:**
 - `qa-vpc`: gce, gce-siren, k8s-gke
 
+
+<a id="gce_pd_ssd_disk_size_db"></a>
 
 ## **gce_pd_ssd_disk_size_db** / SCT_GCE_PD_SSD_DISK_SIZE_DB
 
@@ -160,6 +186,8 @@ Size in GB of the persistent SSD disk attached to each DB node.
 - `0`: gce, gce-siren, k8s-gke
 
 
+<a id="gce_pd_ssd_disk_size_loader"></a>
+
 ## **gce_pd_ssd_disk_size_loader** / SCT_GCE_PD_SSD_DISK_SIZE_LOADER
 
 Size in GB of the persistent SSD disk attached to each loader.
@@ -171,6 +199,8 @@ Size in GB of the persistent SSD disk attached to each loader.
 **backend overrides:**
 - `0`: gce, gce-siren, k8s-gke
 
+
+<a id="gce_pd_ssd_disk_size_monitor"></a>
 
 ## **gce_pd_ssd_disk_size_monitor** / SCT_GCE_PD_SSD_DISK_SIZE_MONITOR
 
@@ -184,6 +214,8 @@ Size in GB of the persistent SSD disk attached to the monitoring node.
 - `0`: gce, gce-siren, k8s-gke
 
 
+<a id="gce_pd_standard_disk_size_db"></a>
+
 ## **gce_pd_standard_disk_size_db** / SCT_GCE_PD_STANDARD_DISK_SIZE_DB
 
 The size of the standard persistent disk in GB used for GCE database nodes
@@ -193,6 +225,8 @@ The size of the standard persistent disk in GB used for GCE database nodes
 **type:** int
 
 
+<a id="gce_project"></a>
+
 ## **gce_project** / SCT_GCE_PROJECT
 
 GCP project that owns the provisioned resources.
@@ -201,6 +235,8 @@ GCP project that owns the provisioned resources.
 
 **type:** str (appendable)
 
+
+<a id="gce_root_disk_type_db"></a>
 
 ## **gce_root_disk_type_db** / SCT_GCE_ROOT_DISK_TYPE_DB
 
@@ -214,6 +250,8 @@ Root disk type for database nodes in Google Compute Engine
 - `pd-ssd`: gce, gce-siren, k8s-gke
 
 
+<a id="gce_root_disk_type_loader"></a>
+
 ## **gce_root_disk_type_loader** / SCT_GCE_ROOT_DISK_TYPE_LOADER
 
 Root disk type for loader nodes in Google Compute Engine
@@ -226,6 +264,8 @@ Root disk type for loader nodes in Google Compute Engine
 - `pd-standard`: gce, gce-siren, k8s-gke
 
 
+<a id="gce_root_disk_type_monitor"></a>
+
 ## **gce_root_disk_type_monitor** / SCT_GCE_ROOT_DISK_TYPE_MONITOR
 
 Root disk type for monitor nodes in Google Compute Engine
@@ -237,6 +277,8 @@ Root disk type for monitor nodes in Google Compute Engine
 **backend overrides:**
 - `pd-standard`: gce, gce-siren, k8s-gke
 
+
+<a id="gce_setup_hybrid_raid"></a>
 
 ## **gce_setup_hybrid_raid** / SCT_GCE_SETUP_HYBRID_RAID
 

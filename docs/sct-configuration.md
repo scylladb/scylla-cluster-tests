@@ -228,7 +228,7 @@ To regenerate the documentation, run:
 uv run sct.py pre-commit
 
 # Or directly generate only the configuration documentation
-uv run python3 -c "from sdcm.sct_config import SCTConfiguration; SCTConfiguration.dump_help_config_markdown()"
+uv run sct.py update-conf-docs
 ```
 
 This will update the index and the group page your option belongs to.
