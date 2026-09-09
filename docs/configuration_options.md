@@ -1330,20 +1330,8 @@ AMS AMI id to use for loader node
 
 **default:** N/A
 
-<<<<<<< HEAD
 **type:** str
 * appendable
-||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
-**type:** str (appendable)
-
-**backend overrides:**
-- `resolve:ssm:/aws/service/canonical/ubuntu/server/26.04/stable/current/amd64/hvm/ebs-gp3/ami-id`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
-=======
-**type:** str (appendable)
-
-**backend overrides:**
-- `resolve:ssm:/aws/service/canonical/ubuntu/server/26.04/stable/current/{arch}/hvm/ebs-gp3/ami-id`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
->>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
 
 
 ## **ami_id_monitor** / SCT_AMI_ID_MONITOR
@@ -1633,20 +1621,8 @@ Google Compute Engine image to use for loader nodes
 
 **default:** N/A
 
-<<<<<<< HEAD
 **type:** str
 * appendable
-||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
-**type:** str (appendable)
-
-**backend overrides:**
-- `https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2604-lts-amd64`: gce, gce-siren, k8s-gke
-=======
-**type:** str (appendable)
-
-**backend overrides:**
-- `https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2604-lts-{arch}`: gce, gce-siren, k8s-gke
->>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
 
 
 ## **gce_image_username** / SCT_GCE_IMAGE_USERNAME
@@ -2195,20 +2171,8 @@ The Azure image to be used for loader nodes.
 
 **default:** N/A
 
-<<<<<<< HEAD
 **type:** str
 * appendable
-||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
-**type:** str (appendable)
-
-**backend overrides:**
-- `Canonical:ubuntu-26_04-lts:server:latest`: azure
-=======
-**type:** str (appendable)
-
-**backend overrides:**
-- `Canonical:ubuntu-26_04-lts:{arch_sku}:latest`: azure
->>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
 
 
 ## **azure_image_username** / SCT_AZURE_IMAGE_USERNAME

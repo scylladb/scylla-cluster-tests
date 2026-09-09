@@ -9,13 +9,7 @@ fallback_to_next_region: true
 gce_project: '' # empty mean default one, can be overwritten to use different one
 
 gce_image_db: '' # so we can use `scylla_version` as needed
-<<<<<<< HEAD
-gce_image_loader: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64'
-||||||| parent of 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
-gce_image_loader: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2604-lts-amd64'
-=======
 gce_image_loader: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2604-lts-{arch}'
->>>>>>> 9896e9ba2 (feature(sizing): default loaders to Arm and match the image to the instance)
 gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylladb-monitor-4-16-0-amd64-2026-08-30t08-46-39z'
 
 gce_image_username: 'scylla-test'
