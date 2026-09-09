@@ -30,6 +30,7 @@ from sdcm.utils.minicloud.networking import setup_host_networking
 from sdcm.utils.minicloud.preflight import (
     check_aws_credentials,
     check_host_memory,
+    check_scylla_memory_budget,
     parse_memory_gib,
     sum_node_counts,
 )
@@ -87,6 +88,7 @@ class MinicloudManager:
             raise MinicloudError("docker is not available on PATH. Install Docker to run minicloud in container mode.")
         if params is not None:
             self._check_host_memory(params)
+            self._check_scylla_memory_budget(params)
             if enforce_overlay:
                 validate_minicloud_params(params)
             else:
@@ -104,6 +106,10 @@ class MinicloudManager:
 
     def _check_host_memory(self, params) -> None:
         check_host_memory(self.config, params)
+
+    @staticmethod
+    def _check_scylla_memory_budget(params) -> None:
+        check_scylla_memory_budget(params)
 
     @staticmethod
     def _check_aws_credentials() -> None:

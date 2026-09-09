@@ -1,4 +1,4 @@
-"""Tests for pre-start checks: KVM/docker/AWS-creds gates and the host-memory arithmetic."""
+"""Tests for pre-start checks: KVM/docker/AWS-creds gates, host-memory and guest-memory arithmetic."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.utils.minicloud import MinicloudConfig, MinicloudError, MinicloudManager
+from sdcm.utils.minicloud.preflight import scylla_reserve_memory
 from unit_tests.unit.minicloud.conftest import _meminfo_path_patch
 
 
@@ -204,4 +205,51 @@ def test_preflight_check_runs_memory_check_when_params_given(tmp_path):
         with _meminfo_path_patch(8 * 1024 * 1024):  # 8GiB
             with patch("sdcm.utils.minicloud.manager.shutil.which", return_value="/usr/bin/docker"):
                 with pytest.raises(MinicloudError, match="not enough memory"):
+                    manager.preflight_check(skip_aws_creds=True, params=params)
+
+
+def _reserve_params(reserve="3G", guest="8GiB", vcpus=2, **extra):
+    return {
+        "minicloud_scylla_reserve_memory": reserve,
+        "minicloud_lightweight_memory": guest,
+        "minicloud_lightweight_vcpus": vcpus,
+        **extra,
+    }
+
+
+def test_scylla_reserve_memory_off_by_default():
+    # it is bought out of Scylla's own budget, so a test has to ask for it
+    assert scylla_reserve_memory(_reserve_params(reserve="")) is None
+
+
+def test_scylla_reserve_memory_passes_the_request_through_when_it_fits():
+    assert scylla_reserve_memory(_reserve_params(guest="8GiB", vcpus=2)) == "3072M"
+
+
+def test_scylla_reserve_memory_capped_to_leave_scylla_running():
+    # a 4GiB guest cannot spare 3GiB: Scylla still needs its own floor
+    assert scylla_reserve_memory(_reserve_params(guest="4GiB", vcpus=1)) == "2048M"
+
+
+def test_scylla_reserve_memory_floor_follows_the_shard_count():
+    # 3 shards need ~3GiB, so the same 4GiB guest has nothing worth reserving left over -
+    # a fixed floor would hand Scylla less memory than it can boot on
+    assert scylla_reserve_memory(_reserve_params(guest="4GiB", vcpus=3)) is None
+
+
+def test_scylla_reserve_memory_survives_a_bad_value():
+    # preflight is where a typo fails the run; a node coming up mid-run must not die on top of it
+    assert scylla_reserve_memory(_reserve_params(reserve="three gigs")) is None
+
+
+def test_preflight_check_rejects_an_impossible_request(tmp_path):
+    # the other half of the contract above: unhonourable is fatal before anything is provisioned,
+    # and going through preflight_check also proves the gate is actually wired in
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
+    params = _reserve_params(guest="3GiB", vcpus=1, n_db_nodes=1)
+
+    with _kvm_path_patch(kvm_exists=True):
+        with _meminfo_path_patch(64 * 1024 * 1024):  # plenty, so only the guest gate can fail
+            with patch("sdcm.utils.minicloud.manager.shutil.which", return_value="/usr/bin/docker"):
+                with pytest.raises(MinicloudError, match="does not fit"):
                     manager.preflight_check(skip_aws_creds=True, params=params)
