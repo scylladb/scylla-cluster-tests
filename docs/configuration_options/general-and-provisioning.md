@@ -5,12 +5,12 @@
 Cluster topology, region/AZ placement, instance provisioning, credentials and test-level
 plumbing. Options here apply to every backend and every test type.
 
-**71 options.** Jump to: [adaptive_timeout_multipliers](#adaptive_timeout_multipliers) · [adaptive_timeout_store_metrics](#adaptive_timeout_store_metrics) · [add_node_cnt](#add_node_cnt) · [agent](#agent) · [availability_zone](#availability_zone) · [billing_project](#billing_project) · [bisect_end_date](#bisect_end_date) · [bisect_start_date](#bisect_start_date) · [cluster_backend](#cluster_backend) · [cluster_health_check](#cluster_health_check) · [cluster_health_check_parallel_workers](#cluster_health_check_parallel_workers) · [config_files](#config_files) · [data_volume_disk_iops](#data_volume_disk_iops) · [data_volume_disk_num](#data_volume_disk_num) · [data_volume_disk_size](#data_volume_disk_size) · [data_volume_disk_throughput](#data_volume_disk_throughput) · [data_volume_disk_type](#data_volume_disk_type) · [db_nodes_shards_selection](#db_nodes_shards_selection) · [fallback_to_next_availability_zone](#fallback_to_next_availability_zone) · [fallback_to_next_region](#fallback_to_next_region) · [force_run_iotune](#force_run_iotune) · [instance_provision](#instance_provision) · [instance_provision_fallback_on_demand](#instance_provision_fallback_on_demand) · [instance_type_db](#instance_type_db) · [instance_type_db_oracle](#instance_type_db_oracle) · [instance_type_db_target](#instance_type_db_target) · [instance_type_loader](#instance_type_loader) · [instance_type_monitor](#instance_type_monitor) · [instance_type_runner](#instance_type_runner) · [instance_type_vector_store](#instance_type_vector_store) · [intra_node_comm_public](#intra_node_comm_public) · [ip_ssh_connections](#ip_ssh_connections) · [keystore_backend](#keystore_backend) · [keystore_sm_prefix](#keystore_sm_prefix) · [keystore_sm_region](#keystore_sm_region) · [latency_decorator_error_thresholds](#latency_decorator_error_thresholds) · [n_db_nodes](#n_db_nodes) · [n_db_zero_token_nodes](#n_db_zero_token_nodes) · [n_loaders](#n_loaders) · [n_monitor_nodes](#n_monitor_nodes) · [parallel_node_operations](#parallel_node_operations) · [pre_filter_unavailable_availability_zones](#pre_filter_unavailable_availability_zones) · [pre_flight_capacity_probe](#pre_flight_capacity_probe) · [raid_level](#raid_level) · [region_name](#region_name) · [reuse_cluster](#reuse_cluster) · [root_disk_size_db](#root_disk_size_db) · [root_disk_size_loader](#root_disk_size_loader) · [root_disk_size_monitor](#root_disk_size_monitor) · [root_disk_size_runner](#root_disk_size_runner) · [sct_public_ip](#sct_public_ip) · [seeds_num](#seeds_num) · [seeds_selector](#seeds_selector) · [simulated_racks](#simulated_racks) · [simulated_regions](#simulated_regions) · [sizing_db](#sizing_db) · [sizing_db_oracle](#sizing_db_oracle) · [sizing_loader](#sizing_loader) · [sizing_monitor](#sizing_monitor) · [skip_test_stages](#skip_test_stages) · [ssh_transport](#ssh_transport) · [test_duration](#test_duration) · [test_id](#test_id) · [test_metadata](#test_metadata) · [test_method](#test_method) · [use_dns_names](#use_dns_names) · [use_legacy_cluster_init](#use_legacy_cluster_init) · [use_zero_nodes](#use_zero_nodes) · [user_credentials_path](#user_credentials_path) · [user_prefix](#user_prefix) · [zero_token_instance_type_db](#zero_token_instance_type_db)
+**71 options.**
 
 
 ## **adaptive_timeout_multipliers** / SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS
 
-Optional dict of adaptive-timeout multipliers keyed by operation name (from Operations enum value[0], e.g. decommission, remove_node, new_node, repair, etc.). If the current operation key is absent, multiplier 1.0 is used.<br>YAML example:<br>adaptive_timeout_multipliers:<br>  decommission: 4<br>  new_node: 2<br>Environment variable examples:<br>SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS="{'decommission': 4, 'new_node': 2}"<br>Or dot-notation: SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4<br>Or double-underscore (bash-exportable): SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__decommission=4
+Optional dict of adaptive-timeout multipliers keyed by operation name (from Operations enum value[0], e.g. decommission, remove_node, new_node, repair, etc.). If the current operation key is absent, multiplier 1.0 is used.<br>YAML example:<br>[`adaptive_timeout_multipliers`](#adaptive_timeout_multipliers):<br>  decommission: 4<br>  new_node: 2<br>Environment variable examples:<br>SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS="{'decommission': 4, 'new_node': 2}"<br>Or dot-notation: SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4<br>Or double-underscore (bash-exportable): SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS__decommission=4
 
 **default:** {}
 
@@ -135,7 +135,7 @@ Number of iops for ebs type io2|io3|gp3
 
 ## **data_volume_disk_num** / SCT_DATA_VOLUME_DISK_NUM
 
-Number of additional data volumes attached to instances<br>if data_volume_disk_num > 0, then data volumes (ebs on aws) will be<br>used for scylla data directory
+Number of additional data volumes attached to instances<br>if [`data_volume_disk_num`](#data_volume_disk_num) > 0, then data volumes (ebs on aws) will be<br>used for scylla data directory
 
 **default:** 0
 
@@ -220,7 +220,7 @@ Force running iotune on the DB nodes, regardless if image has predefined values
 
 ## **instance_provision** / SCT_INSTANCE_PROVISION
 
-instance_provision: spot|on_demand|spot_fleet
+[`instance_provision`](#instance_provision): spot|on_demand|spot_fleet
 
 **default:** spot
 
@@ -232,7 +232,7 @@ instance_provision: spot|on_demand|spot_fleet
 
 ## **instance_provision_fallback_on_demand** / SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND
 
-instance_provision_fallback_on_demand: create instance on_demand provision type if instance with selected [`instance_provision`](#instance_provision) type creation failed. Expected values: true|false (default - false
+[`instance_provision_fallback_on_demand`](#instance_provision_fallback_on_demand): create instance on_demand provision type if instance with selected [`instance_provision`](#instance_provision) type creation failed. Expected values: true|false (default - false
 
 **default:** N/A
 
@@ -345,7 +345,7 @@ Credential storage backend for KeyStore: 'secretsmanager' (default) or 's3' (leg
 
 ## **keystore_sm_prefix** / SCT_KEYSTORE_SM_PREFIX
 
-AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (default: 'sct/')
+AWS Secrets Manager secret name prefix when [`keystore_backend`](#keystore_backend)=secretsmanager (default: 'sct/')
 
 **default:** sct/
 
@@ -354,7 +354,7 @@ AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (def
 
 ## **keystore_sm_region** / SCT_KEYSTORE_SM_REGION
 
-AWS region holding the KeyStore secrets when keystore_backend=secretsmanager (default: 'us-east-1')
+AWS region holding the KeyStore secrets when [`keystore_backend`](#keystore_backend)=secretsmanager (default: 'us-east-1')
 
 **default:** us-east-1
 
@@ -466,7 +466,7 @@ Cloud region(s) to run in. A space-separated list or YAML list provisions a mult
 
 ## **reuse_cluster** / SCT_REUSE_CLUSTER
 
-If reuse_cluster is set it should hold test_id of the cluster that will be reused.<br>`reuse_cluster: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71`
+If [`reuse_cluster`](#reuse_cluster) is set it should hold [`test_id`](#test_id) of the cluster that will be reused.<br>`reuse_cluster: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71`
 
 **default:** N/A
 
@@ -590,7 +590,7 @@ Cloud-agnostic instance sizing constraints for db_oracle nodes
 
 ## **sizing_loader** / SCT_SIZING_LOADER
 
-Cloud-agnostic instance sizing constraints for loader nodes. Loaders default to Arm. A stress tool whose loader image is published for linux/amd64 only (cassandra-harry, hydra-kcl, ndbench, nosqlbench, and the alternator DNS sidecar used by YCSB when alternator_use_dns_routing is set) sets arch to x86_64 for you. Set arch here to pick the architecture yourself
+Cloud-agnostic instance sizing constraints for loader nodes. Loaders default to Arm. A stress tool whose loader image is published for linux/amd64 only (cassandra-harry, hydra-kcl, ndbench, nosqlbench, and the alternator DNS sidecar used by YCSB when [`alternator_use_dns_routing`](alternator-dynamodb-api.md#alternator_use_dns_routing) is set) sets arch to x86_64 for you. Set arch here to pick the architecture yourself
 
 **default:** {'vcpu': 4, 'memory': '>=8'}
 
@@ -635,7 +635,7 @@ Test duration (min). Parameter used to keep instances produced by tests<br>and f
 
 ## **test_id** / SCT_TEST_ID
 
-Set the test_id of the run manually. Use only from the env before running Hydra
+Set the [`test_id`](#test_id) of the run manually. Use only from the env before running Hydra
 
 **default:** N/A
 

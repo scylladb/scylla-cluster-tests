@@ -4,7 +4,7 @@
 
 The monitoring stack, event severities, Argus reporting and email reports.
 
-**17 options.** Jump to: [argus_email_report_template](#argus_email_report_template) · [argus_use_ssh_tunnel](#argus_use_ssh_tunnel) · [backtrace_decoding](#backtrace_decoding) · [backtrace_decoding_disable_regex](#backtrace_decoding_disable_regex) · [backtrace_stall_decoding](#backtrace_stall_decoding) · [download_from_s3](#download_from_s3) · [email_recipients](#email_recipients) · [email_subject_postfix](#email_subject_postfix) · [enable_argus](#enable_argus) · [enable_kernel_panic_checker](#enable_kernel_panic_checker) · [events_limit_in_email](#events_limit_in_email) · [max_events_severities](#max_events_severities) · [monitor_branch](#monitor_branch) · [monitor_swap_size](#monitor_swap_size) · [print_kernel_callstack](#print_kernel_callstack) · [sct_ngrok_name](#sct_ngrok_name) · [scylla_rsyslog_setup](#scylla_rsyslog_setup)
+**17 options.**
 
 
 ## **argus_email_report_template** / SCT_ARGUS_EMAIL_REPORT_TEMPLATE
@@ -39,7 +39,7 @@ If True, all backtraces found in db nodes would be decoded automatically
 
 ## **backtrace_decoding_disable_regex** / SCT_BACKTRACE_DECODING_DISABLE_REGEX
 
-Regex pattern to disable backtrace decoding for specific event types. If an event type matches<br>this regex, its backtrace will not be decoded. This can be used to reduce overhead in performance tests<br>by skipping backtrace decoding for certain types of events. Only applies when backtrace_decoding is True.
+Regex pattern to disable backtrace decoding for specific event types. If an event type matches<br>this regex, its backtrace will not be decoded. This can be used to reduce overhead in performance tests<br>by skipping backtrace decoding for certain types of events. Only applies when [`backtrace_decoding`](#backtrace_decoding) is True.
 
 **default:** N/A
 
@@ -48,7 +48,7 @@ Regex pattern to disable backtrace decoding for specific event types. If an even
 
 ## **backtrace_stall_decoding** / SCT_BACKTRACE_STALL_DECODING
 
-If True, reactor stall backtraces will be decoded. If False, reactor stalls are skipped during<br>backtrace decoding to reduce overhead in performance tests. Only applies when backtrace_decoding is True.
+If True, reactor stall backtraces will be decoded. If False, reactor stalls are skipped during<br>backtrace decoding to reduce overhead in performance tests. Only applies when [`backtrace_decoding`](#backtrace_decoding) is True.
 
 **default:** True
 

@@ -9,7 +9,7 @@
 #
 # See LICENSE for more details.
 #
-# Copyright (c) 2020 ScyllaDB
+# Copyright (c) 2026 ScyllaDB
 
 """
 Backend lists and per-backend requirement tables for the SCT configuration.

@@ -4,7 +4,7 @@
 
 Which disruptions run, how often, and how targets are selected.
 
-**12 options.** Jump to: [nemesis_add_node_cnt](#nemesis_add_node_cnt) · [nemesis_class_name](#nemesis_class_name) · [nemesis_double_load_during_grow_shrink_duration](#nemesis_double_load_during_grow_shrink_duration) · [nemesis_during_prepare](#nemesis_during_prepare) · [nemesis_filter_seeds](#nemesis_filter_seeds) · [nemesis_grow_shrink_instance_type](#nemesis_grow_shrink_instance_type) · [nemesis_interval](#nemesis_interval) · [nemesis_multiply_factor](#nemesis_multiply_factor) · [nemesis_seed](#nemesis_seed) · [nemesis_selector](#nemesis_selector) · [nemesis_sequence_sleep_between_ops](#nemesis_sequence_sleep_between_ops) · [sla](#sla)
+**12 options.**
 
 
 ## **nemesis_add_node_cnt** / SCT_NEMESIS_ADD_NODE_CNT
@@ -18,7 +18,7 @@ Add/remove nodes during GrowShrinkCluster nemesis
 
 ## **nemesis_class_name** / SCT_NEMESIS_CLASS_NAME
 
-Nemesis class to use (possible types in sdcm.nemesis).<br>Supported syntax:<br>- nemesis_class_name: "NemesisName"<br>Run one nemesis in a single thread.<br>- nemesis_class_name: ["NemesisA", "NemesisB"]<br>Run NemesisA and NemesisB each in their own thread.<br>- nemesis_class_name: ["SisyphusMonkey", "SisyphusMonkey"]<br>Run two SisyphusMonkey threads in parallel.<br>Note: the former 'Class:N' count syntax (e.g. "ChaosMonkey:2") and<br>space-separated strings (e.g. "DisruptiveMonkey NonDisruptiveMonkey") are no<br>longer supported. Use an explicit YAML list instead.
+Nemesis class to use (possible types in sdcm.nemesis).<br>Supported syntax:<br>- [`nemesis_class_name`](#nemesis_class_name): "NemesisName"<br>Run one nemesis in a single thread.<br>- [`nemesis_class_name`](#nemesis_class_name): ["NemesisA", "NemesisB"]<br>Run NemesisA and NemesisB each in their own thread.<br>- [`nemesis_class_name`](#nemesis_class_name): ["SisyphusMonkey", "SisyphusMonkey"]<br>Run two SisyphusMonkey threads in parallel.<br>Note: the former 'Class:N' count syntax (e.g. "ChaosMonkey:2") and<br>space-separated strings (e.g. "DisruptiveMonkey NonDisruptiveMonkey") are no<br>longer supported. Use an explicit YAML list instead.
 
 **default:** NoOpMonkey
 
@@ -90,7 +90,7 @@ A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
 
 ## **nemesis_selector** / SCT_NEMESIS_SELECTOR
 
-nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has<br>ALL the properties in that list which are set to true (the intersection of all properties).<br>(In other words filters out all nemesis that doesn't ONE of these properties set to true)<br>IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.
+[`nemesis_selector`](#nemesis_selector) gets a list of "nemesis properties" and filters IN all the nemesis that has<br>ALL the properties in that list which are set to true (the intersection of all properties).<br>(In other words filters out all nemesis that doesn't ONE of these properties set to true)<br>IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.
 
 **default:** N/A
 

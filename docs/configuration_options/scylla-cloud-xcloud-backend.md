@@ -4,7 +4,7 @@
 
 Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options.
 
-**12 options.** Jump to: [cloud_cluster_id](#cloud_cluster_id) · [cloud_credentials_path](#cloud_credentials_path) · [cloud_prom_bearer_token](#cloud_prom_bearer_token) · [cloud_prom_host](#cloud_prom_host) · [cloud_prom_path](#cloud_prom_path) · [xcloud_availability_zones](#xcloud_availability_zones) · [xcloud_credentials_path](#xcloud_credentials_path) · [xcloud_env](#xcloud_env) · [xcloud_provider](#xcloud_provider) · [xcloud_replication_factor](#xcloud_replication_factor) · [xcloud_scaling_config](#xcloud_scaling_config) · [xcloud_vpc_peering](#xcloud_vpc_peering)
+**12 options.**
 
 
 ## **cloud_cluster_id** / SCT_CLOUD_CLUSTER_ID
