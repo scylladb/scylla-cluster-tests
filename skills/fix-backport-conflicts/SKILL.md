@@ -4,8 +4,9 @@ description: >-
   Fix inline merge conflict markers in backport PRs by resolving
   conflicts and recommitting cleanly with original metadata preserved.
   Use when a backport PR has unresolved conflict markers, a cherry-pick
-  produced merge conflicts, or a PR has the 'conflicts' label and needs
-  to be made ready for review. Supports bulk mode for multiple PRs.
+  produced merge conflicts, a PR has the 'conflicts' label and needs
+  to be made ready for review, or files show <<<<<<< / ======= / >>>>>>>
+  markers from a bad cherry-pick. Supports bulk mode for multiple PRs.
 disable-model-invocation: true
 argument-hint: <PR-number> [PR-number...]
 ---
@@ -30,7 +31,7 @@ a completely isolated git state.
 For each PR number in `$ARGUMENTS`, launch a parallel Agent with:
 - `isolation: "worktree"`
 - `subagent_type: "general-purpose"`
-- A prompt containing: the PR number, and the full Workflow below (copy it into the prompt)
+- A prompt containing: the PR number, and the full Workflow from `references/workflow.md`
 
 After all subagents complete, summarize which PRs succeeded and which failed or had ambiguous
 conflicts requiring user input. Remind the user to review the changes.
@@ -38,127 +39,62 @@ conflicts requiring user input. Remind the user to review the changes.
 ## Helper Script
 
 All dangerous git operations (rebase, reset, commit --no-verify, force-push) are wrapped in
-`.claude/scripts/fix-backport.sh`. This script is the ONLY command allowed in project
-permissions, keeping the blast radius small. Available subcommands:
+the helper script at `.claude/scripts/fix-backport.sh`. The script lives on `master` and
+does NOT exist on PR branches.
 
-| Subcommand | Purpose |
-|------------|---------|
-| `checkout <PR>` | Checkout PR branch, print base/head/headRepoOwner as JSON |
-| `rebase <BASE_REF>` | Fetch latest base branch and rebase PR onto it |
-| `rebase-continue` | Continue rebase after resolving conflicts |
-| `resolve-commit` | Stage all + temp commit (--no-verify) |
-| `prepare-recommit <BASE_REF>` | Tag resolved tree, hard-reset to base for clean recommit |
-| `recommit <HASH>` | Copy files from resolved tree for one commit, commit with original author |
-| `push <REMOTE> <BRANCH>` | Force-push with --force-with-lease |
-| `update-pr <PR>` | Remove conflicts label + mark ready |
-| `verify` | Check no conflict markers remain |
+**Derive the script path dynamically — never hardcode an absolute path:**
 
-## Workflow (executed by the subagent inside its worktree)
-
-**All commands run from the worktree's working directory. Never use `git -C`.**
-
-### 1. Checkout the PR
-
-```
-.claude/scripts/fix-backport.sh checkout $PR_NUMBER
+```bash
+SCRIPT="$(git worktree list | head -1 | awk '{print $1}')/.claude/scripts/fix-backport.sh"
 ```
 
-This prints JSON with `base`, `head`, and `headRepoOwner` fields. Save all three.
-The `headRepoOwner` is the git remote name to push to (e.g. `scylladbbot`, not `origin`).
-Backport PRs are typically created by bots on their own forks.
+**Bootstrap fallback** — if `$SCRIPT` is not accessible (e.g. main worktree unavailable):
 
-### 2. Rebase onto the latest base branch
-
-```
-.claude/scripts/fix-backport.sh rebase upstream/<baseRefName>
-```
-
-This fetches the latest state of the base branch and rebases the PR commits onto it.
-Rebasing BEFORE resolving conflicts ensures we work against the current target code.
-If we resolved first and rebased after, the rebase could introduce new conflicts,
-requiring double work.
-
-**If the rebase prints `REBASE_OK`:** The PR is now up to date with the base. Proceed
-to step 3.
-
-**If the rebase prints `REBASE_CONFLICTS`:** The rebase stopped because git couldn't
-auto-resolve the cherry-pick against the latest base. This is the expected case for
-backport PRs with the `conflicts` label. The conflicted files are in the working tree.
-Skip to step 3 (the conflict markers are already there from the rebase).
-
-### 3. Check for inline conflict markers
-
-```
-.claude/scripts/fix-backport.sh verify
+```bash
+if [ ! -x "$SCRIPT" ]; then
+    git show upstream/master:.claude/scripts/fix-backport.sh > /tmp/fix-backport.sh
+    chmod +x /tmp/fix-backport.sh
+    SCRIPT="/tmp/fix-backport.sh"
+fi
 ```
 
-If it prints "CLEAN", the rebase resolved everything automatically. Run
-`rebase-continue` if needed, then skip to step 7 (push).
+The script is already permitted in `.claude/settings.json`. Always use `$SCRIPT <subcommand>`
+for all git operations — never run raw git rebase/reset/push directly.
 
-### 4. Understand each conflict
+## Remotes
 
-Read each conflicted file. For each conflict block, identify:
-- **HEAD side** — changes already in the base branch
-- **Incoming side** — changes from the cherry-picked/backported commit
-- **Parent (if diff3)** — the common ancestor version
+- `upstream` = target repo (scylladb/scylla-cluster-tests) — rebase target, NEVER push here
+- `origin` = user's fork — NEVER push here for backport PRs
+- `<headRepoOwner>` (e.g. `scylladbbot`) = the bot's fork where the PR lives — **push HERE only**
 
-Determine the correct resolution by combining both sides:
-- Keep new features/fixes from both HEAD and the incoming change
-- Use the incoming commit's architectural approach when that's the purpose of the backport
-- Preserve additions from HEAD that don't conflict with the incoming approach
+## Workflow Summary
 
-### 5. Resolve the conflicts
+See `references/workflow.md` for detailed step-by-step instructions. High-level flow:
 
-Edit the files to remove all conflict markers and produce the correct merged code.
-Then verify:
-```
-.claude/scripts/fix-backport.sh verify
-```
-Must print "CLEAN" before proceeding.
+1. **Bootstrap** — derive `$SCRIPT` path, verify or fallback
+2. **Checkout** — `$SCRIPT checkout $PR_NUMBER` → save base ref + push command
+3. **Rebase** — `$SCRIPT rebase upstream/<baseRefName>` → handle OK/conflicts/error
+4. **Verify** — `$SCRIPT verify` → if CLEAN skip to push, otherwise resolve
+5. **Resolve & recommit** — edit files, remove markers, `resolve-commit`, `prepare-recommit`, `recommit` per original hash
+6. **Push** — use the push command from checkout output, then `update-pr`
 
-Then complete the rebase:
-```
-git add <resolved-files>
-.claude/scripts/fix-backport.sh rebase-continue
-```
+## Decision Points
 
-If there are multiple commits being rebased and the next one also has conflicts,
-repeat steps 3-5 for each.
+| Situation | Action |
+|-----------|--------|
+| `REBASE_OK` + `verify` = CLEAN | Skip to push (step 6) |
+| `REBASE_CONFLICTS` | Resolve in-place, `git add`, `$SCRIPT rebase-continue` |
+| `verify` finds markers after rebase | Full recommit flow (step 4 in workflow) |
+| `ERROR: Found N commits` (>50) | Wrong base ref — abort, report to user |
+| Ambiguous conflict resolution | Ask user before proceeding |
+| Script not found at derived path | Use bootstrap fallback to `/tmp/fix-backport.sh` |
 
-### 6. Verify the result
+## Critical Rules
 
-After the rebase completes:
-
-```
-.claude/scripts/fix-backport.sh verify
-git log --oneline upstream/<baseRefName>..HEAD
-git show --stat HEAD
-```
-
-Confirm:
-- No conflict markers remain
-- Commit count matches the original PR
-- Each commit's `--stat` matches expected files (compare with parent PR if needed)
-- No files outside the original commit's scope are included
-
-### 7. Push and update PR
-
-```
-.claude/scripts/fix-backport.sh push <headRepoOwner> <headRefName>
-.claude/scripts/fix-backport.sh update-pr $PR_NUMBER
-```
-
-**CRITICAL:** Use `headRepoOwner` from step 1 as the remote — NOT `origin`.
-Backport PRs are created by bots (e.g. `scylladbbot`) on their forks. Pushing
-to `origin` goes to the wrong fork and leaves the PR unchanged.
-
-## Important rules
-
-- **Always dispatch to a worktree subagent** — never run the workflow in the current working directory
-- **Always rebase onto the latest base branch first** — resolving stale conflicts wastes work if the rebase introduces new ones
-- **Use `.claude/scripts/fix-backport.sh`** for all dangerous operations — raw git reset/commit --no-verify/push are not in the permission allowlist
+- **Always derive `$SCRIPT` dynamically** — never hardcode absolute paths
+- **Always dispatch to a worktree subagent** — never run in current working directory
+- **Always rebase onto latest base first** — resolving stale conflicts wastes work
 - **Never use `git stash`** — stashes are global across worktrees
 - **Never use `git -C`** — all commands run from the worktree working directory
-- **Verify file scope after rebase** — each commit must touch ONLY the files from the original commit, nothing else
-- Never modify commit messages beyond what's needed (preserve co-author lines, cherry-pick references, etc.)
+- **Verify file scope after recommit** — each commit must touch ONLY its original files
 - If a conflict resolution is ambiguous, ask the user before proceeding
