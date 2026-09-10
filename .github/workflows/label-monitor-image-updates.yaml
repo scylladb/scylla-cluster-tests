@@ -1,0 +1,38 @@
+name: Add test-integration label on monitor image updates
+
+# A monitor image bump can only be validated against the real clouds: `sct.py lint-pipelines`
+# stubs image resolution out so it can run without credentials, so a name that was never
+# published still lints clean (SCT-910). unit_tests/integration/test_default_monitor_images.py
+# does the real lookup, and it only runs when the PR carries the `test-integration` label —
+# so add that label automatically whenever the default monitor images change.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'defaults/aws_config.yaml'
+      - 'defaults/gce_config.yaml'
+
+jobs:
+  label-monitor-image-update:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Add test-integration label when a monitor image changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Only added/removed lines, so an unrelated edit to those files is not enough
+          if gh pr diff "$PR_NUMBER" --repo "$REPO" \
+              | grep -E '^[+-][^+-]' \
+              | grep -qE '(ami_id_monitor|gce_image_monitor):'; then
+            echo "Monitor image changed in PR #$PR_NUMBER, adding 'test-integration' label"
+            gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "test-integration"
+          else
+            echo "No monitor image change in PR #$PR_NUMBER, nothing to do"
+          fi
