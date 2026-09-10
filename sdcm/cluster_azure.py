@@ -105,6 +105,10 @@ class AzureNode(cluster.BaseNode):
         self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
         if network_interfaces_count(self.parent_cluster.params) > 1:
             self._configure_secondary_nics_os()
+        # built after the remoter is up: resolving the device name of each interface needs the
+        # MAC -> device map read off the node
+        self.scylla_network_configuration = self._build_scylla_network_configuration()
+        self.refresh_network_interfaces_info()
 
     def _configure_secondary_nics_os(self):
         """Configure OS-level addresses and routing for the secondary NICs.
