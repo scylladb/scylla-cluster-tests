@@ -46,9 +46,19 @@
       "title": "Health Check Optimization",
       "file": "infrastructure/health-check-optimization.md",
       "domain": "framework",
-      "status": "draft",
+      "status": "in_progress",
       "created": "2026-01-11",
-      "phases_total": null,
+      "phases_total": 7,
+      "phases_done": 2
+    },
+    {
+      "id": "health-check-sampling",
+      "title": "Health Check Node Sampling",
+      "file": "infrastructure/health-check-sampling.md",
+      "domain": "framework",
+      "status": "draft",
+      "created": "2026-09-08",
+      "phases_total": 2,
       "phases_done": 0
     },
     {
@@ -269,15 +279,6 @@
       "domain": "config",
       "status": "pending_pr",
       "pr": 13845,
-      "phases_total": null,
-      "phases_done": 0
-    },
-    {
-      "id": "nemesis-extraction-phase3",
-      "title": "Nemesis Extraction Phase 3",
-      "domain": "nemesis",
-      "status": "pending_pr",
-      "pr": 13769,
       "phases_total": null,
       "phases_done": 0
     },
