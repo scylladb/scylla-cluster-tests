@@ -59,6 +59,9 @@ DEFAULT_STUCK_VM_TOTAL_TIMEOUT = 4500
 # Azure itself caps a VM at 8 NICs, so anything above that cannot be provisioned in any case.
 AZURE_SUPPORTED_NETWORK_INTERFACES = 8
 
+# node types the multi-NIC layout applies to; everything else keeps a single interface
+DB_NODE_TYPES = ("scylla-db", "oracle-db")
+
 
 class AzureProvisioner(Provisioner):
     """Provides api for VM provisioning in Azure cloud, tuned for Scylla QA."""
@@ -265,13 +268,15 @@ class AzureProvisioner(Provisioner):
         """Provision all Azure resources needed for the given VM definitions."""
         # validate before creating anything, so an impossible layout fails in seconds instead of
         # after a resource group, a VNet and a set of NICs already exist
+        layouts = {definition.name: self._interfaces_for(definition) for definition in definitions}
         for definition in definitions:
-            self._validate_network_interfaces_count(definition.type)
+            self._validate_network_interfaces_count(definition.type, len(layouts[definition.name]))
 
         self._rg_provider.get_or_create()
         sec_group_id = self._network_sec_group_provider.get_or_create(security_rules=ScyllaOpenPorts).id
         vnet_name = self._vnet_provider.get_or_create(ipv6=self._ipv6_enabled).name
 
+        # every node type shares the same subnets, so they are created once for the widest layout
         subnet_ids = [
             self._subnet_provider.get_or_create(
                 vnet_name,
@@ -287,12 +292,14 @@ class AzureProvisioner(Provisioner):
         # node that asked for public access at all. An Azure IPv6 Public IP is billed, so an
         # interface without 'public_ipv6' gets a VNet-local address only.
         plans = {definition.name: [] for definition in definitions}
-        for index, interface in enumerate(self._network_interfaces):
-            for version, wanted in (("IPV4", interface["public_ip"]), ("IPV6", interface["public_ipv6"])):
-                self._ip_provider.get_or_create(
-                    instance_definitions=definitions if wanted else [], version=version, index=index
-                )
-            for definition in definitions:
+        for index in range(len(self._network_interfaces)):
+            at_index = [definition for definition in definitions if len(layouts[definition.name]) > index]
+            for version in ("IPV4", "IPV6"):
+                key = "public_ip" if version == "IPV4" else "public_ipv6"
+                wanted = [definition for definition in at_index if layouts[definition.name][index][key]]
+                self._ip_provider.get_or_create(instance_definitions=wanted, version=version, index=index)
+            for definition in at_index:
+                interface = layouts[definition.name][index]
                 addresses = {}
                 for version, key in (("IPV4", "public_ip"), ("IPV6", "public_ipv6")):
                     address = (
@@ -331,9 +338,22 @@ class AzureProvisioner(Provisioner):
                 addresses.append(self._ip_provider.get(name, version=version, index=index))
         return addresses
 
-    def _validate_network_interfaces_count(self, instance_type: str) -> None:
+    def _interfaces_for(self, definition: InstanceDefinition) -> List[dict]:
+        """NIC layout of one node.
+
+        Only DB nodes take the secondary interfaces: 'azure_network_interfaces' describes the
+        network topology Scylla is tested on. A loader or a monitor keeps a single interface - it
+        reaches the secondary subnets over intra-VNet routing anyway, and their smaller VM sizes
+        often accept fewer NICs than a DB node's. The primary interface spec is kept as is, so an
+        IPv6 run gives them the address they need to talk to IPv6 DB nodes and to be reached by SCT
+        when 'ip_ssh_connections' is 'ipv6'.
+        """
+        if definition.tags.get("NodeType") in DB_NODE_TYPES:
+            return self._network_interfaces
+        return self._network_interfaces[:1]
+
+    def _validate_network_interfaces_count(self, instance_type: str, count: int) -> None:
         """Reject a NIC count the VM size cannot carry, before the create call."""
-        count = len(self._network_interfaces)
         if count <= 1:
             return
 

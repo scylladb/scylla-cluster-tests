@@ -54,7 +54,7 @@ def fixture_make_provisioner(azure_service):
     return _make
 
 
-def definition(name: str, instance_type: str = "Standard_L8s_v3") -> InstanceDefinition:
+def definition(name: str, instance_type: str = "Standard_L8s_v3", node_type: str = "scylla-db") -> InstanceDefinition:
     return InstanceDefinition(
         name=name,
         image_id="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers"
@@ -62,7 +62,7 @@ def definition(name: str, instance_type: str = "Standard_L8s_v3") -> InstanceDef
         type=instance_type,
         user_name="tester",
         ssh_key=KeyStore().get_ssh_key_pair(name="scylla_test_id_ed25519"),
-        tags={"test-tag": "test_value"},
+        tags={"test-tag": "test_value", "NodeType": node_type},
         user_data=None,
         use_public_ip=True,
     )
@@ -296,3 +296,82 @@ class TestIpv6:
 
         vnet = azure_service.network.virtual_networks.get(provisioner.resource_group_name, "default")
         assert vnet.address_space.address_prefixes == ["10.0.0.0/16"]
+
+
+class TestNodeTypeLayout:
+    """Only DB nodes take the secondary interfaces."""
+
+    @pytest.mark.parametrize("node_type", ["loader", "monitor"])
+    def test_non_db_nodes_keep_a_single_interface(self, make_provisioner, node_type):
+        provisioner = make_provisioner(3)
+        instance = provisioner.get_or_create_instance(
+            definition(f"{node_type}-vm", node_type=node_type), PricingModel.ON_DEMAND
+        )
+
+        assert nic_names(provisioner, instance.name) == [f"{node_type}-vm-nic"]
+
+    @pytest.mark.parametrize("node_type", ["scylla-db", "oracle-db"])
+    def test_db_nodes_take_the_full_layout(self, make_provisioner, node_type):
+        provisioner = make_provisioner(3)
+        instance = provisioner.get_or_create_instance(
+            definition(f"{node_type}-vm", node_type=node_type), PricingModel.ON_DEMAND
+        )
+
+        assert len(nic_names(provisioner, instance.name)) == 3
+
+    def test_a_small_monitor_size_is_not_rejected_by_a_wide_db_layout(self, make_provisioner):
+        """Standard_D2_v4 carries 2 NICs; a 3-NIC DB layout must not fail the monitor."""
+        provisioner = make_provisioner(3)
+        instance = provisioner.get_or_create_instance(
+            definition("small-monitor-vm", instance_type="Standard_D2_v4", node_type="monitor"),
+            PricingModel.ON_DEMAND,
+        )
+
+        assert nic_names(provisioner, instance.name) == ["small-monitor-vm-nic"]
+
+    def test_non_db_nodes_still_get_ipv6_when_the_run_enables_it(self, make_provisioner):
+        """A monitor must reach IPv6 DB nodes, and SCT must reach it under ip_ssh_connections: ipv6."""
+        specs = [
+            {"subnet": "default", "public_ip": True, "ipv6": True, "public_ipv6": True},
+            {"subnet": "nic1", "public_ip": False, "ipv6": True, "public_ipv6": False},
+        ]
+        provisioner = make_provisioner(2, specs=specs)
+        instance = provisioner.get_or_create_instance(
+            definition("ipv6-monitor-vm", node_type="monitor"), PricingModel.ON_DEMAND
+        )
+
+        (nic,) = provisioner._nic_provider.get_all(instance.name)  # noqa: SLF001
+        assert [config.private_ip_address_version for config in nic.ip_configurations] == ["IPv4", "IPv6"]
+        assert nic.ip_configurations[1].public_ip_address is not None
+
+
+class TestMonitoringConnectivity:
+    """What monitoring needs to reach a node on any of its interfaces."""
+
+    def test_every_subnet_carries_the_scylla_security_group(self, make_provisioner, azure_service):
+        """Prometheus scrapes a DB node on the address scylla_network_config picks, which may be on
+        a secondary subnet - so the open-ports rules must apply there too, not only on 'default'."""
+        provisioner = make_provisioner(3)
+        provisioner.get_or_create_instance(definition("nsg-vm"), PricingModel.ON_DEMAND)
+        resource_group = provisioner.resource_group_name
+
+        security_group_ids = {
+            azure_service.network.subnets.get(resource_group, "default", subnet_name).network_security_group.id
+            for subnet_name in ("default", "nic1", "nic2")
+        }
+        assert len(security_group_ids) == 1, "all subnets must share the one SCT security group"
+        assert None not in security_group_ids
+
+    def test_monitor_and_db_nodes_share_the_vnet(self, make_provisioner, azure_service):
+        """Intra-VNet routing is what lets a single-NIC monitor reach a DB node's secondary subnet."""
+        provisioner = make_provisioner(2)
+        db_node = provisioner.get_or_create_instance(definition("conn-db-vm"), PricingModel.ON_DEMAND)
+        monitor = provisioner.get_or_create_instance(
+            definition("conn-monitor-vm", node_type="monitor"), PricingModel.ON_DEMAND
+        )
+
+        def vnet_of(name):
+            nic = provisioner._nic_provider.get_all(name)[0]  # noqa: SLF001
+            return nic.ip_configurations[0].subnet.id.split("/subnets/")[0]
+
+        assert vnet_of(db_node.name) == vnet_of(monitor.name)
