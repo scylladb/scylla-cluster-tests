@@ -248,7 +248,13 @@ class AdaptiveTimeoutStore(metaclass=Singleton):
     Used for future reference/node operations time tracking and calculations optimization."""
 
     def store(
-        self, metrics: dict[str, Any], operation: str, duration: int | float, timeout: int, timeout_occurred: bool
+        self,
+        metrics: dict[str, Any],
+        operation: str,
+        duration: int | float,
+        timeout: int,
+        timeout_occurred: bool,
+        hard_timeout: int | float | None = None,
     ) -> None:
         pass
 
@@ -263,6 +269,7 @@ class ArgusAdaptiveTimeoutResult:
     operation: str
     duration: int
     timeout: int
+    hard_timeout: int | None
     timeout_occurred: bool
     end_time: str
     metrics: dict[str, Any]
@@ -277,6 +284,7 @@ class AdaptiveTimeoutResultsTable(StaticGenericResultTable):
         columns = [
             ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
             ColumnMetadata(name="timeout", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="hard_timeout", unit="HH:MM:SS", type=ResultType.DURATION),
             ColumnMetadata(name="end_time", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="cpu_load_5", unit="%", type=ResultType.FLOAT, visible=False),
             ColumnMetadata(name="shards_count", unit="", type=ResultType.INTEGER, visible=False),
@@ -318,6 +326,8 @@ class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
             status=Status.PASS if not result.timeout_occurred else Status.ERROR,
         )
         table.add_result(column="timeout", row=f"#{cycle}", value=result.timeout, status=Status.UNSET)
+        if result.hard_timeout is not None:
+            table.add_result(column="hard_timeout", row=f"#{cycle}", value=result.hard_timeout, status=Status.UNSET)
         table.add_result(column="end_time", row=f"#{cycle}", value=result.end_time, status=Status.UNSET)
         table.add_result(
             column="cpu_load_5", row=f"#{cycle}", value=result.metrics.get("cpu_load_5"), status=Status.UNSET
@@ -366,11 +376,20 @@ class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
         logging.debug("Submitting adaptive timeout results to Argus: %s", table.as_dict())
         submit_results_to_argus(argus_client, table)
 
-    def store(self, metrics: dict[str, Any], operation: str, duration: float, timeout: float, timeout_occurred: bool):
+    def store(
+        self,
+        metrics: dict[str, Any],
+        operation: str,
+        duration: float,
+        timeout: float,
+        timeout_occurred: bool,
+        hard_timeout: float | None = None,
+    ):
         result = ArgusAdaptiveTimeoutResult(
             operation=operation,
             duration=int(duration),
             timeout=int(timeout),
+            hard_timeout=int(hard_timeout) if hard_timeout is not None else None,
             timeout_occurred=timeout_occurred,
             end_time="N/A",
             metrics=metrics.copy(),
