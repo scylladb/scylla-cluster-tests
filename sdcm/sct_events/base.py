@@ -444,6 +444,7 @@ class LogEventProtocol(SctEventProtocol, Protocol[T_log_event]):
     line_number: int
     backtrace: Optional[str]
     raw_backtrace: Optional[str]
+    build_id: Optional[str]
 
     def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event: ...
 
@@ -464,6 +465,7 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
         self.line_number = 0
         self.backtrace = None
         self.raw_backtrace = None
+        self.build_id: Optional[str] = None
         self.subcontext = []
         self.known_issue = None
 
@@ -519,6 +521,8 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
             fmt += " node={0.node}"
         if self.known_issue:
             fmt += " known_issue={0.known_issue}"
+        if self.build_id:
+            fmt += " build_id={0.build_id}"
         if self.line is not None:
             fmt += "\n{0.line}"
         if self.backtrace:
