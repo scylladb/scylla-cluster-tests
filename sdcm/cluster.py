@@ -238,6 +238,8 @@ HOUR_IN_SEC: int = 60 * MINUTE_IN_SEC
 MAX_TIME_WAIT_FOR_NEW_NODE_UP: int = HOUR_IN_SEC * 8
 MAX_TIME_WAIT_FOR_ALL_NODES_UP: int = MAX_TIME_WAIT_FOR_NEW_NODE_UP + HOUR_IN_SEC
 MAX_TIME_WAIT_FOR_DECOMMISSION: int = HOUR_IN_SEC * 6
+# cooldown for this build after backtrace service failure
+BACKTRACE_SERVICE_COOLDOWN_SEC: int = 15 * MINUTE_IN_SEC
 
 LOGGER = logging.getLogger(__name__)
 
@@ -377,6 +379,7 @@ class BaseNode(AutoSshContainerMixin):
         self._db_log_reader_thread = None
         self._scylla_manager_journal_thread = None
         self._decoding_backtraces_thread = None
+        self._backtrace_service_cooldown: dict[str, float] = {}
 
         self._short_hostname = None
         self._alert_manager: Optional[PrometheusAlertManagerListener] = None
@@ -1841,16 +1844,23 @@ class BaseNode(AutoSshContainerMixin):
 
     def start_decode_on_monitor_node_thread(self):
         self._decoding_backtraces_thread = threading.Thread(
-            target=self.decode_backtrace, name="DecodeOnMonitorNodeThread", daemon=True
+            target=self.decode_backtrace, name="DecodeBacktraceThread", daemon=True
         )
         self._decoding_backtraces_thread.daemon = True
         self._decoding_backtraces_thread.start()
 
     @lru_cache(maxsize=None)
+    @retrying(
+        n=3,
+        sleep_time=5,
+        allowed_exceptions=(requests.RequestException,),
+        message="Decoding backtrace via backtrace.scylladb.com",
+    )
     def _decode_via_external_service(self, build_id: str, raw_backtrace: str) -> str:
         """Decode backtrace using the external backtraces.scylladb.com service.
 
-        Avoids loading 1+ GB DWARF debug info on the monitor node (prevents OOM).
+        Transient HTTP/network errors (404, 5xx, timeouts, connection errors) are retried;
+        a reply with success=false is a processing error on the service side and is final.
 
         Args:
             build_id: hex build ID of the scylla binary
@@ -1860,7 +1870,7 @@ class BaseNode(AutoSshContainerMixin):
             decoded backtrace string (stdout from the service)
 
         Raises:
-            requests.RequestException: on network/HTTP error
+            requests.RequestException: on network/HTTP error after all retries
             ValueError: if the service returns success=false
         """
         response = requests.post(
@@ -1883,42 +1893,10 @@ class BaseNode(AutoSshContainerMixin):
                     break
                 event = obj["event"]
                 self.log.debug("Event origin severity: %s", event.severity)
-                build_id = obj["build_id"]
-                raw_backtrace_oneline = " ".join(event.raw_backtrace.split("\n"))
-
-                decoded = None
-                if build_id:
-                    try:
-                        decoded = self._decode_via_external_service(build_id, event.raw_backtrace)
-                        self.log.debug("Decoded backtrace via external service for build_id=%s", build_id)
-                    except Exception as exc:  # noqa: BLE001
-                        self.log.warning("External backtrace service failed (%s), falling back to local addr2line", exc)
-
-                if decoded is None:
-                    scylla_debug_file = self.copy_scylla_debug_info(obj["node"], build_id)
-                    decoded = self.decode_backtrace_local(scylla_debug_file, raw_backtrace_oneline).stdout
-
-                event.backtrace = decoded
-                the_map = FindIssuePerBacktrace()
-                if issue_url := the_map.find_issue(backtrace_type=event.type, decoded_backtrace=event.backtrace):
-                    event.known_issue = issue_url
-                    skip_per_issue = SkipPerIssues(issue_url, self.parent_cluster.params)
-                    # If found issue is closed
-                    if not skip_per_issue.issues_opened():
-                        if skip_per_issue.issues_labeled():
-                            # If found issue has skip label, this issue was fixed but won't be backported to the tested branch.
-                            # So this reactor stall is expected and shouldn't fail the test
-                            # if this event severity is Error or Critical - decrease to warning.
-                            event.severity = (
-                                Severity.WARNING if event.severity.value > Severity.WARNING.value else event.severity
-                            )
-                        else:
-                            # If found issue has no skip label - increase severity to Error (if not).
-                            # A reason: the issue was fixed, and it is not expected to get this reactor stall
-                            event.severity = (
-                                Severity.ERROR if event.severity.value < Severity.ERROR.value else event.severity
-                            )
-                    self.log.debug("Found issue for %s event: %s", event.event_id, event.known_issue)
+                event.build_id = obj["build_id"]
+                if decoded := self._decode_backtrace_via_service(event.build_id, event.raw_backtrace):
+                    event.backtrace = decoded
+                    self._match_known_issue(event)
             except queue.Empty:
                 pass
             except Exception as details:  # noqa: BLE001
@@ -1933,73 +1911,52 @@ class BaseNode(AutoSshContainerMixin):
             if self.termination_event.is_set() and self.test_config.DECODING_QUEUE.empty():
                 break
 
-    def copy_scylla_debug_info(self, node_name: str, build_id: str):
-        """Copy scylla debug file from db-node to monitor-node.
+    def _decode_backtrace_via_service(self, build_id: Optional[str], raw_backtrace: str) -> Optional[str]:
+        """Decode a backtrace with backtrace.scylladb.com, or return None to publish it undecoded.
 
-        Skip if debug file already exists on monitor node.
-
-        Copy via builder
-        :param node_name: db node name
-        :type node_name: str
-        :param build_id: build id of scylla binary
-        :type build_id: str
-        :returns: path on monitor node
-        :rtype: {str}
+        Backtraces are never decoded locally. An undecoded backtrace can still be decoded later from
+        the build id and the raw addresses.
         """
-        final_scylla_debug_file = os.path.join("/tmp", f"debug_{build_id}")
-        res = self.remoter.run("test -f {}".format(final_scylla_debug_file), ignore_status=True, verbose=False)
-        if res.exited == 0:
-            return final_scylla_debug_file
-        db_nodes = self.parent_cluster.targets["db_cluster"].nodes
-        db_node = next(iter([n for n in db_nodes if n.name == node_name]), None)
-        assert db_node, f"Node named: {node_name} wasn't found"
+        if not build_id:
+            self.log.warning("No build-id known for this backtrace, publishing it undecoded")
+            return None
 
-        debug_file = db_node.get_scylla_debuginfo_file(build_id)
-        LOGGER.debug("Debug info file %s", debug_file)
-        base_scylla_debug_file = os.path.basename(debug_file)
-        transit_scylla_debug_file = os.path.join(db_node.parent_cluster.logdir, base_scylla_debug_file)
-        db_node.remoter.receive_files(debug_file, transit_scylla_debug_file)
-        self.remoter.send_files(transit_scylla_debug_file, final_scylla_debug_file)
-        self.log.info("File on monitor node %s: %s", self, final_scylla_debug_file)
-        self.log.info("Remove transit file: %s", transit_scylla_debug_file)
-        os.remove(transit_scylla_debug_file)
-        return final_scylla_debug_file
+        if time.monotonic() < self._backtrace_service_cooldown.get(build_id, 0):
+            self.log.debug("Backtrace service is in cooldown for build_id=%s, publishing raw backtrace", build_id)
+            return None
 
-    def get_scylla_debuginfo_file(self, build_id: str):
-        """Lookup the scylla debug information for a given build_id."""
-        # first try default location
-        scylla_debug_info = "/usr/lib/debug/bin/scylla.debug"
-        results = self.remoter.run(f"[[ -f {scylla_debug_info} ]]", ignore_status=True)
-        if results.ok:
-            return scylla_debug_info
+        try:
+            decoded = self._decode_via_external_service(build_id, raw_backtrace)
+        except Exception as exc:  # noqa: BLE001
+            self._backtrace_service_cooldown[build_id] = time.monotonic() + BACKTRACE_SERVICE_COOLDOWN_SEC
+            self.log.warning(
+                "External backtrace service failed for build_id=%s (%s); publishing the raw backtrace, "
+                "it can be decoded later. Not asking the service about this build for the next %d min",
+                build_id,
+                exc,
+                BACKTRACE_SERVICE_COOLDOWN_SEC // MINUTE_IN_SEC,
+            )
+            return None
+        self.log.debug("Decoded backtrace via external service for build_id=%s", build_id)
+        return decoded
 
-        # then try the relocatable location
-        results = self.remoter.run("ls /usr/lib/debug/opt/scylladb/libexec/scylla*.debug", ignore_status=True)
-        if results.stdout.strip():
-            return results.stdout.strip()
+    def _match_known_issue(self, event) -> None:
+        """Look the decoded backtrace up in the known-issues map and adjust the event severity."""
+        issue_url = FindIssuePerBacktrace().find_issue(backtrace_type=event.type, decoded_backtrace=event.backtrace)
+        if not issue_url:
+            return
 
-        # then look it up based on the build id
-        if build_id:
-            scylla_debug_info = f"/usr/lib/debug/.build-id/{build_id[:2]}/{build_id[2:]}.debug"
-            results = self.remoter.run(f"[[ -f {scylla_debug_info} ]]", ignore_status=True)
-            if results.ok:
-                return scylla_debug_info
+        event.known_issue = issue_url
+        skip_per_issue = SkipPerIssues(issue_url, self.parent_cluster.params)
 
-        raise Exception("Couldn't find scylla debug information")
+        if not skip_per_issue.issues_opened():
+            if skip_per_issue.issues_labeled():
+                if event.severity.value > Severity.WARNING.value:
+                    event.severity = Severity.WARNING
+            elif event.severity.value < Severity.ERROR.value:
+                event.severity = Severity.ERROR
 
-    @lru_cache(maxsize=None)
-    def decode_backtrace_local(self, scylla_debug_file, raw_backtrace):
-        """run decode backtrace on monitor node
-
-        Decode backtrace on monitor node
-        :param scylla_debug_file: file path on db-node
-        :type scylla_debug_file: str
-        :param raw_backtrace: string with backtrace data
-        :type raw_backtrace: str
-        :returns: result of bactrace
-        :rtype: {str}
-        """
-        return self.remoter.run("addr2line -Cpife {0} {1}".format(scylla_debug_file, raw_backtrace), verbose=True)
+        self.log.debug("Found issue for %s event: %s", event.event_id, event.known_issue)
 
     def get_scylla_build_id(self) -> Optional[str]:
         for scylla_executable in (
@@ -2670,23 +2627,6 @@ class BaseNode(AutoSshContainerMixin):
             f"| sudo bash -s -- --scylla-version {version}",
             retry=3,
         )
-
-    def install_scylla_debuginfo(self) -> None:
-        if ComparableScyllaVersion(self.scylla_version) > "2025.1.0~dev":
-            # since source available versions, theres only on option for package names
-            package_prefix = "scylla"
-        else:
-            package_prefix = self.scylla_pkg()
-
-        if self.distro.is_rhel_like or self.distro.is_sles:
-            package_name = rf"{package_prefix}-debuginfo-{self.scylla_version}\*"
-        else:
-            package_name = rf"{package_prefix}-server-dbg={self.scylla_version}\*"
-
-        self.log.debug("Installing Scylla debug info...")
-        # using ignore_status=True cause of docker image doesn't have the repo/list available
-        # TODO: find a why to identify the package, otherwise we don't have debug symbols
-        self.install_package(package_name=package_name, ignore_status=True)
 
     def is_scylla_installed(self, raise_if_not_installed=False):
         if self.get_scylla_binary_version():
@@ -5832,9 +5772,6 @@ class BaseScyllaCluster:
                 node.remoter.sudo("systemctl restart syslog-ng")
             elif self.params.get("logs_transport") == "vector":
                 node.remoter.sudo("systemctl restart vector")
-        if self.test_config.BACKTRACE_DECODING:
-            node.install_scylla_debuginfo()
-
         simulated_regions_num = self.params.get("simulated_regions")
         if self.test_config.MULTI_REGION or simulated_regions_num > 1 or self.params.get("simulated_racks") > 1:
             if simulated_regions_num > 1:

@@ -436,8 +436,6 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
     def node_setup(self, node, verbose=False, timeout=3600):
         node.is_scylla_installed(raise_if_not_installed=True)
         self.check_aio_max_nr(node)
-        if self.test_config.BACKTRACE_DECODING:
-            node.install_scylla_debuginfo()
 
         node.config_setup(append_scylla_args=self.get_scylla_args())
         node.restart_scylla(verify_up_before=True)

@@ -2971,8 +2971,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         return []
 
     def node_setup(self, node: BaseScyllaPodContainer, verbose: bool = False, timeout: int = 3600):
-        if self.test_config.BACKTRACE_DECODING:
-            node.install_scylla_debuginfo()
         self.node_config_setup()
 
     def node_startup(self, node: BaseScyllaPodContainer, verbose: bool = False, timeout: int = 3600):
