@@ -26,6 +26,12 @@ _RECOVERY_TIMEOUT_S = 300
 class AbortDecommissionMonkey(NemesisBaseClass):
     disruptive = True
 
+    def precheck(self, node) -> str | None:
+        # Aborting decommission is only supported with tablets, https://github.com/scylladb/scylladb/pull/24129
+        if not is_tablets_feature_enabled(node):
+            return "Aborting decommission is only supported with tablets."
+        return None
+
     def decommission_target_node(self):
         try:
             with EventsSeverityChangerFilter(
@@ -95,10 +101,6 @@ class AbortDecommissionMonkey(NemesisBaseClass):
             raise UnsupportedNemesis(
                 f"Target node {self.runner.target_node.name} is the only one in rack {self.runner.target_node.rack}, cannot decommission it."
             )
-
-        # Aborting decommission is only supported with tablets, https://github.com/scylladb/scylladb/pull/24129
-        if not is_tablets_feature_enabled(self.runner.target_node):
-            raise UnsupportedNemesis("Aborting decommission is only supported with tablets.")
 
         if not self.runner.cluster.get_non_system_ks_cf_with_tablets_list(db_node=self.runner.target_node):
             raise UnsupportedNemesis("No test tables with tablets found.")
