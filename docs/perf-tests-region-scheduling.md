@@ -61,7 +61,26 @@ Master monthly (master-monthly):
 - latency-650gb-with-nemesis-i8g-tablets — ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], read + mixed
 - predefined-throughput-steps-i8g-vnodes — ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed only
 - latency-650gb-with-nemesis-i8g-vnodes — ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed only
+
+2024.1, 2024.2, 2025.1, 2025.2, 2025.3, 2025.4 — no perf regression jobs at all:
+- every version filter in the matrix names all six branches. The lists spell out the minors
+  instead of matching a '2025.' prefix, so a branch is only ever added deliberately.
+- the x86 (i4i/i3en) job variants those branches used to run —
+  predefined-throughput-steps[-write]-vnodes, predefined-throughput-steps[-write]-tablets,
+  latency-650gb-with-nemesis, latency-650gb-with-nemesis-tablets and
+  latency-650gb-during-rolling-upgrade-tablets — are retired: the entries stay in
+  perf-regression.yaml for reference with `disabled: true`.
+- the weekly microbenchmarks have no version filter and still run for these branches.
+
+Vnodes coverage:
+- master keeps it — predefined-throughput-steps-i8g-vnodes and latency-650gb-with-nemesis-i8g-vnodes
+  on master-monthly.
+- no release branch runs a vnodes job any more; the release entries of those two jobs remain
+  for 2026.x and up.
 ```
+
+Do not switch a job off by emptying its `include_versions`: an empty list is *no* filter, so
+`filter_jobs()` runs the job for every version instead of none. Use `disabled: true`.
 
 ## Final Region Assignment
 
