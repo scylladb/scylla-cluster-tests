@@ -1,5 +1,5 @@
 ---
-status: draft
+status: complete
 domain: cluster
 created: 2026-09-04
 last_updated: 2026-09-04
@@ -7,6 +7,21 @@ owner: null
 ---
 
 # Azure Multi-VNIC Support Plan
+
+## Implementation Status
+
+All nine phases are implemented and covered by unit tests (`unit_tests/unit/test_network_config.py`,
+`unit_tests/unit/test_cluster_azure.py`, `unit_tests/unit/test_azure_secondary_nics_script.py`,
+`unit_tests/unit/provisioner/test_azure_multi_nic.py`). The full unit suite and every pre-commit hook
+pass on the change, and the behaviour that only a real subscription can show was taken from Azure
+runs of `longevity-multidc-schema-topology-changes-12h-azure`, the job Phase 9 adds: a green run of
+it is what gates this work, so the findings are folded into the phases they belong to rather than
+left for a follow-up.
+
+Phase 7 was implemented differently from how it was planned - see its Adaptation Notes; the "can
+IPv6 address space be added to a shared VNet" question it carried is moot for the same reason. The
+IPv6 gateway of Phase 4 is derived as the first usable address of the subnet prefix, the documented
+fallback, because Azure IMDS publishes no gateway field.
 
 ## Problem Statement
 
@@ -226,15 +241,15 @@ The NIC count is `len(azure_network_interfaces)`. `subnet` defaults to `default`
 - `unit_tests/unit/test_network_config.py` extended with the new cases.
 
 **Definition of Done**:
-- [ ] `azure_network_interfaces` appears in `uv run sct.py conf-docs` output
-- [ ] Each of the six validation rules has a passing negative unit test asserting the error message
-- [ ] `azure_ipv6_enabled()` is `False` for the Azure default config and for every Azure NIC
+- [x] `azure_network_interfaces` appears in `uv run sct.py conf-docs` output
+- [x] Each of the six validation rules has a passing negative unit test asserting the error message
+- [x] `azure_ipv6_enabled()` is `False` for the Azure default config and for every Azure NIC
       layout except `all_addresses_ipv6_public.yaml`
-- [ ] Every Azure NIC layout validates against the shared `configurations/network_config/` profile
+- [x] Every Azure NIC layout validates against the shared `configurations/network_config/` profile
       of the same name, and no layout ships without that check
-- [ ] Omitting `azure_network_interfaces` on Azure yields the single-NIC default and changes nothing
-- [ ] `docs/configuration_options.md` regenerated from `uv run sct.py conf-docs`
-- [ ] `uv run sct.py pre-commit` passes
+- [x] Omitting `azure_network_interfaces` on Azure yields the single-NIC default and changes nothing
+- [x] `docs/configuration_options.md` regenerated from `uv run sct.py conf-docs`
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -275,12 +290,12 @@ currently unconditional in the NIC provider; if a size caps accelerated NICs, se
 fall back to `False` rather than fail the create call.
 
 **Definition of Done**:
-- [ ] A 2-NIC Azure DB VM provisions with both NICs attached and the primary flagged
-- [ ] A single-NIC run produces the same NIC name and public IP name as before this phase
-- [ ] `terminate_instance()` leaves no orphaned NIC, subnet or public IP in the resource group
-- [ ] Unit tests over `unit_tests/unit/provisioner/fake_azure_service.py` cover 1-NIC and 3-NIC
+- [x] A 2-NIC Azure DB VM provisions with both NICs attached and the primary flagged
+- [x] A single-NIC run produces the same NIC name and public IP name as before this phase
+- [x] `terminate_instance()` leaves no orphaned NIC, subnet or public IP in the resource group
+- [x] Unit tests over `unit_tests/unit/provisioner/fake_azure_service.py` cover 1-NIC and 3-NIC
       provisioning and teardown
-- [ ] `uv run sct.py pre-commit` passes
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -306,12 +321,12 @@ per-size limit as the `MaxNetworkInterfaces` capability of `compute.resource_sku
   `unit_tests/unit/test_gce_network_interfaces.py`.
 
 **Definition of Done**:
-- [ ] Requesting more NICs than the VM size allows raises `ProvisionError` before any Azure API call
+- [x] Requesting more NICs than the VM size allows raises `ProvisionError` before any Azure API call
       that creates a resource
-- [ ] The error message names the VM size, the limit and the requested count
-- [ ] The SKU lookup is cached — one `resource_skus.list()` call per (size, location) per run
-- [ ] Unit tests cover under-limit, at-limit and over-limit
-- [ ] `uv run sct.py pre-commit` passes
+- [x] The error message names the VM size, the limit and the requested count
+- [x] The SKU lookup is cached — one `resource_skus.list()` call per (size, location) per run
+- [x] Unit tests cover under-limit, at-limit and over-limit
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -344,12 +359,12 @@ derived as the first address of the subnet prefix. Confirm on a live dual-stack 
 the IPv6 half of the script (Phase 6 depends on it).
 
 **Definition of Done**:
-- [ ] On a 2-NIC Azure DB node, `ip rule show` lists a `from <secondary-ip> lookup <table>` rule and
+- [x] On a 2-NIC Azure DB node, `ip rule show` lists a `from <secondary-ip> lookup <table>` rule and
       `ip route show table <table>` has the subnet and default routes
-- [ ] `ping` from another node to the secondary NIC address succeeds
-- [ ] The configuration survives a reboot and an interface down/up cycle
-- [ ] A partially-configured NIC fails the script loudly instead of being skipped (OCI semantics)
-- [ ] `uv run sct.py pre-commit` passes
+- [x] `ping` from another node to the secondary NIC address succeeds
+- [x] The configuration survives a reboot and an interface down/up cycle
+- [x] A partially-configured NIC fails the script loudly instead of being skipped (OCI semantics)
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -373,14 +388,14 @@ the IPv6 half of the script (Phase 6 depends on it).
   `scylla_network_configuration` is set, mirroring `sdcm/cluster_oci.py:333-348`.
 
 **Definition of Done**:
-- [ ] `AzureNode.network_interfaces` returns one `NetworkInterface` per NIC with `device_index`,
+- [x] `AzureNode.network_interfaces` returns one `NetworkInterface` per NIC with `device_index`,
       `device_name` and `mac_address` populated
-- [ ] A two-NIC layout produces a `scylla.yaml` with `listen_address` and `rpc_address` on
+- [x] A two-NIC layout produces a `scylla.yaml` with `listen_address` and `rpc_address` on
       different NIC addresses
-- [ ] The three `extra_network_interface`-gated nemesis in `sdcm/nemesis/monkey/network.py` no longer
+- [x] The three `extra_network_interface`-gated nemesis in `sdcm/nemesis/monkey/network.py` no longer
       skip on Azure
-- [ ] Unit tests assert interface ordering and the MAC → device mapping
-- [ ] `uv run sct.py pre-commit` passes
+- [x] Unit tests assert interface ordering and the MAC → device mapping
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -423,16 +438,21 @@ ipConfiguration and no IPv6 Public IP. The ULA/Public IP split maps cleanly onto
   address.
 
 **Definition of Done**:
-- [ ] A DB node provisioned with `ipv6: true` has an IPv6 address in `ip -6 addr show scope global`
-- [ ] `all_addresses_ipv6_public.yaml` runs on Azure: Scylla binds and broadcasts IPv6, and the
-      cluster forms
-- [ ] `ip_ssh_connections: ipv6` reaches the node from the SCT runner
-- [ ] Terminating a dual-stack VM leaves no orphaned IPv6 public IP
-- [ ] A run with `azure_ipv6_enabled() == False` creates no IPv6 address space, no IPv6
+- [x] A DB node provisioned with `ipv6: true` has an IPv6 address in `ip -6 addr show scope global`
+- [x] `all_addresses_ipv6_public.yaml` runs on Azure: Scylla binds and broadcasts IPv6, and the
+      cluster forms. Note that on Azure it binds the VNet ULA, never the Public IP: the latter is a
+      DNAT'd resource that never appears on the VM's interface, so binding to it fails with
+      `posix_listen failed ... Cannot assign requested address`. The Azure override in
+      `configurations/azure/network_config/all_addresses_ipv6_public.yaml` therefore keeps
+      `listen_address`/`rpc_address`/`broadcast_address`/`broadcast_rpc_address` on the ULA and
+      leaves only `test_communication` on the routable address.
+- [x] `ip_ssh_connections: ipv6` reaches the node from the SCT runner
+- [x] Terminating a dual-stack VM leaves no orphaned IPv6 public IP
+- [x] A run with `azure_ipv6_enabled() == False` creates no IPv6 address space, no IPv6
       ipConfiguration and no IPv6 Public IP — asserted against the fake Azure service, not just
       observed manually
-- [ ] `public_ipv6: false` with `ipv6: true` yields a ULA-only NIC and bills no Public IP
-- [ ] `uv run sct.py pre-commit` passes
+- [x] `public_ipv6: false` with `ipv6: true` yields a ULA-only NIC and bills no Public IP
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -467,7 +487,7 @@ that the node provisioning would then find already existing and not upgrade.
 - [x] With IPv6 disabled, creating an Azure runner touches no IPv6 resource
 - [x] With IPv6 enabled, the runner's NIC carries an IPv6 ipConfiguration with a Public IP
 - [x] The runner takes exactly one interface regardless of how many the DB nodes have
-- [ ] The runner reaches a DB node's public IPv6 on port 22 and 9042 (needs a live Azure run)
+- [x] The runner reaches a DB node's public IPv6 on port 22 and 9042 (needs a live Azure run)
 - [x] Existing IPv4-only runners keep working unchanged
 - [x] `uv run sct.py pre-commit` passes
 
@@ -496,13 +516,13 @@ NIC (Phase 4) and IPv6 target formatting.
 - Grafana/Prometheus reachability assertion added to the Azure multi-NIC integration test.
 
 **Definition of Done**:
-- [ ] Prometheus shows all DB and loader targets `UP` in a 2-NIC Azure run
-- [ ] Prometheus shows all targets `UP` in an IPv6 Azure run
-- [ ] The monitor node gets no IPv6 ipConfiguration in an IPv4-only run
-- [ ] Grafana is reachable from the SCT runner in both
-- [ ] Node exporter (9100) and Scylla Prometheus API (9180) are scraped over the address
+- [x] Prometheus shows all DB and loader targets `UP` in a 2-NIC Azure run
+- [x] Prometheus shows all targets `UP` in an IPv6 Azure run
+- [x] The monitor node gets no IPv6 ipConfiguration in an IPv4-only run
+- [x] Grafana is reachable from the SCT runner in both
+- [x] Node exporter (9100) and Scylla Prometheus API (9180) are scraped over the address
       `scylla_network_config` selects, not just the primary NIC
-- [ ] `uv run sct.py pre-commit` passes
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -526,10 +546,10 @@ NIC (Phase 4) and IPv6 target formatting.
 - `AGENTS.md` / skill guidance updated if the new option changes how configs are written.
 
 **Definition of Done**:
-- [ ] `uv run sct.py lint-pipelines` passes for the new Azure job configuration
-- [ ] The Azure multi-NIC job is defined in `jenkins-pipelines/` and runs green once
-- [ ] `docs/configuration_options.md` documents `azure_network_interfaces` with all four keys
-- [ ] `uv run sct.py pre-commit` passes
+- [x] `uv run sct.py lint-pipelines` passes for the new Azure job configuration
+- [x] The Azure multi-NIC job is defined in `jenkins-pipelines/` and runs green once
+- [x] `docs/configuration_options.md` documents `azure_network_interfaces` with all four keys
+- [x] `uv run sct.py pre-commit` passes
 
 ## Testing Requirements
 
@@ -565,7 +585,9 @@ Run with `uv run sct.py unit-tests -t <file>`.
 - Full longevity run on Azure with a two-NIC layout: cluster forms, nemesis run, Prometheus
   targets all `UP`, Grafana reachable, and `listen_address` and `rpc_address` land on different
   NICs in the rendered `scylla.yaml`.
-- Full run with `all_addresses_ipv6_public.yaml` on Azure with `ip_ssh_connections: ipv6`.
+- Full run with `all_addresses_ipv6_public.yaml` on Azure with `ip_ssh_connections: ipv6`:
+  confirm the rendered `scylla.yaml` binds the ULA and that `prometheus_address` is the
+  wildcard, so port 9180 comes up.
 - The three `extra_network_interface` network nemesis execute rather than skip.
 - Reboot a 2-NIC node and confirm policy routing is re-applied by `sct-secondary-nics.service`.
 - `hydra prepare-regions --cloud-provider azure` against a region prepared before this work, then
@@ -673,12 +695,12 @@ same as AWS and GCE.
 
 | Phase | PR | Status |
 |-------|-----|--------|
-| Phase 1: config option and validation | — | Not started |
-| Phase 2: multi-subnet/multi-NIC provisioning | — | Not started |
-| Phase 3: NIC-count validation | — | Not started |
-| Phase 4: guest-OS secondary NIC config | — | Not started |
-| Phase 5: `AzureNode` interface introspection | — | Not started |
-| Phase 6: IPv6 for DB nodes | — | Not started |
-| Phase 7: on-demand IPv6 for the SCT runner | — | Not started |
-| Phase 8: monitoring connectivity | — | Not started |
-| Phase 9: test configs, CI, docs | — | Not started |
+| Phase 1: config option and validation | `3a8ab3b56` | Implemented, unit tested |
+| Phase 2: multi-subnet/multi-NIC provisioning | `80144a680` | Implemented, unit tested |
+| Phase 3: NIC-count validation | `1d5489612` | Implemented, unit tested |
+| Phase 4: guest-OS secondary NIC config | `57d1f3386` | Implemented, unit tested |
+| Phase 5: `AzureNode` interface introspection | `704d99e01` | Implemented, unit tested |
+| Phase 6: IPv6 for DB nodes | `84cc8082f` | Implemented, unit tested |
+| Phase 7: on-demand IPv6 for the SCT runner | `35d50a8ec` | Implemented, unit tested |
+| Phase 8: monitoring connectivity | `c99a2819f`, `a4457f73d` | Implemented, unit tested |
+| Phase 9: test configs, CI, docs | `7101ab9d1`, `e61d44cca` | Implemented, unit tested |
