@@ -10,20 +10,20 @@ prepare_write_cmd:
     -p insertstart=0 -p insertcount=3495250 -p table=usertable_no_lwt
   - >-
     cassandra-stress write cl=QUORUM n=1747625 -log interval=5
-    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)'
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
     -mode cql3 native -rate threads=80 -col 'n=FIXED(10) size=FIXED(512)' -pop seq=1..1747625
   - >-
     cassandra-stress write cl=QUORUM n=1747625 -log interval=5
-    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)'
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
     -mode cql3 native -rate threads=80 -col 'n=FIXED(10) size=FIXED(512)' -pop seq=1747626..3495250
 stress_cmd:
   - >-
     cassandra-stress write cl=QUORUM duration=180m -log interval=5
-    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)'
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
     -mode cql3 native -rate threads=20 -col 'n=FIXED(10) size=FIXED(512)' -pop seq=1..3495250
   - >-
     cassandra-stress read  cl=QUORUM duration=180m -log interval=5
-    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)'
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
     -mode cql3 native -rate threads=20 -col 'n=FIXED(10) size=FIXED(512)' -pop seq=1..3495250
   - >-
     bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p recordcount=3495250
