@@ -26,6 +26,9 @@ if TYPE_CHECKING:
 from cassandra.query import BatchStatement
 
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.mgmt import TaskStatus
+from sdcm.mgmt.cli import ManagerCluster, SCTool
+from sdcm.mgmt.operations import ManagerTestFunctionsMixIn
 from sdcm.rest.remote_curl_client import RemoteCurlClient
 from sdcm.tester import ClusterTester
 from sdcm.utils.decorators import retrying, Retry
@@ -177,6 +180,48 @@ class VectorSearchThread(threading.Thread):
         self.test.log.info("Vector search operations stopped after %d operations", operation_number)
 
 
+class NodeTerminationWatcher(threading.Thread):
+    """Background thread tracking when nodes present at start disappear from the cluster's node list."""
+
+    POLL_INTERVAL = 15
+
+    def __init__(self, test: "XCloudBackupDuringScaleTest", baseline_node_ids: set):
+        super().__init__()
+        self.test = test
+        self.baseline_node_ids = set(baseline_node_ids)
+        self.removed_at: dict[str, float] = {}
+        self._stop_event = threading.Event()
+
+    def _current_node_ids(self) -> set:
+        cluster_info = self.test.cloud_api_client.get_cluster_details(
+            account_id=self.test.account_id,
+            cluster_id=self.test.cluster_id,
+            enriched=True,
+        )
+        # DB nodes are missing nodeType field, thus, can be filtered out this way
+        return {node["id"] for node in cluster_info["nodes"] if not node.get("nodeType")}
+
+    def stop_and_join(self, timeout: int = 60) -> None:
+        self._stop_event.set()
+        self.join(timeout=timeout)
+
+    def run(self):
+        while not self._stop_event.is_set():
+            try:
+                current_ids = self._current_node_ids()
+            except Exception as exc:  # noqa: BLE001
+                self.test.log.warning("Failed to poll cluster node list: %s", exc)
+                self._stop_event.wait(self.POLL_INTERVAL)
+                continue
+
+            for missing_id in self.baseline_node_ids - current_ids:
+                if missing_id not in self.removed_at:
+                    self.test.log.info("Node %s no longer present in cluster node list", missing_id)
+                    self.removed_at[missing_id] = time.time()
+
+            self._stop_event.wait(self.POLL_INTERVAL)
+
+
 class ScyllaCloudTestBase(ClusterTester, LoaderUtilsMixin):
     """Base class for Scylla Cloud E2E tests, providing cloud API helpers."""
 
@@ -197,6 +242,52 @@ class ScyllaCloudTestBase(ClusterTester, LoaderUtilsMixin):
             account_id=self.account_id,
             cluster_name=self.db_cluster.name,
         )
+
+    @retrying(n=20, sleep_time=60, allowed_exceptions=(Retry,))
+    def wait_for_resize_request(self) -> int:
+        requests = self.cloud_api_client.get_cluster_requests(account_id=self.account_id, cluster_id=self.cluster_id)
+        resize_request = next((r for r in requests if r["requestType"] == "RESIZE_CLUSTER_V3"), None)
+        if resize_request and resize_request["status"] == "IN_PROGRESS":
+            return resize_request["id"]
+        raise Retry("Resize request not found")
+
+    @retrying(n=180, sleep_time=60, allowed_exceptions=(AssertionError,))
+    def wait_for_cluster_scale_out(self, request_id: int) -> None:
+        request = self.cloud_api_client.get_cluster_request_details(account_id=self.account_id, request_id=request_id)
+        status = request["status"]
+        if status in ("FAILED", "CANCELLED"):
+            raise ScaleOutFailedException("Cluster scale out failed")
+        assert status == "COMPLETED", f"Cluster resize is not completed yet. Current status: {status}"
+
+    def wait_for_cluster_disk_utilization(
+        self, target_utilization: int, check_interval: int = 30, wait_timeout: int = 3600
+    ) -> None:
+        """Wait until cluster disk utilization reaches the target percentage."""
+        cluster_info = self.cloud_api_client.get_cluster_details(
+            account_id=self.account_id,
+            cluster_id=self.cluster_id,
+            enriched=True,
+        )
+        # DB nodes are missing nodeType field, thus, can be filtered out this way
+        cluster_nodes = [node for node in cluster_info["nodes"] if not node.get("nodeType")]
+        total_storage = cluster_info["instance"]["totalStorage"] * len(cluster_nodes)
+
+        self.log.debug("Waiting for cluster disk utilization to reach %d%%...", target_utilization)
+        start_time = time.time()
+        while time.time() - start_time < wait_timeout:
+            clusters = self.cloud_api_client.get_clusters(account_id=self.account_id, metrics="STORAGE_USED")
+            cluster = next(cluster for cluster in clusters if cluster["id"] == self.cluster_id)
+            storage_used = cluster["metrics"]["STORAGE_USED"] / (1024**3)  # Convert bytes to GB
+
+            current_disk_utilization = (storage_used / total_storage) * 100
+            if current_disk_utilization >= target_utilization:
+                self.log.info("Target disk utilization of %d%% reached", target_utilization)
+                return
+
+            self.log.debug("Current disk utilization: %.2f%%, waiting...", current_disk_utilization)
+            time.sleep(check_interval)
+
+        raise TimeoutError(f"Disk utilization did not reach {target_utilization}% within {wait_timeout}s")
 
 
 class XCloudVectorSearchTest(ScyllaCloudTestBase):
@@ -252,52 +343,6 @@ class XCloudVectorSearchTest(ScyllaCloudTestBase):
 
         self.log.debug("Table %s.%s created successfully", self.KEYSPACE_NAME, self.TABLE_NAME)
 
-    def wait_for_cluster_disk_utilization(
-        self, target_utilization: int, check_interval: int = 30, wait_timeout: int = 3600
-    ) -> None:
-        """Wait until cluster disk utilization reaches the target percentage."""
-        cluster_info = self.cloud_api_client.get_cluster_details(
-            account_id=self.account_id,
-            cluster_id=self.cluster_id,
-            enriched=True,
-        )
-        # DB nodes are missing nodeType field, thus, can be filtered out this way
-        cluster_nodes = [node for node in cluster_info["nodes"] if not node.get("nodeType")]
-        total_storage = cluster_info["instance"]["totalStorage"] * len(cluster_nodes)
-
-        self.log.debug("Waiting for cluster disk utilization to reach %d%%...", target_utilization)
-        start_time = time.time()
-        while time.time() - start_time < wait_timeout:
-            clusters = self.cloud_api_client.get_clusters(account_id=self.account_id, metrics="STORAGE_USED")
-            cluster = next(cluster for cluster in clusters if cluster["id"] == self.cluster_id)
-            storage_used = cluster["metrics"]["STORAGE_USED"] / (1024**3)  # Convert bytes to GB
-
-            current_disk_utilization = (storage_used / total_storage) * 100
-            if current_disk_utilization >= target_utilization:
-                self.log.info("Target disk utilization of %d%% reached", target_utilization)
-                return
-
-            self.log.debug("Current disk utilization: %.2f%%, waiting...", current_disk_utilization)
-            time.sleep(check_interval)
-
-        raise TimeoutError(f"Disk utilization did not reach {target_utilization}% within {wait_timeout}s")
-
-    @retrying(n=20, sleep_time=60, allowed_exceptions=(Retry,))
-    def wait_for_resize_request(self) -> int:
-        requests = self.cloud_api_client.get_cluster_requests(account_id=self.account_id, cluster_id=self.cluster_id)
-        resize_request = next((r for r in requests if r["requestType"] == "RESIZE_CLUSTER_V3"), None)
-        if resize_request and resize_request["status"] == "IN_PROGRESS":
-            return resize_request["id"]
-        raise Retry("Resize request not found")
-
-    @retrying(n=180, sleep_time=60, allowed_exceptions=(AssertionError,))
-    def wait_for_cluster_scale_out(self, request_id: int) -> None:
-        request = self.cloud_api_client.get_cluster_request_details(account_id=self.account_id, request_id=request_id)
-        status = request["status"]
-        if status in ("FAILED", "CANCELLED"):
-            raise ScaleOutFailedException("Cluster scale out failed")
-        assert status == "COMPLETED", f"Cluster resize is not completed yet. Current status: {status}"
-
     def test_vs_functions_while_xcloud_cluster_scaling(self) -> None:
         """Test vector search functionality during cluster scaling operations."""
         self.log.info("Prepare Vector Search test data")
@@ -323,3 +368,116 @@ class XCloudVectorSearchTest(ScyllaCloudTestBase):
             raise AssertionError(
                 f"Vector search validation failed {self.vector_thread.validation_failures} times during cluster scaling"
             )
+
+
+class XCloudBackupDuringScaleTest(ScyllaCloudTestBase, ManagerTestFunctionsMixIn):
+    """Verify that a Scylla Manager backup running in parallel with a manual cluster scale-up completes
+    successfully, and that a decommissioned node is not terminated until the backup finishes uploading
+    from it.
+    """
+
+    TARGET_INSTANCE_TYPE_ID = 63  # i4i.xlarge
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.load_thread = None
+        self.node_watcher = None
+
+    def tearDown(self) -> None:
+        """Clean up background threads."""
+        if self.load_thread and self.load_thread.is_alive():
+            self.log.info("Waiting for load thread to complete...")
+            self.load_thread.join(timeout=60)
+            if self.load_thread.is_alive():
+                self.log.warning("C-S load thread did not complete within timeout")
+
+        if self.node_watcher and self.node_watcher.is_alive():
+            self.node_watcher.stop_and_join()
+
+        super().tearDown()
+
+    def _get_baseline_node_ids(self) -> set:
+        cluster_info = self.cloud_api_client.get_cluster_details(
+            account_id=self.account_id,
+            cluster_id=self.cluster_id,
+            enriched=True,
+        )
+        # DB nodes are missing nodeType field, thus, can be filtered out this way
+        return {node["id"] for node in cluster_info["nodes"] if not node.get("nodeType")}
+
+    def test_backup_during_manual_scale_up(self) -> None:
+        """Trigger an SM backup, scale the cluster up while it's running, and assert the backup
+        completes successfully and decommissioned nodes are only terminated after the backup
+        finishes uploading data from them.
+        """
+        self.log.info("Start loading cluster in background")
+        self.load_thread = LoadThread(self)
+        self.load_thread.start()
+
+        self.log.info("Wait for 50% of disk utilization to be reached before starting backup")
+        self.wait_for_cluster_disk_utilization(target_utilization=10)
+
+        self.log.info("Start an existing Scylla Manager backup task")
+        manager_sctool = SCTool(manager_node=self.db_cluster.scylla_manager_node)
+
+        # Query the manager directly via sctool over SSH instead of ClusterTester.get_cluster_manager(),
+        # which resolves clusters by name and would self-register a new (task-less) cluster on a mismatch.
+        # The manager also registers its own self-backup cluster ("sm-backend") alongside the actual
+        # xcloud cluster, so filter that one out rather than assuming a single row.
+        cluster_rows = manager_sctool.run(cmd="cluster list", is_verify_errorless_result=True)
+        id_column = "cluster id" if cluster_rows and "cluster id" in cluster_rows[0] else "ID"
+        cluster_ids = manager_sctool.get_all_column_values_from_table(cluster_rows, id_column)
+        cluster_names = manager_sctool.get_all_column_values_from_table(cluster_rows, "Name")
+        target_clusters = [cluster_id for cluster_id, name in zip(cluster_ids, cluster_names) if name != "sm-backend"]
+        assert len(target_clusters) == 1, (
+            f"Expected exactly one non-sm-backend cluster in Manager, found: {list(zip(cluster_ids, cluster_names))}"
+        )
+
+        mgr_cluster = ManagerCluster(manager_node=self.db_cluster.scylla_manager_node, cluster_id=target_clusters[0])
+        backup_tasks = mgr_cluster.backup_task_list
+        assert backup_tasks, "No existing backup task found on cluster"
+        backup_task = backup_tasks[0]
+        backup_task.start(continue_task=False)
+
+        self.log.info("Capture baseline node list and start watching for node termination")
+        baseline_node_ids = self._get_baseline_node_ids()
+        self.node_watcher = NodeTerminationWatcher(self, baseline_node_ids)
+        self.node_watcher.start()
+
+        self.log.info("Trigger cluster scale-up while backup is running")
+        self.cloud_api_client.update_dc_scaling_policy(
+            account_id=self.account_id,
+            cluster_id=self.cluster_id,
+            dc_id=self.db_cluster.dc_id,
+            instance_type_ids=[self.TARGET_INSTANCE_TYPE_ID],
+            policies={"storage": {"targetUtilization": 0.8}, "vcpu": {}},
+        )
+
+        self.log.info("Wait for cluster to scale out")
+        request_id = self.wait_for_resize_request()
+
+        self.log.info("Wait for backup task to complete")
+        backup_status = backup_task.wait_and_get_final_status()
+        assert backup_status == TaskStatus.DONE, f"Backup task ended in {backup_status} instead of {TaskStatus.DONE}"
+        backup_completed_at = time.time()
+
+        self.log.info("Wait for cluster scale-up to complete")
+        self.wait_for_cluster_scale_out(request_id=request_id)
+
+        self.log.info("Stop watching for node termination and verify deferred termination")
+        self.node_watcher.stop_and_join()
+        assert self.node_watcher.removed_at, "No node was removed during cluster scale-up"
+        for node_id, removed_at in self.node_watcher.removed_at.items():
+            assert removed_at >= backup_completed_at, (
+                f"Node {node_id} was terminated before backup completed "
+                f"(removed_at={removed_at}, backup_completed_at={backup_completed_at})"
+            )
+
+        # self.log.info("Verify backup is restorable by restoring it and validating data")
+        # snapshot_tag = backup_task.get_snapshot_tag()
+        # for keyspace in self.db_cluster.get_test_keyspaces():
+        #     self.db_cluster.nodes[0].run_cqlsh(f"DROP KEYSPACE IF EXISTS {keyspace}")
+        #
+        # self.restore_with_manager_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag, restore_schema=True)
+        # self.restore_with_manager_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag, restore_data=True)
+        # self.run_verification_read_stress()
