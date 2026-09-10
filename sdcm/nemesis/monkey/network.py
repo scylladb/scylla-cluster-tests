@@ -42,6 +42,13 @@ LOGGER = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def extra_network_interface_precheck(runner) -> str | None:
+    """Skip reason when the cluster has no secondary network interface configured."""
+    if not runner.cluster.extra_network_interface:
+        return "for this nemesis to work, you need to set `extra_network_interface: True`"
+    return None
+
+
 def install_iptables(target_node) -> None:
     """Install iptables on Ubuntu nodes where it is missing by default."""
     if target_node.distro.is_ubuntu:  # iptables is missing in a minimized Ubuntu installation
@@ -209,15 +216,17 @@ class RandomInterruptionNetworkMonkey(NemesisBaseClass):
     #  Test communication address (ip_ssh_connections) is defined as "public" for the relevant pipelines in "two_interfaces.yaml"
     additional_params = {"ip_ssh_connections": "public"}
 
+    def precheck(self, node) -> str | None:
+        if self.runner._is_it_on_kubernetes():  # k8s uses Chaos Mesh, no secondary interface needed
+            return None
+        return extra_network_interface_precheck(self.runner)
+
     def disrupt(self):
         """Apply a random network interruption (loss, corruption, delay, or bandwidth cap) for a random duration."""
         list_of_timeout_options = [10, 60, 120, 300, 500]
         if self.runner._is_it_on_kubernetes():
             self._disrupt_k8s(list_of_timeout_options)
             return
-
-        if not self.runner.cluster.extra_network_interface:
-            raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
 
         if not self.runner.target_node.install_traffic_control():
             raise UnsupportedNemesis("Traffic control package not installed on system")
@@ -367,6 +376,11 @@ class BlockNetworkMonkey(NemesisBaseClass):
     #  Test communication address (ip_ssh_connections) is defined as "public" for the relevant pipelines in "two_interfaces.yaml"
     additional_params = {"ip_ssh_connections": "public"}
 
+    def precheck(self, node) -> str | None:
+        if self.runner._is_it_on_kubernetes():  # k8s uses Chaos Mesh, no secondary interface needed
+            return None
+        return extra_network_interface_precheck(self.runner)
+
     def disrupt(self):
         """Block all network traffic on the target node using 100% packet loss for a random duration."""
         list_of_timeout_options = [10, 60, 120, 300, 500]
@@ -374,9 +388,6 @@ class BlockNetworkMonkey(NemesisBaseClass):
             with self.runner.action_log_scope(f"Block network on {self.runner.target_node.name} node"):
                 self._disrupt_k8s(list_of_timeout_options)
             return
-
-        if not self.runner.cluster.extra_network_interface:
-            raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
 
         if not self.runner.target_node.install_traffic_control():
             raise UnsupportedNemesis("Traffic control package not installed on system")
@@ -438,12 +449,14 @@ class RejectInterNodeNetworkMonkey(NemesisBaseClass):
     networking = True
     free_tier_set = True
 
-    def disrupt(self):
-        """Drop or reject inter-node gossip/streaming traffic (ports 7000/7001) with a random iptables rule."""
+    def precheck(self, node) -> str | None:
         # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
         if SkipPerIssues("https://github.com/scylladb/scylladb/issues/6522", self.runner.tester.params):
-            raise UnsupportedNemesis("https://github.com/scylladb/scylladb/issues/6522")
+            return "https://github.com/scylladb/scylladb/issues/6522"
+        return None
 
+    def disrupt(self):
+        """Drop or reject inter-node gossip/streaming traffic (ports 7000/7001) with a random iptables rule."""
         install_iptables(self.runner.target_node)
 
         textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule(rnd=self.runner.random)
@@ -547,11 +560,11 @@ class StopStartInterfacesNetworkMonkey(NemesisBaseClass):
     #  Test communication address (ip_ssh_connections) is defined as "public" for the relevant pipelines in "two_interfaces.yaml"
     additional_params = {"ip_ssh_connections": "public"}
 
+    def precheck(self, node) -> str | None:
+        return extra_network_interface_precheck(self.runner)
+
     def disrupt(self):
         """Take the secondary network interface down for a random duration, then bring it back up."""
-        if not self.runner.cluster.extra_network_interface:
-            raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
-
         list_of_timeout_options = [10, 60, 120, 300, 500]
         wait_time = self.runner.random.choice(list_of_timeout_options)
         self.runner.log.debug("Taking down eth1 for %dsec", wait_time)

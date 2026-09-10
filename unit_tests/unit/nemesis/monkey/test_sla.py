@@ -36,7 +36,7 @@ def runner(base_runner):
     """``base_runner`` extended with SLA-specific attributes.
 
     Adds ``monitoring_set`` (needed by all SlaTests-delegating monkeys) and
-    configures cluster params so ``validate_sla_preconditions`` passes by default.
+    configures cluster params so ``precheck()`` passes by default.
     """
     # monitoring_set needed by SlaTests-delegating monkeys
     monitor = MagicMock()
@@ -76,41 +76,66 @@ def remove_sl_runner(runner):
 
 
 # ---------------------------------------------------------------------------
-# validate_sla_preconditions
+# precheck
 # ---------------------------------------------------------------------------
 
+ALL_SLA_MONKEYS = [
+    RemoveServiceLevelMonkey,
+    SlaIncreaseSharesDuringLoad,
+    SlaDecreaseSharesDuringLoad,
+    SlaReplaceUsingDetachDuringLoad,
+    SlaReplaceUsingDropDuringLoad,
+    SlaIncreaseSharesByAttachAnotherSlDuringLoad,
+    SlaMaximumAllowedSlsWithMaxSharesDuringLoad,
+]
 
-def test_preconditions_raises_when_sla_disabled(runner):
-    """Raise UnsupportedNemesis when 'sla' param is falsy."""
+
+@pytest.mark.parametrize("monkey_cls", ALL_SLA_MONKEYS)
+def test_precheck_skips_when_sla_disabled(runner, monkey_cls):
+    """precheck() skips when the 'sla' param is falsy."""
     runner.cluster.params.get.side_effect = lambda key, **kw: {"sla": False, "authenticator": "Password"}.get(key)
-    monkey = SlaIncreaseSharesDuringLoad(runner)
 
-    with pytest.raises(UnsupportedNemesis, match="SLA nemesis can be run during SLA test only"):
-        monkey.validate_sla_preconditions()
+    assert monkey_cls(runner).precheck(node=runner.cluster.nodes[0]) == "SLA nemesis can be run during SLA test only"
 
 
-def test_preconditions_raises_when_not_enterprise(runner):
-    """Raise UnsupportedNemesis when target node is not Scylla Enterprise."""
-    runner.cluster.nodes[0].is_enterprise = False
-    monkey = SlaIncreaseSharesDuringLoad(runner)
+@pytest.mark.parametrize("monkey_cls", ALL_SLA_MONKEYS)
+def test_precheck_skips_when_not_enterprise(runner, monkey_cls):
+    """precheck() skips when the representative node is not Scylla Enterprise."""
+    node = runner.cluster.nodes[0]
+    node.is_enterprise = False
 
-    with pytest.raises(UnsupportedNemesis, match="only supported by Scylla Enterprise"):
-        monkey.validate_sla_preconditions()
+    assert monkey_cls(runner).precheck(node=node) == "SLA feature is only supported by Scylla Enterprise"
 
 
-def test_preconditions_raises_when_no_authenticator(runner):
-    """Raise UnsupportedNemesis when authenticator param is falsy."""
+@pytest.mark.parametrize("monkey_cls", ALL_SLA_MONKEYS)
+def test_precheck_skips_when_no_authenticator(runner, monkey_cls):
+    """precheck() skips when the authenticator param is falsy."""
     runner.cluster.params.get.side_effect = lambda key, **kw: {"sla": True, "authenticator": None}.get(key)
-    monkey = SlaIncreaseSharesDuringLoad(runner)
 
-    with pytest.raises(UnsupportedNemesis, match="can't work without authenticator"):
-        monkey.validate_sla_preconditions()
+    assert monkey_cls(runner).precheck(node=runner.cluster.nodes[0]) == "SLA feature can't work without authenticator"
 
 
-def test_preconditions_passes_when_all_conditions_met(runner):
-    """No exception raised when all three preconditions pass."""
-    monkey = SlaIncreaseSharesDuringLoad(runner)
-    monkey.validate_sla_preconditions()  # should not raise
+@pytest.mark.parametrize("monkey_cls", ALL_SLA_MONKEYS)
+def test_precheck_keeps_when_all_conditions_met(runner, monkey_cls):
+    """precheck() keeps the nemesis when every static precondition is met."""
+    assert monkey_cls(runner).precheck(node=runner.cluster.nodes[0]) is None
+
+
+@pytest.mark.parametrize("monkey_cls", [cls for cls in ALL_SLA_MONKEYS if cls is not RemoveServiceLevelMonkey])
+def test_precheck_skips_when_no_prepare_write_cmd(runner, monkey_cls):
+    """precheck() skips stress-based SLA nemesis when prepare_write_cmd is not configured."""
+    runner.tester.params.get.return_value = None
+
+    assert monkey_cls(runner).precheck(node=runner.cluster.nodes[0]) == (
+        "SLA nemesis needs cassandra-stress default table 'keyspace1.standard1' is created and prefilled"
+    )
+
+
+def test_precheck_keeps_remove_service_level_without_prepare_write_cmd(runner):
+    """RemoveServiceLevelMonkey does not need prefilled cassandra-stress data."""
+    runner.tester.params.get.return_value = None
+
+    assert RemoveServiceLevelMonkey(runner).precheck(node=runner.cluster.nodes[0]) is None
 
 
 # ---------------------------------------------------------------------------
