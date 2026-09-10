@@ -92,10 +92,15 @@ produces figures that cannot be defended.
    validated palette, both the chart and its table view.
 2. Include the method section in full: detection rule with source line, runs versus builds, region
    provenance with inference accuracy, and scope limits.
-3. Publish as an Artifact. If the user also wants a local file, wrap it in a real
-   `<!doctype html><html><head></head><body>` skeleton first.
+3. **Save the report to `~/Downloads` — always, without being asked.** Name it
+   `capacity-failures-<period>-<YYYY-MM-DD>.html` (e.g. `capacity-failures-month-2026-09-10.html`) and wrap
+   it in a real `<!doctype html><html><head></head><body>` skeleton, which the Artifact host supplies only
+   at publish time. The local file is the copy that outlives the session and can be attached to a ticket.
+4. Publish as an Artifact as well, for a shareable link.
+5. Give the user both the saved path and the Artifact link.
 
-**Exit:** Report published and the link given to the user.
+**Exit:** The report exists at `~/Downloads/capacity-failures-<period>-<date>.html`, and the user has been
+given that path.
 
 ## Verification
 

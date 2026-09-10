@@ -137,6 +137,13 @@ tests are tabulated in `skills/perf-weekly-status-report/SKILL.md` under "Test R
 | Placement-group variant dominates | Configuration or leaked-resource bug, not capacity — inspect cleanup |
 | High run count but low rate | Healthy; do not "fix" it |
 
+## Output
+
+Every report is saved to `~/Downloads/capacity-failures-<period>-<date>.html`, always, without waiting to be
+asked — an Artifact link is tied to a session, while the file on disk is what gets attached to a ticket or
+reopened later. Publish an Artifact too when a shareable link helps, and give the user both. The local file
+needs its own `<!doctype html>` skeleton; see [report-format.md](references/report-format.md).
+
 ## Reference Index
 
 | File | Content |
@@ -159,3 +166,4 @@ tests are tabulated in `skills/perf-weekly-status-report/SKILL.md` under "Test R
 - [ ] Only runs whose final status is `test_error` with a CRITICAL event are counted
 - [ ] Regions with too few runs to be meaningful are flagged rather than ranked
 - [ ] Remediation advice names a specific region or instance type, with the rate that justifies it
+- [ ] The report is saved to `~/Downloads/capacity-failures-<period>-<date>.html` and the path given to the user

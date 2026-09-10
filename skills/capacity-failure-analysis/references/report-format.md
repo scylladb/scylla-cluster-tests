@@ -59,6 +59,36 @@ invites someone to move a job on the strength of an inferred value.
 
 ## Publishing
 
-Publish as an Artifact for sharing. For a local copy the file needs a real
-`<!doctype html><html><head>...</head><body>` wrapper — the Artifact host supplies that at publish time, so
-the artifact source alone opens in quirks mode.
+**Always write the report to `~/Downloads`, every run, without being asked.** Publishing as an Artifact as
+well is good for sharing a link, but the local copy is not optional: an Artifact lives behind a URL and a
+session, while the file on disk is what survives, gets attached to a ticket, and can be reopened offline.
+
+Name it `capacity-failures-<period>-<YYYY-MM-DD>.html`, for example
+`capacity-failures-month-2026-09-10.html`. The period is in the name because reports for different windows
+are not interchangeable — a `week` report and an `all` report of the same date carry very different region
+confidence, and a name without the period invites someone to quote the wrong one. Regenerating the same
+period on the same day overwrites deliberately; a different period never collides.
+
+The local file needs a real skeleton, because the Artifact host supplies one only at publish time and the
+artifact source alone opens in quirks mode:
+
+```html
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html{color-scheme:light dark}
+  body{margin:0;font:14px system-ui,sans-serif}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<!-- report content -->
+</body>
+</html>
+```
+
+Report the saved path to the user alongside any Artifact link.
