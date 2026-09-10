@@ -33,7 +33,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Multi-Cloud Provisioning Resilience | `draft` | [multi-cloud-provisioning-resilience.md](infrastructure/multi-cloud-provisioning-resilience.md) |
 | AWS Capacity AZ Fallback | `draft` | [aws-capacity-az-fallback.md](infrastructure/aws-capacity-az-fallback.md) |
 | NVMe Diagnostics Collection | `draft` | [nvme-diagnostics-collection.md](infrastructure/nvme-diagnostics-collection.md) |
-| Azure Multi-VNIC Support | `draft` | [azure-multi-vnic-support.md](infrastructure/azure-multi-vnic-support.md) |
+| Azure Multi-VNIC Support | `complete` | [azure-multi-vnic-support.md](infrastructure/azure-multi-vnic-support.md) |
 
 ### Nemesis — Chaos engineering, disruptors
 
