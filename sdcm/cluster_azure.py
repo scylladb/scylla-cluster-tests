@@ -16,7 +16,7 @@ from functools import cached_property
 from typing import Dict, List
 
 from sdcm import cluster
-from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.provision.azure.provisioner import DB_NODE_TYPES, AzureProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.kernel_panic_checker import AzureKernelPanicChecker
@@ -104,12 +104,30 @@ class AzureNode(cluster.BaseNode):
         self.remoter.sudo("systemctl disable auditd", ignore_status=True)
         self.remoter.sudo("systemctl mask auditd", ignore_status=True)
         self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
-        if network_interfaces_count(self.parent_cluster.params) > 1:
+        # the node's own interfaces, not the configured count: only DB nodes take the secondary
+        # ones, so a loader or a monitor has a single NIC under a multi-NIC profile
+        if len(self.network_interfaces) > 1:
             self._configure_secondary_nics_os()
         # built after the remoter is up: resolving the device name of each interface needs the
         # MAC -> device map read off the node
         self.scylla_network_configuration = self._build_scylla_network_configuration()
         self.refresh_network_interfaces_info()
+
+    def _build_scylla_network_configuration(self):
+        """The profile, but only for a node that has every interface it names.
+
+        Only DB nodes take the secondary interfaces on Azure, so under a multi-NIC profile a loader
+        or a monitor has one NIC and could not resolve an address pinned to 'nic: 1' - every
+        consumer of this configuration already handles its absence.
+        """
+        if network_interfaces_count(self.parent_cluster.params) > len(self.network_interfaces):
+            self.log.debug(
+                "Node %s has %s network interface(s), fewer than 'scylla_network_config' uses; leaving it unset",
+                self.name,
+                len(self.network_interfaces),
+            )
+            return None
+        return super()._build_scylla_network_configuration()
 
     def _configure_secondary_nics_os(self):
         """Configure OS-level addresses and routing for the secondary NICs.
@@ -120,7 +138,7 @@ class AzureNode(cluster.BaseNode):
         right away. The systemd service makes the configuration survive reboots.
         """
         self.log.info("Configuring OS-level routing for secondary NICs on %s", self.name)
-        nic_count = network_interfaces_count(self.parent_cluster.params)
+        nic_count = len(self.network_interfaces)
 
         self.remoter.sudo(
             f"bash -c 'cat > {SECONDARY_NICS_SCRIPT_PATH}' << '{HEREDOC_DELIMITER}'\n"
@@ -441,7 +459,8 @@ class AzureCluster(cluster.BaseCluster):
             params=params,
             region_names=region_names,
             node_type=node_type,
-            extra_network_interface=network_interfaces_count(params) > 1,
+            # only DB nodes take the secondary interfaces, so only they have one to restart
+            extra_network_interface=node_type in DB_NODE_TYPES and network_interfaces_count(params) > 1,
         )
         self.log.debug("AzureCluster constructor")
 

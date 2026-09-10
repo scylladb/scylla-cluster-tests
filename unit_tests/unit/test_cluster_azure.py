@@ -17,6 +17,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from sdcm import cluster
 from sdcm.cluster_azure import AzureNode, Ipv6AddressNotFoundError
 from sdcm.sct_runner import AzureSctRunner
 
@@ -308,3 +309,56 @@ class TestOsIpv6Fallback:
 
     def test_no_address_at_all_is_empty(self, node):
         assert self.node_with(node, {}, "eth0")._os_ipv6_address() == ""
+
+
+class TestSingleNicNodeUnderAMultiNicProfile:
+    """A loader or a monitor: only DB nodes take the secondary interfaces on Azure.
+
+    The profile still names 'nic: 1', so every path keyed on the configured count rather than on
+    the node's own interfaces would act on an interface the node does not have.
+    """
+
+    PROFILE = {
+        "scylla_network_config": [
+            {"address": "listen_address", "ip_type": "ipv4", "public": False, "nic": 1},
+            {"address": "rpc_address", "ip_type": "ipv4", "public": False, "nic": 1},
+            {"address": "test_communication", "ip_type": "ipv4", "public": False, "nic": 0},
+        ]
+    }
+
+    @pytest.fixture(name="loader")
+    def fixture_loader(self, node):
+        node.name = "loader-node-1"
+        node.log = Mock()
+        node.parent_cluster = Mock(params=self.PROFILE)
+        node._cached_network_interfaces = [Mock(device_name="eth0")]
+        return node
+
+    def test_the_os_routing_setup_is_skipped(self, loader, monkeypatch):
+        """The boot script polls IMDS for an interface that never appears, then exits non-zero."""
+        monkeypatch.setattr(cluster.BaseNode, "init", lambda self: None)
+        loader._configure_secondary_nics_os = Mock()
+        loader.refresh_network_interfaces_info = Mock()
+
+        AzureNode.init(loader)
+
+        loader._configure_secondary_nics_os.assert_not_called()
+
+    def test_a_db_node_with_every_interface_is_configured(self, loader, monkeypatch):
+        monkeypatch.setattr(cluster.BaseNode, "init", lambda self: None)
+        loader._cached_network_interfaces = [Mock(device_name="eth0"), Mock(device_name="eth1")]
+        loader._configure_secondary_nics_os = Mock()
+        loader.refresh_network_interfaces_info = Mock()
+
+        AzureNode.init(loader)
+
+        loader._configure_secondary_nics_os.assert_called_once()
+
+    def test_no_scylla_network_configuration_is_built(self, loader):
+        """Resolving an address pinned to 'nic: 1' would raise NetworkInterfaceNotFound."""
+        assert AzureNode._build_scylla_network_configuration(loader) is None
+
+    def test_a_db_node_with_every_interface_keeps_the_profile(self, loader):
+        loader._cached_network_interfaces = [Mock(device_name="eth0"), Mock(device_name="eth1")]
+
+        assert AzureNode._build_scylla_network_configuration(loader) is not None
