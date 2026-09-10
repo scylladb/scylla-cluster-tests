@@ -1267,10 +1267,19 @@ def resolve_versions_for_targets(
 
     if strategy == "per-backend":
         for target in targets:
-            if not resolvable or target.backend not in VALID_IMAGE_BACKENDS:
+            if target.backend not in VALID_IMAGE_BACKENDS:
                 # Nothing to resolve against — pass the request through as the downstream
                 # job would have received it before backend-aware resolution existed.
                 versions[target] = reference_version if not resolvable else original_version
+                continue
+            if not resolvable:
+                # Explicit full/RC build tags and plain release versions already pin one
+                # build, but that build may only be published on some backends — verify it
+                # the same way aws-strict/common do instead of stamping it blindly (SCT-856).
+                if version_exists_for_backend(reference_version, target.backend, target.region, target.arch):
+                    versions[target] = reference_version
+                else:
+                    unavailable[target] = f"build '{reference_version}' is not published"
                 continue
             if version := _resolve_latest_version_for_backend(
                 original_version, target.backend, target.region, target.arch
