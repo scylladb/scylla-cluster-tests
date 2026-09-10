@@ -10,6 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2024 ScyllaDB
+import json
 from pathlib import Path
 from typing import NamedTuple
 
@@ -19,6 +20,7 @@ import yaml
 from sdcm.provision.network_configuration import azure_ipv6_enabled, azure_network_interfaces
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.aws_utils import EC2NetworkConfiguration
+from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile
 
 
 class RegionAZSubnets(NamedTuple):
@@ -254,6 +256,36 @@ class TestAzureNetworkConfigProfiles:
 
         used_nics = {address["nic"] for address in params["scylla_network_config"]}
         assert max(used_nics) < len(layout)
+
+    def test_multidc_topology_changes_job_config_validates(self):
+        """The config list of longevity-multidc-schema-topology-changes-12h-azure.jenkinsfile."""
+        pipeline = parse_jenkinsfile(
+            Path("jenkins-pipelines/oss/tier1/longevity-multidc-schema-topology-changes-12h-azure.jenkinsfile")
+        )
+        params = {}
+        for config in pipeline.test_config:
+            params |= self.load(config)
+
+        validate_azure(params)
+        # routable IPv6 on every Scylla address is the coverage this job owns
+        assert azure_ipv6_enabled(params)
+        assert params["azure_network_interfaces"][0]["public_ipv6"] is True
+        assert {address["ip_type"] for address in params["scylla_network_config"]} == {"ipv6"}
+
+        # the second DC is simulated, so every node has to land in the one real region
+        assert json.loads(pipeline.params["azure_region_name"]) == ["eastus"]
+        assert params["simulated_regions"] == 2
+
+        # Azure resolves one zone letter per resource group, unlike the 'a,b,c' of the other clouds
+        assert params["availability_zone"] == "a"
+
+        # the racks are simulated too, and have to divide the node count of the base test case
+        # evenly with at least two nodes each: a rack of one disappears with the node a nemesis
+        # removes, leaving RF=3 over fewer racks than it needs
+        assert params["simulated_racks"] == 3
+        for count in (int(nodes) for nodes in str(params["n_db_nodes"]).split()):
+            assert count % params["simulated_racks"] == 0
+            assert count // params["simulated_racks"] >= 2
 
     def test_only_the_ipv6_profile_enables_ipv6(self):
         """An Azure IPv6 is a billed Public IP, so no other layout may quietly turn it on."""
