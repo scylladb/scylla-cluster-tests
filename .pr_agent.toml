@@ -1,0 +1,21 @@
+# Qodo Merge (qodo.ai) configuration.
+#
+# Reviews are manual-only: Qodo does not run automatically when a PR is
+# opened/updated, nor on new commits pushed to a PR. To get a review, comment
+# on the PR with a command, e.g.:
+#
+#   /agentic_review
+#   /agentic_describe
+#   /improve
+#
+# Repository-root config takes precedence over the organization-level
+# `pr-agent-settings` repo and over the Qodo portal settings.
+[github_app]
+# Commands run automatically when a PR is opened or updated. Empty = none.
+pr_commands = []
+
+# Commands run automatically on new commits pushed to an open PR. Empty = none.
+push_commands = []
+
+# Do not re-trigger anything on push.
+handle_push_trigger = false
