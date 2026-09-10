@@ -19,7 +19,7 @@ from typing import Dict, List
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
-from azure.mgmt.network.models import PublicIPAddress
+from azure.mgmt.network.models import NetworkInterface, PublicIPAddress
 from azure.mgmt.resource.resources.models import ResourceGroup
 from invoke import Result
 
@@ -297,6 +297,10 @@ class AzureProvisioner(Provisioner):
         return self._vm_provider.get_or_create(
             definitions=definitions, nics_ids=nics_ids, pricing_model=pricing_model, deadline=deadline
         )
+
+    def network_interfaces(self, name: str) -> List[NetworkInterface]:
+        """Azure NICs of a VM, ordered by device index."""
+        return self._nic_provider.get_all(name)
 
     def _public_ip_addresses(self, name: str) -> List[PublicIPAddress]:
         """Public IP resources of a VM, one per NIC that carries one.
