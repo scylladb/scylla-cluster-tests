@@ -15,25 +15,32 @@ import importlib
 import inspect
 import logging
 import tempfile
+import threading
 import time
 import unittest.mock
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 from invoke import Result
 
-from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode
+from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode, BaseScyllaCluster
 from sdcm.db_log_reader import DbLogReader
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
 from sdcm.sct_events.system import InstanceStatusEvent
+from sdcm.test_config import TestConfig
+from sdcm.utils import hard_exit
 from sdcm.utils.common import (
     get_keyspace_partition_ranges,
     keyspace_min_max_tokens,
 )
 from sdcm.utils.distro import Distro
+from sdcm.utils.parallel_object import WORKER_JOIN_GRACE_PERIOD
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_config import SCTConfiguration
 from unit_tests.lib.dummy_remote import DummyRemote, LocalNode
@@ -1228,3 +1235,325 @@ def test_invalidate_ip_address_cache_allows_re_resolution():
     BaseNode.invalidate_ip_address_cache(node)
 
     assert BaseNode.public_ip_address.fget(node) == "34.1.2.3"
+
+
+# --- BaseScyllaCluster.stop_nemesis / hard-exit escalation tests ---
+
+
+@pytest.fixture
+def scylla_cluster_for_nemesis(monkeypatch):
+    """Minimal `BaseScyllaCluster` instance wired for `stop_nemesis` tests.
+
+    `stop_nemesis` is decorated with `@optional_stage("nemesis")`, which reads
+    `TestConfig().tester_obj().skip_test_stages` — stub that out so the
+    decorator never skips the call. Also resets `hard_exit` module state so
+    arming in one test never leaks into another.
+    """
+    monkeypatch.setattr(
+        TestConfig,
+        "tester_obj",
+        classmethod(lambda cls: SimpleNamespace(skip_test_stages=defaultdict(lambda: False))),
+    )
+    monkeypatch.setattr(hard_exit, "_hard_exit_reason", None)
+    monkeypatch.setattr(hard_exit, "_hard_exit_threads", [])
+
+    with unittest.mock.patch.object(BaseScyllaCluster, "__init__", lambda self, **kw: None):
+        cluster = BaseScyllaCluster()
+    cluster.log = logging.getLogger("test-scylla-cluster")
+    cluster.nemesis_termination_event = threading.Event()
+    cluster.nemesis_threads = []
+    return cluster
+
+
+def test_stop_nemesis_publishes_critical_event_and_arms_hard_exit_on_stuck_threadpool_worker(
+    scylla_cluster_for_nemesis, events_function_scope
+):
+    """Nemesis threads are started with daemon=True (see start_nemesis()): interpreter
+    shutdown never joins them, so a nemesis thread's own liveness is not what can hang
+    the process. What can hang it is a non-daemon ThreadPoolExecutor worker a nemesis
+    spun up internally and never joined -- tracked in
+    concurrent.futures.thread._threads_queues, the registry stop_nemesis() now checks.
+
+    Simulate that: the nemesis thread finishes quickly (its own is_alive() is False by
+    the time stop_nemesis() checks _threads_queues), but a ThreadPoolExecutor worker it
+    left behind is still genuinely blocked. stop_nemesis() must still publish a CRITICAL
+    TestFrameworkEvent and arm the hard exit for that worker thread -- this is exactly
+    the false-negative the old nemesis-thread-is_alive() check missed entirely.
+
+    The stuck worker is spun up from inside `finished_nemesis_thread.join()` -- i.e.
+    *after* stop_nemesis() takes its pre_existing_threads snapshot -- rather than
+    before the call, so it lands in the "new since this stop_nemesis() call" candidate
+    set instead of being (correctly) excluded as already-alive-beforehand.
+    """
+    already_set = threading.Event()
+    already_set.set()
+    finished_nemesis_thread = threading.Thread(target=already_set.wait, daemon=True)
+    finished_nemesis_thread.start()
+    finished_nemesis_thread.join(timeout=5)
+    scylla_cluster_for_nemesis.nemesis_threads = [finished_nemesis_thread]
+
+    block_forever = threading.Event()
+    stuck_executor_holder = {}
+    original_join = finished_nemesis_thread.join
+
+    def join_and_spawn_stuck_worker(timeout=None):
+        # Simulate a nested ThreadPoolExecutor a nemesis spins up internally in
+        # response to being stopped, spawned only once stop_nemesis() is already
+        # underway (i.e. after its pre_existing_threads snapshot was taken).
+        stuck_executor_holder["executor"] = ThreadPoolExecutor(max_workers=1)
+        stuck_executor_holder["executor"].submit(block_forever.wait)
+        return original_join(timeout)
+
+    finished_nemesis_thread.join = join_and_spawn_stuck_worker
+
+    try:
+        scylla_cluster_for_nemesis.stop_nemesis(timeout=0.1)
+
+        critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
+        assert len(critical_events) == 1, f"Expected exactly 1 CRITICAL event, got {len(critical_events)}"
+        assert "stop_nemesis" in critical_events[0]
+        assert hard_exit._hard_exit_reason
+        worker_thread = next(iter(stuck_executor_holder["executor"]._threads))
+        assert worker_thread in hard_exit._hard_exit_threads
+    finally:
+        block_forever.set()
+        stuck_executor_holder["executor"].shutdown(wait=True)
+
+
+def test_stop_nemesis_does_not_arm_hard_exit_when_nemesis_thread_alive_but_no_worker_stuck(
+    scylla_cluster_for_nemesis, events_function_scope
+):
+    """No false-positive escalation: a nemesis thread that is still alive (e.g. still
+    unwinding after KillNemesis was raised into it) must not, by itself, trigger
+    escalation. Nemesis threads are daemon threads and are not what blocks interpreter
+    shutdown, so their own is_alive() must no longer be the trigger -- only a genuinely
+    live ThreadPoolExecutor worker (checked via _threads_queues) should be. This is the
+    false-positive the old nemesis-thread-is_alive() check risked.
+    """
+    block_forever = threading.Event()
+
+    def stuck_target():
+        # stop_nemesis() injects KillNemesis asynchronously via
+        # raise_exception_in_thread(); it is only delivered once bytecode runs
+        # on this thread again (e.g. once block_forever is set in teardown
+        # below), so swallow it here to keep this thread exception-free (this
+        # repo's unit tests fail on unhandled thread exceptions).
+        try:
+            block_forever.wait()
+        except BaseException:  # noqa: BLE001
+            pass
+
+    alive_nemesis_thread = threading.Thread(target=stuck_target, daemon=True)
+    alive_nemesis_thread.start()
+    scylla_cluster_for_nemesis.nemesis_threads = [alive_nemesis_thread]
+
+    try:
+        scylla_cluster_for_nemesis.stop_nemesis(timeout=0.1)
+
+        critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
+        assert len(critical_events) == 0, f"Expected no CRITICAL events, got {len(critical_events)}"
+        assert not hard_exit._hard_exit_reason
+    finally:
+        block_forever.set()
+        alive_nemesis_thread.join(timeout=5)
+
+
+def test_stop_nemesis_does_not_arm_hard_exit_when_threads_stop(scylla_cluster_for_nemesis, events_function_scope):
+    """No false-positive kill on the normal path: threads that stop cleanly
+    must not publish a CRITICAL event or arm the hard exit."""
+    already_set = threading.Event()
+    already_set.set()
+    stopped_thread = threading.Thread(target=already_set.wait, daemon=True)
+    stopped_thread.start()
+    stopped_thread.join(timeout=5)
+    scylla_cluster_for_nemesis.nemesis_threads = [stopped_thread]
+
+    scylla_cluster_for_nemesis.stop_nemesis(timeout=0.1)
+
+    critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
+    assert len(critical_events) == 0, f"Expected no CRITICAL events, got {len(critical_events)}"
+    assert not hard_exit._hard_exit_reason
+
+
+def test_stop_nemesis_does_not_arm_hard_exit_for_pre_existing_long_lived_executor_worker(
+    scylla_cluster_for_nemesis, events_function_scope
+):
+    """This is the single most important false-positive regression test: SCT keeps
+    multiple long-lived, intentionally-alive ThreadPoolExecutors running for most/all
+    of a test's duration (e.g. SSHLoggerBase._child_thread's executor in
+    sdcm/utils/remote_logger.py, used for remote journal log collection on every node,
+    and TimeoutMonitor.executor in sdcm/utils/adaptive_timeouts/__init__.py). Their
+    worker threads sit blocked-but-alive in queue.get() for the whole test -- this is
+    normal, healthy behavior, not a hang.
+
+    Simulate exactly that: a ThreadPoolExecutor worker that is alive *before*
+    stop_nemesis() is even called and remains alive throughout. Checking
+    _threads_queues process-wide with no scoping would find this worker "stuck" on
+    essentially every call, publishing a spurious CRITICAL event on effectively every
+    nemesis stop in real runs. stop_nemesis() must exclude it from *reporting* via its
+    pre_existing_threads snapshot.
+
+    Note this worker DOES still get passed to request_hard_exit(): arming is no longer
+    scoped by pre_existing_threads (see
+    test_stop_nemesis_arms_hard_exit_for_worker_stuck_before_stop_nemesis_was_called),
+    since a worker that was already stuck before this call is exactly the
+    SCT-575/SCT-803 incident shape that scoping would otherwise silently hide. This is
+    still safe here: exit_process() re-checks is_alive() on each implicated thread at
+    the actual, later exit point, and this test's executor is explicitly shut down
+    before that could ever happen in a real run.
+    """
+    already_set = threading.Event()
+    already_set.set()
+    stopped_thread = threading.Thread(target=already_set.wait, daemon=True)
+    stopped_thread.start()
+    stopped_thread.join(timeout=5)
+    scylla_cluster_for_nemesis.nemesis_threads = [stopped_thread]
+
+    block_forever = threading.Event()
+    long_lived_executor = ThreadPoolExecutor(max_workers=1)
+    long_lived_executor.submit(block_forever.wait)
+
+    try:
+        scylla_cluster_for_nemesis.stop_nemesis(timeout=0.1)
+
+        critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
+        assert len(critical_events) == 0, f"Expected no CRITICAL events, got {len(critical_events)}"
+        worker_thread = next(iter(long_lived_executor._threads))
+        assert worker_thread in hard_exit._hard_exit_threads
+    finally:
+        block_forever.set()
+        long_lived_executor.shutdown(wait=True)
+
+
+def test_stop_nemesis_arms_hard_exit_for_worker_stuck_before_stop_nemesis_was_called(
+    scylla_cluster_for_nemesis, events_function_scope
+):
+    """Regression test for the false-negative this PR's own escalation mechanism had:
+    a worker thread that has already been stuck for a long time -- e.g. for the whole
+    1800s stop_nemesis timeout, or longer, blocked on an untimed nodetool repair call
+    (see disrupt_no_corrupt_repair/disrupt_abort_repair in sdcm/nemesis/__init__.py) --
+    was previously in pre_existing_threads (snapshotted before the join-timeout loop
+    even runs) and so was silently excluded from request_hard_exit(), exactly the
+    SCT-575/SCT-803 incident scenario this whole mechanism exists to catch.
+
+    Simulate that directly: spawn a ThreadPoolExecutor worker blocked on a
+    never-set threading.Event *before* stop_nemesis() is called at all (i.e. it
+    predates any snapshot stop_nemesis() could take), and assert request_hard_exit()
+    still fires for it.
+    """
+    already_set = threading.Event()
+    already_set.set()
+    stopped_thread = threading.Thread(target=already_set.wait, daemon=True)
+    stopped_thread.start()
+    stopped_thread.join(timeout=5)
+    scylla_cluster_for_nemesis.nemesis_threads = [stopped_thread]
+
+    block_forever = threading.Event()
+    pre_existing_stuck_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="NodeToolRepairThread")
+    pre_existing_stuck_executor.submit(block_forever.wait)
+
+    try:
+        scylla_cluster_for_nemesis.stop_nemesis(timeout=0.1)
+
+        assert hard_exit._hard_exit_reason
+        worker_thread = next(iter(pre_existing_stuck_executor._threads))
+        assert worker_thread in hard_exit._hard_exit_threads
+    finally:
+        block_forever.set()
+        pre_existing_stuck_executor.shutdown(wait=True)
+
+
+def test_stop_nemesis_does_not_arm_hard_exit_for_worker_that_finishes_within_grace_period(
+    scylla_cluster_for_nemesis, events_function_scope
+):
+    """Noise-reduction regression test: arming request_hard_exit() unconditionally on
+    every currently-alive ThreadPoolExecutor worker (with no grace period at all) would
+    reintroduce a lower-severity version of the false-positive-noise problem
+    new_stuck_threads' grace period already guards against -- an ordinary
+    busy-but-healthy worker that is alive at the exact moment stop_nemesis() runs, but
+    finishes on its own shortly after, would still arm the hard exit and publish an
+    ERROR-level log plus mutate persistent global state, on effectively every
+    stop_nemesis() call in real runs (see e.g. SSHLoggerBase._child_thread's executor,
+    TimeoutMonitor.executor -- long-lived executors that are essentially always alive
+    at this point, and any other pool that just happens to be mid-task).
+
+    Simulate that: a ThreadPoolExecutor worker still busy with a short, legitimate task
+    when stop_nemesis() is called. shutdown(wait=False) is issued right after
+    submitting (mirroring a caller that has already moved on, e.g. via a `with
+    ThreadPoolExecutor(...)` block that just exited) so the worker thread itself -- not
+    just this one task -- actually terminates once the task and the queued shutdown
+    sentinel are both processed, well within WORKER_JOIN_GRACE_PERIOD.
+    request_hard_exit() must NOT fire for it.
+    """
+    already_set = threading.Event()
+    already_set.set()
+    stopped_thread = threading.Thread(target=already_set.wait, daemon=True)
+    stopped_thread.start()
+    stopped_thread.join(timeout=5)
+    scylla_cluster_for_nemesis.nemesis_threads = [stopped_thread]
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    executor.submit(time.sleep, WORKER_JOIN_GRACE_PERIOD / 10)
+    executor.shutdown(wait=False)
+
+    scylla_cluster_for_nemesis.stop_nemesis(timeout=0.1)
+
+    critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
+    assert len(critical_events) == 0, f"Expected no CRITICAL events, got {len(critical_events)}"
+    assert not hard_exit._hard_exit_reason
+    assert not hard_exit._hard_exit_threads
+
+
+def test_stop_nemesis_arms_hard_exit_for_both_new_and_pre_existing_stuck_workers(
+    scylla_cluster_for_nemesis, events_function_scope
+):
+    """Combines both concerns to prove the split reporting/arming logic precisely, not
+    just its presence/absence: a long-lived pre-existing executor worker stays alive
+    throughout AND a separate, genuinely new worker thread appears and never winds
+    down. Only the new worker is a genuine *reporting* anomaly (it is excluded from
+    pre_existing_threads, so it alone drives the CRITICAL event), but request_hard_exit()
+    must still fire for BOTH: arming is intentionally unconditional on the
+    pre_existing_threads scoping (see
+    test_stop_nemesis_arms_hard_exit_for_worker_stuck_before_stop_nemesis_was_called),
+    so a pre-existing worker that is still alive at this point is armed too, relying on
+    exit_process()'s later liveness re-check to avoid a false positive at actual exit.
+    """
+    pre_existing_block_forever = threading.Event()
+    pre_existing_executor = ThreadPoolExecutor(max_workers=1)
+    pre_existing_executor.submit(pre_existing_block_forever.wait)
+
+    already_set = threading.Event()
+    already_set.set()
+    finished_nemesis_thread = threading.Thread(target=already_set.wait, daemon=True)
+    finished_nemesis_thread.start()
+    finished_nemesis_thread.join(timeout=5)
+    scylla_cluster_for_nemesis.nemesis_threads = [finished_nemesis_thread]
+
+    new_stuck_block_forever = threading.Event()
+    new_stuck_executor_holder = {}
+    original_join = finished_nemesis_thread.join
+
+    def join_and_spawn_new_stuck_worker(timeout=None):
+        # Spawned after stop_nemesis()'s pre_existing_threads snapshot was taken, so
+        # this one, unlike pre_existing_executor's worker above, is a genuinely new
+        # worker thread for this call.
+        new_stuck_executor_holder["executor"] = ThreadPoolExecutor(max_workers=1)
+        new_stuck_executor_holder["executor"].submit(new_stuck_block_forever.wait)
+        return original_join(timeout)
+
+    finished_nemesis_thread.join = join_and_spawn_new_stuck_worker
+
+    try:
+        scylla_cluster_for_nemesis.stop_nemesis(timeout=0.1)
+
+        critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
+        assert len(critical_events) == 1, f"Expected exactly 1 CRITICAL event, got {len(critical_events)}"
+        new_worker_thread = next(iter(new_stuck_executor_holder["executor"]._threads))
+        pre_existing_worker_thread = next(iter(pre_existing_executor._threads))
+        assert new_worker_thread in hard_exit._hard_exit_threads
+        assert pre_existing_worker_thread in hard_exit._hard_exit_threads
+    finally:
+        pre_existing_block_forever.set()
+        pre_existing_executor.shutdown(wait=True)
+        new_stuck_block_forever.set()
+        new_stuck_executor_holder["executor"].shutdown(wait=True)
