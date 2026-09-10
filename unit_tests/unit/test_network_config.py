@@ -10,9 +10,11 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2024 ScyllaDB
+from pathlib import Path
 from typing import NamedTuple
 
 import pytest
+import yaml
 
 from sdcm.provision.network_configuration import azure_ipv6_enabled, azure_network_interfaces
 from sdcm.sct_config import SCTConfiguration
@@ -201,3 +203,40 @@ class TestAzureNetworkInterfacesValidation:
 
     def test_two_interfaces_with_a_private_secondary_are_valid(self):
         validate_azure({"scylla_network_config": azure_scylla_network_config() + azure_scylla_network_config(nic=1)})
+
+
+class TestAzureNetworkConfigProfiles:
+    """The shared configurations/network_config/ profiles, as the Azure backend reads them."""
+
+    LAYOUT_DIR = Path("configurations/azure/network_config")
+    PROFILE_DIR = Path("configurations/network_config")
+
+    @staticmethod
+    def load(path: str) -> dict:
+        return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+
+    def profiles(self) -> list[str]:
+        return sorted(path.stem for path in self.PROFILE_DIR.glob("*.yaml"))
+
+    def test_every_azure_override_has_a_shared_profile_of_its_name(self):
+        """An override is loaded after the profile of the same name, so it cannot stand alone."""
+        assert set(path.stem for path in self.LAYOUT_DIR.glob("*.yaml")) <= set(self.profiles())
+
+    def test_every_profile_is_usable_on_azure(self):
+        """The NIC layout is derived from the profile, so none of them needs an Azure counterpart."""
+        for profile in self.profiles():
+            params = self.load(f"{self.PROFILE_DIR}/{profile}.yaml")
+            override = self.LAYOUT_DIR / f"{profile}.yaml"
+            if override.exists():
+                params |= self.load(str(override))
+
+            validate_azure(params)
+
+    def test_only_the_ipv6_profile_enables_ipv6(self):
+        """An Azure IPv6 is a billed Public IP, so no other profile may quietly turn it on."""
+        enabled = {
+            profile
+            for profile in self.profiles()
+            if azure_ipv6_enabled(self.load(f"{self.PROFILE_DIR}/{profile}.yaml"))
+        }
+        assert enabled == {"all_addresses_ipv6_public"}
