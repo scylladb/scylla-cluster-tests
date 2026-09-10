@@ -64,6 +64,16 @@ and tries the next AZ, then the next region. Only a run whose *final* status is 
 event was actually killed. Match on severity and final status, not on the presence of the string anywhere in
 the log, or the numbers will be inflated by failures the framework handled correctly.
 
+### Ask for the Reporting Period First
+
+**The period is the user's choice, not a default — ask before collecting anything.**
+
+Offer three: **from first start** (`--period all`), **last month** (`--period month`), **last week**
+(`--period week`). It matters because the period silently changes how much of the region breakdown is
+measured versus guessed: Jenkins rotates builds out of history, so a long period finds more failures but
+resolves fewer of their regions from the authoritative source. Picking a window silently hands the user a
+report whose confidence they had no say in. Skip the question only when the request already names a period.
+
 ## When to Use
 
 - Counting how many runs or builds failed with a capacity or provisioning error over a time window
@@ -102,14 +112,15 @@ the repository root so `sdcm` imports resolve:
 
 ```bash
 PYTHONPATH=. .venv/bin/python skills/capacity-failure-analysis/capacity_failure_stats.py \
-    --registry tests.tsv --weeks 12 --json-out capacity.json
+    --registry tests.tsv --period month --json-out capacity.json
 ```
 
 | Flag | Purpose |
 |------|---------|
 | `--test-id UUID` | One Argus test UUID; repeatable |
 | `--registry FILE` | TSV of `name<TAB>test_id[<TAB>category]` — preferred for multi-job sweeps |
-| `--weeks N` | Look-back window, default 12 |
+| `--period all\|month\|week` | Reporting period: since the first recorded run, last 30 days, or last 7 days |
+| `--weeks N` | Explicit window in weeks when the user wants something other than the three periods (default 12) |
 | `--no-jenkins` | Skip Jenkins lookup; regions come from Argus and inference only (much less accurate) |
 | `--json-out FILE` | Full per-run dataset, the input for the HTML report |
 
@@ -140,6 +151,7 @@ tests are tabulated in `skills/perf-weekly-status-report/SKILL.md` under "Test R
 
 ## Success Criteria
 
+- [ ] The reporting period was chosen by the user, not assumed
 - [ ] Every failure count is paired with the run total and the rate
 - [ ] Builds hit is reported alongside failed runs
 - [ ] Region provenance is stated: how many measured from Jenkins, how many inferred, with inference accuracy

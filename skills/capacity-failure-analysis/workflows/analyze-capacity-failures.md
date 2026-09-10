@@ -8,9 +8,21 @@ produces figures that cannot be defended.
 
 **Entry:** A question about capacity or provisioning failures.
 
-1. Fix the **time window**. Default to 12 weeks. Warn the user that Jenkins region coverage degrades with
-   window length (roughly 80% at 6 weeks, about half at 12) — a longer window buys more failures but a
-   larger inferred fraction.
+1. **Ask the user which period to report on, before doing anything else.** Do not assume a default — the
+   period changes both the effort and how trustworthy the region breakdown is, so it is not a choice to make
+   on the user's behalf. Offer exactly these three:
+
+   | Answer | Flag | Covers | Region provenance |
+   |--------|------|--------|-------------------|
+   | From first start | `--period all` | Every run Argus has recorded | Mostly inferred — Jenkins has rotated away nearly all old builds |
+   | Last month | `--period month` | Last 30 days | Good — most builds still in Jenkins history |
+   | Last week | `--period week` | Last 7 days | Best — nearly every build still present |
+
+   State the trade-off when asking, because it is the whole reason the question exists: a longer period
+   finds more failures but resolves fewer regions from Jenkins, so more of the region breakdown is inferred
+   rather than measured. If the user wants something else ("last quarter", "since June"), use `--weeks N`.
+
+   Skip the question only when the user already named a period in their request.
 2. Fix the **test set**. The Argus CLI requires explicit test UUIDs and has no command to enumerate a group,
    so a job name alone is not enough. Resolve UUIDs from, in order:
    - the "Test Registry" table in `skills/perf-weekly-status-report/SKILL.md` (the 20 enterprise perf tests)

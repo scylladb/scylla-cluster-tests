@@ -34,8 +34,17 @@ elsewhere. Requires `PYTHONPATH=.` when running a script outside `sct.py`.
 agreed on **207 of 207** runs. The parameter can be trusted where it is available.
 
 **Coverage is the problem.** Jenkins rotates old builds out of history and they answer HTTP 404. Coverage
-falls off sharply with window length — roughly 80% at 6 weeks, but only about half at 12 weeks. Always
-report actual coverage rather than assuming it.
+falls off sharply with window length, which is exactly why the skill asks the user to pick a period before
+collecting anything:
+
+| Period | Flag | Typical Jenkins coverage | Consequence |
+|--------|------|--------------------------|-------------|
+| Last week | `--period week` | Near total | Region breakdown is essentially all measured |
+| Last month | `--period month` | High | A small inferred tail, safe to rank regions |
+| From first start | `--period all` | Low and falling with age | Most regions inferred; report shape, not rankings |
+
+These are expectations, not guarantees — the rotation depth changes per job. Always report the actual
+coverage the run produced rather than quoting this table.
 
 Note the pipeline definitions under `jenkins-pipelines/performance/` do **not** set a region; it comes from
 the job's parameter defaults or the trigger, so it can only be read per build, never from the repository.

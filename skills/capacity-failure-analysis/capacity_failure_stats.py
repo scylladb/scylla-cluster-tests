@@ -14,7 +14,10 @@ for builds that have rotated out of Jenkins history. See
 Run from the repository root so ``sdcm`` is importable::
 
     PYTHONPATH=. .venv/bin/python skills/capacity-failure-analysis/capacity_failure_stats.py \
-        --registry tests.tsv --weeks 12 --json-out capacity.json
+        --registry tests.tsv --period month --json-out capacity.json
+
+Periods: ``--period all`` (since the first recorded run), ``month`` (30 days),
+``week`` (7 days), or ``--weeks N`` for anything else.
 """
 
 import argparse
@@ -91,8 +94,37 @@ def load_registry(path: str) -> list[dict]:
     return tests
 
 
+def resolve_window(period: str | None, weeks: int | None) -> tuple[float, str]:
+    """Turn the requested reporting period into an ``--after`` timestamp and a label.
+
+    The three named periods are the ones the skill offers up front. ``all`` means
+    "since the first recorded run", expressed as epoch 0 so Argus applies no lower
+    bound at all.
+
+    Args:
+        period: One of ``all``, ``month``, ``week``, or None when ``weeks`` is used.
+        weeks: Explicit look-back in weeks, used when ``period`` is None.
+
+    Returns:
+        A ``(after_timestamp, human_label)`` pair.
+    """
+    now = datetime.now(timezone.utc)
+    if period == "all":
+        return 0.0, "all recorded history"
+    if period == "month":
+        return (now - timedelta(days=30)).timestamp(), "last month (30 days)"
+    if period == "week":
+        return (now - timedelta(days=7)).timestamp(), "last week (7 days)"
+    return (now - timedelta(weeks=weeks)).timestamp(), f"last {weeks} weeks"
+
+
 def collect_runs(tests: list[dict], after: float, limit: int) -> list[dict]:
-    """List every Argus run of the given tests started after a Unix timestamp."""
+    """List every Argus run of the given tests started after a Unix timestamp.
+
+    Warns when a test returns exactly ``limit`` runs, because the window is then
+    probably truncated — most likely on ``--period all``, where the whole history
+    can exceed the default page size.
+    """
     runs = []
     for test in tests:
         try:
@@ -103,6 +135,10 @@ def collect_runs(tests: list[dict], after: float, limit: int) -> list[dict]:
         for run in found or []:
             run["_test"] = test
         runs.extend(found or [])
+        if len(found or []) >= limit:
+            LOGGER.warning(
+                "%s returned the full limit of %s runs - raise --limit, results may be truncated", test["name"], limit
+            )
         LOGGER.info("%s: %s runs", test["name"], len(found or []))
     return runs
 
@@ -285,7 +321,13 @@ def main() -> int:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--test-id", action="append", help="Argus test UUID (repeatable)")
     source.add_argument("--registry", help="TSV file: name<TAB>test_id[<TAB>category]")
-    parser.add_argument("--weeks", type=int, default=12, help="Look-back window in weeks (default: 12)")
+    window = parser.add_mutually_exclusive_group()
+    window.add_argument(
+        "--period",
+        choices=["all", "month", "week"],
+        help="Reporting period: all = since the first recorded run, month = last 30 days, week = last 7 days",
+    )
+    window.add_argument("--weeks", type=int, help="Explicit look-back window in weeks (default: 12)")
     parser.add_argument("--limit", type=int, default=500, help="Max runs fetched per test (default: 500)")
     parser.add_argument("--workers", type=int, default=10, help="Parallel API calls (default: 10)")
     parser.add_argument(
@@ -301,7 +343,7 @@ def main() -> int:
         if args.registry
         else [{"name": test_id, "test_id": test_id, "category": ""} for test_id in args.test_id]
     )
-    after = (datetime.now(timezone.utc) - timedelta(weeks=args.weeks)).timestamp()
+    after, window_label = resolve_window(args.period, args.weeks or 12)
 
     raw_runs = collect_runs(tests, after, args.limit)
     if not raw_runs:
@@ -344,9 +386,12 @@ def main() -> int:
         del run["_test"], run["_started"]
 
     failures = [run for run in runs if run["signature"]]
+    # On --period all the requested lower bound is epoch 0, so report the first run
+    # actually found rather than 1970.
+    first_seen = min(run["start"] for run in runs)[:10]
     print(
-        f"\nWindow: {datetime.fromtimestamp(after, timezone.utc):%Y-%m-%d} to today "
-        f"({args.weeks} weeks) · {len(tests)} tests · {len(runs)} runs · {len(failures)} capacity failures"
+        f"\nWindow: {window_label} · {first_seen} to today "
+        f"· {len(tests)} tests · {len(runs)} runs · {len(failures)} capacity failures"
     )
     print(f"Signatures: {dict((name, sum(1 for r in failures if r['signature'] == name)) for name in SIGNATURES)}")
     print(
