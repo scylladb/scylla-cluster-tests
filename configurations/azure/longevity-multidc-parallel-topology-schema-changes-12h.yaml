@@ -1,0 +1,31 @@
+# NOTE: kept short on purpose - Azure and simulated regions each shrink the user_prefix budget
+#       (35 - 2 - 3 = 30 chars), and SCT silently truncates whatever does not fit, version tag
+#       included. 25 chars here leave room for the '-<version tag>' suffix SCT appends.
+user_prefix: 'multidc-topo-schema-azure'
+
+# Azure maps a single availability zone letter to a zone number per resource group, so it takes one
+# zone rather than the 'a,b,c' spread the AWS and OCI runs use.
+availability_zone: 'a'
+
+# The second DC is simulated: all nodes are provisioned in the single real region and
+# GossipingPropertyFileSnitch splits them into '<region>-s1' / '<region>-s2'. SCT has no Azure VNet
+# peering, so two *real* regions have no private path between them and every cross-DC hop would
+# have to leave Azure and come back over the internet.
+#
+# The routable-IPv6 addressing stays regardless - it is coverage this job owns, not a workaround for
+# the missing peering - so keep pairing this file with
+# configurations/network_config/all_addresses_ipv6_public.yaml and its Azure NIC layout
+# (configurations/azure/network_config/all_addresses_ipv6_public.yaml). Every Scylla address is then
+# a public IPv6, which on Azure is a separate billed Public IP resource per NIC.
+simulated_regions: 2
+
+# The racks are simulated for the same reason the second DC is: Azure maps one availability zone
+# letter per resource group, so the 'a,b,c' spread the AWS run relies on for its three racks is not
+# available here and 'availability_zone' would leave the cluster with a single rack.
+# 'rf_rack_valid_keyspaces: true' (defaults/test_default.yaml) then rejects the RF=3 keyspaces the
+# test creates, with "Replication factor 3 exceeds the number of racks (1) in dc eastus-s1", before
+# the first stress command runs. Three racks match RF=3 and divide the six nodes per DC of the base
+# test case evenly, so each rack holds two. That is what keeps the node-removal nemesis this job
+# exists to run: with one node per rack, removing it removes the rack, leaving RF=3 over two racks,
+# which Scylla rejects as "makes some existing keyspaces RF-rack-invalid".
+simulated_racks: 3
