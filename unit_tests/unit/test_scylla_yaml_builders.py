@@ -605,9 +605,29 @@ class IntegrationTests:
         VirtualizationType="hvm",
     )
 
+<<<<<<< HEAD
     @property
     def temp_dir(self):
         return str(self._tmp_path)
+||||||| parent of bd2dbde48 (refactor(sct_config): repoint patch targets and docs at the package)
+    with (
+        patch("sdcm.sct_config.get_scylla_ami_versions", return_value=[scylla_ami_version_output]),
+        patch("sdcm.provision.scylla_yaml.certificate_builder.install_client_certificate", return_value=None),
+    ):
+        monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+        monkeypatch.setenv("SCT_REGION_NAME", region_names)
+        monkeypatch.setenv("SCT_CONFIG_FILES", config_path)
+        monkeypatch.setenv("SCT_PREPARE_SASLAUTHD", "true")
+=======
+    with (
+        patch("sdcm.sct_config.config.get_scylla_ami_versions", return_value=[scylla_ami_version_output]),
+        patch("sdcm.provision.scylla_yaml.certificate_builder.install_client_certificate", return_value=None),
+    ):
+        monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+        monkeypatch.setenv("SCT_REGION_NAME", region_names)
+        monkeypatch.setenv("SCT_CONFIG_FILES", config_path)
+        monkeypatch.setenv("SCT_PREPARE_SASLAUTHD", "true")
+>>>>>>> bd2dbde48 (refactor(sct_config): repoint patch targets and docs at the package)
 
     @pytest.fixture(autouse=True)
     def fixture_env(self, monkeypatch, tmp_path):

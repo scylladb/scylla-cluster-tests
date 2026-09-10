@@ -115,7 +115,7 @@ export SCT_REUSE_CLUSTER=$(cat ~/sct-results/latest/test_id)
 | Cluster management | `cluster.py`, `cluster_aws.py`, `cluster_gce.py`, `cluster_azure.py`, `cluster_docker.py`, `cluster_k8s/` | Base classes and backend-specific implementations |
 | Test base | `tester.py` | Base test class, setup/teardown, reporting |
 | Nemesis (chaos) | `nemesis/` package — see [docs/nemesis.md](docs/nemesis.md) | `NemesisBaseClass`, `NemesisRunner`, `NemesisRegistry`, auto-discovery |
-| Configuration | `sct_config.py` | Parameter handling; precedence: CLI > env vars > config files > defaults |
+| Configuration | `sdcm/sct_config/` | Parameter handling; precedence: CLI > env vars > config files > defaults |
 | Stress tools | `stress/`, `*_thread.py` | Wrappers for cassandra-stress, scylla-bench, YCSB, gemini, latte |
 | Remote execution | `remote/` | SSH, Docker, and K8s command runners |
 | Provisioning | `provision/` | Cloud-specific infra provisioning (AWS, Azure, GCE) |

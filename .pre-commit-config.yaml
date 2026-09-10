@@ -68,7 +68,7 @@ repos:
         entry: ./sct.py update-conf-docs
         language: system
         pass_filenames: false
-        files: (?x)(sdcm/sct_config.py|defaults/.*.yaml)
+        files: (?x)(sdcm/sct_config/.*\.py|defaults/.*.yaml|docs/configuration_options/.*\.md)
 
     -   id: create-nemesis-yaml
         name: create-nemesis-yaml

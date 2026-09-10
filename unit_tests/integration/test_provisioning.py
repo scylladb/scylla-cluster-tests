@@ -167,7 +167,7 @@ def mock_xcloud_backend(mock_aws_backend, mock_gce_backend):
         stack.enter_context(patch("sdcm.tester.ScyllaCloudAPIClient"))
         # cloud_env_credentials is a cached_property on SCTConfiguration that calls
         # KeyStore() directly from sct_config — patch at the usage site.
-        stack.enter_context(patch("sdcm.sct_config.KeyStore"))
+        stack.enter_context(patch("sdcm.sct_config.config.KeyStore"))
         yield
 
 
