@@ -13,6 +13,26 @@ The current performance regression testing infrastructure uses i4i.4xlarge (x86_
 
 The migration impacts critical weekly performance testing jobs for both vnodes and tablets configurations across Scylla releases that support ARM64 architecture: 2025.3, 2025.4, and master. **Releases 2024.1, 2024.2, 2025.1, and 2025.2 do not support i8g and will remain on i4i instances.**
 
+> **Superseded for release branches (2026-09-10).** Perf regression is retired for every 2024.x
+> and 2025.x branch — 2024.1, 2024.2, 2025.1, 2025.2, 2025.3 and 2025.4 alike — so the
+> release-routing half of this plan no longer has a release branch to apply to. What is in
+> `configurations/triggers/perf-regression.yaml` today:
+>
+> - every version filter names all six of those branches, spelled out rather than matched by a
+>   `"2025."` prefix, so adding one back is a deliberate edit;
+> - the x86 (i4i/i3en) job variants those branches were the only consumers of are kept for
+>   reference with `disabled: true` — `predefined-throughput-steps[-write]-vnodes`,
+>   `predefined-throughput-steps[-write]-tablets`, `latency-650gb-with-nemesis`,
+>   `latency-650gb-with-nemesis-tablets`, `latency-650gb-during-rolling-upgrade-tablets`;
+> - the weekly simple-query and cql-raw microbenchmarks have no version filter and still run for
+>   every branch — they are all a 2024.x/2025.x trigger selects now;
+> - release branches from 2026.x up run the i8g jobs, and vnodes coverage is kept on master only.
+>
+> Moving 2025.1 onto i8g was considered on the way to this and dropped. Everything below is the
+> original plan: the i8g job creation, calibration and threshold work still stands and is what
+> master and 2026.x run on; the "which releases stay on i4i" parts (goals 6-7, Phase 3, Phase 7)
+> are the parts this update replaces.
+
 ## 2. Current State
 
 ### Existing Infrastructure
@@ -58,6 +78,9 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 - Schedules: Weekly runs (Sunday 6am) with label 'master-weekly'
 - Current versions: 2024.1, 2024.2, 2025.1, 2025.2, 2025.3, 2025.4, master (lines 56-70)
 - **i8g migration scope:** Only 2025.3, 2025.4, and master (ARM64-supporting releases)
+- Superseded: none of those release branches is triggered any more — the release scope is 2026.x
+  and up, and the trigger matrix moved from that Groovy list to
+  `configurations/triggers/perf-regression.yaml`
 
 **Current Throughput Configuration:**
 - **File:** `configurations/performance/cassandra_stress_gradual_load_steps_enterprise.yaml`
@@ -114,6 +137,9 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 - **Confirmed unsupported:** 2024.1, 2024.2, 2025.1, 2025.2 - these releases do not support i8g/ARM64 and will remain on i4i (x86_64)
 - **Supported:** 2025.3.3+, 2025.4.x, master - these releases support ARM64 architecture and i8g instances
 - **Needs Investigation:** Exact minimum minor version for 2025.3.x (known: at least 2025.3.3+)
+- **Superseded (2026-09-10):** which of these releases supports i8g stopped mattering when perf
+  regression was retired for all of 2024.x and 2025.x. The live split is master and 2026.x and up
+  on i8g, everything older on the weekly microbenchmarks alone.
 
 ## 3. Goals
 
@@ -122,8 +148,8 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 3. **Recalibrate throughput steps** based on i8g maximum sustainable throughput using percentage-based approach
 4. **Update P99 latency thresholds** to reflect i8g performance characteristics
 5. **Migrate master trigger** to use new jobs while preserving rollback capability
-6. **Update release-specific triggers** to use i8g jobs only for ARM64-supporting releases (2025.3+, 2025.4, master)
-7. **Maintain backward compatibility** for x86_64-only releases (2024.1, 2024.2, 2025.1, 2025.2) that don't support i8g/ARM64
+6. **Update release-specific triggers** to use i8g jobs only for ARM64-supporting releases (2025.3+, 2025.4, master) — *superseded: no 2024.x/2025.x branch is triggered at all*
+7. **Maintain backward compatibility** for x86_64-only releases (2024.1, 2024.2, 2025.1, 2025.2) that don't support i8g/ARM64 — *superseded: their x86 jobs are retired, not kept*
 
 ## 4. Implementation Phases
 
@@ -192,6 +218,8 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
   - [ ] 2025.4.x - identify latest minor version and confirm i8g support
   - [ ] master - confirm continued i8g support
 - [ ] Document that 2024.1, 2024.2, 2025.1, 2025.2 do NOT support i8g/ARM64 and remain on i4i
+  - Superseded: they do not remain on i4i either — their x86 jobs are retired, as are the i8g
+    entries for 2025.3 and 2025.4
 - [ ] Document findings in version support matrix table
 - [ ] Finalize release migration strategy with clear version boundaries
 
@@ -276,6 +304,7 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 - [ ] Update `vars/perfRegressionParallelPipelinebyRegion.groovy`:
   - [ ] For ARM64-supporting versions (2025.3+, 2025.4, master): Update job_name to point to new i8g jobs
   - [ ] For x86_64-only versions (2024.1, 2024.2, 2025.1, 2025.2): Keep existing i4i job references unchanged
+    - Superseded: those i4i entries are now `disabled: true` in perf-regression.yaml
   - [ ] Add comments documenting ARM64 vs x86_64 architecture routing
   - [ ] Ensure version boundaries are correct (e.g., 2025.3.3+ for 2025.3.x)
 - [ ] Document rollback procedure:
@@ -366,7 +395,7 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
    - Weekly automated runs complete successfully
    - Results properly reported to Argus and email
 
-4. **Backward Compatibility Maintained:**
+4. **Backward Compatibility Maintained:** — *superseded, see the update in section 1*
    - x86_64-only releases (2024.1, 2024.2, 2025.1, 2025.2) continue using i4i jobs
    - No test result format changes breaking downstream consumers
    - Rollback capability preserved and documented
@@ -398,6 +427,7 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 **Mitigation:**
 - i8g is ARM64-only; architecture change from x86_64 to ARM64
 - Releases 2024.1, 2024.2, 2025.1, 2025.2 confirmed not supporting i8g - remain on i4i
+  (superseded: perf regression is retired for every 2024.x and 2025.x branch)
 - Only migrate releases with confirmed ARM64 support (2025.3.3+, 2025.4, master)
 - Validation phase tests actual ARM64 compatibility
 - Existing ARM tests (rolling-upgrade-ami-arm) provide precedent
