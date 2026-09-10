@@ -329,7 +329,7 @@ def call(Map pipelineParams = [:]) {
             string(name: 'post_behavior_db_nodes', defaultValue: 'destroy',
                    description: 'keep|keep-on-failure|destroy')
             string(name: 'provision_type', defaultValue: 'spot',
-                   description: 'on_demand|spot|spot_fleet')
+                   description: 'on_demand|spot|spot_fleet|auto (auto: resolved by test duration, threshold spot_max_test_duration)')
 
             separator(name: 'NOTIFICATION_CONFIG', sectionHeader: 'Notification Configuration')
             string(name: 'email_recipients', defaultValue: 'vladz@scylladb.com',
