@@ -19,7 +19,7 @@ from typing import Dict, List
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
-from azure.mgmt.network.models import PublicIPAddress
+from azure.mgmt.network.models import NetworkInterface, PublicIPAddress
 from azure.mgmt.resource.resources.models import ResourceGroup
 from invoke import Result
 
@@ -301,6 +301,18 @@ class AzureProvisioner(Provisioner):
         return self._vm_provider.get_or_create(
             definitions=definitions, nics_ids=nics_ids, pricing_model=pricing_model, deadline=deadline
         )
+
+    def network_interfaces(self, name: str) -> List[NetworkInterface]:
+        """Azure NICs of a VM, ordered by device index."""
+        return self._nic_provider.get_all(name)
+
+    def public_ip_address(self, name: str, version: str = "IPV4", index: int = 0) -> str | None:
+        """Address of a Public IP of a VM, None when that NIC carries none of this family.
+
+        The provisioner re-reads every Public IP it creates, so it holds the full resource - a NIC
+        payload carries only a reference to it.
+        """
+        return self._ip_provider.get(name, version=version, index=index).ip_address
 
     def _public_ip_addresses(self, name: str) -> List[PublicIPAddress]:
         """Public IP resources of a VM, one per NIC that carries one.
