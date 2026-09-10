@@ -13,6 +13,12 @@ The current performance regression testing infrastructure uses i4i.4xlarge (x86_
 
 The migration impacts critical weekly performance testing jobs for both vnodes and tablets configurations across Scylla releases that support ARM64 architecture: 2025.3, 2025.4, and master. **Releases 2024.1, 2024.2, 2025.1, and 2025.2 do not support i8g and will remain on i4i instances.**
 
+**Update (2026-09-10):** moving 2025.1 onto the i8g jobs was considered and dropped.
+Instead, every 2024.x and 2025.x branch was removed from `configurations/triggers/perf-regression.yaml`
+altogether, and the x86 release-only job variants they were the last consumers of are now
+`disabled: true` there. Perf regression runs for master and 2026.x and up only, so the
+"keep older releases on i4i" parts of this plan no longer have any releases to apply to.
+
 ## 2. Current State
 
 ### Existing Infrastructure

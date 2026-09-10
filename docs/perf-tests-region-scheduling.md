@@ -55,13 +55,27 @@ Master monthly (master-monthly):
 - predefined-throughput-steps-i8g-vnodes — versions: ['master'], labels: ['master-monthly'], all 4 sub tests
 - latency-650gb-with-nemesis-i8g-vnodes — versions: ['master'], labels: ['master-monthly'], all 3 sub tests (mixed, read, write)
 
->= Scylla version 2025.3 (non-master):
-- predefined-throughput-steps-i8g-tablets — ignore_versions: ['2025.2', '2025.1', '2024.1', '2024.2', 'master'], all sub tests
-- latency-650gb-during-rolling-upgrade-i8g-tablets — ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed load
-- latency-650gb-with-nemesis-i8g-tablets — ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], read + mixed
-- predefined-throughput-steps-i8g-vnodes — ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed only
-- latency-650gb-with-nemesis-i8g-vnodes — ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed only
+Non-master releases on i8g (2026.x and up — every 2024.x and 2025.x branch was dropped
+from the perf regression trigger):
+- predefined-throughput-steps-i8g-tablets — exclude_versions: ['2025.', '2024.', 'master'], all sub tests
+- latency-650gb-during-rolling-upgrade-i8g-tablets — exclude_versions: ['2025.', '2024.', 'master'], mixed load
+- latency-650gb-with-nemesis-i8g-tablets — exclude_versions: ['2025.', '2024.', 'master'], read + mixed
+- predefined-throughput-steps-i8g-vnodes — exclude_versions: ['2025.', '2024.', 'master'], mixed only
+- latency-650gb-with-nemesis-i8g-vnodes — exclude_versions: ['2025.', '2024.', 'master'], mixed only
 ```
+
+`exclude_versions` matches by prefix, so '2025.' / '2024.' cover every minor of those years.
+Every other live entry carries the same exclusions — the weekly simple-query and cql-raw
+microbenchmarks, the elasticity job, the GCE latte jobs, the alternator job and the two
+already-disabled x86 jobs — so no perf regression job is triggered for a 2024.x or 2025.x
+release.
+
+2024.x/2025.x were the only consumers of the x86 (i4i/i3en) release job variants, so those
+seven entries — predefined-throughput-steps[-write]-vnodes, predefined-throughput-steps[-write]-tablets,
+latency-650gb-with-nemesis, latency-650gb-with-nemesis-tablets and
+latency-650gb-during-rolling-upgrade-tablets — stay in the matrix for reference but are
+turned off with `disabled: true`. Do not switch a job off by emptying its `include_versions`:
+an empty list is *no* filter, so the job runs for every version instead of none.
 
 ## Final Region Assignment
 
