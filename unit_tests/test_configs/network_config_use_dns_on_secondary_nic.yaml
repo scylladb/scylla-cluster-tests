@@ -1,0 +1,36 @@
+# Puts 'use_dns' on a secondary interface, which GCE rejects: GCE creates a private DNS record for
+# the primary network interface only, so a DNS name on nic 1 resolves back to nic 0.
+test_duration: 5
+
+n_db_nodes: 3
+n_loaders: 1
+user_prefix: 'network-config-unit-test'
+
+scylla_network_config:
+- address: listen_address
+  ip_type: ipv4
+  public: false
+  listen_all: false
+  use_dns: false
+  nic: 0
+- address: rpc_address
+  ip_type: ipv4
+  public: false
+  listen_all: false
+  use_dns: true
+  nic: 1
+- address: broadcast_rpc_address
+  ip_type: ipv4
+  public: false
+  use_dns: false
+  nic: 0
+- address: broadcast_address
+  ip_type: ipv4
+  public: false
+  use_dns: false
+  nic: 0
+- address: test_communication
+  ip_type: ipv4
+  public: false
+  use_dns: false
+  nic: 0
