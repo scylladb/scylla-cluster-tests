@@ -18,6 +18,7 @@ import logging
 import datetime
 import json
 import os
+import threading
 from functools import wraps, partial, cached_property
 from typing import Optional, Callable, TYPE_CHECKING
 
@@ -36,6 +37,11 @@ if TYPE_CHECKING:
     from sdcm.cluster import BaseCluster
 
 LOGGER = logging.getLogger(__name__)
+
+# Guards the read-modify-write of tester.latency_results_file so concurrent
+# latency_calculator_decorator calls (e.g. dual-engine workloads awaited in parallel
+# threads) don't clobber each other's entry when writing the shared JSON file back.
+_LATENCY_RESULTS_FILE_LOCK = threading.Lock()
 
 
 class Retry(Exception):
@@ -277,78 +283,86 @@ def latency_calculator_decorator(  # noqa: PLR0915
                         raise func_exception  # noqa: TRY201
                     return res
 
-                latency_results_file_path = tester.latency_results_file
-                if not os.path.exists(latency_results_file_path):
-                    latency_results = {}
-                else:
-                    with open(latency_results_file_path, encoding="utf-8") as file:
-                        data = file.read().strip()
-                        latency_results = json.loads(data or "{}")
+                # HDR extraction/Argus submission happen under start..end, which is only ever
+                # a small bookkeeping window (the actual multi-minute workload already ran
+                # before this point) -- serializing them is cheap and keeps concurrent
+                # decorated calls (e.g. dual-engine workloads awaited in parallel threads)
+                # from racing on the shared latency_results_file's read-modify-write.
+                with _LATENCY_RESULTS_FILE_LOCK:
+                    latency_results_file_path = tester.latency_results_file
+                    if not os.path.exists(latency_results_file_path):
+                        latency_results = {}
+                    else:
+                        with open(latency_results_file_path, encoding="utf-8") as file:
+                            data = file.read().strip()
+                            latency_results = json.loads(data or "{}")
 
-                if "steady" not in func_name.lower():
-                    if func_name not in latency_results:
-                        latency_results[func_name] = {"legend": legend or func_name}
-                    if "cycles" not in latency_results[func_name]:
-                        latency_results[func_name]["cycles"] = []
+                    if "steady" not in func_name.lower():
+                        if func_name not in latency_results:
+                            latency_results[func_name] = {"legend": legend or func_name}
+                        if "cycles" not in latency_results[func_name]:
+                            latency_results[func_name]["cycles"] = []
 
-                result = (
-                    latency.collect_latency(monitor, start, end, workload, cluster, all_nodes_list) if monitor else {}
-                )
-                result["screenshots"] = screenshots
-                result["duration"] = f"{datetime.timedelta(seconds=int(end - start))}"
-                result["duration_in_sec"] = int(end - start)
+                    result = (
+                        latency.collect_latency(monitor, start, end, workload, cluster, all_nodes_list)
+                        if monitor
+                        else {}
+                    )
+                    result["screenshots"] = screenshots
+                    result["duration"] = f"{datetime.timedelta(seconds=int(end - start))}"
+                    result["duration_in_sec"] = int(end - start)
 
-                hdr_tags = _find_hdr_tags(kwargs, res, _self)
-                result["hdr"] = tester.get_hdrhistogram_by_interval(
-                    hdr_tags=hdr_tags, stress_operation=workload, start_time=start, end_time=end
-                )
-                LOGGER.debug("hdr: %s", result["hdr"])
+                    hdr_tags = _find_hdr_tags(kwargs, res, _self)
+                    result["hdr"] = tester.get_hdrhistogram_by_interval(
+                        hdr_tags=hdr_tags, stress_operation=workload, start_time=start, end_time=end
+                    )
+                    LOGGER.debug("hdr: %s", result["hdr"])
 
-                result["hdr_summary"] = tester.get_hdrhistogram(
-                    hdr_tags=hdr_tags, stress_operation=workload, start_time=start, end_time=end
-                )
-                LOGGER.debug("HDR summary added to results: %s", result["hdr_summary"])
-                hdr_throughput = 0
-                for summary, values in result["hdr_summary"].items():
-                    hdr_throughput += values["throughput"]
-                LOGGER.debug("HDR throughput: %s", hdr_throughput)
-                result["cycle_hdr_throughput"] = round(hdr_throughput)
-                result["reactor_stalls_stats"] = reactor_stall_stats
-                LOGGER.debug("Reactor stalls stats: %s", reactor_stall_stats)
-                error_thresholds = tester.params.get("latency_decorator_error_thresholds")
-                if "steady" in func_name.lower():
-                    if "Steady State" not in latency_results:
-                        latency_results["Steady State"] = result
+                    result["hdr_summary"] = tester.get_hdrhistogram(
+                        hdr_tags=hdr_tags, stress_operation=workload, start_time=start, end_time=end
+                    )
+                    LOGGER.debug("HDR summary added to results: %s", result["hdr_summary"])
+                    hdr_throughput = 0
+                    for summary, values in result["hdr_summary"].items():
+                        hdr_throughput += values["throughput"]
+                    LOGGER.debug("HDR throughput: %s", hdr_throughput)
+                    result["cycle_hdr_throughput"] = round(hdr_throughput)
+                    result["reactor_stalls_stats"] = reactor_stall_stats
+                    LOGGER.debug("Reactor stalls stats: %s", reactor_stall_stats)
+                    error_thresholds = tester.params.get("latency_decorator_error_thresholds")
+                    if "steady" in func_name.lower():
+                        if "Steady State" not in latency_results:
+                            latency_results["Steady State"] = result
+                            send_result_to_argus(
+                                argus_client=tester.test_config.argus_client(),
+                                workload=workload,
+                                name="Steady State",
+                                description="Latencies without any operation running",
+                                cycle=row_name or 0,
+                                result=result,
+                                start_time=start,
+                                error_thresholds=error_thresholds,
+                            )
+                    else:
+                        latency_results[func_name]["cycles"].append(result)
+                        LOGGER.debug("latency_results: %s", latency_results)
+                        LOGGER.debug("Send to Argus")
                         send_result_to_argus(
                             argus_client=tester.test_config.argus_client(),
                             workload=workload,
-                            name="Steady State",
-                            description="Latencies without any operation running",
-                            cycle=row_name or 0,
+                            name=f"{func_name}",
+                            description=legend or "",
+                            cycle=row_name or len(latency_results[func_name]["cycles"]),
                             result=result,
                             start_time=start,
                             error_thresholds=error_thresholds,
                         )
-                else:
-                    latency_results[func_name]["cycles"].append(result)
-                    LOGGER.debug("latency_results: %s", latency_results)
-                    LOGGER.debug("Send to Argus")
-                    send_result_to_argus(
-                        argus_client=tester.test_config.argus_client(),
-                        workload=workload,
-                        name=f"{func_name}",
-                        description=legend or "",
-                        cycle=row_name or len(latency_results[func_name]["cycles"]),
-                        result=result,
-                        start_time=start,
-                        error_thresholds=error_thresholds,
-                    )
-                    LOGGER.debug("Saved in Argus")
+                        LOGGER.debug("Saved in Argus")
 
-                LOGGER.debug("Write results into file")
-                with open(latency_results_file_path, "w", encoding="utf-8") as file:
-                    json.dump(latency_results, file)
-                LOGGER.debug("Results written into file")
+                    LOGGER.debug("Write results into file")
+                    with open(latency_results_file_path, "w", encoding="utf-8") as file:
+                        json.dump(latency_results, file)
+                    LOGGER.debug("Results written into file")
             except Exception as exc:  # noqa: BLE001
                 TestFrameworkEvent(
                     source=tester.__class__.__name__,
