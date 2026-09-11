@@ -1,0 +1,18 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// Eventual Consistency baseline for the i4i SC job. It drops enable_experimental_sc.yaml and uses
+// the EC keyspace, but keeps the same stress tool, image, connection count, rates, commitlog
+// settings and scylla args (ec_baseline_align_with_sc.yaml) so the per-disruption delta against
+// the SC job is attributable to the keyspace consistency clause alone.
+perfRegressionParallelPipeline(
+    backend: "aws",
+    region: "us-east-1",
+    provision_type: 'on_demand',
+    test_name: "performance_regression_test.PerformanceRegressionTest",
+    test_config: '''["test-cases/performance/perf-regression-latency-650gb-with-nemesis.yaml", "configurations/disable_kms.yaml", "configurations/disable_speculative_retry.yaml", "configurations/performance/latency-decorator-error-thresholds-nemesis-sc-tablets.yaml", "configurations/aws/i4i_4xlarge.yaml", "configurations/strong_consistency/nemesis_650gb_cql_stress_base.yaml", "configurations/strong_consistency/ec_baseline_align_with_sc.yaml", "configurations/strong_consistency/enable_commitlog_sync_batch.yaml", "configurations/stress_images/cql-stress-strong-consistency-leader-awarness.yaml", "configurations/strong_consistency/prepare_cql_stress_nemesis_ks_with_ec_1kpershard.yaml"]''',
+    sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"],
+    test_email_title: "EC latency during topology operations / tablets / i4i",
+)
