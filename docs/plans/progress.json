@@ -308,6 +308,16 @@
       "created": "2026-06-28",
       "phases_total": 8,
       "phases_done": 0
+    },
+    {
+      "id": "sc-topology-operations-perf-tests",
+      "title": "SC Perf Tests with Topology Operations",
+      "file": "jenkins/sc-topology-operations-perf-tests.md",
+      "domain": "ci-cd",
+      "status": "draft",
+      "created": "2026-09-11",
+      "phases_total": 14,
+      "phases_done": 0
     }
   ]
 }
