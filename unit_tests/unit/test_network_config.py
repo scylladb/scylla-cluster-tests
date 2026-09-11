@@ -232,7 +232,7 @@ class TestAzureNetworkConfigProfiles:
     """Every Azure NIC layout pairs with the shared configurations/network_config/ profile of its name."""
 
     LAYOUT_DIR = Path("configurations/azure/network_config")
-    PROFILES = ["all_addresses_ipv6_public"]
+    PROFILES = ["all_addresses_ipv6_public", "two_interfaces"]
 
     @staticmethod
     def load(path: str) -> dict:

@@ -128,12 +128,15 @@ class NemesisJobGenerator:
             additional_params = clazz.additional_params or {}
             for backend in self.backends:
                 backend_config = self.BACKEND_CONFIGS.get(backend, [])
-                config_name = [
-                    str(self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml"),
-                    str(self.nemesis_test_config_dir / f"{cls}.yaml"),
-                    *backend_config,
-                    *additional_configs,
-                ]
+                config_name = self.with_backend_network_layouts(
+                    [
+                        str(self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml"),
+                        str(self.nemesis_test_config_dir / f"{cls}.yaml"),
+                        *backend_config,
+                        *additional_configs,
+                    ],
+                    backend,
+                )
                 job_file_name = f"{self.base_job}-{cls}-{backend}.jenkinsfile"
                 region_param = self.BACKEND_TO_REGION_PARAM.get(backend, "region")
                 nemesis_job_groovy_source = Template(self.nemesis_job_template).render(
@@ -150,6 +153,26 @@ class NemesisJobGenerator:
                 job_path = self.base_nemesis_job_dir / job_file_name
                 with self.file_opener(job_path, "w") as file:
                     file.write(nemesis_job_groovy_source + "\n")
+
+    def with_backend_network_layouts(self, configs: list[str], backend: str) -> list[str]:
+        """Pair every shared network_config profile with the layout of the same name for this backend.
+
+        A profile under 'configurations/network_config/' says which interface and address family
+        each Scylla address uses. A backend that has to be told how those interfaces are built -
+        Azure, through 'azure_network_interfaces' - keeps a file of the same name under
+        'configurations/<backend>/network_config/', and its config validation rejects the job when
+        the profile arrives without it.
+        """
+        paired = []
+        for config in configs:
+            paired.append(config)
+            path = Path(config)
+            if path.parent.name != "network_config":
+                continue
+            layout = self.base_dir / "configurations" / backend / "network_config" / path.name
+            if layout.exists():
+                paired.append(str(layout))
+        return paired
 
     def render_base_job_config(self, params: dict | None = None):
         params = params if params else {}
