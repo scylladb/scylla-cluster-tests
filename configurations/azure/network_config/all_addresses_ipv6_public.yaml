@@ -1,0 +1,55 @@
+# Azure IPv6 addressing, the counterpart of `configurations/network_config/all_addresses_ipv6_public.yaml`.
+#
+# That generic file puts every Scylla address on a routable IPv6, which is what AWS allows: there
+# the routable address is assigned to the ENI, so the OS owns it and Scylla can bind to it. Azure
+# works the other way round. The VNet's IPv6 space is a private (ULA) range, and a routable address
+# is a separate, billed Public IP resource reached by DNAT - it never appears on the VM's interface.
+# Binding to it fails outright:
+#
+#     Startup failed: std::system_error (error system:99, posix_listen failed for
+#     address [2603:1030:20e:2a::9]:9180: Cannot assign requested address)
+#
+# So the addresses Scylla binds - listen_address and rpc_address - are the ULA. The addresses only
+# advertised stay on the ULA too: the DB nodes, the loaders, the monitor and the SCT runner all
+# share one resource group, hence one VNet and one subnet, so intra-cluster and client traffic has
+# a direct path. Sending it to the public addresses instead would hairpin every hop out to Azure's
+# edge and back, for latency and egress cost that buy nothing.
+#
+# 'test_communication' keeps the routable address. That is the part of the routable-IPv6 coverage
+# Azure can actually honour - inbound DNAT to a listener bound on the ULA - and it is what the
+# 'public_ipv6' Public IP resource below pays for.
+scylla_network_config:
+  - address: listen_address  # Address Scylla listens for connections from other nodes.
+    ip_type: ipv6
+    public: false  # a Public IP is not bindable on Azure
+    listen_all: false
+    use_dns: false
+    nic: 0
+  - address: rpc_address  # Address on which Scylla expects CQL client connections.
+    ip_type: ipv6
+    public: false  # a Public IP is not bindable on Azure
+    listen_all: false
+    use_dns: false
+    nic: 0
+  - address: broadcast_rpc_address  # Address broadcast to clients. Related to rpc_address.
+    ip_type: ipv6
+    public: false  # loaders share the VNet - no reason to hairpin
+    use_dns: false
+    nic: 0
+  - address: broadcast_address  # Address broadcast to other nodes. Related to listen_address.
+    ip_type: ipv6
+    public: false  # gossip stays inside the VNet
+    use_dns: false
+    nic: 0
+  - address: test_communication  # Type of IP used to connect from test to DB/monitor instances
+    ip_type: ipv6
+    public: true  # the routable address, reached by DNAT
+    use_dns: false
+    nic: 0
+
+# The IPv4 configuration stays as well: Azure requires the primary ipConfiguration to be IPv4.
+azure_network_interfaces:
+  - subnet: default
+    public_ip: true
+    ipv6: true
+    public_ipv6: true

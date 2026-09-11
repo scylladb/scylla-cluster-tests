@@ -19,6 +19,7 @@ from typing import Dict
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.network.models import VirtualNetwork
 
+from sdcm.provision.network_configuration import AZURE_IPV6_ADDRESS_SPACE
 from sdcm.utils.azure_utils import AzureService
 
 LOGGER = logging.getLogger(__name__)
@@ -42,9 +43,12 @@ class VirtualNetworkProvider:
         except ResourceNotFoundError:
             pass
 
-    def get_or_create(self, name: str = "default") -> VirtualNetwork:
+    def get_or_create(self, name: str = "default", ipv6: bool = False) -> VirtualNetwork:
         if name in self._cache:
             return self._cache[name]
+        # the IPv6 space is only added when a network interface asks for it: it is what makes the
+        # subnets dual-stack, and an IPv6 address on Azure is never free
+        address_prefixes = ["10.0.0.0/16"] + ([AZURE_IPV6_ADDRESS_SPACE] if ipv6 else [])
         LOGGER.info("Creating vnet in resource group %s...", self._resource_group_name)
         self._azure_service.network.virtual_networks.begin_create_or_update(
             resource_group_name=self._resource_group_name,
@@ -53,7 +57,7 @@ class VirtualNetworkProvider:
                 "location": self._region,
                 "zones": [self._az] if self._az else [],
                 "address_space": {
-                    "address_prefixes": ["10.0.0.0/16"],
+                    "address_prefixes": address_prefixes,
                 },
             },
         ).wait()

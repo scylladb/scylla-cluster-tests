@@ -228,6 +228,48 @@ def network_interfaces_count(params):
     return 1
 
 
+DEFAULT_AZURE_SUBNET_NAME = "default"
+# Azure VNet IPv6 space must come from a private (ULA) range: an internet-routable IPv6 is a
+# separate, billed Public IP resource attached to the ipConfiguration, never the VNet address.
+AZURE_IPV6_ADDRESS_SPACE = "fd00:db8:5c7::/48"
+AZURE_IPV6_SUBNET_PREFIX_TMPL = "fd00:db8:5c7:{index}::/64"  # Azure requires exactly a /64
+AZURE_SECONDARY_SUBNET_NAME_TMPL = "nic{index}"
+
+
+def azure_network_interfaces(params) -> list[dict]:
+    """NIC specs of an Azure node, one dict per device index, with the defaults filled in.
+
+    Falls back to a single public IPv4 NIC when 'azure_network_interfaces' is not configured, so
+    callers never have to special-case the option being absent.
+    """
+    specs = (params.get("azure_network_interfaces") if params else None) or [{}]
+    return [
+        {
+            "subnet": spec.get(
+                "subnet",
+                DEFAULT_AZURE_SUBNET_NAME if index == 0 else AZURE_SECONDARY_SUBNET_NAME_TMPL.format(index=index),
+            ),
+            # a public IPv4 can only live on the primary NIC, so it never defaults to True elsewhere
+            "public_ip": spec.get("public_ip", index == 0),
+            "ipv6": spec.get("ipv6", False),
+            "public_ipv6": spec.get("public_ipv6", False),
+        }
+        for index, spec in enumerate(specs)
+    ]
+
+
+def azure_ipv6_enabled(params) -> bool:
+    """True when the test configuration asks for IPv6 on any Azure network interface.
+
+    Every gate on IPv6 provisioning goes through here. Unlike OCI, where an IPv6 address comes free
+    with the VNIC, an internet-routable Azure IPv6 is a billed Public IP resource, so nothing IPv6
+    gets created unless a NIC spec asks for it. 'scylla_network_config' and 'ip_ssh_connections' are
+    covered too: SCTConfiguration validation rejects an 'ip_type: ipv6' entry (or
+    'ip_ssh_connections: ipv6') whose NIC does not set 'ipv6: true'.
+    """
+    return any(interface["ipv6"] for interface in azure_network_interfaces(params))
+
+
 def ssh_connection_ip_type(params):
     if scylla_network_config := params.get("scylla_network_config"):
         ssh_ip_type = [conf for conf in scylla_network_config if conf["address"] == "test_communication"][0]

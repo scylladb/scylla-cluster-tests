@@ -17,6 +17,15 @@ azure_provision_stuck_vm_total_timeout: 4500  # total seconds budget for the who
 azure_image_loader: 'Canonical:ubuntu-26_04-lts:{arch_sku}:latest'
 azure_image_monitor: 'Canonical:ubuntu-24_04-lts:server:latest'
 
+# One public IPv4 NIC per node. Add an item per extra NIC and keep the 'nic' indexes of
+# 'scylla_network_config' below the length of this list. An Azure IPv6 address is a billed
+# Public IP resource, so 'ipv6'/'public_ipv6' stay false unless a test asks for IPv6.
+azure_network_interfaces:
+  - subnet: default
+    public_ip: true
+    ipv6: false
+    public_ipv6: false
+
 availability_zone: ''
 root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
 root_disk_size_db: 30  # GB, increase root disk for larger swap (maximum: 16G)

@@ -76,8 +76,10 @@ def upload_remote_files_directly_to_s3(
     extra_args = {}
     if public_read_acl is True:
         extra_args.update({"ACL": "public-read"})
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect((ssh_info.get("hostname"), ssh_info.get("port", 22)))
+    # `create_connection` resolves the address family instead of assuming IPv4: on an IPv6 run the
+    # hostname is the node's IPv6 address, and an AF_INET socket refuses it outright with
+    # "gaierror: [Errno -9] Address family for hostname not supported".
+    sock = socket.create_connection((ssh_info.get("hostname"), ssh_info.get("port", 22)))
     session = Session()
     session.handshake(sock)
     session.userauth_publickey_fromfile(username=ssh_info.get("user"), privatekey=expanduser(ssh_info.get("key_file")))

@@ -19,6 +19,7 @@ from typing import Dict, List
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
+from azure.mgmt.network.models import NetworkInterface, PublicIPAddress
 from azure.mgmt.resource.resources.models import ResourceGroup
 from invoke import Result
 
@@ -39,18 +40,27 @@ from sdcm.provision.provisioner import (
     VmInstance,
     PricingModel,
     OperationPreemptedError,
+    ProvisionError,
     StuckVMProvisioningError,
     ProvisionUnrecoverableError,
 )
+from sdcm.provision.network_configuration import DEFAULT_AZURE_SUBNET_NAME
 from sdcm.provision.security import ScyllaOpenPorts
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InstanceProvisionStuckEvent
-from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.azure_utils import AzureService, max_network_interfaces
 
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_STUCK_VM_RECREATE_ATTEMPTS = 3
 DEFAULT_STUCK_VM_TOTAL_TIMEOUT = 4500
+
+# SCT carves one 10.0.<index>.0/24 out of the test VNet's 10.0.0.0/16 per network interface, and
+# Azure itself caps a VM at 8 NICs, so anything above that cannot be provisioned in any case.
+AZURE_SUPPORTED_NETWORK_INTERFACES = 8
+
+# node types the multi-NIC layout applies to; everything else keeps a single interface
+DB_NODE_TYPES = ("scylla-db", "oracle-db")
 
 
 class AzureProvisioner(Provisioner):
@@ -63,6 +73,12 @@ class AzureProvisioner(Provisioner):
         super().__init__(test_id, region, availability_zone)
         # NOTE: Enable Azure KMS by default, disable only if configured explicitly
         self._enable_azure_kms = not config.get("enterprise_disable_kms")
+        # NIC specs of the test configuration, one per device index. Only creation needs them:
+        # teardown discovers the NICs a VM actually has, so a provisioner built without a
+        # configuration (discover_regions()) can still clean multi-NIC nodes up.
+        self._network_interfaces = config.get("azure_network_interfaces") or [
+            {"subnet": DEFAULT_AZURE_SUBNET_NAME, "public_ip": True, "ipv6": False, "public_ipv6": False}
+        ]
         stuck_vm_timeout = config.get("azure_provision_stuck_vm_timeout")
         self._stuck_vm_timeout = stuck_vm_timeout if stuck_vm_timeout is not None else DEFAULT_STUCK_VM_TIMEOUT
         stuck_vm_recreate_attempts = config.get("azure_provision_stuck_vm_recreate_attempts")
@@ -232,43 +248,137 @@ class AzureProvisioner(Provisioner):
         self._vm_provider.delete(name, wait=True)
         self._cache.pop(name, None)
 
-        try:
-            nic = self._nic_provider.get(name)
-        except KeyError:
-            nic = None
-        if nic is not None:
+        for nic in self._nic_provider.get_all(name):
             self._azure_service.network.network_interfaces.begin_delete(self._resource_group_name, nic.name).wait()
             self._nic_provider.delete(nic)
 
-        ip_address = self._ip_provider.get(name)
-        if getattr(ip_address, "id", None):
-            try:
-                self._azure_service.network.public_ip_addresses.begin_delete(
-                    self._resource_group_name, ip_address.name
-                ).wait()
-            except ResourceNotFoundError:
-                pass
-        self._ip_provider.delete(ip_address)
+        for ip_address in self._public_ip_addresses(name):
+            if getattr(ip_address, "id", None):
+                try:
+                    self._azure_service.network.public_ip_addresses.begin_delete(
+                        self._resource_group_name, ip_address.name
+                    ).wait()
+                except ResourceNotFoundError:
+                    pass
+            self._ip_provider.delete(ip_address)
 
     def _provision_resources(
         self, definitions: List[InstanceDefinition], pricing_model: PricingModel, deadline: float | None = None
     ) -> List[VirtualMachine]:
         """Provision all Azure resources needed for the given VM definitions."""
+        # validate before creating anything, so an impossible layout fails in seconds instead of
+        # after a resource group, a VNet and a set of NICs already exist
+        layouts = {definition.name: self._interfaces_for(definition) for definition in definitions}
+        for definition in definitions:
+            self._validate_network_interfaces_count(definition.type, len(layouts[definition.name]))
+
         self._rg_provider.get_or_create()
         sec_group_id = self._network_sec_group_provider.get_or_create(security_rules=ScyllaOpenPorts).id
-        vnet_name = self._vnet_provider.get_or_create().name
-        subnet_id = self._subnet_provider.get_or_create(vnet_name, sec_group_id).id
-        self._ip_provider.get_or_create(instance_definitions=definitions, version="IPV4")
-        ip_addresses_ids = [self._ip_provider.get(definition.name).id for definition in definitions]
-        self._nic_provider.get_or_create(
-            subnet_id,
-            ip_addresses_ids=ip_addresses_ids,
-            names=[definition.name for definition in definitions],
-        )
-        nics_ids = [self._nic_provider.get(definition.name).id for definition in definitions]
+        vnet_name = self._vnet_provider.get_or_create(ipv6=self._ipv6_enabled).name
+
+        # every node type shares the same subnets, so they are created once for the widest layout
+        subnet_ids = [
+            self._subnet_provider.get_or_create(
+                vnet_name,
+                sec_group_id,
+                subnet_name=interface["subnet"],
+                index=index,
+                ipv6=interface["ipv6"],
+            ).id
+            for index, interface in enumerate(self._network_interfaces)
+        ]
+
+        # A public address is only created for an interface configured to carry one, and only for a
+        # node that asked for public access at all. An Azure IPv6 Public IP is billed, so an
+        # interface without 'public_ipv6' gets a VNet-local address only.
+        plans = {definition.name: [] for definition in definitions}
+        for index in range(len(self._network_interfaces)):
+            at_index = [definition for definition in definitions if len(layouts[definition.name]) > index]
+            for version in ("IPV4", "IPV6"):
+                key = "public_ip" if version == "IPV4" else "public_ipv6"
+                wanted = [definition for definition in at_index if layouts[definition.name][index][key]]
+                self._ip_provider.get_or_create(instance_definitions=wanted, version=version, index=index)
+            for definition in at_index:
+                interface = layouts[definition.name][index]
+                addresses = {}
+                for version, key in (("IPV4", "public_ip"), ("IPV6", "public_ipv6")):
+                    address = (
+                        self._ip_provider.get(definition.name, version=version, index=index) if interface[key] else None
+                    )
+                    addresses[version.lower()] = getattr(address, "id", None)
+                plans[definition.name].append(
+                    {"interface": interface, "subnet_id": subnet_ids[index], "addresses": addresses}
+                )
+
+        names = [definition.name for definition in definitions]
+        self._nic_provider.get_or_create(plans)
+        nics_ids = [[nic.id for nic in self._nic_provider.get_all(name)] for name in names]
         return self._vm_provider.get_or_create(
             definitions=definitions, nics_ids=nics_ids, pricing_model=pricing_model, deadline=deadline
         )
+
+    @property
+    def _ipv6_enabled(self) -> bool:
+        """True when any configured network interface asks for IPv6."""
+        return any(interface["ipv6"] for interface in self._network_interfaces)
+
+    def network_interfaces(self, name: str) -> List[NetworkInterface]:
+        """Azure NICs of a VM, ordered by device index."""
+        return self._nic_provider.get_all(name)
+
+    def _public_ip_addresses(self, name: str) -> List[PublicIPAddress]:
+        """Public IP resources of a VM, one per NIC that carries one.
+
+        Derived from the NICs the VM actually has rather than from the test configuration, so it
+        also covers a provisioner discovered without one.
+        """
+        addresses = []
+        for index, _ in enumerate(self._nic_provider.get_all(name) or [None]):
+            for version in ("IPV4", "IPV6"):
+                addresses.append(self._ip_provider.get(name, version=version, index=index))
+        return addresses
+
+    def _interfaces_for(self, definition: InstanceDefinition) -> List[dict]:
+        """NIC layout of one node.
+
+        Only DB nodes take the secondary interfaces: 'azure_network_interfaces' describes the
+        network topology Scylla is tested on. A loader or a monitor keeps a single interface - it
+        reaches the secondary subnets over intra-VNet routing anyway, and their smaller VM sizes
+        often accept fewer NICs than a DB node's. The primary interface spec is kept as is, so an
+        IPv6 run gives them the address they need to talk to IPv6 DB nodes and to be reached by SCT
+        when 'ip_ssh_connections' is 'ipv6'.
+        """
+        if definition.tags.get("NodeType") in DB_NODE_TYPES:
+            return self._network_interfaces
+        return self._network_interfaces[:1]
+
+    def _validate_network_interfaces_count(self, instance_type: str, count: int) -> None:
+        """Reject a NIC count the VM size cannot carry, before the create call."""
+        if count <= 1:
+            return
+
+        if count > AZURE_SUPPORTED_NETWORK_INTERFACES:
+            raise ProvisionError(
+                f"{count} network interfaces were requested, but SCT supports at most "
+                f"{AZURE_SUPPORTED_NETWORK_INTERFACES} on Azure. Reduce the number of items in "
+                f"'azure_network_interfaces'."
+            )
+
+        allowed = max_network_interfaces(instance_type, self._region, self._azure_service)
+        if allowed is None:
+            LOGGER.warning(
+                "Azure does not report 'MaxNetworkInterfaces' for VM size '%s' in %s, "
+                "cannot validate the requested %s network interfaces",
+                instance_type,
+                self._region,
+                count,
+            )
+            return
+        if count > allowed:
+            raise ProvisionError(
+                f"VM size '{instance_type}' supports at most {allowed} network interface(s), but {count} were "
+                f"requested. Reduce the number of items in 'azure_network_interfaces' or pick a larger VM size."
+            )
 
     def _reset_resource_providers(self) -> None:
         """Rebuild IP/NIC/VM providers so they rediscover live resources (caches may be stale)."""
@@ -284,8 +394,10 @@ class AzureProvisioner(Provisioner):
             return
         self._vm_provider.delete(name, wait=wait)
         del self._cache[name]
-        self._nic_provider.delete(self._nic_provider.get(name))
-        self._ip_provider.delete(self._ip_provider.get(name))
+        for nic in self._nic_provider.get_all(name):
+            self._nic_provider.delete(nic)
+        for ip_address in self._public_ip_addresses(name):
+            self._ip_provider.delete(ip_address)
 
     def reboot_instance(self, name: str, wait: bool, hard: bool = False) -> None:
         self._vm_provider.reboot(name, wait, hard)

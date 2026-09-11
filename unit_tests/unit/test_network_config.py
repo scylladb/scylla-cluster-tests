@@ -10,9 +10,17 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2024 ScyllaDB
+import json
+from pathlib import Path
 from typing import NamedTuple
 
+import pytest
+import yaml
+
+from sdcm.provision.network_configuration import azure_ipv6_enabled, azure_network_interfaces
+from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.aws_utils import EC2NetworkConfiguration
+from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile
 
 
 class RegionAZSubnets(NamedTuple):
@@ -103,3 +111,185 @@ class TestAWSNetworkConfiguration:
             [["subnet-0a09ba4421ec6aaa8"], ["subnet-06604bf2840958461"]],
             [["subnet-085db77751694e2a6"], ["subnet-084b1d12f9974e61f"]],
         ]
+
+
+class FakeAzureParams(dict):
+    """Minimal stand-in for SCTConfiguration: the Azure validator only reads params via get()."""
+
+    def get(self, key, default=None):
+        return super().get(key, default)
+
+
+def azure_scylla_network_config(nic: int = 0, ip_type: str = "ipv4", public: bool = False) -> list[dict]:
+    """A complete 'scylla_network_config' with every address on one NIC/address family."""
+    return [
+        {"address": address, "ip_type": ip_type, "public": public, "nic": nic, "use_dns": False}
+        for address in (
+            "listen_address",
+            "rpc_address",
+            "broadcast_rpc_address",
+            "broadcast_address",
+            "test_communication",
+        )
+    ]
+
+
+def validate_azure(params: dict) -> None:
+    SCTConfiguration._validate_azure_network_interfaces(FakeAzureParams(params))
+
+
+class TestAzureNetworkInterfacesDefaults:
+    def test_missing_option_yields_one_public_ipv4_nic(self):
+        assert azure_network_interfaces({}) == [
+            {"subnet": "default", "public_ip": True, "ipv6": False, "public_ipv6": False}
+        ]
+
+    def test_secondary_interfaces_default_to_their_own_private_subnet(self):
+        interfaces = azure_network_interfaces({"azure_network_interfaces": [{}, {}, {}]})
+        assert [interface["subnet"] for interface in interfaces] == ["default", "nic1", "nic2"]
+        assert [interface["public_ip"] for interface in interfaces] == [True, False, False]
+
+    def test_explicit_values_win_over_defaults(self):
+        interfaces = azure_network_interfaces(
+            {"azure_network_interfaces": [{"public_ip": False}, {"subnet": "rpc", "ipv6": True}]}
+        )
+        assert interfaces[0]["public_ip"] is False
+        assert interfaces[1] == {"subnet": "rpc", "public_ip": False, "ipv6": True, "public_ipv6": False}
+
+
+class TestAzureIpv6Enabled:
+    def test_disabled_without_the_option(self):
+        assert azure_ipv6_enabled({}) is False
+
+    def test_disabled_when_no_interface_asks_for_ipv6(self):
+        assert azure_ipv6_enabled({"azure_network_interfaces": [{}, {"subnet": "nic1"}]}) is False
+
+    def test_enabled_when_any_interface_asks_for_ipv6(self):
+        assert azure_ipv6_enabled({"azure_network_interfaces": [{}, {"ipv6": True}]}) is True
+
+
+class TestAzureNetworkInterfacesValidation:
+    def test_default_single_nic_config_is_valid(self):
+        validate_azure({"scylla_network_config": azure_scylla_network_config()})
+
+    def test_primary_interface_must_stay_on_the_default_subnet(self):
+        with pytest.raises(ValueError, match="must stay on the 'default' subnet"):
+            validate_azure({"azure_network_interfaces": [{"subnet": "nic1"}]})
+
+    def test_nic_index_beyond_the_configured_interfaces_is_rejected(self):
+        with pytest.raises(ValueError, match="defines only 1 interface"):
+            validate_azure({"scylla_network_config": azure_scylla_network_config(nic=1)})
+
+    def test_ipv6_address_on_an_ipv4_only_interface_is_rejected(self):
+        with pytest.raises(ValueError, match="not configured for IPv6"):
+            validate_azure({"scylla_network_config": azure_scylla_network_config(ip_type="ipv6")})
+
+    def test_public_ipv6_address_without_a_public_ipv6_resource_is_rejected(self):
+        with pytest.raises(ValueError, match="has no IPv6 Public IP"):
+            validate_azure(
+                {
+                    "azure_network_interfaces": [{"ipv6": True}],
+                    "scylla_network_config": azure_scylla_network_config(ip_type="ipv6", public=True),
+                }
+            )
+
+    def test_public_ipv4_address_without_a_public_ip_resource_is_rejected(self):
+        with pytest.raises(ValueError, match="has no IPv4 Public IP"):
+            validate_azure(
+                {
+                    "azure_network_interfaces": [{"public_ip": False}],
+                    "scylla_network_config": azure_scylla_network_config(public=True),
+                }
+            )
+
+    def test_ipv6_ssh_needs_a_routable_address_on_the_primary_interface(self):
+        with pytest.raises(ValueError, match="IPv6 SSH connections need a routable address"):
+            validate_azure(
+                {
+                    "azure_network_interfaces": [{"ipv6": True}],
+                    "scylla_network_config": azure_scylla_network_config(ip_type="ipv6"),
+                }
+            )
+
+    def test_fully_configured_public_ipv6_setup_is_valid(self):
+        validate_azure(
+            {
+                "azure_network_interfaces": [{"ipv6": True, "public_ipv6": True}],
+                "scylla_network_config": azure_scylla_network_config(ip_type="ipv6", public=True),
+            }
+        )
+
+    def test_two_interfaces_with_a_private_secondary_are_valid(self):
+        validate_azure(
+            {
+                "azure_network_interfaces": [{}, {}],
+                "scylla_network_config": azure_scylla_network_config(nic=1),
+            }
+        )
+
+
+class TestAzureNetworkConfigProfiles:
+    """Every Azure NIC layout pairs with the shared configurations/network_config/ profile of its name."""
+
+    LAYOUT_DIR = Path("configurations/azure/network_config")
+    PROFILES = ["all_addresses_ipv6_public", "two_interfaces"]
+
+    @staticmethod
+    def load(path: str) -> dict:
+        return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+
+    def test_every_layout_is_covered_here(self):
+        """A layout added without a line in PROFILES would silently skip the checks below."""
+        assert sorted(path.stem for path in self.LAYOUT_DIR.glob("*.yaml")) == sorted(self.PROFILES)
+
+    @pytest.mark.parametrize("profile", PROFILES)
+    def test_profile_validates_with_its_azure_layout(self, profile):
+        params = self.load(f"configurations/network_config/{profile}.yaml")
+        params |= self.load(f"{self.LAYOUT_DIR}/{profile}.yaml")
+
+        validate_azure(params)
+
+    @pytest.mark.parametrize("profile", PROFILES)
+    def test_layout_covers_every_nic_the_profile_uses(self, profile):
+        params = self.load(f"configurations/network_config/{profile}.yaml")
+        layout = self.load(f"{self.LAYOUT_DIR}/{profile}.yaml")["azure_network_interfaces"]
+
+        used_nics = {address["nic"] for address in params["scylla_network_config"]}
+        assert max(used_nics) < len(layout)
+
+    def test_multidc_topology_changes_job_config_validates(self):
+        """The config list of longevity-multidc-schema-topology-changes-12h-azure.jenkinsfile."""
+        pipeline = parse_jenkinsfile(
+            Path("jenkins-pipelines/oss/tier1/longevity-multidc-schema-topology-changes-12h-azure.jenkinsfile")
+        )
+        params = {}
+        for config in pipeline.test_config:
+            params |= self.load(config)
+
+        validate_azure(params)
+        # routable IPv6 on every Scylla address is the coverage this job owns
+        assert azure_ipv6_enabled(params)
+        assert params["azure_network_interfaces"][0]["public_ipv6"] is True
+        assert {address["ip_type"] for address in params["scylla_network_config"]} == {"ipv6"}
+
+        # the second DC is simulated, so every node has to land in the one real region
+        assert json.loads(pipeline.params["azure_region_name"]) == ["eastus"]
+        assert params["simulated_regions"] == 2
+
+        # Azure resolves one zone letter per resource group, unlike the 'a,b,c' of the other clouds
+        assert params["availability_zone"] == "a"
+
+        # the racks are simulated too, and have to divide the node count of the base test case
+        # evenly with at least two nodes each: a rack of one disappears with the node a nemesis
+        # removes, leaving RF=3 over fewer racks than it needs
+        assert params["simulated_racks"] == 3
+        for count in (int(nodes) for nodes in str(params["n_db_nodes"]).split()):
+            assert count % params["simulated_racks"] == 0
+            assert count // params["simulated_racks"] >= 2
+
+    def test_only_the_ipv6_profile_enables_ipv6(self):
+        """An Azure IPv6 is a billed Public IP, so no other layout may quietly turn it on."""
+        enabled = {
+            profile for profile in self.PROFILES if azure_ipv6_enabled(self.load(f"{self.LAYOUT_DIR}/{profile}.yaml"))
+        }
+        assert enabled == {"all_addresses_ipv6_public"}
