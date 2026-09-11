@@ -175,10 +175,14 @@ SC keyspace pre-creation plus `prepare_write_cmd` and the three steady-state wor
   `perf-regression-latency-650gb-with-nemesis.yaml` (41 240/s and 35 000/s aggregate →
   `fixed=10310/s` / `fixed=8750/s`) — see Phase 14 for calibration.
 
+**Verified against upstream cql-stress** (scylladb/cql-stress, master):
+- `-pop 'dist=...'` is supported (`settings/option/population.rs`), and `GAUSSIAN(min..max,mean,stdev)` accepts
+  the aliases `GAUSS` / `NORMAL` / `NORM` (`java_generate/distribution/normal.rs`), so
+  `dist=gauss(1..650000000,325000000,9750000)` is valid.
+- `-mode connectionsPerShard=` exists and takes precedence over `connectionsPerHost=` (`settings/option/mode.rs`).
+- `-rate ... fixed=` is supported (`settings/option/rate.rs`), so coordinated-omission-corrected latency works.
+
 **Needs Investigation**:
-- cql-stress support for `-pop 'dist=gauss(...)'`. It is used by
-  `configurations/performance/cql-stress-650gb-8-col-i4i-80-percent-throughput-oss.yaml` (elasticity pipeline)
-  but not by any SC job. Fallback if unsupported: `dist=UNIFORM(1..650000000)`.
 - Thread counts per workload for cql-stress at 250 conns/shard (the gradual SC job uses 500 write / 620 read
   threads per loader as a starting point).
 
