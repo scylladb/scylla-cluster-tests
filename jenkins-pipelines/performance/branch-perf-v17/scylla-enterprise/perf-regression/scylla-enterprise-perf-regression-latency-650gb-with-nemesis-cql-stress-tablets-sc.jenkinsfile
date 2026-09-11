@@ -1,0 +1,18 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// Strong Consistency latency during topology operations (grow / terminate+replace / shrink),
+// driven by cql-stress with the Raft-leader-aware load balancing policy.
+// The fragment order matters: string options such as append_scylla_args are replaced by the
+// last file that sets them, so enable_experimental_sc.yaml has to come after the test-case.
+perfRegressionParallelPipeline(
+    backend: "aws",
+    region: "us-east-1",
+    provision_type: 'on_demand',
+    test_name: "performance_regression_test.PerformanceRegressionTest",
+    test_config: '''["test-cases/performance/perf-regression-latency-650gb-with-nemesis.yaml", "configurations/disable_kms.yaml", "configurations/disable_speculative_retry.yaml", "configurations/performance/latency-decorator-error-thresholds-nemesis-sc-tablets.yaml", "configurations/aws/i4i_4xlarge.yaml", "configurations/strong_consistency/nemesis_650gb_cql_stress_base.yaml", "configurations/strong_consistency/enable_experimental_sc.yaml", "configurations/strong_consistency/enable_commitlog_sync_batch.yaml", "configurations/stress_images/cql-stress-strong-consistency-leader-awarness.yaml", "configurations/strong_consistency/prepare_cql_stress_nemesis_ks_with_sc_1kpershard.yaml"]''',
+    sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"],
+    test_email_title: "SC latency during topology operations / tablets / i4i",
+)
