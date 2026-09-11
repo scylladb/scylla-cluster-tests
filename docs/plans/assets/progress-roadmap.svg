@@ -4,9 +4,9 @@
 <text x="420" y="84" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#8899AA">33 plans across 9 domains</text>
 <rect x="30" y="120" width="780" height="50" rx="6" fill="#1B2A4A" stroke="#2A3F5F" stroke-width="1"/>
 <circle cx="50" cy="148" r="5" fill="#607D8B"/>
-<text x="60" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">Draft: 12</text>
+<text x="60" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">Draft: 11</text>
 <circle cx="180" cy="148" r="5" fill="#FFC107"/>
-<text x="190" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">In Progress: 3</text>
+<text x="190" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">In Progress: 4</text>
 <circle cx="310" cy="148" r="5" fill="#2196F3"/>
 <text x="320" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">Approved: 0</text>
 <circle cx="440" cy="148" r="5" fill="#F44336"/>
@@ -18,10 +18,10 @@
 <rect x="40" y="175" width="760" height="20" rx="10" fill="#1B2A4A" stroke="#2A3F5F" stroke-width="1"/>
 <rect x="40" y="175" width="115.15151515151516" height="20" rx="10" fill="#4CAF50"/>
 <text x="97.57575757575758" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">5</text>
-<rect x="155.15151515151516" y="175" width="69.0909090909091" height="20" rx="0" fill="#FFC107"/>
-<text x="189.6969696969697" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">3</text>
-<rect x="224.24242424242425" y="175" width="276.3636363636364" height="20" rx="0" fill="#607D8B"/>
-<text x="362.42424242424244" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">12</text>
+<rect x="155.15151515151516" y="175" width="92.12121212121212" height="20" rx="0" fill="#FFC107"/>
+<text x="201.21212121212122" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">4</text>
+<rect x="247.27272727272728" y="175" width="253.33333333333331" height="20" rx="0" fill="#607D8B"/>
+<text x="373.93939393939394" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">11</text>
 <rect x="500.6060606060606" y="175" width="299.3939393939394" height="20" rx="0" fill="#9E9E9E"/>
 <text x="650.3030303030303" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">13</text>
 <rect x="30" y="220" width="380" height="32" rx="4" fill="#1B2A4A" stroke="#00BCD4" stroke-width="1"/>
@@ -69,9 +69,9 @@
 <circle cx="44" cy="650" r="4" fill="#9E9E9E"/>
 <text x="56" y="654" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">curl Retry/Timeout Linting</text>
 <text x="398" y="654" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#9E9E9E">Pending PR</text>
-<circle cx="44" cy="678" r="4" fill="#607D8B"/>
+<circle cx="44" cy="678" r="4" fill="#FFC107"/>
 <text x="56" y="682" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">SC Perf Tests with Topology Operations</text>
-<text x="398" y="682" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#607D8B">Draft</text>
+<text x="398" y="682" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#FFC107">In Progress</text>
 <rect x="30" y="708" width="380" height="32" rx="4" fill="#1B2A4A" stroke="#00BCD4" stroke-width="1"/>
 <text x="42" y="729" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" fill="#00BCD4">framework</text>
 <text x="398" y="729" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#8899AA">4 plans</text>

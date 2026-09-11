@@ -1,5 +1,5 @@
 ---
-status: draft
+status: in_progress
 domain: ci-cd
 created: 2026-09-11
 last_updated: 2026-09-11
@@ -453,17 +453,40 @@ One row per phase = one SCYLLADB-4346 sub-task = at least one commit. Updated as
 
 | # | Phase | Sub-task | Commit(s) | Status |
 |---|-------|----------|-----------|--------|
-| 1 | Stop cql-stress load cleanly when nemesis ends | [SCYLLADB-4404](https://scylladb.atlassian.net/browse/SCYLLADB-4404) | — | not started |
-| 2 | Shared base fragment for 650 GB cql-stress nemesis runs | [SCYLLADB-4405](https://scylladb.atlassian.net/browse/SCYLLADB-4405) | — | not started |
-| 3 | SC keyspace + cql-stress workload fragment | [SCYLLADB-4406](https://scylladb.atlassian.net/browse/SCYLLADB-4406) | — | not started |
-| 4 | EC baseline workload fragment | [SCYLLADB-4407](https://scylladb.atlassian.net/browse/SCYLLADB-4407) | — | not started |
-| 5 | SC latency-thresholds fragment | [SCYLLADB-4408](https://scylladb.atlassian.net/browse/SCYLLADB-4408) | — | not started |
-| 6 | i4i SC pipeline | [SCYLLADB-4409](https://scylladb.atlassian.net/browse/SCYLLADB-4409) | — | not started |
-| 7 | i8g SC pipeline | [SCYLLADB-4410](https://scylladb.atlassian.net/browse/SCYLLADB-4410) | — | not started |
-| 8 | i4i EC baseline pipeline | [SCYLLADB-4411](https://scylladb.atlassian.net/browse/SCYLLADB-4411) | — | not started |
-| 9 | i8g EC baseline pipeline | [SCYLLADB-4412](https://scylladb.atlassian.net/browse/SCYLLADB-4412) | — | not started |
-| 10 | `test_metadata` for the new pipelines | [SCYLLADB-4413](https://scylladb.atlassian.net/browse/SCYLLADB-4413) | — | not started |
-| 11 | Config-chain regression test | [SCYLLADB-4414](https://scylladb.atlassian.net/browse/SCYLLADB-4414) | — | not started |
-| 12 | Documentation | [SCYLLADB-4415](https://scylladb.atlassian.net/browse/SCYLLADB-4415) | — | not started |
-| 13 | Dry-run validation of the four chains | [SCYLLADB-4416](https://scylladb.atlassian.net/browse/SCYLLADB-4416) | — | not started |
-| 14 | Rate and threshold calibration after first run | [SCYLLADB-4417](https://scylladb.atlassian.net/browse/SCYLLADB-4417) | — | not started |
+| 1 | Stop cql-stress load cleanly when nemesis ends | [SCYLLADB-4404](https://scylladb.atlassian.net/browse/SCYLLADB-4404) | `8efd6ab2f` | done |
+| 2 | Shared base fragment for 650 GB cql-stress nemesis runs | [SCYLLADB-4405](https://scylladb.atlassian.net/browse/SCYLLADB-4405) | `4aa785562` | done |
+| 3 | SC keyspace + cql-stress workload fragment | [SCYLLADB-4406](https://scylladb.atlassian.net/browse/SCYLLADB-4406) | `6fb78b2a1` | done |
+| 4 | EC baseline workload fragment | [SCYLLADB-4407](https://scylladb.atlassian.net/browse/SCYLLADB-4407) | `1c12c1558` | done |
+| 5 | SC latency-thresholds fragment | [SCYLLADB-4408](https://scylladb.atlassian.net/browse/SCYLLADB-4408) | `486797d3f` | done |
+| 6 | i4i SC pipeline | [SCYLLADB-4409](https://scylladb.atlassian.net/browse/SCYLLADB-4409) | `cd45ec3d1` | done |
+| 7 | i8g SC pipeline | [SCYLLADB-4410](https://scylladb.atlassian.net/browse/SCYLLADB-4410) | `6578dcaed` | done |
+| 8 | i4i EC baseline pipeline | [SCYLLADB-4411](https://scylladb.atlassian.net/browse/SCYLLADB-4411) | `1c5f55a4b` | done |
+| 9 | i8g EC baseline pipeline | [SCYLLADB-4412](https://scylladb.atlassian.net/browse/SCYLLADB-4412) | `269193c97` | done |
+| 10 | `test_metadata` for the new pipelines | [SCYLLADB-4413](https://scylladb.atlassian.net/browse/SCYLLADB-4413) | `e09dbba6d` | done |
+| 11 | Config-chain regression test | [SCYLLADB-4414](https://scylladb.atlassian.net/browse/SCYLLADB-4414) | `bf64833ad` | done |
+| 12 | Documentation | [SCYLLADB-4415](https://scylladb.atlassian.net/browse/SCYLLADB-4415) | `7b434362e` | done |
+| 13 | Dry-run validation of the four chains | [SCYLLADB-4416](https://scylladb.atlassian.net/browse/SCYLLADB-4416) | see sub-task | done |
+| 14 | Rate and threshold calibration after first run | [SCYLLADB-4417](https://scylladb.atlassian.net/browse/SCYLLADB-4417) | — | blocked - needs the first run |
+
+### Validation performed for phase 13
+
+All four chains were resolved offline through `SCTConfiguration`, including `verify_configuration()`
+and `check_required_files()`, and every invariant held:
+
+| Check | Result |
+|-------|--------|
+| chains resolve | 4/4, no errors |
+| `experimental_features` | `['strongly-consistent-tables']` on SC, `[]` on EC |
+| `append_scylla_yaml` merge | `api_address: 0.0.0.0` **and** `commitlog_sync: batch` / window 100 present in all four |
+| `append_scylla_args` | identical string in all four (`--blocked-reactor-notify-ms 50 ... --abort-on-internal-error 0`) |
+| `instance_type_db` | `i4i.4xlarge` / `i8g.4xlarge` as intended |
+| `instance_type_loader` | `c7i.8xlarge`, `n_loaders: 4` |
+| stress image | `aleksbykov/cql-stress:leader-aware-strong-consistency` |
+| stress commands | all cql-stress, `cl=QUORUM`, `connectionsPerShard=250`, rates 12500 / 10310 / 8750 per loader |
+| nemesis | `SisyphusMonkey` + `NemesisSequence`, interval 30 min |
+
+`unit_tests/unit/test_sc_topology_operations_pipelines.py` (36 cases) and
+`unit_tests/unit/test_perf_stress_event_classes.py` (10 cases) pass offline, and `ruff check` /
+`ruff format --check` are clean on the changed Python files. `sct.py lint-test-docs` passes on
+`test-cases/performance/perf-regression-latency-650gb-with-nemesis.yaml` (the remaining failures in
+that directory are pre-existing test-cases with no `test_metadata` at all).

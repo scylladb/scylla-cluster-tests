@@ -57,7 +57,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Jenkins Uno-Choice Billing Project | `draft` | [jenkins-uno-choice-billing-project.md](jenkins/jenkins-uno-choice-billing-project.md) |
 | Centralized Trigger Matrix | `draft` | [centralized-trigger-matrix.md](jenkins/centralized-trigger-matrix.md) |
 | i8g Performance Jobs Migration | `draft` | [i8g-performance-jobs-migration.md](i8g-performance-jobs-migration.md) |
-| SC Perf Tests with Topology Operations | `draft` | [sc-topology-operations-perf-tests.md](jenkins/sc-topology-operations-perf-tests.md) |
+| SC Perf Tests with Topology Operations | `in_progress` | [sc-topology-operations-perf-tests.md](jenkins/sc-topology-operations-perf-tests.md) |
 | Perf-Simple-Query Offline Installer Trigger | `complete` | [perf-simple-query-offline-installer-trigger.md](jenkins/perf-simple-query-offline-installer-trigger.md), [#14340](https://github.com/scylladb/scylla-cluster-tests/pull/14340) |
 
 ### Config — Configuration system
