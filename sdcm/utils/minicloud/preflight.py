@@ -15,10 +15,12 @@ GUEST_NODE_COUNT_PARAMS = (
     "n_db_nodes",
     "n_loaders",
     "n_monitor_nodes",
-    "n_test_oracle_db_nodes",
     "n_db_zero_token_nodes",
     "n_vector_store_nodes",
 )
+
+# Count `n_test_oracle_db_nodes` only for db types that actually provision an oracle cluster
+ORACLE_GUEST_DB_TYPES = ("mixed_scylla", "mixed_cassandra")
 
 
 def sum_node_counts(value) -> int:
@@ -71,7 +73,10 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
         return  # non-lightweight sizing follows the requested instance types; out of scope here
     # every pool that becomes a guest has to be counted, or a test with an oracle cluster,
     # zero-token nodes or a vector store passes the gate and still OOM-kills the container.
-    guests = sum(sum_node_counts(params.get(name)) for name in GUEST_NODE_COUNT_PARAMS)
+    counted_params = list(GUEST_NODE_COUNT_PARAMS)
+    if params.get("db_type") in ORACLE_GUEST_DB_TYPES:
+        counted_params.append("n_test_oracle_db_nodes")
+    guests = sum(sum_node_counts(params.get(name)) for name in counted_params)
     # n_db_nodes is only where the cluster *starts*. A test that grows it - the scale tests set
     # cluster_target_size, and longevity_test grows to it - peaks higher, and the peak is what has
     # to fit: a gate that sizes the initial cluster only would pass and then let the run die at the
@@ -107,7 +112,7 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
             f"not enough memory for this test: {guests} guest(s) x "
             f"{per_guest_gib:.1f}GiB ({config.lightweight_memory}){headroom_note} = "
             f"{needed_gib:.1f}GiB needed, but only {budget_gib:.1f}GiB is available from "
-            f"{budget_source}. Reduce {'/'.join(GUEST_NODE_COUNT_PARAMS)}, lower "
+            f"{budget_source}. Reduce {'/'.join(counted_params)}, lower "
             f"minicloud_lightweight_memory, raise the budget, or set "
             f"SCT_MINICLOUD_SKIP_MEMORY_CHECK=true if you know the real footprint - otherwise the "
             f"container is OOM-killed mid-test (exit 137) taking every VM with it."

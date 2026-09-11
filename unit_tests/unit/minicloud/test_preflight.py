@@ -124,11 +124,13 @@ def test_check_host_memory_counts_every_guest_pool(tmp_path):
     """Oracle, zero-token and vector-store nodes are guests too.
 
     Leaving them out of the arithmetic let a test pass the gate and then OOM-kill the
-    container mid-run (exit 137), taking every VM with it.
+    container mid-run (exit 137), taking every VM with it. db_type is the mixed one that
+    actually provisions the oracle cluster, so all six pools are real guests here.
     """
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
     # 1 + 1 + 1 + 1 + 1 + 1 = 6 guests x 4GiB + 2GiB headroom = 26GiB needed, 16GiB available
     params = {
+        "db_type": "mixed_scylla",
         "n_db_nodes": 1,
         "n_loaders": 1,
         "n_monitor_nodes": 1,
@@ -139,6 +141,23 @@ def test_check_host_memory_counts_every_guest_pool(tmp_path):
     with _meminfo_path_patch(16 * 1024 * 1024):
         with pytest.raises(MinicloudError, match="6 guest.*26.0GiB needed"):
             manager._check_host_memory(params)
+
+
+def test_check_host_memory_ignores_the_oracle_pool_without_a_mixed_db_type(tmp_path):
+    """n_test_oracle_db_nodes defaults to 1, but the oracle cluster only exists for mixed db_type.
+
+    tester.py creates it solely when db_type is mixed_scylla/mixed_cassandra, so counting it
+    for an ordinary longevity run invents a guest that is never provisioned and rejects a test
+    that fits - which is what blocked longevity-100gb-4h on a 123GiB lab machine.
+    """
+    manager = MinicloudManager(
+        config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True, lightweight_memory="10GiB")
+    )
+    # 6 db + 2 loaders + 1 monitor = 9 guests x 10GiB + 2GiB headroom = 92GiB, under the 100GiB budget.
+    # Counting the phantom oracle node makes it 102GiB and the run never starts.
+    params = {"n_db_nodes": 6, "n_loaders": 2, "n_monitor_nodes": 1, "n_test_oracle_db_nodes": 1}
+    with _meminfo_path_patch(100 * 1024 * 1024):
+        manager._check_host_memory(params)  # must not raise
 
 
 def test_check_host_memory_counts_the_grown_cluster_not_the_initial_one(tmp_path):
