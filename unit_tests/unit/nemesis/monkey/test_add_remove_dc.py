@@ -340,6 +340,68 @@ def test_finalizer_skips_decommission_when_no_new_nodes(runner):
     monkey.decommission_new_nodes.assert_not_called()
 
 
+def test_decommission_new_nodes_clears_tracking_on_success(runner):
+    """decommission_new_nodes() should stop tracking nodes that left the cluster."""
+    new_node = MagicMock(name="node-new")
+    runner.cluster.nodes = list(runner.cluster.data_nodes)
+
+    monkey = AddRemoveDcNemesis(runner)
+    monkey.new_nodes = [new_node]
+
+    monkey.decommission_new_nodes()
+
+    runner.decommission_nodes.assert_called_once_with([new_node])
+    assert monkey.new_nodes == []
+
+
+def test_decommission_new_nodes_untracks_terminated_nodes_on_failure(runner):
+    """A failure raised after termination (e.g. monitoring reconfiguration) must not keep tracking."""
+    new_node = MagicMock(name="node-new")
+    # verify_decommission() terminated the node, so it is no longer a cluster member
+    runner.cluster.nodes = list(runner.cluster.data_nodes)
+    runner.decommission_nodes.side_effect = RuntimeError("ConnectTimeout to monitor node")
+
+    monkey = AddRemoveDcNemesis(runner)
+    monkey.new_nodes = [new_node]
+
+    with pytest.raises(RuntimeError, match="ConnectTimeout to monitor node"):
+        monkey.decommission_new_nodes()
+
+    assert monkey.new_nodes == []
+
+
+def test_decommission_new_nodes_keeps_tracking_nodes_still_in_cluster(runner):
+    """A node whose decommission really failed is still a cluster member and stays tracked."""
+    new_node = MagicMock(name="node-new")
+    runner.cluster.nodes = [*runner.cluster.data_nodes, new_node]
+    runner.decommission_nodes.side_effect = RuntimeError("decommission failed")
+
+    monkey = AddRemoveDcNemesis(runner)
+    monkey.new_nodes = [new_node]
+
+    with pytest.raises(RuntimeError, match="decommission failed"):
+        monkey.decommission_new_nodes()
+
+    assert monkey.new_nodes == [new_node]
+
+
+def test_finalizer_does_not_redecommission_terminated_nodes(runner):
+    """finalizer() must not re-decommission nodes that a failed decommission already terminated."""
+    new_node = MagicMock(name="node-new")
+    runner.cluster.nodes = list(runner.cluster.data_nodes)
+    runner.decommission_nodes.side_effect = RuntimeError("ConnectTimeout to monitor node")
+
+    monkey = AddRemoveDcNemesis(runner)
+    monkey.new_nodes = [new_node]
+
+    with pytest.raises(RuntimeError, match="ConnectTimeout to monitor node"):
+        monkey.decommission_new_nodes()
+    monkey.finalizer(RuntimeError, None, None)
+
+    runner.decommission_nodes.assert_called_once_with([new_node])
+    assert runner.executed[-1] == f"DROP KEYSPACE IF EXISTS {monkey.new_ks_name}"
+
+
 @pytest.mark.parametrize(
     "feature_enabled,expected_count",
     [
