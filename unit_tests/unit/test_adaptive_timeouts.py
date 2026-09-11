@@ -225,10 +225,11 @@ def test_tablets_decommission_timeout_is_calculated_from_data_size(
         operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
     ) as timeout:
         # node_data_size_mb=102400, expected_throughput=69/2*3=103.5 → estimated≈989.4s
-        # hard = int(estimated) * 4 + 600 (10-minute overhead) = 4556
+        # soft = int(estimated) * 2 + 600 (10-minute overhead); hard = soft * 2
         throughput = _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
         estimated = int(102400 / throughput)
-        expected_hard = estimated * 4 + _STREAMING_OVERHEAD
+        soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
+        expected_hard = soft_timeout * 2
         assert timeout == expected_hard
 
     soft_timeout_mock.assert_not_called()
@@ -266,10 +267,11 @@ def test_tablets_tablet_migration_timeout_is_calculated_from_disk_size(
     ) as timeout:
         # node_disk_size_mb=102400, expected_throughput=69/2*3=103.5
         # estimated = 102400 * 0.9 / 103.5 ≈ 889.9s
-        # hard = int(estimated) * 4 + 600 (10-minute overhead) = 4160
+        # soft = int(estimated) * 2 + 600 (10-minute overhead); hard = soft * 2
         throughput = _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
         estimated = int(102400 * 0.9 / throughput)
-        expected_hard = estimated * 4 + _STREAMING_OVERHEAD
+        soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
+        expected_hard = soft_timeout * 2
         assert timeout == expected_hard
 
     soft_timeout_mock.assert_not_called()
