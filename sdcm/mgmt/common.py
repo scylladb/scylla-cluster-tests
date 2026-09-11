@@ -25,6 +25,379 @@ LOGGER = logging.getLogger(__name__)
 BACKUP_SIZE_REGEX = re.compile(r".+100% │ (.*?) │ ", re.MULTILINE)
 SIZE_PATTERN = re.compile(r"^([\d.]+)\s*([KMGTPE]?i?B)$", re.IGNORECASE)
 
+<<<<<<< HEAD
+||||||| parent of 9535a4c7f (fix(nemesis): stop mgmt restore task before dropping the keyspace)
+MANAGER_REPO_PATTERNS = {
+    "rhel": "https://downloads.scylladb.com/rpm/centos/scylladb-manager-{version}.repo",
+    "debian": "https://downloads.scylladb.com/deb/debian/scylladb-manager-{version}.list",
+}
+MANAGER_REPO_MASTER_LATEST = {
+    "rhel": "https://downloads.scylladb.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo",
+    "debian": "https://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list",
+}
+
+# ---------------------------------------------------------------------------
+# Exception classes
+# ---------------------------------------------------------------------------
+
+
+class ScyllaManagerError(Exception):
+    """
+    A custom exception for Manager related errors
+    """
+
+
+# ---------------------------------------------------------------------------
+# Enum classes (alphabetical)
+# ---------------------------------------------------------------------------
+
+
+class BackupRetentionLockMode(StrEnum):
+    DISABLED = "disabled"
+    UNLOCKED = "unlocked"
+    LOCKED = "locked"
+    EVENT_BASED_HOLD = "event-based-hold"
+
+
+class HostRestStatus(Enum):
+    UP = "UP"
+    DOWN = "DOWN"
+    TIMEOUT = "TIMEOUT"
+    UNAUTHORIZED = "UNAUTHORIZED"
+    HTTP = "HTTP"
+
+    @classmethod
+    def from_str(cls, output_str):
+        try:
+            output_str = output_str.upper()
+            if output_str == "-":
+                return cls.DOWN
+            return getattr(cls, output_str)
+        except AttributeError as err:
+            raise ScyllaManagerError(f"Could not recognize returned host rest status: {output_str}") from err
+
+
+class HostSsl(Enum):
+    ON = "ON"
+    OFF = "OFF"
+
+    @classmethod
+    def from_str(cls, output_str):
+        if "SSL" in output_str:
+            return HostSsl.ON
+        return HostSsl.OFF
+
+
+class HostStatus(Enum):
+    UP = "UP"
+    DOWN = "DOWN"
+    TIMEOUT = "TIMEOUT"
+
+    @classmethod
+    def from_str(cls, output_str):
+        try:
+            output_str = output_str.upper()
+            if output_str == "-":
+                return cls.DOWN
+            return getattr(cls, output_str)
+        except AttributeError as err:
+            raise ScyllaManagerError(f"Could not recognize returned host status: {output_str}") from err
+
+
+class ObjectStorageUploadMode(str, Enum):
+    AUTO = "auto"
+    RCLONE = "rclone"
+    NATIVE = "native"
+
+
+class TaskStatus:
+    NEW = "NEW"
+    RUNNING = "RUNNING"
+    DONE = "DONE"
+    UNKNOWN = "UNKNOWN"
+    ERROR = "ERROR"
+    ERROR_FINAL = "ERROR (4/4)"
+    STOPPING = "STOPPING"
+    STOPPED = "STOPPED"
+    WAITING = "WAITING"
+    STARTING = "STARTING"
+    ABORTED = "ABORTED"
+    SKIPPED = "SKIPPED"
+
+    @classmethod
+    def from_str(cls, output_str) -> str:
+        try:
+            output_str = output_str.upper()
+            return getattr(cls, output_str)
+        except AttributeError as err:
+            raise ScyllaManagerError(f"Could not recognize returned task status: {output_str}") from err
+
+    @classmethod
+    def all_statuses(cls):
+        return set(getattr(cls, name) for name in dir(cls) if name.isupper())
+
+
+# ---------------------------------------------------------------------------
+# Data model classes (alphabetical)
+# ---------------------------------------------------------------------------
+
+
+class AgentBackupParameters(BaseModel):
+    checkers: Optional[int] = 100
+    transfers: Optional[int] = 2
+    low_level_retries: Optional[int] = 20
+
+    model_config = ConfigDict(arbitrary_types_allowed=False)
+
+
+class TaskRunDetails(BaseModel):
+    """Details of a Manager task run.
+
+    Attributes:
+        next_run: The datetime of the next scheduled run
+        latest_run_id: The ID of the latest run
+        start_time: The start time string from task history
+        end_time: The calculated end time as datetime
+        duration: The duration string (e.g., "2d3h15m30s")
+    """
+
+    next_run: datetime
+    latest_run_id: str
+    start_time: str
+    end_time: datetime
+    duration: str
+
+
+# ---------------------------------------------------------------------------
+# Functions — Parsing / conversion utilities
+# ---------------------------------------------------------------------------
+
+
+def duration_to_timedelta(duration_string):
+    total_seconds = 0
+    if "d" in duration_string:
+        total_seconds += int(duration_string[: duration_string.find("d")]) * 86400
+        duration_string = duration_string[duration_string.find("d") + 1 :]
+    if "h" in duration_string:
+        total_seconds += int(duration_string[: duration_string.find("h")]) * 3600
+        duration_string = duration_string[duration_string.find("h") + 1 :]
+    if "m" in duration_string:
+        total_seconds += int(duration_string[: duration_string.find("m")]) * 60
+        duration_string = duration_string[duration_string.find("m") + 1 :]
+    if "s" in duration_string:
+        total_seconds += int(duration_string[: duration_string.find("s")])
+    return timedelta(seconds=total_seconds)
+
+
+def parse_bandwidth_value(bandwidth_str: str) -> float | None:
+    """Parse bandwidth value from Manager output string.
+
+    Args:
+        bandwidth_str: String containing bandwidth value (e.g., "22.313MiB/s/shard")
+
+    Returns:
+        Float value of bandwidth in MiB/s/shard, or None if parsing fails
+    """
+    bandwidth_match = re.search(r"(\d+\.\d+)", bandwidth_str)
+    if bandwidth_match:
+        return float(bandwidth_match.group(1))
+    else:
+        LOGGER.warning(f"Bandwidth value is non-numeric: {bandwidth_str.strip()}. Returning None.")
+        return None
+
+=======
+MANAGER_REPO_PATTERNS = {
+    "rhel": "https://downloads.scylladb.com/rpm/centos/scylladb-manager-{version}.repo",
+    "debian": "https://downloads.scylladb.com/deb/debian/scylladb-manager-{version}.list",
+}
+MANAGER_REPO_MASTER_LATEST = {
+    "rhel": "https://downloads.scylladb.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo",
+    "debian": "https://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list",
+}
+
+# ---------------------------------------------------------------------------
+# Exception classes
+# ---------------------------------------------------------------------------
+
+
+class ScyllaManagerError(Exception):
+    """
+    A custom exception for Manager related errors
+    """
+
+
+# ---------------------------------------------------------------------------
+# Enum classes (alphabetical)
+# ---------------------------------------------------------------------------
+
+
+class BackupRetentionLockMode(StrEnum):
+    DISABLED = "disabled"
+    UNLOCKED = "unlocked"
+    LOCKED = "locked"
+    EVENT_BASED_HOLD = "event-based-hold"
+
+
+class HostRestStatus(Enum):
+    UP = "UP"
+    DOWN = "DOWN"
+    TIMEOUT = "TIMEOUT"
+    UNAUTHORIZED = "UNAUTHORIZED"
+    HTTP = "HTTP"
+
+    @classmethod
+    def from_str(cls, output_str):
+        try:
+            output_str = output_str.upper()
+            if output_str == "-":
+                return cls.DOWN
+            return getattr(cls, output_str)
+        except AttributeError as err:
+            raise ScyllaManagerError(f"Could not recognize returned host rest status: {output_str}") from err
+
+
+class HostSsl(Enum):
+    ON = "ON"
+    OFF = "OFF"
+
+    @classmethod
+    def from_str(cls, output_str):
+        if "SSL" in output_str:
+            return HostSsl.ON
+        return HostSsl.OFF
+
+
+class HostStatus(Enum):
+    UP = "UP"
+    DOWN = "DOWN"
+    TIMEOUT = "TIMEOUT"
+
+    @classmethod
+    def from_str(cls, output_str):
+        try:
+            output_str = output_str.upper()
+            if output_str == "-":
+                return cls.DOWN
+            return getattr(cls, output_str)
+        except AttributeError as err:
+            raise ScyllaManagerError(f"Could not recognize returned host status: {output_str}") from err
+
+
+class ObjectStorageUploadMode(str, Enum):
+    AUTO = "auto"
+    RCLONE = "rclone"
+    NATIVE = "native"
+
+
+class TaskStatus:
+    NEW = "NEW"
+    RUNNING = "RUNNING"
+    DONE = "DONE"
+    UNKNOWN = "UNKNOWN"
+    ERROR = "ERROR"
+    ERROR_FINAL = "ERROR (4/4)"
+    STOPPING = "STOPPING"
+    STOPPED = "STOPPED"
+    WAITING = "WAITING"
+    STARTING = "STARTING"
+    ABORTED = "ABORTED"
+    SKIPPED = "SKIPPED"
+
+    @classmethod
+    def from_str(cls, output_str) -> str:
+        try:
+            output_str = output_str.upper()
+            return getattr(cls, output_str)
+        except AttributeError as err:
+            raise ScyllaManagerError(f"Could not recognize returned task status: {output_str}") from err
+
+    @classmethod
+    def all_statuses(cls):
+        return set(getattr(cls, name) for name in dir(cls) if name.isupper())
+
+
+# Statuses a task can no longer leave. ERROR is deliberately excluded: the manager reports
+# "ERROR (#/4)" while retries are still pending and only "ERROR (4/4)" maps to ERROR_FINAL,
+# so a task in ERROR can still resume. Callers that must know whether a task is truly finished
+# (e.g. before dropping a restored keyspace) use this strict list; callers that only need to
+# stop waiting append TaskStatus.ERROR.
+TERMINAL_TASK_STATUSES = [
+    TaskStatus.DONE,
+    TaskStatus.ERROR_FINAL,
+    TaskStatus.STOPPED,
+    TaskStatus.ABORTED,
+]
+
+
+# ---------------------------------------------------------------------------
+# Data model classes (alphabetical)
+# ---------------------------------------------------------------------------
+
+
+class AgentBackupParameters(BaseModel):
+    checkers: Optional[int] = 100
+    transfers: Optional[int] = 2
+    low_level_retries: Optional[int] = 20
+
+    model_config = ConfigDict(arbitrary_types_allowed=False)
+
+
+class TaskRunDetails(BaseModel):
+    """Details of a Manager task run.
+
+    Attributes:
+        next_run: The datetime of the next scheduled run
+        latest_run_id: The ID of the latest run
+        start_time: The start time string from task history
+        end_time: The calculated end time as datetime
+        duration: The duration string (e.g., "2d3h15m30s")
+    """
+
+    next_run: datetime
+    latest_run_id: str
+    start_time: str
+    end_time: datetime
+    duration: str
+
+
+# ---------------------------------------------------------------------------
+# Functions — Parsing / conversion utilities
+# ---------------------------------------------------------------------------
+
+
+def duration_to_timedelta(duration_string):
+    total_seconds = 0
+    if "d" in duration_string:
+        total_seconds += int(duration_string[: duration_string.find("d")]) * 86400
+        duration_string = duration_string[duration_string.find("d") + 1 :]
+    if "h" in duration_string:
+        total_seconds += int(duration_string[: duration_string.find("h")]) * 3600
+        duration_string = duration_string[duration_string.find("h") + 1 :]
+    if "m" in duration_string:
+        total_seconds += int(duration_string[: duration_string.find("m")]) * 60
+        duration_string = duration_string[duration_string.find("m") + 1 :]
+    if "s" in duration_string:
+        total_seconds += int(duration_string[: duration_string.find("s")])
+    return timedelta(seconds=total_seconds)
+
+
+def parse_bandwidth_value(bandwidth_str: str) -> float | None:
+    """Parse bandwidth value from Manager output string.
+
+    Args:
+        bandwidth_str: String containing bandwidth value (e.g., "22.313MiB/s/shard")
+
+    Returns:
+        Float value of bandwidth in MiB/s/shard, or None if parsing fails
+    """
+    bandwidth_match = re.search(r"(\d+\.\d+)", bandwidth_str)
+    if bandwidth_match:
+        return float(bandwidth_match.group(1))
+    else:
+        LOGGER.warning(f"Bandwidth value is non-numeric: {bandwidth_str.strip()}. Returning None.")
+        return None
+
+>>>>>>> 9535a4c7f (fix(nemesis): stop mgmt restore task before dropping the keyspace)
 
 def parse_size_to_bytes(size_str: str) -> int:
     """Parse a human-readable size string into bytes.
