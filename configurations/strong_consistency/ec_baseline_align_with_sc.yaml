@@ -1,0 +1,16 @@
+# EC baseline companion for the "latency during topology operations" jobs.
+#
+# The EC chain omits enable_experimental_sc.yaml, which would otherwise carry three unrelated changes:
+# the strongly-consistent-tables feature (correctly dropped for EC), a different append_scylla_args,
+# and api_address. Dropping all three at once is what makes the existing EC gradual baseline an
+# imperfect comparison (see commit 172372628). This fragment restores the two settings that
+# have nothing to do with consistency, so the only variable left between the SC and EC jobs is the
+# keyspace clause.
+#
+# Keep in sync with configurations/strong_consistency/enable_experimental_sc.yaml.
+
+append_scylla_args: '--blocked-reactor-notify-ms 50 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 0 --abort-on-ebadf 1'
+
+# the EC baseline runs the same leader-aware cql-stress image, which queries the Scylla REST API
+append_scylla_yaml:
+  api_address: "0.0.0.0"
