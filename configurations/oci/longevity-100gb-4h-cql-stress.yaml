@@ -9,4 +9,6 @@ availability_zone: "a,b,c" # use real AZs to balance limited DenseIO shapes usag
 oci_instance_type_db: "VM.DenseIO.E5.Flex:8" # <shape-name>:<ocpus>:<ram>:<nvmes>
 instance_provision: 'on_demand' # DenseIO shapes cannot be 'spot'
 
-oci_instance_type_loader:  "VM.Standard3.Flex:8:16" # <shape-name>:<ocpus>:<ram>:<nvmes>
+sizing_loader:
+  vcpu: 16
+  memory: '>=16'
