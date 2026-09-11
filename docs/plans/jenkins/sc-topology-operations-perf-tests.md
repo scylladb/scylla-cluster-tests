@@ -449,23 +449,25 @@ All phase DoD items are checked, plus:
 
 ## Tracking
 
-One row per phase = one SCYLLADB-4346 sub-task = at least one commit. Updated as implementation proceeds.
+One row per phase = one SCYLLADB-4346 sub-task = at least one commit. Updated as implementation
+proceeds. Every commit carries its sub-task key in the subject line, so a rebase does not
+invalidate this table: find a phase's commit with `git log --grep=SCYLLADB-44<nn>`.
 
 | # | Phase | Sub-task | Commit(s) | Status |
 |---|-------|----------|-----------|--------|
-| 1 | Stop cql-stress load cleanly when nemesis ends | [SCYLLADB-4404](https://scylladb.atlassian.net/browse/SCYLLADB-4404) | `8efd6ab2f` | done |
-| 2 | Shared base fragment for 650 GB cql-stress nemesis runs | [SCYLLADB-4405](https://scylladb.atlassian.net/browse/SCYLLADB-4405) | `4aa785562` | done |
-| 3 | SC keyspace + cql-stress workload fragment | [SCYLLADB-4406](https://scylladb.atlassian.net/browse/SCYLLADB-4406) | `6fb78b2a1` | done |
-| 4 | EC baseline workload fragment | [SCYLLADB-4407](https://scylladb.atlassian.net/browse/SCYLLADB-4407) | `1c12c1558` | done |
-| 5 | SC latency-thresholds fragment | [SCYLLADB-4408](https://scylladb.atlassian.net/browse/SCYLLADB-4408) | `486797d3f` | done |
-| 6 | i4i SC pipeline | [SCYLLADB-4409](https://scylladb.atlassian.net/browse/SCYLLADB-4409) | `cd45ec3d1` | done |
-| 7 | i8g SC pipeline | [SCYLLADB-4410](https://scylladb.atlassian.net/browse/SCYLLADB-4410) | `6578dcaed` | done |
-| 8 | i4i EC baseline pipeline | [SCYLLADB-4411](https://scylladb.atlassian.net/browse/SCYLLADB-4411) | `1c5f55a4b` | done |
-| 9 | i8g EC baseline pipeline | [SCYLLADB-4412](https://scylladb.atlassian.net/browse/SCYLLADB-4412) | `269193c97` | done |
-| 10 | `test_metadata` for the new pipelines | [SCYLLADB-4413](https://scylladb.atlassian.net/browse/SCYLLADB-4413) | `e09dbba6d` | done |
-| 11 | Config-chain regression test | [SCYLLADB-4414](https://scylladb.atlassian.net/browse/SCYLLADB-4414) | `bf64833ad` | done |
-| 12 | Documentation | [SCYLLADB-4415](https://scylladb.atlassian.net/browse/SCYLLADB-4415) | `7b434362e` | done |
-| 13 | Dry-run validation of the four chains | [SCYLLADB-4416](https://scylladb.atlassian.net/browse/SCYLLADB-4416) | see sub-task | done |
+| 1 | Stop cql-stress load cleanly when nemesis ends | [SCYLLADB-4404](https://scylladb.atlassian.net/browse/SCYLLADB-4404) | 1 commit | done |
+| 2 | Shared base fragment for 650 GB cql-stress nemesis runs | [SCYLLADB-4405](https://scylladb.atlassian.net/browse/SCYLLADB-4405) | 1 commit | done |
+| 3 | SC keyspace + cql-stress workload fragment | [SCYLLADB-4406](https://scylladb.atlassian.net/browse/SCYLLADB-4406) | 1 commit | done |
+| 4 | EC baseline workload fragment | [SCYLLADB-4407](https://scylladb.atlassian.net/browse/SCYLLADB-4407) | 1 commit | done |
+| 5 | SC latency-thresholds fragment | [SCYLLADB-4408](https://scylladb.atlassian.net/browse/SCYLLADB-4408) | 1 commit | done |
+| 6 | i4i SC pipeline | [SCYLLADB-4409](https://scylladb.atlassian.net/browse/SCYLLADB-4409) | 1 commit | done |
+| 7 | i8g SC pipeline | [SCYLLADB-4410](https://scylladb.atlassian.net/browse/SCYLLADB-4410) | 1 commit | done |
+| 8 | i4i EC baseline pipeline | [SCYLLADB-4411](https://scylladb.atlassian.net/browse/SCYLLADB-4411) | 1 commit | done |
+| 9 | i8g EC baseline pipeline | [SCYLLADB-4412](https://scylladb.atlassian.net/browse/SCYLLADB-4412) | 1 commit | done |
+| 10 | `test_metadata` for the new pipelines | [SCYLLADB-4413](https://scylladb.atlassian.net/browse/SCYLLADB-4413) | 1 commit | done |
+| 11 | Config-chain regression test | [SCYLLADB-4414](https://scylladb.atlassian.net/browse/SCYLLADB-4414) | 1 commit | done |
+| 12 | Documentation | [SCYLLADB-4415](https://scylladb.atlassian.net/browse/SCYLLADB-4415) | 1 commit | done |
+| 13 | Dry-run validation of the four chains | [SCYLLADB-4416](https://scylladb.atlassian.net/browse/SCYLLADB-4416) | 1 commit | done |
 | 14 | Rate and threshold calibration after first run | [SCYLLADB-4417](https://scylladb.atlassian.net/browse/SCYLLADB-4417) | — | blocked - needs the first run |
 
 ### Validation performed for phase 13
