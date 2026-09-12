@@ -14,6 +14,12 @@
 # plus ~2GiB host headroom. Raise minicloud_lightweight_memory only if the host has room for
 # 5x the increase.
 
+# Scylla keeps about 1.5GiB for the guest OS when RAM is below ~22GiB.
+# This rolling-upgrade scenario puts heavy pressure on the node (upgrades, upgradesstables, five parallel
+# scylla-doctor runs, `scylla sstable dump-data`), so the default reserve can leave too little memory for
+# sshd and one-shot commands. It is auto-capped on small guests.
+minicloud_scylla_reserve_memory: '3G'
+
 # Three nodes is the floor for a rolling upgrade: RF=3 with one node down at a time still has quorum.
 n_db_nodes: 3
 n_loaders: 1

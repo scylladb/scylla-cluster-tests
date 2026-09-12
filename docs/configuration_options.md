@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-523 options across 29 groups.
+524 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -52,7 +52,7 @@ concerns first, then one page per backend, then one per test type.
 | [Docker backend](configuration_options/docker-backend.md) | 2 | Running the cluster as local Docker containers. |
 | [Baremetal backend](configuration_options/baremetal-backend.md) | 7 | Running against pre-existing hosts that SCT does not provision. |
 | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) | 12 | Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options. |
-| [Minicloud](configuration_options/minicloud.md) | 14 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with `cluster_backend: aws` and an... |
+| [Minicloud](configuration_options/minicloud.md) | 15 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with `cluster_backend: aws` and an... |
 | [Longevity tests](configuration_options/longevity-tests.md) | 13 | Options specific to long-running longevity test scenarios. |
 | [Performance regression tests](configuration_options/performance-regression-tests.md) | 18 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
 | [Upgrade tests](configuration_options/upgrade-tests.md) | 20 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
@@ -354,6 +354,7 @@ concerns first, then one page per backend, then one per test type.
 | [`minicloud_lightweight_vcpus`](configuration_options/minicloud.md#minicloud_lightweight_vcpus) | `SCT_MINICLOUD_LIGHTWEIGHT_VCPUS` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_regions`](configuration_options/minicloud.md#minicloud_regions) | `SCT_MINICLOUD_REGIONS` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_s3_passthrough_buckets`](configuration_options/minicloud.md#minicloud_s3_passthrough_buckets) | `SCT_MINICLOUD_S3_PASSTHROUGH_BUCKETS` | [Minicloud](configuration_options/minicloud.md) |
+| [`minicloud_scylla_reserve_memory`](configuration_options/minicloud.md#minicloud_scylla_reserve_memory) | `SCT_MINICLOUD_SCYLLA_RESERVE_MEMORY` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_skip_memory_check`](configuration_options/minicloud.md#minicloud_skip_memory_check) | `SCT_MINICLOUD_SKIP_MEMORY_CHECK` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_state_dir`](configuration_options/minicloud.md#minicloud_state_dir) | `SCT_MINICLOUD_STATE_DIR` | [Minicloud](configuration_options/minicloud.md) |
 | [`monitor_branch`](configuration_options/monitoring-events-and-reporting.md#monitor_branch) | `SCT_MONITOR_BRANCH` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |

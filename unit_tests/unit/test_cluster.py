@@ -18,11 +18,12 @@ import tempfile
 import time
 import unittest.mock
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 from invoke import Result
 
-from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode
+from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode, BaseScyllaCluster
 from sdcm.db_log_reader import DbLogReader
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
@@ -1228,3 +1229,40 @@ def test_invalidate_ip_address_cache_allows_re_resolution():
     BaseNode.invalidate_ip_address_cache(node)
 
     assert BaseNode.public_ip_address.fget(node) == "34.1.2.3"
+
+
+MINICLOUD_BASE_SCYLLA_ARGS = "--blocked-reactor-notify-ms 25 --abort-on-seastar-bad-alloc"
+
+
+def _append_minicloud_reserve(args, **params):
+    """Run the append hook against a stand-in cluster: it only reads params and logs."""
+    defaults = {
+        "minicloud_endpoint_url": "http://localhost:5000",
+        "minicloud_scylla_reserve_memory": "3G",
+        "minicloud_lightweight_memory": "8GiB",
+        "minicloud_lightweight_vcpus": 2,
+    }
+    cluster = SimpleNamespace(params={**defaults, **params}, log=unittest.mock.MagicMock())
+    return BaseScyllaCluster._append_minicloud_reserve_memory(cluster, args)
+
+
+def test_minicloud_reserve_memory_is_appended_to_the_test_s_own_args():
+    assert _append_minicloud_reserve(MINICLOUD_BASE_SCYLLA_ARGS) == (
+        f"{MINICLOUD_BASE_SCYLLA_ARGS} --reserve-memory 3072M"
+    )
+
+
+def test_minicloud_reserve_memory_not_appended_outside_minicloud():
+    args = MINICLOUD_BASE_SCYLLA_ARGS
+    assert _append_minicloud_reserve(args, minicloud_endpoint_url="") == args
+
+
+@pytest.mark.parametrize("existing", ["-m 4G", "--reserve-memory=1G"])
+def test_minicloud_reserve_memory_defers_to_a_test_that_sized_scylla_itself(existing):
+    args = f"{MINICLOUD_BASE_SCYLLA_ARGS} {existing}"
+    assert _append_minicloud_reserve(args) == args
+
+
+def test_minicloud_reserve_memory_is_not_confused_by_an_unrelated_memory_flag():
+    args = f"{MINICLOUD_BASE_SCYLLA_ARGS} --max-memory-for-unlimited-query-soft-limit 1M"
+    assert _append_minicloud_reserve(args) == f"{args} --reserve-memory 3072M"
