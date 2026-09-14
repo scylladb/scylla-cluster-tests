@@ -18,7 +18,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from sdcm.utils.trigger_matrix import JOB_LEVEL_KEYS, MatrixValidationError, load_matrix_config
+from sdcm.utils.trigger_matrix import MatrixValidationError, load_matrix_config
+from sdcm.utils.trigger_matrix.models import JOB_LEVEL_KEYS
 
 TRIGGERS_DIR = Path(__file__).parent.parent.parent / "configurations" / "triggers"
 
