@@ -1275,7 +1275,7 @@ def resolve_versions_for_targets(
             if not resolvable:
                 # Explicit full/RC build tags and plain release versions already pin one
                 # build, but that build may only be published on some backends — verify it
-                # the same way aws-strict/common do instead of stamping it blindly (SCT-856).
+                # the same way aws-strict/common do instead of stamping it blindly.
                 if version_exists_for_backend(reference_version, target.backend, target.region, target.arch):
                     versions[target] = reference_version
                 else:
