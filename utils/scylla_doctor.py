@@ -632,10 +632,16 @@ class ScyllaDoctor:
         # Search for created scylla-logs tar.gz
         # Scylla Docker does not collect Scylla cluster logs - https://github.com/scylladb/field-engineering/issues/2288
         if self.node.parent_cluster.cluster_backend != "docker":
-            result = self.node.remoter.run("ls scylla_logs_*.tar.gz", verbose=False)
-            self.scylla_logs_file = result.stdout.strip()
+            # Up to 1.13 the archive landed in the login directory, since scylla-doctor is invoked
+            # over SSH and the tarball was created with a relative name. Since 1.14 it is written
+            # next to the journalctl dump, which itself moved to the system temp directory.
+            # Search both so either version is supported.
+            search_paths = "scylla_logs_*.tar.gz /tmp/scylla_logs_*.tar.gz"
+            result = self.node.remoter.run(f"ls {search_paths}", verbose=False, ignore_status=True)
+            found_archives = result.stdout.split()
+            self.scylla_logs_file = found_archives[0] if found_archives else ""
             assert self.scylla_logs_file, (
-                f"Scylla log archive {self.scylla_logs_file} has not been created. "
+                f"Scylla log archive has not been created in any of: {search_paths}. "
                 f"Scylla doctor version: {self.version}"
             )
 
