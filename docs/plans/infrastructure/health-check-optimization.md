@@ -212,6 +212,71 @@ this plan.
 - [ ] No change to which checks run or when the gate passes or fails
 - [ ] Baseline measured on a multi-node cluster and recorded in this plan
 
+**First measurement (2026-09-14)**: two runs, 6 nodes each, 43 gates and 260
+per-node samples between them. Gate wall-clock 6.6-7.7 s on 2-vCPU instances and
+7.4-8.8 s on i7i.2xlarge. **Waiting was 0.0 s in every gate and every sample
+completed on its first attempt** — across both runs the retry path did not fire
+once.
+
+Ranking the gathering operations, from most to least expensive: nodetool
+status, token ring, gossip, then peers and Raft group0 roughly together. Exact
+per-operation figures are **not yet trustworthy**: the instrument rounds each
+operation to a tenth of a second, and three of the five sit at or next to that
+floor — token ring logged the identical value in all 97 samples, and peers and
+Raft group0 each collapse onto three values, many of them "0.0 s". Averaging
+already-rounded values produces false precision, so the numbers are recorded
+here only as an ordering until the instrument's resolution is raised.
+
+This measures the healthy-cluster floor only; the slow case this plan exists to
+fix is still unmeasured. Two runs without a single retry says the retry path is
+rare, not that it is cheap when it fires. It does establish that a healthy gate
+costs seconds rather than minutes, consistent with the two hours coming from
+retries rather than per-operation cost. It also surfaced the gap in Phase 8.
+
+---
+
+### Phase 8: Account for validation cost, not just gathering
+
+**Importance**: Important
+**Dependencies**: Phase 3
+**Tracked as**: [SCT-1002](https://scylladb.atlassian.net/browse/SCT-1002)
+
+The Phase 3 measurement leaves most of the gate unexplained. Gathering summed to
+about 10.7 s across six nodes and ran five-at-a-time, so it should have finished
+in roughly 3.6 s of wall-clock; the gate took 8.0 s. That is 2.2x worse than
+ideal, and only 1.34x better than doing the work fully serially. Well over half
+the gate is outside everything Phase 3 measures.
+
+The ratio is not a fluke of one machine: two 6-node clusters four-fold apart in
+vCPU produced 1.32 and 1.34. Whatever serialises the parallel path is therefore
+not CPU starvation on the runner.
+
+The likely reason is that Phase 3 times only the gathering. The five validators
+that compare that state run outside any timing block, and they are the part that
+does not parallelise: each node's validators walk every other node's entry, so
+the work is quadratic in cluster size, and being pure Python it is serialised by
+the interpreter however many workers the gate is given.
+
+**This is a hypothesis with arithmetic behind it, not a diagnosis.** The first
+deliverable is to measure validation separately and confirm or kill it. Both
+runs so far are 6-node, so nothing is yet known about how the effect scales —
+which is the more interesting question, because validation grows with the square
+of node count while gathering grows linearly. If that holds, a 60-node gate would
+be dominated by validation and extra workers would not help.
+
+**Definition of Done**:
+- [ ] Per-operation timings are logged with enough resolution to be averaged
+      (the current tenth-of-a-second rounding pins three of the five operations
+      to the floor and makes their means meaningless)
+- [ ] Validation time is measured per node and reported alongside gathering
+- [ ] The gate accounts for its wall-clock: gathering, validation and overhead
+      sum to the measured total, with any remainder named
+- [ ] Measurement on clusters of different **node counts** shows how validation
+      scales, confirming or refuting the quadratic expectation (the two runs so
+      far differ in instance size, not in node count, so they do not answer this)
+- [ ] If confirmed, a follow-up is opened for the fix — this phase measures, it
+      does not optimise
+
 ---
 
 ### Phase 4: Backoff and cluster-level short-circuit
