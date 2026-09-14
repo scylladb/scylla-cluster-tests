@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from sdcm.utils.trigger_matrix import load_matrix_config
+from sdcm.utils.trigger_matrix.config import load_matrix_config
 
 TRIGGERS_DIR = Path(__file__).parent.parent.parent / "configurations" / "triggers"
 

@@ -5,8 +5,8 @@
 //
 // Cron schedules are passed via the 'cron' parameter because Jenkins declarative
 // pipeline triggers must be resolved before a node is allocated, and the Groovy
-// sandbox blocks direct file I/O. Generate the cron spec from the matrix YAML with:
-//   python3 -c "from sdcm.utils.trigger_matrix import get_parameterized_cron; print(get_parameterized_cron('path/to/matrix.yaml'))"
+// sandbox blocks direct file I/O. utils/build_system/generate_trigger_jenkinsfiles.py
+// (run by pre-commit) writes the spec from the matrix YAML into each generated Jenkinsfile.
 //
 // NOTE: Either scylla_version or an image param is required. When an image is
 //       provided without scylla_version, the Python code resolves the version from

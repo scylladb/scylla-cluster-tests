@@ -14,7 +14,8 @@
 import pytest
 import yaml
 
-from sdcm.utils.trigger_matrix import JobConfig, images
+from sdcm.utils.trigger_matrix import images
+from sdcm.utils.trigger_matrix.models import JobConfig
 
 
 # Version the stubbed cloud lookups report for every backend, so tests that don't care about

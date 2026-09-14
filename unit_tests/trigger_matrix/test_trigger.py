@@ -19,7 +19,9 @@ import pytest
 import yaml
 from botocore.exceptions import NoCredentialsError
 
-from sdcm.utils.trigger_matrix import JenkinsClient, JenkinsTriggerError, trigger_matrix
+from sdcm.utils.trigger_matrix.errors import JenkinsTriggerError
+from sdcm.utils.trigger_matrix.jenkins_client import JenkinsClient
+from sdcm.utils.trigger_matrix.matrix import trigger_matrix
 
 
 def test_dry_run_produces_output(sample_matrix_yaml, caplog):

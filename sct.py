@@ -76,13 +76,10 @@ from sdcm.sct_runner import (
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.decorators import retrying
 from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
-from sdcm.utils.trigger_matrix import (
-    VERSION_RESOLUTION_STRATEGIES,
-    resolve_image_architecture,
-    resolve_scylla_version_from_image,
-    resolve_to_full_version,
-    trigger_matrix as run_trigger_matrix,
-)
+from sdcm.utils.trigger_matrix.constants import VERSION_RESOLUTION_STRATEGIES
+from sdcm.utils.trigger_matrix.images import resolve_image_architecture, resolve_scylla_version_from_image
+from sdcm.utils.trigger_matrix.matrix import trigger_matrix as run_trigger_matrix
+from sdcm.utils.trigger_matrix.resolution import resolve_to_full_version
 from sdcm.utils.argus import (
     ReplayOnlyArgusSCTClient,
     argus_offline_collect_events,
