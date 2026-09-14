@@ -28,11 +28,11 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-528 options across 29 groups.
+529 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
-| [General and provisioning](configuration_options/general-and-provisioning.md) | 72 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
+| [General and provisioning](configuration_options/general-and-provisioning.md) | 74 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 74 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
@@ -44,8 +44,8 @@ concerns first, then one page per backend, then one per test type.
 | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) | 10 | Scylla's DynamoDB-compatible API: the endpoint, write isolation, load-balancing and the credentials the tests use against it. |
 | [Vector Store](configuration_options/vector-store.md) | 6 | The Vector Store service under test alongside Scylla. |
 | [Kafka / CDC connectors](configuration_options/kafka-cdc-connectors.md) | 2 | Kafka deployment and connector configuration for CDC testing. |
-| [AWS backend](configuration_options/aws-backend.md) | 26 | AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity reservations and dedicated hosts. |
-| [GCE backend](configuration_options/gce-backend.md) | 23 | Google Compute Engine provisioning. |
+| [AWS backend](configuration_options/aws-backend.md) | 24 | AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity reservations and dedicated hosts. |
+| [GCE backend](configuration_options/gce-backend.md) | 24 | Google Compute Engine provisioning. |
 | [Azure backend](configuration_options/azure-backend.md) | 13 | Microsoft Azure provisioning. |
 | [OCI backend](configuration_options/oci-backend.md) | 10 | Oracle Cloud Infrastructure provisioning. |
 | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) | 44 | Scylla Operator deployments: EKS, GKE and local kind clusters. |
@@ -241,6 +241,7 @@ concerns first, then one page per backend, then one per test type.
 | [`gce_root_disk_type_loader`](configuration_options/gce-backend.md#gce_root_disk_type_loader) | `SCT_GCE_ROOT_DISK_TYPE_LOADER` | [GCE backend](configuration_options/gce-backend.md) |
 | [`gce_root_disk_type_monitor`](configuration_options/gce-backend.md#gce_root_disk_type_monitor) | `SCT_GCE_ROOT_DISK_TYPE_MONITOR` | [GCE backend](configuration_options/gce-backend.md) |
 | [`gce_setup_hybrid_raid`](configuration_options/gce-backend.md#gce_setup_hybrid_raid) | `SCT_GCE_SETUP_HYBRID_RAID` | [GCE backend](configuration_options/gce-backend.md) |
+| [`gce_spot_obtainability_min`](configuration_options/gce-backend.md#gce_spot_obtainability_min) | `SCT_GCE_SPOT_OBTAINABILITY_MIN` | [GCE backend](configuration_options/gce-backend.md) |
 | [`gemini_cmd`](configuration_options/stress-commands-and-load-generation.md#gemini_cmd) | `SCT_GEMINI_CMD` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`gemini_log_cql_statements`](configuration_options/stress-commands-and-load-generation.md#gemini_log_cql_statements) | `SCT_GEMINI_LOG_CQL_STATEMENTS` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`gemini_schema_url`](configuration_options/stress-commands-and-load-generation.md#gemini_schema_url) | `SCT_GEMINI_SCHEMA_URL` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
@@ -485,7 +486,7 @@ concerns first, then one page per backend, then one per test type.
 | [`spot_max_price`](configuration_options/aws-backend.md#spot_max_price) | `SCT_SPOT_MAX_PRICE` | [AWS backend](configuration_options/aws-backend.md) |
 | [`spot_max_test_duration`](configuration_options/general-and-provisioning.md#spot_max_test_duration) | `SCT_SPOT_MAX_TEST_DURATION` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`spot_placement_score_min`](configuration_options/aws-backend.md#spot_placement_score_min) | `SCT_SPOT_PLACEMENT_SCORE_MIN` | [AWS backend](configuration_options/aws-backend.md) |
-| [`spot_score_overrides_configured_az`](configuration_options/aws-backend.md#spot_score_overrides_configured_az) | `SCT_SPOT_SCORE_OVERRIDES_CONFIGURED_AZ` | [AWS backend](configuration_options/aws-backend.md) |
+| [`spot_score_overrides_configured_az`](configuration_options/general-and-provisioning.md#spot_score_overrides_configured_az) | `SCT_SPOT_SCORE_OVERRIDES_CONFIGURED_AZ` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`spot_score_region_relocation_margin`](configuration_options/aws-backend.md#spot_score_region_relocation_margin) | `SCT_SPOT_SCORE_REGION_RELOCATION_MARGIN` | [AWS backend](configuration_options/aws-backend.md) |
 | [`ssh_transport`](configuration_options/general-and-provisioning.md#ssh_transport) | `SCT_SSH_TRANSPORT` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`sstable_file`](configuration_options/refresh-sstable-loading-tests.md#sstable_file) | `SCT_SSTABLE_FILE` | [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) |
@@ -568,7 +569,7 @@ concerns first, then one page per backend, then one per test type.
 | [`use_preinstalled_scylla`](configuration_options/scylla-installation-and-configuration.md#use_preinstalled_scylla) | `SCT_USE_PREINSTALLED_SCYLLA` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`use_prepared_loaders`](configuration_options/stress-commands-and-load-generation.md#use_prepared_loaders) | `SCT_USE_PREPARED_LOADERS` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`use_scylla_doctor_on_failure`](configuration_options/scylla-doctor.md#use_scylla_doctor_on_failure) | `SCT_USE_SCYLLA_DOCTOR_ON_FAILURE` | [Scylla Doctor](configuration_options/scylla-doctor.md) |
-| [`use_spot_placement_scores`](configuration_options/aws-backend.md#use_spot_placement_scores) | `SCT_USE_SPOT_PLACEMENT_SCORES` | [AWS backend](configuration_options/aws-backend.md) |
+| [`use_spot_placement_scores`](configuration_options/general-and-provisioning.md#use_spot_placement_scores) | `SCT_USE_SPOT_PLACEMENT_SCORES` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`use_zero_nodes`](configuration_options/general-and-provisioning.md#use_zero_nodes) | `SCT_USE_ZERO_NODES` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`user_credentials_path`](configuration_options/general-and-provisioning.md#user_credentials_path) | `SCT_USER_CREDENTIALS_PATH` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`user_data_format_version`](configuration_options/scylla-installation-and-configuration.md#user_data_format_version) | `SCT_USER_DATA_FORMAT_VERSION` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |

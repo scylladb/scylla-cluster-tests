@@ -17,10 +17,10 @@ from typing import Callable
 import boto3
 from botocore.exceptions import ClientError
 
+from sdcm.provision.common.fallback import is_spot_capacity_scoring_enabled
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, is_capacity_error
 from sdcm.provision.aws.spot_placement_score import get_scores, rank_az_letters, rank_regions
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS
-from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_ON_DEMAND
 from sdcm.test_config import TestConfig
 from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.aws_region import AwsRegion
@@ -100,15 +100,8 @@ _NODE_COUNT_PARAM_GATES: tuple[tuple[str, Callable[[object], bool]], ...] = (
 
 
 def is_spot_placement_scoring_enabled(params) -> bool:
-    """Return True when AZ/region ordering should consult `ec2:GetSpotPlacementScores`.
-
-    Pointless for on-demand runs (the scores only describe spot capacity), so those skip the API entirely.
-    """
-    if not params.get("use_spot_placement_scores"):
-        return False
-    if params.get("cluster_backend") != "aws":
-        return False
-    return params.get("instance_provision") != INSTANCE_PROVISION_ON_DEMAND
+    """Return True when AZ/region ordering should consult `ec2:GetSpotPlacementScores`."""
+    return is_spot_capacity_scoring_enabled(params, backend="aws")
 
 
 # (instance-type param key, gate). The gate decides whether this type will actually

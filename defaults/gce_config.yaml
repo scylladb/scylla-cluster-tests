@@ -6,6 +6,7 @@ gce_network: 'qa-vpc'
 # single-node/single-region cluster to another eligible region (mirrors aws_config.yaml).
 fallback_to_next_availability_zone: true
 fallback_to_next_region: true
+use_spot_placement_scores: true
 gce_project: '' # empty mean default one, can be overwritten to use different one
 
 gce_image_db: '' # so we can use `scylla_version` as needed
