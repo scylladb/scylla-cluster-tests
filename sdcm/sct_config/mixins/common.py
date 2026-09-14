@@ -318,6 +318,13 @@ class CommonConfigMixin(BaseModel):
             cycle. See `docs/skip-test-stages.md` for the stage names and what each one covers.
         """,
     )
+    spot_score_overrides_configured_az: Boolean = SctField(
+        description="Let the spot capacity score override an `availability_zone` that was set explicitly - in a test "
+        "case, an SCT_* env var or on the command line. Off by default, so a deliberate AZ pin keeps its "
+        "meaning. Note this is only needed for *deliberate* pins: an `availability_zone` inherited from "
+        "`defaults/` is not treated as a choice, and the score is free to move off it regardless of this "
+        "setting. Supported backends: AWS, GCE.",
+    )
     spot_max_test_duration: int = SctField(
         description="Duration (min) up to which `instance_provision` defaults to spot; longer tests default to on_demand, "
         "since interruption exposure grows with runtime. Only applies when `instance_provision` was not set "
@@ -349,6 +356,14 @@ class CommonConfigMixin(BaseModel):
     test_method: String = SctField(
         description="class.method used to run the test. Filled automatically with run-test sct command.",
         appendable=False,
+    )
+    use_spot_placement_scores: Boolean = SctField(
+        description="Order availability zones and region-fallback candidates by the backend's spot capacity signal "
+        "instead of alphabetically, so spot requests go to the AZ/zone most likely to have capacity: "
+        "`ec2:GetSpotPlacementScores` on AWS, Capacity Advisor obtainability (`advice.capacity`) on GCE. Scores "
+        "only reorder candidates that already passed the instance/machine-type offering filter; they never veto "
+        "one. Ignored for `instance_provision: on_demand`, and silently ignored when the permission is missing. "
+        "Supported backends: AWS, GCE.",
     )
     use_dns_names: Boolean = SctField(
         description="""Use dns names instead of ip addresses for nodes in cluster""",
