@@ -87,6 +87,8 @@ class JobConfig(BaseModel):
     wait: bool = False
     wait_timeout: int = WAIT_TIMEOUT
     fail_on_error: bool = False
+    # Globs are matched against the artifact's *filename*, not its relative path, so
+    # "*.xml" finds reports/results.xml while "reports/*.xml" matches nothing.
     collect_results: list[str] = Field(default_factory=list)
 
 
