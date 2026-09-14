@@ -16,7 +16,6 @@ import fnmatch
 import json
 import logging
 import os
-import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,6 +26,35 @@ import pydantic
 import requests
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from sdcm.utils.trigger_matrix.backends import _aws_arch, _backend_region, _vm_arch, split_regions
+from sdcm.utils.trigger_matrix.constants import (
+    DEFAULT_ARCH,
+    DEFAULT_AWS_REGION,
+    DEFAULT_EMAIL_RECIPIENTS,
+    DEFAULT_VERSION_RESOLUTION,
+    MAX_TRIGGER_RETRIES,
+    PER_JOB_LOCATION_PARAMS,
+    RETRY_BACKOFF_BASE,
+    VALID_IMAGE_BACKENDS,
+    VERSION_RESOLUTION_STRATEGIES,
+    VersionResolution,
+    WAIT_POLL_INTERVAL,
+    WAIT_TIMEOUT,
+)
+from sdcm.utils.trigger_matrix.errors import JenkinsTriggerError, MatrixValidationError, TriggerMatrixError
+from sdcm.utils.trigger_matrix.versions import (
+    RELEASE_VERSION_RE,
+    _as_branch_qualifier,
+    _branch_directory_id,
+    _extract_branch_from_version,
+    _gce_label_to_version,
+    _strip_version_qualifier,
+    _version_build_date,
+    determine_job_folder,
+    is_full_version_tag,
+    is_resolvable_partial_version,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,80 +96,6 @@ def _get_jenkins_client() -> tuple[jenkins_lib.Jenkins, str]:
 
     client = jenkins_lib.Jenkins(jenkins_url, username=username or None, password=token)
     return client, jenkins_url
-
-
-# Regex for full version tags like:
-#   2024.2.5-0.20250221.cb9e2a54ae6d-1 (release)
-#   2026.2.0~dev-0.20260322.f51126483167 (dev/nightly)
-#   2026.3.0.rc0.0.20260719.a64da1e635f3 (release candidate)
-FULL_VERSION_TAG_RE = re.compile(
-    r"^(?P<major>\d{4})\.(?P<minor>\d+)\.(?P<patch>\d+)"
-    r"(?:[~-][a-zA-Z0-9._~]+-?\d*\.\d{8}\.[0-9a-f]+(?:-\d+)?"
-    r"|\.rc\d+\.\d+\.\d{8}\.[0-9a-f]+(?:\.\d+)?)$"
-)
-
-# Regex for release version strings like: 2026.1.8, 2025.4.1 (three-part, specific release)
-RELEASE_VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
-
-# Regex for simple version strings like: 2025.4, 2025.4.0, 5.2.1
-SIMPLE_VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)(?:\.\d+)?$")
-
-# Regex for branch:qualifier like: master:latest, branch-2019.1:all
-BRANCH_VERSION_RE = re.compile(r"^(?P<branch>[a-zA-Z0-9._-]+):(?P<qualifier>.+)$")
-
-VALID_BACKENDS = {"aws", "gce", "azure", "docker", "oci"}
-
-# Backends whose Scylla build is published as an image SCT looks up by version
-VALID_IMAGE_BACKENDS = {"aws", "gce", "azure", "oci"}
-
-DEFAULT_ARCH = "x86_64"
-
-MAX_TRIGGER_RETRIES = 3
-RETRY_BACKOFF_BASE = 2
-
-# Default region used for AMI tag lookups
-DEFAULT_AWS_REGION = "eu-west-1"
-DEFAULT_AZURE_REGION = "eastus"
-
-# Backends whose images are region scoped — both resolution and availability of a
-# given build have to be checked in the region the job actually runs in.
-REGIONAL_BACKENDS = {"aws", "azure", "oci"}
-
-# How the version passed to the downstream jobs is picked:
-#   per-backend — every backend resolves its own latest build (jobs may run different builds)
-#   common      — one build for the whole matrix: the newest one published on *every* backend
-#                 in the matrix (i.e. the lowest of the per-backend latest builds)
-#   aws-strict  — the AWS latest build for everyone; jobs on a backend that doesn't have that
-#                 exact build published are not triggered
-VersionResolution = Literal["per-backend", "common", "aws-strict"]
-VERSION_RESOLUTION_STRATEGIES: tuple[str, ...] = ("per-backend", "common", "aws-strict")
-DEFAULT_VERSION_RESOLUTION: VersionResolution = "per-backend"
-
-WAIT_POLL_INTERVAL = 30
-WAIT_TIMEOUT = 14400
-DEFAULT_EMAIL_RECIPIENTS = ["qa@scylladb.com"]
-
-# Parameters that describe *where* a job runs. They are per-job by nature: a job that
-# declares them in its `params` owns them, and a global CLI value only fills in for the
-# jobs that don't. Without this, `--region us-east-1` would silently collapse a multi-DC
-# job configured with region: '["eu-west-1", "eu-west-2"]' into a single region (SCT-693).
-PER_JOB_LOCATION_PARAMS = ("region", "availability_zone")
-
-
-def is_full_version_tag(version: str) -> bool:
-    """Check if a version string is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)."""
-    return bool(FULL_VERSION_TAG_RE.match(version))
-
-
-def is_resolvable_partial_version(scylla_version: str) -> bool:
-    """Check whether a version string points at "whatever is newest" rather than one build.
-
-    Those are the versions that have to be resolved against a backend's published images:
-    branch:qualifier (``master:latest``) and simple versions (``2025.4``).
-    """
-    if not scylla_version or is_full_version_tag(scylla_version) or RELEASE_VERSION_RE.match(scylla_version):
-        return False
-    return bool(BRANCH_VERSION_RE.match(scylla_version) or SIMPLE_VERSION_RE.match(scylla_version))
 
 
 def resolve_to_full_version(
@@ -186,76 +140,6 @@ def resolve_to_full_version(
         f"or ensure images exist for the version"
         f"{f' in region {lookup_region!r}' if lookup_region else ''}."
     )
-
-
-def split_regions(region: str | None) -> list[str]:
-    """Split a matrix `region` value into single regions.
-
-    Multi-DC jobs carry a JSON list (`'["eu-west-1", "eu-west-2"]'`), single-DC jobs a plain
-    region name.
-
-    Examples:
-        >>> split_regions("eu-west-1")
-        ['eu-west-1']
-        >>> split_regions('["eu-west-1", "eu-west-2"]')
-        ['eu-west-1', 'eu-west-2']
-        >>> split_regions("")
-        []
-    """
-    value = (region or "").strip()
-    if not value:
-        return []
-    if value.startswith("["):
-        try:
-            return [str(item).strip() for item in json.loads(value) if str(item).strip()]
-        except json.JSONDecodeError:
-            logger.warning("Could not parse region list %r — treating it as a plain region", value)
-    return [part for part in re.split(r"[,\s]+", value) if part]
-
-
-def _backend_region(backend: str, region: str | None) -> str:
-    """Regions to use for a backend's image lookups, comma separated.
-
-    Empty for region-less backends (GCE); the backend default when a job declares no region.
-    """
-    if backend not in REGIONAL_BACKENDS:
-        return ""
-    regions = split_regions(region)
-    if not regions:
-        return {"aws": DEFAULT_AWS_REGION, "azure": DEFAULT_AZURE_REGION}.get(backend, "")
-    return ",".join(regions)
-
-
-def _as_branch_qualifier(scylla_version: str) -> str:
-    """Normalize a partial version to the branch:qualifier form all image lookups expect.
-
-    Examples:
-        >>> _as_branch_qualifier("master:latest")
-        'master:latest'
-        >>> _as_branch_qualifier("2025.4")
-        'branch-2025.4:latest'
-        >>> _as_branch_qualifier("2025.4.0")
-        'branch-2025.4:latest'
-    """
-    if BRANCH_VERSION_RE.match(scylla_version):
-        return scylla_version
-    if simple_match := SIMPLE_VERSION_RE.match(scylla_version):
-        return f"branch-{simple_match.group('major')}.{simple_match.group('minor')}:latest"
-    return scylla_version
-
-
-def _vm_arch(arch: str):
-    """Convert an architecture string to the VmArch enum used by the image lookups."""
-    from sdcm.provision.provisioner import VmArch  # noqa: PLC0415 - circular import avoidance
-
-    return VmArch.ARM if arch == "aarch64" else VmArch.X86
-
-
-def _aws_arch(arch: str) -> str:
-    """AWS names the ARM architecture `arm64`, not `aarch64`, on both AMIs and instances."""
-    from sdcm.utils.aws_utils import vmarch_to_aws  # noqa: PLC0415 - circular import avoidance
-
-    return vmarch_to_aws(_vm_arch(arch))
 
 
 def _resolve_latest_version_for_backend(
@@ -356,38 +240,6 @@ def _resolve_version_via_branched_ami(scylla_version: str, region: str, arch: st
     except Exception as exc:  # noqa: BLE001 - best-effort cloud lookup
         logger.warning("Failed to resolve '%s' via AMI lookup: %s", scylla_version, exc)
     return ""
-
-
-def _gce_label_to_version(label: str) -> str:
-    """Rebuild a full version tag from the dashed `scylla_version` label of a GCE image.
-
-    GCE labels can't hold dots or tildes, so the separators have to be put back:
-
-        >>> _gce_label_to_version("2026-4-0-dev-0-20260804-9a3aba9e452a")
-        '2026.4.0~dev-0.20260804.9a3aba9e452a'
-        >>> _gce_label_to_version("2026-3-0-rc1-0-20260730-726f67a532e2")
-        '2026.3.0.rc1.0.20260730.726f67a532e2'
-        >>> _gce_label_to_version("2025-4-10-0-20260609-99f4121cd8e1")
-        '2025.4.10-0.20260609.99f4121cd8e1'
-
-    Returns an empty string when the result isn't a valid full version tag.
-    """
-    parts = label.split("-")
-    if len(parts) < 4:
-        logger.warning("GCE label '%s' doesn't look like a full version label", label)
-        return ""
-    major, minor, patch, *rest = parts
-    if rest[0] == "dev":
-        version = f"{major}.{minor}.{patch}~dev-" + ".".join(rest[1:])
-    elif rest[0].startswith("rc"):
-        version = f"{major}.{minor}.{patch}." + ".".join(rest)
-    else:
-        version = f"{major}.{minor}.{patch}-" + ".".join(rest)
-
-    if not is_full_version_tag(version):
-        logger.warning("GCE label '%s' doesn't map to a valid full version tag (got '%s')", label, version)
-        return ""
-    return version
 
 
 def _resolve_version_via_branched_gce_image(scylla_version: str, arch: str = DEFAULT_ARCH) -> str:
@@ -776,18 +628,6 @@ JOB_LEVEL_KEYS = frozenset(JobConfig.model_fields)
 MATRIX_LEVEL_KEYS = frozenset(MatrixConfig.model_fields)
 
 
-class TriggerMatrixError(Exception):
-    """Base exception for trigger matrix errors."""
-
-
-class MatrixValidationError(TriggerMatrixError):
-    """Raised when YAML matrix file fails validation."""
-
-
-class JenkinsTriggerError(TriggerMatrixError):
-    """Raised when a Jenkins job trigger fails."""
-
-
 @dataclass
 class BuildResult:
     job_name: str
@@ -953,67 +793,6 @@ def load_matrix_config(path: str | Path) -> MatrixConfig:
         raise MatrixValidationError(f"Invalid trigger matrix {path}:\n{exc}") from exc
 
 
-def determine_job_folder(scylla_version: str, job_folder: str | None = None) -> str:
-    """Derive Jenkins job folder from version string.
-
-    Args:
-        scylla_version: Version string in any supported format.
-        job_folder: Explicit override — returned as-is if provided.
-
-    Returns:
-        Jenkins job folder name (e.g., 'scylla-master', 'scylla-2025.4').
-
-    Examples:
-        >>> determine_job_folder("master:latest")
-        'scylla-master'
-        >>> determine_job_folder("master")
-        'scylla-master'
-        >>> determine_job_folder("2025.4")
-        'scylla-2025.4'
-        >>> determine_job_folder("2025.4.1")
-        'scylla-2025.4'
-        >>> determine_job_folder("2024.2.5-0.20250221.cb9e2a54ae6d-1")
-        'scylla-2024.2'
-        >>> determine_job_folder("master:latest", job_folder="my-folder")
-        'my-folder'
-    """
-    if job_folder:
-        return job_folder
-
-    if not scylla_version:
-        raise TriggerMatrixError(
-            "Cannot determine job folder: scylla_version is empty. Provide a version or explicit --job-folder."
-        )
-
-    # Handle branch:qualifier format (e.g., "master:latest")
-    branch_match = BRANCH_VERSION_RE.match(scylla_version)
-    if branch_match:
-        branch = branch_match.group("branch")
-        return "scylla-master" if branch == "master" else f"scylla-{branch}"
-
-    # Handle full version tags (e.g., "2024.2.5-0.20250221.cb9e2a54ae6d-1")
-    full_match = FULL_VERSION_TAG_RE.match(scylla_version)
-    if full_match:
-        major = full_match.group("major")
-        minor = full_match.group("minor")
-        return f"scylla-{major}.{minor}"
-
-    # Handle simple version strings (e.g., "2025.4", "2025.4.0")
-    simple_match = SIMPLE_VERSION_RE.match(scylla_version)
-    if simple_match:
-        major = simple_match.group("major")
-        minor = simple_match.group("minor")
-        return f"scylla-{major}.{minor}"
-
-    # Handle bare "master"
-    if scylla_version.strip().lower() == "master":
-        return "scylla-master"
-
-    raise TriggerMatrixError(
-        f"Cannot determine job folder from version '{scylla_version}'. Provide an explicit --job-folder."
-    )
-
-
 def filter_jobs(
     jobs: list[JobConfig],
     scylla_version: str,
@@ -1105,18 +884,6 @@ def filter_jobs(
     return result
 
 
-def _strip_version_qualifier(scylla_version: str) -> str:
-    """Strip branch qualifier from version string.
-
-    If version matches branch:qualifier format (e.g., "master:latest"),
-    returns the branch part. Otherwise returns the original string.
-    """
-    branch_match = BRANCH_VERSION_RE.match(scylla_version)
-    if branch_match:
-        return branch_match.group("branch")
-    return scylla_version
-
-
 def _is_version_excluded(scylla_version: str, exclude_versions: list[str]) -> bool:
     """Check if a version matches any exclusion prefix.
 
@@ -1158,36 +925,6 @@ def _is_pre_release_match(scylla_version: str, resolved_version: str, pre_releas
     return any(f"-{tag}" in resolved_version for tag in pre_release)
 
 
-def _extract_branch_from_version(scylla_version: str) -> str:
-    """Extract branch name from a scylla_version string for template resolution.
-
-    Examples:
-        >>> _extract_branch_from_version("master:latest")
-        'master'
-        >>> _extract_branch_from_version("2025.4.1-0.20250601.abc123def456-1")
-        '2025.4'
-        >>> _extract_branch_from_version("")
-        ''
-    """
-    if not scylla_version:
-        return ""
-
-    branch_match = BRANCH_VERSION_RE.match(scylla_version)
-    if branch_match:
-        return branch_match.group("branch")
-
-    full_match = FULL_VERSION_TAG_RE.match(scylla_version)
-    if not full_match:
-        full_match = SIMPLE_VERSION_RE.match(scylla_version)
-    if full_match:
-        return f"{full_match.group('major')}.{full_match.group('minor')}"
-
-    if scylla_version.strip().lower() == "master":
-        return "master"
-
-    return ""
-
-
 @dataclass(frozen=True, order=True)
 class BackendTarget:
     """A backend/region/arch combination that matrix jobs need an image for."""
@@ -1225,12 +962,6 @@ def job_uses_scylla_version(job: JobConfig, defaults: dict, overrides: dict | No
     if str(merged.get("rolling_upgrade_test", "")).lower() == "true":
         return False
     return not merged.get("unified_package")
-
-
-def _version_build_date(version: str) -> str:
-    """Extract the YYYYMMDD build date from a full version tag (empty when absent)."""
-    match = re.search(r"[.-](\d{8})[.-]", version)
-    return match.group(1) if match else ""
 
 
 def resolve_versions_for_targets(
@@ -1342,21 +1073,6 @@ def resolve_versions_for_targets(
         f"(tried: {', '.join(candidates)}). Use version_resolution=per-backend to let every backend "
         f"run its own latest build, or aws-strict to trigger only the backends that have the AWS build."
     )
-
-
-def _branch_directory_id(branch: str) -> str:
-    """Compute the S3 directory-prefixed branch id for a bare branch string.
-
-    SCT-782: the unstable-repo S3 layout uses a `branch-` prefix for non-master
-    branches in the directory path segment (e.g. `branch-2025.1`), while `master`
-    has no prefix; the filename segment, in contrast, always stays bare (e.g.
-    `scylladb-2025.1`). This helper produces the former. If `branch` already
-    carries a `branch-` or `enterprise-` prefix (or is empty), it is returned
-    unchanged.
-    """
-    if not branch or branch == "master" or branch.startswith(("branch-", "enterprise-")):
-        return branch
-    return f"branch-{branch}"
 
 
 def _resolve_templates(value: object, branch: str, branch_id: str) -> object:
