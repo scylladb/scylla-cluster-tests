@@ -58,3 +58,15 @@ GCE_MIN_NETWORK_INTERFACES = 2
 GCE_MAX_NETWORK_INTERFACES = 8
 GCE_SUPPORTED_NETWORK_INTERFACES = 2
 SECONDARY_SUBNET_NAME_TMPL = "{network_name}-nic{index}"
+
+# Capacity Advisor (`advice.capacity`) lives only in the beta discovery document; `compute/v1` has no
+# `advice` resource at all, and the typed `google-cloud-compute` SDK exposes only `calendar_mode` from it.
+GCE_CAPACITY_ADVICE_API_VERSION = "beta"
+
+# Obtainability is derived from recent capacity trends rather than live inventory, so an hour-old answer is
+# still a useful ranking, and caching avoids re-querying once per zone candidate within a provisioning run.
+GCE_CAPACITY_ADVICE_CACHE_TTL = 3600
+
+# GCP caps `scores.estimatedUptime` at one hour: it does not predict more Spot runtime than that for any
+# request. Referenced when logging the caveat, not when ordering.
+GCE_SPOT_MAX_ESTIMATED_UPTIME = 3600
