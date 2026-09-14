@@ -23,7 +23,8 @@ from pathlib import Path
 
 import pytest
 
-from sdcm.utils.trigger_matrix import filter_jobs, load_matrix_config
+from sdcm.utils.trigger_matrix import load_matrix_config
+from sdcm.utils.trigger_matrix.filters import filter_jobs
 
 TRIGGERS_DIR = Path(__file__).parent.parent.parent / "configurations" / "triggers"
 BIWEEKLY_MATRICES = ["tier1.yaml", "rolling-upgrade.yaml"]

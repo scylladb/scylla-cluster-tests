@@ -1,6 +1,6 @@
 // vars/triggerMatrixPipeline.groovy
 // Thin Groovy pipeline wrapper for Python-driven trigger matrix.
-// All logic lives in sdcm/utils/trigger_matrix.py — this pipeline only
+// All logic lives in the sdcm/utils/trigger_matrix package — this pipeline only
 // sanitizes inputs, builds the CLI command, and executes it.
 //
 // Cron schedules are passed via the 'cron' parameter because Jenkins declarative
