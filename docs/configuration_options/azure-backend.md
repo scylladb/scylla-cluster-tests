@@ -4,7 +4,7 @@
 
 Microsoft Azure provisioning.
 
-**13 options.**
+**14 options.**
 
 
 <a id="azure_image_db"></a>
@@ -113,6 +113,20 @@ The Azure virtual machine size to be used for monitor nodes.
 **default:** N/A
 
 **type:** str (appendable)
+
+
+<a id="azure_network_interfaces"></a>
+
+## **azure_network_interfaces** / SCT_AZURE_NETWORK_INTERFACES
+
+Describes how each Azure network interface of a DB node is provisioned.<br>One list item per NIC, ordered by device index. Where [`scylla_network_config`](scylla-installation-and-configuration.md#scylla_network_config) says<br>which NIC/IP Scylla uses, this option says how that NIC is built. Keys per item:<br>- subnet: name of the subnet inside the test VNet. Index 0 must stay on 'default';<br>the other indexes default to 'nic<index>'<br>- public_ip: attach an IPv4 Public IP resource to this NIC (only valid on index 0)<br>- ipv6: add an IPv6 ipConfiguration from the VNet's IPv6 (ULA) prefix<br>- public_ipv6: attach an IPv6 Public IP resource to the IPv6 ipConfiguration<br>An Azure IPv6 address is a billed Public IP resource, so IPv6 is strictly opt-in:<br>leaving 'ipv6' false everywhere creates no IPv6 resource at all.<br>The number of NICs to create is the length of this list.
+
+**default:** N/A
+
+**type:** list
+
+**backend overrides:**
+- `[{'subnet': 'default', 'public_ip': True, 'ipv6': False, 'public_ipv6': False}]`: azure
 
 
 <a id="azure_provision_stuck_vm_recreate_attempts"></a>

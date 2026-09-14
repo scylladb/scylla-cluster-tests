@@ -1,0 +1,12 @@
+# Azure NIC layout for `configurations/network_config/two_interfaces.yaml`.
+# Scylla lives entirely on the secondary interface there, so the node needs two of them.
+# The public IPv4 stays on the primary NIC: Azure, like AWS and GCE, only accepts one there.
+azure_network_interfaces:
+  - subnet: default
+    public_ip: true
+    ipv6: false
+    public_ipv6: false
+  - subnet: nic1
+    public_ip: false
+    ipv6: false
+    public_ipv6: false

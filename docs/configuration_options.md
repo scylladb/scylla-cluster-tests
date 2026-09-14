@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-523 options across 29 groups.
+524 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -46,7 +46,7 @@ concerns first, then one page per backend, then one per test type.
 | [Kafka / CDC connectors](configuration_options/kafka-cdc-connectors.md) | 2 | Kafka deployment and connector configuration for CDC testing. |
 | [AWS backend](configuration_options/aws-backend.md) | 22 | AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity reservations and dedicated hosts. |
 | [GCE backend](configuration_options/gce-backend.md) | 23 | Google Compute Engine provisioning. |
-| [Azure backend](configuration_options/azure-backend.md) | 13 | Microsoft Azure provisioning. |
+| [Azure backend](configuration_options/azure-backend.md) | 14 | Microsoft Azure provisioning. |
 | [OCI backend](configuration_options/oci-backend.md) | 10 | Oracle Cloud Infrastructure provisioning. |
 | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) | 44 | Scylla Operator deployments: EKS, GKE and local kind clusters. |
 | [Docker backend](configuration_options/docker-backend.md) | 2 | Running the cluster as local Docker containers. |
@@ -120,6 +120,7 @@ concerns first, then one page per backend, then one per test type.
 | [`azure_instance_type_db_oracle`](configuration_options/azure-backend.md#azure_instance_type_db_oracle) | `SCT_AZURE_INSTANCE_TYPE_DB_ORACLE` | [Azure backend](configuration_options/azure-backend.md) |
 | [`azure_instance_type_loader`](configuration_options/azure-backend.md#azure_instance_type_loader) | `SCT_AZURE_INSTANCE_TYPE_LOADER` | [Azure backend](configuration_options/azure-backend.md) |
 | [`azure_instance_type_monitor`](configuration_options/azure-backend.md#azure_instance_type_monitor) | `SCT_AZURE_INSTANCE_TYPE_MONITOR` | [Azure backend](configuration_options/azure-backend.md) |
+| [`azure_network_interfaces`](configuration_options/azure-backend.md#azure_network_interfaces) | `SCT_AZURE_NETWORK_INTERFACES` | [Azure backend](configuration_options/azure-backend.md) |
 | [`azure_provision_stuck_vm_recreate_attempts`](configuration_options/azure-backend.md#azure_provision_stuck_vm_recreate_attempts) | `SCT_AZURE_PROVISION_STUCK_VM_RECREATE_ATTEMPTS` | [Azure backend](configuration_options/azure-backend.md) |
 | [`azure_provision_stuck_vm_timeout`](configuration_options/azure-backend.md#azure_provision_stuck_vm_timeout) | `SCT_AZURE_PROVISION_STUCK_VM_TIMEOUT` | [Azure backend](configuration_options/azure-backend.md) |
 | [`azure_provision_stuck_vm_total_timeout`](configuration_options/azure-backend.md#azure_provision_stuck_vm_total_timeout) | `SCT_AZURE_PROVISION_STUCK_VM_TOTAL_TIMEOUT` | [Azure backend](configuration_options/azure-backend.md) |

@@ -23,6 +23,17 @@ from sdcm.kernel_panic_checker import AzureKernelPanicChecker
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
+from sdcm.provision.network_configuration import (
+    NetworkInterface,
+    azure_network_interfaces,
+    network_interfaces_count,
+)
+from sdcm.utils.azure_utils import (
+    SECONDARY_NICS_SCRIPT,
+    SECONDARY_NICS_SCRIPT_PATH,
+    SECONDARY_NICS_SERVICE,
+    SECONDARY_NICS_SERVICE_UNIT_TMPL,
+)
 from sdcm.utils.decorators import retrying
 from sdcm.utils.net import resolve_ip_to_dns
 
@@ -31,6 +42,10 @@ SPOT_TERMINATION_CHECK_DELAY = 15
 
 
 class CreateAzureNodeError(Exception):
+    pass
+
+
+class Ipv6AddressNotFoundError(Exception):
     pass
 
 
@@ -60,6 +75,7 @@ class AzureNode(cluster.BaseNode):
         self.parent_cluster = parent_cluster
         self._instance = azure_instance
         self._instance_type = azure_instance.instance_type
+        self._cached_network_interfaces: List[NetworkInterface] | None = None
         name = f"{node_prefix}-{self.region}-{node_index}".lower()
         self.last_event_document_incarnation = -1
         ssh_login_info = {
@@ -87,6 +103,48 @@ class AzureNode(cluster.BaseNode):
         self.remoter.sudo("systemctl disable auditd", ignore_status=True)
         self.remoter.sudo("systemctl mask auditd", ignore_status=True)
         self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
+        if network_interfaces_count(self.parent_cluster.params) > 1:
+            self._configure_secondary_nics_os()
+        # built after the remoter is up: resolving the device name of each interface needs the
+        # MAC -> device map read off the node
+        self.scylla_network_configuration = self._build_scylla_network_configuration()
+        self.refresh_network_interfaces_info()
+
+    def _configure_secondary_nics_os(self):
+        """Configure OS-level addresses and routing for the secondary NICs.
+
+        Azure gives a secondary NIC an address over DHCP but no routing policy, so a reply sourced
+        from its address would leave through the primary NIC's default route and be dropped.
+        Installs a boot script which queries IMDS and configures every secondary NIC, then runs it
+        right away. The systemd service makes the configuration survive reboots.
+        """
+        self.log.info("Configuring OS-level routing for secondary NICs on %s", self.name)
+        nic_count = network_interfaces_count(self.parent_cluster.params)
+
+        self.remoter.sudo(f"bash -c 'cat > {SECONDARY_NICS_SCRIPT_PATH}' << 'SCTEOF'\n{SECONDARY_NICS_SCRIPT}\nSCTEOF")
+        self.remoter.sudo(f"chmod 755 {SECONDARY_NICS_SCRIPT_PATH}")
+
+        service_unit = SECONDARY_NICS_SERVICE_UNIT_TMPL.format(
+            script_path=SECONDARY_NICS_SCRIPT_PATH, nic_count=nic_count
+        )
+        service_path = f"/etc/systemd/system/{SECONDARY_NICS_SERVICE}.service"
+        self.remoter.sudo(f"bash -c 'cat > {service_path}' << 'SCTEOF'\n{service_unit}\nSCTEOF")
+        self.remoter.sudo("systemctl daemon-reload")
+        self.remoter.sudo(f"systemctl enable {SECONDARY_NICS_SERVICE}.service")
+
+        # NOTE: run the script now to apply immediately. Failures must not be swallowed: a node with
+        #       half-configured NICs stays reachable over its primary interface and only breaks much
+        #       later, as a confusing connectivity or streaming error.
+        self.remoter.sudo(f"{SECONDARY_NICS_SCRIPT_PATH} {nic_count}")
+
+    def start_network_interface(self, interface_name=None):
+        super().start_network_interface(interface_name=interface_name)
+        # NOTE: taking a secondary NIC down flushes its addresses and the policy routes/rules of its
+        #       dedicated routing table. The 'sct-secondary-nics' service is a 'oneshot' which
+        #       normally runs only at boot, so re-run it here to re-apply the configuration once the
+        #       interface is back up.
+        if self.parent_cluster.extra_network_interface:
+            self.remoter.sudo(f"systemctl restart {SECONDARY_NICS_SERVICE}.service")
 
     def _create_kernel_panic_checker(self):
         return AzureKernelPanicChecker(
@@ -110,10 +168,70 @@ class AzureNode(cluster.BaseNode):
 
     @property
     def network_interfaces(self):
-        pass
+        """Cached NetworkInterface list, rebuilt from the Azure API only after an invalidation."""
+        if self._cached_network_interfaces is None:
+            self._cached_network_interfaces = self._build_network_interfaces()
+        return self._cached_network_interfaces
+
+    def _invalidate_network_interfaces_cache(self):
+        self._cached_network_interfaces = None
 
     def refresh_network_interfaces_info(self):
-        pass
+        self._invalidate_network_interfaces_cache()
+        super().refresh_network_interfaces_info()
+
+    def _build_network_interfaces(self) -> List[NetworkInterface]:
+        """Build the NetworkInterface list from the Azure NICs of this VM, primary one first."""
+        provisioner = self._instance._provisioner
+        devices = self.network_configuration if self.remoter else {}
+
+        interfaces = []
+        for device_index, nic in enumerate(provisioner.network_interfaces(self._instance.name)):
+            ipv4_private_addresses, ipv6_addresses, public_ipv4, public_ipv6 = [], [], None, None
+            for config in nic.ip_configurations:
+                public_ip = self._public_ip_of(config, device_index)
+                if config.private_ip_address_version == "IPv6":
+                    ipv6_addresses.append(config.private_ip_address)
+                    public_ipv6 = public_ipv6 or public_ip
+                else:
+                    ipv4_private_addresses.append(config.private_ip_address)
+                    public_ipv4 = public_ipv4 or public_ip
+
+            # Azure reports MACs as '00-0D-3A-...', ip-link as '00:0d:3a:...'
+            mac_address = nic.mac_address.replace("-", ":").lower() if nic.mac_address else None
+            interfaces.append(
+                NetworkInterface(
+                    ipv4_public_address=public_ipv4,
+                    # only a routable (Public IP) IPv6 belongs here, the VNet-local one is private
+                    ipv6_public_addresses=[public_ipv6] if public_ipv6 else [],
+                    ipv4_private_addresses=ipv4_private_addresses,
+                    ipv6_private_address=ipv6_addresses[0] if ipv6_addresses else "",
+                    dns_private_name=self._instance.private_dns_name or "",
+                    dns_public_name=None,
+                    device_index=device_index,
+                    device_name=devices.get(mac_address, "") if mac_address and devices else "",
+                    mac_address=mac_address,
+                    use_dns_names=self.use_dns_names,
+                )
+            )
+        return interfaces
+
+    def _public_ip_of(self, ip_configuration, device_index: int) -> str | None:
+        """Address of the Public IP attached to one ipConfiguration, None when it carries none.
+
+        Azure embeds a Public IP in a NIC as a sub-resource *reference*: the payload carries its
+        id but not its `ipAddress` unless the NIC is fetched with
+        `expand=IPConfigurations/PublicIPAddress`. The provisioner's IP provider holds the full
+        resource - it re-reads every Public IP it creates - so the address comes from there, with
+        whatever the NIC happens to carry preferred when it is populated.
+        """
+        if ip_configuration.public_ip_address is None:
+            return None
+        if address := getattr(ip_configuration.public_ip_address, "ip_address", None):
+            return address
+        version = "IPV6" if ip_configuration.private_ip_address_version == "IPv6" else "IPV4"
+        provisioner = self._instance._provisioner
+        return provisioner._ip_provider.get(self._instance.name, version=version, index=device_index).ip_address
 
     @retrying(n=6, sleep_time=1)
     def _set_keep_alive(self) -> bool:
@@ -125,8 +243,20 @@ class AzureNode(cluster.BaseNode):
         self._instance.add_tags({"keep": str(duration_in_hours)})
 
     def _refresh_instance_state(self):
-        ip_tuple = ([self._instance.public_ip_address], [self._instance.private_ip_address])
-        return ip_tuple
+        if self.scylla_network_configuration:
+            self.refresh_network_interfaces_info()
+            public_ipv4_addresses = [
+                interface.ipv4_public_address
+                for interface in self.scylla_network_configuration.network_interfaces
+                if interface.ipv4_public_address
+            ]
+            private_ipv4_addresses = [
+                interface.ipv4_private_addresses[0]
+                for interface in self.scylla_network_configuration.network_interfaces
+                if interface.ipv4_private_addresses
+            ]
+            return public_ipv4_addresses, private_ipv4_addresses
+        return ([self._instance.public_ip_address], [self._instance.private_ip_address])
 
     @property
     def vm_region(self):
@@ -181,9 +311,57 @@ class AzureNode(cluster.BaseNode):
         self._instance.terminate(wait=True)
         super().destroy()
 
-    def _get_ipv6_ip_address(self):
-        # todo: fix it
+    def _get_ipv6_ip_address(self) -> str:
+        """Routable IPv6 address of the node, empty when the run did not ask for IPv6.
+
+        Prefers what the API reports, and asks the OS only as a fallback - which needs SSH, so
+        before the node has a remoter a missing address is an error rather than an empty string.
+        """
+        if self.scylla_network_configuration:
+            if address := self.scylla_network_configuration.interface_ipv6_address:
+                return address
+        if address := self._api_ipv6_address():
+            return address
+        if not any(interface["ipv6"] for interface in azure_network_interfaces(self.parent_cluster.params)):
+            return ""
+        if not self.remoter and not self.destroyed:
+            # No SSH yet, and the OS fallback below needs it. This is the node-init path:
+            # `ip_ssh_connections` resolves to 'ipv6' whenever 'test_communication' does, so this
+            # address is what the SSH connection is about to be opened to. Returning "" here would
+            # hand SSH an empty hostname and fail much later, as a connection timeout.
+            raise Ipv6AddressNotFoundError(
+                f"No routable IPv6 address for {self.name}: the Azure API reports none on its "
+                f"primary NIC and the OS cannot be asked before SSH is up"
+            )
+        return next(iter(self._discover_ipv6_from_os().values()), [""])[0]
+
+    def _api_ipv6_address(self) -> str:
+        """Routable IPv6 of the primary NIC per the Azure API, empty while it is not published."""
+        interfaces = self.network_interfaces
+        if interfaces and interfaces[0].ipv6_public_addresses:
+            return interfaces[0].ipv6_public_addresses[0]
         return ""
+
+    def _discover_ipv6_from_os(self) -> dict:
+        """Global-scope IPv6 addresses seen by the node OS, keyed by interface name."""
+        if not self.remoter or self.destroyed:
+            return {}
+        result = self.remoter.run("ip -6 -j addr show scope global", ignore_status=True)
+        if result.exit_status != 0 or not result.stdout.strip():
+            return {}
+        try:
+            ipv6_map = {}
+            for interface in json.loads(result.stdout.strip()):
+                addresses = [
+                    address["local"]
+                    for address in interface.get("addr_info", [])
+                    if address.get("family") == "inet6" and address.get("local")
+                ]
+                if addresses:
+                    ipv6_map[interface.get("ifname", "")] = addresses
+            return ipv6_map
+        except json.JSONDecodeError, KeyError:
+            return {}
 
     @property
     def image(self):
@@ -242,6 +420,7 @@ class AzureCluster(cluster.BaseCluster):
             params=params,
             region_names=region_names,
             node_type=node_type,
+            extra_network_interface=network_interfaces_count(params) > 1,
         )
         self.log.debug("AzureCluster constructor")
 

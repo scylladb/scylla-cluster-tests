@@ -59,6 +59,19 @@ class AzureConfigMixin(BaseModel):
     azure_instance_type_monitor: String = SctField(
         description="The Azure virtual machine size to be used for monitor nodes.",
     )
+    azure_network_interfaces: list = SctField(
+        description="""Describes how each Azure network interface of a DB node is provisioned.
+              One list item per NIC, ordered by device index. Where 'scylla_network_config' says
+              which NIC/IP Scylla uses, this option says how that NIC is built. Keys per item:
+              - subnet: name of the subnet inside the test VNet. Index 0 must stay on 'default';
+                        the other indexes default to 'nic<index>'
+              - public_ip: attach an IPv4 Public IP resource to this NIC (only valid on index 0)
+              - ipv6: add an IPv6 ipConfiguration from the VNet's IPv6 (ULA) prefix
+              - public_ipv6: attach an IPv6 Public IP resource to the IPv6 ipConfiguration
+              An Azure IPv6 address is a billed Public IP resource, so IPv6 is strictly opt-in:
+              leaving 'ipv6' false everywhere creates no IPv6 resource at all.
+              The number of NICs to create is the length of this list.""",
+    )
     azure_provision_stuck_vm_recreate_attempts: int = SctField(
         ge=0,
         description="""

@@ -24,6 +24,17 @@ try to make sure there's no huge files in SCT directory,
 because that would slow it down
 
 
+### IPv6 on the Azure runner
+
+An Azure runner gets an IPv6 address only when the test configuration asks for one, because every
+internet-routable Azure IPv6 is a billed Public IP resource. The trigger is `azure_network_interfaces`:
+if any interface sets `ipv6: true`, the runner's own interface is created dual-stack with a routable
+IPv6 Public IP, so it can reach the DB nodes over IPv6. An IPv4-only run creates no IPv6 resource.
+
+Nothing has to be prepared per region for this - the runner is provisioned into the same per-test
+resource group as the nodes it serves, and requesting IPv6 there makes that VNet dual-stack before
+the first node is created.
+
 ### process of updating sct runner images
 
 1. update code in sct_runner.py, give it a new version number

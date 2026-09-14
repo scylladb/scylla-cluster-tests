@@ -48,6 +48,11 @@ from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.common.oracle import ORACLE_IMAGE_PARAMS, ORACLE_USER_PREFIX_SUFFIX
+from sdcm.provision.network_configuration import (
+    DEFAULT_AZURE_SUBNET_NAME,
+    azure_network_interfaces,
+    ssh_connection_ip_type,
+)
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
 from sdcm.utils.common import (
     ami_built_by_scylla,
@@ -991,6 +996,10 @@ class SCTConfiguration(*CONFIG_GROUPS):
             if len(nics) > 1 and len(regions) >= 2:
                 raise ValueError("Multiple network interfaces aren't supported for multi region use cases")
 
+        # 17.1 Validate the Azure network interfaces against 'scylla_network_config'
+        if cluster_backend == "azure":
+            self._validate_azure_network_interfaces()
+
         # 18 Validate K8S TLS+SNI values
         if self.get("k8s_enable_sni") and not self.get("k8s_enable_tls"):
             raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
@@ -1014,6 +1023,57 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
             self.log.debug("Using random cassandra-stress driver version: %s", self["c_s_driver_version"])
+
+    def _validate_azure_network_interfaces(self) -> None:
+        """Cross-validate 'azure_network_interfaces' with 'scylla_network_config'.
+
+        'azure_network_interfaces' says how each NIC is provisioned, 'scylla_network_config' says
+        which NIC and address family Scylla uses. An address that asks for something its NIC was
+        not built with (an IPv6 address on an IPv4-only NIC, a public address on a NIC with no
+        Public IP) would only fail much later, while the node is coming up, so reject it here.
+        """
+        interfaces = azure_network_interfaces(self)
+
+        if interfaces[0]["subnet"] != DEFAULT_AZURE_SUBNET_NAME:
+            raise ValueError(
+                f"'azure_network_interfaces' index 0 must stay on the '{DEFAULT_AZURE_SUBNET_NAME}' subnet, "
+                f"got '{interfaces[0]['subnet']}'. The primary NIC carries the public IPv4 address and SCT "
+                f"places it on the test VNet's default subnet"
+            )
+
+        for address_config in self.get("scylla_network_config") or []:
+            nic = address_config["nic"]
+            address = address_config["address"]
+            if nic >= len(interfaces):
+                raise ValueError(
+                    f"'{address}' is configured on nic {nic}, but 'azure_network_interfaces' defines only "
+                    f"{len(interfaces)} interface(s). Add the missing interface(s) or lower the 'nic' value"
+                )
+            interface = interfaces[nic]
+            if address_config["ip_type"] == "ipv6":
+                if not interface["ipv6"]:
+                    raise ValueError(
+                        f"'{address}' asks for an IPv6 address on nic {nic}, but that interface is not configured "
+                        f"for IPv6. Set 'ipv6: true' on item {nic} of 'azure_network_interfaces'"
+                    )
+                if address_config["public"] and not interface["public_ipv6"]:
+                    raise ValueError(
+                        f"'{address}' asks for a public IPv6 address on nic {nic}, but that interface has no IPv6 "
+                        f"Public IP. Set 'public_ipv6: true' on item {nic} of 'azure_network_interfaces'"
+                    )
+            elif address_config["public"] and not interface["public_ip"]:
+                raise ValueError(
+                    f"'{address}' asks for a public IPv4 address on nic {nic}, but that interface has no IPv4 "
+                    f"Public IP. Set 'public_ip: true' on item {nic} of 'azure_network_interfaces'"
+                )
+
+        # checked last so that a mismatch on a specific address reports itself first, with its own message
+        if ssh_connection_ip_type(self) == "ipv6" and not interfaces[0]["public_ipv6"]:
+            raise ValueError(
+                "IPv6 SSH connections need a routable address on the primary NIC: the SCT runner lives outside "
+                "the test VNet, so the VNet-local (ULA) IPv6 address cannot reach it. Set 'public_ipv6: true' on "
+                "the first item of 'azure_network_interfaces'"
+            )
 
     def _propagate_keystore_env(self):
         """Export the resolved keystore settings so bare ``KeyStore()`` callers agree.

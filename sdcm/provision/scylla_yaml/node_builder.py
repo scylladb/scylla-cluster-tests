@@ -135,6 +135,12 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
     @computed_field
     @property
     def prometheus_address(self) -> Optional[str]:
-        if self._is_ip_ssh_connections_ipv6:
-            return self._ipv6_ip_address
-        return "0.0.0.0"
+        """Address the metrics endpoint binds to: the wildcard of the family in use.
+
+        It used to be the node's routable IPv6 on an IPv6 run, which is not bindable everywhere -
+        an Azure Public IP is a separate DNAT'd resource and never appears on the VM's interface,
+        so Scylla died on startup with 'posix_listen failed ... Cannot assign requested address'.
+        The wildcard is reachable at every address the node has, which is what the monitor needs,
+        and it matches what the IPv4 branch has always done.
+        """
+        return "::" if self._is_ip_ssh_connections_ipv6 else "0.0.0.0"
