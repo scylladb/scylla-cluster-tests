@@ -42,6 +42,19 @@ class _StubProvisioner(InstanceProvisionerBase):
         return self.results.pop(0) if self.results else []
 
 
+@pytest.fixture(autouse=True)
+def _drain_recorded_outcomes():
+    """`TestConfig.SPOT_PROVISION_OUTCOMES` is class-level state that outlives a test.
+
+    Left behind, it reaches whatever runs next in the same worker: it made
+    `test_provision_error_event.py` fail in CI while passing in isolation, because a leftover outcome
+    sent `sct.py provision-resources` down its Argus-reporting path a second time.
+    """
+    TestConfig.SPOT_PROVISION_OUTCOMES.clear()
+    yield
+    TestConfig.SPOT_PROVISION_OUTCOMES.clear()
+
+
 def _steps(*names):
     return [
         ProvisionParameters(name=name, region_name="eu-west-1", availability_zone="a", spot=name != "OnDemand")
@@ -57,7 +70,7 @@ def _run(plan, instance_type="i4i.2xlarge"):
     """Run the plan and return the kwargs the outcome event was constructed with."""
     instance_params = MagicMock()
     instance_params.InstanceType = instance_type
-    with patch("sdcm.provision.common.provision_plan.SpotProvisionOutcomeEvent") as mock_event:
+    with patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent") as mock_event:
         instances = plan.provision_instances(
             instance_parameters=instance_params, node_count=6, node_tags=[{}] * 6, node_names=["n"] * 6
         )

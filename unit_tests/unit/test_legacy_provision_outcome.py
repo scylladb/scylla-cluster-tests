@@ -44,7 +44,7 @@ def _run(cluster, on_demand=None, spot=None):
     with (
         patch.object(AWSCluster, "_create_on_demand_instances", **(on_demand or {})),
         patch.object(AWSCluster, "_create_spot_instances", **(spot or {})),
-        patch("sdcm.cluster_aws.SpotProvisionOutcomeEvent") as mock_event,
+        patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent") as mock_event,
     ):
         try:
             instances = cluster.fallback_provision_type(count=3, interfaces=[], ec2_user_data="", dc_idx=0, az_idx=1)
@@ -136,7 +136,7 @@ def test_publishing_failure_never_breaks_provisioning():
     cluster = _cluster()
     with (
         patch.object(AWSCluster, "_create_spot_instances", return_value=["i-1"]),
-        patch("sdcm.cluster_aws.SpotProvisionOutcomeEvent", side_effect=RuntimeError("boom")),
+        patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent", side_effect=RuntimeError("boom")),
     ):
         assert cluster.fallback_provision_type(count=1, interfaces=[], ec2_user_data="", dc_idx=0, az_idx=0) == ["i-1"]
 
@@ -147,7 +147,7 @@ def test_out_of_range_az_index_is_tolerated(az_idx):
     cluster = _cluster()
     with (
         patch.object(AWSCluster, "_create_spot_instances", return_value=["i-1"]),
-        patch("sdcm.cluster_aws.SpotProvisionOutcomeEvent") as event,
+        patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent") as event,
     ):
         cluster.fallback_provision_type(count=1, interfaces=[], ec2_user_data="", dc_idx=0, az_idx=az_idx)
 
