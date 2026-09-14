@@ -5,7 +5,7 @@
 Cluster topology, region/AZ placement, instance provisioning, credentials and test-level
 plumbing. Options here apply to every backend and every test type.
 
-**72 options.**
+**74 options.**
 
 
 <a id="adaptive_timeout_multipliers"></a>
@@ -735,6 +735,17 @@ Skip selected stages of a test scenario, as a mapping of stage name to true/fals
 **type:** dict | YAML/JSON string → dict
 
 
+<a id="spot_score_overrides_configured_az"></a>
+
+## **spot_score_overrides_configured_az** / SCT_SPOT_SCORE_OVERRIDES_CONFIGURED_AZ
+
+Let the spot capacity score override an [`availability_zone`](#availability_zone) that was set explicitly - in a test case, an SCT_* env var or on the command line. Off by default, so a deliberate AZ pin keeps its meaning. Note this is only needed for *deliberate* pins: an [`availability_zone`](#availability_zone) inherited from `defaults/` is not treated as a choice, and the score is free to move off it regardless of this setting. Supported backends: AWS, GCE.
+
+**default:** False
+
+**type:** bool
+
+
 <a id="spot_max_test_duration"></a>
 
 ## **spot_max_test_duration** / SCT_SPOT_MAX_TEST_DURATION
@@ -799,6 +810,20 @@ class.method used to run the test. Filled automatically with run-test sct comman
 **default:** N/A
 
 **type:** str
+
+
+<a id="use_spot_placement_scores"></a>
+
+## **use_spot_placement_scores** / SCT_USE_SPOT_PLACEMENT_SCORES
+
+Order availability zones and region-fallback candidates by the backend's spot capacity signal instead of alphabetically, so spot requests go to the AZ/zone most likely to have capacity: `ec2:GetSpotPlacementScores` on AWS, Capacity Advisor obtainability (`advice.capacity`) on GCE. Scores only reorder candidates that already passed the instance/machine-type offering filter; they never veto one. Ignored for `instance_provision: on_demand`, and silently ignored when the permission is missing. Supported backends: AWS, GCE.
+
+**default:** False
+
+**type:** bool
+
+**backend overrides:**
+- `True`: aws, gce, aws-siren, gce-siren, k8s-local-kind-aws, k8s-gke, k8s-eks
 
 
 <a id="use_dns_names"></a>

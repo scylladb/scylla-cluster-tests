@@ -4,7 +4,7 @@
 
 Google Compute Engine provisioning.
 
-**23 options.**
+**24 options.**
 
 
 <a id="gce_datacenter"></a>
@@ -298,6 +298,17 @@ Root disk type for monitor nodes in Google Compute Engine
 
 **backend overrides:**
 - `pd-standard`: gce, gce-siren, k8s-gke
+
+
+<a id="gce_spot_obtainability_min"></a>
+
+## **gce_spot_obtainability_min** / SCT_GCE_SPOT_OBTAINABILITY_MIN
+
+Drop zones whose Capacity Advisor obtainability is below this value (0.0-1.0) from spot placement candidates. Default 0 keeps every zone, matching GCP's framing of obtainability as a likelihood rather than a guarantee. Separate from the AWS [`spot_placement_score_min`](aws-backend.md#spot_placement_score_min) because the scales differ: GCP returns a probability, AWS an integer 1-10. If fewer zones reach the threshold than [`availability_zone`](general-and-provisioning.md#availability_zone) asks for, provisioning fails rather than quietly building a cluster with fewer racks than the test was written for.
+
+**default:** 0.0
+
+**type:** float
 
 
 <a id="gce_setup_hybrid_raid"></a>
