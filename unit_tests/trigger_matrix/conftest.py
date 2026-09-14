@@ -11,11 +11,53 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+import socket
+from unittest.mock import MagicMock
+
 import pytest
 import yaml
 
-from sdcm.utils.trigger_matrix import images
+from sdcm.utils.trigger_matrix import images, reporting
 from sdcm.utils.trigger_matrix.models import JobConfig
+
+# Loopback endpoints stay reachable: only calls leaving the machine mean a cloud API or Jenkins
+# was reached instead of a stub.
+LOCAL_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", ""})
+
+
+class RemoteNetworkAccessError(RuntimeError):
+    """A test reached the network instead of a stub."""
+
+
+@pytest.fixture(autouse=True)
+def no_remote_network(monkeypatch):
+    """Refuse every outbound connection, and fail the test if one was attempted.
+
+    The image lookups are best-effort and swallow errors, so a refused connection alone could
+    pass unnoticed -- a stub that stopped applying would only make the suite slower. Recording
+    the attempts and failing at teardown catches those too.
+    """
+    attempts = []
+    real_connect = socket.socket.connect
+    real_connect_ex = socket.socket.connect_ex
+
+    def check(address):
+        if isinstance(address, tuple) and address and address[0] not in LOCAL_HOSTS:
+            attempts.append(address)
+            raise RemoteNetworkAccessError(f"tried to connect to {address!r}")
+
+    def connect(self, address, *args, **kwargs):
+        check(address)
+        return real_connect(self, address, *args, **kwargs)
+
+    def connect_ex(self, address, *args, **kwargs):
+        check(address)
+        return real_connect_ex(self, address, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+    yield
+    assert not attempts, f"test reached the network instead of a stub: {attempts}"
 
 
 # Version the stubbed cloud lookups report for every backend, so tests that don't care about
@@ -45,6 +87,12 @@ def stub_image_lookups(monkeypatch):
     )
     monkeypatch.setattr(images, "version_exists_for_backend", lambda *args, **kwargs: True)
     monkeypatch.setattr(images, "_version_exists_in_region", lambda *args, **kwargs: True)
+
+
+@pytest.fixture(autouse=True)
+def stub_email(monkeypatch):
+    """Wait-mode runs end with a report email; building `Email()` reads SMTP credentials from KeyStore."""
+    monkeypatch.setattr(reporting, "Email", MagicMock())
 
 
 @pytest.fixture()
