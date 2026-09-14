@@ -32,6 +32,7 @@ from sdcm import ec2_client, cluster, wait
 from sdcm.cluster_cassandra import BaseCassandraCluster, CassandraNodeMixin
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
+from sdcm.provision.common.spot_outcome import record_spot_provision_outcome
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
 from sdcm.provision.network_configuration import (
     NetworkInterface,
@@ -48,7 +49,7 @@ from sdcm.remote import shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
-from sdcm.sct_events.system import SpotProvisionOutcomeEvent, SpotTerminationEvent, TestFrameworkEvent
+from sdcm.sct_events.system import SpotTerminationEvent, TestFrameworkEvent
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
 from sdcm.utils.common import list_instances_aws
 from sdcm.kernel_panic_checker import AWSKernelPanicChecker
@@ -342,25 +343,22 @@ class AWSCluster(cluster.BaseCluster):
         through it - mid-test `add_nodes` (nemesis grow/shrink) and whole families such as artifact tests that
         provision via `tester.get_cluster_aws()`. Without it a spot->on-demand downgrade there stays silent.
 
-        Unlike the upfront path this runs inside the tester, where the events device is already up, so a plain
-        publish reaches events.log and Argus through the normal pipeline - no handoff needed.
+        Unlike the upfront path this runs inside the tester, where the events device is already up, so the
+        shared recorder publishes straight through the normal pipeline - no Argus handoff needed.
 
         Never raises: this sits on the hot path for every legacy provision and every add_nodes, and a
         reporting failure must not break node creation.
         """
-        try:
-            azs = [az.strip() for az in (self.params.get("availability_zone") or "").split(",") if az.strip()]
-            region = self.region_names[dc_idx] if dc_idx < len(self.region_names) else ""
-            SpotProvisionOutcomeEvent(
-                requested=requested,
-                realized=realized,
-                region=region,
-                availability_zone=azs[az_idx] if az_idx < len(azs) else "",
-                instance_type=instance_type or self._ec2_instance_type,
-                count=count,
-            ).publish_or_dump(warn_not_ready=False)
-        except Exception as exc:  # noqa: BLE001
-            self.log.warning("Failed to publish spot provisioning outcome: %s", exc)
+        azs = [az.strip() for az in (self.params.get("availability_zone") or "").split(",") if az.strip()]
+        region = self.region_names[dc_idx] if dc_idx < len(self.region_names) else ""
+        record_spot_provision_outcome(
+            requested=requested,
+            realized=realized,
+            region=region,
+            availability_zone=azs[az_idx] if az_idx < len(azs) else "",
+            instance_type=instance_type or self._ec2_instance_type,
+            count=count,
+        )
 
     def fallback_provision_type(
         self,
