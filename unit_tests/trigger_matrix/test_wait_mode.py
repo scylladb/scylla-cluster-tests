@@ -15,8 +15,7 @@ import logging
 
 import yaml
 
-from sdcm.utils import trigger_matrix as tm
-from sdcm.utils.trigger_matrix import JobConfig, JenkinsTriggerError, load_matrix_config, trigger_matrix
+from sdcm.utils.trigger_matrix import JenkinsClient, JobConfig, JenkinsTriggerError, load_matrix_config, trigger_matrix
 
 
 def test_job_config_wait_defaults_false():
@@ -93,8 +92,8 @@ def test_fail_on_error_aborts_remaining(tmp_path, monkeypatch):
     def mock_trigger_with_queue(*args, **kwargs):
         raise JenkinsTriggerError("Build failed")
 
-    monkeypatch.setattr(tm, "trigger_jenkins_job_with_queue", mock_trigger_with_queue)
-    monkeypatch.setattr(tm, "trigger_jenkins_job", lambda *a, **kw: True)
+    monkeypatch.setattr(JenkinsClient, "trigger_with_queue", mock_trigger_with_queue)
+    monkeypatch.setattr(JenkinsClient, "trigger", lambda *a, **kw: True)
 
     results = trigger_matrix(
         matrix_file=str(path),
