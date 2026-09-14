@@ -18,7 +18,7 @@ import jenkins as jenkins_lib
 import pytest
 import yaml
 
-from sdcm.utils.trigger_matrix import JenkinsTriggerError, trigger_jenkins_job, trigger_matrix
+from sdcm.utils.trigger_matrix import JenkinsClient, JenkinsTriggerError, trigger_matrix
 
 
 def test_dry_run_produces_output(sample_matrix_yaml, caplog):
@@ -63,7 +63,7 @@ def test_dry_run_version_exclusion(sample_matrix_yaml):
     assert len(results["triggered"]) == 3
 
 
-@patch("sdcm.utils.trigger_matrix.trigger_jenkins_job")
+@patch.object(JenkinsClient, "trigger")
 def test_full_flow_with_mocked_api(mock_trigger, sample_matrix_yaml):
     mock_trigger.return_value = True
     results = trigger_matrix(
@@ -74,7 +74,7 @@ def test_full_flow_with_mocked_api(mock_trigger, sample_matrix_yaml):
     assert len(results["triggered"]) == 4
 
 
-@patch("sdcm.utils.trigger_matrix.trigger_jenkins_job")
+@patch.object(JenkinsClient, "trigger")
 def test_failed_jobs_reported(mock_trigger, sample_matrix_yaml):
     mock_trigger.return_value = False
     results = trigger_matrix(
@@ -91,7 +91,7 @@ def test_missing_jenkins_url_raises(monkeypatch):
     monkeypatch.delenv("JENKINS_API_TOKEN", raising=False)
     with patch("sdcm.keystore.KeyStore.get_json", side_effect=Exception("no keystore")):
         with pytest.raises(JenkinsTriggerError, match="Jenkins URL not set"):
-            trigger_jenkins_job("test-job", {}, dry_run=False)
+            JenkinsClient().trigger("test-job", {}, dry_run=False)
 
 
 def test_missing_jenkins_token_raises(monkeypatch):
@@ -99,10 +99,10 @@ def test_missing_jenkins_token_raises(monkeypatch):
     monkeypatch.delenv("JENKINS_API_TOKEN", raising=False)
     with patch("sdcm.keystore.KeyStore.get_json", side_effect=Exception("no keystore")):
         with pytest.raises(JenkinsTriggerError, match="Jenkins API token not set"):
-            trigger_jenkins_job("test-job", {}, dry_run=False)
+            JenkinsClient().trigger("test-job", {}, dry_run=False)
 
 
-@patch("sdcm.utils.trigger_matrix.time.sleep")
+@patch("sdcm.utils.trigger_matrix.jenkins_client.time.sleep")
 def test_jenkins_exception_returns_false(mock_sleep, monkeypatch):
     monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com")
     monkeypatch.setenv("JENKINS_API_TOKEN", "fake-token")
@@ -110,13 +110,14 @@ def test_jenkins_exception_returns_false(mock_sleep, monkeypatch):
     mock_client = MagicMock()
     mock_client.run_script.side_effect = jenkins_lib.JenkinsException("Not Found")
     with patch(
-        "sdcm.utils.trigger_matrix._get_jenkins_client", return_value=(mock_client, "https://jenkins.example.com")
+        "sdcm.utils.trigger_matrix.jenkins_client._get_jenkins_client",
+        return_value=(mock_client, "https://jenkins.example.com"),
     ):
-        result = trigger_jenkins_job("test-job", {}, dry_run=False)
+        result = JenkinsClient().trigger("test-job", {}, dry_run=False)
     assert result is False
 
 
-@patch("sdcm.utils.trigger_matrix.time.sleep")
+@patch("sdcm.utils.trigger_matrix.jenkins_client.time.sleep")
 def test_jenkins_exception_retries_then_fails(mock_sleep, monkeypatch):
     monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com")
     monkeypatch.setenv("JENKINS_API_TOKEN", "fake-token")
@@ -124,14 +125,15 @@ def test_jenkins_exception_retries_then_fails(mock_sleep, monkeypatch):
     mock_client = MagicMock()
     mock_client.run_script.side_effect = jenkins_lib.JenkinsException("Service Unavailable")
     with patch(
-        "sdcm.utils.trigger_matrix._get_jenkins_client", return_value=(mock_client, "https://jenkins.example.com")
+        "sdcm.utils.trigger_matrix.jenkins_client._get_jenkins_client",
+        return_value=(mock_client, "https://jenkins.example.com"),
     ):
-        result = trigger_jenkins_job("test-job", {}, dry_run=False)
+        result = JenkinsClient().trigger("test-job", {}, dry_run=False)
     assert result is False
     assert mock_client.run_script.call_count == 3
 
 
-@patch("sdcm.utils.trigger_matrix.time.sleep")
+@patch("sdcm.utils.trigger_matrix.jenkins_client.time.sleep")
 def test_jenkins_exception_then_success(mock_sleep, monkeypatch):
     monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com")
     monkeypatch.setenv("JENKINS_API_TOKEN", "fake-token")
@@ -142,14 +144,15 @@ def test_jenkins_exception_then_success(mock_sleep, monkeypatch):
         "TRIGGERED:https://jenkins.example.com/job/test-job/",
     ]
     with patch(
-        "sdcm.utils.trigger_matrix._get_jenkins_client", return_value=(mock_client, "https://jenkins.example.com")
+        "sdcm.utils.trigger_matrix.jenkins_client._get_jenkins_client",
+        return_value=(mock_client, "https://jenkins.example.com"),
     ):
-        result = trigger_jenkins_job("test-job", {}, dry_run=False)
+        result = JenkinsClient().trigger("test-job", {}, dry_run=False)
     assert result is True
     assert mock_client.run_script.call_count == 2
 
 
-@patch("sdcm.utils.trigger_matrix.time.sleep")
+@patch("sdcm.utils.trigger_matrix.jenkins_client.time.sleep")
 def test_trigger_script_error_returns_false_without_retry(mock_sleep, monkeypatch):
     monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com")
     monkeypatch.setenv("JENKINS_API_TOKEN", "fake-token")
@@ -157,9 +160,10 @@ def test_trigger_script_error_returns_false_without_retry(mock_sleep, monkeypatc
     mock_client = MagicMock()
     mock_client.run_script.return_value = "ERROR: Job not found: test-job"
     with patch(
-        "sdcm.utils.trigger_matrix._get_jenkins_client", return_value=(mock_client, "https://jenkins.example.com")
+        "sdcm.utils.trigger_matrix.jenkins_client._get_jenkins_client",
+        return_value=(mock_client, "https://jenkins.example.com"),
     ):
-        result = trigger_jenkins_job("test-job", {}, dry_run=False)
+        result = JenkinsClient().trigger("test-job", {}, dry_run=False)
     assert result is False
     assert mock_client.run_script.call_count == 1
 
