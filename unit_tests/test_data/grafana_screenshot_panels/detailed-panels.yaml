@@ -1,0 +1,12 @@
+# Config used by unit_tests/integration/test_grafana_panel_screenshot.py.
+# Titles are substring-matched against a real scylla-monitoring Grafana: the dashboard is
+# "Detailed", and the panels are "LSA total memory $func by [[by]]" (top level) and
+# "Tombstones found in SSTables $func by [[by]]" (inside the collapsed "Tombstones" row).
+# Grafana's renderer clamps anything below 1000x500, so both resolutions stay above it.
+grafana_screenshot_panels:
+  - dashboard_title: "Detailed"
+    panel_title: "LSA total memory"
+    resolution: [1200, 500]
+  - dashboard_title: "Detailed"
+    panel_title: "Tombstones found in SSTables"
+    resolution: [1600, 600]
