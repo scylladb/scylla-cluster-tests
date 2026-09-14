@@ -15,13 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sdcm.utils.trigger_matrix import (
-    TriggerMatrixError,
-    _arch_from_image_name,
-    resolve_architecture_from_ami,
-    resolve_image_architecture,
-    resolve_to_full_version,
-)
+from sdcm.utils.trigger_matrix import TriggerMatrixError, resolve_image_architecture, resolve_to_full_version
+from sdcm.utils.trigger_matrix.images import _arch_from_image_name, resolve_architecture_from_ami
 
 
 FULL_TAG = "2025.4.1-0.20250601.abc123def456-1"
@@ -53,7 +48,7 @@ def test_release_version_returned_as_is(release_version):
     assert result == release_version
 
 
-@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_ami")
+@patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami")
 def test_branch_qualifier_version_passes_as_is(mock_resolve):
     mock_resolve.return_value = FULL_TAG
 
@@ -63,7 +58,7 @@ def test_branch_qualifier_version_passes_as_is(mock_resolve):
     mock_resolve.assert_called_once_with("master:latest", "eu-west-1", "x86_64")
 
 
-@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_ami")
+@patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami")
 def test_simple_version_looked_up_as_release_branch(mock_resolve):
     mock_resolve.return_value = FULL_TAG
 
@@ -73,7 +68,7 @@ def test_simple_version_looked_up_as_release_branch(mock_resolve):
     mock_resolve.assert_called_once_with("branch-2025.4:latest", "eu-west-1", "x86_64")
 
 
-@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_ami")
+@patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami")
 def test_custom_region_forwarded(mock_resolve):
     mock_resolve.return_value = FULL_TAG
 
@@ -83,7 +78,7 @@ def test_custom_region_forwarded(mock_resolve):
     mock_resolve.assert_called_once_with("branch-2025.4:latest", "us-east-1", "x86_64")
 
 
-@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_gce_image")
+@patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_gce_image")
 def test_gce_backend_resolved_against_gce_images(mock_resolve):
     mock_resolve.return_value = FULL_TAG
 
@@ -93,7 +88,7 @@ def test_gce_backend_resolved_against_gce_images(mock_resolve):
     mock_resolve.assert_called_once_with("master:latest", "x86_64")
 
 
-@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_azure_image")
+@patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_azure_image")
 def test_azure_backend_defaults_to_eastus(mock_resolve):
     mock_resolve.return_value = FULL_TAG
 
@@ -103,7 +98,7 @@ def test_azure_backend_defaults_to_eastus(mock_resolve):
     mock_resolve.assert_called_once_with("master:latest", "eastus", "x86_64")
 
 
-@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_ami")
+@patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami")
 def test_arch_forwarded_to_lookup(mock_resolve):
     mock_resolve.return_value = FULL_TAG
 
@@ -113,7 +108,7 @@ def test_arch_forwarded_to_lookup(mock_resolve):
     mock_resolve.assert_called_once_with("master:latest", "eu-west-1", "aarch64")
 
 
-@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_gce_image")
+@patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_gce_image")
 def test_error_mentions_the_backend_that_failed(mock_resolve):
     mock_resolve.return_value = ""
 
@@ -121,7 +116,7 @@ def test_error_mentions_the_backend_that_failed(mock_resolve):
         resolve_to_full_version("master:latest", backend="gce")
 
 
-@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_ami")
+@patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami")
 def test_raises_when_version_cannot_be_resolved(mock_resolve):
     mock_resolve.return_value = ""
 
@@ -129,7 +124,7 @@ def test_raises_when_version_cannot_be_resolved(mock_resolve):
         resolve_to_full_version("2025.4")
 
 
-@patch("sdcm.utils.trigger_matrix._resolve_version_via_branched_ami")
+@patch("sdcm.utils.trigger_matrix.images._resolve_version_via_branched_ami")
 def test_branch_version_fallthrough_raises(mock_resolve):
     mock_resolve.return_value = ""
 
@@ -193,7 +188,7 @@ def test_arch_from_image_name(image_name, expected):
     assert _arch_from_image_name(image_name) == expected
 
 
-@patch("sdcm.utils.trigger_matrix.resolve_architecture_from_ami")
+@patch("sdcm.utils.trigger_matrix.images.resolve_architecture_from_ami")
 def test_resolve_image_architecture_ami(mock_resolve_ami):
     mock_resolve_ami.return_value = "aarch64"
 

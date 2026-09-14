@@ -14,8 +14,7 @@
 import pytest
 import yaml
 
-from sdcm.utils import trigger_matrix
-from sdcm.utils.trigger_matrix import JobConfig
+from sdcm.utils.trigger_matrix import JobConfig, images
 
 
 # Version the stubbed cloud lookups report for every backend, so tests that don't care about
@@ -27,23 +26,24 @@ STUB_RESOLVED_VERSION = "2025.4.1-0.20250601.abc123def456-1"
 def stub_image_lookups(monkeypatch):
     """Keep version resolution offline — no unit test may query a cloud image API.
 
+    Every cloud lookup lives in `sdcm.utils.trigger_matrix.images`, and other submodules call
+    them through the module object, so stubbing them here reaches every call site.
+
     Tests that exercise resolution patch these same names themselves; `unittest.mock.patch`
     inside a test takes precedence over this fixture.
     """
+    monkeypatch.setattr(images, "_resolve_version_via_branched_ami", lambda *args, **kwargs: STUB_RESOLVED_VERSION)
     monkeypatch.setattr(
-        trigger_matrix, "_resolve_version_via_branched_ami", lambda *args, **kwargs: STUB_RESOLVED_VERSION
+        images, "_resolve_version_via_branched_gce_image", lambda *args, **kwargs: STUB_RESOLVED_VERSION
     )
     monkeypatch.setattr(
-        trigger_matrix, "_resolve_version_via_branched_gce_image", lambda *args, **kwargs: STUB_RESOLVED_VERSION
+        images, "_resolve_version_via_branched_azure_image", lambda *args, **kwargs: STUB_RESOLVED_VERSION
     )
     monkeypatch.setattr(
-        trigger_matrix, "_resolve_version_via_branched_azure_image", lambda *args, **kwargs: STUB_RESOLVED_VERSION
+        images, "_resolve_version_via_branched_oci_image", lambda *args, **kwargs: STUB_RESOLVED_VERSION
     )
-    monkeypatch.setattr(
-        trigger_matrix, "_resolve_version_via_branched_oci_image", lambda *args, **kwargs: STUB_RESOLVED_VERSION
-    )
-    monkeypatch.setattr(trigger_matrix, "version_exists_for_backend", lambda *args, **kwargs: True)
-    monkeypatch.setattr(trigger_matrix, "_version_exists_in_region", lambda *args, **kwargs: True)
+    monkeypatch.setattr(images, "version_exists_for_backend", lambda *args, **kwargs: True)
+    monkeypatch.setattr(images, "_version_exists_in_region", lambda *args, **kwargs: True)
 
 
 @pytest.fixture()
