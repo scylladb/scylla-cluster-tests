@@ -1,7 +1,6 @@
 import traceback
 import logging
 import time
-import re
 import threading
 from dataclasses import dataclass
 from distutils.util import strtobool
@@ -10,7 +9,7 @@ from sdcm.rest.remote_curl_client import RemoteCurlClient
 
 
 def get_max_disk_size_metric(db_cluster):
-    node = db_cluster.nodes[0]
+    node = db_cluster.data_nodes[0]
     node.wait_native_transport()
     return (
         RemoteCurlClient(host="localhost:10000", endpoint="commitlog", node=node)
@@ -26,8 +25,9 @@ class CommitlogConfigParams:
         db_cluster,
     ):
         logger = logging.getLogger(self.__class__.__name__)
+        node = db_cluster.data_nodes[0]
         with db_cluster.cql_connection_patient(
-            node=db_cluster.data_nodes[0],
+            node=node,
             connect_timeout=300,
         ) as session:
             self.use_hard_size_limit = bool(
@@ -40,14 +40,16 @@ class CommitlogConfigParams:
             self.segment_size_in_mb = int(
                 session.execute("SELECT value FROM system.config WHERE name='commitlog_segment_size_in_mb'").one().value
             )
+            # the API sums 'max_disk_size' over all shards of the node, so it has to be divided
+            # back by the shard count to get the per-shard limit the metric is reported against.
             self.max_disk_size = int(
-                RemoteCurlClient(host="localhost:10000", endpoint="commitlog", node=db_cluster.nodes[0])
+                RemoteCurlClient(host="localhost:10000", endpoint="commitlog", node=node)
                 .run_remoter_curl(method="GET", path="metrics/max_disk_size", params=None)
                 .stdout
             )
-            self.smp = len(
-                re.findall("shard", db_cluster.data_nodes[0].remoter.run("sudo seastar-cpu-map.sh -n scylla").stdout)
-            )
+            self.smp = node.scylla_shards
+            if not self.smp:
+                raise ValueError(f"Failed to get number of Scylla shards on node {node.name}")
             self.total_space = int(self.max_disk_size / self.smp)
 
             logger.debug("CommitlogConfigParams")
