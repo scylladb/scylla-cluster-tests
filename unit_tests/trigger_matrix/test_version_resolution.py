@@ -16,15 +16,9 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from sdcm.utils.trigger_matrix import (
-    BackendTarget,
-    JobConfig,
-    TriggerMatrixError,
-    job_uses_scylla_version,
-    resolve_versions_for_targets,
-    target_for_job,
-    trigger_matrix,
-)
+from sdcm.utils.trigger_matrix import BackendTarget, JobConfig, TriggerMatrixError, trigger_matrix
+from sdcm.utils.trigger_matrix.resolution import job_uses_scylla_version, resolve_versions_for_targets, target_for_job
+
 from sdcm.utils.trigger_matrix.backends import split_regions
 from sdcm.utils.trigger_matrix.images import version_exists_for_backend
 from sdcm.utils.trigger_matrix.versions import (

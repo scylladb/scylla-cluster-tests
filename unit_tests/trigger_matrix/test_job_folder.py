@@ -13,7 +13,9 @@
 
 import pytest
 
-from sdcm.utils.trigger_matrix import TriggerMatrixError, determine_job_folder, resolve_job_path
+from sdcm.utils.trigger_matrix import TriggerMatrixError
+from sdcm.utils.trigger_matrix.parameters import resolve_job_path
+from sdcm.utils.trigger_matrix.versions import determine_job_folder
 
 
 @pytest.mark.parametrize(
