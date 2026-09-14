@@ -1,0 +1,22 @@
+# Shared, consistency-agnostic settings for the "latency during topology operations" jobs that drive
+# the 650GB dataset with cql-stress-cassandra-stress instead of cassandra-stress.
+#
+# Stacked on top of test-cases/performance/perf-regression-latency-650gb-with-nemesis.yaml, which it
+# overrides, and kept free of anything SC/EC- or architecture-specific so that all four jobs
+# (i4i/i8g x SC/EC) share exactly the same loader shape.
+#
+# Loader sizing: the workload fragments ask for 250 connections per shard per loader, so with
+# 4 loaders every db shard accepts 1000 connections in aggregate. Against a 4xlarge db node
+# (16 vCPU -> 15 shards) that is 3750 connections held open by each loader, far beyond what the
+# c5.2xlarge of the base test-case can drive - hence c7i.8xlarge, the same loader the SC gradual
+# throughput jobs use (test-cases/performance/perf-regression-predefined-throughput-steps.yaml).
+
+n_loaders: 4
+instance_type_loader: 'c7i.8xlarge'
+
+# cql-stress always runs in a docker container on the loader
+use_prepared_loaders: false
+round_robin: true
+
+user_prefix: 'perf-lat-nemesis-cqls'
+email_subject_postfix: 'latency during topology operations'
