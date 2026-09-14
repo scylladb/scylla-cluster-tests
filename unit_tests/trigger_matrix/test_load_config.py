@@ -14,7 +14,9 @@
 import pytest
 import yaml
 
-from sdcm.utils.trigger_matrix import MatrixConfig, MatrixValidationError, load_matrix_config
+from sdcm.utils.trigger_matrix.config import load_matrix_config
+from sdcm.utils.trigger_matrix.errors import MatrixValidationError
+from sdcm.utils.trigger_matrix.models import MatrixConfig
 
 
 def test_load_valid_yaml(sample_matrix_yaml):

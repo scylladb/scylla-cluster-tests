@@ -29,21 +29,6 @@ from sdcm.utils.trigger_matrix.models import JOB_LEVEL_KEYS, MATRIX_LEVEL_KEYS, 
 logger = logging.getLogger(__name__)
 
 
-def get_parameterized_cron(path: str | Path) -> str:
-    """Extract parameterizedCron spec from a matrix YAML file.
-
-    Returns a string suitable for the Jenkins parameterizedCron trigger,
-    with one line per cron_triggers entry in the format:
-        schedule % key1=val1\\nkey2=val2
-    """
-    config = load_matrix_config(path)
-    lines = []
-    for cron in config.cron_triggers:
-        param_parts = ";".join(f"{k}={v}" for k, v in cron.params.items())
-        lines.append(f"{cron.schedule} % {param_parts}" if param_parts else cron.schedule)
-    return "\n".join(lines)
-
-
 def _did_you_mean(key: str, candidates: frozenset[str]) -> str:
     """Return a ' — did you mean ...' hint when `key` looks like a typo of a known key."""
     close = difflib.get_close_matches(key, sorted(candidates), n=1, cutoff=0.8)
