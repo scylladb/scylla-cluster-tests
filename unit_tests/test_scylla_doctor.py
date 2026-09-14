@@ -726,3 +726,78 @@ def test_analyze_and_verify_results_still_fails_for_other_collectors(doctor):
         doctor.analyze_and_verify_results()
 
     assert "ScyllaLimitNOFILECollector" not in str(exc_info.value)
+
+
+# --- run_scylla_doctor_and_collect_results: log archive location tests ---
+
+
+def _ls_side_effects(cwd_archive: str = "", tmp_archive: str = ""):
+    """Build remoter.run results for the vitals lookup followed by the log archive lookup."""
+    vitals = MagicMock()
+    vitals.stdout = "test-node.local.vitals.json\n"
+    archives = MagicMock()
+    archives.stdout = "\n".join(path for path in (cwd_archive, tmp_archive) if path)
+    return [vitals, archives]
+
+
+@pytest.mark.parametrize(
+    "cwd_archive,tmp_archive,expected",
+    [
+        pytest.param(
+            "scylla_logs_20260914132345.tar.gz",
+            "",
+            "scylla_logs_20260914132345.tar.gz",
+            id="login_dir_up_to_1_13",
+        ),
+        pytest.param(
+            "",
+            "/tmp/scylla_logs_20260914132345.tar.gz",
+            "/tmp/scylla_logs_20260914132345.tar.gz",
+            id="temp_dir_since_1_14",
+        ),
+    ],
+)
+def test_collect_results_finds_log_archive_in_either_location(doctor, cwd_archive, tmp_archive, expected):
+    """scylla-doctor 1.14 moved the log archive to the temp dir; both locations must be accepted."""
+    doctor.node.parent_cluster.get_db_auth = MagicMock(return_value=None)
+    doctor.node.remoter.run.side_effect = _ls_side_effects(cwd_archive, tmp_archive)
+
+    with (
+        patch.object(ScyllaDoctor, "_ensure_lspci"),
+        patch.object(ScyllaDoctor, "_ensure_iptables"),
+        patch.object(ScyllaDoctor, "run"),
+    ):
+        doctor.run_scylla_doctor_and_collect_results()
+
+    assert doctor.scylla_logs_file == expected
+
+
+def test_collect_results_fails_when_log_archive_is_missing_everywhere(doctor):
+    """A genuinely missing log archive must still fail the test."""
+    doctor.node.parent_cluster.get_db_auth = MagicMock(return_value=None)
+    doctor.node.remoter.run.side_effect = _ls_side_effects()
+
+    with (
+        patch.object(ScyllaDoctor, "_ensure_lspci"),
+        patch.object(ScyllaDoctor, "_ensure_iptables"),
+        patch.object(ScyllaDoctor, "run"),
+        pytest.raises(AssertionError, match="Scylla log archive has not been created"),
+    ):
+        doctor.run_scylla_doctor_and_collect_results()
+
+
+def test_collect_results_skips_log_archive_lookup_on_docker(doctor):
+    """Scylla Docker does not collect cluster logs - field-engineering#2288."""
+    doctor.node.parent_cluster.cluster_backend = "docker"
+    doctor.node.parent_cluster.get_db_auth = MagicMock(return_value=None)
+    doctor.node.remoter.run.side_effect = _ls_side_effects()
+
+    with (
+        patch.object(ScyllaDoctor, "_ensure_lspci"),
+        patch.object(ScyllaDoctor, "_ensure_iptables"),
+        patch.object(ScyllaDoctor, "run"),
+    ):
+        doctor.run_scylla_doctor_and_collect_results()
+
+    assert doctor.scylla_logs_file == ""
+    assert doctor.node.remoter.run.call_count == 1
