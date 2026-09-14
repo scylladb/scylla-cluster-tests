@@ -55,6 +55,7 @@ from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
 from sdcm.provision.aws.spot_placement_score import get_scores as get_spot_placement_scores
+from sdcm.provision.gce.capacity_advisor import get_zone_advice
 from sdcm.provision.aws.spot_placement_score import rank_regions as rank_spot_regions
 from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
@@ -168,7 +169,7 @@ from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_co
 from sdcm.test_config import TestConfig
 from sdcm.utils.aws_utils import AwsArchType, get_arch_from_instance_type
 from sdcm.utils.aws_okta import try_auth_with_okta
-from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
+from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, GceZoneResolver, gce_public_addresses
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
 from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
@@ -2993,6 +2994,39 @@ def spot_placement_scores(types, count, regions, per_region):
         sys.exit(1)
     for item in scores:
         click.echo(f"{item.location}\t{item.score}")
+
+
+@cli.command("gce-capacity-advice", help="Show GCE Capacity Advisor obtainability for machine types by zone")
+@click.option("--types", required=True, help="Comma-separated machine types. Diversified requests score higher")
+@click.option("--count", default=6, type=int, help="Number of instances to score for")
+@click.option("--region", required=True, help="GCE region, e.g. us-east1")
+@click.option("--zones", default="", help="Comma-separated zone letters; defaults to every zone in the region")
+@click.option("--on-demand", is_flag=True, help="Score STANDARD instead of SPOT provisioning")
+def gce_capacity_advice(types, count, region, zones, on_demand):
+    """Print Capacity Advisor obtainability (0.0-1.0, higher is better), best-first.
+
+    Read-only: it calls `compute.beta advice.capacity` and launches nothing. The GCE counterpart of
+    `hydra spot-placement-scores`; note the scales differ - GCP returns a probability, AWS an integer 1-10.
+    """
+    add_file_logger()
+
+    machine_types = [item.strip() for item in types.split(",") if item.strip()]
+    letters = [item.strip() for item in zones.split(",") if item.strip()]
+    zone_names = [f"{region}-{letter}" for letter in letters] or GceZoneResolver().get_zones_for_region(region)
+
+    advice = get_zone_advice(
+        machine_types=machine_types,
+        size=count,
+        region=region,
+        zones=zone_names,
+        provisioning_model="STANDARD" if on_demand else "SPOT",
+    )
+    if not advice:
+        click.echo("No advice returned - the warning logged above says why.")
+        sys.exit(1)
+    for item in advice:
+        uptime = f"\t{item.estimated_uptime_seconds}s" if item.estimated_uptime_seconds else ""
+        click.echo(f"{item.zone}\t{item.obtainability:.2f}{uptime}")
 
 
 @cli.command("pick-spot-region", help="Print the AWS region with the best spot placement score (for CI use)")

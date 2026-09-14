@@ -5,7 +5,7 @@
 AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity
 reservations and dedicated hosts.
 
-**26 options.**
+**24 options.**
 
 
 <a id="ami_db_cassandra_user"></a>
@@ -252,17 +252,6 @@ Drop availability zones scoring below this value (1-10) from spot placement cand
 **type:** int
 
 
-<a id="spot_score_overrides_configured_az"></a>
-
-## **spot_score_overrides_configured_az** / SCT_SPOT_SCORE_OVERRIDES_CONFIGURED_AZ
-
-Let the spot placement score override an explicitly configured [`availability_zone`](general-and-provisioning.md#availability_zone) rather than only ordering the AZs backfilled around it. Off by default so existing AZ pins keep their meaning.
-
-**default:** False
-
-**type:** bool
-
-
 <a id="spot_score_region_relocation_margin"></a>
 
 ## **spot_score_region_relocation_margin** / SCT_SPOT_SCORE_REGION_RELOCATION_MARGIN
@@ -305,17 +294,3 @@ if true, create 'cluster' placement group for test case for low-latency network 
 **default:** False
 
 **type:** bool
-
-
-<a id="use_spot_placement_scores"></a>
-
-## **use_spot_placement_scores** / SCT_USE_SPOT_PLACEMENT_SCORES
-
-Order availability zones and region-fallback candidates by `ec2:GetSpotPlacementScores` instead of alphabetically, so spot requests go to the AZ/region most likely to have capacity. Scores only reorder candidates that already passed the instance-type-offering filter; they never veto one. Ignored for `instance_provision: on_demand`, and silently ignored when the IAM permission is missing. AWS-only.
-
-**default:** False
-
-**type:** bool
-
-**backend overrides:**
-- `True`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
