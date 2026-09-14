@@ -27,6 +27,6 @@ the importing module's namespace, so patching the module that merely defines it 
 call site untouched. The cloud lookups are the exception that proves the rule: submodules
 reach them as ``images.f(...)`` precisely so that one patch of
 ``sdcm.utils.trigger_matrix.images.f`` covers every caller -- which is what
-``unit_tests/trigger_matrix/conftest.py`` relies on to keep the suite offline.
-``unit_tests/trigger_matrix/test_patch_targets.py`` enforces both rules.
+``unit_tests/trigger_matrix/conftest.py`` relies on to keep the suite offline. That conftest
+also refuses outbound connections, so a patch that stops applying fails the test that leaked.
 """
