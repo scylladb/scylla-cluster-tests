@@ -278,7 +278,7 @@ Force running iotune on the DB nodes, regardless if image has predefined values
 
 ## **instance_provision_fallback_on_demand** / SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND
 
-[`instance_provision_fallback_on_demand`](#instance_provision_fallback_on_demand): create instance on_demand provision type if instance with selected [`instance_provision`](#instance_provision) type creation failed. Expected values: true|false (default - false
+Create the instance on_demand when the requested [`instance_provision`](#instance_provision) type could not be obtained, rather than failing the run. Expected values: true|false. Defaults to **true** on AWS and Azure and to false elsewhere - see SCT-1076, which proposes making it opt-in per test family, since it turns a spot shortage into a silent on-demand purchase.
 
 **default:** N/A
 
