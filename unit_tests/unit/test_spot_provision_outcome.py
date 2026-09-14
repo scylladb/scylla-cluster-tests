@@ -57,7 +57,7 @@ def _run(plan, instance_type="i4i.2xlarge"):
     """Run the plan and return the kwargs the outcome event was constructed with."""
     instance_params = MagicMock()
     instance_params.InstanceType = instance_type
-    with patch("sdcm.provision.common.provision_plan.SpotProvisionOutcomeEvent") as mock_event:
+    with patch("sdcm.provision.common.spot_outcome.SpotProvisionOutcomeEvent") as mock_event:
         instances = plan.provision_instances(
             instance_parameters=instance_params, node_count=6, node_tags=[{}] * 6, node_names=["n"] * 6
         )

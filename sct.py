@@ -469,6 +469,9 @@ def provision_resources(backend, test_name: str, config: str):
     except Exception as exc:
         LOGGER.error("Unable to provision resources - aborting the test...", exc_info=True)
         _report_provision_error_to_argus(exc, params=params, test_config=test_config, backend=backend)
+        # A failed run still recorded which provision type it was trying for, in which region and AZ. That is
+        # the outcome most worth having, so flush it here too rather than only on the success path.
+        _report_spot_provision_outcomes_to_argus(params=params, test_config=test_config)
         sys.exit(1)
 
     _report_spot_provision_outcomes_to_argus(params=params, test_config=test_config)
@@ -490,7 +493,11 @@ def _report_spot_provision_outcomes_to_argus(params, test_config) -> None:
     try:
         if test_config is None:
             test_config = get_test_config()
-        test_config.init_argus_client(params)
+        # On the failure path `_report_provision_error_to_argus` has already resolved the client, and
+        # `init_argus_client` is explicitly a resolve-once-per-process decision - calling it again would
+        # either re-connect to the same run for nothing or throw away a working connection.
+        if not test_config.argus_client_ready():
+            test_config.init_argus_client(params)
         client = test_config.argus_client()
     except Exception:  # noqa: BLE001
         LOGGER.warning("Unable to init Argus client for spot provisioning outcomes", exc_info=True)
