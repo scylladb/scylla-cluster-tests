@@ -59,7 +59,7 @@ Direct URL to a full edition Scylla Doctor tarball in S3. When set, bypasses the
 
 Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.10')<br>to hardcode the version, or leave empty to use the latest available version. For stability,<br>artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.
 
-**default:** 1.13
+**default:** 1.14
 
 **type:** str (appendable)
 
