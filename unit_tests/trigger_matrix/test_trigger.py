@@ -19,6 +19,7 @@ import pytest
 import yaml
 
 from sdcm.utils.trigger_matrix import JenkinsClient, JenkinsTriggerError, trigger_matrix
+from sdcm.utils.trigger_matrix.jenkins_client import _get_jenkins_client
 
 
 def test_dry_run_produces_output(sample_matrix_yaml, caplog):
@@ -251,3 +252,92 @@ def test_duplicate_job_names_deduplicated(tmp_path):
     triggered_names = [j.split("/")[-1] for j in results["triggered"]]
     assert "longevity-twcs-48h-test" in triggered_names
     assert "longevity-2tb-5days-test" in triggered_names
+
+
+def test_credentials_are_read_from_env(monkeypatch):
+    monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com/")
+    monkeypatch.setenv("JENKINS_USERNAME", "bob")
+    monkeypatch.setenv("JENKINS_API_TOKEN", "tok")
+
+    with patch("sdcm.utils.trigger_matrix.jenkins_client.jenkins_lib.Jenkins") as mock_jenkins:
+        client, url = _get_jenkins_client()
+
+    assert url == "https://jenkins.example.com"  # trailing slash stripped
+    mock_jenkins.assert_called_once_with("https://jenkins.example.com", username="bob", password="tok")
+    assert client is mock_jenkins.return_value
+
+
+def test_credentials_fall_back_to_keystore(monkeypatch):
+    """Local runs and SCT runners have no JENKINS_* env; jenkins.json in KeyStore is the fallback."""
+    monkeypatch.delenv("JENKINS_URL", raising=False)
+    monkeypatch.delenv("JENKINS_USERNAME", raising=False)
+    monkeypatch.delenv("JENKINS_API_TOKEN", raising=False)
+
+    keystore_json = {"url": "https://jenkins.from-keystore.com/", "username": "alice", "password": "secret"}
+    with (
+        patch("sdcm.keystore.KeyStore.get_json", return_value=keystore_json),
+        patch("sdcm.utils.trigger_matrix.jenkins_client.jenkins_lib.Jenkins") as mock_jenkins,
+    ):
+        _, url = _get_jenkins_client()
+
+    assert url == "https://jenkins.from-keystore.com"
+    mock_jenkins.assert_called_once_with("https://jenkins.from-keystore.com", username="alice", password="secret")
+
+
+def test_env_url_wins_over_keystore(monkeypatch):
+    """Env vars take priority, and each is filled in independently."""
+    monkeypatch.setenv("JENKINS_URL", "https://from-env.example.com")
+    monkeypatch.delenv("JENKINS_USERNAME", raising=False)
+    monkeypatch.delenv("JENKINS_API_TOKEN", raising=False)
+
+    keystore_json = {"url": "https://from-keystore.com", "username": "alice", "password": "secret"}
+    with (
+        patch("sdcm.keystore.KeyStore.get_json", return_value=keystore_json),
+        patch("sdcm.utils.trigger_matrix.jenkins_client.jenkins_lib.Jenkins") as mock_jenkins,
+    ):
+        _, url = _get_jenkins_client()
+
+    assert url == "https://from-env.example.com"
+    # the token still comes from the KeyStore
+    mock_jenkins.assert_called_once_with("https://from-env.example.com", username="alice", password="secret")
+
+
+@patch("sdcm.utils.trigger_matrix.jenkins_client.time.sleep")
+def test_trigger_with_queue_returns_the_queue_url(_mock_sleep):
+    mock_client = MagicMock()
+    mock_client.run_script.return_value = "TRIGGERED:https://jenkins.example.com/queue/item/77/"
+    with patch(
+        "sdcm.utils.trigger_matrix.jenkins_client._get_jenkins_client",
+        return_value=(mock_client, "https://jenkins.example.com"),
+    ):
+        queue_url = JenkinsClient().trigger_with_queue("test-job", {"a": "1"}, dry_run=False)
+    assert queue_url == "https://jenkins.example.com/queue/item/77/"
+
+
+@patch("sdcm.utils.trigger_matrix.jenkins_client.time.sleep")
+def test_unexpected_script_output_is_retried_then_reported_as_failure(_mock_sleep):
+    """Jenkins answering with neither TRIGGERED: nor ERROR: must not be read as success."""
+    mock_client = MagicMock()
+    mock_client.run_script.return_value = "some unrelated groovy output"
+    with patch(
+        "sdcm.utils.trigger_matrix.jenkins_client._get_jenkins_client",
+        return_value=(mock_client, "https://jenkins.example.com"),
+    ):
+        assert JenkinsClient().trigger("test-job", {}, dry_run=False) is False
+    assert mock_client.run_script.call_count == 3
+
+
+@patch("sdcm.utils.trigger_matrix.jenkins_client.time.sleep")
+def test_error_reply_fails_fast_without_retrying(_mock_sleep):
+    """An ERROR: reply is Jenkins' considered answer -- retrying it just triggers nothing, slower."""
+    mock_client = MagicMock()
+    mock_client.run_script.return_value = "ERROR: Job not found: nope"
+    with patch(
+        "sdcm.utils.trigger_matrix.jenkins_client._get_jenkins_client",
+        return_value=(mock_client, "https://jenkins.example.com"),
+    ):
+        assert JenkinsClient().trigger("nope", {}, dry_run=False) is False
+        mock_client.run_script.reset_mock()
+        with pytest.raises(JenkinsTriggerError, match="Job not found"):
+            JenkinsClient().trigger_with_queue("nope", {}, dry_run=False)
+    assert mock_client.run_script.call_count == 1
