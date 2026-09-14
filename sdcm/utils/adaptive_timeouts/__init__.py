@@ -33,6 +33,9 @@ def _get_operation_timeout_factor(params, operation: "Operations") -> float:
 TABLETS_SOFT_TIMEOUT = 1 * 60 * 60
 TABLETS_HARD_TIMEOUT = 3 * 60 * 60
 _STREAMING_OVERHEAD = 600  # add 10 minutes overhead for operations other than streaming
+# Extra headroom to account for reduced effective throughput under concurrent foreground load.
+# See: https://scylladb.atlassian.net/browse/SCT-681
+TIMEOUT_CONTENTION_FACTOR = 1.3
 
 
 def _get_decommission_timeout(
@@ -45,8 +48,8 @@ def _get_decommission_timeout(
         if tablets_enabled:
             node_info["tablets_enabled"] = True
             estimated = int(node_info_service.node_data_size_mb / node_info_service.expected_throughput)
-            soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
-            hard_timeout = estimated * 4 + _STREAMING_OVERHEAD
+            soft_timeout = int((estimated * 2 + _STREAMING_OVERHEAD) * TIMEOUT_CONTENTION_FACTOR)
+            hard_timeout = int((estimated * 4 + _STREAMING_OVERHEAD) * TIMEOUT_CONTENTION_FACTOR)
             return (soft_timeout, hard_timeout), node_info
         else:
             # For non-tablet cases, calculate based on data size
