@@ -38,14 +38,14 @@ from sdcm.provision.provisioner import ProvisionError, ZoneResourcesExhaustedErr
 LOGGER = logging.getLogger(__name__)
 
 
-def _is_capacity_error(exc: BaseException) -> bool:
+def is_capacity_error(exc: BaseException) -> bool:
     """True for GCE capacity/exhaustion errors that should trigger relocation to another region."""
     if isinstance(exc, ZoneResourcesExhaustedError):
         return True
     return isinstance(exc, ProvisionError) and is_zone_capacity_error(exc)
 
 
-def _current_datacenters(params) -> list[str]:
+def current_datacenters(params) -> list[str]:
     """Live list of configured GCE datacenters, reading the value ``switch_dc_region`` mutates.
 
     Uses ``gce_datacenter`` (updated in place on relocation) rather than the ``gce_datacenters``
@@ -107,7 +107,7 @@ def switch_dc_region(params, dc_index: int, region: str, az_letters: list[str]) 
     region *by the configured letters* and yields those same letters back, so ``az_letters`` is always
     the AZ value already in effect. It is accepted for signature parity with the shared loop.
     """
-    datacenters = _current_datacenters(params)
+    datacenters = current_datacenters(params)
     datacenters[dc_index] = region
     joined = " ".join(datacenters)
     os.environ["SCT_GCE_DATACENTER"] = joined
@@ -121,7 +121,7 @@ def _failed_dc_index(params, exc: BaseException) -> int | None:
     configured region is a substring of the error message. Returns None when it cannot be attributed.
     """
     message = str(exc)
-    for index, region in enumerate(_current_datacenters(params)):
+    for index, region in enumerate(current_datacenters(params)):
         if region and region in message:
             return index
     return None
@@ -194,7 +194,7 @@ def provision_with_az_fallback(
             try:
                 provision_once()
             except Exception as exc:  # noqa: BLE001
-                if not _is_capacity_error(exc):
+                if not is_capacity_error(exc):
                     params["availability_zone"] = original_az
                     raise
                 return exc
@@ -210,13 +210,13 @@ def provision_with_az_fallback(
             # destroys in-memory clusters, so it runs once - not once per configured region.
             if partial_cleanup is not None:
                 partial_cleanup()
-            for region in dict.fromkeys(_current_datacenters(params)):
+            for region in dict.fromkeys(current_datacenters(params)):
                 cleanup_region(test_id, region, network_name=network_name, partial_cleanup=None)
             LOGGER.warning(
                 "Zone(s) '%s' exhausted; retrying the cluster in zone(s) '%s' of region(s) %s",
                 params.get("availability_zone"),
                 ",".join(az_letters),
-                _current_datacenters(params),
+                current_datacenters(params),
             )
             params["availability_zone"] = ",".join(az_letters)
             last_error = attempt()
@@ -277,7 +277,7 @@ def provision_with_region_fallback(
         cleanup_region=lambda region: cleanup_region(
             test_id, region, network_name=network_name, partial_cleanup=partial_cleanup
         ),
-        is_capacity_error=_is_capacity_error,
+        is_capacity_error=is_capacity_error,
         error_factory=error_factory,
     )
 
@@ -309,7 +309,7 @@ def provision_with_dc_fallback(
         # Destroy in-memory clusters (legacy path) once, then sweep every currently-configured region.
         if partial_cleanup is not None:
             partial_cleanup()
-        for region in dict.fromkeys(_current_datacenters(params)):
+        for region in dict.fromkeys(current_datacenters(params)):
             cleanup_region(test_id, region, network_name=network_name, partial_cleanup=None)
 
     _provision_with_dc_fallback(
@@ -319,7 +319,7 @@ def provision_with_dc_fallback(
         switch_dc_region=lambda index, region, az_letters: switch_dc_region(params, index, region, az_letters),
         restore=restore,
         cleanup=cleanup,
-        is_capacity_error=_is_capacity_error,
+        is_capacity_error=is_capacity_error,
         error_factory=error_factory,
     )
 
