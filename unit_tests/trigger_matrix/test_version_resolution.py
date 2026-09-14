@@ -155,6 +155,7 @@ def test_per_backend_drops_a_backend_missing_an_explicit_build():
             strategy="per-backend",
         )
 
+    mock_exists.assert_any_call(AWS_BUILD, "aws", "eu-west-1", "x86_64")
     mock_exists.assert_any_call(AWS_BUILD, "gce", "", "x86_64")
     assert versions == {AWS_TARGET: AWS_BUILD}
     assert list(unavailable) == [GCE_TARGET]
