@@ -27,7 +27,7 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import jenkins as jenkins_lib
 import requests
@@ -38,6 +38,26 @@ from sdcm.utils.trigger_matrix.groovy import _build_trigger_groovy
 from sdcm.utils.trigger_matrix.models import BuildResult, _PendingWaitJob
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ActiveBuild:
+    """Internal: a build that has left the queue and is being polled to completion.
+
+    The wait-phase counterpart of `_PendingWaitJob`, which covers the queue phase.
+
+    `start_time` is passed in by the caller rather than defaulted through
+    `default_factory=time.time`, which would resolve `time.time` once when this class body runs
+    at import -- the tests fake the clock by swapping this module's `time`.
+    """
+
+    job_name: str
+    build_number: int
+    job_url_path: str
+    collect_results: list[str]
+    timeout: int
+    fail_on_error: bool
+    start_time: float
 
 
 def _get_jenkins_client() -> tuple[jenkins_lib.Jenkins, str]:
@@ -198,16 +218,6 @@ class JenkinsClient:
         client, jenkins_url = self._connect()
 
         # Phase 1: Wait for all builds to leave the queue and get build numbers
-        @dataclass
-        class _ActiveBuild:
-            job_name: str
-            build_number: int
-            job_url_path: str
-            collect_results: list[str]
-            timeout: int
-            fail_on_error: bool
-            start_time: float = field(default_factory=time.time)
-
         active_builds: list[_ActiveBuild] = []
         results: list[BuildResult] = []
 
@@ -223,6 +233,7 @@ class JenkinsClient:
                         collect_results=pending.collect_results,
                         timeout=pending.timeout,
                         fail_on_error=pending.fail_on_error,
+                        start_time=time.time(),
                     )
                 )
             except JenkinsTriggerError as exc:
@@ -313,6 +324,11 @@ class JenkinsClient:
         raise JenkinsTriggerError(f"Build did not start within {timeout}s")
 
     def _collect_artifacts(self, job_url_path: str, build_number: int, patterns: list[str]) -> list[str]:
+        """Return URLs for the build's artifacts whose *filename* matches one of `patterns`.
+
+        Patterns are matched against the filename alone, never the relative path: "*.xml" finds
+        `reports/results.xml`, while "reports/*.xml" matches nothing.
+        """
         if not patterns:
             return []
 

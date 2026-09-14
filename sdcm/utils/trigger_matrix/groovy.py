@@ -16,8 +16,10 @@
 Builds are scheduled through /scriptText rather than the REST build API, which omits the
 'Location' header and makes python-jenkins retry -- triggering the same job several times.
 
-The script text is an f-string with literal Groovy braces doubled. Nothing here is covered by
-a unit test, so treat it as it is: change it only deliberately."""
+The script text is an f-string with literal Groovy braces doubled, and job names and parameter
+values are interpolated into single-quoted Groovy literals -- see `_escape_groovy_string`.
+Jenkins is the only thing that parses the result, so `unit_tests/trigger_matrix/test_groovy.py`
+covers the escaping, both cause branches, both output branches and brace balance."""
 
 import logging
 import os
