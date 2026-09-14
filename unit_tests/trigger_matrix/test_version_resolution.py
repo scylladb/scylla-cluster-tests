@@ -17,7 +17,6 @@ import pytest
 import yaml
 
 from sdcm.utils.trigger_matrix import (
-    DEFAULT_ARCH,
     BackendTarget,
     JobConfig,
     TriggerMatrixError,
@@ -26,6 +25,7 @@ from sdcm.utils.trigger_matrix import (
     target_for_job,
     trigger_matrix,
 )
+from sdcm.utils.trigger_matrix.constants import DEFAULT_ARCH
 from sdcm.utils.trigger_matrix.backends import split_regions
 from sdcm.utils.trigger_matrix.images import version_exists_for_backend
 from sdcm.utils.trigger_matrix.versions import (

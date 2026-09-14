@@ -15,14 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from sdcm.utils.trigger_matrix import (
-    JobConfig,
-    _branch_directory_id,
-    _extract_branch_from_version,
-    build_job_parameters,
-    filter_jobs,
-    load_matrix_config,
-)
+from sdcm.utils.trigger_matrix import JobConfig, build_job_parameters, filter_jobs, load_matrix_config
+from sdcm.utils.trigger_matrix.versions import _branch_directory_id, _extract_branch_from_version
 
 ROLLING_UPGRADE_YAML = Path(__file__).parent.parent.parent / "configurations" / "triggers" / "rolling-upgrade.yaml"
 
