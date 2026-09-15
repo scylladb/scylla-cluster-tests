@@ -107,3 +107,7 @@ class TestFailedByEvents(Exception):
     """
     Exception raised when a test fails due to events.
     """
+
+
+class FirewallNotDisabled(Exception):
+    """Raise when a node still has firewall rules which can block the traffic to it"""

@@ -224,6 +224,7 @@ from sdcm.paths import (
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
 
 from sdcm.exceptions import (
+    FirewallNotDisabled,
     KillNemesis,
     NodeNotReady,
     SstablesNotFound,
@@ -247,6 +248,23 @@ MAX_TIME_WAIT_FOR_ALL_NODES_UP: int = MAX_TIME_WAIT_FOR_NEW_NODE_UP + HOUR_IN_SE
 MAX_TIME_WAIT_FOR_DECOMMISSION: int = HOUR_IN_SEC * 6
 # cooldown for this build after backtrace service failure
 BACKTRACE_SERVICE_COOLDOWN_SEC: int = 15 * MINUTE_IN_SEC
+
+# How long `wait_db_up()` polls before reporting why the CQL port stays unreachable. Scylla
+# reaches the CQL port within a couple of minutes of a restart even with a long commitlog
+# replay, so anything still unreachable at 5 minutes is worth looking at - while the wait
+# itself keeps its own, much longer, timeout.
+DB_UP_DIAGNOSTICS_DELAY: int = 5 * MINUTE_IN_SEC
+# Time budget for that report. It is collected inside the poll callback, which `wait_for`
+# cannot interrupt, so the whole collection has to fit in what is left of the wait.
+DB_UP_DIAGNOSTICS_BUDGET: int = 90
+
+# Dumps of the live netfilter rules, in the order they are collected. iptables-save covers the
+# nft backend the iptables wrappers use as well, `nft list ruleset` only adds the rules written
+# natively, which the wrappers do not show.
+FIREWALL_RULE_DUMP_COMMANDS = ("iptables-save", "ip6tables-save", "nft list ruleset")
+
+# how `ss` prints a listener bound to every address of the node, per address family
+CQL_WILDCARD_ADDRESSES = frozenset({"0.0.0.0", "*", "::"})
 
 LOGGER = logging.getLogger(__name__)
 
@@ -2027,14 +2045,117 @@ class BaseNode(AutoSshContainerMixin):
             text = "%s: Waiting for JMX service to be down" % self.name
         wait.wait_for(func=lambda: not self.jmx_up(), step=60, text=text, timeout=timeout, throw_exc=True)
 
-    def wait_db_up(self, verbose=True, timeout=3600):
+    def wait_db_up(self, verbose=True, timeout=3600, diagnose_after=DB_UP_DIAGNOSTICS_DELAY):
+        """Wait until the node answers on its CQL port, reporting a node which never will.
+
+        Args:
+            verbose: log a line on every poll saying which node is being waited for.
+            timeout: seconds to keep polling before raising. A falsey timeout polls forever.
+            diagnose_after: seconds of failed polling after which to report, once, why the CQL
+                port is unreachable (see `log_cql_unreachable_diagnostics()`). The report is
+                skipped when too little of the timeout is left to collect it.
+
+        Raises:
+            WaitForTimeoutError: the port did not open within `timeout`.
+            ExitByEventError: the wait was stopped through `stop_wait_db_up_event`.
+        """
         text = None
         if verbose:
             text = "%s: Waiting for DB services to be up" % self.name
 
+        started_at = time.perf_counter()
+        diagnostics_reported = False
+
+        def db_up_with_diagnostics():
+            nonlocal diagnostics_reported
+            if self.db_up():
+                return True
+            elapsed = time.perf_counter() - started_at
+            # report once, a node which is up but unreachable never recovers on its own, and
+            # only while the collection still fits in the wait - it runs in this very callback,
+            # which `wait_for` cannot interrupt to honour the timeout
+            # a falsey timeout waits forever, so the whole budget is always left
+            budget_left = not timeout or timeout - elapsed > DB_UP_DIAGNOSTICS_BUDGET
+            if not diagnostics_reported and elapsed > diagnose_after and budget_left:
+                diagnostics_reported = True
+                self.log_cql_unreachable_diagnostics()
+            return False
+
         wait.wait_for(
-            func=self.db_up, step=5, text=text, timeout=timeout, throw_exc=True, stop_event=self.stop_wait_db_up_event
+            func=db_up_with_diagnostics,
+            step=5,
+            text=text,
+            timeout=timeout,
+            throw_exc=True,
+            stop_event=self.stop_wait_db_up_event,
         )
+
+    def log_cql_unreachable_diagnostics(self) -> None:
+        """Report why the CQL port stays unreachable while SCT is waiting for it.
+
+        A node which serves CQL locally but is unreachable from SCT looks exactly like a node
+        which never started: both keep `db_up()` returning False until the timeout expires,
+        an hour later (SCT-479). Tell the two apart while the node is still there to look at.
+
+        Best-effort by design: this runs inside the `wait_db_up()` poll, so a node that cannot
+        be reached over SSH either just leaves the wait to time out as it did before.
+        """
+        command_timeout = DB_UP_DIAGNOSTICS_BUDGET // 3
+        try:
+            listening = self.remoter.run("ss -ltn", ignore_status=True, verbose=False, timeout=command_timeout)
+            bound_to = self.cql_listening_addresses(listening.stdout) if listening.ok else set()
+            if not bound_to:
+                self.log.debug("Node %s does not listen on the CQL port yet", self.name)
+                return
+            # a listener on an address SCT does not connect to is a local bind problem, and
+            # blaming the network for it sends whoever reads this down the wrong path
+            if not bound_to & (CQL_WILDCARD_ADDRESSES | {self.cql_address}):
+                message = (
+                    f"Node {self.name} listens on the CQL port at {', '.join(sorted(bound_to))}, and not on "
+                    f"{self.cql_address} which SCT connects to - Scylla bound CQL to the wrong address."
+                )
+                self.log.warning(message)
+                InfoEvent(message=message, severity=Severity.WARNING).publish()
+                return
+            message = (
+                f"Node {self.name} listens on the CQL port locally, but {self.cql_address}:{self.CQL_PORT} "
+                f"is not reachable from SCT. The node itself is up, so the traffic to it is being dropped "
+                f"on the way - its netfilter rules and routing state are in the node log."
+            )
+            self.log.warning(message)
+            self.log.warning("netfilter rules on %s:\n%s", self.name, self.get_firewall_rules())
+            network_state = self.remoter.run(
+                "ip -d addr; ip route; ip -6 route; ip rule; ip -6 rule; ip neigh; ip -6 neigh",
+                ignore_status=True,
+                verbose=False,
+                timeout=command_timeout,
+            )
+            self.log.warning("network state of %s:\n%s", self.name, network_state.stdout)
+            # WARNING, not ERROR: the wait may still succeed, and the failure of the operation
+            # this is diagnosing gets its own event from whoever is waiting for the node
+            InfoEvent(message=message, severity=Severity.WARNING).publish()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to collect the diagnostics of the unreachable node %s: %s", self.name, exc)
+
+    def cql_listening_addresses(self, ss_output: str) -> set[str]:
+        """The addresses the CQL port is bound to, read from the output of `ss -ltn`.
+
+        Args:
+            ss_output: the listening sockets of the node, as `ss -ltn` prints them.
+
+        Returns:
+            The local addresses of the listeners on the CQL port, with the wildcards
+            (`0.0.0.0`, `*`, `::`) kept as they are. Empty when nothing listens on it.
+        """
+        addresses = set()
+        for line in ss_output.splitlines():
+            fields = line.split()
+            if len(fields) < 4:
+                continue
+            address, _, port = fields[3].rpartition(":")
+            if port == str(self.CQL_PORT):
+                addresses.add(address.strip("[]"))
+        return addresses
 
     def is_manager_agent_up(self, port=None):
         port = port if port else self.MANAGER_AGENT_PORT
@@ -4156,20 +4277,140 @@ class BaseNode(AutoSshContainerMixin):
             self.log.info("Waiting for scylla-manager-agent to be ready")
             self.wait_manager_agent_up(verbose=verbose, timeout=180)
 
-    def disable_firewall(self) -> None:
-        if self.distro.is_rhel_like:
-            self.remoter.sudo("systemctl stop iptables", ignore_status=True)
-            self.remoter.sudo("systemctl disable iptables", ignore_status=True)
-            self.remoter.sudo("systemctl stop firewalld", ignore_status=True)
-            self.remoter.sudo("systemctl disable firewalld", ignore_status=True)
+    def disable_firewall(self, verify: bool = True) -> None:
+        """Disable the guest firewall, in a way which survives a reboot.
 
-        # For Ubuntu/Debian, specially on OCI where iptables rules might be persistent
+        The cloud images used on OCI ship a restrictive ruleset (only port 22 is accepted,
+        everything else is REJECTed with icmp-host-prohibited) which is re-applied on every
+        boot. Flushing the live tables is therefore not enough: after a reboot the node
+        serves CQL locally but looks unreachable to its peers, to the loaders and to
+        `wait_db_up()`, while SSH keeps working. So the boot-time restore has to go as well.
+
+        The nodes get this done at first boot from cloud-init already
+        (`DisableFirewallUserDataObject`); this runs at node setup for the images and the
+        backends that path does not cover, and verifies the outcome either way.
+
+        Args:
+            verify: raise `FirewallNotDisabled` when the node still rejects inbound traffic
+                after this ran. Pass False only where a caller handles the state itself.
+        """
+        if self.distro.is_rhel_like:
+            for service in ("iptables", "ip6tables", "firewalld", "nftables"):
+                self.remoter.sudo(f"systemctl disable --now {service}", ignore_status=True)
+
         elif self.distro.is_debian_like:
-            self.remoter.sudo("iptables -F", ignore_status=True)
-            self.remoter.sudo("iptables -P INPUT ACCEPT", ignore_status=True)
-            self.remoter.sudo("iptables -P FORWARD ACCEPT", ignore_status=True)
-            self.remoter.sudo("iptables -P OUTPUT ACCEPT", ignore_status=True)
+            self.remoter.sudo("ufw disable", ignore_status=True)
+            for service in ("ufw", "netfilter-persistent", "nftables"):
+                self.remoter.sudo(f"systemctl disable --now {service}", ignore_status=True)
+            # netfilter-persistent's `flush` only clears the live tables, the saved rules stay
+            # on disk and come back on the next boot, so drop them too
             self.remoter.sudo("netfilter-persistent flush", ignore_status=True)
+            self.remoter.sudo("rm -f /etc/iptables/rules.v4 /etc/iptables/rules.v6", ignore_status=True)
+
+        # IPv6 rules carry the same REJECT as the IPv4 ones, and are just as persistent
+        for iptables in ("iptables", "ip6tables"):
+            self.remoter.sudo(f"{iptables} -F", ignore_status=True)
+            for chain in ("INPUT", "FORWARD", "OUTPUT"):
+                self.remoter.sudo(f"{iptables} -P {chain} ACCEPT", ignore_status=True)
+
+        if verify:
+            self.verify_firewall_disabled()
+
+    def get_firewall_rules(self, strict: bool = False) -> str:
+        """Return the live netfilter rules of the node: IPv4, IPv6 and native nftables.
+
+        Every tool is queried on its own, and one which is not installed contributes nothing -
+        a node with no ip6tables has no IPv6 rules to block anything with.
+
+        Args:
+            strict: raise `FirewallNotDisabled` when an installed tool fails to dump its rules,
+                instead of reporting the failure as part of the output. A failed dump must not
+                read as "no rules" to a caller which is verifying that nothing blocks traffic.
+
+        Returns:
+            The concatenated dumps, each under a `# <command>` header.
+
+        Raises:
+            FirewallNotDisabled: in strict mode, when the rules cannot be read.
+        """
+        dumps = []
+        for command in FIREWALL_RULE_DUMP_COMMANDS:
+            tool = command.split()[0]
+            # one round trip per tool: a missing tool exits 0 with no output, a broken one fails
+            result = self.remoter.sudo(
+                f"bash -c 'command -v {tool} >/dev/null || exit 0; {command}'",
+                ignore_status=True,
+                verbose=False,
+                timeout=60,
+            )
+            if not result.ok:
+                if strict:
+                    raise FirewallNotDisabled(
+                        f"Node {self.name}: cannot tell whether the firewall is disabled, "
+                        f"`{command}` failed: {result.stderr.strip() or result.return_code}"
+                    )
+                dumps.append(f"# {command} FAILED: {result.stderr.strip() or result.return_code}")
+                continue
+            if result.stdout.strip():
+                dumps.append(f"# {command}\n{result.stdout}")
+        return "\n".join(dumps)
+
+    def verify_firewall_disabled(self) -> None:
+        """Fail loudly when the node still rejects the traffic coming to it.
+
+        `disable_firewall()` ignores the status of every command it runs, since which of them
+        applies depends on the distro and on the image. A firewall which silently stayed up is
+        exactly the failure this check exists to catch, so the result has to be verified.
+
+        Only what blocks inbound traffic counts - see `find_blocking_firewall_rules()`.
+
+        Raises:
+            FirewallNotDisabled: when a blocking rule is found, or the rules cannot be read.
+        """
+        blocking = self.find_blocking_firewall_rules(self.get_firewall_rules(strict=True))
+        if blocking:
+            raise FirewallNotDisabled(
+                f"Node {self.name} still has firewall rules which may block the traffic to it:\n" + "\n".join(blocking)
+            )
+
+    def find_blocking_firewall_rules(self, rules: str) -> list[str]:
+        """The rules of a netfilter dump which can block the traffic coming to the node.
+
+        Only the inbound paths count: the INPUT chain of either iptables family, and the
+        nftables chains hooked into input - both their default policy and the rules which
+        drop or reject a packet under a policy which accepts it. FORWARD is left alone, it
+        carries the DROP rules docker installs for its own bridges on every loader.
+
+        After `disable_firewall()` has run an input chain has no such rule left, so anything
+        found here is a ruleset which came back, or was never taken down.
+
+        Args:
+            rules: the dumps `get_firewall_rules()` returns, headers included.
+
+        Returns:
+            The offending rules, as they appear in the dump. Empty when nothing blocks.
+        """
+        blocking = []
+        depth = 0
+        input_chain_depth = None
+        for dumped in rules.splitlines():
+            rule = dumped.strip()
+            if rule.startswith("#"):
+                # the header of the next dump: nothing of the previous one is still open
+                depth, input_chain_depth = 0, None
+                continue
+            if re.match(r"-A INPUT .*-j\s+(REJECT|DROP)", rule) or re.match(r":INPUT\s+(DROP|REJECT)", rule):
+                blocking.append(rule)
+            elif input_chain_depth == depth and re.search(r"\b(drop|reject)\b", rule):
+                blocking.append(rule)
+            elif "hook input" in rule:
+                input_chain_depth = depth
+                if re.search(r"policy\s+(drop|reject)", rule):
+                    blocking.append(rule)
+            depth += rule.count("{") - rule.count("}")
+            if input_chain_depth is not None and depth < input_chain_depth:
+                input_chain_depth = None
+        return blocking
 
     def upgrade_ssh_packages(self) -> None:
         """
