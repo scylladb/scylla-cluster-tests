@@ -5,7 +5,7 @@
 Cluster topology, region/AZ placement, instance provisioning, credentials and test-level
 plumbing. Options here apply to every backend and every test type.
 
-**71 options.**
+**74 options.**
 
 
 <a id="adaptive_timeout_multipliers"></a>
@@ -264,11 +264,11 @@ Force running iotune on the DB nodes, regardless if image has predefined values
 
 ## **instance_provision** / SCT_INSTANCE_PROVISION
 
-[`instance_provision`](#instance_provision): spot|on_demand|spot_fleet
+[`instance_provision`](#instance_provision): spot|on_demand|spot_fleet|auto. 'auto' defers the choice to [`spot_max_test_duration`](#spot_max_test_duration): spot at or below the threshold, on_demand above it. Because every Jenkins pipeline gives the `provision_type` job parameter a concrete default, 'auto' is the opt-in a job needs for duration-based selection to apply at all. Resolved to a concrete value at config load, so nothing downstream ever sees 'auto'.
 
 **default:** spot
 
-**type:** Literal['spot', 'on_demand', 'spot_fleet', 'spot_low_price']
+**type:** Literal['spot', 'on_demand', 'spot_fleet', 'spot_low_price', 'auto']
 
 **backend overrides:**
 - `on_demand`: oci, k8s-gke, k8s-eks
@@ -735,6 +735,28 @@ Skip selected stages of a test scenario, as a mapping of stage name to true/fals
 **type:** dict | YAML/JSON string → dict
 
 
+<a id="spot_score_overrides_configured_az"></a>
+
+## **spot_score_overrides_configured_az** / SCT_SPOT_SCORE_OVERRIDES_CONFIGURED_AZ
+
+Let the spot capacity score override an explicitly configured [`availability_zone`](#availability_zone) rather than only ordering the AZs/zones backfilled around it. Off by default so existing AZ pins keep their meaning. Supported backends: AWS, GCE.
+
+**default:** False
+
+**type:** bool
+
+
+<a id="spot_max_test_duration"></a>
+
+## **spot_max_test_duration** / SCT_SPOT_MAX_TEST_DURATION
+
+Duration (min) up to which [`instance_provision`](#instance_provision) defaults to spot; longer tests default to on_demand, since interruption exposure grows with runtime. Only applies when [`instance_provision`](#instance_provision) was not set explicitly by a test case, env var or CLI - an explicit value always wins.
+
+**default:** 720
+
+**type:** int
+
+
 <a id="ssh_transport"></a>
 
 ## **ssh_transport** / SCT_SSH_TRANSPORT
@@ -788,6 +810,20 @@ class.method used to run the test. Filled automatically with run-test sct comman
 **default:** N/A
 
 **type:** str
+
+
+<a id="use_spot_placement_scores"></a>
+
+## **use_spot_placement_scores** / SCT_USE_SPOT_PLACEMENT_SCORES
+
+Order availability zones and region-fallback candidates by the backend's spot capacity signal instead of alphabetically, so spot requests go to the AZ/zone most likely to have capacity: `ec2:GetSpotPlacementScores` on AWS, Capacity Advisor obtainability (`advice.capacity`) on GCE. Scores only reorder candidates that already passed the instance/machine-type offering filter; they never veto one. Ignored for `instance_provision: on_demand`, and silently ignored when the permission is missing. Supported backends: AWS, GCE.
+
+**default:** False
+
+**type:** bool
+
+**backend overrides:**
+- `True`: aws, gce, aws-siren, gce-siren, k8s-local-kind-aws, k8s-gke, k8s-eks
 
 
 <a id="use_dns_names"></a>

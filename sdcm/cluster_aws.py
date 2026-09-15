@@ -32,6 +32,7 @@ from sdcm import ec2_client, cluster, wait
 from sdcm.cluster_cassandra import BaseCassandraCluster, CassandraNodeMixin
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
+from sdcm.provision.common.spot_outcome import record_spot_provision_outcome
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
 from sdcm.provision.network_configuration import (
     NetworkInterface,
@@ -293,6 +294,15 @@ class AWSCluster(cluster.BaseCluster):
                 is_zero_node=is_zero_node,
                 ami_id=ami_id,
             )
+            # no fallback ladder on this branch, so requested == realized
+            self._publish_provision_outcome(
+                requested=INSTANCE_PROVISION_ON_DEMAND,
+                realized=INSTANCE_PROVISION_ON_DEMAND,
+                dc_idx=dc_idx,
+                az_idx=az_idx,
+                instance_type=instance_type,
+                count=count,
+            )
         elif self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
             instances = self._create_spot_instances(
                 count,
@@ -303,6 +313,15 @@ class AWSCluster(cluster.BaseCluster):
                 is_zero_node=is_zero_node,
                 ami_id=ami_id,
             )
+            # straight to spot with no ladder; a failure raises out of here rather than downgrading
+            self._publish_provision_outcome(
+                requested=INSTANCE_PROVISION_SPOT_FLEET,
+                realized=INSTANCE_PROVISION_SPOT_FLEET,
+                dc_idx=dc_idx,
+                az_idx=az_idx,
+                instance_type=instance_type,
+                count=count,
+            )
         else:
             instances = self.fallback_provision_type(
                 count,
@@ -312,12 +331,45 @@ class AWSCluster(cluster.BaseCluster):
                 instance_type=instance_type,
                 is_zero_node=is_zero_node,
                 ami_id=ami_id,
+                az_idx=az_idx,
             )
 
         return instances
 
+    def _publish_provision_outcome(self, requested, realized, dc_idx=0, az_idx=0, instance_type=None, count=0) -> None:
+        """Record requested vs realized provision type for the legacy (in-test) provisioning path.
+
+        `ProvisionPlan` covers the upfront `provision-resources` path; this covers everything that does not go
+        through it - mid-test `add_nodes` (nemesis grow/shrink) and whole families such as artifact tests that
+        provision via `tester.get_cluster_aws()`. Without it a spot->on-demand downgrade there stays silent.
+
+        Unlike the upfront path this runs inside the tester, where the events device is already up, so the
+        shared recorder publishes straight through the normal pipeline - no Argus handoff needed.
+
+        Never raises: this sits on the hot path for every legacy provision and every add_nodes, and a
+        reporting failure must not break node creation.
+        """
+        azs = [az.strip() for az in (self.params.get("availability_zone") or "").split(",") if az.strip()]
+        region = self.region_names[dc_idx] if dc_idx < len(self.region_names) else ""
+        record_spot_provision_outcome(
+            requested=requested,
+            realized=realized,
+            region=region,
+            availability_zone=azs[az_idx] if az_idx < len(azs) else "",
+            instance_type=instance_type or self._ec2_instance_type,
+            count=count,
+        )
+
     def fallback_provision_type(
-        self, count, interfaces, ec2_user_data, dc_idx, instance_type=None, is_zero_node=False, ami_id=None
+        self,
+        count,
+        interfaces,
+        ec2_user_data,
+        dc_idx,
+        instance_type=None,
+        is_zero_node=False,
+        ami_id=None,
+        az_idx=0,
     ):
         instances = None
 
@@ -331,6 +383,8 @@ class AWSCluster(cluster.BaseCluster):
         if self.params.get("instance_provision_fallback_on_demand"):
             instances_provision_fallbacks.append(INSTANCE_PROVISION_ON_DEMAND)
 
+        # first entry is what the test asked for; anything later is a downgrade
+        requested = instances_provision_fallbacks[0]
         self.log.debug(f"Instances provision fallbacks : {instances_provision_fallbacks}")
 
         for instances_provision_type in instances_provision_fallbacks:
@@ -356,11 +410,26 @@ class AWSCluster(cluster.BaseCluster):
                         is_zero_node=is_zero_node,
                         ami_id=ami_id,
                     )
+                self._publish_provision_outcome(
+                    requested=requested,
+                    realized=instances_provision_type,
+                    dc_idx=dc_idx,
+                    az_idx=az_idx,
+                    instance_type=instance_type,
+                    count=count,
+                )
                 break
             except (CreateSpotInstancesError, botocore.exceptions.ClientError) as cl_ex:
-                if instances_provision_type == instances_provision_fallbacks[-1]:
-                    raise
-                if not self.check_spot_error(str(cl_ex), instances_provision_type):
+                is_last = instances_provision_type == instances_provision_fallbacks[-1]
+                if is_last or not self.check_spot_error(str(cl_ex), instances_provision_type):
+                    self._publish_provision_outcome(
+                        requested=requested,
+                        realized=None,
+                        dc_idx=dc_idx,
+                        az_idx=az_idx,
+                        instance_type=instance_type,
+                        count=count,
+                    )
                     raise
 
         return instances

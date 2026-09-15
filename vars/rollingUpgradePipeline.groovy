@@ -77,7 +77,7 @@ def call(Map pipelineParams) {
                          name: 'base_version_all_sts_versions')
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
-                   description: 'on_demand|spot_fleet|spot',
+                   description: 'on_demand|spot_fleet|spot|auto (auto: resolved by test duration, threshold spot_max_test_duration)',
                    name: 'provision_type')
             // Minicloud Configuration
             // Only has an effect when the jenkinsfile opts in with `minicloud: true`; see

@@ -158,6 +158,16 @@ def call(String backend, String region=null, String datacenter=null, String loca
         println("Finding builder for region: " + region)
         if (region == "random") {
             def choices = new ArrayList(supported_regions)
+            // Only regions that actually have a builder label are viable candidates; without this filter a
+            // region present in `supported_regions_by_provider` but missing from `jenkins_labels` throws below.
+            def labelled = choices.findAll { jenkins_labels.containsKey(cloud_provider + "-" + it) }
+            if (labelled) {
+                choices = labelled
+            }
+            // NOTE: this function runs on the Jenkins controller, before any agent is allocated, so `sh()` is
+            //       unavailable here and the builder region cannot be chosen by spot placement score. The
+            //       score-driven choice happens inside SCT instead (see `sdcm/provision/aws/az_resolver.py`),
+            //       which ranks AZs and region-fallback candidates for the cluster itself.
             Collections.shuffle(choices)
             region = choices[0]
         }

@@ -5,7 +5,7 @@
 AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity
 reservations and dedicated hosts.
 
-**22 options.**
+**24 options.**
 
 
 <a id="ami_db_cassandra_user"></a>
@@ -239,6 +239,28 @@ The max percentage of the on demand price we set for spot/fleet instances
 **default:** N/A
 
 **type:** float
+
+
+<a id="spot_placement_score_min"></a>
+
+## **spot_placement_score_min** / SCT_SPOT_PLACEMENT_SCORE_MIN
+
+Drop availability zones scoring below this value (1-10) from spot placement candidates. Default 0 keeps every AZ, which matches the AWS contract that a score is a recommendation and not a guarantee. Note AWS returns structurally low scores when fewer than 3 instance types are requested, so a non-zero value here is only safe alongside instance-type diversification. If fewer AZs reach the threshold than the configured [`availability_zone`](general-and-provisioning.md#availability_zone) asks for, provisioning fails rather than quietly spanning fewer AZs than the test was written for.
+
+**default:** 0
+
+**type:** int
+
+
+<a id="spot_score_region_relocation_margin"></a>
+
+## **spot_score_region_relocation_margin** / SCT_SPOT_SCORE_REGION_RELOCATION_MARGIN
+
+Relocate the cluster to a better-scoring region BEFORE the first provisioning attempt, when that region's spot placement score exceeds the configured region's by at least this many points (1-10). Useful for `region: random` jobs that land on a poor region by chance. 0 (default) disables it, leaving region relocation purely reactive. Only relocates to VPC-peered regions with an equivalent AMI; note the SCT runner stays in the original region, so the cluster is reached over the peering.
+
+**default:** 0
+
+**type:** int
 
 
 <a id="use_capacity_reservation"></a>

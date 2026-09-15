@@ -77,7 +77,7 @@ def call() {
                    name: 'manager_version')
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
             string(defaultValue: "spot",
-                   description: 'spot|on_demand|spot_fleet',
+                   description: 'spot|on_demand|spot_fleet|auto (auto: resolved by test duration, threshold spot_max_test_duration)',
                    name: 'provision_type')
             string(defaultValue: "false",
                    description: 'true|false',
