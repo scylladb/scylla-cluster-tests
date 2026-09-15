@@ -81,6 +81,7 @@ from sdcm.utils.trigger_matrix import (
     resolve_to_full_version,
     trigger_matrix as run_trigger_matrix,
 )
+from sdcm.utils.cloud_catalog.cost import RunCostEstimate, estimate_run_cost
 from sdcm.utils.argus import (
     ReplayOnlyArgusSCTClient,
     argus_offline_collect_events,
@@ -1666,6 +1667,80 @@ def output_conf(config_files, backend):
         os.environ["SCT_CONFIG_FILES"] = config_files
     config = SCTConfiguration()
     click.secho(config.dump_config(), fg="green")
+    sys.exit(0)
+
+
+@cli.command("estimate-cost", help="Estimate a test run's instance-hour cost from its configuration")
+@click.argument("config_files", type=str, default="")
+@click.option("-b", "--backend", type=click.Choice(available_backends))
+@click.option("--duration", type=float, default=None, help="Override test_duration, in minutes")
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option(
+    "--output",
+    "output_file",
+    type=str,
+    default=None,
+    help="Write the JSON estimate to this file. Loading a config prints a lot to stdout, so a "
+    "pipeline should read the file rather than try to parse stdout.",
+)
+def estimate_cost(config_files, backend, duration, output_format, output_file):
+    """Print the estimated instance-hour cost of a run, before anything is provisioned.
+
+    Reads configuration only - no cloud API calls, no runner, no Argus - so it is safe to
+    call as a pipeline pre-flight step. Always exits 0: an unpriceable configuration
+    reports a null total rather than failing the caller.
+    """
+    add_file_logger()
+
+    if backend:
+        os.environ["SCT_CLUSTER_BACKEND"] = backend
+    if config_files:
+        os.environ["SCT_CONFIG_FILES"] = config_files
+
+    try:
+        config = SCTConfiguration()
+    except Exception as exc:  # noqa: BLE001
+        # This runs as a pipeline pre-flight step. A configuration SCT cannot load is a real
+        # problem, but it is not this command's problem to report - the run is about to fail
+        # on it anyway, with a better message, from the code that actually needs the config.
+        # Failing here would only turn an advisory stage into a second, noisier failure.
+        click.echo(f"\nCannot estimate cost: configuration could not be loaded ({exc})\n")
+        if output_file:
+            with open(output_file, "w", encoding="utf-8") as fobj:
+                json.dump(RunCostEstimate.unavailable().as_dict(), fobj)
+        sys.exit(0)
+
+    estimate = estimate_run_cost(config, duration_minutes=duration)
+
+    if output_file:
+        with open(output_file, "w", encoding="utf-8") as fobj:
+            json.dump(estimate.as_dict(), fobj)
+
+    if output_format == "json":
+        click.echo(json.dumps(estimate.as_dict()))
+        sys.exit(0)
+
+    total = f"${estimate.total:,.2f}" if estimate.total is not None else "unknown"
+    headline = f"Estimated cost of this run: {total} (on-demand rates)"
+    if estimate.partial:
+        missing = ", ".join(estimate.unpriced_roles) or "no roles resolved"
+        headline += f" -- PARTIAL, no price for: {missing}"
+    click.echo("")
+    click.echo(headline)
+    click.echo("")
+    if estimate.roles:
+        click.echo(f"  {'role':<10}{'nodes':>6}  {'instance type':<24}{'$/hour':>9}{'hours':>8}{'cost':>10}")
+        for role in estimate.roles:
+            rate = f"{role.rate.price_per_hour:.4f}" if role.rate.price_per_hour is not None else "-"
+            cost = f"${role.cost:,.2f}" if role.cost is not None else "unknown"
+            click.echo(
+                f"  {role.role:<10}{role.node_count:>6}  {role.instance_type:<24}"
+                f"{rate:>9}{estimate.duration_hours:>8.2f}{cost:>10}"
+            )
+        click.echo("")
+    click.echo("  Instance hours only, for the whole run - no storage, network or other charges.")
+    click.echo("  See docs/cost-estimation.md")
+    click.echo("")
     sys.exit(0)
 
 
