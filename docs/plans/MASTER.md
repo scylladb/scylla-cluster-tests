@@ -69,6 +69,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | SCT Config Follow-up Refactoring | `pending_pr` | [#13845](https://github.com/scylladb/scylla-cluster-tests/pull/13845) |
 | Config Type Normalization | `complete` | [config-type-normalization.md](config/config-type-normalization.md), [#14805](https://github.com/scylladb/scylla-cluster-tests/pull/14805) |
 | Constraint-Based Instance Sizing | `complete` | [constraint-based-sizing.md](config/constraint-based-sizing.md), [#14576](https://github.com/scylladb/scylla-cluster-tests/pull/14576) |
+| Config Validation on Mixins | `draft` | [validation-on-mixins.md](config/validation-on-mixins.md) |
 
 ### K8s — Kubernetes operator, K8s backends
 
