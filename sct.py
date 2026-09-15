@@ -2566,6 +2566,17 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
         if test_id:
             LOGGER.info("Using test_id from SCT configuration: %s", test_id)
 
+    if not test_id and logdir:
+        # The pipeline exports SCT_TEST_ID build-wide, so --logdir alone is enough there
+        # (vars/runCollectLogs.groovy). A local run has no such export, and without an id
+        # Collector leaves collector.test_id None - which surfaces much later as
+        # update_sct_runner_tags() raising about a runner a local run never had, after
+        # collection has already done its work. The run dir always holds the id.
+        test_id_file = Path(logdir) / "test_id"
+        if test_id_file.exists():
+            test_id = test_id_file.read_text(encoding="utf-8").strip()
+            LOGGER.info("Using test_id from %s: %s", test_id_file, test_id)
+
     if is_minicloud_active(config):
         # After SCTConfiguration so yaml-only activation is seen, and the SDK endpoint
         # is exported before Collector runs — in a fresh collect-logs process
@@ -2613,8 +2624,13 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
     click.echo(rich_table_to_string(table, title=f"Collected logs by test-id: {collector.test_id}"))
     update_sct_runner_tags(backend=backend, test_id=collector.test_id, tags={"logs_collected": True})
 
-    # Always send collected logs to Argus, even if there were collection errors
-    if collector.test_id:
+    # Always send collected logs to Argus, even if there were collection errors - but only
+    # when the run registered with Argus in the first place. A local run with enable_argus
+    # off has no SCTTestRun to attach to, and store_logs_in_argus would log a full traceback
+    # ("No SCTTestRun found matching ...") at the end of an otherwise clean run.
+    if collector.test_id and not config.get("enable_argus"):
+        LOGGER.info("enable_argus is off for this run - skipping Argus log submission")
+    elif collector.test_id:
         store_logs_in_argus(
             test_id=UUID(collector.test_id),
             logs=collected_logs,
