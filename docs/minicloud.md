@@ -10,6 +10,11 @@ downloads), and on the GCE path GCS/Cloud Build for image export.
 Use it for provisioning-path development, artifact smoke tests, and any test whose value is in
 exercising SCT itself rather than real cloud hardware.
 
+Most production test-cases do not fit on one host as they stand. For the procedure that turns
+one into something that does - the guest-memory budget, the overlay pattern, which params each
+test type actually reads - see the
+[downscaling-for-minicloud](../skills/downscaling-for-minicloud/SKILL.md) skill.
+
 ## How activation works
 
 `is_minicloud_active()` (`sdcm/utils/minicloud/`) switches SCT into minicloud mode when any of
