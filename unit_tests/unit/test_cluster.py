@@ -15,6 +15,7 @@ import importlib
 import inspect
 import logging
 import tempfile
+import threading
 import time
 import unittest.mock
 from datetime import datetime, timezone
@@ -25,6 +26,8 @@ from invoke import Result
 
 from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode, BaseScyllaCluster
 from sdcm.db_log_reader import DbLogReader
+from sdcm.exceptions import ExitByEventError, FirewallNotDisabled, WaitForTimeoutError
+from sdcm.provision.common.utils import disable_firewall as disable_firewall_script
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.filters import DbEventsFilter
@@ -1268,3 +1271,302 @@ def test_minicloud_reserve_memory_defers_to_a_test_that_sized_scylla_itself(exis
 def test_minicloud_reserve_memory_is_not_confused_by_an_unrelated_memory_flag():
     args = f"{MINICLOUD_BASE_SCYLLA_ARGS} --max-memory-for-unlimited-query-soft-limit 1M"
     assert _append_minicloud_reserve(args) == f"{args} --reserve-memory 3072M"
+
+
+# the ruleset the OCI images ship: SSH is accepted, everything else gets an ICMP host-prohibited
+OCI_IMAGE_RULESET = """\
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT
+-A INPUT -j REJECT --reject-with icmp-host-prohibited
+-A FORWARD -j REJECT --reject-with icmp-host-prohibited
+COMMIT
+"""
+
+
+@pytest.fixture
+def firewall_node():
+    """Build a bare `BaseNode` whose remoter reports the given rules - real methods, no stubs.
+
+    The rules are returned for whichever dump command is asked for; a command listed in
+    `failing` fails instead, which is how a node with a broken or half-installed netfilter
+    tooling behaves.
+    """
+
+    def _build(rules: str = "", debian: bool = True, failing: tuple = ()):
+        node = BaseNode.__new__(BaseNode)
+        node.name = "test-node"
+        node.log = logging.getLogger("test-node")
+        node.distro = unittest.mock.Mock(is_rhel_like=not debian, is_debian_like=debian)
+        node.remoter = unittest.mock.Mock()
+
+        def _sudo(command, **_):
+            if any(failed in command for failed in failing):
+                return unittest.mock.Mock(ok=False, return_code=1, stdout="", stderr="not permitted")
+            dump = rules if any(tool in command for tool in ("iptables-save", "nft list")) else ""
+            return unittest.mock.Mock(ok=True, return_code=0, stdout=dump, stderr="")
+
+        node.remoter.sudo.side_effect = _sudo
+        return node
+
+    return _build
+
+
+def test_disable_firewall_runs_the_script_cloud_init_runs(firewall_node):
+    """Node setup and first boot take the firewall down the same way, from one definition.
+
+    Spelling the policy out twice - a script for cloud-init, `remoter.sudo` calls here - is
+    how the two drifted apart while both claimed to disable the firewall.
+    """
+    node = firewall_node()
+
+    BaseNode.disable_firewall(node, verify=False)
+
+    ran = " ".join(call.args[0] for call in node.remoter.sudo.call_args_list)
+    for line in filter(None, (line.strip() for line in disable_firewall_script().splitlines())):
+        assert line in ran, f"node setup does not run `{line}`"
+
+
+def test_disable_firewall_verifies_the_firewall_is_actually_down(firewall_node):
+    """Every command of `disable_firewall()` ignores its status, so the result must be verified.
+
+    Which of them applies depends on the distro and on the image, and a firewall which silently
+    stayed up is exactly the failure this is here to prevent.
+    """
+    node = firewall_node(rules=OCI_IMAGE_RULESET)
+
+    with pytest.raises(FirewallNotDisabled, match="icmp-host-prohibited"):
+        BaseNode.disable_firewall(node)
+
+    BaseNode.disable_firewall(node, verify=False)
+
+
+def test_verify_firewall_disabled_accepts_an_empty_ruleset(firewall_node):
+    node = firewall_node(rules="*filter\n:INPUT ACCEPT [0:0]\n:FORWARD ACCEPT [0:0]\nCOMMIT\n")
+
+    BaseNode.verify_firewall_disabled(node)
+
+
+def test_verify_firewall_disabled_ignores_the_rules_docker_owns(firewall_node):
+    """Docker's own DROP rules live in FORWARD and never make the node itself unreachable.
+
+    Every loader runs docker, so treating them as a firewall would fail the setup of the node.
+    """
+    docker_rules = """\
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD DROP [0:0]
+-A FORWARD -j DOCKER-ISOLATION-STAGE-1
+-A DOCKER-ISOLATION-STAGE-1 -i docker0 ! -o docker0 -j DOCKER-ISOLATION-STAGE-2
+-A DOCKER-ISOLATION-STAGE-2 -o docker0 -j DROP
+COMMIT
+"""
+    node = firewall_node(rules=docker_rules)
+
+    BaseNode.verify_firewall_disabled(node)
+
+
+def test_verify_firewall_disabled_reports_a_dropping_policy(firewall_node):
+    node = firewall_node(rules="*filter\n:INPUT DROP [0:0]\nCOMMIT\n")
+
+    with pytest.raises(FirewallNotDisabled, match="INPUT DROP"):
+        BaseNode.verify_firewall_disabled(node)
+
+
+def test_verify_firewall_disabled_reports_a_dropping_nftables_input_hook():
+    """The iptables wrappers do not show the rules written natively through nft."""
+    nft_ruleset = """\
+table inet filter {
+  chain input { type filter hook input priority 0; policy drop; }
+}
+"""
+    node = BaseNode.__new__(BaseNode)
+    node.name, node.log = "test-node", logging.getLogger("test-node")
+    node.remoter = unittest.mock.Mock()
+    node.remoter.sudo.side_effect = lambda command, **_: unittest.mock.Mock(
+        ok=True, return_code=0, stdout=nft_ruleset if "nft list" in command else "", stderr=""
+    )
+
+    with pytest.raises(FirewallNotDisabled, match="policy drop"):
+        BaseNode.verify_firewall_disabled(node)
+
+
+@pytest.mark.parametrize("failing_tool", ["iptables-save", "ip6tables-save", "nft list ruleset"])
+def test_verify_firewall_disabled_refuses_to_pass_on_an_unreadable_ruleset(firewall_node, failing_tool):
+    """An installed tool which fails says nothing about the firewall - and must not read as 'none'.
+
+    Passing here would let node setup continue with the node still rejecting all its traffic.
+    """
+    node = firewall_node(failing=(failing_tool,))
+
+    with pytest.raises(FirewallNotDisabled, match="cannot tell whether the firewall is disabled"):
+        BaseNode.verify_firewall_disabled(node)
+
+
+def test_missing_netfilter_tooling_is_not_a_firewall(firewall_node):
+    """A node with no ip6tables at all has no IPv6 rules to block anything with."""
+    node = firewall_node()
+    node.remoter.sudo.side_effect = lambda command, **_: unittest.mock.Mock(
+        ok=True, return_code=0, stdout="", stderr=""
+    )
+
+    BaseNode.verify_firewall_disabled(node)
+
+
+def test_cql_diagnostics_name_the_node_which_is_up_but_unreachable(firewall_node, events_function_scope):
+    """`db_up()` returning False looks the same for a node which never started and for one
+
+    which is up but unreachable - the second one is the failure that used to eat a full hour
+    of `wait_db_up()` before anything was said about it (SCT-479).
+    """
+    node = firewall_node(rules=OCI_IMAGE_RULESET)
+    node.log = unittest.mock.Mock()
+    node.remoter.run.return_value = unittest.mock.Mock(ok=True, stdout="LISTEN 0 100 10.0.3.66:9042 0.0.0.0:*")
+
+    with unittest.mock.patch.object(BaseNode, "cql_address", "10.0.3.66"):
+        BaseNode.log_cql_unreachable_diagnostics(node)
+
+    warnings = " ".join(str(call.args) for call in node.log.warning.call_args_list)
+    assert "listens on the CQL port locally" in warnings
+    assert "icmp-host-prohibited" in warnings, "the netfilter rules must be part of the report"
+
+    published = [event for event in events_function_scope.published_events if event["severity"] == "WARNING"]
+    assert published, "the condition must reach the event stream, not only the node log"
+    assert "is not reachable from SCT" in published[0]["message"]
+
+
+def test_no_cql_diagnostics_while_the_node_is_still_starting(firewall_node):
+    """Not listening yet is the normal case of `wait_db_up()` - it must stay quiet."""
+    node = firewall_node(rules=OCI_IMAGE_RULESET)
+    node.log = unittest.mock.Mock()
+    node.remoter.run.return_value = unittest.mock.Mock(ok=True, stdout="LISTEN 0 100 0.0.0.0:22 0.0.0.0:*")
+
+    BaseNode.log_cql_unreachable_diagnostics(node)
+
+    node.log.warning.assert_not_called()
+
+
+def test_cql_diagnostics_tell_a_misbound_listener_from_an_unreachable_node(firewall_node, events_function_scope):
+    """A listener on an address SCT does not connect to is a local bind problem.
+
+    Reporting the firewall and the routing for it would send whoever reads the report down
+    a path which has nothing to do with the failure.
+    """
+    node = firewall_node(rules=OCI_IMAGE_RULESET)
+    node.log = unittest.mock.Mock()
+    node.remoter.run.return_value = unittest.mock.Mock(ok=True, stdout="LISTEN 0 100 127.0.0.1:9042 0.0.0.0:*")
+
+    with unittest.mock.patch.object(BaseNode, "cql_address", "10.0.3.66"):
+        BaseNode.log_cql_unreachable_diagnostics(node)
+
+    warnings = " ".join(str(call.args) for call in node.log.warning.call_args_list)
+    assert "bound CQL to the wrong address" in warnings
+    assert "icmp-host-prohibited" not in warnings, "the firewall is not the suspect here"
+
+    published = [event for event in events_function_scope.published_events if event["severity"] == "WARNING"]
+    assert published, "the condition must reach the event stream, not only the node log"
+    assert "127.0.0.1" in published[0]["message"]
+
+
+@pytest.mark.parametrize("wildcard", ["0.0.0.0", "*", "[::]"])
+def test_a_wildcard_listener_serves_the_cql_address(firewall_node, wildcard, events_function_scope):
+    """A listener on every address of the node is serving `cql_address` as well."""
+    node = firewall_node(rules=OCI_IMAGE_RULESET)
+    node.log = unittest.mock.Mock()
+    node.remoter.run.return_value = unittest.mock.Mock(ok=True, stdout=f"LISTEN 0 100 {wildcard}:9042 [::]:*")
+
+    with unittest.mock.patch.object(BaseNode, "cql_address", "10.0.3.66"):
+        BaseNode.log_cql_unreachable_diagnostics(node)
+
+    warnings = " ".join(str(call.args) for call in node.log.warning.call_args_list)
+    assert "listens on the CQL port locally" in warnings
+
+
+def test_verify_firewall_disabled_reports_a_reject_under_an_accepting_nft_policy():
+    """A chain whose policy accepts still blocks everything a rule of its own rejects.
+
+    Which is how ufw and firewalld write their rulesets, so the default policy alone does
+    not say whether the traffic to the node gets through.
+    """
+    nft_ruleset = """\
+table inet filter {
+  chain input {
+    type filter hook input priority 0; policy accept;
+    tcp dport 22 accept
+    reject with icmpx type port-unreachable
+  }
+  chain forward {
+    type filter hook forward priority 0; policy accept;
+    drop
+  }
+}
+"""
+    node = BaseNode.__new__(BaseNode)
+    node.name, node.log = "test-node", logging.getLogger("test-node")
+    node.remoter = unittest.mock.Mock()
+    node.remoter.sudo.side_effect = lambda command, **_: unittest.mock.Mock(
+        ok=True, return_code=0, stdout=nft_ruleset if "nft list" in command else "", stderr=""
+    )
+
+    with pytest.raises(FirewallNotDisabled) as blocked:
+        BaseNode.verify_firewall_disabled(node)
+
+    assert "reject with icmpx" in str(blocked.value)
+    assert "drop" not in str(blocked.value).replace("dropped", ""), "the forward chain is not ours to judge"
+
+
+def test_an_accepting_nft_input_chain_is_not_a_firewall(firewall_node):
+    """The rules which let the traffic through must not read as blocking it."""
+    nft_ruleset = """\
+table inet filter {
+  chain input {
+    type filter hook input priority 0; policy accept;
+    ct state established,related accept
+  }
+}
+"""
+    node = firewall_node(rules=nft_ruleset)
+
+    BaseNode.verify_firewall_disabled(node)
+
+
+def _node_waiting_for_db_up(firewall_node, db_up):
+    node = firewall_node()
+    node.stop_wait_db_up_event = threading.Event()
+    node.db_up = unittest.mock.Mock(side_effect=db_up)
+    node.log_cql_unreachable_diagnostics = unittest.mock.Mock()
+    return node
+
+
+def test_wait_db_up_diagnoses_the_node_it_gave_up_on(firewall_node):
+    """The report is the point of the wait failing: it must come before the exception does."""
+    node = _node_waiting_for_db_up(firewall_node, db_up=lambda: False)
+
+    with unittest.mock.patch("sdcm.wait.time.sleep"), pytest.raises(WaitForTimeoutError):
+        BaseNode.wait_db_up(node, timeout=0.1)
+
+    node.log_cql_unreachable_diagnostics.assert_called_once()
+
+
+def test_wait_db_up_says_nothing_about_a_node_which_came_up(firewall_node):
+    """A node SCT waited for and got is not worth a word."""
+    node = _node_waiting_for_db_up(firewall_node, db_up=[False, True])
+
+    with unittest.mock.patch("sdcm.wait.time.sleep"):
+        BaseNode.wait_db_up(node, timeout=60)
+
+    node.log_cql_unreachable_diagnostics.assert_not_called()
+
+
+def test_wait_db_up_says_nothing_about_a_wait_stopped_on_purpose(firewall_node):
+    """`stop_wait_db_up_event` ends the wait by decision, the node is not the subject."""
+    node = _node_waiting_for_db_up(firewall_node, db_up=lambda: False)
+    node.stop_wait_db_up_event.set()
+
+    with unittest.mock.patch("sdcm.wait.time.sleep"), pytest.raises(ExitByEventError):
+        BaseNode.wait_db_up(node, timeout=60)
+
+    node.log_cql_unreachable_diagnostics.assert_not_called()

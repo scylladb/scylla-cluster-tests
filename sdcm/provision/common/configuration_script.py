@@ -18,6 +18,7 @@ from typing import Any
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
     configure_sshd_script,
+    disable_firewall,
     restart_sshd_service,
     configure_backoff_timeout,
     update_repo_cache,
@@ -49,6 +50,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     params: Any | None = None
     install_docker: bool = False
     install_agent: bool = False
+    # off by default: the callers which build a boot script decide, from the backend
+    disable_guest_firewall: bool = False
 
     def to_string(self) -> str:
         script = self._start_script()
@@ -117,6 +120,11 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         # 4. There is race condition between sct and boot script, disable ssh to mitigate it
         # 5. Make sure that whenever you use "cat <<EOF >>/file", make sure that EOF has no spaces in front of it
         script = ""
+
+        if self.disable_guest_firewall:
+            # first thing on the node: an image whose firewall accepts nothing but SSH looks
+            # exactly like a broken network to everything that comes after (SCT-479)
+            script += disable_firewall()
 
         script += configure_backoff_timeout()
         if self.logs_transport == "syslog-ng":
