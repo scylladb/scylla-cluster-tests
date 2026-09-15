@@ -1,0 +1,56 @@
+# Longevity test: asymmetric cluster – 12 h authorization + LimitedMonkey
+#
+# Dataset:
+#   - Prepare:      300M rows × ~1 KB per row ≈ ~300 GB logical (single replica basis)
+#   - Stress:       mixed 50/50 read/write over seq 1..300M, throttled 45k ops/s;
+#                   no net growth - the write half overwrites the prepared range
+#
+# Disk footprint: ~900 GB replicated (RF=3) over 6 nodes ≈ ~150 GB per node.
+# The db nodes come from sizing_db (8 vCPU / >=64 GB / x86_64), so the exact disk
+# share depends on what each cloud resolves to - roughly 5-10% on the current
+# matches (AWS i7i.2xlarge, GCE z3-highmem-8, Azure L8s_v3).
+
+test_metadata:
+  description: >-
+    Longevity test with asymmetric 6-node cluster running 12 h authorization
+    with LimitedMonkey nemesis. Dataset of ~300 GB logical (RF=3) prepared from a
+    single loader, followed by mixed QUORUM read/write stress. Validates stability
+    under sustained load with encryption and rolling compaction.
+  test_type: longevity
+  tier: tier1
+  duration_class: long
+  supported_backends:
+    - gce
+    - aws
+  stress_tools:
+    - cql-stress-cassandra-stress
+
+test_duration: 750
+
+prepare_write_cmd: "cql-stress-cassandra-stress write cl=ALL n=300000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=500 -col 'size=FIXED(256) n=FIXED(4)' -pop seq=1..300000000 -log interval=15"
+
+stress_cmd: "cql-stress-cassandra-stress mixed cl=QUORUM duration=11h -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate 'threads=200 throttle=45000/s' -col 'size=FIXED(256) n=FIXED(4)' -pop seq=1..300000000 -log interval=15"
+
+run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 5}']
+
+n_db_nodes: 6
+n_loaders: 1
+simulated_racks: 3
+round_robin: true
+
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 8
+  memory: '>=64'
+  arch: x86_64
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: 'limited'
+nemesis_interval: 30
+nemesis_during_prepare: false
+
+user_prefix: 'longevity-asymmetric-12h'
+
+server_encrypt: true
+client_encrypt: true
+
+use_preinstalled_scylla: true
