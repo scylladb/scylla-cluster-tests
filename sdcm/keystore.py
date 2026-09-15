@@ -84,8 +84,21 @@ class KeyStore:
     """Credential store backed by AWS Secrets Manager or S3.
 
     Fetches credentials (JSON configs, SSH keys, API tokens) from a
-    configurable backend.  Results are cached in a thread-safe dict for
-    the lifetime of the instance.
+    configurable backend.  Results are cached in a thread-safe dict shared
+    by every instance in the process.
+
+    The cache is deliberately *not* per-instance.  Nothing in SCT holds on to
+    a KeyStore -- every call site writes ``KeyStore().get_...()`` and throws
+    the object away, so an instance-scoped cache could never register a hit
+    and every lookup paid a full Secrets Manager round trip (~0.6s).  One
+    ``hydra gce-capacity-advice`` spent 2.4s re-fetching the same GCP service
+    account four times; ``sdcm/utils/gce_utils.py`` alone has ~15 call sites.
+
+    Because it is process-wide, a credential rotated mid-run is not picked up
+    until the process restarts.  That is the intended trade: SCT reads
+    credentials constantly and rotates them between runs, not during one.
+    Use ``bypass_cache=True`` for a guaranteed-fresh read, or ``clear_cache()``
+    to drop everything.
 
     Backend selection is controlled by the ``SCT_KEYSTORE_BACKEND``
     environment variable (``secretsmanager`` by default, ``s3`` for the
@@ -99,9 +112,14 @@ class KeyStore:
             in :mod:`sdcm.utils.issues`.  Leave unset for credentials.
     """
 
+    # Shared by every instance, and keyed by where the content came from as well as by its name:
+    # `KeyStore(backend="s3")` exists alongside the Secrets Manager default (see the `issues/` bulk
+    # cache in `sdcm.utils.issues`), and the prefix/region are env-tunable, so keying on the file
+    # name alone would let one backend serve another's bytes.
+    _cache: dict[tuple[str, str, str, str], bytes] = {}
+    _cache_lock = threading.Lock()
+
     def __init__(self, backend: str | None = None):
-        self._cache: dict[str, bytes] = {}
-        self._cache_lock = threading.Lock()
         self._backend = backend or os.environ.get("SCT_KEYSTORE_BACKEND") or "secretsmanager"
         self._sm_prefix = os.environ.get("SCT_KEYSTORE_SM_PREFIX") or KEYSTORE_SM_PREFIX
         self._sm_region = os.environ.get("SCT_KEYSTORE_SM_REGION") or KEYSTORE_SM_REGION
@@ -164,11 +182,12 @@ class KeyStore:
         Returns:
             Raw bytes of the file content.
         """
+        cache_key = self._cache_key(file_name)
         if not bypass_cache:
             with self._cache_lock:
-                if file_name in self._cache:
+                if cache_key in self._cache:
                     LOGGER.debug("cache hit for %s", file_name)
-                    return self._cache[file_name]
+                    return self._cache[cache_key]
 
         start = time.monotonic()
         result = self._fetch_content(file_name)
@@ -180,12 +199,16 @@ class KeyStore:
             LOGGER.info("fetched %s (backend=%s) in %.2fs", file_name, self._backend, elapsed)
 
         with self._cache_lock:
-            self._cache[file_name] = result
+            self._cache[cache_key] = result
 
         return result
 
+    def _cache_key(self, file_name: str) -> tuple[str, str, str, str]:
+        """Identify content by everything that decides which bytes a name resolves to."""
+        return self._backend, self._sm_prefix, self._sm_region, file_name
+
     def clear_cache(self):
-        """Remove all cached credentials from the in-memory cache."""
+        """Drop every cached credential, for all backends and all instances in this process."""
         with self._cache_lock:
             self._cache.clear()
 
