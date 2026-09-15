@@ -38,7 +38,8 @@ are separate hydra invocations that all need to reach the same live endpoint.
 test-case yaml. It is the single delivery mechanism for the params the emulator requires:
 KMS off (minicloud implements no KMS endpoint), `instance_provision: on_demand` (no spot
 market), `ip_ssh_connections: private` (guests live on the host's userspace switch),
-`force_run_iotune: false`, AZ/region fallbacks off, kernel-panic checker off, and
+`force_run_iotune: false`, placement groups and capacity reservations off (neither exists in
+minicloud's EC2 surface), AZ/region fallbacks off, kernel-panic checker off, and
 `developer_mode: true` via `append_scylla_yaml`. `preflight_check()` fails fast with the exact
 missing values when the overlay is not in the config list. Env exports cannot substitute for
 it: `SCT_*` variables set after `SCTConfiguration` is built never reach params.
@@ -114,6 +115,13 @@ exit-137 failure mode above if you were wrong.
 - **KMS** (AWS or GCP) - hence `enterprise_disable_kms: true` in the overlay. When minicloud
   grows KMS support, only the overlay changes; no pipeline knows about KMS.
 - **Spot** - `instance_provision` must stay `on_demand`.
+- **Placement groups and capacity reservations** - hence `use_placement_group: false` and
+  `use_capacity_reservation: false` in the overlay. Both are set by the performance test-cases
+  and both fail deep in provisioning rather than at startup (`GetPlacementGroupError` on a group
+  that was never created, then `CapacityReservationError`), so `validate_minicloud_params()`
+  rejects them up front instead. Tracked by
+  [QATOOLS-448](https://scylladb.atlassian.net/browse/QATOOLS-448); when it lands, only the
+  overlay changes.
 - **Local SSDs / NVMe passthrough** - guests get qcow2-backed disks.
 - Anything not in the emulated API surface fails closed with an explicit error rather than
   being silently ignored - by design, on both sides.

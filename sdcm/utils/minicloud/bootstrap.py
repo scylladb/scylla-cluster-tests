@@ -3,7 +3,11 @@
 import logging
 import time
 
-from sdcm.utils.minicloud.activation import check_minicloud_reachability, set_minicloud_endpoint_env
+from sdcm.utils.minicloud.activation import (
+    check_minicloud_reachability,
+    set_minicloud_endpoint_env,
+    validate_minicloud_params,
+)
 from sdcm.utils.minicloud.config import MinicloudConfig
 from sdcm.utils.minicloud.endpoint import get_minicloud_endpoint
 from sdcm.utils.minicloud.manager import MinicloudManager
@@ -30,6 +34,14 @@ def ensure_minicloud_ready(backend: str = "aws", params=None) -> None:
         try:
             check_minicloud_reachability(endpoint, timeout=5)
             set_minicloud_endpoint_env(endpoint, backend)
+            # Adopting a running container skips manager.preflight_check() below, and with it
+            # the overlay validation. A standalone provision-resources against an already-healthy
+            # emulator would then proceed with spot, public-IP SSH, KMS, placement groups or
+            # capacity reservations still enabled, and fail on the unsupported operation instead
+            # of here. Only the parameter check is repeated - the host-level checks (KVM, docker,
+            # credentials, memory) were satisfied by whoever started the container.
+            if params is not None:
+                validate_minicloud_params(params)
             return
         except RuntimeError:
             if attempt < max_retries - 1:
