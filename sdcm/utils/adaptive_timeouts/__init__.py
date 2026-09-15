@@ -28,12 +28,33 @@ def _get_decommission_timeout(
         node_info = node_info_service.as_dict()
         if tablets_enabled:
             node_info["tablets_enabled"] = True
+<<<<<<< HEAD
             return (TABLETS_SOFT_TIMEOUT, TABLETS_HARD_TIMEOUT), node_info
 
         # For non-tablet cases, calculate based on data size
         # rough estimation from previous runs almost 9h for 1TB
         timeout = max(int(node_info_service.node_data_size_mb * 0.03), 7200)  # 2 hours minimum
         return (timeout, None), node_info
+||||||| parent of 9bb16daad (fix(adaptive_timeouts): set hard timeout to 2x soft for tablet operations)
+            estimated = int(node_info_service.node_data_size_mb / node_info_service.expected_throughput)
+            soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
+            hard_timeout = estimated * 4 + _STREAMING_OVERHEAD
+            return (soft_timeout, hard_timeout), node_info
+        else:
+            # For non-tablet cases, calculate based on data size
+            # rough estimation from previous runs almost 9h for 1TB
+            soft_timeout = max(int(node_info_service.node_data_size_mb * 0.03), 7200)  # 2 hours minimum
+            return (soft_timeout, None), node_info
+=======
+            estimated = int(node_info_service.node_data_size_mb / node_info_service.expected_throughput)
+            soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
+            return (soft_timeout, soft_timeout * 2), node_info
+        else:
+            # For non-tablet cases, calculate based on data size
+            # rough estimation from previous runs almost 9h for 1TB
+            soft_timeout = max(int(node_info_service.node_data_size_mb * 0.03), 7200)  # 2 hours minimum
+            return (soft_timeout, None), node_info
+>>>>>>> 9bb16daad (fix(adaptive_timeouts): set hard timeout to 2x soft for tablet operations)
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Failed to calculate decommission timeout: \n%s \nDefaulting to 6 hours", exc)
         return (6 * 60 * 60, None), {}
@@ -57,6 +78,73 @@ def _get_new_node_timeout(
         return (timeout, None), {}
 
 
+<<<<<<< HEAD
+||||||| parent of 9bb16daad (fix(adaptive_timeouts): set hard timeout to 2x soft for tablet operations)
+def _get_tablet_migration_timeout(
+    node_info_service: NodeLoadInfoService,
+    timeout: int | float = None,
+    tablets_enabled: bool = False,
+) -> tuple[tuple[int, int | None], dict[str, Any]]:
+    """Calculate timeout for tablet migration operation based on node disk size.
+
+    At worst, the node will be filled up to 90% of its disk size
+    Uses node_disk_size_mb * 0.9 / expected_throughput as the base estimate,
+    with soft = estimated * 2 and hard = estimated * 4.
+    For vnodes, use the same estimation as decommission.
+    Falls back to the caller-supplied timeout on error.
+    """
+    try:
+        node_info = node_info_service.as_dict()
+        LOGGER.debug(f"Estimating tablet migration timeout with {node_info=}")
+        if tablets_enabled:
+            node_info["tablets_enabled"] = True
+            estimated = int(node_info_service.node_disk_size_mb * 0.9 / node_info_service.expected_throughput)
+            soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
+            hard_timeout = estimated * 4 + _STREAMING_OVERHEAD
+            return (soft_timeout, hard_timeout), node_info
+        else:
+            soft_timeout = max(int(node_info_service.node_disk_size_mb * 0.9 * 0.03), 7200)  # 2 hours minimum
+            return (soft_timeout, None), node_info
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning(
+            "Failed to calculate tablet migration timeout: \n%s \nDefaulting to caller timeout or 6 hours", exc
+        )
+        return (timeout or 6 * 60 * 60, None), {}
+
+
+=======
+def _get_tablet_migration_timeout(
+    node_info_service: NodeLoadInfoService,
+    timeout: int | float = None,
+    tablets_enabled: bool = False,
+) -> tuple[tuple[int, int | None], dict[str, Any]]:
+    """Calculate timeout for tablet migration operation based on node disk size.
+
+    At worst, the node will be filled up to 90% of its disk size
+    Uses node_disk_size_mb * 0.9 / expected_throughput as the base estimate,
+    with soft = estimated * 2 and hard = estimated * 4.
+    For vnodes, use the same estimation as decommission.
+    Falls back to the caller-supplied timeout on error.
+    """
+    try:
+        node_info = node_info_service.as_dict()
+        LOGGER.debug(f"Estimating tablet migration timeout with {node_info=}")
+        if tablets_enabled:
+            node_info["tablets_enabled"] = True
+            estimated = int(node_info_service.node_disk_size_mb * 0.9 / node_info_service.expected_throughput)
+            soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
+            return (soft_timeout, soft_timeout * 2), node_info
+        else:
+            soft_timeout = max(int(node_info_service.node_disk_size_mb * 0.9 * 0.03), 7200)  # 2 hours minimum
+            return (soft_timeout, None), node_info
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning(
+            "Failed to calculate tablet migration timeout: \n%s \nDefaulting to caller timeout or 6 hours", exc
+        )
+        return (timeout or 6 * 60 * 60, None), {}
+
+
+>>>>>>> 9bb16daad (fix(adaptive_timeouts): set hard timeout to 2x soft for tablet operations)
 def _get_soft_timeout(
     node_info_service: NodeLoadInfoService, timeout: int | float = None
 ) -> tuple[int | float, dict[str, Any]]:
