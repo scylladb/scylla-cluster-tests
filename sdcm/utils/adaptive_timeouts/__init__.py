@@ -3,7 +3,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from enum import Enum
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from sdcm.sct_events.system import SoftTimeoutEvent, HardTimeoutEvent
 from sdcm.utils.adaptive_timeouts.load_info_store import (
@@ -13,6 +13,9 @@ from sdcm.utils.adaptive_timeouts.load_info_store import (
     NodeLoadInfoServices,
 )
 from sdcm.utils.features import is_tablets_feature_enabled
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,9 +37,31 @@ TABLETS_SOFT_TIMEOUT = 1 * 60 * 60
 TABLETS_HARD_TIMEOUT = 3 * 60 * 60
 _STREAMING_OVERHEAD = 600  # add 10 minutes overhead for operations other than streaming
 
+# Topology coordinator state machine overhead per tablet during decommission.
+_TOPOLOGY_OVERHEAD_PER_TABLET = 2  # seconds per tablet on the decommissioning node
+
+
+def _get_node_tablet_count(node: "BaseNode") -> int:
+    """Count total tablet replicas hosted on the given node.
+
+    This determines how many tablets will need to be migrated during decommission,
+    which affects topology coordinator state machine overhead regardless of data size.
+    Returns 0 on any failure to avoid blocking the operation.
+    """
+    try:
+        host_id = node.host_id
+        with node.parent_cluster.cql_connection_patient(node, connect_timeout=30) as session:
+            result = session.execute("SELECT replicas FROM system.tablets")
+            count = sum(1 for row in result if any(str(host_id) in str(r) for r in (row.replicas or [])))
+            LOGGER.debug("Node %s hosts %d tablet replicas (host_id=%s)", node.name, count, host_id)
+            return count
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Failed to query node tablet count: %s", exc)
+        return 0
+
 
 def _get_decommission_timeout(
-    node_info_service: NodeLoadInfoService, tablets_enabled: bool = False
+    node_info_service: NodeLoadInfoService, tablets_enabled: bool = False, node: "BaseNode" = None
 ) -> tuple[tuple[int, int | None], dict[str, Any]]:
     """Calculate timeout for decommission operation based on node load info. Still experimental, used to gather historical data."""
     try:
@@ -47,6 +72,16 @@ def _get_decommission_timeout(
             estimated = int(node_info_service.node_data_size_mb / node_info_service.expected_throughput)
             soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
             hard_timeout = estimated * 4 + _STREAMING_OVERHEAD
+            # Account for topology coordinator state machine overhead.
+            if node:
+                tablet_count = _get_node_tablet_count(node)
+                tablet_overhead = tablet_count * _TOPOLOGY_OVERHEAD_PER_TABLET
+                soft_timeout += tablet_overhead
+                hard_timeout += tablet_overhead
+                LOGGER.debug(
+                    f"Tablets overhead {tablet_overhead}. Tablet count is {tablet_count}. Soft timeout  "
+                    f"is {soft_timeout} hard timeout {hard_timeout}."
+                )
             return (soft_timeout, hard_timeout), node_info
         else:
             # For non-tablet cases, calculate based on data size
@@ -218,7 +253,7 @@ class Operations(Enum):
 
     maps to (function, (required arguments))"""
 
-    DECOMMISSION = ("decommission", _get_decommission_timeout, ())
+    DECOMMISSION = ("decommission", _get_decommission_timeout, ("node",))
     NEW_NODE = ("new_node", _get_new_node_timeout, ("timeout",))
     CREATE_INDEX = ("create_index", _get_soft_timeout, ("timeout",))
     START_SCYLLA = ("start_scylla", _get_soft_timeout, ("timeout",))
@@ -326,6 +361,8 @@ def adaptive_timeout(  # noqa: PLR0914
     tablets_enabled = kwargs["node_available"] and is_tablets_feature_enabled(node)
 
     _, timeout_func, required_arg_names = operation.value
+    # Make node available for operations that declare it in required_arg_names
+    kwargs["node"] = node
     args = {arg: kwargs[arg] for arg in required_arg_names}
 
     # if node is known to be not available, skip metrics gathering and use default timeouts
