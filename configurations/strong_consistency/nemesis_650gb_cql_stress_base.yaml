@@ -20,3 +20,11 @@ round_robin: true
 
 user_prefix: 'perf-lat-nemesis-cqls'
 email_subject_postfix: 'latency during topology operations'
+
+# configurations/disable_speculative_retry.yaml, which these jobs stack earlier in the chain, ALTERs
+# three tables (keyspace1.standard1, scylla_bench.test, custom_d3_w1.table1). That list is safe only
+# for the gradual-throughput test class, which filters it down to its own keyspace in
+# run_post_prepare_cql() before executing. PerformanceRegressionTest.preload_data() runs every command
+# as-is, so narrow the list to the only table these jobs create - otherwise the run dies with
+# "Keyspace scylla_bench does not exist" right after the population phase.
+post_prepare_cql_cmds: ["ALTER TABLE keyspace1.standard1 WITH speculative_retry = 'NONE'"]
