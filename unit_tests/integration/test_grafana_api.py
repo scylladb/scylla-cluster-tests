@@ -60,7 +60,7 @@ LOGGER = logging.getLogger(__name__)
 GRAFANA_ADMIN = ("admin", "admin")
 
 # One release per API generation, oldest first:
-#   11.x  -- no /apis surface, must fall back to the legacy endpoint
+#   11.x  -- serves /apis, but no dashboard.grafana.app group, so the legacy fallback must engage
 #   12.0  -- earliest /apis surface, serves v1beta1 only
 #   12.4  -- the version shipped by scylla-monitoring branch-4.15
 #   13.1  -- adds v1 and prefers v2, so it proves v1beta1 is still served
@@ -108,9 +108,20 @@ def fixture_grafana(request: pytest.FixtureRequest):
 
 
 def _wait_for_grafana(base_url: str, version: str) -> None:
+    """Wait until both the legacy API and the /apis surface give a settled answer.
+
+    ``/api/health`` turns 200 well before the apiserver that backs ``/apis`` finishes
+    registering -- on a busy machine the gap reached ~14s on 11.6.6 -- and inside that window
+    every ``/apis`` request answers 503 instead of the 404 that tells a pre-12 Grafana apart
+    from a newer one. Gating on ``/apis`` too removes that race; the surface is settled once
+    it stops answering 5xx, whether it ends up serving the groups (200) or not (404).
+    """
+
     def healthy():
         try:
-            return requests.get(f"{base_url}/api/health", timeout=5).ok
+            if not requests.get(f"{base_url}/api/health", timeout=5).ok:
+                return False
+            return requests.get(f"{base_url}/apis", auth=GRAFANA_ADMIN, timeout=5).status_code < 500
         except requests.RequestException:
             return False
 
