@@ -98,6 +98,7 @@ jobs:
     params:
       region: "eu-west-2"
       sub_tests: '["test_mixed_gradual_increase_load"]'
+      requested_by_user: "juliayakovlev"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-vnodes"
     backend: "aws"
@@ -118,6 +119,7 @@ jobs:
     params:
       region: "eu-west-1"
       sub_tests: '["test_latency_mixed_with_nemesis"]'
+      requested_by_user: "juliayakovlev"
 
   # === x86 vnodes — retired (kept for reference) ===
 
@@ -176,6 +178,7 @@ jobs:
     params:
       region: "us-east-1"
       microbenchmark: "true"
+      requested_by_user: "juliayakovlev"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-write"
     backend: "aws"
@@ -184,6 +187,7 @@ jobs:
     params:
       region: "us-east-1"
       microbenchmark: "true"
+      requested_by_user: "juliayakovlev"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64"
     backend: "aws"
@@ -191,6 +195,7 @@ jobs:
     params:
       region: "us-east-1"
       microbenchmark: "true"
+      requested_by_user: "juliayakovlev"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64-write"
     backend: "aws"
@@ -198,6 +203,7 @@ jobs:
     params:
       region: "us-east-1"
       microbenchmark: "true"
+      requested_by_user: "juliayakovlev"
 
   # The `scylla perf-cql-raw` tool is not available in 2026.1 and will not be supported there,
   # so these jobs are excluded from that release.
@@ -208,6 +214,7 @@ jobs:
     params:
       region: "us-east-1"
       microbenchmark: "true"
+      requested_by_user: "juliayakovlev"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_x86_64-write"
     backend: "aws"
@@ -216,6 +223,7 @@ jobs:
     params:
       region: "us-east-1"
       microbenchmark: "true"
+      requested_by_user: "juliayakovlev"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_arm64"
     backend: "aws"
@@ -225,6 +233,7 @@ jobs:
     params:
       region: "us-east-1"
       microbenchmark: "true"
+      requested_by_user: "juliayakovlev"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_arm64-write"
     backend: "aws"
@@ -234,6 +243,7 @@ jobs:
     params:
       region: "us-east-1"
       microbenchmark: "true"
+      requested_by_user: "juliayakovlev"
 
   # === Daily sanity perf (master-only) ===
 
@@ -293,6 +303,7 @@ jobs:
     params:
       region: "us-west-2"
       sub_tests: '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_write_gradual_increase_load", "test_read_disk_only_gradual_increase_load"]'
+      requested_by_user: "juliayakovlev"
 
   # === x86 tablets — retired (kept for reference) ===
 
@@ -361,6 +372,7 @@ jobs:
       sub_tests: '["test_latency_mixed_with_upgrade"]'
       rolling_upgrade_test: "true"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch_id}/deb/unified/latest/scylladb-{branch}/scylla.list"
+      requested_by_user: "juliayakovlev"
 
   # === i8g tablets latency with nemesis (3-weekly) ===
 
@@ -383,6 +395,7 @@ jobs:
     params:
       region: "eu-west-2"
       sub_tests: '["test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"]'
+      requested_by_user: "juliayakovlev"
 
   # === Elasticity (monthly) ===
 
@@ -394,6 +407,7 @@ jobs:
     params:
       region: "eu-north-1"
       sub_tests: '["test_latency_mixed_with_nemesis"]'
+      requested_by_user: "juliayakovlev"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-2.5tb-i8g-elasticity"
     backend: "aws"
