@@ -37,6 +37,13 @@ GRAFANA_DASHBOARD_API_PATH = "/apis/dashboard.grafana.app/v1beta1/namespaces/def
 # Legacy dashboard endpoint, kept for Grafana < 12 (no /apis surface at all - verified 404 on 11.6.6)
 GRAFANA_LEGACY_DASHBOARD_API_PATH = "/api/dashboards/db"
 
+# Statuses that mean "the /apis surface cannot serve this upload", so the legacy endpoint takes over:
+#   404 - the dashboard group is not served at all (every Grafana before 12)
+#   503 - the apiserver behind /apis is registered but not ready yet. /api/health turns 200 before
+#         it does, so a dashboard upload issued right after a Grafana starts can land in that window
+#         (observed on 11.6.6: /api/health answered 200 ~14s before /apis stopped being unavailable)
+NEW_DASHBOARD_API_UNAVAILABLE_STATUSES = frozenset({http.HTTPStatus.NOT_FOUND, http.HTTPStatus.SERVICE_UNAVAILABLE})
+
 # Annotations and Search have no /apis replacement yet (as of Grafana 13)
 GRAFANA_ANNOTATIONS_API_PATH = "/api/annotations"
 GRAFANA_SEARCH_API_PATH = "/api/search"
@@ -108,8 +115,9 @@ def upload_dashboard(
 
     Uses ``PUT`` on the named resource so re-uploads update in place rather than failing
     with 409 Conflict, and falls back to the legacy ``/api/dashboards/db`` endpoint when the
-    /apis surface is absent (Grafana < 12), which is reachable when restoring an archived
-    monitoring stack pinned to an older Grafana.
+    /apis surface cannot serve the upload - either absent (Grafana < 12), which is reachable
+    when restoring an archived monitoring stack pinned to an older Grafana, or not ready yet
+    on a Grafana that has only just started.
 
     Returns the final :class:`requests.Response` so callers keep their own success handling.
     """
@@ -123,12 +131,13 @@ def upload_dashboard(
         timeout=timeout,
         **request_kwargs,
     )
-    if response.status_code != http.HTTPStatus.NOT_FOUND:
+    if response.status_code not in NEW_DASHBOARD_API_UNAVAILABLE_STATUSES:
         return response
 
     LOGGER.debug(
-        "Grafana at %s has no %s endpoint, falling back to %s",
+        "Grafana at %s answered %s for %s, falling back to %s",
         base_url,
+        response.status_code,
         GRAFANA_DASHBOARD_API_PATH,
         GRAFANA_LEGACY_DASHBOARD_API_PATH,
     )
