@@ -203,6 +203,18 @@ def mocked_s3():
         yield s3
 
 
+@pytest.fixture(autouse=True)
+def _clear_keystore_cache():
+    """The cache is process-wide, so it has to be dropped between tests.
+
+    Without this, `test_bypass_cache_updates_cached_value` (which rewrites `email_config.json` in
+    the bucket and then restores it) leaves the rewritten bytes cached for every later test.
+    """
+    KeyStore.clear_cache(KeyStore())
+    yield
+    KeyStore.clear_cache(KeyStore())
+
+
 @pytest.fixture
 def ks(mocked_s3):
     """Return a fresh KeyStore inside the moto context (S3 backend, see autouse fixture)."""
@@ -746,13 +758,41 @@ class TestCaching:
             ks.get_file_contents("azure.json")
             assert mock_fetch.call_count == 2
 
-    def test_cache_is_per_instance(self, mocked_s3):
+    def test_cache_is_shared_between_instances(self, mocked_s3):
+        """The whole point: nothing in SCT keeps a KeyStore, so a per-instance cache never hit."""
         ks1 = KeyStore()
         ks2 = KeyStore()
         ks1.get_file_contents("email_config.json")
         with patch.object(ks2, "_fetch_from_s3", wraps=ks2._fetch_from_s3) as mock_fetch:
             ks2.get_file_contents("email_config.json")
-            mock_fetch.assert_called_once()
+            mock_fetch.assert_not_called()
+
+    def test_the_real_call_shape_only_fetches_once(self, mocked_s3):
+        """`KeyStore().get_json(...)` repeated is how every call site in SCT is actually written."""
+        with patch.object(KeyStore, "_fetch_from_s3", autospec=True, side_effect=KeyStore._fetch_from_s3) as fetch:
+            for _ in range(4):
+                KeyStore().get_json("email_config.json")
+        assert fetch.call_count == 1
+
+    def test_backends_do_not_serve_each_others_bytes(self, mocked_s3, monkeypatch):
+        """A name means different content per backend, so the key cannot be the name alone."""
+        s3_store = KeyStore(backend="s3")
+        s3_store.get_file_contents("email_config.json")
+
+        sm_store = KeyStore(backend="secretsmanager")
+        with patch.object(sm_store, "_fetch_from_secrets_manager", return_value=b"{}") as sm_fetch:
+            sm_store.get_file_contents("email_config.json")
+            sm_fetch.assert_called_once(), "the S3 entry must not satisfy a Secrets Manager read"
+
+    def test_prefix_is_part_of_the_key(self, mocked_s3, monkeypatch):
+        """`SCT_KEYSTORE_SM_PREFIX` selects a different secret for the same file name."""
+        monkeypatch.setenv("SCT_KEYSTORE_BACKEND", "secretsmanager")
+        monkeypatch.setenv("SCT_KEYSTORE_SM_PREFIX", "prod/")
+        with patch.object(KeyStore, "_fetch_from_secrets_manager", return_value=b"{}") as fetch:
+            KeyStore().get_file_contents("email_config.json")
+            monkeypatch.setenv("SCT_KEYSTORE_SM_PREFIX", "staging/")
+            KeyStore().get_file_contents("email_config.json")
+        assert fetch.call_count == 2
 
     def test_cache_thread_safe(self, ks):
         results = []
