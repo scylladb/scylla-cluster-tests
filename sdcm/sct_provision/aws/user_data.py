@@ -8,6 +8,7 @@ from email.mime.multipart import MIMEMultipart
 from pydantic import Field, computed_field
 
 from sdcm.provision.aws.configuration_script import AWSConfigurationScriptBuilder
+from sdcm.provision.common.utils import guest_firewall_needs_disabling
 from sdcm.provision.common.user_data import (
     UserDataBuilderBase,
     DataDeviceType,
@@ -77,6 +78,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
             params=self.params,
             install_docker=self.install_docker,
             install_agent=self.install_agent,
+            disable_guest_firewall=guest_firewall_needs_disabling(self.params),
         ).to_string()
         LOGGER.debug("post_boot_script: %s", post_boot_script)
         return base64.b64encode(post_boot_script.encode("utf-8")).decode("ascii")
@@ -149,5 +151,6 @@ class AWSInstanceUserDataBuilder(UserDataBuilderBase):
             params=self.params,
             install_docker=self.install_docker,
             install_agent=self.install_agent,
+            disable_guest_firewall=guest_firewall_needs_disabling(self.params),
         ).to_string()
         return post_boot_script
