@@ -18,6 +18,7 @@ from typing import ClassVar
 from pydantic import BaseModel
 
 from sdcm.sct_config.types import Boolean, SctField, String, StringOrList
+from sdcm.sct_config.validation import cross_field_check
 
 
 class KubernetesConfigMixin(BaseModel):
@@ -164,3 +165,10 @@ class KubernetesConfigMixin(BaseModel):
     mini_k8s_version: String = SctField(
         description="Specifies the version of the mini K8S cluster to be used.",
     )
+
+    @cross_field_check
+    def check_k8s_sni_requires_tls(self):
+        """SNI routing only means anything over a TLS connection."""
+        if self.k8s_enable_sni and not self.k8s_enable_tls:
+            raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
+        return self

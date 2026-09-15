@@ -29,6 +29,7 @@ from sdcm.sct_config.types import (
     StringOrList,
     dict_or_str_or_pydantic,
 )
+from sdcm.sct_config.validation import cross_field_check
 from sdcm.test_metadata import TestMetadata
 
 
@@ -358,3 +359,14 @@ class CommonConfigMixin(BaseModel):
     zero_token_instance_type_db: String = SctField(
         description="Instance type for zero-token DB nodes -- nodes that join the ring for reads/writes but own no token range. Falls back to 'instance_type_db' when unset.",
     )
+
+    @cross_field_check
+    def check_common_dns_names_supported_by_backend(self):
+        """Only the backends whose provider hands out resolvable instance DNS records support this.
+
+        Reads `cluster_backend`, which this mixin owns; an unset backend is left alone, since the
+        configuration is then not yet aimed at one.
+        """
+        if self.use_dns_names and self.cluster_backend and self.cluster_backend not in ("aws", "gce", "oci"):
+            raise ValueError(f"use_dns_names is not supported for {self.cluster_backend} backend")
+        return self
