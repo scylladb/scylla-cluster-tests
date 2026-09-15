@@ -161,3 +161,20 @@ def test_topology_nemesis_is_inherited_from_the_base_test_case(conf):
     """NemesisSequence is the disruption that grows, replaces and shrinks the cluster."""
     assert conf.get("nemesis_class_name") == ["SisyphusMonkey"]
     assert conf.get("nemesis_selector") == ["NemesisSequence"]
+
+
+@pytest.mark.parametrize("conf", list(ALL_PIPELINES), indirect=True)
+def test_post_prepare_cql_cmds_only_touch_tables_these_jobs_create(conf):
+    """disable_speculative_retry.yaml ALTERs three tables, and PerformanceRegressionTest runs them all.
+
+    Unlike the gradual-throughput class, preload_data() does not filter the list down to its own
+    keyspace, so a command naming a keyspace the chain never creates aborts the run right after the
+    population phase with "Keyspace <name> does not exist".
+    """
+    created_keyspaces = {"keyspace1"}
+    for cmd in _as_list(conf.get("post_prepare_cql_cmds")):
+        keyspace = re.search(r"ALTER TABLE\s+(\w+)\.", cmd, re.IGNORECASE)
+        assert keyspace, f"cannot tell which keyspace this command targets: {cmd}"
+        assert keyspace.group(1) in created_keyspaces, (
+            f"post_prepare_cql_cmds targets {keyspace.group(1)}, which these jobs never create: {cmd}"
+        )
