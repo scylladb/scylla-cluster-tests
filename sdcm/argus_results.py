@@ -320,7 +320,7 @@ def send_result_to_argus(  # noqa: PLR0914
     skip_hdr_tag = hdr_summary_len == 1 or (workload == "mixed" and hdr_summary_len == 2)
     for i, (workload_type_and_hdr_tag, hdr_data) in enumerate(hdr_summary.items()):
         (workload_type, hdr_tag) = workload_type_and_hdr_tag.split("--", maxsplit=1)
-        row_name = f"{cycle}" + "" if skip_hdr_tag else f" (HDR tag: {hdr_tag})"
+        row_name = cycle if skip_hdr_tag else f"{cycle} (HDR tag: {hdr_tag})"
         for percentile in ("90", "99"):
             if (workload_type, percentile) not in summary_worst_lat:
                 summary_worst_lat[(workload_type, percentile)] = 0.0
