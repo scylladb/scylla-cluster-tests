@@ -66,15 +66,27 @@ already runs hydra to create the SCT runner and hard-fails without AWS credentia
 genuinely absent (local development), fall back to the on-demand catalog price and mark the result
 as such. **The estimate must never fail its caller.**
 
-### 2. GCE — keep it in the catalog
+### 2. GCE — keep it in the catalog, but source it from the Billing API
 
-GCE has no cheap live equivalent: pricing needs the Cloud Billing Catalog API with a key, or
-scraping. It does not need one. GCP sets spot prices administratively and changes them at most
-monthly, so a checked-in value is accurate in a way an AWS one never is.
+GCE stays catalog-only at estimate time, and this was checked rather than assumed. Its pricing
+API is shaped differently from the AWS one: the Cloud Billing Catalog API is a bulk listing of
+every Compute Engine SKU, not a targeted "price these three machine types now" query. Listing
+thousands of SKUs to price three machine types is the wrong shape for a per-run call, and buys
+nothing anyway — GCP sets spot prices administratively and moves them at most monthly, so a
+checked-in value is accurate here in a way an AWS one never is.
 
-The generator already scrapes Google's general-purpose and storage-optimized pricing pages; spot
-prices live on the dedicated Spot VMs pricing page and carry per-machine-type values for the
-families SCT uses, z3 included. One extra request at generation time, none at estimate time.
+For the *generator*, though, that API is clearly the better source than today's scraping. The
+pages the generator parses are 18 MB (spot) and 36 MB (on-demand), take seconds to fetch, and are
+matched with regexes that break whenever Google restyles a page. The Catalog API returns
+structured per-region SKU rates for the same data, including spot, and needs no API key — the
+existing keystore service account authenticates fine.
+
+**Prerequisite:** the Cloud Billing API is currently disabled on the SCT project, so the call
+fails with an explicit "has not been used in project ... or it is disabled" error. Enabling it is
+a one-line project change and there is no published per-call charge for the API; the practical
+limit is a 300-calls-per-minute-per-project quota, against which a monthly catalog regeneration
+is nothing. Page count and latency should be measured once it is enabled — that number is not yet
+known, and the scrape remains the fallback until it is.
 
 ### 3. Refresh cadence
 
@@ -127,8 +139,9 @@ Azure and OCI spot. AZ-level price selection: the spread is reported, not modell
 - `sdcm/utils/cloud_catalog/cost.py` -- **introduced by PR #15987** -- resolve AWS spot live and
   GCE spot from the catalog; derive lifecycle from config; report spot estimate, on-demand ceiling,
   AZ spread and the fallback warning; degrade to catalog pricing without credentials
-- `sdcm/utils/cloud_catalog/catalog_generator.py` -- scrape the GCE spot pricing page; fetch AWS
-  interruption-rate buckets from the advisor dataset
+- `sdcm/utils/cloud_catalog/catalog_generator.py` -- source GCE spot (and ideally on-demand)
+  rates from the Cloud Billing Catalog API instead of scraping, keeping the scrape as a fallback;
+  fetch AWS interruption-rate buckets from the advisor dataset
 - `sdcm/utils/cloud_catalog/instance_catalog.py` -- carry GCE spot price and AWS interruption
   bucket, with per-region accessors mirroring the on-demand one
 - `data/instance_catalog/gce.yaml` -- regenerated with spot prices
@@ -146,6 +159,8 @@ Azure and OCI spot. AZ-level price selection: the spread is reported, not modell
 - [ ] With AWS credentials unavailable the estimate still returns, marked as on-demand-based, and
       never raises
 - [ ] Estimating a GCE config makes no network calls at all
+- [ ] GCE catalog generation via the Billing API produces the same prices as the scrape it
+      replaces, for a sample of machine types SCT runs
 - [ ] A spot estimate is materially below the on-demand estimate for the same config, and both are
       reported
 - [ ] A config with fallback enabled produces a visible warning and shows the on-demand ceiling
