@@ -367,7 +367,7 @@ class CloudNode(cluster.BaseNode):
         pass
 
     @xcloud_super_if_supported
-    def wait_db_up(self, verbose=True, timeout=3600):
+    def wait_db_up(self, verbose=True, timeout=3600, diagnose_after=cluster.DB_UP_DIAGNOSTICS_DELAY):
         pass
 
     @xcloud_super_if_supported

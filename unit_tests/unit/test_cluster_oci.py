@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from sdcm.cluster_oci import CreateOciNodeError, OciCluster, OciNode
+from sdcm.sct_provision.user_data_objects.firewall import DisableFirewallUserDataObject
 from sdcm.utils.oci_utils import SECONDARY_VNICS_SCRIPT_PATH
 
 from unit_tests.lib.oci_test_helpers import (
@@ -552,3 +553,35 @@ def test_wait_for_private_dns_records_skipped_without_dns_names():
     node._wait_for_private_dns_records(timeout=5, interval=1)
 
     node.check_dns_ready.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("backend", "applicable"),
+    [("oci", True), ("aws", False), ("gce", False), ("azure", False)],
+)
+def test_the_firewall_is_only_disabled_at_boot_on_oci(backend, applicable):
+    """Only the OCI images ship a ruleset which blocks everything but SSH and restores it on boot.
+
+    The other backends have nothing to disable, and touching their nodes' firewall from
+    cloud-init would change their behaviour for no reason.
+    """
+    user_data_object = DisableFirewallUserDataObject(
+        test_config=Mock(),
+        params={"cluster_backend": backend},
+        instance_name="node-1",
+        node_type="scylla-db",
+    )
+
+    assert user_data_object.is_applicable is applicable
+
+
+def test_the_boot_script_removes_what_restores_the_ruleset():
+    """Flushing the live tables is not what makes it stick - dropping the saved rules is."""
+    script = DisableFirewallUserDataObject(
+        test_config=Mock(), params={"cluster_backend": "oci"}, instance_name="node-1", node_type="scylla-db"
+    ).script_to_run
+
+    assert "rm -f /etc/iptables/rules.v4 /etc/iptables/rules.v6" in script
+    assert "systemctl disable --now $service" in script
+    for service in ("ufw", "netfilter-persistent", "nftables"):
+        assert service in script
