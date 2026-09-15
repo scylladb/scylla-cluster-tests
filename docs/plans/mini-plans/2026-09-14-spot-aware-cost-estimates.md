@@ -22,22 +22,14 @@ more expensive than it is.
 
 Both halves of the design were measured rather than assumed.
 
-**Spot is genuinely volatile.** Over 90 days, for five instance types SCT runs, in us-east-1 and
-eu-west-1: prices change 2-4 times per AZ per day, with a 21%-132% min-to-max spread. A cached
-value drifts 8% after a week and 12% after a month (worst case seen: 40%). For comparison, the
-spread *across AZs at any single instant* is 22%-38% — so no single number per region-and-type is
-ever precise, however fresh.
+**AWS spot is genuinely volatile.** Over 90 days, five instance types SCT runs, us-east-1 and
+eu-west-1: prices change 2-4 times per AZ per day, 21%-132% min-to-max spread. A cached value
+drifts 8% after a week, 12% after a month (worst seen: 40%). But the spread *across AZs at any
+instant* is 22%-38% — so no single number per region-and-type is ever precise, however fresh.
 
 **But the AWS API is far cheaper than assumed.** `DescribeSpotPriceHistory` takes a *list* of
-instance types, so the unit of work is a region, not an instance type:
-
-| Query | Latency | Result |
-|---|---|---|
-| 3 instance types (a whole run), current prices | ~190 ms | 16 rows, no pagination |
-| 15 instance types | ~200 ms | 80 rows, no pagination |
-
-Call cost is essentially independent of how many instance types are asked for. **Caching AWS spot
-prices buys nothing and costs 12% accuracy.**
+instance types, so the unit of work is a region, not an instance type: 3 types cost ~190 ms and 15
+cost ~200 ms, both unpaginated. **Caching AWS spot prices buys nothing and costs 12% accuracy.**
 
 ## Approach
 
@@ -63,30 +55,45 @@ precision.
 
 Credentials are available where this runs: the estimate stage sits on the Jenkins builder, which
 already runs hydra to create the SCT runner and hard-fails without AWS credentials. Where they are
-genuinely absent (local development), fall back to the on-demand catalog price and mark the result
-as such. **The estimate must never fail its caller.**
+absent (local development), fall back to the on-demand catalog price and say so. **The estimate
+must never fail its caller.**
 
-### 2. GCE — keep it in the catalog, but source it from the Billing API
+### 2. GCE — keep it in the catalog, sourced from the Billing Catalog API
 
-GCE stays catalog-only at estimate time, and this was checked rather than assumed. Its pricing
-API is shaped differently from the AWS one: the Cloud Billing Catalog API is a bulk listing of
-every Compute Engine SKU, not a targeted "price these three machine types now" query. Listing
-thousands of SKUs to price three machine types is the wrong shape for a per-run call, and buys
-nothing anyway — GCP sets spot prices administratively and moves them at most monthly, so a
-checked-in value is accurate here in a way an AWS one never is.
+GCE stays catalog-only at estimate time, verified rather than assumed. Its pricing API is shaped
+differently from the AWS one: the Cloud Billing Catalog API only lists *every* Compute Engine SKU,
+with no server-side filter by family, region or usage type. Measured on the SCT project:
 
-For the *generator*, though, that API is clearly the better source than today's scraping. The
-pages the generator parses are 18 MB (spot) and 36 MB (on-demand), take seconds to fetch, and are
-matched with regexes that break whenever Google restyles a page. The Catalog API returns
-structured per-region SKU rates for the same data, including spot, and needs no API key — the
-existing keystore service account authenticates fine.
+| Property | Measured |
+|---|---|
+| API calls for a full listing | 7 (pages of 5,000) |
+| Wall time | ~13 s median (8.8 s - 18.7 s over 3 runs) |
+| Payload | 28.3 MB, 32,873 SKUs |
+| Of which Spot | 3,816, of which 1,332 in families SCT uses, across 48 regions |
 
-**Prerequisite:** the Cloud Billing API is currently disabled on the SCT project, so the call
-fails with an explicit "has not been used in project ... or it is disabled" error. Enabling it is
-a one-line project change and there is no published per-call charge for the API; the practical
-limit is a 300-calls-per-minute-per-project quota, against which a monthly catalog regeneration
-is nothing. Page count and latency should be measured once it is enabled — that number is not yet
-known, and the scrape remains the fallback until it is.
+Pulling 28 MB to price three machine types is the wrong shape for a per-run call, and buys nothing
+anyway: GCP sets spot administratively, so the value barely moves between catalog refreshes.
+
+For the *generator* it is clearly better than today's scraping, which fetches an 18.4 MB spot page
+and a 35.7 MB on-demand page and matches them with regexes that break whenever Google restyles.
+One structured source replaces both, and needs no API key — the existing keystore service account
+authenticates with the `cloud-platform` scope.
+
+**Validated end to end.** GCE prices are resource-based: a machine type's rate is
+`vcpus x Core rate + memory_gb x Ram rate`, per family per region, with spot carried as the
+`Preemptible` usage type. Recomputing *on-demand* this way reproduces the checked-in catalog
+exactly for N2 and E2, standard and highmem — which is what confirms the SKU selection is right,
+and therefore that the spot figures derived the same way are trustworthy.
+
+**The spot discount is strongly region-dependent** and must be stored per region, not as one
+global rate: for the same N2 core it ranges from 40% off in us-east1 to 71-78% off in
+europe-west1, asia-northeast1 and southamerica-east1.
+
+**Cost of using it:** no published per-call charge — the Catalog API serves *"publicly available
+Google Cloud pricing information"*. The binding limit is quota, 300 calls per minute per project
+(975 per organisation). Seven calls per monthly regeneration is roughly 2% of a single minute's
+allowance, so quota is not a constraint at any plausible cadence. The API must be enabled on the
+project (`cloudbilling.googleapis.com`); it was disabled until this plan was written.
 
 ### 3. Refresh cadence
 
@@ -98,19 +105,17 @@ known, and the scrape remains the fallback until it is.
 ### 4. Keep the interruption rate, drop the rest of the advisor
 
 AWS publishes a Spot Instance Advisor dataset as public JSON needing no credentials — one request
-covers 34 regions and ~1,150 instance types. Its savings percentages are now redundant against
-live pricing, but its **interruption-rate bucket is not available from the pricing API at all**,
-and is the input a later "is spot safe for this run" decision needs. A run that is cheap but
-likely to be killed is not cheap. Store that one field in the catalog; it is a slow-moving
-aggregate, so monthly refresh suits it.
+(1.2 MB, ~1.8 s) covers 34 regions and ~1,150 instance types. Its savings percentages are redundant
+against live pricing, but its **interruption-rate bucket is not available from the pricing API at
+all**, and is what a later "is spot safe for this run" decision needs — a run that is cheap but
+likely to be killed is not cheap. Store that one field; monthly refresh suits it.
 
 ### 5. Why not a shared S3 cache
 
 Considered and rejected on the measurements above. For AWS it would add a writer, a bucket,
-credentials, a staleness policy and new failure modes in order to save roughly 200 ms per
-provisioning event, while making every price up to a cache-window old. For GCE the checked-in
-catalog already *is* the cache, refreshed on the same cadence the prices move. Revisit only if
-API throttling ever shows up, which a few dozen describe calls a day will not cause.
+credentials, a staleness policy and new failure modes to save ~200 ms per provisioning event,
+while making every price up to a cache-window old. For GCE the checked-in catalog already *is*
+the cache. Revisit only if throttling appears, which a few dozen calls a day will not cause.
 
 ### 6. Fallback to on-demand must be visible in estimate and bill
 
