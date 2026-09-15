@@ -30,6 +30,7 @@ from sdcm.sct_provision.user_data_objects.syslog_ng import SyslogNgUserDataObjec
 from sdcm.sct_provision.user_data_objects.vector_dev import VectorDevUserDataObject
 from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
 from sdcm.sct_provision.user_data_objects.docker_service import DockerUserDataObject
+from sdcm.sct_provision.user_data_objects.firewall import DisableFirewallUserDataObject
 from sdcm.sct_provision.user_data_objects.sct_agent import SctAgentUserDataObject
 from sdcm.test_config import TestConfig
 
@@ -233,6 +234,7 @@ class DefinitionBuilder(abc.ABC):
 
     def _get_user_data_objects(self, instance_name: str, node_type: NodeTypeType) -> List[SctUserDataObject]:
         user_data_object_classes: List[Type[SctUserDataObject]] = [
+            DisableFirewallUserDataObject,
             DisableAptTriggersUserDataObject,
             SyslogNgUserDataObject,
             SyslogNgExporterUserDataObject,
