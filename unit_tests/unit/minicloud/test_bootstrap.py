@@ -61,3 +61,32 @@ def test_ensure_minicloud_ready_falls_through_to_auto_start(monkeypatch):
     mock_manager.preflight_check.assert_called_once_with(params=None)
     mock_manager.start.assert_called_once()
     mock_manager.prepare_regions.assert_called_once()
+
+
+def test_ensure_minicloud_ready_validates_params_when_adopting_a_healthy_container(monkeypatch):
+    """Adopting a running emulator must not skip the overlay check.
+
+    The healthy path returns before manager.preflight_check(), so a standalone
+    provision-resources against an already-started container would otherwise proceed with
+    spot, public-IP SSH, KMS, placement groups or capacity reservations still enabled and
+    fail on the unsupported operation instead of here.
+    """
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    params = MagicMock()
+
+    with patch("sdcm.utils.minicloud.bootstrap.check_minicloud_reachability", return_value=True):
+        with patch("sdcm.utils.minicloud.bootstrap.validate_minicloud_params") as mock_validate:
+            ensure_minicloud_ready(params=params)
+
+    mock_validate.assert_called_once_with(params)
+
+
+def test_ensure_minicloud_ready_healthy_path_tolerates_no_params(monkeypatch):
+    """Callers without an SCTConfiguration to hand must still be able to adopt a container."""
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+
+    with patch("sdcm.utils.minicloud.bootstrap.check_minicloud_reachability", return_value=True):
+        with patch("sdcm.utils.minicloud.bootstrap.validate_minicloud_params") as mock_validate:
+            ensure_minicloud_ready()
+
+    mock_validate.assert_not_called()

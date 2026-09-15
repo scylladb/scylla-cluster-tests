@@ -144,6 +144,30 @@ def test_check_host_memory_counts_every_guest_pool(tmp_path):
             manager._check_host_memory(params)
 
 
+@pytest.mark.parametrize("db_type", ["mixed_scylla", "mixed_cassandra"])
+def test_check_host_memory_counts_the_oracle_pool_for_both_mixed_db_types(tmp_path, db_type):
+    """Both mixed types provision an oracle pool, by different routes.
+
+    mixed_scylla goes through _create_oracle_cluster(); mixed_cassandra builds a
+    CassandraAWSCluster directly with n_nodes=n_test_oracle_db_nodes and node_type="oracle-db",
+    so searching tester.py for the helper alone finds only one of the two and the pool of the
+    other goes unbudgeted.
+    """
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
+    # 3 db + 1 loader + 1 monitor + 1 oracle = 6 guests x 4GiB + 2GiB = 26GiB, over the 24GiB
+    # the same shape without an oracle node fits into.
+    params = {
+        "db_type": db_type,
+        "n_db_nodes": 3,
+        "n_loaders": 1,
+        "n_monitor_nodes": 1,
+        "n_test_oracle_db_nodes": 1,
+    }
+    with _meminfo_path_patch(24 * 1024 * 1024):
+        with pytest.raises(MinicloudError, match="6 guest"):
+            manager._check_host_memory(params)
+
+
 def test_check_host_memory_ignores_the_oracle_pool_without_a_mixed_db_type(tmp_path):
     """n_test_oracle_db_nodes defaults to 1, but the oracle cluster only exists for mixed db_type.
 
