@@ -199,8 +199,11 @@ jobs:
       region: "us-east-1"
       microbenchmark: "true"
 
+  # The `scylla perf-cql-raw` tool is not available in 2026.1 and will not be supported there,
+  # so these jobs are excluded from that release.
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_x86_64"
     backend: "aws"
+    exclude_versions: ["2026.1"]
     labels: []
     params:
       region: "us-east-1"
@@ -208,6 +211,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_x86_64-write"
     backend: "aws"
+    exclude_versions: ["2026.1"]
     labels: []
     params:
       region: "us-east-1"
@@ -216,6 +220,7 @@ jobs:
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_arm64"
     backend: "aws"
     arch: "aarch64"
+    exclude_versions: ["2026.1"]
     labels: []
     params:
       region: "us-east-1"
@@ -224,6 +229,7 @@ jobs:
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_arm64-write"
     backend: "aws"
     arch: "aarch64"
+    exclude_versions: ["2026.1"]
     labels: []
     params:
       region: "us-east-1"
