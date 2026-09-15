@@ -397,24 +397,19 @@ class S3Storage:
             headers = {"Authorization": f"token {creds['token']}", **creds["extra_headers"]}
 
             try:
-                response = requests.head(link, allow_redirects=True, headers=headers, timeout=30)
-
-                # Check if we got redirected properly
-                if response.history:
-                    redirect_location = response.history[-1].headers.get("location")
-                    if redirect_location:
-                        link = redirect_location
-                    else:
+                # Argus answers with a 302 to a pre-signed S3 URL, and we only need that location
+                # header. We ask for it with a GET we don't follow, and not with a HEAD: since the
+                # FastAPI migration Argus answers 405 to HEAD on this endpoint (ARGUS-233).
+                # `stream=True` keeps us from pulling a body if the answer isn't the redirect.
+                with requests.get(link, allow_redirects=False, headers=headers, timeout=30, stream=True) as response:
+                    redirect_location = response.headers.get("location")
+                    if not redirect_location:
                         raise RuntimeError(
-                            f"Argus redirect failed: no location header found. "
+                            f"Argus communication failed: no redirect returned. "
+                            f"This may indicate authentication issues or a Cloudflare access problem. "
                             f"Status: {response.status_code}, URL: {response.url}"
                         )
-                else:
-                    raise RuntimeError(
-                        f"Argus communication failed: no redirect occurred. "
-                        f"This may indicate authentication issues or a Cloudflare access problem. "
-                        f"Status: {response.status_code}, URL: {response.url}"
-                    )
+                    link = redirect_location
 
                 # remove query parameters from the link, we don't need them for S3 download
                 link = urljoin(link, urlparse(link).path)

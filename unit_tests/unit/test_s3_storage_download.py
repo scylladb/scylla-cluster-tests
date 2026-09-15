@@ -53,6 +53,17 @@ def fast_retry(monkeypatch):
     yield
 
 
+def mock_redirect_response(location=None, status_code=302, url=None):
+    """Build a mocked non-followed response, as returned by an un-redirected GET."""
+    response = Mock()
+    response.headers = {"location": location} if location else {}
+    response.status_code = status_code
+    response.url = url or "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=False)
+    return response
+
+
 def test_download_direct_s3_link_success(tmp_path):
     """Test successful download with direct S3 link."""
     s3_link = "https://cloudius-jenkins-test.s3.amazonaws.com/test-path/test-file.tar.zst"
@@ -79,16 +90,12 @@ def test_download_argus_link_success(tmp_path, mock_keystore):
     argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
     s3_link = "https://cloudius-jenkins-test.s3.amazonaws.com/test-path/file.tar.zst?signature=xyz"
 
-    # Mock requests.head to simulate successful Argus redirect
-    mock_response = Mock()
-    mock_response.history = [Mock()]
-    mock_response.history[0].headers = {"location": s3_link}
-    mock_response.status_code = 200
+    mock_response = mock_redirect_response(location=s3_link)
 
     mock_bucket = Mock()
     mock_bucket.download_file = Mock()
 
-    with patch("requests.head", return_value=mock_response):
+    with patch("requests.get", return_value=mock_response):
         with patch("boto3.resource") as mock_boto3:
             mock_boto3.return_value.Bucket.return_value = mock_bucket
 
@@ -104,16 +111,15 @@ def test_download_argus_link_success(tmp_path, mock_keystore):
 
 
 def test_download_argus_link_no_redirect_fails(tmp_path, mock_keystore):
-    """Test failure when Argus doesn't redirect (e.g., Cloudflare login page)."""
+    """Test failure when Argus answers a page instead of a redirect (e.g. Cloudflare login)."""
     argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
 
-    # Mock requests.head to simulate no redirect (Cloudflare login page)
-    mock_response = Mock()
-    mock_response.history = []  # No redirect occurred
-    mock_response.status_code = 200
-    mock_response.url = "https://scylladb.cloudflareaccess.com/cdn-cgi/access/login/argus.scylladb.com"
+    mock_response = mock_redirect_response(
+        status_code=200,
+        url="https://scylladb.cloudflareaccess.com/cdn-cgi/access/login/argus.scylladb.com",
+    )
 
-    with patch("requests.head", return_value=mock_response):
+    with patch("requests.get", return_value=mock_response):
         with patch("boto3.resource"):
             storage = S3Storage()
 
@@ -121,35 +127,36 @@ def test_download_argus_link_no_redirect_fails(tmp_path, mock_keystore):
                 storage.download_file(argus_link, str(tmp_path))
 
             assert "Argus communication failed" in str(exc_info.value)
-            assert "no redirect occurred" in str(exc_info.value)
+            assert "no redirect returned" in str(exc_info.value)
 
 
-def test_download_argus_link_no_location_header_fails(tmp_path, mock_keystore):
-    """Test failure when Argus redirect has no location header."""
+def test_download_argus_link_uses_get_not_head(tmp_path, mock_keystore):
+    """Argus answers 405 to HEAD since the FastAPI migration, so the link must be resolved with GET."""
     argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
+    s3_link = "https://cloudius-jenkins-test.s3.amazonaws.com/test-path/file.tar.zst?signature=xyz"
 
-    # Mock requests.head to simulate redirect without location header
-    mock_response = Mock()
-    mock_response.history = [Mock()]
-    mock_response.history[0].headers = {}  # No location header
-    mock_response.status_code = 200
+    mock_bucket = Mock()
+    mock_bucket.download_file = Mock()
 
-    with patch("requests.head", return_value=mock_response):
-        with patch("boto3.resource"):
-            storage = S3Storage()
+    with patch("requests.get", return_value=mock_redirect_response(location=s3_link)) as mock_get:
+        with patch("requests.head", side_effect=AssertionError("HEAD is answered with 405 by Argus")):
+            with patch("boto3.resource") as mock_boto3:
+                mock_boto3.return_value.Bucket.return_value = mock_bucket
 
-            with pytest.raises(RuntimeError) as exc_info:
+                (tmp_path / "file.tar.zst").write_text("test content")
+
+                storage = S3Storage()
                 storage.download_file(argus_link, str(tmp_path))
 
-            assert "Argus redirect failed" in str(exc_info.value)
-            assert "no location header found" in str(exc_info.value)
+    assert mock_get.call_args.kwargs["allow_redirects"] is False
+    assert mock_get.call_args.kwargs["stream"] is True
 
 
 def test_download_argus_request_exception_fails(tmp_path, mock_keystore):
     """Test failure when request to Argus raises an exception."""
     argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
 
-    with patch("requests.head", side_effect=requests.exceptions.ConnectionError("Connection failed")):
+    with patch("requests.get", side_effect=requests.exceptions.ConnectionError("Connection failed")):
         with patch("boto3.resource"):
             storage = S3Storage()
 
@@ -198,23 +205,19 @@ def test_download_with_retry_on_argus_failure(tmp_path, mock_keystore):
     argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
 
     # First two attempts fail with no redirect, third succeeds
-    mock_response_fail = Mock()
-    mock_response_fail.history = []
-    mock_response_fail.status_code = 200
-    mock_response_fail.url = "https://scylladb.cloudflareaccess.com/cdn-cgi/access/login/argus.scylladb.com"
-
-    mock_response_success = Mock()
-    mock_response_success.history = [Mock()]
-    mock_response_success.history[0].headers = {
-        "location": "https://cloudius-jenkins-test.s3.amazonaws.com/test-path/file.tar.zst"
-    }
-    mock_response_success.status_code = 200
+    mock_response_fail = mock_redirect_response(
+        status_code=200,
+        url="https://scylladb.cloudflareaccess.com/cdn-cgi/access/login/argus.scylladb.com",
+    )
+    mock_response_success = mock_redirect_response(
+        location="https://cloudius-jenkins-test.s3.amazonaws.com/test-path/file.tar.zst"
+    )
 
     mock_bucket = Mock()
     mock_bucket.download_file = Mock()
 
     with patch(
-        "requests.head",
+        "requests.get",
         side_effect=[
             mock_response_fail,  # First attempt fails
             mock_response_fail,  # Second attempt fails
@@ -240,12 +243,12 @@ def test_download_retries_exhausted_fails(tmp_path, mock_keystore):
     argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
 
     # All attempts fail with no redirect
-    mock_response = Mock()
-    mock_response.history = []
-    mock_response.status_code = 200
-    mock_response.url = "https://scylladb.cloudflareaccess.com/cdn-cgi/access/login/argus.scylladb.com"
+    mock_response = mock_redirect_response(
+        status_code=200,
+        url="https://scylladb.cloudflareaccess.com/cdn-cgi/access/login/argus.scylladb.com",
+    )
 
-    with patch("requests.head", return_value=mock_response):
+    with patch("requests.get", return_value=mock_response):
         with patch("boto3.resource"):
             storage = S3Storage()
 
