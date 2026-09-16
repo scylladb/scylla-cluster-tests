@@ -208,14 +208,54 @@ dataset, same nemesis - so a failure that reproduces on both is not an SC bug.
 The test-case has to come first: `enable_experimental_sc.yaml` *replaces* `append_scylla_args`, so a
 reordered chain silently leaves the default `--blocked-reactor-notify-ms 25` in place.
 
-### Two details worth knowing
+### How the strongly consistent keyspace gets created
 
-**Keyspace creation.** `LongevityTest.test_custom_time` calls `run_pre_create_keyspace()` before
-`run_pre_create_schema()`, and the latter issues `CREATE KEYSPACE IF NOT EXISTS`. The strongly
-consistent keyspace from `pre_create_keyspace` therefore survives, and `pre_create_schema` only adds
-`keyspace1.standard1`. Were those two calls ever reordered, the `consistency = 'global'` clause would
-be dropped and the job would quietly become an EC run - which is why
-`unit_tests/unit/test_sc_sanity_longevity_pipeline.py` asserts the clause on the resolved config.
+**The keyspace is created by cql-stress, not by SCT.** `consistency` is a cql-stress extension to
+the `-schema replication(...)` sub-parameters. It is not passed into the CQL replication map but
+lifted out into a top-level keyspace property, so
+
+```
+-schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,consistency=global)'
+```
+
+emits
+
+```sql
+CREATE KEYSPACE IF NOT EXISTS "keyspace1"
+  WITH REPLICATION = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}
+  AND consistency = 'global';
+```
+
+Accepted values are `global` and `eventual`; omit it and no clause is emitted, so existing runs are
+unaffected. `local` is rejected at parse time. Four constraints come with it:
+
+1. **`cl=QUORUM` is required.** The default is `local_one`, which a strongly consistent keyspace
+   rejects for writes, so the run fails at startup. Reads accept `ONE`/`LOCAL_ONE`, but those turn
+   leader-aware routing off and would measure the wrong thing.
+2. **`NetworkTopologyStrategy` is required.** The default `-schema` is `SimpleStrategy`, which
+   2026.2+ rejects outright because it cannot do tablet replication, and a non-tablet keyspace
+   cannot carry the consistency option.
+3. **Only `write` and `counterwrite` create the keyspace.** A read-only run expects it to already
+   exist, which is why the prepare phase is a write. `CREATE KEYSPACE IF NOT EXISTS` will *not*
+   upgrade a leftover eventually consistent keyspace, so drop it when switching modes - this is the
+   trap to watch for with `SCT_REUSE_CLUSTER`.
+4. **Every node needs `--experimental-features=strongly-consistent-tables`.** The cluster feature
+   gating `consistency = 'global'` only turns on once all nodes carry the flag. SCT's
+   `experimental_features` option is applied by the cluster-level scylla.yaml builder, so this
+   holds automatically.
+
+The flag does not apply to user profiles: `user` mode runs the profile's own `keyspace_definition`
+and never executes the `-schema` DDL, so cql-stress rejects it at parse time.
+
+Because cql-stress owns keyspace creation, **`pre_create_schema` must stay `false`**. It is not
+merely redundant: `_pre_create_schema()` calls `tester.create_keyspace()`, which emits no
+consistency clause, and cql-stress's `IF NOT EXISTS` would then silently no-op against the
+eventually consistent keyspace it finds. The result is a green EC run wearing an SC label, which is
+why `unit_tests/unit/test_sc_sanity_longevity_pipeline.py` asserts the option is off.
+
+Tablets are pinned on via `append_scylla_yaml` rather than inherited from the Scylla default,
+because cql-stress's `-schema` cannot emit a `tablets = {...}` clause and tablets are what carry the
+feature.
 
 **Encryption is off.** `cql-stress` does not support it, and the encrypted path is already covered by
 `longevity-100gb-4h`. This also keeps the job aligned with the SC performance jobs, which all run
