@@ -600,7 +600,11 @@ class CassandraStressThread(DockerBasedStressThread):
             # Total GC memory           : 0.000 KiB
             # Total GC time             :    0.0 seconds
             key = line[:split_idx].strip().lower()
-            value = line[split_idx + 1 :].split()[0].replace(",", "")
+            if not (value_tokens := line[split_idx + 1 :].split()):
+                # A section header inside the summary, e.g. the "Coordinators:" block that
+                # cql-stress prints when the command carries '-log coordinators=true'.
+                continue
+            value = value_tokens[0].replace(",", "")
             results[key] = value
             match = re.findall(r"\[READ:\s([\d,]+\.\d+)\sms,\sWRITE:\s([\d,]+\.\d)\sms\]", line)
             if match:  # parse results for mixed workload

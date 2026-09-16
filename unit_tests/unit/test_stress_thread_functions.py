@@ -342,3 +342,50 @@ def test_apply_gemini_stress_duration(original_cmd, stress_duration, expected_cm
 )
 def test_extract_gemini_seed(gemini_cmd, expected_seed):
     assert extract_gemini_seed(gemini_cmd) == expected_seed
+
+
+# --- _parse_stress_summary tests ---
+
+CQL_STRESS_SUMMARY = """TAG: loader_idx:2-cpu_idx:0-keyspace_idx:1
+******************** Stress Settings ********************
+Command:
+  Type: write
+  Count: 10485760
+  No Warmup: true
+
+Results:
+Op rate                   :     9,999 op/s
+Latency mean              :    1.1 ms
+Latency 99th percentile   :    5.4 ms
+Total operations          : 10,485,760
+Total errors              :          0
+Total operation time      : 00:17:28
+"""
+
+
+def test_parse_stress_summary_parses_cql_stress_results():
+    results = CassandraStressThread._parse_stress_summary(None, CQL_STRESS_SUMMARY.splitlines())
+
+    assert results["loader_idx"] == "2"
+    assert results["op rate"] == "9999"
+    assert results["latency 99th percentile"] == "5.4"
+    assert results["total operations"] == "10485760"
+    assert results["total errors"] == "0"
+
+
+def test_parse_stress_summary_skips_valueless_section_headers():
+    """cql-stress prints a 'Coordinators:' block inside the summary with '-log coordinators=true'.
+
+    Its header line has nothing after the colon, which used to raise IndexError and fail the test.
+    """
+    lines = CQL_STRESS_SUMMARY.splitlines() + [
+        "Coordinators:",
+        "  10.4.0.1: 3,495,253",
+        "  10.4.0.2: 3,495,253",
+    ]
+
+    results = CassandraStressThread._parse_stress_summary(None, lines)
+
+    assert "coordinators" not in results
+    assert results["op rate"] == "9999"
+    assert results["10.4.0.1"] == "3495253"
