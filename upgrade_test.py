@@ -769,12 +769,12 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.actions_log.info("Running stress workload before upgrade")
         if self.should_do_complex_profile():
             # complex workload: prepare write
-            self.actions_log.info("Starting complex c-s workload (5M) to prepare data")
+            self.actions_log.info("Starting complex latte workload to prepare data")
             stress_cmd_complex_prepare = self.params.get("stress_cmd_complex_prepare")
-            complex_cs_thread_pools = self._run_all_stress_cmds([], params={"stress_cmd": stress_cmd_complex_prepare})
+            complex_thread_pools = self._run_all_stress_cmds([], params={"stress_cmd": stress_cmd_complex_prepare})
 
             # wait for the complex workload to finish
-            for pool in complex_cs_thread_pools:
+            for pool in complex_thread_pools:
                 self.verify_stress_thread(pool)
 
         self.actions_log.info("Checking paged query before upgrading nodes")
@@ -936,14 +936,12 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self.verify_stress_thread(pool)
 
         if self.should_do_complex_profile():
-            # complex workload: verify data by simple read cl=ALL
-            self.actions_log.info("Starting c-s complex workload to verify data by simple read")
+            # complex workload: verify data by simple read cl=ONE
+            self.actions_log.info("Starting complex latte workload to verify data by simple read")
             stress_cmd_complex_verify_read = self.params.get("stress_cmd_complex_verify_read")
-            complex_cs_thread_pools = self._run_all_stress_cmds(
-                [], params={"stress_cmd": stress_cmd_complex_verify_read}
-            )
+            complex_thread_pools = self._run_all_stress_cmds([], params={"stress_cmd": stress_cmd_complex_verify_read})
             # wait for the read complex workload to finish
-            for pool in complex_cs_thread_pools:
+            for pool in complex_thread_pools:
                 self.verify_stress_thread(pool)
 
         self.actions_log.info("Will check paged query after upgrading all nodes")
