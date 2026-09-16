@@ -1,0 +1,492 @@
+// Rolling-upgrade workload with a complex schema.
+//
+// The schema creates `keyspace_complex.user_with_ck`, a wide table with many CQL types,
+// a static column, two user-defined types, a compound primary key, and a secondary index
+// on `email`. The keyspace, table, and index names are fixed because the rolling-upgrade
+// test depends on them.
+//
+// Each row is deterministic for its index, so reads can rebuild the expected row and
+// compare every column. Any mismatch calls `signal_failure`, and the default fail-fast
+// strategy ends the run with an error.
+//
+// USAGE:
+//
+// 1) Create schema:
+//    $ latte schema data_dir/latte/complex_schema.rn -P replication_factor=3 -- 172.17.0.2
+// 2) Populate:
+//    One row is written per cycle, so `-d` should usually match `row_count`. A smaller `-d`
+//    deliberately covers only the first rows, which is how `stress_cmd_complex_verify_delete`
+//    deletes a subset.
+//    $ latte run data_dir/latte/complex_schema.rn -q \
+//        -f insert --consistency ALL -d 5000000 -P row_count=5000000 -- 172.17.0.2
+// 3) Verify by primary key and secondary index:
+//    $ latte run data_dir/latte/complex_schema.rn -q \
+//        -f read_by_key:1 -f read_by_email:1 \
+//        --consistency ONE -d 5000000 -P row_count=5000000 -- 172.17.0.2
+//
+// `read_by_ck`, the `update_*` functions, and `delete_row` cover the remaining old
+// profile operations. They are kept for `stress_cmd_complex_verify_more` and
+// `stress_cmd_complex_verify_delete`, but the rolling-upgrade test does not use them.
+
+use latte::*;
+
+// ========================================
+// Schema parameters
+// ========================================
+const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
+// NOTE: emit the tablets clause only when `tablets` is explicitly `false`.
+//       `configurations/tablets_disabled.yaml` relies on this. Otherwise, keep the
+//       cluster default so `latte schema` uses the pre-upgrade settings.
+const TABLETS = latte::param!("tablets", true);
+const COMPACTION_STRATEGY = latte::param!("compaction_strategy", "TimeWindowCompactionStrategy");
+
+// ========================================
+// Data manipulation parameters
+// ========================================
+const ROW_COUNT = latte::param!("row_count", 5_000_000);
+const OFFSET = latte::param!("offset", 0);
+
+const KEYSPACE = "keyspace_complex";
+const TABLE = "user_with_ck";
+const INDEX_NAME = "email_ind";
+const UDT_HASH_AND_BASENAME = "hash_and_basename";
+// NOTE: 'address' holds collections, so it must be frozen. Scylla rejects the non-frozen form with
+//       "Non-frozen UDTs with nested non-frozen collections are not supported".
+//       'hash_and_basename' has no collections, so stays non-frozen.
+//       This table covers both forms.
+const UDT_ADDRESS = "address";
+
+const KEY_SIZE = 10;
+
+const P_STMT_INSERT = "latte_prep_stmt__complex_insert";
+const P_STMT_READ_BY_KEY = "latte_prep_stmt__complex_read_by_key";
+const P_STMT_READ_BY_CK = "latte_prep_stmt__complex_read_by_ck";
+const P_STMT_READ_BY_EMAIL = "latte_prep_stmt__complex_read_by_email";
+const P_STMT_UPDATE_STATIC = "latte_prep_stmt__complex_update_static";
+const P_STMT_UPDATE_TTL = "latte_prep_stmt__complex_update_ttl";
+const P_STMT_UPDATE_DIFF1_TS = "latte_prep_stmt__complex_update_diff1_ts";
+const P_STMT_UPDATE_DIFF2_TS = "latte_prep_stmt__complex_update_diff2_ts";
+const P_STMT_UPDATE_SAME1_TS = "latte_prep_stmt__complex_update_same1_ts";
+const P_STMT_UPDATE_SAME2_TS = "latte_prep_stmt__complex_update_same2_ts";
+const P_STMT_DELETE_ROW = "latte_prep_stmt__complex_delete_row";
+
+// Column order used by the INSERT statement and by the generated row data.
+const COLUMNS = [
+    "key", "md5", "email", "static_int",
+    "a", "b", "c", "d", "e", "f", "g", "h",
+    "char", "vchar", "finished", "osirisjson", "ip", "size", "imagebase",
+    "small_num", "tiny_num", "vint", "decimal_num", "double_num", "float_num",
+    "start_date", "start_time", "check_date", "pass_date", "upload_time", "user_uid",
+    "name_set", "name_list", "hash_basename", "home_addr",
+];
+
+// The 4th timeuuid group must start with a variant hex digit. RFC 4122 uses the top two bits
+// for the variant, so only '8', '9', 'a', and 'b' are valid.
+const UUID_VARIANT_NIBBLES = ["8", "9", "a", "b"];
+
+// ========================================
+// schema(db) - called by 'latte schema'
+// ========================================
+
+pub async fn schema(db) {
+    // NOTE: 'tablets' is a keyspace option, not a table one. Scylla rejects it on a table with
+    //       "Unknown tablet hint 'enabled'".
+    let tablets = "";
+    if !TABLETS {
+        tablets = " AND tablets = {'enabled': false}";
+    }
+
+    db.execute(`
+        CREATE KEYSPACE IF NOT EXISTS ${KEYSPACE}
+        WITH replication = {
+          'class'              : 'NetworkTopologyStrategy',
+          'replication_factor' : ${REPLICATION_FACTOR}
+        }${tablets}
+    `).await?;
+    println!("rune-info: Created keyspace '{ks}'", ks=KEYSPACE);
+
+    db.execute(
+        `CREATE TYPE IF NOT EXISTS ${KEYSPACE}.${UDT_HASH_AND_BASENAME} (md5 text, basename text)`
+    ).await?;
+    db.execute(
+        `CREATE TYPE IF NOT EXISTS ${KEYSPACE}.${UDT_ADDRESS} (` +
+        "street text, city text, zip_code int," +
+        " phones set<text>, map1 map<text, text>, map2 map<int, text>)"
+    ).await?;
+    println!("rune-info: Created user-defined types in '{ks}'", ks=KEYSPACE);
+
+    db.execute(`
+        CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE} (
+            key blob,
+            md5 text,
+            email text,
+            static_int int static,
+            a blob,
+            b text,
+            c ascii,
+            d varchar,
+            e boolean,
+            f inet,
+            g int,
+            h bigint,
+            char ascii,
+            vchar varchar,
+            finished boolean,
+            osirisjson blob,
+            ip inet,
+            size int,
+            imagebase bigint,
+            small_num smallint,
+            tiny_num tinyint,
+            vint varint,
+            decimal_num decimal,
+            double_num double,
+            float_num float,
+            start_date date,
+            start_time time,
+            check_date timestamp,
+            pass_date timestamp,
+            upload_time timeuuid,
+            user_uid uuid,
+            name_set set<text>,
+            name_list list<text>,
+            hash_basename ${UDT_HASH_AND_BASENAME},
+            home_addr frozen<${UDT_ADDRESS}>,
+            PRIMARY KEY (key, md5)
+        ) WITH compaction = { 'class' : '${COMPACTION_STRATEGY}' }
+    `).await?;
+    println!("rune-info: Created table '{ks}.{table}'", ks=KEYSPACE, table=TABLE);
+
+    db.execute(
+        `CREATE INDEX IF NOT EXISTS ${INDEX_NAME} ON ${KEYSPACE}.${TABLE} (email)`
+    ).await?;
+    println!("rune-info: Created secondary index '{idx}' on 'email'", idx=INDEX_NAME);
+}
+
+// ========================================
+// prepare(db) - called by 'latte run'
+// ========================================
+
+pub async fn prepare(db) {
+    if ROW_COUNT < 1 {
+        return Err("'row_count' cannot be less than '1'")
+    }
+    println!("debug: Keyspace: {keyspace}", keyspace=KEYSPACE);
+
+    let insert_cols = "";
+    let insert_vals = "";
+    for col_name in COLUMNS {
+        if !insert_cols.is_empty() {
+            insert_cols += ", ";
+            insert_vals += ", ";
+        }
+        insert_cols += col_name;
+        insert_vals += `:b_${col_name}`;
+    }
+
+    db.prepare(
+        P_STMT_INSERT,
+        `INSERT INTO ${KEYSPACE}.${TABLE}(${insert_cols}) VALUES (${insert_vals})`
+    ).await?;
+    db.prepare(
+        P_STMT_READ_BY_KEY,
+        `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE key = :b_key LIMIT 1`
+    ).await?;
+    db.prepare(
+        P_STMT_READ_BY_CK,
+        `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE key = :b_key AND md5 = :b_md5 LIMIT 1`
+    ).await?;
+    // NOTE: this also checks that the secondary index exists; if `email_ind` is missing,
+    //       preparing the statement fails before any cycle runs.
+    db.prepare(
+        P_STMT_READ_BY_EMAIL,
+        `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE email = :b_email LIMIT 1`
+    ).await?;
+
+    db.prepare(
+        P_STMT_UPDATE_STATIC,
+        `UPDATE ${KEYSPACE}.${TABLE} USING TTL 5 SET static_int = :b_static_int WHERE key = :b_key`
+    ).await?;
+    db.prepare(
+        P_STMT_UPDATE_TTL,
+        `UPDATE ${KEYSPACE}.${TABLE} USING TTL 5 SET check_date = :b_check_date` +
+        " WHERE key = :b_key AND md5 = :b_md5"
+    ).await?;
+    db.prepare(
+        P_STMT_UPDATE_DIFF1_TS,
+        `UPDATE ${KEYSPACE}.${TABLE} USING TIMESTAMP 10 SET check_date = :b_check_date` +
+        " WHERE key = :b_key AND md5 = :b_md5"
+    ).await?;
+    db.prepare(
+        P_STMT_UPDATE_DIFF2_TS,
+        `UPDATE ${KEYSPACE}.${TABLE} USING TIMESTAMP 5 SET pass_date = :b_pass_date` +
+        " WHERE key = :b_key AND md5 = :b_md5"
+    ).await?;
+    db.prepare(
+        P_STMT_UPDATE_SAME1_TS,
+        `UPDATE ${KEYSPACE}.${TABLE} USING TIMESTAMP 10` +
+        " SET check_date = '2018-01-01T11:21:59.001+0000' WHERE key = :b_key AND md5 = :b_md5"
+    ).await?;
+    db.prepare(
+        P_STMT_UPDATE_SAME2_TS,
+        `UPDATE ${KEYSPACE}.${TABLE} USING TIMESTAMP 10` +
+        " SET pass_date = '2018-01-01T11:21:59.001+0000' WHERE key = :b_key AND md5 = :b_md5"
+    ).await?;
+    db.prepare(
+        P_STMT_DELETE_ROW,
+        `DELETE FROM ${KEYSPACE}.${TABLE} WHERE key = :b_key AND md5 = :b_md5`
+    ).await?;
+}
+
+// ========================================
+// Utility functions
+// ========================================
+
+/// Convert a cycle index to a row index.
+/// One row is written per cycle, so `row_count` cycles cover every row once.
+fn get_row_idx(i) {
+    i % ROW_COUNT + OFFSET
+}
+
+fn generate_decimal(idx) {
+    if idx % 24 == 0 {
+        None
+    } else if idx % 2 == 0 {
+        // NOTE: '4_503_599_627_370_495' is '2^52 - 1', the biggest integer that the mantissa of
+        //       a double holds without a loss of precision.
+        `${hash_range(idx, 4_503_599_627_370_495)}`
+    } else {
+        `${hash_range(idx, 9876543)}.${hash_range(idx + 4321, 9876543)}`
+    }
+}
+
+/// Build a deterministic row for a given row index.
+/// `idx` controls both the null pattern and the generated values, so the same index
+/// always produces the same row and reads can reconstruct the expected result.
+fn generate_row_data(idx) {
+    let mult = if idx % 2 == 0 { -1 } else { 1 };
+
+    let key = blob(idx, KEY_SIZE);
+    let md5 = text(idx, 32);
+    let email = `user${idx}@scylladb.com`;
+
+    let ret = #{
+        "key": key,
+        "md5": md5,
+        "email": email,
+        "static_int": if idx % 31 == 0 { None } else { hash_range(idx, 2_147_483_647) * mult },
+        "a": if idx % 16 == 0 { None } else { blob(idx + 400, 64) },
+        "b": if idx % 14 == 0 { None } else { text(idx + 200, 32) },
+        "c": if idx % 13 == 0 { None } else { text(idx + 300, 24) },
+        "d": if idx % 15 == 0 { None } else { text(idx + 500, 32) },
+        "e": if idx % 3 == 0 { None } else { idx % 3 == 1 },
+        "f": if idx % 17 == 0 { None } else { generate_inet(idx) },
+        "g": if idx % 29 == 0 { None } else { hash_range(idx + 1500, 2_147_483_647) * mult },
+        "h": if idx % 37 == 0 { None } else { hash(idx) * mult },
+        "char": if idx % 18 == 0 { None } else { text(idx + 600, 16) },
+        "vchar": if idx % 19 == 0 { None } else { text(idx + 700, 24) },
+        "finished": if idx % 5 == 0 { None } else { idx % 5 == 1 },
+        "osirisjson": if idx % 20 == 0 { None } else { blob(idx + 800, 48) },
+        "ip": if idx % 21 == 0 { None } else { generate_inet(idx + 900) },
+        "size": if idx % 22 == 0 { None } else { hash_range(idx, 2_147_483_647) },
+        "imagebase": if idx % 26 == 0 { None } else { hash(idx + 1000) },
+        "small_num": if idx % 23 == 0 { None } else { hash_range(idx, 32_767) * mult },
+        "tiny_num": if idx % 27 == 0 { None } else { hash_range(idx, 127) * mult },
+        "vint": if idx % 28 == 0 { None } else { hash_range(idx, 9_223_372_036_854_775_807) * mult },
+        "decimal_num": generate_decimal(idx),
+        "double_num": if idx % 12 == 0 { None } else { normal(idx, 0.0, 1234567890.0) },
+        "float_num": if idx % 11 == 0 { None } else { normal_f32(idx, 1234.0, 999.9) },
+        // NOTE: `date` and `time` are generated in the numeric form the driver returns, so they
+        //       can be compared like any other column. A `date` is the day count since
+        //       1970-01-01 offset by 2^31; a `time` is nanoseconds since midnight. Written as
+        //       strings they would come back as those numbers and never match.
+        "start_date": if idx % 30 == 0 { None } else { 2_147_483_648 + hash_range(idx, 20_000) },
+        "start_time": if idx % 32 == 0 { None } else { hash_range(idx + 777, 86_399_999_999_999) },
+        "check_date": if idx % 33 == 0 { None } else { hash(idx + 888) },
+        "pass_date": if idx % 34 == 0 { None } else { hash(idx + 999) },
+        "upload_time": if idx % 35 == 0 { None } else {
+            let variant = UUID_VARIANT_NIBBLES[idx % 4];
+            `474ecf7${idx % 7}-4fea-11ef-${variant}eba-${idx % 8}${idx % 9}1023456789`
+        },
+        "user_uid": if idx % 36 == 0 { None } else { uuid(idx) },
+        "name_set": if idx % 25 == 0 { None } else { [text(idx + 1100, 12), text(idx + 1200, 12)] },
+        "name_list": if idx % 38 == 0 { None } else { [text(idx + 1300, 12), text(idx + 1400, 12)] },
+        "hash_basename": if idx % 39 == 0 { None } else {
+            #{"md5": text(idx + 1500, 32), "basename": text(idx + 1600, 16)}
+        },
+        "home_addr": generate_address(idx),
+    };
+    if !is_none(ret.name_set) {
+        ret.name_set.sort();
+    }
+    ret
+}
+
+/// Build the 'address' user-defined type value.
+/// Its nested collections are sorted, so they compare equal to the driver output.
+fn generate_address(idx) {
+    if idx % 40 == 0 {
+        return None;
+    }
+
+    let phones = [text(idx + 1700, 10), text(idx + 1800, 10)];
+    phones.sort();
+    let map1 = [
+        (text(idx + 1900, 8), text(idx + 2000, 12)),
+        (text(idx + 2100, 8), text(idx + 2200, 12)),
+    ];
+    map1.sort();
+
+    // both entries are derived from one random draw, so the map keeps its expected size
+    let map2_key = hash_range(idx + 2300, 1_000_000);
+    let map2 = [
+        (map2_key * 2, text(idx + 2400, 12)),
+        (map2_key * 2 + 1, text(idx + 2500, 12)),
+    ];
+
+    #{
+        "street": text(idx + 2600, 24),
+        "city": text(idx + 2700, 16),
+        "zip_code": hash_range(idx, 99_999),
+        "phones": phones,
+        "map1": map1,
+        "map2": map2,
+    }
+}
+
+fn generate_inet(idx) {
+    `${hash_range(idx, 255)}` +
+    `.${hash_range(idx + 60, 255)}` +
+    `.${hash_range(idx + 120, 255)}` +
+    `.${hash_range(idx + 180, 255)}`
+}
+
+/// Ordered values for the INSERT statement, matching 'COLUMNS'.
+fn row_values(d) {
+    let values = [];
+    for col_name in COLUMNS {
+        values.push(d.get(col_name)?);
+    }
+    values
+}
+
+/// Compare each read row with the expected row.
+/// Any mismatch calls `signal_failure`, and the default fail-fast
+/// strategy turns that into a failed run.
+async fn validate_row(db, d, row, err_info) {
+    for col_name in COLUMNS {
+        let actual = row.get(col_name)?;
+        let expected = d.get(col_name)?;
+        if !is_none(expected) {
+            if col_name == "user_uid" || col_name == "decimal_num" {
+                expected = `${expected}`;
+            }
+            if actual != expected {
+                db.signal_failure(
+                    `${err_info}, column '${col_name}'. ` +
+                    `Actual value is '${actual}', but expected is '${expected}'`
+                ).await?;
+            }
+        } else {
+            if !is_none(actual) {
+                db.signal_failure(
+                    `${err_info}, column '${col_name}'. Expected NULL but got '${actual}'`
+                ).await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Run a single-row lookup and validate the row it returns.
+async fn read_and_validate(db, stmt_name, params, d, idx, lookup) {
+    let rows = db.execute_prepared_with_result(stmt_name, params).await?;
+    let rows_len = rows.len();
+    let err_info = `ks='${KEYSPACE}', table='${TABLE}', row_idx='${idx}', lookup='${lookup}'`;
+    if rows_len != 1 {
+        db.signal_failure(`Expected exactly 1 row but got '${rows_len}'. ${err_info}`).await?;
+    } else {
+        validate_row(db, d, rows.0, err_info).await?;
+    }
+    Ok(())
+}
+
+// ========================================
+// User functions (stress loop)
+// ========================================
+
+/// Write one fully populated row per cycle.
+pub async fn insert(db, i) {
+    let d = generate_row_data(get_row_idx(i));
+    db.execute_prepared(P_STMT_INSERT, row_values(d)).await?
+}
+
+/// Read a row by its partition key and validate every column.
+pub async fn read_by_key(db, i) {
+    let idx = get_row_idx(i);
+    let d = generate_row_data(idx);
+    read_and_validate(db, P_STMT_READ_BY_KEY, [d.key], d, idx, "key").await?
+}
+
+/// Read a row by its full primary key and validate every column.
+pub async fn read_by_ck(db, i) {
+    let idx = get_row_idx(i);
+    let d = generate_row_data(idx);
+    read_and_validate(db, P_STMT_READ_BY_CK, [d.key, d.md5], d, idx, "key+md5").await?
+}
+
+/// Read a row through the 'email' secondary index and validate every column.
+pub async fn read_by_email(db, i) {
+    let idx = get_row_idx(i);
+    let d = generate_row_data(idx);
+    read_and_validate(db, P_STMT_READ_BY_EMAIL, [d.email], d, idx, "email").await?
+}
+
+/// Update the static column with a short TTL. Destructive, not used by the test today.
+pub async fn update_static(db, i) {
+    let idx = get_row_idx(i);
+    let d = generate_row_data(idx);
+    db.execute_prepared(P_STMT_UPDATE_STATIC, [d.static_int, d.key]).await?
+}
+
+/// Update a regular column with a short TTL. Destructive, not used by the test today.
+pub async fn update_ttl(db, i) {
+    let idx = get_row_idx(i);
+    let d = generate_row_data(idx);
+    db.execute_prepared(P_STMT_UPDATE_TTL, [d.check_date, d.key, d.md5]).await?
+}
+
+/// Write with an explicit low timestamp. Destructive, not used by the test today.
+pub async fn update_diff1_ts(db, i) {
+    let idx = get_row_idx(i);
+    let d = generate_row_data(idx);
+    db.execute_prepared(P_STMT_UPDATE_DIFF1_TS, [d.check_date, d.key, d.md5]).await?
+}
+
+/// Write another column with a different explicit timestamp. Destructive, not used today.
+pub async fn update_diff2_ts(db, i) {
+    let idx = get_row_idx(i);
+    let d = generate_row_data(idx);
+    db.execute_prepared(P_STMT_UPDATE_DIFF2_TS, [d.pass_date, d.key, d.md5]).await?
+}
+
+/// Write a constant value with a fixed timestamp. Destructive, not used by the test today.
+pub async fn update_same1_ts(db, i) {
+    let idx = get_row_idx(i);
+    let d = generate_row_data(idx);
+    db.execute_prepared(P_STMT_UPDATE_SAME1_TS, [d.key, d.md5]).await?
+}
+
+/// Write another constant value with the same timestamp. Destructive, not used today.
+pub async fn update_same2_ts(db, i) {
+    let idx = get_row_idx(i);
+    let d = generate_row_data(idx);
+    db.execute_prepared(P_STMT_UPDATE_SAME2_TS, [d.key, d.md5]).await?
+}
+
+/// Delete a row by its full primary key. Destructive, not used by the test today.
+pub async fn delete_row(db, i) {
+    let idx = get_row_idx(i);
+    let d = generate_row_data(idx);
+    db.execute_prepared(P_STMT_DELETE_ROW, [d.key, d.md5]).await?
+}

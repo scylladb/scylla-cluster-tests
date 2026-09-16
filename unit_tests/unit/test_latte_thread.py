@@ -11,7 +11,10 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import re
+
 import pytest
+import yaml
 
 from sdcm import sct_abs_path
 from sdcm.stress.latte_thread import (
@@ -24,6 +27,33 @@ from sdcm.stress.latte_thread import (
 pytestmark = [
     pytest.mark.usefixtures("events"),
 ]
+
+COMPLEX_CONFIG_FILES = (
+    "test-cases/upgrades/rolling-upgrade.yaml",
+    "configurations/azure/azure_rolling_upgrade.yaml",
+    "configurations/minicloud/rolling-upgrade.yaml",
+    "unit_tests/test_data/test_scylla_yaml_builders/rolling-upgrade.yaml",
+)
+COMPLEX_SCHEMA_SCRIPT = "data_dir/latte/complex_schema.rn"
+COMPLEX_CMD_EXPECTATIONS = {
+    "stress_cmd_complex_prepare": ("write", ["insert"]),
+    "stress_cmd_complex_verify_read": ("read", ["read_by_key", "read_by_email"]),
+    "stress_cmd_complex_verify_more": (
+        "mixed",
+        [
+            "read_by_key",
+            "read_by_ck",
+            "read_by_email",
+            "update_static",
+            "update_ttl",
+            "update_diff1_ts",
+            "update_diff2_ts",
+            "update_same1_ts",
+            "update_same2_ts",
+        ],
+    ),
+    "stress_cmd_complex_verify_delete": ("write", ["delete_row"]),
+}
 
 
 def test_05_latte_parse_final_output():
@@ -139,3 +169,32 @@ def test_find_latte_tags(cmd, items):
     assert len(result) == len(items), f"Expected: {items}, Actual: {result}"
     for item in items:
         assert item in result
+
+
+def _load_complex_cmd(config_file, param_name):
+    with open(sct_abs_path(config_file), encoding="utf-8") as config:
+        return yaml.safe_load(config)[param_name]
+
+
+@pytest.mark.parametrize("config_file", COMPLEX_CONFIG_FILES)
+@pytest.mark.parametrize("param_name", sorted(COMPLEX_CMD_EXPECTATIONS))
+def test_complex_schema_cmds_are_classified(config_file, param_name):
+    """Each complex command must run the rune script and map onto the right latte metrics."""
+    cmd = _load_complex_cmd(config_file, param_name)
+    expected_operation_type, expected_fn_names = COMPLEX_CMD_EXPECTATIONS[param_name]
+
+    assert COMPLEX_SCHEMA_SCRIPT in cmd
+    assert find_latte_fn_names(cmd) == expected_fn_names
+    assert get_latte_operation_type(cmd) == expected_operation_type
+
+
+@pytest.mark.parametrize("config_file", COMPLEX_CONFIG_FILES)
+@pytest.mark.parametrize("param_name", ("stress_cmd_complex_prepare", "stress_cmd_complex_verify_read"))
+def test_complex_schema_cmds_cover_every_row(config_file, param_name):
+    """The workload writes one row per cycle, so these steps must run exactly 'row_count' cycles."""
+    cmd = _load_complex_cmd(config_file, param_name)
+
+    cycles = re.search(r"-d (\d+)", cmd)
+    row_count = re.search(r"-P row_count=(\d+)", cmd)
+    assert cycles and row_count, f"missing -d or -P row_count in: {cmd}"
+    assert cycles.group(1) == row_count.group(1)
