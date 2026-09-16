@@ -2024,15 +2024,32 @@ class NemesisRunner:
         return disruptions
 
     def build_disruptions_by_name(self, disrupt_methods: List[str]):
-        """Builds list of available disruptions according to class names"""
+        """Builds list of available disruptions according to class names, honoring the
+        active nemesis_selector.
+
+        Raises if a name matches no known nemesis class (a typo, or a class that was
+        renamed or split). A name that exists but is excluded by the active selector (for
+        example a non-kubernetes nemesis while running on a kubernetes backend, where
+        build_disruptions_by_selector ANDs in "kubernetes") is expected and is skipped with
+        a warning instead. Raises if the selector excludes every requested name.
+        """
+        requested = set(disrupt_methods)
+        known = {cls.__name__ for cls in self.nemesis_registry.get_subclasses()}
+        if unknown := requested - known:
+            raise ValueError(f"Unknown nemesis class names in {disrupt_methods}: {sorted(unknown)}")
+
         method_selector = " or ".join(disrupt_methods)
         selector = f"{self.nemesis_selector} and ({method_selector})" if self.nemesis_selector else method_selector
         filtered = self.build_disruptions_by_selector(selector)
-        names = [func.__class__.__name__ for func in filtered]
-        assert names == disrupt_methods, (
-            f"Unable to find these disrupt methods: {set(disrupt_methods).difference(names)}"
-        )
-        return filtered
+        by_name = {func.__class__.__name__: func for func in filtered}
+
+        if excluded_by_selector := requested - by_name.keys():
+            self.log.warning(
+                "Nemesis excluded by active selector %r: %s", self.nemesis_selector, sorted(excluded_by_selector)
+            )
+        if not by_name:
+            raise ValueError(f"No nemesis left from {disrupt_methods} under selector {self.nemesis_selector!r}")
+        return list(by_name.values())
 
     @property
     def nemesis_selector(self) -> str:
