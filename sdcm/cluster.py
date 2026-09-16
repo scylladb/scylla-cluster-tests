@@ -2448,9 +2448,14 @@ class BaseNode(AutoSshContainerMixin):
         format for APT to use.
 
         Tries multiple HKP keyservers in order, and falls back to HTTPS if all HKP attempts fail.
+        Every gpg invocation is followed by `gpgconf --kill all` so its forked helper daemons
+        (`dirmngr`/`gpg-agent`) do not outlive the call inside the persistent SSH session.
         """
         self.remoter.sudo("mkdir -m 0755 -p /etc/apt/keyrings")
         temp_keyring = f"/tmp/temp-{uuid.uuid4()}.gpg"
+        # gpg forks dirmngr/gpg-agent, which then get stuck in the SSH session's systemd scope,
+        # delaying session teardown and tripping SSH_CONNECTIVITY soft timeouts.
+        kill_gpg_daemons = "gpgconf --homedir /tmp --kill all"
         try:
             # Import all keys into a temporary keyring
             for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
@@ -2470,6 +2475,7 @@ class BaseNode(AutoSshContainerMixin):
                         retry=1,
                         ignore_status=True,
                     )
+                    self.remoter.sudo(kill_gpg_daemons, ignore_status=True, verbose=False, timeout=60)
                     if result.ok:
                         LOGGER.debug("Fetched GPG key %s from %s", apt_key, keyserver)
                         key_fetched = True
@@ -2494,6 +2500,7 @@ class BaseNode(AutoSshContainerMixin):
                         retry=1,
                         ignore_status=True,
                     )
+                    self.remoter.sudo(kill_gpg_daemons, ignore_status=True, verbose=False, timeout=60)
                     if result.ok:
                         LOGGER.debug("Fetched GPG key %s from HTTPS fallback", apt_key)
                         key_fetched = True
@@ -2514,6 +2521,7 @@ class BaseNode(AutoSshContainerMixin):
             )
         finally:
             # Ensure cleanup
+            self.remoter.sudo(kill_gpg_daemons, ignore_status=True, verbose=False, timeout=60)
             self.remoter.sudo(f"rm -f {temp_keyring}", ignore_status=True)
 
     @retrying(
