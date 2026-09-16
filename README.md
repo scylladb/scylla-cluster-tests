@@ -220,6 +220,44 @@ so those tests won't honor what is set in `test-cases/your_config.yaml`.
 
 the available configuration options are listed in [configuration_options](./docs/configuration_options.md)
 
+<<<<<<< HEAD
+||||||| parent of 905145b03 (docs(sct_config): split the option reference by group, and finish the regrouping)
+- **[SCT Configuration Guide](./docs/sct-configuration.md)** - Comprehensive guide on how the configuration system works and how to add new options
+- **[Configuration Options Reference](./docs/configuration_options.md)** - Auto-generated list of all available configuration options
+- **[Cross-Cloud Instance Sizing](./docs/cross-cloud-sizing.md)** - Constraint-based instance selection across AWS, GCE, Azure, and OCI
+- **[Running against minicloud](./docs/minicloud.md)** - Local QEMU/KVM cloud emulation: run SCT tests without real cloud credentials or cost
+
+### Diagnostics Documentation
+
+- **[Kernel Panic Detection](./docs/kernel-panic-detection.md)** - How SCT detects kernel panics from cloud serial consoles, and how to troubleshoot false positives
+- **[Collected Log Files](./docs/collected-logs.md)** - What each log archive contains after a test run
+
+
+## Development Plans
+
+![Progress Roadmap](docs/plans/assets/progress-roadmap.svg)
+
+Active implementation plans for SCT are tracked in [docs/plans/MASTER.md](docs/plans/MASTER.md).
+For guidelines on creating new plans, see [docs/plans/INSTRUCTIONS.md](docs/plans/INSTRUCTIONS.md).
+=======
+- **[SCT Configuration Guide](./docs/sct-configuration.md)** - Comprehensive guide on how the configuration system works and how to add new options
+- **[Configuration Options Reference](./docs/configuration_options.md)** - Auto-generated index of all configuration options, grouped by backend, test type and concern
+- **[Cross-Cloud Instance Sizing](./docs/cross-cloud-sizing.md)** - Constraint-based instance selection across AWS, GCE, Azure, and OCI
+- **[Running against minicloud](./docs/minicloud.md)** - Local QEMU/KVM cloud emulation: run SCT tests without real cloud credentials or cost
+
+### Diagnostics Documentation
+
+- **[Kernel Panic Detection](./docs/kernel-panic-detection.md)** - How SCT detects kernel panics from cloud serial consoles, and how to troubleshoot false positives
+- **[Collected Log Files](./docs/collected-logs.md)** - What each log archive contains after a test run
+
+
+## Development Plans
+
+![Progress Roadmap](docs/plans/assets/progress-roadmap.svg)
+
+Active implementation plans for SCT are tracked in [docs/plans/MASTER.md](docs/plans/MASTER.md).
+For guidelines on creating new plans, see [docs/plans/INSTRUCTIONS.md](docs/plans/INSTRUCTIONS.md).
+>>>>>>> 905145b03 (docs(sct_config): split the option reference by group, and finish the regrouping)
 
 ## Types of Tests
 ### [Artifact tests](./docs/artifacts_test.md)
