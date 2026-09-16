@@ -289,6 +289,8 @@ class ScyllaYaml(BaseModel):
     #       allowed_repair_based_node_ops: "replace,removenode,rebuild"
     allowed_repair_based_node_ops: str = None
     enable_small_table_optimization_for_rbno: bool = None  # False
+    auto_repair_enabled_default: bool = None  # False
+    auto_repair_threshold_default_in_seconds: int = None  # 24 * 3600
     ring_delay_ms: int = None  # 30 * 1000
     shadow_round_ms: int = None  # 300 * 1000
     fd_max_interval_ms: int = None  # 2 * 1000
