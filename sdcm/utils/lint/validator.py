@@ -113,7 +113,6 @@ def validate_pipeline(pipeline_path: Path, env: dict[str, str]) -> tuple[bool, s
             for target, mock_fn in _CLOUD_API_PATCHES.items():
                 stack.enter_context(patch(target, side_effect=mock_fn))
             stack.enter_context(patch.object(SCTConfiguration, "_validate_cloud_backend_parameters"))
-            stack.enter_context(patch.object(SCTConfiguration, "_validate_docker_backend_parameters"))
             stack.enter_context(patch.object(SCTConfiguration, "_resolve_xcloud_version_tag"))
             config = SCTConfiguration()
             config.verify_configuration()
