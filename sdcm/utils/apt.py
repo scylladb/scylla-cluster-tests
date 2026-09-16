@@ -17,7 +17,7 @@ from typing import Optional
 APT_DEFAULTS = {
     "Acquire::http::Timeout": "60",
     "Acquire::Retries": "3",
-    "DPkg::Lock::Timeout": "120",
+    "DPkg::Lock::Timeout": "300",
     "Dpkg::Options::": '"--force-confold"',
 }
 
