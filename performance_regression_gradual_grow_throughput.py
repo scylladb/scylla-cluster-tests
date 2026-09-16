@@ -8,7 +8,6 @@ from dataclasses import dataclass, replace
 from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
-from sdcm.stress.latte_thread import find_latte_fn_names
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
@@ -429,8 +428,13 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         )
 
     def check_latency_during_steps(self, step):
+        # TestConfig.latency_results_file() creates the file empty and only
+        # latency_calculator_decorator ever fills it in, so it is still empty here whenever the
+        # decorator failed to collect the results of the step. An empty file is not valid JSON:
+        # read it the way the decorator itself does, to report the step without latencies rather
+        # than fail the whole test on a JSONDecodeError that hides the original failure.
         with open(self.latency_results_file, encoding="utf-8") as file:
-            latency_results = json.load(file)
+            latency_results = json.loads(file.read().strip() or "{}")
         self.log.debug(
             "Step %s: latency_results were loaded from file %s and its result is %s",
             step,
@@ -446,7 +450,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             return latency_results
         return {step: {"step": step, "legend": "", "cycles": []}}
 
-    def run_step(self, stress_cmds, step_params, step_duration, hdr_tags=None):
+    def run_step(self, stress_cmds, step_params, step_duration):
         """
         Run a single stress step with parameters from step_params dict.
 
@@ -454,10 +458,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             stress_cmds:   List of stress command templates
             step_params:   Dict with step parameters (threads, concurrency, rate, throttle)
             step_duration: Duration for this step
-            hdr_tags:      Optional explicit list of HDR tag strings.  When provided,
-                           latency_calculator_decorator uses it directly so that all
-                           function tags (write + read) are reported rather than only
-                           the first queue's tags.  Pass None to use auto-detection.
+
+        Returns the step's results and, for latency_calculator_decorator, the HDR tags to build
+        the histograms of the step from.
         """
         results = []
         stress_queue = []
@@ -481,8 +484,18 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         for stress in stress_queue:
             results.extend(self.get_stress_results(queue=stress, store_results=False))
             self.log.debug("One c-s command results: %s", results[-1])
-        # NOTE: 'stress_queue' will be used by the 'latency_calculator_decorator' decorator
-        return results, stress_queue
+        # NOTE: the returned 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator.
+        # Every stress thread derives its own tags from the command it actually runs, which is the
+        # only place the tags of a step can come from: they are tool specific (cassandra-stress
+        # WRITE/READ, scylla-bench co-fixed, latte fn--<name>) and, for cassandra-stress, they also
+        # depend on the step itself, which tags a throttled run 'WRITE-rt' and an unthrottled one
+        # 'WRITE-st'. Merge every queue's, or a step running a write and a read command reports the
+        # writes and drops the reads.
+        hdr_tags = list(
+            dict.fromkeys(tag for queue in stress_queue for tag in (getattr(queue, "hdr_tags", None) or []))
+        )
+        self.log.debug("HDR tags of the step, collected from %s stress queue(s): %s", len(stress_queue), hdr_tags)
+        return results, {"hdr_tags": hdr_tags}
 
     def drop_keyspace(self, keyspace_name):
         self.log.debug(f"Drop keyspace {keyspace_name}")
@@ -626,11 +639,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 current_throttle_step,
                 step_duration,
             )
-            # Pre-compute flattened HDR tags from command templates so both write
-            # and read tags are passed explicitly to the decorator.  This prevents
-            # _find_hdr_tags from stopping at the first queue and omitting the read tag.
-            step_hdr_tags = [f"fn--{fn}" for cmd in workload.cs_cmd_tmpl for fn in find_latte_fn_names(cmd)]
-
             run_step = (
                 latency_calculator_decorator(
                     legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
@@ -640,7 +648,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 stress_cmds=workload.cs_cmd_tmpl,
                 step_params=step_params,
                 step_duration=step_duration,
-                hdr_tags=step_hdr_tags or None,
             )
             self.log.debug("All c-s commands results collected and saved in Argus")
 

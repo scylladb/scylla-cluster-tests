@@ -18,11 +18,15 @@ performance testing framework (PerformanceRegressionPredefinedStepsTest).
 Tests import the production code directly to ensure we're validating real behaviour.
 """
 
+import json
+import logging
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
 import performance_regression_gradual_grow_throughput as gradual_grow_module
+from sdcm.utils.decorators import _find_hdr_tags
 
 
 def _get_test_table_name(params, stress_cmds):
@@ -216,3 +220,120 @@ def test_aggregate_ops_rate_ignores_bad_values():
 
 def test_aggregate_ops_rate_empty_results():
     assert _aggregate_ops_rate([], num_loaders=2, num_commands=2) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# check_latency_during_steps: an empty latency results file
+# ---------------------------------------------------------------------------
+
+
+def _check_latency_during_steps(tmp_path, content, step="unthrottled"):
+    """Call the production check_latency_during_steps against a results file holding `content`."""
+    results_file = tmp_path / "latency_results.json"
+    results_file.write_text(content, encoding="utf-8")
+    instance = SimpleNamespace(latency_results_file=str(results_file), log=logging.getLogger(__name__))
+    result = gradual_grow_module.PerformanceRegressionPredefinedStepsTest.check_latency_during_steps(instance, step)
+    return result, results_file
+
+
+@pytest.mark.parametrize(
+    "content",
+    (pytest.param("", id="empty"), pytest.param("  \n", id="whitespace-only")),
+)
+def test_check_latency_during_steps_tolerates_an_unfilled_results_file(tmp_path, content):
+    """TestConfig.latency_results_file() creates the file empty, and the decorator leaves it that
+    way when it fails to collect the results. That must report a step without latencies, not kill
+    the test with a JSONDecodeError that hides the failure that actually happened."""
+    result, results_file = _check_latency_during_steps(tmp_path, content)
+
+    assert result == {"unthrottled": {"step": "unthrottled", "legend": "", "cycles": []}}
+    # nothing was consumed, so the decorator can still fill the file in on the next step
+    assert results_file.exists()
+
+
+def test_check_latency_during_steps_still_processes_collected_results(tmp_path):
+    """The happy path is untouched: the results are processed and the file is consumed."""
+    collected = {"unthrottled": {"legend": "Gradual test step unthrottled op/s", "cycles": [{"duration": "0:10:00"}]}}
+
+    with (
+        patch.object(gradual_grow_module, "calculate_latency", side_effect=lambda results: results) as calculate,
+        patch.object(gradual_grow_module, "analyze_hdr_percentiles", side_effect=lambda results: results),
+    ):
+        result, results_file = _check_latency_during_steps(tmp_path, json.dumps(collected))
+
+    assert result["unthrottled"]["step"] == "unthrottled"
+    assert result["unthrottled"]["cycles"] == [{"duration": "0:10:00"}]
+    calculate.assert_called_once()
+    assert not results_file.exists()
+
+
+# ---------------------------------------------------------------------------
+# run_step: the HDR tags handed to latency_calculator_decorator
+# ---------------------------------------------------------------------------
+
+
+def _run_step(queues_hdr_tags, stress_cmds=None, step_params=None, step_duration=None):
+    """Call the production run_step with fake stress threads carrying the given hdr_tags."""
+    queues = [SimpleNamespace(hdr_tags=list(tags)) for tags in queues_hdr_tags]
+    started = iter(queues)
+    instance = SimpleNamespace(
+        log=logging.getLogger(__name__),
+        run_stress_thread=lambda **_: next(started),
+        get_stress_results=lambda queue, store_results: [{"op rate": "1000"}],
+    )
+    return gradual_grow_module.PerformanceRegressionPredefinedStepsTest.run_step(
+        instance,
+        stress_cmds if stress_cmds is not None else [f"stress-cmd-{i}" for i in range(len(queues))],
+        step_params or {},
+        step_duration,
+    )
+
+
+@pytest.mark.parametrize(
+    "queues_hdr_tags,expected",
+    (
+        pytest.param([["WRITE-st"]], ["WRITE-st"], id="cassandra-stress-unthrottled"),
+        pytest.param([["WRITE-rt"]], ["WRITE-rt"], id="cassandra-stress-throttled"),
+        pytest.param([["co-fixed"]], ["co-fixed"], id="scylla-bench"),
+        pytest.param([["fn--write", "fn--read"]], ["fn--write", "fn--read"], id="latte"),
+    ),
+)
+def test_run_step_reports_the_tags_of_whatever_stress_tool_ran(queues_hdr_tags, expected):
+    """The tags are tool specific and, for cassandra-stress, step specific, so they can only come
+    from the stress threads: each derives its own from the command it actually runs."""
+    _, decorator_input = _run_step(queues_hdr_tags)
+    assert decorator_input == {"hdr_tags": expected}
+
+
+def test_run_step_merges_the_tags_of_every_stress_queue():
+    """A step running a write and a read command must report both, not just the first queue's."""
+    _, decorator_input = _run_step([["WRITE-st"], ["READ-st"]])
+    assert decorator_input == {"hdr_tags": ["WRITE-st", "READ-st"]}
+
+
+def test_run_step_deduplicates_repeated_tags():
+    """Several commands of the same kind (split by -pop range) all report the same tag."""
+    _, decorator_input = _run_step([["WRITE-st"], ["WRITE-st"]])
+    assert decorator_input == {"hdr_tags": ["WRITE-st"]}
+
+
+def test_run_step_skips_a_queue_that_carries_no_tags():
+    """Not every stress tool sets 'hdr_tags', and one that does not must not break the step."""
+    queues = [SimpleNamespace(), SimpleNamespace(hdr_tags=None), SimpleNamespace(hdr_tags=["WRITE-st"])]
+    started = iter(queues)
+    instance = SimpleNamespace(
+        log=logging.getLogger(__name__),
+        run_stress_thread=lambda **_: next(started),
+        get_stress_results=lambda queue, store_results: [{"op rate": "1000"}],
+    )
+    _, decorator_input = gradual_grow_module.PerformanceRegressionPredefinedStepsTest.run_step(
+        instance, ["cmd-0", "cmd-1", "cmd-2"], {}, None
+    )
+    assert decorator_input == {"hdr_tags": ["WRITE-st"]}
+
+
+def test_latency_decorator_finds_the_tags_run_step_returns():
+    """The wiring that broke: what run_step returns must be what _find_hdr_tags picks up."""
+    res = _run_step([["WRITE-st"], ["READ-st"]])
+    kwargs = {"stress_cmds": ["stress-cmd-0", "stress-cmd-1"], "step_params": {}, "step_duration": None}
+    assert _find_hdr_tags(kwargs, res, object()) == ["WRITE-st", "READ-st"]
