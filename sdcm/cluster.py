@@ -108,6 +108,7 @@ from sdcm.utils import properties
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout, AdaptiveTimeoutStore
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.apt import apt_cmd
 from sdcm.utils.rpm import rpm_cmd
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
@@ -2657,7 +2658,7 @@ class BaseNode(AutoSshContainerMixin):
         else:
             self.remoter.sudo("apt-get update", ignore_status=True)
             self.remoter.sudo(
-                "DEBIAN_FRONTEND=noninteractive apt-get install -o Dpkg::Lock::Timeout=300 "
+                "DEBIAN_FRONTEND=noninteractive apt-get install "
                 "-o Dpkg::Options::='--force-confold' -o Dpkg::Options::='--force-confdef' "
                 "-y scylla-manager-agent"
             )
@@ -2700,23 +2701,26 @@ class BaseNode(AutoSshContainerMixin):
         self.clean_scylla_data()
 
     def update_repo_cache(self):
+        """Clean the package manager cache and refresh the repo metadata."""
         try:
             if self.distro.is_rhel_like:
                 # The yum makecache command was removed from here since not needed and recommended.
                 # In the past it also caused ERROR 404 of yum, reference https://wiki.centos.org/yum-errors
                 # This fixes https://github.com/scylladb/scylla-cluster-tests/issues/4977
-                self.remoter.sudo("yum clean all")
+                self.remoter.sudo(rpm_cmd("yum", "clean all"), retry=3)
                 self.remoter.sudo("rm -rf /var/cache/yum/")
             elif self.distro.is_sles:
-                self.remoter.sudo("zypper clean all")
+                self.remoter.sudo("zypper clean all", retry=3)
                 self.remoter.sudo("rm -rf /var/cache/zypp/")
                 self.remoter.sudo("zypper refresh", retry=3)
             else:
-                self.remoter.sudo("apt-get clean all")
+                # NOTE: it is `apt-get clean`, not `apt-get clean all`: unlike yum, apt-get clean
+                #       takes no arguments
+                self.remoter.sudo(apt_cmd("clean", dpkg_options=False, lock_wait=True), retry=3)
                 self.remoter.sudo("rm -rf /var/cache/apt/")
-                self.remoter.sudo("apt-get update", retry=3)
-        except Exception as ex:  # noqa: BLE001
-            self.log.error("Failed to update repo cache: %s", ex)
+                self.remoter.sudo(apt_cmd("update", lock_wait=True), retry=3)
+        except Exception as ex:
+            raise NodeSetupFailed(node=self, error_msg=f"Failed to update repo cache: {ex}") from ex
 
     def upgrade_system(self):
         if self.distro.is_rhel_like:
