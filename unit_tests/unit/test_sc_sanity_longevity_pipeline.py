@@ -50,6 +50,11 @@ def _config_chain() -> list:
     return json.loads(match.group(1))
 
 
+def _all_stress_commands(config) -> list:
+    """Every command that reaches a loader, prepare phase and main load alike."""
+    return list(config.get("prepare_write_cmd")) + list(config.get("stress_cmd"))
+
+
 @pytest.fixture(name="resolved_config", scope="module")
 def fixture_resolved_config():
     """Resolve the pipeline's config chain once, without touching any cloud API.
@@ -94,21 +99,69 @@ def test_leader_aware_stress_image_wins(resolved_config):
     assert resolved_config.get("stress_image")["cql-stress-cassandra-stress"] == LEADER_AWARE_IMAGE
 
 
-def test_keyspace_is_strongly_consistent_on_tablets(resolved_config):
-    statements = resolved_config.get("pre_create_keyspace")
-    assert len(statements) == 1
-    statement = statements[0]
-    assert "consistency = 'global'" in statement
-    assert "tablets = {'enabled': true}" in statement
+def test_keyspace_is_created_by_cql_stress_not_by_sct(resolved_config):
+    """SCT must not create keyspace1 first.
+
+    tester.create_keyspace(), which _pre_create_schema() calls, emits no consistency clause, and
+    cql-stress issues CREATE KEYSPACE IF NOT EXISTS - which does not upgrade an existing eventually
+    consistent keyspace. Either option being set turns this into an EC run that still passes.
+    """
+    assert resolved_config.get("pre_create_schema") is False
+    assert not resolved_config.get("pre_create_keyspace")
+
+
+def test_tablets_are_enabled(resolved_config):
+    """Tablets carry the strongly-consistent-tables feature, and cql-stress cannot emit a
+    "tablets = {...}" clause, so the cluster default is what decides it."""
+    append_scylla_yaml = resolved_config.get("append_scylla_yaml")
+    assert append_scylla_yaml["enable_tablets"] is True
+    assert append_scylla_yaml["tablets_mode_for_new_keyspaces"] == "enabled"
+
+
+def test_every_stress_command_requests_a_strongly_consistent_keyspace(resolved_config):
+    """consistency=global is what makes this an SC run at all.
+
+    It is a cql-stress extension to the replication(...) sub-parameters, lifted out of the CQL
+    replication map into a top-level keyspace property. NetworkTopologyStrategy must accompany it:
+    the cql-stress default is SimpleStrategy, which 2026.2+ rejects because it cannot do tablet
+    replication, and a non-tablet keyspace cannot carry the consistency option.
+    """
+    for command in _all_stress_commands(resolved_config):
+        assert "consistency=global" in command, command
+        assert "strategy=NetworkTopologyStrategy" in command, command
+        assert "SimpleStrategy" not in command, command
+
+
+def test_the_prepare_phase_creates_the_keyspace(resolved_config):
+    """Only write and counterwrite emit the CREATE KEYSPACE DDL. A read-only command expects the
+    keyspace to already exist, so at least one prepare command has to be a write."""
+    prepare_commands = list(resolved_config.get("prepare_write_cmd"))
+    assert prepare_commands
+    assert all(" write " in command for command in prepare_commands), prepare_commands
 
 
 def test_every_stress_command_uses_cql_stress_at_quorum(resolved_config):
-    """cl=ALL does not work with the leader-aware policy (cql-stress commit 1505752b6)."""
-    commands = list(resolved_config.get("prepare_write_cmd")) + list(resolved_config.get("stress_cmd"))
+    """The cql-stress default is local_one, which an SC keyspace rejects for writes - the run would
+    fail at startup. Reads accept ONE/LOCAL_ONE but that turns leader-aware routing off."""
+    commands = _all_stress_commands(resolved_config)
     assert commands
     for command in commands:
         assert command.startswith("cql-stress-cassandra-stress"), command
         assert "cl=QUORUM" in command, command
+
+
+def test_coordinators_are_logged(resolved_config):
+    """Without this there is no way to confirm after a run that leader-aware routing actually sent
+    requests to the Raft leader rather than silently falling back to round-robin."""
+    for command in _all_stress_commands(resolved_config):
+        assert "coordinators=true" in command, command
+
+
+def test_user_profiles_are_not_used(resolved_config):
+    """consistency=global is rejected at parse time in user mode: a user profile runs its own
+    keyspace_definition and never executes the -schema DDL."""
+    assert not resolved_config.get("cs_user_profiles")
+    assert not resolved_config.get("prepare_cs_user_profiles")
 
 
 def test_encryption_is_off(resolved_config):

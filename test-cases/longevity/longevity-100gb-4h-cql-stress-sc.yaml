@@ -32,6 +32,11 @@ sizing_db:  # aligned with longevity-100gb-4h.yaml (i7i.2xlarge); arch is pinned
   memory: '>=64'
   arch: x86_64
 
+sizing_loader:  # default loader size (4 vCPU / 8GB), pinned to x86_64
+  vcpu: 4
+  memory: '>=8'
+  arch: x86_64
+
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '032'
 
@@ -44,55 +49,90 @@ space_node_threshold: 64424
 server_encrypt: false
 client_encrypt: false
 
-# Create the strongly consistent keyspace before anything else touches it. Tablets are required
-# by the strongly-consistent-tables feature, and the "consistency = 'global'" clause is the only
-# difference between this job and its Eventual Consistency twin (longevity-100gb-4h-cql-stress).
-pre_create_keyspace: ["CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} and consistency = 'global' and tablets = {'enabled': true};"]
+# The keyspace is created by cql-stress itself, from the consistency=global sub-parameter of
+# -schema replication(...) in the stress commands below. SCT must therefore not create it first:
+#
+#   - pre_create_keyspace is left unset.
+#   - pre_create_schema MUST stay False. It is not merely redundant here: _pre_create_schema()
+#     calls tester.create_keyspace(), which emits no consistency clause at all, and cql-stress
+#     issues CREATE KEYSPACE IF NOT EXISTS - which does not upgrade an existing eventually
+#     consistent keyspace. Turning this on silently produces an EC run that still passes.
+#
+# The same applies to a reused cluster: SCT_REUSE_CLUSTER against a cluster that already holds an
+# eventually consistent keyspace1 will not be upgraded. Drop the keyspace before switching modes.
+pre_create_schema: false
 
-# LongevityTest.test_custom_time runs run_pre_create_keyspace() before run_pre_create_schema(),
-# and _pre_create_schema() issues CREATE KEYSPACE IF NOT EXISTS - so the keyspace above survives
-# and only keyspace1.standard1 is created here, with the sstable_size below. Reordering those two
-# calls would silently drop the consistency clause and turn this into an EC run.
-pre_create_schema: True
-sstable_size: 100
+# Tablets carry the strongly-consistent-tables feature, and cql-stress cannot emit a
+# "tablets = {...}" clause - its -schema flag only reaches the replication map and the lifted
+# consistency property. Recent Scylla defaults to tablets_mode_for_new_keyspaces: enabled, but
+# pin it rather than inherit it, so the job cannot quietly turn into a vnodes run on a version
+# or config where that default differs.
+append_scylla_yaml:
+  enable_tablets: true
+  tablets_mode_for_new_keyspaces: 'enabled'
 
 hinted_handoff: 'enabled'
 parallel_node_operations: true
 
-# cl=QUORUM everywhere: the leader-aware load balancing policy does not work with cl=ALL
-# (cql-stress commit 1505752b6).
+# cl=QUORUM everywhere, and it is not optional. The cql-stress default is local_one, which a
+# strongly consistent keyspace rejects outright for writes, so the run would fail at startup.
+# Reads do accept ONE/LOCAL_ONE, but those turn leader-aware routing off and would measure the
+# wrong thing.
+#
+# "consistency=global" is a cql-stress extension to the replication(...) sub-parameters: it is
+# lifted out of the CQL replication map into a top-level keyspace property, so the emitted DDL is
+#
+#   CREATE KEYSPACE IF NOT EXISTS "keyspace1"
+#     WITH REPLICATION = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}
+#     AND consistency = 'global';
+#
+# NetworkTopologyStrategy is required with it - the cql-stress default is SimpleStrategy, which
+# 2026.2+ rejects because it cannot do tablet replication, and a non-tablet keyspace cannot carry
+# the consistency option.
+#
+# Only write and counterwrite emit that DDL, so the keyspace is created here, in the prepare
+# phase. Both commands below carry the clause: they start in parallel and race, which the
+# IF NOT EXISTS makes harmless, and whichever wins produces the same keyspace.
+#
+# "-log coordinators=true" records the coordinator of each request, which is what makes it
+# possible to confirm after the fact that leader-aware routing actually sent writes to the Raft
+# leader rather than silently falling back to round-robin.
 prepare_write_cmd:
   - >-
     cql-stress-cassandra-stress write cl=QUORUM n=10485760
-    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,consistency=global)'
     -mode cql3 native
     -rate threads=80
     -pop seq=1..10485760
     -col 'n=FIXED(10) size=FIXED(512)'
-    -log interval=5
+    -log interval=5 coordinators=true
   - >-
     cql-stress-cassandra-stress write cl=QUORUM n=10485760
-    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,consistency=global)'
     -mode cql3 native
     -rate threads=80
     -pop seq=10485761..20971520
     -col 'n=FIXED(10) size=FIXED(512)'
-    -log interval=5
+    -log interval=5 coordinators=true
 
+# The read command deliberately keeps the same -schema: a read-only run never emits the DDL and
+# expects the keyspace to already exist, which the prepare phase above guarantees. Keeping the
+# clause identical across all four commands means there is no command from which a reader could
+# infer that this job is anything but strongly consistent.
 stress_cmd:
   - >-
     cql-stress-cassandra-stress write cl=QUORUM duration=240m
-    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,consistency=global)'
     -mode cql3 native
     -rate threads=80
     -pop seq=1..20971520
     -col 'n=FIXED(10) size=FIXED(512)'
-    -log interval=5
+    -log interval=5 coordinators=true
   - >-
     cql-stress-cassandra-stress read  cl=QUORUM duration=240m
-    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,consistency=global)'
     -mode cql3 native
     -rate threads=80
     -pop seq=1..20971520
     -col 'n=FIXED(10) size=FIXED(512)'
-    -log interval=5
+    -log interval=5 coordinators=true
