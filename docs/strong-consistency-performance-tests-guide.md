@@ -182,6 +182,45 @@ the `fixed=` value: write `fixed=12500/s` (50k aggregate, the throttled step of 
 read `fixed=10310/s` and mixed `fixed=8750/s` (the cassandra-stress baseline rates). All three are
 starting points to be calibrated from the first run.
 
+## Sanity Longevity (functional coverage of SC under nemesis)
+
+The jobs above all measure latency and throughput. None of them answers whether Strong Consistency
+survives chaos, because a performance run must not be perturbed by nemesis beyond the one topology
+sequence it measures. That functional coverage is provided by a third, much cheaper job:
+
+`jenkins-pipelines/oss/longevity/rust/longevity-100gb-4h-cql-stress-sc.jenkinsfile`
+
+It is the sanity-tier `longevity-100gb-4h` workload (100GB, 4 hours, 6 nodes, `SisyphusMonkey`,
+`longevity_test.LongevityTest.test_custom_time`) with the keyspace created strongly consistent on
+tablets and the load driven by leader-aware `cql-stress-cassandra-stress`. It is a **manual** job:
+it is deliberately not wired into any trigger, so run it from Jenkins with "Build with Parameters".
+
+Its Eventual Consistency twin is the existing `longevity-100gb-4h-cql-stress` job - same tool, same
+dataset, same nemesis - so a failure that reproduces on both is not an SC bug.
+
+### Config chain
+
+1. `test-cases/longevity/longevity-100gb-4h-cql-stress-sc.yaml`
+2. `configurations/strong_consistency/enable_experimental_sc.yaml`
+3. `configurations/strong_consistency/enable_commitlog_sync_batch.yaml`
+4. `configurations/stress_images/cql-stress-strong-consistency-leader-awarness.yaml`
+
+The test-case has to come first: `enable_experimental_sc.yaml` *replaces* `append_scylla_args`, so a
+reordered chain silently leaves the default `--blocked-reactor-notify-ms 25` in place.
+
+### Two details worth knowing
+
+**Keyspace creation.** `LongevityTest.test_custom_time` calls `run_pre_create_keyspace()` before
+`run_pre_create_schema()`, and the latter issues `CREATE KEYSPACE IF NOT EXISTS`. The strongly
+consistent keyspace from `pre_create_keyspace` therefore survives, and `pre_create_schema` only adds
+`keyspace1.standard1`. Were those two calls ever reordered, the `consistency = 'global'` clause would
+be dropped and the job would quietly become an EC run - which is why
+`unit_tests/unit/test_sc_sanity_longevity_pipeline.py` asserts the clause on the resolved config.
+
+**Encryption is off.** `cql-stress` does not support it, and the encrypted path is already covered by
+`longevity-100gb-4h`. This also keeps the job aligned with the SC performance jobs, which all run
+unencrypted.
+
 ## Configuration Files Reference
 
 | File | Purpose |
@@ -207,3 +246,4 @@ starting points to be calibrated from the first run.
 | `configurations/strong_consistency/prepare_cql_stress_nemesis_ks_with_ec_1kpershard.yaml` | EC twin of the above |
 | `configurations/strong_consistency/ec_baseline_align_with_sc.yaml` | Restores the non-SC settings of `enable_experimental_sc.yaml` for EC baselines |
 | `configurations/performance/latency-decorator-error-thresholds-nemesis-sc-tablets.yaml` | Per-disruption latency limits for the SC topology-operations jobs |
+| `test-cases/longevity/longevity-100gb-4h-cql-stress-sc.yaml` | SC sanity longevity test-case: SC keyspace + cql-stress 100GB/4h workload under nemesis |
