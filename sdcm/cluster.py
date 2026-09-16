@@ -3951,6 +3951,23 @@ class BaseNode(AutoSshContainerMixin):
             self.log.error(f"Failed to retreive value of {config_param_name} parameter. Error: {e}")
             return None
 
+    def set_scylla_config_param(self, config_param_name: str, value: str) -> bool:
+        """
+        Live-update a Scylla configuration parameter on this node, without a restart.
+
+        Works only for options declared with liveness::LiveUpdate in scylladb.
+        The change is not persisted to scylla.yaml, so a node restart reverts it.
+        Returns True on success, False otherwise (e.g. node down or CQL unavailable).
+        """
+        try:
+            with self.parent_cluster.cql_connection_patient_exclusive(self) as session:
+                session.execute("UPDATE system.config SET value=%s WHERE name=%s", (value, config_param_name))
+            self.log.debug(f"Live-updated scylla config: {config_param_name}={value}")
+            return True
+        except Exception as e:  # noqa: BLE001
+            self.log.error(f"Failed to set {config_param_name}={value}. Error: {e}")
+            return False
+
     def install_epel(self):
         """
         Standard repositories might not provide all the packages that can be installed on CentOS, RHEL,

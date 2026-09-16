@@ -149,7 +149,7 @@ from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.sstable.sstable_utils import SstableUtils
-from sdcm.utils.tablets.common import wait_tablets_balanced
+from sdcm.utils.tablets.common import temporarily_disable_auto_repair, wait_tablets_balanced
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions, ComparableScyllaVersion
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
@@ -2207,6 +2207,7 @@ class NemesisRunner:
         target_node = nodes[0]
         if is_tablets_feature_enabled(target_node):
             with (
+                temporarily_disable_auto_repair(self.cluster),
                 adaptive_timeout(Operations.REPAIR, target_node, timeout=timeout) as repair_timeout,
                 self.action_log_scope("nodetool cluster repair", target=target_node.name),
             ):
@@ -2225,7 +2226,7 @@ class NemesisRunner:
         ignore_down_hosts: If True, consider only nodes that are up and normal.
         """
         mgr_cluster = self.cluster.get_cluster_manager()
-        with self.action_log_scope("Scylla Manager repair task"):
+        with temporarily_disable_auto_repair(self.cluster), self.action_log_scope("Scylla Manager repair task"):
             mgr_task = mgr_cluster.create_repair_task(ignore_down_hosts=ignore_down_hosts)
             task_final_status = mgr_task.wait_and_get_final_status(timeout=timeout)  # timeout is 24 hours
             if task_final_status != TaskStatus.DONE:
@@ -3315,52 +3316,59 @@ class NemesisRunner:
                 return True
             return False
 
-        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="NodeToolRepairThread") as thread_pool:
-            thread = thread_pool.submit(silenced_nodetool_repair_to_fail)
-            wait.wait_for(
-                func=repair_streaming_exists, timeout=300, step=1, throw_exc=True, text="Wait for repair starts"
-            )
+        # Auto-repair sessions would false-positive the active-repair poll below and get aborted
+        # by force_terminate_repair instead of the nemesis repair (SCT-905)
+        with temporarily_disable_auto_repair(self.cluster):
+            with ThreadPoolExecutor(max_workers=1, thread_name_prefix="NodeToolRepairThread") as thread_pool:
+                thread = thread_pool.submit(silenced_nodetool_repair_to_fail)
+                wait.wait_for(
+                    func=repair_streaming_exists, timeout=300, step=1, throw_exc=True, text="Wait for repair starts"
+                )
 
-            self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
+                self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
 
-            with (
-                DbEventsFilter(
-                    db_event=DatabaseLogEvent.DATABASE_ERROR,
-                    line="repair's stream failed: streaming::stream_exception",
-                    node=self.target_node,
-                ),
-                DbEventsFilter(
-                    db_event=DatabaseLogEvent.RUNTIME_ERROR, line="Can not find stream_manager", node=self.target_node
-                ),
-                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="is aborted", node=self.target_node),
-                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="Failed to repair", node=self.target_node),
-            ):
                 with (
-                    DbNodeLogger(self.cluster.nodes, "abort repair streaming", target_node=self.target_node),
-                    self.action_log_scope(f"Abort repair streaming on {self.target_node.name} node"),
+                    DbEventsFilter(
+                        db_event=DatabaseLogEvent.DATABASE_ERROR,
+                        line="repair's stream failed: streaming::stream_exception",
+                        node=self.target_node,
+                    ),
+                    DbEventsFilter(
+                        db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                        line="Can not find stream_manager",
+                        node=self.target_node,
+                    ),
+                    DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="is aborted", node=self.target_node),
+                    DbEventsFilter(
+                        db_event=DatabaseLogEvent.RUNTIME_ERROR, line="Failed to repair", node=self.target_node
+                    ),
                 ):
-                    # force_terminate_repair only aborts running repair tasks
-                    # it is possible that it will be called just after a task has ended and just before the next task starts
-                    zero_jobs_log = self.target_node.follow_system_log(
-                        [r"repair - Started to abort repair jobs=\{\}, nr_jobs=0"]
-                    )
+                    with (
+                        DbNodeLogger(self.cluster.nodes, "abort repair streaming", target_node=self.target_node),
+                        self.action_log_scope(f"Abort repair streaming on {self.target_node.name} node"),
+                    ):
+                        # force_terminate_repair only aborts running repair tasks
+                        # it is possible that it will be called just after a task has ended and just before the next task starts
+                        zero_jobs_log = self.target_node.follow_system_log(
+                            [r"repair - Started to abort repair jobs=\{\}, nr_jobs=0"]
+                        )
 
-                    self.target_node.remoter.run(
-                        "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
-                        " http://127.0.0.1:10000/storage_service/force_terminate_repair"
-                    )
+                        self.target_node.remoter.run(
+                            "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
+                            " http://127.0.0.1:10000/storage_service/force_terminate_repair"
+                        )
 
-                try:
-                    thread.result(timeout=120)
-                except TimeoutError:
-                    if list(zero_jobs_log):
-                        raise UnsupportedNemesis("No repair jobs running when terminate was called")
-                    else:
-                        raise
-                time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
+                    try:
+                        thread.result(timeout=120)
+                    except TimeoutError:
+                        if list(zero_jobs_log):
+                            raise UnsupportedNemesis("No repair jobs running when terminate was called")
+                        else:
+                            raise
+                    time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
 
-        self.log.debug("Execute a complete repair for target node")
-        self.run_repair()
+            self.log.debug("Execute a complete repair for target node")
+            self.run_repair()
 
     def disrupt_validate_hh_short_downtime(self):
         """
@@ -3905,31 +3913,34 @@ class NemesisRunner:
         # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
         # following repair would then propagate the resurrected data to the other replicas.
         self._destroy_data_and_restart_scylla(skip_sstables_with_tombstones=True)
-        trigger = partial(
-            self.target_node.run_nodetool,
-            sub_cmd="repair",
-            warning_event_on_exception=(Exception,),
-            long_running=True,
-            retry=0,
-            timeout=600,
-        )
-        log_follower = self.target_node.follow_system_log(patterns=["Repair 1 out of"])
-        timeout = 1200
-        if self.cluster.params.get("cluster_backend") == "azure":
-            timeout += 1200  # Azure reboot can take up to 20min to initiate
-        watcher = partial(
-            self._call_disrupt_func_after_expression_logged,
-            log_follower=log_follower,
-            disrupt_func=self.reboot_node,
-            disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
-            delay=1,
-        )
-        with self.action_log_scope(f"Repair data after destroy on {self.target_node.name} node"):
-            ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
+        # Auto-repair session log lines would match the "Repair 1 out of" watcher below and
+        # reboot the node before the nemesis repair even starts (SCT-905)
+        with temporarily_disable_auto_repair(self.cluster):
+            trigger = partial(
+                self.target_node.run_nodetool,
+                sub_cmd="repair",
+                warning_event_on_exception=(Exception,),
+                long_running=True,
+                retry=0,
+                timeout=600,
+            )
+            log_follower = self.target_node.follow_system_log(patterns=["Repair 1 out of"])
+            timeout = 1200
+            if self.cluster.params.get("cluster_backend") == "azure":
+                timeout += 1200  # Azure reboot can take up to 20min to initiate
+            watcher = partial(
+                self._call_disrupt_func_after_expression_logged,
+                log_follower=log_follower,
+                disrupt_func=self.reboot_node,
+                disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
+                delay=1,
+            )
+            with self.action_log_scope(f"Repair data after destroy on {self.target_node.name} node"):
+                ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
 
-        self.target_node.wait_node_fully_start()
+            self.target_node.wait_node_fully_start()
 
-        self.rebuild_or_repair(self.target_node, reason="After destroy")
+            self.rebuild_or_repair(self.target_node, reason="After destroy")
 
     def start_and_interrupt_rebuild_streaming(self):
         """
