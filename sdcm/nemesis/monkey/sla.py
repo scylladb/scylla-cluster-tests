@@ -14,21 +14,30 @@ class SlaMonkeyBase(NemesisBaseClass):
 
     sla = True
 
+    # Whether the nemesis needs the cassandra-stress default table prefilled by
+    # the prepare phase. Checked in precheck() via the prepare_write_cmd param.
+    requires_prefilled_cs_data: bool = True
+
     additional_configs = [
         "configurations/nemesis/additional_configs/sla_config.yaml",
         "configurations/auth_cassandra.yaml",
     ]
 
-    def validate_sla_preconditions(self):
-        """Common validation for all SLA nemeses."""
+    def precheck(self, node) -> str | None:
+        """Common static preconditions for all SLA nemeses."""
         if not self.runner.cluster.params.get("sla"):
-            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
+            return "SLA nemesis can be run during SLA test only"
 
-        if not self.runner.cluster.nodes[0].is_enterprise:
-            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+        if not node.is_enterprise:
+            return "SLA feature is only supported by Scylla Enterprise"
 
         if not self.runner.cluster.params.get("authenticator"):
-            raise UnsupportedNemesis("SLA feature can't work without authenticator")
+            return "SLA feature can't work without authenticator"
+
+        if self.requires_prefilled_cs_data and not self.get_cassandra_stress_write_cmds():
+            return "SLA nemesis needs cassandra-stress default table 'keyspace1.standard1' is created and prefilled"
+
+        return None
 
     def get_cassandra_stress_write_cmds(self):
         write_cmds = self.runner.tester.params.get("prepare_write_cmd")
@@ -57,7 +66,11 @@ class SlaMonkeyBase(NemesisBaseClass):
         return column_definition, data_set_size
 
     def get_stress_params(self):
-        """Return (column_definition, dataset_size) for SLA stress tests."""
+        """Return (column_definition, dataset_size) for SLA stress tests.
+
+        The missing-command case is already pruned by precheck(); the raise below
+        stays as an in-method safety net.
+        """
         stress_cmds = self.get_cassandra_stress_write_cmds()
         if not stress_cmds:
             raise UnsupportedNemesis(
@@ -78,10 +91,9 @@ class RemoveServiceLevelMonkey(SlaMonkeyBase):
     """Remove service level while load is running, then re-create it."""
 
     disruptive = True
+    requires_prefilled_cs_data = False  # works on pre-defined roles, not on cassandra-stress data
 
     def disrupt(self):
-        self.validate_sla_preconditions()
-
         if not getattr(self.runner.tester, "roles", None):
             raise UnsupportedNemesis("This nemesis is supported with Service Level and role are pre-defined")
 
@@ -115,7 +127,6 @@ class SlaIncreaseSharesDuringLoad(SlaMonkeyBase):
     disruptive = False
 
     def disrupt(self):
-        self.validate_sla_preconditions()
         column_definition, dataset_size = self.get_stress_params()
 
         prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
@@ -134,7 +145,6 @@ class SlaDecreaseSharesDuringLoad(SlaMonkeyBase):
     disruptive = False
 
     def disrupt(self):
-        self.validate_sla_preconditions()
         column_definition, dataset_size = self.get_stress_params()
 
         prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
@@ -154,7 +164,6 @@ class SlaReplaceUsingDetachDuringLoad(SlaMonkeyBase):
     disruptive = True
 
     def disrupt(self):
-        self.validate_sla_preconditions()
         column_definition, dataset_size = self.get_stress_params()
 
         prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
@@ -174,7 +183,6 @@ class SlaReplaceUsingDropDuringLoad(SlaMonkeyBase):
     disruptive = True
 
     def disrupt(self):
-        self.validate_sla_preconditions()
         column_definition, dataset_size = self.get_stress_params()
 
         prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
@@ -194,7 +202,6 @@ class SlaIncreaseSharesByAttachAnotherSlDuringLoad(SlaMonkeyBase):
     disruptive = True
 
     def disrupt(self):
-        self.validate_sla_preconditions()
         column_definition, dataset_size = self.get_stress_params()
 
         prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
@@ -213,7 +220,6 @@ class SlaMaximumAllowedSlsWithMaxSharesDuringLoad(SlaMonkeyBase):
     disruptive = False
 
     def disrupt(self):
-        self.validate_sla_preconditions()
         column_definition, dataset_size = self.get_stress_params()
 
         prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
