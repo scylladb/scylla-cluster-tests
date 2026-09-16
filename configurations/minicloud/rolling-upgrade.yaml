@@ -68,10 +68,10 @@ stress_after_cluster_upgrade: "cassandra-stress read no-warmup cl=QUORUM n=10000
 # Runs while nodes are being upgraded, so CL=QUORUM not ALL - not every node is available.
 large_partition_stress_during_upgrade: "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=10 -clustering-row-count=1000 -clustering-row-size=1024 -concurrency=4 -rows-per-request=10 -consistency-level=quorum"
 
-# The complex profile runs unless tablets disable it (should_do_complex_profile()), so these have to
-# be present and small rather than removed. The profile path must stay /tmp/complex_schema.yaml -
-# check_required_files() resolves it against data_dir/, and the ops sets are what the test asserts on.
-stress_cmd_complex_prepare: "cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml ops'(insert=1)' cl=ALL n=10000 -mode cql3 native -rate threads=10 -pop seq=1..10000"
-stress_cmd_complex_verify_read: "cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml ops'(read1=1,read3=1)' cl=ONE n=10000 -mode cql3 native -rate threads=10 -pop seq=1..10000"
-stress_cmd_complex_verify_more: "cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml ops'(read1=1,read2=1,read3=1,update_static=1,update_ttl=1,update_diff1_ts=1,update_diff2_ts=1,update_same1_ts=1,update_same2_ts=1)' cl=ALL n=10000 -mode cql3 native -rate threads=10 -pop seq=1..10000"
-stress_cmd_complex_verify_delete: "cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml ops'(delete_row=1)' cl=ALL n=10000 -mode cql3 native -rate threads=10 -pop seq=1..10000"
+# The complex workload stays enabled unless tablets disable it (should_do_complex_profile()), so these entries must
+# remain, just smaller. Keep the rune path `data_dir/latte/complex_schema.rn`; `check_required_files()` resolves it
+# from the SCT root, and the test asserts on the function set.
+stress_cmd_complex_prepare: "latte run data_dir/latte/complex_schema.rn -f insert --consistency ALL -d 10000 -P row_count=10000 --threads 2 --concurrency 32"
+stress_cmd_complex_verify_read: "latte run data_dir/latte/complex_schema.rn -f read_by_key:1 -f read_by_email:1 --consistency ONE -d 10000 -P row_count=10000 --threads 2 --concurrency 32 --validation-strategy=retry"
+stress_cmd_complex_verify_more: "latte run data_dir/latte/complex_schema.rn -f read_by_key:1 -f read_by_ck:1 -f read_by_email:1 -f update_static:1 -f update_ttl:1 -f update_diff1_ts:1 -f update_diff2_ts:1 -f update_same1_ts:1 -f update_same2_ts:1 --consistency ALL -d 10000 -P row_count=10000 --threads 2 --concurrency 16 --validation-strategy=retry"
+stress_cmd_complex_verify_delete: "latte run data_dir/latte/complex_schema.rn -f delete_row --consistency ALL -d 10000 -P row_count=10000 --threads 2 --concurrency 16"
