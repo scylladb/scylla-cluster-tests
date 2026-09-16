@@ -1,0 +1,98 @@
+test_duration: 330
+
+test_metadata:
+  description: >-
+    Strong Consistency sanity longevity: the 100GB / 4h workload of longevity-100gb-4h, but the
+    keyspace is created strongly consistent (consistency = 'global') on tablets and the load is
+    driven by cql-stress-cassandra-stress with the Raft-leader-aware load balancing policy.
+    A 6-node cluster is preloaded with 20M rows, then parallel write and read streams run at
+    QUORUM for 4 hours under SisyphusMonkey chaos. This is the functional/stability counterpart
+    to the Strong Consistency performance jobs, which measure latency but never run nemesis.
+  test_type: longevity
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - cql-stress-cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - tablets
+  team_ownership: core-test-infra
+
+n_db_nodes: 6
+n_loaders: 2
+seeds_num: 3
+
+sizing_db:  # aligned with longevity-100gb-4h.yaml (i7i.2xlarge); arch is pinned because the
+            # AMI of this job is supplied by id (x86_64)
+  vcpu: 8
+  memory: '>=64'
+  arch: x86_64
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '032'
+
+user_prefix: 'longevity-100gb-4h-sc'
+space_node_threshold: 64424
+
+# Encryption is not supported by cql-stress (see configurations/rust/cql-stress-100gb-4h.yaml),
+# and the encrypted path is already covered by longevity-100gb-4h. Keeping it off here also keeps
+# this job comparable to the Strong Consistency performance jobs, which all run unencrypted.
+server_encrypt: false
+client_encrypt: false
+
+# Create the strongly consistent keyspace before anything else touches it. Tablets are required
+# by the strongly-consistent-tables feature, and the "consistency = 'global'" clause is the only
+# difference between this job and its Eventual Consistency twin (longevity-100gb-4h-cql-stress).
+pre_create_keyspace: ["CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} and consistency = 'global' and tablets = {'enabled': true};"]
+
+# LongevityTest.test_custom_time runs run_pre_create_keyspace() before run_pre_create_schema(),
+# and _pre_create_schema() issues CREATE KEYSPACE IF NOT EXISTS - so the keyspace above survives
+# and only keyspace1.standard1 is created here, with the sstable_size below. Reordering those two
+# calls would silently drop the consistency clause and turn this into an EC run.
+pre_create_schema: True
+sstable_size: 100
+
+hinted_handoff: 'enabled'
+parallel_node_operations: true
+
+# cl=QUORUM everywhere: the leader-aware load balancing policy does not work with cl=ALL
+# (cql-stress commit 1505752b6).
+prepare_write_cmd:
+  - >-
+    cql-stress-cassandra-stress write cl=QUORUM n=10485760
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=1..10485760
+    -col 'n=FIXED(10) size=FIXED(512)'
+    -log interval=5
+  - >-
+    cql-stress-cassandra-stress write cl=QUORUM n=10485760
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=10485761..20971520
+    -col 'n=FIXED(10) size=FIXED(512)'
+    -log interval=5
+
+stress_cmd:
+  - >-
+    cql-stress-cassandra-stress write cl=QUORUM duration=240m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=1..20971520
+    -col 'n=FIXED(10) size=FIXED(512)'
+    -log interval=5
+  - >-
+    cql-stress-cassandra-stress read  cl=QUORUM duration=240m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=1..20971520
+    -col 'n=FIXED(10) size=FIXED(512)'
+    -log interval=5
