@@ -165,11 +165,19 @@ def measure_time(func):
 
 
 def _find_hdr_tags(*args):
+    """Find the HDR tags to build the histograms of a latency cycle from.
+
+    An explicit None never counts as found: a caller that takes an optional 'hdr_tags'
+    argument forwards it unconditionally, and returning that None hands the caller a value
+    it cannot iterate instead of falling through to the remaining sources. An empty list is
+    returned as it is - a nemesis carries one until a test populates it, and reporting a
+    cycle without HDR histograms is a valid outcome. Raises ValueError when nothing is found.
+    """
     for input_arg in args:
-        if isinstance(input_arg, dict) and "hdr_tags" in input_arg:
+        if isinstance(input_arg, dict) and input_arg.get("hdr_tags") is not None:
             # NOTE: case when some method has 'hdr_tags' kwarg
             return input_arg["hdr_tags"]
-        elif hasattr(input_arg, "hdr_tags"):
+        elif getattr(input_arg, "hdr_tags", None) is not None:
             # NOTE: case of 'stress_queue.hdr_tags' and 'nemesis.hdr_tags'
             return input_arg.hdr_tags
         elif isinstance(input_arg, (list, tuple)):
