@@ -1,0 +1,7 @@
+instance_type_db: 'i4i.4xlarge'
+endpoint_snitch: 'GossipingPropertyFileSnitch'
+n_db_nodes: '3 3'
+n_loaders: '2 2'
+simulated_racks: 0
+availability_zone: 'a,b,c'
+region_aware_loader: true
