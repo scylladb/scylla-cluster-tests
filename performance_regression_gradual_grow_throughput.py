@@ -414,8 +414,13 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         )
 
     def check_latency_during_steps(self, step):
+        # TestConfig.latency_results_file() creates the file empty and only
+        # latency_calculator_decorator ever fills it in, so it is still empty here whenever the
+        # decorator failed to collect the results of the step. An empty file is not valid JSON:
+        # read it the way the decorator itself does, to report the step without latencies rather
+        # than fail the whole test on a JSONDecodeError that hides the original failure.
         with open(self.latency_results_file, encoding="utf-8") as file:
-            latency_results = json.load(file)
+            latency_results = json.loads(file.read().strip() or "{}")
         self.log.debug(
             "Step %s: latency_results were loaded from file %s and its result is %s",
             step,
@@ -439,6 +444,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             stress_cmds: List of stress command templates
             step_params: Dict with step parameters (threads, concurrency, rate, throttle)
             step_duration: Duration for this step
+
+        Returns the step's results and, for latency_calculator_decorator, the HDR tags to build
+        the histograms of the step from.
         """
         results = []
         stress_queue = []
@@ -466,8 +474,18 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         for stress in stress_queue:
             results.extend(self.get_stress_results(queue=stress, store_results=False))
             self.log.debug("One c-s command results: %s", results[-1])
-        # NOTE: 'stress_queue' will be used by the 'latency_calculator_decorator' decorator
-        return results, stress_queue
+        # NOTE: the returned 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator.
+        # Every stress thread derives its own tags from the command it actually runs, which is the
+        # only place the tags of a step can come from: they are tool specific (cassandra-stress
+        # WRITE/READ, scylla-bench co-fixed, latte fn--<name>) and, for cassandra-stress, they also
+        # depend on the step itself, which tags a throttled run 'WRITE-rt' and an unthrottled one
+        # 'WRITE-st'. Merge every queue's, or a step running a write and a read command reports the
+        # writes and drops the reads.
+        hdr_tags = list(
+            dict.fromkeys(tag for queue in stress_queue for tag in (getattr(queue, "hdr_tags", None) or []))
+        )
+        self.log.debug("HDR tags of the step, collected from %s stress queue(s): %s", len(stress_queue), hdr_tags)
+        return results, {"hdr_tags": hdr_tags}
 
     def drop_keyspace(self, keyspace_name):
         self.log.debug(f"Drop keyspace {keyspace_name}")
