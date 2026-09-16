@@ -24,31 +24,33 @@ def block_scylla_ports(target_node: BaseNode, ports: list[int] | None = None):
         target_node.remoter.sudo(f"iptables -A OUTPUT -p tcp --dport {port} -j DROP")
         target_node.remoter.sudo(f"ip6tables -A INPUT -p tcp --dport {port} -j DROP")
         target_node.remoter.sudo(f"ip6tables -A OUTPUT -p tcp --dport {port} -j DROP")
-    yield
-
-    if is_node_destroyed(target_node):
-        target_node.log.debug("Node %s was destroyed, skipping iptables cleanup", target_node.name)
-        return
-    target_node.log.debug("Remove all iptable rules %s", target_node.name)
-    for port in ports:
-        target_node.remoter.sudo(f"iptables -D INPUT -p tcp --dport {port} -j DROP")
-        target_node.remoter.sudo(f"iptables -D OUTPUT -p tcp --dport {port} -j DROP")
-        target_node.remoter.sudo(f"ip6tables -D INPUT -p tcp --dport {port} -j DROP")
-        target_node.remoter.sudo(f"ip6tables -D OUTPUT -p tcp --dport {port} -j DROP")
-    target_node.stop_service("iptables", ignore_status=True)
+    try:
+        yield
+    finally:
+        if is_node_destroyed(target_node):
+            target_node.log.debug("Node %s was destroyed, skipping iptables cleanup", target_node.name)
+        else:
+            target_node.log.debug("Remove all iptable rules %s", target_node.name)
+            for port in ports:
+                target_node.remoter.sudo(f"iptables -D INPUT -p tcp --dport {port} -j DROP")
+                target_node.remoter.sudo(f"iptables -D OUTPUT -p tcp --dport {port} -j DROP")
+                target_node.remoter.sudo(f"ip6tables -D INPUT -p tcp --dport {port} -j DROP")
+                target_node.remoter.sudo(f"ip6tables -D OUTPUT -p tcp --dport {port} -j DROP")
+            target_node.stop_service("iptables", ignore_status=True)
 
 
 @contextlib.contextmanager
 def pause_scylla_with_sigstop(target_node: BaseNode):
     target_node.log.debug("Send signal SIGSTOP to scylla process on node %s", target_node.name)
     target_node.remoter.sudo("pkill --signal SIGSTOP -e scylla", timeout=60)
-    yield
-
-    if is_node_destroyed(target_node):
-        target_node.log.debug("Node %s was destroyed, skipping SIGCONT", target_node.name)
-        return
-    target_node.log.debug("Send signal SIGCONT to scylla process on node %s", target_node.name)
-    target_node.remoter.sudo(cmd="pkill --signal SIGCONT -e scylla", timeout=60)
+    try:
+        yield
+    finally:
+        if is_node_destroyed(target_node):
+            target_node.log.debug("Node %s was destroyed, skipping SIGCONT", target_node.name)
+        else:
+            target_node.log.debug("Send signal SIGCONT to scylla process on node %s", target_node.name)
+            target_node.remoter.sudo(cmd="pkill --signal SIGCONT -e scylla", timeout=60)
 
 
 @contextlib.contextmanager
@@ -73,21 +75,21 @@ def block_loaders_payload_for_scylla_node(scylla_node: BaseNode, loader_nodes: l
         scylla_node.remoter.sudo(
             f"ip6tables -A INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True
         )
-    yield
-
-    if is_node_destroyed(scylla_node):
-        scylla_node.log.debug("Node %s was destroyed, skipping iptables cleanup", scylla_node.name)
-        return
-
-    if scylla_node.remoter.is_up():
-        for port in ports:
-            scylla_node.remoter.sudo(
-                f"iptables -D INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True
-            )
-            scylla_node.remoter.sudo(
-                f"ip6tables -D INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True
-            )
-        scylla_node.stop_service("iptables", ignore_status=True)
+    try:
+        yield
+    finally:
+        if is_node_destroyed(scylla_node):
+            scylla_node.log.debug("Node %s was destroyed, skipping iptables cleanup", scylla_node.name)
+        elif scylla_node.remoter.is_up():
+            for port in ports:
+                scylla_node.remoter.sudo(
+                    f"iptables -D INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True
+                )
+                scylla_node.remoter.sudo(
+                    f"ip6tables -D INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP",
+                    ignore_status=True,
+                )
+            scylla_node.stop_service("iptables", ignore_status=True)
 
 
 def is_node_removed_from_cluster(removed_node: BaseNode, verification_node: BaseNode) -> bool:
