@@ -2763,7 +2763,7 @@ class BaseNode(AutoSshContainerMixin):
             self.remoter.sudo("zypper update scylla-manager-agent -y")
         else:
             self.remoter.sudo(apt_cmd("update"), ignore_status=True)
-            self.remoter.sudo(apt_cmd("install -y scylla-manager-agent", options={"DPkg::Lock::Timeout": "300"}))
+            self.remoter.sudo(apt_cmd("install -y scylla-manager-agent"))
         self.remoter.sudo("scyllamgr_agent_setup -y")
         if start_agent_after_upgrade:
             if self.is_docker():
@@ -2803,23 +2803,26 @@ class BaseNode(AutoSshContainerMixin):
         self.clean_scylla_data()
 
     def update_repo_cache(self):
+        """Clean the package manager cache and refresh the repo metadata."""
         try:
             if self.distro.is_rhel_like:
                 # The yum makecache command was removed from here since not needed and recommended.
                 # In the past it also caused ERROR 404 of yum, reference https://wiki.centos.org/yum-errors
                 # This fixes https://github.com/scylladb/scylla-cluster-tests/issues/4977
-                self.remoter.sudo("yum clean all")
+                self.remoter.sudo(rpm_cmd("yum", "clean all"), retry=3)
                 self.remoter.sudo("rm -rf /var/cache/yum/")
             elif self.distro.is_sles:
-                self.remoter.sudo("zypper clean all")
+                self.remoter.sudo("zypper clean all", retry=3)
                 self.remoter.sudo("rm -rf /var/cache/zypp/")
                 self.remoter.sudo("zypper refresh", retry=3)
             else:
-                self.remoter.sudo("apt-get clean all")
+                # NOTE: it is `apt-get clean`, not `apt-get clean all`: unlike yum, apt-get clean
+                #       takes no arguments
+                self.remoter.sudo(apt_cmd("clean", dpkg_options=False, lock_wait=True), retry=3)
                 self.remoter.sudo("rm -rf /var/cache/apt/")
-                self.remoter.sudo(apt_cmd("update"), retry=3)
-        except Exception as ex:  # noqa: BLE001
-            self.log.error("Failed to update repo cache: %s", ex)
+                self.remoter.sudo(apt_cmd("update", lock_wait=True), retry=3)
+        except Exception as ex:
+            raise NodeSetupFailed(node=self, error_msg=f"Failed to update repo cache: {ex}") from ex
 
     def upgrade_system(self):
         if self.distro.is_rhel_like:
