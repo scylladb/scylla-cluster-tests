@@ -131,8 +131,6 @@ Also include runs with status `"running"`.
 2. Group by test category:
    - **i8g Tablets** -- tests with "i8g-tablets" in name
    - **i8g Vnodes** -- tests with "i8g-vnodes" in name
-   - **i4i Tablets** -- tests with "tablets" (but not "i8g") in name
-   - **i4i Vnodes** -- tests with "vnodes" (but not "i8g") in name
    - **Microbenchmarks** -- tests with "microbenchmark" in name
 
 3. Compute full version with build date and revision hash for display:

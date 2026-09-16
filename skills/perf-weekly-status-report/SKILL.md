@@ -175,7 +175,7 @@ So resolve a limit in exactly this order:
 4. For the failing step: `merged[workload]["default"] | merged[workload].get(step, {})`, then read
    `[metric]["fixed_limit"]`.
 
-A step-specific entry always wins over the default (e.g. i4i tablets read has `P99 read: 1` at the
+A step-specific entry always wins over the default (e.g. i8g tablets read has `P99 read: 1` at the
 150,000 step), but a step the file never mentions -- such as the i8g `1500000` read step, or any
 throttled step in a `write` section that only lists `unthrottled` -- correctly falls back to 10 ms.
 
@@ -373,13 +373,6 @@ These are the enterprise performance tests tracked in the weekly report:
 | latency-650gb-during-rolling-upgrade-i8g-tablets | 01945e9c-ccbc-4248-8eb9-6b80ed7e29fe | i8g Tablets |
 | predefined-throughput-steps-i8g-vnodes | 6ffbef10-7138-457c-b386-73574805ca00 | i8g Vnodes |
 | latency-650gb-with-nemesis-i8g-vnodes | 4bd86f85-49a4-454a-aeb7-252e83fc533d | i8g Vnodes |
-| predefined-throughput-steps-tablets | d0b4711b-bc62-41e8-a619-41a61ffab0e3 | i4i Tablets |
-| predefined-throughput-steps-write-tablets | 4c91ab7e-b6ec-4591-9b39-cf8bc838ebe2 | i4i Tablets |
-| latency-650gb-with-nemesis-tablets | fd8ef431-3485-4232-9f0f-2b46b818a63b | i4i Tablets |
-| latency-650gb-during-rolling-upgrade-tablets | 7b96ec0a-7dec-4aae-9f37-dfbad8a6d98f | i4i Tablets |
-| predefined-throughput-steps-vnodes | 5c8777b4-9bf1-49bc-8b96-fa3426b05e86 | i4i Vnodes |
-| latency-650gb-with-nemesis | 2a4db9d5-80e6-437e-8871-a4d5e54cc35c | i4i Vnodes |
-| latency-650gb-during-rolling-upgrade | 9148b8ed-5b2e-4dfa-ab7b-b845d6117bdb | i4i Vnodes |
 | simple-query-weekly-microbenchmark_arm64 | a0063c73-efcf-4878-988d-72af779dc59d | Microbenchmarks |
 | simple-query-weekly-microbenchmark_arm64-write | dcc1afa0-2225-468c-9f45-5cfc8486f7f8 | Microbenchmarks |
 | simple-query-weekly-microbenchmark_x86_64 | 03464849-60e8-46c8-91b9-955cdeb07ea6 | Microbenchmarks |
@@ -399,7 +392,7 @@ under `jenkins-pipelines/performance/branch-perf-v17/scylla-enterprise/perf-regr
 > `PerfSimpleQueryTest`, so a staging run can silently be a different test. Confirm via the run's
 > `test_method` field before treating a cql-raw run as a cql-raw result.
 
-**Most of this registry is usually empty for a given week, and that is expected.** These tests are not all scheduled weekly, and several run predominantly on release branches -- their runs get filtered out by the master-only rule. It is normal for whole categories (i8g Vnodes, i4i Tablets, i4i Vnodes) to contribute zero rows because they only ran release builds such as `2026.2.2` / `2026.1.9`.
+**Most of this registry is usually empty for a given week, and that is expected.** These tests are not all scheduled weekly, and several run predominantly on release branches -- their runs get filtered out by the master-only rule. It is normal for a whole category (such as i8g Vnodes) to contribute zero rows because they only ran release builds such as `2026.2.2` / `2026.1.9`.
 
 Do not treat a mostly-empty result as a collection failure, and do not list tests with no runs in the report. Do state in the "Issues Found in the Runs" section which categories had no runs, so readers can tell "passed" apart from "never ran".
 
