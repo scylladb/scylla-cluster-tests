@@ -15,6 +15,7 @@ from argus.client.sct.client import ArgusSCTClient
 
 from sdcm.keystore import KeyStore
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
+from sdcm.provision.common.utils import guest_firewall_needs_disabling
 from sdcm.sct_events import Severity
 from sdcm.sct_events.argus import enable_argus_posting, start_posting_argus_events
 from sdcm.sct_events.system import TestFrameworkEvent
@@ -424,6 +425,7 @@ class TestConfig(metaclass=Singleton):
             logs_transport=cls._tester_obj.params.get("logs_transport") if cls._tester_obj else "syslog-ng",
             test_config=cls(),
             install_agent=install_agent,
+            disable_guest_firewall=guest_firewall_needs_disabling(cls._tester_obj.params),
         ).to_string()
 
     @classmethod

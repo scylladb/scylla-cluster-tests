@@ -374,6 +374,55 @@ def disable_daily_apt_triggers():
     """)
 
 
+# The backends whose images ship a firewall that has to go. Everything below is backend- and
+# distro-agnostic, so widening this tuple is all it takes to disable the firewall on another
+# backend - both cloud-init paths read it from here. OCI is the only one with a failure behind
+# it (SCT-479): its images accept nothing but SSH and restore that ruleset on every boot.
+BACKENDS_WITH_A_FIREWALL_TO_DISABLE = ("oci",)
+
+
+def guest_firewall_needs_disabling(params) -> bool:
+    """Whether the nodes of this run boot with a firewall which has to be taken down.
+
+    Args:
+        params: the SCT configuration of the run.
+
+    Returns:
+        True when the backend is one of `BACKENDS_WITH_A_FIREWALL_TO_DISABLE`.
+    """
+    return params.get("cluster_backend") in BACKENDS_WITH_A_FIREWALL_TO_DISABLE
+
+
+def disable_firewall() -> str:
+    """Take the guest firewall down for good, at first boot.
+
+    The OCI images ship a ruleset which accepts port 22 and REJECTs everything else with
+    icmp-host-prohibited, restored on every boot by netfilter-persistent (`ufw` does the same
+    through its own unit). A node which boots with it serves CQL locally and answers SSH, while
+    its peers, the loaders and `wait_db_up()` see nothing at all - see SCT-479.
+
+    Flushing the live tables is not enough for the same reason: what makes it stick is dropping
+    the saved rules and the units which restore them.
+
+    Returns:
+        The shell script which takes the firewall down, to run from cloud-init.
+    """
+    return dedent("""\
+    ufw disable || true
+    for service in ufw netfilter-persistent nftables iptables ip6tables firewalld; do
+        systemctl disable --now $service || true
+    done
+    rm -f /etc/iptables/rules.v4 /etc/iptables/rules.v6 || true
+    for iptables in iptables ip6tables; do
+        command -v $iptables >/dev/null || continue
+        $iptables -F || true
+        for chain in INPUT FORWARD OUTPUT; do
+            $iptables -P $chain ACCEPT || true
+        done
+    done
+    """)
+
+
 def configure_syslogng_destination_conf(host: str, port: int, throttle_per_second: int) -> str:
     return dedent("""
         write_syslog_ng_destination() {{
