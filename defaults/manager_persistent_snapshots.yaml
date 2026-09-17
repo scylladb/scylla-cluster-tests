@@ -1,125 +1,71 @@
 aws:
   bucket: "manager-backup-tests-permanent-snapshots-{region}"
-  confirmation_stress_template: "cassandra-stress read cl=QUORUM n={num_of_rows} -schema 'keyspace={keyspace_name} replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq={sequence_start}..{sequence_end}"
+  confirmation_stress_template: "cassandra-stress read cl=QUORUM n={num_of_rows} -schema 'keyspace={keyspace_name} replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native -rate threads=50 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq={sequence_start}..{sequence_end}"
   snapshots_sizes:
     5:
       number_of_rows: 5242880
       expected_timeout: 1800  # 30 minutes
       snapshots:
         us-east-1:
-          sm_20250206093521UTC:
-            keyspace_name: "5gb_stcs_quorum_64_16_2024_2_4"
-            scylla_version: "2024.2.4"
-            scylla_product: "enterprise"
+          sm_20260917110855UTC:
+            keyspace_name: "ks_5gb_ics_quorum_1024_1_2026_1_13"
+            scylla_version: "2026.1.13"
             number_of_nodes: 3
             # Recording cluster_id which is required for snapshots cleanup from the bucket in the future
-            cluster_id: "baac78e2-4b60-4a5b-8d16-6bbf9d70321a"
-          sm_20240812150350UTC:
-            keyspace_name: "5gb_sizetiered_6_0"
-            scylla_version: "6.0.2"
-            scylla_product: "oss"
-            number_of_nodes: 3
-            cluster_id: "9b8c43c0-ebbc-4c59-a23f-dbdbeda9d9e0"
+            cluster_id: "d441190c-ce66-497a-947e-319ebff5b300"
         eu-west-1:
-          sm_20241202161158UTC:
-            keyspace_name: "5gb_sizetiered_2024_2"
-            scylla_version: "2024.2.0"
-            scylla_product: "enterprise"
+          sm_20260917120746UTC:
+            keyspace_name: "ks_5gb_ics_quorum_1024_1_2026_1_13"
+            scylla_version: "2026.1.13"
             number_of_nodes: 3
-            cluster_id: "e61259b5-77eb-4cad-8db1-1fc4a6f3991d"
-          sm_20241203091117UTC:
-            keyspace_name: "5gb_sizetiered_6_1"
-            scylla_version: "6.1.4"
-            scylla_product: "oss"
+            cluster_id: "861f79c3-c3ea-4566-b388-f09bb26fb63d"
+        eu-north-1:
+          sm_20260917131103UTC:
+            keyspace_name: "ks_5gb_ics_quorum_1024_1_2026_1_13"
+            scylla_version: "2026.1.13"
             number_of_nodes: 3
-            cluster_id: "f3e64aed-62db-4bd3-82cc-55c83fed82c8"
+            cluster_id: "12d72997-6f21-4374-a495-1a69dc42a0bd"
     10:
       number_of_rows: 10485760
       expected_timeout: 3600  # 60 minutes
       snapshots:
         us-east-1:
-          sm_20250206093952UTC:
-            keyspace_name: "10gb_stcs_quorum_64_16_2024_2_4"
-            scylla_version: "2024.2.4"
-            scylla_product: "enterprise"
+          sm_20260917115150UTC:
+            keyspace_name: "ks_10gb_ics_quorum_1024_1_2026_1_13"
+            scylla_version: "2026.1.13"
             number_of_nodes: 3
-            cluster_id: "064c2b1c-99ad-4e7d-b3ad-0fd9591edd39"
-          sm_20240812150801UTC:
-            keyspace_name: "10gb_sizetiered_6_0"
-            scylla_version: "6.0.2"
-            scylla_product: "oss"
-            number_of_nodes: 3
-            cluster_id: "947e78ed-e988-41d6-92b5-faaf8ad7bbc0"
+            cluster_id: "8afb0b22-c38a-4301-b207-c67a9629b899"
         eu-west-1:
-          sm_20241203091417UTC:
-            keyspace_name: "10gb_sizetiered_2024_2"
-            scylla_version: "2024.2.0"
-            scylla_product: "enterprise"
+          sm_20260917120822UTC:
+            keyspace_name: "ks_10gb_ics_quorum_1024_1_2026_1_13"
+            scylla_version: "2026.1.13"
             number_of_nodes: 3
-            cluster_id: "5c17bec0-ee5c-4fc3-93cd-1e5916a8da57"
-          sm_20241203091651UTC:
-            keyspace_name: "10gb_sizetiered_6_1"
-            scylla_version: "6.1.4"
-            scylla_product: "oss"
+            cluster_id: "2e591e64-a185-4066-81b9-5deccf549444"
+        eu-north-1:
+          sm_20260917131221UTC:
+            keyspace_name: "ks_10gb_ics_quorum_1024_1_2026_1_13"
+            scylla_version: "2026.1.13"
             number_of_nodes: 3
-            cluster_id: "71878cc5-1268-4e87-b849-c433e4d8a4ed"
+            cluster_id: "be684d77-53e4-4434-be59-9870ee117962"
     100:
       number_of_rows: 104857600
       expected_timeout: 18000  # 300 minutes
       snapshots:
         us-east-1:
-          sm_20250206102841UTC:
-            keyspace_name: "100gb_stcs_quorum_64_16_2024_2_4"
-            scylla_version: "2024.2.4"
-            scylla_product: "enterprise"
+          sm_20260917120847UTC:
+            keyspace_name: "ks_100gb_ics_quorum_1024_1_2026_1_13"
+            scylla_version: "2026.1.13"
             number_of_nodes: 3
-            cluster_id: "4d9e8d6c-ffb5-4a13-83f0-adb4f5298e44"
-          sm_20240812164539UTC:
-            keyspace_name: "100gb_sizetiered_6_0"
-            scylla_version: "6.0.2"
-            scylla_product: "oss"
-            number_of_nodes: 3
-            cluster_id: "931ff656-51c0-432c-9495-9b4850061b65"
+            cluster_id: "663f6189-7ecc-44e0-85dd-3e37f846ff83"
         eu-west-1:
-          sm_20241203103619UTC:
-            keyspace_name: "100gb_sizetiered_2024_2"
-            scylla_version: "2024.2.0"
-            scylla_product: "enterprise"
+          sm_20260917124728UTC:
+            keyspace_name: "ks_100gb_ics_quorum_1024_1_2026_1_13"
+            scylla_version: "2026.1.13"
             number_of_nodes: 3
-            cluster_id: "a152b771-fe7a-4826-8958-999bd4cb2ea2"
-          sm_20241203104551UTC:
-            keyspace_name: "100gb_sizetiered_6_1"
-            scylla_version: "6.1.4"
-            scylla_product: "oss"
+            cluster_id: "90a930ac-a16d-4c0e-9465-d04fa2bd916b"
+        eu-north-1:
+          sm_20260917135330UTC:
+            keyspace_name: "ks_100gb_ics_quorum_1024_1_2026_1_13"
+            scylla_version: "2026.1.13"
             number_of_nodes: 3
-            cluster_id: "5becc815-1961-4c81-9557-131d308cd67c"
-    2048:
-      number_of_rows: 2147483648
-      expected_timeout: 132000  # 2200 minutes
-      snapshots:
-        us-east-1:
-          sm_20250206145422UTC:
-            keyspace_name: "2048gb_stcs_quorum_64_16_2024_2_4"
-            scylla_version: "2024.2.4"
-            scylla_product: "enterprise"
-            number_of_nodes: 3
-            cluster_id: "f6c0b53d-100b-4410-aec9-07be11b3a224"
-          sm_20240905214537UTC:
-            keyspace_name: "2tb_sizetiered_6_0"
-            scylla_version: "6.0.2"
-            scylla_product: "oss"
-            number_of_nodes: 3
-            cluster_id: "7fc7ce78-2e7e-4348-a8f7-29ae6494f6c9"
-        eu-west-1:
-          sm_20241205173847UTC:
-            keyspace_name: "2048gb_sizetiered_2024_2"
-            scylla_version: "2024.2.0"
-            scylla_product: "enterprise"
-            number_of_nodes: 3
-            cluster_id: "cd688eb4-409c-49b7-8165-0f586febde40"
-          sm_20241205214509UTC:
-            keyspace_name: "2048gb_sizetiered_6_1"
-            scylla_version: "6.1.4"
-            scylla_product: "oss"
-            number_of_nodes: 3
-            cluster_id: "f65efbab-415e-40bc-aa3c-1720256a1025"
+            cluster_id: "8af39702-bae7-4951-a0e9-4a4f221ca25c"
