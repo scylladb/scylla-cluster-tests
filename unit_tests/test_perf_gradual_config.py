@@ -12,7 +12,7 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-1234")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
-    with patch("sdcm.sct_config.aws_check_instance_type_supported", return_value=True):
+    with patch("sdcm.sct_config.config.aws_check_instance_type_supported", return_value=True):
         yield
 
 

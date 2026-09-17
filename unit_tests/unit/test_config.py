@@ -20,7 +20,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from sdcm import sct_config
+from sdcm.sct_config import config as sct_config
 from sdcm.keystore import KeyStore
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.test_config import TestConfig
@@ -923,7 +923,7 @@ def test_vector_store_ami_name_resolved_to_ami_id(monkeypatch):
             return f"ami-{param}"
         return param
 
-    with unittest.mock.patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=fake_convert):
+    with unittest.mock.patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=fake_convert):
         sct_config.SCTConfiguration()
 
     assert "vector-store-1-5-0-arm64-2026-03-17t07-07-32z" in resolved_names, (
@@ -991,7 +991,7 @@ def test_resolve_amis_reresolves_name_intent_via_convert(monkeypatch):
     conf._ami_params_snapshot = {"ami_id_loader": "resolve:ssm:/some/loader/path"}
     conf["ami_id_loader"] = "ami-loader-east"
 
-    with patch("sdcm.sct_config.convert_name_to_ami_if_needed", return_value="ami-loader-west") as mock_convert:
+    with patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", return_value="ami-loader-west") as mock_convert:
         conf.resolve_amis(["eu-west-1"], source_region="us-east-1")
 
     mock_convert.assert_called_once_with("resolve:ssm:/some/loader/path", ("eu-west-1",))
@@ -1004,7 +1004,7 @@ def test_resolve_amis_remaps_explicit_ami_via_find_equivalent(monkeypatch):
     conf["ami_id_db_scylla"] = "ami-source-scylla"
 
     with patch(
-        "sdcm.sct_config.find_equivalent_ami",
+        "sdcm.sct_config.config.find_equivalent_ami",
         return_value=[{"region": "eu-west-1", "ami_id": "ami-target-scylla"}],
     ) as mock_equiv:
         conf.resolve_amis(["eu-west-1"], source_region="us-east-1")
@@ -1018,7 +1018,7 @@ def test_resolve_amis_raises_region_ineligible_when_no_equivalent(monkeypatch):
     conf._ami_params_snapshot = {"ami_id_db_scylla": "ami-source-scylla"}
     conf["ami_id_db_scylla"] = "ami-source-scylla"
 
-    with patch("sdcm.sct_config.find_equivalent_ami", return_value=[]):
+    with patch("sdcm.sct_config.config.find_equivalent_ami", return_value=[]):
         with pytest.raises(RegionAMINotFoundError):
             conf.resolve_amis(["eu-west-1"], source_region="us-east-1")
 
@@ -1087,7 +1087,7 @@ def test_overlay_beats_env_when_test_id_matches(monkeypatch, placement_logdir): 
 
     # relocation re-resolves region-bound AMIs; ami-dummy is explicit so it goes through find_equivalent_ami
     with patch(
-        "sdcm.sct_config.find_equivalent_ami",
+        "sdcm.sct_config.config.find_equivalent_ami",
         return_value=[{"region": "eu-west-1", "ami_id": "ami-dummy-west"}],
     ):
         conf = sct_config.SCTConfiguration()
@@ -1112,7 +1112,7 @@ def test_resolved_placement_with_amis_applies_directly_and_skips_re_resolution(m
     )
 
     with patch(
-        "sdcm.sct_config.find_equivalent_ami",
+        "sdcm.sct_config.config.find_equivalent_ami",
         return_value=[{"region": "eu-west-1", "ami_id": "ami-reresolved"}],
     ):
         conf = sct_config.SCTConfiguration()
