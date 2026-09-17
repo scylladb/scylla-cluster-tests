@@ -868,6 +868,7 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
             "ear_key_id": key_id,
             "manager_cluster_id": manager_cluster_id,
         }
+        self.log.debug(f"Snapshot details: {snapshot_details}")
         send_manager_snapshot_details_to_argus(
             argus_client=self.test_config.argus_client(),
             snapshot_details=snapshot_details,
