@@ -433,11 +433,41 @@ class MyWeightedRunner(NemesisRunner):
 
 See `CategoricalMonkey` in `monkey/runners.py` for a complete example of weighted random selection.
 
+### Sweeping every nemesis once
+
+`CategorySweepMonkey` is the coverage counterpart to `SisyphusMonkey`. Instead of shuffling the
+whole set and cycling it forever, it runs every selected nemesis exactly once, in category order,
+and then ends its own nemesis thread:
+
+| Order | Category | Selects |
+|-------|----------|---------|
+| 1 | `schema-changes` | `schema_changes` |
+| 2 | `topology-changes` | `topology_changes and not schema_changes` |
+| 3 | `other-disruptive` | `disruptive and not topology_changes and not schema_changes` |
+| 4 | `rest` | everything else |
+
+Categories are matched in order, so a nemesis carrying both `schema_changes` and
+`topology_changes` is swept as a schema change. An `InfoEvent` announces each category as its
+first nemesis starts, and a final one records the completed pass — which is what distinguishes a
+finished sweep from a job that ran out of `test_duration` mid-category.
+
+Two config options behave differently than under `SisyphusMonkey`:
+
+- `nemesis_multiply_factor` is ignored; repeating the list contradicts "every nemesis once".
+- `nemesis_selector` still applies, intersected with every category, so a narrowed set is swept in
+  the same category order.
+
+Order inside a category is alphabetical by class name rather than shuffled, so a sweep is
+reproducible without `nemesis_seed`. A finite runner signals its completed pass by raising
+`NemesisPassCompleted`; the base run loop publishes the event and leaves the thread, without
+touching the termination event shared by the other nemesis threads.
+
 ### Available Runners
 
 | Runner | Description |
 |--------|-------------|
 | `SisyphusMonkey` | Standard runner — filters by `nemesis_selector`, shuffles, cycles through all |
+| `CategorySweepMonkey` | Coverage sweep — runs every nemesis once, grouped by category, then stops the thread |
 | `CategoricalMonkey` | Weighted random selection from a distribution |
 | `NoOpMonkey` | Does nothing (sleeps) — useful for control experiments |
 | `ScyllaCloudLimitedChaosMonkey` | Limited set for Scylla Cloud (no AWS API access) |
