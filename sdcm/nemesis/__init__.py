@@ -3023,15 +3023,7 @@ class NemesisRunner:
             chosen_snapshot_size = self.random.choice(fitting_snapshot_sizes)
             all_snapshots_per_region = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"][region]
 
-            if self.cluster.nodes[0].is_enterprise:
-                snapshot_tag = self.random.choice(list(all_snapshots_per_region.keys()))
-            else:
-                oss_snapshots = [
-                    snapshot_key
-                    for snapshot_key, snapshot_value in all_snapshots_per_region.items()
-                    if snapshot_value["scylla_product"] == "oss"
-                ]
-                snapshot_tag = self.random.choice(oss_snapshots)
+            snapshot_tag = self.random.choice(list(all_snapshots_per_region.keys()))
 
             snapshot_info = all_snapshots_per_region[snapshot_tag]
             snapshot_info.update(
