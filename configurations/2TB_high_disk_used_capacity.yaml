@@ -26,3 +26,9 @@ sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
 
 user_prefix: 'longevity-2tb-high-disk-used'
 nemesis_selector: 'supports_high_disk_utilization'
+
+# The stress phase overwrites the whole prepared population. Without a space
+# amplification goal ICS never reclaims the old row copies and the nodes fill up
+# to 98% (https://scylladb.atlassian.net/browse/SCYLLADB-2801). With 1.2 the
+# ~930 GiB live set settles around 1.25x, about 68% of the 1.75 TiB disk.
+ics_space_amplification_goal: 1.2

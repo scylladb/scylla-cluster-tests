@@ -7,6 +7,7 @@ from typing import Optional
 import yaml
 
 from sdcm.cluster import BaseNode
+from sdcm.sct_events.system import InfoEvent
 
 LOGGER = logging.getLogger(__name__)
 
@@ -77,6 +78,26 @@ def get_gc_mode(node: BaseNode, keyspace: str, table: str) -> str | GcMode:
 
     LOGGER.debug("Query result for %s.%s GC mode is: %s", keyspace, table, gc_mode)
     return gc_mode
+
+
+def alter_table_compaction(
+    node: BaseNode,
+    keyspace: str,
+    table: str,
+    compaction_strategy: CompactionStrategy = CompactionStrategy.INCREMENTAL,
+    additional_compaction_params: dict | None = None,
+) -> str:
+    """Alter a table's compaction, like:
+    ALTER TABLE mykeyspace.mytable WITH compaction = {'class': 'IncrementalCompactionStrategy', 'min_threshold': '4'}
+
+    :returns: the executed ALTER TABLE query
+    """
+    compaction = {"class": compaction_strategy.value, **(additional_compaction_params or {})}
+    query = f"ALTER TABLE {keyspace}.{table} WITH compaction = {compaction}"
+    LOGGER.debug("Alter table query is: %s", query)
+    node.run_cqlsh(cmd=query)
+    InfoEvent(message=f"Altered table by: {query}").publish()
+    return query
 
 
 def get_compaction_strategy(node, keyspace, table):

@@ -28,6 +28,7 @@ from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import optional_stage
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.features import is_tablets_feature_enabled
+from test_lib.compaction import alter_table_compaction
 
 DEFAULT_USER = "cassandra"
 DEFAULT_USER_PASSWORD = "cassandra"
@@ -334,9 +335,31 @@ class LoaderUtilsMixin:
         self._run_cql_commands(cmds)
 
     def run_post_prepare_cql_cmds(self):
+        """Apply the schema changes that have to wait until the stress tools created the tables."""
         if post_prepare_cql_cmds := self.params.get("post_prepare_cql_cmds"):
             self.log.debug("Execute post prepare queries: %s", post_prepare_cql_cmds)
             self._run_cql_commands(post_prepare_cql_cmds)
+        if goal := self.params.get("ics_space_amplification_goal"):
+            self.apply_ics_space_amplification_goal(goal)
+
+    def apply_ics_space_amplification_goal(self, goal: float):
+        """Switch every non-system table to ICS with the given ``space_amplification_goal``.
+
+        Without a goal ICS never merges the large bottom-tier run holding the old copy of an overwritten row with
+        the small top-tier run holding the new one, so an overwrite workload keeps growing on disk until the nodes
+        fill up (https://scylladb.atlassian.net/browse/SCYLLADB-2801).
+        """
+        node = self.db_cluster.nodes[0]
+        for keyspace_table in self.db_cluster.get_non_system_ks_cf_list(
+            db_node=node, filter_out_mv=True, filter_empty_tables=False
+        ):
+            keyspace, table = keyspace_table.split(".")
+            alter_table_compaction(
+                node=node,
+                keyspace=keyspace,
+                table=table,
+                additional_compaction_params={"space_amplification_goal": str(goal)},
+            )
 
     def run_prepare_write_cmd(self):
         # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load

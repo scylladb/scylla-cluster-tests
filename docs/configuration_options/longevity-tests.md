@@ -4,7 +4,7 @@
 
 Options specific to long-running longevity test scenarios.
 
-**13 options.**
+**14 options.**
 
 
 <a id="cluster_target_size"></a>
@@ -38,6 +38,17 @@ Specify the type of data validation to perform
 **default:** N/A
 
 **type:** str (appendable)
+
+
+<a id="ics_space_amplification_goal"></a>
+
+## **ics_space_amplification_goal** / SCT_ICS_SPACE_AMPLIFICATION_GOAL
+
+IncrementalCompactionStrategy space_amplification_goal, for example 1.2, applied with ALTER TABLE<br>to every non-system table once the prepare phase has finished (the stress tools create the tables,<br>so it cannot be set up front). Tables using another strategy are switched to ICS. Without a goal<br>ICS never pairs the large bottom-tier run holding the old copy of an overwritten row with the small<br>top-tier run holding the new one, so an overwrite workload keeps growing on disk.<br>Leave unset to keep the schema's compaction as is.
+
+**default:** N/A
+
+**type:** float
 
 
 <a id="post_prepare_cql_cmds"></a>

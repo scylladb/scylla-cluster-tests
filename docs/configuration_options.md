@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-524 options across 29 groups.
+525 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -53,7 +53,7 @@ concerns first, then one page per backend, then one per test type.
 | [Baremetal backend](configuration_options/baremetal-backend.md) | 7 | Running against pre-existing hosts that SCT does not provision. |
 | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) | 12 | Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options. |
 | [Minicloud](configuration_options/minicloud.md) | 15 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with `cluster_backend: aws` and an... |
-| [Longevity tests](configuration_options/longevity-tests.md) | 13 | Options specific to long-running longevity test scenarios. |
+| [Longevity tests](configuration_options/longevity-tests.md) | 14 | Options specific to long-running longevity test scenarios. |
 | [Performance regression tests](configuration_options/performance-regression-tests.md) | 18 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
 | [Upgrade tests](configuration_options/upgrade-tests.md) | 20 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
 | [Grow cluster tests](configuration_options/grow-cluster-tests.md) | 2 | Scaling the cluster up and down during a test. |
@@ -249,6 +249,7 @@ concerns first, then one page per backend, then one per test type.
 | [`gke_cluster_version`](configuration_options/kubernetes-backends-eks-gke-kind.md#gke_cluster_version) | `SCT_GKE_CLUSTER_VERSION` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
 | [`gke_k8s_release_channel`](configuration_options/kubernetes-backends-eks-gke-kind.md#gke_k8s_release_channel) | `SCT_GKE_K8S_RELEASE_CHANNEL` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
 | [`hinted_handoff`](configuration_options/scylla-installation-and-configuration.md#hinted_handoff) | `SCT_HINTED_HANDOFF` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
+| [`ics_space_amplification_goal`](configuration_options/longevity-tests.md#ics_space_amplification_goal) | `SCT_ICS_SPACE_AMPLIFICATION_GOAL` | [Longevity tests](configuration_options/longevity-tests.md) |
 | [`install_cassandra_exporter`](configuration_options/auxiliary-db-cluster-oracle-cassandra.md#install_cassandra_exporter) | `SCT_INSTALL_CASSANDRA_EXPORTER` | [Auxiliary DB cluster (oracle / Cassandra)](configuration_options/auxiliary-db-cluster-oracle-cassandra.md) |
 | [`install_mode`](configuration_options/scylla-installation-and-configuration.md#install_mode) | `SCT_INSTALL_MODE` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`instance_provision`](configuration_options/general-and-provisioning.md#instance_provision) | `SCT_INSTANCE_PROVISION` | [General and provisioning](configuration_options/general-and-provisioning.md) |
