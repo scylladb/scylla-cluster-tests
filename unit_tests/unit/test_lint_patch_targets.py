@@ -36,12 +36,31 @@ def _target_ids():
     return sorted(_CLOUD_API_PATCHES)
 
 
+def _split_target(target):
+    """Split a patch target the way `mock.patch` does: longest importable prefix, then attributes.
+
+    Targets are either `<module>.<attr>` or `<module>.<Class>.<method>`, and only the first form
+    can be shadowed by an import, so the rest of this module needs the two told apart.
+    """
+    parts = target.split(".")
+    for split_at in range(len(parts) - 1, 0, -1):
+        try:
+            module = importlib.import_module(".".join(parts[:split_at]))
+        except ImportError:
+            continue
+        return module, ".".join(parts[:split_at]), parts[split_at:]
+    raise AssertionError(f"no importable module in {target!r}")
+
+
 @pytest.mark.parametrize("target", _target_ids())
 def test_patch_target_attribute_exists(target):
     """The dotted path must resolve, or `mock.patch` raises at linting time."""
-    module_path, _, attr = target.rpartition(".")
-    module = importlib.import_module(module_path)
-    assert hasattr(module, attr), f"{module_path} has no attribute {attr!r}"
+    obj, module_path, attrs = _split_target(target)
+    walked = module_path
+    for attr in attrs:
+        assert hasattr(obj, attr), f"{walked} has no attribute {attr!r}"
+        obj = getattr(obj, attr)
+        walked = f"{walked}.{attr}"
 
 
 @pytest.mark.parametrize("target", _target_ids())
@@ -57,7 +76,13 @@ def test_no_call_site_shadows_the_patch_target(target):
     `sdcm.sct_config.config.check_required_files`, had done `from ...types import _check_file_exists`.
     It passed locally only because the developer had the credential file the patch exists to skip.
     """
-    module_path, _, attr = target.rpartition(".")
+    _, module_path, attrs = _split_target(target)
+    if len(attrs) > 1:
+        pytest.skip(
+            f"{target} patches an attribute on a class object, which every reference to that class "
+            f"shares -- an import cannot shadow it"
+        )
+    (attr,) = attrs
 
     shadowing = []
     sdcm_root = pathlib.Path(sct_abs_path("sdcm"))

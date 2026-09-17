@@ -128,6 +128,11 @@ _CLOUD_API_PATCHES = {
     "sdcm.sct_config.config.azure_check_instance_type_available": lambda *a, **kw: True,
     # KeyStore reads credentials from S3 — not needed for config structure validation
     "sdcm.sct_config.config.KeyStore": _FakeKeyStore,
+    # AWS capacity reservation lookup (EC2 DescribeCapacityReservations).
+    # Called straight from SCTConfiguration.__init__ for every pipeline that enables it.
+    "sdcm.provision.aws.capacity_reservation.SCTCapacityReservation.get_cr_from_aws": lambda *a, **kw: None,
+    # AWS dedicated host reservation (EC2 DescribeHosts/AllocateHosts)
+    "sdcm.provision.aws.dedicated_host.SCTDedicatedHosts.reserve": lambda *a, **kw: None,
     # OCI branched image lookup
     "sdcm.utils.oci_utils.get_scylla_images_by_branch": lambda *a, **kw: [_FAKE_OCI_IMAGE],
     # OCI released image lookup
