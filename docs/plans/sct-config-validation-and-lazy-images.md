@@ -2,7 +2,7 @@
 status: draft
 domain: config
 created: 2026-03-04
-last_updated: 2026-03-19
+last_updated: 2026-09-15
 owner: fruch
 ---
 
@@ -115,6 +115,14 @@ After Phase 2, `SCTConfiguration()` would not need any of these image-resolution
 ## Implementation Phases
 
 ### Phase 1: Extract Validation from `__init__` into Pydantic Validators
+
+> **Superseded by [validation-on-mixins.md](config/validation-on-mixins.md).**
+> This phase was written against the single-file `sdcm/sct_config.py`, before the package split
+> into domain mixins, and its design — validators on the central class, guarded by a flag that
+> defaults to *off* — is the one that failed in
+> [PR #14124](https://github.com/scylladb/scylla-cluster-tests/pull/14124). The replacement plan
+> puts each rule on the mixin that owns its options and inverts the default so no construction
+> path skips validation silently. The section below is kept for the record; do not implement it.
 
 **Objective**: Move all inline validation blocks (steps 11–21 in `__init__`) into proper Pydantic `@model_validator` and `@field_validator` methods, making them declarative and independently testable. **Only pure data validators** (no network/cloud API calls) become Pydantic validators.
 
