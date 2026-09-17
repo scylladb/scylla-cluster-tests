@@ -19,7 +19,8 @@ Commands:
   recommit <ORIGINAL_HASH>          Apply one commit's file changes from the resolved tree and commit
   push <REMOTE> <BRANCH>            Force-push the fixed branch (--force-with-lease)
   update-pr <PR_NUMBER>             Remove 'conflicts' label and mark PR ready
-  verify                            Check no conflict markers remain in tracked files
+  verify                            Check no conflict markers remain in any tracked file
+                                    (documentation included; diff3 base marker aware)
 EOF
     exit 1
 }
@@ -158,9 +159,21 @@ cmd_update_pr() {
 }
 
 cmd_verify() {
-    # Search for conflict markers in tracked files, excluding known false positives
+    # Search ALL tracked files — no path exclusions. Backport branches routinely
+    # carry committed conflict markers in documentation, so excluding *.md hid
+    # real breakage (see PRs 16024/16025/16026 and 15594/15596/15597/15598).
+    #
+    # The pattern covers the three side markers, including the diff3 base marker
+    # '|||||||' (this repo sets merge.conflictstyle=diff3). Requiring exactly
+    # 7 marker characters followed by a space or end-of-line is what makes
+    # scanning documentation safe: it will not match markdown blockquote runs
+    # such as '>>>>>>>>'.
+    #
+    # '=======' is deliberately NOT matched: a bare '=======' line is a valid
+    # Markdown setext H1 underline. Every real conflict region contains both a
+    # '<<<<<<<' and a '>>>>>>>' line, so detection does not depend on it.
     local markers
-    markers="$(git grep -l -E '^(<<<<<<<|>>>>>>>)' -- ':(exclude)*.md' ':(exclude)docker/jepsen/*' 2>/dev/null || true)"
+    markers="$(git grep -l -E '^(<<<<<<<|>>>>>>>|\|\|\|\|\|\|\|)( |$)' 2>/dev/null || true)"
     if [ -n "$markers" ]; then
         echo "CONFLICT MARKERS FOUND in:"
         echo "$markers"
