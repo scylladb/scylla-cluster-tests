@@ -49,6 +49,7 @@ from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.common.oracle import ORACLE_IMAGE_PARAMS, ORACLE_USER_PREFIX_SUFFIX
+from sdcm.provision.network_configuration import azure_network_interfaces, ssh_connection_ip_type
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
 from sdcm.utils.common import (
     ami_built_by_scylla,
@@ -1028,6 +1029,10 @@ class SCTConfiguration(*CONFIG_GROUPS):
         # 17 Validate scylla network configuration mandatory values
         self._validate_scylla_network_config(cluster_backend=cluster_backend)
 
+        # 17.1 Validate what the Azure backend can build out of 'scylla_network_config'
+        if cluster_backend == "azure":
+            self._validate_azure_network_interfaces()
+
         # 18 Validate K8S TLS+SNI values
         if self.get("k8s_enable_sni") and not self.get("k8s_enable_tls"):
             raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
@@ -1051,6 +1056,37 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
             self.log.debug("Using random cassandra-stress driver version: %s", self["c_s_driver_version"])
+
+    def _validate_azure_network_interfaces(self) -> None:
+        """Validate what SCT can build on Azure out of 'scylla_network_config'.
+
+        The Azure NIC layout is derived from that option, so most mismatches are unrepresentable.
+        What is left are the addresses Azure cannot place where the option asks for them, and they
+        would only fail much later, while the node is coming up, so reject them here.
+        """
+        interfaces = azure_network_interfaces(self)
+
+        for address_config in self.get("scylla_network_config") or []:
+            nic = address_config["nic"]
+            address = address_config["address"]
+            if nic >= len(interfaces):
+                raise ValueError(
+                    f"'{address}' is configured on nic {nic}, but 'scylla_network_config' defines only "
+                    f"{len(interfaces)} interface(s). The 'nic' indexes must be contiguous and start at 0"
+                )
+            if address_config["ip_type"] != "ipv6" and address_config["public"] and not interfaces[nic]["public_ip"]:
+                raise ValueError(
+                    f"'{address}' asks for a public IPv4 address on nic {nic}, but on Azure SCT attaches the "
+                    f"IPv4 Public IP to the primary NIC only. Move it to nic 0 or make it private"
+                )
+
+        # checked last so that a mismatch on a specific address reports itself first, with its own message
+        if ssh_connection_ip_type(self) == "ipv6" and not interfaces[0]["public_ipv6"]:
+            raise ValueError(
+                "IPv6 SSH connections need a routable address on the primary NIC: the SCT runner lives outside "
+                "the test VNet, so the VNet-local (ULA) IPv6 address cannot reach it. Set 'test_communication' "
+                "to 'ip_type: ipv6' with 'public: true' on nic 0 in 'scylla_network_config'"
+            )
 
     def _propagate_keystore_env(self):
         """Export the resolved keystore settings so bare ``KeyStore()`` callers agree.
