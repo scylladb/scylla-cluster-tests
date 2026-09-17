@@ -333,7 +333,7 @@ class SnapshotOperations(ClusterTester):
 
 
 class SnapshotPreparerOperations(ClusterTester):
-    ks_name_template = "{size}gb_{compaction}_{cl}_{col_size}_{col_n}_{scylla_version}"
+    ks_name_template = "ks_{size}gb_{compaction}_{cl}_{col_size}_{col_n}_{scylla_version}"
 
     @staticmethod
     def _abbreviate_compaction_strategy_name(compaction_strategy: str) -> str:
