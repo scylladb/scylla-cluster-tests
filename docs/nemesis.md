@@ -145,6 +145,19 @@ When `nemesis_exclude_disabled` is `true` (default), `" and not disabled"` is au
 
 On Kubernetes backends, `" and kubernetes"` is automatically appended to ensure only K8s-compatible nemesis run.
 
+### Turning Off Nemesis That Break the Test's Goal
+
+Some tests check one specific setting. For example, a TWCS test needs the table to keep TWCS compaction and its TTL for the whole run. Some nemesis change exactly these settings. The `ModifyTable*` nemesis pick a random table and change one property on it (compaction, compression, `default_time_to_live`, `gc_grace_seconds`, ...). They never change it back. If such a nemesis runs in a TWCS test, the test still passes, but it no longer tests TWCS.
+
+Nemesis do not know what the test is about. So, when you write a test config, ask: "Does my test depend on a setting that a nemesis can change?" Check the settings your test sets in `pre_create_keyspace`, `post_prepare_cql_cmds`, cassandra-stress `-schema`, user profiles, or in the test class. If the answer is yes, turn off that nemesis by name:
+
+```yaml
+# TWCS test: keep compaction strategy and TTL unchanged
+nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableDefaultTimeToLiveMonkey and not ModifyTableTwcsWindowSizeMonkey'
+```
+
+Turn off only the nemesis that your test really depends on. Let the others run. Note that `nemesis_selector` is not merged when you stack config files: the last file wins. If an overlay sets its own `nemesis_selector`, it must repeat the exclusion.
+
 ### Example Configurations
 
 **Standard longevity test with random disruptions:**
