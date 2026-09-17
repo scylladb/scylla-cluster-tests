@@ -371,6 +371,7 @@ These are the enterprise performance tests tracked in the weekly report:
 | predefined-throughput-steps-i8g-tablets | d6ebf1a5-135f-43fc-a7ba-0716b60dfa94 | i8g Tablets |
 | latency-650gb-with-nemesis-i8g-tablets | c3e46c77-2068-4ea1-b351-9329ed4e4161 | i8g Tablets |
 | latency-650gb-during-rolling-upgrade-i8g-tablets | 01945e9c-ccbc-4248-8eb9-6b80ed7e29fe | i8g Tablets |
+| latency-2.5tb-i8g-elasticity | 828baced-a56d-4931-abb9-610cd1b68058 | i8g Tablets |
 | predefined-throughput-steps-i8g-vnodes | 6ffbef10-7138-457c-b386-73574805ca00 | i8g Vnodes |
 | latency-650gb-with-nemesis-i8g-vnodes | 4bd86f85-49a4-454a-aeb7-252e83fc533d | i8g Vnodes |
 | simple-query-weekly-microbenchmark_arm64 | a0063c73-efcf-4878-988d-72af779dc59d | Microbenchmarks |
