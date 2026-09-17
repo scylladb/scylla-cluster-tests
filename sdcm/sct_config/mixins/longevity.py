@@ -40,6 +40,16 @@ class LongevityConfigMixin(BaseModel):
     data_validation: String = SctField(
         description="Specify the type of data validation to perform",
     )
+    ics_space_amplification_goal: float = SctField(
+        description="""
+             IncrementalCompactionStrategy space_amplification_goal, for example 1.2, applied with ALTER TABLE
+             to every non-system table once the prepare phase has finished (the stress tools create the tables,
+             so it cannot be set up front). Tables using another strategy are switched to ICS. Without a goal
+             ICS never pairs the large bottom-tier run holding the old copy of an overwritten row with the small
+             top-tier run holding the new one, so an overwrite workload keeps growing on disk.
+             Leave unset to keep the schema's compaction as is.
+         """,
+    )
     post_prepare_cql_cmds: StringOrList = SctField(
         description="CQL Commands to run after prepare stage finished (relevant only to longevity_test.py)",
     )

@@ -17,13 +17,12 @@ from functools import partial
 from textwrap import dedent
 
 from longevity_test import LongevityTest
-from sdcm.cluster import BaseNode
 from sdcm.db_stats import AVAIL_SIZE_METRIC, AVAIL_SIZE_METRIC_OLD, GB_SIZE
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.parallel_object import ParallelObject
-from test_lib.compaction import CompactionStrategy, LOGGER
+from test_lib.compaction import alter_table_compaction
 
 KEYSPACE_NAME = "keyspace1"
 TABLE_NAME = "standard1"
@@ -118,29 +117,6 @@ class IcsSpaceAmplificationTest(LongevityTest):
             dict_nodes_used_capacity[node.private_ip_address] = self.prometheus_db.get_used_capacity_gb(node=node)
         return dict_nodes_used_capacity
 
-    def _alter_table_compaction(
-        self,
-        compaction_strategy=CompactionStrategy.INCREMENTAL,
-        table_name=TABLE_NAME,
-        keyspace_name=KEYSPACE_NAME,
-        additional_compaction_params: dict = None,
-    ):
-        """
-        Alters table compaction like: ALTER TABLE mykeyspace.mytable WITH
-                                       compaction = {'class' : 'IncrementalCompactionStrategy'}
-        """
-
-        base_query = f"ALTER TABLE {keyspace_name}.{table_name} WITH compaction = "
-        dict_requested_compaction = {"class": compaction_strategy.value}
-        if additional_compaction_params:
-            dict_requested_compaction.update(additional_compaction_params)
-
-        full_alter_query = base_query + str(dict_requested_compaction)
-        LOGGER.debug("Alter table query is: %s", full_alter_query)
-        node1: BaseNode = self.db_cluster.nodes[0]
-        node1.run_cqlsh(cmd=full_alter_query)
-        InfoEvent(message=f"Altered table by: {full_alter_query}").publish()
-
     def _set_enforce_min_threshold_true(self):
         yaml_file = "/etc/scylla/scylla.yaml"
         tmp_yaml_file = "/tmp/scylla.yaml"
@@ -225,7 +201,12 @@ class IcsSpaceAmplificationTest(LongevityTest):
                     ).publish()
 
             # (3) Altering compaction with SAG=1.5,1.2,None
-            self._alter_table_compaction(additional_compaction_params=additional_compaction_params)
+            alter_table_compaction(
+                node=self.db_cluster.nodes[0],
+                keyspace=KEYSPACE_NAME,
+                table=TABLE_NAME,
+                additional_compaction_params=additional_compaction_params,
+            )
             stress_queue = []
             InfoEvent(message=f"Starting C-S over-write load: {stress_cmd}").publish()
 
