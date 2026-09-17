@@ -78,3 +78,48 @@ def test_send_latency_decorator_result_to_argus(test_data_dir):
         ),
     ]
     argus_mock.submit_results.assert_has_calls(expected_calls, any_order=True)
+<<<<<<< HEAD
+||||||| parent of 28f469435 (fix(argus_results): keep the cycle prefix in per-HDR-tag latency rows)
+
+
+@pytest.mark.parametrize("run", [{}, {"test_id": None}], ids=["no-run-registered", "empty-test-id"])
+def test_send_iotune_results_to_argus_skips_when_no_run(run):
+    """In replay-log-only mode get_run() returns an empty payload, it should be skipped, not raise."""
+    argus_mock = MagicMock()
+    argus_mock.get_run = MagicMock(return_value=run)
+
+    send_iotune_results_to_argus(argus_client=argus_mock, results={}, node=MagicMock(), params={})
+
+    argus_mock.submit_results.assert_not_called()
+=======
+
+
+def test_send_result_to_argus_per_hdr_tag_rows_keep_cycle_prefix():
+    """With more than two HDR tags every tag gets its own row, named '<cycle> (HDR tag: <tag>)'."""
+    argus_mock = MagicMock()
+    hdr_data = {"percentile_90": 1.0, "percentile_99": 2.0, "throughput": 100}
+    tags = ("fn--logstor_write", "fn--logstor_read", "fn--lsm_write", "fn--lsm_read")
+    result = {
+        "screenshots": [],
+        "duration_in_sec": 60,
+        "reactor_stalls_stats": {},
+        "hdr_summary": {f"{'WRITE' if 'write' in tag else 'READ'}--{tag}": dict(hdr_data) for tag in tags},
+    }
+    send_result_to_argus(argus_client=argus_mock, workload="mixed", name="test", description="", cycle=3, result=result)
+
+    latency_table = next(
+        c.args[0] for c in argus_mock.submit_results.call_args_list if c.args[0].name == "mixed - test - latencies"
+    )
+    assert {cell.row for cell in latency_table.results} == {f"Cycle #3 (HDR tag: {tag})" for tag in tags}
+
+
+@pytest.mark.parametrize("run", [{}, {"test_id": None}], ids=["no-run-registered", "empty-test-id"])
+def test_send_iotune_results_to_argus_skips_when_no_run(run):
+    """In replay-log-only mode get_run() returns an empty payload, it should be skipped, not raise."""
+    argus_mock = MagicMock()
+    argus_mock.get_run = MagicMock(return_value=run)
+
+    send_iotune_results_to_argus(argus_client=argus_mock, results={}, node=MagicMock(), params={})
+
+    argus_mock.submit_results.assert_not_called()
+>>>>>>> 28f469435 (fix(argus_results): keep the cycle prefix in per-HDR-tag latency rows)
