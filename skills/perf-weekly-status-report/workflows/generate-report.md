@@ -128,8 +128,9 @@ Also include runs with status `"running"`.
    - `"mixed - Steady State - latencies"` -> workload=mixed, step=Steady State, type=latencies
    - `"mixed - _mgmt_repair_cli - latencies"` -> workload=mixed, step=_mgmt_repair_cli, type=latencies
 
-2. Group by test category:
-   - **i8g Tablets** -- tests with "i8g-tablets" in name
+2. Group by test category. The Category column of the Test Registry in SKILL.md is authoritative --
+   look the test up there; the name patterns below are only a fallback:
+   - **i8g Tablets** -- tests with "i8g-tablets" or "i8g-elasticity" in name
    - **i8g Vnodes** -- tests with "i8g-vnodes" in name
    - **Microbenchmarks** -- tests with "microbenchmark" in name
 
