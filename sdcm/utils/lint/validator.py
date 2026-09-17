@@ -8,6 +8,7 @@ import contextlib
 import logging
 import os
 import pathlib
+import socket
 import traceback
 from collections import namedtuple
 from pathlib import Path
@@ -15,9 +16,67 @@ from unittest.mock import patch
 
 logger = logging.getLogger(__name__)
 
-# Lightweight stub for AMI/GCE image objects returned by cloud lookup functions
-_FakeImage = namedtuple("_FakeImage", ["image_id", "name", "self_link"])
-_FAKE_IMAGE = _FakeImage(image_id="ami-lint-placeholder", name="lint-placeholder", self_link="lint-placeholder")
+# Lightweight stub for the image objects returned by cloud lookup functions.
+# The fields cover every attribute the image resolvers in sdcm.sct_config.config read:
+# `image_id` (AWS), `self_link` (GCE), `id`/`unique_id` (Azure) and `name` (logging).
+_FakeImage = namedtuple("_FakeImage", ["image_id", "name", "self_link", "id", "unique_id"])
+_FAKE_IMAGE = _FakeImage(
+    image_id="ami-lint-placeholder",
+    name="lint-placeholder",
+    self_link="lint-placeholder",
+    id="lint-placeholder",
+    unique_id="lint-placeholder",
+)
+
+# OCI image lookups return positional lists shaped ["OCI", <name>, <ocid>, ...]
+_FAKE_OCI_IMAGE = ["OCI", "lint-placeholder", "ocid1.image.oc1..lint-placeholder"]
+
+# Loopback endpoints stay reachable: only calls leaving the machine mean a cloud API slipped
+# past _CLOUD_API_PATCHES.
+_LOCAL_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", ""})
+
+
+class LintNetworkAccessError(RuntimeError):
+    """Linting reached the network instead of a stub in `_CLOUD_API_PATCHES`."""
+
+
+def _is_local_address(address) -> bool:
+    """AF_UNIX paths and loopback endpoints are not remote cloud calls."""
+    if not isinstance(address, tuple) or not address:
+        return True
+    return address[0] in _LOCAL_HOSTS
+
+
+@contextlib.contextmanager
+def _no_remote_network():
+    """Turn an unstubbed cloud call into a loud, self-explanatory failure.
+
+    Without this, a lookup missing from `_CLOUD_API_PATCHES` reaches the real provider and
+    surfaces as an expired-credential or timeout error from deep inside a vendor SDK -- which
+    says nothing about the linter and breaks every PR the moment a shared secret rotates.
+    """
+    real_connect = socket.socket.connect
+    real_connect_ex = socket.socket.connect_ex
+
+    def _refuse(address):
+        raise LintNetworkAccessError(
+            f"pipeline linting tried to connect to {address!r}. Linting validates configuration "
+            f"structure only and must not reach a cloud provider: add the lookup that made this "
+            f"call to _CLOUD_API_PATCHES in sdcm/utils/lint/validator.py."
+        )
+
+    def connect(self, address, *args, **kwargs):
+        if not _is_local_address(address):
+            _refuse(address)
+        return real_connect(self, address, *args, **kwargs)
+
+    def connect_ex(self, address, *args, **kwargs):
+        if not _is_local_address(address):
+            _refuse(address)
+        return real_connect_ex(self, address, *args, **kwargs)
+
+    with patch.object(socket.socket, "connect", connect), patch.object(socket.socket, "connect_ex", connect_ex):
+        yield
 
 
 def _check_file_exists_skip_credentials(value: str) -> None:
@@ -61,12 +120,20 @@ _CLOUD_API_PATCHES = {
     "sdcm.sct_config.config.get_arch_from_instance_type": lambda *a, **kw: "x86_64",
     # EC2 instance type validation
     "sdcm.sct_config.config.aws_check_instance_type_supported": lambda *a, **kw: True,
-    # Azure image lookup
+    # Azure branched image lookup (private/community galleries)
     "sdcm.provision.azure.utils.get_scylla_images": lambda **kw: [_FAKE_IMAGE],
+    # Azure released image lookup (community gallery)
+    "sdcm.provision.azure.utils.get_released_scylla_images": lambda **kw: [_FAKE_IMAGE],
     # Azure instance type validation
     "sdcm.sct_config.config.azure_check_instance_type_available": lambda *a, **kw: True,
     # KeyStore reads credentials from S3 — not needed for config structure validation
     "sdcm.sct_config.config.KeyStore": _FakeKeyStore,
+    # OCI branched image lookup
+    "sdcm.utils.oci_utils.get_scylla_images_by_branch": lambda *a, **kw: [_FAKE_OCI_IMAGE],
+    # OCI released image lookup
+    "sdcm.utils.oci_utils.get_scylla_images_by_version": lambda *a, **kw: [_FAKE_OCI_IMAGE],
+    # OCI shape validation
+    "sdcm.utils.oci_utils.is_shape_available": lambda *a, **kw: True,
     # OCI image tag lookup (verify_configuration_urls_validity)
     "sdcm.utils.oci_utils.get_image_tags": lambda *a, **kw: {
         "user_data_format_version": "3",
@@ -112,6 +179,7 @@ def validate_pipeline(pipeline_path: Path, env: dict[str, str]) -> tuple[bool, s
         with patch.dict(os.environ, env, clear=True), contextlib.ExitStack() as stack:
             for target, mock_fn in _CLOUD_API_PATCHES.items():
                 stack.enter_context(patch(target, side_effect=mock_fn))
+            stack.enter_context(_no_remote_network())
             stack.enter_context(patch.object(SCTConfiguration, "_validate_cloud_backend_parameters"))
             stack.enter_context(patch.object(SCTConfiguration, "_validate_docker_backend_parameters"))
             stack.enter_context(patch.object(SCTConfiguration, "_resolve_xcloud_version_tag"))
