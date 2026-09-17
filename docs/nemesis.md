@@ -442,9 +442,14 @@ and then ends its own nemesis thread:
 | Order | Category | Selects |
 |-------|----------|---------|
 | 1 | `schema-changes` | `schema_changes` |
-| 2 | `topology-changes` | `topology_changes and not schema_changes` |
+| 2 | `topology-changes` | `topology_changes and not schema_changes` — **temporarily disabled** |
 | 3 | `other-disruptive` | `disruptive and not topology_changes and not schema_changes` |
 | 4 | `rest` | everything else |
+
+A category named in `DISABLED_CATEGORIES` is held out of the sweep. `topology-changes` is there for
+now, so topology nemesis do not run; remove the label to bring them back. Disabled categories stay
+in the table on purpose — dropping the row instead would hand their nemesis to the next matching
+category rather than skipping them.
 
 Categories are matched in order, so a nemesis carrying both `schema_changes` and
 `topology_changes` is swept as a schema change. An `InfoEvent` announces each category as its

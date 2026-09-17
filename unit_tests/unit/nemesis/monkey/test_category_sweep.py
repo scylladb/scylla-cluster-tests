@@ -44,6 +44,7 @@ class FakeCategorySweepMonkey(CategorySweepMonkey, TestNemesisClass):
     """
 
     CATEGORIES = TEST_CATEGORIES
+    DISABLED_CATEGORIES = frozenset()
 
     def __init__(self, tester_obj, *args, termination_event=None, nemesis_selector=None, **kwargs):
         super().__init__(tester_obj, termination_event, *args, nemesis_selector=nemesis_selector, **kwargs)
@@ -53,11 +54,11 @@ class FakeCategorySweepMonkey(CategorySweepMonkey, TestNemesisClass):
 def sweep():
     """A sweep runner whose nemesis never really execute, so tests drive the order only."""
 
-    def _create(params=None, nemesis_selector=None):
+    def _create(params=None, nemesis_selector=None, runner_class=FakeCategorySweepMonkey):
         tester = FakeTester(params=params or PARAMS)
         tester.db_cluster.check_cluster_health = MagicMock()
         tester.db_cluster.test_config = MagicMock()
-        runner = FakeCategorySweepMonkey(tester, termination_event=threading.Event(), nemesis_selector=nemesis_selector)
+        runner = runner_class(tester, termination_event=threading.Event(), nemesis_selector=nemesis_selector)
         runner.interval = 0
         runner.executed = []
         runner.execute_nemesis = lambda nemesis: runner.executed.append(nemesis.__class__.__name__)
@@ -117,6 +118,28 @@ def test_nemesis_selector_narrows_every_category(sweep):
         "CustomNemesisAD",
         "CustomNemesisB",
     ]
+
+
+def test_disabled_category_is_held_out_of_the_sweep(sweep):
+    """A disabled category contributes no nemesis, and the rest keep their order."""
+
+    class SweepWithoutFlagA(FakeCategorySweepMonkey):
+        DISABLED_CATEGORIES = frozenset({"flag-a"})
+
+    runner = sweep(runner_class=SweepWithoutFlagA)
+
+    assert [nemesis.__class__.__name__ for nemesis in runner.disruptions_list] == [
+        "CustomNemesisC",
+        "CustomNemesisB",
+    ]
+
+
+def test_topology_changes_is_disabled_for_now(sweep):
+    """The topology-changes category is temporarily held out of the real sweep."""
+    assert CategorySweepMonkey.DISABLED_CATEGORIES == frozenset({"topology-changes"})
+    assert "topology-changes" in dict(CategorySweepMonkey.CATEGORIES), (
+        "a disabled category must stay in CATEGORIES, otherwise its nemesis fall into another one"
+    )
 
 
 def test_multiply_factor_is_ignored(sweep):

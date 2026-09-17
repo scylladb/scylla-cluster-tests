@@ -31,6 +31,9 @@ class CategorySweepMonkey(NemesisRunner):
     disjoint. This matters for the nemesis that carry both schema_changes and topology_changes:
     they are swept as schema changes.
 
+    A category listed in DISABLED_CATEGORIES is held out of the sweep entirely - currently
+    topology-changes, temporarily.
+
     Two config options behave differently here than under SisyphusMonkey:
 
       - nemesis_multiply_factor is ignored. Repeating the list contradicts "every nemesis once".
@@ -48,6 +51,11 @@ class CategorySweepMonkey(NemesisRunner):
         ("rest", "not disruptive and not topology_changes and not schema_changes"),
     )
 
+    # Categories held out of the sweep for now. They stay in CATEGORIES so the table keeps
+    # describing the whole nemesis tree - a nemesis of a disabled category is skipped, not
+    # silently reassigned to another one. Drop the label here to bring the category back.
+    DISABLED_CATEGORIES: frozenset = frozenset({"topology-changes"})
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.category_by_nemesis: dict[str, str] = {}
@@ -59,6 +67,9 @@ class CategorySweepMonkey(NemesisRunner):
         """Collect the nemesis of every category into one list, in category order."""
         ordered = []
         for label, category_selector in self.CATEGORIES:
+            if label in self.DISABLED_CATEGORIES:
+                self.log.info("Nemesis category %r is temporarily disabled, skipping it in this sweep", label)
+                continue
             selector = (
                 f"({self.nemesis_selector}) and ({category_selector})" if self.nemesis_selector else category_selector
             )
