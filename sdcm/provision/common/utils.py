@@ -184,18 +184,39 @@ def configure_backoff_timeout():
 
 
 def update_repo_cache():
+    # NOTE: cloud provider agents run their own package manager commands at boot
+    #       (e.g. the oracle-cloud-agent snap runs `apt update` on OCI instances),
+    #       so the cache cleanup must wait for the package manager lock and be retried.
+    #       Also, it is `apt-get clean`, not `apt-get clean all`: unlike yum,
+    #       apt-get clean takes no arguments.
+    # NOTE: this script gets wrapped into "bash -cxe '<script>'", so it must not use single quotes.
     return dedent("""\
         if yum --help 2>/dev/null 1>&2 ; then
             echo "Cleaning yum cache..."
-            yum clean all
+            for n in 1 2 3 4 5 6 7 8 9; do
+                for i in $(seq 1 60); do
+                    fuser /var/lib/rpm/.rpm.lock >/dev/null 2>&1 || break
+                    echo "rpm lock held, waiting... ($i/60)"
+                    sleep 2
+                done
+                if yum clean all; then
+                    break
+                fi
+                sleep $(backoff $n)
+            done
             rm -rf /var/cache/yum/
         elif apt-get --help 2>/dev/null 1>&2 ; then
             echo "Cleaning apt cache..."
-            apt-get clean all
+            for n in 1 2 3 4 5 6 7 8 9; do
+                if apt-get -o DPkg::Lock::Timeout=300 clean; then
+                    break
+                fi
+                sleep $(backoff $n)
+            done
             rm -rf /var/cache/apt/
 
             for n in 1 2 3 4 5 6 7 8 9; do
-                if apt-get -y update; then
+                if apt-get -o DPkg::Lock::Timeout=300 -y update; then
                     break
                 fi
                 sleep $(backoff $n)
