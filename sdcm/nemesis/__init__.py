@@ -2042,13 +2042,6 @@ class NemesisRunner:
             else:
                 nemesis_selector = "kubernetes"
         subclasses = self.nemesis_registry.filter_subclasses(nemesis_selector)
-        excluded = set(self.tester.params.get("nemesis_exclude_list") or [])
-        if excluded:
-            held_back = sorted(cls.__name__ for cls in subclasses if cls.__name__ in excluded)
-            subclasses = [cls for cls in subclasses if cls.__name__ not in excluded]
-            self.log.info("Nemesis held out by nemesis_exclude_list: %s", held_back or "none of the selected")
-            if unknown := excluded - {cls.__name__ for cls in self.nemesis_registry.get_subclasses()}:
-                self.log.warning("nemesis_exclude_list names no such nemesis, check for typos: %s", sorted(unknown))
         disruptions = []
         for subclass in subclasses:
             try:

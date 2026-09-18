@@ -171,5 +171,9 @@ def test_encryption_is_off(resolved_config):
 
 
 def test_nemesis_is_configured(resolved_config):
-    """The point of this job over the SC performance jobs is that chaos runs against SC tables."""
-    assert resolved_config.get("nemesis_class_name") == ["SisyphusMonkey"]
+    """The point of this job over the SC performance jobs is that chaos runs against SC tables.
+
+    CategorySweepMonkey rather than SisyphusMonkey: this job is a coverage pass, so it runs every
+    nemesis once, category by category, instead of cycling a shuffled set forever.
+    """
+    assert resolved_config.get("nemesis_class_name") == ["CategorySweepMonkey"]
