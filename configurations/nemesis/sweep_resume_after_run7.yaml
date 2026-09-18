@@ -40,3 +40,13 @@ nemesis_exclude_list:
   - "ModifyTableTwcsWindowSizeMonkey"  # skipped
   - "SplitMergeTabletsWithAlter"  # succeeded
   - "ToggleAuditNemesisSyslog"  # failed
+
+  # run #9 (de61fd2c) - the first run the exclude list actually reached.
+  # AbortDecommissionMonkey exposed SCYLLADB-4604 and failed the run; the five skips are
+  # workload/feature mismatches, not defects, so none of these six need re-running.
+  - "AbortDecommissionMonkey"  # succeeded
+  - "RandomInterruptionNetworkMonkey"  # skipped
+  - "ToggleAuditRulesNemesisSyslog"  # skipped
+  - "ToggleCDCMonkey"  # skipped
+  - "ToggleGcModeMonkey"  # skipped
+  - "ToggleTableIcsMonkey"  # skipped
