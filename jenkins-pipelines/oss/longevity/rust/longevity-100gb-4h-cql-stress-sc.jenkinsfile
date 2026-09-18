@@ -13,12 +13,15 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
     Fragment order matters. Dict options such as append_scylla_yaml are merged key by key, but
     string options such as append_scylla_args are replaced by the last fragment that sets them, so
     enable_experimental_sc.yaml has to come after the test-case.
+
+    sweep_resume_after_run7.yaml holds the nemesis that run #7 already covered out of the next
+    run. Drop it from the list to sweep the whole tree again.
 */
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     availability_zone: 'c',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-100gb-4h-cql-stress-sc.yaml", "configurations/strong_consistency/enable_experimental_sc.yaml", "configurations/strong_consistency/enable_commitlog_sync_batch.yaml", "configurations/stress_images/cql-stress-strong-consistency-leader-awarness.yaml"]''',
+    test_config: '''["test-cases/longevity/longevity-100gb-4h-cql-stress-sc.yaml", "configurations/strong_consistency/enable_experimental_sc.yaml", "configurations/strong_consistency/enable_commitlog_sync_batch.yaml", "configurations/stress_images/cql-stress-strong-consistency-leader-awarness.yaml", "configurations/nemesis/sweep_resume_after_run7.yaml"]''',
     instance_provision_fallback_on_demand: true
 )
