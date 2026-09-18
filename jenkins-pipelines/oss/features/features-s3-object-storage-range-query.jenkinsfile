@@ -1,0 +1,17 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// Range-query latency over an S3-backed keyspace. test_sequential_latency measures each
+// latte query pattern as its own Argus cycle.
+// NOTE: region must stay 'us-east-1' -- configurations/object_storage_s3.yaml pins the
+// endpoint to s3.us-east-1.amazonaws.com and the latte workload defaults to the
+// 'manager-backup-tests-us-east-1' bucket, so the cluster must be co-located with them.
+perfRegressionParallelPipeline(
+    backend: "aws",
+    region: "us-east-1",
+    provision_type: 'on_demand',
+    test_name: "performance_regression_sequential_latency_test.PerformanceRegressionSequentialLatencyTest.test_sequential_latency",
+    test_config: '''["test-cases/longevity/longevity-100gb-4h-s3-range-query-latte.yaml", "configurations/object_storage_s3.yaml"]''',
+)
