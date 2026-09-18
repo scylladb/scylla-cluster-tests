@@ -37,8 +37,11 @@ sizing_loader:  # default loader size (4 vCPU / 8GB), pinned to x86_64
   memory: '>=8'
   arch: x86_64
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '032'
+# CategorySweepMonkey rather than SisyphusMonkey: this job is a coverage pass, so every
+# nemesis should run once, category by category, instead of a shuffled set cycling forever.
+# nemesis_seed has no effect under it - order inside a category is alphabetical, so a sweep
+# is reproducible without a seed.
+nemesis_class_name: 'CategorySweepMonkey'
 
 user_prefix: 'longevity-100gb-4h-sc'
 space_node_threshold: 64424
