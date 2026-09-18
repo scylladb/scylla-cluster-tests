@@ -40,6 +40,7 @@ from sdcm.mgmt.common import (
 )
 from sdcm.provision.helpers.certificate import TLSAssets
 from sdcm.utils.context_managers import DbNodeLogger
+from sdcm.utils.decorators import retrying
 from sdcm.utils.database_query_utils import is_system_keyspace
 from sdcm.utils.replication_strategy_utils import ReplicationStrategy
 from sdcm.utils.version_utils import ComparableScyllaVersion
@@ -660,14 +661,44 @@ class ManagerCluster(ScyllaManagerBase):
         ScyllaManagerBase.__init__(self, id=cluster_id, manager_node=manager_node)
         self.client_encrypt = client_encrypt
 
-    def get_cluster_id_by_name(self, cluster_name: str):
+    def _list_clusters(self, retry_listing: bool = False):
+        """Run `sctool cluster list`, optionally retrying a failing command.
+
+        Manager checks the CQL credentials of every registered cluster while serving the command, so it
+        fails transiently while the DB cluster is disrupted. Only the command failure is retried - an empty
+        cluster list is a valid result. With retry_listing=False the command runs exactly once, without sleep.
+        """
+
+        @retrying(
+            n=3 if retry_listing else 1,
+            sleep_time=10,
+            allowed_exceptions=(ScyllaManagerError,),
+            message="Retrying 'sctool cluster list'",
+        )
+        def run_cluster_list():
+            return self.sctool.run(cmd="cluster list", is_verify_errorless_result=True)
+
+        return run_cluster_list()
+
+    def get_cluster_id_by_name(self, cluster_name: str, retry_listing: bool = False):
+        """Get the Manager cluster id by its name, None if the cluster is not registered in Manager.
+
+        Args:
+            retry_listing: If True, retry a failing `sctool cluster list`. If False (default), a failing listing
+                           is reported the same way as a missing cluster - by returning None.
+        """
         try:
-            cluster_list = self.sctool.run(cmd="cluster list", is_verify_errorless_result=True)
-            column_to_search = "ID"
-            if cluster_list:
-                column_names = cluster_list[0]
-                if "cluster id" in column_names:
-                    column_to_search = "cluster id"
+            cluster_list = self._list_clusters(retry_listing=retry_listing)
+        except ScyllaManagerError as ex:
+            LOGGER.warning(f"Cluster name not found in Scylla-Manager: {ex}")
+            return None
+
+        column_to_search = "ID"
+        if cluster_list:
+            column_names = cluster_list[0]
+            if "cluster id" in column_names:
+                column_to_search = "cluster id"
+        try:
             return self.sctool.get_table_value(
                 parsed_table=cluster_list, column_name=column_to_search, identifier=cluster_name
             )
@@ -1184,9 +1215,12 @@ class ScyllaManagerTool(ScyllaManagerBase):
         cmd = "cluster list"
         return self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
-    def get_cluster(self, cluster_name):
+    def get_cluster(self, cluster_name, retry_listing: bool = False):
         """
-        Returns Manager Cluster object by a given name if exist, else returns none.
+        Returns Manager Cluster object by a given name if exists, else returns None.
+
+        Use retry_listing=True to retry a failing `sctool cluster list` instead of reporting it as a
+        missing cluster.
         """
         # ╭──────────────────────────────────────┬──────────╮
         # │ cluster id                           │ name     │
@@ -1195,7 +1229,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         # │ bf6571ef-21d9-4cf1-9f67-9d05bc07b32e │ Prod     │
         # ╰──────────────────────────────────────┴──────────╯
         cluster = self.clusterClass(manager_node=self.manager_node)
-        cluster_id = cluster.get_cluster_id_by_name(cluster_name)
+        cluster_id = cluster.get_cluster_id_by_name(cluster_name, retry_listing=retry_listing)
         if cluster_id is None:
             return None
         cluster.set_cluster_id(cluster_id)

@@ -3112,7 +3112,7 @@ class NemesisRunner:
         if self.cluster.params.get("cluster_backend") not in ("aws", "k8s-eks"):
             raise UnsupportedNemesis("The restore test only supports 'AWS' and 'K8S-EKS' backends.")
 
-        mgr_cluster = self.cluster.get_cluster_manager()
+        mgr_cluster = self.cluster.get_cluster_manager(retry_listing=True)
         cluster_backend = self.cluster.params.get("cluster_backend")
         if cluster_backend == "k8s-eks":
             cluster_backend = "aws"
@@ -3228,7 +3228,7 @@ class NemesisRunner:
     def _mgmt_backup(self, backup_specific_tables):
         if not self.cluster.params.get("use_mgmt") and not self.cluster.params.get("use_cloud_manager"):
             raise UnsupportedNemesis("Scylla-manager configuration is not defined!")
-        mgr_cluster = self.cluster.get_cluster_manager()
+        mgr_cluster = self.cluster.get_cluster_manager(retry_listing=True)
         if self.cluster.params.get("use_cloud_manager"):
             auto_backup_task = mgr_cluster.backup_task_list[0]
             #  An example of the auto generated backup task of cloud manager is:
