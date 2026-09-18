@@ -293,3 +293,18 @@ def test_build_disruptions_by_name(disruptions, expected_error):
     ctx = pytest.raises(expected_error) if expected_error else nullcontext()
     with ctx:
         CustomNemesis(tester, None)
+
+
+def test_exclude_list_applies_to_sisyphus_too(get_sisyphus):
+    """nemesis_exclude_list is honoured by every runner, not only CategorySweepMonkey.
+
+    It lives in build_disruptions_by_selector, the path both runners share, so a job that
+    sets the option but leaves nemesis_class_name at its default still gets the exclusion
+    instead of silently running the full set.
+    """
+    full = {n.__class__.__name__ for n in get_sisyphus().disruptions_list}
+    assert "CustomNemesisA" in full
+
+    narrowed = get_sisyphus(params=dict(PARAMS, nemesis_exclude_list=["CustomNemesisA"]))
+    names = {n.__class__.__name__ for n in narrowed.disruptions_list}
+    assert names == full - {"CustomNemesisA"}
