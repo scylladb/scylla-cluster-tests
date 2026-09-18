@@ -6821,13 +6821,18 @@ class BaseScyllaCluster:
         return self.name
 
     def get_cluster_manager(
-        self, create_if_not_exists: bool = True, force_add: bool = False, **add_cluster_extra_params
+        self,
+        create_if_not_exists: bool = True,
+        force_add: bool = False,
+        retry_listing: bool = False,
+        **add_cluster_extra_params,
     ) -> AnyManagerCluster:
         """Get the Manager cluster if it already exists, otherwise create it.
 
         Args:
             create_if_not_exists: If True, create the cluster if it does not exist.
             force_add: If True, re-add the cluster (delete and add again) even if it already added.
+            retry_listing: If True, retry `sctool cluster list` attempt
             add_cluster_extra_params: Pass additional parameters (like 'client_encrypt') to the add_cluster method.
         """
         if not self.params.get("use_mgmt"):
@@ -6836,7 +6841,7 @@ class BaseScyllaCluster:
         cluster_name = self.scylla_manager_cluster_name
 
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.scylla_manager_node, scylla_cluster=self)
-        mgr_cluster = manager_tool.get_cluster(cluster_name)
+        mgr_cluster = manager_tool.get_cluster(cluster_name, retry_listing=retry_listing)
 
         if mgr_cluster and force_add:
             LOGGER.debug("Cluster '%s' already exists in Manager. Deleting and adding it again", cluster_name)
