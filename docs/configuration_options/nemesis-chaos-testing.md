@@ -4,7 +4,7 @@
 
 Which disruptions run, how often, and how targets are selected.
 
-**12 options.**
+**13 options.**
 
 
 <a id="nemesis_add_node_cnt"></a>
@@ -104,6 +104,17 @@ A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
 **default:** N/A
 
 **type:** int | list[int] | space-separated ints → list[int]
+
+
+<a id="nemesis_exclude_list"></a>
+
+## **nemesis_exclude_list** / SCT_NEMESIS_EXCLUDE_LIST
+
+List of nemesis class names to hold out of the run, by name rather than by flag.<br>Honoured by CategorySweepMonkey. Use it to skip nemesis that cannot work against the workload<br>under test (for example materialized-view nemesis on a strongly consistent keyspace), or that<br>are blocked by a known bug, without narrowing the flag selector for everything else.
+
+**default:** []
+
+**type:** str | list[str] → list[str] (appendable)
 
 
 <a id="nemesis_selector"></a>

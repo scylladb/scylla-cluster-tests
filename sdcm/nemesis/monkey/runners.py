@@ -65,6 +65,9 @@ class CategorySweepMonkey(NemesisRunner):
 
     def build_categorized_disruptions(self) -> List[NemesisBaseClass]:
         """Collect the nemesis of every category into one list, in category order."""
+        excluded = set(self.tester.params.get("nemesis_exclude_list") or [])
+        if excluded:
+            self.log.info("Nemesis excluded by nemesis_exclude_list: %s", sorted(excluded))
         ordered = []
         for label, category_selector in self.CATEGORIES:
             if label in self.DISABLED_CATEGORIES:
@@ -76,13 +79,23 @@ class CategorySweepMonkey(NemesisRunner):
             members = sorted(
                 self.build_disruptions_by_selector(selector), key=lambda nemesis: nemesis.__class__.__name__
             )
+            # Excluded after the category is built, not before, so category_by_nemesis still
+            # describes the whole tree and the log line below shows what was held back and why.
+            members = [nemesis for nemesis in members if nemesis.__class__.__name__ not in excluded]
             for nemesis in members:
                 self.category_by_nemesis[nemesis.__class__.__name__] = label
             ordered.extend(members)
             self.log.info(
                 "Nemesis category %r: %s", label, [nemesis.__class__.__name__ for nemesis in members] or "empty"
             )
+        unknown = excluded - set(self.registry_names())
+        if unknown:
+            self.log.warning("nemesis_exclude_list names no such nemesis, check for typos: %s", sorted(unknown))
         return ordered
+
+    def registry_names(self) -> Set[str]:
+        """Every nemesis class name the registry knows, used to catch typos in the exclude list."""
+        return {nemesis.__name__ for nemesis in self.nemesis_registry.get_subclasses()}
 
     def call_next_nemesis(self):
         """Run the next nemesis of the sweep, or end the pass once the list is exhausted.

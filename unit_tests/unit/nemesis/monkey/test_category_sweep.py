@@ -232,3 +232,31 @@ def test_run_stops_the_thread_after_one_pass(sweep, events_function_scope):
     assert not runner.termination_event.is_set(), "a finished sweep must not stop sibling nemesis threads"
     assert events_function_scope.get_events_by_category()["CRITICAL"] == []
     assert f"{runner} completed its sweep of 4 nemesis" in info_messages(events_function_scope)
+
+
+# ---------------------------------------------------------------------------
+# nemesis_exclude_list holds named nemesis out of the sweep
+# ---------------------------------------------------------------------------
+
+
+def test_exclude_list_removes_named_nemesis_from_the_sweep(sweep):
+    """A name in nemesis_exclude_list is dropped, and the rest keep their order."""
+    params = dict(PARAMS, nemesis_exclude_list=["CustomNemesisA"])
+    runner = sweep(params=params)
+    assert [n.__class__.__name__ for n in runner.disruptions_list] == [
+        name for name in FULL_SWEEP if name != "CustomNemesisA"
+    ]
+
+
+def test_exclude_list_can_empty_a_category_without_breaking_the_sweep(sweep):
+    """Excluding every member of a category leaves the other categories intact."""
+    params = dict(PARAMS, nemesis_exclude_list=["CustomNemesisA", "CustomNemesisAD"])
+    runner = sweep(params=params)
+    assert [n.__class__.__name__ for n in runner.disruptions_list] == ["CustomNemesisC", "CustomNemesisB"]
+
+
+def test_empty_exclude_list_sweeps_everything(sweep):
+    """The default is a full sweep - an empty or missing list changes nothing."""
+    assert [n.__class__.__name__ for n in sweep(params=dict(PARAMS, nemesis_exclude_list=[])).disruptions_list] == (
+        FULL_SWEEP
+    )
