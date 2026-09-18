@@ -1,0 +1,42 @@
+# Resume the category sweep after sanity-longevity-100gb-4h-sc-test #7.
+#
+# Run #7 swept 22 nemesis before ToggleAuditNemesisSyslog crashed node-1 (SCYLLADB-4625) and
+# aborted the run, leaving 77 of the 99 enabled nemesis unexecuted. Excluding what #7 already
+# covered lets the next run start where that one stopped instead of spending ~2h repeating
+# the schema-changes category.
+#
+# Six of these should stay excluded even once a full sweep is repeated - they cannot pass
+# against this workload:
+#   AddRemoveMvNemesis: MVs/2i unsupported on strongly consistent keyspaces
+#   BlockNetworkMonkey: needs extra_network_interface: True, not set in this job
+#   CreateIndexNemesis: secondary indexes unsupported on strongly consistent keyspaces
+#   KillMVBuildingCoordinator: MVs/2i unsupported on strongly consistent keyspaces
+#   ModifyTableTwcsWindowSizeMonkey: no TWCS table in this workload
+#   ToggleAuditNemesisSyslog: blocked by SCYLLADB-4625 - restart puts the node in a crash loop
+#
+# The remaining entries are the ones that passed in #7; drop them from this list to sweep the
+# whole tree again.
+
+nemesis_exclude_list:
+  - "AddDropColumnMonkey"  # succeeded
+  - "AddRemoveMvNemesis"  # failed
+  - "BlockNetworkMonkey"  # skipped
+  - "CreateIndexNemesis"  # skipped
+  - "KillMVBuildingCoordinator"  # failed
+  - "ModifyTableBloomFilterFpChanceMonkey"  # succeeded
+  - "ModifyTableCachingMonkey"  # succeeded
+  - "ModifyTableCommentMonkey"  # succeeded
+  - "ModifyTableCompactionMonkey"  # succeeded
+  - "ModifyTableCompressionMonkey"  # succeeded
+  - "ModifyTableCrcCheckChanceMonkey"  # succeeded
+  - "ModifyTableDclocalReadRepairChanceMonkey"  # succeeded
+  - "ModifyTableDefaultTimeToLiveMonkey"  # succeeded
+  - "ModifyTableGcGraceTimeMonkey"  # succeeded
+  - "ModifyTableMaxIndexIntervalMonkey"  # succeeded
+  - "ModifyTableMemtableFlushPeriodInMsMonkey"  # succeeded
+  - "ModifyTableMinIndexIntervalMonkey"  # succeeded
+  - "ModifyTableReadRepairChanceMonkey"  # succeeded
+  - "ModifyTableSpeculativeRetryMonkey"  # succeeded
+  - "ModifyTableTwcsWindowSizeMonkey"  # skipped
+  - "SplitMergeTabletsWithAlter"  # succeeded
+  - "ToggleAuditNemesisSyslog"  # failed
