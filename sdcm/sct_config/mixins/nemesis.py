@@ -70,6 +70,12 @@ class NemesisConfigMixin(BaseModel):
     nemesis_seed: IntOrList = SctField(
         description="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey""",
     )
+    nemesis_exclude_list: StringOrList = SctField(
+        description="""List of nemesis class names to hold out of the run, by name rather than by flag.
+        Honoured by CategorySweepMonkey. Use it to skip nemesis that cannot work against the workload
+        under test (for example materialized-view nemesis on a strongly consistent keyspace), or that
+        are blocked by a known bug, without narrowing the flag selector for everything else.""",
+    )
     nemesis_selector: StringOrList = SctField(
         description="""nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has
         ALL the properties in that list which are set to true (the intersection of all properties).
