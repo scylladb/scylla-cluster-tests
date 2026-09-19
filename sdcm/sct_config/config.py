@@ -106,6 +106,7 @@ from sdcm.sct_config.defaults import (
     available_backends,
 )
 from sdcm.sct_config.mixins import CONFIG_GROUPS
+from sdcm.sct_config.validation import checks_deferred, deferred_checks, run_cross_field_checks
 from sdcm.sct_config.helpers import (
     DOCKER_RACK_ARG_MIN_VERSION,
     _load_docker_images_defaults_cached,
@@ -515,12 +516,38 @@ class SCTConfiguration(*CONFIG_GROUPS):
         return hasattr(self, key)
 
     def update(self, other=None, **new_data):
-        """
-        Provide dict-like update() method that triggers Pydantic validation on each field assignment.
+        """Apply several options as one transaction.
 
-        Enables updating multiple config fields at once while ensuring validation, unlike direct
-        attribute assignment which could bypass checks when done in bulk operations.
+        Each key is assigned individually, so per-field coercion still happens, but the cross-field
+        rules are checked once at the end -- which is what lets options that are only *jointly*
+        valid be set together (``authenticator`` with its user and password, say). On failure the
+        configuration is left exactly as it was, so a rejected update cannot strand it in a state
+        that makes the next, unrelated assignment raise.
+
+        The snapshot is shallow: mutating a list or dict value in place still escapes the rollback,
+        as it escapes assignment validation generally.
         """
+        if checks_deferred():
+            # Nested inside a load or an outer update -- whoever opened that window validates on
+            # exit and owns the rollback.
+            self._assign_all(other, new_data)
+            return
+
+        snapshot = dict(self.__dict__)
+        fields_set = set(self.__pydantic_fields_set__)
+        try:
+            with deferred_checks():
+                self._assign_all(other, new_data)
+            run_cross_field_checks(self)
+        except Exception:
+            self.__dict__.clear()
+            self.__dict__.update(snapshot)
+            self.__pydantic_fields_set__.clear()
+            self.__pydantic_fields_set__.update(fields_set)
+            raise
+
+    def _assign_all(self, other, new_data):
+        """Assign every key of ``other`` and ``new_data``, in that order."""
         if other is not None:
             if hasattr(other, "keys"):
                 for key in other.keys():
@@ -532,13 +559,27 @@ class SCTConfiguration(*CONFIG_GROUPS):
         for key, value in new_data.items():
             setattr(self, key, value)
 
-    def __init__(self, /, **data):  # noqa: PLR0912, PLR0914, PLR0915
+    def __init__(self, /, **data):
         """
         Initialize configuration by loading and merging settings from multiple sources.
 
         Loads configuration in priority order: defaults → backend configs → user config files →
         environment variables → region-specific data. Validates and resolves cloud images (AMI/GCE)
         based on scylla_version when not explicitly provided.
+
+        The load runs with the cross-field rules suspended -- it mutates this model a few hundred
+        times on its way to a configuration, and none of the intermediate states are one. The rules
+        run once, here, when there is something to judge.
+        """
+        with deferred_checks():
+            self._load(**data)
+        run_cross_field_checks(self)
+
+    def _load(self, /, **data):  # noqa: PLR0912, PLR0914, PLR0915
+        """Merge the configuration from every source onto this model.
+
+        Split out of ``__init__`` only so the cross-field rules have a window to be suspended for;
+        see `sdcm.sct_config.validation`.
         """
         super().__init__(**data)
 
@@ -957,16 +998,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if self.get("instance_provision") not in ["spot", "on_demand", "spot_fleet"]:
             raise ValueError(f"Selected instance_provision type '{self.get('instance_provision')}' is not supported!")
 
-        # 12) validate authenticator parameters
-        if self.get("authenticator") and self.get("authenticator") == "PasswordAuthenticator":
-            authenticator_user = self.get("authenticator_user")
-            authenticator_password = self.get("authenticator_password")
-            if not (authenticator_password and authenticator_user):
-                raise ValueError(
-                    "For PasswordAuthenticator authenticator authenticator_user and authenticator_password"
-                    " have to be provided"
-                )
-
+        # 12) validate alternator authorization parameters
         if self.get("alternator_enforce_authorization"):
             if not self.get("authenticator") or not self.get("authorizer"):
                 raise ValueError(
@@ -1020,17 +1052,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 )
             self["endpoint_snitch"] = "org.apache.cassandra.locator.GossipingPropertyFileSnitch"
 
-        # 16 Validate use_dns_names
-        if self.get("use_dns_names"):
-            if cluster_backend and cluster_backend not in ("aws", "gce", "oci"):
-                raise ValueError(f"use_dns_names is not supported for {cluster_backend} backend")
-
         # 17 Validate scylla network configuration mandatory values
         self._validate_scylla_network_config(cluster_backend=cluster_backend)
-
-        # 18 Validate K8S TLS+SNI values
-        if self.get("k8s_enable_sni") and not self.get("k8s_enable_tls"):
-            raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
 
         SCTCapacityReservation.get_cr_from_aws(self)
         SCTDedicatedHosts.reserve(self)

@@ -18,6 +18,7 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel
 
 from sdcm.sct_config.types import Boolean, DictOrStrOrPydantic, SctField, String, StringOrList
+from sdcm.sct_config.validation import cross_field_check
 
 
 class ScyllaConfigMixin(BaseModel):
@@ -192,3 +193,19 @@ class ScyllaConfigMixin(BaseModel):
         description="user-data format version to send to the DB node images. Defaults to whatever the image is tagged with; set it only to override that.",
         appendable=False,
     )
+
+    @cross_field_check
+    def check_scylla_password_authenticator_has_credentials(self):
+        """`PasswordAuthenticator` without credentials would lock SCT out of its own cluster.
+
+        The three options are usually set together, which `SCTConfiguration.update` supports: it
+        applies every key before checking, so none of them has to be set first.
+        """
+        if self.authenticator == "PasswordAuthenticator" and not (
+            self.authenticator_user and self.authenticator_password
+        ):
+            raise ValueError(
+                "For PasswordAuthenticator authenticator authenticator_user and authenticator_password"
+                " have to be provided"
+            )
+        return self
