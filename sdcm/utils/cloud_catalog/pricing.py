@@ -8,7 +8,7 @@ import boto3
 import requests
 from mypy_boto3_pricing import PricingClient
 
-from sdcm.utils.cloud_monitor.common import InstanceLifecycle
+from sdcm.utils.cloud_catalog.lifecycle import InstanceLifecycle
 
 LOGGER = getLogger(__name__)
 
