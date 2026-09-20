@@ -208,6 +208,31 @@ class AZResolver:
 
         return candidates
 
+    def _blocked_by_dns_names(self, context: str) -> bool:
+        """Indicates if relocating to another region would break `use_dns_names`.
+
+        With `use_dns_names`, `cql_address` is the node's EC2 private DNS name
+        (`ip-10-3-13-210.eu-west-2.compute.internal`). Resolving that name from a VPC in
+        another region requires `AllowDnsResolutionFromRemoteVpc` on the peering; AWS does
+        support it for inter-region peerings, but SCT's peerings never enable it (see
+        `sdcm/utils/aws_peering.py`, which sets up routes and tags only), so the name does
+        not resolve. The sct-runner stays in the originally configured region while the
+        cluster relocates, and would then fail every CQL connection with a name-resolution
+        error even though the nodes are healthy and reachable by IP.
+
+        Enabling that peering option everywhere would be the alternative fix; until then,
+        staying in the runner's region is the only safe option.
+        """
+        if not self._params.get("use_dns_names"):
+            return False
+        LOGGER.warning(
+            "%s: disabled because use_dns_names is enabled - SCT's VPC peerings do not enable "
+            "cross-VPC DNS resolution, so the nodes' private DNS names would be unresolvable "
+            "from the sct-runner once the cluster moves to another region",
+            context,
+        )
+        return True
+
     def get_region_fallback_candidates(self) -> list[tuple[str, list[str]]]:
         """Collects ordered ``(region, az_letters)`` candidates for cluster region fallback.
 
@@ -216,6 +241,8 @@ class AZResolver:
             - able to supply the configured number of AZs that support the required instance types.
         The current region is excluded (as the starting point).
         """
+        if self._blocked_by_dns_names("Region fallback"):
+            return []
         region_names = self._region_names()
         if not region_names:
             return []
@@ -246,6 +273,8 @@ class AZResolver:
 
     def get_dc_fallback_candidates(self, dc_index: int) -> list[tuple[str, list[str]]]:
         """Collect ordered ``(region, az_letters)`` candidates to relocate the DC at ``dc_index``."""
+        if self._blocked_by_dns_names(f"Region fallback (DC {dc_index})"):
+            return []
         region_names = self._region_names()
         if dc_index >= len(region_names):
             return []

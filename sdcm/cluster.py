@@ -312,6 +312,10 @@ class NodeError(Exception):
             return ""
 
 
+class CqlAddressUnresolvableError(Exception):
+    """raised when `cql_address` is a DNS name that the sct-runner cannot resolve"""
+
+
 class PrometheusSnapshotErrorException(Exception):
     pass
 
@@ -406,6 +410,9 @@ class BaseNode(AutoSshContainerMixin):
     MANAGER_AGENT_PORT = 10001
     MANAGER_SERVER_PORT = 5080
     OLD_MANAGER_PORT = 56080
+    # how long `cql_address` may stay unresolvable before it is treated as a hard failure
+    CQL_ADDRESS_RESOLVE_TIMEOUT = 120
+    CQL_ADDRESS_RESOLVE_STEP = 5
 
     log = LOGGER
     _instance_type = "N/A"
@@ -1834,6 +1841,17 @@ class BaseNode(AutoSshContainerMixin):
         try:
             socket.create_connection((self.cql_address, port)).close()
             return True
+        except socket.gaierror as details:
+            # gaierror is an OSError, so without this branch an unresolvable `cql_address` is
+            # indistinguishable from "the port is not open yet" and the caller just times out
+            self.log.error(
+                "Cannot resolve '%s' while checking for '%s' on port %s: %s",
+                self.cql_address,
+                service_name,
+                port,
+                details,
+            )
+            return False
         except OSError:
             return False
         except Exception as details:  # noqa: BLE001
@@ -1980,11 +1998,37 @@ class BaseNode(AutoSshContainerMixin):
         except Exception as details:  # noqa: BLE001
             self.log.error("Failed to report housekeeping uuid. Error details: %s", details)
 
+    def verify_cql_address_resolvable(self, timeout: int = CQL_ADDRESS_RESOLVE_TIMEOUT) -> None:
+        """Fail fast when `cql_address` is a DNS name the sct-runner cannot resolve.
+
+        With `use_dns_names`, `cql_address` is the node's cloud-internal DNS name. A name that
+        does not resolve never starts resolving on its own, yet every CQL probe then fails with
+        `socket.gaierror` - an `OSError`, so it looks exactly like "the port is not open yet"
+        and the caller burns its whole timeout in silence. Resolving once up front turns that
+        into an immediate, named failure.
+        """
+        deadline = time.time() + timeout
+        while True:
+            try:
+                socket.getaddrinfo(self.cql_address, self.CQL_PORT, proto=socket.IPPROTO_TCP)
+                return
+            except socket.gaierror as details:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    raise CqlAddressUnresolvableError(
+                        f"{self.name}: cql_address '{self.cql_address}' did not resolve within {timeout}s: {details}. "
+                        f"On AWS this happens when the cluster was relocated to a region other than the "
+                        f"sct-runner's, because SCT's VPC peerings do not enable cross-VPC DNS resolution."
+                    ) from details
+                # never sleep past the caller's deadline - `timeout` is an upper bound, not a hint
+                time.sleep(min(self.CQL_ADDRESS_RESOLVE_STEP, remaining))
+
     def wait_db_up(self, verbose=True, timeout=3600):
         text = None
         if verbose:
             text = "%s: Waiting for DB services to be up" % self.name
 
+        self.verify_cql_address_resolvable(timeout=min(self.CQL_ADDRESS_RESOLVE_TIMEOUT, timeout))
         wait.wait_for(
             func=self.db_up, step=5, text=text, timeout=timeout, throw_exc=True, stop_event=self.stop_wait_db_up_event
         )
@@ -5266,6 +5310,18 @@ class NodeSetupTimeout(Exception):
     pass
 
 
+def _drain_queued_failures(task_queue: queue.Queue) -> list[tuple]:
+    """Pop every result already waiting on `task_queue` and return the failed ones."""
+    failures = []
+    while True:
+        try:
+            node, exception_details = task_queue.get_nowait()
+        except queue.Empty:
+            return failures
+        if exception_details:
+            failures.append((node, exception_details))
+
+
 def wait_for_init_wrap(method):
     """
     Wraps wait_for_init class method.
@@ -5326,6 +5382,11 @@ def wait_for_init_wrap(method):
             try:
                 node, setup_exception = task_queue.get(block=True, timeout=5)
                 if setup_exception:
+                    # nodes usually fail together on a shared cause, and only the first result off
+                    # the queue is ever reported - log whatever else already failed so the shared
+                    # cause is visible instead of looking like a single-node problem
+                    for other_node, other_exception in _drain_queued_failures(task_queue):
+                        cl_inst.log.error("Node %s also failed setup/startup: %s", other_node, other_exception[0])
                     raise NodeSetupFailed(node=node, error_msg=setup_exception[0], traceback_str=setup_exception[1])
                 results.append(node)
                 cl_inst.log.info(
