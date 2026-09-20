@@ -55,11 +55,16 @@ def provision_instances_with_fallback(
         provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
     except OperationPreemptedError:
         if pricing_model.is_spot() and fallback_on_demand:
-            provision_with_retry(provisioner, definitions=definitions, pricing_model=PricingModel.ON_DEMAND)
+            LOGGER.warning("Spot instances were preempted during provisioning, falling back to on-demand")
+            pricing_model = PricingModel.ON_DEMAND
+            provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
         else:
             raise
 
-    provisioned_instances = provisioner.get_or_create_instances(definitions=definitions)
+    # The pricing model has to be handed over explicitly: `get_or_create_instances` defaults to spot,
+    # so a definition that is not in the provisioner cache yet would be re-created at spot pricing -
+    # exactly the pricing that just failed.
+    provisioned_instances = provisioner.get_or_create_instances(definitions=definitions, pricing_model=pricing_model)
     for definition, v_m in zip(definitions, provisioned_instances):
         if definition.use_public_ip:
             hostname = v_m.public_ip_address if v_m.public_ip_address else v_m.private_ip_address

@@ -23,12 +23,13 @@ from google.cloud import compute_v1
 from sdcm.provision.provisioner import (
     InstanceConfigurationError,
     InstanceDefinition,
+    OperationPreemptedError,
     PricingModel,
     ProvisionError,
     ProvisionUnrecoverableError,
     ZoneResourcesExhaustedError,
 )
-from sdcm.provision.gce.capacity_errors import is_config_error
+from sdcm.provision.gce.capacity_errors import is_config_error, is_preemption_error
 from sdcm.provision.gce.disk_provider import DiskProvider
 from sdcm.provision.gce.network_provider import NetworkProvider
 from sdcm.provision.gce.constants import (
@@ -109,6 +110,42 @@ def resolve_root_disk_type(instance_type: str, configured: str | None) -> str:
     if instance_type.split("-", maxsplit=1)[0] in HYPERDISK_ONLY_FAMILIES:
         return DISK_TYPE_HYPERDISK_BALANCED
     return configured or DISK_TYPE_PD_STANDARD
+
+
+def build_scheduling(instance_type: str, pricing_model: PricingModel) -> compute_v1.Scheduling:
+    """Build the scheduling policy for `instance_type` at `pricing_model`.
+
+    A bundled-local-SSD family (z3) has no spot form at all: GCE rejects the insert outright with
+    "OnHostMaintenance must be set to MIGRATE for machine type - z3-highmem-8-highlssd", and a spot
+    VM cannot live-migrate, so TERMINATE is the only value it can carry. Those machine types are
+    therefore requested on-demand, as the legacy `sdcm.utils.gce_utils` path already does.
+
+    Every other family decides pricing before the maintenance policy. Checking the family first
+    dropped the SPOT provisioning model for e2 - which does support spot - and handed back an
+    on-demand VM while the test believed it was running on spot.
+    """
+    scheduling = compute_v1.Scheduling()
+    family = instance_type.split("-", maxsplit=1)[0]
+    if family in BUNDLED_LOCAL_SSD_FAMILIES:
+        if pricing_model.is_spot():
+            LOGGER.warning(
+                "Machine type %s requires on_host_maintenance=MIGRATE, which a spot VM cannot have; "
+                "requesting it on-demand instead",
+                instance_type,
+            )
+        scheduling.on_host_maintenance = "MIGRATE"
+    elif pricing_model.is_spot():
+        scheduling.on_host_maintenance = "TERMINATE"
+        scheduling.provisioning_model = compute_v1.Scheduling.ProvisioningModel.SPOT.name
+        scheduling.instance_termination_action = "STOP"
+    elif instance_type.startswith("e2-"):
+        # the e2 family supports only on_host_maintenance=MIGRATE for non-spot VMs
+        scheduling.on_host_maintenance = "MIGRATE"
+    else:
+        # avoid live migration and unexpected restarts disrupting tests
+        scheduling.on_host_maintenance = "TERMINATE"
+        scheduling.automatic_restart = False
+    return scheduling
 
 
 class VirtualMachineProvider:
@@ -198,6 +235,12 @@ class VirtualMachineProvider:
                     raise InstanceConfigurationError(
                         f"Failed to create instance {normalized_name} due to configuration error: {err}"
                     ) from err
+                if pricing_model.is_spot() and is_preemption_error(err):
+                    LOGGER.warning("Spot VM %s was preempted during the insert request: %s", normalized_name, err)
+                    self._drain_pending_creations(pending_instance_creations)
+                    raise OperationPreemptedError(
+                        f"Spot instance {normalized_name} preempted during provisioning: {err}"
+                    ) from err
                 if _is_zone_exhausted(err):
                     LOGGER.error(
                         "Zone %s resource pool exhausted during insert request for %s",
@@ -208,13 +251,18 @@ class VirtualMachineProvider:
                 LOGGER.error("Error when sending create vm request for instance %s: %s", normalized_name, str(err))
                 error_to_raise = err
 
-        # Second loop: Wait for all operations to complete and collect instances
-        for definition, operation, normalized_name, user_data, startup_script in pending_instance_creations:
+        # Second loop: Wait for all operations to complete and collect instances. Entries are popped
+        # as they are taken, so on an abort the list holds exactly the operations still in flight.
+        while pending_instance_creations:
+            definition, operation, normalized_name, user_data, startup_script = pending_instance_creations.pop(0)
             try:
                 instance = self._wait_for_instance_creation(
                     definition, operation, normalized_name, pricing_model, user_data, startup_script
                 )
                 instances.append(instance)
+            except OperationPreemptedError:
+                self._drain_pending_creations(pending_instance_creations)
+                raise
             except ProvisionUnrecoverableError:
                 # Zone exhaustion and configuration errors are unrecoverable; let them propagate
                 # immediately. Successfully-created instances remain in self._cache so callers
@@ -229,12 +277,40 @@ class VirtualMachineProvider:
                 raise InstanceConfigurationError(
                     f"Failed to create instances due to configuration error: {error_to_raise}"
                 ) from error_to_raise
+            if pricing_model.is_spot() and is_preemption_error(error_to_raise):
+                raise OperationPreemptedError(
+                    f"Spot instance preempted during provisioning: {error_to_raise}"
+                ) from error_to_raise
             if _is_zone_exhausted(error_to_raise):
                 raise ZoneResourcesExhaustedError(
                     f"Zone {self.zone} resource pool exhausted: {error_to_raise}"
                 ) from error_to_raise
             raise ProvisionError(f"Failed to create instances: {error_to_raise}") from error_to_raise
         return instances
+
+    def _drain_pending_creations(self, pending_instance_creations: list) -> None:
+        """Resolve the insert operations still in flight when a batch is abandoned mid-way.
+
+        GCE's `insert` is not idempotent, so a name whose operation was never awaited is neither in
+        the cache nor free: the caller's on-demand retry would get `AlreadyExists` for it instead of
+        a VM. Each remaining operation is waited out - a VM that came up is cached and reused by the
+        retry, one that failed is deleted so its name is free again. Errors are only logged: the
+        abort that triggered the drain is the error the caller has to see.
+        """
+        while pending_instance_creations:
+            definition, operation, normalized_name, _, _ = pending_instance_creations.pop(0)
+            try:
+                wait_for_extended_operation(operation, f"instance creation for {normalized_name}")
+                instance = self._instances_client.get(project=self.project_id, zone=self.zone, instance=normalized_name)
+                self._set_instance_labels(instance, definition.tags, normalized_name)
+                self._cache[normalized_name] = instance
+                LOGGER.info("Instance %s finished creating after the abort; keeping it for the retry", normalized_name)
+            except google.api_core.exceptions.GoogleAPIError as gce_error:
+                LOGGER.warning("Instance %s did not finish creating after the abort: %s", normalized_name, gce_error)
+                try:
+                    self.delete(normalized_name, wait=True)
+                except google.api_core.exceptions.GoogleAPIError as delete_error:
+                    LOGGER.warning("Cleanup of %s after the abort failed: %s", normalized_name, delete_error)
 
     def _wait_for_instance_creation(
         self,
@@ -267,9 +343,21 @@ class VirtualMachineProvider:
                     normalized_name,
                     gce_error,
                 )
-                self._cleanup_failed_instance(normalized_name, str(gce_error))
+                self._cleanup_failed_instance(normalized_name, gce_error)
                 raise InstanceConfigurationError(
                     f"Failed to create instance {normalized_name} due to configuration error: {gce_error}"
+                ) from gce_error
+            if pricing_model.is_spot() and is_preemption_error(gce_error):
+                # Retrying spot here would re-issue the same request three times, 15 minutes apart,
+                # while the caller already holds a cheaper answer: re-provision at on-demand pricing.
+                LOGGER.warning(
+                    "Spot VM %s was preempted before it finished booting; not retrying spot: %s",
+                    normalized_name,
+                    gce_error,
+                )
+                self._cleanup_failed_instance(normalized_name, gce_error)
+                raise OperationPreemptedError(
+                    f"Spot instance {normalized_name} preempted during provisioning: {gce_error}"
                 ) from gce_error
             if _is_zone_exhausted(gce_error):
                 LOGGER.error(
@@ -277,12 +365,12 @@ class VirtualMachineProvider:
                     self.zone,
                     normalized_name,
                 )
-                self._cleanup_failed_instance(normalized_name, str(gce_error))
+                self._cleanup_failed_instance(normalized_name, gce_error)
                 raise ZoneResourcesExhaustedError(
                     f"Zone {self.zone} resource pool exhausted: {gce_error}"
                 ) from gce_error
             LOGGER.warning("Instance %s creation failed: %s, will retry", normalized_name, gce_error)
-            self._cleanup_failed_instance(normalized_name, str(gce_error))
+            self._cleanup_failed_instance(normalized_name, gce_error)
             # Retry the entire creation process with retry decorator
             return self._create_instance_with_retry(definition, pricing_model, user_data, startup_script)
 
@@ -314,10 +402,14 @@ class VirtualMachineProvider:
             return instance
         except google.api_core.exceptions.GoogleAPIError as gce_error:
             LOGGER.warning("Instance %s creation failed: %s", normalized_name, gce_error)
-            self._cleanup_failed_instance(normalized_name, str(gce_error))
+            self._cleanup_failed_instance(normalized_name, gce_error)
             if is_config_error(gce_error):
                 raise InstanceConfigurationError(
                     f"Failed to create instance {normalized_name} due to configuration error: {gce_error}"
+                ) from gce_error
+            if pricing_model.is_spot() and is_preemption_error(gce_error):
+                raise OperationPreemptedError(
+                    f"Spot instance {normalized_name} preempted during provisioning: {gce_error}"
                 ) from gce_error
             if _is_zone_exhausted(gce_error):
                 raise ZoneResourcesExhaustedError(
@@ -375,21 +467,10 @@ class VirtualMachineProvider:
             instance.metadata.items.append({"key": k, "value": str(v)})
 
         # Scheduling
-        instance.scheduling = compute_v1.Scheduling()
+        instance.scheduling = build_scheduling(definition.type, pricing_model)
         if has_bundled_local_ssds:
-            instance.scheduling.on_host_maintenance = "MIGRATE"
+            # The local SSDs come with the machine type, so the explicitly requested ones are dropped.
             instance.disks = [d for d in disks if "-data-local-ssd-" not in d.device_name]
-        elif pricing_model.is_spot():
-            instance.scheduling.on_host_maintenance = "TERMINATE"
-            instance.scheduling.provisioning_model = compute_v1.Scheduling.ProvisioningModel.SPOT.name
-            instance.scheduling.instance_termination_action = "STOP"
-        elif definition.type.startswith("e2-"):
-            # e2 family supports only on_host_maintenance=MIGRATE for non-spot VMs
-            instance.scheduling.on_host_maintenance = "MIGRATE"
-        else:
-            # avoid live migration and unexpected restarts disrupting tests
-            instance.scheduling.on_host_maintenance = "TERMINATE"
-            instance.scheduling.automatic_restart = False
 
         # Network tags and service accounts
         network_tags = self.network_provider.get_network_tags(allow_public_access=definition.use_public_ip)
@@ -479,9 +560,14 @@ class VirtualMachineProvider:
             except Exception as exc:  # noqa: BLE001
                 LOGGER.warning("Failed to set labels on instance %s: %s", name, exc)
 
-    def _cleanup_failed_instance(self, name: str, error_message: str) -> None:
-        """Cleanup instance that failed due to preemption or quota."""
-        if "Instance failed to start due to preemption" in error_message or "Quota exceeded" in error_message:
+    def _cleanup_failed_instance(self, name: str, error: BaseException) -> None:
+        """Cleanup instance that failed due to preemption or quota.
+
+        Preemption is recognized through `is_preemption_error` so this stays in step with the
+        classification that routes to the on-demand fallback: a form accepted there but not here
+        would leave the stopped spot VM behind, and the fallback cannot recreate its name.
+        """
+        if is_preemption_error(error) or "Quota exceeded" in str(error):
             LOGGER.warning("Instance %s failed due to preemption or quota, attempting cleanup...", name)
             try:
                 self.delete(name, wait=True)

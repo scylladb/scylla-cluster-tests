@@ -29,6 +29,14 @@ TYPE_NOT_AVAILABLE_MARKERS: list[str] = [
     "machineTypeNotFound",
 ]
 
+# A spot VM reclaimed by GCE before it finished booting. Unlike a zone capacity shortage this says
+# nothing about the zone - the very same request succeeds there at on-demand pricing - so it routes
+# to the spot -> on-demand fallback rather than to zone/region relocation.
+PREEMPTION_ERROR_MARKERS: list[str] = [
+    "Instance failed to start due to preemption",
+    "PREEMPTED",
+]
+
 
 # GCE reports an unsupported machine-type / disk-type / image combination with the very same
 # ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS code it uses for a genuine capacity shortage, e.g.
@@ -71,13 +79,21 @@ def is_type_unavailable_error(exception: BaseException) -> bool:
     return any(marker in error_str for marker in TYPE_NOT_AVAILABLE_MARKERS)
 
 
+def is_preemption_error(exception: BaseException) -> bool:
+    """Return True if `exception` reports a spot VM reclaimed by GCE during provisioning."""
+    error_str = str(exception)
+    return any(marker in error_str for marker in PREEMPTION_ERROR_MARKERS)
+
+
 def classify_provisioning_error(exception: BaseException) -> str:
     """Classify a GCE provisioning error for fallback routing.
 
-    Returns one of: "config", "capacity", "quota", "type_unavailable", "unknown".
+    Returns one of: "config", "preemption", "capacity", "quota", "type_unavailable", "unknown".
     """
     if is_config_error(exception):
         return "config"
+    if is_preemption_error(exception):
+        return "preemption"
     if is_zone_capacity_error(exception):
         return "capacity"
     if is_quota_error(exception):
