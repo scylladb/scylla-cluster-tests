@@ -1,4 +1,7 @@
 instance_provision: 'spot'
+# A preempted spot VM is re-provisioned on-demand in the same zone, as on AWS and Azure. Without it
+# the param defaults to false and every GCE test that does not set it explicitly fails the run instead.
+instance_provision_fallback_on_demand: true
 gce_datacenter: 'us-east1'
 gce_network: 'qa-vpc'
 
