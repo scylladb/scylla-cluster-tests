@@ -93,7 +93,7 @@ def test_send_latency_decorator_result_to_argus(test_data_dir):
 def test_send_result_to_argus_per_hdr_tag_rows_keep_cycle_prefix():
     """With more than two HDR tags every tag gets its own row, named '<cycle> (HDR tag: <tag>)'."""
     argus_mock = MagicMock()
-    hdr_data = {"percentile_90": 1.0, "percentile_99": 2.0, "throughput": 100}
+    hdr_data = {"percentile_90": 1.0, "percentile_95": 1.5, "percentile_99": 2.0, "throughput": 100}
     tags = ("fn--logstor_write", "fn--logstor_read", "fn--lsm_write", "fn--lsm_read")
     result = {
         "screenshots": [],
