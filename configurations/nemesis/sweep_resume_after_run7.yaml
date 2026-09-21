@@ -41,10 +41,14 @@ nemesis_exclude_list:
   - "SplitMergeTabletsWithAlter"  # succeeded
   - "ToggleAuditNemesisSyslog"  # failed
 
+  # Comments below are the Argus nemesis status - did the disruption itself complete - not the
+  # coverage verdict on the wiki page, which asks whether the nemesis exposed an SC problem. A
+  # nemesis can be "succeeded" here and still be the one that failed the run.
+  #
   # run #9 (de61fd2c) - the first run the exclude list actually reached.
   # AbortDecommissionMonkey exposed SCYLLADB-4604 and failed the run; the five skips are
   # workload/feature mismatches, not defects, so none of these six need re-running.
-  - "AbortDecommissionMonkey"  # failed - SCYLLADB-4604
+  - "AbortDecommissionMonkey"  # succeeded; the run then failed on SCYLLADB-4604
   - "RandomInterruptionNetworkMonkey"  # skipped
   - "ToggleAuditRulesNemesisSyslog"  # skipped
   - "ToggleCDCMonkey"  # skipped
