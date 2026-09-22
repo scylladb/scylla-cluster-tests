@@ -26,3 +26,7 @@ sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
 
 user_prefix: 'longevity-2tb-high-disk-used'
 nemesis_selector: 'supports_high_disk_utilization'
+
+# The stress phase overwrites the prepared data. A space amplification goal makes ICS
+# reclaim overwritten data more strictly, keeping disk usage below ~85% (SCYLLADB-2801).
+post_prepare_cql_cmds: "ALTER TABLE keyspace1.standard1 WITH compaction = {'class': 'IncrementalCompactionStrategy', 'space_amplification_goal': '1.2'}"
