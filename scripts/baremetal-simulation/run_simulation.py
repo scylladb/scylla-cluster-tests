@@ -65,7 +65,8 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
         python_step("preflight", "preflight checks", "00_preflight.py"),
         python_step("launch", "launch the simulated hosts", "01_launch_hosts.py"),
         python_step("nodes", "write the bare-metal node JSON", "02_write_baremetal_config.py"),
-        python_step("distro", "patch sdcm/utils/distro.py for Fedora", "03_patch_distro_for_fedora.py", "--apply"),
+        shell_step("peers", "map peer addresses between hosts", "10_map_peer_addresses.sh"),
+        python_step("distro", "patch SCT for Fedora", "03_patch_sct_for_fedora.py", "--apply"),
     ]
 
     if args.phase == "artifact":
@@ -102,7 +103,7 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
 
     if args.teardown:
         steps += [
-            python_step("revert", "revert the distro patch", "03_patch_distro_for_fedora.py", "--revert"),
+            python_step("revert", "revert the Fedora patches", "03_patch_sct_for_fedora.py", "--revert"),
             python_step("teardown", "terminate the hosts", "99_teardown.py", "--yes"),
         ]
     return steps
@@ -156,7 +157,7 @@ def print_summary(results: list[tuple[Step, bool, float]], args: argparse.Namesp
     if not args.teardown:
         log("hosts are still running -- terminate with:")
         log("  uv run python scripts/baremetal-simulation/99_teardown.py --yes --all")
-        log("  uv run python scripts/baremetal-simulation/03_patch_distro_for_fedora.py --revert")
+        log("  uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --revert")
     log("record on SCT-901: distro detected, RPM install outcome, scylla_setup + /var/lib/scylla mount,")
     log("install wall-clock, log collection, and the io.conf diff between passes (.state/host-state-*).")
     log("=" * 68)

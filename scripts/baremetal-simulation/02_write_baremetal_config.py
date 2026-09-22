@@ -129,7 +129,7 @@ def main() -> int:
     if problems:
         return 1
 
-    log("hosts are usable -- next: 03_patch_distro_for_fedora.py --apply")
+    log("hosts are usable -- next: 03_patch_sct_for_fedora.py --apply")
     return 0
 
 

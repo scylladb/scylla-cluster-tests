@@ -27,9 +27,32 @@ export SCT_TEST_ID
 export SCT_S3_BAREMETAL_CONFIG="${SIM_BAREMETAL_CONFIG_NAME}"
 export SCT_USE_PREINSTALLED_SCYLLA="false"
 export SCT_SCYLLA_REPO="${SIM_SCYLLA_REPO}"
+# The perf test case does not set logs_transport, so it takes the global default
+# of "vector".  On Fedora 44 that binary core-dumped repeatedly on every node
+# (2026-09-22), and each dump raises an ERROR-severity CoreDumpEvent that fails
+# the run at teardown -- and the coredump exporter's own `yum list installed`
+# deadlocked dnf, hanging node_setup with no timeout.  Ship logs over SSH instead,
+# as the artifact test case already does.
+export SCT_LOGS_TRANSPORT="${SIM_LOGS_TRANSPORT:-ssh}"
+# perf-regression-throughput-baremetal-5gb.yaml asks for RF=3, but every
+# PhysicalMachineNode reports the same rack (RACK0) -- the backend has no rack
+# awareness, whereas on AWS/GCE SCT derives racks from AZs.  ScyllaDB 2025.3
+# enables rf_rack_valid_keyspaces by default, so RF=3 in a single rack is
+# rejected and cassandra-stress dies creating its keyspace:
+#
+#   InvalidQueryException: The option `rf_rack_valid_keyspaces` is enabled.
+#   It requires that all keyspaces are RF-rack-valid.
+#
+# The real fix is either rack support for the baremetal backend or an RF the
+# topology can satisfy; this override only lets the workload run meanwhile.
+# NB: Python literal syntax, not JSON/YAML.  sdcm/sct_config/types.py's
+# dict_or_str_or_pydantic() only tries ast.literal_eval() on a string, unlike its
+# sibling dict_or_str() which falls back to yaml.safe_load() -- so a lowercase
+# `false` here fails with "isn't a dict, str or Pydantic model".
+export SCT_APPEND_SCYLLA_YAML="${SIM_APPEND_SCYLLA_YAML:-{\"rf_rack_valid_keyspaces\": False\}}"
 
 sim_log "test id: ${SCT_TEST_ID}"
-sim_hydra run-test performance_regression_test.PerformanceRegressionTest.test_write \
-    --backend baremetal \
-    --config "${SIM_PERF_TEST_CASE}" \
-    "$@"
+sim_run_test_with_retry performance_regression_test.PerformanceRegressionTest.test_write \
+    "${SIM_PERF_TEST_CASE}" perf "$@"
+
+sim_log "done -- collect logs with: scripts/baremetal-simulation/06_collect_logs.sh"

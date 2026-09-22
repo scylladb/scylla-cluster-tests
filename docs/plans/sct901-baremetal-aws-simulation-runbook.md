@@ -158,7 +158,7 @@ work at all: distro, SELinux mode, and what `detect_disks(nvme=True)` would retu
 ### Step 3 — the one code change
 
 ```bash
-uv run python scripts/baremetal-simulation/03_patch_distro_for_fedora.py --apply
+uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --apply
 # undo later with --revert, inspect with --check
 ```
 
@@ -231,7 +231,7 @@ invalidates the DB-node conclusion.
 
 ```bash
 uv run python scripts/baremetal-simulation/99_teardown.py --yes --all
-uv run python scripts/baremetal-simulation/03_patch_distro_for_fedora.py --revert
+uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --revert
 ```
 
 ## 4. Pass/fail criteria to record on SCT-901

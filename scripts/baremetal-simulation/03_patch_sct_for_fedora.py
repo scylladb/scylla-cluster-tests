@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
-"""Step 3 -- teach SCT about recent Fedora releases (local, uncommitted patch).
+"""Step 3 -- the local, uncommitted patches SCT needs to run on Fedora.
 
-    uv run python scripts/baremetal-simulation/03_patch_distro_for_fedora.py --check
-    uv run python scripts/baremetal-simulation/03_patch_distro_for_fedora.py --apply
-    uv run python scripts/baremetal-simulation/03_patch_distro_for_fedora.py --revert
+    uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --check
+    uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --apply
+    uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --revert
+
+Two patches, both genuine gaps in SCT rather than simulation artifacts:
+
+1. sdcm/utils/distro.py -- the Fedora release table (below).
+2. sdcm/cluster.py install_epel() -- BaseLoaderSet.node_setup calls it for every
+   rhel-like distro, and its fallback runs `yum install -y epel-release`, which
+   does not exist on Fedora: Fedora IS the upstream of EPEL, so its own repos
+   already carry those packages.  Loader setup dies without this.
 
 sdcm/utils/distro.py declares:
 
@@ -30,6 +38,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import REPO_ROOT, log  # noqa: E402
 
 DISTRO_PY = REPO_ROOT / "sdcm" / "utils" / "distro.py"
+CLUSTER_PY = REPO_ROOT / "sdcm" / "cluster.py"
+
+EPEL_ANCHOR = '            raise Exception("EPEL can only be installed for RHEL like distros")\n'
+EPEL_SKIP = (
+    "\n        if self.distro.is_fedora:\n"
+    '            self.log.debug("Fedora ships EPEL\'s packages in its own repositories; skipping")\n'
+    "            return\n"
+)
 ORIGINAL_VERSIONS = ["34", "35", "36"]
 PATCHED_VERSIONS = ["34", "35", "36", "41", "42", "43", "44", "45"]
 LINE_RE = re.compile(r'^(\s*\("FEDORA", "fedora", )\[[^\]]*\](, DistroBase\.RHEL\),\s*)$', re.MULTILINE)
@@ -52,6 +68,22 @@ def rewrite(versions: list[str]) -> bool:
     DISTRO_PY.write_text(new_text, encoding="utf-8")
     log(f"{DISTRO_PY.relative_to(REPO_ROOT)}: Fedora versions -> {versions}")
     return True
+
+
+def patch_install_epel(apply: bool) -> None:
+    """Make install_epel() a no-op on Fedora, which has no epel-release package."""
+    text = CLUSTER_PY.read_text(encoding="utf-8")
+    patched = EPEL_SKIP in text
+    if apply and not patched:
+        if EPEL_ANCHOR not in text:
+            raise SystemExit(f"could not locate install_epel() in {CLUSTER_PY} -- patch it by hand")
+        CLUSTER_PY.write_text(text.replace(EPEL_ANCHOR, EPEL_ANCHOR + EPEL_SKIP, 1), encoding="utf-8")
+        log("sdcm/cluster.py: install_epel() now skips Fedora")
+    elif not apply and patched:
+        CLUSTER_PY.write_text(text.replace(EPEL_SKIP, "", 1), encoding="utf-8")
+        log("sdcm/cluster.py: install_epel() patch removed")
+    else:
+        log(f"sdcm/cluster.py: install_epel() already {'patched' if patched else 'unpatched'}")
 
 
 def verify() -> None:
@@ -83,11 +115,13 @@ def main() -> int:
     if args.apply:
         rewrite(PATCHED_VERSIONS)
         verify()
+        patch_install_epel(apply=True)
         log("next: 04_render_test_case.py")
         return 0
 
     rewrite(ORIGINAL_VERSIONS)
-    log("reverted; `git diff sdcm/utils/distro.py` should now be empty")
+    patch_install_epel(apply=False)
+    log("reverted; `git diff sdcm/` should now be empty")
     return 0
 
 

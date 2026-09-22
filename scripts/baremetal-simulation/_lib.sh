@@ -66,3 +66,52 @@ sim_hydra() {
     sim_log "hydra $*"
     ./docker/env/hydra.sh "$@"
 }
+
+# Run an SCT test through hydra, retrying once on a known-transient setup failure.
+#
+# SCT resolves the Scylla version from the repo at config time with a single 30s
+# budget and no retry (SCYLLA_URL_RESPONSE_TIMEOUT in sdcm/utils/version_utils.py),
+# on every invocation.  downloads.scylladb.com throttled those objects four times
+# on 2026-09-22, each time recovering within minutes, and each time failing the run
+# before it touched the hardware -- once with five machines already provisioned.
+#
+# The retry is keyed on the failure signature, not on how long the run took: hydra
+# spends minutes on container startup before SCT even begins, so a config-time
+# failure can still take ~5 minutes of wall clock (measured: 293s for a run whose
+# pytest phase was 40.74s).  Timing cannot tell the two apart; the message can.
+SIM_TRANSIENT_SETUP_FAILURES='repodata/repomd\.xml|Connection reset by peer|ParallelObjectException|MaxRetryError'
+
+sim_run_test_with_retry() {
+    local test_name="$1" test_case="$2" label="$3"
+    shift 3
+    local backoff="${SIM_RETRY_BACKOFF_SECONDS:-120}"
+    local attempt rc output
+    output="$(mktemp -t sct901-run-XXXXXX.log)"
+
+    for attempt in 1 2; do
+        rc=0
+        set -o pipefail
+        sim_hydra run-test "${test_name}" --backend baremetal --config "${test_case}" "$@" 2>&1 \
+            | tee "${output}" || rc=$?
+        set +o pipefail
+
+        if [[ ${rc} -eq 0 ]]; then
+            rm -f "${output}"
+            return 0
+        fi
+        if [[ ${attempt} -ge 2 ]]; then
+            sim_log "run failed again (rc=${rc}) -- giving up"
+            rm -f "${output}"
+            return "${rc}"
+        fi
+        if ! grep -qE "${SIM_TRANSIENT_SETUP_FAILURES}" "${output}"; then
+            sim_log "run failed (rc=${rc}) -- not a transient setup failure, not retrying"
+            rm -f "${output}"
+            return "${rc}"
+        fi
+        sim_log "transient setup failure detected -- retrying once in ${backoff}s"
+        sleep "${backoff}"
+        SCT_TEST_ID="$(sim_new_test_id "${label}-retry")"
+        export SCT_TEST_ID
+    done
+}
