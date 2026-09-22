@@ -57,6 +57,9 @@ KNOWN_SECRETS = (
     "scylla_test_id_ed25519",
     "scylla_test_id_ed25519.pub",
     "gcp-sct-project-1.json",
+    "gcp-sct-project-1_service_accounts.json",
+    "gcp-local-ssd-latency.json",
+    "gcp-local-ssd-latency_service_accounts.json",
     "gcp-scylladbaaslab.json",
     "azure.json",
     "oci.json",
@@ -65,14 +68,26 @@ KNOWN_SECRETS = (
     "ldap_ms_ad.json",
     "argus_rest_credentials.json",
     "scylladb_jira.json",
-    "housekeeping-db.json",
+    "CA.pem",
+    "SCYLLADB.pem",
+    "hytrust-kmip-cacert.pem",
+    "hytrust-kmip-scylla.pem",
     "backup_azure_blob.json",
     "azure_kms_config.json",
     "gcp_kms_config.json",
     "scylladb_upload.json",
     "qa_users.json",
     "bucket-users.json",
+    "aws_images_role.json",
+    "github_access.json",
+    "jenkins.json",
+    "scylla_doctor_full.json",
 )
+
+# Entries whose names are templated per provider or per environment
+# (``argus_rest_credentials_sct_{provider}.json``,
+# ``scylla_cloud_sct_api_creds_{env}.json``) cannot be described by name and are
+# only seen when listing is permitted.
 
 STATUS_EXPIRED = "expired"
 STATUS_EXPIRING = "expiring"
@@ -165,6 +180,27 @@ def collect_secrets(client, prefix):
     yield from listed
 
 
+# AADSTS codes that mean "this credential is no longer good", as opposed to
+# Graph or the network being unavailable.
+CREDENTIAL_REJECTION_MARKERS = ("AADSTS7000222", "AADSTS7000215", "invalid_client", "unauthorized_client")
+
+
+def _describe_http_error(exc):
+    """Summarise an HTTPError, including the response body when it has one."""
+    try:
+        body = exc.read().decode("utf-8", "replace")[:400]
+    except Exception:  # noqa: BLE001 - the body is best-effort context only
+        body = ""
+    return f"HTTP {exc.code} {body}".strip()
+
+
+def _is_credential_rejection(exc, detail):
+    """True when the failure means the stored secret itself was refused."""
+    if exc.code not in (400, 401):
+        return False
+    return any(marker in detail for marker in CREDENTIAL_REJECTION_MARKERS)
+
+
 def _post_form(url, fields):
     """POST a urlencoded form and return the parsed JSON response."""
     data = urllib.parse.urlencode(fields).encode()
@@ -187,9 +223,10 @@ def azure_secret_expiry(client, secret_name):
     and reads the application's own ``passwordCredentials``.  This needs no
     Graph app role: an application may always read its own application object.
 
-    Returns the latest expiry as a date, or ``None`` when the answer cannot be
-    obtained - including when the secret has already expired hard enough that
-    the token request itself fails, which the caller reports separately.
+    Returns ``(expiry_date, warning)``.  ``expiry_date`` is ``None`` when the
+    app carries no client secret at all.  ``warning`` is a string when the
+    stored secret could not be matched to exactly one credential on the app,
+    and ``None`` otherwise.
     """
     payload = client.get_secret_value(SecretId=secret_name)
     creds = json.loads(payload.get("SecretString") or payload["SecretBinary"])
@@ -204,22 +241,39 @@ def azure_secret_expiry(client, secret_name):
         },
     )
     app = _get_json(AZURE_GRAPH_APP_URL.format(client_id=creds["client_id"]), token_response["access_token"])
+    credentials = app.get("passwordCredentials", [])
 
-    expiries = [parse_expiry(entry["endDateTime"]) for entry in app.get("passwordCredentials", [])]
-    expiries = [expiry for expiry in expiries if expiry is not None]
+    # During an overlap window the app carries several secrets, and the keystore
+    # holds exactly one of them - not necessarily the newest. Picking the latest
+    # expiry would report a healthy date while the secret SCT actually uses is
+    # about to lapse. Graph returns a `hint` holding the first three characters
+    # of each secret, which identifies the one the keystore has.
+    hint = creds["client_secret"][:3]
+    matched = [entry for entry in credentials if entry.get("hint") == hint]
+    if len(matched) == 1:
+        return parse_expiry(matched[0]["endDateTime"]), None
+    if len(matched) > 1:
+        # Same three-character prefix on two secrets: report the nearer expiry
+        # rather than guess optimistically.
+        expiries = sorted(filter(None, (parse_expiry(entry["endDateTime"]) for entry in matched)))
+        return (expiries[0] if expiries else None), f"{len(matched)} app secrets share the hint {hint!r}"
+
+    expiries = sorted(filter(None, (parse_expiry(entry["endDateTime"]) for entry in credentials)))
     if not expiries:
-        return None
-    # The app can carry several secrets during an overlap window; the newest
-    # one is the one SCT will still be using.
-    return max(expiries)
+        return None, None
+    # The stored secret is not among the app's current credentials at all, which
+    # means it was replaced without the keystore being updated.
+    return expiries[0], "stored secret does not match any credential on the app"
 
 
 def apply_azure_truth(results, client, prefix, today, warn_days):
     """Replace the tag-derived Azure row with what Azure AD actually reports.
 
-    Mutates and returns ``results``.  A failure here is reported but never
-    masks the tag-based answer, so a Graph outage cannot turn the whole check
-    into a false alarm.
+    Mutates and returns ``results``.  Only an outright rejection of the stored
+    credential marks the row expired; anything else - DNS, a read timeout, an
+    IAM denial on the keystore read - is reported as an unverified lookup and
+    leaves the tag-based answer standing, so infrastructure trouble cannot be
+    mistaken for a lapsed secret.
     """
     name = f"{prefix}{AZURE_SECRET_NAME}"
     row = next((item for item in results if item["name"] == name), None)
@@ -227,29 +281,53 @@ def apply_azure_truth(results, client, prefix, today, warn_days):
         return results
 
     try:
-        expires_on = azure_secret_expiry(client, name)
-    except (urllib.error.URLError, ClientError, KeyError, ValueError) as exc:
-        # An expired or revoked secret fails the token request outright, which
-        # is itself the answer we are looking for.
+        expires_on, warning = azure_secret_expiry(client, name)
+    except urllib.error.HTTPError as exc:
+        # The token endpoint answers 400/401 with an AADSTS code when the
+        # secret itself is bad; that is the answer we are looking for. Any
+        # other HTTP status is Graph being unwell, not a dead credential.
+        detail = _describe_http_error(exc)
+        if _is_credential_rejection(exc, detail):
+            row["status"] = STATUS_EXPIRED
+            row["note"] = f"Azure AD rejected the stored secret ({detail})"
+        else:
+            row["note"] = f"Azure lookup failed, showing tag: {detail}"
+        print(f"azure lookup for {name}: {detail}", file=sys.stderr)
+        return results
+    except (
+        urllib.error.URLError,
+        TimeoutError,
+        OSError,
+        ClientError,
+        KeyError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as exc:
+        # Network, TLS, socket timeout, IAM denial on the keystore read, or a
+        # response that did not parse. None of these say anything about the
+        # credential, so the tag-based answer stands.
         detail = f"{type(exc).__name__}: {exc}"
-        print(f"azure lookup failed for {name}: {detail}", file=sys.stderr)
-        row["azure_error"] = detail
-        row["status"] = STATUS_EXPIRED
-        row["note"] = "Azure AD rejected the stored secret"
+        print(f"azure lookup for {name}: {detail}", file=sys.stderr)
+        row["note"] = f"Azure lookup failed, showing tag: {detail}"
         return results
 
     if expires_on is None:
-        row["note"] = "Azure AD reports no client secret on the app"
         row["status"] = STATUS_EXPIRED
+        row["note"] = warning or "Azure AD reports no client secret on the app"
         return results
 
     tagged = row.get("expires_on")
     verified = classify(name, {EXPIRY_TAG: expires_on.isoformat()}, today, warn_days)
     verified["source"] = "azure"
+    notes = []
+    if warning:
+        notes.append(warning)
     if tagged and tagged != verified["expires_on"]:
-        verified["note"] = f"tag says {tagged}, Azure AD says {verified['expires_on']}"
+        notes.append(f"tag says {tagged}, Azure AD says {verified['expires_on']}")
     elif not tagged:
-        verified["note"] = "no expires_on tag; value read from Azure AD"
+        notes.append("no expires_on tag; value read from Azure AD")
+    if notes:
+        verified["note"] = "; ".join(notes)
 
     results[results.index(row)] = verified
     return results

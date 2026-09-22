@@ -17,6 +17,8 @@ The script lives under ``.github/scripts``, which is not an importable
 package, so it is loaded by path.
 """
 
+import io
+import json
 import datetime
 import importlib.util
 import urllib.error
@@ -97,10 +99,14 @@ def test_render_markdown_orders_worst_first_and_counts():
     assert "1 expired, 1 expiring within 30 days, 1 untracked, 1 healthy." in markdown
 
 
+def _fake_azure(expiry, warning=None):
+    return lambda client, name: (expiry, warning)
+
+
 def test_apply_azure_truth_overrides_tag_and_flags_drift(monkeypatch):
     """Azure AD wins over the hand-written tag, and the disagreement is shown."""
     results = [check_keystore_expiry.classify("sct/azure.json", {"expires_on": "2026-12-01"}, TODAY, WARN_DAYS)]
-    monkeypatch.setattr(check_keystore_expiry, "azure_secret_expiry", lambda client, name: datetime.date(2027, 9, 22))
+    monkeypatch.setattr(check_keystore_expiry, "azure_secret_expiry", _fake_azure(datetime.date(2027, 9, 22)))
 
     check_keystore_expiry.apply_azure_truth(results, client=None, prefix="sct/", today=TODAY, warn_days=WARN_DAYS)
 
@@ -112,7 +118,7 @@ def test_apply_azure_truth_overrides_tag_and_flags_drift(monkeypatch):
 
 def test_apply_azure_truth_fills_in_a_missing_tag(monkeypatch):
     results = [check_keystore_expiry.classify("sct/azure.json", {}, TODAY, WARN_DAYS)]
-    monkeypatch.setattr(check_keystore_expiry, "azure_secret_expiry", lambda client, name: datetime.date(2026, 10, 1))
+    monkeypatch.setattr(check_keystore_expiry, "azure_secret_expiry", _fake_azure(datetime.date(2026, 10, 1)))
 
     check_keystore_expiry.apply_azure_truth(results, client=None, prefix="sct/", today=TODAY, warn_days=WARN_DAYS)
 
@@ -120,19 +126,71 @@ def test_apply_azure_truth_fills_in_a_missing_tag(monkeypatch):
     assert results[0]["note"] == "no expires_on tag; value read from Azure AD"
 
 
-def test_apply_azure_truth_marks_expired_when_azure_rejects_the_secret(monkeypatch):
+def test_apply_azure_truth_surfaces_a_hint_mismatch_warning(monkeypatch):
+    """The stored secret not matching any app credential must be visible."""
+    results = [check_keystore_expiry.classify("sct/azure.json", {"expires_on": "2027-09-22"}, TODAY, WARN_DAYS)]
+    monkeypatch.setattr(
+        check_keystore_expiry,
+        "azure_secret_expiry",
+        _fake_azure(datetime.date(2027, 9, 22), "stored secret does not match any credential on the app"),
+    )
+
+    check_keystore_expiry.apply_azure_truth(results, client=None, prefix="sct/", today=TODAY, warn_days=WARN_DAYS)
+
+    assert "does not match any credential" in results[0]["note"]
+
+
+def _http_error(code, body):
+    return urllib.error.HTTPError("url", code, "err", {}, io.BytesIO(body.encode()))
+
+
+def test_apply_azure_truth_marks_expired_only_on_a_credential_rejection(monkeypatch):
     """A rejected token request is itself the answer: the secret is dead."""
     results = [check_keystore_expiry.classify("sct/azure.json", {"expires_on": "2027-09-22"}, TODAY, WARN_DAYS)]
 
+    def _rejected(client, name):
+        raise _http_error(401, '{"error":"invalid_client","error_description":"AADSTS7000222 expired"}')
+
+    monkeypatch.setattr(check_keystore_expiry, "azure_secret_expiry", _rejected)
+    check_keystore_expiry.apply_azure_truth(results, client=None, prefix="sct/", today=TODAY, warn_days=WARN_DAYS)
+
+    assert results[0]["status"] == check_keystore_expiry.STATUS_EXPIRED
+    assert "rejected the stored secret" in results[0]["note"]
+
+
+@pytest.mark.parametrize(
+    "raiser",
+    [
+        pytest.param(lambda: _http_error(503, "Service Unavailable"), id="graph-5xx"),
+        pytest.param(lambda: _http_error(403, "Forbidden"), id="graph-403"),
+        pytest.param(lambda: urllib.error.URLError("dns failure"), id="dns"),
+        pytest.param(lambda: TimeoutError("read timed out"), id="read-timeout"),
+        pytest.param(lambda: OSError("connection reset"), id="socket"),
+        pytest.param(lambda: json.JSONDecodeError("bad", "", 0), id="unparsable-response"),
+    ],
+)
+def test_apply_azure_truth_keeps_the_tag_when_the_lookup_is_unreliable(monkeypatch, raiser):
+    """Infrastructure trouble must never be reported as an expired secret."""
+    results = [check_keystore_expiry.classify("sct/azure.json", {"expires_on": "2027-09-22"}, TODAY, WARN_DAYS)]
+
     def _boom(client, name):
-        raise urllib.error.HTTPError("url", 401, "AADSTS7000222", {}, None)
+        raise raiser()
 
     monkeypatch.setattr(check_keystore_expiry, "azure_secret_expiry", _boom)
+    check_keystore_expiry.apply_azure_truth(results, client=None, prefix="sct/", today=TODAY, warn_days=WARN_DAYS)
+
+    assert results[0]["status"] == check_keystore_expiry.STATUS_OK
+    assert results[0].get("source") != "azure"
+    assert "Azure lookup failed" in results[0]["note"]
+
+
+def test_apply_azure_truth_flags_an_app_with_no_secret(monkeypatch):
+    results = [check_keystore_expiry.classify("sct/azure.json", {"expires_on": "2027-09-22"}, TODAY, WARN_DAYS)]
+    monkeypatch.setattr(check_keystore_expiry, "azure_secret_expiry", _fake_azure(None))
 
     check_keystore_expiry.apply_azure_truth(results, client=None, prefix="sct/", today=TODAY, warn_days=WARN_DAYS)
 
     assert results[0]["status"] == check_keystore_expiry.STATUS_EXPIRED
-    assert results[0]["note"] == "Azure AD rejected the stored secret"
 
 
 def test_apply_azure_truth_is_a_noop_when_azure_json_is_absent(monkeypatch):
