@@ -21,9 +21,9 @@ uv run python scripts/baremetal-simulation/run_simulation.py --phase perf # 3 db
 
 `run_simulation.py` chains the numbered steps below, times each one, records
 progress in `.state/progress.json` and prints a summary with the data points
-SCT-901 asks for. By default it also repeats the artifact test once on the
-un-reset host, which is the drift measurement the ticket needs
-(`--dirty-passes 0` drops it).
+SCT-901 asks for. By default it also resets the host and repeats the artifact test once, which is
+SCT-901 criterion 1 (`--reset-passes 0` drops it).  `--dirty-passes N` adds runs
+on the *un-reset* host instead -- criterion 2, and expected to fail.
 
 Useful flags: `--list` (show the steps), `--dry-run` (print the commands),
 `--resume` (continue after a failed step without re-provisioning), `--from-step
@@ -46,9 +46,10 @@ Each step is also runnable on its own:
 | 4 | `uv run python scripts/baremetal-simulation/04_render_test_case.py` | writes `test-cases/artifacts/baremetal-fedora.yaml` |
 | 5 | `scripts/baremetal-simulation/05_run_artifact_test.sh` | `hydra run-test artifacts_test ... --backend baremetal` |
 | 6 | `scripts/baremetal-simulation/06_collect_logs.sh` | `hydra collect-logs` through the bare-metal collector |
-| 7 | `scripts/baremetal-simulation/07_rerun_dirty_host.sh` | second pass on the un-reset host + host-state diff (drift) |
-| 8 | `scripts/baremetal-simulation/08_run_perf_test.sh` | optional perf smoke, needs db + loader + monitor hosts |
-| 9 | `uv run python scripts/baremetal-simulation/99_teardown.py --yes --all` | terminates everything, removes the generated files |
+| 7 | `scripts/baremetal-simulation/09_reset_host.sh` | reset the host to a pre-`scylla_setup` state (required between passes) |
+| 8 | `scripts/baremetal-simulation/07_rerun_dirty_host.sh` | optional: second pass on the **un-reset** host, the drift experiment — expected to fail |
+| 9 | `scripts/baremetal-simulation/08_run_perf_test.sh` | optional perf smoke, needs db + loader + monitor hosts |
+| 10 | `uv run python scripts/baremetal-simulation/99_teardown.py --yes --all` | terminates everything, removes the generated files |
 
 Steps 3 and 4 produce **uncommitted local state**; step 9 (`--all`) and
 `03_patch_distro_for_fedora.py --revert` undo them.
@@ -82,5 +83,14 @@ Phase B (perf smoke) is `SIM_DB_COUNT=3 SIM_LOADER_COUNT=1 SIM_MONITOR_COUNT=1`.
 - **`logs_transport` defaults to `vector`**, which makes the node push logs *to* the
   runner; from a laptop behind NAT that never arrives. The generated test case uses
   `ssh`.
+- **A reused host must be reset before a second run.** `scylla_setup` refuses to
+  redo its work while `/etc/systemd/system/var-lib-scylla.mount` exists, which also
+  skips `scylla_io_setup`, so nothing regenerates `/etc/scylla.d/io.conf` after the
+  RPM reinstall has reset it -- and Scylla then dies with `Bad I/O Scheduler
+  configuration`. That is what `09_reset_host.sh` is for.
+- **SCT resolves the version from the repo at config time** with a 30s budget and no
+  retry, on every invocation. Repeated runs can get throttled by
+  downloads.scylladb.com and fail before touching the hardware;
+  `05_run_artifact_test.sh` retries once when a run dies within 150s.
 - **`PhysicalMachineNode.reboot()` raises `NotImplementedError`** — SELinux is set to
   permissive from user-data at launch instead.

@@ -11,8 +11,12 @@ Runs the numbered step scripts in order, times each one, records progress in
 Defaults chosen so a single command answers the ticket:
 
   * phase A  -- preflight, launch, node JSON, distro patch, test case, artifact
-    test, log collection, then one repeat on the un-reset host (criterion 2:
-    the drift number).  ``--dirty-passes 0`` drops the repeat.
+    test, log collection, then a host reset and a second artifact test -- which is
+    SCT-901 criterion 1, two runs of the same build on the same host.
+    ``--reset-passes 0`` drops the repeat.
+  * ``--dirty-passes N`` adds runs on the *un-reset* host, which is criterion 2.
+    That experiment is expected to FAIL; 09_reset_host.sh documents the measured
+    reason.  It is off by default, and the run stops when it fails.
   * the hosts are LEFT RUNNING at the end, so a failure can be investigated on
     the box.  They carry keep=<SIM_KEEP_HOURS>/keep_action=terminate, so they
     cannot leak past that window.  ``--teardown`` terminates them (and reverts
@@ -70,10 +74,23 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
             shell_step("run", "artifact test (pass 1)", "05_run_artifact_test.sh"),
             shell_step("logs", "collect logs", "06_collect_logs.sh", advisory=True),
         ]
-        for pass_no in range(2, args.dirty_passes + 2):
+        pass_no = 1
+        for _ in range(args.reset_passes):
+            pass_no += 1
+            steps += [
+                shell_step("reset-%d" % pass_no, f"reset the host before pass {pass_no}", "09_reset_host.sh"),
+                shell_step(
+                    "run-%d" % pass_no, f"artifact test on the reset host (pass {pass_no})", "05_run_artifact_test.sh"
+                ),
+                shell_step("logs-%d" % pass_no, f"collect logs (pass {pass_no})", "06_collect_logs.sh", advisory=True),
+            ]
+        for _ in range(args.dirty_passes):
+            pass_no += 1
             steps += [
                 shell_step(
-                    "dirty-%d" % pass_no, f"artifact test on the dirty host (pass {pass_no})", "07_rerun_dirty_host.sh"
+                    "dirty-%d" % pass_no,
+                    f"artifact test on the DIRTY host (pass {pass_no}, expected to fail)",
+                    "07_rerun_dirty_host.sh",
                 ),
                 shell_step("logs-%d" % pass_no, f"collect logs (pass {pass_no})", "06_collect_logs.sh", advisory=True),
             ]
@@ -149,11 +166,22 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--phase", choices=("artifact", "perf"), default="artifact", help="which workload to run")
     parser.add_argument(
-        "--dirty-passes",
+        "--reset-passes",
         type=int,
         default=1,
         metavar="N",
-        help="extra artifact runs on the un-reset host, for the drift number (default: 1, 0 disables)",
+        help="extra artifact runs, each preceded by a host reset -- run-to-run variance on one host (default: 1)",
+    )
+    parser.add_argument(
+        "--dirty-passes",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "extra artifact runs on the un-reset host (default: 0).  The drift experiment, and it is EXPECTED "
+            "TO FAIL: a reused host skips RAID setup, never regenerates /etc/scylla.d/io.conf, and scylla then "
+            "refuses to start"
+        ),
     )
     parser.add_argument("--teardown", action="store_true", help="terminate the hosts and revert the patch at the end")
     parser.add_argument("--resume", action="store_true", help="skip the steps that already succeeded")
