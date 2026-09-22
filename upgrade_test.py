@@ -70,6 +70,11 @@ from sdcm.exceptions import Group0LimitedVotersFeatureNotEnableOnNodes
 
 NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
 
+# jira:SCYLLADB-2533 - the `rpc::client::wait_for_reply` oversized allocation - is fixed by a seastar bump
+# (jira:SCYLLADB-1541) which landed on master only. The backports were declined both for 2026.1
+# (jira:SCYLLADB-3023) and for 2026.2 (jira:SCYLLADB-3021), so it's never going to be fixed on those branches.
+OVERSIZED_RPC_ALLOCATION_FIXED_FROM = "2026.3.0~dev"
+
 
 def truncate_entries(func):
     @wraps(func)
@@ -157,11 +162,12 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.stacks = {}
         for node in self.db_cluster.nodes:
             self.configure_event_filtering(node)
+        self.filter_oversized_allocation_for_whole_run()
 
     def configure_event_filtering(self, node):
         self.stacks[node] = contextlib.ExitStack()
         # ignoring those oversized allocation errors, till both ends of the upgrade would have
-        # fixes for https://github.com/scylladb/scylladb/issues/24660
+        # fixes for jira:SCYLLADB-2533
         self.stacks[node].enter_context(
             DbEventsFilter(
                 node=node,
@@ -170,6 +176,26 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 extra_time_to_expiration=30,
             )
         )
+
+    def filter_oversized_allocation_for_whole_run(self):
+        """Filter out jira:SCYLLADB-2533 for the whole run, when it's not going to be fixed on either end.
+
+        The per node filters above cover only the window where the node still runs the pre-upgrade version,
+        on the assumption the version we upgrade to has the fix. When we upgrade to a version that never got
+        it (see `OVERSIZED_RPC_ALLOCATION_FIXED_FROM`), the allocation shows up on the upgraded nodes just
+        the same, so filter that backtrace for the whole run instead.
+        """
+        target_version = self.params.scylla_version_upgrade_target or self.params.get("target_upgrade_version")
+        if target_version and ComparableScyllaVersion(target_version) >= OVERSIZED_RPC_ALLOCATION_FIXED_FROM:
+            return
+        InfoEvent(
+            message=f"filtering out jira:SCYLLADB-2533 oversized allocations for the whole run, "
+            f"it's not fixed in {target_version or 'the version being upgraded to'}"
+        ).publish()
+        DbEventsFilter(
+            db_event=DatabaseLogEvent.OVERSIZED_ALLOCATION,
+            line=r"seastar::rpc::client::wait_for_reply",
+        ).publish()
 
     orig_ver = None
     new_ver = None
