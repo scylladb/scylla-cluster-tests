@@ -157,6 +157,16 @@ def test_coordinators_are_logged(resolved_config):
         assert "coordinators=true" in command, command
 
 
+def test_stress_errors_do_not_kill_the_run(resolved_config):
+    """cql-stress defaults to fail-fast, which a nemesis job cannot survive: one operation that
+    exhausts its retries ends the benchmark with exit 1, SCT raises a CRITICAL, and the test dies
+    on chaos it was built to run. SC sharpens it further - an SC timeout arrives as
+    WriteTimeout(SIMPLE), which the rust driver's default retry policy will not retry elsewhere
+    (SCYLLADB-4671)."""
+    for command in _all_stress_commands(resolved_config):
+        assert "-errors ignore" in command, command
+
+
 def test_user_profiles_are_not_used(resolved_config):
     """consistency=global is rejected at parse time in user mode: a user profile runs its own
     keyspace_definition and never executes the -schema DDL."""

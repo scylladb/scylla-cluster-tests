@@ -100,6 +100,20 @@ parallel_node_operations: true
 # "-log coordinators=true" records the coordinator of each request, which is what makes it
 # possible to confirm after the fact that leader-aware routing actually sent writes to the Raft
 # leader rather than silently falling back to round-robin.
+#
+# "-errors ignore" is required for a nemesis job, and not a matter of taste. cql-stress defaults
+# to fail-fast: one operation that exhausts its retries ends the whole benchmark with exit 1,
+# which SCT raises as a CRITICAL and fails the test. Every nemesis that takes a node's CQL
+# listener away - DisableBinaryGossipExecuteMajorCompaction, StopStartMonkey, ScyllaKillMonkey,
+# HardRebootNodeMonkey and the rest of the sweep - produces exactly such errors on a healthy
+# cluster, so without this the job cannot survive its own chaos.
+#
+# Strong consistency makes that worse than it is for the EC jobs: an SC timeout is reported as
+# WriteTimeout(CL=ONE, 0/1, write_type=SIMPLE) - a placeholder in Scylla's SC coordinator - and
+# the rust driver's default retry policy treats a SIMPLE write timeout as non-retryable, so it
+# abandons the query plan instead of failing over to a replica that would forward to the leader.
+# See SCYLLADB-4671. Errors are still counted and printed per interval, so a run that produces
+# them is still visible - it just no longer dies on the first one.
 prepare_write_cmd:
   - >-
     cql-stress-cassandra-stress write cl=QUORUM n=10485760
@@ -109,6 +123,7 @@ prepare_write_cmd:
     -pop seq=1..10485760
     -col 'n=FIXED(10) size=FIXED(512)'
     -log interval=5 coordinators=true
+    -errors ignore
   - >-
     cql-stress-cassandra-stress write cl=QUORUM n=10485760
     -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,consistency=global)'
@@ -117,6 +132,7 @@ prepare_write_cmd:
     -pop seq=10485761..20971520
     -col 'n=FIXED(10) size=FIXED(512)'
     -log interval=5 coordinators=true
+    -errors ignore
 
 # The read command deliberately keeps the same -schema: a read-only run never emits the DDL and
 # expects the keyspace to already exist, which the prepare phase above guarantees. Keeping the
@@ -131,6 +147,7 @@ stress_cmd:
     -pop seq=1..20971520
     -col 'n=FIXED(10) size=FIXED(512)'
     -log interval=5 coordinators=true
+    -errors ignore
   - >-
     cql-stress-cassandra-stress read  cl=QUORUM duration=240m
     -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,consistency=global)'
@@ -139,3 +156,4 @@ stress_cmd:
     -pop seq=1..20971520
     -col 'n=FIXED(10) size=FIXED(512)'
     -log interval=5 coordinators=true
+    -errors ignore
