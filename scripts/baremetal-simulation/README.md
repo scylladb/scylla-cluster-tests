@@ -43,7 +43,7 @@ Each step is also runnable on its own:
 | 1 | `uv run python scripts/baremetal-simulation/01_launch_hosts.py` | launches the Fedora hosts + a security group for your own IP |
 | 2 | `uv run python scripts/baremetal-simulation/02_write_baremetal_config.py` | writes `<repo>/baremetal_sct901.json` and probes the hosts |
 | 3 | `uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --apply` | teaches `sdcm/utils/distro.py` about Fedora 41-45 |
-| 4 | `uv run python scripts/baremetal-simulation/04_render_test_case.py` | writes `test-cases/artifacts/baremetal-fedora.yaml` |
+| 4 | `uv run python scripts/baremetal-simulation/04_render_test_case.py` | `test-cases/artifacts/baremetal-fedora.yaml` is committed; this only writes it if missing. Pass `--force` to re-render it from `config.env` (e.g. after changing node counts or setting `SIM_UNIFIED_PACKAGE`). |
 | 5 | `scripts/baremetal-simulation/05_run_artifact_test.sh` | `hydra run-test artifacts_test ... --backend baremetal` |
 | 6 | `scripts/baremetal-simulation/06_collect_logs.sh` | `hydra collect-logs` through the bare-metal collector |
 | 7 | `scripts/baremetal-simulation/09_reset_host.sh` | reset the host to a pre-`scylla_setup` state (required between passes) |
