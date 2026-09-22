@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 """Report SCT keystore credentials that are expired or close to expiring.
 
-Reads the ``expires_on`` tag from every secret under the ``sct/`` prefix in
-AWS Secrets Manager and classifies each one.  The tag is set by hand as part
-of the rotation runbook (``docs/keystore-credential-rotation.md``); a secret
-without the tag is reported so it does not sit unwatched.
+Two sources, because neither covers everything:
+
+* the ``expires_on`` tag on every secret under the ``sct/`` prefix in AWS
+  Secrets Manager.  Broad - it covers every credential - but it is written by
+  hand during rotation (``docs/keystore-credential-rotation.md``), so it can
+  drift.  A secret without the tag is reported so it does not sit unwatched.
+* Azure AD itself, for ``azure.json``.  Authoritative, and it needs no extra
+  permission: Azure grants an application the right to read its own
+  application object, so the service principal can list its own
+  ``passwordCredentials`` with no Graph app role assigned.
+
+When both are available the Azure answer wins and a disagreement with the tag
+is called out, which is what catches a rotation that forgot to update the tag.
 
 Exit codes: 0 when nothing is expired, 1 when at least one secret is.
 """
@@ -12,6 +21,10 @@ Exit codes: 0 when nothing is expired, 1 when at least one secret is.
 import os
 import sys
 import json
+import uuid
+import urllib.error
+import urllib.parse
+import urllib.request
 import argparse
 import datetime
 
@@ -21,11 +34,25 @@ from botocore.exceptions import ClientError
 WARN_DAYS_DEFAULT = 30
 EXPIRY_TAG = "expires_on"
 
+# The keystore entry holding the Azure service principal, and the Graph
+# endpoints used to ask Azure AD when its client secret really expires.
+AZURE_SECRET_NAME = "azure.json"
+AZURE_TOKEN_URL = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+AZURE_GRAPH_SCOPE = "https://graph.microsoft.com/.default"
+AZURE_GRAPH_APP_URL = (
+    "https://graph.microsoft.com/v1.0/applications(appId='{client_id}')?$select=displayName,passwordCredentials"
+)
+HTTP_TIMEOUT = 30
+
 # ``secretsmanager:ListSecrets`` does not support resource-level permissions, so
 # the policies that grant ``secretsmanager:*`` on ``secret:sct/*`` do not cover
 # it.  When listing is denied we fall back to describing each known entry by
 # name.  Keep in sync with the managed credentials table in
 # docs/keystore-secrets-manager.md and the accessors in sdcm/keystore.py.
+#
+# These are the entries of the ``sct/`` keystore specifically.  The fallback
+# joins them to whatever ``--prefix`` is in force, so pointing the script at a
+# different prefix while listing is denied finds nothing at all.
 KNOWN_SECRETS = (
     "scylla_test_id_ed25519",
     "scylla_test_id_ed25519.pub",
@@ -60,14 +87,19 @@ STATUS_EMOJI = {
 }
 
 
-def get_parser():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--prefix", type=str, default="sct/", help="Secrets Manager name prefix to scan")
     parser.add_argument(
         "--warn-days", type=int, default=WARN_DAYS_DEFAULT, help="Days before expiry at which to start warning"
     )
     parser.add_argument("--region", type=str, default=os.environ.get("AWS_REGION", "us-east-1"))
-    return parser.parse_args()
+    parser.add_argument(
+        "--no-azure",
+        action="store_true",
+        help="Skip asking Azure AD for the real service principal expiry, and trust the tag instead",
+    )
+    return parser.parse_args(argv)
 
 
 def parse_expiry(value):
@@ -133,6 +165,96 @@ def collect_secrets(client, prefix):
     yield from listed
 
 
+def _post_form(url, fields):
+    """POST a urlencoded form and return the parsed JSON response."""
+    data = urllib.parse.urlencode(fields).encode()
+    request = urllib.request.Request(url, data=data, method="POST")
+    with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT) as response:
+        return json.load(response)
+
+
+def _get_json(url, token):
+    """GET a bearer-authenticated JSON endpoint."""
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT) as response:
+        return json.load(response)
+
+
+def azure_secret_expiry(client, secret_name):
+    """Ask Azure AD when the SCT service principal's client secret expires.
+
+    Reads ``azure.json`` out of the keystore, exchanges it for a Graph token
+    and reads the application's own ``passwordCredentials``.  This needs no
+    Graph app role: an application may always read its own application object.
+
+    Returns the latest expiry as a date, or ``None`` when the answer cannot be
+    obtained - including when the secret has already expired hard enough that
+    the token request itself fails, which the caller reports separately.
+    """
+    payload = client.get_secret_value(SecretId=secret_name)
+    creds = json.loads(payload.get("SecretString") or payload["SecretBinary"])
+
+    token_response = _post_form(
+        AZURE_TOKEN_URL.format(tenant_id=creds["tenant_id"]),
+        {
+            "client_id": creds["client_id"],
+            "client_secret": creds["client_secret"],
+            "scope": AZURE_GRAPH_SCOPE,
+            "grant_type": "client_credentials",
+        },
+    )
+    app = _get_json(AZURE_GRAPH_APP_URL.format(client_id=creds["client_id"]), token_response["access_token"])
+
+    expiries = [parse_expiry(entry["endDateTime"]) for entry in app.get("passwordCredentials", [])]
+    expiries = [expiry for expiry in expiries if expiry is not None]
+    if not expiries:
+        return None
+    # The app can carry several secrets during an overlap window; the newest
+    # one is the one SCT will still be using.
+    return max(expiries)
+
+
+def apply_azure_truth(results, client, prefix, today, warn_days):
+    """Replace the tag-derived Azure row with what Azure AD actually reports.
+
+    Mutates and returns ``results``.  A failure here is reported but never
+    masks the tag-based answer, so a Graph outage cannot turn the whole check
+    into a false alarm.
+    """
+    name = f"{prefix}{AZURE_SECRET_NAME}"
+    row = next((item for item in results if item["name"] == name), None)
+    if row is None:
+        return results
+
+    try:
+        expires_on = azure_secret_expiry(client, name)
+    except (urllib.error.URLError, ClientError, KeyError, ValueError) as exc:
+        # An expired or revoked secret fails the token request outright, which
+        # is itself the answer we are looking for.
+        detail = f"{type(exc).__name__}: {exc}"
+        print(f"azure lookup failed for {name}: {detail}", file=sys.stderr)
+        row["azure_error"] = detail
+        row["status"] = STATUS_EXPIRED
+        row["note"] = "Azure AD rejected the stored secret"
+        return results
+
+    if expires_on is None:
+        row["note"] = "Azure AD reports no client secret on the app"
+        row["status"] = STATUS_EXPIRED
+        return results
+
+    tagged = row.get("expires_on")
+    verified = classify(name, {EXPIRY_TAG: expires_on.isoformat()}, today, warn_days)
+    verified["source"] = "azure"
+    if tagged and tagged != verified["expires_on"]:
+        verified["note"] = f"tag says {tagged}, Azure AD says {verified['expires_on']}"
+    elif not tagged:
+        verified["note"] = "no expires_on tag; value read from Azure AD"
+
+    results[results.index(row)] = verified
+    return results
+
+
 def classify(name, tags, today, warn_days):
     """Return a result dict describing the expiry state of one secret."""
     raw = tags.get(EXPIRY_TAG)
@@ -156,16 +278,21 @@ def classify(name, tags, today, warn_days):
 def render_markdown(results, warn_days):
     """Render the results as a Markdown table, worst first."""
     order = {STATUS_EXPIRED: 0, STATUS_EXPIRING: 1, STATUS_UNTRACKED: 2, STATUS_OK: 3}
+    # Status first, then soonest expiry.  The middle element keeps the rows with
+    # no known expiry from being compared against integers: they only ever sort
+    # against each other, since untracked is the one status that allows None.
     rows = sorted(results, key=lambda item: (order[item["status"]], item["days_left"] is None, item["days_left"]))
 
     lines = [
-        "| | Secret | Expires on | Days left |",
-        "|---|---|---|---|",
+        "| | Secret | Expires on | Days left | Source | Note |",
+        "|---|---|---|---|---|---|",
     ]
     for item in rows:
         days = "—" if item["days_left"] is None else str(item["days_left"])
         expires = item["expires_on"] or "—"
-        lines.append(f"| {STATUS_EMOJI[item['status']]} | `{item['name']}` | {expires} | {days} |")
+        source = item.get("source", "tag")
+        note = item.get("note", "")
+        lines.append(f"| {STATUS_EMOJI[item['status']]} | `{item['name']}` | {expires} | {days} | {source} | {note} |")
 
     counts = {status: sum(1 for item in results if item["status"] == status) for status in order}
     lines.append("")
@@ -188,7 +315,10 @@ def write_github_output(name, value):
         return
     with open(output_file, "a", encoding="utf-8") as handle:
         if "\n" in value:
-            handle.write(f"{name}<<__EOF__\n{value}\n__EOF__\n")
+            # Random delimiter: a report line that happened to equal the marker
+            # would otherwise truncate the output the runner reads back.
+            delimiter = f"EOF_{uuid.uuid4().hex}"
+            handle.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
         else:
             handle.write(f"{name}={value}\n")
 
@@ -205,7 +335,7 @@ def write_step_summary(markdown):
 
 
 def main():
-    args = get_parser()
+    args = parse_args()
     client = boto3.client("secretsmanager", region_name=args.region)
     today = datetime.datetime.now(datetime.UTC).date()
 
@@ -213,6 +343,9 @@ def main():
     if not results:
         print(f"No secrets found under prefix {args.prefix!r}", file=sys.stderr)
         return 1
+
+    if not args.no_azure:
+        results = apply_azure_truth(results, client, args.prefix, today, args.warn_days)
 
     markdown = render_markdown(results, args.warn_days)
     print(markdown)
