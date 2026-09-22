@@ -51,6 +51,18 @@ sim_hydra() {
     # hydra must run from the repo root: get_baremetal_config() resolves
     # ./<name>.json relative to the working directory.
     cd "${REPO_ROOT}" || sim_die "cannot cd to ${REPO_ROOT}"
+    # Without a controlling terminal hydra's "docker run -it" fails with
+    # "the input device is not a TTY".  BUILD_TAG puts it on its build-server
+    # path, which drops -it; SCT only uses the value as an extra resource tag.
+    if [[ ! -t 0 ]]; then
+        export BUILD_TAG="${BUILD_TAG:-${SIM_TEST_TAG}-local}"
+    fi
+    # hydra forwards JOB_NAME into the container even when it is empty, and an
+    # empty JOB_NAME is not "local_run", so TestConfig builds a *real* Argus
+    # client for a run Argus has never heard of.  Every submission then raises
+    # "Run not found", and the ERROR-severity event fails the test at teardown.
+    # Naming the job explicitly puts the client in replay-only mode.
+    export JOB_NAME="${JOB_NAME:-local_run}"
     sim_log "hydra $*"
     ./docker/env/hydra.sh "$@"
 }

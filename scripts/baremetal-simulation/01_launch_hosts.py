@@ -54,6 +54,29 @@ USER_DATA = """#!/bin/bash
 # Prepare the host the way a hand-prepared physical machine would be prepared.
 setenforce 0 || true
 sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config || true
+
+# On a physical host the address SCT is given IS the host's own NIC address, so
+# the host can reach itself through it.  On EC2 the public IP is NAT'd outside
+# the instance and there is no hairpin, so anything SCT points at the node's own
+# public address from the node (cqlsh, cassandra-stress -node ...) times out.
+# Map it back locally to keep the simulation faithful to the bare-metal case.
+TOKEN=$(curl -sf -X PUT http://169.254.169.254/latest/api/token \
+    -H "X-aws-ec2-metadata-token-ttl-seconds: 600")
+PUBLIC_IP=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" \
+    http://169.254.169.254/latest/meta-data/public-ipv4)
+PRIVATE_IP=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" \
+    http://169.254.169.254/latest/meta-data/local-ipv4)
+if [ -n "$PUBLIC_IP" ] && [ -n "$PRIVATE_IP" ]; then
+    # Fedora cloud images ship nftables, not iptables.
+    nft -f - <<NFT
+table ip sctsim {
+  chain output {
+    type nat hook output priority -100; policy accept;
+    ip daddr $PUBLIC_IP dnat to $PRIVATE_IP
+  }
+}
+NFT
+fi
 """
 
 
