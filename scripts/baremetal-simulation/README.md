@@ -42,7 +42,7 @@ Each step is also runnable on its own:
 | 0 | `uv run python scripts/baremetal-simulation/00_preflight.py` | AWS creds, SCT VPC/subnet/SG/key pair, SSH key, hydra, Fedora AMI, distro patch |
 | 1 | `uv run python scripts/baremetal-simulation/01_launch_hosts.py` | launches the Fedora hosts + a security group for your own IP |
 | 2 | `uv run python scripts/baremetal-simulation/02_write_baremetal_config.py` | writes `<repo>/baremetal_sct901.json` and probes the hosts |
-| 3 | `uv run python scripts/baremetal-simulation/03_patch_distro_for_fedora.py --apply` | teaches `sdcm/utils/distro.py` about Fedora 41-45 |
+| 3 | `uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --apply` | teaches `sdcm/utils/distro.py` about Fedora 41-45 |
 | 4 | `uv run python scripts/baremetal-simulation/04_render_test_case.py` | writes `test-cases/artifacts/baremetal-fedora.yaml` |
 | 5 | `scripts/baremetal-simulation/05_run_artifact_test.sh` | `hydra run-test artifacts_test ... --backend baremetal` |
 | 6 | `scripts/baremetal-simulation/06_collect_logs.sh` | `hydra collect-logs` through the bare-metal collector |
@@ -52,7 +52,7 @@ Each step is also runnable on its own:
 | 10 | `uv run python scripts/baremetal-simulation/99_teardown.py --yes --all` | terminates everything, removes the generated files |
 
 Steps 3 and 4 produce **uncommitted local state**; step 9 (`--all`) and
-`03_patch_distro_for_fedora.py --revert` undo them.
+`03_patch_sct_for_fedora.py --revert` undo them.
 
 ## Configuration
 
