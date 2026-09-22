@@ -157,14 +157,23 @@ def test_coordinators_are_logged(resolved_config):
         assert "coordinators=true" in command, command
 
 
-def test_stress_errors_do_not_kill_the_run(resolved_config):
+def test_load_survives_nemesis_errors(resolved_config):
     """cql-stress defaults to fail-fast, which a nemesis job cannot survive: one operation that
     exhausts its retries ends the benchmark with exit 1, SCT raises a CRITICAL, and the test dies
     on chaos it was built to run. SC sharpens it further - an SC timeout arrives as
     WriteTimeout(SIMPLE), which the rust driver's default retry policy will not retry elsewhere
     (SCYLLADB-4671)."""
-    for command in _all_stress_commands(resolved_config):
+    for command in resolved_config.get("stress_cmd"):
         assert "-errors ignore" in command, command
+
+
+def test_prepare_keeps_fail_fast(resolved_config):
+    """Ignoring errors while populating means silently missing rows, which the read command later
+    reports as read validation errors - a data-loss signature manufactured by the test. Prepare
+    must stay fail-fast, and nemesis must stay out of the prepare phase for that to hold."""
+    for command in resolved_config.get("prepare_write_cmd"):
+        assert "-errors" not in command, command
+    assert resolved_config.get("nemesis_during_prepare") is False
 
 
 def test_user_profiles_are_not_used(resolved_config):

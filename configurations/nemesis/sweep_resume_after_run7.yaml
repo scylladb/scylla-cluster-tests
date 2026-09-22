@@ -70,3 +70,31 @@ nemesis_exclude_list:
   - "CorruptThenRebuildMonkey"  # skipped - rebuild unsupported with tablets, scylladb/scylladb#17575
   - "CorruptThenRepairMonkey"  # failed - run aborted, no verdict; needs a targeted re-run
   - "RejectInterNodeNetworkMonkey"  # skipped by precheck - scylladb/scylladb#6522
+
+  # run #13 (47fedaef) - the eight nemesis precheck holds out of every run of this job. Their
+  # verdicts are static config facts, so they cost startup time and Argus noise on every sweep
+  # and will never change here. (Argus recorded only the first of them; the SCT log has all
+  # eight.) run #13 itself died on DisableBinaryGossipExecuteMajorCompaction, which is not
+  # excluded here - see the run #14 block, where it passed.
+  - "RemoveServiceLevelMonkey"  # precheck skip - SLA nemesis need an SLA test
+  - "SlaDecreaseSharesDuringLoad"  # precheck skip - SLA nemesis need an SLA test
+  - "SlaIncreaseSharesByAttachAnotherSlDuringLoad"  # precheck skip - SLA nemesis need an SLA test
+  - "SlaIncreaseSharesDuringLoad"  # precheck skip - SLA nemesis need an SLA test
+  - "SlaMaximumAllowedSlsWithMaxSharesDuringLoad"  # precheck skip - SLA nemesis need an SLA test
+  - "SlaReplaceUsingDetachDuringLoad"  # precheck skip - SLA nemesis need an SLA test
+  - "SlaReplaceUsingDropDuringLoad"  # precheck skip - SLA nemesis need an SLA test
+  - "StopStartInterfacesNetworkMonkey"  # precheck skip - needs extra_network_interface: True
+
+  # run #14 (f57403f7), the first run with "-errors ignore" on the load.
+  # DisableBinaryGossipExecuteMajorCompaction is the proof the option was the missing piece: the
+  # nemesis that ended run #13 in 4 seconds ran here to completion in 124 s.
+  #
+  # EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey has no verdict of its own - it
+  # was 37 minutes in when a ReadValidationError on keyspace1.standard1 failed the run and killed
+  # it. That read failure is what nemesis_during_prepare: false and the prepare fail-fast in the
+  # test-case are meant to prevent, so this one is worth re-running deliberately once a run gets
+  # through prepare undisturbed.
+  - "DisableBinaryGossipExecuteMajorCompaction"  # succeeded
+  - "DrainKubernetesNodeThenDecommissionAndAddScyllaNode"  # skipped - kubernetes only
+  - "DrainKubernetesNodeThenReplaceScyllaNode"  # skipped - kubernetes only
+  - "EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey"  # failed - run aborted, no verdict
