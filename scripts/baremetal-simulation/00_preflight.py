@@ -111,7 +111,7 @@ def check_distro_patch() -> None:
     check(
         "fedora distro support",
         patched,
-        f"sdcm/utils/distro.py knows Fedora {versions or '?'} -- run 03_patch_distro_for_fedora.py --apply",
+        f"sdcm/utils/distro.py knows Fedora {versions or '?'} -- run 03_patch_sct_for_fedora.py --apply",
         hard=False,
     )
 

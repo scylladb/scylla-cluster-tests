@@ -79,6 +79,33 @@ NFT
 fi
 """
 
+# Docker is a *prerequisite* of a bare-metal loader, not something SCT installs.
+# BaseLoaderSet.node_setup (sdcm/cluster.py:6949) runs `usermod -aG docker $USER`
+# with no install step: on AWS/GCE the loader comes from a pre-baked AMI that
+# already has Docker, so nothing notices.  A physical machine has nothing, and the
+# run dies with `usermod: exit 6` (no such group).  The monitor node is fine --
+# install_scylla_monitoring_prereqs carries a real installer -- which is why this
+# only shows up once a perf run adds loaders.
+LOADER_USER_DATA = """
+dnf -y install dnf-plugins-core || true
+dnf -y config-manager addrepo --from-repofile=https://download.docker.com/linux/fedora/docker-ce.repo \
+    || dnf -y config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+dnf -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+systemctl enable --now docker
+# SCT runs `usermod -aG docker $USER` itself, but the new group does not apply to
+# the session it then uses, so `docker pull` fails with "permission denied ...
+# /var/run/docker.sock".  Its own loader AMIs bake the membership in, so the cloud
+# path never hits this.  Do the same here, at boot, before SCT connects.
+usermod -aG docker ${SIM_SSH_USER:-fedora}
+"""
+
+
+def user_data_for(role: str) -> str:
+    """Per-role host preparation, i.e. what a physical host would arrive with."""
+    if role == "loader":
+        return USER_DATA + LOADER_USER_DATA.replace("${SIM_SSH_USER:-fedora}", cfg("SIM_SSH_USER"))
+    return USER_DATA
+
 
 def my_public_ip() -> str:
     with urllib.request.urlopen("https://checkip.amazonaws.com", timeout=15) as response:
@@ -134,7 +161,7 @@ def launch(client, role: str, count: int, ami_id: str, subnet_id: str, security_
         KeyName=cfg("SIM_KEYPAIR"),
         SubnetId=subnet_id,
         SecurityGroupIds=security_groups,
-        UserData=USER_DATA,
+        UserData=user_data_for(role),
         BlockDeviceMappings=[
             {
                 "DeviceName": "/dev/sda1",
