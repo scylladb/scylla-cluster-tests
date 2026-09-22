@@ -71,7 +71,7 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
 
     if args.phase == "artifact":
         steps += [
-            python_step("testcase", "render the test case", "04_render_test_case.py", "--force"),
+            python_step("testcase", "render the test case if missing", "04_render_test_case.py"),
             shell_step("run", "artifact test (pass 1)", "05_run_artifact_test.sh"),
             shell_step("logs", "collect logs", "06_collect_logs.sh", advisory=True),
         ]
