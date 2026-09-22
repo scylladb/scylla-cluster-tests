@@ -19,6 +19,7 @@ package, so it is loaded by path.
 
 import datetime
 import importlib.util
+import urllib.error
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,8 @@ _spec = importlib.util.spec_from_file_location("check_keystore_expiry", SCRIPT_P
 check_keystore_expiry = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(check_keystore_expiry)
 
+# Test epoch. Every expectation below is relative to this date, not to the
+# real clock, so the boundary cases stay stable as time passes.
 TODAY = datetime.date(2026, 9, 22)
 WARN_DAYS = 30
 
@@ -41,6 +44,8 @@ WARN_DAYS = 30
         # what `az ad app credential list` prints for endDateTime
         ("2027-09-22T05:59:58Z", datetime.date(2027, 9, 22)),
         ("2027-09-22T05:59:58+00:00", datetime.date(2027, 9, 22)),
+        # a non-UTC offset must not shift the date
+        ("2027-09-22T23:30:00+02:00", datetime.date(2027, 9, 22)),
         ("", None),
         ("not-a-date", None),
     ],
@@ -90,3 +95,55 @@ def test_render_markdown_orders_worst_first_and_counts():
     names_in_order = [line.split("`")[1] for line in body if line.startswith("| :")]
     assert names_in_order == ["sct/expired.json", "sct/soon.json", "sct/untracked.json", "sct/ok.json"]
     assert "1 expired, 1 expiring within 30 days, 1 untracked, 1 healthy." in markdown
+
+
+def test_apply_azure_truth_overrides_tag_and_flags_drift(monkeypatch):
+    """Azure AD wins over the hand-written tag, and the disagreement is shown."""
+    results = [check_keystore_expiry.classify("sct/azure.json", {"expires_on": "2026-12-01"}, TODAY, WARN_DAYS)]
+    monkeypatch.setattr(check_keystore_expiry, "azure_secret_expiry", lambda client, name: datetime.date(2027, 9, 22))
+
+    check_keystore_expiry.apply_azure_truth(results, client=None, prefix="sct/", today=TODAY, warn_days=WARN_DAYS)
+
+    assert results[0]["expires_on"] == "2027-09-22"
+    assert results[0]["source"] == "azure"
+    assert results[0]["status"] == check_keystore_expiry.STATUS_OK
+    assert "tag says 2026-12-01" in results[0]["note"]
+
+
+def test_apply_azure_truth_fills_in_a_missing_tag(monkeypatch):
+    results = [check_keystore_expiry.classify("sct/azure.json", {}, TODAY, WARN_DAYS)]
+    monkeypatch.setattr(check_keystore_expiry, "azure_secret_expiry", lambda client, name: datetime.date(2026, 10, 1))
+
+    check_keystore_expiry.apply_azure_truth(results, client=None, prefix="sct/", today=TODAY, warn_days=WARN_DAYS)
+
+    assert results[0]["status"] == check_keystore_expiry.STATUS_EXPIRING
+    assert results[0]["note"] == "no expires_on tag; value read from Azure AD"
+
+
+def test_apply_azure_truth_marks_expired_when_azure_rejects_the_secret(monkeypatch):
+    """A rejected token request is itself the answer: the secret is dead."""
+    results = [check_keystore_expiry.classify("sct/azure.json", {"expires_on": "2027-09-22"}, TODAY, WARN_DAYS)]
+
+    def _boom(client, name):
+        raise urllib.error.HTTPError("url", 401, "AADSTS7000222", {}, None)
+
+    monkeypatch.setattr(check_keystore_expiry, "azure_secret_expiry", _boom)
+
+    check_keystore_expiry.apply_azure_truth(results, client=None, prefix="sct/", today=TODAY, warn_days=WARN_DAYS)
+
+    assert results[0]["status"] == check_keystore_expiry.STATUS_EXPIRED
+    assert results[0]["note"] == "Azure AD rejected the stored secret"
+
+
+def test_apply_azure_truth_is_a_noop_when_azure_json_is_absent(monkeypatch):
+    results = [check_keystore_expiry.classify("sct/docker.json", {"expires_on": "2027-01-01"}, TODAY, WARN_DAYS)]
+    monkeypatch.setattr(
+        check_keystore_expiry,
+        "azure_secret_expiry",
+        lambda client, name: pytest.fail("must not be called when there is no azure.json row"),
+    )
+
+    check_keystore_expiry.apply_azure_truth(results, client=None, prefix="sct/", today=TODAY, warn_days=WARN_DAYS)
+
+    assert "source" not in results[0]
+    assert results[0]["status"] == check_keystore_expiry.STATUS_OK

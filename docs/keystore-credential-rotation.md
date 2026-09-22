@@ -77,7 +77,7 @@ Record the expiry — step 4 needs it:
 
 ```bash
 EXPIRES_ON=$(az ad app credential list --id "$APP_ID" \
-    --query "max_by([], &endDateTime).endDateTime" -o tsv | cut -dT -f1)
+    --query "max_by([], &endDateTime).endDateTime" -o tsv | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}')
 echo "$EXPIRES_ON"
 ```
 
@@ -193,6 +193,9 @@ The tenant-wide alternative — assigning someone `Application Administrator` �
 also works but lets them manage *every* app registration in the tenant. Prefer
 ownership.
 
+Keep more than one owner. A single owner is how SCT-1042 became a surprise:
+nobody else could see the expiry coming, and nobody else could fix it.
+
 ### AWS side — writing to the keystore
 
 Writing needs `secretsmanager:PutSecretValue` + `secretsmanager:TagResource` on
@@ -222,10 +225,15 @@ instead:
                 "secretsmanager:GetSecretValue",
                 "secretsmanager:DescribeSecret",
                 "secretsmanager:PutSecretValue",
-                "secretsmanager:TagResource",
-                "secretsmanager:ListSecrets"
+                "secretsmanager:TagResource"
             ],
             "Resource": "arn:aws:secretsmanager:*:*:secret:sct/*"
+        },
+        {
+            "Sid": "KeystoreListSecrets",
+            "Effect": "Allow",
+            "Action": ["secretsmanager:ListSecrets"],
+            "Resource": "*"
         },
         {
             "Sid": "KeystoreRotateS3",
@@ -237,8 +245,11 @@ instead:
 }
 ```
 
-`secretsmanager:ListSecrets` does not accept a resource restriction, so it is
-listed here for convenience but is effectively account-wide.
+`secretsmanager:ListSecrets` accepts no resource restriction, so it needs its
+own `"Resource": "*"` statement — putting it under the `sct/*` statement looks
+tighter but simply does not work. It is optional: rotation only ever touches
+secrets by name, and the expiry check falls back to describing known entries
+when listing is denied, which is what the existing identities hit.
 
 ---
 
@@ -260,42 +271,30 @@ deliberate trade-off: it needs no Azure permissions and it covers *every* SCT
 credential, not only Azure. The tag can drift from reality if someone rotates
 without updating it — the untracked-secret report is the backstop.
 
-### Follow-up: checking Azure directly
+### The Azure cross-check
 
-A stronger check would query Azure AD itself
-(`az ad app credential list --query '[].endDateTime'`), which cannot drift.
-That needs a dedicated app registration authenticating over GitHub OIDC, so
-the checker holds no secret of its own and can never expire:
+For `azure.json` the check does not stop at the tag — it asks Azure AD what
+the expiry really is and reports any disagreement, which is what catches a
+rotation that updated the secret but forgot step 4.
 
-```bash
-# 1. dedicated checker app
-CHECKER_APP_ID=$(az ad app create --display-name sct-cred-expiry-checker \
-    --sign-in-audience AzureADMyOrg --query appId -o tsv)
-az ad sp create --id "$CHECKER_APP_ID"
+This needs **no extra Azure permission and no admin consent**. Azure grants
+every application the right to read its own application object, so the service
+principal can list its own `passwordCredentials` with no Graph app role
+assigned. The check reads `azure.json` from the keystore it already has access
+to, exchanges it for a Graph token, and reads back:
 
-# 2. trust this repository's master branch - no stored secret
-az ad app federated-credential create --id "$CHECKER_APP_ID" --parameters '{
-  "name": "github-sct-master",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:scylladb/scylla-cluster-tests:ref:refs/heads/master",
-  "audiences": ["api://AzureADTokenExchange"]
-}'
-
-# 3. Graph permission to read app credentials
-az ad app permission add --id "$CHECKER_APP_ID" \
-    --api 00000003-0000-0000-c000-000000000000 \
-    --api-permissions 9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30=Role  # Application.Read.All
-
-# 4. admin consent - see the note below
-az ad app permission admin-consent --id "$CHECKER_APP_ID"
+```
+GET https://graph.microsoft.com/v1.0/applications(appId='<client_id>')?$select=passwordCredentials
 ```
 
-**Step 4 needs a Global Administrator or Privileged Role Administrator.**
-`Application Administrator` and `Cloud Application Administrator` explicitly
-cannot consent to Microsoft Graph application permissions, so the person who
-owns the SCT app registration cannot grant this to themselves.
+A secret that is expired or revoked fails the token request outright, which is
+itself the answer — that row is reported as expired. A Graph outage is
+reported but never overrides the tag-based answer, so it cannot turn the check
+into a false alarm. `workflow_dispatch` has a `skip_azure` input for when the
+live lookup is in the way.
 
----
+Extending the same treatment to GCP and OCI would need their own API calls and
+their own permissions; only Azure is covered today.
 
 ## Rotation cadence
 
