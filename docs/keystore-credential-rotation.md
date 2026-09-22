@@ -6,8 +6,13 @@ somebody else.
 
 Background: in SCT-1042 the Azure service principal client secret expired.
 Every Azure SCT run — provisioning *and* the `QA-tools/cleanup-cloud` job —
-failed at its first Azure API call with `AADSTS7000222`, so orphaned Azure
-resources stayed alive and kept costing money. The weekly
+failed at its first Azure API call with `AADSTS7000222`, because both go
+through one `AzureService` singleton holding one `ClientSecretCredential`.
+
+The blast radius was smaller than it looks: provisioning was broken by the same
+credential, so nothing new was created during the outage. What it cost was the
+resource groups that already existed when the secret lapsed — cleanup could not
+remove them, so they kept running until someone noticed the red job. The weekly
 [`keystore-expiry-check`](../.github/workflows/keystore-expiry-check.yaml)
 workflow exists to make sure that does not repeat.
 
@@ -20,11 +25,13 @@ Every credential lives in **two** places and both must be updated:
 
 | Backend | Location |
 |---|---|
-| AWS Secrets Manager | `sct/<name>` in account `797456418907`, region `us-east-1` |
-| S3 (legacy fallback) | `s3://scylla-qa-keystore/<name>` |
+| AWS Secrets Manager (default) | `sct/<name>` in account `797456418907`, region `us-east-1` |
+| S3 (legacy) | `s3://scylla-qa-keystore/<name>` |
 
-`SCT_KEYSTORE_BACKEND` selects which one a given run reads (`s3` by default),
-so updating only one leaves half the fleet broken.
+`SCT_KEYSTORE_BACKEND` selects which one a given run reads. Secrets Manager is
+the default; `s3` selects the legacy `scylla-qa-keystore` bucket, which some
+entries and some older branches still use. Updating only one leaves the other
+serving a stale credential, so rotation must write both.
 
 `KeyStore` caches in memory for the lifetime of a single process, so no cache
 invalidation is needed — the next test run and the next cleanup container both
