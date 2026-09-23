@@ -283,6 +283,16 @@
       "phases_done": 0
     },
     {
+      "id": "validation-on-mixins",
+      "title": "Config Validation on Mixins",
+      "file": "config/validation-on-mixins.md",
+      "domain": "config",
+      "status": "draft",
+      "created": "2026-09-15",
+      "phases_total": 6,
+      "phases_done": 0
+    },
+    {
       "id": "i8g-performance-jobs-migration",
       "title": "i8g Performance Jobs Migration",
       "domain": "ci-cd",
