@@ -616,7 +616,7 @@ class IntegrationTests:
 
     def _run_test(self, config_path: str, expected_node_config: str, region_names: str):
         with (
-            patch("sdcm.sct_config.get_scylla_ami_versions", return_value=[self.get_scylla_ami_version_output]),
+            patch("sdcm.sct_config.config.get_scylla_ami_versions", return_value=[self.get_scylla_ami_version_output]),
             patch("sdcm.provision.scylla_yaml.certificate_builder.install_client_certificate", return_value=None),
         ):
             self.monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")

@@ -15,11 +15,11 @@ SCT uses a **Pydantic-based configuration system** that provides:
 
 ### Configuration Class
 
-The `SCTConfiguration` class in `sdcm/sct_config.py` is a Pydantic `BaseModel` that defines all available configuration options:
+The `SCTConfiguration` class in `sdcm/sct_config/config.py` is a Pydantic `BaseModel` that defines all available configuration options:
 
 ```python
 from pydantic import BaseModel
-from sdcm.sct_config import SctField, StringOrList, IntOrList
+from sdcm.sct_config.types import SctField, StringOrList, IntOrList
 
 class SCTConfiguration(BaseModel):
     test_duration: int = SctField(
@@ -171,7 +171,7 @@ append_scylla_yaml: "!get_scylla_yaml_config()"
 
 ### Step 1: Add Field to SCTConfiguration
 
-Edit `sdcm/sct_config.py` and add your field to the `SCTConfiguration` class:
+Edit `sdcm/sct_config/config.py` and add your field to the `SCTConfiguration` class:
 
 ```python
 class SCTConfiguration(BaseModel):
@@ -219,7 +219,7 @@ my_new_option: "aws_specific_value"
 
 ### Step 4: Update Documentation
 
-The documentation in `docs/configuration_options.md` is **auto-generated** from the Pydantic model.
+The documentation in `docs/configuration_options.md` (index) and `docs/configuration_options/` (one page per option group) is **auto-generated** from the Pydantic model.
 
 To regenerate the documentation, run:
 
@@ -228,10 +228,10 @@ To regenerate the documentation, run:
 uv run sct.py pre-commit
 
 # Or directly generate only the configuration documentation
-uv run python3 -c "from sdcm.sct_config import SCTConfiguration; SCTConfiguration.dump_help_config_markdown()"
+uv run sct.py update-conf-docs
 ```
 
-This will update `docs/configuration_options.md` with your new option.
+This will update the index and the group page your option belongs to.
 
 ### Step 5: Add Validation (Optional)
 
@@ -256,7 +256,7 @@ class SCTConfiguration(BaseModel):
 ### Complete Example
 
 ```python
-# In sdcm/sct_config.py
+# In sdcm/sct_config/config.py
 from typing import Literal
 
 class SCTConfiguration(BaseModel):
@@ -414,7 +414,12 @@ scylla-cluster-tests/
 │   ├── nemesis/                # Nemesis configurations
 │   └── ...
 └── sdcm/
-    └── sct_config.py           # Main configuration class
+    └── sct_config/             # Configuration package
+        ├── __init__.py         # Public re-exports
+        ├── config.py           # SCTConfiguration class
+        ├── types.py            # Custom Pydantic types and SctField
+        ├── helpers.py          # Merge/append and env-key helpers
+        └── defaults.py         # Backend lists and requirement tables
 ```
 
 ## Best Practices
@@ -424,7 +429,7 @@ scylla-cluster-tests/
 3. **Document thoroughly**: Add clear descriptions to all fields
 4. **Always set defaults in YAML**: All configuration options MUST have defaults defined in `defaults/test_default.yaml` or backend-specific files - never in code
 5. **Test your changes**: Run `uv run sct.py unit-tests` to ensure your changes work
-6. **Update docs**: Run pre-commit to regenerate `docs/configuration_options.md`
+6. **Update docs**: Run pre-commit to regenerate the option pages
 
 ## Migration from Old System
 

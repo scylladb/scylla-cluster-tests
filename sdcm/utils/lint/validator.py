@@ -46,27 +46,27 @@ class _FakeKeyStore:
 # We patch them to avoid network I/O during linting.
 _CLOUD_API_PATCHES = {
     # AMI name → AMI ID resolution (EC2 DescribeImages)
-    "sdcm.sct_config.convert_name_to_ami_if_needed": lambda param, regions: param,
+    "sdcm.sct_config.config.convert_name_to_ami_if_needed": lambda param, regions: param,
     # scylla_version → S3 repo URL lookup
-    "sdcm.sct_config.find_scylla_repo": lambda *a, **kw: "https://lint-placeholder-repo",
+    "sdcm.sct_config.config.find_scylla_repo": lambda *a, **kw: "https://lint-placeholder-repo",
     # EC2 AMI version lookup
-    "sdcm.sct_config.get_scylla_ami_versions": lambda **kw: [_FAKE_IMAGE],
+    "sdcm.sct_config.config.get_scylla_ami_versions": lambda **kw: [_FAKE_IMAGE],
     # EC2 branched AMI lookup
-    "sdcm.sct_config.get_branched_ami": lambda **kw: [_FAKE_IMAGE],
+    "sdcm.sct_config.config.get_branched_ami": lambda **kw: [_FAKE_IMAGE],
     # GCE image version lookup
-    "sdcm.sct_config.get_scylla_gce_images_versions": lambda **kw: [_FAKE_IMAGE],
+    "sdcm.sct_config.config.get_scylla_gce_images_versions": lambda **kw: [_FAKE_IMAGE],
     # GCE branched image lookup
-    "sdcm.sct_config.get_branched_gce_images": lambda **kw: [_FAKE_IMAGE],
+    "sdcm.sct_config.config.get_branched_gce_images": lambda **kw: [_FAKE_IMAGE],
     # EC2 instance type → architecture resolution (DescribeInstanceTypes)
-    "sdcm.sct_config.get_arch_from_instance_type": lambda *a, **kw: "x86_64",
+    "sdcm.sct_config.config.get_arch_from_instance_type": lambda *a, **kw: "x86_64",
     # EC2 instance type validation
-    "sdcm.sct_config.aws_check_instance_type_supported": lambda *a, **kw: True,
+    "sdcm.sct_config.config.aws_check_instance_type_supported": lambda *a, **kw: True,
     # Azure image lookup
     "sdcm.provision.azure.utils.get_scylla_images": lambda **kw: [_FAKE_IMAGE],
     # Azure instance type validation
-    "sdcm.sct_config.azure_check_instance_type_available": lambda *a, **kw: True,
+    "sdcm.sct_config.config.azure_check_instance_type_available": lambda *a, **kw: True,
     # KeyStore reads credentials from S3 — not needed for config structure validation
-    "sdcm.sct_config.KeyStore": _FakeKeyStore,
+    "sdcm.sct_config.config.KeyStore": _FakeKeyStore,
     # OCI image tag lookup (verify_configuration_urls_validity)
     "sdcm.utils.oci_utils.get_image_tags": lambda *a, **kw: {
         "user_data_format_version": "3",
@@ -77,8 +77,10 @@ _CLOUD_API_PATCHES = {
         "user_data_format_version": "2",
         "scylla_version": "2024.2.0",
     },
-    # Credential keys (e.g. ~/.ssh/) are fetched from AWS KeyStore at runtime — skip them
-    "sdcm.sct_config._check_file_exists": _check_file_exists_skip_credentials,
+    # Credential keys (e.g. ~/.ssh/) are fetched from AWS KeyStore at runtime — skip them.
+    # Patched on config, not on types where it is defined: check_required_files() calls the name
+    # bound in config's own namespace, so patching sdcm.sct_config.types would be a silent no-op.
+    "sdcm.sct_config.config._check_file_exists": _check_file_exists_skip_credentials,
 }
 
 
