@@ -212,23 +212,22 @@ class AZResolver:
         """Indicates if relocating to another region would break `use_dns_names`.
 
         With `use_dns_names`, `cql_address` is the node's EC2 private DNS name
-        (`ip-10-3-13-210.eu-west-2.compute.internal`). Resolving that name from a VPC in
-        another region requires `AllowDnsResolutionFromRemoteVpc` on the peering; AWS does
-        support it for inter-region peerings, but SCT's peerings never enable it (see
-        `sdcm/utils/aws_peering.py`, which sets up routes and tags only), so the name does
-        not resolve. The sct-runner stays in the originally configured region while the
-        cluster relocates, and would then fail every CQL connection with a name-resolution
-        error even though the nodes are healthy and reachable by IP.
+        (`ip-10-3-13-210.eu-west-2.compute.internal`), which the Amazon-provided DNS of a VPC
+        in another region cannot resolve. The sct-runner stays in the originally configured
+        region while the cluster relocates, and would then fail every CQL connection with a
+        name-resolution error even though the nodes are healthy and reachable by IP.
 
-        Enabling that peering option everywhere would be the alternative fix; until then,
-        staying in the runner's region is the only safe option.
+        The peering option `AllowDnsResolutionFromRemoteVpc` does not help here: it only makes
+        the peer's *public* DNS hostnames resolve to private IPs, and private hostnames are
+        untouched. Lifting this needs cross-region resolution of private names (e.g. Route 53
+        Resolver forwarding rules); until then, staying in the runner's region is the only
+        safe option.
         """
         if not self._params.get("use_dns_names"):
             return False
         LOGGER.warning(
-            "%s: disabled because use_dns_names is enabled - SCT's VPC peerings do not enable "
-            "cross-VPC DNS resolution, so the nodes' private DNS names would be unresolvable "
-            "from the sct-runner once the cluster moves to another region",
+            "%s: disabled because use_dns_names is enabled - the nodes' EC2 private DNS names "
+            "would be unresolvable from the sct-runner once the cluster moves to another region",
             context,
         )
         return True

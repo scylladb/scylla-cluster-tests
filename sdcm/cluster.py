@@ -2065,7 +2065,7 @@ class BaseNode(AutoSshContainerMixin):
                     raise CqlAddressUnresolvableError(
                         f"{self.name}: cql_address '{self.cql_address}' did not resolve within {timeout}s: {details}. "
                         f"On AWS this happens when the cluster was relocated to a region other than the "
-                        f"sct-runner's, because SCT's VPC peerings do not enable cross-VPC DNS resolution."
+                        f"sct-runner's, because EC2 private DNS names do not resolve from another region's VPC."
                     ) from details
                 # never sleep past the caller's deadline - `timeout` is an upper bound, not a hint
                 time.sleep(min(self.CQL_ADDRESS_RESOLVE_STEP, remaining))
