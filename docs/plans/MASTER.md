@@ -99,6 +99,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 |------|--------|-----------|
 | MiniCloud Local Testing | `pending_pr` | [archive/minicloud-local-testing.md](archive/minicloud-local-testing.md), [docs/minicloud.md](../minicloud.md), [#15618](https://github.com/scylladb/scylla-cluster-tests/pull/15618) |
 | Unit/Integration Test Separation | `complete` | [unit-integration-test-separation.md](testing/unit-integration-test-separation.md), [#14172](https://github.com/scylladb/scylla-cluster-tests/pull/14172) |
+| Cost Estimation Rollout and Test Plan | `draft` | [cost-estimation-rollout.md](testing/cost-estimation-rollout.md) |
 
 ## Cross-Plan Dependencies
 
