@@ -119,6 +119,7 @@ class GeminiStressThread(DockerBasedStressThread):
             "min-clustering-keys": 2,
             "partition-key-distribution": "uniform",  # Distribution for hitting the partition
             "partition-count": 5_000_000,
+            "max-deleted-heap-size": 3_000_000,
             "max-errors-to-store": 30,  # Number of error to make gemini fail, after N error, gemini will stop immediately with error
         }
 
