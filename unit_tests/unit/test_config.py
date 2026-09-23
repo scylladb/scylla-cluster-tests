@@ -1861,3 +1861,43 @@ def test_scylla_network_config_multiple_nics_single_region_accepted(monkeypatch)
     conf = sct_config.SCTConfiguration()
 
     assert {address["nic"] for address in conf.scylla_network_config} == {0, 1}
+
+
+def test_use_dns_names_aws_multi_dc_raises(monkeypatch):
+    """EC2 private DNS names do not resolve across regions, so AWS multi-DC with DNS names is rejected."""
+    _setup_network_config_env(
+        monkeypatch,
+        _AWS_NETWORK_CONFIG_ENV | {"SCT_AMI_ID_DB_SCYLLA": "ami-dummy ami-dummy2"},
+        "unit_tests/test_configs/minimal_test_case.yaml",
+    )
+    monkeypatch.setenv("SCT_REGION_NAME", '["eu-west-1", "us-east-1"]')
+    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
+    monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
+
+    with pytest.raises(ValueError, match="use_dns_names is not supported for AWS multi-DC tests"):
+        sct_config.SCTConfiguration()
+
+
+def test_use_dns_names_aws_single_dc_accepted(monkeypatch):
+    """Positive control: a single AWS region keeps accepting use_dns_names."""
+    _setup_network_config_env(monkeypatch, _AWS_NETWORK_CONFIG_ENV, "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.get("use_dns_names") is True
+
+
+def test_use_dns_names_gce_multi_dc_accepted(monkeypatch):
+    """The multi-DC guard is AWS-only; GCE internal DNS is project-wide."""
+    _setup_network_config_env(
+        monkeypatch,
+        _GCE_NETWORK_CONFIG_ENV | {"SCT_GCE_DATACENTER": "us-east1 us-west1"},
+        "unit_tests/test_configs/minimal_test_case.yaml",
+    )
+    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
+    monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.gce_datacenters == ["us-east1", "us-west1"]
