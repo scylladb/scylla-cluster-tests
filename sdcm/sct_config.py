@@ -3446,6 +3446,13 @@ class SCTConfiguration(BaseModel):
         if self.get("use_dns_names"):
             if cluster_backend and cluster_backend not in ("aws", "gce", "oci"):
                 raise ValueError(f"use_dns_names is not supported for {cluster_backend} backend")
+            # EC2 private DNS names do not resolve from another region's VPC, so neither the
+            # sct-runner nor the other DCs could reach the nodes by name (SCT-994, SCT-1051)
+            if cluster_backend == "aws" and len(self.region_names) > 1:
+                raise ValueError(
+                    "use_dns_names is not supported for AWS multi-DC tests: EC2 private DNS names "
+                    "do not resolve across regions"
+                )
 
         # 17 Validate scylla network configuration mandatory values
         if scylla_network_config := self.get("scylla_network_config"):
