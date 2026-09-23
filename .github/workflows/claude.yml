@@ -116,7 +116,7 @@ jobs:
       - name: Run Claude Code
         if: steps.membership.outputs.is_member == 'true'
         id: claude
-        uses: anthropics/claude-code-action@bf38e86e58df9ebf3420326d019f955bb3be64dd  # v1.0.225
+        uses: anthropics/claude-code-action@46a42b43239748e5b25771606bf1f551c3b1b517  # v1.0.232
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: '--model claude-sonnet-4-6'
