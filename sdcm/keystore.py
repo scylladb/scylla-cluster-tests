@@ -116,7 +116,7 @@ class KeyStore:
     # `KeyStore(backend="s3")` exists alongside the Secrets Manager default (see the `issues/` bulk
     # cache in `sdcm.utils.issues`), and the prefix/region are env-tunable, so keying on the file
     # name alone would let one backend serve another's bytes.
-    _cache: dict[tuple[str, str, str, str], bytes] = {}
+    _cache: dict[tuple[str, str, str, str, str], bytes] = {}
     _cache_lock = threading.Lock()
 
     def __init__(self, backend: str | None = None):
@@ -203,9 +203,14 @@ class KeyStore:
 
         return result
 
-    def _cache_key(self, file_name: str) -> tuple[str, str, str, str]:
-        """Identify content by everything that decides which bytes a name resolves to."""
-        return self._backend, self._sm_prefix, self._sm_region, file_name
+    def _cache_key(self, file_name: str) -> tuple[str, str, str, str, str]:
+        """Identify content by everything that decides which bytes a name resolves to.
+
+        That includes ``AWS_ENDPOINT_URL``: boto3 honours it at client creation, so the same name
+        read with it set (a moto server, the minicloud emulator) comes from a different store than
+        without it, and bytes cached from one must never be served for the other.
+        """
+        return self._backend, self._sm_prefix, self._sm_region, os.environ.get("AWS_ENDPOINT_URL", ""), file_name
 
     def clear_cache(self):
         """Drop every cached credential, for all backends and all instances in this process."""

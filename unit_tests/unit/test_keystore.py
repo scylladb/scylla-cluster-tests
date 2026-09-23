@@ -794,6 +794,20 @@ class TestCaching:
             KeyStore().get_file_contents("email_config.json")
         assert fetch.call_count == 2
 
+    def test_endpoint_url_is_part_of_the_key(self, mocked_s3, monkeypatch):
+        """Bytes read through a moto/emulator endpoint must not be served once it is unset.
+
+        The integration suite seeds a moto keystore with fake credentials; with the endpoint out of
+        the key, every later module got those fakes and sent them to real AWS and GCE.
+        """
+        monkeypatch.setenv("SCT_KEYSTORE_BACKEND", "secretsmanager")
+        with patch.object(KeyStore, "_fetch_from_secrets_manager", side_effect=[b"fake", b"real"]) as fetch:
+            monkeypatch.setenv("AWS_ENDPOINT_URL", "http://127.0.0.1:5000")
+            assert KeyStore().get_file_contents("aws_images_role.json") == b"fake"
+            monkeypatch.delenv("AWS_ENDPOINT_URL")
+            assert KeyStore().get_file_contents("aws_images_role.json") == b"real"
+        assert fetch.call_count == 2
+
     def test_cache_thread_safe(self, ks):
         results = []
 
