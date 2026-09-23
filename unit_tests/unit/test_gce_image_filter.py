@@ -24,6 +24,9 @@ from sdcm.utils.common import build_gce_image_filter, gce_image_version_label
         pytest.param("2026.4.0~dev-0.20260804.9a3aba9e452a", "2026-4-0-dev-0-20260804-9a3aba9e452a", id="dev"),
         pytest.param("2025.4.10-0.20260609.99f4121cd8e1-1", "2025-4-10-0-20260609-99f4121cd8e1", id="release"),
         pytest.param("2026.3.0.rc1.0.20260730.726f67a532e2", "2026-3-0-rc1-0-20260730-726f67a532e2", id="rc"),
+        # Full tags that parse_scylla_version_tag can't split: a revision suffix must never end up in the label
+        pytest.param("2026.3.0.rc0.0.20260719.a64da1e635f3.1", "", id="rc-with-revision"),
+        pytest.param("2026.1.0~rc0.0.20260101.aaaaaa-1", "", id="unparsable-tilde-rc-with-revision"),
         pytest.param("2025.4", "", id="open-ended-version"),
         pytest.param("master:latest", "", id="branch"),
         pytest.param("", "", id="empty"),
