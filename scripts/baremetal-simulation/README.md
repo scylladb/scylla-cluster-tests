@@ -49,7 +49,7 @@ Each step is also runnable on its own:
 | 7 | `scripts/baremetal-simulation/09_reset_host.sh` | reset the host to a pre-`scylla_setup` state (required between passes) |
 | 8 | `scripts/baremetal-simulation/07_rerun_dirty_host.sh` | optional: second pass on the **un-reset** host, the drift experiment — expected to fail |
 | 9 | `scripts/baremetal-simulation/08_run_perf_test.sh` | optional perf smoke, needs db + loader + monitor hosts |
-| 10 | `uv run python scripts/baremetal-simulation/99_teardown.py --yes --all` | terminates everything, removes the generated files |
+| 10 | `uv run python scripts/baremetal-simulation/99_teardown.py --yes --all` | terminates everything, removes the generated files. Refuses while one of this simulation's runs is still executing — a passing pytest summary is not the end of a run, log collection follows it. `--force` overrides. |
 
 Steps 3 and 4 produce **uncommitted local state**; step 9 (`--all`) and
 `03_patch_sct_for_fedora.py --revert` undo them.
