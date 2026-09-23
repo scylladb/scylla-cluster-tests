@@ -417,6 +417,9 @@ class BaseNode(AutoSshContainerMixin):
     log = LOGGER
     _instance_type = "N/A"
     scylla_network_configuration: Optional[ScyllaNetworkConfiguration] = None
+    # class-level default so code checking `node.destroyed` never hits an AttributeError,
+    # even for instances built without running the full __init__ (e.g. test doubles)
+    destroyed = False
 
     GOSSIP_STATUSES_FILTER_OUT = [
         "LEFT",  # in case the node was decommissioned
@@ -460,6 +463,7 @@ class BaseNode(AutoSshContainerMixin):
         self._public_ip_address_cached = None
         self._private_ip_address_cached = None
         self._ipv6_ip_address_cached = None
+        self.destroyed = False
         self._maximum_number_of_cores_to_publish = 10
 
         self.last_line_no = 1
@@ -1817,6 +1821,7 @@ class BaseNode(AutoSshContainerMixin):
         self.stop_task_threads()
         if self.remoter:
             self.remoter.stop()
+        self.destroyed = True
         ContainerManager.destroy_all_containers(self)
         self._terminate_node_in_argus()
         LOGGER.info("%s destroyed", self)
