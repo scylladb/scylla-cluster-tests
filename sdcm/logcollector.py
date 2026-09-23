@@ -1179,6 +1179,9 @@ class BaseSCTLogCollector(LogCollector):
         FileLog(name="result_gradual_increase.log", search_locally=True),
         FileLog(name="partition_range_scan_diff_*.log", search_locally=True),
         FileLog(name="junit.xml", search_locally=True),
+        # hydra's builder <-> runner transport watchdog samples (SCT-1044). The runner appends one
+        # sample every few minutes. The console gets only the anomalous ones and a periodic sample.
+        FileLog(name="hydra-watchdog.log", search_locally=True),
     ]
     cluster_log_type = "sct-runner-events"
     cluster_dir_prefix = "sct-runner-events"

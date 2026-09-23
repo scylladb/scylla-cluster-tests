@@ -247,44 +247,82 @@ function hydra_watchdog_unsupported_reason () {
 
 # SCT-1044: the docker CLI reaches the runner through one `ssh ... docker system dial-stdio`
 # connection per API stream (attach, wait, ...). When one of them stalls nothing is printed
-# until it times out, sometimes hours later. Every HYDRA_WATCHDOG_INTERVAL seconds, print
-# both ends' view of those connections, plus a fresh SSH probe that shows whether the
-# runner itself is reachable and what the container's processes are blocked on.
+# until it times out, sometimes hours later. Every HYDRA_WATCHDOG_INTERVAL seconds, sample
+# both ends' view of those connections through a fresh SSH probe, which also shows whether
+# the runner itself is reachable and what the container's processes are blocked on.
+# Every sample is appended to hydra-watchdog.log in the test's result dir on the runner
+# (collected with the sct-runner-events logs). The console gets the full sample right away when
+# something looks wrong, and otherwise every HYDRA_WATCHDOG_CONSOLE_INTERVAL seconds (default 30m),
+# so the evidence survives even when log collection doesn't. HYDRA_WATCHDOG_VERBOSE=true prints all.
 function hydra_watchdog () {
     set +e
-    local interval=$1 now started rc out child=""
+    local interval=$1 now started rc out builder_view anomalies last_console=-1 child=""
     out=$(mktemp) || return
     # Children run in the background and are waited on, so TERM is handled right away and
     # nothing outlives the watchdog holding hydra's stdout open.
     trap '[[ -n "${child}" ]] && kill "${child}" 2>/dev/null; rm -f "${out}"; exit 0' TERM
-    local probe="echo \"uptime: \$(uptime)\"
+    # Runs on the runner; stdin is the builder's view. The result dir is the newest one holding
+    # this test's id, the same one collect-logs picks.
+    local probe="runner_view=\$(echo \"uptime: \$(uptime)\"
         echo 'runner -> builder sockets:'
         hydra_ss_summary '( sport = :22 and dst '\${SSH_CLIENT%% *}' )'
         docker ps --all --filter name=${SCT_TEST_ID:-hydra} --format '{{.Names}} {{.Status}}'
-        ps -eo pid,stat,wchan:24,etimes,args --sort=pid | awk '/[s]ct\\.py/ {print substr(\$0, 1, 200)}'"
+        ps -eo pid,stat,wchan:24,etimes,args --sort=pid | awk '/[s]ct\\.py/ {print substr(\$0, 1, 200)}')
+        logdir=\$(find ~/sct-results -mindepth 2 -maxdepth 2 -name test_id 2>/dev/null \\
+                 | xargs -r grep -lx '${SCT_TEST_ID}' 2>/dev/null | xargs -r -n1 dirname | xargs -r ls -td | head -1)
+        log=\${logdir:+\${logdir}/hydra-watchdog.log}
+        { echo \"=== \${WATCHDOG_NOW}\"; cat; echo 'runner view:'; echo \"\${runner_view}\"; } >> \"\${log:-/dev/null}\"
+        echo \"log: \${log:-<no result dir for ${SCT_TEST_ID} yet>}\"
+        echo \"\${runner_view}\""
     while true; do
         sleep "${interval}" &
         child=$!
         wait "${child}"
         now=$(date -u +%FT%TZ)
         started=${SECONDS}
+        # taken before the probe connects, so the probe's own socket isn't part of it
+        builder_view=$(
+            echo "builder -> runner ${RUNNER_IP} sockets:"
+            hydra_ss_summary "( dst ${RUNNER_IP} and dport = :22 )"
+            ps -o pid=,etimes=,args= -C ssh | grep -F -- "${RUNNER_IP}" | sed 's/^/  ssh pid,age_s,args: /')
         # No multiplexing: the probe must open its own connection, not ride a stalled master.
         timeout 60 ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=15 \
             -o ControlMaster=no -o ControlPath=none \
             -o ServerAliveInterval=5 -o ServerAliveCountMax=3 "ubuntu@${RUNNER_IP}" \
-            "$(declare -f hydra_ss_summary); ${probe}" >"${out}" 2>&1 &
+            "WATCHDOG_NOW=${now}; $(declare -f hydra_ss_summary); ${probe}" \
+            <<< "${builder_view}" >"${out}" 2>&1 &
         child=$!
         wait "${child}"
         rc=$?
         child=""
-        {
-            echo "builder -> runner ${RUNNER_IP} sockets:"
-            hydra_ss_summary "( dst ${RUNNER_IP} and dport = :22 )"
-            ps -o pid=,etimes=,args= -C ssh | grep -F -- "${RUNNER_IP}" | sed 's/^/  ssh pid,age_s,args: /'
-            echo "runner probe rc=${rc} took $((SECONDS - started))s:"
-            sed 's/^/  /' "${out}"
-        } | sed "s/^/[hydra-watchdog ${now}] /"
+        anomalies=$(hydra_watchdog_anomalies "${rc}" "${builder_view}" "${out}")
+        # the first sample always prints, so the console says early where the samples go
+        if [[ -n "${anomalies}" || "${HYDRA_WATCHDOG_VERBOSE:-false}" == "true" || "${last_console}" -lt 0 ]] \
+                || (( SECONDS - last_console >= ${HYDRA_WATCHDOG_CONSOLE_INTERVAL:-1800} )); then
+            {
+                [[ -n "${anomalies}" ]] && echo "ANOMALY: ${anomalies}"
+                echo "${builder_view}"
+                echo "runner probe rc=${rc} took $((SECONDS - started))s:"
+                sed 's/^/  /' "${out}"
+            } | sed "s/^/[hydra-watchdog ${now}] /"
+            last_console=${SECONDS}
+        fi
     done
+}
+
+# What looks wrong in one watchdog sample, as a one-line summary (empty = healthy): the probe
+# failed, a dial-stdio socket keeps retransmitting or has unanswered keepalive or zero-window probes
+# on either end, or sct.py is blocked writing to its stdout. The runner also lists the probe's own
+# connection; only sockets whose port the builder holds count.
+function hydra_watchdog_anomalies () {
+    local rc=$1 builder_view=$2 probe_out=$3 ports stuck='timer:\((on|keepalive|persist),[^,]*,[1-9]'
+    [[ "${rc}" != 0 ]] && echo -n "runner probe failed rc=${rc}; "
+    grep -Eq "${stuck}" <<< "${builder_view}" && echo -n "builder socket retrying; "
+    ports=$(grep -o 'local=[^ ]*' <<< "${builder_view}" | sed 's/.*://' | paste -sd'|')
+    [[ -n "${ports}" ]] && grep -E "peer=[^ ]*:(${ports}) " "${probe_out}" | grep -Eq "${stuck}" \
+        && echo -n "runner socket retrying; "
+    grep -q ' pipe_write ' "${probe_out}" && echo -n "sct.py blocked on stdout; "
+    true
 }
 
 function stop_hydra_watchdog () {

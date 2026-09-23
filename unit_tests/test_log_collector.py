@@ -122,3 +122,19 @@ def test_schema_log_collector_is_tracked_as_critical(tmp_path):
     # since it inherits from BaseSCTLogCollector
     with pytest.raises(FileNotFoundError, match="No local files found for schema-logs"):
         collector.collect_logs(local_search_path=str(tmp_path))
+
+
+def test_hydra_watchdog_log_collected_from_result_dir(tmp_path):
+    """hydra's transport watchdog appends its samples to the test's result dir (SCT-1044)."""
+    result_dir = tmp_path / "20260923-165527-000000"
+    result_dir.mkdir()
+    (result_dir / "hydra-watchdog.log").write_text("=== 2026-09-23T17:30:32Z\nbuilder -> runner sockets:\n")
+    (result_dir / "collected_logs").mkdir()
+    (result_dir / "collected_logs" / "hydra-watchdog.log").write_text("already collected copy")
+    local_dst = tmp_path / "dst"
+
+    entity = next(e for e in BaseSCTLogCollector.log_entities if e.name == "hydra-watchdog.log")
+    entity.collect(None, str(local_dst), local_search_path=str(result_dir))
+
+    assert [p.name for p in local_dst.iterdir()] == ["hydra-watchdog.log"]
+    assert (local_dst / "hydra-watchdog.log").read_text().startswith("=== 2026-09-23T17:30:32Z")
