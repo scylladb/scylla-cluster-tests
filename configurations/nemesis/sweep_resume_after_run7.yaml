@@ -89,12 +89,11 @@ nemesis_exclude_list:
   # DisableBinaryGossipExecuteMajorCompaction is the proof the option was the missing piece: the
   # nemesis that ended run #13 in 4 seconds ran here to completion in 124 s.
   #
-  # EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey has no verdict of its own - it
-  # was 37 minutes in when a ReadValidationError on keyspace1.standard1 failed the run and killed
-  # it. That read failure is what nemesis_during_prepare: false and the prepare fail-fast in the
-  # test-case are meant to prevent, so this one is worth re-running deliberately once a run gets
-  # through prepare undisturbed.
+  # EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey is deliberately NOT excluded. It
+  # never got a verdict - it was 37 minutes in when a ReadValidationError on keyspace1.standard1
+  # failed the run and killed it, and those missing rows came from the prepare phase, not from
+  # anything the nemesis did. With nemesis_during_prepare: false and fail-fast restored on
+  # prepare, the next run populates cleanly, so this one gets the fair attempt it has not had.
   - "DisableBinaryGossipExecuteMajorCompaction"  # succeeded
   - "DrainKubernetesNodeThenDecommissionAndAddScyllaNode"  # skipped - kubernetes only
   - "DrainKubernetesNodeThenReplaceScyllaNode"  # skipped - kubernetes only
-  - "EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey"  # failed - run aborted, no verdict
