@@ -15,6 +15,7 @@ def curl_with_retry(
     retry_max_time: int = 300,
     retry_all_errors: bool = True,
     connect_timeout: int = 10,
+    max_time: int | None = None,
     output: str | None = None,
     silent: bool = False,
     follow_redirects: bool = False,
@@ -32,6 +33,8 @@ def curl_with_retry(
             capability check, so the command stays valid on distros with curl < 7.71.
             Pass ``False`` for non-idempotent requests. Ignored when ``retry`` is 0.
         connect_timeout: ``--connect-timeout`` in seconds.
+        max_time: ``--max-time`` in seconds. It limits the total transfer time. Used for
+            large downloads so a stalled transfer fails instead of hanging the caller.
         output: Path for ``-o`` (download target).
         silent: Add ``-s`` flag.
         follow_redirects: Add ``-L`` flag.
@@ -49,6 +52,8 @@ def curl_with_retry(
     if fail_early:
         parts.append("-f")
     parts.append(f"--connect-timeout {connect_timeout}")
+    if max_time is not None:
+        parts.append(f"--max-time {max_time}")
     if retry > 0:
         parts.append(f"--retry {retry}")
         parts.append(f"--retry-max-time {retry_max_time}")

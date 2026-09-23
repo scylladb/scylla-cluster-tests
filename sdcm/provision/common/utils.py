@@ -15,6 +15,25 @@ from textwrap import dedent
 
 from sdcm.utils.curl import curl_with_retry
 
+VECTOR_VERSION = "latest"
+VECTOR_LATEST_SOURCE = "https://packages.timber.io/vector/latest"
+# used when the latest alias cannot be resolved, so installation can still try the backup download source.
+VECTOR_FALLBACK_VERSION = "0.58.0"
+# package download mirrors; the shell expands $_vector_version before use.
+VECTOR_PACKAGE_SOURCES = (
+    "https://packages.timber.io/vector/$_vector_version",
+    "https://github.com/vectordotdev/vector/releases/download/v$_vector_version",
+)
+
+VECTOR_DOWNLOAD_MAX_TIME = 90
+VECTOR_DOWNLOAD_RETRY = 1
+VECTOR_DOWNLOAD_RETRY_MAX_TIME = 200
+# checksum files are tiny, so they use a shorter timeout window.
+VECTOR_CHECKSUM_MAX_TIME = 20
+VECTOR_CHECKSUM_RETRY_MAX_TIME = 45
+
+VECTOR_INSTALL_ATTEMPTS = "1 2 3 4 5 6"
+
 
 def configure_syslogng_target_script(hostname: str = "") -> str:
     return dedent(
@@ -261,57 +280,199 @@ def install_syslogng_service():
 
 
 def install_vector_service():
-    vector_setup_curl = curl_with_retry(
-        "https://setup.vector.dev",
+    """Install the vector.dev logging agent from a downloaded package.
+
+    This avoids OS repositories and the upstream bootstrap script.
+    """
+    # both downloads share the output path variable; the script sets $_vector_dst before each download
+    download_kwargs = dict(
         silent=True,
         follow_redirects=True,
         fail_early=True,
+        retry=VECTOR_DOWNLOAD_RETRY,
+        output="$_vector_dst",
         extra_flags="-S",
     )
-    return dedent(f"""\
-        # install repo
-        for n in 2 4 6 8 10 10 10 10; do # cloud-init is running it with set +o braceexpand
-            if bash -c "$({vector_setup_curl})"; then
-                if yum --help 2>/dev/null 1>&2; then
-                    if yum -y list vector >/dev/null 2>&1; then
-                        break
-                    fi
-                elif apt-get --help 2>/dev/null 1>&2; then
-                    if apt-cache show vector >/dev/null 2>&1; then
-                        break
-                    fi
-                else
-                    break
-                fi
-            fi
-            sleep $(backoff $n)
-        done
+    package_curl = curl_with_retry(
+        "$_vector_url",
+        retry_max_time=VECTOR_DOWNLOAD_RETRY_MAX_TIME,
+        max_time=VECTOR_DOWNLOAD_MAX_TIME,
+        **download_kwargs,
+    )
+    checksum_curl = curl_with_retry(
+        "$_vector_url",
+        retry_max_time=VECTOR_CHECKSUM_RETRY_MAX_TIME,
+        max_time=VECTOR_CHECKSUM_MAX_TIME,
+        **download_kwargs,
+    )
+    resolve_curl = curl_with_retry(
+        f"{VECTOR_LATEST_SOURCE}/$_vector_latest_pkg",
+        silent=True,
+        retry=VECTOR_DOWNLOAD_RETRY,
+        retry_max_time=VECTOR_CHECKSUM_RETRY_MAX_TIME,
+        max_time=VECTOR_CHECKSUM_MAX_TIME,
+        output="/dev/null",
+        extra_flags='-I -S -w "%{redirect_url}"',
+    )
 
-        # install vector
-        if yum --help 2>/dev/null 1>&2 ; then
-            # Rocky Linux 8 / EL8: vector >= 0.55.0 requires GLIBC_2.29/2.30 not available on EL8 (SCT-261,
-            # https://github.com/vectordotdev/vector/issues/25253). Use --nobest so yum picks the latest
-            # version that actually resolves on this OS.
-            _yum_vector_flags=""
-            if [ -f /etc/os-release ] && . /etc/os-release 2>/dev/null && [ "$ID" = "rocky" ] && echo "$VERSION_ID" | grep -q "^8"; then
-                _yum_vector_flags="--nobest"
-            fi
-            for n in 2 4 6 8 10 10 10 10; do # cloud-init is running it with set +o braceexpand
-                if yum install -y $_yum_vector_flags vector; then
-                    break
-                fi
-                sleep $(backoff $n)
-            done
-        elif apt-get --help 2>/dev/null 1>&2 ; then
-            for n in 2 4 6 8 10 10 10 10; do # cloud-init is running it with set +o braceexpand
-                DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=300 -y vector || true
-                if dpkg-query --show vector ; then
-                    break
-                fi
-                sleep $(backoff $n)
-            done
+    sources = " ".join(f'"{source}"' for source in VECTOR_PACKAGE_SOURCES)
+    install_attempts = VECTOR_INSTALL_ATTEMPTS
+    last_install_attempt = install_attempts.split()[-1]
+
+    return dedent(f"""\
+        # vector.dev logging agent: downloaded directly, checksum verified.
+        if vector --version > /dev/null 2>&1; then
+            echo "vector is already installed, keeping the version the image ships"
         else
-            echo "Unsupported distro"
+            vector_fail() {{
+                echo "ERROR: vector.dev installation failed: $1"
+                shift
+                while [ $# -gt 0 ]; do
+                    echo "  $1"
+                    shift
+                done
+                exit 1
+            }}
+
+            vector_pkg_name() {{
+                if [ "$_vector_fmt" = "rpm" ]; then
+                    echo "vector-$1-1.$_vector_arch.rpm"
+                else
+                    echo "vector_$1-1_$_vector_arch.deb"
+                fi
+            }}
+
+            vector_note_attempt() {{
+                _vector_attempts="$_vector_attempts; $1"
+            }}
+
+            _vector_machine=$(uname -m)
+            case "$_vector_machine" in
+                x86_64)
+                    _vector_rpm_arch=x86_64
+                    _vector_deb_arch=amd64
+                    ;;
+                aarch64|arm64)
+                    _vector_rpm_arch=aarch64
+                    _vector_deb_arch=arm64
+                    ;;
+                *)
+                    vector_fail "unsupported architecture $_vector_machine"
+                    ;;
+            esac
+
+            if yum --help > /dev/null 2>&1; then
+                _vector_fmt=rpm
+                _vector_arch=$_vector_rpm_arch
+                _vector_install_cmd="rpm -U --replacepkgs"
+            elif apt-get --help > /dev/null 2>&1; then
+                _vector_fmt=deb
+                _vector_arch=$_vector_deb_arch
+                _vector_install_cmd="dpkg -i"
+            else
+                vector_fail "neither yum nor apt-get is available"
+            fi
+
+            _vector_version={VECTOR_VERSION}
+            if [ "$_vector_version" = "latest" ]; then
+                _vector_latest_pkg=$(vector_pkg_name latest)
+                _vector_redirect=$({resolve_curl} || true)
+                # matched with a character class rather than an escape: a backslash here is read
+                # by Python first, and single quotes would close the bash -cxe wrapper early
+                _vector_version=$(echo "$_vector_redirect" | grep -oE "[0-9]+[.][0-9]+[.][0-9]+" | head -1)
+
+                if [ -n "$_vector_version" ]; then
+                    echo "vector.dev latest resolves to $_vector_version"
+                else
+                    echo "WARNING: cannot resolve the latest vector.dev release from {VECTOR_LATEST_SOURCE}"
+                    echo "  got: $_vector_redirect"
+                    echo "  falling back to {VECTOR_FALLBACK_VERSION}"
+                    _vector_version={VECTOR_FALLBACK_VERSION}
+                fi
+            fi
+
+            _vector_pkg=$(vector_pkg_name "$_vector_version")
+            _vector_sums="vector-$_vector_version-SHA256SUMS"
+            _vector_pkg_path="/tmp/$_vector_pkg"
+            _vector_sums_path="/tmp/$_vector_sums"
+            _vector_log=/tmp/vector-install.log
+            _vector_attempts=""
+            _vector_downloaded=0
+
+            for _vector_base in {sources}; do
+                rm -f "$_vector_pkg_path" "$_vector_sums_path"
+
+                _vector_rc=0
+                _vector_url="$_vector_base/$_vector_pkg"
+                _vector_dst=$_vector_pkg_path
+                {package_curl} || _vector_rc=$?
+                if [ "$_vector_rc" -ne 0 ]; then
+                    vector_note_attempt "$_vector_url: curl exit $_vector_rc"
+                    continue
+                fi
+
+                _vector_rc=0
+                _vector_url="$_vector_base/$_vector_sums"
+                _vector_dst=$_vector_sums_path
+                {checksum_curl} || _vector_rc=$?
+                if [ "$_vector_rc" -ne 0 ]; then
+                    vector_note_attempt "$_vector_url: curl exit $_vector_rc"
+                    continue
+                fi
+
+                _vector_expected=$(grep " $_vector_pkg\\$" "$_vector_sums_path" | cut -d" " -f1)
+                _vector_actual=$(sha256sum "$_vector_pkg_path" | cut -d" " -f1)
+                if [ -z "$_vector_expected" ] || [ "$_vector_expected" != "$_vector_actual" ]; then
+                    vector_note_attempt "$_vector_base/$_vector_pkg: sha256 $_vector_actual != $_vector_expected"
+                    continue
+                fi
+
+                _vector_downloaded=1
+                break
+            done
+
+            if [ "$_vector_downloaded" -ne 1 ]; then
+                vector_fail \
+                    "no source served a usable $_vector_pkg" \
+                    "version $_vector_version, architecture $_vector_machine" \
+                    "attempts:$_vector_attempts"
+            fi
+
+            _vector_install_rc=1
+            rm -f "$_vector_log"
+            for n in {install_attempts}; do
+                _vector_install_rc=0
+                echo "=== attempt $n: $_vector_install_cmd $_vector_pkg_path" >> "$_vector_log"
+                $_vector_install_cmd "$_vector_pkg_path" >> "$_vector_log" 2>&1 || _vector_install_rc=$?
+                if [ "$_vector_install_rc" -eq 0 ]; then
+                    break
+                fi
+                if [ "$n" -lt {last_install_attempt} ]; then
+                    sleep "$(backoff "$n")"
+                fi
+            done
+
+            _vector_unit=""
+            for _vector_candidate in /usr/lib/systemd/system/vector.service /lib/systemd/system/vector.service; do
+                if [ -f "$_vector_candidate" ]; then
+                    _vector_unit=$_vector_candidate
+                    break
+                fi
+            done
+
+            _vector_rc=0
+            vector --version > /dev/null 2>&1 || _vector_rc=$?
+            if [ "$_vector_install_rc" -ne 0 ] || [ "$_vector_rc" -ne 0 ] || [ -z "$_vector_unit" ]; then
+                echo "ERROR: vector.dev installation failed: $_vector_pkg did not install cleanly"
+                echo "  version $_vector_version, architecture $_vector_machine"
+                echo "  install exit $_vector_install_rc, vector --version exit $_vector_rc, unit file found: $_vector_unit"
+                echo "  source attempts:$_vector_attempts"
+                echo "  install output:"
+                cat "$_vector_log" || true
+                exit 1
+            fi
+
+            rm -f "$_vector_pkg_path" "$_vector_sums_path"
         fi
 
         systemctl enable vector
