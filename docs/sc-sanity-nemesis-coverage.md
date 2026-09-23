@@ -50,6 +50,7 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 | `3dfcf31c4` | `DISABLED_CATEGORIES = {topology-changes}` | hold 13 nemesis out while SCYLLADB-4529 is open |
 | `fd3f4cbdc` | `-errors ignore` on `stress_cmd` | cql-stress fail-fast ended run #13 on the first nemesis that closed a CQL port |
 | `b179e9800` | fail-fast kept on `prepare_write_cmd`, `nemesis_during_prepare: false` | ignoring errors during prepare left ~103k rows unwritten in run #14, which the read phase then reported as validation failures |
+| `9e6a0e3` (this change) | `EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey` put back in the sweep | it never got a verdict in run #14 - the rows it was blamed for were missing before it started |
 
 ## Open issues found by this job
 
