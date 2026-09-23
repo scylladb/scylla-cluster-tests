@@ -19,6 +19,7 @@ working and waiting -- without changing which checks run or when the gate passes
 """
 
 import logging
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -27,6 +28,8 @@ from sdcm.cluster import BaseNode, BaseScyllaCluster
 from sdcm.utils.health_checker import NodeHealthCheckStats
 
 GATHER_OPERATIONS = {"nodetool_status", "peers", "gossip", "raft_group0", "token_ring"}
+#: gathering plus running the validators over what was gathered -- what a full check records
+CHECK_OPERATIONS = GATHER_OPERATIONS | {"validation"}
 
 
 @pytest.fixture
@@ -124,7 +127,7 @@ class TestCheckNodeHealth:
         assert stats.attempts == 1
         assert stats.causes == []
         assert stats.waiting_time == 0.0
-        assert set(stats.operation_time) == GATHER_OPERATIONS
+        assert set(stats.operation_time) == CHECK_OPERATIONS
 
     @patch("sdcm.cluster.time.sleep")
     def test_records_the_validator_that_caused_each_retry(self, mock_sleep, node):
@@ -236,3 +239,51 @@ class TestOperationTimeResolution:
         assert "peers=0.081s" in caplog.text
         assert "raft_group0=0.074s" in caplog.text
         assert "token_ring=0.500s" in caplog.text
+
+
+class TestValidationIsMeasured:
+    """The validators run outside node_health_events, so they need their own measurement.
+
+    node_health_events() returns a lazy chain: gathering happens there, but running the five
+    validators over what was gathered happens when check_node_health() consumes it. That time
+    used to fall outside every measure block, so working_time under-reported the gate.
+    """
+
+    def test_a_full_check_records_validation_alongside_gathering(self, node):
+        stats = node.check_node_health()
+
+        assert set(stats.operation_time) == CHECK_OPERATIONS
+
+    def test_working_time_includes_validation(self, node):
+        stats = node.check_node_health()
+
+        assert stats.working_time == pytest.approx(sum(stats.operation_time.values()))
+        assert stats.working_time >= stats.operation_time["validation"]
+
+    def test_time_spent_in_the_validators_lands_under_validation(self, node):
+        """A slow validator must be charged to validation, not left out of the totals.
+
+        The work has to happen when the chain is *consumed*, not when node_health_events() is
+        called -- that is exactly the laziness that made this time invisible in the first place.
+        """
+
+        def slow_validators(stats=None):
+            def chain():
+                time.sleep(0.05)
+                yield from ()
+
+            return chain()
+
+        node.node_health_events = MagicMock(side_effect=slow_validators)
+
+        stats = node.check_node_health()
+
+        assert stats.operation_time["validation"] >= 0.05
+
+    def test_gathering_alone_does_not_record_validation(self, node):
+        """node_health_events() on its own only gathers -- nothing has consumed the chain yet."""
+        stats = NodeHealthCheckStats(node_name=node.name)
+
+        node.node_health_events(stats=stats)
+
+        assert "validation" not in stats.operation_time

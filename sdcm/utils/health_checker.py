@@ -51,7 +51,9 @@ class NodeHealthCheckStats:
 
     node_name: str
     attempts: int = 0
-    #: wall-clock seconds per state-gathering operation, accumulated over all attempts
+    #: wall-clock seconds per operation, accumulated over all attempts: one entry per
+    #: state-gathering call, plus "validation" for running the validators over that state
+    #: (which is where the larger share of the time goes)
     operation_time: dict[str, float] = field(default_factory=dict)
     #: validator that rejected each attempt, in order; a trailing entry means the check failed
     causes: list[str] = field(default_factory=list)

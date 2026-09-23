@@ -3766,7 +3766,13 @@ class BaseNode(AutoSshContainerMixin):
                 LOGGER.debug("Check the health of the node `%s' [attempt #%d]", self.name, retry_n)
                 stats.attempts = retry_n
                 events = self.node_health_events(stats=stats)
-                event = next(events, None)
+                # node_health_events() returns a lazy chain, so the validators themselves run here,
+                # not there - and that time fell outside every measure block, leaving more than half
+                # the gate unaccounted for. A healthy node runs all five to exhaustion, so this is
+                # the full validation cost; an unhealthy one stops at the first event it yields.
+                # The final-retry drain below is excluded on purpose: it publishes, it doesn't validate.
+                with stats.measure("validation"):
+                    event = next(events, None)
                 if event is None:
                     LOGGER.debug("Node `%s' is healthy", self.name)
                     break
