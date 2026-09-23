@@ -285,7 +285,7 @@ Force running iotune on the DB nodes, regardless if image has predefined values
 **type:** bool
 
 **backend overrides:**
-- `True`: aws, gce, azure, aws-siren, gce-siren, k8s-local-kind-aws, k8s-gke, k8s-eks
+- `True`: aws, azure, aws-siren, k8s-local-kind-aws, k8s-eks
 
 
 <a id="instance_type_db"></a>
