@@ -10,6 +10,7 @@ from sdcm.nemesis.utils.node_operations import (
     is_node_destroyed,
     pause_scylla_with_sigstop,
 )
+from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode
 from unit_tests.unit.nemesis import make_mock_node, sudo_commands
 
 LOADER_IPS = "10.0.0.2,10.0.0.3"
@@ -65,6 +66,22 @@ def test_is_node_destroyed_detects_either_half_of_destroy(destroyed, has_remoter
     node.remoter = MagicMock() if has_remoter else None
 
     assert is_node_destroyed(node) is expected
+
+
+def test_is_node_destroyed_is_false_for_a_live_node(tmp_path):
+    """A real ``BaseNode`` (not a ``MagicMock``) must expose ``destroyed`` on its own,
+    without the caller setting it first: a bare ``MagicMock`` auto-stubs missing
+    attributes, so it can't catch a ``destroyed`` that was never defined on ``BaseNode``."""
+    node = DummyNode(
+        name="node1",
+        parent_cluster=None,
+        base_logdir=str(tmp_path),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+    )
+    node.parent_cluster = DummyDbCluster(nodes=[node])
+    node.remoter = MagicMock()
+
+    assert is_node_destroyed(node) is False
 
 
 # ---------------------------------------------------------------------------
