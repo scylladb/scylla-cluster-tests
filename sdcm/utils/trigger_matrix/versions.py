@@ -13,8 +13,9 @@
 
 """Scylla version string parsing.
 
-Pure string and regex work: no cloud lookups, no pydantic models, no Jenkins. The four
-compiled version patterns live here with the predicates and extractors built on them.
+Pure string work: no cloud lookups, no pydantic models, no Jenkins. The version patterns
+themselves live in `sdcm.utils.version_utils`, which is the single home for them; this
+module holds the trigger-matrix predicates and extractors built on top.
 
 Choosing *which* build a backend should run is policy, not parsing -- that lives in
 `resolution`, which is allowed to call the cloud image lookups this module must not."""
@@ -23,28 +24,14 @@ import logging
 import re
 
 from sdcm.utils.trigger_matrix.errors import TriggerMatrixError
-
-logger = logging.getLogger(__name__)
-
-
-# Regex for full version tags like:
-#   2024.2.5-0.20250221.cb9e2a54ae6d-1 (release)
-#   2026.2.0~dev-0.20260322.f51126483167 (dev/nightly)
-#   2026.3.0.rc0.0.20260719.a64da1e635f3 (release candidate)
-FULL_VERSION_TAG_RE = re.compile(
-    r"^(?P<major>\d{4})\.(?P<minor>\d+)\.(?P<patch>\d+)"
-    r"(?:[~-][a-zA-Z0-9._~]+-?\d*\.\d{8}\.[0-9a-f]+(?:-\d+)?"
-    r"|\.rc\d+\.\d+\.\d{8}\.[0-9a-f]+(?:\.\d+)?)$"
+from sdcm.utils.version_utils import (
+    BRANCH_VERSION_RE,
+    FULL_VERSION_TAG_RE,
+    RELEASE_VERSION_RE,
+    SIMPLE_VERSION_RE,
 )
 
-# Regex for release version strings like: 2026.1.8, 2025.4.1 (three-part, specific release)
-RELEASE_VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
-
-# Regex for simple version strings like: 2025.4, 2025.4.0, 5.2.1
-SIMPLE_VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)(?:\.\d+)?$")
-
-# Regex for branch:qualifier like: master:latest, branch-2019.1:all
-BRANCH_VERSION_RE = re.compile(r"^(?P<branch>[a-zA-Z0-9._-]+):(?P<qualifier>.+)$")
+logger = logging.getLogger(__name__)
 
 
 def is_full_version_tag(version: str) -> bool:
