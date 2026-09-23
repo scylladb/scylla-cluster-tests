@@ -11,13 +11,19 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""Unit tests for monitoring stack restore of annotations (SCT-432)."""
+"""Unit tests for monitoring stack restore: annotations, port selection and cleanup on failure."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sdcm.monitorstack.restore import restore_annotations_data, restore_grafana_dashboards_and_annotations
+from sdcm.monitorstack import restore
+from sdcm.monitorstack.restore import (
+    pick_monitoring_stack_ports,
+    restore_annotations_data,
+    restore_grafana_dashboards_and_annotations,
+    restore_monitoring_stack,
+)
 
 
 def _annotations_dir(tmp_path):
@@ -81,3 +87,89 @@ def test_restore_grafana_dashboards_and_annotations_succeeds_when_annotations_sk
             )
 
     assert result is True
+
+
+@pytest.fixture
+def default_ports(monkeypatch):
+    """Pin the default ports (they are picked at import time) and fake port binding."""
+    monkeypatch.setattr(restore, "GRAFANA_DOCKER_PORT", 3000)
+    monkeypatch.setattr(restore, "ALERT_DOCKER_PORT", 6000)
+    monkeypatch.setattr(restore, "PROMETHEUS_DOCKER_PORT", 9090)
+    bound_elsewhere = set()
+    random_ports = iter(range(40000, 40100))
+
+    def fake_get_free_port(address="", ports_to_try=(0,)):
+        for port in ports_to_try:
+            if port == 0:
+                return next(random_ports)
+            if port not in bound_elsewhere:
+                return port
+        raise RuntimeError("Can't allocate a free port")
+
+    monkeypatch.setattr(restore, "get_free_port", fake_get_free_port)
+    return bound_elsewhere
+
+
+def test_pick_monitoring_stack_ports_uses_defaults_when_nothing_runs(default_ports):
+    assert pick_monitoring_stack_ports(tenants_number=1, occupied_ports=set()) == (3000, 6000, 9090)
+
+
+def test_pick_monitoring_stack_ports_skips_half_started_stack(default_ports):
+    """A concurrent restore that has created Prometheus and Alertmanager but not yet Grafana owns the slot."""
+    ports = pick_monitoring_stack_ports(tenants_number=1, occupied_ports={6000, 9090})
+
+    assert ports == (40000, 40001, 40002)
+
+
+def test_pick_monitoring_stack_ports_skips_slot_with_port_bound_by_other_process(default_ports):
+    default_ports.add(3000)
+
+    assert pick_monitoring_stack_ports(tenants_number=1, occupied_ports=set()) == (40000, 40001, 40002)
+
+
+def test_pick_monitoring_stack_ports_uses_next_tenant_slot(default_ports):
+    assert pick_monitoring_stack_ports(tenants_number=2, occupied_ports={3000, 6000, 9090}) == (3001, 6001, 9091)
+
+
+@pytest.fixture
+def restore_until_dashboards(monkeypatch):
+    """Stub everything restore_monitoring_stack() does before uploading dashboards, for two clusters."""
+    clusters = {"cluster-1": "arch-1", "cluster-2": "arch-2"}
+    started = iter(
+        [
+            {"grafana_docker_port": 3000, "alert_docker_port": 6000, "prometheus_docker_port": 9090},
+            {"grafana_docker_port": 3001, "alert_docker_port": 6001, "prometheus_docker_port": 9091},
+        ]
+    )
+    monkeypatch.setattr(restore, "is_docker_available", lambda: True)
+    monkeypatch.setattr(restore, "get_monitoring_stack_archive", lambda *_: {"file_path": "f", "link": "l"})
+    monkeypatch.setattr(restore, "S3Storage", MagicMock())
+    monkeypatch.setattr(restore, "extract_monitoring_data_archive", lambda *_: dict(clusters))
+    monkeypatch.setattr(restore, "extract_monitoring_stack_archive", lambda *_: dict(clusters))
+    monkeypatch.setattr(restore, "create_monitoring_data_dir", lambda *_, **__: "/data")
+    monkeypatch.setattr(restore, "create_monitoring_stack_dir", lambda *_: "/stack")
+    monkeypatch.setattr(restore, "get_monitoring_stack_scylla_version", lambda *_: ("master", "master"))
+    monkeypatch.setattr(restore, "run_monitoring_stack_containers", lambda *_, **__: next(started))
+    monkeypatch.setattr(restore, "get_nemesis_dashboard_file_for_cluster", lambda **_: "dashboard.json")
+    monkeypatch.setattr(restore, "verify_monitoring_stack", lambda **_: True)
+    kill = MagicMock()
+    monkeypatch.setattr(restore, "kill_running_monitoring_stack_services", kill)
+    return kill
+
+
+def test_restore_monitoring_stack_removes_only_its_own_containers_on_failure(monkeypatch, restore_until_dashboards):
+    """When the second cluster fails, both stacks this restore started are removed, and nothing else."""
+    monkeypatch.setattr(restore, "restore_grafana_dashboards_and_annotations", MagicMock(side_effect=[True, False]))
+
+    assert restore_monitoring_stack("test-id") is False
+    assert [call.kwargs["ports"]["grafana_docker_port"] for call in restore_until_dashboards.call_args_list] == [
+        3000,
+        3001,
+    ]
+
+
+def test_restore_monitoring_stack_keeps_containers_on_success(monkeypatch, restore_until_dashboards):
+    monkeypatch.setattr(restore, "restore_grafana_dashboards_and_annotations", lambda *_, **__: True)
+
+    assert set(restore_monitoring_stack("test-id")) == {"cluster-1", "cluster-2"}
+    restore_until_dashboards.assert_not_called()

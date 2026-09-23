@@ -121,6 +121,7 @@ def restore_monitoring_stack(test_id, date_time=None):  # noqa: PLR0911
             monitoring_stack_dir, monitoring_data_dir, scylla_version, tenants_number=len(monitoring_stack_arch)
         )
         if not containers_ports:
+            kill_monitoring_stacks(monitors_containers.values())
             return False
 
         dashboard_file = get_nemesis_dashboard_file_for_cluster(
@@ -135,10 +136,12 @@ def restore_monitoring_stack(test_id, date_time=None):  # noqa: PLR0911
             sct_dashboard_file=dashboard_file,
         )
         if not status:
+            kill_monitoring_stacks([*monitors_containers.values(), containers_ports])
             return False
 
         status = verify_monitoring_stack(containers_ports=containers_ports)
         if not status:
+            kill_monitoring_stacks([*monitors_containers.values(), containers_ports])
             remove_files(monitoring_stack_base_dir)
             return False
 
@@ -436,21 +439,28 @@ def restore_annotations_data(monitoring_stack_dir, grafana_docker_port):
         raise
 
 
-def get_available_port_candidates(base_port, tenants_number, occupied_ports):
-    """Generate list of candidate ports, excluding occupied ones."""
-    return [p for p in range(base_port, base_port + tenants_number) if p not in occupied_ports] + [0]
+def pick_monitoring_stack_ports(tenants_number, occupied_ports):
+    """Pick the Grafana, Alertmanager and Prometheus host ports as one set.
+
+    A default slot (base ports + tenant offset) is used only if none of its three ports is claimed by
+    a monitoring container. A concurrent restore creates its containers one by one (Grafana last), so
+    checking each service separately could hand us the Grafana port of a half-started stack.
+    Without a fully free slot, all three services get random ports.
+    """
+    for offset in range(tenants_number):
+        slot = (GRAFANA_DOCKER_PORT + offset, ALERT_DOCKER_PORT + offset, PROMETHEUS_DOCKER_PORT + offset)
+        if not occupied_ports.isdisjoint(slot):
+            continue
+        try:
+            return tuple(get_free_port(ports_to_try=(port,)) for port in slot)
+        except RuntimeError:
+            continue
+    return tuple(get_free_port() for _ in range(3))
 
 
 def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version, tenants_number):
     # pick ports once so retries reuse the same container names and can clean up after themselves
-    occupied_ports = get_monitoring_container_ports()
-
-    def pick_port(base_port):
-        return get_free_port(ports_to_try=get_available_port_candidates(base_port, tenants_number, occupied_ports))
-
-    graf_port = pick_port(GRAFANA_DOCKER_PORT)
-    alert_port = pick_port(ALERT_DOCKER_PORT)
-    prom_port = pick_port(PROMETHEUS_DOCKER_PORT)
+    graf_port, alert_port, prom_port = pick_monitoring_stack_ports(tenants_number, get_monitoring_container_ports())
 
     _start_dockers_with_ports(
         monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version, graf_port, alert_port, prom_port
@@ -568,3 +578,9 @@ def kill_running_monitoring_stack_services(ports=None):
     for docker in get_monitoring_stack_services(ports=dockers_ports):
         LOGGER.info("Killing %s", docker["service"])
         lr.run("docker rm -f {name}-{port}".format(name=docker["name"], port=docker["port"]), ignore_status=True)
+
+
+def kill_monitoring_stacks(stacks_ports):
+    """Remove the containers of the given stacks only, leaving any concurrent restore's stack alone."""
+    for ports in stacks_ports:
+        kill_running_monitoring_stack_services(ports=ports)

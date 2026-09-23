@@ -92,7 +92,14 @@ def runRestoreMonitoringStack(){
     env
 
     echo "Restoring Monitor stack for test-id \$SCT_TEST_ID"
-    ./docker/env/hydra.sh investigate show-monitor \$SCT_TEST_ID --kill true
+    # restore on the provision's own SCT runner: parallel provision branches share this builder's
+    # docker daemon, so restoring here lets their monitoring stacks collide
+    RUNNER_IP=\$(cat sct_runner_ip||echo "")
+    if [[ -n "\${RUNNER_IP}" ]] ; then
+        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} investigate show-monitor \$SCT_TEST_ID --kill true
+    else
+        ./docker/env/hydra.sh investigate show-monitor \$SCT_TEST_ID --kill true
+    fi
     """
 }
 
