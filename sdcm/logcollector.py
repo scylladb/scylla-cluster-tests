@@ -1301,6 +1301,9 @@ class BaseSCTLogCollector(LogCollector):
         # each emulated guest's serial console — the only view inside a node SCT never
         # managed to SSH into, where every per-node archive comes back empty
         FileLog(name="minicloud-serial-*.log", search_locally=True),
+        # hydra's builder <-> runner transport watchdog samples (SCT-1044). The runner appends one
+        # sample every few minutes. The console gets only the anomalous ones and a periodic sample.
+        FileLog(name="hydra-watchdog.log", search_locally=True),
     ]
     cluster_log_type = "sct-runner-events"
     cluster_dir_prefix = "sct-runner-events"
