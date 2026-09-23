@@ -2245,8 +2245,9 @@ def show_monitor(test_id, date_time, kill, cluster_name):
         LOGGER.error(details)
 
     if not containers:
+        # restore_monitoring_stack() already removed the containers it started; killing the default-port
+        # containers here could take down a concurrent restore's stack
         click.echo("Errors were found when restoring Scylla monitoring stack")
-        kill_running_monitoring_stack_services()
         sys.exit(1)
 
     for cluster, containers_ports in containers.items():
