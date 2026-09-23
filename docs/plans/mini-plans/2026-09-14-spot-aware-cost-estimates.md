@@ -18,18 +18,15 @@ The existing spot paths do not help: GCE has a hardcoded n1/n2 table that report
 every family SCT runs, and the AWS path was written per instance type, which made it look far
 more expensive than it is.
 
-### What the numbers actually say
+### What the numbers say
 
-Both halves of the design were measured rather than assumed.
-
-**AWS spot is genuinely volatile.** Over 90 days, five instance types SCT runs, us-east-1 and
-eu-west-1: prices change 2-4 times per AZ per day, 21%-132% min-to-max spread. A cached value
-drifts 8% after a week, 12% after a month (worst seen: 40%). But the spread *across AZs at any
-instant* is 22%-38% — so no single number per region-and-type is ever precise, however fresh.
-
-**But the AWS API is far cheaper than assumed.** `DescribeSpotPriceHistory` takes a *list* of
-instance types, so the unit of work is a region, not an instance type: 3 types cost ~190 ms and 15
-cost ~200 ms, both unpaginated. **Caching AWS spot prices buys nothing and costs 12% accuracy.**
+Both halves of the design were measured, not assumed; the full figures are in the PR description.
+**AWS spot is volatile** — 2-4 price changes per AZ per day over 90 days, and a cached value
+drifts 12% in a month — **but the API is cheap**, because `DescribeSpotPriceHistory` takes a
+*list* of instance types, so the unit of work is a region: 3 types cost ~190 ms and 15 cost
+~200 ms, both unpaginated. Caching AWS spot buys nothing and costs accuracy. Meanwhile the spread
+*across AZs at any instant* is 22%-38% — wider than a month of staleness — so no single number
+per region-and-type is ever precise, however fresh.
 
 ## Approach
 
@@ -48,10 +45,21 @@ call counts:
 | Nodes added mid-test (grow/shrink nemesis) | at most 1 per region per cache window |
 | Whole 3-day longevity run | order of tens, at ~200 ms each |
 
-Memoise per region and instance type with a short TTL, so a burst of node creations shares one
-lookup and a long test still refreshes as prices move. Take the mean across AZs and record the
-spread — the estimate cannot know which AZ it will land in, and pretending otherwise is false
-precision.
+Take the mean across AZs and record the spread — the estimate cannot know which AZ it will land
+in, and pretending otherwise is false precision.
+
+**The call happens only when it is needed.** Cheap is not the same as free, and a lookup nothing
+asked for is pure waste:
+
+- **Gate on lifecycle first.** An `on_demand` run must make **zero** spot calls. Decide from the
+  resolved provision type before touching the API, not after.
+- **Resolve lazily.** Price a region when something actually asks for a rate in it, rather than
+  warming every region or role up front.
+- **Memoise per region with a short TTL**, shared across the whole process, so a burst of node
+  creations costs one lookup, the estimate and the per-node cost report reuse each other's answer,
+  and a long test still refreshes as prices drift.
+- **Never per node.** Node count must not multiply calls — the batching above is what guarantees
+  this, and a test should pin it.
 
 Credentials are available where this runs: the estimate stage sits on the Jenkins builder, which
 already runs hydra to create the SCT runner and hard-fails without AWS credentials. Where they are
@@ -60,9 +68,9 @@ must never fail its caller.**
 
 ### 2. GCE — keep it in the catalog, sourced from the Billing Catalog API
 
-GCE stays catalog-only at estimate time, verified rather than assumed. Its pricing API is shaped
-differently from the AWS one: the Cloud Billing Catalog API only lists *every* Compute Engine SKU,
-with no server-side filter by family, region or usage type. Measured on the SCT project:
+GCE stays catalog-only at estimate time, verified rather than assumed. Its Cloud Billing Catalog
+API lists *every* Compute Engine SKU with no server-side filter by family, region or usage type.
+Measured on the SCT project:
 
 | Property | Measured |
 |---|---|
@@ -72,28 +80,23 @@ with no server-side filter by family, region or usage type. Measured on the SCT 
 | Of which Spot | 3,816, of which 1,332 in families SCT uses, across 48 regions |
 
 Pulling 28 MB to price three machine types is the wrong shape for a per-run call, and buys nothing
-anyway: GCP sets spot administratively, so the value barely moves between catalog refreshes.
-
-For the *generator* it is clearly better than today's scraping, which fetches an 18.4 MB spot page
-and a 35.7 MB on-demand page and matches them with regexes that break whenever Google restyles.
-One structured source replaces both, and needs no API key — the existing keystore service account
+anyway: GCP sets spot administratively, so the value barely moves between refreshes. For the
+*generator* it beats today's scraping of an 18.4 MB spot page and a 35.7 MB on-demand page with
+regexes that break whenever Google restyles. It needs no API key — the keystore service account
 authenticates with the `cloud-platform` scope.
 
-**Validated end to end.** GCE prices are resource-based: a machine type's rate is
-`vcpus x Core rate + memory_gb x Ram rate`, per family per region, with spot carried as the
-`Preemptible` usage type. Recomputing *on-demand* this way reproduces the checked-in catalog
-exactly for N2 and E2, standard and highmem — which is what confirms the SKU selection is right,
-and therefore that the spot figures derived the same way are trustworthy.
+**Validated end to end.** GCE prices are resource-based: `vcpus x Core rate + memory_gb x Ram
+rate`, per family per region, spot carried as the `Preemptible` usage type. Recomputing
+*on-demand* this way reproduces the checked-in catalog exactly for N2 and E2, standard and
+highmem — which confirms the SKU selection, and so the spot figures from the same query.
 
-**The spot discount is strongly region-dependent** and must be stored per region, not as one
-global rate: for the same N2 core it ranges from 40% off in us-east1 to 71-78% off in
-europe-west1, asia-northeast1 and southamerica-east1.
+**The discount is strongly region-dependent** — 40% off in us-east1 against 71-78% in
+europe-west1, asia-northeast1 and southamerica-east1 — so it must be stored per region, never as
+one global rate.
 
-**Cost of using it:** no published per-call charge — the Catalog API serves *"publicly available
-Google Cloud pricing information"*. The binding limit is quota, 300 calls per minute per project
-(975 per organisation). Seven calls per monthly regeneration is roughly 2% of a single minute's
-allowance, so quota is not a constraint at any plausible cadence. The API must be enabled on the
-project (`cloudbilling.googleapis.com`); it was disabled until this plan was written.
+**Cost is quota, not money:** no published per-call charge, 300 calls/min/project. Seven calls a
+month is ~2% of one minute's allowance. The API must be enabled on the project
+(`cloudbilling.googleapis.com`); it was disabled until this plan was written.
 
 ### 3. Refresh cadence
 
@@ -104,18 +107,18 @@ project (`cloudbilling.googleapis.com`); it was disabled until this plan was wri
 
 ### 4. Keep the interruption rate, drop the rest of the advisor
 
-AWS publishes a Spot Instance Advisor dataset as public JSON needing no credentials — one request
-(1.2 MB, ~1.8 s) covers 34 regions and ~1,150 instance types. Its savings percentages are redundant
-against live pricing, but its **interruption-rate bucket is not available from the pricing API at
-all**, and is what a later "is spot safe for this run" decision needs — a run that is cheap but
-likely to be killed is not cheap. Store that one field; monthly refresh suits it.
+AWS publishes a Spot Instance Advisor dataset as public JSON, no credentials, one request (1.2 MB,
+~1.8 s) for 34 regions and ~1,150 instance types. Its savings percentages are redundant against
+live pricing, but its **interruption-rate bucket exists nowhere else**, and is what a later "is
+spot safe for this run" decision needs — a run that is cheap but likely to be killed is not cheap.
+Store that one field; monthly refresh suits it.
 
 ### 5. Why not a shared S3 cache
 
-Considered and rejected on the measurements above. For AWS it would add a writer, a bucket,
-credentials, a staleness policy and new failure modes to save ~200 ms per provisioning event,
-while making every price up to a cache-window old. For GCE the checked-in catalog already *is*
-the cache. Revisit only if throttling appears, which a few dozen calls a day will not cause.
+Rejected on the measurements above: for AWS it adds a writer, bucket, credentials, staleness
+policy and new failure modes to save ~200 ms per provisioning event, while making every price a
+cache-window old. For GCE the checked-in catalog already *is* the cache. Revisit only if
+throttling appears, which a few dozen calls a day will not cause.
 
 ### 6. Fallback to on-demand must be visible in estimate and bill
 
@@ -129,9 +132,9 @@ times its estimate:
   summarise how many nodes ended up on-demand. A run that quietly fell back is the most useful
   thing this feature can report.
 
-Fallback is currently the AWS and Azure backend default rather than artifact-only, so this warning
+Fallback is currently the AWS and Azure backend default rather than artifact-only, so the warning
 would fire on every AWS run until [SCT-1005](https://scylladb.atlassian.net/browse/SCT-1005) flips
-it. That ticket is independent of this work and should land first.
+it. That ticket is independent and should land first.
 
 ### 7. Out of scope
 
@@ -142,8 +145,8 @@ Azure and OCI spot. AZ-level price selection: the spread is reported, not modell
 - `sdcm/utils/cloud_catalog/pricing.py` -- rework the AWS spot lookup to batch instance types per
   region and memoise with a TTL; drop the GCE hardcoded spot table
 - `sdcm/utils/cloud_catalog/cost.py` -- **introduced by PR #15987** -- resolve AWS spot live and
-  GCE spot from the catalog; derive lifecycle from config; report spot estimate, on-demand ceiling,
-  AZ spread and the fallback warning; degrade to catalog pricing without credentials
+  GCE spot from the catalog, gated on lifecycle and memoised per region; report spot estimate,
+  on-demand ceiling, AZ spread and fallback warning; degrade to catalog pricing without credentials
 - `sdcm/utils/cloud_catalog/catalog_generator.py` -- source GCE spot (and ideally on-demand)
   rates from the Cloud Billing Catalog API instead of scraping, keeping the scrape as a fallback;
   fetch AWS interruption-rate buckets from the advisor dataset
@@ -155,12 +158,21 @@ Azure and OCI spot. AZ-level price selection: the spread is reported, not modell
   unknown-stays-unknown, ceiling and fallback warning, credential-less degradation
 - `unit_tests/unit/test_catalog_generator.py` -- GCE spot scrape and advisor parsing, against
   recorded fixtures rather than live endpoints
+- `utils/spot_pricing_report.py` -- **(new file, delivered with the implementation)** one entry
+  point per backend, exercising the real code path and printing what it did: resolved spot and
+  on-demand rates, AZ spread, savings, **API calls made**, and wall time. It exists to show the
+  implementation works against live providers, to re-measure when a provider changes something,
+  and to make a regression obvious — a call count that grows with node count, or a lookup on an
+  `on_demand` run, should be visible at a glance rather than inferred from a bill.
 
 ## Verification
 
 - [ ] Unit tests pass: `uv run python -m pytest unit_tests/unit/test_cost.py unit_tests/unit/test_catalog_generator.py -v`
 - [ ] Pricing a whole run costs **one** AWS call per region, asserted by counting calls against a
       mocked client -- node count and instance-type count must not change it
+- [ ] An `on_demand` run makes **zero** spot calls, asserted the same way
+- [ ] `utils/spot_pricing_report.py` runs green against live AWS and GCE, and its reported call
+      counts match what the unit tests assert
 - [ ] With AWS credentials unavailable the estimate still returns, marked as on-demand-based, and
       never raises
 - [ ] Estimating a GCE config makes no network calls at all
