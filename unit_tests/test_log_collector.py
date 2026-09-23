@@ -175,3 +175,19 @@ def test_monitoring_entities_skip_when_no_monitor_nodes(tmp_path):
         grafana_entity.set_params(params)
         result = grafana_entity.collect(mock_node, test_dir, None, None)
         assert result == [], f"GrafanaScreenShot should skip for {backend} with n_monitor_nodes=0"
+
+
+def test_hydra_watchdog_log_collected_from_result_dir(tmp_path):
+    """hydra's transport watchdog appends its samples to the test's result dir (SCT-1044)."""
+    result_dir = tmp_path / "20260923-165527-000000"
+    result_dir.mkdir()
+    (result_dir / "hydra-watchdog.log").write_text("=== 2026-09-23T17:30:32Z\nbuilder -> runner sockets:\n")
+    (result_dir / "collected_logs").mkdir()
+    (result_dir / "collected_logs" / "hydra-watchdog.log").write_text("already collected copy")
+    local_dst = tmp_path / "dst"
+
+    entity = next(e for e in BaseSCTLogCollector.log_entities if e.name == "hydra-watchdog.log")
+    entity.collect(None, str(local_dst), local_search_path=str(result_dir))
+
+    assert [p.name for p in local_dst.iterdir()] == ["hydra-watchdog.log"]
+    assert (local_dst / "hydra-watchdog.log").read_text().startswith("=== 2026-09-23T17:30:32Z")
