@@ -51,6 +51,9 @@ def moto_server():
         mp.setenv("AWS_ENDPOINT_URL", aws_endpoint_url)
         yield aws_endpoint_url
     server.stop()
+    # KeyStore's cache is process-wide; drop the fake entries seeded below so no later
+    # module can be handed them once it talks to the real services again.
+    KeyStore().clear_cache()
 
 
 @pytest.fixture(scope="module", autouse=True)
