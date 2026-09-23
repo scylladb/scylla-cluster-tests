@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
 """Step 9 -- terminate everything this simulation created.
 
-    uv run python scripts/baremetal-simulation/99_teardown.py [--yes] [--all]
+    uv run python scripts/baremetal-simulation/99_teardown.py [--yes] [--all] [--force]
 
-    --yes   do not ask for confirmation
-    --all   also remove the generated local files: <name>.json, the rendered test
-            case, and .state/ (the distro.py patch is reverted separately, with
-            03_patch_sct_for_fedora.py --revert)
+    --yes    do not ask for confirmation
+    --all    also remove the generated local files: <name>.json, the rendered test
+             case, and .state/ (the distro.py patch is reverted separately, with
+             03_patch_sct_for_fedora.py --revert)
+    --force  terminate even while a run of this simulation is still executing
 
 Terminates by the TestId tag, then deletes the workstation security group created
 in step 1 (it can only go once nothing references it).  Safe to run repeatedly.
+
+Refuses to run while one of this simulation's own hydra containers is still up.
+The pytest summary is not the end of a run: log collection, and the teardown steps
+of run_simulation.py itself, keep using the hosts for several minutes afterwards.
+Terminating on the summary line loses the collected logs -- done twice by hand
+before this guard existed.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -36,6 +45,48 @@ from common import (  # noqa: E402
     lookup_vpc_id,
     simulation_instances,
 )
+
+
+#: hydra names its container "<test id>_<epoch>".
+HYDRA_CONTAINER = re.compile(r"^(?P<test_id>[0-9a-f-]{36})_\d+$")
+
+
+def known_test_ids() -> set[str]:
+    """Test ids this simulation has launched, from .state/runs.log."""
+    runs_log = STATE_DIR / "runs.log"
+    if not runs_log.exists():
+        return set()
+    ids = set()
+    for line in runs_log.read_text(encoding="utf-8").splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            ids.add(parts[1])
+    return ids
+
+
+def runs_still_executing() -> list[str]:
+    """Container names of this simulation's runs that are still going.
+
+    Scoped to our own test ids on purpose: an unrelated SCT run on the same
+    workstation is none of our business and must not block a teardown.
+    """
+    try:
+        listed = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}"], capture_output=True, text=True, timeout=30, check=False
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        log(f"could not ask docker what is running ({exc}); skipping the in-flight check")
+        return []
+    if listed.returncode != 0:
+        log("could not ask docker what is running; skipping the in-flight check")
+        return []
+
+    ours = known_test_ids()
+    return [
+        name
+        for name in listed.stdout.split()
+        if (match := HYDRA_CONTAINER.match(name)) and match.group("test_id") in ours
+    ]
 
 
 def terminate_instances(client) -> list[str]:
@@ -87,7 +138,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     parser.add_argument("--all", action="store_true", help="also remove the generated local files")
+    parser.add_argument(
+        "--force", action="store_true", help="terminate even while a run of this simulation is still executing"
+    )
     args = parser.parse_args()
+
+    if in_flight := runs_still_executing():
+        if args.force:
+            log(f"--force: terminating although {len(in_flight)} run(s) are still executing")
+        else:
+            log("refusing to terminate: a run of this simulation is still executing")
+            for name in in_flight:
+                log(f"  {name}")
+            log("a passing pytest summary is not the end of the run -- log collection comes after it.")
+            log("wait for run_simulation.py to exit, or pass --force.")
+            return 1
 
     client = ec2_client()
     instances = simulation_instances(client)
