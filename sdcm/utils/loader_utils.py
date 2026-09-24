@@ -309,6 +309,7 @@ class LoaderUtilsMixin:
                         "stress_cmd": prepare_verify_cmd,
                         "keyspace_num": keyspace_num,
                         "duration": self.params.get("prepare_stress_duration"),
+                        "round_robin": self.params.get("round_robin"),
                     },
                 )
 
