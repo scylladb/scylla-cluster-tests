@@ -230,7 +230,9 @@ samples. The last three vary only node count, holding workers at five.
 | 30    | 32    | 961     | 25.05 s         | 4.112 s  | 2.244 s    | 1.868 s   |
 
 Gathering, per node per gate: nodetool status 0.697 s, token ring 0.503 s, Raft
-group0 0.231 s, gossip 0.206 s, peers 0.206 s.
+group0 0.231 s, gossip 0.206 s, peers 0.206 s. A seventh run at six nodes,
+adding a per-validator breakdown, reproduced the same 8.00 s gate and the same
+2.3 s validation, so the instrumentation does not change what it measures.
 
 **Waiting was 0.0 s in every gate, and all 5,298 samples passed on their first
 attempt.** The retry path did not fire once, including in a run configured to
@@ -269,22 +271,42 @@ validation is 2.328 s at six nodes and 2.244 s at thirty. It does not grow with
 node count at all. The earlier "2.2x worse than ideal" figure was computed
 against gathering alone and should not be carried forward.
 
-That flatness is now the finding. Comparing a few dozen dictionary entries
-should cost microseconds, and a cost that ignores cluster size is fixed overhead
-rather than real per-node work. Something inside the validators spends roughly
-two seconds per node per gate regardless of what it is checking, and nothing
-currently names it. Until it is named, no estimate of what the gate could cost
-is worth anything.
+That flatness pointed at fixed overhead rather than per-node work, and a
+per-validator breakdown (230 gates, 1,381 samples, six nodes) found it in one
+place.
+
+**The group0/token-ring check is 99.9% of validation** — 2.298 s of 2.300 s. The
+other four validators cost 0.000 s each, which is what comparing a few dozen
+dictionary entries should cost, and nothing is unaccounted for between them.
+
+That check is not a comparison. It delegates to the node's Raft helper, which
+opens a **fresh exclusive CQL connection, per node and per gate**, to read
+whether the limited-voters feature is enabled — a cluster-wide constant — before
+computing its difference. Across the run it did this 1,381 times, once per node
+per gate, and the difference was empty every single time. The group0 and
+token-ring membership it compares had already been gathered moments earlier in
+the same function and handed to it as arguments.
+
+So the larger half of the gate is a repeated connect-and-query for a value that
+cannot change during a run. This phase has found what it set out to find; the
+fix belongs to a follow-up.
 
 **Definition of Done**:
 - [x] Per-operation timings are logged with enough resolution to be averaged
 - [x] Validation time is measured per node and reported alongside gathering
 - [x] Measurement across node counts shows how validation scales — it does not
-- [ ] Validation is broken down per validator, naming where the fixed cost sits
-- [ ] The gate accounts for its wall-clock: gathering, validation and overhead
-      sum to the measured total, with any remainder named
-- [ ] If the cost proves removable, a follow-up is opened for the fix — this
-      phase measures, it does not optimise
+- [x] Validation is broken down per validator, naming where the fixed cost sits
+- [x] The gate accounts for its wall-clock: gathering, validation and overhead
+      sum to the measured total, with no unattributed remainder
+- [ ] A follow-up is opened for the fix — this phase measures, it does not
+      optimise
+
+**Follow-up, in increasing order of effort.** Cache the feature-flag lookup for
+the cluster rather than reading it per node per gate. Compare the membership
+already passed in and only take the expensive path when it actually differs.
+Reuse a pooled session instead of opening an exclusive connection. Any one of
+them removes most of the larger half of the gate; on the measured model a
+healthy 60-node gate would fall from about 50 seconds to about 22.
 
 ---
 
