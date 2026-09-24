@@ -1,14 +1,17 @@
 import json
-from datetime import datetime, timedelta
+import time
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from functools import lru_cache
 from logging import getLogger
 from pathlib import Path
+from statistics import mean
 
 import boto3
 import requests
 from mypy_boto3_pricing import PricingClient
 
-from sdcm.utils.cloud_monitor.common import InstanceLifecycle
+from sdcm.utils.cloud_catalog.lifecycle import InstanceLifecycle
 
 LOGGER = getLogger(__name__)
 
@@ -36,8 +39,22 @@ def _catalog_price(cloud: str, region: str, instance_type: str) -> float | None:
     return None
 
 
+def _catalog_spot_price(cloud: str, region: str, instance_type: str) -> float | None:
+    catalog = _get_catalog()
+    inst = catalog.get_instance(cloud, instance_type)
+    if inst:
+        return inst.get_spot_price(region)
+    return None
+
+
 class AWSPricing:
+    # AWS spot moves a few times a day per AZ, so a short window keeps a long test roughly
+    # current while still collapsing a provisioning burst into a single call.
+    SPOT_PRICE_TTL = 15 * 60
+
     def __init__(self):
+        # region -> (fetched_at, {instance_type: {az: price}})
+        self._spot_cache: dict[str, tuple[float, dict[str, dict[str, float]]]] = {}
         self.pricing_client: PricingClient = boto3.client("pricing", region_name="us-east-1")
 
     @lru_cache(maxsize=None)
@@ -95,24 +112,74 @@ class AWSPricing:
         instance_price = next(iter(price_dimensions.values()))["pricePerUnit"]["USD"]
         return float(instance_price)
 
-    @staticmethod
-    @lru_cache(maxsize=None)
-    def get_spot_instance_price(region_name, instance_type):
-        """currently doesn't take AZ into consideration"""
+    def get_spot_instance_prices(self, region_name: str, instance_types: Sequence[str]) -> dict[str, float]:
+        """Current spot price per instance type, averaged over the region's AZs.
+
+        `DescribeSpotPriceHistory` accepts a *list* of instance types, so the unit of work
+        is a region, not an instance type: pricing three types costs the same one call as
+        pricing fifteen. Everything else here exists to keep it that way — callers ask for
+        every type they need at once, and a whole cluster costs one call no matter how many
+        nodes it has.
+
+        Results are cached per region for `SPOT_PRICE_TTL`, so a burst of node creations
+        shares one lookup while a long test still picks up drift. AWS spot moves a few times
+        a day per AZ, which is why this is never cached to disk.
+
+        Prices vary across AZs by tens of percent, and which AZ a node lands in is not known
+        here, so the mean is the honest answer; `get_spot_price_spread` exposes the rest.
+        """
+        wanted = [t for t in dict.fromkeys(instance_types) if t]
+        if not wanted:
+            return {}
+
+        now = time.monotonic()
+        cached = self._spot_cache.get(region_name)
+        if cached and now - cached[0] < self.SPOT_PRICE_TTL and all(t in cached[1] for t in wanted):
+            return {t: mean(cached[1][t].values()) for t in wanted if cached[1][t]}
+
         client = boto3.client("ec2", region_name=region_name)
+        timestamp = datetime.now(UTC)
         result = client.describe_spot_price_history(
-            InstanceTypes=[instance_type],
+            InstanceTypes=wanted,
             ProductDescriptions=["Linux/UNIX (Amazon VPC)", "Linux/UNIX"],
-            StartTime=datetime.now() - timedelta(hours=3),
-            EndTime=datetime.now(),
+            # A zero-width window asks for the price as it stands now rather than a history
+            # to average, which keeps the response to one row per type per AZ.
+            StartTime=timestamp,
+            EndTime=timestamp,
+            MaxResults=1000,
         )
-        prices = result["SpotPriceHistory"]
-        if prices:
-            all_prices = [float(p["SpotPrice"]) for p in prices]
-            return sum(all_prices) / len(all_prices)
-        else:
-            LOGGER.warning("Spot price not found for '%s' in '%s':\n%s", instance_type, region_name, result)
-            return 0
+
+        per_az: dict[str, dict[str, float]] = {t: {} for t in wanted}
+        for entry in result.get("SpotPriceHistory", []):
+            itype = entry["InstanceType"]
+            if itype in per_az:
+                per_az[itype][entry["AvailabilityZone"]] = float(entry["SpotPrice"])
+
+        merged = dict(cached[1]) if cached and now - cached[0] < self.SPOT_PRICE_TTL else {}
+        merged.update(per_az)
+        self._spot_cache[region_name] = (now, merged)
+
+        missing = [t for t, azs in per_az.items() if not azs]
+        if missing:
+            LOGGER.warning("No spot price returned for %s in '%s'", ", ".join(missing), region_name)
+        return {t: mean(azs.values()) for t, azs in per_az.items() if azs}
+
+    def get_spot_instance_price(self, region_name: str, instance_type: str) -> float:
+        """Spot price for a single instance type. Returns 0 when unknown, as callers expect."""
+        return self.get_spot_instance_prices(region_name, [instance_type]).get(instance_type, 0)
+
+    def get_spot_price_spread(self, region_name: str, instance_type: str) -> float | None:
+        """Relative min-to-max spread across AZs, or None if not looked up yet.
+
+        Reported rather than smoothed away: it is routinely wider than the error from a
+        stale price, so quoting a single spot figure without it is false precision.
+        """
+        cached = self._spot_cache.get(region_name)
+        azs = cached[1].get(instance_type) if cached else None
+        if not azs or len(azs) < 2:
+            return None
+        low, high = min(azs.values()), max(azs.values())
+        return (high - low) / low if low else None
 
     def get_instance_price(self, region, instance_type, state, lifecycle):
         if state == "running":
@@ -128,78 +195,13 @@ class AWSPricing:
 
 
 class GCEPricing:
-    prices = {
-        InstanceLifecycle.SPOT: {
-            "n1-standard-1": 0.0100,
-            "n1-standard-2": 0.0200,
-            "n1-standard-4": 0.0400,
-            "n1-standard-8": 0.0800,
-            "n1-standard-16": 0.1600,
-            "n1-standard-32": 0.3200,
-            "n1-standard-64": 0.6400,
-            "n1-standard-96": 0.9600,
-            "n2-standard-2": 0.0235,
-            "n2-standard-4": 0.0470,
-            "n2-standard-8": 0.0940,
-            "n2-standard-16": 0.1880,
-            "n2-standard-32": 0.3760,
-            "n2-standard-48": 0.5640,
-            "n2-standard-64": 0.7520,
-            "n2-standard-80": 0.9400,
-            "n2-highmem-2": 0.0317,
-            "n2-highmem-4": 0.0634,
-            "n2-highmem-8": 0.1268,
-            "n2-highmem-16": 0.2536,
-            "n2-highmem-32": 0.5073,
-            "n2-highmem-48": 0.7609,
-            "n2-highmem-64": 1.0145,
-            "n2-highmem-80": 1.2681,
-            "n2-highcpu-2": 0.0173,
-            "n2-highcpu-4": 0.0347,
-            "n2-highcpu-8": 0.0694,
-            "n2-highcpu-16": 0.1388,
-            "n2-highcpu-32": 0.2776,
-            "n2-highcpu-48": 0.4164,
-            "n2-highcpu-64": 0.5552,
-            "n2-highcpu-80": 0.6940,
-            "e2-standard-2": 0.02010,
-            "e2-standard-4": 0.04021,
-            "e2-standard-8": 0.08041,
-            "e2-standard-16": 0.16083,
-            "e2-micro": 0.00251,
-            "e2-small": 0.00503,
-            "e2-medium": 0.01005,
-            "f1-micro": 0.0035,
-            "g1-small": 0.0070,
-            "m1-ultramem-40": 1.3311,
-            "m1-ultramem-80": 2.6622,
-            "m1-ultramem-160": 5.3244,
-            "m1-megamem-96": 2.2600,
-            "n1-highmem-2": 0.0250,
-            "n1-highmem-4": 0.0500,
-            "n1-highmem-8": 0.1000,
-            "n1-highmem-16": 0.2000,
-            "n1-highmem-32": 0.4000,
-            "n1-highmem-64": 0.8000,
-            "n1-highmem-96": 1.2000,
-            "c2-standard-4": 0.0505,
-            "c2-standard-8": 0.1011,
-            "c2-standard-16": 0.2021,
-            "c2-standard-30": 0.3790,
-            "c2-standard-60": 0.7579,
-            "n2d-standard-2": 0.0204,
-            "n2d-standard-4": 0.0409,
-            "n2d-standard-8": 0.0818,
-            "n2d-standard-16": 0.1636,
-            "n2d-standard-32": 0.3271,
-            "n2d-standard-48": 0.4907,
-            "n2d-standard-64": 0.6543,
-            "n2d-standard-80": 0.8178,
-            "n2d-standard-96": 0.9814,
-            "n2d-standard-128": 1.3085,
-            "n2d-standard-224": 2.2900,
-        },
-    }
+    """GCE pricing.
+
+    Both on-demand and spot come from the checked-in catalog: GCP publishes spot rates as
+    administered prices that move at most monthly, so there is nothing to gain from a live
+    lookup, and its pricing API has no server-side filter — the only way to ask is to list
+    every Compute Engine SKU. That belongs in catalog generation, not in a test run.
+    """
 
     def get_instance_price(self, region, instance_type, state, lifecycle):
         if state == "running":
@@ -210,7 +212,14 @@ class GCEPricing:
                 LOGGER.warning("No catalog price for GCE %s in %s", instance_type, region)
                 return 0
             if lifecycle == InstanceLifecycle.SPOT:
-                return self.prices[InstanceLifecycle.SPOT].get(instance_type, 0)
+                # GCP sets spot rates administratively and changes them at most monthly, and
+                # the discount is strongly region-dependent (roughly 40%-78%), so the answer
+                # comes from the per-region catalog rather than a global ratio or a live call.
+                price = _catalog_spot_price("gce", region, instance_type)
+                if price is not None:
+                    return price
+                LOGGER.warning("No catalog spot price for GCE %s in %s", instance_type, region)
+                return 0
             LOGGER.warning("No price for %s", instance_type)
             return 0
         else:
@@ -218,10 +227,20 @@ class GCEPricing:
 
 
 class AzurePricing:
+    """Azure pricing.
+
+    Both rates come from the catalog when it has them. Spot is free to catalogue: the
+    Retail Prices response the generator already fetches carries the Spot rows alongside the
+    on-demand ones, so there is no extra call to make here or at generation time.
+    """
+
     def get_instance_price(self, region, instance_type, state, lifecycle):
         if state == "running":
-            price = _catalog_price("azure", region, instance_type)
-            if price is not None and lifecycle == InstanceLifecycle.ON_DEMAND:
+            if lifecycle == InstanceLifecycle.ON_DEMAND:
+                price = _catalog_price("azure", region, instance_type)
+            else:
+                price = _catalog_spot_price("azure", region, instance_type)
+            if price is not None:
                 return price
             prices = self._get_sku_prices(instance_type, region)
             if not prices:
@@ -246,7 +265,8 @@ class AzurePricing:
     def _get_sku_prices(instance_type: str, region):
         resp = requests.get(
             f"https://prices.azure.com/api/retail/prices?$filter=serviceName eq 'Virtual Machines' "
-            f"and armSkuName eq '{instance_type}' and armRegionName eq '{region}' and priceType eq 'consumption'"
+            f"and armSkuName eq '{instance_type}' and armRegionName eq '{region}' and priceType eq 'consumption'",
+            timeout=30,
         )
         if not resp.ok:
             LOGGER.warning("Failed to fetch prices for %s in location: %s", instance_type, region)
@@ -255,9 +275,27 @@ class AzurePricing:
 
 
 class OCIPricing:
-    """OCI pricing - returns 0 as OCI does not have a public retail pricing API like AWS/Azure."""
+    """OCI pricing, from the catalog plus a fixed preemptible ratio.
+
+    OCI has no spot market. Preemptible instances are a flat, deliberately predictable
+    discount off the on-demand rate rather than a demand-driven price, and Oracle's public
+    pricing API lists no preemptible products at all — so the rate is derived, not fetched.
+
+    The on-demand side is a plain catalog lookup. It used to return 0 unconditionally, which
+    left OCI unpriced even though `oci.yaml` has carried real prices all along.
+    """
+
+    #: Oracle prices preemptible capacity at half the on-demand rate, uniformly.
+    #: https://blogs.oracle.com/cloud-infrastructure/post/announcing-preemptible-instances-a-new-kind-of-compute-instance-available-at-a-50-discount
+    PREEMPTIBLE_RATIO = 0.5
 
     def get_instance_price(self, region, instance_type, state, lifecycle):
-        # OCI does not expose a simple public pricing API for compute instances.
-        # Return 0 to indicate pricing is unavailable rather than failing.
-        return 0
+        if state != "running":
+            return 0
+        price = _catalog_price("oci", region, instance_type)
+        if price is None:
+            LOGGER.warning("No catalog price for OCI %s in %s", instance_type, region)
+            return 0
+        if lifecycle == InstanceLifecycle.SPOT:
+            return price * self.PREEMPTIBLE_RATIO
+        return price

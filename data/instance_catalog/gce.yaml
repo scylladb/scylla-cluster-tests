@@ -51,6 +51,50 @@ instances:
     europe-north2: 0.415550032
     me-west1: 0.435338128
     europe-west4: 0.43570464
+  spot_price_per_hour:
+    me-central1: 0.196704
+    asia-northeast2: 0.168832
+    europe-southwest1: 0.265456
+    southamerica-west1: 0.235488
+    us-west4: 0.0588
+    europe-west6: 0.22136
+    europe-west9: 0.248048
+    asia-northeast3: 0.243008
+    us-east5: 0.191024
+    us-west8: 0.11536
+    asia-southeast2: 0.115824
+    me-west1: 0.23536
+    us-west2: 0.160384
+    europe-west8: 0.228064
+    asia-south1: 0.285216
+    asia-southeast1: 0.293024
+    us-west3: 0.144064
+    europe-west1: 0.260416
+    asia-northeast1: 0.305008
+    northamerica-south1: 0.155488
+    europe-west3: 0.30592
+    europe-north2: 0.11176
+    us-east4: 0.26744
+    europe-west2: 0.214496
+    asia-east2: 0.137568
+    africa-south1: 0.147728
+    northamerica-northeast1: 0.142048
+    asia-east1: 0.224976
+    europe-west10: 0.093584
+    europe-west12: 0.146432
+    europe-west4: 0.206112
+    southamerica-east1: 0.145328
+    europe-north1: 0.132832
+    us-south1: 0.164432
+    australia-southeast2: 0.260976
+    northamerica-northeast2: 0.086528
+    me-central2: 0.379792
+    us-central1: 0.237504
+    us-east1: 0.237504
+    us-west1: 0.237504
+    australia-southeast1: 0.30008
+    europe-central2: 0.201616
+    asia-south2: 0.223184
 - instance_type: e2-highcpu-2
   family: e2
   vcpus: 2
@@ -102,6 +146,50 @@ instances:
     europe-north2: 0.051943754
     me-west1: 0.054417266
     europe-west4: 0.05446308
+  spot_price_per_hour:
+    me-central1: 0.024588
+    asia-northeast2: 0.021104
+    europe-southwest1: 0.033182
+    southamerica-west1: 0.029436
+    us-west4: 0.00735
+    europe-west6: 0.02767
+    europe-west9: 0.031006
+    asia-northeast3: 0.030376
+    us-east5: 0.023878
+    us-west8: 0.01442
+    asia-southeast2: 0.014478
+    me-west1: 0.02942
+    us-west2: 0.020048
+    europe-west8: 0.028508
+    asia-south1: 0.035652
+    asia-southeast1: 0.036628
+    us-west3: 0.018008
+    europe-west1: 0.032552
+    asia-northeast1: 0.038126
+    northamerica-south1: 0.019436
+    europe-west3: 0.03824
+    europe-north2: 0.01397
+    us-east4: 0.03343
+    europe-west2: 0.026812
+    asia-east2: 0.017196
+    africa-south1: 0.018466
+    northamerica-northeast1: 0.017756
+    asia-east1: 0.028122
+    europe-west10: 0.011698
+    europe-west12: 0.018304
+    europe-west4: 0.025764
+    southamerica-east1: 0.018166
+    europe-north1: 0.016604
+    us-south1: 0.020554
+    australia-southeast2: 0.032622
+    northamerica-northeast2: 0.010816
+    me-central2: 0.047474
+    us-central1: 0.029688
+    us-east1: 0.029688
+    us-west1: 0.029688
+    australia-southeast1: 0.03751
+    europe-central2: 0.025202
+    asia-south2: 0.027898
 - instance_type: e2-highcpu-32
   family: e2
   vcpus: 32
@@ -153,6 +241,50 @@ instances:
     europe-north2: 0.831100064
     me-west1: 0.870676256
     europe-west4: 0.87140928
+  spot_price_per_hour:
+    me-central1: 0.393408
+    asia-northeast2: 0.337664
+    europe-southwest1: 0.530912
+    southamerica-west1: 0.470976
+    us-west4: 0.1176
+    europe-west6: 0.44272
+    europe-west9: 0.496096
+    asia-northeast3: 0.486016
+    us-east5: 0.382048
+    us-west8: 0.23072
+    asia-southeast2: 0.231648
+    me-west1: 0.47072
+    us-west2: 0.320768
+    europe-west8: 0.456128
+    asia-south1: 0.570432
+    asia-southeast1: 0.586048
+    us-west3: 0.288128
+    europe-west1: 0.520832
+    asia-northeast1: 0.610016
+    northamerica-south1: 0.310976
+    europe-west3: 0.61184
+    europe-north2: 0.22352
+    us-east4: 0.53488
+    europe-west2: 0.428992
+    asia-east2: 0.275136
+    africa-south1: 0.295456
+    northamerica-northeast1: 0.284096
+    asia-east1: 0.449952
+    europe-west10: 0.187168
+    europe-west12: 0.292864
+    europe-west4: 0.412224
+    southamerica-east1: 0.290656
+    europe-north1: 0.265664
+    us-south1: 0.328864
+    australia-southeast2: 0.521952
+    northamerica-northeast2: 0.173056
+    me-central2: 0.759584
+    us-central1: 0.475008
+    us-east1: 0.475008
+    us-west1: 0.475008
+    australia-southeast1: 0.60016
+    europe-central2: 0.403232
+    asia-south2: 0.446368
 - instance_type: e2-highcpu-4
   family: e2
   vcpus: 4
@@ -204,6 +336,50 @@ instances:
     europe-north2: 0.103887508
     me-west1: 0.108834532
     europe-west4: 0.10892616
+  spot_price_per_hour:
+    me-central1: 0.049176
+    asia-northeast2: 0.042208
+    europe-southwest1: 0.066364
+    southamerica-west1: 0.058872
+    us-west4: 0.0147
+    europe-west6: 0.05534
+    europe-west9: 0.062012
+    asia-northeast3: 0.060752
+    us-east5: 0.047756
+    us-west8: 0.02884
+    asia-southeast2: 0.028956
+    me-west1: 0.05884
+    us-west2: 0.040096
+    europe-west8: 0.057016
+    asia-south1: 0.071304
+    asia-southeast1: 0.073256
+    us-west3: 0.036016
+    europe-west1: 0.065104
+    asia-northeast1: 0.076252
+    northamerica-south1: 0.038872
+    europe-west3: 0.07648
+    europe-north2: 0.02794
+    us-east4: 0.06686
+    europe-west2: 0.053624
+    asia-east2: 0.034392
+    africa-south1: 0.036932
+    northamerica-northeast1: 0.035512
+    asia-east1: 0.056244
+    europe-west10: 0.023396
+    europe-west12: 0.036608
+    europe-west4: 0.051528
+    southamerica-east1: 0.036332
+    europe-north1: 0.033208
+    us-south1: 0.041108
+    australia-southeast2: 0.065244
+    northamerica-northeast2: 0.021632
+    me-central2: 0.094948
+    us-central1: 0.059376
+    us-east1: 0.059376
+    us-west1: 0.059376
+    australia-southeast1: 0.07502
+    europe-central2: 0.050404
+    asia-south2: 0.055796
 - instance_type: e2-highcpu-8
   family: e2
   vcpus: 8
@@ -255,6 +431,50 @@ instances:
     europe-north2: 0.207775016
     me-west1: 0.217669064
     europe-west4: 0.21785232
+  spot_price_per_hour:
+    me-central1: 0.098352
+    asia-northeast2: 0.084416
+    europe-southwest1: 0.132728
+    southamerica-west1: 0.117744
+    us-west4: 0.0294
+    europe-west6: 0.11068
+    europe-west9: 0.124024
+    asia-northeast3: 0.121504
+    us-east5: 0.095512
+    us-west8: 0.05768
+    asia-southeast2: 0.057912
+    me-west1: 0.11768
+    us-west2: 0.080192
+    europe-west8: 0.114032
+    asia-south1: 0.142608
+    asia-southeast1: 0.146512
+    us-west3: 0.072032
+    europe-west1: 0.130208
+    asia-northeast1: 0.152504
+    northamerica-south1: 0.077744
+    europe-west3: 0.15296
+    europe-north2: 0.05588
+    us-east4: 0.13372
+    europe-west2: 0.107248
+    asia-east2: 0.068784
+    africa-south1: 0.073864
+    northamerica-northeast1: 0.071024
+    asia-east1: 0.112488
+    europe-west10: 0.046792
+    europe-west12: 0.073216
+    europe-west4: 0.103056
+    southamerica-east1: 0.072664
+    europe-north1: 0.066416
+    us-south1: 0.082216
+    australia-southeast2: 0.130488
+    northamerica-northeast2: 0.043264
+    me-central2: 0.189896
+    us-central1: 0.118752
+    us-east1: 0.118752
+    us-west1: 0.118752
+    australia-southeast1: 0.15004
+    europe-central2: 0.100808
+    asia-south2: 0.111592
 - instance_type: e2-highmem-16
   family: e2
   vcpus: 16
@@ -306,6 +526,50 @@ instances:
     europe-north2: 0.759357216
     me-west1: 0.795517024
     europe-west4: 0.79613856
+  spot_price_per_hour:
+    me-central1: 0.359552
+    asia-northeast2: 0.307936
+    europe-southwest1: 0.485088
+    southamerica-west1: 0.430144
+    us-west4: 0.10752
+    europe-west6: 0.40448
+    europe-west9: 0.453344
+    asia-northeast3: 0.443264
+    us-east5: 0.348832
+    us-west8: 0.21056
+    asia-southeast2: 0.212032
+    me-west1: 0.43024
+    us-west2: 0.292992
+    europe-west8: 0.416672
+    asia-south1: 0.521088
+    asia-southeast1: 0.535392
+    us-west3: 0.263232
+    europe-west1: 0.476128
+    asia-northeast1: 0.556224
+    northamerica-south1: 0.284064
+    europe-west3: 0.55904
+    europe-north2: 0.20416
+    us-east4: 0.48864
+    europe-west2: 0.392128
+    asia-east2: 0.251584
+    africa-south1: 0.270144
+    northamerica-northeast1: 0.259424
+    asia-east1: 0.411008
+    europe-west10: 0.170752
+    europe-west12: 0.267616
+    europe-west4: 0.376576
+    southamerica-east1: 0.265504
+    europe-north1: 0.242816
+    us-south1: 0.300736
+    australia-southeast2: 0.477248
+    northamerica-northeast2: 0.157984
+    me-central2: 0.694176
+    us-central1: 0.433952
+    us-east1: 0.433952
+    us-west1: 0.433952
+    australia-southeast1: 0.54816
+    europe-central2: 0.368608
+    asia-south2: 0.407872
 - instance_type: e2-highmem-2
   family: e2
   vcpus: 2
@@ -357,6 +621,50 @@ instances:
     europe-north2: 0.094919652
     me-west1: 0.099439628
     europe-west4: 0.09951732
+  spot_price_per_hour:
+    me-central1: 0.044944
+    asia-northeast2: 0.038492
+    europe-southwest1: 0.060636
+    southamerica-west1: 0.053768
+    us-west4: 0.01344
+    europe-west6: 0.05056
+    europe-west9: 0.056668
+    asia-northeast3: 0.055408
+    us-east5: 0.043604
+    us-west8: 0.02632
+    asia-southeast2: 0.026504
+    me-west1: 0.05378
+    us-west2: 0.036624
+    europe-west8: 0.052084
+    asia-south1: 0.065136
+    asia-southeast1: 0.066924
+    us-west3: 0.032904
+    europe-west1: 0.059516
+    asia-northeast1: 0.069528
+    northamerica-south1: 0.035508
+    europe-west3: 0.06988
+    europe-north2: 0.02552
+    us-east4: 0.06108
+    europe-west2: 0.049016
+    asia-east2: 0.031448
+    africa-south1: 0.033768
+    northamerica-northeast1: 0.032428
+    asia-east1: 0.051376
+    europe-west10: 0.021344
+    europe-west12: 0.033452
+    europe-west4: 0.047072
+    southamerica-east1: 0.033188
+    europe-north1: 0.030352
+    us-south1: 0.037592
+    australia-southeast2: 0.059656
+    northamerica-northeast2: 0.019748
+    me-central2: 0.086772
+    us-central1: 0.054244
+    us-east1: 0.054244
+    us-west1: 0.054244
+    australia-southeast1: 0.06852
+    europe-central2: 0.046076
+    asia-south2: 0.050984
 - instance_type: e2-highmem-4
   family: e2
   vcpus: 4
@@ -408,6 +716,50 @@ instances:
     europe-north2: 0.189839304
     me-west1: 0.198879256
     europe-west4: 0.19903464
+  spot_price_per_hour:
+    me-central1: 0.089888
+    asia-northeast2: 0.076984
+    europe-southwest1: 0.121272
+    southamerica-west1: 0.107536
+    us-west4: 0.02688
+    europe-west6: 0.10112
+    europe-west9: 0.113336
+    asia-northeast3: 0.110816
+    us-east5: 0.087208
+    us-west8: 0.05264
+    asia-southeast2: 0.053008
+    me-west1: 0.10756
+    us-west2: 0.073248
+    europe-west8: 0.104168
+    asia-south1: 0.130272
+    asia-southeast1: 0.133848
+    us-west3: 0.065808
+    europe-west1: 0.119032
+    asia-northeast1: 0.139056
+    northamerica-south1: 0.071016
+    europe-west3: 0.13976
+    europe-north2: 0.05104
+    us-east4: 0.12216
+    europe-west2: 0.098032
+    asia-east2: 0.062896
+    africa-south1: 0.067536
+    northamerica-northeast1: 0.064856
+    asia-east1: 0.102752
+    europe-west10: 0.042688
+    europe-west12: 0.066904
+    europe-west4: 0.094144
+    southamerica-east1: 0.066376
+    europe-north1: 0.060704
+    us-south1: 0.075184
+    australia-southeast2: 0.119312
+    northamerica-northeast2: 0.039496
+    me-central2: 0.173544
+    us-central1: 0.108488
+    us-east1: 0.108488
+    us-west1: 0.108488
+    australia-southeast1: 0.13704
+    europe-central2: 0.092152
+    asia-south2: 0.101968
 - instance_type: e2-highmem-8
   family: e2
   vcpus: 8
@@ -459,6 +811,50 @@ instances:
     europe-north2: 0.379678608
     me-west1: 0.397758512
     europe-west4: 0.39806928
+  spot_price_per_hour:
+    me-central1: 0.179776
+    asia-northeast2: 0.153968
+    europe-southwest1: 0.242544
+    southamerica-west1: 0.215072
+    us-west4: 0.05376
+    europe-west6: 0.20224
+    europe-west9: 0.226672
+    asia-northeast3: 0.221632
+    us-east5: 0.174416
+    us-west8: 0.10528
+    asia-southeast2: 0.106016
+    me-west1: 0.21512
+    us-west2: 0.146496
+    europe-west8: 0.208336
+    asia-south1: 0.260544
+    asia-southeast1: 0.267696
+    us-west3: 0.131616
+    europe-west1: 0.238064
+    asia-northeast1: 0.278112
+    northamerica-south1: 0.142032
+    europe-west3: 0.27952
+    europe-north2: 0.10208
+    us-east4: 0.24432
+    europe-west2: 0.196064
+    asia-east2: 0.125792
+    africa-south1: 0.135072
+    northamerica-northeast1: 0.129712
+    asia-east1: 0.205504
+    europe-west10: 0.085376
+    europe-west12: 0.133808
+    europe-west4: 0.188288
+    southamerica-east1: 0.132752
+    europe-north1: 0.121408
+    us-south1: 0.150368
+    australia-southeast2: 0.238624
+    northamerica-northeast2: 0.078992
+    me-central2: 0.347088
+    us-central1: 0.216976
+    us-east1: 0.216976
+    us-west1: 0.216976
+    australia-southeast1: 0.27408
+    europe-central2: 0.184304
+    asia-south2: 0.203936
 - instance_type: e2-medium
   family: e2
   vcpus: 2
@@ -467,6 +863,50 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: null
+  spot_price_per_hour:
+    me-central1: 0.027496
+    asia-northeast2: 0.023588
+    europe-southwest1: 0.037104
+    southamerica-west1: 0.032912
+    us-west4: 0.00822
+    europe-west6: 0.03094
+    europe-west9: 0.034672
+    asia-northeast3: 0.033952
+    us-east5: 0.026696
+    us-west8: 0.01612
+    asia-southeast2: 0.016196
+    me-west1: 0.0329
+    us-west2: 0.022416
+    europe-west8: 0.031876
+    asia-south1: 0.039864
+    asia-southeast1: 0.040956
+    us-west3: 0.020136
+    europe-west1: 0.036404
+    asia-northeast1: 0.042612
+    northamerica-south1: 0.021732
+    europe-west3: 0.04276
+    europe-north2: 0.01562
+    us-east4: 0.03738
+    europe-west2: 0.029984
+    asia-east2: 0.019232
+    africa-south1: 0.020652
+    northamerica-northeast1: 0.019852
+    asia-east1: 0.031444
+    europe-west10: 0.013076
+    europe-west12: 0.020468
+    europe-west4: 0.028808
+    southamerica-east1: 0.020312
+    europe-north1: 0.018568
+    us-south1: 0.022988
+    australia-southeast2: 0.036484
+    northamerica-northeast2: 0.012092
+    me-central2: 0.053088
+    us-central1: 0.033196
+    us-east1: 0.033196
+    us-west1: 0.033196
+    australia-southeast1: 0.04194
+    europe-central2: 0.028184
+    asia-south2: 0.031196
 - instance_type: e2-micro
   family: e2
   vcpus: 2
@@ -475,6 +915,50 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: null
+  spot_price_per_hour:
+    me-central1: 0.023134
+    asia-northeast2: 0.019862
+    europe-southwest1: 0.031221
+    southamerica-west1: 0.027698
+    us-west4: 0.006915
+    europe-west6: 0.026035
+    europe-west9: 0.029173
+    asia-northeast3: 0.028588
+    us-east5: 0.022469
+    us-west8: 0.01357
+    asia-southeast2: 0.013619
+    me-west1: 0.02768
+    us-west2: 0.018864
+    europe-west8: 0.026824
+    asia-south1: 0.033546
+    asia-southeast1: 0.034464
+    us-west3: 0.016944
+    europe-west1: 0.030626
+    asia-northeast1: 0.035883
+    northamerica-south1: 0.018288
+    europe-west3: 0.03598
+    europe-north2: 0.013145
+    us-east4: 0.031455
+    europe-west2: 0.025226
+    asia-east2: 0.016178
+    africa-south1: 0.017373
+    northamerica-northeast1: 0.016708
+    asia-east1: 0.026461
+    europe-west10: 0.011009
+    europe-west12: 0.017222
+    europe-west4: 0.024242
+    southamerica-east1: 0.017093
+    europe-north1: 0.015622
+    us-south1: 0.019337
+    australia-southeast2: 0.030691
+    northamerica-northeast2: 0.010178
+    me-central2: 0.044667
+    us-central1: 0.027934
+    us-east1: 0.027934
+    us-west1: 0.027934
+    australia-southeast1: 0.035295
+    europe-central2: 0.023711
+    asia-south2: 0.026249
 - instance_type: e2-small
   family: e2
   vcpus: 2
@@ -483,6 +967,50 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: null
+  spot_price_per_hour:
+    me-central1: 0.024588
+    asia-northeast2: 0.021104
+    europe-southwest1: 0.033182
+    southamerica-west1: 0.029436
+    us-west4: 0.00735
+    europe-west6: 0.02767
+    europe-west9: 0.031006
+    asia-northeast3: 0.030376
+    us-east5: 0.023878
+    us-west8: 0.01442
+    asia-southeast2: 0.014478
+    me-west1: 0.02942
+    us-west2: 0.020048
+    europe-west8: 0.028508
+    asia-south1: 0.035652
+    asia-southeast1: 0.036628
+    us-west3: 0.018008
+    europe-west1: 0.032552
+    asia-northeast1: 0.038126
+    northamerica-south1: 0.019436
+    europe-west3: 0.03824
+    europe-north2: 0.01397
+    us-east4: 0.03343
+    europe-west2: 0.026812
+    asia-east2: 0.017196
+    africa-south1: 0.018466
+    northamerica-northeast1: 0.017756
+    asia-east1: 0.028122
+    europe-west10: 0.011698
+    europe-west12: 0.018304
+    europe-west4: 0.025764
+    southamerica-east1: 0.018166
+    europe-north1: 0.016604
+    us-south1: 0.020554
+    australia-southeast2: 0.032622
+    northamerica-northeast2: 0.010816
+    me-central2: 0.047474
+    us-central1: 0.029688
+    us-east1: 0.029688
+    us-west1: 0.029688
+    australia-southeast1: 0.03751
+    europe-central2: 0.025202
+    asia-south2: 0.027898
 - instance_type: e2-standard-16
   family: e2
   vcpus: 16
@@ -534,6 +1062,50 @@ instances:
     europe-north2: 0.562895968
     me-west1: 0.589700512
     europe-west4: 0.59017632
+  spot_price_per_hour:
+    me-central1: 0.266496
+    asia-northeast2: 0.228448
+    europe-southwest1: 0.359584
+    southamerica-west1: 0.318912
+    us-west4: 0.07968
+    europe-west6: 0.29984
+    europe-west9: 0.336032
+    asia-northeast3: 0.328832
+    us-east5: 0.258656
+    us-west8: 0.15616
+    asia-southeast2: 0.157056
+    me-west1: 0.31888
+    us-west2: 0.217216
+    europe-west8: 0.308896
+    asia-south1: 0.386304
+    asia-southeast1: 0.396896
+    us-west3: 0.195136
+    europe-west1: 0.352864
+    asia-northeast1: 0.412672
+    northamerica-south1: 0.210592
+    europe-west3: 0.4144
+    europe-north2: 0.15136
+    us-east4: 0.36224
+    europe-west2: 0.290624
+    asia-east2: 0.186432
+    africa-south1: 0.200192
+    northamerica-northeast1: 0.192352
+    asia-east1: 0.304704
+    europe-west10: 0.126656
+    europe-west12: 0.198368
+    europe-west4: 0.279168
+    southamerica-east1: 0.196832
+    europe-north1: 0.179968
+    us-south1: 0.222848
+    australia-southeast2: 0.353664
+    northamerica-northeast2: 0.117152
+    me-central2: 0.514528
+    us-central1: 0.321696
+    us-east1: 0.321696
+    us-west1: 0.321696
+    australia-southeast1: 0.4064
+    europe-central2: 0.273184
+    asia-south2: 0.302336
 - instance_type: e2-standard-2
   family: e2
   vcpus: 2
@@ -585,6 +1157,50 @@ instances:
     europe-north2: 0.070361996
     me-west1: 0.073712564
     europe-west4: 0.07377204
+  spot_price_per_hour:
+    me-central1: 0.033312
+    asia-northeast2: 0.028556
+    europe-southwest1: 0.044948
+    southamerica-west1: 0.039864
+    us-west4: 0.00996
+    europe-west6: 0.03748
+    europe-west9: 0.042004
+    asia-northeast3: 0.041104
+    us-east5: 0.032332
+    us-west8: 0.01952
+    asia-southeast2: 0.019632
+    me-west1: 0.03986
+    us-west2: 0.027152
+    europe-west8: 0.038612
+    asia-south1: 0.048288
+    asia-southeast1: 0.049612
+    us-west3: 0.024392
+    europe-west1: 0.044108
+    asia-northeast1: 0.051584
+    northamerica-south1: 0.026324
+    europe-west3: 0.0518
+    europe-north2: 0.01892
+    us-east4: 0.04528
+    europe-west2: 0.036328
+    asia-east2: 0.023304
+    africa-south1: 0.025024
+    northamerica-northeast1: 0.024044
+    asia-east1: 0.038088
+    europe-west10: 0.015832
+    europe-west12: 0.024796
+    europe-west4: 0.034896
+    southamerica-east1: 0.024604
+    europe-north1: 0.022496
+    us-south1: 0.027856
+    australia-southeast2: 0.044208
+    northamerica-northeast2: 0.014644
+    me-central2: 0.064316
+    us-central1: 0.040212
+    us-east1: 0.040212
+    us-west1: 0.040212
+    australia-southeast1: 0.0508
+    europe-central2: 0.034148
+    asia-south2: 0.037792
 - instance_type: e2-standard-32
   family: e2
   vcpus: 32
@@ -636,6 +1252,50 @@ instances:
     europe-north2: 1.125791936
     me-west1: 1.179401024
     europe-west4: 1.18035264
+  spot_price_per_hour:
+    me-central1: 0.532992
+    asia-northeast2: 0.456896
+    europe-southwest1: 0.719168
+    southamerica-west1: 0.637824
+    us-west4: 0.15936
+    europe-west6: 0.59968
+    europe-west9: 0.672064
+    asia-northeast3: 0.657664
+    us-east5: 0.517312
+    us-west8: 0.31232
+    asia-southeast2: 0.314112
+    me-west1: 0.63776
+    us-west2: 0.434432
+    europe-west8: 0.617792
+    asia-south1: 0.772608
+    asia-southeast1: 0.793792
+    us-west3: 0.390272
+    europe-west1: 0.705728
+    asia-northeast1: 0.825344
+    northamerica-south1: 0.421184
+    europe-west3: 0.8288
+    europe-north2: 0.30272
+    us-east4: 0.72448
+    europe-west2: 0.581248
+    asia-east2: 0.372864
+    africa-south1: 0.400384
+    northamerica-northeast1: 0.384704
+    asia-east1: 0.609408
+    europe-west10: 0.253312
+    europe-west12: 0.396736
+    europe-west4: 0.558336
+    southamerica-east1: 0.393664
+    europe-north1: 0.359936
+    us-south1: 0.445696
+    australia-southeast2: 0.707328
+    northamerica-northeast2: 0.234304
+    me-central2: 1.029056
+    us-central1: 0.643392
+    us-east1: 0.643392
+    us-west1: 0.643392
+    australia-southeast1: 0.8128
+    europe-central2: 0.546368
+    asia-south2: 0.604672
 - instance_type: e2-standard-4
   family: e2
   vcpus: 4
@@ -687,6 +1347,50 @@ instances:
     europe-north2: 0.140723992
     me-west1: 0.147425128
     europe-west4: 0.14754408
+  spot_price_per_hour:
+    me-central1: 0.066624
+    asia-northeast2: 0.057112
+    europe-southwest1: 0.089896
+    southamerica-west1: 0.079728
+    us-west4: 0.01992
+    europe-west6: 0.07496
+    europe-west9: 0.084008
+    asia-northeast3: 0.082208
+    us-east5: 0.064664
+    us-west8: 0.03904
+    asia-southeast2: 0.039264
+    me-west1: 0.07972
+    us-west2: 0.054304
+    europe-west8: 0.077224
+    asia-south1: 0.096576
+    asia-southeast1: 0.099224
+    us-west3: 0.048784
+    europe-west1: 0.088216
+    asia-northeast1: 0.103168
+    northamerica-south1: 0.052648
+    europe-west3: 0.1036
+    europe-north2: 0.03784
+    us-east4: 0.09056
+    europe-west2: 0.072656
+    asia-east2: 0.046608
+    africa-south1: 0.050048
+    northamerica-northeast1: 0.048088
+    asia-east1: 0.076176
+    europe-west10: 0.031664
+    europe-west12: 0.049592
+    europe-west4: 0.069792
+    southamerica-east1: 0.049208
+    europe-north1: 0.044992
+    us-south1: 0.055712
+    australia-southeast2: 0.088416
+    northamerica-northeast2: 0.029288
+    me-central2: 0.128632
+    us-central1: 0.080424
+    us-east1: 0.080424
+    us-west1: 0.080424
+    australia-southeast1: 0.1016
+    europe-central2: 0.068296
+    asia-south2: 0.075584
 - instance_type: e2-standard-8
   family: e2
   vcpus: 8
@@ -738,6 +1442,50 @@ instances:
     europe-north2: 0.281447984
     me-west1: 0.294850256
     europe-west4: 0.29508816
+  spot_price_per_hour:
+    me-central1: 0.133248
+    asia-northeast2: 0.114224
+    europe-southwest1: 0.179792
+    southamerica-west1: 0.159456
+    us-west4: 0.03984
+    europe-west6: 0.14992
+    europe-west9: 0.168016
+    asia-northeast3: 0.164416
+    us-east5: 0.129328
+    us-west8: 0.07808
+    asia-southeast2: 0.078528
+    me-west1: 0.15944
+    us-west2: 0.108608
+    europe-west8: 0.154448
+    asia-south1: 0.193152
+    asia-southeast1: 0.198448
+    us-west3: 0.097568
+    europe-west1: 0.176432
+    asia-northeast1: 0.206336
+    northamerica-south1: 0.105296
+    europe-west3: 0.2072
+    europe-north2: 0.07568
+    us-east4: 0.18112
+    europe-west2: 0.145312
+    asia-east2: 0.093216
+    africa-south1: 0.100096
+    northamerica-northeast1: 0.096176
+    asia-east1: 0.152352
+    europe-west10: 0.063328
+    europe-west12: 0.099184
+    europe-west4: 0.139584
+    southamerica-east1: 0.098416
+    europe-north1: 0.089984
+    us-south1: 0.111424
+    australia-southeast2: 0.176832
+    northamerica-northeast2: 0.058576
+    me-central2: 0.257264
+    us-central1: 0.160848
+    us-east1: 0.160848
+    us-west1: 0.160848
+    australia-southeast1: 0.2032
+    europe-central2: 0.136592
+    asia-south2: 0.151168
 - instance_type: n2-highcpu-16
   family: n2
   vcpus: 16
@@ -787,6 +1535,48 @@ instances:
     europe-west8: 0.66533888
     europe-central2: 0.694032
     us-west3: 0.688944
+  spot_price_per_hour:
+    me-west1: 0.340064
+    asia-northeast3: 0.262144
+    australia-southeast2: 0.340592
+    southamerica-east1: 0.19176
+    asia-east2: 0.277984
+    europe-west2: 0.148064
+    europe-north1: 0.308272
+    me-central1: 0.145696
+    europe-west12: 0.137856
+    asia-northeast2: 0.206288
+    northamerica-northeast2: 0.0568
+    us-central1: 0.344032
+    us-east1: 0.344032
+    us-west1: 0.344032
+    asia-southeast2: 0.396656
+    northamerica-northeast1: 0.290848
+    europe-west8: 0.072576
+    us-west3: 0.252976
+    africa-south1: 0.180224
+    europe-west6: 0.275616
+    asia-southeast1: 0.270896
+    europe-west10: 0.10992
+    asia-northeast1: 0.213104
+    europe-west1: 0.158752
+    us-east4: 0.162
+    europe-west4: 0.176352
+    asia-east1: 0.243888
+    australia-southeast1: 0.338912
+    us-east5: 0.344192
+    me-central2: 0.137904
+    europe-central2: 0.217936
+    us-west4: 0.34384
+    us-south1: 0.127904
+    us-west2: 0.233712
+    southamerica-west1: 0.211344
+    asia-south1: 0.217376
+    europe-southwest1: 0.175456
+    us-west8: 0.051856
+    europe-west3: 0.353264
+    asia-south2: 0.062048
+    europe-west9: 0.20672
 - instance_type: n2-highcpu-2
   family: n2
   vcpus: 2
@@ -836,6 +1626,48 @@ instances:
     europe-west8: 0.08316736
     europe-central2: 0.086754
     us-west3: 0.086118
+  spot_price_per_hour:
+    me-west1: 0.042508
+    asia-northeast3: 0.032768
+    australia-southeast2: 0.042574
+    southamerica-east1: 0.02397
+    asia-east2: 0.034748
+    europe-west2: 0.018508
+    europe-north1: 0.038534
+    me-central1: 0.018212
+    europe-west12: 0.017232
+    asia-northeast2: 0.025786
+    northamerica-northeast2: 0.0071
+    us-central1: 0.043004
+    us-east1: 0.043004
+    us-west1: 0.043004
+    asia-southeast2: 0.049582
+    northamerica-northeast1: 0.036356
+    europe-west8: 0.009072
+    us-west3: 0.031622
+    africa-south1: 0.022528
+    europe-west6: 0.034452
+    asia-southeast1: 0.033862
+    europe-west10: 0.01374
+    asia-northeast1: 0.026638
+    europe-west1: 0.019844
+    us-east4: 0.02025
+    europe-west4: 0.022044
+    asia-east1: 0.030486
+    australia-southeast1: 0.042364
+    us-east5: 0.043024
+    me-central2: 0.017238
+    europe-central2: 0.027242
+    us-west4: 0.04298
+    us-south1: 0.015988
+    us-west2: 0.029214
+    southamerica-west1: 0.026418
+    asia-south1: 0.027172
+    europe-southwest1: 0.021932
+    us-west8: 0.006482
+    europe-west3: 0.044158
+    asia-south2: 0.007756
+    europe-west9: 0.02584
 - instance_type: n2-highcpu-32
   family: n2
   vcpus: 32
@@ -885,6 +1717,48 @@ instances:
     europe-west8: 1.33067776
     europe-central2: 1.388064
     us-west3: 1.377888
+  spot_price_per_hour:
+    me-west1: 0.680128
+    asia-northeast3: 0.524288
+    australia-southeast2: 0.681184
+    southamerica-east1: 0.38352
+    asia-east2: 0.555968
+    europe-west2: 0.296128
+    europe-north1: 0.616544
+    me-central1: 0.291392
+    europe-west12: 0.275712
+    asia-northeast2: 0.412576
+    northamerica-northeast2: 0.1136
+    us-central1: 0.688064
+    us-east1: 0.688064
+    us-west1: 0.688064
+    asia-southeast2: 0.793312
+    northamerica-northeast1: 0.581696
+    europe-west8: 0.145152
+    us-west3: 0.505952
+    africa-south1: 0.360448
+    europe-west6: 0.551232
+    asia-southeast1: 0.541792
+    europe-west10: 0.21984
+    asia-northeast1: 0.426208
+    europe-west1: 0.317504
+    us-east4: 0.324
+    europe-west4: 0.352704
+    asia-east1: 0.487776
+    australia-southeast1: 0.677824
+    us-east5: 0.688384
+    me-central2: 0.275808
+    europe-central2: 0.435872
+    us-west4: 0.68768
+    us-south1: 0.255808
+    us-west2: 0.467424
+    southamerica-west1: 0.422688
+    asia-south1: 0.434752
+    europe-southwest1: 0.350912
+    us-west8: 0.103712
+    europe-west3: 0.706528
+    asia-south2: 0.124096
+    europe-west9: 0.41344
 - instance_type: n2-highcpu-4
   family: n2
   vcpus: 4
@@ -934,6 +1808,48 @@ instances:
     europe-west8: 0.16633472
     europe-central2: 0.173508
     us-west3: 0.172236
+  spot_price_per_hour:
+    me-west1: 0.085016
+    asia-northeast3: 0.065536
+    australia-southeast2: 0.085148
+    southamerica-east1: 0.04794
+    asia-east2: 0.069496
+    europe-west2: 0.037016
+    europe-north1: 0.077068
+    me-central1: 0.036424
+    europe-west12: 0.034464
+    asia-northeast2: 0.051572
+    northamerica-northeast2: 0.0142
+    us-central1: 0.086008
+    us-east1: 0.086008
+    us-west1: 0.086008
+    asia-southeast2: 0.099164
+    northamerica-northeast1: 0.072712
+    europe-west8: 0.018144
+    us-west3: 0.063244
+    africa-south1: 0.045056
+    europe-west6: 0.068904
+    asia-southeast1: 0.067724
+    europe-west10: 0.02748
+    asia-northeast1: 0.053276
+    europe-west1: 0.039688
+    us-east4: 0.0405
+    europe-west4: 0.044088
+    asia-east1: 0.060972
+    australia-southeast1: 0.084728
+    us-east5: 0.086048
+    me-central2: 0.034476
+    europe-central2: 0.054484
+    us-west4: 0.08596
+    us-south1: 0.031976
+    us-west2: 0.058428
+    southamerica-west1: 0.052836
+    asia-south1: 0.054344
+    europe-southwest1: 0.043864
+    us-west8: 0.012964
+    europe-west3: 0.088316
+    asia-south2: 0.015512
+    europe-west9: 0.05168
 - instance_type: n2-highcpu-48
   family: n2
   vcpus: 48
@@ -983,6 +1899,48 @@ instances:
     europe-west8: 1.99601664
     europe-central2: 2.082096
     us-west3: 2.066832
+  spot_price_per_hour:
+    me-west1: 1.020192
+    asia-northeast3: 0.786432
+    australia-southeast2: 1.021776
+    southamerica-east1: 0.57528
+    asia-east2: 0.833952
+    europe-west2: 0.444192
+    europe-north1: 0.924816
+    me-central1: 0.437088
+    europe-west12: 0.413568
+    asia-northeast2: 0.618864
+    northamerica-northeast2: 0.1704
+    us-central1: 1.032096
+    us-east1: 1.032096
+    us-west1: 1.032096
+    asia-southeast2: 1.189968
+    northamerica-northeast1: 0.872544
+    europe-west8: 0.217728
+    us-west3: 0.758928
+    africa-south1: 0.540672
+    europe-west6: 0.826848
+    asia-southeast1: 0.812688
+    europe-west10: 0.32976
+    asia-northeast1: 0.639312
+    europe-west1: 0.476256
+    us-east4: 0.486
+    europe-west4: 0.529056
+    asia-east1: 0.731664
+    australia-southeast1: 1.016736
+    us-east5: 1.032576
+    me-central2: 0.413712
+    europe-central2: 0.653808
+    us-west4: 1.03152
+    us-south1: 0.383712
+    us-west2: 0.701136
+    southamerica-west1: 0.634032
+    asia-south1: 0.652128
+    europe-southwest1: 0.526368
+    us-west8: 0.155568
+    europe-west3: 1.059792
+    asia-south2: 0.186144
+    europe-west9: 0.62016
 - instance_type: n2-highcpu-64
   family: n2
   vcpus: 64
@@ -1032,6 +1990,48 @@ instances:
     europe-west8: 2.66135552
     europe-central2: 2.776128
     us-west3: 2.755776
+  spot_price_per_hour:
+    me-west1: 1.360256
+    asia-northeast3: 1.048576
+    australia-southeast2: 1.362368
+    southamerica-east1: 0.76704
+    asia-east2: 1.111936
+    europe-west2: 0.592256
+    europe-north1: 1.233088
+    me-central1: 0.582784
+    europe-west12: 0.551424
+    asia-northeast2: 0.825152
+    northamerica-northeast2: 0.2272
+    us-central1: 1.376128
+    us-east1: 1.376128
+    us-west1: 1.376128
+    asia-southeast2: 1.586624
+    northamerica-northeast1: 1.163392
+    europe-west8: 0.290304
+    us-west3: 1.011904
+    africa-south1: 0.720896
+    europe-west6: 1.102464
+    asia-southeast1: 1.083584
+    europe-west10: 0.43968
+    asia-northeast1: 0.852416
+    europe-west1: 0.635008
+    us-east4: 0.648
+    europe-west4: 0.705408
+    asia-east1: 0.975552
+    australia-southeast1: 1.355648
+    us-east5: 1.376768
+    me-central2: 0.551616
+    europe-central2: 0.871744
+    us-west4: 1.37536
+    us-south1: 0.511616
+    us-west2: 0.934848
+    southamerica-west1: 0.845376
+    asia-south1: 0.869504
+    europe-southwest1: 0.701824
+    us-west8: 0.207424
+    europe-west3: 1.413056
+    asia-south2: 0.248192
+    europe-west9: 0.82688
 - instance_type: n2-highcpu-8
   family: n2
   vcpus: 8
@@ -1081,6 +2081,48 @@ instances:
     europe-west8: 0.33266944
     europe-central2: 0.347016
     us-west3: 0.344472
+  spot_price_per_hour:
+    me-west1: 0.170032
+    asia-northeast3: 0.131072
+    australia-southeast2: 0.170296
+    southamerica-east1: 0.09588
+    asia-east2: 0.138992
+    europe-west2: 0.074032
+    europe-north1: 0.154136
+    me-central1: 0.072848
+    europe-west12: 0.068928
+    asia-northeast2: 0.103144
+    northamerica-northeast2: 0.0284
+    us-central1: 0.172016
+    us-east1: 0.172016
+    us-west1: 0.172016
+    asia-southeast2: 0.198328
+    northamerica-northeast1: 0.145424
+    europe-west8: 0.036288
+    us-west3: 0.126488
+    africa-south1: 0.090112
+    europe-west6: 0.137808
+    asia-southeast1: 0.135448
+    europe-west10: 0.05496
+    asia-northeast1: 0.106552
+    europe-west1: 0.079376
+    us-east4: 0.081
+    europe-west4: 0.088176
+    asia-east1: 0.121944
+    australia-southeast1: 0.169456
+    us-east5: 0.172096
+    me-central2: 0.068952
+    europe-central2: 0.108968
+    us-west4: 0.17192
+    us-south1: 0.063952
+    us-west2: 0.116856
+    southamerica-west1: 0.105672
+    asia-south1: 0.108688
+    europe-southwest1: 0.087728
+    us-west8: 0.025928
+    europe-west3: 0.176632
+    asia-south2: 0.031024
+    europe-west9: 0.10336
 - instance_type: n2-highcpu-80
   family: n2
   vcpus: 80
@@ -1130,6 +2172,48 @@ instances:
     europe-west8: 3.3266944
     europe-central2: 3.47016
     us-west3: 3.44472
+  spot_price_per_hour:
+    me-west1: 1.70032
+    asia-northeast3: 1.31072
+    australia-southeast2: 1.70296
+    southamerica-east1: 0.9588
+    asia-east2: 1.38992
+    europe-west2: 0.74032
+    europe-north1: 1.54136
+    me-central1: 0.72848
+    europe-west12: 0.68928
+    asia-northeast2: 1.03144
+    northamerica-northeast2: 0.284
+    us-central1: 1.72016
+    us-east1: 1.72016
+    us-west1: 1.72016
+    asia-southeast2: 1.98328
+    northamerica-northeast1: 1.45424
+    europe-west8: 0.36288
+    us-west3: 1.26488
+    africa-south1: 0.90112
+    europe-west6: 1.37808
+    asia-southeast1: 1.35448
+    europe-west10: 0.5496
+    asia-northeast1: 1.06552
+    europe-west1: 0.79376
+    us-east4: 0.81
+    europe-west4: 0.88176
+    asia-east1: 1.21944
+    australia-southeast1: 1.69456
+    us-east5: 1.72096
+    me-central2: 0.68952
+    europe-central2: 1.08968
+    us-west4: 1.7192
+    us-south1: 0.63952
+    us-west2: 1.16856
+    southamerica-west1: 1.05672
+    asia-south1: 1.08688
+    europe-southwest1: 0.87728
+    us-west8: 0.25928
+    europe-west3: 1.76632
+    asia-south2: 0.31024
+    europe-west9: 1.0336
 - instance_type: n2-highcpu-96
   family: n2
   vcpus: 96
@@ -1179,6 +2263,48 @@ instances:
     europe-west8: 3.99203328
     europe-central2: 4.164192
     us-west3: 4.133664
+  spot_price_per_hour:
+    me-west1: 2.040384
+    asia-northeast3: 1.572864
+    australia-southeast2: 2.043552
+    southamerica-east1: 1.15056
+    asia-east2: 1.667904
+    europe-west2: 0.888384
+    europe-north1: 1.849632
+    me-central1: 0.874176
+    europe-west12: 0.827136
+    asia-northeast2: 1.237728
+    northamerica-northeast2: 0.3408
+    us-central1: 2.064192
+    us-east1: 2.064192
+    us-west1: 2.064192
+    asia-southeast2: 2.379936
+    northamerica-northeast1: 1.745088
+    europe-west8: 0.435456
+    us-west3: 1.517856
+    africa-south1: 1.081344
+    europe-west6: 1.653696
+    asia-southeast1: 1.625376
+    europe-west10: 0.65952
+    asia-northeast1: 1.278624
+    europe-west1: 0.952512
+    us-east4: 0.972
+    europe-west4: 1.058112
+    asia-east1: 1.463328
+    australia-southeast1: 2.033472
+    us-east5: 2.065152
+    me-central2: 0.827424
+    europe-central2: 1.307616
+    us-west4: 2.06304
+    us-south1: 0.767424
+    us-west2: 1.402272
+    southamerica-west1: 1.268064
+    asia-south1: 1.304256
+    europe-southwest1: 1.052736
+    us-west8: 0.311136
+    europe-west3: 2.119584
+    asia-south2: 0.372288
+    europe-west9: 1.24032
 - instance_type: n2-highmem-128
   family: n2
   vcpus: 128
@@ -1228,6 +2354,48 @@ instances:
     europe-west8: 8.94009216
     europe-central2: 9.325728
     us-west3: 9.257056
+  spot_price_per_hour:
+    me-west1: 4.570816
+    asia-northeast3: 3.520576
+    australia-southeast2: 4.577248
+    southamerica-east1: 2.57552
+    asia-east2: 3.735616
+    europe-west2: 1.989696
+    europe-north1: 4.142048
+    me-central1: 1.957504
+    europe-west12: 1.850624
+    asia-northeast2: 2.771232
+    northamerica-northeast2: 0.76352
+    us-central1: 4.623168
+    us-east1: 4.623168
+    us-west1: 4.623168
+    asia-southeast2: 5.330464
+    northamerica-northeast1: 3.907712
+    europe-west8: 0.975104
+    us-west3: 3.400864
+    africa-south1: 2.423616
+    europe-west6: 3.703424
+    asia-southeast1: 3.639904
+    europe-west10: 1.47552
+    asia-northeast1: 2.859616
+    europe-west1: 2.132608
+    us-east4: 2.17552
+    europe-west4: 2.369088
+    asia-east1: 3.278112
+    australia-southeast1: 4.552768
+    us-east5: 4.624448
+    me-central2: 1.853216
+    europe-central2: 2.929184
+    us-west4: 4.62016
+    us-south1: 1.718016
+    us-west2: 3.140768
+    southamerica-west1: 2.838176
+    asia-south1: 2.921024
+    europe-southwest1: 2.357504
+    us-west8: 0.695264
+    europe-west3: 4.746336
+    asia-south2: 0.833472
+    europe-west9: 2.77984
 - instance_type: n2-highmem-16
   family: n2
   vcpus: 16
@@ -1277,6 +2445,48 @@ instances:
     europe-west8: 1.21580992
     europe-central2: 1.268256
     us-west3: 1.258912
+  spot_price_per_hour:
+    me-west1: 0.621632
+    asia-northeast3: 0.478752
+    australia-southeast2: 0.622496
+    southamerica-east1: 0.35024
+    asia-east2: 0.508032
+    europe-west2: 0.270592
+    europe-north1: 0.563296
+    me-central1: 0.266208
+    europe-west12: 0.251648
+    asia-northeast2: 0.376864
+    northamerica-northeast2: 0.10384
+    us-central1: 0.628736
+    us-east1: 0.628736
+    us-west1: 0.628736
+    asia-southeast2: 0.724928
+    northamerica-northeast1: 0.531424
+    europe-west8: 0.132608
+    us-west3: 0.462528
+    africa-south1: 0.329632
+    europe-west6: 0.503648
+    asia-southeast1: 0.495008
+    europe-west10: 0.20064
+    asia-northeast1: 0.388832
+    europe-west1: 0.290016
+    us-east4: 0.29584
+    europe-west4: 0.322176
+    asia-east1: 0.445824
+    australia-southeast1: 0.619136
+    us-east5: 0.628896
+    me-central2: 0.252032
+    europe-central2: 0.398368
+    us-west4: 0.62832
+    us-south1: 0.233632
+    us-west2: 0.427136
+    southamerica-west1: 0.385952
+    asia-south1: 0.397248
+    europe-southwest1: 0.320608
+    us-west8: 0.094528
+    europe-west3: 0.645472
+    asia-south2: 0.113344
+    europe-west9: 0.37808
 - instance_type: n2-highmem-2
   family: n2
   vcpus: 2
@@ -1326,6 +2536,48 @@ instances:
     europe-west8: 0.15197624
     europe-central2: 0.158532
     us-west3: 0.157364
+  spot_price_per_hour:
+    me-west1: 0.077704
+    asia-northeast3: 0.059844
+    australia-southeast2: 0.077812
+    southamerica-east1: 0.04378
+    asia-east2: 0.063504
+    europe-west2: 0.033824
+    europe-north1: 0.070412
+    me-central1: 0.033276
+    europe-west12: 0.031456
+    asia-northeast2: 0.047108
+    northamerica-northeast2: 0.01298
+    us-central1: 0.078592
+    us-east1: 0.078592
+    us-west1: 0.078592
+    asia-southeast2: 0.090616
+    northamerica-northeast1: 0.066428
+    europe-west8: 0.016576
+    us-west3: 0.057816
+    africa-south1: 0.041204
+    europe-west6: 0.062956
+    asia-southeast1: 0.061876
+    europe-west10: 0.02508
+    asia-northeast1: 0.048604
+    europe-west1: 0.036252
+    us-east4: 0.03698
+    europe-west4: 0.040272
+    asia-east1: 0.055728
+    australia-southeast1: 0.077392
+    us-east5: 0.078612
+    me-central2: 0.031504
+    europe-central2: 0.049796
+    us-west4: 0.07854
+    us-south1: 0.029204
+    us-west2: 0.053392
+    southamerica-west1: 0.048244
+    asia-south1: 0.049656
+    europe-southwest1: 0.040076
+    us-west8: 0.011816
+    europe-west3: 0.080684
+    asia-south2: 0.014168
+    europe-west9: 0.04726
 - instance_type: n2-highmem-32
   family: n2
   vcpus: 32
@@ -1375,6 +2627,48 @@ instances:
     europe-west8: 2.43161984
     europe-central2: 2.536512
     us-west3: 2.517824
+  spot_price_per_hour:
+    me-west1: 1.243264
+    asia-northeast3: 0.957504
+    australia-southeast2: 1.244992
+    southamerica-east1: 0.70048
+    asia-east2: 1.016064
+    europe-west2: 0.541184
+    europe-north1: 1.126592
+    me-central1: 0.532416
+    europe-west12: 0.503296
+    asia-northeast2: 0.753728
+    northamerica-northeast2: 0.20768
+    us-central1: 1.257472
+    us-east1: 1.257472
+    us-west1: 1.257472
+    asia-southeast2: 1.449856
+    northamerica-northeast1: 1.062848
+    europe-west8: 0.265216
+    us-west3: 0.925056
+    africa-south1: 0.659264
+    europe-west6: 1.007296
+    asia-southeast1: 0.990016
+    europe-west10: 0.40128
+    asia-northeast1: 0.777664
+    europe-west1: 0.580032
+    us-east4: 0.59168
+    europe-west4: 0.644352
+    asia-east1: 0.891648
+    australia-southeast1: 1.238272
+    us-east5: 1.257792
+    me-central2: 0.504064
+    europe-central2: 0.796736
+    us-west4: 1.25664
+    us-south1: 0.467264
+    us-west2: 0.854272
+    southamerica-west1: 0.771904
+    asia-south1: 0.794496
+    europe-southwest1: 0.641216
+    us-west8: 0.189056
+    europe-west3: 1.290944
+    asia-south2: 0.226688
+    europe-west9: 0.75616
 - instance_type: n2-highmem-4
   family: n2
   vcpus: 4
@@ -1424,6 +2718,48 @@ instances:
     europe-west8: 0.30395248
     europe-central2: 0.317064
     us-west3: 0.314728
+  spot_price_per_hour:
+    me-west1: 0.155408
+    asia-northeast3: 0.119688
+    australia-southeast2: 0.155624
+    southamerica-east1: 0.08756
+    asia-east2: 0.127008
+    europe-west2: 0.067648
+    europe-north1: 0.140824
+    me-central1: 0.066552
+    europe-west12: 0.062912
+    asia-northeast2: 0.094216
+    northamerica-northeast2: 0.02596
+    us-central1: 0.157184
+    us-east1: 0.157184
+    us-west1: 0.157184
+    asia-southeast2: 0.181232
+    northamerica-northeast1: 0.132856
+    europe-west8: 0.033152
+    us-west3: 0.115632
+    africa-south1: 0.082408
+    europe-west6: 0.125912
+    asia-southeast1: 0.123752
+    europe-west10: 0.05016
+    asia-northeast1: 0.097208
+    europe-west1: 0.072504
+    us-east4: 0.07396
+    europe-west4: 0.080544
+    asia-east1: 0.111456
+    australia-southeast1: 0.154784
+    us-east5: 0.157224
+    me-central2: 0.063008
+    europe-central2: 0.099592
+    us-west4: 0.15708
+    us-south1: 0.058408
+    us-west2: 0.106784
+    southamerica-west1: 0.096488
+    asia-south1: 0.099312
+    europe-southwest1: 0.080152
+    us-west8: 0.023632
+    europe-west3: 0.161368
+    asia-south2: 0.028336
+    europe-west9: 0.09452
 - instance_type: n2-highmem-48
   family: n2
   vcpus: 48
@@ -1473,6 +2809,48 @@ instances:
     europe-west8: 3.64742976
     europe-central2: 3.804768
     us-west3: 3.776736
+  spot_price_per_hour:
+    me-west1: 1.864896
+    asia-northeast3: 1.436256
+    australia-southeast2: 1.867488
+    southamerica-east1: 1.05072
+    asia-east2: 1.524096
+    europe-west2: 0.811776
+    europe-north1: 1.689888
+    me-central1: 0.798624
+    europe-west12: 0.754944
+    asia-northeast2: 1.130592
+    northamerica-northeast2: 0.31152
+    us-central1: 1.886208
+    us-east1: 1.886208
+    us-west1: 1.886208
+    asia-southeast2: 2.174784
+    northamerica-northeast1: 1.594272
+    europe-west8: 0.397824
+    us-west3: 1.387584
+    africa-south1: 0.988896
+    europe-west6: 1.510944
+    asia-southeast1: 1.485024
+    europe-west10: 0.60192
+    asia-northeast1: 1.166496
+    europe-west1: 0.870048
+    us-east4: 0.88752
+    europe-west4: 0.966528
+    asia-east1: 1.337472
+    australia-southeast1: 1.857408
+    us-east5: 1.886688
+    me-central2: 0.756096
+    europe-central2: 1.195104
+    us-west4: 1.88496
+    us-south1: 0.700896
+    us-west2: 1.281408
+    southamerica-west1: 1.157856
+    asia-south1: 1.191744
+    europe-southwest1: 0.961824
+    us-west8: 0.283584
+    europe-west3: 1.936416
+    asia-south2: 0.340032
+    europe-west9: 1.13424
 - instance_type: n2-highmem-64
   family: n2
   vcpus: 64
@@ -1522,6 +2900,48 @@ instances:
     europe-west8: 4.86323968
     europe-central2: 5.073024
     us-west3: 5.035648
+  spot_price_per_hour:
+    me-west1: 2.486528
+    asia-northeast3: 1.915008
+    australia-southeast2: 2.489984
+    southamerica-east1: 1.40096
+    asia-east2: 2.032128
+    europe-west2: 1.082368
+    europe-north1: 2.253184
+    me-central1: 1.064832
+    europe-west12: 1.006592
+    asia-northeast2: 1.507456
+    northamerica-northeast2: 0.41536
+    us-central1: 2.514944
+    us-east1: 2.514944
+    us-west1: 2.514944
+    asia-southeast2: 2.899712
+    northamerica-northeast1: 2.125696
+    europe-west8: 0.530432
+    us-west3: 1.850112
+    africa-south1: 1.318528
+    europe-west6: 2.014592
+    asia-southeast1: 1.980032
+    europe-west10: 0.80256
+    asia-northeast1: 1.555328
+    europe-west1: 1.160064
+    us-east4: 1.18336
+    europe-west4: 1.288704
+    asia-east1: 1.783296
+    australia-southeast1: 2.476544
+    us-east5: 2.515584
+    me-central2: 1.008128
+    europe-central2: 1.593472
+    us-west4: 2.51328
+    us-south1: 0.934528
+    us-west2: 1.708544
+    southamerica-west1: 1.543808
+    asia-south1: 1.588992
+    europe-southwest1: 1.282432
+    us-west8: 0.378112
+    europe-west3: 2.581888
+    asia-south2: 0.453376
+    europe-west9: 1.51232
 - instance_type: n2-highmem-8
   family: n2
   vcpus: 8
@@ -1571,6 +2991,48 @@ instances:
     europe-west8: 0.60790496
     europe-central2: 0.634128
     us-west3: 0.629456
+  spot_price_per_hour:
+    me-west1: 0.310816
+    asia-northeast3: 0.239376
+    australia-southeast2: 0.311248
+    southamerica-east1: 0.17512
+    asia-east2: 0.254016
+    europe-west2: 0.135296
+    europe-north1: 0.281648
+    me-central1: 0.133104
+    europe-west12: 0.125824
+    asia-northeast2: 0.188432
+    northamerica-northeast2: 0.05192
+    us-central1: 0.314368
+    us-east1: 0.314368
+    us-west1: 0.314368
+    asia-southeast2: 0.362464
+    northamerica-northeast1: 0.265712
+    europe-west8: 0.066304
+    us-west3: 0.231264
+    africa-south1: 0.164816
+    europe-west6: 0.251824
+    asia-southeast1: 0.247504
+    europe-west10: 0.10032
+    asia-northeast1: 0.194416
+    europe-west1: 0.145008
+    us-east4: 0.14792
+    europe-west4: 0.161088
+    asia-east1: 0.222912
+    australia-southeast1: 0.309568
+    us-east5: 0.314448
+    me-central2: 0.126016
+    europe-central2: 0.199184
+    us-west4: 0.31416
+    us-south1: 0.116816
+    us-west2: 0.213568
+    southamerica-west1: 0.192976
+    asia-south1: 0.198624
+    europe-southwest1: 0.160304
+    us-west8: 0.047264
+    europe-west3: 0.322736
+    asia-south2: 0.056672
+    europe-west9: 0.18904
 - instance_type: n2-highmem-80
   family: n2
   vcpus: 80
@@ -1620,6 +3082,48 @@ instances:
     europe-west8: 6.0790496
     europe-central2: 6.34128
     us-west3: 6.29456
+  spot_price_per_hour:
+    me-west1: 3.10816
+    asia-northeast3: 2.39376
+    australia-southeast2: 3.11248
+    southamerica-east1: 1.7512
+    asia-east2: 2.54016
+    europe-west2: 1.35296
+    europe-north1: 2.81648
+    me-central1: 1.33104
+    europe-west12: 1.25824
+    asia-northeast2: 1.88432
+    northamerica-northeast2: 0.5192
+    us-central1: 3.14368
+    us-east1: 3.14368
+    us-west1: 3.14368
+    asia-southeast2: 3.62464
+    northamerica-northeast1: 2.65712
+    europe-west8: 0.66304
+    us-west3: 2.31264
+    africa-south1: 1.64816
+    europe-west6: 2.51824
+    asia-southeast1: 2.47504
+    europe-west10: 1.0032
+    asia-northeast1: 1.94416
+    europe-west1: 1.45008
+    us-east4: 1.4792
+    europe-west4: 1.61088
+    asia-east1: 2.22912
+    australia-southeast1: 3.09568
+    us-east5: 3.14448
+    me-central2: 1.26016
+    europe-central2: 1.99184
+    us-west4: 3.1416
+    us-south1: 1.16816
+    us-west2: 2.13568
+    southamerica-west1: 1.92976
+    asia-south1: 1.98624
+    europe-southwest1: 1.60304
+    us-west8: 0.47264
+    europe-west3: 3.22736
+    asia-south2: 0.56672
+    europe-west9: 1.8904
 - instance_type: n2-highmem-96
   family: n2
   vcpus: 96
@@ -1669,6 +3173,48 @@ instances:
     europe-west8: 7.29485952
     europe-central2: 7.609536
     us-west3: 7.553472
+  spot_price_per_hour:
+    me-west1: 3.729792
+    asia-northeast3: 2.872512
+    australia-southeast2: 3.734976
+    southamerica-east1: 2.10144
+    asia-east2: 3.048192
+    europe-west2: 1.623552
+    europe-north1: 3.379776
+    me-central1: 1.597248
+    europe-west12: 1.509888
+    asia-northeast2: 2.261184
+    northamerica-northeast2: 0.62304
+    us-central1: 3.772416
+    us-east1: 3.772416
+    us-west1: 3.772416
+    asia-southeast2: 4.349568
+    northamerica-northeast1: 3.188544
+    europe-west8: 0.795648
+    us-west3: 2.775168
+    africa-south1: 1.977792
+    europe-west6: 3.021888
+    asia-southeast1: 2.970048
+    europe-west10: 1.20384
+    asia-northeast1: 2.332992
+    europe-west1: 1.740096
+    us-east4: 1.77504
+    europe-west4: 1.933056
+    asia-east1: 2.674944
+    australia-southeast1: 3.714816
+    us-east5: 3.773376
+    me-central2: 1.512192
+    europe-central2: 2.390208
+    us-west4: 3.76992
+    us-south1: 1.401792
+    us-west2: 2.562816
+    southamerica-west1: 2.315712
+    asia-south1: 2.383488
+    europe-southwest1: 1.923648
+    us-west8: 0.567168
+    europe-west3: 3.872832
+    asia-south2: 0.680064
+    europe-west9: 2.26848
 - instance_type: n2-standard-128
   family: n2
   vcpus: 128
@@ -1718,6 +3264,48 @@ instances:
     europe-west8: 7.21004032
     europe-central2: 7.521024
     us-west3: 7.465728
+  spot_price_per_hour:
+    me-west1: 3.685888
+    asia-northeast3: 2.839808
+    australia-southeast2: 3.691264
+    southamerica-east1: 2.07744
+    asia-east2: 3.012608
+    europe-west2: 1.604608
+    europe-north1: 3.340544
+    me-central1: 1.578752
+    europe-west12: 1.492992
+    asia-northeast2: 2.235136
+    northamerica-northeast2: 0.61568
+    us-central1: 3.728384
+    us-east1: 3.728384
+    us-west1: 3.728384
+    asia-southeast2: 4.298752
+    northamerica-northeast1: 3.151616
+    europe-west8: 0.786432
+    us-west3: 2.742272
+    africa-south1: 1.954048
+    europe-west6: 2.986752
+    asia-southeast1: 2.935552
+    europe-west10: 1.1904
+    asia-northeast1: 2.307328
+    europe-west1: 1.720064
+    us-east4: 1.75488
+    europe-west4: 1.910784
+    asia-east1: 2.643456
+    australia-southeast1: 3.672064
+    us-east5: 3.729664
+    me-central2: 1.494528
+    europe-central2: 2.362112
+    us-west4: 3.72608
+    us-south1: 1.385728
+    us-west2: 2.532864
+    southamerica-west1: 2.289408
+    asia-south1: 2.355712
+    europe-southwest1: 1.901312
+    us-west8: 0.561152
+    europe-west3: 3.827968
+    asia-south2: 0.672256
+    europe-west9: 2.24128
 - instance_type: n2-standard-16
   family: n2
   vcpus: 16
@@ -1767,6 +3355,48 @@ instances:
     europe-west8: 0.90125504
     europe-central2: 0.940128
     us-west3: 0.933216
+  spot_price_per_hour:
+    me-west1: 0.460736
+    asia-northeast3: 0.354976
+    australia-southeast2: 0.461408
+    southamerica-east1: 0.25968
+    asia-east2: 0.376576
+    europe-west2: 0.200576
+    europe-north1: 0.417568
+    me-central1: 0.197344
+    europe-west12: 0.186624
+    asia-northeast2: 0.279392
+    northamerica-northeast2: 0.07696
+    us-central1: 0.466048
+    us-east1: 0.466048
+    us-west1: 0.466048
+    asia-southeast2: 0.537344
+    northamerica-northeast1: 0.393952
+    europe-west8: 0.098304
+    us-west3: 0.342784
+    africa-south1: 0.244256
+    europe-west6: 0.373344
+    asia-southeast1: 0.366944
+    europe-west10: 0.1488
+    asia-northeast1: 0.288416
+    europe-west1: 0.215008
+    us-east4: 0.21936
+    europe-west4: 0.238848
+    asia-east1: 0.330432
+    australia-southeast1: 0.459008
+    us-east5: 0.466208
+    me-central2: 0.186816
+    europe-central2: 0.295264
+    us-west4: 0.46576
+    us-south1: 0.173216
+    us-west2: 0.316608
+    southamerica-west1: 0.286176
+    asia-south1: 0.294464
+    europe-southwest1: 0.237664
+    us-west8: 0.070144
+    europe-west3: 0.478496
+    asia-south2: 0.084032
+    europe-west9: 0.28016
 - instance_type: n2-standard-2
   family: n2
   vcpus: 2
@@ -1816,6 +3446,48 @@ instances:
     europe-west8: 0.11265688
     europe-central2: 0.117516
     us-west3: 0.116652
+  spot_price_per_hour:
+    me-west1: 0.057592
+    asia-northeast3: 0.044372
+    australia-southeast2: 0.057676
+    southamerica-east1: 0.03246
+    asia-east2: 0.047072
+    europe-west2: 0.025072
+    europe-north1: 0.052196
+    me-central1: 0.024668
+    europe-west12: 0.023328
+    asia-northeast2: 0.034924
+    northamerica-northeast2: 0.00962
+    us-central1: 0.058256
+    us-east1: 0.058256
+    us-west1: 0.058256
+    asia-southeast2: 0.067168
+    northamerica-northeast1: 0.049244
+    europe-west8: 0.012288
+    us-west3: 0.042848
+    africa-south1: 0.030532
+    europe-west6: 0.046668
+    asia-southeast1: 0.045868
+    europe-west10: 0.0186
+    asia-northeast1: 0.036052
+    europe-west1: 0.026876
+    us-east4: 0.02742
+    europe-west4: 0.029856
+    asia-east1: 0.041304
+    australia-southeast1: 0.057376
+    us-east5: 0.058276
+    me-central2: 0.023352
+    europe-central2: 0.036908
+    us-west4: 0.05822
+    us-south1: 0.021652
+    us-west2: 0.039576
+    southamerica-west1: 0.035772
+    asia-south1: 0.036808
+    europe-southwest1: 0.029708
+    us-west8: 0.008768
+    europe-west3: 0.059812
+    asia-south2: 0.010504
+    europe-west9: 0.03502
 - instance_type: n2-standard-32
   family: n2
   vcpus: 32
@@ -1865,6 +3537,48 @@ instances:
     europe-west8: 1.80251008
     europe-central2: 1.880256
     us-west3: 1.866432
+  spot_price_per_hour:
+    me-west1: 0.921472
+    asia-northeast3: 0.709952
+    australia-southeast2: 0.922816
+    southamerica-east1: 0.51936
+    asia-east2: 0.753152
+    europe-west2: 0.401152
+    europe-north1: 0.835136
+    me-central1: 0.394688
+    europe-west12: 0.373248
+    asia-northeast2: 0.558784
+    northamerica-northeast2: 0.15392
+    us-central1: 0.932096
+    us-east1: 0.932096
+    us-west1: 0.932096
+    asia-southeast2: 1.074688
+    northamerica-northeast1: 0.787904
+    europe-west8: 0.196608
+    us-west3: 0.685568
+    africa-south1: 0.488512
+    europe-west6: 0.746688
+    asia-southeast1: 0.733888
+    europe-west10: 0.2976
+    asia-northeast1: 0.576832
+    europe-west1: 0.430016
+    us-east4: 0.43872
+    europe-west4: 0.477696
+    asia-east1: 0.660864
+    australia-southeast1: 0.918016
+    us-east5: 0.932416
+    me-central2: 0.373632
+    europe-central2: 0.590528
+    us-west4: 0.93152
+    us-south1: 0.346432
+    us-west2: 0.633216
+    southamerica-west1: 0.572352
+    asia-south1: 0.588928
+    europe-southwest1: 0.475328
+    us-west8: 0.140288
+    europe-west3: 0.956992
+    asia-south2: 0.168064
+    europe-west9: 0.56032
 - instance_type: n2-standard-4
   family: n2
   vcpus: 4
@@ -1914,6 +3628,48 @@ instances:
     europe-west8: 0.22531376
     europe-central2: 0.235032
     us-west3: 0.233304
+  spot_price_per_hour:
+    me-west1: 0.115184
+    asia-northeast3: 0.088744
+    australia-southeast2: 0.115352
+    southamerica-east1: 0.06492
+    asia-east2: 0.094144
+    europe-west2: 0.050144
+    europe-north1: 0.104392
+    me-central1: 0.049336
+    europe-west12: 0.046656
+    asia-northeast2: 0.069848
+    northamerica-northeast2: 0.01924
+    us-central1: 0.116512
+    us-east1: 0.116512
+    us-west1: 0.116512
+    asia-southeast2: 0.134336
+    northamerica-northeast1: 0.098488
+    europe-west8: 0.024576
+    us-west3: 0.085696
+    africa-south1: 0.061064
+    europe-west6: 0.093336
+    asia-southeast1: 0.091736
+    europe-west10: 0.0372
+    asia-northeast1: 0.072104
+    europe-west1: 0.053752
+    us-east4: 0.05484
+    europe-west4: 0.059712
+    asia-east1: 0.082608
+    australia-southeast1: 0.114752
+    us-east5: 0.116552
+    me-central2: 0.046704
+    europe-central2: 0.073816
+    us-west4: 0.11644
+    us-south1: 0.043304
+    us-west2: 0.079152
+    southamerica-west1: 0.071544
+    asia-south1: 0.073616
+    europe-southwest1: 0.059416
+    us-west8: 0.017536
+    europe-west3: 0.119624
+    asia-south2: 0.021008
+    europe-west9: 0.07004
 - instance_type: n2-standard-48
   family: n2
   vcpus: 48
@@ -1963,6 +3719,48 @@ instances:
     europe-west8: 2.70376512
     europe-central2: 2.820384
     us-west3: 2.799648
+  spot_price_per_hour:
+    me-west1: 1.382208
+    asia-northeast3: 1.064928
+    australia-southeast2: 1.384224
+    southamerica-east1: 0.77904
+    asia-east2: 1.129728
+    europe-west2: 0.601728
+    europe-north1: 1.252704
+    me-central1: 0.592032
+    europe-west12: 0.559872
+    asia-northeast2: 0.838176
+    northamerica-northeast2: 0.23088
+    us-central1: 1.398144
+    us-east1: 1.398144
+    us-west1: 1.398144
+    asia-southeast2: 1.612032
+    northamerica-northeast1: 1.181856
+    europe-west8: 0.294912
+    us-west3: 1.028352
+    africa-south1: 0.732768
+    europe-west6: 1.120032
+    asia-southeast1: 1.100832
+    europe-west10: 0.4464
+    asia-northeast1: 0.865248
+    europe-west1: 0.645024
+    us-east4: 0.65808
+    europe-west4: 0.716544
+    asia-east1: 0.991296
+    australia-southeast1: 1.377024
+    us-east5: 1.398624
+    me-central2: 0.560448
+    europe-central2: 0.885792
+    us-west4: 1.39728
+    us-south1: 0.519648
+    us-west2: 0.949824
+    southamerica-west1: 0.858528
+    asia-south1: 0.883392
+    europe-southwest1: 0.712992
+    us-west8: 0.210432
+    europe-west3: 1.435488
+    asia-south2: 0.252096
+    europe-west9: 0.84048
 - instance_type: n2-standard-64
   family: n2
   vcpus: 64
@@ -2012,6 +3810,48 @@ instances:
     europe-west8: 3.60502016
     europe-central2: 3.760512
     us-west3: 3.732864
+  spot_price_per_hour:
+    me-west1: 1.842944
+    asia-northeast3: 1.419904
+    australia-southeast2: 1.845632
+    southamerica-east1: 1.03872
+    asia-east2: 1.506304
+    europe-west2: 0.802304
+    europe-north1: 1.670272
+    me-central1: 0.789376
+    europe-west12: 0.746496
+    asia-northeast2: 1.117568
+    northamerica-northeast2: 0.30784
+    us-central1: 1.864192
+    us-east1: 1.864192
+    us-west1: 1.864192
+    asia-southeast2: 2.149376
+    northamerica-northeast1: 1.575808
+    europe-west8: 0.393216
+    us-west3: 1.371136
+    africa-south1: 0.977024
+    europe-west6: 1.493376
+    asia-southeast1: 1.467776
+    europe-west10: 0.5952
+    asia-northeast1: 1.153664
+    europe-west1: 0.860032
+    us-east4: 0.87744
+    europe-west4: 0.955392
+    asia-east1: 1.321728
+    australia-southeast1: 1.836032
+    us-east5: 1.864832
+    me-central2: 0.747264
+    europe-central2: 1.181056
+    us-west4: 1.86304
+    us-south1: 0.692864
+    us-west2: 1.266432
+    southamerica-west1: 1.144704
+    asia-south1: 1.177856
+    europe-southwest1: 0.950656
+    us-west8: 0.280576
+    europe-west3: 1.913984
+    asia-south2: 0.336128
+    europe-west9: 1.12064
 - instance_type: n2-standard-8
   family: n2
   vcpus: 8
@@ -2061,6 +3901,48 @@ instances:
     europe-west8: 0.45062752
     europe-central2: 0.470064
     us-west3: 0.466608
+  spot_price_per_hour:
+    me-west1: 0.230368
+    asia-northeast3: 0.177488
+    australia-southeast2: 0.230704
+    southamerica-east1: 0.12984
+    asia-east2: 0.188288
+    europe-west2: 0.100288
+    europe-north1: 0.208784
+    me-central1: 0.098672
+    europe-west12: 0.093312
+    asia-northeast2: 0.139696
+    northamerica-northeast2: 0.03848
+    us-central1: 0.233024
+    us-east1: 0.233024
+    us-west1: 0.233024
+    asia-southeast2: 0.268672
+    northamerica-northeast1: 0.196976
+    europe-west8: 0.049152
+    us-west3: 0.171392
+    africa-south1: 0.122128
+    europe-west6: 0.186672
+    asia-southeast1: 0.183472
+    europe-west10: 0.0744
+    asia-northeast1: 0.144208
+    europe-west1: 0.107504
+    us-east4: 0.10968
+    europe-west4: 0.119424
+    asia-east1: 0.165216
+    australia-southeast1: 0.229504
+    us-east5: 0.233104
+    me-central2: 0.093408
+    europe-central2: 0.147632
+    us-west4: 0.23288
+    us-south1: 0.086608
+    us-west2: 0.158304
+    southamerica-west1: 0.143088
+    asia-south1: 0.147232
+    europe-southwest1: 0.118832
+    us-west8: 0.035072
+    europe-west3: 0.239248
+    asia-south2: 0.042016
+    europe-west9: 0.14008
 - instance_type: n2-standard-80
   family: n2
   vcpus: 80
@@ -2110,6 +3992,48 @@ instances:
     europe-west8: 4.5062752
     europe-central2: 4.70064
     us-west3: 4.66608
+  spot_price_per_hour:
+    me-west1: 2.30368
+    asia-northeast3: 1.77488
+    australia-southeast2: 2.30704
+    southamerica-east1: 1.2984
+    asia-east2: 1.88288
+    europe-west2: 1.00288
+    europe-north1: 2.08784
+    me-central1: 0.98672
+    europe-west12: 0.93312
+    asia-northeast2: 1.39696
+    northamerica-northeast2: 0.3848
+    us-central1: 2.33024
+    us-east1: 2.33024
+    us-west1: 2.33024
+    asia-southeast2: 2.68672
+    northamerica-northeast1: 1.96976
+    europe-west8: 0.49152
+    us-west3: 1.71392
+    africa-south1: 1.22128
+    europe-west6: 1.86672
+    asia-southeast1: 1.83472
+    europe-west10: 0.744
+    asia-northeast1: 1.44208
+    europe-west1: 1.07504
+    us-east4: 1.0968
+    europe-west4: 1.19424
+    asia-east1: 1.65216
+    australia-southeast1: 2.29504
+    us-east5: 2.33104
+    me-central2: 0.93408
+    europe-central2: 1.47632
+    us-west4: 2.3288
+    us-south1: 0.86608
+    us-west2: 1.58304
+    southamerica-west1: 1.43088
+    asia-south1: 1.47232
+    europe-southwest1: 1.18832
+    us-west8: 0.35072
+    europe-west3: 2.39248
+    asia-south2: 0.42016
+    europe-west9: 1.4008
 - instance_type: n2-standard-96
   family: n2
   vcpus: 96
@@ -2159,6 +4083,48 @@ instances:
     europe-west8: 5.40753024
     europe-central2: 5.640768
     us-west3: 5.599296
+  spot_price_per_hour:
+    me-west1: 2.764416
+    asia-northeast3: 2.129856
+    australia-southeast2: 2.768448
+    southamerica-east1: 1.55808
+    asia-east2: 2.259456
+    europe-west2: 1.203456
+    europe-north1: 2.505408
+    me-central1: 1.184064
+    europe-west12: 1.119744
+    asia-northeast2: 1.676352
+    northamerica-northeast2: 0.46176
+    us-central1: 2.796288
+    us-east1: 2.796288
+    us-west1: 2.796288
+    asia-southeast2: 3.224064
+    northamerica-northeast1: 2.363712
+    europe-west8: 0.589824
+    us-west3: 2.056704
+    africa-south1: 1.465536
+    europe-west6: 2.240064
+    asia-southeast1: 2.201664
+    europe-west10: 0.8928
+    asia-northeast1: 1.730496
+    europe-west1: 1.290048
+    us-east4: 1.31616
+    europe-west4: 1.433088
+    asia-east1: 1.982592
+    australia-southeast1: 2.754048
+    us-east5: 2.797248
+    me-central2: 1.120896
+    europe-central2: 1.771584
+    us-west4: 2.79456
+    us-south1: 1.039296
+    us-west2: 1.899648
+    southamerica-west1: 1.717056
+    asia-south1: 1.766784
+    europe-southwest1: 1.425984
+    us-west8: 0.420864
+    europe-west3: 2.870976
+    asia-south2: 0.504192
+    europe-west9: 1.68096
 - instance_type: n2d-highcpu-128
   family: n2d
   vcpus: 128
@@ -2208,6 +4174,48 @@ instances:
     europe-west10: 5.14362752
     us-west8: 3.992064
     australia-southeast1: 5.66464
+  spot_price_per_hour:
+    australia-southeast2: 1.435648
+    us-central1: 1.94624
+    us-east1: 1.94624
+    us-west1: 1.94624
+    us-west4: 1.47904
+    europe-west9: 1.917696
+    europe-north1: 2.403584
+    asia-east2: 2.972288
+    europe-west3: 3.078656
+    asia-southeast2: 2.31552
+    europe-west6: 3.138176
+    us-south1: 1.878016
+    europe-west1: 2.413952
+    asia-northeast1: 3.074432
+    me-central1: 2.121984
+    europe-southwest1: 2.82624
+    europe-west8: 1.195136
+    us-east4: 2.698368
+    asia-south1: 1.576448
+    europe-west2: 3.085952
+    us-west3: 1.924608
+    asia-southeast1: 1.164288
+    asia-northeast3: 1.399168
+    asia-south2: 2.869632
+    europe-central2: 2.890112
+    europe-west10: 1.039104
+    us-west2: 2.869632
+    asia-east1: 2.772608
+    europe-west12: 1.27552
+    us-east5: 1.43104
+    africa-south1: 2.101888
+    southamerica-west1: 1.627264
+    northamerica-northeast2: 2.63488
+    northamerica-northeast1: 2.622976
+    asia-northeast2: 1.268864
+    southamerica-east1: 2.097408
+    us-west8: 0.359936
+    europe-west4: 2.46016
+    australia-southeast1: 3.39072
+    me-central2: 1.517312
+    me-west1: 1.44896
 - instance_type: n2d-highcpu-16
   family: n2d
   vcpus: 16
@@ -2257,6 +4265,48 @@ instances:
     europe-west10: 0.64295344
     us-west8: 0.499008
     australia-southeast1: 0.70808
+  spot_price_per_hour:
+    australia-southeast2: 0.179456
+    us-central1: 0.24328
+    us-east1: 0.24328
+    us-west1: 0.24328
+    us-west4: 0.18488
+    europe-west9: 0.239712
+    europe-north1: 0.300448
+    asia-east2: 0.371536
+    europe-west3: 0.384832
+    asia-southeast2: 0.28944
+    europe-west6: 0.392272
+    us-south1: 0.234752
+    europe-west1: 0.301744
+    asia-northeast1: 0.384304
+    me-central1: 0.265248
+    europe-southwest1: 0.35328
+    europe-west8: 0.149392
+    us-east4: 0.337296
+    asia-south1: 0.197056
+    europe-west2: 0.385744
+    us-west3: 0.240576
+    asia-southeast1: 0.145536
+    asia-northeast3: 0.174896
+    asia-south2: 0.358704
+    europe-central2: 0.361264
+    europe-west10: 0.129888
+    us-west2: 0.358704
+    asia-east1: 0.346576
+    europe-west12: 0.15944
+    us-east5: 0.17888
+    africa-south1: 0.262736
+    southamerica-west1: 0.203408
+    northamerica-northeast2: 0.32936
+    northamerica-northeast1: 0.327872
+    asia-northeast2: 0.158608
+    southamerica-east1: 0.262176
+    us-west8: 0.044992
+    europe-west4: 0.30752
+    australia-southeast1: 0.42384
+    me-central2: 0.189664
+    me-west1: 0.18112
 - instance_type: n2d-highcpu-2
   family: n2d
   vcpus: 2
@@ -2306,6 +4356,48 @@ instances:
     europe-west10: 0.08036918
     us-west8: 0.062376
     australia-southeast1: 0.08851
+  spot_price_per_hour:
+    australia-southeast2: 0.022432
+    us-central1: 0.03041
+    us-east1: 0.03041
+    us-west1: 0.03041
+    us-west4: 0.02311
+    europe-west9: 0.029964
+    europe-north1: 0.037556
+    asia-east2: 0.046442
+    europe-west3: 0.048104
+    asia-southeast2: 0.03618
+    europe-west6: 0.049034
+    us-south1: 0.029344
+    europe-west1: 0.037718
+    asia-northeast1: 0.048038
+    me-central1: 0.033156
+    europe-southwest1: 0.04416
+    europe-west8: 0.018674
+    us-east4: 0.042162
+    asia-south1: 0.024632
+    europe-west2: 0.048218
+    us-west3: 0.030072
+    asia-southeast1: 0.018192
+    asia-northeast3: 0.021862
+    asia-south2: 0.044838
+    europe-central2: 0.045158
+    europe-west10: 0.016236
+    us-west2: 0.044838
+    asia-east1: 0.043322
+    europe-west12: 0.01993
+    us-east5: 0.02236
+    africa-south1: 0.032842
+    southamerica-west1: 0.025426
+    northamerica-northeast2: 0.04117
+    northamerica-northeast1: 0.040984
+    asia-northeast2: 0.019826
+    southamerica-east1: 0.032772
+    us-west8: 0.005624
+    europe-west4: 0.03844
+    australia-southeast1: 0.05298
+    me-central2: 0.023708
+    me-west1: 0.02264
 - instance_type: n2d-highcpu-224
   family: n2d
   vcpus: 224
@@ -2355,6 +4447,48 @@ instances:
     europe-west10: 9.00134816
     us-west8: 6.986112
     australia-southeast1: 9.91312
+  spot_price_per_hour:
+    australia-southeast2: 2.512384
+    us-central1: 3.40592
+    us-east1: 3.40592
+    us-west1: 3.40592
+    us-west4: 2.58832
+    europe-west9: 3.355968
+    europe-north1: 4.206272
+    asia-east2: 5.201504
+    europe-west3: 5.387648
+    asia-southeast2: 4.05216
+    europe-west6: 5.491808
+    us-south1: 3.286528
+    europe-west1: 4.224416
+    asia-northeast1: 5.380256
+    me-central1: 3.713472
+    europe-southwest1: 4.94592
+    europe-west8: 2.091488
+    us-east4: 4.722144
+    asia-south1: 2.758784
+    europe-west2: 5.400416
+    us-west3: 3.368064
+    asia-southeast1: 2.037504
+    asia-northeast3: 2.448544
+    asia-south2: 5.021856
+    europe-central2: 5.057696
+    europe-west10: 1.818432
+    us-west2: 5.021856
+    asia-east1: 4.852064
+    europe-west12: 2.23216
+    us-east5: 2.50432
+    africa-south1: 3.678304
+    southamerica-west1: 2.847712
+    northamerica-northeast2: 4.61104
+    northamerica-northeast1: 4.590208
+    asia-northeast2: 2.220512
+    southamerica-east1: 3.670464
+    us-west8: 0.629888
+    europe-west4: 4.30528
+    australia-southeast1: 5.93376
+    me-central2: 2.655296
+    me-west1: 2.53568
 - instance_type: n2d-highcpu-32
   family: n2d
   vcpus: 32
@@ -2404,6 +4538,48 @@ instances:
     europe-west10: 1.28590688
     us-west8: 0.998016
     australia-southeast1: 1.41616
+  spot_price_per_hour:
+    australia-southeast2: 0.358912
+    us-central1: 0.48656
+    us-east1: 0.48656
+    us-west1: 0.48656
+    us-west4: 0.36976
+    europe-west9: 0.479424
+    europe-north1: 0.600896
+    asia-east2: 0.743072
+    europe-west3: 0.769664
+    asia-southeast2: 0.57888
+    europe-west6: 0.784544
+    us-south1: 0.469504
+    europe-west1: 0.603488
+    asia-northeast1: 0.768608
+    me-central1: 0.530496
+    europe-southwest1: 0.70656
+    europe-west8: 0.298784
+    us-east4: 0.674592
+    asia-south1: 0.394112
+    europe-west2: 0.771488
+    us-west3: 0.481152
+    asia-southeast1: 0.291072
+    asia-northeast3: 0.349792
+    asia-south2: 0.717408
+    europe-central2: 0.722528
+    europe-west10: 0.259776
+    us-west2: 0.717408
+    asia-east1: 0.693152
+    europe-west12: 0.31888
+    us-east5: 0.35776
+    africa-south1: 0.525472
+    southamerica-west1: 0.406816
+    northamerica-northeast2: 0.65872
+    northamerica-northeast1: 0.655744
+    asia-northeast2: 0.317216
+    southamerica-east1: 0.524352
+    us-west8: 0.089984
+    europe-west4: 0.61504
+    australia-southeast1: 0.84768
+    me-central2: 0.379328
+    me-west1: 0.36224
 - instance_type: n2d-highcpu-4
   family: n2d
   vcpus: 4
@@ -2453,6 +4629,48 @@ instances:
     europe-west10: 0.16073836
     us-west8: 0.124752
     australia-southeast1: 0.17702
+  spot_price_per_hour:
+    australia-southeast2: 0.044864
+    us-central1: 0.06082
+    us-east1: 0.06082
+    us-west1: 0.06082
+    us-west4: 0.04622
+    europe-west9: 0.059928
+    europe-north1: 0.075112
+    asia-east2: 0.092884
+    europe-west3: 0.096208
+    asia-southeast2: 0.07236
+    europe-west6: 0.098068
+    us-south1: 0.058688
+    europe-west1: 0.075436
+    asia-northeast1: 0.096076
+    me-central1: 0.066312
+    europe-southwest1: 0.08832
+    europe-west8: 0.037348
+    us-east4: 0.084324
+    asia-south1: 0.049264
+    europe-west2: 0.096436
+    us-west3: 0.060144
+    asia-southeast1: 0.036384
+    asia-northeast3: 0.043724
+    asia-south2: 0.089676
+    europe-central2: 0.090316
+    europe-west10: 0.032472
+    us-west2: 0.089676
+    asia-east1: 0.086644
+    europe-west12: 0.03986
+    us-east5: 0.04472
+    africa-south1: 0.065684
+    southamerica-west1: 0.050852
+    northamerica-northeast2: 0.08234
+    northamerica-northeast1: 0.081968
+    asia-northeast2: 0.039652
+    southamerica-east1: 0.065544
+    us-west8: 0.011248
+    europe-west4: 0.07688
+    australia-southeast1: 0.10596
+    me-central2: 0.047416
+    me-west1: 0.04528
 - instance_type: n2d-highcpu-48
   family: n2d
   vcpus: 48
@@ -2502,6 +4720,48 @@ instances:
     europe-west10: 1.92886032
     us-west8: 1.497024
     australia-southeast1: 2.12424
+  spot_price_per_hour:
+    australia-southeast2: 0.538368
+    us-central1: 0.72984
+    us-east1: 0.72984
+    us-west1: 0.72984
+    us-west4: 0.55464
+    europe-west9: 0.719136
+    europe-north1: 0.901344
+    asia-east2: 1.114608
+    europe-west3: 1.154496
+    asia-southeast2: 0.86832
+    europe-west6: 1.176816
+    us-south1: 0.704256
+    europe-west1: 0.905232
+    asia-northeast1: 1.152912
+    me-central1: 0.795744
+    europe-southwest1: 1.05984
+    europe-west8: 0.448176
+    us-east4: 1.011888
+    asia-south1: 0.591168
+    europe-west2: 1.157232
+    us-west3: 0.721728
+    asia-southeast1: 0.436608
+    asia-northeast3: 0.524688
+    asia-south2: 1.076112
+    europe-central2: 1.083792
+    europe-west10: 0.389664
+    us-west2: 1.076112
+    asia-east1: 1.039728
+    europe-west12: 0.47832
+    us-east5: 0.53664
+    africa-south1: 0.788208
+    southamerica-west1: 0.610224
+    northamerica-northeast2: 0.98808
+    northamerica-northeast1: 0.983616
+    asia-northeast2: 0.475824
+    southamerica-east1: 0.786528
+    us-west8: 0.134976
+    europe-west4: 0.92256
+    australia-southeast1: 1.27152
+    me-central2: 0.568992
+    me-west1: 0.54336
 - instance_type: n2d-highcpu-64
   family: n2d
   vcpus: 64
@@ -2551,6 +4811,48 @@ instances:
     europe-west10: 2.57181376
     us-west8: 1.996032
     australia-southeast1: 2.83232
+  spot_price_per_hour:
+    australia-southeast2: 0.717824
+    us-central1: 0.97312
+    us-east1: 0.97312
+    us-west1: 0.97312
+    us-west4: 0.73952
+    europe-west9: 0.958848
+    europe-north1: 1.201792
+    asia-east2: 1.486144
+    europe-west3: 1.539328
+    asia-southeast2: 1.15776
+    europe-west6: 1.569088
+    us-south1: 0.939008
+    europe-west1: 1.206976
+    asia-northeast1: 1.537216
+    me-central1: 1.060992
+    europe-southwest1: 1.41312
+    europe-west8: 0.597568
+    us-east4: 1.349184
+    asia-south1: 0.788224
+    europe-west2: 1.542976
+    us-west3: 0.962304
+    asia-southeast1: 0.582144
+    asia-northeast3: 0.699584
+    asia-south2: 1.434816
+    europe-central2: 1.445056
+    europe-west10: 0.519552
+    us-west2: 1.434816
+    asia-east1: 1.386304
+    europe-west12: 0.63776
+    us-east5: 0.71552
+    africa-south1: 1.050944
+    southamerica-west1: 0.813632
+    northamerica-northeast2: 1.31744
+    northamerica-northeast1: 1.311488
+    asia-northeast2: 0.634432
+    southamerica-east1: 1.048704
+    us-west8: 0.179968
+    europe-west4: 1.23008
+    australia-southeast1: 1.69536
+    me-central2: 0.758656
+    me-west1: 0.72448
 - instance_type: n2d-highcpu-8
   family: n2d
   vcpus: 8
@@ -2600,6 +4902,48 @@ instances:
     europe-west10: 0.32147672
     us-west8: 0.249504
     australia-southeast1: 0.35404
+  spot_price_per_hour:
+    australia-southeast2: 0.089728
+    us-central1: 0.12164
+    us-east1: 0.12164
+    us-west1: 0.12164
+    us-west4: 0.09244
+    europe-west9: 0.119856
+    europe-north1: 0.150224
+    asia-east2: 0.185768
+    europe-west3: 0.192416
+    asia-southeast2: 0.14472
+    europe-west6: 0.196136
+    us-south1: 0.117376
+    europe-west1: 0.150872
+    asia-northeast1: 0.192152
+    me-central1: 0.132624
+    europe-southwest1: 0.17664
+    europe-west8: 0.074696
+    us-east4: 0.168648
+    asia-south1: 0.098528
+    europe-west2: 0.192872
+    us-west3: 0.120288
+    asia-southeast1: 0.072768
+    asia-northeast3: 0.087448
+    asia-south2: 0.179352
+    europe-central2: 0.180632
+    europe-west10: 0.064944
+    us-west2: 0.179352
+    asia-east1: 0.173288
+    europe-west12: 0.07972
+    us-east5: 0.08944
+    africa-south1: 0.131368
+    southamerica-west1: 0.101704
+    northamerica-northeast2: 0.16468
+    northamerica-northeast1: 0.163936
+    asia-northeast2: 0.079304
+    southamerica-east1: 0.131088
+    us-west8: 0.022496
+    europe-west4: 0.15376
+    australia-southeast1: 0.21192
+    me-central2: 0.094832
+    me-west1: 0.09056
 - instance_type: n2d-highcpu-80
   family: n2d
   vcpus: 80
@@ -2649,6 +4993,48 @@ instances:
     europe-west10: 3.2147672
     us-west8: 2.49504
     australia-southeast1: 3.5404
+  spot_price_per_hour:
+    australia-southeast2: 0.89728
+    us-central1: 1.2164
+    us-east1: 1.2164
+    us-west1: 1.2164
+    us-west4: 0.9244
+    europe-west9: 1.19856
+    europe-north1: 1.50224
+    asia-east2: 1.85768
+    europe-west3: 1.92416
+    asia-southeast2: 1.4472
+    europe-west6: 1.96136
+    us-south1: 1.17376
+    europe-west1: 1.50872
+    asia-northeast1: 1.92152
+    me-central1: 1.32624
+    europe-southwest1: 1.7664
+    europe-west8: 0.74696
+    us-east4: 1.68648
+    asia-south1: 0.98528
+    europe-west2: 1.92872
+    us-west3: 1.20288
+    asia-southeast1: 0.72768
+    asia-northeast3: 0.87448
+    asia-south2: 1.79352
+    europe-central2: 1.80632
+    europe-west10: 0.64944
+    us-west2: 1.79352
+    asia-east1: 1.73288
+    europe-west12: 0.7972
+    us-east5: 0.8944
+    africa-south1: 1.31368
+    southamerica-west1: 1.01704
+    northamerica-northeast2: 1.6468
+    northamerica-northeast1: 1.63936
+    asia-northeast2: 0.79304
+    southamerica-east1: 1.31088
+    us-west8: 0.22496
+    europe-west4: 1.5376
+    australia-southeast1: 2.1192
+    me-central2: 0.94832
+    me-west1: 0.9056
 - instance_type: n2d-highcpu-96
   family: n2d
   vcpus: 96
@@ -2698,6 +5084,48 @@ instances:
     europe-west10: 3.85772064
     us-west8: 2.994048
     australia-southeast1: 4.24848
+  spot_price_per_hour:
+    australia-southeast2: 1.076736
+    us-central1: 1.45968
+    us-east1: 1.45968
+    us-west1: 1.45968
+    us-west4: 1.10928
+    europe-west9: 1.438272
+    europe-north1: 1.802688
+    asia-east2: 2.229216
+    europe-west3: 2.308992
+    asia-southeast2: 1.73664
+    europe-west6: 2.353632
+    us-south1: 1.408512
+    europe-west1: 1.810464
+    asia-northeast1: 2.305824
+    me-central1: 1.591488
+    europe-southwest1: 2.11968
+    europe-west8: 0.896352
+    us-east4: 2.023776
+    asia-south1: 1.182336
+    europe-west2: 2.314464
+    us-west3: 1.443456
+    asia-southeast1: 0.873216
+    asia-northeast3: 1.049376
+    asia-south2: 2.152224
+    europe-central2: 2.167584
+    europe-west10: 0.779328
+    us-west2: 2.152224
+    asia-east1: 2.079456
+    europe-west12: 0.95664
+    us-east5: 1.07328
+    africa-south1: 1.576416
+    southamerica-west1: 1.220448
+    northamerica-northeast2: 1.97616
+    northamerica-northeast1: 1.967232
+    asia-northeast2: 0.951648
+    southamerica-east1: 1.573056
+    us-west8: 0.269952
+    europe-west4: 1.84512
+    australia-southeast1: 2.54304
+    me-central2: 1.137984
+    me-west1: 1.08672
 - instance_type: n2d-highmem-16
   family: n2d
   vcpus: 16
@@ -2747,6 +5175,48 @@ instances:
     europe-west10: 1.17470368
     us-west8: 0.91184
     australia-southeast1: 1.29384
+  spot_price_per_hour:
+    australia-southeast2: 0.327968
+    us-central1: 0.44432
+    us-east1: 0.44432
+    us-west1: 0.44432
+    us-west4: 0.33776
+    europe-west9: 0.438176
+    europe-north1: 0.548864
+    asia-east2: 0.678528
+    europe-west3: 0.703136
+    asia-southeast2: 0.52912
+    europe-west6: 0.716736
+    us-south1: 0.428736
+    europe-west1: 0.551392
+    asia-northeast1: 0.701152
+    me-central1: 0.484544
+    europe-southwest1: 0.6456
+    europe-west8: 0.273376
+    us-east4: 0.616288
+    asia-south1: 0.360128
+    europe-west2: 0.704832
+    us-west3: 0.439488
+    asia-southeast1: 0.266048
+    asia-northeast3: 0.319488
+    asia-south2: 0.655392
+    europe-central2: 0.660192
+    europe-west10: 0.237184
+    us-west2: 0.655392
+    asia-east1: 0.633408
+    europe-west12: 0.29104
+    us-east5: 0.32672
+    africa-south1: 0.480128
+    southamerica-west1: 0.371744
+    northamerica-northeast2: 0.60208
+    northamerica-northeast1: 0.599136
+    asia-northeast2: 0.289984
+    southamerica-east1: 0.479008
+    us-west8: 0.082176
+    europe-west4: 0.56176
+    australia-southeast1: 0.7744
+    me-central2: 0.346912
+    me-west1: 0.3312
 - instance_type: n2d-highmem-2
   family: n2d
   vcpus: 2
@@ -2796,6 +5266,48 @@ instances:
     europe-west10: 0.14683796
     us-west8: 0.11398
     australia-southeast1: 0.16173
+  spot_price_per_hour:
+    australia-southeast2: 0.040996
+    us-central1: 0.05554
+    us-east1: 0.05554
+    us-west1: 0.05554
+    us-west4: 0.04222
+    europe-west9: 0.054772
+    europe-north1: 0.068608
+    asia-east2: 0.084816
+    europe-west3: 0.087892
+    asia-southeast2: 0.06614
+    europe-west6: 0.089592
+    us-south1: 0.053592
+    europe-west1: 0.068924
+    asia-northeast1: 0.087644
+    me-central1: 0.060568
+    europe-southwest1: 0.0807
+    europe-west8: 0.034172
+    us-east4: 0.077036
+    asia-south1: 0.045016
+    europe-west2: 0.088104
+    us-west3: 0.054936
+    asia-southeast1: 0.033256
+    asia-northeast3: 0.039936
+    asia-south2: 0.081924
+    europe-central2: 0.082524
+    europe-west10: 0.029648
+    us-west2: 0.081924
+    asia-east1: 0.079176
+    europe-west12: 0.03638
+    us-east5: 0.04084
+    africa-south1: 0.060016
+    southamerica-west1: 0.046468
+    northamerica-northeast2: 0.07526
+    northamerica-northeast1: 0.074892
+    asia-northeast2: 0.036248
+    southamerica-east1: 0.059876
+    us-west8: 0.010272
+    europe-west4: 0.07022
+    australia-southeast1: 0.0968
+    me-central2: 0.043364
+    me-west1: 0.0414
 - instance_type: n2d-highmem-32
   family: n2d
   vcpus: 32
@@ -2845,6 +5357,48 @@ instances:
     europe-west10: 2.34940736
     us-west8: 1.82368
     australia-southeast1: 2.58768
+  spot_price_per_hour:
+    australia-southeast2: 0.655936
+    us-central1: 0.88864
+    us-east1: 0.88864
+    us-west1: 0.88864
+    us-west4: 0.67552
+    europe-west9: 0.876352
+    europe-north1: 1.097728
+    asia-east2: 1.357056
+    europe-west3: 1.406272
+    asia-southeast2: 1.05824
+    europe-west6: 1.433472
+    us-south1: 0.857472
+    europe-west1: 1.102784
+    asia-northeast1: 1.402304
+    me-central1: 0.969088
+    europe-southwest1: 1.2912
+    europe-west8: 0.546752
+    us-east4: 1.232576
+    asia-south1: 0.720256
+    europe-west2: 1.409664
+    us-west3: 0.878976
+    asia-southeast1: 0.532096
+    asia-northeast3: 0.638976
+    asia-south2: 1.310784
+    europe-central2: 1.320384
+    europe-west10: 0.474368
+    us-west2: 1.310784
+    asia-east1: 1.266816
+    europe-west12: 0.58208
+    us-east5: 0.65344
+    africa-south1: 0.960256
+    southamerica-west1: 0.743488
+    northamerica-northeast2: 1.20416
+    northamerica-northeast1: 1.198272
+    asia-northeast2: 0.579968
+    southamerica-east1: 0.958016
+    us-west8: 0.164352
+    europe-west4: 1.12352
+    australia-southeast1: 1.5488
+    me-central2: 0.693824
+    me-west1: 0.6624
 - instance_type: n2d-highmem-4
   family: n2d
   vcpus: 4
@@ -2894,6 +5448,48 @@ instances:
     europe-west10: 0.29367592
     us-west8: 0.22796
     australia-southeast1: 0.32346
+  spot_price_per_hour:
+    australia-southeast2: 0.081992
+    us-central1: 0.11108
+    us-east1: 0.11108
+    us-west1: 0.11108
+    us-west4: 0.08444
+    europe-west9: 0.109544
+    europe-north1: 0.137216
+    asia-east2: 0.169632
+    europe-west3: 0.175784
+    asia-southeast2: 0.13228
+    europe-west6: 0.179184
+    us-south1: 0.107184
+    europe-west1: 0.137848
+    asia-northeast1: 0.175288
+    me-central1: 0.121136
+    europe-southwest1: 0.1614
+    europe-west8: 0.068344
+    us-east4: 0.154072
+    asia-south1: 0.090032
+    europe-west2: 0.176208
+    us-west3: 0.109872
+    asia-southeast1: 0.066512
+    asia-northeast3: 0.079872
+    asia-south2: 0.163848
+    europe-central2: 0.165048
+    europe-west10: 0.059296
+    us-west2: 0.163848
+    asia-east1: 0.158352
+    europe-west12: 0.07276
+    us-east5: 0.08168
+    africa-south1: 0.120032
+    southamerica-west1: 0.092936
+    northamerica-northeast2: 0.15052
+    northamerica-northeast1: 0.149784
+    asia-northeast2: 0.072496
+    southamerica-east1: 0.119752
+    us-west8: 0.020544
+    europe-west4: 0.14044
+    australia-southeast1: 0.1936
+    me-central2: 0.086728
+    me-west1: 0.0828
 - instance_type: n2d-highmem-48
   family: n2d
   vcpus: 48
@@ -2943,6 +5539,48 @@ instances:
     europe-west10: 3.52411104
     us-west8: 2.73552
     australia-southeast1: 3.88152
+  spot_price_per_hour:
+    australia-southeast2: 0.983904
+    us-central1: 1.33296
+    us-east1: 1.33296
+    us-west1: 1.33296
+    us-west4: 1.01328
+    europe-west9: 1.314528
+    europe-north1: 1.646592
+    asia-east2: 2.035584
+    europe-west3: 2.109408
+    asia-southeast2: 1.58736
+    europe-west6: 2.150208
+    us-south1: 1.286208
+    europe-west1: 1.654176
+    asia-northeast1: 2.103456
+    me-central1: 1.453632
+    europe-southwest1: 1.9368
+    europe-west8: 0.820128
+    us-east4: 1.848864
+    asia-south1: 1.080384
+    europe-west2: 2.114496
+    us-west3: 1.318464
+    asia-southeast1: 0.798144
+    asia-northeast3: 0.958464
+    asia-south2: 1.966176
+    europe-central2: 1.980576
+    europe-west10: 0.711552
+    us-west2: 1.966176
+    asia-east1: 1.900224
+    europe-west12: 0.87312
+    us-east5: 0.98016
+    africa-south1: 1.440384
+    southamerica-west1: 1.115232
+    northamerica-northeast2: 1.80624
+    northamerica-northeast1: 1.797408
+    asia-northeast2: 0.869952
+    southamerica-east1: 1.437024
+    us-west8: 0.246528
+    europe-west4: 1.68528
+    australia-southeast1: 2.3232
+    me-central2: 1.040736
+    me-west1: 0.9936
 - instance_type: n2d-highmem-64
   family: n2d
   vcpus: 64
@@ -2992,6 +5630,48 @@ instances:
     europe-west10: 4.69881472
     us-west8: 3.64736
     australia-southeast1: 5.17536
+  spot_price_per_hour:
+    australia-southeast2: 1.311872
+    us-central1: 1.77728
+    us-east1: 1.77728
+    us-west1: 1.77728
+    us-west4: 1.35104
+    europe-west9: 1.752704
+    europe-north1: 2.195456
+    asia-east2: 2.714112
+    europe-west3: 2.812544
+    asia-southeast2: 2.11648
+    europe-west6: 2.866944
+    us-south1: 1.714944
+    europe-west1: 2.205568
+    asia-northeast1: 2.804608
+    me-central1: 1.938176
+    europe-southwest1: 2.5824
+    europe-west8: 1.093504
+    us-east4: 2.465152
+    asia-south1: 1.440512
+    europe-west2: 2.819328
+    us-west3: 1.757952
+    asia-southeast1: 1.064192
+    asia-northeast3: 1.277952
+    asia-south2: 2.621568
+    europe-central2: 2.640768
+    europe-west10: 0.948736
+    us-west2: 2.621568
+    asia-east1: 2.533632
+    europe-west12: 1.16416
+    us-east5: 1.30688
+    africa-south1: 1.920512
+    southamerica-west1: 1.486976
+    northamerica-northeast2: 2.40832
+    northamerica-northeast1: 2.396544
+    asia-northeast2: 1.159936
+    southamerica-east1: 1.916032
+    us-west8: 0.328704
+    europe-west4: 2.24704
+    australia-southeast1: 3.0976
+    me-central2: 1.387648
+    me-west1: 1.3248
 - instance_type: n2d-highmem-8
   family: n2d
   vcpus: 8
@@ -3041,6 +5721,48 @@ instances:
     europe-west10: 0.58735184
     us-west8: 0.45592
     australia-southeast1: 0.64692
+  spot_price_per_hour:
+    australia-southeast2: 0.163984
+    us-central1: 0.22216
+    us-east1: 0.22216
+    us-west1: 0.22216
+    us-west4: 0.16888
+    europe-west9: 0.219088
+    europe-north1: 0.274432
+    asia-east2: 0.339264
+    europe-west3: 0.351568
+    asia-southeast2: 0.26456
+    europe-west6: 0.358368
+    us-south1: 0.214368
+    europe-west1: 0.275696
+    asia-northeast1: 0.350576
+    me-central1: 0.242272
+    europe-southwest1: 0.3228
+    europe-west8: 0.136688
+    us-east4: 0.308144
+    asia-south1: 0.180064
+    europe-west2: 0.352416
+    us-west3: 0.219744
+    asia-southeast1: 0.133024
+    asia-northeast3: 0.159744
+    asia-south2: 0.327696
+    europe-central2: 0.330096
+    europe-west10: 0.118592
+    us-west2: 0.327696
+    asia-east1: 0.316704
+    europe-west12: 0.14552
+    us-east5: 0.16336
+    africa-south1: 0.240064
+    southamerica-west1: 0.185872
+    northamerica-northeast2: 0.30104
+    northamerica-northeast1: 0.299568
+    asia-northeast2: 0.144992
+    southamerica-east1: 0.239504
+    us-west8: 0.041088
+    europe-west4: 0.28088
+    australia-southeast1: 0.3872
+    me-central2: 0.173456
+    me-west1: 0.1656
 - instance_type: n2d-highmem-80
   family: n2d
   vcpus: 80
@@ -3090,6 +5812,48 @@ instances:
     europe-west10: 5.8735184
     us-west8: 4.5592
     australia-southeast1: 6.4692
+  spot_price_per_hour:
+    australia-southeast2: 1.63984
+    us-central1: 2.2216
+    us-east1: 2.2216
+    us-west1: 2.2216
+    us-west4: 1.6888
+    europe-west9: 2.19088
+    europe-north1: 2.74432
+    asia-east2: 3.39264
+    europe-west3: 3.51568
+    asia-southeast2: 2.6456
+    europe-west6: 3.58368
+    us-south1: 2.14368
+    europe-west1: 2.75696
+    asia-northeast1: 3.50576
+    me-central1: 2.42272
+    europe-southwest1: 3.228
+    europe-west8: 1.36688
+    us-east4: 3.08144
+    asia-south1: 1.80064
+    europe-west2: 3.52416
+    us-west3: 2.19744
+    asia-southeast1: 1.33024
+    asia-northeast3: 1.59744
+    asia-south2: 3.27696
+    europe-central2: 3.30096
+    europe-west10: 1.18592
+    us-west2: 3.27696
+    asia-east1: 3.16704
+    europe-west12: 1.4552
+    us-east5: 1.6336
+    africa-south1: 2.40064
+    southamerica-west1: 1.85872
+    northamerica-northeast2: 3.0104
+    northamerica-northeast1: 2.99568
+    asia-northeast2: 1.44992
+    southamerica-east1: 2.39504
+    us-west8: 0.41088
+    europe-west4: 2.8088
+    australia-southeast1: 3.872
+    me-central2: 1.73456
+    me-west1: 1.656
 - instance_type: n2d-highmem-96
   family: n2d
   vcpus: 96
@@ -3139,6 +5903,48 @@ instances:
     europe-west10: 7.04822208
     us-west8: 5.47104
     australia-southeast1: 7.76304
+  spot_price_per_hour:
+    australia-southeast2: 1.967808
+    us-central1: 2.66592
+    us-east1: 2.66592
+    us-west1: 2.66592
+    us-west4: 2.02656
+    europe-west9: 2.629056
+    europe-north1: 3.293184
+    asia-east2: 4.071168
+    europe-west3: 4.218816
+    asia-southeast2: 3.17472
+    europe-west6: 4.300416
+    us-south1: 2.572416
+    europe-west1: 3.308352
+    asia-northeast1: 4.206912
+    me-central1: 2.907264
+    europe-southwest1: 3.8736
+    europe-west8: 1.640256
+    us-east4: 3.697728
+    asia-south1: 2.160768
+    europe-west2: 4.228992
+    us-west3: 2.636928
+    asia-southeast1: 1.596288
+    asia-northeast3: 1.916928
+    asia-south2: 3.932352
+    europe-central2: 3.961152
+    europe-west10: 1.423104
+    us-west2: 3.932352
+    asia-east1: 3.800448
+    europe-west12: 1.74624
+    us-east5: 1.96032
+    africa-south1: 2.880768
+    southamerica-west1: 2.230464
+    northamerica-northeast2: 3.61248
+    northamerica-northeast1: 3.594816
+    asia-northeast2: 1.739904
+    southamerica-east1: 2.874048
+    us-west8: 0.493056
+    europe-west4: 3.37056
+    australia-southeast1: 4.6464
+    me-central2: 2.081472
+    me-west1: 1.9872
 - instance_type: n2d-standard-128
   family: n2d
   vcpus: 128
@@ -3188,6 +5994,48 @@ instances:
     europe-west10: 6.9667712
     us-west8: 5.407488
     australia-southeast1: 7.67296
+  spot_price_per_hour:
+    australia-southeast2: 1.944832
+    us-central1: 2.63552
+    us-east1: 2.63552
+    us-west1: 2.63552
+    us-west4: 2.0032
+    europe-west9: 2.598144
+    europe-north1: 3.255296
+    asia-east2: 4.024832
+    europe-west3: 4.169984
+    asia-southeast2: 3.13728
+    europe-west6: 4.250624
+    us-south1: 2.543104
+    europe-west1: 3.269888
+    asia-northeast1: 4.160768
+    me-central1: 2.873856
+    europe-southwest1: 3.82848
+    europe-west8: 1.620224
+    us-east4: 3.654912
+    asia-south1: 2.135552
+    europe-west2: 4.179968
+    us-west3: 2.606592
+    asia-southeast1: 1.577472
+    asia-northeast3: 1.894912
+    asia-south2: 3.886848
+    europe-central2: 3.915008
+    europe-west10: 1.406976
+    us-west2: 3.886848
+    asia-east1: 3.756032
+    europe-west12: 1.72672
+    us-east5: 1.93792
+    africa-south1: 2.847232
+    southamerica-west1: 2.204416
+    northamerica-northeast2: 3.56992
+    northamerica-northeast1: 3.553024
+    asia-northeast2: 1.719296
+    southamerica-east1: 2.840832
+    us-west8: 0.487424
+    europe-west4: 3.33184
+    australia-southeast1: 4.59264
+    me-central2: 2.056448
+    me-west1: 1.96352
 - instance_type: n2d-standard-16
   family: n2d
   vcpus: 16
@@ -3237,6 +6085,48 @@ instances:
     europe-west10: 0.8708464
     us-west8: 0.675936
     australia-southeast1: 0.95912
+  spot_price_per_hour:
+    australia-southeast2: 0.243104
+    us-central1: 0.32944
+    us-east1: 0.32944
+    us-west1: 0.32944
+    us-west4: 0.2504
+    europe-west9: 0.324768
+    europe-north1: 0.406912
+    asia-east2: 0.503104
+    europe-west3: 0.521248
+    asia-southeast2: 0.39216
+    europe-west6: 0.531328
+    us-south1: 0.317888
+    europe-west1: 0.408736
+    asia-northeast1: 0.520096
+    me-central1: 0.359232
+    europe-southwest1: 0.47856
+    europe-west8: 0.202528
+    us-east4: 0.456864
+    asia-south1: 0.266944
+    europe-west2: 0.522496
+    us-west3: 0.325824
+    asia-southeast1: 0.197184
+    asia-northeast3: 0.236864
+    asia-south2: 0.485856
+    europe-central2: 0.489376
+    europe-west10: 0.175872
+    us-west2: 0.485856
+    asia-east1: 0.469504
+    europe-west12: 0.21584
+    us-east5: 0.24224
+    africa-south1: 0.355904
+    southamerica-west1: 0.275552
+    northamerica-northeast2: 0.44624
+    northamerica-northeast1: 0.444128
+    asia-northeast2: 0.214912
+    southamerica-east1: 0.355104
+    us-west8: 0.060928
+    europe-west4: 0.41648
+    australia-southeast1: 0.57408
+    me-central2: 0.257056
+    me-west1: 0.24544
 - instance_type: n2d-standard-2
   family: n2d
   vcpus: 2
@@ -3286,6 +6176,48 @@ instances:
     europe-west10: 0.1088558
     us-west8: 0.084492
     australia-southeast1: 0.11989
+  spot_price_per_hour:
+    australia-southeast2: 0.030388
+    us-central1: 0.04118
+    us-east1: 0.04118
+    us-west1: 0.04118
+    us-west4: 0.0313
+    europe-west9: 0.040596
+    europe-north1: 0.050864
+    asia-east2: 0.062888
+    europe-west3: 0.065156
+    asia-southeast2: 0.04902
+    europe-west6: 0.066416
+    us-south1: 0.039736
+    europe-west1: 0.051092
+    asia-northeast1: 0.065012
+    me-central1: 0.044904
+    europe-southwest1: 0.05982
+    europe-west8: 0.025316
+    us-east4: 0.057108
+    asia-south1: 0.033368
+    europe-west2: 0.065312
+    us-west3: 0.040728
+    asia-southeast1: 0.024648
+    asia-northeast3: 0.029608
+    asia-south2: 0.060732
+    europe-central2: 0.061172
+    europe-west10: 0.021984
+    us-west2: 0.060732
+    asia-east1: 0.058688
+    europe-west12: 0.02698
+    us-east5: 0.03028
+    africa-south1: 0.044488
+    southamerica-west1: 0.034444
+    northamerica-northeast2: 0.05578
+    northamerica-northeast1: 0.055516
+    asia-northeast2: 0.026864
+    southamerica-east1: 0.044388
+    us-west8: 0.007616
+    europe-west4: 0.05206
+    australia-southeast1: 0.07176
+    me-central2: 0.032132
+    me-west1: 0.03068
 - instance_type: n2d-standard-224
   family: n2d
   vcpus: 224
@@ -3335,6 +6267,48 @@ instances:
     europe-west10: 12.1918496
     us-west8: 9.463104
     australia-southeast1: 13.42768
+  spot_price_per_hour:
+    australia-southeast2: 3.403456
+    us-central1: 4.61216
+    us-east1: 4.61216
+    us-west1: 4.61216
+    us-west4: 3.5056
+    europe-west9: 4.546752
+    europe-north1: 5.696768
+    asia-east2: 7.043456
+    europe-west3: 7.297472
+    asia-southeast2: 5.49024
+    europe-west6: 7.438592
+    us-south1: 4.450432
+    europe-west1: 5.722304
+    asia-northeast1: 7.281344
+    me-central1: 5.029248
+    europe-southwest1: 6.69984
+    europe-west8: 2.835392
+    us-east4: 6.396096
+    asia-south1: 3.737216
+    europe-west2: 7.314944
+    us-west3: 4.561536
+    asia-southeast1: 2.760576
+    asia-northeast3: 3.316096
+    asia-south2: 6.801984
+    europe-central2: 6.851264
+    europe-west10: 2.462208
+    us-west2: 6.801984
+    asia-east1: 6.573056
+    europe-west12: 3.02176
+    us-east5: 3.39136
+    africa-south1: 4.982656
+    southamerica-west1: 3.857728
+    northamerica-northeast2: 6.24736
+    northamerica-northeast1: 6.217792
+    asia-northeast2: 3.008768
+    southamerica-east1: 4.971456
+    us-west8: 0.852992
+    europe-west4: 5.83072
+    australia-southeast1: 8.03712
+    me-central2: 3.598784
+    me-west1: 3.43616
 - instance_type: n2d-standard-32
   family: n2d
   vcpus: 32
@@ -3384,6 +6358,48 @@ instances:
     europe-west10: 1.7416928
     us-west8: 1.351872
     australia-southeast1: 1.91824
+  spot_price_per_hour:
+    australia-southeast2: 0.486208
+    us-central1: 0.65888
+    us-east1: 0.65888
+    us-west1: 0.65888
+    us-west4: 0.5008
+    europe-west9: 0.649536
+    europe-north1: 0.813824
+    asia-east2: 1.006208
+    europe-west3: 1.042496
+    asia-southeast2: 0.78432
+    europe-west6: 1.062656
+    us-south1: 0.635776
+    europe-west1: 0.817472
+    asia-northeast1: 1.040192
+    me-central1: 0.718464
+    europe-southwest1: 0.95712
+    europe-west8: 0.405056
+    us-east4: 0.913728
+    asia-south1: 0.533888
+    europe-west2: 1.044992
+    us-west3: 0.651648
+    asia-southeast1: 0.394368
+    asia-northeast3: 0.473728
+    asia-south2: 0.971712
+    europe-central2: 0.978752
+    europe-west10: 0.351744
+    us-west2: 0.971712
+    asia-east1: 0.939008
+    europe-west12: 0.43168
+    us-east5: 0.48448
+    africa-south1: 0.711808
+    southamerica-west1: 0.551104
+    northamerica-northeast2: 0.89248
+    northamerica-northeast1: 0.888256
+    asia-northeast2: 0.429824
+    southamerica-east1: 0.710208
+    us-west8: 0.121856
+    europe-west4: 0.83296
+    australia-southeast1: 1.14816
+    me-central2: 0.514112
+    me-west1: 0.49088
 - instance_type: n2d-standard-4
   family: n2d
   vcpus: 4
@@ -3433,6 +6449,48 @@ instances:
     europe-west10: 0.2177116
     us-west8: 0.168984
     australia-southeast1: 0.23978
+  spot_price_per_hour:
+    australia-southeast2: 0.060776
+    us-central1: 0.08236
+    us-east1: 0.08236
+    us-west1: 0.08236
+    us-west4: 0.0626
+    europe-west9: 0.081192
+    europe-north1: 0.101728
+    asia-east2: 0.125776
+    europe-west3: 0.130312
+    asia-southeast2: 0.09804
+    europe-west6: 0.132832
+    us-south1: 0.079472
+    europe-west1: 0.102184
+    asia-northeast1: 0.130024
+    me-central1: 0.089808
+    europe-southwest1: 0.11964
+    europe-west8: 0.050632
+    us-east4: 0.114216
+    asia-south1: 0.066736
+    europe-west2: 0.130624
+    us-west3: 0.081456
+    asia-southeast1: 0.049296
+    asia-northeast3: 0.059216
+    asia-south2: 0.121464
+    europe-central2: 0.122344
+    europe-west10: 0.043968
+    us-west2: 0.121464
+    asia-east1: 0.117376
+    europe-west12: 0.05396
+    us-east5: 0.06056
+    africa-south1: 0.088976
+    southamerica-west1: 0.068888
+    northamerica-northeast2: 0.11156
+    northamerica-northeast1: 0.111032
+    asia-northeast2: 0.053728
+    southamerica-east1: 0.088776
+    us-west8: 0.015232
+    europe-west4: 0.10412
+    australia-southeast1: 0.14352
+    me-central2: 0.064264
+    me-west1: 0.06136
 - instance_type: n2d-standard-48
   family: n2d
   vcpus: 48
@@ -3482,6 +6540,48 @@ instances:
     europe-west10: 2.6125392
     us-west8: 2.027808
     australia-southeast1: 2.87736
+  spot_price_per_hour:
+    australia-southeast2: 0.729312
+    us-central1: 0.98832
+    us-east1: 0.98832
+    us-west1: 0.98832
+    us-west4: 0.7512
+    europe-west9: 0.974304
+    europe-north1: 1.220736
+    asia-east2: 1.509312
+    europe-west3: 1.563744
+    asia-southeast2: 1.17648
+    europe-west6: 1.593984
+    us-south1: 0.953664
+    europe-west1: 1.226208
+    asia-northeast1: 1.560288
+    me-central1: 1.077696
+    europe-southwest1: 1.43568
+    europe-west8: 0.607584
+    us-east4: 1.370592
+    asia-south1: 0.800832
+    europe-west2: 1.567488
+    us-west3: 0.977472
+    asia-southeast1: 0.591552
+    asia-northeast3: 0.710592
+    asia-south2: 1.457568
+    europe-central2: 1.468128
+    europe-west10: 0.527616
+    us-west2: 1.457568
+    asia-east1: 1.408512
+    europe-west12: 0.64752
+    us-east5: 0.72672
+    africa-south1: 1.067712
+    southamerica-west1: 0.826656
+    northamerica-northeast2: 1.33872
+    northamerica-northeast1: 1.332384
+    asia-northeast2: 0.644736
+    southamerica-east1: 1.065312
+    us-west8: 0.182784
+    europe-west4: 1.24944
+    australia-southeast1: 1.72224
+    me-central2: 0.771168
+    me-west1: 0.73632
 - instance_type: n2d-standard-64
   family: n2d
   vcpus: 64
@@ -3531,6 +6631,48 @@ instances:
     europe-west10: 3.4833856
     us-west8: 2.703744
     australia-southeast1: 3.83648
+  spot_price_per_hour:
+    australia-southeast2: 0.972416
+    us-central1: 1.31776
+    us-east1: 1.31776
+    us-west1: 1.31776
+    us-west4: 1.0016
+    europe-west9: 1.299072
+    europe-north1: 1.627648
+    asia-east2: 2.012416
+    europe-west3: 2.084992
+    asia-southeast2: 1.56864
+    europe-west6: 2.125312
+    us-south1: 1.271552
+    europe-west1: 1.634944
+    asia-northeast1: 2.080384
+    me-central1: 1.436928
+    europe-southwest1: 1.91424
+    europe-west8: 0.810112
+    us-east4: 1.827456
+    asia-south1: 1.067776
+    europe-west2: 2.089984
+    us-west3: 1.303296
+    asia-southeast1: 0.788736
+    asia-northeast3: 0.947456
+    asia-south2: 1.943424
+    europe-central2: 1.957504
+    europe-west10: 0.703488
+    us-west2: 1.943424
+    asia-east1: 1.878016
+    europe-west12: 0.86336
+    us-east5: 0.96896
+    africa-south1: 1.423616
+    southamerica-west1: 1.102208
+    northamerica-northeast2: 1.78496
+    northamerica-northeast1: 1.776512
+    asia-northeast2: 0.859648
+    southamerica-east1: 1.420416
+    us-west8: 0.243712
+    europe-west4: 1.66592
+    australia-southeast1: 2.29632
+    me-central2: 1.028224
+    me-west1: 0.98176
 - instance_type: n2d-standard-8
   family: n2d
   vcpus: 8
@@ -3580,6 +6722,48 @@ instances:
     europe-west10: 0.4354232
     us-west8: 0.337968
     australia-southeast1: 0.47956
+  spot_price_per_hour:
+    australia-southeast2: 0.121552
+    us-central1: 0.16472
+    us-east1: 0.16472
+    us-west1: 0.16472
+    us-west4: 0.1252
+    europe-west9: 0.162384
+    europe-north1: 0.203456
+    asia-east2: 0.251552
+    europe-west3: 0.260624
+    asia-southeast2: 0.19608
+    europe-west6: 0.265664
+    us-south1: 0.158944
+    europe-west1: 0.204368
+    asia-northeast1: 0.260048
+    me-central1: 0.179616
+    europe-southwest1: 0.23928
+    europe-west8: 0.101264
+    us-east4: 0.228432
+    asia-south1: 0.133472
+    europe-west2: 0.261248
+    us-west3: 0.162912
+    asia-southeast1: 0.098592
+    asia-northeast3: 0.118432
+    asia-south2: 0.242928
+    europe-central2: 0.244688
+    europe-west10: 0.087936
+    us-west2: 0.242928
+    asia-east1: 0.234752
+    europe-west12: 0.10792
+    us-east5: 0.12112
+    africa-south1: 0.177952
+    southamerica-west1: 0.137776
+    northamerica-northeast2: 0.22312
+    northamerica-northeast1: 0.222064
+    asia-northeast2: 0.107456
+    southamerica-east1: 0.177552
+    us-west8: 0.030464
+    europe-west4: 0.20824
+    australia-southeast1: 0.28704
+    me-central2: 0.128528
+    me-west1: 0.12272
 - instance_type: n2d-standard-80
   family: n2d
   vcpus: 80
@@ -3629,6 +6813,48 @@ instances:
     europe-west10: 4.354232
     us-west8: 3.37968
     australia-southeast1: 4.7956
+  spot_price_per_hour:
+    australia-southeast2: 1.21552
+    us-central1: 1.6472
+    us-east1: 1.6472
+    us-west1: 1.6472
+    us-west4: 1.252
+    europe-west9: 1.62384
+    europe-north1: 2.03456
+    asia-east2: 2.51552
+    europe-west3: 2.60624
+    asia-southeast2: 1.9608
+    europe-west6: 2.65664
+    us-south1: 1.58944
+    europe-west1: 2.04368
+    asia-northeast1: 2.60048
+    me-central1: 1.79616
+    europe-southwest1: 2.3928
+    europe-west8: 1.01264
+    us-east4: 2.28432
+    asia-south1: 1.33472
+    europe-west2: 2.61248
+    us-west3: 1.62912
+    asia-southeast1: 0.98592
+    asia-northeast3: 1.18432
+    asia-south2: 2.42928
+    europe-central2: 2.44688
+    europe-west10: 0.87936
+    us-west2: 2.42928
+    asia-east1: 2.34752
+    europe-west12: 1.0792
+    us-east5: 1.2112
+    africa-south1: 1.77952
+    southamerica-west1: 1.37776
+    northamerica-northeast2: 2.2312
+    northamerica-northeast1: 2.22064
+    asia-northeast2: 1.07456
+    southamerica-east1: 1.77552
+    us-west8: 0.30464
+    europe-west4: 2.0824
+    australia-southeast1: 2.8704
+    me-central2: 1.28528
+    me-west1: 1.2272
 - instance_type: n2d-standard-96
   family: n2d
   vcpus: 96
@@ -3678,6 +6904,48 @@ instances:
     europe-west10: 5.2250784
     us-west8: 4.055616
     australia-southeast1: 5.75472
+  spot_price_per_hour:
+    australia-southeast2: 1.458624
+    us-central1: 1.97664
+    us-east1: 1.97664
+    us-west1: 1.97664
+    us-west4: 1.5024
+    europe-west9: 1.948608
+    europe-north1: 2.441472
+    asia-east2: 3.018624
+    europe-west3: 3.127488
+    asia-southeast2: 2.35296
+    europe-west6: 3.187968
+    us-south1: 1.907328
+    europe-west1: 2.452416
+    asia-northeast1: 3.120576
+    me-central1: 2.155392
+    europe-southwest1: 2.87136
+    europe-west8: 1.215168
+    us-east4: 2.741184
+    asia-south1: 1.601664
+    europe-west2: 3.134976
+    us-west3: 1.954944
+    asia-southeast1: 1.183104
+    asia-northeast3: 1.421184
+    asia-south2: 2.915136
+    europe-central2: 2.936256
+    europe-west10: 1.055232
+    us-west2: 2.915136
+    asia-east1: 2.817024
+    europe-west12: 1.29504
+    us-east5: 1.45344
+    africa-south1: 2.135424
+    southamerica-west1: 1.653312
+    northamerica-northeast2: 2.67744
+    northamerica-northeast1: 2.664768
+    asia-northeast2: 1.289472
+    southamerica-east1: 2.130624
+    us-west8: 0.365568
+    europe-west4: 2.49888
+    australia-southeast1: 3.44448
+    me-central2: 1.542336
+    me-west1: 1.47264
 - instance_type: n4a-highcpu-1
   family: n4a-highcpu
   vcpus: 1
@@ -3696,6 +6964,17 @@ instances:
     us-east1: 0.03248
     us-east4: 0.03576
     us-west1: 0.04006
+  spot_price_per_hour:
+    europe-west3: 0.018558
+    europe-west4: 0.015036
+    europe-west1: 0.017352
+    africa-south1: 0.012926
+    us-east4: 0.015
+    us-west1: 0.011734
+    europe-west2: 0.017932
+    asia-southeast1: 0.019418
+    us-east1: 0.011734
+    us-central1: 0.012952
 - instance_type: n4a-highcpu-16
   family: n4a-highcpu
   vcpus: 16
@@ -3714,6 +6993,17 @@ instances:
     us-east1: 0.51968
     us-east4: 0.57216
     us-west1: 0.64096
+  spot_price_per_hour:
+    europe-west3: 0.296928
+    europe-west4: 0.240576
+    europe-west1: 0.277632
+    africa-south1: 0.206816
+    us-east4: 0.24
+    us-west1: 0.187744
+    europe-west2: 0.286912
+    asia-southeast1: 0.310688
+    us-east1: 0.187744
+    us-central1: 0.207232
 - instance_type: n4a-highcpu-2
   family: n4a-highcpu
   vcpus: 2
@@ -3732,6 +7022,17 @@ instances:
     us-east1: 0.06496
     us-east4: 0.07152
     us-west1: 0.08012
+  spot_price_per_hour:
+    europe-west3: 0.037116
+    europe-west4: 0.030072
+    europe-west1: 0.034704
+    africa-south1: 0.025852
+    us-east4: 0.03
+    us-west1: 0.023468
+    europe-west2: 0.035864
+    asia-southeast1: 0.038836
+    us-east1: 0.023468
+    us-central1: 0.025904
 - instance_type: n4a-highcpu-32
   family: n4a-highcpu
   vcpus: 32
@@ -3750,6 +7051,17 @@ instances:
     us-east1: 1.03936
     us-east4: 1.14432
     us-west1: 1.28192
+  spot_price_per_hour:
+    europe-west3: 0.593856
+    europe-west4: 0.481152
+    europe-west1: 0.555264
+    africa-south1: 0.413632
+    us-east4: 0.48
+    us-west1: 0.375488
+    europe-west2: 0.573824
+    asia-southeast1: 0.621376
+    us-east1: 0.375488
+    us-central1: 0.414464
 - instance_type: n4a-highcpu-4
   family: n4a-highcpu
   vcpus: 4
@@ -3768,6 +7080,17 @@ instances:
     us-east1: 0.12992
     us-east4: 0.14304
     us-west1: 0.16024
+  spot_price_per_hour:
+    europe-west3: 0.074232
+    europe-west4: 0.060144
+    europe-west1: 0.069408
+    africa-south1: 0.051704
+    us-east4: 0.06
+    us-west1: 0.046936
+    europe-west2: 0.071728
+    asia-southeast1: 0.077672
+    us-east1: 0.046936
+    us-central1: 0.051808
 - instance_type: n4a-highcpu-48
   family: n4a-highcpu
   vcpus: 48
@@ -3786,6 +7109,17 @@ instances:
     us-east1: 1.55904
     us-east4: 1.71648
     us-west1: 1.92288
+  spot_price_per_hour:
+    europe-west3: 0.890784
+    europe-west4: 0.721728
+    europe-west1: 0.832896
+    africa-south1: 0.620448
+    us-east4: 0.72
+    us-west1: 0.563232
+    europe-west2: 0.860736
+    asia-southeast1: 0.932064
+    us-east1: 0.563232
+    us-central1: 0.621696
 - instance_type: n4a-highcpu-64
   family: n4a-highcpu
   vcpus: 64
@@ -3804,6 +7138,17 @@ instances:
     us-east1: 2.07872
     us-east4: 2.28864
     us-west1: 2.56384
+  spot_price_per_hour:
+    europe-west3: 1.187712
+    europe-west4: 0.962304
+    europe-west1: 1.110528
+    africa-south1: 0.827264
+    us-east4: 0.96
+    us-west1: 0.750976
+    europe-west2: 1.147648
+    asia-southeast1: 1.242752
+    us-east1: 0.750976
+    us-central1: 0.828928
 - instance_type: n4a-highcpu-8
   family: n4a-highcpu
   vcpus: 8
@@ -3822,6 +7167,17 @@ instances:
     us-east1: 0.25984
     us-east4: 0.28608
     us-west1: 0.32048
+  spot_price_per_hour:
+    europe-west3: 0.148464
+    europe-west4: 0.120288
+    europe-west1: 0.138816
+    africa-south1: 0.103408
+    us-east4: 0.12
+    us-west1: 0.093872
+    europe-west2: 0.143456
+    asia-southeast1: 0.155344
+    us-east1: 0.093872
+    us-central1: 0.103616
 - instance_type: n4a-highmem-1
   family: n4a-highmem
   vcpus: 1
@@ -3840,6 +7196,17 @@ instances:
     us-east1: 0.05054
     us-east4: 0.05562
     us-west1: 0.06232
+  spot_price_per_hour:
+    europe-west3: 0.028872
+    europe-west4: 0.023394
+    europe-west1: 0.026988
+    africa-south1: 0.020114
+    us-east4: 0.02334
+    us-west1: 0.018256
+    europe-west2: 0.027898
+    asia-southeast1: 0.030212
+    us-east1: 0.018256
+    us-central1: 0.020158
 - instance_type: n4a-highmem-16
   family: n4a-highmem
   vcpus: 16
@@ -3858,6 +7225,17 @@ instances:
     us-east1: 0.80864
     us-east4: 0.88992
     us-west1: 0.99712
+  spot_price_per_hour:
+    europe-west3: 0.461952
+    europe-west4: 0.374304
+    europe-west1: 0.431808
+    africa-south1: 0.321824
+    us-east4: 0.37344
+    us-west1: 0.292096
+    europe-west2: 0.446368
+    asia-southeast1: 0.483392
+    us-east1: 0.292096
+    us-central1: 0.322528
 - instance_type: n4a-highmem-2
   family: n4a-highmem
   vcpus: 2
@@ -3876,6 +7254,17 @@ instances:
     us-east1: 0.10108
     us-east4: 0.11124
     us-west1: 0.12464
+  spot_price_per_hour:
+    europe-west3: 0.057744
+    europe-west4: 0.046788
+    europe-west1: 0.053976
+    africa-south1: 0.040228
+    us-east4: 0.04668
+    us-west1: 0.036512
+    europe-west2: 0.055796
+    asia-southeast1: 0.060424
+    us-east1: 0.036512
+    us-central1: 0.040316
 - instance_type: n4a-highmem-32
   family: n4a-highmem
   vcpus: 32
@@ -3894,6 +7283,17 @@ instances:
     us-east1: 1.61728
     us-east4: 1.77984
     us-west1: 1.99424
+  spot_price_per_hour:
+    europe-west3: 0.923904
+    europe-west4: 0.748608
+    europe-west1: 0.863616
+    africa-south1: 0.643648
+    us-east4: 0.74688
+    us-west1: 0.584192
+    europe-west2: 0.892736
+    asia-southeast1: 0.966784
+    us-east1: 0.584192
+    us-central1: 0.645056
 - instance_type: n4a-highmem-4
   family: n4a-highmem
   vcpus: 4
@@ -3912,6 +7312,17 @@ instances:
     us-east1: 0.20216
     us-east4: 0.22248
     us-west1: 0.24928
+  spot_price_per_hour:
+    europe-west3: 0.115488
+    europe-west4: 0.093576
+    europe-west1: 0.107952
+    africa-south1: 0.080456
+    us-east4: 0.09336
+    us-west1: 0.073024
+    europe-west2: 0.111592
+    asia-southeast1: 0.120848
+    us-east1: 0.073024
+    us-central1: 0.080632
 - instance_type: n4a-highmem-48
   family: n4a-highmem
   vcpus: 48
@@ -3930,6 +7341,17 @@ instances:
     us-east1: 2.42592
     us-east4: 2.66976
     us-west1: 2.99136
+  spot_price_per_hour:
+    europe-west3: 1.385856
+    europe-west4: 1.122912
+    europe-west1: 1.295424
+    africa-south1: 0.965472
+    us-east4: 1.12032
+    us-west1: 0.876288
+    europe-west2: 1.339104
+    asia-southeast1: 1.450176
+    us-east1: 0.876288
+    us-central1: 0.967584
 - instance_type: n4a-highmem-64
   family: n4a-highmem
   vcpus: 64
@@ -3948,6 +7370,17 @@ instances:
     us-east1: 3.23456
     us-east4: 3.55968
     us-west1: 3.98848
+  spot_price_per_hour:
+    europe-west3: 1.847808
+    europe-west4: 1.497216
+    europe-west1: 1.727232
+    africa-south1: 1.287296
+    us-east4: 1.49376
+    us-west1: 1.168384
+    europe-west2: 1.785472
+    asia-southeast1: 1.933568
+    us-east1: 1.168384
+    us-central1: 1.290112
 - instance_type: n4a-highmem-8
   family: n4a-highmem
   vcpus: 8
@@ -3966,6 +7399,17 @@ instances:
     us-east1: 0.40432
     us-east4: 0.44496
     us-west1: 0.49856
+  spot_price_per_hour:
+    europe-west3: 0.230976
+    europe-west4: 0.187152
+    europe-west1: 0.215904
+    africa-south1: 0.160912
+    us-east4: 0.18672
+    us-west1: 0.146048
+    europe-west2: 0.223184
+    asia-southeast1: 0.241696
+    us-east1: 0.146048
+    us-central1: 0.161264
 - instance_type: n4a-standard-1
   family: n4a-standard
   vcpus: 1
@@ -3984,6 +7428,17 @@ instances:
     us-east1: 0.0385
     us-east4: 0.0385
     us-west1: 0.0385
+  spot_price_per_hour:
+    europe-west3: 0.021996
+    europe-west4: 0.017822
+    europe-west1: 0.020564
+    africa-south1: 0.015322
+    us-east4: 0.01778
+    us-west1: 0.013908
+    europe-west2: 0.021254
+    asia-southeast1: 0.023016
+    us-east1: 0.013908
+    us-central1: 0.015354
 - instance_type: n4a-standard-16
   family: n4a-standard
   vcpus: 16
@@ -4002,6 +7457,17 @@ instances:
     us-east1: 0.616
     us-east4: 0.616
     us-west1: 0.616
+  spot_price_per_hour:
+    europe-west3: 0.351936
+    europe-west4: 0.285152
+    europe-west1: 0.329024
+    africa-south1: 0.245152
+    us-east4: 0.28448
+    us-west1: 0.222528
+    europe-west2: 0.340064
+    asia-southeast1: 0.368256
+    us-east1: 0.222528
+    us-central1: 0.245664
 - instance_type: n4a-standard-2
   family: n4a-standard
   vcpus: 2
@@ -4020,6 +7486,17 @@ instances:
     us-east1: 0.077
     us-east4: 0.077
     us-west1: 0.077
+  spot_price_per_hour:
+    europe-west3: 0.043992
+    europe-west4: 0.035644
+    europe-west1: 0.041128
+    africa-south1: 0.030644
+    us-east4: 0.03556
+    us-west1: 0.027816
+    europe-west2: 0.042508
+    asia-southeast1: 0.046032
+    us-east1: 0.027816
+    us-central1: 0.030708
 - instance_type: n4a-standard-32
   family: n4a-standard
   vcpus: 32
@@ -4038,6 +7515,17 @@ instances:
     us-east1: 1.232
     us-east4: 1.232
     us-west1: 1.232
+  spot_price_per_hour:
+    europe-west3: 0.703872
+    europe-west4: 0.570304
+    europe-west1: 0.658048
+    africa-south1: 0.490304
+    us-east4: 0.56896
+    us-west1: 0.445056
+    europe-west2: 0.680128
+    asia-southeast1: 0.736512
+    us-east1: 0.445056
+    us-central1: 0.491328
 - instance_type: n4a-standard-4
   family: n4a-standard
   vcpus: 4
@@ -4056,6 +7544,17 @@ instances:
     us-east1: 0.154
     us-east4: 0.154
     us-west1: 0.154
+  spot_price_per_hour:
+    europe-west3: 0.087984
+    europe-west4: 0.071288
+    europe-west1: 0.082256
+    africa-south1: 0.061288
+    us-east4: 0.07112
+    us-west1: 0.055632
+    europe-west2: 0.085016
+    asia-southeast1: 0.092064
+    us-east1: 0.055632
+    us-central1: 0.061416
 - instance_type: n4a-standard-48
   family: n4a-standard
   vcpus: 48
@@ -4074,6 +7573,17 @@ instances:
     us-east1: 1.848
     us-east4: 1.848
     us-west1: 1.848
+  spot_price_per_hour:
+    europe-west3: 1.055808
+    europe-west4: 0.855456
+    europe-west1: 0.987072
+    africa-south1: 0.735456
+    us-east4: 0.85344
+    us-west1: 0.667584
+    europe-west2: 1.020192
+    asia-southeast1: 1.104768
+    us-east1: 0.667584
+    us-central1: 0.736992
 - instance_type: n4a-standard-64
   family: n4a-standard
   vcpus: 64
@@ -4092,6 +7602,17 @@ instances:
     us-east1: 2.464
     us-east4: 2.464
     us-west1: 2.464
+  spot_price_per_hour:
+    europe-west3: 1.407744
+    europe-west4: 1.140608
+    europe-west1: 1.316096
+    africa-south1: 0.980608
+    us-east4: 1.13792
+    us-west1: 0.890112
+    europe-west2: 1.360256
+    asia-southeast1: 1.473024
+    us-east1: 0.890112
+    us-central1: 0.982656
 - instance_type: n4a-standard-8
   family: n4a-standard
   vcpus: 8
@@ -4110,6 +7631,17 @@ instances:
     us-east1: 0.308
     us-east4: 0.308
     us-west1: 0.308
+  spot_price_per_hour:
+    europe-west3: 0.175968
+    europe-west4: 0.142576
+    europe-west1: 0.164512
+    africa-south1: 0.122576
+    us-east4: 0.14224
+    us-west1: 0.111264
+    europe-west2: 0.170032
+    asia-southeast1: 0.184128
+    us-east1: 0.111264
+    us-central1: 0.122832
 - instance_type: z3-highmem-16-highlssd
   family: z3-highmem-highlssd
   vcpus: 16
@@ -4161,6 +7693,50 @@ instances:
     us-south1: 2.718557483
     europe-west4: 2.451931991
     africa-south1: 2.810931143
+  spot_price_per_hour:
+    southamerica-east1: 0.393152
+    northamerica-northeast1: 0.16336
+    asia-east1: 0.229248
+    europe-west9: 0.287584
+    asia-east2: 0.276672
+    europe-west10: 0.223296
+    africa-south1: 0.324288
+    southamerica-west1: 0.211936
+    me-central1: 0.180224
+    asia-northeast1: 0.532224
+    europe-west6: 0.276672
+    asia-south1: 0.205408
+    australia-southeast2: 0.321856
+    europe-west2: 0.51936
+    us-south1: 0.198048
+    northamerica-northeast2: 0.272992
+    europe-central2: 0.25472
+    europe-west12: 0.319616
+    us-west4: 0.1672
+    me-west1: 0.163072
+    me-central2: 0.237024
+    europe-west8: 0.172
+    us-east4: 0.2264
+    northamerica-south1: 0.717761
+    europe-southwest1: 0.174816
+    europe-north2: 0.691454
+    asia-northeast3: 0.190432
+    europe-west3: 0.338624
+    us-west2: 0.17808
+    europe-north1: 0.16336
+    us-west8: 0.22256
+    asia-southeast2: 0.19936
+    us-east5: 0.824544
+    europe-west1: 0.431232
+    australia-southeast1: 0.243232
+    us-west3: 0.238016
+    asia-northeast2: 0.190432
+    asia-southeast1: 0.354016
+    asia-south2: 0.237568
+    europe-west4: 0.272864
+    us-central1: 0.985888
+    us-east1: 0.985888
+    us-west1: 0.985888
 - instance_type: z3-highmem-192-highlssd-metal
   family: z3-highmem-highlssd
   vcpus: 192
@@ -4212,6 +7788,50 @@ instances:
     us-south1: 32.622689796
     europe-west4: 29.423183895
     africa-south1: 33.731173711
+  spot_price_per_hour:
+    southamerica-east1: 4.717824
+    northamerica-northeast1: 1.96032
+    asia-east1: 2.750976
+    europe-west9: 3.451008
+    asia-east2: 3.320064
+    europe-west10: 2.679552
+    africa-south1: 3.891456
+    southamerica-west1: 2.543232
+    me-central1: 2.162688
+    asia-northeast1: 6.386688
+    europe-west6: 3.320064
+    asia-south1: 2.464896
+    australia-southeast2: 3.862272
+    europe-west2: 6.23232
+    us-south1: 2.376576
+    northamerica-northeast2: 3.275904
+    europe-central2: 3.05664
+    europe-west12: 3.835392
+    us-west4: 2.0064
+    me-west1: 1.956864
+    me-central2: 2.844288
+    europe-west8: 2.064
+    us-east4: 2.7168
+    northamerica-south1: 8.613128
+    europe-southwest1: 2.097792
+    europe-north2: 8.297453
+    asia-northeast3: 2.285184
+    europe-west3: 4.063488
+    us-west2: 2.13696
+    europe-north1: 1.96032
+    us-west8: 2.67072
+    asia-southeast2: 2.39232
+    us-east5: 9.894528
+    europe-west1: 5.174784
+    australia-southeast1: 2.918784
+    us-west3: 2.856192
+    asia-northeast2: 2.285184
+    asia-southeast1: 4.248192
+    asia-south2: 2.850816
+    europe-west4: 3.274368
+    us-central1: 11.830656
+    us-east1: 11.830656
+    us-west1: 11.830656
 - instance_type: z3-highmem-22-highlssd
   family: z3-highmem-highlssd
   vcpus: 22
@@ -4263,6 +7883,50 @@ instances:
     us-south1: 3.83500284
     europe-west4: 3.461817447
     africa-south1: 3.947222102
+  spot_price_per_hour:
+    southamerica-east1: 0.540584
+    northamerica-northeast1: 0.22462
+    asia-east1: 0.315216
+    europe-west9: 0.395428
+    asia-east2: 0.380424
+    europe-west10: 0.307032
+    africa-south1: 0.445896
+    southamerica-west1: 0.291412
+    me-central1: 0.247808
+    asia-northeast1: 0.731808
+    europe-west6: 0.380424
+    asia-south1: 0.282436
+    australia-southeast2: 0.442552
+    europe-west2: 0.71412
+    us-south1: 0.272316
+    northamerica-northeast2: 0.375364
+    europe-central2: 0.35024
+    europe-west12: 0.439472
+    us-west4: 0.2299
+    me-west1: 0.224224
+    me-central2: 0.325908
+    europe-west8: 0.2365
+    us-east4: 0.3113
+    northamerica-south1: 0.986921
+    europe-southwest1: 0.240372
+    europe-north2: 0.95075
+    asia-northeast3: 0.261844
+    europe-west3: 0.465608
+    us-west2: 0.24486
+    europe-north1: 0.22462
+    us-west8: 0.30602
+    asia-southeast2: 0.27412
+    us-east5: 1.133748
+    europe-west1: 0.592944
+    australia-southeast1: 0.334444
+    us-west3: 0.327272
+    asia-northeast2: 0.261844
+    asia-southeast1: 0.486772
+    asia-south2: 0.326656
+    europe-west4: 0.375188
+    us-central1: 1.355596
+    us-east1: 1.355596
+    us-west1: 1.355596
 - instance_type: z3-highmem-32-highlssd
   family: z3-highmem-highlssd
   vcpus: 32
@@ -4314,6 +7978,50 @@ instances:
     us-south1: 5.437114966
     europe-west4: 4.903863982
     africa-south1: 5.621862285
+  spot_price_per_hour:
+    southamerica-east1: 0.786304
+    northamerica-northeast1: 0.32672
+    asia-east1: 0.458496
+    europe-west9: 0.575168
+    asia-east2: 0.553344
+    europe-west10: 0.446592
+    africa-south1: 0.648576
+    southamerica-west1: 0.423872
+    me-central1: 0.360448
+    asia-northeast1: 1.064448
+    europe-west6: 0.553344
+    asia-south1: 0.410816
+    australia-southeast2: 0.643712
+    europe-west2: 1.03872
+    us-south1: 0.396096
+    northamerica-northeast2: 0.545984
+    europe-central2: 0.50944
+    europe-west12: 0.639232
+    us-west4: 0.3344
+    me-west1: 0.326144
+    me-central2: 0.474048
+    europe-west8: 0.344
+    us-east4: 0.4528
+    northamerica-south1: 1.435521
+    europe-southwest1: 0.349632
+    europe-north2: 1.382909
+    asia-northeast3: 0.380864
+    europe-west3: 0.677248
+    us-west2: 0.35616
+    europe-north1: 0.32672
+    us-west8: 0.44512
+    asia-southeast2: 0.39872
+    us-east5: 1.649088
+    europe-west1: 0.862464
+    australia-southeast1: 0.486464
+    us-west3: 0.476032
+    asia-northeast2: 0.380864
+    asia-southeast1: 0.708032
+    asia-south2: 0.475136
+    europe-west4: 0.545728
+    us-central1: 1.971776
+    us-east1: 1.971776
+    us-west1: 1.971776
 - instance_type: z3-highmem-44-highlssd
   family: z3-highmem-highlssd
   vcpus: 44
@@ -4365,6 +8073,50 @@ instances:
     us-south1: 7.670005681
     europe-west4: 6.923634894
     africa-south1: 7.894444204
+  spot_price_per_hour:
+    southamerica-east1: 1.081168
+    northamerica-northeast1: 0.44924
+    asia-east1: 0.630432
+    europe-west9: 0.790856
+    asia-east2: 0.760848
+    europe-west10: 0.614064
+    africa-south1: 0.891792
+    southamerica-west1: 0.582824
+    me-central1: 0.495616
+    asia-northeast1: 1.463616
+    europe-west6: 0.760848
+    asia-south1: 0.564872
+    australia-southeast2: 0.885104
+    europe-west2: 1.42824
+    us-south1: 0.544632
+    northamerica-northeast2: 0.750728
+    europe-central2: 0.70048
+    europe-west12: 0.878944
+    us-west4: 0.4598
+    me-west1: 0.448448
+    me-central2: 0.651816
+    europe-west8: 0.473
+    us-east4: 0.6226
+    northamerica-south1: 1.973842
+    europe-southwest1: 0.480744
+    europe-north2: 1.9015
+    asia-northeast3: 0.523688
+    europe-west3: 0.931216
+    us-west2: 0.48972
+    europe-north1: 0.44924
+    us-west8: 0.61204
+    asia-southeast2: 0.54824
+    us-east5: 2.267496
+    europe-west1: 1.185888
+    australia-southeast1: 0.668888
+    us-west3: 0.654544
+    asia-northeast2: 0.523688
+    asia-southeast1: 0.973544
+    asia-south2: 0.653312
+    europe-west4: 0.750376
+    us-central1: 2.711192
+    us-east1: 2.711192
+    us-west1: 2.711192
 - instance_type: z3-highmem-8-highlssd
   family: z3-highmem-highlssd
   vcpus: 8
@@ -4416,6 +8168,50 @@ instances:
     us-south1: 1.225965996
     europe-west4: 1.405465571
     africa-south1: 1.505799612
+  spot_price_per_hour:
+    southamerica-east1: 0.196576
+    northamerica-northeast1: 0.08168
+    asia-east1: 0.114624
+    europe-west9: 0.143792
+    asia-east2: 0.138336
+    europe-west10: 0.111648
+    africa-south1: 0.162144
+    southamerica-west1: 0.105968
+    me-central1: 0.090112
+    asia-northeast1: 0.266112
+    europe-west6: 0.138336
+    asia-south1: 0.102704
+    australia-southeast2: 0.160928
+    europe-west2: 0.25968
+    us-south1: 0.099024
+    northamerica-northeast2: 0.136496
+    europe-central2: 0.12736
+    europe-west12: 0.159808
+    us-west4: 0.0836
+    me-west1: 0.081536
+    me-central2: 0.118512
+    europe-west8: 0.086
+    us-east4: 0.1132
+    northamerica-south1: 0.35888
+    europe-southwest1: 0.087408
+    europe-north2: 0.345727
+    asia-northeast3: 0.095216
+    europe-west3: 0.169312
+    us-west2: 0.08904
+    europe-north1: 0.08168
+    us-west8: 0.11128
+    asia-southeast2: 0.09968
+    us-east5: 0.412272
+    europe-west1: 0.215616
+    australia-southeast1: 0.121616
+    us-west3: 0.119008
+    asia-northeast2: 0.095216
+    asia-southeast1: 0.177008
+    asia-south2: 0.118784
+    europe-west4: 0.136432
+    us-central1: 0.492944
+    us-east1: 0.492944
+    us-west1: 0.492944
 - instance_type: z3-highmem-88-highlssd
   family: z3-highmem-highlssd
   vcpus: 88
@@ -4467,6 +8263,50 @@ instances:
     us-south1: 15.340011362
     europe-west4: 13.847269787
     africa-south1: 15.788888407
+  spot_price_per_hour:
+    southamerica-east1: 2.162336
+    northamerica-northeast1: 0.89848
+    asia-east1: 1.260864
+    europe-west9: 1.581712
+    asia-east2: 1.521696
+    europe-west10: 1.228128
+    africa-south1: 1.783584
+    southamerica-west1: 1.165648
+    me-central1: 0.991232
+    asia-northeast1: 2.927232
+    europe-west6: 1.521696
+    asia-south1: 1.129744
+    australia-southeast2: 1.770208
+    europe-west2: 2.85648
+    us-south1: 1.089264
+    northamerica-northeast2: 1.501456
+    europe-central2: 1.40096
+    europe-west12: 1.757888
+    us-west4: 0.9196
+    me-west1: 0.896896
+    me-central2: 1.303632
+    europe-west8: 0.946
+    us-east4: 1.2452
+    northamerica-south1: 3.947684
+    europe-southwest1: 0.961488
+    europe-north2: 3.802999
+    asia-northeast3: 1.047376
+    europe-west3: 1.862432
+    us-west2: 0.97944
+    europe-north1: 0.89848
+    us-west8: 1.22408
+    asia-southeast2: 1.09648
+    us-east5: 4.534992
+    europe-west1: 2.371776
+    australia-southeast1: 1.337776
+    us-west3: 1.309088
+    asia-northeast2: 1.047376
+    asia-southeast1: 1.947088
+    asia-south2: 1.306624
+    europe-west4: 1.500752
+    us-central1: 5.422384
+    us-east1: 5.422384
+    us-west1: 5.422384
 - instance_type: z3-highmem-14-standardlssd
   family: z3-highmem-standardlssd
   vcpus: 14
@@ -4518,6 +8358,50 @@ instances:
     asia-east2: 2.376811004
     europe-west10: 2.281623668
     asia-northeast3: 2.277334832
+  spot_price_per_hour:
+    southamerica-east1: 0.344008
+    northamerica-northeast1: 0.14294
+    asia-east1: 0.200592
+    europe-west9: 0.251636
+    asia-east2: 0.242088
+    europe-west10: 0.195384
+    africa-south1: 0.283752
+    southamerica-west1: 0.185444
+    me-central1: 0.157696
+    asia-northeast1: 0.465696
+    europe-west6: 0.242088
+    asia-south1: 0.179732
+    australia-southeast2: 0.281624
+    europe-west2: 0.45444
+    us-south1: 0.173292
+    northamerica-northeast2: 0.238868
+    europe-central2: 0.22288
+    europe-west12: 0.279664
+    us-west4: 0.1463
+    me-west1: 0.142688
+    me-central2: 0.207396
+    europe-west8: 0.1505
+    us-east4: 0.1981
+    northamerica-south1: 0.628041
+    europe-southwest1: 0.152964
+    europe-north2: 0.605023
+    asia-northeast3: 0.166628
+    europe-west3: 0.296296
+    us-west2: 0.15582
+    europe-north1: 0.14294
+    us-west8: 0.19474
+    asia-southeast2: 0.17444
+    us-east5: 0.721476
+    europe-west1: 0.377328
+    australia-southeast1: 0.212828
+    us-west3: 0.208264
+    asia-northeast2: 0.166628
+    asia-southeast1: 0.309764
+    asia-south2: 0.207872
+    europe-west4: 0.238756
+    us-central1: 0.862652
+    us-east1: 0.862652
+    us-west1: 0.862652
 - instance_type: z3-highmem-176-standardlssd
   family: z3-highmem-standardlssd
   vcpus: 176
@@ -4569,6 +8453,50 @@ instances:
     asia-east2: 29.673256139
     europe-west10: 28.457828655
     asia-northeast3: 28.385125171
+  spot_price_per_hour:
+    southamerica-east1: 4.324672
+    northamerica-northeast1: 1.79696
+    asia-east1: 2.521728
+    europe-west9: 3.163424
+    asia-east2: 3.043392
+    europe-west10: 2.456256
+    africa-south1: 3.567168
+    southamerica-west1: 2.331296
+    me-central1: 1.982464
+    asia-northeast1: 5.854464
+    europe-west6: 3.043392
+    asia-south1: 2.259488
+    australia-southeast2: 3.540416
+    europe-west2: 5.71296
+    us-south1: 2.178528
+    northamerica-northeast2: 3.002912
+    europe-central2: 2.80192
+    europe-west12: 3.515776
+    us-west4: 1.8392
+    me-west1: 1.793792
+    me-central2: 2.607264
+    europe-west8: 1.892
+    us-east4: 2.4904
+    northamerica-south1: 7.895367
+    europe-southwest1: 1.922976
+    europe-north2: 7.605998
+    asia-northeast3: 2.094752
+    europe-west3: 3.724864
+    us-west2: 1.95888
+    europe-north1: 1.79696
+    us-west8: 2.44816
+    asia-southeast2: 2.19296
+    us-east5: 9.069984
+    europe-west1: 4.743552
+    australia-southeast1: 2.675552
+    us-west3: 2.618176
+    asia-northeast2: 2.094752
+    asia-southeast1: 3.894176
+    asia-south2: 2.613248
+    europe-west4: 3.001504
+    us-central1: 10.844768
+    us-east1: 10.844768
+    us-west1: 10.844768
 - instance_type: z3-highmem-22-standardlssd
   family: z3-highmem-standardlssd
   vcpus: 22
@@ -4620,6 +8548,50 @@ instances:
     asia-east2: 3.889978935
     europe-west10: 3.754488856
     asia-northeast3: 3.761839277
+  spot_price_per_hour:
+    southamerica-east1: 0.540584
+    northamerica-northeast1: 0.22462
+    asia-east1: 0.315216
+    europe-west9: 0.395428
+    asia-east2: 0.380424
+    europe-west10: 0.307032
+    africa-south1: 0.445896
+    southamerica-west1: 0.291412
+    me-central1: 0.247808
+    asia-northeast1: 0.731808
+    europe-west6: 0.380424
+    asia-south1: 0.282436
+    australia-southeast2: 0.442552
+    europe-west2: 0.71412
+    us-south1: 0.272316
+    northamerica-northeast2: 0.375364
+    europe-central2: 0.35024
+    europe-west12: 0.439472
+    us-west4: 0.2299
+    me-west1: 0.224224
+    me-central2: 0.325908
+    europe-west8: 0.2365
+    us-east4: 0.3113
+    northamerica-south1: 0.986921
+    europe-southwest1: 0.240372
+    europe-north2: 0.95075
+    asia-northeast3: 0.261844
+    europe-west3: 0.465608
+    us-west2: 0.24486
+    europe-north1: 0.22462
+    us-west8: 0.30602
+    asia-southeast2: 0.27412
+    us-east5: 1.133748
+    europe-west1: 0.592944
+    australia-southeast1: 0.334444
+    us-west3: 0.327272
+    asia-northeast2: 0.261844
+    asia-southeast1: 0.486772
+    asia-south2: 0.326656
+    europe-west4: 0.375188
+    us-central1: 1.355596
+    us-east1: 1.355596
+    us-west1: 1.355596
 - instance_type: z3-highmem-44-standardlssd
   family: z3-highmem-standardlssd
   vcpus: 44
@@ -4671,6 +8643,50 @@ instances:
     asia-east2: 7.418314035
     europe-west10: 7.114457164
     asia-northeast3: 7.096281293
+  spot_price_per_hour:
+    southamerica-east1: 1.081168
+    northamerica-northeast1: 0.44924
+    asia-east1: 0.630432
+    europe-west9: 0.790856
+    asia-east2: 0.760848
+    europe-west10: 0.614064
+    africa-south1: 0.891792
+    southamerica-west1: 0.582824
+    me-central1: 0.495616
+    asia-northeast1: 1.463616
+    europe-west6: 0.760848
+    asia-south1: 0.564872
+    australia-southeast2: 0.885104
+    europe-west2: 1.42824
+    us-south1: 0.544632
+    northamerica-northeast2: 0.750728
+    europe-central2: 0.70048
+    europe-west12: 0.878944
+    us-west4: 0.4598
+    me-west1: 0.448448
+    me-central2: 0.651816
+    europe-west8: 0.473
+    us-east4: 0.6226
+    northamerica-south1: 1.973842
+    europe-southwest1: 0.480744
+    europe-north2: 1.9015
+    asia-northeast3: 0.523688
+    europe-west3: 0.931216
+    us-west2: 0.48972
+    europe-north1: 0.44924
+    us-west8: 0.61204
+    asia-southeast2: 0.54824
+    us-east5: 2.267496
+    europe-west1: 1.185888
+    australia-southeast1: 0.668888
+    us-west3: 0.654544
+    asia-northeast2: 0.523688
+    asia-southeast1: 0.973544
+    asia-south2: 0.653312
+    europe-west4: 0.750376
+    us-central1: 2.711192
+    us-east1: 2.711192
+    us-west1: 2.711192
 - instance_type: z3-highmem-88-standardlssd
   family: z3-highmem-standardlssd
   vcpus: 88
@@ -4722,3 +8738,47 @@ instances:
     asia-east2: 14.83662807
     europe-west10: 14.228914328
     asia-northeast3: 14.192562586
+  spot_price_per_hour:
+    southamerica-east1: 2.162336
+    northamerica-northeast1: 0.89848
+    asia-east1: 1.260864
+    europe-west9: 1.581712
+    asia-east2: 1.521696
+    europe-west10: 1.228128
+    africa-south1: 1.783584
+    southamerica-west1: 1.165648
+    me-central1: 0.991232
+    asia-northeast1: 2.927232
+    europe-west6: 1.521696
+    asia-south1: 1.129744
+    australia-southeast2: 1.770208
+    europe-west2: 2.85648
+    us-south1: 1.089264
+    northamerica-northeast2: 1.501456
+    europe-central2: 1.40096
+    europe-west12: 1.757888
+    us-west4: 0.9196
+    me-west1: 0.896896
+    me-central2: 1.303632
+    europe-west8: 0.946
+    us-east4: 1.2452
+    northamerica-south1: 3.947684
+    europe-southwest1: 0.961488
+    europe-north2: 3.802999
+    asia-northeast3: 1.047376
+    europe-west3: 1.862432
+    us-west2: 0.97944
+    europe-north1: 0.89848
+    us-west8: 1.22408
+    asia-southeast2: 1.09648
+    us-east5: 4.534992
+    europe-west1: 2.371776
+    australia-southeast1: 1.337776
+    us-west3: 1.309088
+    asia-northeast2: 1.047376
+    asia-southeast1: 1.947088
+    asia-south2: 1.306624
+    europe-west4: 1.500752
+    us-central1: 5.422384
+    us-east1: 5.422384
+    us-west1: 5.422384
