@@ -292,8 +292,6 @@ def test_18_error_if_no_version_repo_ami_selected(monkeypatch):
             continue
         if "siren" in backend:
             continue
-        if backend == "baremetal":
-            continue
         if backend == "xcloud":
             monkeypatch.setenv("SCT_XCLOUD_PROVIDER", "aws")
         monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
