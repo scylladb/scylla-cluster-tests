@@ -138,6 +138,12 @@ def get_argus_client(
 
 
 def terminate_resource_in_argus(client: ArgusSCTClient, resource_name: str):
+    # TODO(SCT-852): report cost here too, with `leaked` set. This is the cleanup and reaper
+    # path, so anything reaching it outlived its test — exactly the spend worth surfacing,
+    # and the case the Argus cost API's `leaked` flag exists for. Callers here hold the live
+    # cloud instance, so type, region and launch time are all available to price it; the
+    # cost has to be computed by the caller and passed in, because this function knows only
+    # a name.
     try:
         client.terminate_resource(name=resource_name, reason="clean-resources: Graceful Termination")
     except ArgusClientError as exc:
