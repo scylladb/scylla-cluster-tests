@@ -5,7 +5,7 @@
 # covered lets the next run start where that one stopped instead of spending ~2h repeating
 # the schema-changes category.
 #
-# Nine of these should stay excluded even once a full sweep is repeated - they cannot pass
+# Ten of these should stay excluded even once a full sweep is repeated - they cannot pass
 # against this workload:
 #   AddRemoveMvNemesis: MVs/2i unsupported on strongly consistent keyspaces
 #   BlockNetworkMonkey: needs extra_network_interface: True, not set in this job
@@ -14,6 +14,7 @@
 #     which strongly consistent tables reject (SCYLLADB-4727)
 #   HardRebootNodeMonkey: blocked by SCYLLADB-4625 - the reboot puts the node in a crash loop
 #   KillMVBuildingCoordinator: MVs/2i unsupported on strongly consistent keyspaces
+#   MgmtRestore: blocked by SCYLLADB-4625 - its rolling restart puts a node in a crash loop
 #   ModifyTableTwcsWindowSizeMonkey: no TWCS table in this workload
 #   ToggleAuditNemesisSyslog: blocked by SCYLLADB-4625 - restart puts the node in a crash loop
 #
@@ -118,3 +119,13 @@ nemesis_exclude_list:
   - "EnospcMonkey"  # skipped - applicable only to 2025.3 and lower, SCT#12989
   - "GrowShrinkZeroTokenNode"  # skipped - zero-token support not enabled
   - "HardRebootNodeMonkey"  # failed - SCYLLADB-4625 crash loop after the hard reboot
+
+  # run #16 (8ffe2ba5) - three more of other-disruptive in 20 minutes.
+  # MgmtRestore restores a backup schema and then restarts every node, one at a time. Nodes 1-4
+  # came back; node-5 logged "shutdown complete" - a clean stop, not a crash - and then aborted
+  # on every start with "Raft init failed: committed index cannot be larger then persisted one"
+  # for sc- raft groups (SCYLLADB-4625). So a graceful restart is enough to trigger it. Node-5
+  # was the node MgmtCorruptThenRepair had wiped and repaired ten minutes earlier.
+  - "MemoryStressMonkey"  # skipped - disabled, scylla-cluster-tests#6928
+  - "MgmtCorruptThenRepair"  # succeeded
+  - "MgmtRestore"  # failed - SCYLLADB-4625 crash loop after its rolling restart
