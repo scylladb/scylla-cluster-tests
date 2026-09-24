@@ -578,6 +578,22 @@ def test_ycsb_with_dns_routing_requires_the_amd64_only_dns_image(monkeypatch):
     assert conf._amd64_only_stress_tools() == ["alternator-dns"]
 
 
+def test_ycsb_upgrade_test_stress_params_with_dns_routing_requires_the_amd64_only_dns_image(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
+    monkeypatch.setenv("SCT_STRESS_BEFORE_UPGRADE", "bin/ycsb load dynamodb -P workloads/workloada")
+    monkeypatch.setenv("SCT_ALTERNATOR_USE_DNS_ROUTING", "true")
+
+    with patch(
+        "sdcm.sct_config.config.InstanceCatalog.from_directory",
+        return_value=_make_catalog(_GCE_INSTANCE, _GCE_LOADER_ARM),
+    ):
+        conf = sct_config.SCTConfiguration()
+
+    assert conf._amd64_only_stress_tools() == ["alternator-dns"]
+    assert conf.get("sizing_loader").get("arch") == "x86_64"
+
+
 def test_ycsb_without_dns_routing_keeps_arm_loaders(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
