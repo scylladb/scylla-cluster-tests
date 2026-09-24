@@ -483,6 +483,33 @@ class TestBaseNodeGetScyllaVersion:
         assert "3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx" == self.node.scylla_version_detailed
 
 
+@pytest.mark.parametrize(
+    "distro, expected_cmd",
+    [
+        pytest.param(Distro.ROCKY9, "epel-release", id="rocky9"),
+        pytest.param(Distro.RHEL8, "epel-release-latest-8.noarch.rpm", id="rhel8"),
+        pytest.param(Distro.FEDORA44, None, id="fedora44"),
+    ],
+)
+def test_install_epel(distro, expected_cmd, tmp_path):
+    node = DummyNode(
+        name="test_node",
+        parent_cluster=None,
+        base_logdir=str(tmp_path),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+    )
+    node.distro = distro
+    node.remoter = unittest.mock.MagicMock()
+
+    node.install_epel()
+
+    if expected_cmd is None:
+        node.remoter.run.assert_not_called()
+    else:
+        node.remoter.run.assert_called_once()
+        assert expected_cmd in node.remoter.run.call_args.args[0]
+
+
 class TestBaseMonitorSet:
     @pytest.fixture(autouse=True, scope="class")
     def _class_tmp_dir(self, tmp_path_factory):

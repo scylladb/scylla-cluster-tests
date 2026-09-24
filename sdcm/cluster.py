@@ -4004,6 +4004,11 @@ class BaseNode(AutoSshContainerMixin):
         if not self.distro.is_rhel_like:
             raise Exception("EPEL can only be installed for RHEL like distros")
 
+        if self.distro.is_fedora:
+            # EPEL is built from Fedora packages, so Fedora already carries them and has no `epel-release'
+            self.log.debug("Skipping EPEL installation: not needed on Fedora")
+            return
+
         if self.distro.is_rhel8:
             self.remoter.run(
                 f"sudo {rpm_cmd('yum', 'install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm')}",
