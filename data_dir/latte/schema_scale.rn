@@ -97,7 +97,8 @@ pub async fn prepare(db) {
     db.data.ks_table_mapping = [];
     for ks_i in 0..KEYSPACE_COUNT {
         let tables = [];
-        let kpadding = get_index_padding(ks_i, KEYSPACE_COUNT).await;
+        // pad the 1-based index, same as create_schema
+        let kpadding = get_index_padding(ks_i + 1, KEYSPACE_COUNT).await;
         let ks = `schema_scale_k${kpadding}${ks_i + 1}`;
         for table_i in 0..TABLE_COUNT_PER_KEYSPACE {
             // Save pairs of keyspaces and tables into a mapping
