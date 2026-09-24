@@ -354,6 +354,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | reviewing-pipeline-docs | Guides reviewing and generating test_metadata sections for SCT test-case YAML files. Use when adding or auditing test_metadata, checking description/tier/labels accuracy, or running lint-test-docs. | `skills/reviewing-pipeline-docs/SKILL.md` |
 | labeling-pipelines | Guides bulk-labeling and linting test-case YAML files with test_metadata. Use when finding coverage gaps, auto-fixing mismatches, or auditing label accuracy across a directory. | `skills/labeling-pipelines/SKILL.md` |
 | stack-sync | Manage stacked PRs via the gh-stack CLI extension (native GitHub stacked PR support). Use when splitting a large change into a chain of small reviewable PRs, checking stack status, or syncing/rebasing/merging stack layers. | `skills/stack-sync/SKILL.md` |
+| downscaling-for-minicloud | Guides shrinking an SCT test-case so it runs against minicloud, the local QEMU/KVM cloud emulator, on a single host. Use when validating a change locally before spending cloud time, fitting a test-case into host RAM, writing a configurations/minicloud overlay, or triaging a local run. | `skills/downscaling-for-minicloud/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 
