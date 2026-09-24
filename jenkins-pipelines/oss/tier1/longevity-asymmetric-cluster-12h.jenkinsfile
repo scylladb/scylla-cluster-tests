@@ -1,0 +1,17 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+<<<<<<< HEAD:jenkins-pipelines/oss/tier1/longevity-150gb-asymmetric-cluster-12h.jenkinsfile
+    test_config: '''["test-cases/longevity/longevity-150GB-12h-autorization-LimitedMonkey-cql-stress.yaml", "configurations/db-nodes-shards-random.yaml", "configurations/auth_cassandra.yaml"]'''
+||||||| parent of 974a74f25 (refactor(longevity): move asymmetric cluster test to GCE):jenkins-pipelines/oss/tier1/longevity-150gb-asymmetric-cluster-12h.jenkinsfile
+    test_config: '''["test-cases/longevity/longevity-150GB-12h-autorization-LimitedMonkey-cql-stress.yaml", "configurations/db-nodes-shards-random.yaml", "configurations/auth_cassandra.yaml", "configurations/auto-repair-1h.yaml"]'''
+=======
+    test_config: '''["test-cases/longevity/longevity-12h-autorization-LimitedMonkey-cql-stress.yaml", "configurations/db-nodes-shards-random.yaml", "configurations/auth_cassandra.yaml", "configurations/auto-repair-1h.yaml"]'''
+>>>>>>> 974a74f25 (refactor(longevity): move asymmetric cluster test to GCE):jenkins-pipelines/oss/tier1/longevity-asymmetric-cluster-12h.jenkinsfile
+)

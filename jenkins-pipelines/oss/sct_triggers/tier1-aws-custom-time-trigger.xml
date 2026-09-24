@@ -59,6 +59,7 @@ stress_duration=$stress_duration</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
+<<<<<<< HEAD
           <projects>../tier1/longevity-mv-si-4days-streaming-test,../tier1/longevity-schema-topology-changes-12h-test,../tier1/longevity-150gb-asymmetric-cluster-12h-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
@@ -79,6 +80,16 @@ region=us-east-1</properties>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
           <projects>../tier1/longevity-50gb-3days-test</projects>
+||||||| parent of 974a74f25 (refactor(longevity): move asymmetric cluster test to GCE)
+          <projects>../tier1/gemini-1tb-10h-test,../tier1/longevity-mv-si-4days-streaming-test,../tier1/longevity-schema-topology-changes-12h-test,../tier1/longevity-150gb-asymmetric-cluster-12h-test,../tier1/scale-schema-5000-tables-latte-test</projects>
+=======
+          <projects>
+              ../tier1/gemini-1tb-10h-test,
+              ../tier1/longevity-mv-si-4days-streaming-test,
+              ../tier1/longevity-schema-topology-changes-12h-test,
+              ../tier1/scale-schema-5000-tables-latte-test
+          </projects>
+>>>>>>> 974a74f25 (refactor(longevity): move asymmetric cluster test to GCE)
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
