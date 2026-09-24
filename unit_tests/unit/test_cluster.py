@@ -24,7 +24,7 @@ from types import SimpleNamespace
 import pytest
 from invoke import Result
 
-from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode, BaseScyllaCluster
+from sdcm.cluster import BaseCluster, BaseLoaderSet, BaseMonitorSet, BaseNode, BaseScyllaCluster
 from sdcm.db_log_reader import DbLogReader
 from sdcm.exceptions import ExitByEventError, FirewallNotDisabled, WaitForTimeoutError
 from sdcm.provision.common.utils import disable_firewall as disable_firewall_script
@@ -511,6 +511,26 @@ def test_install_epel(distro, expected_cmd, tmp_path):
     else:
         node.remoter.run.assert_called_once()
         assert expected_cmd in node.remoter.run.call_args.args[0]
+
+
+def test_install_docker_on_fedora_installs_missing_docker():
+    node = unittest.mock.MagicMock()
+    node.remoter.run.return_value.ok = False
+
+    BaseLoaderSet._install_docker_on_fedora(node)
+
+    node.install_package.assert_called_once_with("moby-engine")
+    node.remoter.sudo.assert_called_once_with("systemctl enable --now docker", timeout=60)
+
+
+def test_install_docker_on_fedora_skips_present_docker():
+    node = unittest.mock.MagicMock()
+    node.remoter.run.return_value.ok = True
+
+    BaseLoaderSet._install_docker_on_fedora(node)
+
+    node.install_package.assert_not_called()
+    node.remoter.sudo.assert_not_called()
 
 
 class TestBaseMonitorSet:
