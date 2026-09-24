@@ -7013,10 +7013,26 @@ class BaseLoaderSet:
         if result.exit_status == 0:
             node.log.debug("Skip loader setup for using a prepared AMI")
         else:
+            if node.distro.is_fedora:
+                self._install_docker_on_fedora(node)
             node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
 
         # Login to Docker Hub.
         docker_hub_login(remoter=node.remoter)
+
+    @staticmethod
+    def _install_docker_on_fedora(node):
+        """Install Docker from the Fedora repos, if missing.
+
+        Stock Fedora hosts (e.g. bare-metal loaders) come without Docker, while loader images of the other
+        distros have it preinstalled. Without it, `usermod -aG docker' fails, since the `docker' group
+        does not exist yet.
+        """
+        if node.remoter.run("command -v docker", ignore_status=True).ok:
+            return
+        node.log.info("Docker is not installed, installing it from the Fedora repos")
+        node.install_package("moby-engine")
+        node.remoter.sudo("systemctl enable --now docker", timeout=60)
 
     def _generate_loader_certs(self, node):
         """Generate SSL client certificates for a loader node"""
