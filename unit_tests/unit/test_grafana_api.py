@@ -158,13 +158,19 @@ def test_upload_uses_put_on_the_new_api():
     assert kwargs["timeout"] > 0, "every grafana request must be bounded"
 
 
-def test_upload_falls_back_to_the_legacy_endpoint_when_apis_is_absent():
-    """Grafana < 12 has no /apis surface at all and answers 404 there."""
-    session = FakeSession(put_status=http.HTTPStatus.NOT_FOUND)
+@pytest.mark.parametrize(
+    ("put_status", "reason"),
+    [
+        (http.HTTPStatus.NOT_FOUND, "grafana < 12 has no /apis surface at all and answers 404 there"),
+        (http.HTTPStatus.SERVICE_UNAVAILABLE, "the apiserver behind /apis is registered but not ready yet"),
+    ],
+)
+def test_upload_falls_back_to_the_legacy_endpoint_when_apis_cannot_serve_it(put_status, reason):
+    session = FakeSession(put_status=put_status)
 
     response = upload_dashboard(BASE_URL, {"dashboard": {"uid": "dash-1"}}, session=session)
 
-    assert response.ok
+    assert response.ok, reason
     assert [call[0] for call in session.calls] == ["PUT", "POST"]
     assert session.calls[1][1] == f"{BASE_URL}{GRAFANA_LEGACY_DASHBOARD_API_PATH}"
     # the legacy endpoint needs the overwrite flag to accept a re-upload
