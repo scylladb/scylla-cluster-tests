@@ -1,11 +1,9 @@
 from __future__ import absolute_import, annotations
 
-import atexit
 import logging
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from concurrent.futures.thread import _python_exit
 from functools import wraps
 from typing import Iterable, Callable, List
 
@@ -134,8 +132,6 @@ class ParallelObject:
         for future, _ in futures:
             future.cancel()
         self._thread_pool.shutdown(wait=False)
-        # we need to unregister internal function that waits for all threads to finish when interpreter exits
-        atexit.unregister(_python_exit)
 
     @staticmethod
     def run_named_tasks_in_parallel(
