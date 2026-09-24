@@ -52,7 +52,7 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 | `fd3f4cbdc` | `-errors ignore` on `stress_cmd` | cql-stress fail-fast ended run #13 on the first nemesis that closed a CQL port |
 | `b179e9800` | fail-fast kept on `prepare_write_cmd`, `nemesis_during_prepare: false` | ignoring errors during prepare left ~103k rows unwritten in run #14, which the read phase then reported as validation failures |
 | `087be6312` | `EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey` put back in the sweep | it never got a verdict in run #14 - the rows it was blamed for were missing before it started |
-| `e3db976cb` | the seven nemesis run #15 reached excluded | both KMS nemesis write at CL=ALL, which SC tables reject; `HardRebootNodeMonkey` hits SCYLLADB-4625; the four skips are static for this job |
+| `e3db976cb` | the seven nemesis run #15 reached excluded | both KMS nemesis write at CL=ALL, which SC tables reject (SCYLLADB-4727); `HardRebootNodeMonkey` hits SCYLLADB-4625; the four skips are static for this job |
 
 ## Open issues found by this job
 
@@ -63,3 +63,4 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 | [SCYLLADB-4529](https://scylladb.atlassian.net/browse/SCYLLADB-4529) | node bootstrap fails on group0 snapshot - blocks the topology-changes category |
 | [SCYLLADB-4671](https://scylladb.atlassian.net/browse/SCYLLADB-4671) | SC: timeouts reported as CL=ONE/SIMPLE, so drivers never retry them |
 | [SCYLLADB-4700](https://scylladb.atlassian.net/browse/SCYLLADB-4700) | SC: writes fail without replica failover while the Raft leader's CQL port is down |
+| [SCYLLADB-4727](https://scylladb.atlassian.net/browse/SCYLLADB-4727) | SCT: nemesis internal stress with hard-coded CL fails on strongly consistent keyspaces - both KMS encryption nemesis |

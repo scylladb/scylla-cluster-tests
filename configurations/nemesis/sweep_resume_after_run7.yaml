@@ -11,7 +11,7 @@
 #   BlockNetworkMonkey: needs extra_network_interface: True, not set in this job
 #   CreateIndexNemesis: secondary indexes unsupported on strongly consistent keyspaces
 #   EnableDisableTableEncryptionAwsKmsProvider{With,Without}RotationMonkey: write at CL=ALL,
-#     which strongly consistent tables reject
+#     which strongly consistent tables reject (SCYLLADB-4727)
 #   HardRebootNodeMonkey: blocked by SCYLLADB-4625 - the reboot puts the node in a crash loop
 #   KillMVBuildingCoordinator: MVs/2i unsupported on strongly consistent keyspaces
 #   ModifyTableTwcsWindowSizeMonkey: no TWCS table in this workload
@@ -106,13 +106,13 @@ nemesis_exclude_list:
   # scylla-bench -consistency-level=all, and SC keyspaces reject that ("Strongly consistent
   # writes must use QUORUM/LOCAL_QUORUM consistency level"): 5000 of 5000 writes failed per
   # pass, the table stayed empty, and the sstable check raised SstablesNotFound - 110 min lost.
-  # Re-enable them once the nemesis picks QUORUM for SC keyspaces.
+  # Re-enable them once the nemesis picks QUORUM for SC keyspaces (SCYLLADB-4727).
   #
   # HardRebootNodeMonkey put node-1 into the SCYLLADB-4625 crash loop (Raft init failed:
   # committed index cannot be larger then persisted one) and aborted the run - the same
   # failure as ToggleAuditNemesisSyslog, without audit. Blocked while SCYLLADB-4625 is open.
-  - "EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey"  # failed - CL=ALL rejected on SC tables
-  - "EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey"  # failed - CL=ALL rejected on SC tables
+  - "EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey"  # failed - CL=ALL rejected on SC tables, SCYLLADB-4727
+  - "EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey"  # failed - CL=ALL rejected on SC tables, SCYLLADB-4727
   - "EndOfQuotaNemesis"  # skipped - disabled upstream, scylladb/scylla-enterprise#3736
   - "EnospcAllNodesMonkey"  # skipped - applicable only to 2025.3 and lower, SCT#12989
   - "EnospcMonkey"  # skipped - applicable only to 2025.3 and lower, SCT#12989
