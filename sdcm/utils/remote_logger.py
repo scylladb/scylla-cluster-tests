@@ -75,18 +75,43 @@ class SSHLoggerBase(LoggerBase):
         super().__init__(target_log_file=target_log_file)
         self._node = node
         self._termination_event = ThreadEvent()
-        self._child_thread = ThreadPoolExecutor(max_workers=1)
+        self._child_thread = None
         self._thread = None
 
     def start(self) -> None:
         self._termination_event.clear()
+        self._child_thread = ThreadPoolExecutor(max_workers=1)
         self._thread = self._child_thread.submit(self._journal_thread)
 
     def stop(self, timeout: float | None = None) -> None:
         self._termination_event.set()
-        self._remoter.run(f"kill -9 -{self.remote_pid}", ignore_status=True)
+        if remote_pid := self.remote_pid:
+            self._remoter.run(f"kill -9 -{remote_pid}", ignore_status=True)
+        else:
+            # Without the pid the remote follower keeps running, so _retrieve() stays blocked and
+            # the pool worker outlives stop() -- and would still hang interpreter shutdown.
+            self._log.warning(
+                "No remote pid file for the log follower of %s; can't kill it, its pool worker may outlive stop()",
+                self._target_log_file,
+            )
         if self._thread.running():
             self._thread.cancel()
+        self._shutdown_pool()
+
+    def _shutdown_pool(self) -> None:
+        """Release the pool's worker thread once the journal task is done.
+
+        Without shutdown() the worker stays alive, parked in queue.get(), for the rest of
+        the process -- and CPython's interpreter-shutdown hook
+        (concurrent.futures.thread._python_exit) joins every such worker with no timeout,
+        so one live worker is enough to hang the process at exit. See SCT-803.
+        """
+        # Already shut down: node teardown calls stop() twice (stop_task_threads() and
+        # wait_till_tasks_threads_are_stopped()), and the first call cleared the pool.
+        if self._child_thread is None:
+            return
+        self._child_thread.shutdown(wait=False, cancel_futures=True)
+        self._child_thread = None
 
     @raise_event_on_failure
     def _journal_thread(self) -> None:
@@ -153,7 +178,7 @@ class HDRHistogramFileLogger(SSHLoggerBase):
         self._child_process = None
         self._remote_log_file = remote_log_file
         self.target_log_file = target_log_file
-        self._child_thread = ThreadPoolExecutor(max_workers=1)
+        self._child_thread = None
         self._thread = None
         self._lock = Lock()
         self._started = False
@@ -166,6 +191,7 @@ class HDRHistogramFileLogger(SSHLoggerBase):
                 "Start to read remote_log_file: %s, target_log_file: %s", self._remote_log_file, self.target_log_file
             )
             self._termination_event.clear()
+            self._child_thread = ThreadPoolExecutor(max_workers=1)
             self._thread = self._child_thread.submit(self._journal_thread)
             self._started = True
             LOGGER.debug("Journal thread started for target_log_file: %s", self.target_log_file)
@@ -180,6 +206,7 @@ class HDRHistogramFileLogger(SSHLoggerBase):
             self._remoter.run(f"pkill -f '{self._remote_log_file}'", ignore_status=True)
             if self._thread.running():
                 self._thread.cancel()
+            self._shutdown_pool()
             self._started = False
 
     def remove_remote_log_file(self):
