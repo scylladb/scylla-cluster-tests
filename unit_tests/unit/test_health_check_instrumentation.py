@@ -18,6 +18,7 @@ where it spent its time -- per state-gathering operation, per retry attempt, and
 working and waiting -- without changing which checks run or when the gate passes.
 """
 
+import itertools
 import logging
 import time
 from unittest.mock import MagicMock, patch
@@ -25,7 +26,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.cluster import BaseNode, BaseScyllaCluster
-from sdcm.utils.health_checker import NodeHealthCheckStats
+from sdcm.utils.health_checker import NodeHealthCheckStats, timed_validator
 
 GATHER_OPERATIONS = {"nodetool_status", "peers", "gossip", "raft_group0", "token_ring"}
 #: gathering plus running the validators over what was gathered -- what a full check records
@@ -287,3 +288,83 @@ class TestValidationIsMeasured:
         node.node_health_events(stats=stats)
 
         assert "validation" not in stats.operation_time
+
+
+class TestValidatorBreakdown:
+    """The 'validation' total says over half the gate is validators, but not which one.
+
+    Per-validator timing is what tells a fixed overhead apart from real per-node work: a cost
+    that ignores cluster size is not the validators walking node entries.
+    """
+
+    VALIDATORS = {
+        "nodes_status",
+        "gossip_vs_status",
+        "schema_version",
+        "nulls_in_peers",
+        "group0_tokenring",
+    }
+
+    def test_every_validator_is_timed_separately(self, node):
+        stats = node.check_node_health()
+
+        assert set(stats.validator_time) == self.VALIDATORS
+
+    def test_breakdown_is_not_counted_as_extra_work(self, node):
+        """validator_time is a split of the 'validation' entry, so it must stay out of the sum."""
+        stats = node.check_node_health()
+
+        assert stats.working_time == pytest.approx(sum(stats.operation_time.values()))
+        assert set(stats.operation_time).isdisjoint(stats.validator_time)
+
+    def test_breakdown_accounts_for_the_validation_total(self, node):
+        stats = node.check_node_health()
+
+        assert sum(stats.validator_time.values()) <= stats.operation_time["validation"]
+        assert stats.unattributed_validation_time >= 0
+
+    def test_time_is_charged_to_the_validator_that_spent_it(self):
+        """A slow validator must show up as itself, not smeared over its neighbours."""
+        stats = NodeHealthCheckStats(node_name="node-1")
+
+        def quick():
+            yield from ()
+
+        def slow():
+            time.sleep(0.05)
+            yield from ()
+
+        chain = itertools.chain(
+            timed_validator(stats, "quick_one", quick()),
+            timed_validator(stats, "slow_one", slow()),
+        )
+        assert next(chain, None) is None
+
+        assert stats.validator_time["slow_one"] >= 0.05
+        assert stats.validator_time["quick_one"] < 0.05
+
+    def test_summary_reports_the_breakdown(self, caplog):
+        stats = NodeHealthCheckStats(node_name="node-1", attempts=1)
+        stats.operation_time = {"validation": 2.5}
+        stats.validator_time = {"nodes_status": 2.0, "schema_version": 0.25}
+
+        with caplog.at_level(logging.DEBUG):
+            stats.log_summary()
+
+        assert "nodes_status=2.000s" in caplog.text
+        assert "schema_version=0.250s" in caplog.text
+        # 2.5 measured, 2.25 attributed: the gap is time outside every validator
+        assert "unattributed=0.250s" in caplog.text
+
+    def test_accepts_any_iterable_not_just_a_generator(self):
+        """One validator delegates to the node's raft helper and returns whatever that hands back.
+
+        Taking next() on the object instead of on its iterator loops forever against a Mock and
+        raises TypeError against a plain sequence, so the iterator protocol has to be used.
+        """
+        stats = NodeHealthCheckStats(node_name="node-1")
+
+        events = list(timed_validator(stats, "delegating", ["first", "second"]))
+
+        assert events == ["first", "second"]
+        assert "delegating" in stats.validator_time

@@ -153,6 +153,7 @@ from sdcm.utils.health_checker import (
     check_nulls_in_peers,
     check_schema_agreement_in_gossip_and_peers,
     check_group0_tokenring_consistency,
+    timed_validator,
     CHECK_NODE_HEALTH_RETRIES,
     CHECK_NODE_HEALTH_RETRY_DELAY,
 )
@@ -3733,20 +3734,40 @@ class BaseNode(AutoSshContainerMixin):
             tokenring_members = self.get_token_ring_members()
 
         return itertools.chain(
-            check_nodes_status(
-                nodes_status=nodes_status,
-                current_node=self,
-                removed_nodes_list=self.parent_cluster.dead_nodes_ip_address_list,
+            timed_validator(
+                stats,
+                "nodes_status",
+                check_nodes_status(
+                    nodes_status=nodes_status,
+                    current_node=self,
+                    removed_nodes_list=self.parent_cluster.dead_nodes_ip_address_list,
+                ),
             ),
-            check_node_status_in_gossip_and_nodetool_status(
-                gossip_info=gossip_info, nodes_status=nodes_status, current_node=self
+            timed_validator(
+                stats,
+                "gossip_vs_status",
+                check_node_status_in_gossip_and_nodetool_status(
+                    gossip_info=gossip_info, nodes_status=nodes_status, current_node=self
+                ),
             ),
-            check_schema_version(
-                gossip_info=gossip_info, peers_details=peers_details, nodes_status=nodes_status, current_node=self
+            timed_validator(
+                stats,
+                "schema_version",
+                check_schema_version(
+                    gossip_info=gossip_info, peers_details=peers_details, nodes_status=nodes_status, current_node=self
+                ),
             ),
-            check_nulls_in_peers(gossip_info=gossip_info, peers_details=peers_details, current_node=self),
-            check_group0_tokenring_consistency(
-                group0_members=group0_members, tokenring_members=tokenring_members, current_node=self
+            timed_validator(
+                stats,
+                "nulls_in_peers",
+                check_nulls_in_peers(gossip_info=gossip_info, peers_details=peers_details, current_node=self),
+            ),
+            timed_validator(
+                stats,
+                "group0_tokenring",
+                check_group0_tokenring_consistency(
+                    group0_members=group0_members, tokenring_members=tokenring_members, current_node=self
+                ),
             ),
         )
 

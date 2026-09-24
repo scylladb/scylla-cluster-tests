@@ -55,6 +55,11 @@ class NodeHealthCheckStats:
     #: state-gathering call, plus "validation" for running the validators over that state
     #: (which is where the larger share of the time goes)
     operation_time: dict[str, float] = field(default_factory=dict)
+    #: wall-clock seconds per validator, accumulated over all attempts. A breakdown of the
+    #: "validation" entry above rather than additional work, so it is deliberately kept out of
+    #: operation_time: summing both would double-count. Any shortfall against "validation" is
+    #: time spent outside every validator, which is itself worth seeing.
+    validator_time: dict[str, float] = field(default_factory=dict)
     #: validator that rejected each attempt, in order; a trailing entry means the check failed
     causes: list[str] = field(default_factory=list)
     #: seconds spent sleeping between attempts
@@ -64,6 +69,11 @@ class NodeHealthCheckStats:
     def working_time(self) -> float:
         return sum(self.operation_time.values())
 
+    @property
+    def unattributed_validation_time(self) -> float:
+        """Validation time that no single validator accounts for."""
+        return self.operation_time.get("validation", 0.0) - sum(self.validator_time.values())
+
     @contextmanager
     def measure(self, operation: str) -> Iterator[None]:
         """Accumulate the wall-clock time of one state-gathering operation."""
@@ -72,6 +82,15 @@ class NodeHealthCheckStats:
             yield
         finally:
             self.operation_time[operation] = self.operation_time.get(operation, 0.0) + time.perf_counter() - start
+
+    @contextmanager
+    def measure_validator(self, name: str) -> Iterator[None]:
+        """Accumulate the wall-clock time of one validator."""
+        start = time.perf_counter()
+        try:
+            yield
+        finally:
+            self.validator_time[name] = self.validator_time.get(name, 0.0) + time.perf_counter() - start
 
     @contextmanager
     def measure_waiting(self) -> Iterator[None]:
@@ -86,16 +105,39 @@ class NodeHealthCheckStats:
         # .3f, not .1f: the cheapest operations land under 100ms, and rounding them to a tenth
         # of a second pins them to 0.0s/0.1s - averaging already-rounded values is false precision.
         operations = ", ".join(f"{name}={duration:.3f}s" for name, duration in self.operation_time.items())
+        validators = ", ".join(f"{name}={duration:.3f}s" for name, duration in self.validator_time.items())
         LOGGER.debug(
             "Health check timing for node `%s': %d attempt(s), %.1fs working, %.1fs waiting "
-            "(operations: %s; causes: %s)",
+            "(operations: %s; validators: %s, unattributed=%.3fs; causes: %s)",
             self.node_name,
             self.attempts,
             self.working_time,
             self.waiting_time,
             operations or "none",
+            validators or "none",
+            self.unattributed_validation_time,
             ", ".join(self.causes) or "none",
         )
+
+
+def timed_validator(stats: NodeHealthCheckStats, name: str, events: HealthEventsGenerator) -> HealthEventsGenerator:
+    """Charge a validator's run time to itself.
+
+    The validators are chained lazily and consumed by the caller, so their cost lands wherever the
+    chain is drained rather than where it is built. Wrapping each one attributes the time to the
+    validator that spent it, which is what tells a fixed overhead apart from real per-node work.
+    """
+    # iter() first: the validators are declared as generators but one of them delegates to the
+    # node's raft helper and returns whatever that hands back, so take the iterator protocol
+    # rather than assuming next() works on the object itself.
+    iterator = iter(events)
+    while True:
+        with stats.measure_validator(name):
+            try:
+                event = next(iterator)
+            except StopIteration:
+                return
+        yield event
 
 
 def check_nodes_status(nodes_status: dict, current_node, removed_nodes_list=()) -> HealthEventsGenerator:
