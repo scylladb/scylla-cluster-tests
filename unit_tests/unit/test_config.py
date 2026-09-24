@@ -121,6 +121,33 @@ def test_08_baremetal(monkeypatch):
     assert conf.db_nodes_private_ip == ["1.2.3.4", "1.2.3.5"]
 
 
+def test_08_baremetal_requires_version_source(monkeypatch):
+    monkeypatch.delenv("SCT_SCYLLA_VERSION")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "baremetal")
+    monkeypatch.setenv("SCT_DB_NODES_PRIVATE_IP", '["1.2.3.4", "1.2.3.5"]')
+    monkeypatch.setenv("SCT_DB_NODES_PUBLIC_IP", '["1.2.3.4", "1.2.3.5"]')
+    monkeypatch.setenv("SCT_USE_PREINSTALLED_SCYLLA", "false")
+    monkeypatch.setenv("SCT_S3_BAREMETAL_CONFIG", "some_config")
+    conf = sct_config.SCTConfiguration()
+
+    with pytest.raises(AssertionError, match="SCT_SCYLLA_REPO"):
+        conf.verify_configuration()
+
+
+def test_08_baremetal_with_scylla_repo(monkeypatch):
+    monkeypatch.delenv("SCT_SCYLLA_VERSION")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "baremetal")
+    monkeypatch.setenv("SCT_DB_NODES_PRIVATE_IP", '["1.2.3.4", "1.2.3.5"]')
+    monkeypatch.setenv("SCT_DB_NODES_PUBLIC_IP", '["1.2.3.4", "1.2.3.5"]')
+    monkeypatch.setenv("SCT_USE_PREINSTALLED_SCYLLA", "false")
+    monkeypatch.setenv("SCT_S3_BAREMETAL_CONFIG", "some_config")
+    monkeypatch.setenv(
+        "SCT_SCYLLA_REPO", "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-2025.3.repo"
+    )
+    conf = sct_config.SCTConfiguration()
+    conf.verify_configuration()
+
+
 def test_09_unknown_configure(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/unknown_param_in_config.yaml")
