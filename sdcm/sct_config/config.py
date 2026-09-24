@@ -2261,7 +2261,6 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if (
             self.get("db_type") not in ("cassandra",)
             and not self.get("use_preinstalled_scylla")
-            and not backend == "baremetal"
             and not self.get("unified_package")
         ):
             options_must_exist += ["scylla_repo"]
