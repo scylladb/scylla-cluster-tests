@@ -40,7 +40,7 @@ KNOWN_OS = (
     ("DEBIAN", "debian", ["11", "12", "13"], DistroBase.DEBIAN),
     ("UBUNTU", "ubuntu", ["20.04", "21.04", "21.10", "22.04", "24.04", "26.04"], DistroBase.DEBIAN),
     ("SLES", "sles", ["15"], DistroBase.UNKNOWN),
-    ("FEDORA", "fedora", ["34", "35", "36"], DistroBase.RHEL),
+    ("FEDORA", "fedora", ["34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44"], DistroBase.RHEL),
     ("MINT", "linuxmint", ["20", "21", "22"], DistroBase.DEBIAN),
 )
 

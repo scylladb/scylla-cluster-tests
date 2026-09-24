@@ -23,7 +23,7 @@ from types import SimpleNamespace
 import pytest
 from invoke import Result
 
-from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode, BaseScyllaCluster
+from sdcm.cluster import BaseCluster, BaseLoaderSet, BaseMonitorSet, BaseNode, BaseScyllaCluster
 from sdcm.db_log_reader import DbLogReader
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
@@ -481,6 +481,53 @@ class TestBaseNodeGetScyllaVersion:
 
         assert "3.3.rc1" == self.node.scylla_version
         assert "3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx" == self.node.scylla_version_detailed
+
+
+@pytest.mark.parametrize(
+    "distro, expected_cmd",
+    [
+        pytest.param(Distro.ROCKY9, "epel-release", id="rocky9"),
+        pytest.param(Distro.RHEL8, "epel-release-latest-8.noarch.rpm", id="rhel8"),
+        pytest.param(Distro.FEDORA44, None, id="fedora44"),
+    ],
+)
+def test_install_epel(distro, expected_cmd, tmp_path):
+    node = DummyNode(
+        name="test_node",
+        parent_cluster=None,
+        base_logdir=str(tmp_path),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+    )
+    node.distro = distro
+    node.remoter = unittest.mock.MagicMock()
+
+    node.install_epel()
+
+    if expected_cmd is None:
+        node.remoter.run.assert_not_called()
+    else:
+        node.remoter.run.assert_called_once()
+        assert expected_cmd in node.remoter.run.call_args.args[0]
+
+
+def test_install_docker_on_fedora_installs_missing_docker():
+    node = unittest.mock.MagicMock()
+    node.remoter.run.return_value.ok = False
+
+    BaseLoaderSet._install_docker_on_fedora(node)
+
+    node.install_package.assert_called_once_with("moby-engine")
+    node.remoter.sudo.assert_called_once_with("systemctl enable --now docker", timeout=60)
+
+
+def test_install_docker_on_fedora_skips_present_docker():
+    node = unittest.mock.MagicMock()
+    node.remoter.run.return_value.ok = True
+
+    BaseLoaderSet._install_docker_on_fedora(node)
+
+    node.install_package.assert_not_called()
+    node.remoter.sudo.assert_not_called()
 
 
 class TestBaseMonitorSet:
