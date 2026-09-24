@@ -121,6 +121,7 @@ Use `BaseNode.fetch_apt_keys()` which handles:
 - HTTPS fallback
 - Timeout on each attempt (`--keyserver-options timeout=10`)
 - Raises `NodeSetupFailed` if all sources fail
+- Reaps the forked `dirmngr`/`gpg-agent` helpers via `gpgconf --kill all` after each gpg call, so they don't outlive the call and delay the SSH session's teardown
 
 Never write bare `apt-key adv --recv-keys` without timeout and fallback logic.
 
