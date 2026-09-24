@@ -5,11 +5,14 @@
 # covered lets the next run start where that one stopped instead of spending ~2h repeating
 # the schema-changes category.
 #
-# Six of these should stay excluded even once a full sweep is repeated - they cannot pass
+# Nine of these should stay excluded even once a full sweep is repeated - they cannot pass
 # against this workload:
 #   AddRemoveMvNemesis: MVs/2i unsupported on strongly consistent keyspaces
 #   BlockNetworkMonkey: needs extra_network_interface: True, not set in this job
 #   CreateIndexNemesis: secondary indexes unsupported on strongly consistent keyspaces
+#   EnableDisableTableEncryptionAwsKmsProvider{With,Without}RotationMonkey: write at CL=ALL,
+#     which strongly consistent tables reject
+#   HardRebootNodeMonkey: blocked by SCYLLADB-4625 - the reboot puts the node in a crash loop
 #   KillMVBuildingCoordinator: MVs/2i unsupported on strongly consistent keyspaces
 #   ModifyTableTwcsWindowSizeMonkey: no TWCS table in this workload
 #   ToggleAuditNemesisSyslog: blocked by SCYLLADB-4625 - restart puts the node in a crash loop
@@ -97,3 +100,21 @@ nemesis_exclude_list:
   - "DisableBinaryGossipExecuteMajorCompaction"  # succeeded
   - "DrainKubernetesNodeThenDecommissionAndAddScyllaNode"  # skipped - kubernetes only
   - "DrainKubernetesNodeThenReplaceScyllaNode"  # skipped - kubernetes only
+
+  # run #15 (3dd4dabf) - the fair attempt the KMS rotation nemesis was put back for, and the
+  # proof it cannot pass here. Both KMS nemesis write their temp table with a hard-coded
+  # scylla-bench -consistency-level=all, and SC keyspaces reject that ("Strongly consistent
+  # writes must use QUORUM/LOCAL_QUORUM consistency level"): 5000 of 5000 writes failed per
+  # pass, the table stayed empty, and the sstable check raised SstablesNotFound - 110 min lost.
+  # Re-enable them once the nemesis picks QUORUM for SC keyspaces.
+  #
+  # HardRebootNodeMonkey put node-1 into the SCYLLADB-4625 crash loop (Raft init failed:
+  # committed index cannot be larger then persisted one) and aborted the run - the same
+  # failure as ToggleAuditNemesisSyslog, without audit. Blocked while SCYLLADB-4625 is open.
+  - "EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey"  # failed - CL=ALL rejected on SC tables
+  - "EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey"  # failed - CL=ALL rejected on SC tables
+  - "EndOfQuotaNemesis"  # skipped - disabled upstream, scylladb/scylla-enterprise#3736
+  - "EnospcAllNodesMonkey"  # skipped - applicable only to 2025.3 and lower, SCT#12989
+  - "EnospcMonkey"  # skipped - applicable only to 2025.3 and lower, SCT#12989
+  - "GrowShrinkZeroTokenNode"  # skipped - zero-token support not enabled
+  - "HardRebootNodeMonkey"  # failed - SCYLLADB-4625 crash loop after the hard reboot
