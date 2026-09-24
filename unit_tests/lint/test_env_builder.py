@@ -206,6 +206,28 @@ def test_build_env_baremetal_placeholder_ips():
     assert len(ips) >= 2
 
 
+def test_build_env_baremetal_scylla_repo_placeholder():
+    config = _make_config(
+        params={
+            "backend": "baremetal",
+        }
+    )
+    env = build_env(config)
+    assert env["SCT_SCYLLA_REPO"]
+
+
+def test_build_env_baremetal_keeps_pipeline_scylla_version():
+    config = _make_config(
+        params={
+            "backend": "baremetal",
+            "scylla_version": "2026.1.0",
+        }
+    )
+    env = build_env(config)
+    assert env["SCT_SCYLLA_VERSION"] == "2026.1.0"
+    assert "SCT_SCYLLA_REPO" not in env
+
+
 def test_build_env_test_config_json_encoded():
     config = _make_config(
         params={"backend": "aws"},
