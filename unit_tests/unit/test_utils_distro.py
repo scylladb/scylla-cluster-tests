@@ -304,6 +304,31 @@ ROCKY_SUPPORT_PRODUCT_VERSION="9.0"
 REDHAT_SUPPORT_PRODUCT="Rocky Linux"
 REDHAT_SUPPORT_PRODUCT_VERSION="9.0"
 """,
+    "Fedora 44": """\
+NAME="Fedora Linux"
+VERSION="44 (Cloud Edition)"
+RELEASE_TYPE=stable
+ID=fedora
+VERSION_ID=44
+VERSION_CODENAME=""
+PLATFORM_ID="platform:f44"
+PRETTY_NAME="Fedora Linux 44 (Cloud Edition)"
+ANSI_COLOR="0;38;2;60;110;180"
+LOGO=fedora-logo-icon
+CPE_NAME="cpe:/o:fedoraproject:fedora:44"
+DEFAULT_HOSTNAME="fedora"
+HOME_URL="https://fedoraproject.org/"
+DOCUMENTATION_URL="https://docs.fedoraproject.org/en-US/fedora/f44/"
+SUPPORT_URL="https://ask.fedoraproject.org/"
+BUG_REPORT_URL="https://bugzilla.redhat.com/"
+REDHAT_BUGZILLA_PRODUCT="Fedora"
+REDHAT_BUGZILLA_PRODUCT_VERSION=44
+REDHAT_SUPPORT_PRODUCT="Fedora"
+REDHAT_SUPPORT_PRODUCT_VERSION=44
+SUPPORT_END=2027-05-19
+VARIANT="Cloud Edition"
+VARIANT_ID=cloud
+""",
     "Unknown": """\
 ID=sillylinux
 VERSION_ID=666
@@ -422,6 +447,13 @@ class TestDistro:
         assert Distro.ROCKY9.is_rocky9
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Rocky Linux 9"])
         assert distro.is_rocky9
+        assert distro.is_rhel_like
+
+    def test_fedora44(self):
+        assert Distro.FEDORA44.is_fedora44
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Fedora 44"])
+        assert distro.is_fedora44
+        assert distro.is_fedora
         assert distro.is_rhel_like
 
     def test_parsing_error(self):
