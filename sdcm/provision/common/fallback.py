@@ -18,6 +18,8 @@ availability zone (AZ fallback) or relocate the whole cluster to another region 
 They live here - not under a single backend - so neither backend imports the other's package.
 """
 
+from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_ON_DEMAND
+
 FALLBACK_SUPPORTED_BACKENDS: tuple[str, ...] = ("aws", "gce")
 
 
@@ -35,3 +37,22 @@ def is_az_fallback_enabled(params) -> bool:
 def is_region_fallback_enabled(params) -> bool:
     """Return True when whole-cluster region fallback on capacity errors is enabled."""
     return bool(params.get("fallback_to_next_region")) and params.get("cluster_backend") in FALLBACK_SUPPORTED_BACKENDS
+
+
+# Backends whose provisioning can consult a spot capacity signal when ordering placement candidates:
+# `ec2:GetSpotPlacementScores` on AWS, Capacity Advisor obtainability on GCE.
+SPOT_SCORING_SUPPORTED_BACKENDS: tuple[str, ...] = ("aws", "gce")
+
+
+def is_spot_capacity_scoring_enabled(params, backend: str) -> bool:
+    """Return True when `backend` should order AZs/zones by its spot capacity signal.
+
+    Pointless for on-demand runs - the signal only describes spot capacity - so those skip the API entirely.
+    The `backend` argument is what each caller passes for itself: the AWS resolver must not start scoring
+    because a GCE run enabled the knob, and vice versa.
+    """
+    if not params.get("use_spot_placement_scores"):
+        return False
+    if params.get("cluster_backend") != backend or backend not in SPOT_SCORING_SUPPORTED_BACKENDS:
+        return False
+    return params.get("instance_provision") != INSTANCE_PROVISION_ON_DEMAND

@@ -111,7 +111,7 @@ def call(Map pipelineParams) {
             // Provisioning Configuration
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
-                   description: 'spot|on_demand|spot_fleet',
+                   description: 'spot|on_demand|spot_fleet|auto (auto: resolved by test duration, threshold spot_max_test_duration)',
                    name: 'provision_type')
             string(defaultValue: "${pipelineParams.get('instance_provision_fallback_on_demand', '')}",
                    description: 'true|false',

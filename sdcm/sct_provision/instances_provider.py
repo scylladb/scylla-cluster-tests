@@ -17,7 +17,9 @@ from typing import List, Any
 
 from sdcm.provision import provisioner_factory
 from sdcm.provision.common.fallback import is_region_fallback_enabled
+from sdcm.provision.common.spot_outcome import record_spot_provision_outcome
 from sdcm.provision.gce import region_fallback as gce_region_fallback
+from sdcm.provision.gce.region_fallback import current_datacenters, is_capacity_error
 from sdcm.provision.gce.zone_resolver import GceAZResolver
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.provision.provisioner import (
@@ -27,6 +29,7 @@ from sdcm.provision.provisioner import (
     ProvisionUnrecoverableError,
     Provisioner,
     InstanceDefinition,
+    InstanceConfigurationError,
     OperationPreemptedError,
 )
 from sdcm.remote import RemoteCmdRunnerBase
@@ -45,21 +48,66 @@ def provision_with_retry(
     return provisioner.get_or_create_instances(definitions=definitions, pricing_model=pricing_model)
 
 
+def _record_outcome(
+    provisioner: Provisioner,
+    definitions: List[InstanceDefinition],
+    requested: str,
+    realized: str | None,
+) -> None:
+    """Report the spot-vs-on-demand outcome for one region's worth of instances, one record per type.
+
+    A region's batch is not homogeneous - it is the DB nodes, the loaders and the monitor together - so
+    naming it after `definitions[0]` labels the whole thing with whichever type happens to come first.
+    That is actively misleading on the failure path: a loader that could not be created gets reported as
+    `instance_type=<db type> count=9`, and the obvious conclusion from that line ("the DB machine type
+    cannot do spot") is wrong. Group by type so each line names something that was really requested.
+    """
+    counts: dict[str | None, int] = {}
+    for definition in definitions:
+        counts[definition.type] = counts.get(definition.type, 0) + 1
+    for instance_type, count in (counts or {None: 0}).items():
+        record_spot_provision_outcome(
+            requested=requested,
+            realized=realized,
+            region=provisioner.region,
+            availability_zone=provisioner.availability_zone,
+            instance_type=instance_type,
+            count=count,
+        )
+
+
 def provision_instances_with_fallback(
     provisioner: Provisioner,
     definitions: List[InstanceDefinition],
     pricing_model: PricingModel,
     fallback_on_demand: bool,
 ) -> List[VmInstance]:
+    # What the test asked for, before any fallback gets a chance to change it. The downgrade below is silent
+    # by nature - provisioning succeeds either way - so this is the only point where the difference is
+    # knowable, and without recording it the spot-vs-on-demand spend split stays unmeasured on every backend
+    # that provisions through here (GCE, Azure, OCI).
+    requested = pricing_model.value
+    realized = requested
     try:
-        provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
-    except OperationPreemptedError:
-        if pricing_model.is_spot() and fallback_on_demand:
-            LOGGER.warning("Spot instances were preempted during provisioning, falling back to on-demand")
-            pricing_model = PricingModel.ON_DEMAND
+        try:
             provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
-        else:
-            raise
+        except OperationPreemptedError:
+            if pricing_model.is_spot() and fallback_on_demand:
+                LOGGER.warning("Spot instances were preempted during provisioning, falling back to on-demand")
+                # Rebinding matters beyond this retry: the `get_or_create_instances` call below is handed
+                # this same variable, and it defaults to spot, so leaving it unchanged would re-create any
+                # uncached definition at exactly the pricing that just failed.
+                pricing_model = PricingModel.ON_DEMAND
+                realized = pricing_model.value
+                provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
+            else:
+                raise
+    except Exception:
+        # Report before re-raising: this path raises rather than returning empty, so recording afterwards
+        # would mean the total-failure case - the one worth alerting on - is the one never recorded.
+        _record_outcome(provisioner, definitions, requested, realized=None)
+        raise
+    _record_outcome(provisioner, definitions, requested, realized=realized)
 
     # The pricing model has to be handed over explicitly: `get_or_create_instances` defaults to spot,
     # so a definition that is not in the provisioner cache yet would be re-created at spot pricing -
@@ -127,6 +175,55 @@ def _provision_sct_resources_once(params: SCTConfiguration, test_config: TestCon
         )
 
 
+def _is_capacity_exhaustion(exc: BaseException) -> bool:
+    """True when provisioning gave up for lack of capacity rather than for a configuration problem.
+
+    Two shapes reach here. The capacity error itself, when region fallback is disabled or re-raised;
+    and the ``ProvisionUnrecoverableError`` the region-fallback loop raises once every candidate region
+    is exhausted - that one names its cause only inside the message, so the type is all there is to go
+    on. ``InstanceConfigurationError`` shares that base class but means the request itself is invalid,
+    and no amount of capacity will fix it.
+    """
+    if isinstance(exc, InstanceConfigurationError):
+        return False
+    return is_capacity_error(exc) or isinstance(exc, ProvisionUnrecoverableError)
+
+
+def _provision_with_on_demand_last_resort(
+    *, params: SCTConfiguration, test_id: str, network_name: str, provision: Any
+) -> None:
+    """Run `provision`; if spot capacity ran out everywhere, ask for the same cluster on-demand, once.
+
+    `provision_instances_with_fallback` downgrades only on `OperationPreemptedError`, which is a
+    *running* instance being reclaimed. A spot request that never got capacity raises
+    `ZoneResourcesExhaustedError` instead and so never reached that downgrade - a GCE run failed
+    outright where the equivalent AWS run would have paid for on-demand and carried on.
+
+    It deliberately runs outermost, after zone and region fallback are both exhausted: downgrading any
+    earlier would pay on-demand prices for a cluster that some other zone or region still had spot
+    capacity for, which is the opposite of what the spot work is for.
+    """
+    try:
+        provision()
+        return
+    except Exception as exc:  # noqa: BLE001
+        # Compared as a string rather than through PricingModel: an unrecognised value would raise from
+        # inside this handler and replace the real provisioning failure with a ValueError about an enum.
+        if params.get("instance_provision") == PricingModel.ON_DEMAND.value:
+            raise
+        if not params.get("instance_provision_fallback_on_demand") or not _is_capacity_exhaustion(exc):
+            raise
+        LOGGER.warning("No spot capacity in any eligible zone or region (%s); retrying the cluster on-demand", exc)
+
+    # The retry reuses every instance name verbatim, so whatever the failed attempt left behind has to go
+    # first - and `restore_region()` has already put the configured placement back, so this sweeps the
+    # region the retry is about to use.
+    for region in dict.fromkeys(current_datacenters(params)):
+        gce_region_fallback.cleanup_region(test_id, region, network_name=network_name)
+    params["instance_provision"] = PricingModel.ON_DEMAND.value
+    provision()
+
+
 def _provision_gce_resources(params: SCTConfiguration, test_config: TestConfig, provision_once: Any) -> None:
     """GCE provisioning: upfront zone filter, optional zone/region fallback, placement handoff.
 
@@ -160,16 +257,21 @@ def _provision_gce_resources(params: SCTConfiguration, test_config: TestConfig, 
         provision_once=provision_once,
     )
 
-    if is_region_fallback_enabled(params):
-        gce_region_fallback.provision_with_fallback(
-            params=params,
-            test_id=test_id,
-            network_name=network_name,
-            provision_once=provision_attempt,
-            error_factory=ProvisionUnrecoverableError,
-        )
-    else:
-        provision_attempt()
+    def provision_everywhere() -> None:
+        if is_region_fallback_enabled(params):
+            gce_region_fallback.provision_with_fallback(
+                params=params,
+                test_id=test_id,
+                network_name=network_name,
+                provision_once=provision_attempt,
+                error_factory=ProvisionUnrecoverableError,
+            )
+        else:
+            provision_attempt()
+
+    _provision_with_on_demand_last_resort(
+        params=params, test_id=test_id, network_name=network_name, provision=provision_everywhere
+    )
 
     region_name = " ".join(params.gce_datacenters) if params.gce_datacenters else None
     availability_zone = params.get("availability_zone")

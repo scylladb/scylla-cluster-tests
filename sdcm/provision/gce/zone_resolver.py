@@ -15,6 +15,8 @@ import logging
 import random
 from typing import Callable, Iterator
 
+from sdcm.provision.common.fallback import is_spot_capacity_scoring_enabled
+from sdcm.provision.gce.capacity_advisor import rank_regions, rank_zone_letters_for_roles
 from sdcm.provision.gce.constants import SUPPORTED_GCE_REGIONS
 from sdcm.utils.gce_utils import GceZoneResolver
 
@@ -34,6 +36,22 @@ def _node_count_positive(value) -> bool:
     if isinstance(value, str):
         return any(int(n) > 0 for n in value.split() if n.strip().lstrip("-").isdigit())
     return False
+
+
+def _node_count_total(value) -> int:
+    """Sum an SCT node-count parameter, which may be an int or a per-DC list/space-separated string."""
+    if value is None or isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    items = value if isinstance(value, list) else str(value).split()
+    total = 0
+    for item in items:
+        try:
+            total += int(item)
+        except TypeError, ValueError:
+            continue
+    return total
 
 
 def _has_loaders(params) -> bool:
@@ -74,6 +92,11 @@ _MACHINE_TYPE_PARAM_GATES: tuple[tuple[str, Callable[[object], bool]], ...] = (
     ("nemesis_grow_shrink_instance_type", _always),
     ("instance_type_vector_store", _has_vector_store),
 )
+
+
+def is_capacity_advice_enabled(params) -> bool:
+    """Return True when zone ordering should consult GCE Capacity Advisor."""
+    return is_spot_capacity_scoring_enabled(params, backend="gce")
 
 
 class NoValidAvailabilityZoneError(Exception):
@@ -124,7 +147,10 @@ class GceAZResolver:
             valid_letters = self._discover_valid_zone_letters(region_names, machine_types)
             if not valid_letters:
                 raise NoValidAvailabilityZoneError(self._build_no_zone_error(region_names, machine_types))
-            chosen = random.choice(valid_letters)
+            ranked = self._rank_letters_by_capacity_advice(region_names, valid_letters)
+            # With advice available the best zone is a strictly better pick than a shuffle; without it, keep
+            # the random choice, which spreads unconfigured jobs across zones instead of piling them onto one.
+            chosen = ranked[0] if ranked is not valid_letters else random.choice(valid_letters)
             LOGGER.info(
                 "GceAZResolver: no availability_zone configured; selected '%s' from valid zones %s",
                 chosen,
@@ -137,12 +163,19 @@ class GceAZResolver:
         if not supported_letters:
             raise NoValidAvailabilityZoneError(self._build_no_zone_error(region_names, machine_types))
 
-        resolved = [letter for letter in configured_letters if letter in supported_letters]
-        for letter in supported_letters:
-            if len(resolved) >= len(configured_letters):
-                break
-            if letter not in resolved:
-                resolved.append(letter)
+        # Capacity advice only reorders the pool the zone slots are filled from. By default the configured
+        # letters keep priority, so an explicit `availability_zone` stays honoured and only backfilled slots
+        # are advice-driven; `spot_score_overrides_configured_az` opts into letting obtainability win outright.
+        ranked_letters = self._rank_letters_by_capacity_advice(region_names, supported_letters)
+        if self._score_may_choose_az():
+            resolved = ranked_letters[: len(configured_letters)]
+        else:
+            resolved = [letter for letter in configured_letters if letter in supported_letters]
+            for letter in ranked_letters:
+                if len(resolved) >= len(configured_letters):
+                    break
+                if letter not in resolved:
+                    resolved.append(letter)
 
         if len(resolved) < len(configured_letters):
             # `availability_zone: 'b,c,d'` asks for three racks, one per zone. Handing back two
@@ -161,14 +194,26 @@ class GceAZResolver:
         new_value = ",".join(resolved)
         original_value = self._params.get("availability_zone")
         if new_value != original_value:
-            LOGGER.warning(
-                "GceAZResolver: availability_zone '%s' does not support all required "
-                "machine types %s in regions %s; replacing with '%s'",
-                original_value,
-                machine_types,
-                region_names,
-                new_value,
-            )
+            # Two different reasons land here, and saying the wrong one sends whoever reads this log chasing a
+            # machine-type problem that does not exist: the configured zone may be genuinely unsupported for
+            # the required types, or perfectly valid and merely outranked on obtainability.
+            dropped = [letter for letter in configured_letters if letter not in supported_letters]
+            if dropped:
+                LOGGER.warning(
+                    "GceAZResolver: availability_zone '%s' does not support all required "
+                    "machine types %s in regions %s; replacing with '%s'",
+                    original_value,
+                    machine_types,
+                    region_names,
+                    new_value,
+                )
+            else:
+                LOGGER.info(
+                    "GceAZResolver: availability_zone '%s' outranked on capacity advice in regions %s; using '%s'",
+                    original_value,
+                    region_names,
+                    new_value,
+                )
             self._params["availability_zone"] = new_value
         else:
             LOGGER.info(
@@ -198,9 +243,7 @@ class GceAZResolver:
         cardinality = len(configured_letters) or 1
         machine_types = self.required_machine_types()
 
-        for region in SUPPORTED_GCE_REGIONS:
-            if region == current_region:
-                continue
+        for region in self._ordered_fallback_regions(exclude={current_region}):
             letters = self._common_supported_letters([region], configured_letters, machine_types)
             if len(letters) < cardinality:
                 LOGGER.info(
@@ -240,7 +283,10 @@ class GceAZResolver:
         cardinality = len(configured_letters) or 1
         machine_types = self.required_machine_types()
 
-        for region in SUPPORTED_GCE_REGIONS:
+        # Ranked once for the whole generator, but with an empty exclude set: the in-use check below has to
+        # stay per-candidate (sibling DCs relocate while this generator is alive), so it cannot be folded into
+        # the ranking.
+        for region in self._ordered_fallback_regions(exclude=set()):
             # Re-read per candidate: sibling DCs may have relocated since the previous yield.
             if region in set(self._region_names()):
                 continue
@@ -295,6 +341,144 @@ class GceAZResolver:
             if letter in configured_letters:
                 continue
             yield [letter]
+
+    def advised_machine_types(self) -> list[str]:
+        """Machine types to ask Capacity Advisor about - DB types only.
+
+        `instanceSelections` means "any of these will do" for one homogeneous request, not "I need all of
+        these". Mixing in a small, plentiful loader or monitor type would let it answer for the whole request
+        and flatten obtainability across zones, destroying the ranking. DB nodes are also where the capacity
+        risk and the cost actually are.
+        """
+        selected = []
+        for key in ("gce_instance_type_db", "zero_token_instance_type_db", "instance_type_db_target"):
+            if (machine_type := self._params.get(key)) and machine_type not in selected:
+                selected.append(machine_type)
+        return selected
+
+    def advised_size(self) -> int:
+        """Instance count the advice request should be sized for - DB nodes only, matching the types above."""
+        total = _node_count_total(self._params.get("n_db_nodes"))
+        if _has_zero_token(self._params):
+            total += _node_count_total(self._params.get("n_db_zero_token_nodes"))
+        return max(total, 1)
+
+    def advised_role_requests(self) -> list[tuple[str, list[str], int]]:
+        """One advice request per node role, so a zone is judged on everything it has to hold.
+
+        This is the gap that a real run fell into: the DB type scored 0.90 in every `us-east1` zone, the run
+        took `us-east1-b`, and provisioning then failed creating a *loader* there - the loader type scored
+        0.10 in `b` and `c`, and 0.90 in `d`. Ranking on DB types alone could not see it. Kept as separate
+        requests on purpose - `instanceSelections` inside one request means "any of these will do".
+        """
+        requests = [("db", self.advised_machine_types(), self.advised_size())]
+        for role, type_key, count_key in (
+            ("loaders", "gce_instance_type_loader", "n_loaders"),
+            ("monitor", "gce_instance_type_monitor", "n_monitor_nodes"),
+        ):
+            machine_type = self._params.get(type_key)
+            count = _node_count_total(self._params.get(count_key))
+            if machine_type and count > 0:
+                requests.append((role, [machine_type], count))
+        return requests
+
+    def _score_may_choose_az(self) -> bool:
+        """May the score pick the AZ outright, or only order the backfill around a configured one?
+
+        Two cases qualify. The explicit opt-in `spot_score_overrides_configured_az`, and - the case that
+        actually matters - an `availability_zone` nobody chose: `defaults/gce_config.yaml` pins 'none by default' for every run,
+        so "is an AZ configured?" is true on every test and the score would never be allowed to move off it.
+        That is the same trap the duration policy hit with Jenkins always exporting `provision_type`, and it
+        takes the same answer: ask where the value came from, not what it is.
+
+        A pin written into a test case, passed as an SCT_* env var or given on the command line still wins.
+        Only the repo default gives way. Moving is safe: `create_sct_subnets()` builds subnets in every AZ,
+        and the capacity-error fallback already relocates between them at runtime.
+
+        Params without provenance (plain dicts in unit tests) count as explicitly set, i.e. today's
+        behaviour.
+        """
+        if not is_capacity_advice_enabled(self._params):
+            return False
+        if self._params.get("spot_score_overrides_configured_az"):
+            return True
+        try:
+            is_explicitly_set = self._params.is_explicitly_set
+        except AttributeError, KeyError:
+            # DotDict and friends raise KeyError rather than AttributeError, so `getattr(..., default)`
+            # does not shield us here.
+            return False
+        return callable(is_explicitly_set) and not is_explicitly_set("availability_zone")
+
+    def _rank_letters_by_capacity_advice(self, region_names: list[str], letters: list[str]) -> list[str]:
+        """Reorder `letters` best-first by Capacity Advisor obtainability.
+
+        A no-op unless advice is enabled, and a no-op for multi-region configs: a zone letter there must be
+        valid in every region, and a letter that scores well in one region may score poorly in another, so
+        there is no single meaningful ranking. Returns the given list object unchanged when the advice is
+        unavailable, which callers can compare by identity to tell "not ranked" from "ranked to the same
+        order".
+        """
+        if len(letters) < 2 or not is_capacity_advice_enabled(self._params):
+            return letters
+        if len(region_names) != 1:
+            LOGGER.debug("GCE capacity advice: skipping zone ranking for multi-region config %s", region_names)
+            return letters
+
+        machine_types = self.advised_machine_types()
+        if not machine_types:
+            return letters
+
+        min_obtainability = float(self._params.get("gce_spot_obtainability_min") or 0.0)
+        ranked = rank_zone_letters_for_roles(
+            role_requests=self.advised_role_requests(),
+            region=region_names[0],
+            zone_letters=letters,
+            min_obtainability=min_obtainability,
+        )
+        if ranked is None:
+            return letters
+        # `gce_spot_obtainability_min` can drop zones, and the caller fills a fixed number of zone slots from
+        # what comes back. On GCE that count is also `racks_count`, so a short list would silently build a
+        # cluster with fewer racks than the test was written for - which `resolve()` already refuses to do for
+        # the machine-type filter. Hold the advice filter to the same rule.
+        required = min(len(self._configured_az_letters()), len(letters))
+        if len(ranked) < required:
+            raise NoValidAvailabilityZoneError(
+                f"Only {len(ranked)} zone(s) in {region_names[0]} reached "
+                f"gce_spot_obtainability_min={min_obtainability} for {machine_types}, but {required} are "
+                f"needed (candidates were {letters}, qualifying {ranked}); lower the threshold, use machine "
+                f"types available in more zones, or pick another region."
+            )
+        if ranked != letters:
+            LOGGER.debug(
+                "GCE capacity advice reordered zone candidates in %s: %s -> %s", region_names[0], letters, ranked
+            )
+        return ranked
+
+    def _ordered_fallback_regions(self, exclude: set[str]) -> list[str]:
+        """Candidate regions for relocation, obtainability-ordered when advice is enabled.
+
+        Ranking regions costs one advice call per zone of each candidate, so it is done once here for the
+        whole list rather than per candidate as the consumer walks it lazily.
+        """
+        regions = [region for region in SUPPORTED_GCE_REGIONS if region not in exclude]
+        if not is_capacity_advice_enabled(self._params) or len(regions) < 2:
+            return regions
+        machine_types = self.advised_machine_types()
+        if not machine_types:
+            return regions
+        resolver = GceZoneResolver()
+        zones_per_region = {region: resolver.get_zones_for_region(region) for region in regions}
+        ranked = rank_regions(
+            machine_types=machine_types,
+            size=self.advised_size(),
+            regions=regions,
+            zones_per_region=zones_per_region,
+        )
+        if ranked and ranked != regions:
+            LOGGER.info("GCE capacity advice reordered region fallback candidates: %s -> %s", regions, ranked)
+        return ranked or regions
 
     def _common_supported_letters(
         self, region_names: list[str], configured_letters: list[str], machine_types: list[str]

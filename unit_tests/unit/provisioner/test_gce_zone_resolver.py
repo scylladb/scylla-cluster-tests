@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
+from sdcm.provision.gce.capacity_advisor import ZoneCapacityAdvice
 from sdcm.provision.gce.zone_resolver import GceAZResolver, NoValidAvailabilityZoneError, _node_count_positive
 from sdcm.utils.gce_utils import get_alternative_zones
 
@@ -309,3 +310,219 @@ def test_get_alternative_zones_returns_deterministic_order(mock_zone_letters):
 def test_get_alternative_zones_single_zone_region_returns_empty():
     with patch("sdcm.utils.gce_utils._get_zone_letters_for_region", return_value=["a"]):
         assert get_alternative_zones("single-region-1", "a") == []
+
+
+class TestDefaultZoneIsNotAChoice:
+    """Same rule as AWS: a zone nobody chose must not outrank the capacity signal.
+
+    GCE has no zone pinned in `defaults/gce_config.yaml` today, so this mostly guards the rule from
+    drifting apart between the two resolvers - the AWS one has the identical logic, and a divergence
+    would mean the same config means different things per backend.
+    """
+
+    @staticmethod
+    def _params(explicit: bool, **overrides):
+        defaults = {"instance_provision": "spot", "use_spot_placement_scores": True, "availability_zone": "b"}
+        params = _make_params(**{**defaults, **overrides})
+        params.is_explicitly_set = lambda name: explicit and name == "availability_zone"
+        return params
+
+    def test_a_defaults_only_zone_lets_the_advice_choose(self):
+        assert GceAZResolver(self._params(explicit=False))._score_may_choose_az() is True
+
+    def test_a_deliberate_pin_is_honoured(self):
+        assert GceAZResolver(self._params(explicit=True))._score_may_choose_az() is False
+
+    def test_the_override_flag_still_beats_a_deliberate_pin(self):
+        params = self._params(explicit=True, spot_score_overrides_configured_az=True)
+        assert GceAZResolver(params)._score_may_choose_az() is True
+
+    def test_on_demand_runs_never_reorder_regardless_of_provenance(self):
+        assert (
+            GceAZResolver(self._params(explicit=False, instance_provision="on_demand"))._score_may_choose_az() is False
+        )
+
+    def test_params_without_provenance_keep_todays_behaviour(self):
+        params = _make_params(instance_provision="spot", use_spot_placement_scores=True, availability_zone="b")
+        assert GceAZResolver(params)._score_may_choose_az() is False
+
+
+class TestRegionFallbackOrdering:
+    """Region-fallback candidates are obtainability-ordered, once for the whole list.
+
+    Ranking costs one advice call per zone of each candidate region, so it happens once here rather than
+    per candidate as the consumer walks the generator lazily.
+    """
+
+    def test_candidates_are_ordered_by_capacity_advice(self):
+        params = _make_params(instance_provision="spot", use_spot_placement_scores=True)
+        with (
+            patch("sdcm.provision.gce.zone_resolver.SUPPORTED_GCE_REGIONS", ["us-east1", "us-east4", "us-west1"]),
+            patch("sdcm.provision.gce.zone_resolver.GceZoneResolver") as zone_resolver,
+            patch("sdcm.provision.gce.zone_resolver.rank_regions", return_value=["us-west1", "us-east1"]) as rank,
+        ):
+            zone_resolver.return_value.get_zones_for_region.return_value = ["us-east1-b"]
+            ordered = GceAZResolver(params)._ordered_fallback_regions(exclude={"us-east4"})
+
+        assert ordered == ["us-west1", "us-east1"]
+        assert rank.call_args.kwargs["regions"] == ["us-east1", "us-west1"], "the excluded region is never scored"
+
+    def test_unavailable_advice_keeps_the_configured_order(self):
+        params = _make_params(instance_provision="spot", use_spot_placement_scores=True)
+        with (
+            patch("sdcm.provision.gce.zone_resolver.SUPPORTED_GCE_REGIONS", ["us-east1", "us-west1"]),
+            patch("sdcm.provision.gce.zone_resolver.GceZoneResolver") as zone_resolver,
+            patch("sdcm.provision.gce.zone_resolver.rank_regions", return_value=None),
+        ):
+            zone_resolver.return_value.get_zones_for_region.return_value = ["us-east1-b"]
+            assert GceAZResolver(params)._ordered_fallback_regions(exclude=set()) == ["us-east1", "us-west1"]
+
+    def test_on_demand_runs_never_call_the_advice_api(self):
+        params = _make_params(instance_provision="on_demand", use_spot_placement_scores=True)
+        with (
+            patch("sdcm.provision.gce.zone_resolver.SUPPORTED_GCE_REGIONS", ["us-east1", "us-west1"]),
+            patch("sdcm.provision.gce.zone_resolver.rank_regions") as rank,
+        ):
+            assert GceAZResolver(params)._ordered_fallback_regions(exclude=set()) == ["us-east1", "us-west1"]
+        rank.assert_not_called()
+
+
+class TestCapacityAdviceZoneRanking:
+    """The resolver method that wires Capacity Advisor into zone selection.
+
+    The AWS counterpart has this covered; the GCE one did not, which left the `gce_spot_obtainability_min`
+    guard untested - the guard whose whole job is to refuse a cluster with fewer zones than the test asked
+    for, rather than quietly building one. On GCE the zone count is also the rack count.
+    """
+
+    @staticmethod
+    def _params(**overrides):
+        defaults = {
+            "instance_provision": "spot",
+            "use_spot_placement_scores": True,
+            "availability_zone": "b,c",
+        }
+        params = _make_params(**{**defaults, **overrides})
+        params.is_explicitly_set = lambda _: False
+        return params
+
+    def test_zones_are_reordered_best_first(self):
+        resolver = GceAZResolver(self._params())
+        with patch("sdcm.provision.gce.zone_resolver.rank_zone_letters_for_roles", return_value=["d", "b", "c"]):
+            assert resolver._rank_letters_by_capacity_advice(["us-east1"], ["b", "c", "d"]) == ["d", "b", "c"]
+
+    def test_unavailable_advice_returns_the_input_unchanged(self):
+        """Callers compare by identity to tell "not ranked" from "ranked to the same order"."""
+        resolver = GceAZResolver(self._params())
+        letters = ["b", "c", "d"]
+        with patch("sdcm.provision.gce.zone_resolver.rank_zone_letters_for_roles", return_value=None):
+            assert resolver._rank_letters_by_capacity_advice(["us-east1"], letters) is letters
+
+    def test_multi_region_configs_are_not_ranked(self):
+        """A zone letter must be valid in every region, and a letter good in one may be poor in another."""
+        resolver = GceAZResolver(self._params())
+        letters = ["b", "c"]
+        with patch("sdcm.provision.gce.zone_resolver.rank_zone_letters_for_roles") as rank:
+            assert resolver._rank_letters_by_capacity_advice(["us-east1", "us-west1"], letters) is letters
+        rank.assert_not_called()
+
+    def test_a_threshold_leaving_too_few_zones_fails_loudly(self):
+        """Silently returning one zone would build a 1-rack cluster for a 2-rack test."""
+        resolver = GceAZResolver(self._params(gce_spot_obtainability_min=0.5))
+        with patch("sdcm.provision.gce.zone_resolver.rank_zone_letters_for_roles", return_value=["d"]):
+            with pytest.raises(NoValidAvailabilityZoneError, match="gce_spot_obtainability_min=0.5"):
+                resolver._rank_letters_by_capacity_advice(["us-east1"], ["b", "c", "d"])
+
+    def test_a_threshold_keeping_enough_zones_is_fine(self):
+        resolver = GceAZResolver(self._params(gce_spot_obtainability_min=0.5))
+        with patch("sdcm.provision.gce.zone_resolver.rank_zone_letters_for_roles", return_value=["d", "b"]):
+            assert resolver._rank_letters_by_capacity_advice(["us-east1"], ["b", "c", "d"]) == ["d", "b"]
+
+    def test_on_demand_runs_never_call_the_advice_api(self):
+        resolver = GceAZResolver(self._params(instance_provision="on_demand"))
+        with patch("sdcm.provision.gce.zone_resolver.rank_zone_letters_for_roles") as rank:
+            resolver._rank_letters_by_capacity_advice(["us-east1"], ["b", "c"])
+        rank.assert_not_called()
+
+    def test_a_single_candidate_is_not_worth_an_api_call(self):
+        resolver = GceAZResolver(self._params())
+        with patch("sdcm.provision.gce.zone_resolver.rank_zone_letters_for_roles") as rank:
+            assert resolver._rank_letters_by_capacity_advice(["us-east1"], ["b"]) == ["b"]
+        rank.assert_not_called()
+
+
+class TestRolesNeverSplitAcrossZones:
+    """Per-role advice must not turn into per-role placement.
+
+    Each role is asked separately and their preference orders routinely disagree - on a real run the DB type
+    scored 0.90 in every `us-east1` zone while the loader type scored 0.10 in two of them. What must never
+    follow is a cluster with the DB nodes in one zone and the loaders in another: the roles collapse to one
+    ranked list before anything is chosen, and the configured zone count decides how many come out. On GCE
+    that count is also `racks_count`.
+    """
+
+    @staticmethod
+    def _params(availability_zone):
+        return _make_params(
+            instance_provision="spot",
+            use_spot_placement_scores=True,
+            availability_zone=availability_zone,
+            spot_score_overrides_configured_az=True,
+        )
+
+    @staticmethod
+    def _conflicting_advice():
+        """db prefers b, loaders prefer c, monitor prefers d."""
+        return [
+            [
+                ZoneCapacityAdvice(zone="us-east1-b", obtainability=0.9),
+                ZoneCapacityAdvice(zone="us-east1-c", obtainability=0.2),
+                ZoneCapacityAdvice(zone="us-east1-d", obtainability=0.2),
+            ],
+            [
+                ZoneCapacityAdvice(zone="us-east1-b", obtainability=0.2),
+                ZoneCapacityAdvice(zone="us-east1-c", obtainability=0.9),
+                ZoneCapacityAdvice(zone="us-east1-d", obtainability=0.3),
+            ],
+            [
+                ZoneCapacityAdvice(zone="us-east1-b", obtainability=0.2),
+                ZoneCapacityAdvice(zone="us-east1-c", obtainability=0.3),
+                ZoneCapacityAdvice(zone="us-east1-d", obtainability=0.9),
+            ],
+        ]
+
+    def test_one_configured_zone_resolves_to_exactly_one(self):
+        params = self._params("b")
+        with (
+            patch.object(GceAZResolver, "_common_supported_letters", return_value=["b", "c", "d"]),
+            patch("sdcm.provision.gce.capacity_advisor.get_zone_advice", side_effect=self._conflicting_advice()),
+        ):
+            GceAZResolver(params).resolve()
+
+        resolved = params["availability_zone"]
+        assert "," not in resolved, f"roles were split across zones: {resolved!r}"
+        assert len(resolved) == 1
+
+    def test_three_configured_zones_resolve_to_exactly_three(self):
+        """`availability_zone: 'b,c,d'` asks for three racks; advice may reorder them, never drop one."""
+        params = self._params("b,c,d")
+        with (
+            patch.object(GceAZResolver, "_common_supported_letters", return_value=["b", "c", "d"]),
+            patch("sdcm.provision.gce.capacity_advisor.get_zone_advice", side_effect=self._conflicting_advice()),
+        ):
+            GceAZResolver(params).resolve()
+
+        assert sorted(params["availability_zone"].split(",")) == ["b", "c", "d"]
+
+    def test_fallback_candidates_keep_the_configured_cardinality(self):
+        """A single-zone config must stay single-zone through every fallback candidate too."""
+        params = self._params("b")
+        with (
+            patch.object(GceAZResolver, "_common_supported_letters", return_value=["b", "c", "d"]),
+            patch("sdcm.provision.gce.zone_resolver.rank_zone_letters_for_roles", return_value=["d", "c", "b"]),
+            patch("sdcm.provision.gce.zone_resolver.GceZoneResolver"),
+        ):
+            candidates = list(GceAZResolver(params).get_az_fallback_candidates())
+
+        assert candidates, "expected at least one fallback candidate"
+        assert all(len(candidate) == 1 for candidate in candidates), f"cardinality changed: {candidates}"
