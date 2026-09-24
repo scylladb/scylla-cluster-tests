@@ -208,7 +208,26 @@ class CategoricalMonkey(NemesisRunner):
 
     def __init__(self, tester_obj, termination_event, dist: dict, *args, default_weight: float = 1, **kwargs):
         super().__init__(tester_obj, termination_event, *args, **kwargs)
-        self.disruption_distribution = self.get_disruption_distribution(dist, default_weight)
+        population, weights = self.get_disruption_distribution(dist, default_weight)
+        self._weight_by_nemesis = dict(zip(population, weights))
+        self.disruptions_list = population
+        self.disruption_distribution = (population, weights)
+
+    def precheck_nemesis(self) -> list[tuple[str, str]]:
+        """Prune infeasible members from disruption_distribution too, via disruptions_list.
+
+        CategoricalMonkey keeps its executable candidates in disruption_distribution rather
+        than disruptions_list, so the base precheck alone would leave infeasible weighted
+        candidates selectable by select_next_nemesis(). Mirroring the population into
+        disruptions_list lets the base pruning run once, then this resyncs the weights to
+        match the survivors.
+        """
+        excluded = super().precheck_nemesis()
+        self.disruption_distribution = (
+            list(self.disruptions_list),
+            [self._weight_by_nemesis[nemesis] for nemesis in self.disruptions_list],
+        )
+        return excluded
 
     def select_next_nemesis(self):
         population, weights = self.disruption_distribution
