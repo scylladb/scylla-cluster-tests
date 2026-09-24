@@ -303,3 +303,30 @@ def test_preemption_mid_batch_drains_the_operations_still_in_flight(vm_provider)
     # node-3 was submitted before the abort, so its operation is waited out too and cached.
     assert [call.args[0] for call in waited.call_args_list] == operations
     assert sorted(vm_provider._cache) == ["node-1", "node-3"]
+
+
+@pytest.mark.parametrize("drain_error", [TimeoutError("timed out"), RuntimeError("operation failed")])
+def test_drain_errors_do_not_mask_the_preemption(vm_provider, drain_error):
+    """`wait_for_extended_operation` can also raise TimeoutError/RuntimeError; the drain must swallow those.
+
+    Otherwise the drain error replaces OperationPreemptedError and the on-demand fallback never runs.
+    """
+    definitions = [_definition(name=f"node-{index}") for index in range(1, 3)]
+    operations = [MagicMock() for _ in definitions]
+
+    def wait(operation, _description):
+        if operation is operations[0]:
+            raise PREEMPTION_ERROR
+        raise drain_error
+
+    with (
+        patch.object(vm_provider, "_build_and_insert_instance", side_effect=operations),
+        patch("sdcm.provision.gce.instance_provider.wait_for_extended_operation", side_effect=wait),
+        patch.object(vm_provider, "delete") as deleted,
+    ):
+        with pytest.raises(OperationPreemptedError):
+            vm_provider.get_or_create(definitions=definitions, pricing_model=PricingModel.SPOT)
+
+    # node-2 never came up, so its name is freed for the on-demand retry.
+    deleted.assert_any_call("node-2", wait=True)
+    assert "node-2" not in vm_provider._cache

@@ -294,7 +294,7 @@ class VirtualMachineProvider:
         GCE's `insert` is not idempotent, so a name whose operation was never awaited is neither in
         the cache nor free: the caller's on-demand retry would get `AlreadyExists` for it instead of
         a VM. Each remaining operation is waited out - a VM that came up is cached and reused by the
-        retry, one that failed is deleted so its name is free again. Errors are only logged: the
+        retry, one that failed is deleted so its name is free again. Any error is only logged: the
         abort that triggered the drain is the error the caller has to see.
         """
         while pending_instance_creations:
@@ -305,12 +305,9 @@ class VirtualMachineProvider:
                 self._set_instance_labels(instance, definition.tags, normalized_name)
                 self._cache[normalized_name] = instance
                 LOGGER.info("Instance %s finished creating after the abort; keeping it for the retry", normalized_name)
-            except google.api_core.exceptions.GoogleAPIError as gce_error:
-                LOGGER.warning("Instance %s did not finish creating after the abort: %s", normalized_name, gce_error)
-                try:
-                    self.delete(normalized_name, wait=True)
-                except google.api_core.exceptions.GoogleAPIError as delete_error:
-                    LOGGER.warning("Cleanup of %s after the abort failed: %s", normalized_name, delete_error)
+            except Exception as error:  # noqa: BLE001 - the wait also raises TimeoutError/RuntimeError
+                LOGGER.warning("Instance %s did not finish creating after the abort: %s", normalized_name, error)
+                self.delete(normalized_name, wait=True)  # logs its own failures, never raises
 
     def _wait_for_instance_creation(
         self,
