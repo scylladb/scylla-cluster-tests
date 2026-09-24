@@ -18,12 +18,12 @@ stops. Each run resumes where the previous one stopped, through
 
 | Status | Count | Share of all 112 |
 |---|---:|---:|
-| pass | 19 | 17% |
-| failed | 8 | 7% |
+| pass | 20 | 18% |
+| failed | 9 | 8% |
 | blocked (topology-changes) | 13 | 12% |
-| **failed + blocked** | **21** | **19%** |
-| skipped | 25 | 22% |
-| not executed | 47 | 42% |
+| **failed + blocked** | **22** | **20%** |
+| skipped | 26 | 23% |
+| not executed | 44 | 39% |
 
 ## Per-run statistics
 
@@ -39,6 +39,7 @@ A nemesis can be "succeeded" here and still be the one that failed the run.
 | [#13](https://argus.scylladb.com/tests/scylla-cluster-tests/47fedaef-92b9-49c6-9a62-63b3b0267cdc) | 2026-09-22 09:45–11:06 | 9 | 0 | 1 | 8 | failed after 14 min - `disablebinary` for 1.17 s killed the write stress (SCYLLADB-4671) |
 | [#14](https://argus.scylladb.com/tests/scylla-cluster-tests/f57403f7-15ec-4333-9922-e99704c90fe0) | 2026-09-22 13:13–14:15 | 5 | 1 | 1 | 3 | failed - `ReadValidationError` on rows an earlier nemesis prevented prepare from writing |
 | [#15](https://argus.scylladb.com/tests/scylla-cluster-tests/3dd4dabf-fc6d-4012-9662-2bb9aaae85a0) | 2026-09-23 14:39–18:53 | 7 | 0 | 3 | 4 | aborted - node-1 crash loop after `HardRebootNodeMonkey` (SCYLLADB-4625) |
+| [#16](https://argus.scylladb.com/tests/scylla-cluster-tests/8ffe2ba5-91f5-4f92-a69c-a2e183c4ce83) | 2026-09-24 13:24–14:43 | 3 | 1 | 1 | 1 | failed - node-5 crash loop after a clean restart in `MgmtRestore` (SCYLLADB-4625) |
 
 Run #13 reached nine nemesis but Argus recorded two: the eight precheck exclusions are submitted
 with one shared timestamp, and only the first survives. The SCT log has all of them.
@@ -53,12 +54,13 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 | `9535c036e` | fail-fast kept on `prepare_write_cmd`, `nemesis_during_prepare: false` | ignoring errors during prepare left ~103k rows unwritten in run #14, which the read phase then reported as validation failures |
 | `3e187ff95` | `EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey` put back in the sweep | it never got a verdict in run #14 - the rows it was blamed for were missing before it started |
 | `4e4412268` | the seven nemesis run #15 reached excluded | both KMS nemesis write at CL=ALL, which SC tables reject (SCYLLADB-4727); `HardRebootNodeMonkey` hits SCYLLADB-4625; the four skips are static for this job |
+| `a98427dd9` | the three nemesis run #16 reached excluded | `MgmtRestore`'s rolling restart hits SCYLLADB-4625 even after a clean shutdown; `MemoryStressMonkey` is disabled (scylla-cluster-tests#6928); `MgmtCorruptThenRepair` passed |
 
 ## Open issues found by this job
 
 | Issue | What it is |
 |---|---|
-| [SCYLLADB-4625](https://scylladb.atlassian.net/browse/SCYLLADB-4625) | node cannot restart after enabling audit - permanent crash loop; run #15 hit it after a hard reboot, without audit |
+| [SCYLLADB-4625](https://scylladb.atlassian.net/browse/SCYLLADB-4625) | node cannot restart after enabling audit - permanent crash loop; run #15 hit it after a hard reboot, run #16 after a clean restart |
 | [SCYLLADB-4604](https://scylladb.atlassian.net/browse/SCYLLADB-4604) | SC: decommission blocks writes - migrated tablet raft groups never elect a leader |
 | [SCYLLADB-4529](https://scylladb.atlassian.net/browse/SCYLLADB-4529) | node bootstrap fails on group0 snapshot - blocks the topology-changes category |
 | [SCYLLADB-4671](https://scylladb.atlassian.net/browse/SCYLLADB-4671) | SC: timeouts reported as CL=ONE/SIMPLE, so drivers never retry them |
