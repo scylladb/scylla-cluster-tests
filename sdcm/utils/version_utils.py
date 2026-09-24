@@ -74,6 +74,29 @@ ARGUS_VERSION_RE = re.compile(r"((?P<short>[\w.~]+)(-(0\.)?(?P<date>[0-9]{8,8})?
 SCYLLA_VERSION_GROUPED_RE = re.compile(
     r"(?P<version>[\w.~]+(?:-(?:dev|enterprise))?)[-~](?:(?P<build>0|rc\d+)\.)?(?P<date>[\d]{8})\.(?P<commit_id>[a-f0-9]+)"
 )
+# Scylla version string forms, in one place so there is a single definition of each.
+#
+# A *full version tag* names one exact build. Two spellings are in use:
+#   2024.2.5-0.20250221.cb9e2a54ae6d-1      release (optional trailing packaging revision)
+#   2026.4.0~dev-0.20260804.9a3aba9e452a    dev / nightly
+#   2026.3.0.rc1.0.20260730.726f67a532e2    release candidate (dot separated)
+# `SCYLLA_VERSION_GROUPED_RE` above splits a tag into components but does not accept the
+# dotted RC spelling; this one is the membership test and accepts every spelling.
+FULL_VERSION_TAG_RE = re.compile(
+    r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"
+    r"(?:[~-][a-zA-Z0-9._~]+-?\d*\.\d{8}\.[0-9a-f]+(?:-\d+)?"
+    r"|\.rc\d+\.\d+\.\d{8}\.[0-9a-f]+(?:\.\d+)?)$"
+)
+
+# A specific three-part release: 2026.1.8, 2025.4.1
+RELEASE_VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
+
+# A short version that names a line rather than a build: 2025.4, 2025.4.0, 5.2.1
+SIMPLE_VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)(?:\.\d+)?$")
+
+# branch:qualifier, as accepted by the trigger matrix: master:latest, branch-2019.1:all
+BRANCH_VERSION_RE = re.compile(r"^(?P<branch>[a-zA-Z0-9._-]+):(?P<qualifier>.+)$")
+
 SSTABLE_FORMAT_VERSION_REGEX = re.compile(r"Feature (.*)_SSTABLE_FORMAT is enabled")
 ENABLED_SSTABLE_FORMAT_VERSION_REGEXP = re.compile(r"(.*)_SSTABLE_FORMAT")
 PRIMARY_XML_REGEX = re.compile(r'="(.*?primary.xml.(gz|zst)?)".*')
