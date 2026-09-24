@@ -47,12 +47,12 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 
 | Commit | Change | Why |
 |---|---|---|
-| `540600481` | `CategorySweepMonkey` | run every nemesis once, in category order, instead of a shuffled infinite cycle |
-| `3dfcf31c4` | `DISABLED_CATEGORIES = {topology-changes}` | hold 13 nemesis out while SCYLLADB-4529 is open |
-| `fd3f4cbdc` | `-errors ignore` on `stress_cmd` | cql-stress fail-fast ended run #13 on the first nemesis that closed a CQL port |
-| `b179e9800` | fail-fast kept on `prepare_write_cmd`, `nemesis_during_prepare: false` | ignoring errors during prepare left ~103k rows unwritten in run #14, which the read phase then reported as validation failures |
-| `087be6312` | `EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey` put back in the sweep | it never got a verdict in run #14 - the rows it was blamed for were missing before it started |
-| `e3db976cb` | the seven nemesis run #15 reached excluded | both KMS nemesis write at CL=ALL, which SC tables reject (SCYLLADB-4727); `HardRebootNodeMonkey` hits SCYLLADB-4625; the four skips are static for this job |
+| `cd54b38d3` | `CategorySweepMonkey` | run every nemesis once, in category order, instead of a shuffled infinite cycle |
+| `ae7e96d95` | `DISABLED_CATEGORIES = {topology-changes}` | hold 13 nemesis out while SCYLLADB-4529 is open |
+| `86a954504` | `-errors ignore` on `stress_cmd` | cql-stress fail-fast ended run #13 on the first nemesis that closed a CQL port |
+| `9535c036e` | fail-fast kept on `prepare_write_cmd`, `nemesis_during_prepare: false` | ignoring errors during prepare left ~103k rows unwritten in run #14, which the read phase then reported as validation failures |
+| `3e187ff95` | `EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey` put back in the sweep | it never got a verdict in run #14 - the rows it was blamed for were missing before it started |
+| `4e4412268` | the seven nemesis run #15 reached excluded | both KMS nemesis write at CL=ALL, which SC tables reject (SCYLLADB-4727); `HardRebootNodeMonkey` hits SCYLLADB-4625; the four skips are static for this job |
 
 ## Open issues found by this job
 
