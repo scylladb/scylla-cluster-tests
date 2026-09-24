@@ -158,6 +158,7 @@ from sdcm.utils.issues import SkipPerIssues
 from sdcm.wait import wait_for
 from sdcm.exceptions import (
     KillNemesis,
+    NemesisPassCompleted,
     NoFilesFoundToDestroy,
     NoKeyspaceFound,
     FilesNotCorrupted,
@@ -448,6 +449,11 @@ class NemesisRunner:
                 cur_interval = self.interval
                 try:
                     self.call_next_nemesis()
+                except NemesisPassCompleted as exc:
+                    InfoEvent(message=str(exc)).publish()
+                    self.log.info("Nemesis thread [%s] finished its pass: %s", id(self), exc)
+                    cur_interval = 0
+                    break
                 except (UnsupportedNemesis, MethodVersionNotFound) as exc:
                     self.log.warning("Skipping unsupported nemesis: %s", exc)
                     cur_interval = 0

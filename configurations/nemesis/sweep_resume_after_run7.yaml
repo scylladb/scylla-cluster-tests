@@ -1,0 +1,99 @@
+# Resume the category sweep after sanity-longevity-100gb-4h-sc-test #7.
+#
+# Run #7 swept 22 nemesis before ToggleAuditNemesisSyslog crashed node-1 (SCYLLADB-4625) and
+# aborted the run, leaving 77 of the 99 enabled nemesis unexecuted. Excluding what #7 already
+# covered lets the next run start where that one stopped instead of spending ~2h repeating
+# the schema-changes category.
+#
+# Six of these should stay excluded even once a full sweep is repeated - they cannot pass
+# against this workload:
+#   AddRemoveMvNemesis: MVs/2i unsupported on strongly consistent keyspaces
+#   BlockNetworkMonkey: needs extra_network_interface: True, not set in this job
+#   CreateIndexNemesis: secondary indexes unsupported on strongly consistent keyspaces
+#   KillMVBuildingCoordinator: MVs/2i unsupported on strongly consistent keyspaces
+#   ModifyTableTwcsWindowSizeMonkey: no TWCS table in this workload
+#   ToggleAuditNemesisSyslog: blocked by SCYLLADB-4625 - restart puts the node in a crash loop
+#
+# The remaining entries are the ones that passed in #7; drop them from this list to sweep the
+# whole tree again.
+
+nemesis_exclude_list:
+  - "AddDropColumnMonkey"  # succeeded
+  - "AddRemoveMvNemesis"  # failed
+  - "BlockNetworkMonkey"  # skipped
+  - "CreateIndexNemesis"  # skipped
+  - "KillMVBuildingCoordinator"  # failed
+  - "ModifyTableBloomFilterFpChanceMonkey"  # succeeded
+  - "ModifyTableCachingMonkey"  # succeeded
+  - "ModifyTableCommentMonkey"  # succeeded
+  - "ModifyTableCompactionMonkey"  # succeeded
+  - "ModifyTableCompressionMonkey"  # succeeded
+  - "ModifyTableCrcCheckChanceMonkey"  # succeeded
+  - "ModifyTableDclocalReadRepairChanceMonkey"  # succeeded
+  - "ModifyTableDefaultTimeToLiveMonkey"  # succeeded
+  - "ModifyTableGcGraceTimeMonkey"  # succeeded
+  - "ModifyTableMaxIndexIntervalMonkey"  # succeeded
+  - "ModifyTableMemtableFlushPeriodInMsMonkey"  # succeeded
+  - "ModifyTableMinIndexIntervalMonkey"  # succeeded
+  - "ModifyTableReadRepairChanceMonkey"  # succeeded
+  - "ModifyTableSpeculativeRetryMonkey"  # succeeded
+  - "ModifyTableTwcsWindowSizeMonkey"  # skipped
+  - "SplitMergeTabletsWithAlter"  # succeeded
+  - "ToggleAuditNemesisSyslog"  # failed
+
+  # Comments below are the Argus nemesis status - did the disruption itself complete - not the
+  # coverage verdict on the wiki page, which asks whether the nemesis exposed an SC problem. A
+  # nemesis can be "succeeded" here and still be the one that failed the run.
+  #
+  # run #9 (de61fd2c) - the first run the exclude list actually reached.
+  # AbortDecommissionMonkey exposed SCYLLADB-4604 and failed the run; the five skips are
+  # workload/feature mismatches, not defects, so none of these six need re-running.
+  - "AbortDecommissionMonkey"  # succeeded; the run then failed on SCYLLADB-4604
+  - "RandomInterruptionNetworkMonkey"  # skipped
+  - "ToggleAuditRulesNemesisSyslog"  # skipped
+  - "ToggleCDCMonkey"  # skipped
+  - "ToggleGcModeMonkey"  # skipped
+  - "ToggleTableIcsMonkey"  # skipped
+
+  # run #10 (64b2f4b9) - six more of other-disruptive, in 40 minutes.
+  # RejectInterNodeNetworkMonkey never entered the rotation: its precheck() held it out before
+  # the sweep began, and that verdict is static, so it cannot pass on this backend either.
+  # AddRemoveRackNemesis and CorruptThenRebuildMonkey are workload/backend mismatches.
+  #
+  # CorruptThenRepairMonkey is the one entry here without a verdict of its own: the cl=QUORUM
+  # write stress died 5 minutes into it and the CRITICAL killed the nemesis mid-disruption. It
+  # is excluded so the sweep can move past it rather than losing another run in the same place;
+  # re-run it on its own once that stress failure has been investigated.
+  - "AddRemoveRackNemesis"  # skipped - adding a rack is unsupported on non-k8s clusters
+  - "ClusterRollingRestart"  # succeeded
+  - "ClusterRollingRestartRandomOrder"  # succeeded
+  - "CorruptThenRebuildMonkey"  # skipped - rebuild unsupported with tablets, scylladb/scylladb#17575
+  - "CorruptThenRepairMonkey"  # failed - run aborted, no verdict; needs a targeted re-run
+  - "RejectInterNodeNetworkMonkey"  # skipped by precheck - scylladb/scylladb#6522
+
+  # run #13 (47fedaef) - the eight nemesis precheck holds out of every run of this job. Their
+  # verdicts are static config facts, so they cost startup time and Argus noise on every sweep
+  # and will never change here. (Argus recorded only the first of them; the SCT log has all
+  # eight.) run #13 itself died on DisableBinaryGossipExecuteMajorCompaction, which is not
+  # excluded here - see the run #14 block, where it passed.
+  - "RemoveServiceLevelMonkey"  # precheck skip - SLA nemesis need an SLA test
+  - "SlaDecreaseSharesDuringLoad"  # precheck skip - SLA nemesis need an SLA test
+  - "SlaIncreaseSharesByAttachAnotherSlDuringLoad"  # precheck skip - SLA nemesis need an SLA test
+  - "SlaIncreaseSharesDuringLoad"  # precheck skip - SLA nemesis need an SLA test
+  - "SlaMaximumAllowedSlsWithMaxSharesDuringLoad"  # precheck skip - SLA nemesis need an SLA test
+  - "SlaReplaceUsingDetachDuringLoad"  # precheck skip - SLA nemesis need an SLA test
+  - "SlaReplaceUsingDropDuringLoad"  # precheck skip - SLA nemesis need an SLA test
+  - "StopStartInterfacesNetworkMonkey"  # precheck skip - needs extra_network_interface: True
+
+  # run #14 (f57403f7), the first run with "-errors ignore" on the load.
+  # DisableBinaryGossipExecuteMajorCompaction is the proof the option was the missing piece: the
+  # nemesis that ended run #13 in 4 seconds ran here to completion in 124 s.
+  #
+  # EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey is deliberately NOT excluded. It
+  # never got a verdict - it was 37 minutes in when a ReadValidationError on keyspace1.standard1
+  # failed the run and killed it, and those missing rows came from the prepare phase, not from
+  # anything the nemesis did. With nemesis_during_prepare: false and fail-fast restored on
+  # prepare, the next run populates cleanly, so this one gets the fair attempt it has not had.
+  - "DisableBinaryGossipExecuteMajorCompaction"  # succeeded
+  - "DrainKubernetesNodeThenDecommissionAndAddScyllaNode"  # skipped - kubernetes only
+  - "DrainKubernetesNodeThenReplaceScyllaNode"  # skipped - kubernetes only

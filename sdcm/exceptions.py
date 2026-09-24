@@ -63,6 +63,14 @@ class KillNemesis(BaseException):
     """Exception that would be raised, when a nemesis thread is killed at teardown of the test"""
 
 
+class NemesisPassCompleted(Exception):
+    """Raised by a finite nemesis runner once it has executed every nemesis it was built with.
+
+    Unlike KillNemesis, this is not a failure or a teardown: the runner did all the work it was
+    asked to do, so the nemesis thread ends on its own while the rest of the test keeps running.
+    """
+
+
 class QuotaConfigurationFailure(Exception):
     """Exception that would be raised, if quota configuration failed"""
 

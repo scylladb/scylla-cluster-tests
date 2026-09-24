@@ -16,6 +16,7 @@
 
 import os
 import time
+from contextlib import ExitStack
 from typing import Optional
 
 import yaml
@@ -26,7 +27,7 @@ from upgrade_test import UpgradeTest
 from sdcm.tester import ClusterTester, teardown_on_exception
 from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
-from sdcm.sct_events.loaders import CassandraStressEvent
+from sdcm.sct_events.loaders import CassandraStressEvent, CqlStressCassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.decorators import log_run_info, latency_calculator_decorator, optional_stage
@@ -200,14 +201,36 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             )
             self.get_stress_results(queue=stress_queue, store_results=True)
 
+    @staticmethod
+    def _stress_event_classes(stress_cmd) -> list:
+        """Event classes published by the stress tool(s) that run `stress_cmd`.
+
+        cassandra-stress and cql-stress-cassandra-stress publish unrelated sibling event classes,
+        so a severity filter installed for one of them does not cover the other.
+        """
+        stress_cmds = [stress_cmd] if isinstance(stress_cmd, str) else list(stress_cmd or [])
+        event_classes = []
+        for cmd in stress_cmds:
+            # the cql-stress binary name contains "cassandra-stress", so it has to be matched first
+            if "cql-stress-cassandra-stress" in cmd:
+                event_classes.append(CqlStressCassandraStressEvent)
+            elif "cassandra-stress" in cmd:
+                event_classes.append(CassandraStressEvent)
+        # dict.fromkeys() de-duplicates while keeping the order
+        return list(dict.fromkeys(event_classes)) or [CassandraStressEvent]
+
     def _stop_load_when_nemesis_threads_end(self):
         for nemesis_thread in self.db_cluster.nemesis_threads:
             nemesis_thread.join()
-        with EventsSeverityChangerFilter(
-            new_severity=Severity.NORMAL,  # killing stress creates Critical error
-            event_class=CassandraStressEvent,
-            extra_time_to_expiration=60,
-        ):
+        with ExitStack() as stack:
+            for event_class in self._stress_event_classes(self.stress_cmd):
+                stack.enter_context(
+                    EventsSeverityChangerFilter(
+                        new_severity=Severity.NORMAL,  # killing stress creates Critical error
+                        event_class=event_class,
+                        extra_time_to_expiration=60,
+                    )
+                )
             self.loaders.kill_stress_thread()
 
     @optional_stage("perf_preload_data")
