@@ -16,6 +16,7 @@ import time
 import logging
 import datetime
 import re
+import shlex
 from packaging.version import Version
 from pathlib import Path
 from re import findall
@@ -63,7 +64,7 @@ class ScyllaManagerBase:
     def __init__(self, id, manager_node):
         self.id = id
         self.manager_node = manager_node
-        self.sctool = SCTool(manager_node=manager_node)
+        self.sctool = create_sctool(manager_node=manager_node)
 
     def get_property(self, parsed_table, column_name):
         return self.sctool.get_table_value(parsed_table=parsed_table, column_name=column_name, identifier=self.id)
@@ -72,7 +73,7 @@ class ScyllaManagerBase:
 class ManagerTask:
     def __init__(self, task_id, cluster_id, manager_node):
         self.manager_node = manager_node
-        self.sctool = SCTool(manager_node=manager_node)
+        self.sctool = create_sctool(manager_node=manager_node)
         self.id = task_id
         self.cluster_id = cluster_id
 
@@ -1431,7 +1432,7 @@ class SCTool:
     ):
         LOGGER.debug("Issuing: 'sctool %s'", cmd)
         try:
-            res = self.manager_node.remoter.sudo(f"sctool {cmd}")
+            res = self._run_sctool(cmd)
             LOGGER.debug("sctool output: %s", res.stdout)
         except (InvokeFailure, Libssh2Failure) as ex:
             raise ScyllaManagerError(f"Encountered an error on sctool command: {cmd}: {ex}") from ex
@@ -1450,6 +1451,10 @@ class SCTool:
                 return dict_res_tables
         LOGGER.debug("sctool res after parsing: %s", res)
         return res
+
+    def _run_sctool(self, cmd):
+        """Execute a raw sctool command on the manager node. Overridden by backends that wrap the invocation."""
+        return self.manager_node.remoter.sudo(f"sctool {cmd}")
 
     @staticmethod
     def replace_chars_with_line_character(string, chars_to_replace_index_range):
@@ -1667,3 +1672,49 @@ class SCTool:
         date_obj = datetime.datetime.strptime(date_str, "%Y%m%d")
         timestamp = int(date_obj.timestamp())
         return timestamp
+
+
+class SCToolDocker(SCTool):
+    """sctool runner for the Docker backend - the manager server runs in a container, so sctool is reached via docker exec."""
+
+    def __init__(self, manager_node, container_name):
+        super().__init__(manager_node=manager_node)
+        self.container_name = container_name
+
+    def _run_sctool(self, cmd):
+        return self.manager_node.remoter.run(f"docker exec {shlex.quote(self.container_name)} sctool {cmd}")
+
+
+def create_sctool(manager_node) -> SCTool:
+    """Build the sctool runner that matches the backend the manager server runs on.
+
+    On Docker there is no sctool on the monitor node itself - the manager server runs in a
+    container, so every sctool call has to go through `docker exec`. This is the single
+    place that choice is made: ScyllaManagerBase (so ScyllaManagerTool* and ManagerCluster)
+    and ManagerTask all build their sctool here, because a ManagerCluster or a backup/repair
+    task that fell back to the plain host runner would silently fail on Docker.
+    """
+    if manager_node.is_docker():
+        parent_cluster = getattr(manager_node, "parent_cluster", None)
+        container_name = getattr(parent_cluster, "manager_container_name", None)
+        if not container_name:
+            raise ScyllaManagerError(
+                "Cannot run sctool on a Docker manager node: manager_container_name is not set on "
+                "parent_cluster. Ensure install_scylla_manager() ran on the monitor set."
+            )
+        return SCToolDocker(manager_node=manager_node, container_name=container_name)
+    return SCTool(manager_node=manager_node)
+
+
+class ScyllaManagerToolDocker(ScyllaManagerTool):
+    def __init__(self, manager_node, manager_container_name):
+        self.manager_container_name = manager_container_name
+        # sctool comes from create_sctool() via ScyllaManagerBase, the same way every
+        # ManagerCluster and ManagerTask gets one -- see create_sctool()'s docstring.
+        ScyllaManagerBase.__init__(self, id="MANAGER", manager_node=manager_node)
+        self._initial_wait(20)
+        LOGGER.info(f"Initiating Scylla-Manager (Docker), version: {self.sctool.version}")
+        self.default_user = "root"
+
+    def rollback_upgrade(self, scylla_mgmt_address):
+        raise NotImplementedError("Rollback not supported for Docker manager")
