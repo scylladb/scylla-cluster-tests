@@ -253,6 +253,10 @@ class CoredumpThreadBase(Thread):
 
     @cached_property
     def _is_pigz_installed(self):
+        if self.node.distro.is_fedora:
+            # `rpm -q' reads only the local package DB, while `yum list' refreshes the repo metadata and takes
+            # the dnf lock, which on Fedora deadlocked a concurrent `dnf install' and hung the node setup
+            return self.node.remoter.run("rpm -q pigz", ignore_status=True, timeout=60).ok
         if self.node.distro.is_rhel_like:
             return self.node.remoter.run("yum list installed | grep pigz", ignore_status=True).ok
         if self.node.distro.is_ubuntu or self.node.distro.is_debian:

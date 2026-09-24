@@ -1,10 +1,12 @@
 import time
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
 from sdcm.cluster import BaseNode
 from sdcm.coredump import CoredumpExportSystemdThread, CoreDumpInfo, CoredumpExportFileThread, CoredumpThreadBase
+from sdcm.utils.distro import Distro
 from unit_tests.lib.data_pickle import Pickler
 from unit_tests.lib.mock_remoter import MockRemoter
 
@@ -185,3 +187,20 @@ def test_coredump_export_systemd_case(test_data_dir, systemd_coredump_thread_fac
 def test_coredump_export_file_case(test_data_dir, file_coredump_thread_factory, test_name):
     coredump_thread = file_coredump_thread_factory(test_name)
     run_coredump_export_case(test_data_dir, "filebased", coredump_thread, test_name)
+
+
+@pytest.mark.parametrize(
+    "distro, expected_cmd",
+    [
+        pytest.param(Distro.FEDORA44, "rpm -q pigz", id="fedora44"),
+        pytest.param(Distro.ROCKY9, "yum list installed | grep pigz", id="rocky9"),
+        pytest.param(Distro.UBUNTU22, "apt list --installed | grep pigz", id="ubuntu22"),
+    ],
+)
+def test_is_pigz_installed_command(distro, expected_cmd):
+    node = MagicMock(distro=distro)
+    thread = CoredumpExportSystemdThread(node=node, max_core_upload_limit=1)
+
+    assert thread._is_pigz_installed
+    node.remoter.run.assert_called_once()
+    assert node.remoter.run.call_args.args[0] == expected_cmd
