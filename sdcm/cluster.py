@@ -698,6 +698,13 @@ class BaseNode(AutoSshContainerMixin):
             LOGGER.error("Encountered an unhandled exception while updating resource in Argus", exc_info=True)
 
     def _terminate_node_in_argus(self):
+        # TODO(SCT-852): report this node's actual cost here, once a released Argus client
+        # carries the cost API (merged in argus#1101, absent from 0.16.3 which we vendor).
+        # This is the right place: the node is about to die, so its running time is final,
+        # and `is_spot` still reflects the lifecycle it actually got rather than the one
+        # that was asked for. Send one CostItem — name, category (the node type),
+        # pricing_tier ("spot"/"on-demand") — computed from the rate snapshotted when the
+        # node was created, since the cloud instance is already gone by the time this runs.
         try:
             client = self.test_config.argus_client()
             reason = self.running_nemesis if self.running_nemesis else "GracefulShutdown"

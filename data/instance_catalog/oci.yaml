@@ -8,6 +8,7 @@ instances:
   local_disk_count: 8
   arch: x86_64
   price_per_hour: 9.60128
+  spot_price_per_hour: 4.80064
 - instance_type: BM.DenseIO.E5.128
   family: BM.DenseIO
   vcpus: 256
@@ -16,6 +17,7 @@ instances:
   local_disk_count: 8
   arch: x86_64
   price_per_hour: 11.26528
+  spot_price_per_hour: 5.63264
 - instance_type: BM.DenseIO2.52
   family: BM.DenseIO
   vcpus: 104
@@ -24,6 +26,7 @@ instances:
   local_disk_count: 8
   arch: x86_64
   price_per_hour: 2.452
+  spot_price_per_hour: 1.226
 - instance_type: VM.DenseIO.E5.Flex:16
   family: DenseIO.E5
   vcpus: 32
@@ -32,6 +35,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 1.64736
+  spot_price_per_hour: 0.82368
 - instance_type: VM.DenseIO.E5.Flex:24
   family: DenseIO.E5
   vcpus: 48
@@ -40,6 +44,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 2.47104
+  spot_price_per_hour: 1.23552
 - instance_type: VM.DenseIO.E5.Flex:32
   family: DenseIO.E5
   vcpus: 64
@@ -48,6 +53,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 3.29472
+  spot_price_per_hour: 1.64736
 - instance_type: VM.DenseIO.E5.Flex:40
   family: DenseIO.E5
   vcpus: 80
@@ -56,6 +62,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 4.1184
+  spot_price_per_hour: 2.0592
 - instance_type: VM.DenseIO.E5.Flex:48
   family: DenseIO.E5
   vcpus: 96
@@ -64,6 +71,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 4.94208
+  spot_price_per_hour: 2.47104
 - instance_type: VM.DenseIO.E5.Flex:8
   family: DenseIO.E5
   vcpus: 16
@@ -72,6 +80,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 0.82368
+  spot_price_per_hour: 0.41184
 - instance_type: VM.DenseIO.E4.Flex:16
   family: VM.DenseIO
   vcpus: 32
@@ -80,6 +89,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 1.47136
+  spot_price_per_hour: 0.73568
 - instance_type: VM.DenseIO.E4.Flex:24
   family: VM.DenseIO
   vcpus: 48
@@ -88,6 +98,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 2.20704
+  spot_price_per_hour: 1.10352
 - instance_type: VM.DenseIO.E4.Flex:32
   family: VM.DenseIO
   vcpus: 64
@@ -96,6 +107,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 2.94272
+  spot_price_per_hour: 1.47136
 - instance_type: VM.DenseIO.E4.Flex:8
   family: VM.DenseIO
   vcpus: 16
@@ -104,6 +116,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 0.73568
+  spot_price_per_hour: 0.36784
 - instance_type: VM.DenseIO2.16
   family: VM.DenseIO
   vcpus: 32
@@ -112,6 +125,7 @@ instances:
   local_disk_count: 2
   arch: x86_64
   price_per_hour: 0.76
+  spot_price_per_hour: 0.38
 - instance_type: VM.DenseIO2.24
   family: VM.DenseIO
   vcpus: 48
@@ -120,6 +134,7 @@ instances:
   local_disk_count: 4
   arch: x86_64
   price_per_hour: 1.08
+  spot_price_per_hour: 0.54
 - instance_type: VM.DenseIO2.8
   family: VM.DenseIO
   vcpus: 16
@@ -128,6 +143,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 0.38
+  spot_price_per_hour: 0.19
 - instance_type: VM.Standard.A1.Flex:1
   family: VM.Standard
   vcpus: 2
@@ -136,6 +152,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.019
+  spot_price_per_hour: 0.0095
   min_memory_gb: 1.0
   max_memory_gb: 6.0
 - instance_type: VM.Standard.A1.Flex:2
@@ -146,6 +163,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.038
+  spot_price_per_hour: 0.019
   min_memory_gb: 2.0
   max_memory_gb: 12.0
 - instance_type: VM.Standard.A1.Flex:4
@@ -156,6 +174,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.076
+  spot_price_per_hour: 0.038
   min_memory_gb: 4.0
   max_memory_gb: 24.0
 - instance_type: VM.Standard.A1.Flex:8
@@ -166,6 +185,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.152
+  spot_price_per_hour: 0.076
   min_memory_gb: 8.0
   max_memory_gb: 48.0
 - instance_type: VM.Standard.A4.Flex:1
@@ -176,6 +196,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.057
+  spot_price_per_hour: 0.0285
   min_memory_gb: 1.0
   max_memory_gb: 16.0
 - instance_type: VM.Standard.A4.Flex:16
@@ -186,6 +207,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.912
+  spot_price_per_hour: 0.456
   min_memory_gb: 16.0
   max_memory_gb: 256.0
 - instance_type: VM.Standard.A4.Flex:2
@@ -196,6 +218,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.114
+  spot_price_per_hour: 0.057
   min_memory_gb: 2.0
   max_memory_gb: 32.0
 - instance_type: VM.Standard.A4.Flex:32
@@ -206,6 +229,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 1.824
+  spot_price_per_hour: 0.912
   min_memory_gb: 32.0
   max_memory_gb: 512.0
 - instance_type: VM.Standard.A4.Flex:4
@@ -216,6 +240,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.228
+  spot_price_per_hour: 0.114
   min_memory_gb: 4.0
   max_memory_gb: 64.0
 - instance_type: VM.Standard.A4.Flex:8
@@ -226,6 +251,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.456
+  spot_price_per_hour: 0.228
   min_memory_gb: 8.0
   max_memory_gb: 128.0
 - instance_type: VM.Standard.E4.Flex:1
@@ -236,6 +262,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.049
+  spot_price_per_hour: 0.0245
   min_memory_gb: 1.0
   max_memory_gb: 16.0
 - instance_type: VM.Standard.E4.Flex:16
@@ -246,6 +273,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.784
+  spot_price_per_hour: 0.392
   min_memory_gb: 16.0
   max_memory_gb: 256.0
 - instance_type: VM.Standard.E4.Flex:2
@@ -256,6 +284,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.098
+  spot_price_per_hour: 0.049
   min_memory_gb: 2.0
   max_memory_gb: 32.0
 - instance_type: VM.Standard.E4.Flex:32
@@ -266,6 +295,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.568
+  spot_price_per_hour: 0.784
   min_memory_gb: 32.0
   max_memory_gb: 512.0
 - instance_type: VM.Standard.E4.Flex:4
@@ -276,6 +306,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.196
+  spot_price_per_hour: 0.098
   min_memory_gb: 4.0
   max_memory_gb: 64.0
 - instance_type: VM.Standard.E4.Flex:64
@@ -286,6 +317,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.136
+  spot_price_per_hour: 1.568
   min_memory_gb: 64.0
   max_memory_gb: 1024.0
 - instance_type: VM.Standard.E4.Flex:8
@@ -296,6 +328,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.392
+  spot_price_per_hour: 0.196
   min_memory_gb: 8.0
   max_memory_gb: 128.0
 - instance_type: VM.Standard.E5.Flex:1
@@ -306,6 +339,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.062
+  spot_price_per_hour: 0.031
   min_memory_gb: 1.0
   max_memory_gb: 16.0
 - instance_type: VM.Standard.E5.Flex:16
@@ -316,6 +350,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.992
+  spot_price_per_hour: 0.496
   min_memory_gb: 16.0
   max_memory_gb: 256.0
 - instance_type: VM.Standard.E5.Flex:2
@@ -326,6 +361,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.124
+  spot_price_per_hour: 0.062
   min_memory_gb: 2.0
   max_memory_gb: 32.0
 - instance_type: VM.Standard.E5.Flex:32
@@ -336,6 +372,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.984
+  spot_price_per_hour: 0.992
   min_memory_gb: 32.0
   max_memory_gb: 512.0
 - instance_type: VM.Standard.E5.Flex:4
@@ -346,6 +383,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.248
+  spot_price_per_hour: 0.124
   min_memory_gb: 4.0
   max_memory_gb: 64.0
 - instance_type: VM.Standard.E5.Flex:64
@@ -356,6 +394,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.968
+  spot_price_per_hour: 1.984
   min_memory_gb: 64.0
   max_memory_gb: 1024.0
 - instance_type: VM.Standard.E5.Flex:8
@@ -366,6 +405,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.496
+  spot_price_per_hour: 0.248
   min_memory_gb: 8.0
   max_memory_gb: 128.0
 - instance_type: VM.Standard.E5.Flex:94
@@ -376,6 +416,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 5.828
+  spot_price_per_hour: 2.914
   min_memory_gb: 94.0
   max_memory_gb: 1504.0
 - instance_type: VM.Standard.E6.Flex:1
@@ -386,6 +427,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.062
+  spot_price_per_hour: 0.031
   min_memory_gb: 1.0
   max_memory_gb: 16.0
 - instance_type: VM.Standard.E6.Flex:16
@@ -396,6 +438,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.992
+  spot_price_per_hour: 0.496
   min_memory_gb: 16.0
   max_memory_gb: 256.0
 - instance_type: VM.Standard.E6.Flex:2
@@ -406,6 +449,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.124
+  spot_price_per_hour: 0.062
   min_memory_gb: 2.0
   max_memory_gb: 32.0
 - instance_type: VM.Standard.E6.Flex:32
@@ -416,6 +460,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.984
+  spot_price_per_hour: 0.992
   min_memory_gb: 32.0
   max_memory_gb: 512.0
 - instance_type: VM.Standard.E6.Flex:4
@@ -426,6 +471,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.248
+  spot_price_per_hour: 0.124
   min_memory_gb: 4.0
   max_memory_gb: 64.0
 - instance_type: VM.Standard.E6.Flex:64
@@ -436,6 +482,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.968
+  spot_price_per_hour: 1.984
   min_memory_gb: 64.0
   max_memory_gb: 1024.0
 - instance_type: VM.Standard.E6.Flex:8
@@ -446,6 +493,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.496
+  spot_price_per_hour: 0.248
   min_memory_gb: 8.0
   max_memory_gb: 128.0
 - instance_type: VM.Standard3.Flex:1
@@ -456,6 +504,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.049
+  spot_price_per_hour: 0.0245
   min_memory_gb: 1.0
   max_memory_gb: 64.0
 - instance_type: VM.Standard3.Flex:16
@@ -466,6 +515,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.784
+  spot_price_per_hour: 0.392
   min_memory_gb: 16.0
   max_memory_gb: 1024.0
 - instance_type: VM.Standard3.Flex:2
@@ -476,6 +526,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.098
+  spot_price_per_hour: 0.049
   min_memory_gb: 2.0
   max_memory_gb: 128.0
 - instance_type: VM.Standard3.Flex:32
@@ -486,6 +537,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.568
+  spot_price_per_hour: 0.784
   min_memory_gb: 32.0
   max_memory_gb: 2048.0
 - instance_type: VM.Standard3.Flex:4
@@ -496,6 +548,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.196
+  spot_price_per_hour: 0.098
   min_memory_gb: 4.0
   max_memory_gb: 256.0
 - instance_type: VM.Standard3.Flex:8
@@ -506,5 +559,6 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.392
+  spot_price_per_hour: 0.196
   min_memory_gb: 8.0
   max_memory_gb: 512.0

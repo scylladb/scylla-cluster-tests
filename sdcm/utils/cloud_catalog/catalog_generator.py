@@ -507,6 +507,110 @@ def _extract_section_on_demand_prices(  # noqa: PLR0914
     return result
 
 
+_GCE_BILLING_SKUS_URL = "https://cloudbilling.googleapis.com/v1/services/6F81-5844-456A/skus"
+#: SKU descriptions that price something other than a plain predefined machine type.
+_GCE_SKU_EXCLUDED = ("Custom", "Extended", "Sole Tenancy", "Commitment", "Reserved")
+
+
+def _fetch_gce_spot_rates() -> dict[str, dict[str, dict[str, float]]]:
+    """Per-region Spot vCPU and RAM rates, keyed by family.
+
+    Returns `{family: {region: {"core": usd_per_vcpu_hour, "ram": usd_per_gib_hour}}}`.
+
+    GCE prices machine types from resource rates rather than per type, so this is both the
+    natural shape and a compact one. Source is the Cloud Billing Catalog API, which has no
+    server-side filter — the only way to ask is to list every Compute Engine SKU, roughly
+    30k of them over a handful of pages. That is fine here, at catalog-generation time, and
+    is exactly why a run must never do it.
+
+    Returns an empty mapping on any failure: a missing spot price is reported as unknown
+    downstream, which is better than blocking a catalog refresh over it.
+    """
+    try:
+        import google.auth.transport.requests as google_requests  # noqa: PLC0415
+        from google.oauth2 import service_account as sa_module  # noqa: PLC0415
+
+        from sdcm.keystore import KeyStore  # noqa: PLC0415
+
+        credentials = sa_module.Credentials.from_service_account_info(
+            KeyStore().get_gcp_credentials(), scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        session = google_requests.AuthorizedSession(credentials)
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        LOG.warning("GCE spot pricing: no usable credentials (%s)", exc)
+        return {}
+
+    skus: list[dict] = []
+    page_token = None
+    try:
+        while True:
+            params = {"pageSize": 5000}
+            if page_token:
+                params["pageToken"] = page_token
+            resp = session.get(_GCE_BILLING_SKUS_URL, params=params, timeout=120)
+            resp.raise_for_status()
+            payload = resp.json()
+            skus.extend(payload.get("skus", []))
+            page_token = payload.get("nextPageToken")
+            if not page_token:
+                break
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        # The Cloud Billing API must be enabled on the project; a 403 here says it is not.
+        LOG.warning("GCE spot pricing: Cloud Billing Catalog API unavailable (%s)", exc)
+        return {}
+
+    rates: dict[str, dict[str, dict[str, float]]] = {}
+    for sku in skus:
+        if sku.get("category", {}).get("usageType") != "Preemptible":
+            continue
+        description = sku.get("description", "")
+        if not description.startswith("Spot Preemptible ") or any(w in description for w in _GCE_SKU_EXCLUDED):
+            continue
+        # "Spot Preemptible N2 Instance Core running in Frankfurt", but AMD families read
+        # "Spot Preemptible N2D AMD Instance Core" — so find "Instance" rather than assuming
+        # it sits at a fixed offset, or every AMD family silently prices as unknown.
+        parts = description.split(" running in")[0].split()
+        if "Instance" not in parts:
+            continue
+        marker = parts.index("Instance")
+        if marker < 3 or marker + 1 >= len(parts):
+            continue
+        family, resource = parts[2].lower(), parts[marker + 1].lower()
+        if resource not in ("core", "ram"):
+            continue
+        try:
+            tier = sku["pricingInfo"][0]["pricingExpression"]["tieredRates"][-1]["unitPrice"]
+            price = int(tier.get("units", 0)) + tier.get("nanos", 0) / 1e9
+        except KeyError, IndexError, TypeError:
+            continue
+        if price <= 0:
+            continue
+        for region in sku.get("serviceRegions", []):
+            rates.setdefault(family, {}).setdefault(region, {})[resource] = price
+
+    LOG.info("GCE spot pricing: %d families from %d SKUs", len(rates), len(skus))
+    return rates
+
+
+def _gce_spot_price_for(
+    rates: dict[str, dict[str, dict[str, float]]], family: str, vcpus: int, memory_gb: float
+) -> dict[str, float]:
+    """Per-region spot price for one machine type, from its family's resource rates.
+
+    Only regions that priced both vCPU and RAM are included — half a price is not a price.
+    """
+    # z3 families are catalogued as "z3-highmem-highlssd"; the SKUs just say "Z3".
+    family_key = family.split("-", maxsplit=1)[0].lower()
+    per_region = rates.get(family_key) or {}
+    priced: dict[str, float] = {}
+    for region, resources in per_region.items():
+        core, ram = resources.get("core"), resources.get("ram")
+        if core is None or ram is None:
+            continue
+        priced[region] = round(vcpus * core + memory_gb * ram, 6)
+    return priced
+
+
 def generate_gce_catalog(  # noqa: PLR0914
     families: list[str],
     project: str = "",
@@ -540,6 +644,7 @@ def generate_gce_catalog(  # noqa: PLR0914
     results: list[InstanceTypeInfo] = []
     z3_prices = _scrape_gce_z3_prices() if any(f.startswith("z3") for f in families) else {}
     general_prices = _scrape_gce_general_prices(families)
+    spot_rates = _fetch_gce_spot_rates()
 
     try:
         from google.oauth2 import service_account as sa_module  # noqa: PLC0415
@@ -603,6 +708,7 @@ def generate_gce_catalog(  # noqa: PLR0914
                     family = "-".join(name.split("-")[:2])
 
             price: float | dict[str, float] | None = z3_prices.get(name) or general_prices.get(name)
+            spot_price = _gce_spot_price_for(spot_rates, family, vcpus, memory_gb)
 
             results.append(
                 InstanceTypeInfo(
@@ -615,6 +721,7 @@ def generate_gce_catalog(  # noqa: PLR0914
                     local_disk_count=local_disk_count,
                     arch=arch,
                     price_per_hour=price,
+                    spot_price_per_hour=spot_price or None,
                 )
             )
 
@@ -725,17 +832,22 @@ def _azure_parse_sku_specs(sku_name: str, family_prefix: str) -> dict[str, Any]:
     }
 
 
-def _azure_fetch_prices(sku_prefix: str, region: str) -> dict[str, float]:
-    """Fetch Azure retail prices for a SKU prefix from the Azure Retail Prices API.
+def _azure_fetch_prices(sku_prefix: str, region: str) -> tuple[dict[str, float], dict[str, float]]:
+    """Fetch Azure retail on-demand and Spot prices for a SKU prefix, in one query.
+
+    Spot costs nothing extra to obtain: the response already contains the Spot rows — for
+    `Standard_L` in eastus, 83 of 147 items — so this keeps them instead of discarding them.
 
     Args:
         sku_prefix: ARM SKU name prefix to filter (e.g. "Standard_L").
         region: Azure region (armRegionName) to filter (e.g. "eastus").
 
     Returns:
-        Dict mapping armSkuName -> hourly price (USD).
+        Two dicts mapping armSkuName -> hourly price (USD): on-demand, then Spot. A SKU with
+        no Spot row is simply absent from the second, which reads downstream as unknown.
     """
     prices: dict[str, float] = {}
+    spot_prices: dict[str, float] = {}
     url = "https://prices.azure.com/api/retail/prices"
     params = {
         "$filter": (
@@ -758,16 +870,21 @@ def _azure_fetch_prices(sku_prefix: str, region: str) -> dict[str, float]:
         for item in data.get("Items", []):
             sku = item.get("armSkuName", "")
             sku_name = item.get("skuName", "")
-            if "Spot" in sku_name or "Low Priority" in sku_name:
-                continue
             price = item.get("retailPrice")
-            if sku and price is not None and sku not in prices:
-                prices[sku] = float(price)
+            if not sku or price is None:
+                continue
+            # "Low Priority" is the retired predecessor of Spot and is priced differently;
+            # it is not a Spot rate and must not be recorded as one.
+            if "Low Priority" in sku_name:
+                continue
+            target = spot_prices if "Spot" in sku_name else prices
+            if sku not in target:
+                target[sku] = float(price)
 
         url = data.get("NextPageLink")
         params = {}  # NextPageLink already contains query params
 
-    return prices
+    return prices, spot_prices
 
 
 def generate_azure_catalog(  # noqa: PLR0914
@@ -823,10 +940,13 @@ def generate_azure_catalog(  # noqa: PLR0914
     try:
         for family in families:
             all_region_prices: dict[str, dict[str, float]] = {}
+            all_region_spot: dict[str, dict[str, float]] = {}
             for pr in price_regions:
-                prices = _azure_fetch_prices(family, pr)
+                prices, spot_prices = _azure_fetch_prices(family, pr)
                 for sku_name, price in prices.items():
                     all_region_prices.setdefault(sku_name, {})[pr] = price
+                for sku_name, price in spot_prices.items():
+                    all_region_spot.setdefault(sku_name, {})[pr] = price
 
             if not all_region_prices:
                 LOG.warning("No Azure prices found for family prefix '%s' in %s", family, price_regions)
@@ -863,6 +983,13 @@ def generate_azure_catalog(  # noqa: PLR0914
                 else:
                     price_per_hour = region_prices
 
+                region_spot = all_region_spot.get(sku_name) or {}
+                spot_price_per_hour: float | dict[str, float] | None
+                if len(region_spot) == 1:
+                    spot_price_per_hour = next(iter(region_spot.values()))
+                else:
+                    spot_price_per_hour = region_spot or None
+
                 results.append(
                     InstanceTypeInfo(
                         instance_type=sku_name,
@@ -874,6 +1001,7 @@ def generate_azure_catalog(  # noqa: PLR0914
                         local_disk_count=local_disk_count,
                         arch=arch,
                         price_per_hour=price_per_hour,
+                        spot_price_per_hour=spot_price_per_hour,
                     )
                 )
 
@@ -1137,6 +1265,17 @@ def _oci_calc_price(series: str, ocpus: int, memory_gb: float, local_disk_tb: fl
     return round(price, 6)
 
 
+#: Oracle prices preemptible capacity at a flat half the on-demand rate, uniformly and by
+#: policy rather than by demand, and exposes no preemptible products through its pricing API.
+#: https://blogs.oracle.com/cloud-infrastructure/post/announcing-preemptible-instances-a-new-kind-of-compute-instance-available-at-a-50-discount
+_OCI_PREEMPTIBLE_RATIO = 0.5
+
+
+def _oci_preemptible_price(on_demand: float | None) -> float | None:
+    """Derive the preemptible rate. Catalogued like every other cloud so the lookup is uniform."""
+    return round(on_demand * _OCI_PREEMPTIBLE_RATIO, 6) if on_demand else None
+
+
 def generate_oci_catalog(
     families: list[str],
     compartment_id: str = "",
@@ -1181,6 +1320,9 @@ def generate_oci_catalog(
                     local_disk_count=flex["local_disk_count"],
                     arch=flex["arch"],
                     price_per_hour=_oci_calc_price(flex["series"], ocpus, memory_gb, local_disk_gb / 1000.0),
+                    spot_price_per_hour=_oci_preemptible_price(
+                        _oci_calc_price(flex["series"], ocpus, memory_gb, local_disk_gb / 1000.0)
+                    ),
                     min_memory_gb=min_memory_gb if min_memory_gb != max_memory_gb else None,
                     max_memory_gb=max_memory_gb if min_memory_gb != max_memory_gb else None,
                 )
@@ -1204,6 +1346,9 @@ def generate_oci_catalog(
                 arch=shape["arch"],
                 price_per_hour=_oci_calc_price(
                     shape["series"], ocpus, shape["memory_gb"], shape["local_disk_gb"] / 1000.0
+                ),
+                spot_price_per_hour=_oci_preemptible_price(
+                    _oci_calc_price(shape["series"], ocpus, shape["memory_gb"], shape["local_disk_gb"] / 1000.0)
                 ),
             )
         )
@@ -1250,6 +1395,10 @@ def write_catalog_file(
             d["price_per_hour"] = inst.price_per_hour
         else:
             d["price_per_hour"] = None
+        # Omitted entirely when unknown rather than written as null: absent means "we have no
+        # spot price", which the lookup reports as unknown. A zero would read as free.
+        if inst.spot_price_per_hour:
+            d["spot_price_per_hour"] = inst.spot_price_per_hour
         if inst.min_memory_gb is not None:
             d["min_memory_gb"] = inst.min_memory_gb
         if inst.max_memory_gb is not None:

@@ -353,6 +353,20 @@ def call(Map pipelineParams) {
                                                 // only thing clearing a stale ./sct_runner_ip out of a
                                                 // persistent workspace.
                                                 if (!localAgent) {
+                                                    // Before the runner exists, so an abort here costs nothing. Never fails the build:
+                                                    // a cost estimate is advisory, and each parallel branch provisions its own cluster,
+                                                    // so the job's real cost is this figure times the number of branches.
+                                                    stage("Estimate Test Cost for ${base_version}") {
+                                                        catchError(stageResult: 'SUCCESS') {
+                                                            timeout(time: 5, unit: 'MINUTES') {
+                                                                wrap([$class: 'BuildUser']) {
+                                                                    dir('scylla-cluster-tests') {
+                                                                        estimateTestCost(params_mapping[base_version], builder.region)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                     stage("Create SCT Runner for ${base_version}") {
                                                         wrap([$class: 'BuildUser']) {
                                                             dir('scylla-cluster-tests') {
