@@ -50,6 +50,10 @@ else
     find . -maxdepth 1 -type d -name '????????-????-????-????-????????????' -mtime +${keepDays} -print -exec rm -rf {} + 2>/dev/null
     find . -maxdepth 1 -name 'latest' -type l -delete 2>/dev/null
 
+    # Delete stale coredump archives left by aborted hydra builds.
+    # They are owned by the build user, so no sudo is needed.
+    find . -maxdepth 1 -type f -name 'sct-coredumps-*.tar.zst' -print -delete 2>/dev/null
+
     # Guest state an aborted build never got to clean.
     if [[ -d "\${HOME}/.cache/minicloud/instances" ]] ; then
         find "\${HOME}/.cache/minicloud/instances" -maxdepth 1 -mindepth 1 -mtime +${keepDays} -print -exec rm -rf {} + 2>/dev/null
