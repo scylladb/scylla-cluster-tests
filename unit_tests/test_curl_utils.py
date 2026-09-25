@@ -61,6 +61,17 @@ from sdcm.utils.curl import RETRY_ALL_ERRORS_PROBE, curl_with_retry
             {"retry": 0, "retry_all_errors": True},
             "curl --connect-timeout 10 https://x.com",
         ),
+        (
+            "https://x.com/vector.rpm",
+            {"max_time": 600},
+            f"curl --connect-timeout 10 --max-time 600 --retry 5 --retry-max-time 300 {RETRY_ALL_ERRORS_PROBE} "
+            "https://x.com/vector.rpm",
+        ),
+        (
+            "https://x.com/vector.rpm",
+            {"max_time": 600, "retry": 0},
+            "curl --connect-timeout 10 --max-time 600 https://x.com/vector.rpm",
+        ),
     ],
 )
 def test_curl_with_retry(url, kwargs, expected):
@@ -73,3 +84,8 @@ def test_starts_with_curl():
 
 def test_retry_all_errors_probe_pinned():
     assert RETRY_ALL_ERRORS_PROBE == "$(curl --retry-all-errors --version >/dev/null 2>&1 && echo --retry-all-errors)"
+
+
+def test_max_time_omitted_by_default():
+    """A stalled transfer must be bounded only when the caller asks; other callers keep today's command."""
+    assert "--max-time" not in curl_with_retry("https://x.com")

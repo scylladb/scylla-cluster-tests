@@ -139,10 +139,10 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
             script += install_syslogng_exporter()
 
         if self.logs_transport == "vector":
-            script += update_repo_cache()
             script += install_vector_service()
             host, port = self.syslog_host_port
             script += configure_vector_target_script(host=host, port=port)
+            script += update_repo_cache()
 
         if self.configure_sshd:
             script += configure_sshd_script()
