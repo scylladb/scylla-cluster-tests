@@ -5,7 +5,7 @@
 # covered lets the next run start where that one stopped instead of spending ~2h repeating
 # the schema-changes category.
 #
-# Eleven of these should stay excluded even once a full sweep is repeated - they cannot pass
+# Twelve of these should stay excluded even once a full sweep is repeated - they cannot pass
 # against this workload:
 #   AddRemoveMvNemesis: MVs/2i unsupported on strongly consistent keyspaces
 #   BlockNetworkMonkey: needs extra_network_interface: True, not set in this job
@@ -16,6 +16,7 @@
 #   KillMVBuildingCoordinator: MVs/2i unsupported on strongly consistent keyspaces
 #   MgmtRestore: blocked by SCYLLADB-4625 - its rolling restart puts a node in a crash loop
 #   MultipleHardRebootNodeMonkey: blocked by SCYLLADB-4625 - hard reboots put a node in a crash loop
+#   NemesisSequence: grows, replaces and shrinks the cluster - blocked by SCYLLADB-4529 and SCYLLADB-4753
 #   ModifyTableTwcsWindowSizeMonkey: no TWCS table in this workload
 #   ToggleAuditNemesisSyslog: blocked by SCYLLADB-4625 - restart puts the node in a crash loop
 #
@@ -134,3 +135,8 @@ nemesis_exclude_list:
   # Held out before it ran: HardRebootNodeMonkey already put a node into the SCYLLADB-4625 crash
   # loop in run #15, and this one reboots several times, so it would only cost another run.
   - "MultipleHardRebootNodeMonkey"  # not run - blocked by SCYLLADB-4625
+
+  # Held out before it ran: NemesisSequence is a topology sequence in disguise - it adds nodes,
+  # replaces one and decommissions them again, but has no topology_changes flag, so the category
+  # hold-out misses it. Adding a node hits SCYLLADB-4529 and decommission hits SCYLLADB-4753.
+  - "NemesisSequence"  # not run - blocked by SCYLLADB-4529 and SCYLLADB-4753
