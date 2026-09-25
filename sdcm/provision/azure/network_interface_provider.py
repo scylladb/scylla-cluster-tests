@@ -42,52 +42,96 @@ class NetworkInterfaceProvider:
         except ResourceNotFoundError:
             pass
 
-    def get(self, name: str) -> NetworkInterface:
-        return self._cache[self.get_nic_name(name)]
+    def get(self, name: str, index: int = 0) -> NetworkInterface:
+        return self._cache[self.get_nic_name(name, index)]
 
-    def get_or_create(
-        self, subnet_id: str, ip_addresses_ids: List[str | None], names: List[str]
-    ) -> List[NetworkInterface]:
-        """Creates or gets (if already exists) network interface"""
-        nics = []
-        pollers = []
-        for name, address in zip(names, ip_addresses_ids):
-            nic_name = self.get_nic_name(name)
-            if nic_name in self._cache:
-                nics.append(self._cache[nic_name])
-                continue
-            parameters = {
-                "location": self._region,
-                "ip_configurations": [
-                    {
-                        "name": nic_name,
-                        "subnet": {
-                            "id": subnet_id,
-                        },
-                    }
-                ],
-                "enable_accelerated_networking": True,
-            }
+    def get_all(self, name: str) -> List[NetworkInterface]:
+        """Every NIC of a VM, ordered by device index.
+
+        Discovered from the cached resource group listing rather than from the test configuration,
+        so teardown works for a provisioner that was created without one (e.g. discover_regions()).
+        """
+        nics = [
+            (index, nic)
+            for nic_name, nic in self._cache.items()
+            if (index := self.get_nic_index(nic_name, name)) is not None
+        ]
+        return [nic for _, nic in sorted(nics, key=lambda item: item[0])]
+
+    @staticmethod
+    def _ip_configurations(nic_name: str, subnet_id: str, interface: Dict, addresses: Dict[str, str | None]) -> List:
+        """ipConfigurations of one NIC: an IPv4 one, and an IPv6 one when the NIC asks for it.
+
+        Azure requires the primary ipConfiguration to be IPv4, so the IPv6 one is always secondary.
+        """
+
+        def with_public_ip(config: Dict, address: str | None) -> Dict:
             if address is not None:
-                parameters["ip_configurations"][0]["public_ip_address"] = {
-                    "id": address,
-                    "properties": {"deleteOption": "Delete"},
-                }
-            LOGGER.info("Creating nic in resource group %s...", self._resource_group_name)
-            poller = self._azure_service.network.network_interfaces.begin_create_or_update(
-                resource_group_name=self._resource_group_name,
-                network_interface_name=nic_name,
-                parameters=parameters,
+                config["public_ip_address"] = {"id": address, "properties": {"deleteOption": "Delete"}}
+            return config
+
+        configurations = [
+            with_public_ip(
+                {
+                    "name": nic_name,
+                    "subnet": {"id": subnet_id},
+                    "primary": True,
+                    "private_ip_address_version": "IPv4",
+                },
+                addresses.get("ipv4"),
             )
-            pollers.append((nic_name, poller))
+        ]
+        if interface["ipv6"]:
+            configurations.append(
+                with_public_ip(
+                    {
+                        "name": f"{nic_name}-ipv6",
+                        "subnet": {"id": subnet_id},
+                        "primary": False,
+                        "private_ip_address_version": "IPv6",
+                    },
+                    addresses.get("ipv6"),
+                )
+            )
+        return configurations
+
+    def get_or_create(self, plans: Dict[str, List[Dict]]) -> Dict[str, List[NetworkInterface]]:
+        """Creates or gets (if already exists) the network interfaces of every given VM.
+
+        'plans' maps a VM name to its interfaces in device-index order, each an entry of
+        {"interface": <NIC spec>, "subnet_id": ..., "addresses": {"ipv4": id, "ipv6": id}}. It is
+        per VM because node types differ: only DB nodes take the secondary interfaces.
+
+        Azure can only attach a NIC to a deallocated VM, so every NIC a VM will ever have is
+        created here, before the VM itself.
+        """
+        pollers = []
+        for name, plan in plans.items():
+            for index, entry in enumerate(plan):
+                nic_name = self.get_nic_name(name, index)
+                if nic_name in self._cache:
+                    continue
+                parameters = {
+                    "location": self._region,
+                    "ip_configurations": self._ip_configurations(
+                        nic_name, entry["subnet_id"], entry["interface"], entry["addresses"]
+                    ),
+                    "enable_accelerated_networking": True,
+                }
+                LOGGER.info("Creating nic %s in resource group %s...", nic_name, self._resource_group_name)
+                poller = self._azure_service.network.network_interfaces.begin_create_or_update(
+                    resource_group_name=self._resource_group_name,
+                    network_interface_name=nic_name,
+                    parameters=parameters,
+                )
+                pollers.append((nic_name, poller))
         for nic_name, poller in pollers:
             nic = poller.result()
             LOGGER.info("Provisioned nic %s in the %s resource group", nic.name, self._resource_group_name)
             self._cache[nic_name] = nic
-            nics.append(nic)
         if pollers:
             time.sleep(5)  # wait for nic to be fully propagated before returning (SCT-373)
-        return nics
+        return {name: self.get_all(name) for name in plans}
 
     def delete(self, nic: NetworkInterface):
         # just remove from cache as it should be deleted along with network interface
@@ -97,5 +141,26 @@ class NetworkInterfaceProvider:
         self._cache = {}
 
     @staticmethod
-    def get_nic_name(name: str):
+    def get_nic_name(name: str, index: int = 0):
+        """Name of the NIC of a device index: '<vm>-nic' for the primary one,
+        '<vm>-nic<index>' for the rest."""
+        if index:
+            return f"{name}-nic{index}"
         return f"{name}-nic"
+
+    @staticmethod
+    def get_nic_index(nic_name: str, vm_name: str) -> int | None:
+        """Device index encoded in a NIC name, 0 for the primary one, None when it is not this VM's.
+
+        One VM name can be a prefix of another's - 'foo' and 'foo-nic1' both being legal - and then
+        the second VM's primary NIC, 'foo-nic1-nic', starts with the first one's '<vm>-nic'. So a
+        plain prefix match would hand a VM the interfaces of its namesake. The suffix grammar is
+        unambiguous where the prefix is not: only an empty suffix (the primary NIC) or an all-digit
+        one (a secondary NIC) belongs to this VM.
+        """
+        prefix = f"{vm_name}-nic"
+        if not nic_name.startswith(prefix):
+            return None
+        if not (suffix := nic_name[len(prefix) :]):
+            return 0
+        return int(suffix) if suffix.isdigit() else None

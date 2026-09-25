@@ -228,6 +228,55 @@ def network_interfaces_count(params):
     return 1
 
 
+DEFAULT_AZURE_SUBNET_NAME = "default"
+# Azure VNet IPv6 space must come from a private (ULA) range: an internet-routable IPv6 is a
+# separate, billed Public IP resource attached to the ipConfiguration, never the VNet address.
+AZURE_IPV6_ADDRESS_SPACE = "fd00:db8:5c7::/48"
+AZURE_IPV6_SUBNET_PREFIX_TMPL = "fd00:db8:5c7:{index}::/64"  # Azure requires exactly a /64
+AZURE_SECONDARY_SUBNET_NAME_TMPL = "nic{index}"
+
+
+def azure_network_interfaces(params) -> list[dict]:
+    """NIC specs of an Azure node, one dict per device index, derived from 'scylla_network_config'.
+
+    That option already says how many interfaces the node has, which address family each one
+    carries and which of those addresses must be reachable from outside the VNet, so the Azure
+    layout follows from it - there is nothing left for a separate, Azure-only option to say:
+
+    - subnet: positional. The primary NIC carries the public IPv4 and stays on the test VNet's
+      default subnet; every other NIC gets its own 'nic<index>' subnet
+    - public_ip: only the primary NIC. It is the node's outbound path and the address SCT falls
+      back to, and a public IPv4 on a secondary NIC is rejected by validation anyway
+    - ipv6 / public_ipv6: an IPv6 ipConfiguration wherever an address asks for 'ip_type: ipv6',
+      and the billed IPv6 Public IP only where such an address is also 'public: true'
+
+    Without 'scylla_network_config' this is a single public IPv4 NIC - what every Azure test had
+    before multiple interfaces were supported.
+    """
+    scylla_network_config = (params.get("scylla_network_config") if params else None) or []
+    ipv6_nics = {config["nic"] for config in scylla_network_config if config["ip_type"] == "ipv6"}
+    public_ipv6_nics = {
+        config["nic"] for config in scylla_network_config if config["ip_type"] == "ipv6" and config["public"]
+    }
+    return [
+        {
+            "subnet": DEFAULT_AZURE_SUBNET_NAME if index == 0 else AZURE_SECONDARY_SUBNET_NAME_TMPL.format(index=index),
+            "public_ip": index == 0,
+            "ipv6": index in ipv6_nics,
+            "public_ipv6": index in public_ipv6_nics,
+        }
+        for index in range(network_interfaces_count(params))
+    ]
+
+
+def azure_ipv6_enabled(params) -> bool:
+    """True when 'scylla_network_config' puts an 'ip_type: ipv6' address on any interface.
+
+    An internet-routable Azure IPv6 is a billed Public IP resource, so IPv6 is strictly opt-in.
+    """
+    return any(interface["ipv6"] for interface in azure_network_interfaces(params))
+
+
 def ssh_connection_ip_type(params):
     if scylla_network_config := params.get("scylla_network_config"):
         ssh_ip_type = [conf for conf in scylla_network_config if conf["address"] == "test_communication"][0]
