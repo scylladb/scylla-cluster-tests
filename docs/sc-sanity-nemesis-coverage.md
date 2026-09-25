@@ -14,16 +14,17 @@ stops. Each run resumes where the previous one stopped, through
 ## Where the sweep stands
 
 112 nemesis are discovered in total; 13 of them are `topology-changes`, held out of the sweep by
-`DISABLED_CATEGORIES` while SCYLLADB-4529 is open, so 99 are in scope.
+`DISABLED_CATEGORIES` while SCYLLADB-4529 is open, so 99 are in scope. `MultipleHardRebootNodeMonkey`
+is also blocked, held out before it ran while SCYLLADB-4625 is open.
 
 | Status | Count | Share of all 112 |
 |---|---:|---:|
 | pass | 20 | 18% |
 | failed | 9 | 8% |
-| blocked (topology-changes) | 13 | 12% |
-| **failed + blocked** | **22** | **20%** |
+| blocked (13 topology-changes + `MultipleHardRebootNodeMonkey`) | 14 | 13% |
+| **failed + blocked** | **23** | **21%** |
 | skipped | 26 | 23% |
-| not executed | 44 | 39% |
+| not executed | 43 | 38% |
 
 ## Per-run statistics
 
@@ -55,6 +56,7 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 | `3e187ff95` | `EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey` put back in the sweep | it never got a verdict in run #14 - the rows it was blamed for were missing before it started |
 | `4e4412268` | the seven nemesis run #15 reached excluded | both KMS nemesis write at CL=ALL, which SC tables reject (SCYLLADB-4727); `HardRebootNodeMonkey` hits SCYLLADB-4625; the four skips are static for this job |
 | `a98427dd9` | the three nemesis run #16 reached excluded | `MgmtRestore`'s rolling restart hits SCYLLADB-4625 even after a clean shutdown; `MemoryStressMonkey` is disabled (scylla-cluster-tests#6928); `MgmtCorruptThenRepair` passed |
+| `5f1c18c00` | `MultipleHardRebootNodeMonkey` held out before it ran | `HardRebootNodeMonkey` already hit the SCYLLADB-4625 crash loop in run #15; this one reboots several times |
 
 ## Open issues found by this job
 
