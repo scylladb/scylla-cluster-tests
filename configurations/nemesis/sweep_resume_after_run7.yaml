@@ -5,7 +5,7 @@
 # covered lets the next run start where that one stopped instead of spending ~2h repeating
 # the schema-changes category.
 #
-# Ten of these should stay excluded even once a full sweep is repeated - they cannot pass
+# Eleven of these should stay excluded even once a full sweep is repeated - they cannot pass
 # against this workload:
 #   AddRemoveMvNemesis: MVs/2i unsupported on strongly consistent keyspaces
 #   BlockNetworkMonkey: needs extra_network_interface: True, not set in this job
@@ -15,6 +15,7 @@
 #   HardRebootNodeMonkey: blocked by SCYLLADB-4625 - the reboot puts the node in a crash loop
 #   KillMVBuildingCoordinator: MVs/2i unsupported on strongly consistent keyspaces
 #   MgmtRestore: blocked by SCYLLADB-4625 - its rolling restart puts a node in a crash loop
+#   MultipleHardRebootNodeMonkey: blocked by SCYLLADB-4625 - hard reboots put a node in a crash loop
 #   ModifyTableTwcsWindowSizeMonkey: no TWCS table in this workload
 #   ToggleAuditNemesisSyslog: blocked by SCYLLADB-4625 - restart puts the node in a crash loop
 #
@@ -129,3 +130,7 @@ nemesis_exclude_list:
   - "MemoryStressMonkey"  # skipped - disabled, scylla-cluster-tests#6928
   - "MgmtCorruptThenRepair"  # succeeded
   - "MgmtRestore"  # failed - SCYLLADB-4625 crash loop after its rolling restart
+
+  # Held out before it ran: HardRebootNodeMonkey already put a node into the SCYLLADB-4625 crash
+  # loop in run #15, and this one reboots several times, so it would only cost another run.
+  - "MultipleHardRebootNodeMonkey"  # not run - blocked by SCYLLADB-4625
