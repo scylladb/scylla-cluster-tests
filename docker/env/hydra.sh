@@ -283,13 +283,13 @@ function hydra_watchdog () {
         started=${SECONDS}
         # taken before the probe connects, so the probe's own socket isn't part of it
         builder_view=$(
-            echo "builder -> runner ${RUNNER_IP} sockets:"
-            hydra_ss_summary "( dst ${RUNNER_IP} and dport = :22 )"
-            ps -o pid=,etimes=,args= -C ssh | grep -F -- "${RUNNER_IP}" | sed 's/^/  ssh pid,age_s,args: /')
+            echo "builder -> runner ${RUNNER_SSH_HOST} sockets:"
+            hydra_ss_summary "( dst ${RUNNER_SSH_HOST} and dport = :22 )"
+            ps -o pid=,etimes=,args= -C ssh | grep -F -- "${RUNNER_SSH_HOST}" | sed 's/^/  ssh pid,age_s,args: /')
         # No multiplexing: the probe must open its own connection, not ride a stalled master.
         timeout 60 ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=15 \
             -o ControlMaster=no -o ControlPath=none \
-            -o ServerAliveInterval=5 -o ServerAliveCountMax=3 "ubuntu@${RUNNER_IP}" \
+            -o ServerAliveInterval=5 -o ServerAliveCountMax=3 "ubuntu@${RUNNER_SSH_HOST}" \
             "WATCHDOG_NOW=${now}; $(declare -f hydra_ss_summary); ${probe}" \
             <<< "${builder_view}" >"${out}" 2>&1 &
         child=$!
@@ -445,13 +445,53 @@ if [[ -n "$RUNNER_IP" ]]; then
         echo ssh-add ~/.ssh/scylla_test_id_ed25519
     fi
 
+    # SCT-1044: an idle builder -> runner SSH connection (e.g. docker's `wait` stream) can be
+    # silently blackholed, and is only noticed ~2h later by kernel TCP keepalive. Every ssh
+    # started from here on (rsync, the docker CLI's dial-stdio helper, the watchdog) goes through
+    # this wrapper: it keeps the connection busy, and fails a dead one within ~2 minutes.
+    if [ -z "$HYDRA_DRY_RUN" ]; then
+        HYDRA_SSH_WRAPPER_DIR="${HOME}/.cache/hydra/bin"
+        mkdir -p "${HYDRA_SSH_WRAPPER_DIR}"
+        # resolve the real ssh with the wrapper dir left out of PATH, so a nested hydra can't wrap the wrapper
+        real_ssh=$(PATH=$(echo "${PATH}" | tr ':' '\n' | grep -vxF "${HYDRA_SSH_WRAPPER_DIR}" | paste -sd:) command -v ssh)
+        # ssh keeps the first value given for an option, so a caller's own ServerAlive* settings
+        # (e.g. the watchdog's fast-failing probe) are left alone
+        printf '#!/usr/bin/env bash\ncase " $* " in *ServerAlive*) exec %s "$@" ;; esac\nexec %s -o ServerAliveInterval=%s -o ServerAliveCountMax=4 "$@"\n' \
+            "${real_ssh}" "${real_ssh}" "${HYDRA_SSH_ALIVE_INTERVAL:-30}" > "${HYDRA_SSH_WRAPPER_DIR}/ssh.$$"
+        chmod +x "${HYDRA_SSH_WRAPPER_DIR}/ssh.$$"
+        mv -f "${HYDRA_SSH_WRAPPER_DIR}/ssh.$$" "${HYDRA_SSH_WRAPPER_DIR}/ssh"
+        export PATH="${HYDRA_SSH_WRAPPER_DIR}:${PATH}"
+    fi
+
+    # SCT-1044: reach the runner through its private IP when this host can (same VPC). Traffic from
+    # the runner's public IP back to the builder isn't allowed by any SG rule, only by SG connection
+    # tracking, and established flows were seen losing it. Private-IP traffic is allowed by rule.
+    # Use the private IP only if it leads to the very same machine, else keep the public one.
+    RUNNER_SSH_HOST="${RUNNER_IP}"
+    if [[ -z "$HYDRA_DRY_RUN" && "${HYDRA_RUNNER_VIA_PRIVATE_IP:-true}" == "true" ]]; then
+        ssh-keygen -R "$RUNNER_IP" >/dev/null 2>&1 || true
+        runner_identity=$(timeout 60 ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 "ubuntu@${RUNNER_IP}" \
+            'cat /etc/machine-id; hostname -I' 2>/dev/null || true)
+        runner_machine_id=$(echo "${runner_identity}" | sed -n 1p)
+        for runner_private_ip in $(echo "${runner_identity}" | sed -n 2p); do
+            [[ "$runner_private_ip" =~ ^(10|172|192)\. ]] || continue
+            ssh-keygen -R "$runner_private_ip" >/dev/null 2>&1 || true
+            if [[ -n "${runner_machine_id}" && "$(timeout 20 ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+                    "ubuntu@${runner_private_ip}" cat /etc/machine-id 2>/dev/null)" == "${runner_machine_id}" ]]; then
+                RUNNER_SSH_HOST="${runner_private_ip}"
+                break
+            fi
+        done
+    fi
+    echo "Connecting to the SCT runner through ${RUNNER_SSH_HOST}"
+
     echo "Going to run a Hydra commands on SCT runner '$RUNNER_IP'..."
     HOME_DIR="/home/ubuntu"
 
     echo "Syncing ${SCT_DIR} to the SCT runner instance..."
     if [ -z "$HYDRA_DRY_RUN" ]; then
-        ssh-keygen -R "$RUNNER_IP" || true
-        rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete ${SCT_DIR} ubuntu@${RUNNER_IP}:/home/ubuntu/
+        ssh-keygen -R "$RUNNER_SSH_HOST" || true
+        rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete ${SCT_DIR} ubuntu@${RUNNER_SSH_HOST}:/home/ubuntu/
     else
         echo "ssh-keygen -R \"$RUNNER_IP\" || true"
         echo "rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete ${SCT_DIR} ubuntu@${RUNNER_IP}:/home/ubuntu/"
@@ -465,7 +505,7 @@ if [[ -n "$RUNNER_IP" ]]; then
         fi
         echo "AWS credentials file found. Syncing to SCT Runner..."
         if [ -z "$HYDRA_DRY_RUN" ]; then
-            rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete ~/.aws ubuntu@${RUNNER_IP}:/home/ubuntu/
+            rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete ~/.aws ubuntu@${RUNNER_SSH_HOST}:/home/ubuntu/
         else
             echo "rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete ~/.aws ubuntu@${RUNNER_IP}:/home/ubuntu/"
         fi
@@ -475,13 +515,13 @@ if [[ -n "$RUNNER_IP" ]]; then
 
     SCT_DIR="/home/ubuntu/scylla-cluster-tests"
     HOST_NAME="ip-${RUNNER_IP//./-}"
-    RUNNER_CMD="ssh -o StrictHostKeyChecking=no ubuntu@${RUNNER_IP}"
+    RUNNER_CMD="ssh -o StrictHostKeyChecking=no ubuntu@${RUNNER_SSH_HOST}"
     if [ -z "$HYDRA_DRY_RUN" ]; then
         USER_ID=$(${RUNNER_CMD} id -u):$(${RUNNER_CMD} id -g)
     else
         USER_ID=1000:1000
     fi
-    DOCKER_HOST="-H ssh://ubuntu@${RUNNER_IP}"
+    DOCKER_HOST="-H ssh://ubuntu@${RUNNER_SSH_HOST}"
 fi
 
 if [ -z "${DOCKER_GROUP_ARGS[@]}" ]; then
@@ -519,5 +559,5 @@ fi
 HYDRA_DOCKER_STARTED=${SECONDS}
 HYDRA_DOCKER_RC=0
 run_in_docker "${CMD}" "${DOCKER_HOST}" || HYDRA_DOCKER_RC=$?
-echo "[hydra $(date -u +%FT%TZ)] docker run on runner ${RUNNER_IP} exited rc=${HYDRA_DOCKER_RC} after $((SECONDS - HYDRA_DOCKER_STARTED))s"
+echo "[hydra $(date -u +%FT%TZ)] docker run on runner ${RUNNER_SSH_HOST} exited rc=${HYDRA_DOCKER_RC} after $((SECONDS - HYDRA_DOCKER_STARTED))s"
 exit ${HYDRA_DOCKER_RC}
