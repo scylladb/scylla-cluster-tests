@@ -13,7 +13,9 @@
 
 from textwrap import dedent
 
+from sdcm.utils.apt import APT_LOCK_TIMEOUT, apt_lock_wait
 from sdcm.utils.curl import curl_with_retry
+from sdcm.utils.rpm import rpm_lock_wait
 
 
 def configure_syslogng_target_script(hostname: str = "") -> str:
@@ -184,18 +186,37 @@ def configure_backoff_timeout():
 
 
 def update_repo_cache():
-    return dedent("""\
+    # NOTE: cloud provider agents run their own package manager commands at boot
+    #       (e.g. the oracle-cloud-agent snap runs `apt update` on OCI instances),
+    #       so the cache cleanup must wait for the package manager lock and be retried.
+    #       Also, it is `apt-get clean`, not `apt-get clean all`: unlike yum,
+    #       apt-get clean takes no arguments.
+    # NOTE: this script gets wrapped into "bash -cxe '<script>'", so it must not use single quotes.
+    return dedent(f"""\
         if yum --help 2>/dev/null 1>&2 ; then
             echo "Cleaning yum cache..."
-            yum clean all
+            for n in 1 2 3 4 5 6 7 8 9; do
+                {rpm_lock_wait()}
+                if yum clean all; then
+                    break
+                fi
+                sleep $(backoff $n)
+            done
             rm -rf /var/cache/yum/
         elif apt-get --help 2>/dev/null 1>&2 ; then
             echo "Cleaning apt cache..."
-            apt-get clean all
+            for n in 1 2 3 4 5 6 7 8 9; do
+                {apt_lock_wait()}
+                if apt-get -o DPkg::Lock::Timeout={APT_LOCK_TIMEOUT} clean; then
+                    break
+                fi
+                sleep $(backoff $n)
+            done
             rm -rf /var/cache/apt/
 
             for n in 1 2 3 4 5 6 7 8 9; do
-                if apt-get -y update; then
+                {apt_lock_wait()}
+                if apt-get -o DPkg::Lock::Timeout={APT_LOCK_TIMEOUT} -y update; then
                     break
                 fi
                 sleep $(backoff $n)
