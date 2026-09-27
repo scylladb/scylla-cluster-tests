@@ -65,6 +65,12 @@ hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian13.yaml
 ```
 
+## Fedora 44
+Not part of any trigger; `artifacts-fedora44.jenkinsfile` is started manually to check SCT on a current Fedora.
+```sh
+hydra run-test artifacts_test --backend gce --config test-cases/artifacts/fedora44.yaml
+```
+
 ## RHEL 8
 ```sh
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/rhel8.yaml
