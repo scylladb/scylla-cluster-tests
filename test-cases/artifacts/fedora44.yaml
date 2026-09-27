@@ -1,0 +1,38 @@
+test_metadata:
+  description: >-
+    Artifacts validation test that installs ScyllaDB from the RPM repository onto a stock Fedora 44
+    GCE image (the official fedora-cloud project) and runs the standard artifact smoke checks. Keeps
+    a runnable configuration for SCT on current Fedora hosts; it is started manually and is not part
+    of any trigger.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - gce
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
+backtrace_decoding: false
+cluster_backend: 'gce'
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/fedora-cloud/global/images/family/fedora-cloud-44-x86-64'
+sizing_db:
+  vcpu: 2
+  memory: '>=8'
+gce_root_disk_type_db: 'pd-ssd'
+root_disk_size_db: 50
+gce_n_local_ssd_disk_db: 1
+instance_provision: "spot"
+instance_provision_fallback_on_demand: true
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 0
+nemesis_class_name: 'NoOpMonkey'
+scylla_linux_distro: 'centos'
+test_duration: 60
+user_prefix: 'artifacts-fedora44'
+
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
+use_preinstalled_scylla: false
+fallback_to_next_availability_zone: true
