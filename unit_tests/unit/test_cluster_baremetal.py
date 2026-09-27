@@ -25,6 +25,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from sdcm import cluster as sdcm_cluster
+from sdcm.utils.docker_utils import ContainerManager
 from sdcm.cluster_baremetal import (
     NodeIpsNotConfiguredError,
     PhysicalMachineCluster,
@@ -446,9 +447,10 @@ def test_scylla_setup_resets_first_and_no_longer_swallows_failures(monkeypatch):
 def fixture_teardown_node(monkeypatch):
     """A node built by _node_with_disk_state, with the parts of destroy() that need a real node stubbed out."""
 
-    def make(params=None, **state):
+    def make(params=None, ip_ssh_connections="private", **state):
         node = _node_with_disk_state(**state)
         node.parent_cluster = MagicMock(params=params or {})
+        node.test_config = MagicMock(IP_SSH_CONNECTIONS=ip_ssh_connections)
         node.stop_scylla_server = MagicMock()
         node.stop_task_threads = MagicMock()
         node.wait_till_tasks_threads_are_stopped = MagicMock()
@@ -518,3 +520,89 @@ def test_a_failed_teardown_reset_does_not_fail_destroy(teardown_node):
     assert "wipefs -a /dev/nvme1n1" not in _sudo_cmds(node)
     assert _sudo_cmds(node)[-1] == "base destroy"
     assert "the next setup will" in node.log.warning.call_args.args[0]
+
+
+SS_LISTENING = """\
+LISTEN 0      128        127.0.0.1:5001       0.0.0.0:*    users:(("sshd-session",pid=1574,fd=10))
+LISTEN 0      128        127.0.0.1:5000       0.0.0.0:*    users:(("sshd-session",pid=1601,fd=11))
+LISTEN 0      4096         0.0.0.0:9042       0.0.0.0:*    users:(("scylla",pid=2200,fd=40))
+LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:(("sshd",pid=900,fd=3))
+LISTEN 0      4096       127.0.0.1:5001       0.0.0.0:*    users:(("other-daemon",pid=3000,fd=5))
+LISTEN 0      128            [::1]:5001          [::]:*    users:(("sshd-session",pid=1574,fd=12))
+"""
+
+
+def _node_with_listeners(ss_output: str) -> PhysicalMachineNode:
+    node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.test_config = MagicMock(SYSLOGNG_SSH_TUNNEL_LOCAL_PORT=5000, VECTOR_SSH_TUNNEL_LOCAL_PORT=5001)
+    node.log = MagicMock()
+    node.remoter = MagicMock()
+    node.remoter.run.return_value.stdout = ss_output
+    return node
+
+
+def test_stale_tunnel_sessions_are_killed():
+    """A reused host keeps the reverse tunnels of an earlier run bound: free their ports for ours."""
+    node = _node_with_listeners(SS_LISTENING)
+
+    node._release_stale_tunnel_ports()
+
+    node.remoter.sudo.assert_called_once_with("kill 1574 1601", ignore_status=True)
+
+
+def test_nothing_is_killed_without_stale_tunnels():
+    node = _node_with_listeners(
+        'LISTEN 0 4096 0.0.0.0:9042 0.0.0.0:* users:(("scylla",pid=2200,fd=40))\n'
+        'LISTEN 0 128 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=900,fd=3))\n'
+    )
+
+    node._release_stale_tunnel_ports()
+
+    node.remoter.sudo.assert_not_called()
+
+
+@pytest.mark.parametrize("ip_ssh_connections, released", [("public", True), ("private", False)])
+def test_stale_tunnels_released_only_when_tunnels_are_used(ip_ssh_connections, released, monkeypatch):
+    node = _node_with_listeners("")
+    node.test_config.IP_SSH_CONNECTIONS = ip_ssh_connections
+    release = MagicMock()
+    monkeypatch.setattr(node, "_release_stale_tunnel_ports", release)
+    monkeypatch.setattr(sdcm_cluster.BaseNode, "_init_port_mapping", lambda self: None)
+
+    node._init_port_mapping()
+
+    assert release.called is released
+
+
+def test_destroy_frees_the_tunnel_ports_after_removing_its_own_tunnels(teardown_node, monkeypatch):
+    """Removing the tunnel containers closes their sessions on the host; anything still bound is freed after."""
+    node = teardown_node(ip_ssh_connections="public")
+    calls = []
+    monkeypatch.setattr(ContainerManager, "destroy_all_containers", lambda instance: calls.append("containers"))
+    node._release_stale_tunnel_ports = lambda: calls.append("release")
+    node.remoter.sudo.side_effect = lambda cmd, **_: calls.append(cmd) or MagicMock(stdout="")
+
+    node.destroy()
+
+    assert calls == ["containers", "release", "base destroy"]
+
+
+def test_destroy_leaves_tunnel_ports_alone_without_tunnels(teardown_node, monkeypatch):
+    node = teardown_node(ip_ssh_connections="private")
+    node._release_stale_tunnel_ports = MagicMock()
+    monkeypatch.setattr(ContainerManager, "destroy_all_containers", MagicMock())
+
+    node.destroy()
+
+    node._release_stale_tunnel_ports.assert_not_called()
+
+
+def test_a_failed_tunnel_cleanup_does_not_skip_the_disk_reset(teardown_node, monkeypatch):
+    node = teardown_node(ip_ssh_connections="public", mount_source="/dev/nvme1n1")
+    monkeypatch.setattr(ContainerManager, "destroy_all_containers", MagicMock())
+    node._release_stale_tunnel_ports = MagicMock(side_effect=RuntimeError("ss: exited with 1"))
+
+    node.destroy()
+
+    assert "wipefs -a /dev/nvme1n1" in _sudo_cmds(node)
+    assert "the next run will" in node.log.warning.call_args_list[0].args[0]

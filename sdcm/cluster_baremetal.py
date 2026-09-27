@@ -10,6 +10,8 @@ from typing import Optional, TypedDict
 
 from sdcm import cluster
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
+from sdcm.utils.docker_utils import ContainerManager
+from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT
 
 LOGGER = logging.getLogger(__name__)
 
@@ -77,6 +79,39 @@ class PhysicalMachineNode(cluster.BaseNode):
     def init(self):
         super().init()
         self.set_hostname()
+
+    def _init_port_mapping(self):
+        if self.test_config.IP_SSH_CONNECTIONS == "public":
+            self._release_stale_tunnel_ports()
+        super()._init_port_mapping()
+
+    def _release_stale_tunnel_ports(self):
+        """Kill the sshd sessions still holding the reverse-tunnel ports of an earlier run.
+
+        A physical host outlives the run. The tunnel of an earlier run keeps its port on the host until sshd drops
+        the session, which can take minutes after its runner is gone. The new tunnel cannot bind the port meanwhile,
+        so the node ships its logs into the dead tunnel. Runs before our own tunnels are created, so any listener
+        found is stale.
+
+        NOTE: this only helps once the earlier runner is gone. A runner still alive restarts its tunnel container and
+              races ours for the port, but it then still runs its test on these hosts, which no port handoff can fix.
+        """
+        ports = {
+            self.test_config.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT,
+            self.test_config.VECTOR_SSH_TUNNEL_LOCAL_PORT,
+            LDAP_SSH_TUNNEL_LOCAL_PORT,
+        }
+        result = self.remoter.run("sudo ss -Hltnp", ignore_status=True, verbose=False)
+        pids = set()
+        for line in result.stdout.splitlines():
+            fields = line.split()
+            if len(fields) < 4 or not fields[3].rpartition(":")[2].isdigit():
+                continue
+            if int(fields[3].rpartition(":")[2]) in ports:
+                pids.update(re.findall(r'"sshd[^"]*",pid=(\d+)', line))
+        if pids:
+            self.log.warning("Killing sshd sessions %s holding stale SSH tunnel ports of an earlier run", sorted(pids))
+            self.remoter.sudo(f"kill {' '.join(sorted(pids))}", ignore_status=True)
 
     def wait_for_cloud_init(self):
         pass
@@ -211,8 +246,16 @@ class PhysicalMachineNode(cluster.BaseNode):
         Undoes what a run leaves on a reused host that breaks the next one. Each step also runs at the start of a
         run, as a fallback for a host that was not cleaned up: kept after a failure, from a killed run, or from a run
         that did not execute its post behavior. A failing step is only logged, so teardown goes on, and the fallback
-        handles what it left.
+        handles what it left: _init_port_mapping() frees the tunnel ports, scylla_setup() resets the disks.
         """
+        # The SSH tunnel ports: removing this run's tunnel containers closes their sessions on the host, then free
+        # whatever still holds a port, which the next run's tunnels could not bind
+        if self.test_config.IP_SSH_CONNECTIONS == "public":
+            try:
+                ContainerManager.destroy_all_containers(self)
+                self._release_stale_tunnel_ports()
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Could not free the SSH tunnel ports on teardown, the next run will: %s", exc)
         # The scylla disk setup: only what scylla_setup built, on the disks /var/lib/scylla is mounted from, never on
         # every disk detect_disks() would offer, as this also runs for loader and monitor hosts. A preinstalled Scylla
         # comes with its disk setup, which the next run relies on, and no scylla_setup of ours to redo it.
