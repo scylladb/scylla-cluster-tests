@@ -7349,7 +7349,7 @@ class BaseLoaderSet:
                 #       monitoring and vector-store ones sharing the loader host. Narrow it down to the stress
                 #       containers with 'shell_marker', set at every 'RemoteDocker' call site - but not by
                 #       'NoSQLBenchStressThread', whose containers carry no labels at all and never matched.
-                loader.remoter.run(
+                result = loader.remoter.run(
                     cmd=(
                         f"docker ps -a -q --filter label=TestId={test_id} --filter label=shell_marker"
                         " | xargs -r docker rm -f"
@@ -7360,6 +7360,20 @@ class BaseLoaderSet:
                     #       waits in 'select()' with no timeout. A new session fails on its connect timeout.
                     new_session=True,
                 )
+                # NOTE: Docker 28 and older say "... Docker daemon socket", Docker 29 and newer say "... docker API"
+                stderr = (result.stderr or "").lower()
+                if "permission denied" in stderr and "docker" in stderr:
+                    self.log.warning("Docker access denied on %s, stress containers are not removed", loader.name)
+                    # NOTE: shows whether the SSH session lacks the 'docker' group, or the socket changed.
+                    #       $PPID is the sshd session running this command: its start time shows whether
+                    #       the session predates usermod.
+                    loader.remoter.run(
+                        "id -nG; getent group docker; ls -l /var/run/docker.sock; ps -o pid=,lstart=,args= -p $PPID",
+                        verbose=True,
+                        ignore_status=True,
+                        new_session=True,
+                    )
+                    continue
                 self.log.info("Killed docker loader on node: %s", loader.name)
             except Exception as ex:  # noqa: BLE001
                 self.log.warning("failed to kill docker stress command on [%s]: [%s]", str(loader), str(ex))
