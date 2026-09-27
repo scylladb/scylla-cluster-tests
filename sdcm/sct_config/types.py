@@ -30,6 +30,8 @@ from pydantic.functional_validators import BeforeValidator
 from pydantic.types import confloat
 from typing_extensions import Annotated
 
+from sdcm.utils.adaptive_timeouts import Operations
+
 
 #: Accepted string spellings of true/false, matching what `distutils.util.strtobool` accepted.
 _TRUTHY = frozenset({"y", "yes", "t", "true", "on", "1"})
@@ -298,9 +300,6 @@ class AdaptiveTimeoutMultipliers(RootModel):
         """Reject multiplier keys that are not known adaptive-timeout operation names."""
         if not isinstance(value, dict):
             return value
-
-        # cyclic-import: Operations imports from sct_config indirectly via cluster
-        from sdcm.utils.adaptive_timeouts import Operations  # noqa: PLC0415
 
         valid_keys = {op.value[0] for op in Operations}
         for key in value.keys():
