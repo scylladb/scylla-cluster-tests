@@ -19,6 +19,7 @@ A physical host has no availability zone to derive a rack from, so without
 keyspace with RF > 1 as not RF-rack-valid.
 """
 
+import re
 from unittest.mock import MagicMock
 
 import pytest
@@ -219,3 +220,301 @@ def test_the_rack_survives_the_hops_into_basenode(monkeypatch):
     assert node.node_index == 1
     assert node._public_ip == "1.2.3.1"
     assert node._private_ip == "10.0.0.1"
+
+
+def _node_with_disk_state(
+    mount_source: str = "",
+    mdstat: str = "",
+    other_mounts: list[tuple[str, str]] | None = None,
+    mounted_by_unit: bool = True,
+    failing_probe: str = "",
+    fails_after_stop: bool = False,
+    unit_present: bool = True,
+):
+    """A node whose remoter answers the reset's probes from the given host state.
+
+    `other_mounts` are (source, target) mounts besides /var/lib/scylla, and the devices on a disk are the disk and
+    the md arrays built from it. As on a real host, stopping var-lib-scylla.mount unmounts /var/lib/scylla, unless it
+    was mounted otherwise. The probe starting with `failing_probe` fails, only once the unit is stopped if
+    `fails_after_stop`: remoter.run() raises, unless told to ignore the exit status. `unit_present` tells whether
+    scylla_setup's var-lib-scylla.mount exists; a device is a partition when its name ends in p<N>.
+    """
+    state = {"source": mount_source, "stopped": False}
+
+    def sudo(cmd, **_):
+        if cmd == "systemctl stop var-lib-scylla.mount":
+            state["stopped"] = True
+            if mounted_by_unit:
+                state["source"] = ""
+        elif cmd == "umount /var/lib/scylla":
+            assert state["source"], "umount: /var/lib/scylla: not mounted."
+            state["source"] = ""
+        return MagicMock(stdout="")
+
+    def run(cmd, ignore_status=False, **_):
+        if failing_probe and cmd.startswith(failing_probe) and (state["stopped"] or not fails_after_stop):
+            if ignore_status:
+                return MagicMock(stdout="", exit_status=1)
+            raise RuntimeError(f"{cmd}: exited with 1")
+        stdout = ""
+        if cmd == "test -e /etc/systemd/system/var-lib-scylla.mount":
+            return MagicMock(stdout="", ok=unit_present)
+        if cmd.startswith("lsblk -ndo TYPE "):
+            stdout = "part" if re.search(r"p\d+$", cmd.rsplit(" ", 1)[1]) else "disk"
+        elif cmd == "findmnt -rn -o SOURCE,TARGET":
+            mounts = [(state["source"], "/var/lib/scylla")] if state["source"] else []
+            stdout = "".join(f"{source} {target}\n" for source, target in mounts + (other_mounts or []))
+        elif cmd == "if [ -e /proc/mdstat ]; then cat /proc/mdstat; fi":
+            stdout = mdstat
+        elif cmd.startswith("lsblk -nrp -o NAME "):
+            disk = cmd.rsplit(" ", 1)[1]
+            arrays = re.findall(rf"^(md\d+) : .*\b{disk.removeprefix('/dev/')}\[", mdstat, re.MULTILINE)
+            stdout = "".join(f"{device}\n" for device in [disk, *(f"/dev/{array}" for array in arrays)])
+        return MagicMock(stdout=stdout)
+
+    node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.log = MagicMock()
+    node.remoter = MagicMock()
+    node.remoter.run.side_effect = run
+    node.remoter.sudo.side_effect = sudo
+    return node
+
+
+def _sudo_cmds(node) -> list[str]:
+    return [call.args[0] for call in node.remoter.sudo.call_args_list]
+
+
+def test_reset_on_a_clean_host_only_wipes_the_setup_disks():
+    node = _node_with_disk_state()
+
+    node._reset_scylla_disk_setup(["/dev/nvme1n1"])
+
+    cmds = _sudo_cmds(node)
+    assert "umount /var/lib/scylla" not in cmds
+    assert not any(cmd.startswith("mdadm --stop") for cmd in cmds)
+    assert "wipefs -a /dev/nvme1n1" in cmds
+    assert cmds[-1] == "rm -f /etc/scylla.d/io.conf /etc/scylla.d/io_properties.yaml"
+
+
+def test_reset_undoes_an_earlier_single_disk_setup():
+    """i4i.large: scylla_setup put XFS straight on its one NVMe disk, mounted through var-lib-scylla.mount."""
+    node = _node_with_disk_state(mount_source="/dev/nvme1n1")
+
+    node._reset_scylla_disk_setup(["/dev/nvme1n1"])
+
+    cmds = _sudo_cmds(node)
+    # stopping the unit already unmounted it: a umount on top fails with "not mounted", exit 32
+    assert "umount /var/lib/scylla" not in cmds
+    unit_removed = next(i for i, cmd in enumerate(cmds) if "rm -f /etc/systemd/system/var-lib-scylla.mount" in cmd)
+    assert cmds.index("systemctl stop var-lib-scylla.mount") < unit_removed < cmds.index("systemctl daemon-reload")
+    assert cmds.index("systemctl stop var-lib-scylla.mount") < cmds.index("wipefs -a /dev/nvme1n1")
+
+
+def test_reset_unmounts_what_the_unit_did_not_mount():
+    node = _node_with_disk_state(mount_source="/dev/nvme1n1", mounted_by_unit=False)
+
+    node._reset_scylla_disk_setup(["/dev/nvme1n1"])
+
+    cmds = _sudo_cmds(node)
+    assert cmds.index("systemctl stop var-lib-scylla.mount") < cmds.index("umount /var/lib/scylla")
+    assert cmds.index("umount /var/lib/scylla") < cmds.index("wipefs -a /dev/nvme1n1")
+
+
+def test_reset_accepts_a_bind_mount_of_a_setup_disk():
+    node = _node_with_disk_state(mount_source="/dev/nvme1n1[/scylla]", mounted_by_unit=False)
+
+    node._reset_scylla_disk_setup(["/dev/nvme1n1"])
+
+    cmds = _sudo_cmds(node)
+    assert cmds.index("umount /var/lib/scylla") < cmds.index("wipefs -a /dev/nvme1n1")
+
+
+def test_reset_stops_the_raid_built_from_the_setup_disks():
+    node = _node_with_disk_state(
+        mount_source="/dev/md0",
+        mdstat="Personalities : [raid0]\nmd0 : active raid0 nvme2n1[1] nvme1n1[0]\n      3749396480 blocks\n",
+    )
+
+    node._reset_scylla_disk_setup(["/dev/nvme1n1", "/dev/nvme2n1"])
+
+    cmds = _sudo_cmds(node)
+    assert (
+        cmds.index("systemctl stop var-lib-scylla.mount")
+        < cmds.index("mdadm --stop /dev/md0")
+        < cmds.index("wipefs -a /dev/nvme1n1")
+    )
+    assert "wipefs -a /dev/nvme2n1" in cmds
+
+
+@pytest.mark.parametrize(
+    "state, disks, reason",
+    [
+        pytest.param({"mount_source": "/dev/sdb"}, ["/dev/nvme1n1"], "mounted from /dev/sdb", id="foreign-mount"),
+        pytest.param(
+            {"mount_source": "/dev/nvme1n1", "other_mounts": [("/dev/sdb", "/var/lib/scylla")]},
+            ["/dev/nvme1n1"],
+            "mounted from /dev/sdb",
+            id="foreign-mount-stacked-on-the-disk",
+        ),
+        pytest.param(
+            {"mdstat": "md5 : active raid1 nvme1n1[0] sda[1]\n"},
+            ["/dev/nvme1n1"],
+            "/dev/md5 also uses sda",
+            id="array-with-other-devices",
+        ),
+        pytest.param(
+            {"other_mounts": [("/dev/nvme1n1", "/data")]},
+            ["/dev/nvme1n1"],
+            "mounted at /data",
+            id="disk-mounted-elsewhere",
+        ),
+        pytest.param(
+            {
+                "mount_source": "/dev/nvme1n1",
+                "other_mounts": [("/dev/nvme2n1", "/data")],
+            },
+            ["/dev/nvme1n1", "/dev/nvme2n1"],
+            "/dev/nvme2n1 is mounted at /data",
+            id="a-later-disk-mounted-elsewhere",
+        ),
+        pytest.param(
+            {
+                "mdstat": "md0 : active raid0 nvme2n1[1] nvme1n1[0]\n",
+                "other_mounts": [("/dev/md0", "/data")],
+            },
+            ["/dev/nvme1n1", "/dev/nvme2n1"],
+            "/dev/nvme1n1 is mounted at /data",
+            id="array-mounted-elsewhere",
+        ),
+        pytest.param(
+            {"mount_source": "/dev/nvme1n1", "other_mounts": [("/dev/nvme1n1[/data]", "/srv/data")]},
+            ["/dev/nvme1n1"],
+            "mounted at /srv/data",
+            id="also-bind-mounted-elsewhere",
+        ),
+    ],
+)
+def test_reset_refuses_to_touch_other_devices(state, disks, reason):
+    node = _node_with_disk_state(**state)
+
+    with pytest.raises(sdcm_cluster.NodeSetupFailed) as failure:
+        node._reset_scylla_disk_setup(disks)
+
+    assert reason in failure.value.error_msg
+
+    # refused before changing anything: no unmount, no array stopped, no disk wiped
+    assert _sudo_cmds(node) == []
+
+
+@pytest.mark.parametrize("probe", ["findmnt -rn", "lsblk", "if [ -e /proc/mdstat ]"])
+def test_reset_changes_nothing_when_a_mount_probe_fails(probe):
+    node = _node_with_disk_state(mount_source="/dev/nvme1n1", failing_probe=probe)
+
+    with pytest.raises(RuntimeError, match="exited with 1"):
+        node._reset_scylla_disk_setup(["/dev/nvme1n1"])
+
+    assert _sudo_cmds(node) == []
+
+
+def test_reset_wipes_nothing_when_the_mount_probe_fails_after_stopping_the_unit():
+    node = _node_with_disk_state(mount_source="/dev/nvme1n1", failing_probe="findmnt -rn", fails_after_stop=True)
+
+    with pytest.raises(RuntimeError, match="exited with 1"):
+        node._reset_scylla_disk_setup(["/dev/nvme1n1"])
+
+    assert _sudo_cmds(node) == ["systemctl stop var-lib-scylla.mount"]
+
+
+def test_scylla_setup_resets_first_and_no_longer_swallows_failures(monkeypatch):
+    node = _node_with_disk_state()
+    calls = []
+    monkeypatch.setattr(node, "_reset_scylla_disk_setup", lambda disks: calls.append(("reset", disks)))
+
+    def failing_setup(self, disks, devname):
+        calls.append(("setup", disks))
+        raise RuntimeError("scylla_setup: /etc/systemd/system/var-lib-scylla.mount already exists")
+
+    monkeypatch.setattr(sdcm_cluster.BaseNode, "scylla_setup", failing_setup)
+
+    with pytest.raises(RuntimeError, match="already exists"):
+        node.scylla_setup(["/dev/nvme1n1"], "eth0")
+
+    assert calls == [("reset", ["/dev/nvme1n1"]), ("setup", ["/dev/nvme1n1"])]
+
+
+@pytest.fixture(name="teardown_node")
+def fixture_teardown_node(monkeypatch):
+    """A node built by _node_with_disk_state, with the parts of destroy() that need a real node stubbed out."""
+
+    def make(params=None, **state):
+        node = _node_with_disk_state(**state)
+        node.parent_cluster = MagicMock(params=params or {})
+        node.stop_scylla_server = MagicMock()
+        node.stop_task_threads = MagicMock()
+        node.wait_till_tasks_threads_are_stopped = MagicMock()
+        return node
+
+    monkeypatch.setattr(sdcm_cluster.BaseNode, "destroy", lambda self: self.remoter.sudo("base destroy"))
+    return make
+
+
+def test_destroy_leaves_a_single_disk_host_clean(teardown_node):
+    node = teardown_node(mount_source="/dev/nvme1n1")
+
+    node.destroy()
+
+    cmds = _sudo_cmds(node)
+    node.stop_scylla_server.assert_called_once_with(verify_down=False, ignore_status=True)
+    assert "wipefs -a /dev/nvme1n1" in cmds
+    assert cmds.index("wipefs -a /dev/nvme1n1") < cmds.index("base destroy")
+
+
+def test_destroy_resets_the_raid_scylla_setup_built(teardown_node):
+    node = teardown_node(
+        mount_source="/dev/md0",
+        mdstat="Personalities : [raid0]\nmd0 : active raid0 nvme2n1[1] nvme1n1[0]\n      3749396480 blocks\n",
+    )
+
+    node.destroy()
+
+    cmds = _sudo_cmds(node)
+    assert "mdadm --stop /dev/md0" in cmds
+    assert {"wipefs -a /dev/nvme1n1", "wipefs -a /dev/nvme2n1"} <= set(cmds)
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        pytest.param({"unit_present": False}, id="loader-or-monitor-host"),
+        pytest.param({"unit_present": False, "mount_source": "/dev/nvme1n1"}, id="mounted-without-scylla-setup"),
+        pytest.param({"mount_source": "/dev/nvme1n1p1"}, id="hand-prepared-partition"),
+        pytest.param({}, id="unit-left-but-nothing-mounted"),
+    ],
+)
+def test_destroy_leaves_hosts_scylla_setup_did_not_build_alone(teardown_node, state):
+    node = teardown_node(**state)
+
+    node.destroy()
+
+    assert _sudo_cmds(node) == ["base destroy"]
+    node.stop_scylla_server.assert_not_called()
+
+
+def test_destroy_keeps_the_disk_setup_of_a_preinstalled_scylla(teardown_node):
+    """No scylla_setup of ours built it, and the next run with use_preinstalled_scylla relies on it."""
+    node = teardown_node(params={"use_preinstalled_scylla": True}, mount_source="/dev/nvme1n1")
+
+    node.destroy()
+
+    assert _sudo_cmds(node) == ["base destroy"]
+    node.stop_scylla_server.assert_not_called()
+
+
+def test_a_failed_teardown_reset_does_not_fail_destroy(teardown_node):
+    node = teardown_node(mount_source="/dev/nvme1n1", failing_probe="lsblk -nrp -o NAME")
+
+    node.destroy()
+
+    assert "wipefs -a /dev/nvme1n1" not in _sudo_cmds(node)
+    assert _sudo_cmds(node)[-1] == "base destroy"
+    assert "the next setup will" in node.log.warning.call_args.args[0]

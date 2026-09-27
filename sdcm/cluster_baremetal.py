@@ -5,9 +5,8 @@ This backend is experimental and not regularly tested in CI.
 """
 
 import logging
+import re
 from typing import Optional, TypedDict
-
-from invoke import UnexpectedExit
 
 from sdcm import cluster
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
@@ -94,15 +93,93 @@ class PhysicalMachineNode(cluster.BaseNode):
         return "baremetal"
 
     def scylla_setup(self, disks, devname: str):
-        try:
-            super().scylla_setup(disks, devname)
-        except UnexpectedExit as exc:
-            # Covering for case when scylla-setup script has already been run. If the command is scylla_setup
-            # and there's "already" in the stdout of that command, we can skip this method safely as nics and disks
-            # were already configured on this node.
-            if "scylla_setup" in exc.result.command and "already" in exc.streams_for_display()[0].lower():
-                return
-            raise exc
+        # A physical host is reused across runs. clean_scylla() removes the package and the data, but not what
+        # scylla_setup built. With its var-lib-scylla.mount left in place, scylla_setup skips RAID setup, and with it
+        # scylla_io_setup, and exits 1, and Scylla then fails with "Bad I/O Scheduler configuration" on the stub
+        # io.conf the reinstall left behind. destroy() resets that, but a host can still arrive dirty: kept after a
+        # failure, from a killed run, or from a run that did not execute its post behavior. So undo whatever is left
+        # first, and let a failure of this setup fail.
+        self._reset_scylla_disk_setup(disks)
+        super().scylla_setup(disks, devname)
+
+    def _reset_scylla_disk_setup(self, disks: list[str]) -> None:
+        """Undo what an earlier scylla_setup built on `disks`, the disks this one is about to format.
+
+        Touches nothing scylla_setup would not destroy anyway, and refuses when /var/lib/scylla or an md array
+        involves any other device.
+        """
+        disk_names = {disk.removeprefix("/dev/") for disk in disks}
+        arrays = self._md_arrays_on(disk_names)
+        allowed_sources = set(disks) | {f"/dev/{array}" for array in arrays}
+
+        # Check every disk before touching any, and let a failing probe stop the reset. lsblk MOUNTPOINT shows one
+        # mount per device (and MOUNTPOINTS needs util-linux 2.37), so take all mounts, bind and stacked ones
+        # included, from findmnt, and the devices on a disk (the disk and what is built on it: an md array, a
+        # partition) from lsblk. /var/lib/scylla may only be mounted from the disks, and the disks only there.
+        mounts = self._mounts()
+        if foreign := sorted(
+            source
+            for source, targets in mounts.items()
+            if "/var/lib/scylla" in targets and source not in allowed_sources
+        ):
+            raise cluster.NodeSetupFailed(
+                node=self,
+                error_msg=f"/var/lib/scylla is mounted from {', '.join(foreign)}, not from the disks for scylla_setup "
+                f"({', '.join(disks)}): refusing to reset it",
+            )
+        for disk in disks:
+            devices = self.remoter.run(f"lsblk -nrp -o NAME {disk}").stdout.split()
+            targets = set().union(*(mounts.get(device, set()) for device in devices))
+            if mountpoints := sorted(targets - {"/var/lib/scylla"}):
+                raise cluster.NodeSetupFailed(
+                    node=self, error_msg=f"{disk} is mounted at {', '.join(mountpoints)}: refusing to wipe it"
+                )
+        self.log.info("Resetting the scylla disk setup of an earlier run on %s", ", ".join(disks))
+        self.remoter.sudo("systemctl stop var-lib-scylla.mount", ignore_status=True)
+        # Stopping the unit unmounts it; only a mount made some other way (fstab, by hand) is still there
+        if any("/var/lib/scylla" in targets for targets in self._mounts().values()):
+            self.remoter.sudo("umount /var/lib/scylla")
+        self.remoter.sudo(
+            "rm -f /etc/systemd/system/var-lib-scylla.mount /etc/systemd/system/*.wants/var-lib-scylla.mount"
+        )
+        self.remoter.sudo(r"sed -i '\#[[:space:]]/var/lib/scylla[[:space:]]#d' /etc/fstab")
+        self.remoter.sudo("systemctl daemon-reload")
+
+        for array in arrays:
+            self.remoter.sudo(f"mdadm --stop /dev/{array}")
+        for disk in disks:
+            self.remoter.sudo(f"mdadm --zero-superblock {disk}", ignore_status=True)
+            self.remoter.sudo(f"wipefs -a {disk}")
+        self.remoter.sudo("rm -f /etc/scylla.d/io.conf /etc/scylla.d/io_properties.yaml")
+
+    def _mounts(self) -> dict[str, set[str]]:
+        """Every mount on the host, as the targets each source device is mounted at."""
+        mounts = {}
+        for line in self.remoter.run("findmnt -rn -o SOURCE,TARGET").stdout.splitlines():
+            source, _, target = line.partition(" ")
+            # A bind mount of a directory has a source like /dev/nvme1n1[/subdir]
+            mounts.setdefault(source.split("[", 1)[0], set()).add(target)
+        return mounts
+
+    def _md_arrays_on(self, disk_names: set[str]) -> list[str]:
+        """The md arrays built from `disk_names`, refusing any that also uses another device."""
+        arrays = []
+        # No /proc/mdstat means the md driver is not loaded, so there is no array; any other failure stops the reset
+        mdstat = self.remoter.run("if [ -e /proc/mdstat ]; then cat /proc/mdstat; fi").stdout
+        for line in mdstat.splitlines():
+            if not (match := re.match(r"(md\d+) : .*", line)):
+                continue
+            members = set(re.findall(r"(\w+)\[\d+\]", line))
+            if not members & disk_names:
+                continue
+            if members - disk_names:
+                raise cluster.NodeSetupFailed(
+                    node=self,
+                    error_msg=f"/dev/{match.group(1)} also uses {', '.join(sorted(members - disk_names))}, "
+                    f"which are not disks for scylla_setup: refusing to stop it",
+                )
+            arrays.append(match.group(1))
+        return arrays
 
     def _get_private_ip_address(self) -> Optional[str]:
         return self._private_ip
@@ -125,7 +202,47 @@ class PhysicalMachineNode(cluster.BaseNode):
     def destroy(self):
         self.stop_task_threads()  # For future implementation of destroy
         self.wait_till_tasks_threads_are_stopped()
+        self._clean_up_host()
         super().destroy()
+
+    def _clean_up_host(self) -> None:
+        """Leave a destroyed physical host clean for the next run, as a destroyed cloud node leaves nothing behind.
+
+        Undoes what a run leaves on a reused host that breaks the next one. Each step also runs at the start of a
+        run, as a fallback for a host that was not cleaned up: kept after a failure, from a killed run, or from a run
+        that did not execute its post behavior. A failing step is only logged, so teardown goes on, and the fallback
+        handles what it left.
+        """
+        # The scylla disk setup: only what scylla_setup built, on the disks /var/lib/scylla is mounted from, never on
+        # every disk detect_disks() would offer, as this also runs for loader and monitor hosts. A preinstalled Scylla
+        # comes with its disk setup, which the next run relies on, and no scylla_setup of ours to redo it.
+        if not self.parent_cluster.params.get("use_preinstalled_scylla"):
+            try:
+                if disks := self._scylla_setup_disks():
+                    self.stop_scylla_server(verify_down=False, ignore_status=True)
+                    self._reset_scylla_disk_setup(disks)
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Could not reset the scylla disk setup on teardown, the next setup will: %s", exc)
+
+    def _scylla_setup_disks(self) -> list[str]:
+        """The disks scylla_setup set /var/lib/scylla up on, or none if it did not.
+
+        Its var-lib-scylla.mount must be there, and /var/lib/scylla on a whole disk or on an md array of them. A
+        host prepared by hand, e.g. on a partition, is left alone.
+        """
+        if not self.remoter.run("test -e /etc/systemd/system/var-lib-scylla.mount", ignore_status=True).ok:
+            return []
+        sources = [source for source, targets in self._mounts().items() if "/var/lib/scylla" in targets]
+        if len(sources) != 1:
+            return []
+        source = sources[0]
+        if match := re.fullmatch(r"/dev/(md\d+)", source):
+            mdstat = self.remoter.run("if [ -e /proc/mdstat ]; then cat /proc/mdstat; fi").stdout
+            line = next((line for line in mdstat.splitlines() if line.startswith(f"{match.group(1)} : ")), "")
+            return sorted(f"/dev/{member}" for member in re.findall(r"(\w+)\[\d+\]", line))
+        if self.remoter.run(f"lsblk -ndo TYPE {source}", ignore_status=True).stdout.strip() == "disk":
+            return [source]
+        return []
 
 
 class PhysicalMachineCluster(cluster.BaseCluster):
