@@ -7304,7 +7304,7 @@ class BaseLoaderSet:
                 #       monitoring and vector-store ones sharing the loader host. Narrow it down to the stress
                 #       containers with 'shell_marker', set at every 'RemoteDocker' call site - but not by
                 #       'NoSQLBenchStressThread', whose containers carry no labels at all and never matched.
-                loader.remoter.run(
+                result = loader.remoter.run(
                     cmd=(
                         f"docker ps -a -q --filter label=TestId={test_id} --filter label=shell_marker"
                         " | xargs -r docker rm -f"
@@ -7312,9 +7312,38 @@ class BaseLoaderSet:
                     verbose=True,
                     ignore_status=True,
                 )
+                # NOTE: older Docker CLIs say "Got permission denied ... Docker daemon socket", newer "docker API"
+                stderr = (result.stderr or "").lower()
+                if "permission denied" in stderr and "docker" in stderr:
+                    self.log.warning("Docker access denied on %s, stress containers are not removed", loader.name)
+                    self._log_docker_access_diagnostics(loader)
+                    continue
                 self.log.info("Killed docker loader on node: %s", loader.name)
             except Exception as ex:  # noqa: BLE001
                 self.log.warning("failed to kill docker stress command on [%s]: [%s]", str(loader), str(ex))
+
+    @staticmethod
+    def _log_docker_access_diagnostics(loader):
+        """Show whether the SSH session lacks the `docker` group, or the socket changed.
+
+        Seen on a Fedora loader where SCT had installed Docker in the same run: `docker info` worked right after
+        `usermod -aG docker`, yet the same remoter was denied at teardown (SCT-901).
+        """
+        remoter = loader.remoter
+        connection = getattr(getattr(remoter, "connection_thread_map", None), str(id(remoter)), None)
+        loader.log.warning(
+            "Docker access diagnostics: thread=%s remoter=%s generation=%s connection generation=%s",
+            threading.current_thread().name,
+            type(remoter).__name__,
+            getattr(remoter, "_context_generation", None),
+            getattr(connection, "_context_generation", None),
+        )
+        # $PPID is the sshd session running this command: its start time shows whether the session predates usermod
+        remoter.run(
+            "id -nG; getent group docker; ls -l /var/run/docker.sock; ps -o pid=,lstart=,args= -p $PPID",
+            verbose=True,
+            ignore_status=True,
+        )
 
     def update_rack_info_in_argus(self):
         for loader in self.nodes:
