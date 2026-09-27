@@ -606,6 +606,20 @@ class ScyllaDoctor:
         LOGGER.info("lspci not found, installing pciutils...")
         self.node.install_package("pciutils")
 
+    def _ensure_ethtool(self):
+        """Install ethtool if not already present.
+
+        scylla-doctor's NICs collector requires it, and every collector that depends on NICs data fails without
+        it - including the Scylla logs collector, so no log archive is created. Some images, e.g. the official
+        Fedora Cloud image on GCE, ship without it.
+        """
+        result = self.node.remoter.sudo("which ethtool", ignore_status=True, verbose=False)
+        if result.ok:
+            LOGGER.info("ethtool already installed, proceeding...")
+            return
+        LOGGER.info("ethtool not found, installing it...")
+        self.node.install_package("ethtool")
+
     def _ensure_iptables(self):
         """Install and start iptables service before SD Analyzer run."""
         self.node.install_package("iptables")
@@ -613,6 +627,7 @@ class ScyllaDoctor:
 
     def run_scylla_doctor_and_collect_results(self):
         self._ensure_lspci()
+        self._ensure_ethtool()
         self._ensure_iptables()
 
         auth_options = ""
