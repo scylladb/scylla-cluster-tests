@@ -692,6 +692,25 @@ def _ls_side_effects(cwd_archive: str = "", tmp_archive: str = ""):
 
 
 @pytest.mark.parametrize(
+    "ethtool_present,expected_installs",
+    [
+        pytest.param(True, [], id="already_installed"),
+        pytest.param(False, ["ethtool"], id="missing_gets_installed"),
+    ],
+)
+def test_ensure_ethtool(doctor, ethtool_present, expected_installs):
+    """scylla-doctor's NICs collector needs ethtool; the Fedora Cloud GCE image lacks it."""
+    doctor.node.remoter.sudo.return_value = MagicMock(ok=ethtool_present)
+    installed = []
+    doctor.node.install_package = installed.append
+
+    doctor._ensure_ethtool()
+
+    doctor.node.remoter.sudo.assert_called_once_with("which ethtool", ignore_status=True, verbose=False)
+    assert installed == expected_installs
+
+
+@pytest.mark.parametrize(
     "cwd_archive,tmp_archive,expected",
     [
         pytest.param(
@@ -715,6 +734,7 @@ def test_collect_results_finds_log_archive_in_either_location(doctor, cwd_archiv
 
     with (
         patch.object(ScyllaDoctor, "_ensure_lspci"),
+        patch.object(ScyllaDoctor, "_ensure_ethtool"),
         patch.object(ScyllaDoctor, "_ensure_iptables"),
         patch.object(ScyllaDoctor, "run"),
     ):
@@ -730,6 +750,7 @@ def test_collect_results_fails_when_log_archive_is_missing_everywhere(doctor):
 
     with (
         patch.object(ScyllaDoctor, "_ensure_lspci"),
+        patch.object(ScyllaDoctor, "_ensure_ethtool"),
         patch.object(ScyllaDoctor, "_ensure_iptables"),
         patch.object(ScyllaDoctor, "run"),
         pytest.raises(AssertionError, match="Scylla log archive has not been created"),
@@ -745,6 +766,7 @@ def test_collect_results_skips_log_archive_lookup_on_docker(doctor):
 
     with (
         patch.object(ScyllaDoctor, "_ensure_lspci"),
+        patch.object(ScyllaDoctor, "_ensure_ethtool"),
         patch.object(ScyllaDoctor, "_ensure_iptables"),
         patch.object(ScyllaDoctor, "run"),
     ):
