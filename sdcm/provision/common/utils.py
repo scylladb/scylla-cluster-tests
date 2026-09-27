@@ -152,6 +152,19 @@ EOF
         chmod 0755 /etc/vector
         chmod 0644 /etc/vector/vector.yaml
 
+        # vector waits up to 60s (--graceful-shutdown-limit-secs) to flush its sinks when stopped. On Fedora
+        # systemd stops waiting after 45s and then SIGABRTs the whole unit (TimeoutStopFailureMode=abort),
+        # dumping core of vector and its journalctl child whenever the runner is unreachable, e.g. a reused
+        # host still pointing at the runner of the previous run. 90s is the upstream systemd default.
+        # NB: no apostrophes in these comments. The script is sent wrapped in single quotes
+        # (`sudo bash -cxe '...'`), so a stray one ends it early and runs the rest outside sudo.
+        mkdir -p /etc/systemd/system/vector.service.d
+        cat > /etc/systemd/system/vector.service.d/sct-stop-timeout.conf <<'EOF'
+[Service]
+TimeoutStopSec=90s
+EOF
+        systemctl daemon-reload
+
         systemctl restart vector || echo "WARNING: vector.service restart failed, will be reconfigured later by configure_remote_logging"
     """).format(host=host, port=port)
 
