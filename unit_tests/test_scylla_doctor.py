@@ -427,24 +427,21 @@ def test_download_and_extract_tarball_accepts_gzip(mock_node, mock_test_config):
     extract_result = MagicMock()
     extract_result.ok = True
 
-    rm_result = MagicMock()
-    rm_result.ok = True
-
-    # Flow: curl download, magic-byte check (passes), mkdir (current_dir), tar extract, rm -f
+    # Flow: curl download, magic-byte check (passes), tar extract + cleanup
     mock_node.remoter.run.side_effect = [
         MagicMock(ok=True),  # curl download
         check_result,  # head -c 2 | od (gzip magic bytes)
-        MagicMock(ok=True),  # mkdir -p (current_dir cached property)
-        extract_result,  # tar -xzf
-        rm_result,  # rm -f
+        extract_result,  # tar -xvzf && rm -f
     ]
 
     doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
     doc._download_and_extract_tarball("https://example.com/good.tar.gz")
 
     commands = [call.args[0] for call in mock_node.remoter.run.call_args_list]
-    assert "tar -xzf" in commands[3]
-    assert commands[4].startswith("rm -f")
+    assert len(commands) == 3
+    # Extraction and cleanup of the temporary download are a single command
+    assert "tar -xvzf" in commands[2]
+    assert "rm -f" in commands[2]
 
 
 # --- _full_edition_downloaded tests ---

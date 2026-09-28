@@ -5,6 +5,7 @@ import pprint
 import re
 from functools import cached_property
 from textwrap import dedent
+from urllib.parse import urlparse
 
 import boto3
 
