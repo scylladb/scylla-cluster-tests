@@ -25,8 +25,8 @@ is also blocked, held out before it ran while SCYLLADB-4625 is open, and so is `
 | failed | 11 | 10% |
 | blocked (13 topology-changes + `MultipleHardRebootNodeMonkey` + `NemesisSequence`) | 15 | 13% |
 | **failed + blocked** | **26** | **23%** |
-| skipped | 29 | 26% |
-| not executed | 35 | 31% |
+| skipped (29 run, 11 held out on a precondition this job never meets) | 40 | 36% |
+| not executed | 24 | 21% |
 
 ## Per-run statistics
 
@@ -65,6 +65,7 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 | `e0545d788` | `NemesisSequence` held out before it ran | it grows, replaces and shrinks the cluster but has no `topology_changes` flag, so the category hold-out misses it; node add hits SCYLLADB-4529, decommission SCYLLADB-4753 |
 | `64a93082c` | the six nemesis run #20 reached excluded | `RepairStreamingErrMonkey` hard-reboots its node mid-repair and hits SCYLLADB-4625; two kubernetes-only and one tablet skip are static; two network nemesis passed |
 | `63c2c9c56` | `RestartThenRepairNodeMonkey` excluded after run #21 | on instance-store types `node.restart()` is an EC2 stop/start that wipes the disk, so the node replaces itself, and the replace never finishes (SCYLLADB-4753) |
+| `fb6966bfe` | eleven nemesis held out before they ran | each raises `UnsupportedNemesis` on a precondition this job never meets: no CDC table, no `scylla_bench` keyspace, no LDAP/saslauthd, `server_encrypt: false`, kubernetes only, or scylladb/scylladb#8136 open |
 
 ## Open issues found by this job
 
