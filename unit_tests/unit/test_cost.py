@@ -20,8 +20,10 @@ data/instance_catalog/, so these assert on real prices without touching the netw
 import pytest
 
 from sdcm.utils.cloud_catalog.pricing import AWSPricing, AzurePricing, GCEPricing, OCIPricing
+from sdcm.sct_config.config import _SIZING_ROLE_PARAMS
 from sdcm.utils.cloud_catalog.cost import (
     BACKEND_TO_CLOUD,
+    _ROLE_PARAMS,
     InstanceRate,
     RunCostEstimate,
     cost_for,
@@ -584,3 +586,45 @@ def test_unpriceable_backends_yield_an_honest_estimate_rather_than_an_error(back
 def test_managed_backends_price_through_their_underlying_cloud(backend):
     """k8s-eks and aws-siren are AWS underneath; k8s-gke and gce-siren are GCE."""
     assert BACKEND_TO_CLOUD[backend] in ("aws", "gce")
+
+
+# --- review follow-ups ------------------------------------------------------------------
+
+
+def test_xcloud_prices_through_its_configured_provider():
+    """xcloud has no cloud of its own; config resolves it from xcloud_provider."""
+    params = _aws_params(cluster_backend="xcloud", xcloud_provider="aws")
+    estimate = estimate_run_cost(params)
+    assert estimate.total is not None
+    assert not estimate.partial
+
+
+def test_role_table_follows_config_so_a_new_role_is_not_silently_dropped():
+    """The instance-type half comes from config; zero_token was being omitted before."""
+    for cloud, roles in _SIZING_ROLE_PARAMS.items():
+        priced = set(_ROLE_PARAMS[cloud])
+        assert priced == set(roles), f"{cloud}: config has {set(roles) - priced} that we do not price"
+
+
+def test_zero_token_nodes_are_priced_when_configured():
+    params = _aws_params(zero_token_instance_type_db="i4i.4xlarge", n_db_zero_token_nodes=2)
+    estimate = estimate_run_cost(params)
+    assert "zero_token" in {r.role for r in estimate.roles}
+
+
+def test_spot_prices_are_cached_per_region_without_expiry(fake_ec2):
+    """A long run must not re-price: the number should not move under the reader."""
+    pricing = AWSPricing()
+    pricing.get_spot_instance_prices("eu-west-1", ["i4i.4xlarge"])
+    pricing.get_spot_instance_prices("eu-west-1", ["i4i.4xlarge"])
+    assert len(fake_ec2.calls) == 1
+
+
+def test_a_later_lookup_does_not_evict_earlier_types(fake_ec2):
+    pricing = AWSPricing()
+    pricing.get_spot_instance_prices("eu-west-1", ["i4i.4xlarge"])
+    pricing.get_spot_instance_prices("eu-west-1", ["c6i.2xlarge"])
+    # Second call fetched the new type; the first stays cached rather than being dropped.
+    assert len(fake_ec2.calls) == 2
+    assert pricing.get_spot_instance_prices("eu-west-1", ["i4i.4xlarge", "c6i.2xlarge"])
+    assert len(fake_ec2.calls) == 2

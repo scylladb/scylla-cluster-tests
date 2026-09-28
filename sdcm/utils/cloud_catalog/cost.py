@@ -27,9 +27,16 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
+from sdcm.sct_config.config import (
+    _BACKEND_TO_CLOUD,
+    _SIZING_ROLE_PARAMS,
+    backend_to_cloud,
+    oracle_cluster_in_use,
+)
 from sdcm.utils.cloud_catalog.lifecycle import InstanceLifecycle
 
 if TYPE_CHECKING:
@@ -39,17 +46,18 @@ LOGGER = logging.getLogger(__name__)
 
 SECONDS_PER_HOUR = 3600.0
 
-#: SCT cluster_backend -> the cloud key used by the pricing classes and the catalog.
-BACKEND_TO_CLOUD = {
-    "aws": "aws",
-    "aws-siren": "aws",
-    "k8s-eks": "aws",
-    "gce": "gce",
-    "gce-siren": "gce",
-    "k8s-gke": "gce",
-    "azure": "azure",
-    "oci": "oci",
-}
+#: Backend -> cloud comes from the config module, which already owns this mapping and knows
+#: that xcloud's cloud is whatever `xcloud_provider` says. Keeping a second copy here meant
+#: xcloud priced as unknown for no reason.
+BACKEND_TO_CLOUD = _BACKEND_TO_CLOUD
+
+
+class RateSource(StrEnum):
+    """Where a rate came from. Closed set, so a typo cannot invent a new source."""
+
+    CATALOG = "catalog"
+    SPOT_API = "spot-api"
+    UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True)
@@ -58,22 +66,22 @@ class InstanceRate:
 
     price_per_hour: float | None
     is_spot: bool
-    source: str  # "catalog" | "spot-api" | "unknown"
+    source: RateSource
 
     @classmethod
-    def from_raw(cls, raw: Any, *, is_spot: bool, source: str) -> InstanceRate:
+    def from_raw(cls, raw: Any, *, is_spot: bool, source: RateSource) -> InstanceRate:
         """The single place that owns the 0-means-unknown rule."""
         try:
             price = float(raw)
         except TypeError, ValueError:
             price = 0.0
         if price <= 0:
-            return cls(price_per_hour=None, is_spot=is_spot, source="unknown")
+            return cls(price_per_hour=None, is_spot=is_spot, source=RateSource.UNKNOWN)
         return cls(price_per_hour=price, is_spot=is_spot, source=source)
 
     @classmethod
     def unknown(cls, *, is_spot: bool = False) -> InstanceRate:
-        return cls(price_per_hour=None, is_spot=is_spot, source="unknown")
+        return cls(price_per_hour=None, is_spot=is_spot, source=RateSource.UNKNOWN)
 
     @property
     def known(self) -> bool:
@@ -146,7 +154,7 @@ def get_hourly_rate(
         except Exception:  # noqa: BLE001
             LOGGER.warning("Catalog lookup failed for %s/%s in %s", cloud, instance_type, region, exc_info=True)
             return InstanceRate.unknown(is_spot=is_spot)
-        return InstanceRate.from_raw(raw, is_spot=is_spot, source="catalog")
+        return InstanceRate.from_raw(raw, is_spot=is_spot, source=RateSource.CATALOG)
 
     lifecycle = InstanceLifecycle.SPOT if is_spot else InstanceLifecycle.ON_DEMAND
     try:
@@ -157,7 +165,7 @@ def get_hourly_rate(
         LOGGER.warning("Could not price %s/%s in %s", cloud, instance_type, region, exc_info=True)
         return InstanceRate.unknown(is_spot=is_spot)
 
-    return InstanceRate.from_raw(raw, is_spot=is_spot, source="spot-api" if is_spot else "catalog")
+    return InstanceRate.from_raw(raw, is_spot=is_spot, source=RateSource.SPOT_API if is_spot else "catalog")
 
 
 def resolve_spot_rates(backend: str, region: str, instance_types: Sequence[str]) -> dict[str, InstanceRate]:
@@ -188,7 +196,7 @@ def resolve_spot_rates(backend: str, region: str, instance_types: Sequence[str])
         LOGGER.warning("Could not fetch AWS spot prices in %s", region, exc_info=True)
         return {t: InstanceRate.unknown(is_spot=True) for t in wanted}
 
-    return {t: InstanceRate.from_raw(prices.get(t), is_spot=True, source="spot-api") for t in wanted}
+    return {t: InstanceRate.from_raw(prices.get(t), is_spot=True, source=RateSource.SPOT_API) for t in wanted}
 
 
 def cost_for(rate: InstanceRate | None, seconds: float) -> float | None:
@@ -200,31 +208,22 @@ def cost_for(rate: InstanceRate | None, seconds: float) -> float | None:
 
 #: cloud -> {role: (instance-type param, node-count param)}. Mirrors ROLE_PARAMS in
 #: sdcm/sct_config.py, which is what resolves sizing constraints into these very params.
+#: How many nodes each role has. The instance-type half of this comes from config's own
+#: table, so a role added there is priced here automatically rather than silently omitted —
+#: which is how `zero_token` was being left out of every estimate.
+_ROLE_NODE_COUNTS: dict[str, str] = {
+    "db": "n_db_nodes",
+    "db_oracle": "n_test_oracle_db_nodes",
+    "zero_token": "n_db_zero_token_nodes",
+    "loader": "n_loaders",
+    "monitor": "n_monitor_nodes",
+}
+
 _ROLE_PARAMS: dict[str, dict[str, tuple[str, str]]] = {
-    "aws": {
-        "db": ("instance_type_db", "n_db_nodes"),
-        "db_oracle": ("instance_type_db_oracle", "n_test_oracle_db_nodes"),
-        "loader": ("instance_type_loader", "n_loaders"),
-        "monitor": ("instance_type_monitor", "n_monitor_nodes"),
-    },
-    "gce": {
-        "db": ("gce_instance_type_db", "n_db_nodes"),
-        "db_oracle": ("gce_instance_type_db_oracle", "n_test_oracle_db_nodes"),
-        "loader": ("gce_instance_type_loader", "n_loaders"),
-        "monitor": ("gce_instance_type_monitor", "n_monitor_nodes"),
-    },
-    "azure": {
-        "db": ("azure_instance_type_db", "n_db_nodes"),
-        "db_oracle": ("azure_instance_type_db_oracle", "n_test_oracle_db_nodes"),
-        "loader": ("azure_instance_type_loader", "n_loaders"),
-        "monitor": ("azure_instance_type_monitor", "n_monitor_nodes"),
-    },
-    "oci": {
-        "db": ("oci_instance_type_db", "n_db_nodes"),
-        "db_oracle": ("oci_instance_type_db_oracle", "n_test_oracle_db_nodes"),
-        "loader": ("oci_instance_type_loader", "n_loaders"),
-        "monitor": ("oci_instance_type_monitor", "n_monitor_nodes"),
-    },
+    cloud: {
+        role: (type_param, _ROLE_NODE_COUNTS[role]) for role, type_param in roles.items() if role in _ROLE_NODE_COUNTS
+    }
+    for cloud, roles in _SIZING_ROLE_PARAMS.items()
 }
 
 _REGION_PARAMS = {
@@ -267,9 +266,19 @@ class RunCostEstimate:
     fallback_to_on_demand: bool = False
 
     @classmethod
-    def unavailable(cls) -> "RunCostEstimate":
-        """No estimate could be produced at all (e.g. the configuration would not load)."""
-        return cls(total=None, currency="USD", duration_hours=0.0, is_spot=False, roles=(), partial=True)
+    def unavailable(
+        cls, *, duration_hours: float = 0.0, is_spot: bool = False, fallback_to_on_demand: bool = False
+    ) -> "RunCostEstimate":
+        """No estimate could be produced. Keeps whatever context the caller does have."""
+        return cls(
+            total=None,
+            currency="USD",
+            duration_hours=duration_hours,
+            is_spot=is_spot,
+            roles=(),
+            partial=True,
+            fallback_to_on_demand=fallback_to_on_demand,
+        )
 
     @property
     def may_fall_back(self) -> bool:
@@ -322,9 +331,10 @@ def _sum_counts(value: Any) -> int:
 
 
 def _first_region(value: Any) -> str:
+    """First region of a resolved configuration, which normalises these to a list."""
     if isinstance(value, (list, tuple)):
         return str(value[0]) if value else ""
-    return str(value).split()[0] if value and str(value).split() else ""
+    return str(value or "")
 
 
 def estimate_run_cost(params: Any, duration_minutes: float | None = None) -> RunCostEstimate:  # noqa: PLR0914
@@ -344,33 +354,27 @@ def estimate_run_cost(params: Any, duration_minutes: float | None = None) -> Run
     are reported as unknown rather than guessed.
     """
     backend = str(params.get("cluster_backend") or "")
-    cloud = BACKEND_TO_CLOUD.get(backend)
+    # xcloud has no cloud of its own; config resolves it from xcloud_provider, and it loads
+    # that provider's defaults, so the role parameters below are the provider's too.
+    cloud = backend_to_cloud(backend, params.get("xcloud_provider"))
     duration_min = duration_minutes if duration_minutes is not None else params.get("test_duration") or 0
     duration_hours = float(duration_min) / 60.0
     is_spot = "spot" in str(params.get("instance_provision") or "").lower()
     fallback = bool(params.get("instance_provision_fallback_on_demand"))
 
     if not cloud:
-        return RunCostEstimate(
-            total=None,
-            currency="USD",
-            duration_hours=duration_hours,
-            is_spot=is_spot,
-            roles=(),
-            partial=True,
-            fallback_to_on_demand=fallback,
+        return RunCostEstimate.unavailable(
+            duration_hours=duration_hours, is_spot=is_spot, fallback_to_on_demand=fallback
         )
 
     region = _first_region(params.get(_REGION_PARAMS[cloud]))
-    # An oracle cluster only exists for mixed runs, but its node count parameter still
-    # defaults to 1 - the same condition sdcm/sct_config.py applies when resolving sizing.
     db_type = str(params.get("db_type") or "")
 
     # Gather every instance type first so spot can be resolved in one batch. Resolving per
     # role would turn one API call into one per role, which is the whole thing this avoids.
     planned: list[tuple[str, str, int]] = []
     for role, (type_param, count_param) in _ROLE_PARAMS[cloud].items():
-        if role == "db_oracle" and db_type not in ("mixed_scylla", "mixed_cassandra"):
+        if role == "db_oracle" and not oracle_cluster_in_use(db_type):
             continue
         node_count = _sum_counts(params.get(count_param))
         if node_count > 0:
@@ -378,12 +382,12 @@ def estimate_run_cost(params: Any, duration_minutes: float | None = None) -> Run
 
     spot_rates: dict[str, InstanceRate] = {}
     if is_spot:
-        spot_rates = resolve_spot_rates(backend, region, [t for _, t, _ in planned if t])
+        spot_rates = resolve_spot_rates(cloud, region, [t for _, t, _ in planned if t])
 
     roles: list[RoleCost] = []
     ceilings: list[float | None] = []
     for role, (type_param, count_param) in _ROLE_PARAMS[cloud].items():
-        if role == "db_oracle" and db_type not in ("mixed_scylla", "mixed_cassandra"):
+        if role == "db_oracle" and not oracle_cluster_in_use(db_type):
             continue
         instance_type = str(params.get(type_param) or "").strip()
         node_count = _sum_counts(params.get(count_param))
@@ -404,7 +408,7 @@ def estimate_run_cost(params: Any, duration_minutes: float | None = None) -> Run
             )
             ceilings.append(None)
             continue
-        on_demand_rate = get_hourly_rate(backend, region, instance_type, is_spot=False, catalog_only=True)
+        on_demand_rate = get_hourly_rate(cloud, region, instance_type, is_spot=False, catalog_only=True)
         # A spot rate we could not resolve must not silently become the on-demand price:
         # that would report a number under a "spot" label that is several times too high.
         rate = spot_rates.get(instance_type, InstanceRate.unknown(is_spot=True)) if is_spot else on_demand_rate

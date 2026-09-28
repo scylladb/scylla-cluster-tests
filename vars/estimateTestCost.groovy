@@ -41,8 +41,12 @@ Map call(Map params, String region) {
             export SCT_OCI_REGION_NAME=${current_oci_region}
         fi
 
-        if [[ -n "${params.instance_provision ? params.instance_provision : ''}" ]] ; then
-            export SCT_INSTANCE_PROVISION="${params.instance_provision}"
+        if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
+            export SCT_INSTANCE_PROVISION="${params.provision_type}"
+        fi
+
+        if [[ -n "${params.instance_provision_fallback_on_demand ? params.instance_provision_fallback_on_demand : ''}" ]] ; then
+            export SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND="${params.instance_provision_fallback_on_demand}"
         fi
 
         ./docker/env/hydra.sh estimate-cost -b "${params.backend}" --output "${estimate_file}"

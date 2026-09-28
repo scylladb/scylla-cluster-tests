@@ -1,5 +1,4 @@
 import json
-import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -48,13 +47,9 @@ def _catalog_spot_price(cloud: str, region: str, instance_type: str) -> float | 
 
 
 class AWSPricing:
-    # AWS spot moves a few times a day per AZ, so a short window keeps a long test roughly
-    # current while still collapsing a provisioning burst into a single call.
-    SPOT_PRICE_TTL = 15 * 60
-
     def __init__(self):
-        # region -> (fetched_at, {instance_type: {az: price}})
-        self._spot_cache: dict[str, tuple[float, dict[str, dict[str, float]]]] = {}
+        # region -> {instance_type: {az: price}}
+        self._spot_cache: dict[str, dict[str, dict[str, float]]] = {}
         self.pricing_client: PricingClient = boto3.client("pricing", region_name="us-east-1")
 
     @lru_cache(maxsize=None)
@@ -121,9 +116,10 @@ class AWSPricing:
         every type they need at once, and a whole cluster costs one call no matter how many
         nodes it has.
 
-        Results are cached per region for `SPOT_PRICE_TTL`, so a burst of node creations
-        shares one lookup while a long test still picks up drift. AWS spot moves a few times
-        a day per AZ, which is why this is never cached to disk.
+        Results are cached per region for the life of the process, so a burst of node
+        creations shares one lookup. There is deliberately no expiry: this is an estimate, and
+        re-pricing mid-run would buy a few percent of accuracy at the cost of making the number
+        move under the reader and the call count depend on how long a test happens to run.
 
         Prices vary across AZs by tens of percent, and which AZ a node lands in is not known
         here, so the mean is the honest answer; `get_spot_price_spread` exposes the rest.
@@ -132,10 +128,9 @@ class AWSPricing:
         if not wanted:
             return {}
 
-        now = time.monotonic()
-        cached = self._spot_cache.get(region_name)
-        if cached and now - cached[0] < self.SPOT_PRICE_TTL and all(t in cached[1] for t in wanted):
-            return {t: mean(cached[1][t].values()) for t in wanted if cached[1][t]}
+        cached = self._spot_cache.get(region_name, {})
+        if all(t in cached for t in wanted):
+            return {t: mean(cached[t].values()) for t in wanted if cached[t]}
 
         client = boto3.client("ec2", region_name=region_name)
         timestamp = datetime.now(UTC)
@@ -155,9 +150,9 @@ class AWSPricing:
             if itype in per_az:
                 per_az[itype][entry["AvailabilityZone"]] = float(entry["SpotPrice"])
 
-        merged = dict(cached[1]) if cached and now - cached[0] < self.SPOT_PRICE_TTL else {}
-        merged.update(per_az)
-        self._spot_cache[region_name] = (now, merged)
+        # Keep what was already known for this region: a later call asking for a different
+        # instance type must not evict the types an earlier one resolved.
+        self._spot_cache.setdefault(region_name, {}).update(per_az)
 
         missing = [t for t, azs in per_az.items() if not azs]
         if missing:
@@ -174,8 +169,7 @@ class AWSPricing:
         Reported rather than smoothed away: it is routinely wider than the error from a
         stale price, so quoting a single spot figure without it is false precision.
         """
-        cached = self._spot_cache.get(region_name)
-        azs = cached[1].get(instance_type) if cached else None
+        azs = self._spot_cache.get(region_name, {}).get(instance_type)
         if not azs or len(azs) < 2:
             return None
         low, high = min(azs.values()), max(azs.values())

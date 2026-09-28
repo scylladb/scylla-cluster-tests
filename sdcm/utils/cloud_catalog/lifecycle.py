@@ -13,10 +13,8 @@
 
 """Instance lifecycle (on-demand vs spot).
 
-Kept in its own leaf module, and deliberately free of imports: pricing lookups need it,
-and pulling it from `sdcm.utils.cloud_monitor.common` made `cloud_catalog.pricing`
-unimportable on its own — `cloud_monitor/__init__.py` eagerly imports the whole monitor
-stack, which imports back into `cloud_catalog.pricing`.
+A leaf module with no imports of its own, so pricing can depend on it without dragging in
+the cloud-monitor package.
 """
 
 from enum import Enum

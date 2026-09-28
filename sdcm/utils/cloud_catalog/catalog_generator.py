@@ -35,6 +35,7 @@ from typing import Any
 import requests
 import yaml
 
+from sdcm.keystore import KeyStore
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceTypeInfo
 
 LOG = logging.getLogger(__name__)
@@ -529,8 +530,6 @@ def _fetch_gce_spot_rates() -> dict[str, dict[str, dict[str, float]]]:
     try:
         import google.auth.transport.requests as google_requests  # noqa: PLC0415
         from google.oauth2 import service_account as sa_module  # noqa: PLC0415
-
-        from sdcm.keystore import KeyStore  # noqa: PLC0415
 
         credentials = sa_module.Credentials.from_service_account_info(
             KeyStore().get_gcp_credentials(), scopes=["https://www.googleapis.com/auth/cloud-platform"]
