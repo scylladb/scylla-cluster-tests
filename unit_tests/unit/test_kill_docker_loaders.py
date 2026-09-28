@@ -46,3 +46,16 @@ def test_kill_docker_loaders_removes_stress_containers_only(loader_set):
     for node in loader_set.nodes:
         node.remoter.run.assert_called_once()
         assert node.remoter.run.call_args.kwargs["cmd"] == expected_cmd
+        # NOTE: a cached connection to a vanished loader hangs on opening a channel (SCT-711)
+        assert node.remoter.run.call_args.kwargs["new_session"] is True
+
+
+def test_kill_docker_loaders_aborts_commands_on_unreachable_loader(loader_set):
+    alive_loader, preempted_loader = loader_set.nodes
+    preempted_loader.remoter.run.side_effect = ConnectionError("host is not reachable")
+
+    loader_set.kill_docker_loaders()
+
+    # NOTE: stress commands on a vanished loader never end by themselves (SCT-711)
+    preempted_loader.remoter.abort_running_commands.assert_called_once_with()
+    alive_loader.remoter.abort_running_commands.assert_not_called()
