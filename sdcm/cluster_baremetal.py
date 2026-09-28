@@ -288,6 +288,22 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
         # disabling since for baremetal we aren't going to fuss with their names, they are preconfigured
         pass
 
+    @property
+    def short_hostname(self):
+        """The name this host's logs arrive under: BaseNode.system_log reads <logdir>/hosts/<it>/messages.log.
+
+        vector files them under the hostname the journal reports. A physical host keeps its own (see set_hostname),
+        often fully qualified, e.g. ip-10-4-13-234.eu-west-1.compute.internal, which `hostname -s` would cut short.
+        """
+        if not self.test_config.VECTOR_ADDRESS:
+            return super().short_hostname
+        if not self._short_hostname:
+            try:
+                self._short_hostname = self.remoter.run("hostname").stdout.strip()
+            except Exception:  # noqa: BLE001
+                return "no_booted_yet"
+        return self._short_hostname
+
     def reboot(self, hard=True, verify_ssh=True):
         raise NotImplementedError("reboot not implemented")
 

@@ -626,3 +626,35 @@ def test_the_coredump_target_is_no_loophole_without_scylla_coredump_unit():
 
     assert "mounted at /var/lib/systemd/coredump" in failure.value.error_msg
     assert not any(cmd.startswith("wipefs") for cmd in _sudo_cmds(node))
+
+
+FQDN = "ip-10-4-13-234.eu-west-1.compute.internal"
+
+
+def _node_answering_hostname(tmp_path, vector_address=None, syslogng_address=None) -> PhysicalMachineNode:
+    node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node._short_hostname = None
+    node.logdir = str(tmp_path / "node")
+    node.test_config = MagicMock(VECTOR_ADDRESS=vector_address, SYSLOGNG_ADDRESS=syslogng_address)
+    node.test_config.logdir.return_value = str(tmp_path)
+    node.remoter = MagicMock()
+    node.remoter.run.side_effect = lambda cmd, **_: MagicMock(
+        stdout=FQDN.split(".", maxsplit=1)[0] if cmd == "hostname -s" else FQDN
+    )
+    return node
+
+
+def test_vector_logs_are_looked_up_under_the_full_hostname(tmp_path):
+    """vector files a host's logs under the hostname its journal reports, which a physical host keeps whole."""
+    node = _node_answering_hostname(tmp_path, vector_address=("10.0.0.1", 49153))
+
+    assert node.short_hostname == FQDN
+    assert node.system_log == str(tmp_path / "hosts" / FQDN / "messages.log")
+    node.remoter.run.assert_called_once_with("hostname")
+
+
+def test_other_transports_keep_the_short_hostname(tmp_path):
+    node = _node_answering_hostname(tmp_path, syslogng_address=("10.0.0.1", 514))
+
+    assert node.short_hostname == "ip-10-4-13-234"
+    node.remoter.run.assert_called_once_with("hostname -s")
