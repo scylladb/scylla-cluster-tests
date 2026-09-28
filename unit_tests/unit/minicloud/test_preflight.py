@@ -6,7 +6,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.utils.minicloud import MinicloudConfig, MinicloudError, MinicloudManager
-from sdcm.utils.minicloud.preflight import check_scylla_memory_budget, scylla_reserve_memory
+from sdcm.utils.minicloud.preflight import (
+    check_scylla_memory_budget,
+    container_mem_in_use_gib,
+    scylla_reserve_memory,
+)
 from unit_tests.unit.minicloud.conftest import _meminfo_path_patch
 
 
@@ -231,12 +235,35 @@ def test_check_host_memory_container_cap_that_fits_passes(tmp_path):
         manager._check_host_memory(params)  # must not raise
 
 
+def test_check_host_memory_adds_mem_in_use_by_running_guests(tmp_path):
+    """In CI the guests are already running when run-test re-runs the gate, so their memory in use is added back."""
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
+    # 20 db + 2 loaders + 1 monitor = 23 guests x 4GiB + 2GiB headroom = 94GiB needed
+    params = {"n_db_nodes": 20, "n_loaders": 2, "n_monitor_nodes": 1}
+    with _meminfo_path_patch(int(91.2 * 1024 * 1024)):
+        with patch("sdcm.utils.minicloud.preflight.container_mem_in_use_gib", return_value=24.0):
+            manager._check_host_memory(params)
+
+
 def test_check_host_memory_skipped_outside_lightweight_mode(tmp_path):
     # non-lightweight sizing follows the requested instance types - no fixed per-guest figure
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=False))
     with patch("sdcm.utils.minicloud.preflight.Path") as mock_path_cls:
         manager._check_host_memory({"n_db_nodes": 100})
         mock_path_cls.assert_not_called()
+
+
+def test_container_mem_in_use_gib_reads_docker_stats():
+    stats = MagicMock(returncode=0, stdout=b"24.3GiB / 125.6GiB\n")
+    with patch("sdcm.utils.minicloud.preflight.subprocess.run", return_value=stats):
+        assert container_mem_in_use_gib("minicloud") == pytest.approx(24.3)
+
+
+def test_container_mem_in_use_gib_is_zero_without_a_container():
+    """start-minicloud runs the gate before the container exists, which must not fail the check."""
+    missing = MagicMock(returncode=1, stdout=b"")
+    with patch("sdcm.utils.minicloud.preflight.subprocess.run", return_value=missing):
+        assert container_mem_in_use_gib("minicloud") == 0.0
 
 
 def test_preflight_check_runs_memory_check_when_params_given(tmp_path):
