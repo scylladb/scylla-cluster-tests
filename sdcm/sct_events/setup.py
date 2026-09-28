@@ -168,8 +168,8 @@ def enable_default_filters(sct_config: SCTConfiguration):
     # test logic runs) can therefore fail to posix_listen() on its own address with
     # EADDRNOTAVAIL ("Cannot assign requested address"), aborting either the whole startup or
     # just the Prometheus API server. systemd retries and the node comes up cleanly within a
-    # few seconds/minutes, well before any test workload starts. Downgrade to WARNING globally
-    # so this transient, self-recovering infra race does not fail otherwise-passing runs.
+    # few seconds/minutes, well before any test workload starts. Downgrade to WARNING on the GCE
+    # backend so this transient, self-recovering infra race does not fail otherwise-passing runs.
     # https://scylladb.atlassian.net/browse/SCT-545
     # https://scylladb.atlassian.net/browse/SCT-411
     if sct_config.get("cluster_backend") == "gce":
