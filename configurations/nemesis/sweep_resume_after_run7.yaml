@@ -5,7 +5,7 @@
 # covered lets the next run start where that one stopped instead of spending ~2h repeating
 # the schema-changes category.
 #
-# Twelve of these should stay excluded even once a full sweep is repeated - they cannot pass
+# Thirteen of these should stay excluded even once a full sweep is repeated - they cannot pass
 # against this workload:
 #   AddRemoveMvNemesis: MVs/2i unsupported on strongly consistent keyspaces
 #   BlockNetworkMonkey: needs extra_network_interface: True, not set in this job
@@ -17,6 +17,7 @@
 #   MgmtRestore: blocked by SCYLLADB-4625 - its rolling restart puts a node in a crash loop
 #   MultipleHardRebootNodeMonkey: blocked by SCYLLADB-4625 - hard reboots put a node in a crash loop
 #   NemesisSequence: grows, replaces and shrinks the cluster - blocked by SCYLLADB-4529 and SCYLLADB-4753
+#   RepairStreamingErrMonkey: blocked by SCYLLADB-4625 - its hard reboot puts the node in a crash loop
 #   ModifyTableTwcsWindowSizeMonkey: no TWCS table in this workload
 #   ToggleAuditNemesisSyslog: blocked by SCYLLADB-4625 - restart puts the node in a crash loop
 #
@@ -140,3 +141,14 @@ nemesis_exclude_list:
   # replaces one and decommissions them again, but has no topology_changes flag, so the category
   # hold-out misses it. Adding a node hits SCYLLADB-4529 and decommission hits SCYLLADB-4753.
   - "NemesisSequence"  # not run - blocked by SCYLLADB-4529 and SCYLLADB-4753
+
+  # run #20 (b498fd49) - six more of other-disruptive. RepairStreamingErrMonkey wiped node-2's
+  # keyspace1.standard1 sstables, started a repair and hard-rebooted the node mid-repair; node-2
+  # then aborted on every start with "Raft init failed: committed index cannot be larger then
+  # persisted one" (SCYLLADB-4625, fix scylladb/scylladb#31356 not merged yet).
+  - "OperatorNodeReplace"  # skipped - kubernetes only
+  - "OperatorNodetoolFlushAndReshard"  # skipped - kubernetes only
+  - "RebuildStreamingErrMonkey"  # skipped - rebuild unsupported with tablets, scylladb/scylladb#17575
+  - "RejectNodeExporterNetworkMonkey"  # succeeded
+  - "RejectThriftNetworkMonkey"  # succeeded
+  - "RepairStreamingErrMonkey"  # failed - SCYLLADB-4625 crash loop after the hard reboot
