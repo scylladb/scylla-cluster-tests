@@ -35,7 +35,6 @@ from sdcm.utils.repo_parser import Parser
 from sdcm.utils.aws_utils import DEFAULT_AWS_REGION
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events.system import ScyllaRepoEvent
-from sdcm.utils.decorators import retrying
 from sdcm.utils.features import get_enabled_features
 from sdcm.utils.session import create_retry_session
 
@@ -86,7 +85,11 @@ SYSTEMD_VERSION_RE = re.compile(r"^systemd (?P<version>\d+)")
 
 REPOMD_XML_PATH = "repodata/repomd.xml"
 
-SCYLLA_URL_RESPONSE_TIMEOUT = 30
+# (connect, read) seconds for one request to a repository. With none, a stalled download held a lookup for minutes.
+SCYLLA_URL_REQUEST_TIMEOUT = (10, 30)
+# Retries of one repository request, on connection errors, timeouts and 429/5xx, with exponential backoff
+SCYLLA_URL_REQUEST_RETRIES = 3
+SCYLLA_URL_REQUEST_BACKOFF = 1
 SUPPORTED_XML_EXTENSIONS = ("xml", "xml.gz", "xml.zst")
 SUPPORTED_FILE_EXTENSIONS = ("list", "repo", "Packages", "gz") + SUPPORTED_XML_EXTENSIONS
 VERSION_NOT_FOUND_ERROR = "The URL not supported, only Debian and Yum are supported"
@@ -282,12 +285,37 @@ class ComparableScyllaOperatorVersion(ComparableScyllaVersion):
         )
 
 
+def fetch_repository_url(url: str) -> requests.Response:
+    """GET a repository URL, retrying transient failures: downloads.scylladb.com resets or stalls when throttling.
+
+    Retry-After is not honored, so a server asking for a long wait cannot outlast repository_lookup_timeout().
+    """
+    with create_retry_session(
+        retries=SCYLLA_URL_REQUEST_RETRIES,
+        backoff_factor=SCYLLA_URL_REQUEST_BACKOFF,
+        respect_retry_after_header=False,
+    ) as session:
+        return session.get(url, timeout=SCYLLA_URL_REQUEST_TIMEOUT)  # not streamed: the body is read before close
+
+
+def repository_lookup_timeout(sequential_requests: int) -> float:
+    """Bound a parallel lookup whose workers each make `sequential_requests` repository requests, retries included."""
+    attempts = SCYLLA_URL_REQUEST_RETRIES + 1
+    backoff = SCYLLA_URL_REQUEST_BACKOFF * 2**SCYLLA_URL_REQUEST_RETRIES  # urllib3 sleeps 0, 2, 4, ... times the factor
+    return sequential_requests * (attempts * sum(SCYLLA_URL_REQUEST_TIMEOUT) + backoff)
+
+
+def get_url_bytes(url: str) -> bytes:
+    response = fetch_repository_url(url)
+    response.raise_for_status()
+    return response.content
+
+
 @lru_cache(maxsize=1024)
-@retrying(n=10, sleep_time=0.1)
 def get_url_content(url, return_url_data=True):
-    response = requests.get(url=url)
+    response = fetch_repository_url(url)
     if response.status_code != 200:
-        raise ValueError(f"The following repository URL '{url}' is incorrect")
+        raise ValueError(f"The following repository URL '{url}' is incorrect (HTTP {response.status_code})")
     response_data = response.text
     if not response_data:
         raise ValueError(f"The repository URL '{url}' not contains any content")
@@ -325,7 +353,7 @@ def get_scylla_urls_from_repository(repo_details):
                 urls.add(Template(full_url).substitute(basearch=basearch, releasever="7"))
             # We found the correct regex and we can continue to next URL
 
-    ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(
+    ParallelObject(objects=urls, timeout=repository_lookup_timeout(sequential_requests=1)).run(
         func=lambda _url: get_url_content(url=_url, return_url_data=False)
     )
     return urls
@@ -343,7 +371,8 @@ def get_branch_version_from_debian_repository(urls, full_version: bool = False):
             return ""
         return set(major_versions)
 
-    threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
+    timeout = repository_lookup_timeout(sequential_requests=1)
+    threads = ParallelObject(objects=urls, timeout=timeout).run(func=get_version)
     result = set.union(*[thread.result for thread in threads])
     return max(result, key=ComparableScyllaVersion)
 
@@ -354,7 +383,7 @@ def get_branch_version_from_centos_repository(urls, full_version: bool = False):
         primary_path = PRIMARY_XML_REGEX.search(data).groups()[0]
         xml_url = url.replace(REPOMD_XML_PATH, primary_path)
 
-        parser = Parser(url=xml_url)
+        parser = Parser(url=xml_url, data=get_url_bytes(xml_url))
         if full_version:
             major_versions = [
                 f"{package['version'][1]['ver']}-{package['version'][1]['rel']}"
@@ -367,7 +396,8 @@ def get_branch_version_from_centos_repository(urls, full_version: bool = False):
             ]
         return set(major_versions)
 
-    threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
+    timeout = repository_lookup_timeout(sequential_requests=2)  # repomd.xml, then primary.xml
+    threads = ParallelObject(objects=urls, timeout=timeout).run(func=get_version)
     result = set.union(*[thread.result for thread in threads])
     return max(result, key=ComparableScyllaVersion)
 
@@ -382,7 +412,8 @@ def get_all_versions_from_debian_repository(urls: set[str], full_version: bool =
             major_versions = [version.split("-", maxsplit=1)[0] for version in REPO_VERSIONS_REGEX.findall(data)]
         return set(major_versions)
 
-    threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
+    timeout = repository_lookup_timeout(sequential_requests=1)
+    threads = ParallelObject(objects=urls, timeout=timeout).run(func=get_version)
     result = set.union(*[thread.result for thread in threads])
     return result
 
@@ -393,7 +424,7 @@ def get_all_versions_from_centos_repository(urls: set[str], full_version: bool =
         primary_path = PRIMARY_XML_REGEX.search(data).groups()[0]
         xml_url = url.replace(REPOMD_XML_PATH, primary_path)
 
-        parser = Parser(url=xml_url)
+        parser = Parser(url=xml_url, data=get_url_bytes(xml_url))
         if full_version:
             major_versions = [
                 f"{package['version'][1]['ver']}-{package['version'][1]['rel']}"
@@ -406,7 +437,8 @@ def get_all_versions_from_centos_repository(urls: set[str], full_version: bool =
             ]
         return set(major_versions)
 
-    threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
+    timeout = repository_lookup_timeout(sequential_requests=2)  # repomd.xml, then primary.xml
+    threads = ParallelObject(objects=urls, timeout=timeout).run(func=get_version)
     result = set.union(*[thread.result for thread in threads])
     return result
 
@@ -446,7 +478,10 @@ def get_all_versions(url: str, full_version: bool = False) -> set[str]:
 
 
 def get_branch_version_for_multiple_repositories(urls):
-    threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_branch_version)
+    # get_branch_version() runs its phases one after another: the repository file, the validation of its URLs,
+    # then their metadata and, on Yum, primary.xml
+    timeout = repository_lookup_timeout(sequential_requests=4)
+    threads = ParallelObject(objects=urls, timeout=timeout).run(func=get_branch_version)
     return [thread.result for thread in threads]
 
 
@@ -678,7 +713,8 @@ def get_specific_tag_of_docker_image(docker_repo: str, architecture: Literal["x8
         raise ValueError(f"SCT doesn't support getting latest from {docker_repo}")
 
     build_url = "https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/master/relocatable/latest/00-Build.txt"
-    res = create_retry_session().get(build_url, timeout=SCYLLA_URL_RESPONSE_TIMEOUT)
+    with create_retry_session() as session:
+        res = session.get(build_url, timeout=SCYLLA_URL_REQUEST_TIMEOUT)
     res.raise_for_status()
     # example of 00-Build.txt content: (each line is formatted as 'key: value`)
     #

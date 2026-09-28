@@ -2,7 +2,6 @@ import subprocess
 import tempfile
 from gzip import GzipFile
 from io import BytesIO
-from urllib.request import urlopen
 from xml.dom import minidom
 
 
@@ -13,7 +12,8 @@ class Parser:
         "Our initializer for the class"
         if "url" in kwargs:
             self.url = kwargs.get("url")
-            self.__open()
+            # the file content: fetch it with version_utils.get_url_bytes(), which retries and times out
+            self.res = kwargs["data"]
             self.__decompress()
             self.__decommpress_ztd()
             self.__dom()
@@ -21,10 +21,6 @@ class Parser:
             self.__todict()
         else:
             raise Exception("kwargs url missing")
-
-    def __open(self):
-        "Open a Yum Repodata XML File"
-        self.res = urlopen("%s" % self.url).read()
 
     def __decompress(self):
         "Attempts to decompress a string as Gzip"

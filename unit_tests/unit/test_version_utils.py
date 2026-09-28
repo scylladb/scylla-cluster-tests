@@ -1145,6 +1145,7 @@ def test_get_specific_tag_of_docker_image_nightly_uses_master_without_branch_dis
     mock_response = MagicMock()
     mock_response.content = b"docker-image-name: scylla-nightly:5.2.0-dev-0.20220829.67c91e8bcd61\n"
     mock_session = MagicMock()
+    mock_session.__enter__.return_value = mock_session
     mock_session.get.return_value = mock_response
     mock_create_session.return_value = mock_session
 
