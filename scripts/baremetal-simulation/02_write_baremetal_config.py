@@ -15,8 +15,9 @@ length, and PhysicalMachineCluster only raises NodeIpsNotConfiguredError when
 there are fewer IPs than nodes.
 
 The script also waits for SSH and prints the host facts that decide whether the
-run can work at all: the distro (Fedora > 36 is unknown to SCT), an unpartitioned
-local NVMe disk (detect_disks) and the SELinux mode.
+run can work at all: the distro (Fedora > 36 is unknown to SCT) and an unpartitioned
+local NVMe disk (detect_disks). The SELinux mode is printed for information only:
+enforcing is fine, scylla_setup switches it to permissive itself.
 """
 
 from __future__ import annotations
@@ -118,10 +119,6 @@ def main() -> int:
             if not disks:
                 problems.append(
                     f"{host}: no unpartitioned NVMe disk -- scylla_setup will fail, use an NVMe instance type"
-                )
-            if "fedora" in facts.get("os_release", "") and "Enforcing" in facts.get("selinux", ""):
-                problems.append(
-                    f"{host}: SELinux is Enforcing -- run 'sudo setenforce 0' (no reboot available on this backend)"
                 )
 
     for problem in problems:

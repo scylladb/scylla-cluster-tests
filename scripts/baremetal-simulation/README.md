@@ -92,5 +92,8 @@ Phase B (perf smoke) is `SIM_DB_COUNT=3 SIM_LOADER_COUNT=1 SIM_MONITOR_COUNT=1`.
   retry, on every invocation. Repeated runs can get throttled by
   downloads.scylladb.com and fail before touching the hardware;
   `05_run_artifact_test.sh` retries once when a run dies within 150s.
-- **`PhysicalMachineNode.reboot()` raises `NotImplementedError`** — SELinux is set to
-  permissive from user-data at launch instead.
+- **`PhysicalMachineNode.reboot()` raises `NotImplementedError`**, but nothing in the
+  setup path needs it — SELinux included. The hosts stay at Fedora's default, enforcing:
+  `scylla_setup`'s own SELinux step runs `setenforce 0` (permissive immediately) and writes
+  `SELINUX=disabled`, which only applies at the next boot. So after its first SCT run a
+  host boots with SELinux disabled.
