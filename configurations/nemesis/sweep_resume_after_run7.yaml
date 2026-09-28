@@ -5,7 +5,7 @@
 # covered lets the next run start where that one stopped instead of spending ~2h repeating
 # the schema-changes category.
 #
-# Fifteen of these should stay excluded even once a full sweep is repeated - they cannot pass
+# Fourteen of these should stay excluded even once a full sweep is repeated - they cannot pass
 # against this workload:
 #   AddRemoveMvNemesis: MVs/2i unsupported on strongly consistent keyspaces
 #   BlockNetworkMonkey: needs extra_network_interface: True, not set in this job
@@ -20,7 +20,6 @@
 #   RepairStreamingErrMonkey: blocked by SCYLLADB-4625 - its hard reboot puts the node in a crash loop
 #   RestartThenRepairNodeMonkey: on instance-store types a restart is an EC2 stop/start that wipes
 #     the disk, so the node replaces itself - blocked by SCYLLADB-4753
-#   RollingRestartConfigChangeInternodeCompression: blocked by SCYLLADB-4625 - it restarts every node
 #   ModifyTableTwcsWindowSizeMonkey: no TWCS table in this workload
 #   ToggleAuditNemesisSyslog: blocked by SCYLLADB-4625 - restart puts the node in a crash loop
 #
@@ -181,7 +180,14 @@ nemesis_exclude_list:
   - "ToggleLdapConfiguration"  # not run - use_ldap_authorization is not set
   - "ValidateHintedHandoffShortDowntime"  # not run - skipped while scylladb/scylladb#8136 is open
 
-  # Held out before it ran: it edits scylla.yaml and restarts every node in turn - the same
-  # rolling restart that put node-5 into the SCYLLADB-4625 crash loop in MgmtRestore (run #16).
-  # Blocked while SCYLLADB-4625 is open (fix: scylladb/scylladb#31356).
-  - "RollingRestartConfigChangeInternodeCompression"  # not run - blocked by SCYLLADB-4625
+  # run #22 (948201de) - started from 13b649db3, before the two hold-outs above were committed,
+  # so it ran the restart nemesis and the precondition skips anyway. All five restarts passed with
+  # no SCYLLADB-4625 crash loop (the fix, scylladb/scylladb#31356, is still not merged - the bug
+  # just did not fire), and the five precondition skips it reached skipped for the reasons given
+  # above. RollingRestartConfigChangeInternodeCompression had been held out as blocked by
+  # SCYLLADB-4625 after run #21; run #22 passed it.
+  - "RollingRestartConfigChangeInternodeCompression"  # succeeded
+  - "ScyllaKillMonkey"  # succeeded
+  - "SoftRebootNodeMonkey"  # succeeded
+  - "StopStartMonkey"  # succeeded
+  - "StopWaitStartMonkey"  # succeeded
