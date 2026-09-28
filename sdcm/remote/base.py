@@ -106,6 +106,12 @@ class CommandRunner(metaclass=ABCMeta):
         No-op by default; subclasses override to close connections/sessions.
         """
 
+    def abort_running_commands(self):
+        """
+        Make commands running on this runner fail right away, e.g. when the host is gone.
+        No-op by default; subclasses whose commands can hang on a vanished host override it.
+        """
+
     def __str__(self):
         return f"{self.__class__.__name__} [{self.user}@{self.hostname}]"
 

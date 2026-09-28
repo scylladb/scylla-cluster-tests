@@ -20,6 +20,7 @@ import shutil
 import tempfile
 import time
 import threading
+import weakref
 from path import Path
 
 from invoke.watchers import StreamWatcher
@@ -93,6 +94,10 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         fd, self.known_hosts_file = tempfile.mkstemp()
         os.close(fd)
         self._context_generation = 0
+        # `connection_thread_map` is thread-local, so it can't reach connections of other threads;
+        # keep a cross-thread view of them for `abort_running_commands()`
+        self._abortable_connections = weakref.WeakSet()
+        self._abortable_connections_lock = threading.Lock()
         super().__init__(hostname=hostname, user=user, password=password)
 
     @property
@@ -104,6 +109,7 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         connection = getattr(self.connection_thread_map, str(id(self)), None)
         if connection is None:
             connection = self._create_connection()
+            self._track_connection(connection)
             setattr(self.connection_thread_map, str(id(self)), connection)
             self._bind_generation_to_connection(connection)
         return connection
@@ -169,6 +175,25 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         # When a remoter is garbage collected, Python may reuse its id() for a new object.
         # Without cleanup, the new object would inherit the stale connection.
         self._remove_connection_from_thread_map()
+
+    def abort_running_commands(self):
+        """Make commands running on this remoter in any thread fail right away, instead of waiting for their timeout.
+
+        Use it when the host is known to be gone (e.g. a preempted spot instance), so threads blocked on
+        its long-running commands (stress tools) can finish. Commands run later on the same connections
+        fail right away too.
+        """
+        with self._abortable_connections_lock:
+            connections = list(self._abortable_connections)
+        for connection in connections:
+            if abort := getattr(connection, "abort", None):
+                abort()
+
+    def _track_connection(self, connection):
+        # NOTE: `WeakSet` is not thread-safe, a connection added by another thread while
+        #       `abort_running_commands()` copies the set would fail the copy
+        with self._abortable_connections_lock:
+            self._abortable_connections.add(connection)
 
     def _remove_connection_from_thread_map(self):
         """Remove connection from thread map to prevent stale connection reuse when id() is recycled."""
@@ -688,6 +713,7 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         )
         if new_session:
             with self._create_connection() as connection:
+                self._track_connection(connection)
                 result = connection.run(**command_kwargs)
         else:
             connection = self.connection
