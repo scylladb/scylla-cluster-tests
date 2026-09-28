@@ -30,6 +30,12 @@ BIWEEKLY_MATRICES = ["tier1.yaml", "rolling-upgrade.yaml"]
 WEEK_LABELS = {"week-a", "week-b"}
 
 
+def biweekly_crons(config):
+    """The alternating cron lines only - a matrix may also schedule other selectors, such as
+    rolling-upgrade.yaml's every-Friday `weekly-minicloud` line."""
+    return [cron for cron in config.cron_triggers if WEEK_LABELS & set(cron.params["labels_selector"].split(","))]
+
+
 @pytest.fixture(name="config", params=BIWEEKLY_MATRICES)
 def fixture_config(request):
     return load_matrix_config(TRIGGERS_DIR / request.param)
@@ -56,7 +62,7 @@ def test_week_labels_only_on_weekly_jobs(config):
 
 def test_cron_selectors_partition_the_weekly_set(config):
     """week-a and week-b must be disjoint and together cover exactly the full weekly set."""
-    selectors = [cron.params["labels_selector"] for cron in config.cron_triggers]
+    selectors = [cron.params["labels_selector"] for cron in biweekly_crons(config)]
     assert len(selectors) == 2, f"Expected 2 biweekly cron lines, got {selectors}"
 
     halves = [
@@ -91,7 +97,7 @@ def test_duplicate_job_entries_share_a_week_label(config):
 def test_cron_lines_same_time_of_day_and_disjoint_day_windows(config):
     """Both halves fire at the same time of day, and their day-of-month windows tile 1-31
     without overlap — so exactly one half runs on any given Saturday."""
-    schedules = [cron.schedule.split() for cron in config.cron_triggers]
+    schedules = [cron.schedule.split() for cron in biweekly_crons(config)]
     assert len(schedules) == 2
 
     minutes_hours = {(fields[0], fields[1]) for fields in schedules}
@@ -121,10 +127,26 @@ def test_tier1_and_rolling_upgrade_are_in_opposite_phase():
     phases = {}
     for filename in BIWEEKLY_MATRICES:
         config = load_matrix_config(TRIGGERS_DIR / filename)
-        phases[filename] = {cron.schedule: cron.params["labels_selector"] for cron in config.cron_triggers}
+        phases[filename] = {cron.schedule: cron.params["labels_selector"] for cron in biweekly_crons(config)}
 
     for schedule, tier1_selector in phases["tier1.yaml"].items():
         rolling_selector = phases["rolling-upgrade.yaml"][schedule]
         assert tier1_selector != rolling_selector, (
             f"Both matrices select '{tier1_selector}' on '{schedule}' — phases should be opposite"
         )
+
+
+def test_minicloud_jobs_run_weekly_outside_the_alternation():
+    """SCT-1093: minicloud rolling upgrades have a cron of their own, and never also ride a
+    biweekly half - that would run the same job twice."""
+    config = load_matrix_config(TRIGGERS_DIR / "rolling-upgrade.yaml")
+    selectors = [cron.params["labels_selector"] for cron in config.cron_triggers]
+    assert "weekly-minicloud" in selectors
+
+    minicloud_jobs = [job for job in config.jobs if "weekly-minicloud" in job.labels]
+    assert minicloud_jobs
+    for job in minicloud_jobs:
+        assert not ({"weekly"} | WEEK_LABELS) & set(job.labels), (
+            f"Job '{job.job_name}' is on both the minicloud cron and the biweekly alternation"
+        )
+        assert job.params.get("minicloud") == "true", f"Job '{job.job_name}' is not switched to minicloud"

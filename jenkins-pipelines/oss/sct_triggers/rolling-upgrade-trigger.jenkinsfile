@@ -5,5 +5,6 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 triggerMatrixPipeline(
     matrix_file: 'configurations/triggers/rolling-upgrade.yaml',
     cron: '''00 06 1-7,15-21,29-31 * 6 % scylla_version={branch}:latest;labels_selector=weekly,week-b;requested_by_user=fruch
-00 06 8-14,22-28 * 6 % scylla_version={branch}:latest;labels_selector=weekly,week-a;requested_by_user=fruch'''
+00 06 8-14,22-28 * 6 % scylla_version={branch}:latest;labels_selector=weekly,week-a;requested_by_user=fruch
+00 12 * * 5 % scylla_version={branch}:latest;labels_selector=weekly-minicloud;requested_by_user=fruch'''
 )

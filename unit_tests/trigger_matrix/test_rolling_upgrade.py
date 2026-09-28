@@ -186,10 +186,12 @@ def test_empty_version_no_resolution():
 def test_rolling_upgrade_yaml_loads():
     config = load_matrix_config(ROLLING_UPGRADE_YAML)
     assert len(config.jobs) > 0
-    # Two biweekly cron lines, both at Saturday 06:00 UTC (SCT-716).
+    # Two biweekly cron lines, both at Saturday 06:00 UTC (SCT-716), and the every-Friday
+    # noon minicloud line (SCT-1093).
     assert [cron.schedule for cron in config.cron_triggers] == [
         "00 06 1-7,15-21,29-31 * 6",
         "00 06 8-14,22-28 * 6",
+        "00 12 * * 5",
     ]
 
 
@@ -202,7 +204,8 @@ def test_all_jobs_have_new_scylla_repo():
 def test_weekly_label_filter():
     config = load_matrix_config(ROLLING_UPGRADE_YAML)
     weekly_jobs = filter_jobs(config.jobs, scylla_version="master:latest", labels_selector="weekly")
-    assert len(weekly_jobs) >= 9
+    minicloud_jobs = filter_jobs(config.jobs, scylla_version="master:latest", labels_selector="weekly-minicloud")
+    assert len(weekly_jobs) + len(minicloud_jobs) >= 9
 
 
 def test_branch_source_version_overrides_resolved_version():
@@ -339,3 +342,30 @@ def test_rolling_upgrade_jobs_have_new_scylla_repo():
                     f"rolling_upgrade_test == 'true' but no new_scylla_repo defined "
                     f"(neither in job.params nor in defaults)"
                 )
+
+
+def test_minicloud_entries_pair_with_regular_entries_excluding_master():
+    """SCT-1093: every minicloud entry is a master-only twin of a regular entry that excludes master.
+
+    That pairing is what keeps the switch revertible and confined to master: master runs each job
+    exactly once (on minicloud), everything else - scylla-pkg release calls included - selects the
+    unchanged regular entry, and removing the minicloud block plus the `["master"]` exclusions
+    restores the previous behaviour.
+    """
+    config = load_matrix_config(ROLLING_UPGRADE_YAML)
+    minicloud = [job for job in config.jobs if "weekly-minicloud" in job.labels]
+    assert minicloud, "no weekly-minicloud entries found"
+
+    for job in minicloud:
+        assert job.include_versions == ["master"], f"{job.job_name}: minicloud entry must be master-only"
+        twins = [
+            other for other in config.jobs if other.job_name == job.job_name and "weekly-minicloud" not in other.labels
+        ]
+        assert len(twins) == 1, f"{job.job_name}: expected exactly one regular twin, got {len(twins)}"
+        twin = twins[0]
+        assert twin.exclude_versions == ["master"], f"{job.job_name}: regular twin must exclude master"
+        assert "weekly" in twin.labels, f"{job.job_name}: regular twin lost its weekly label"
+
+    for version in ("master:latest", "2026.1.3"):
+        names = [job.job_name for job in filter_jobs(config.jobs, scylla_version=version)]
+        assert len(names) == len(set(names)), f"{version}: a job would be triggered twice: {names}"
