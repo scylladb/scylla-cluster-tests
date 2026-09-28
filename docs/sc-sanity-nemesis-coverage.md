@@ -16,17 +16,18 @@ stops. Each run resumes where the previous one stopped, through
 112 nemesis are discovered in total; 13 of them are `topology-changes`, held out of the sweep by
 `DISABLED_CATEGORIES`, so 99 are in scope. SCYLLADB-4529 is fixed now, but the hold-out stays: any
 operation that adds a tablet replica still hits SCYLLADB-4753 (run #21). `MultipleHardRebootNodeMonkey`
-is also blocked, held out before it ran while SCYLLADB-4625 is open, and so is `NemesisSequence`
+and `RollingRestartConfigChangeInternodeCompression` are also blocked, held out before they ran while
+SCYLLADB-4625 is open, and so is `NemesisSequence`
 (it adds, replaces and decommissions nodes: SCYLLADB-4753).
 
 | Status | Count | Share of all 112 |
 |---|---:|---:|
 | pass | 22 | 20% |
 | failed | 11 | 10% |
-| blocked (13 topology-changes + `MultipleHardRebootNodeMonkey` + `NemesisSequence`) | 15 | 13% |
-| **failed + blocked** | **26** | **23%** |
+| blocked (13 topology-changes + `MultipleHardRebootNodeMonkey` + `RollingRestartConfigChangeInternodeCompression` + `NemesisSequence`) | 16 | 14% |
+| **failed + blocked** | **27** | **24%** |
 | skipped (29 run, 11 held out on a precondition this job never meets) | 40 | 36% |
-| not executed | 24 | 21% |
+| not executed | 23 | 21% |
 
 ## Per-run statistics
 
@@ -66,6 +67,7 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 | `64a93082c` | the six nemesis run #20 reached excluded | `RepairStreamingErrMonkey` hard-reboots its node mid-repair and hits SCYLLADB-4625; two kubernetes-only and one tablet skip are static; two network nemesis passed |
 | `63c2c9c56` | `RestartThenRepairNodeMonkey` excluded after run #21 | on instance-store types `node.restart()` is an EC2 stop/start that wipes the disk, so the node replaces itself, and the replace never finishes (SCYLLADB-4753) |
 | `fb6966bfe` | eleven nemesis held out before they ran | each raises `UnsupportedNemesis` on a precondition this job never meets: no CDC table, no `scylla_bench` keyspace, no LDAP/saslauthd, `server_encrypt: false`, kubernetes only, or scylladb/scylladb#8136 open |
+| `ab0fba496` | `RollingRestartConfigChangeInternodeCompression` held out before it ran | it restarts every node in turn - the rolling restart that hit the SCYLLADB-4625 crash loop in `MgmtRestore` (run #16) |
 
 ## Open issues found by this job
 
