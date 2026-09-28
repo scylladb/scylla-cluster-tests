@@ -20,12 +20,12 @@ is also blocked, held out before it ran while SCYLLADB-4625 is open, and so is `
 
 | Status | Count | Share of all 112 |
 |---|---:|---:|
-| pass | 20 | 18% |
-| failed | 9 | 8% |
+| pass | 22 | 20% |
+| failed | 10 | 9% |
 | blocked (13 topology-changes + `MultipleHardRebootNodeMonkey` + `NemesisSequence`) | 15 | 13% |
-| **failed + blocked** | **24** | **21%** |
-| skipped | 26 | 23% |
-| not executed | 42 | 38% |
+| **failed + blocked** | **25** | **22%** |
+| skipped | 29 | 26% |
+| not executed | 36 | 32% |
 
 ## Per-run statistics
 
@@ -42,6 +42,8 @@ A nemesis can be "succeeded" here and still be the one that failed the run.
 | [#14](https://argus.scylladb.com/tests/scylla-cluster-tests/f57403f7-15ec-4333-9922-e99704c90fe0) | 2026-09-22 13:13–14:15 | 5 | 1 | 1 | 3 | failed - `ReadValidationError` on rows an earlier nemesis prevented prepare from writing |
 | [#15](https://argus.scylladb.com/tests/scylla-cluster-tests/3dd4dabf-fc6d-4012-9662-2bb9aaae85a0) | 2026-09-23 14:39–18:53 | 7 | 0 | 3 | 4 | aborted - node-1 crash loop after `HardRebootNodeMonkey` (SCYLLADB-4625) |
 | [#16](https://argus.scylladb.com/tests/scylla-cluster-tests/8ffe2ba5-91f5-4f92-a69c-a2e183c4ce83) | 2026-09-24 13:24–14:43 | 3 | 1 | 1 | 1 | failed - node-5 crash loop after a clean restart in `MgmtRestore` (SCYLLADB-4625) |
+| [#18](https://argus.scylladb.com/tests/scylla-cluster-tests/77703d11-9080-42bd-95b2-9297357ea4d1) | 2026-09-25 09:24–11:07 | 8 | 0 | 8 | 0 | targeted `DecommissionMonkey` run: all 8 decommissions rolled back - pending replica never catches up (SCYLLADB-4753) |
+| [#20](https://argus.scylladb.com/tests/scylla-cluster-tests/b498fd49-bf0a-4b20-b861-c0bc692aeabb) | 2026-09-25 14:22–18:55 | 6 | 2 | 1 | 3 | aborted - node-2 crash loop after the hard reboot in `RepairStreamingErrMonkey` (SCYLLADB-4625) |
 
 Run #13 reached nine nemesis but Argus recorded two: the eight precheck exclusions are submitted
 with one shared timestamp, and only the first survives. The SCT log has all of them.
@@ -59,6 +61,7 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 | `a98427dd9` | the three nemesis run #16 reached excluded | `MgmtRestore`'s rolling restart hits SCYLLADB-4625 even after a clean shutdown; `MemoryStressMonkey` is disabled (scylla-cluster-tests#6928); `MgmtCorruptThenRepair` passed |
 | `5f1c18c00` | `MultipleHardRebootNodeMonkey` held out before it ran | `HardRebootNodeMonkey` already hit the SCYLLADB-4625 crash loop in run #15; this one reboots several times |
 | `e0545d788` | `NemesisSequence` held out before it ran | it grows, replaces and shrinks the cluster but has no `topology_changes` flag, so the category hold-out misses it; node add hits SCYLLADB-4529, decommission SCYLLADB-4753 |
+| `64a93082c` | the six nemesis run #20 reached excluded | `RepairStreamingErrMonkey` hard-reboots its node mid-repair and hits SCYLLADB-4625; two kubernetes-only and one tablet skip are static; two network nemesis passed |
 
 ## Open issues found by this job
 
