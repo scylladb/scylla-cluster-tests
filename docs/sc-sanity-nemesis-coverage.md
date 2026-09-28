@@ -14,18 +14,19 @@ stops. Each run resumes where the previous one stopped, through
 ## Where the sweep stands
 
 112 nemesis are discovered in total; 13 of them are `topology-changes`, held out of the sweep by
-`DISABLED_CATEGORIES` while SCYLLADB-4529 is open, so 99 are in scope. `MultipleHardRebootNodeMonkey`
+`DISABLED_CATEGORIES`, so 99 are in scope. SCYLLADB-4529 is fixed now, but the hold-out stays: any
+operation that adds a tablet replica still hits SCYLLADB-4753 (run #21). `MultipleHardRebootNodeMonkey`
 is also blocked, held out before it ran while SCYLLADB-4625 is open, and so is `NemesisSequence`
-(it adds, replaces and decommissions nodes: SCYLLADB-4529 and SCYLLADB-4753).
+(it adds, replaces and decommissions nodes: SCYLLADB-4753).
 
 | Status | Count | Share of all 112 |
 |---|---:|---:|
 | pass | 22 | 20% |
-| failed | 10 | 9% |
+| failed | 11 | 10% |
 | blocked (13 topology-changes + `MultipleHardRebootNodeMonkey` + `NemesisSequence`) | 15 | 13% |
-| **failed + blocked** | **25** | **22%** |
+| **failed + blocked** | **26** | **23%** |
 | skipped | 29 | 26% |
-| not executed | 36 | 32% |
+| not executed | 35 | 31% |
 
 ## Per-run statistics
 
@@ -44,6 +45,7 @@ A nemesis can be "succeeded" here and still be the one that failed the run.
 | [#16](https://argus.scylladb.com/tests/scylla-cluster-tests/8ffe2ba5-91f5-4f92-a69c-a2e183c4ce83) | 2026-09-24 13:24–14:43 | 3 | 1 | 1 | 1 | failed - node-5 crash loop after a clean restart in `MgmtRestore` (SCYLLADB-4625) |
 | [#18](https://argus.scylladb.com/tests/scylla-cluster-tests/77703d11-9080-42bd-95b2-9297357ea4d1) | 2026-09-25 09:24–11:07 | 8 | 0 | 8 | 0 | targeted `DecommissionMonkey` run: all 8 decommissions rolled back - pending replica never catches up (SCYLLADB-4753) |
 | [#20](https://argus.scylladb.com/tests/scylla-cluster-tests/b498fd49-bf0a-4b20-b861-c0bc692aeabb) | 2026-09-25 14:22–18:55 | 6 | 2 | 1 | 3 | aborted - node-2 crash loop after the hard reboot in `RepairStreamingErrMonkey` (SCYLLADB-4625) |
+| [#21](https://argus.scylladb.com/tests/scylla-cluster-tests/775260c1-70b6-410f-b8ad-5d6a5bb51328) | 2026-09-28 09:03–11:59 | 1 | 0 | 1 | 0 | aborted - `RestartThenRepairNodeMonkey`: the EC2 stop/start wiped node-1, whose self-replace never left BOOTSTRAP (SCYLLADB-4753) |
 
 Run #13 reached nine nemesis but Argus recorded two: the eight precheck exclusions are submitted
 with one shared timestamp, and only the first survives. The SCT log has all of them.
@@ -62,6 +64,7 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 | `5f1c18c00` | `MultipleHardRebootNodeMonkey` held out before it ran | `HardRebootNodeMonkey` already hit the SCYLLADB-4625 crash loop in run #15; this one reboots several times |
 | `e0545d788` | `NemesisSequence` held out before it ran | it grows, replaces and shrinks the cluster but has no `topology_changes` flag, so the category hold-out misses it; node add hits SCYLLADB-4529, decommission SCYLLADB-4753 |
 | `64a93082c` | the six nemesis run #20 reached excluded | `RepairStreamingErrMonkey` hard-reboots its node mid-repair and hits SCYLLADB-4625; two kubernetes-only and one tablet skip are static; two network nemesis passed |
+| `63c2c9c56` | `RestartThenRepairNodeMonkey` excluded after run #21 | on instance-store types `node.restart()` is an EC2 stop/start that wipes the disk, so the node replaces itself, and the replace never finishes (SCYLLADB-4753) |
 
 ## Open issues found by this job
 
@@ -69,8 +72,8 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 |---|---|
 | [SCYLLADB-4625](https://scylladb.atlassian.net/browse/SCYLLADB-4625) | node cannot restart after enabling audit - permanent crash loop; run #15 hit it after a hard reboot, run #16 after a clean restart |
 | [SCYLLADB-4604](https://scylladb.atlassian.net/browse/SCYLLADB-4604) | SC: decommission blocks writes - migrated tablet raft groups never elect a leader. **Closed**: fixed by scylladb/scylladb#29446 |
-| [SCYLLADB-4753](https://scylladb.atlassian.net/browse/SCYLLADB-4753) | SC: decommission fails - pending tablet replica never catches up, `transfer_snapshot()` not implemented |
-| [SCYLLADB-4529](https://scylladb.atlassian.net/browse/SCYLLADB-4529) | node bootstrap fails on group0 snapshot - blocks the topology-changes category |
+| [SCYLLADB-4753](https://scylladb.atlassian.net/browse/SCYLLADB-4753) | SC: decommission fails - pending tablet replica never catches up, `transfer_snapshot()` not implemented; run #21 hit it on a node replace |
+| [SCYLLADB-4529](https://scylladb.atlassian.net/browse/SCYLLADB-4529) | node bootstrap fails on group0 snapshot. **Closed**; run #21's replacing node joined group 0 |
 | [SCYLLADB-4671](https://scylladb.atlassian.net/browse/SCYLLADB-4671) | SC: timeouts reported as CL=ONE/SIMPLE, so drivers never retry them |
 | [SCYLLADB-4700](https://scylladb.atlassian.net/browse/SCYLLADB-4700) | SC: writes fail without replica failover while the Raft leader's CQL port is down |
 | [SCYLLADB-4727](https://scylladb.atlassian.net/browse/SCYLLADB-4727) | SCT: nemesis internal stress with hard-coded CL fails on strongly consistent keyspaces - both KMS encryption nemesis |
