@@ -13,8 +13,8 @@ Two security groups are attached:
   * <tag>-sg          -- created here, allows this workstation's public IP in.
                          SCT-2-sg alone does not let an outside runner SSH in.
 
-SELinux is set to permissive from user-data: scylla_setup's SELinux step wants a
-reboot, and PhysicalMachineNode.reboot() raises NotImplementedError.
+SELinux is left at Fedora's default, enforcing, as on a real host: scylla_setup's
+own SELinux step runs `setenforce 0`, so no reboot is needed (SCT-901).
 """
 
 from __future__ import annotations
@@ -52,8 +52,6 @@ INGRESS_PORTS = ((22, 22), (3000, 3000), (9042, 9042), (9090, 9100), (9180, 9180
 
 USER_DATA = """#!/bin/bash
 # Prepare the host the way a hand-prepared physical machine would be prepared.
-setenforce 0 || true
-sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config || true
 
 # On a physical host the address SCT is given IS the host's own NIC address, so
 # the host can reach itself through it.  On EC2 the public IP is NAT'd outside
