@@ -314,19 +314,17 @@ class AdaptiveTimeoutMultipliers(RootModel):
 
 
 def dict_or_str_or_pydantic(value: dict | str | BaseModel | None) -> dict | BaseModel | None:
-    """Like `dict_or_str`, but also passes an already-built pydantic model through untouched."""
-    if value is None:
-        return None
-    if isinstance(value, str):
-        try:
-            return ast.literal_eval(value)
-        except Exception:  # noqa: BLE001
-            pass
+    """Like `dict_or_str`, but also passes an already-built pydantic model through untouched.
 
-    if isinstance(value, (dict, BaseModel)):
+    A string is parsed as `dict_or_str` does, Python literal first and YAML second, so that an environment variable
+    such as SCT_APPEND_SCYLLA_YAML='{rf_rack_valid_keyspaces: false}' works, not only its `False` spelling.
+    """
+    if isinstance(value, BaseModel):
         return value
-
-    raise ValueError(f'"{value}" isn\'t a dict, str or Pydantic model')
+    try:
+        return dict_or_str(value)
+    except ValueError:
+        raise ValueError(f'"{value}" isn\'t a dict, str or Pydantic model') from None
 
 
 DictOrStrOrPydantic = Annotated[dict | str | BaseModel, BeforeValidator(dict_or_str_or_pydantic)]

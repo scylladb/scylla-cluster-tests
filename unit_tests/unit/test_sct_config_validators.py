@@ -2,7 +2,7 @@
 
 import pytest
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sdcm.sct_config import (
     SCTConfiguration,
     boolean_or_space_separated_booleans,
@@ -10,7 +10,7 @@ from sdcm.sct_config import (
     int_or_space_separated_ints,
     str_or_list_or_eval,
 )
-from sdcm.sct_config.types import strtobool
+from sdcm.sct_config.types import dict_or_str_or_pydantic, strtobool
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +147,57 @@ def test_dict_or_str_valid(input_val, expected):
 def test_dict_or_str_invalid(input_val):
     with pytest.raises(ValueError):
         dict_or_str(input_val)
+
+
+# ---------------------------------------------------------------------------
+# dict_or_str_or_pydantic
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "input_val,expected",
+    [
+        (None, None),
+        ({"key": "val"}, {"key": "val"}),
+        ("{'rf_rack_valid_keyspaces': False}", {"rf_rack_valid_keyspaces": False}),
+        ("{rf_rack_valid_keyspaces: false}", {"rf_rack_valid_keyspaces": False}),
+        ('{"rf_rack_valid_keyspaces": false}', {"rf_rack_valid_keyspaces": False}),
+        (
+            "rf_rack_valid_keyspaces: false\nenable_cache: true",
+            {"rf_rack_valid_keyspaces": False, "enable_cache": True},
+        ),
+    ],
+    ids=["none", "dict", "python-literal", "yaml-flow", "json", "yaml-block"],
+)
+def test_dict_or_str_or_pydantic_valid(input_val, expected):
+    assert dict_or_str_or_pydantic(input_val) == expected
+
+
+def test_dict_or_str_or_pydantic_passes_a_model_through():
+    class Multipliers(BaseModel):
+        decommission: float = 1.0
+
+    model = Multipliers()
+
+    assert dict_or_str_or_pydantic(model) is model
+
+
+@pytest.mark.parametrize("input_val", ["[1, 2]", "3", "plain string", "", 5])
+def test_dict_or_str_or_pydantic_invalid(input_val):
+    with pytest.raises(ValueError, match="isn't a dict, str or Pydantic model"):
+        dict_or_str_or_pydantic(input_val)
+
+
+def test_append_scylla_yaml_env_var_accepts_yaml(monkeypatch):
+    """SCT-901: lowercase `false` used to fail with "failed to parse SCT_APPEND_SCYLLA_YAML"."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_APPEND_SCYLLA_YAML", "{rf_rack_valid_keyspaces: false}")
+
+    conf = SCTConfiguration()
+    assert conf.append_scylla_yaml["rf_rack_valid_keyspaces"] is False
 
 
 # ---------------------------------------------------------------------------

@@ -480,7 +480,7 @@ def test_multiplier_env_var_loaded_by_sct_config(monkeypatch, env_value, expecte
         pytest.param("", "failed to parse SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS", id="empty-string"),
         pytest.param("   ", "failed to parse SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS", id="whitespace-only"),
         pytest.param("not_a_dict", "failed to parse SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS", id="plain-string"),
-        pytest.param("[1, 2, 3]", "isn't a dict, str or Pydantic model", id="list-value"),
+        pytest.param("[1, 2, 3]", "failed to parse SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS", id="list-value"),
         pytest.param("{'unknown_op': 2}", "Unknown operation key 'unknown_op'", id="invalid-operation-key"),
         pytest.param("{'decommission': -1}", "Input should be greater than 0", id="negative-multiplier"),
         pytest.param("{'decommission': 0}", "Input should be greater than 0", id="zero-multiplier"),
