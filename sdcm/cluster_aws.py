@@ -779,6 +779,13 @@ class AWSNode(cluster.BaseNode):
     def _set_hostname(self) -> bool:
         return self.remoter.sudo(f"hostnamectl set-hostname --static {self.name}").ok
 
+    def _set_hostname_manually(self) -> bool:
+        # hostnamectl activates systemd-hostnamed over D-Bus, which can time out; bypass it directly
+        self.log.warning("hostnamectl failed, setting hostname manually")
+        return self.remoter.sudo(
+            f"bash -c 'echo {self.name} > /etc/hostname && hostname {self.name}'", ignore_status=True
+        ).ok
+
     @retrying(n=3, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying set_hostname")
     def set_hostname(self):
         self.log.debug("Changing hostname to %s", self.name)
@@ -786,7 +793,16 @@ class AWSNode(cluster.BaseNode):
         # FIXME: workaround to avoid host rename generating errors on other commands
         if self.distro.is_debian:
             return
-        if wait.wait_for(func=self._set_hostname, step=10, text="Retrying set hostname on the node", timeout=300):
+        if (
+            wait.wait_for(
+                func=self._set_hostname,
+                step=10,
+                text="Retrying set hostname on the node",
+                timeout=300,
+                throw_exc=False,
+            )
+            or self._set_hostname_manually()
+        ):
             self.log.debug("Hostname has been changed successfully. Apply")
             script = configure_hosts_set_hostname_script(self.name) + configure_set_preserve_hostname_script()
             self.remoter.sudo(f"bash -cxe '{script}'")
