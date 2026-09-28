@@ -23,6 +23,8 @@
 #   ModifyTableTwcsWindowSizeMonkey: no TWCS table in this workload
 #   ToggleAuditNemesisSyslog: blocked by SCYLLADB-4625 - restart puts the node in a crash loop
 #
+# The eleven precondition skips held out after run #21 (last block) are static for this job too.
+#
 # The remaining entries are the ones that passed in #7; drop them from this list to sweep the
 # whole tree again.
 
@@ -161,3 +163,18 @@ nemesis_exclude_list:
   # of six sc- tablet groups, failed 6M times to send them a snapshot - "transfer_snapshot() not
   # implemented" (SCYLLADB-4753) - and the nemesis was killed at teardown.
   - "RestartThenRepairNodeMonkey"  # failed - self-replace never finishes, SCYLLADB-4753
+
+  # Held out before they ran: each one raises UnsupportedNemesis on a precondition this job never
+  # meets, so running them costs a sweep slot and says nothing about strong consistency. Like the
+  # precheck skips above, these verdicts are static - keep them excluded on a repeated sweep too.
+  - "CDCStressorMonkey"  # not run - no table has CDC enabled
+  - "DeleteByPartitionsMonkey"  # not run - needs the scylla_bench keyspace, this job has none
+  - "DeleteByRowsRangeMonkey"  # not run - needs the scylla_bench keyspace, this job has none
+  - "DeleteOverlappingRowRangesMonkey"  # not run - needs the scylla_bench keyspace, this job has none
+  - "PauseLdapNemesis"  # not run - use_ldap_authorization is not set
+  - "SslHotReloadingNemesis"  # not run - server_encrypt is false
+  - "SwitchBetweenPasswordAuthAndSaslauthdAuth"  # not run - prepare_saslauthd is not set
+  - "TerminateKubernetesHostThenDecommissionAndAddScyllaNode"  # not run - kubernetes only
+  - "TerminateKubernetesHostThenReplaceScyllaNode"  # not run - kubernetes only
+  - "ToggleLdapConfiguration"  # not run - use_ldap_authorization is not set
+  - "ValidateHintedHandoffShortDowntime"  # not run - skipped while scylladb/scylladb#8136 is open
