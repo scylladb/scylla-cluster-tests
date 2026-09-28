@@ -27,6 +27,7 @@ __all__ = (
     "UnexpectedExit",
     "CommandTimedOut",
     "FailedToReadCommandOutput",
+    "CommandAborted",
     "OpenChannelTimeout",
     "Failure",
     "FailedToRunCommand",
@@ -56,6 +57,10 @@ class ConnectTimeout(Exception):
 
 class PKeyFileError(Exception):
     pass
+
+
+class CommandAborted(Exception):
+    """Command was aborted from another thread by `Client.abort()`, e.g. because the host is gone."""
 
 
 class Failure(Exception):

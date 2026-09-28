@@ -36,6 +36,7 @@ from .exceptions import (
     UnexpectedExit,
     CommandTimedOut,
     FailedToReadCommandOutput,
+    CommandAborted,
     ConnectTimeout,
     FailedToRunCommand,
     OpenChannelTimeout,
@@ -70,7 +71,14 @@ class SSHReaderThread(Thread):
       As part of this process it splits data into lines, because watchers expect it is organized in this way.
     """
 
-    def __init__(self, session: Session, channel: Channel, timeout: NullableTiming, timeout_read_data: NullableTiming):
+    def __init__(
+        self,
+        session: Session,
+        channel: Channel,
+        timeout: NullableTiming,
+        timeout_read_data: NullableTiming,
+        abort_event: Event | None = None,
+    ):
         self.stdout = Queue()
         self.stderr = Queue()
         self.timeout_reached = False
@@ -78,6 +86,7 @@ class SSHReaderThread(Thread):
         self._channel = channel
         self._timeout = timeout
         self._timeout_read_data = timeout_read_data
+        self._abort_event = abort_event
         self.raised = None
         self._can_run = Event()
         self._can_run.set()
@@ -116,6 +125,8 @@ class SSHReaderThread(Thread):
                 break
             if not self._can_run.is_set():
                 break
+            if self._abort_event is not None and self._abort_event.is_set():
+                raise CommandAborted("Reading command output was aborted")
             with session.lock:
                 if stdout_size == LIBSSH2_ERROR_EAGAIN and stderr_size == LIBSSH2_ERROR_EAGAIN:
                     session.simple_select(timeout=timeout_read_data)
@@ -335,6 +346,7 @@ class Client:
         self.channel_lock = Lock()
         self.session: Optional[Session] = None
         self.sock: Optional[socket] = None
+        self._abort_event = Event()
 
     def __reduce__(self):
         return self.__class__, (
@@ -557,6 +569,7 @@ class Client:
         stderr_stream: StringIO,
         timeout: NullableTiming,
         timeout_read_data_chunk: NullableTiming,
+        abort_event: Event | None = None,
     ) -> bool:
         eof_result = stdout_size = stderr_size = LIBSSH2_ERROR_EAGAIN
         if timeout:
@@ -568,6 +581,8 @@ class Client:
         while LIBSSH2_ERROR_EAGAIN in (eof_result, stdout_size, stderr_size) or stdout_size > 0 or stderr_size > 0:
             if perf_counter() > end_time:
                 return False
+            if abort_event is not None and abort_event.is_set():
+                raise CommandAborted("Reading command output was aborted")
             with session.lock:
                 if stdout_size == LIBSSH2_ERROR_EAGAIN and stderr_size == LIBSSH2_ERROR_EAGAIN:
                     session.simple_select(timeout=timeout_read_data_chunk)
@@ -582,6 +597,20 @@ class Client:
             if decoder is not None:
                 stream.write(decoder.decode(b"", final=True))
         return True
+
+    def abort(self):
+        """Make the running command, and every command after it, fail right away.
+
+        Safe to call from any thread: it only sets a flag, which the output read loops check on every
+        iteration, so no libssh2 call is made across threads. Needed when the host is gone (e.g. a
+        preempted spot instance): it sends no RST and keepalive is disabled, so the read loop would
+        otherwise spin on EAGAIN until the command timeout.
+        """
+        self._abort_event.set()
+
+    @property
+    def aborted(self) -> bool:
+        return self._abort_event.is_set()
 
     def check_if_alive(self, timeout: NullableTiming = __DEFAULT__):
         """Check and return if endpoint is capable of running commands"""
@@ -687,6 +716,8 @@ class Client:
             stderr="",
         )
         channel: Optional[Channel] = None
+        if self.aborted:
+            raise CommandAborted(f"Command was not run, connection to {self.host} was aborted: {command}")
         try:
             if self.session is None:
                 self.connect()
@@ -702,7 +733,13 @@ class Client:
                 channel, FailedToRunCommand(result, exc), timeout_reached, timeout, result, warn, stdout, stderr
             )
         if watchers:
-            reader = SSHReaderThread(self.session, channel, timeout, self.timings.interactive_read_data_chunk_timeout)
+            reader = SSHReaderThread(
+                self.session,
+                channel,
+                timeout,
+                self.timings.interactive_read_data_chunk_timeout,
+                abort_event=self._abort_event,
+            )
             try:
                 self.execute(command, channel=channel, use_pty=False)
                 self._process_output(
@@ -725,8 +762,18 @@ class Client:
             try:
                 self.execute(command, channel=channel, use_pty=False)
                 timeout_reached = not self._process_output_no_watchers(
-                    self.session, channel, encoding, stdout, stderr, timeout, self.timings.read_data_chunk_timeout
+                    self.session,
+                    channel,
+                    encoding,
+                    stdout,
+                    stderr,
+                    timeout,
+                    self.timings.read_data_chunk_timeout,
+                    abort_event=self._abort_event,
                 )
+            except CommandAborted as exc:
+                # not wrapped, `FailedToReadCommandOutput` is retryable and there is nothing to retry
+                exception = exc
             except Exception as exc:  # noqa: BLE001
                 exception = FailedToReadCommandOutput(result, exc)
         return self._complete_run(channel, exception, timeout_reached, timeout, result, warn, stdout, stderr)
