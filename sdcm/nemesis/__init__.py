@@ -3885,8 +3885,13 @@ class NemesisRunner:
             with (
                 suppress_expected_unavailability_errors(),
                 self.node_allocator.run_nemesis(nemesis_label="DecommissionStreamingErr") as verification_node,
+                # The coordinator keeps draining the node after the reboot, so how long to wait for the
+                # decommission depends on the data on the node, not on the log pattern timeouts
+                adaptive_timeout(operation=Operations.DECOMMISSION, node=self.target_node) as decommission_timeout,
                 FailedDecommissionOperationMonitoring(
-                    target_node=self.target_node, verification_node=verification_node, timeout=full_operations_timeout
+                    target_node=self.target_node,
+                    verification_node=verification_node,
+                    timeout=max(full_operations_timeout, decommission_timeout),
                 ),
                 self.action_log_scope(f"Reboot {self.target_node.name} node during decommission streaming"),
             ):
