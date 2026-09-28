@@ -12,14 +12,57 @@ jenkinsfiles:
 #
 # Usage patterns:
 #   Weekly (cron):    scylla_version={branch}:latest, labels_selector=weekly,week-{a,b}
+#   Minicloud (cron): scylla_version={branch}:latest, labels_selector=weekly-minicloud (SCT-1093)
 #   Release (manual): new_scylla_repo=<url>, scylla_version=<tag>
 #   Image-based:      scylla_ami_id=<id>, backend=aws (or gce_image_db, azure_image_db)
 #
+# Labels
+# ------
+# Two different kinds of "label" appear in this file - do not mix them up:
+#
+# Matrix labels (a job's `labels:` list) select which jobs a trigger run fires;
+# `labels_selector` AND-matches them:
+#   weekly            - part of the biweekly real-cloud cron (see below)
+#   week-a / week-b   - which half of the biweekly alternation (see below)
+#   release           - fired only by scylla-pkg release triggers, never by cron
+#   rpm / deb / image - how the base version is installed
+#   ami / gce / azure - which image an image-based job boots from
+#   weekly-minicloud  - part of the every-Friday minicloud cron (SCT-1093, see below)
+#
+# Jenkins agent label (the `jenkins_label` job param) pins a build to specific Jenkins
+# machines:
+#   minicloud-kvm-builders-rolling-upgrades - the KVM lab machines minipc1-4, reserved for
+#                                             the minicloud rolling upgrades (SCT-1093)
+#
+# Minicloud on master (SCT-1093)
+# ------------------------------
+# To save cloud cost, seven of the weekly jobs run on master against minicloud on the minipc
+# lab machines, every Friday at noon, instead of in the biweekly real-cloud alternation.
+# The change is purely additive and confined to master:
+#   - each of the seven regular entries below is unchanged except for
+#     `exclude_versions: ["master"]` (marked "SCT-1093"): everything that is not master -
+#     scylla-pkg release calls included - selects and runs them exactly as before;
+#   - the "Minicloud on master" block at the end of `jobs` holds their master-only minicloud
+#     twins (same job names, `include_versions: ["master"]`), passing:
+#       minicloud: "true"   - start the emulator and point SCT at it
+#       local_agent: "true" - no sct-runner, the test runs on the Jenkins agent itself
+#       jenkins_label       - minicloud-kvm-builders-rolling-upgrades (above)
+#       test_config         - adds the minicloud overlays that shrink the run to one host
+#   - the Friday `weekly-minicloud` cron line fires that block.
+#
+# To go back to biweekly real-cloud runs on master: delete the "Minicloud on master" block
+# and the Friday cron line, and set the seven SCT-1093 `exclude_versions` back to `[]`.
+# That alone restores the previous behaviour; the header comments that mention SCT-1093
+# (this section, and the SCT-1093 lines in "Usage patterns", "Labels" and "Biweekly
+# alternation") can then go too.
+
 # Biweekly alternation (SCT-716)
 # ------------------------------
 # Every "weekly" job also carries exactly one of "week-a" / "week-b", and the two cron
 # lines below select one half each — so a job runs roughly every 2 weeks. The halves are
 # balanced on estimated cost (`sct.py sizing preview`), ~$114 vs ~$120 per run.
+# While SCT-1093 is in place, master's halves are just rolling-upgrade-ami-arm (week-a) and
+# rolling-upgrade-azure-image (week-b); the other seven run on minicloud (see above).
 #
 # "weekly" on its own still selects the FULL set (labels are AND-matched), so the
 # scylla-pkg release path is unaffected. The "release"-labelled jobs below are not
@@ -47,6 +90,13 @@ cron_triggers:
       scylla_version: "{branch}:latest"
       labels_selector: "weekly,week-a"
       requested_by_user: "fruch"
+  # SCT-1093: every Friday, 12:00 UTC - the minicloud jobs on master, on the minipc lab
+  # machines, which are otherwise idle at that time. Delete this line to revert.
+  - schedule: "00 12 * * 5"
+    params:
+      scylla_version: "{branch}:latest"
+      labels_selector: "weekly-minicloud"
+      requested_by_user: "fruch"
 
 defaults:
   provision_type: "on_demand"
@@ -68,7 +118,7 @@ jobs:
       - "weekly"
       - "week-a"
       - "rpm"
-    exclude_versions: []
+    exclude_versions: ["master"]  # SCT-1093: on master it runs on minicloud, see the end of `jobs`
     params:
       region: "us-central1"
       new_scylla_repo: "http://downloads.scylladb.com/unstable/scylla/{branch}/rpm/centos/latest/scylla.repo"
@@ -83,7 +133,7 @@ jobs:
       - "weekly"
       - "week-b"
       - "deb"
-    exclude_versions: []
+    exclude_versions: ["master"]  # SCT-1093: on master it runs on minicloud, see the end of `jobs`
     params:
       region: "us-central1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
@@ -94,7 +144,7 @@ jobs:
       - "weekly"
       - "week-b"
       - "deb"
-    exclude_versions: []
+    exclude_versions: ["master"]  # SCT-1093: on master it runs on minicloud, see the end of `jobs`
     params:
       region: "us-central1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
@@ -105,7 +155,7 @@ jobs:
       - "weekly"
       - "week-a"
       - "deb"
-    exclude_versions: []
+    exclude_versions: ["master"]  # SCT-1093: on master it runs on minicloud, see the end of `jobs`
     params:
       region: "us-central1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
@@ -121,7 +171,7 @@ jobs:
       - "week-b"
       - "image"
       - "ami"
-    exclude_versions: []
+    exclude_versions: ["master"]  # SCT-1093: on master it runs on minicloud, see the end of `jobs`
     params:
       region: "eu-west-1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
@@ -146,7 +196,7 @@ jobs:
       - "week-a"
       - "image"
       - "gce"
-    exclude_versions: []
+    exclude_versions: ["master"]  # SCT-1093: on master it runs on minicloud, see the end of `jobs`
     params:
       region: "us-central1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
@@ -173,7 +223,7 @@ jobs:
       - "weekly"
       - "week-b"
       - "deb"
-    exclude_versions: []
+    exclude_versions: ["master"]  # SCT-1093: on master it runs on minicloud, see the end of `jobs`
     params:
       region: "us-east1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
@@ -247,3 +297,110 @@ jobs:
     params:
       region: "us-east1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
+
+  # ===========================================================================
+  # Minicloud on master (SCT-1093) - delete this whole block to revert
+  # ===========================================================================
+  #
+  # Master-only twins of seven entries above (which exclude master). The distro and stock
+  # image still come from each job's jenkinsfile; test_config adds the minicloud overlays.
+
+  - job_name: "rolling-upgrade/rolling-upgrade-rocky10-test"
+    backend: "gce"
+    labels:
+      - "weekly-minicloud"
+      - "rpm"
+    include_versions: ["master"]
+    params:
+      region: "us-central1"
+      new_scylla_repo: "http://downloads.scylladb.com/unstable/scylla/{branch}/rpm/centos/latest/scylla.repo"
+      minicloud: "true"
+      local_agent: "true"
+      jenkins_label: "minicloud-kvm-builders-rolling-upgrades"
+      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/minicloud/generic-rolling-upgrade.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+
+  - job_name: "rolling-upgrade/rolling-upgrade-debian13-test"
+    backend: "gce"
+    labels:
+      - "weekly-minicloud"
+      - "deb"
+    include_versions: ["master"]
+    params:
+      region: "us-central1"
+      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
+      minicloud: "true"
+      local_agent: "true"
+      jenkins_label: "minicloud-kvm-builders-rolling-upgrades"
+      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/minicloud/generic-rolling-upgrade.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+
+  - job_name: "rolling-upgrade/rolling-upgrade-ubuntu2404-test"
+    backend: "gce"
+    labels:
+      - "weekly-minicloud"
+      - "deb"
+    include_versions: ["master"]
+    params:
+      region: "us-central1"
+      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
+      minicloud: "true"
+      local_agent: "true"
+      jenkins_label: "minicloud-kvm-builders-rolling-upgrades"
+      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/minicloud/generic-rolling-upgrade.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+
+  - job_name: "rolling-upgrade/rolling-upgrade-ubuntu2604-test"
+    backend: "gce"
+    labels:
+      - "weekly-minicloud"
+      - "deb"
+    include_versions: ["master"]
+    params:
+      region: "us-central1"
+      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
+      minicloud: "true"
+      local_agent: "true"
+      jenkins_label: "minicloud-kvm-builders-rolling-upgrades"
+      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/minicloud/generic-rolling-upgrade.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+
+  - job_name: "rolling-upgrade/rolling-upgrade-ami-test"
+    backend: "aws"
+    labels:
+      - "weekly-minicloud"
+      - "image"
+      - "ami"
+    include_versions: ["master"]
+    params:
+      region: "eu-west-1"
+      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
+      minicloud: "true"
+      local_agent: "true"
+      jenkins_label: "minicloud-kvm-builders-rolling-upgrades"
+      test_config: '["test-cases/upgrades/rolling-upgrade.yaml", "configurations/minicloud/rolling-upgrade.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+
+  - job_name: "rolling-upgrade/rolling-upgrade-gce-image-test"
+    backend: "gce"
+    labels:
+      - "weekly-minicloud"
+      - "image"
+      - "gce"
+    include_versions: ["master"]
+    params:
+      region: "us-central1"
+      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
+      minicloud: "true"
+      local_agent: "true"
+      jenkins_label: "minicloud-kvm-builders-rolling-upgrades"
+      test_config: '["test-cases/upgrades/rolling-upgrade.yaml", "configurations/minicloud/rolling-upgrade.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'
+
+  - job_name: "rolling-upgrade/rolling-upgrade-alternator-test"
+    backend: "gce"
+    labels:
+      - "weekly-minicloud"
+      - "deb"
+    include_versions: ["master"]
+    params:
+      region: "us-east1"
+      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
+      minicloud: "true"
+      local_agent: "true"
+      jenkins_label: "minicloud-kvm-builders-rolling-upgrades"
+      test_config: '["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-alternator.yaml", "configurations/minicloud/generic-rolling-upgrade.yaml", "configurations/minicloud/rolling-upgrade-alternator.yaml", "configurations/auth_cassandra.yaml", "configurations/minicloud.yaml"]'

@@ -1,0 +1,24 @@
+# Minicloud adaptation of the alternator rolling-upgrade scenario (rolling-upgrade-alternator).
+# Layer it after configurations/rolling-upgrade-alternator.yaml AND after
+# configurations/minicloud/generic-rolling-upgrade.yaml: the generic overlay sizes the cluster
+# for 1-vCPU guests but also sets cassandra-stress workloads, and this file puts the YCSB ones
+# back - the same commands as rolling-upgrade-alternator.yaml, with the record/operation counts
+# and thread counts cut to what a 1-vCPU guest can serve.
+
+stress_before_upgrade: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 10 -p recordcount=100000
+  -p readproportion=0 -p updateproportion=1 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=100000 -p table=usertable
+# Sized by the time it has to cover, not by the other two: it must still be running when the last
+# node is upgraded, or the tail of the upgrade happens with no load. A local run upgraded 3 nodes
+# plus one rollback in ~7 minutes at ~440 ops/s, so 400k operations is ~15 minutes of load.
+stress_during_entire_upgrade: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 10 -p recordcount=100000
+  -p readproportion=0 -p updateproportion=1 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=400000 -p table=usertable
+stress_after_cluster_upgrade: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 10 -p recordcount=100000
+  -p readproportion=1 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=100000 -p table=usertable
+
+user_prefix: 'minicloud-alternator-upgrade'

@@ -1,12 +1,19 @@
-# Minicloud adaptation of the OS rolling-upgrade scenario for AWS.
+# Minicloud adaptation of the OS rolling-upgrade scenario, for AWS and GCE.
 # Based on test-cases/upgrades/generic-rolling-upgrade.yaml, with Ubuntu 24.04 + deb-installed
-# base version and smaller workloads for 1-vCPU guests.
+# base version and smaller workloads for 1-vCPU guests. On GCE the stock image comes from the
+# job's own gce_image_db (rolling-upgrade-ubuntu2404).
 
 ami_id_db_scylla: 'resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id'
 ami_db_scylla_user: 'ubuntu'
 scylla_linux_distro: 'ubuntu-noble'
 
 instance_type_db: 'i4i.large'
+# Lightweight mode caps every guest to 1 vCPU regardless of the type, so the GCE ones only have to
+# exist in the emulated catalog; qcow2-backed disks serve a single local SSD, not the default 4.
+gce_instance_type_db: 'n2-standard-2'
+gce_instance_type_loader: 'n2-standard-2'
+gce_instance_type_monitor: 'n2-standard-2'
+gce_n_local_ssd_disk_db: 1
 # nested virtualization for the QEMU guests, when the run is executed on a cloud sct-runner
 instance_type_runner: 'm8i.2xlarge'
 

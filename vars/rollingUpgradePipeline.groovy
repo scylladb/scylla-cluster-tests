@@ -8,7 +8,18 @@ def completed_stages = [:]
 def call(Map pipelineParams) {
     // Captured locals - see the same block in longevityPipeline for why these come from
     // pipelineParams and must never be read back off `params` in a guard.
-    def minicloudEnabled = pipelineParams.get('minicloud', false)
+    // `minicloud` is also a build parameter here, so a trigger can run an existing rolling-upgrade
+    // job against minicloud without a jenkinsfile of its own. Read once, here - before
+    // getJenkinsLabels leaks its overrides into the global `params` - and written back into
+    // pipelineParams, which is what startMinicloud.active()/exportEnv() and every guard below key
+    // off. Build #1 has no params yet, so it keeps the jenkinsfile default.
+    // The jenkinsfile default is kept apart for the parameter's defaultValue: seeding it from the
+    // written-back value would make one triggered minicloud build the job's default from then on.
+    def minicloudDefault = pipelineParams.get('minicloud', false)
+    def minicloudEnabled = params.minicloud != null
+                           ? params.minicloud.toString().toBoolean()
+                           : minicloudDefault
+    pipelineParams.minicloud = minicloudEnabled
     // Rolling upgrade keeps both topologies, like longevity: a nested-virtualization cloud
     // sct-runner by default, a KVM-capable Jenkins agent with `local_agent: true`.
     // A build parameter as well as a jenkinsfile knob, so an existing job can be moved to a lab
@@ -84,6 +95,11 @@ def call(Map pipelineParams) {
             // vars/startMinicloud.groovy. Everything else minicloud needs - KMS off, a
             // KVM-capable instance_type_runner - is test-case configuration, not a job knob.
             separator(name: 'MINICLOUD_CONFIG', sectionHeader: 'Minicloud Configuration')
+            booleanParam(defaultValue: minicloudDefault,
+                   description: 'Run the test against minicloud (local QEMU/KVM cloud emulation) ' +
+                                'instead of the real cloud. test_config must then include ' +
+                                'configurations/minicloud.yaml and a minicloud sizing overlay',
+                   name: 'minicloud')
             booleanParam(defaultValue: "${pipelineParams.get('local_agent', false)}",
                    description: 'Run minicloud on a KVM-capable Jenkins agent instead of ' +
                                 'provisioning an sct-runner. Needs an agent serving the ' +
