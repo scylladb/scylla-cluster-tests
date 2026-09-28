@@ -54,3 +54,13 @@ cluster_health_check: false
 
 adaptive_timeout_store_metrics: false
 cs_safepoint_logging: true
+
+# Applied on top of latency-decorator-error-thresholds-nemesis-ent-tablets.yaml,
+# which must precede this file in test_config for the override to take effect.
+# Concurrent decommission of 6 of 9 nodes migrates tablets for 2.5TB of data
+# under mixed load, taking up to 47 minutes (SCT-1040).
+latency_decorator_error_thresholds:
+  mixed:
+    decommission_nodes:
+      duration:
+        fixed_limit: 2820
