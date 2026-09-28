@@ -54,8 +54,10 @@ it produces the first data point for the drift question SCT-901 has to answer.
    `test-cases/performance/perf-regression-throughput-baremetal-5gb.yaml` sets them,
    which is misleading.
 3. **`PhysicalMachineNode.reboot()` raises `NotImplementedError`.** Nothing in the
-   artifact-test setup path calls it, but SELinux must therefore be dealt with up
-   front — the launcher sets it permissive from user-data.
+   artifact-test setup path calls it, SELinux included: on an enforcing host
+   `scylla_setup`'s SELinux step runs `setenforce 0` itself and writes
+   `SELINUX=disabled` for the next boot, so the hosts stay at Fedora's default
+   (verified 2026-09-28: artifact test green on an enforcing host).
 4. **`SCT-2-sg` only allows traffic inside itself.** A runner outside the VPC cannot
    SSH in; step 1 adds a second, IP-scoped security group.
 5. **`logs_transport` defaults to `vector`** (`defaults/test_default.yaml:79`), which
@@ -125,8 +127,7 @@ uv run python scripts/baremetal-simulation/01_launch_hosts.py [--dry-run]
 ```
 
 Launches the hosts into the SCT subnet with the SCT key pair, attaches `SCT-2-sg`
-plus a one-off `<tag>-sg` that lets this workstation's public IP in, sets SELinux
-permissive from user-data, and tags everything with
+plus a one-off `<tag>-sg` that lets this workstation's public IP in, and tags everything with
 `TestId=<SIM_TEST_TAG>`, `keep=<hours>`, `keep_action=terminate` so
 `utils/cloud_cleanup/aws/clean_aws.py` neither reaps them mid-run nor leaks them.
 Refuses to run on top of an existing simulation.
