@@ -82,6 +82,12 @@ arithmetic when it fails. Without the check, an oversized test dies mid-run as a
 (container exit 137) that takes every VM with it and surfaces as a wall of SSH timeouts far from
 the cause. `n_db_nodes` is a multi-DC list (`"3 3"`), and is summed.
 
+On the Jenkins pipelines the gate runs again in `run-test`, after `provision-resources` has
+launched the guests. By then `MemAvailable` no longer includes the memory those guests use, so
+the gate adds the `minicloud` container memory in use (from `docker stats`) back to the
+budget. Without this, the cluster was counted twice. Guests left over from an earlier
+kept-alive run are counted too, but Jenkins removes the container at build start.
+
 The arithmetic is deliberately conservative. `minicloud_skip_memory_check: true` (or
 `SCT_MINICLOUD_SKIP_MEMORY_CHECK=true`) disables the
 gate for development on a machine you know can handle the workload - at the price of the

@@ -33,6 +33,13 @@ def clean_env(monkeypatch):
     os.environ.update(original_env)
 
 
+@pytest.fixture(autouse=True)
+def no_mem_in_use():
+    """Pin the container's memory in use to zero, so no test calls a real docker daemon."""
+    with patch("sdcm.utils.minicloud.preflight.container_mem_in_use_gib", return_value=0.0):
+        yield
+
+
 def _patch_probe_session(response=None, side_effect=None):
     """Patch the retry session used by check_minicloud_reachability's POST probe."""
     session = MagicMock()

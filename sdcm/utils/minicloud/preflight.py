@@ -62,6 +62,8 @@ SCYLLA_DEFAULT_RESERVE_FRACTION = 0.07
 SCYLLA_MIN_MEMORY_GIB = 2.0
 SCYLLA_MIN_MEMORY_PER_SHARD_GIB = 1.0
 
+DOCKER_STATS_TIMEOUT = 20
+
 
 def _resolve_scylla_reserve_memory(params) -> tuple[str | None, str | None]:
     """Resolve the reserve-memory value and an optional warning/error message."""
@@ -119,6 +121,35 @@ def check_scylla_memory_budget(params) -> None:
         LOGGER.info("scylla-server will run with --reserve-memory %s on minicloud guests", value)
 
 
+def container_mem_in_use_gib(container_name: str) -> float:
+    """Return the memory in use by the minicloud container and its QEMU guests, in GiB.
+
+    Returns 0.0 when `docker stats` cannot give the figure, so the gate falls back to MemAvailable alone.
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "stats", "--no-stream", "--format", "{{.MemUsage}}", container_name],
+            capture_output=True,
+            timeout=DOCKER_STATS_TIMEOUT,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        LOGGER.debug("cannot read the memory in use by container %s: %s", container_name, exc)
+        return 0.0
+    if result.returncode != 0:
+        LOGGER.debug(
+            "cannot read the memory in use by container %s: docker stats exited %s", container_name, result.returncode
+        )
+        return 0.0
+
+    mem_in_use = result.stdout.decode(errors="replace").split("/")[0].strip()
+    try:
+        return parse_memory_gib(mem_in_use, "docker stats MemUsage")
+    except MinicloudError as exc:
+        LOGGER.debug("%s", exc)
+        return 0.0
+
+
 def check_host_memory(config: MinicloudConfig, params) -> None:
     """Fail before start when the test's guests cannot fit into this host's free memory.
 
@@ -128,10 +159,16 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
     sct_config.py:sum(n_db_nodes) does. Without this check the container is
     cgroup-OOM-killed mid-test (exit 137) and every VM dies with it.
 
+    The host budget is MemAvailable plus whatever the running minicloud container already
+    holds: the CI pipeline provisions the guests before run-test re-runs this gate, and by
+    then MemAvailable excludes their resident memory while the guests still have to be
+    budgeted in full. Leaving the memory in use out charged the cluster twice.
+
     When ``minicloud_container_memory`` caps the container, that cap - not the host's free
     memory - is what the guests actually have to fit into, and it is the figure the cgroup
     OOM killer enforces. Measuring against the host instead would happily pass a test that
-    the cap kills.
+    the cap kills. Guests already running live inside the cap, so their memory in use is not
+    added there.
 
     The ``minicloud_skip_memory_check`` param (SCT_MINICLOUD_SKIP_MEMORY_CHECK) disables
     the gate — the arithmetic is deliberately conservative, and a developer who knows the
@@ -172,16 +209,36 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
         meminfo = Path("/proc/meminfo")
         if not meminfo.exists():  # non-Linux dev box; the container will not run here anyway
             return
-        budget_gib = 0.0
+        available_gib = None
         for line in meminfo.read_text().splitlines():
             if line.startswith("MemAvailable:"):
-                budget_gib = int(line.split()[1]) / 1024 / 1024
+                available_gib = int(line.split()[1]) / 1024 / 1024
                 break
+        if available_gib is None:  # a /proc/meminfo without MemAvailable: nothing to size against
+            return
+
+        mem_in_use_gib = container_mem_in_use_gib(config.container_name)
+        budget_gib = available_gib + mem_in_use_gib
         host_headroom_gib = 2.0  # dockerd, hydra, SCT itself and the page cache need to live too
         needed_gib = guests * per_guest_gib + host_headroom_gib
         budget_source = "available host memory"
+        if mem_in_use_gib:
+            budget_source += (
+                f" ({available_gib:.1f}GiB MemAvailable + {mem_in_use_gib:.1f}GiB already held by the "
+                f"running '{config.container_name}' container)"
+            )
+            LOGGER.info(
+                "host-memory gate: %.1fGiB MemAvailable + %.1fGiB already held by the running '%s' "
+                "container = %.1fGiB budget for %d guest(s) needing %.1fGiB",
+                available_gib,
+                mem_in_use_gib,
+                config.container_name,
+                budget_gib,
+                guests,
+                needed_gib,
+            )
         headroom_note = f" + {host_headroom_gib:.0f}GiB host headroom"
-    if budget_gib and budget_gib < needed_gib:
+    if budget_gib < needed_gib:
         raise MinicloudError(
             f"not enough memory for this test: {guests} guest(s) x "
             f"{per_guest_gib:.1f}GiB ({config.lightweight_memory}){headroom_note} = "
