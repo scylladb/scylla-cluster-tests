@@ -13,7 +13,9 @@ class Parser:
         "Our initializer for the class"
         if "url" in kwargs:
             self.url = kwargs.get("url")
-            self.__open()
+            self.res = kwargs.get("data")  # the file content, when the caller fetched it already
+            if self.res is None:
+                self.__open()
             self.__decompress()
             self.__decommpress_ztd()
             self.__dom()
