@@ -21,12 +21,12 @@ is also blocked, held out before it ran while SCYLLADB-4625 is open, and so is `
 
 | Status | Count | Share of all 112 |
 |---|---:|---:|
-| pass | 26 | 23% |
+| pass | 27 | 24% |
 | failed | 11 | 10% |
 | blocked (13 topology-changes + `MultipleHardRebootNodeMonkey` + `NemesisSequence`) | 15 | 13% |
 | **failed + blocked** | **26** | **23%** |
-| skipped (29 run, 11 held out on a precondition this job never meets) | 40 | 36% |
-| not executed | 20 | 18% |
+| skipped (34 seen in a run, 6 held out on a precondition this job never meets) | 40 | 36% |
+| not executed | 19 | 17% |
 
 ## Per-run statistics
 
@@ -46,7 +46,7 @@ A nemesis can be "succeeded" here and still be the one that failed the run.
 | [#18](https://argus.scylladb.com/tests/scylla-cluster-tests/77703d11-9080-42bd-95b2-9297357ea4d1) | 2026-09-25 09:24–11:07 | 8 | 0 | 8 | 0 | targeted `DecommissionMonkey` run: all 8 decommissions rolled back - pending replica never catches up (SCYLLADB-4753) |
 | [#20](https://argus.scylladb.com/tests/scylla-cluster-tests/b498fd49-bf0a-4b20-b861-c0bc692aeabb) | 2026-09-25 14:22–18:55 | 6 | 2 | 1 | 3 | aborted - node-2 crash loop after the hard reboot in `RepairStreamingErrMonkey` (SCYLLADB-4625) |
 | [#21](https://argus.scylladb.com/tests/scylla-cluster-tests/775260c1-70b6-410f-b8ad-5d6a5bb51328) | 2026-09-28 09:03–11:59 | 1 | 0 | 1 | 0 | aborted - `RestartThenRepairNodeMonkey`: the EC2 stop/start wiped node-1, whose self-replace never left BOOTSTRAP (SCYLLADB-4753) |
-| [#22](https://argus.scylladb.com/tests/scylla-cluster-tests/948201de-ff46-4b43-9abb-c97df770ea18) | 2026-09-28 14:20– (running) | 5 so far | 4 | 0 | 0 | running - four restart nemesis passed with no SCYLLADB-4625 crash loop; `StopWaitStartMonkey` in progress at the time of writing |
+| [#22](https://argus.scylladb.com/tests/scylla-cluster-tests/948201de-ff46-4b43-9abb-c97df770ea18) | 2026-09-28 14:20– (running) | 11 so far | 5 | 0 | 5 | running - all five restart nemesis passed with no SCYLLADB-4625 crash loop, and five precondition skips skipped as predicted; `AbortRepairMonkey` in progress at the time of writing |
 
 Run #13 reached nine nemesis but Argus recorded two: the eight precheck exclusions are submitted
 with one shared timestamp, and only the first survives. The SCT log has all of them.
@@ -68,6 +68,7 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 | `63c2c9c56` | `RestartThenRepairNodeMonkey` excluded after run #21 | on instance-store types `node.restart()` is an EC2 stop/start that wipes the disk, so the node replaces itself, and the replace never finishes (SCYLLADB-4753) |
 | `fb6966bfe` | eleven nemesis held out before they ran | each raises `UnsupportedNemesis` on a precondition this job never meets: no CDC table, no `scylla_bench` keyspace, no LDAP/saslauthd, `server_encrypt: false`, kubernetes only, or scylladb/scylladb#8136 open |
 | `ab0fba496` | `RollingRestartConfigChangeInternodeCompression` held out before it ran | it restarts every node in turn - the rolling restart that hit the SCYLLADB-4625 crash loop in `MgmtRestore` (run #16); run #22, started before this commit, then ran it and it passed, so it counts as pass - the exclusion stays so the sweep does not repeat it |
+| `8ffc91f7d` | the five restart nemesis run #22 passed excluded | `RollingRestartConfigChangeInternodeCompression`, `ScyllaKillMonkey`, `SoftRebootNodeMonkey`, `StopStartMonkey` and `StopWaitStartMonkey` passed; the rolling restart's entry changes from blocked to succeeded |
 
 ## Open issues found by this job
 
