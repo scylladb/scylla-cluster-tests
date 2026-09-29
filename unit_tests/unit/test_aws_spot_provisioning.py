@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-"""Unit tests for AWS spot instance provisioning error handling."""
+"""Unit tests for AWS spot instance and EC2 Fleet provisioning."""
 
 import logging
 from unittest.mock import MagicMock, patch
@@ -19,15 +19,19 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.provision.aws.utils import (
+    build_launch_template_data,
+    create_ec2_fleet_instance_request,
+    delete_ec2_fleet,
     get_provisioned_spot_instance_ids,
-    get_provisioned_fleet_instance_ids,
+    is_ec2_fleet_unfulfillable,
+    split_instance_types,
 )
 from sdcm.provision.aws.constants import (
+    EC2_FLEET_ALLOCATION_STRATEGY,
+    EC2_FLEET_TYPE_INSTANT,
     SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
     SPOT_PRICE_TOO_LOW,
     STATUS_FULFILLED,
-    SPOT_STATUS_UNEXPECTED_ERROR,
-    FLEET_LIMIT_EXCEEDED_ERROR,
 )
 
 
@@ -174,185 +178,208 @@ class TestGetProvisionedSpotInstanceIds:
         assert "API Error" in caplog.records[0].message
 
 
-class TestGetProvisionedFleetInstanceIds:
-    """Tests for get_provisioned_fleet_instance_ids function."""
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        pytest.param("i7i.large", ["i7i.large"], id="single_type"),
+        pytest.param("i7i.large,i7ie.large,i4i.large", ["i7i.large", "i7ie.large", "i4i.large"], id="three_types"),
+        pytest.param(" i7i.large , i7ie.large ", ["i7i.large", "i7ie.large"], id="whitespace_is_stripped"),
+        pytest.param("i7i.large,i7i.large", ["i7i.large"], id="duplicates_removed_order_kept"),
+        pytest.param("i7i.large,,i4i.large", ["i7i.large", "i4i.large"], id="empty_entries_ignored"),
+        pytest.param("", [], id="empty_value"),
+        pytest.param(None, [], id="none_value"),
+        # aws_instance_type_db_alternatives is a StringOrList, so an actual list is the common input
+        pytest.param(["i7i.large", "i4i.large"], ["i7i.large", "i4i.large"], id="list_input"),
+        pytest.param(["i7i.large", "i7i.large"], ["i7i.large"], id="list_duplicates_removed"),
+        pytest.param([" i7i.large ", "i4i.large"], ["i7i.large", "i4i.large"], id="list_whitespace_stripped"),
+        pytest.param([], [], id="empty_list"),
+    ],
+)
+def test_split_instance_types(value, expected):
+    assert split_instance_types(value) == expected
 
-    @pytest.mark.parametrize(
-        "test_case",
-        [
-            {
-                "id": "successful_fleet_provisioning",
-                "description": "Test successful spot fleet provisioning",
-                "region": "us-east-1",
-                "request_id": "sfr-12345",
-                "fleet_response": {
-                    "SpotFleetRequestConfigs": [
-                        {
-                            "SpotFleetRequestId": "sfr-12345",
-                            "SpotFleetRequestState": "active",
-                            "ActivityStatus": STATUS_FULFILLED,
-                        }
-                    ]
-                },
-                "instances_response": {
-                    "ActiveInstances": [
-                        {"InstanceId": "i-fleet-1"},
-                        {"InstanceId": "i-fleet-2"},
-                    ]
-                },
-                "expected_result": ["i-fleet-1", "i-fleet-2"],
-                "expected_log_count": 0,
-                "log_level": logging.INFO,
-                "expected_log_messages": [],
-            },
-            {
-                "id": "fleet_capacity_error",
-                "description": "Test fleet capacity not available error logging",
-                "region": "us-east-1",
-                "request_id": "sfr-error",
-                "fleet_response": {
-                    "SpotFleetRequestConfigs": [
-                        {
-                            "SpotFleetRequestId": "sfr-error",
-                            "SpotFleetRequestState": "active",
-                            "ActivityStatus": SPOT_STATUS_UNEXPECTED_ERROR,
-                        }
-                    ]
-                },
-                "history_response": {
-                    "HistoryRecords": [
-                        {
-                            "EventType": "error",
-                            "EventInformation": {
-                                "EventSubType": SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
-                                "EventDescription": "Insufficient capacity in availability zone",
-                            },
-                        }
-                    ]
-                },
-                "expected_result": None,
-                "expected_log_count": 1,
-                "log_level": logging.ERROR,
-                "expected_log_messages": [
-                    "Critical spot fleet provisioning failure",
-                    "capacity-not-available",
-                    "Insufficient capacity",
-                ],
-            },
-            {
-                "id": "fleet_limit_exceeded_error",
-                "description": "Test fleet limit exceeded error logging",
-                "region": "us-west-1",
-                "request_id": "sfr-limit",
-                "fleet_response": {
-                    "SpotFleetRequestConfigs": [
-                        {
-                            "SpotFleetRequestId": "sfr-limit",
-                            "SpotFleetRequestState": "failed",
-                            "ActivityStatus": SPOT_STATUS_UNEXPECTED_ERROR,
-                        }
-                    ]
-                },
-                "history_response": {
-                    "HistoryRecords": [
-                        {
-                            "EventType": "fleetRequestChange",
-                            "EventInformation": {
-                                "EventSubType": FLEET_LIMIT_EXCEEDED_ERROR,
-                                "EventDescription": "You have exceeded your spot instance limit",
-                            },
-                        }
-                    ]
-                },
-                "expected_result": None,
-                "expected_log_count": 1,
-                "log_level": logging.ERROR,
-                "expected_log_messages": [
-                    "Critical spot fleet provisioning failure",
-                    "spotInstanceCountLimitExceeded",
-                    "exceeded your spot instance limit",
-                ],
-            },
-            {
-                "id": "fleet_pending_warning",
-                "description": "Test warning for pending fleet request",
-                "region": "ap-south-1",
-                "request_id": "sfr-pending",
-                "fleet_response": {
-                    "SpotFleetRequestConfigs": [
-                        {
-                            "SpotFleetRequestId": "sfr-pending",
-                            "SpotFleetRequestState": "active",
-                            "ActivityStatus": "pending_fulfillment",
-                        }
-                    ]
-                },
-                "expected_result": [],
-                "expected_log_count": 1,
-                "log_level": logging.WARNING,
-                "expected_log_messages": [
-                    "Spot fleet request not yet fulfilled",
-                ],
-            },
-        ],
-        ids=lambda tc: tc["id"],
-    )
-    def test_fleet_scenarios(self, mock_ec2_client, caplog, test_case):
-        """Test various spot fleet provisioning scenarios."""
-        mock_client = MagicMock()
-        mock_ec2_client.__getitem__.return_value = mock_client
-        mock_client.describe_spot_fleet_requests.return_value = test_case["fleet_response"]
 
-        # Set up history response if needed
-        if "history_response" in test_case:
-            mock_client.describe_spot_fleet_request_history.return_value = test_case["history_response"]
-
-        # Set up instances response if needed
-        if "instances_response" in test_case:
-            mock_client.describe_spot_fleet_instances.return_value = test_case["instances_response"]
-
-        with caplog.at_level(test_case["log_level"]):
-            result = get_provisioned_fleet_instance_ids(test_case["region"], [test_case["request_id"]])
-
-        assert result == test_case["expected_result"]
-        assert len(caplog.records) == test_case["expected_log_count"]
-        for expected_msg in test_case["expected_log_messages"]:
-            assert expected_msg in caplog.records[0].message if caplog.records else True
-
-    def test_fleet_api_exception(self, mock_ec2_client, caplog):
-        """Test exception handling for fleet API errors."""
-        mock_client = MagicMock()
-        mock_ec2_client.__getitem__.return_value = mock_client
-        mock_client.describe_spot_fleet_requests.side_effect = Exception("Fleet API Error")
-
-        with caplog.at_level(logging.ERROR):
-            result = get_provisioned_fleet_instance_ids("eu-central-1", ["sfr-error"])
-
-        assert result == []
-        assert len(caplog.records) == 1
-        assert "Failed to describe spot fleet requests" in caplog.records[0].message
-        assert "Fleet API Error" in caplog.records[0].message
-
-    def test_fleet_instances_describe_exception(self, mock_ec2_client, caplog):
-        """Test exception handling when describing fleet instances."""
-        mock_client = MagicMock()
-        mock_ec2_client.__getitem__.return_value = mock_client
-
-        mock_client.describe_spot_fleet_requests.return_value = {
-            "SpotFleetRequestConfigs": [
-                {
-                    "SpotFleetRequestId": "sfr-12345",
-                    "SpotFleetRequestState": "active",
-                    "ActivityStatus": STATUS_FULFILLED,
-                }
-            ]
+def test_build_launch_template_data_drops_unsupported_keys():
+    """CreateLaunchTemplate rejects RunInstances-only keys; InstanceType comes from fleet overrides."""
+    launch_template_data = build_launch_template_data(
+        {
+            "ImageId": "ami-1234",
+            "KeyName": "sct-key",
+            "InstanceType": "i7i.large",
+            "AddressingType": "public",
+            "SubnetId": "subnet-1234",
+            "SecurityGroups": ["sg-1234"],
+            "NetworkInterfaces": [{"DeviceIndex": 0, "SubnetId": "subnet-1234", "Groups": ["sg-1234"]}],
         }
-        mock_client.describe_spot_fleet_instances.side_effect = Exception("Instance describe error")
+    )
 
-        with caplog.at_level(logging.ERROR):
-            result = get_provisioned_fleet_instance_ids("us-east-1", ["sfr-12345"])
+    assert "InstanceType" not in launch_template_data
+    assert "AddressingType" not in launch_template_data
+    assert "SubnetId" not in launch_template_data
+    assert "SecurityGroups" not in launch_template_data
+    assert launch_template_data["ImageId"] == "ami-1234"
+    assert launch_template_data["NetworkInterfaces"][0]["SubnetId"] == "subnet-1234"
 
-        assert result is None
-        assert len(caplog.records) == 1
-        assert "Failed to describe spot fleet instances" in caplog.records[0].message
-        assert "Instance describe error" in caplog.records[0].message
+
+def test_create_ec2_fleet_request_diversifies_across_instance_types(mock_ec2_client):
+    """The whole point of moving off Spot Fleet: one request, several candidate instance pools."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.create_fleet.return_value = {
+        "FleetId": "fleet-1234",
+        "Instances": [
+            {"InstanceIds": ["i-1", "i-2"]},
+            {"InstanceIds": ["i-3"]},
+        ],
+        "Errors": [],
+    }
+
+    fleet_id, instance_ids, errors = create_ec2_fleet_instance_request(
+        region_name="us-east-1",
+        count=3,
+        template_id="lt-1234",
+        instance_types=["i7i.large", "i7ie.large", "i4i.large"],
+    )
+
+    assert fleet_id == "fleet-1234"
+    assert instance_ids == ["i-1", "i-2", "i-3"]
+    assert errors == []
+
+    request = mock_client.create_fleet.call_args.kwargs
+    assert request["Type"] == EC2_FLEET_TYPE_INSTANT
+    assert request["TargetCapacitySpecification"] == {
+        "TotalTargetCapacity": 3,
+        "DefaultTargetCapacityType": "spot",
+    }
+    assert request["SpotOptions"] == {"AllocationStrategy": EC2_FLEET_ALLOCATION_STRATEGY}
+    launch_template_config = request["LaunchTemplateConfigs"][0]
+    assert launch_template_config["LaunchTemplateSpecification"]["LaunchTemplateId"] == "lt-1234"
+    assert launch_template_config["Overrides"] == [
+        {"InstanceType": "i7i.large"},
+        {"InstanceType": "i7ie.large"},
+        {"InstanceType": "i4i.large"},
+    ]
+
+
+def test_create_ec2_fleet_request_on_demand_has_no_spot_options(mock_ec2_client):
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.create_fleet.return_value = {"FleetId": "fleet-1", "Instances": [{"InstanceIds": ["i-1"]}]}
+
+    create_ec2_fleet_instance_request(
+        region_name="us-east-1", count=1, template_id="lt-1", instance_types=["i7i.large"], spot=False
+    )
+
+    request = mock_client.create_fleet.call_args.kwargs
+    assert request["TargetCapacitySpecification"]["DefaultTargetCapacityType"] == "on-demand"
+    assert "SpotOptions" not in request
+
+
+def test_create_ec2_fleet_request_returns_partial_fulfillment_with_errors(mock_ec2_client):
+    """`instant` fleets can return fewer instances than requested plus per-pool errors."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.create_fleet.return_value = {
+        "FleetId": "fleet-partial",
+        "Instances": [{"InstanceIds": ["i-1"]}],
+        "Errors": [
+            {
+                "ErrorCode": "InsufficientInstanceCapacity",
+                "ErrorMessage": "There is no Spot capacity available",
+                "LaunchTemplateAndOverrides": {"Overrides": {"InstanceType": "i7i.large"}},
+            }
+        ],
+    }
+
+    _, instance_ids, errors = create_ec2_fleet_instance_request(
+        region_name="us-east-1", count=3, template_id="lt-1", instance_types=["i7i.large", "i4i.large"]
+    )
+
+    assert instance_ids == ["i-1"]
+    assert is_ec2_fleet_unfulfillable(errors) is True
+
+
+@pytest.mark.parametrize(
+    "errors, expected",
+    [
+        pytest.param([], False, id="no_errors"),
+        pytest.param([{"ErrorCode": "InsufficientInstanceCapacity"}], True, id="capacity_exhausted"),
+        pytest.param([{"ErrorCode": "MaxSpotInstanceCountExceeded"}], True, id="account_limit"),
+        pytest.param([{"ErrorCode": "SpotMaxPriceTooLow"}], True, id="price_too_low"),
+        pytest.param([{"ErrorCode": "RequestLimitExceeded"}], False, id="throttling_is_retryable"),
+    ],
+)
+def test_is_ec2_fleet_unfulfillable(errors, expected):
+    assert is_ec2_fleet_unfulfillable(errors) is expected
+
+
+def test_delete_ec2_fleet_is_best_effort(mock_ec2_client, caplog):
+    """Cleanup must never mask the real provisioning failure."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.delete_fleets.side_effect = Exception("Fleet delete error")
+
+    with caplog.at_level(logging.WARNING):
+        delete_ec2_fleet(region_name="us-east-1", fleet_id="fleet-1", terminate_instances=True)
+
+    assert "Failed to delete EC2 fleet" in caplog.records[0].message
+
+
+def test_delete_ec2_fleet_terminates_instances_when_delete_raises(mock_ec2_client):
+    """A failed delete must fall back to terminating the tracked instances (no leaks)."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.delete_fleets.side_effect = Exception("Fleet delete error")
+
+    delete_ec2_fleet(
+        region_name="us-east-1",
+        fleet_id="fleet-1",
+        terminate_instances=True,
+        instance_ids=["i-1", "i-2"],
+    )
+
+    mock_client.terminate_instances.assert_called_once_with(InstanceIds=["i-1", "i-2"])
+
+
+def test_delete_ec2_fleet_terminates_instances_on_unsuccessful_deletion(mock_ec2_client):
+    """UnsuccessfulFleetDeletions in the response must trigger direct instance termination."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.delete_fleets.return_value = {
+        "UnsuccessfulFleetDeletions": [{"FleetId": "fleet-1", "Error": {"Code": "fleetIdDoesNotExist"}}],
+        "SuccessfulFleetDeletions": [],
+    }
+
+    delete_ec2_fleet(
+        region_name="us-east-1",
+        fleet_id="fleet-1",
+        terminate_instances=True,
+        instance_ids=["i-1"],
+    )
+
+    mock_client.terminate_instances.assert_called_once_with(InstanceIds=["i-1"])
+
+
+def test_delete_ec2_fleet_no_terminate_on_successful_deletion(mock_ec2_client):
+    """A clean deletion (no UnsuccessfulFleetDeletions) must not double-terminate instances."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.delete_fleets.return_value = {"UnsuccessfulFleetDeletions": [], "SuccessfulFleetDeletions": []}
+
+    delete_ec2_fleet(
+        region_name="us-east-1",
+        fleet_id="fleet-1",
+        terminate_instances=True,
+        instance_ids=["i-1"],
+    )
+
+    mock_client.terminate_instances.assert_not_called()
+
+
+def test_delete_ec2_fleet_ignores_missing_fleet_id(mock_ec2_client):
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+
+    delete_ec2_fleet(region_name="us-east-1", fleet_id=None, terminate_instances=True)
+
+    mock_client.delete_fleets.assert_not_called()
