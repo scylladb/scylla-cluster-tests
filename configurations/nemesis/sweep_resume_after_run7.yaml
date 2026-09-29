@@ -207,3 +207,23 @@ nemesis_exclude_list:
   # "repair" stage and fail every request to them the same way (SCYLLADB-4854).
   - "MgmtRepair"  # not run - blocked by SCYLLADB-4854
   - "NoCorruptRepairMonkey"  # not run - blocked by SCYLLADB-4854
+
+  # run #23 (1bcb76cd) - the last sixteen of the sweep, all passed with no ERROR or CRITICAL event.
+  # With these the list covers all 99 nemesis in scope, so a run from here executes none: to sweep
+  # again, drop the "succeeded" entries (keep the blocked, failed and static-skip ones).
+  - "CorruptThenScrubMonkey"  # succeeded
+  - "LoadAndStreamMonkey"  # succeeded
+  - "MajorCompactionMonkey"  # succeeded
+  - "MgmtBackup"  # succeeded
+  - "MgmtBackupSpecificKeyspaces"  # succeeded
+  - "NodeToolCleanupMonkey"  # succeeded
+  - "RefreshBigMonkey"  # succeeded
+  - "RefreshMonkey"  # succeeded
+  - "SnapshotOperations"  # succeeded
+  - "StartStopCleanupCompaction"  # succeeded
+  - "StartStopMajorCompaction"  # succeeded
+  - "StartStopScrubCompaction"  # succeeded
+  - "StartStopValidationCompaction"  # succeeded
+  - "TopPartitions"  # succeeded
+  - "TruncateLargeParititionMonkey"  # succeeded
+  - "TruncateMonkey"  # succeeded
