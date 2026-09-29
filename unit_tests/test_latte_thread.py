@@ -84,14 +84,25 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
 
     latte_thread.run()
 
-    @timeout(timeout=60)
+    # NOTE: the gauge shows up in /metrics (as '# HELP'/'# TYPE' lines) as soon as the exporter
+    #       is constructed, long before it has parsed a single latte sample line. So waiting for
+    #       samples is the whole point of the retry here - matching nothing used to satisfy the
+    #       'all(...)' check vacuously and let the test pass without asserting anything.
+    sample_regex = re.compile(
+        r'^sct_latte_user_gauge\{[^}]*type="(?P<type>[^"]+)"[^}]*\}\s+(?P<value>[-+0-9.eE]+)$', re.MULTILINE
+    )
+
+    @timeout(timeout=120)
     def check_metrics():
         output = requests.get("http://{}/metrics".format(prom_address)).text
         assert "sct_latte_user_gauge" in output
 
-        regex = re.compile(r"^sct_latte_user_gauge.*?([0-9\.]*?)$", re.MULTILINE)
-        matches = regex.findall(output)
-        assert all(float(i) > 0 for i in matches), output
+        samples = {match["type"]: float(match["value"]) for match in sample_regex.finditer(output)}
+        assert samples, f"latte exporter has not published any sample yet:\n{output}"
+        # NOTE: 'errors' is the latte 'Errors [op]' column, which is legitimately 0 on a healthy
+        #       run, so only the latency/throughput samples are expected to be positive.
+        positive = {name: value for name, value in samples.items() if name != "errors"}
+        assert positive and all(value > 0 for value in positive.values()), output
 
     check_metrics()
 
