@@ -15,6 +15,7 @@ from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
 
+from sdcm.provision.aws.constants import EC2_FLEET_LAUNCH_TEMPLATE_PREFIX
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils import resources_cleanup
 from sdcm.utils.resources_cleanup import (
@@ -24,6 +25,7 @@ from sdcm.utils.resources_cleanup import (
     clean_instances_aws,
     clean_instances_gce,
     clean_instances_oci,
+    clean_launch_templates_aws,
     clean_resources_docker,
     clean_spot_fleet_requests_aws,
 )
@@ -404,6 +406,14 @@ class TestCleanCloudResources:
         res = clean_cloud_resources(params, self.config)
         assert res
 
+    def test_aws_backend_cleans_only_ec2_fleet_launch_templates(self):
+        # EC2 Fleet's throwaway launch templates leak when provisioning is killed mid-request (SCT-779),
+        # but the aws backend must never delete long-lived templates such as the SCT runner's.
+        clean_cloud_resources({"TestId": "1111"}, self.config)
+        resources_cleanup.clean_launch_templates_aws.assert_called_once_with(
+            {"TestId": "1111"}, regions=ANY, dry_run=False, name_prefix=EC2_FLEET_LAUNCH_TEMPLATE_PREFIX
+        )
+
     def test_step_failure_does_not_abort_cleanup(self):
         # SCT-507: a cleanup step that raises (e.g. an unreachable region) must not
         # abort the whole run; later steps still execute.
@@ -565,3 +575,24 @@ def test_unattached_cleanup_keeps_the_builder_security_group():
         clean_unattached_security_groups("eu-west-1")
 
     ec2.delete_security_group.assert_called_once_with(GroupId="sg-stale")
+
+
+def test_clean_launch_templates_aws_name_prefix_limits_deletion():
+    """Tag matches alone are not enough: a prefix keeps e.g. the SCT runner's template alive."""
+    templates = {
+        "eu-west-3": [
+            {"LaunchTemplateName": f"{EC2_FLEET_LAUNCH_TEMPLATE_PREFIX}1234", "LaunchTemplateId": "lt-fleet"},
+            {"LaunchTemplateName": "sct-runner-1.10", "LaunchTemplateId": "lt-runner"},
+        ]
+    }
+    with (
+        patch("sdcm.utils.resources_cleanup.list_launch_templates_aws", return_value=templates),
+        patch("boto3.client") as ec2_client_factory,
+    ):
+        clean_launch_templates_aws(
+            {"RunByUser": "QA"}, regions=["eu-west-3"], name_prefix=EC2_FLEET_LAUNCH_TEMPLATE_PREFIX
+        )
+
+    ec2_client_factory.return_value.delete_launch_template.assert_called_once_with(
+        LaunchTemplateName=f"{EC2_FLEET_LAUNCH_TEMPLATE_PREFIX}1234"
+    )

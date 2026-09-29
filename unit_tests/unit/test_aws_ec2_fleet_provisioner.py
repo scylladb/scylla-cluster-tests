@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from sdcm.provision.aws.constants import EC2_FLEET_LAUNCH_TEMPLATE_PREFIX
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.common.provisioner import ProvisionParameters
@@ -89,6 +90,33 @@ def test_fleet_request_offers_every_configured_instance_type(
     # launch template is cleaned up.
     fleet_mocks["delete_fleet"].assert_not_called()
     fleet_mocks["delete_template"].assert_called_once_with(region_name="us-east-1", template_id="lt-1234")
+
+
+def test_launch_template_and_fleet_are_tagged_for_cleanup(provision_parameters, fleet_mocks):
+    """SCT-779: a template/fleet left behind by a killed process must be discoverable by its tags."""
+    fleet_mocks["create_fleet"].return_value = ("fleet-1", ["i-1", "i-2"], [])
+    node_tags = {"TestId": "test-1", "RunByUser": "qa", "NodeType": "scylla-db"}
+    provisioner = AWSInstanceProvisioner()
+
+    provisioner._execute_ec2_fleet_instance_request(
+        provision_parameters=provision_parameters,
+        instance_parameters=[make_instance_parameters("i7i.large")],
+        count=2,
+        tags=[node_tags | {"Name": "db-node-1"}, node_tags | {"Name": "db-node-2"}],
+    )
+
+    # the per-node Name is not a property of the shared template/fleet, every other tag is
+    expected_tags = [{"Key": key, "Value": value} for key, value in node_tags.items()]
+    template_call = fleet_mocks["create_template"].call_args.kwargs
+    assert template_call["template_name"].startswith(EC2_FLEET_LAUNCH_TEMPLATE_PREFIX)
+    assert template_call["tags"] == expected_tags
+    assert fleet_mocks["create_fleet"].call_args.kwargs["tag_specifications"] == [
+        {"ResourceType": "fleet", "Tags": expected_tags}
+    ]
+    # instances are still tagged at launch with the full tag set, Name included
+    (instance_tag_spec,) = template_call["instance_parameters"]["TagSpecifications"]
+    assert instance_tag_spec["ResourceType"] == "instance"
+    assert {"Key": "Name", "Value": "db-node-1"} in instance_tag_spec["Tags"]
 
 
 def test_partial_fulfillment_is_rolled_back(provision_parameters, fleet_mocks):
