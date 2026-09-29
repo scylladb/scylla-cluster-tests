@@ -2236,6 +2236,50 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 f"{field_name} missing from config for {backend}"
             )
 
+    def _validate_aws_instance_type_db_alternatives(self):
+        """Check that every EC2 Fleet alternative can stand in for `instance_type_db`.
+
+        The DB AMI is selected for `instance_type_db`'s CPU architecture, so an alternative of another
+        architecture could not boot it; a different vCPU count or memory size would silently yield a
+        cluster with uneven shard counts and cache sizes. Local disk size and CPU generation may
+        differ. Specs come from the offline instance catalog; a type missing from it still has its
+        architecture checked against AWS, but its vCPU/memory can't be verified.
+        """
+        alternatives = split_instance_types(self.get("aws_instance_type_db_alternatives"))
+        primary = self.get("instance_type_db")
+        if not alternatives or not primary:
+            return
+        catalog = InstanceCatalog.from_directory(pathlib.Path(sct_abs_path("data/instance_catalog")))
+        region = self.region_names[0]
+
+        def arch_of(instance_type: str, info) -> str:
+            return info.arch if info else get_arch_from_instance_type(instance_type, region_name=region)
+
+        primary_info = catalog.get_instance("aws", primary)
+        primary_arch = arch_of(primary, primary_info)
+        for alternative in alternatives:
+            alternative_info = catalog.get_instance("aws", alternative)
+            alternative_arch = arch_of(alternative, alternative_info)
+            assert alternative_arch == primary_arch, (
+                f"aws_instance_type_db_alternatives: '{alternative}' is {alternative_arch}, but instance_type_db "
+                f"'{primary}' is {primary_arch} and the DB AMI is selected for {primary_arch}"
+            )
+            if not (primary_info and alternative_info):
+                self.log.warning(
+                    "Can't verify that aws_instance_type_db_alternatives entry '%s' has the same vCPUs and memory "
+                    "as instance_type_db '%s': not in the instance catalog",
+                    alternative,
+                    primary,
+                )
+                continue
+            same_vcpus = alternative_info.vcpus == primary_info.vcpus
+            same_memory = alternative_info.memory_gb == primary_info.memory_gb
+            assert same_vcpus and same_memory, (
+                f"aws_instance_type_db_alternatives: '{alternative}' has {alternative_info.vcpus} vCPUs and "
+                f"{alternative_info.memory_gb}GB memory, but instance_type_db '{primary}' has {primary_info.vcpus} "
+                f"vCPUs and {primary_info.memory_gb}GB; alternatives must be interchangeable with it"
+            )
+
     def _instance_type_validation(self):
         backend = self.get("cluster_backend")
 
@@ -2260,6 +2304,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
                                 f"Instance type '{single_instance_type}' (param: {param_name}) "
                                 f"is not supported in region '{region}'"
                             )
+            self._validate_aws_instance_type_db_alternatives()
 
         # Validate nemesis_grow_shrink_instance_type
         if instance_type := self.get("nemesis_grow_shrink_instance_type"):

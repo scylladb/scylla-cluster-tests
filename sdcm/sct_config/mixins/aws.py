@@ -83,12 +83,15 @@ class AwsConfigMixin(BaseModel):
     aws_instance_type_db_alternatives: StringOrList = SctField(
         description=(
             "List of additional, interchangeable AWS DB instance types "
-            "(e.g. ['i7ie.large', 'i4i.large', 'i3en.large']) offered ONLY to EC2 Fleet (spot) provisioning "
-            "as alternatives to instance_type_db, so a large spot request can be satisfied from more "
-            "than one capacity pool. instance_type_db remains the single primary type used by every "
-            "other code path (validation, AMI/arch lookup, AZ selection, non-fleet provisioning). "
-            "Only list types with CPU/memory/disk characteristics equivalent to instance_type_db - "
-            "SCT does not verify this. AWS-only."
+            "(e.g. ['i7ie.large', 'i4i.large', 'i3en.large']) offered ONLY to EC2 Fleet spot provisioning "
+            "- used for spot batches of more than 10 instances per AZ - as lower-priority alternatives to "
+            "instance_type_db, so a large spot request can still be fulfilled when the primary pool is "
+            "exhausted. instance_type_db stays the primary type: EC2 Fleet prefers it (best effort), and "
+            "every other code path (AMI/arch lookup, AZ selection, non-fleet provisioning) uses it alone. "
+            "Every entry must be available in the region and have the same CPU architecture (the AMI is "
+            "architecture-specific), vCPU count and memory as instance_type_db, which is validated. Local "
+            "disk size and CPU generation may differ, so a fleet can produce a heterogeneous cluster. "
+            "AWS only."
         ),
     )
     extra_network_interface: Boolean = SctField(
