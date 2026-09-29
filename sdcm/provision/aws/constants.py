@@ -41,11 +41,17 @@ EC2_FLEET_TYPE_INSTANT = "instant"
 # EC2 Fleet request type that provisions synchronously and does not try to maintain target capacity.
 # SCT owns node lifecycle (nemesis terminates nodes on purpose), so automatic replacement must stay off.
 
-EC2_FLEET_ALLOCATION_STRATEGY = "capacity-optimized"
-# Allocation strategy telling AWS to pick the instance pools with the deepest spare capacity,
-# which is what reduces interruption rate when several instance types are offered. It is also what
-# `ec2:GetSpotPlacementScores` assumes when it scores an AZ (see `spot_placement_score.py`) - so it must
-# stay capacity-optimized, or the scores we rank AZs by over-predict our actual fulfillment rate.
+EC2_FLEET_ALLOCATION_STRATEGY = "capacity-optimized-prioritized"
+# Allocation strategy telling AWS to pick the instance pools with the deepest spare capacity (which is
+# what reduces the interruption rate when several instance types are offered) while honoring each
+# override's Priority on a best-effort basis, so the primary instance type is preferred over the
+# alternatives whenever its pool can take the request. Plain `capacity-optimized` has no notion of a
+# preferred type and could, e.g., place a scale test on an older generation despite the primary
+# having capacity.
+#
+# Capacity still comes first - the priorities are only best-effort - which is what
+# `ec2:GetSpotPlacementScores` assumes when it scores an AZ (see `spot_placement_score.py`). Keep it a
+# capacity-optimized variant, or the scores we rank AZs by over-predict our actual fulfillment rate.
 #
 # NOTE the spelling: CreateFleet's SpotOptionsRequest.AllocationStrategy takes the hyphenated form; the
 # camelCase 'capacityOptimized' belongs to the legacy RequestSpotFleet API. botocore does not validate enum
