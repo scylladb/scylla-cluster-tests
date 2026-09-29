@@ -41,8 +41,8 @@ from mypy_boto3_ec2.type_defs import (
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.constants import (
     EC2_FLEET_ALLOCATION_STRATEGY,
+    EC2_FLEET_RETRYABLE_ERROR_CODES,
     EC2_FLEET_TYPE_INSTANT,
-    EC2_FLEET_UNFULFILLABLE_ERROR_CODES,
     SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
     SPOT_PRICE_TOO_LOW,
     SPOT_REQUEST_TIMEOUT,
@@ -375,9 +375,13 @@ def create_ec2_fleet_instance_request(
     return fleet_id, instance_ids, errors
 
 
-def is_ec2_fleet_unfulfillable(errors: List[dict]) -> bool:
-    """True when the fleet errors mean retrying the same request is pointless."""
-    return any(error.get("ErrorCode") in EC2_FLEET_UNFULFILLABLE_ERROR_CODES for error in errors)
+def is_ec2_fleet_retryable(errors: List[dict]) -> bool:
+    """True when at least one fleet error is transient, so the same request may succeed on a retry.
+
+    A mix of transient and capacity errors still counts: the pool that was throttled may well have
+    the capacity the others lacked.
+    """
+    return any(error.get("ErrorCode") in EC2_FLEET_RETRYABLE_ERROR_CODES for error in errors)
 
 
 def log_ec2_fleet_errors(region_name: str, fleet_id: Optional[str], errors: List[dict]) -> None:

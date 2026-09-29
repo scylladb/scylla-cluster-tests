@@ -17,7 +17,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sdcm.provision.aws.constants import EC2_FLEET_LAUNCH_TEMPLATE_PREFIX
+from sdcm.provision.aws.constants import (
+    EC2_FLEET_LAUNCH_TEMPLATE_PREFIX,
+    EC2_FLEET_MAX_ATTEMPTS,
+    EC2_FLEET_RETRY_BACKOFF,
+)
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.common.provisioner import ProvisionParameters
@@ -51,12 +55,14 @@ def fleet_mocks():
             "sdcm.provision.aws.provisioner.find_instance_by_id",
             side_effect=lambda region_name, instance_id: instance_id,
         ),
+        patch("sdcm.provision.aws.provisioner.time.sleep") as sleep,
     ):
         yield {
             "create_template": create_template,
             "delete_template": delete_template,
             "create_fleet": create_fleet,
             "delete_fleet": delete_fleet,
+            "sleep": sleep,
         }
 
 
@@ -139,6 +145,55 @@ def test_partial_fulfillment_is_rolled_back(provision_parameters, fleet_mocks):
     fleet_mocks["delete_fleet"].assert_called_once_with(
         region_name="us-east-1", fleet_id="fleet-1", terminate_instances=True, instance_ids=["i-1"]
     )
+    fleet_mocks["delete_template"].assert_called_once()
+    # running out of capacity is not transient, so it goes straight to the caller's fallback
+    fleet_mocks["create_fleet"].assert_called_once()
+    fleet_mocks["sleep"].assert_not_called()
+
+
+def test_transient_fleet_errors_are_retried(provision_parameters, fleet_mocks):
+    """A throttled batch is rolled back and requested again instead of failing the provisioning."""
+    fleet_mocks["create_fleet"].side_effect = [
+        ("fleet-1", ["i-1"], [{"ErrorCode": "RequestLimitExceeded", "ErrorMessage": "throttled"}]),
+        ("fleet-2", ["i-2", "i-3"], []),
+    ]
+    provisioner = AWSInstanceProvisioner()
+
+    instances = provisioner._execute_ec2_fleet_instance_request(
+        provision_parameters=provision_parameters,
+        instance_parameters=[make_instance_parameters("i7i.large")],
+        count=2,
+        tags=[{"NodeIndex": "1"}, {"NodeIndex": "2"}],
+    )
+
+    assert instances == ["i-2", "i-3"]
+    assert fleet_mocks["create_fleet"].call_count == 2
+    # only the throttled attempt is rolled back; the successful one is handed to the cluster
+    fleet_mocks["delete_fleet"].assert_called_once_with(
+        region_name="us-east-1", fleet_id="fleet-1", terminate_instances=True, instance_ids=["i-1"]
+    )
+    fleet_mocks["sleep"].assert_called_once_with(EC2_FLEET_RETRY_BACKOFF)
+    # one launch template serves every attempt
+    fleet_mocks["create_template"].assert_called_once()
+    fleet_mocks["delete_template"].assert_called_once()
+
+
+def test_transient_fleet_error_retries_are_bounded(provision_parameters, fleet_mocks):
+    fleet_mocks["create_fleet"].return_value = ("fleet-1", [], [{"ErrorCode": "RequestLimitExceeded"}])
+    provisioner = AWSInstanceProvisioner()
+
+    instances = provisioner._execute_ec2_fleet_instance_request(
+        provision_parameters=provision_parameters,
+        instance_parameters=[make_instance_parameters("i7i.large")],
+        count=2,
+        tags=[{"NodeIndex": "1"}, {"NodeIndex": "2"}],
+    )
+
+    assert instances == []
+    assert fleet_mocks["create_fleet"].call_count == EC2_FLEET_MAX_ATTEMPTS
+    assert fleet_mocks["delete_fleet"].call_count == EC2_FLEET_MAX_ATTEMPTS
+    # no wait after the last attempt, the caller's fallback takes over right away
+    assert fleet_mocks["sleep"].call_count == EC2_FLEET_MAX_ATTEMPTS - 1
     fleet_mocks["delete_template"].assert_called_once()
 
 
