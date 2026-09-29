@@ -20,14 +20,17 @@ is also blocked, held out before it ran while SCYLLADB-4625 is open, and so is `
 (it adds, replaces and decommissions nodes: SCYLLADB-4753). `MgmtRepair` and `NoCorruptRepairMonkey`
 are blocked by SCYLLADB-4854: both repair the SC table, which fails every request to it.
 
+**The sweep is complete** as of run #23: every one of the 99 nemesis in scope has a verdict, and
+none is left unexecuted.
+
 | Status | Count | Share of all 112 |
 |---|---:|---:|
-| pass | 27 | 24% |
+| pass | 43 | 38% |
 | failed | 12 | 11% |
 | blocked (13 topology-changes + `MultipleHardRebootNodeMonkey` + `NemesisSequence` + `MgmtRepair` + `NoCorruptRepairMonkey`) | 17 | 15% |
 | **failed + blocked** | **29** | **26%** |
 | skipped (34 seen in a run, 6 held out on a precondition this job never meets) | 40 | 36% |
-| not executed | 16 | 14% |
+| not executed | 0 | 0% |
 
 ## Per-run statistics
 
@@ -48,6 +51,7 @@ A nemesis can be "succeeded" here and still be the one that failed the run.
 | [#20](https://argus.scylladb.com/tests/scylla-cluster-tests/b498fd49-bf0a-4b20-b861-c0bc692aeabb) | 2026-09-25 14:22–18:55 | 6 | 2 | 1 | 3 | aborted - node-2 crash loop after the hard reboot in `RepairStreamingErrMonkey` (SCYLLADB-4625) |
 | [#21](https://argus.scylladb.com/tests/scylla-cluster-tests/775260c1-70b6-410f-b8ad-5d6a5bb51328) | 2026-09-28 09:03–11:59 | 1 | 0 | 1 | 0 | aborted - `RestartThenRepairNodeMonkey`: the EC2 stop/start wiped node-1, whose self-replace never left BOOTSTRAP (SCYLLADB-4753) |
 | [#22](https://argus.scylladb.com/tests/scylla-cluster-tests/948201de-ff46-4b43-9abb-c97df770ea18) | 2026-09-28 14:20–19:13 | 11 | 5 | 1 | 5 | aborted - all five restart nemesis passed and five precondition skips skipped as predicted; then `AbortRepairMonkey`'s follow-up repair tablet-repaired the SC table and every request to a tablet in the `repair` stage failed with an internal error for 7 min (SCYLLADB-4854) |
+| [#23](https://argus.scylladb.com/tests/scylla-cluster-tests/1bcb76cd-55c5-4e72-bb3f-a7387c8b3323) | 2026-09-29 13:15– | 16 | 16 | 0 | 0 | sweep finished at 16:11 - the last sixteen of `rest` all passed, no ERROR or CRITICAL event (the run was still in its load phase at the time of writing) |
 
 Run #13 reached nine nemesis but Argus recorded two: the eight precheck exclusions are submitted
 with one shared timestamp, and only the first survives. The SCT log has all of them.
@@ -72,6 +76,7 @@ with one shared timestamp, and only the first survives. The SCT log has all of t
 | `8ffc91f7d` | the five restart nemesis run #22 passed excluded | `RollingRestartConfigChangeInternodeCompression`, `ScyllaKillMonkey`, `SoftRebootNodeMonkey`, `StopStartMonkey` and `StopWaitStartMonkey` passed; the rolling restart's entry changes from blocked to succeeded |
 | `05b266d66` | `AbortRepairMonkey` excluded after run #22 | its follow-up repair tablet-repairs `keyspace1.standard1`; while the SC tablets are in the `repair` stage every request to them fails with `replica_selector::leader_capable: unexpected transition stage repair` |
 | `118fc017f` | `MgmtRepair` and `NoCorruptRepairMonkey` held out before they ran | both repair `keyspace1` and would fail every request to the SC tablets the same way - SCYLLADB-4854 |
+| `b6d9a945b` | the sixteen nemesis run #23 passed excluded | all passed; the list now covers all 99 nemesis in scope, so to sweep again drop the `succeeded` entries |
 
 ## Open issues found by this job
 
