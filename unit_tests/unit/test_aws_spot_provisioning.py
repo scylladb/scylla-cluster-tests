@@ -279,13 +279,17 @@ def test_create_ec2_fleet_request_diversifies_across_instance_types(mock_ec2_cli
         "TotalTargetCapacity": 3,
         "DefaultTargetCapacityType": "spot",
     }
+    # plain `capacity-optimized` ignores priorities, which would make the primary type no more
+    # likely to be picked than any alternative
+    assert EC2_FLEET_ALLOCATION_STRATEGY == "capacity-optimized-prioritized"
     assert request["SpotOptions"] == {"AllocationStrategy": EC2_FLEET_ALLOCATION_STRATEGY}
     launch_template_config = request["LaunchTemplateConfigs"][0]
     assert launch_template_config["LaunchTemplateSpecification"]["LaunchTemplateId"] == "lt-1234"
+    # list order is preference order: the primary (first) type gets the highest priority, 0
     assert launch_template_config["Overrides"] == [
-        {"InstanceType": "i7i.large"},
-        {"InstanceType": "i7ie.large"},
-        {"InstanceType": "i4i.large"},
+        {"InstanceType": "i7i.large", "Priority": 0.0},
+        {"InstanceType": "i7ie.large", "Priority": 1.0},
+        {"InstanceType": "i4i.large", "Priority": 2.0},
     ]
 
 
