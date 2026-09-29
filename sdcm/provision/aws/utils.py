@@ -283,12 +283,25 @@ def build_launch_template_data(instance_parameters: dict) -> dict:
     return launch_template_data
 
 
-def create_launch_template(region_name: str, template_name: str, instance_parameters: dict) -> str:
-    """Create a throwaway launch template backing a single EC2 Fleet request. Returns its id."""
-    resp = ec2_clients[region_name].create_launch_template(
-        LaunchTemplateName=template_name,
-        LaunchTemplateData=build_launch_template_data(instance_parameters),
-    )
+def create_launch_template(
+    region_name: str,
+    template_name: str,
+    instance_parameters: dict,
+    tags: Optional[List[Dict[str, str]]] = None,
+) -> str:
+    """Create a throwaway launch template backing a single EC2 Fleet request. Returns its id.
+
+    `tags` (EC2 format) are applied to the template itself, so a template left behind by a
+    provisioning process that was killed before its `finally` cleanup ran (e.g. a Jenkins stage
+    timeout, see SCT-779) can still be discovered and deleted by clean-resources.
+    """
+    params = {
+        "LaunchTemplateName": template_name,
+        "LaunchTemplateData": build_launch_template_data(instance_parameters),
+    }
+    if tags:
+        params["TagSpecifications"] = [{"ResourceType": "launch-template", "Tags": tags}]
+    resp = ec2_clients[region_name].create_launch_template(**params)
     template_id = resp["LaunchTemplate"]["LaunchTemplateId"]
     LOGGER.info("Created launch template %s (%s) in region %s", template_name, template_id, region_name)
     return template_id

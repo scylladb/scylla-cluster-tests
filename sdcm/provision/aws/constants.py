@@ -32,6 +32,11 @@ SPOT_CAPACITY_NOT_AVAILABLE_ERROR = "capacity-not-available"
 EC2_FLEET_LIMIT = 500
 # Limit of instances that AWS API can handle with single EC2 Fleet request
 
+EC2_FLEET_LAUNCH_TEMPLATE_PREFIX = "sct-fleet-"
+# Name prefix of the throwaway launch templates backing EC2 Fleet requests. clean-resources only
+# deletes launch templates carrying this prefix on the `aws` backend, so it never touches long-lived
+# templates such as the SCT runner's.
+
 EC2_FLEET_TYPE_INSTANT = "instant"
 # EC2 Fleet request type that provisions synchronously and does not try to maintain target capacity.
 # SCT owns node lifecycle (nemesis terminates nodes on purpose), so automatic replacement must stay off.

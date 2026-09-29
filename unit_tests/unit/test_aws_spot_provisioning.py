@@ -20,6 +20,7 @@ import pytest
 
 from sdcm.provision.aws.utils import (
     build_launch_template_data,
+    create_launch_template,
     create_ec2_fleet_instance_request,
     delete_ec2_fleet,
     get_provisioned_spot_instance_ids,
@@ -219,6 +220,33 @@ def test_build_launch_template_data_drops_unsupported_keys():
     assert "SecurityGroups" not in launch_template_data
     assert launch_template_data["ImageId"] == "ami-1234"
     assert launch_template_data["NetworkInterfaces"][0]["SubnetId"] == "subnet-1234"
+
+
+@pytest.mark.parametrize(
+    "tags, expected_tag_specifications",
+    [
+        pytest.param(
+            [{"Key": "TestId", "Value": "test-1"}],
+            [{"ResourceType": "launch-template", "Tags": [{"Key": "TestId", "Value": "test-1"}]}],
+            id="tagged",
+        ),
+        pytest.param(None, None, id="untagged"),
+    ],
+)
+def test_create_launch_template_tags_the_template(mock_ec2_client, tags, expected_tag_specifications):
+    """SCT-779: the template itself is tagged, so clean-resources can find one left behind."""
+    mock_client = MagicMock()
+    mock_ec2_client.__getitem__.return_value = mock_client
+    mock_client.create_launch_template.return_value = {"LaunchTemplate": {"LaunchTemplateId": "lt-1234"}}
+
+    template_id = create_launch_template(
+        region_name="us-east-1", template_name="sct-fleet-1", instance_parameters={"ImageId": "ami-1"}, tags=tags
+    )
+
+    assert template_id == "lt-1234"
+    request = mock_client.create_launch_template.call_args.kwargs
+    assert request["LaunchTemplateName"] == "sct-fleet-1"
+    assert request.get("TagSpecifications") == expected_tag_specifications
 
 
 def test_create_ec2_fleet_request_diversifies_across_instance_types(mock_ec2_client):
