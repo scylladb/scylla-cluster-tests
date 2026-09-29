@@ -48,6 +48,7 @@ from sdcm.utils.cloud_api_utils import (
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
+from sdcm.provision.aws.utils import split_instance_types
 from sdcm.provision.common.oracle import ORACLE_IMAGE_PARAMS, ORACLE_USER_PREFIX_SUFFIX
 from sdcm.provision.network_configuration import azure_network_interfaces, ssh_connection_ip_type
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
@@ -2238,10 +2239,13 @@ class SCTConfiguration(*CONFIG_GROUPS):
     def _instance_type_validation(self):
         backend = self.get("cluster_backend")
 
-        # Validate main instance types (db, loader, monitor) are available in the target region
+        # Validate main instance types (db, loader, monitor) are available in the target region.
+        # aws_instance_type_db_alternatives is a list of EC2 Fleet-only alternatives,
+        # so every listed type must also be available in the target region.
         if backend == "aws":
             instance_type_params = [
                 "instance_type_db",
+                "aws_instance_type_db_alternatives",
                 "instance_type_loader",
                 "instance_type_monitor",
                 "instance_type_db_target",
@@ -2251,10 +2255,11 @@ class SCTConfiguration(*CONFIG_GROUPS):
             for param_name in instance_type_params:
                 if instance_type := self.get(param_name):
                     for region in self.region_names:
-                        assert aws_check_instance_type_supported(instance_type, region), (
-                            f"Instance type '{instance_type}' (param: {param_name}) "
-                            f"is not supported in region '{region}'"
-                        )
+                        for single_instance_type in split_instance_types(instance_type):
+                            assert aws_check_instance_type_supported(single_instance_type, region), (
+                                f"Instance type '{single_instance_type}' (param: {param_name}) "
+                                f"is not supported in region '{region}'"
+                            )
 
         # Validate nemesis_grow_shrink_instance_type
         if instance_type := self.get("nemesis_grow_shrink_instance_type"):

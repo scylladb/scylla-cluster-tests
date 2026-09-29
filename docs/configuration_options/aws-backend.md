@@ -5,7 +5,7 @@
 AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity
 reservations and dedicated hosts.
 
-**22 options.**
+**23 options.**
 
 
 <a id="ami_db_cassandra_user"></a>
@@ -206,6 +206,17 @@ This is the name of the instance profile to set on all loader instances
 **default:** N/A
 
 **type:** str (appendable)
+
+
+<a id="aws_instance_type_db_alternatives"></a>
+
+## **aws_instance_type_db_alternatives** / SCT_AWS_INSTANCE_TYPE_DB_ALTERNATIVES
+
+List of additional, interchangeable AWS DB instance types (e.g. ['i7ie.large', 'i4i.large', 'i3en.large']) offered ONLY to EC2 Fleet (spot) provisioning as alternatives to [`instance_type_db`](general-and-provisioning.md#instance_type_db), so a large spot request can be satisfied from more than one capacity pool. [`instance_type_db`](general-and-provisioning.md#instance_type_db) remains the single primary type used by every other code path (validation, AMI/arch lookup, AZ selection, non-fleet provisioning). Only list types with CPU/memory/disk characteristics equivalent to [`instance_type_db`](general-and-provisioning.md#instance_type_db) - SCT does not verify this. AWS-only.
+
+**default:** []
+
+**type:** str | list[str] → list[str] (appendable)
 
 
 <a id="extra_network_interface"></a>

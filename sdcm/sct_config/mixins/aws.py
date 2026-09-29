@@ -80,6 +80,17 @@ class AwsConfigMixin(BaseModel):
     aws_instance_profile_name_loader: String = SctField(
         description="This is the name of the instance profile to set on all loader instances",
     )
+    aws_instance_type_db_alternatives: StringOrList = SctField(
+        description=(
+            "List of additional, interchangeable AWS DB instance types "
+            "(e.g. ['i7ie.large', 'i4i.large', 'i3en.large']) offered ONLY to EC2 Fleet (spot) provisioning "
+            "as alternatives to instance_type_db, so a large spot request can be satisfied from more "
+            "than one capacity pool. instance_type_db remains the single primary type used by every "
+            "other code path (validation, AMI/arch lookup, AZ selection, non-fleet provisioning). "
+            "Only list types with CPU/memory/disk characteristics equivalent to instance_type_db - "
+            "SCT does not verify this. AWS-only."
+        ),
+    )
     extra_network_interface: Boolean = SctField(
         description="if true, create extra network interface on each node",
     )
