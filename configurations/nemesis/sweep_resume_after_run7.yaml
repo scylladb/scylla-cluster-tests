@@ -5,8 +5,9 @@
 # covered lets the next run start where that one stopped instead of spending ~2h repeating
 # the schema-changes category.
 #
-# Fourteen of these should stay excluded even once a full sweep is repeated - they cannot pass
+# Seventeen of these should stay excluded even once a full sweep is repeated - they cannot pass
 # against this workload:
+#   AbortRepairMonkey: its follow-up repair tablet-repairs the SC table - blocked by SCYLLADB-4854
 #   AddRemoveMvNemesis: MVs/2i unsupported on strongly consistent keyspaces
 #   BlockNetworkMonkey: needs extra_network_interface: True, not set in this job
 #   CreateIndexNemesis: secondary indexes unsupported on strongly consistent keyspaces
@@ -14,9 +15,11 @@
 #     which strongly consistent tables reject (SCYLLADB-4727)
 #   HardRebootNodeMonkey: blocked by SCYLLADB-4625 - the reboot puts the node in a crash loop
 #   KillMVBuildingCoordinator: MVs/2i unsupported on strongly consistent keyspaces
+#   MgmtRepair: Scylla Manager repair tablet-repairs the SC table - blocked by SCYLLADB-4854
 #   MgmtRestore: blocked by SCYLLADB-4625 - its rolling restart puts a node in a crash loop
 #   MultipleHardRebootNodeMonkey: blocked by SCYLLADB-4625 - hard reboots put a node in a crash loop
 #   NemesisSequence: grows, replaces and shrinks the cluster - blocked by SCYLLADB-4529 and SCYLLADB-4753
+#   NoCorruptRepairMonkey: repairs the target node, SC table included - blocked by SCYLLADB-4854
 #   RepairStreamingErrMonkey: blocked by SCYLLADB-4625 - its hard reboot puts the node in a crash loop
 #   RestartThenRepairNodeMonkey: on instance-store types a restart is an EC2 stop/start that wipes
 #     the disk, so the node replaces itself - blocked by SCYLLADB-4753
@@ -197,5 +200,10 @@ nemesis_exclude_list:
   # every read and write routed to them failed on all six nodes with "Internal server error ...
   # replica_selector::leader_capable: unexpected transition stage repair of a strongly
   # consistent tablet" (service/strong_consistency/coordinator.cc - its own FIXME says nothing
-  # refuses to schedule a repair of an SC tablet yet). No issue filed yet.
-  - "AbortRepairMonkey"  # failed - tablet repair of an SC table breaks every request to it
+  # refuses to schedule a repair of an SC tablet yet). Filed as SCYLLADB-4854.
+  - "AbortRepairMonkey"  # failed - tablet repair of an SC table breaks every request to it, SCYLLADB-4854
+
+  # Held out before they ran: both repair keyspace1, so both would put the SC tablets into the
+  # "repair" stage and fail every request to them the same way (SCYLLADB-4854).
+  - "MgmtRepair"  # not run - blocked by SCYLLADB-4854
+  - "NoCorruptRepairMonkey"  # not run - blocked by SCYLLADB-4854
