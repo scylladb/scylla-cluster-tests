@@ -57,17 +57,22 @@ EC2_FLEET_ALLOCATION_STRATEGY = "capacity-optimized-prioritized"
 # camelCase 'capacityOptimized' belongs to the legacy RequestSpotFleet API. botocore does not validate enum
 # values client-side, so the wrong spelling reaches AWS and comes back as InvalidParameterValue.
 
-EC2_FLEET_UNFULFILLABLE_ERROR_CODES = (
-    "InsufficientInstanceCapacity",
-    "InsufficientHostCapacity",
-    "SpotMaxPriceTooLow",
-    "MaxSpotInstanceCountExceeded",
-    "InstanceLimitExceeded",
-    "UnfulfillableCapacity",
+EC2_FLEET_RETRYABLE_ERROR_CODES = (
+    "RequestLimitExceeded",
+    "InternalError",
+    "ServiceUnavailable",
 )
-# `create_fleet` Errors[].ErrorCode values that mean the request can never be fulfilled as-is.
-# EC2 Fleet has no `describe_spot_fleet_request_history` equivalent, so these replace the
-# FLEET_LIMIT_EXCEEDED_ERROR / SPOT_CAPACITY_NOT_AVAILABLE_ERROR event subtypes used by Spot Fleet.
+# `create_fleet` Errors[].ErrorCode values that are transient (throttling, AWS-side failures), so the
+# same request may succeed moments later. Anything else - capacity (InsufficientInstanceCapacity),
+# account limits (MaxSpotInstanceCountExceeded) or invalid configuration - is not retried; the caller's
+# AZ/region/on-demand fallback handles those. EC2 Fleet has no `describe_spot_fleet_request_history`
+# equivalent, so this list replaces the event subtypes Spot Fleet reported.
+
+EC2_FLEET_MAX_ATTEMPTS = 3
+# Attempts per EC2 Fleet batch when it under-fulfills because of transient errors only.
+
+EC2_FLEET_RETRY_BACKOFF = 10
+# Seconds to wait before the next EC2 Fleet attempt, multiplied by the attempt number (10s, then 20s).
 
 SPOT_PLACEMENT_SCORE_MAX_REGIONS = 10
 # `ec2:GetSpotPlacementScores` accepts at most 10 entries in RegionName.N, so region lists are chunked

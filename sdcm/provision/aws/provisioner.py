@@ -14,6 +14,7 @@
 import contextlib
 import datetime
 import logging
+import time
 import uuid
 from typing import List, Union
 
@@ -24,6 +25,8 @@ from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.constants import (
     EC2_FLEET_LAUNCH_TEMPLATE_PREFIX,
     EC2_FLEET_LIMIT,
+    EC2_FLEET_MAX_ATTEMPTS,
+    EC2_FLEET_RETRY_BACKOFF,
     SPOT_CNT_LIMIT,
     SPOT_REQUEST_TIMEOUT,
 )
@@ -38,7 +41,7 @@ from sdcm.provision.aws.utils import (
     ec2_clients,
     ec2_services,
     find_instance_by_id,
-    is_ec2_fleet_unfulfillable,
+    is_ec2_fleet_retryable,
     log_ec2_fleet_errors,
     set_tags_on_instances,
     wait_for_provision_request_done,
@@ -287,26 +290,32 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
         fleet_id = None
         instance_ids: List[str] = []
         try:
-            fleet_id, instance_ids, errors = create_ec2_fleet_instance_request(
-                region_name=region_name,
-                count=count,
-                template_id=template_id,
-                instance_types=instance_types,
-                spot=provision_parameters.spot,
-                tag_specifications=[{"ResourceType": "fleet", "Tags": resource_tags}],
-            )
-            log_ec2_fleet_errors(region_name=region_name, fleet_id=fleet_id, errors=errors)
-            if len(instance_ids) < count:
+            for attempt in range(1, EC2_FLEET_MAX_ATTEMPTS + 1):
+                fleet_id, instance_ids, errors = create_ec2_fleet_instance_request(
+                    region_name=region_name,
+                    count=count,
+                    template_id=template_id,
+                    instance_types=instance_types,
+                    spot=provision_parameters.spot,
+                    tag_specifications=[{"ResourceType": "fleet", "Tags": resource_tags}],
+                )
+                log_ec2_fleet_errors(region_name=region_name, fleet_id=fleet_id, errors=errors)
+                if len(instance_ids) >= count:
+                    break
                 # Partial fulfillment is useless to SCT: the cluster needs the exact node count,
-                # and leaving the extra instances around would leak them. Roll the whole batch back
-                # and let the caller's AZ/region/on-demand fallback take over.
+                # and leaving the extra instances around would leak them. Roll the whole batch back,
+                # then retry if the errors were transient, or else let the caller's AZ/region/on-demand
+                # fallback take over.
+                retry = attempt < EC2_FLEET_MAX_ATTEMPTS and is_ec2_fleet_retryable(errors)
                 LOGGER.error(
-                    "EC2 Fleet %s in %s provisioned %d of %d requested instances%s. Rolling back.",
+                    "EC2 Fleet %s in %s provisioned %d of %d requested instances (attempt %d/%d). Rolling back%s.",
                     fleet_id,
                     region_name,
                     len(instance_ids),
                     count,
-                    " (request is unfulfillable)" if is_ec2_fleet_unfulfillable(errors) else "",
+                    attempt,
+                    EC2_FLEET_MAX_ATTEMPTS,
+                    " and retrying, the errors are transient" if retry else "",
                 )
                 delete_ec2_fleet(
                     region_name=region_name,
@@ -314,7 +323,11 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
                     terminate_instances=True,
                     instance_ids=instance_ids,
                 )
-                return []
+                # already rolled back, so the error handler below must not touch them again
+                fleet_id, instance_ids = None, []
+                if not retry:
+                    return []
+                time.sleep(EC2_FLEET_RETRY_BACKOFF * attempt)
 
             LOGGER.info("EC2 Fleet instances: %s", instance_ids)
             for ind, instance_id in enumerate(instance_ids):
