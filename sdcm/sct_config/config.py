@@ -41,6 +41,7 @@ from sdcm.keystore import KeyStore
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
+from sdcm.provision.aws.utils import split_instance_types
 from sdcm.provision.common.oracle import ORACLE_IMAGE_PARAMS, ORACLE_USER_PREFIX_SUFFIX
 from sdcm.provision.network_configuration import azure_network_interfaces, ssh_connection_ip_type
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
@@ -2503,10 +2504,13 @@ class SCTConfiguration(*CONFIG_GROUPS):
     def _instance_type_validation(self):
         backend = self.get("cluster_backend")
 
-        # Validate main instance types (db, loader, monitor) are available in the target region
+        # Validate main instance types (db, loader, monitor) are available in the target region.
+        # aws_instance_type_db_alternatives is a list of EC2 Fleet-only alternatives,
+        # so every listed type must also be available in the target region.
         if backend == "aws":
             instance_type_params = [
                 "instance_type_db",
+                "aws_instance_type_db_alternatives",
                 "instance_type_loader",
                 "instance_type_monitor",
                 "instance_type_db_target",
@@ -2514,8 +2518,16 @@ class SCTConfiguration(*CONFIG_GROUPS):
             if self.get("db_type") in ("mixed_scylla", "mixed_cassandra"):
                 instance_type_params.append("instance_type_db_oracle")
             for param_name in instance_type_params:
-                if instance_type := self.get(param_name):
-                    for region in self.region_names:
+                if not (value := self.get(param_name)):
+                    continue
+                # Only the alternatives option is a list. Every other option is a single type and is checked
+                # verbatim, so a comma-separated value fails here instead of reaching AMI lookup or RunInstances.
+                if param_name == "aws_instance_type_db_alternatives":
+                    instance_types = split_instance_types(value)
+                else:
+                    instance_types = [value]
+                for region in self.region_names:
+                    for instance_type in instance_types:
                         assert aws_check_instance_type_supported(instance_type, region), (
                             f"Instance type '{instance_type}' (param: {param_name}) "
                             f"is not supported in region '{region}'"
