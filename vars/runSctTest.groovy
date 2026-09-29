@@ -10,7 +10,7 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     }
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
-    def email_recipients = params.email_recipients ? groovy.json.JsonOutput.toJson(params.email_recipients) : ""
+    def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients ?: "")
 
     def test_cmd
 
@@ -226,8 +226,8 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
         export PYTEST_ADDOPTS="${params.pytest_addopts}"
     fi
 
-    if [[ -n "${email_recipients}" ]] ; then
-        export SCT_EMAIL_RECIPIENTS="${email_recipients}"
+    if [[ -n ${email_recipients} ]] ; then
+        export SCT_EMAIL_RECIPIENTS=${email_recipients}
     fi
 
     if [[ -n "${params.stop_on_hw_perf_failure ? params.stop_on_hw_perf_failure : ''}" ]] ; then

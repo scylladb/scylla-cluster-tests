@@ -225,7 +225,7 @@ def call(Map pipelineParams) {
                                         stage("Run ${sub_test}"){
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
-                                                    def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+                                                    def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients ?: "")
                                                     def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                     timeout(time: testRunTimeout, unit: 'MINUTES') { dir('scylla-cluster-tests') {
 
@@ -307,7 +307,7 @@ def call(Map pipelineParams) {
                                                             export SCT_GCE_DATACENTER='${params.gce_datacenter}'
                                                         fi
 
-                                                        export SCT_EMAIL_RECIPIENTS="${email_recipients}"
+                                                        export SCT_EMAIL_RECIPIENTS=${email_recipients}
                                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then
                                                             export SCT_AMI_ID_DB_SCYLLA=${params.scylla_ami_id}
                                                         elif [[ ! -z "${params.scylla_version}" ]] ; then
@@ -385,7 +385,6 @@ def call(Map pipelineParams) {
                                             }
                                         }
                                         stage("Send email for ${sub_test}") {
-                                            def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
