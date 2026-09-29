@@ -22,6 +22,7 @@ from mypy_boto3_ec2.service_resource import Instance
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.constants import (
+    EC2_FLEET_LAUNCH_TEMPLATE_PREFIX,
     EC2_FLEET_LIMIT,
     SPOT_CNT_LIMIT,
     SPOT_REQUEST_TIMEOUT,
@@ -269,12 +270,17 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
         instance_parameters_dict["TagSpecifications"] = [
             {"ResourceType": "instance", "Tags": tags_as_ec2_tags(tags[0])}
         ]
+        # The launch template and the fleet get the same tags (minus the per-node Name), so that if this
+        # process is killed mid-request -- e.g. a Jenkins stage timeout, see SCT-779 -- clean-resources
+        # can still find them by tag, like every other SCT resource.
+        resource_tags = tags_as_ec2_tags({key: value for key, value in tags[0].items() if key != "Name"})
 
-        template_name = f"sct-fleet-{uuid.uuid4()}"
+        template_name = f"{EC2_FLEET_LAUNCH_TEMPLATE_PREFIX}{uuid.uuid4()}"
         template_id = create_launch_template(
             region_name=region_name,
             template_name=template_name,
             instance_parameters=instance_parameters_dict,
+            tags=resource_tags,
         )
         fleet_id = None
         instance_ids: List[str] = []
@@ -285,6 +291,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
                 template_id=template_id,
                 instance_types=instance_types,
                 spot=provision_parameters.spot,
+                tag_specifications=[{"ResourceType": "fleet", "Tags": resource_tags}],
             )
             log_ec2_fleet_errors(region_name=region_name, fleet_id=fleet_id, errors=errors)
             if len(instance_ids) < count:
