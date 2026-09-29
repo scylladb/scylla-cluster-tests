@@ -24,7 +24,7 @@ from sdcm.provision.aws.utils import (
     create_ec2_fleet_instance_request,
     delete_ec2_fleet,
     get_provisioned_spot_instance_ids,
-    is_ec2_fleet_unfulfillable,
+    is_ec2_fleet_retryable,
     split_instance_types,
 )
 from sdcm.provision.aws.constants import (
@@ -328,21 +328,29 @@ def test_create_ec2_fleet_request_returns_partial_fulfillment_with_errors(mock_e
     )
 
     assert instance_ids == ["i-1"]
-    assert is_ec2_fleet_unfulfillable(errors) is True
+    # running out of capacity is not transient: retrying the same pools right away won't help
+    assert is_ec2_fleet_retryable(errors) is False
 
 
 @pytest.mark.parametrize(
     "errors, expected",
     [
         pytest.param([], False, id="no_errors"),
-        pytest.param([{"ErrorCode": "InsufficientInstanceCapacity"}], True, id="capacity_exhausted"),
-        pytest.param([{"ErrorCode": "MaxSpotInstanceCountExceeded"}], True, id="account_limit"),
-        pytest.param([{"ErrorCode": "SpotMaxPriceTooLow"}], True, id="price_too_low"),
-        pytest.param([{"ErrorCode": "RequestLimitExceeded"}], False, id="throttling_is_retryable"),
+        pytest.param([{"ErrorCode": "InsufficientInstanceCapacity"}], False, id="capacity_exhausted"),
+        pytest.param([{"ErrorCode": "MaxSpotInstanceCountExceeded"}], False, id="account_limit"),
+        pytest.param([{"ErrorCode": "SpotMaxPriceTooLow"}], False, id="price_too_low"),
+        pytest.param([{"ErrorCode": "InvalidParameterValue"}], False, id="bad_request_is_not_retried"),
+        pytest.param([{"ErrorCode": "RequestLimitExceeded"}], True, id="throttling_is_retryable"),
+        pytest.param([{"ErrorCode": "InternalError"}], True, id="aws_internal_error_is_retryable"),
+        pytest.param(
+            [{"ErrorCode": "InsufficientInstanceCapacity"}, {"ErrorCode": "RequestLimitExceeded"}],
+            True,
+            id="throttled_pool_may_still_have_capacity",
+        ),
     ],
 )
-def test_is_ec2_fleet_unfulfillable(errors, expected):
-    assert is_ec2_fleet_unfulfillable(errors) is expected
+def test_is_ec2_fleet_retryable(errors, expected):
+    assert is_ec2_fleet_retryable(errors) is expected
 
 
 def test_delete_ec2_fleet_is_best_effort(mock_ec2_client, caplog):
