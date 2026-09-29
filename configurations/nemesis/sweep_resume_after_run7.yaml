@@ -191,3 +191,11 @@ nemesis_exclude_list:
   - "SoftRebootNodeMonkey"  # succeeded
   - "StopStartMonkey"  # succeeded
   - "StopWaitStartMonkey"  # succeeded
+  # AbortRepairMonkey then failed the run. After aborting its first repair it runs a complete
+  # repair of the target node, which tablet-repairs keyspace1.standard1 - a strongly consistent
+  # table. For the 7 minutes the tablets sat in the "repair" transition stage (15:16-15:23),
+  # every read and write routed to them failed on all six nodes with "Internal server error ...
+  # replica_selector::leader_capable: unexpected transition stage repair of a strongly
+  # consistent tablet" (service/strong_consistency/coordinator.cc - its own FIXME says nothing
+  # refuses to schedule a repair of an SC tablet yet). No issue filed yet.
+  - "AbortRepairMonkey"  # failed - tablet repair of an SC table breaks every request to it
