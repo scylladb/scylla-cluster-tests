@@ -325,6 +325,9 @@ def create_ec2_fleet_instance_request(
 ) -> Tuple[Optional[str], List[str], List[dict]]:
     """Request `count` instances via EC2 Fleet, diversified across `instance_types`.
 
+    `instance_types` is ordered by preference: with the `capacity-optimized-prioritized` Spot
+    strategy, AWS prefers earlier entries on a best-effort basis while still optimizing for capacity.
+
     Uses `Type="instant"`, so the call is synchronous: the response already carries the provisioned
     instance ids and there is nothing to poll. This is the key behavioural difference from Spot
     Fleet, which required a describe/poll loop until the request became `fulfilled`.
@@ -335,7 +338,11 @@ def create_ec2_fleet_instance_request(
     Returns a `(fleet_id, instance_ids, errors)` tuple. `errors` is the raw `Errors` list from the
     response and is non-empty on partial fulfillment even when some instances did come up.
     """
-    overrides = [{"InstanceType": instance_type} for instance_type in instance_types]
+    # Priority follows list order (0 is the highest), so the preferred instance type comes first.
+    overrides = [
+        {"InstanceType": instance_type, "Priority": float(priority)}
+        for priority, instance_type in enumerate(instance_types)
+    ]
     params = {
         "LaunchTemplateConfigs": [
             {

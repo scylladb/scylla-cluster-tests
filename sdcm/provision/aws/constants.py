@@ -41,9 +41,13 @@ EC2_FLEET_TYPE_INSTANT = "instant"
 # EC2 Fleet request type that provisions synchronously and does not try to maintain target capacity.
 # SCT owns node lifecycle (nemesis terminates nodes on purpose), so automatic replacement must stay off.
 
-EC2_FLEET_ALLOCATION_STRATEGY = "capacity-optimized"
-# Allocation strategy telling AWS to pick the instance pools with the deepest spare capacity,
-# which is what reduces interruption rate when several instance types are offered.
+EC2_FLEET_ALLOCATION_STRATEGY = "capacity-optimized-prioritized"
+# Allocation strategy telling AWS to pick the instance pools with the deepest spare capacity (which is
+# what reduces the interruption rate when several instance types are offered) while honoring each
+# override's Priority on a best-effort basis, so the primary instance type is preferred over the
+# alternatives whenever its pool can take the request. Plain `capacity-optimized` has no notion of a
+# preferred type and could, e.g., place a scale test on an older generation despite the primary
+# having capacity.
 
 EC2_FLEET_UNFULFILLABLE_ERROR_CODES = (
     "InsufficientInstanceCapacity",

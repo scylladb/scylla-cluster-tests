@@ -252,8 +252,10 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
         All entries of `instance_parameters` are expected to be identical except for their
         `InstanceType`: the shared part becomes a throwaway launch template and each distinct
         instance type becomes a fleet override, so AWS can satisfy the request from whichever
-        instance pool has capacity. This is what Spot Fleet could not do for us -- SCT always
-        sent it a single-type launch specification, so one exhausted pool failed the whole batch.
+        instance pool has capacity. Overrides keep the list order as their priority, so the
+        preferred (first) instance type wins whenever its pool can take the request. This is what
+        Spot Fleet could not do for us -- SCT always sent it a single-type launch specification, so
+        one exhausted pool failed the whole batch.
         """
         base_parameters = instance_parameters[0]
         instance_types = list(dict.fromkeys(params.InstanceType for params in instance_parameters))
