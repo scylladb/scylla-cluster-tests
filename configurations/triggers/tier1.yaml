@@ -173,7 +173,7 @@ jobs:
   - job_name: "tier1/longevity-asymmetric-cluster-12h-test"
     backend: "gce"
     params:
-      region: "us-east1"
+      gce_datacenter: "us-east1"
       availability_zone: ""
     labels:
       - "weekly"
@@ -182,7 +182,7 @@ jobs:
   - job_name: "tier1/longevity-large-partition-200k-pks-4days-gce-test"
     backend: "gce"
     params:
-      region: "us-east1"
+      gce_datacenter: "us-east1"
       availability_zone: ""
     labels:
       - "weekly"
@@ -193,7 +193,7 @@ jobs:
   - job_name: "tier1/longevity-1tb-5days-azure-test"
     backend: "azure"
     params:
-      region: "eastus"
+      azure_region_name: "eastus"
       availability_zone: ""
     labels:
       - "weekly"
