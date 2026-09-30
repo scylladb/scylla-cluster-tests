@@ -1093,7 +1093,9 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         if is_cloud_manager:
             # Extract location from an automatically scheduled backup task
             auto_backup_task = mgr_cluster.backup_task_list[0]
-            location_list = [auto_backup_task.get_task_info_dict()["location"]]
+            # can be several comma-joined, quoted locations for multiDC cluster, for example,
+            # 'AWS_EU_SOUTH_1:s3:scylla-cloud-backup-170-176-15c7bm,AWS_EU_WEST_1:s3:scylla-cloud-backup-170-175-9dy2w4'
+            location_list = self.parse_backup_locations([auto_backup_task.get_task_info_dict()["location"]])
 
             self.log.info("Delete scheduled backup task to not interfere")
             mgr_cluster.delete_task(auto_backup_task)
@@ -1112,14 +1114,13 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
             mgr_cluster, timeout=200000, location_list=location_list, rate_limit_list=["0"]
         )
 
+        size_on_bucket = self.get_snapshot_size_on_bucket(cluster_id=mgr_cluster.id, locations=location_list)
+
         if is_cloud_manager:
             self.log.info("Copy bucket with snapshot since the original bucket is deleted together with cluster")
-            # can be several locations for multiDC cluster, for example,
-            # 'AWS_EU_SOUTH_1:s3:scylla-cloud-backup-170-176-15c7bm,AWS_EU_WEST_1:s3:scylla-cloud-backup-170-175-9dy2w4'
-            location_list = location_list[0].split(",")
             for location in location_list:
-                # from AWS_US_EAST_1:s3:scylla-cloud-backup-8072-7216-v5dn53' to scylla-cloud-backup-8072-7216-v5dn53
-                original_bucket_name = location.split(":")[-1].strip("'")
+                # from AWS_US_EAST_1:s3:scylla-cloud-backup-8072-7216-v5dn53 to scylla-cloud-backup-8072-7216-v5dn53
+                original_bucket_name = location.split(":")[-1]
                 bucket_name = original_bucket_name + "-manager-tests"
                 region = self.get_region_from_bucket_location(location)
                 self.copy_backup_snapshot_bucket(source=original_bucket_name, destination=bucket_name, region=region)
@@ -1144,6 +1145,8 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
             "ear_key_id": key_id,
             "manager_cluster_id": manager_cluster_id,
         }
+        if size_on_bucket is not None:
+            snapshot_details["size_on_bucket"] = size_on_bucket
         self.log.debug(f"Snapshot details: {snapshot_details}")
         send_manager_snapshot_details_to_argus(
             argus_client=self.test_config.argus_client(),
