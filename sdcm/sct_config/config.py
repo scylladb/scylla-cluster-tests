@@ -48,6 +48,7 @@ from sdcm.utils.cloud_api_utils import (
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
+from sdcm.provision.aws.utils import split_instance_types
 from sdcm.provision.common.oracle import ORACLE_IMAGE_PARAMS, ORACLE_USER_PREFIX_SUFFIX
 from sdcm.provision.network_configuration import azure_network_interfaces, ssh_connection_ip_type
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
@@ -2235,13 +2236,60 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 f"{field_name} missing from config for {backend}"
             )
 
+    def _validate_aws_instance_type_db_alternatives(self):
+        """Check that every EC2 Fleet alternative can stand in for `instance_type_db`.
+
+        The DB AMI is selected for `instance_type_db`'s CPU architecture, so an alternative of another
+        architecture could not boot it; a different vCPU count or memory size would silently yield a
+        cluster with uneven shard counts and cache sizes. Local disk size and CPU generation may
+        differ. Specs come from the offline instance catalog; a type missing from it still has its
+        architecture checked against AWS, but its vCPU/memory can't be verified.
+        """
+        alternatives = split_instance_types(self.get("aws_instance_type_db_alternatives"))
+        primary = self.get("instance_type_db")
+        if not alternatives or not primary:
+            return
+        catalog = InstanceCatalog.from_directory(pathlib.Path(sct_abs_path("data/instance_catalog")))
+        region = self.region_names[0]
+
+        def arch_of(instance_type: str, info) -> str:
+            return info.arch if info else get_arch_from_instance_type(instance_type, region_name=region)
+
+        primary_info = catalog.get_instance("aws", primary)
+        primary_arch = arch_of(primary, primary_info)
+        for alternative in alternatives:
+            alternative_info = catalog.get_instance("aws", alternative)
+            alternative_arch = arch_of(alternative, alternative_info)
+            assert alternative_arch == primary_arch, (
+                f"aws_instance_type_db_alternatives: '{alternative}' is {alternative_arch}, but instance_type_db "
+                f"'{primary}' is {primary_arch} and the DB AMI is selected for {primary_arch}"
+            )
+            if not (primary_info and alternative_info):
+                self.log.warning(
+                    "Can't verify that aws_instance_type_db_alternatives entry '%s' has the same vCPUs and memory "
+                    "as instance_type_db '%s': not in the instance catalog",
+                    alternative,
+                    primary,
+                )
+                continue
+            same_vcpus = alternative_info.vcpus == primary_info.vcpus
+            same_memory = alternative_info.memory_gb == primary_info.memory_gb
+            assert same_vcpus and same_memory, (
+                f"aws_instance_type_db_alternatives: '{alternative}' has {alternative_info.vcpus} vCPUs and "
+                f"{alternative_info.memory_gb}GB memory, but instance_type_db '{primary}' has {primary_info.vcpus} "
+                f"vCPUs and {primary_info.memory_gb}GB; alternatives must be interchangeable with it"
+            )
+
     def _instance_type_validation(self):
         backend = self.get("cluster_backend")
 
-        # Validate main instance types (db, loader, monitor) are available in the target region
+        # Validate main instance types (db, loader, monitor) are available in the target region.
+        # aws_instance_type_db_alternatives is a list of EC2 Fleet-only alternatives,
+        # so every listed type must also be available in the target region.
         if backend == "aws":
             instance_type_params = [
                 "instance_type_db",
+                "aws_instance_type_db_alternatives",
                 "instance_type_loader",
                 "instance_type_monitor",
                 "instance_type_db_target",
@@ -2251,10 +2299,12 @@ class SCTConfiguration(*CONFIG_GROUPS):
             for param_name in instance_type_params:
                 if instance_type := self.get(param_name):
                     for region in self.region_names:
-                        assert aws_check_instance_type_supported(instance_type, region), (
-                            f"Instance type '{instance_type}' (param: {param_name}) "
-                            f"is not supported in region '{region}'"
-                        )
+                        for single_instance_type in split_instance_types(instance_type):
+                            assert aws_check_instance_type_supported(single_instance_type, region), (
+                                f"Instance type '{single_instance_type}' (param: {param_name}) "
+                                f"is not supported in region '{region}'"
+                            )
+            self._validate_aws_instance_type_db_alternatives()
 
         # Validate nemesis_grow_shrink_instance_type
         if instance_type := self.get("nemesis_grow_shrink_instance_type"):

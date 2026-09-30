@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-524 options across 29 groups.
+525 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -44,7 +44,7 @@ concerns first, then one page per backend, then one per test type.
 | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) | 10 | Scylla's DynamoDB-compatible API: the endpoint, write isolation, load-balancing and the credentials the tests use against it. |
 | [Vector Store](configuration_options/vector-store.md) | 6 | The Vector Store service under test alongside Scylla. |
 | [Kafka / CDC connectors](configuration_options/kafka-cdc-connectors.md) | 2 | Kafka deployment and connector configuration for CDC testing. |
-| [AWS backend](configuration_options/aws-backend.md) | 22 | AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity reservations and dedicated hosts. |
+| [AWS backend](configuration_options/aws-backend.md) | 23 | AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity reservations and dedicated hosts. |
 | [GCE backend](configuration_options/gce-backend.md) | 23 | Google Compute Engine provisioning. |
 | [Azure backend](configuration_options/azure-backend.md) | 13 | Microsoft Azure provisioning. |
 | [OCI backend](configuration_options/oci-backend.md) | 10 | Oracle Cloud Infrastructure provisioning. |
@@ -111,6 +111,7 @@ concerns first, then one page per backend, then one per test type.
 | [`aws_fallback_to_next_availability_zone`](configuration_options/aws-backend.md#aws_fallback_to_next_availability_zone) | `SCT_AWS_FALLBACK_TO_NEXT_AVAILABILITY_ZONE` | [AWS backend](configuration_options/aws-backend.md) |
 | [`aws_instance_profile_name_db`](configuration_options/aws-backend.md#aws_instance_profile_name_db) | `SCT_AWS_INSTANCE_PROFILE_NAME_DB` | [AWS backend](configuration_options/aws-backend.md) |
 | [`aws_instance_profile_name_loader`](configuration_options/aws-backend.md#aws_instance_profile_name_loader) | `SCT_AWS_INSTANCE_PROFILE_NAME_LOADER` | [AWS backend](configuration_options/aws-backend.md) |
+| [`aws_instance_type_db_alternatives`](configuration_options/aws-backend.md#aws_instance_type_db_alternatives) | `SCT_AWS_INSTANCE_TYPE_DB_ALTERNATIVES` | [AWS backend](configuration_options/aws-backend.md) |
 | [`azure_image_db`](configuration_options/azure-backend.md#azure_image_db) | `SCT_AZURE_IMAGE_DB` | [Azure backend](configuration_options/azure-backend.md) |
 | [`azure_image_db_oracle`](configuration_options/azure-backend.md#azure_image_db_oracle) | `SCT_AZURE_IMAGE_DB_ORACLE` | [Azure backend](configuration_options/azure-backend.md) |
 | [`azure_image_loader`](configuration_options/azure-backend.md#azure_image_loader) | `SCT_AZURE_IMAGE_LOADER` | [Azure backend](configuration_options/azure-backend.md) |

@@ -37,6 +37,14 @@ sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 2
   memory: '>=16'
   arch: x86_64
+# instance_type_db (resolved from sizing_db) stays the primary AWS type. These extra types are offered
+# ONLY to EC2 Fleet (spot), at lower priority, so a large spot request can still be fulfilled when the
+# primary pool is exhausted, which is common at this scale. They are the other AWS types matching
+# sizing_db: same arch, vCPUs and memory (validated), but local disk size and CPU generation differ.
+aws_instance_type_db_alternatives:
+  - 'i7ie.large'
+  - 'i4i.large'
+  - 'i3en.large'
 instance_provision_fallback_on_demand: false
 # Scale tests provision very large clusters (100+ nodes) and want the region fixed and
 # controlled rather than silently relocated. AZ-level fallback within the configured region

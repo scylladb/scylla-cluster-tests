@@ -30,6 +30,7 @@ from mypy_boto3_ec2 import EC2Client
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, ScyllaCloudAPIError
 from sdcm.provision.oci.constants import TAG_NAMESPACE
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
+from sdcm.provision.aws.constants import EC2_FLEET_LAUNCH_TEMPLATE_PREFIX
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.aws.emr_provisioner import list_emr_clusters
 from sdcm.provision.azure.provisioner import AzureProvisioner
@@ -183,6 +184,15 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
         ):
             with cleanup_step(name):
                 clean_func(tags_dict, regions=aws_regions, dry_run=dry_run)
+        if cluster_backend == "aws":
+            # EC2 Fleet provisioning stages its parameters in a throwaway, tagged launch template, which
+            # a provisioning process killed mid-request leaves behind (see SCT-779). Only templates with
+            # the EC2 Fleet prefix are deleted, so long-lived ones (e.g. the SCT runner's) are never
+            # touched. The k8s-eks/"" pass above already cleans every launch template for those backends.
+            with cleanup_step("AWS EC2 Fleet launch templates"):
+                clean_launch_templates_aws(
+                    tags_dict, regions=aws_regions, dry_run=dry_run, name_prefix=EC2_FLEET_LAUNCH_TEMPLATE_PREFIX
+                )
         if cluster_backend == "aws" and not dry_run:
             with cleanup_step("AWS KMS aliases"):
                 clean_aws_kms_alias(tags_dict, aws_regions or all_aws_regions())
@@ -634,20 +644,24 @@ def clean_cloudformation_stacks_aws(tags_dict, regions=None, dry_run=False):
                     LOGGER.debug("Failed with: %s", str(ex))
 
 
-def clean_launch_templates_aws(tags_dict, regions=None, dry_run=False):
+def clean_launch_templates_aws(tags_dict, regions=None, dry_run=False, name_prefix=None):
     """
     Remove all VM launch templates with specific tags.
 
     :param tags_dict: key-value pairs used for filtering
     :param regions: list of the AWS regions to consider
     :param dry_run: if True, wouldn't delete any resource
+    :param name_prefix: if set, only delete launch templates whose name starts with it
     :return: None
     """
 
     assert tags_dict, "Can't cleanup launch templates because 'tags_dict' was not provided."
 
     lts_per_region = list_launch_templates_aws(tags_dict=tags_dict, regions=regions)
-    for region_name, lt_list in lts_per_region.items():
+    for region_name, region_lts in lts_per_region.items():
+        lt_list = [
+            lt for lt in region_lts if not name_prefix or (lt.get("LaunchTemplateName") or "").startswith(name_prefix)
+        ]
         if not lt_list:
             LOGGER.info("There are no LaunchTemplates to remove in AWS region %s", region_name)
             continue
