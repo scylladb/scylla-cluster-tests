@@ -24,6 +24,8 @@ pytestmark = [
     pytest.mark.integration,
 ]
 
+AZURE_PINNED_RELEASE = "2025.4"
+
 
 def _get_latest_branch() -> str:
     full_version = get_latest_scylla_release("scylla-enterprise")
@@ -122,6 +124,10 @@ def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, d
 )
 @pytest.mark.parametrize(argnames="backend", argvalues=("aws", "gce", "azure"))
 def test_images(backend, scylla_version, expected_version, expected_is_enterprise, monkeypatch, latest_release):
+    if backend == "azure" and scylla_version.startswith("branch-"):
+        # this branch can't resolve Azure images of newer releases (the newest one it resolves is 2025.4),
+        # so pin the branch lookup to a release it can resolve
+        latest_release = AZURE_PINNED_RELEASE
     scylla_version = scylla_version.replace("LATEST", latest_release)
     if expected_version == "LATEST":
         expected_version = latest_release
