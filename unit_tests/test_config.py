@@ -1224,7 +1224,7 @@ class ConfigurationTests(unittest.TestCase):
     @pytest.mark.integration
     def test_33_resolve_aws_by_owner(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
-        os.environ["SCT_AMI_ID_DB_SCYLLA"] = "resolve:owner:131827586825/x86_64/OL8.*"
+        os.environ["SCT_AMI_ID_DB_SCYLLA"] = "resolve:owner:309956199498/x86_64/RHEL-10*x86_64*"
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -1236,7 +1236,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
         os.environ["SCT_REGION_NAME"] = '["eu-west-1", "us-east-1"]'
         os.environ["SCT_N_DB_NODES"] = "2 2"
-        os.environ["SCT_SCYLLA_VERSION"] = "6.0.0"
+        os.environ["SCT_SCYLLA_VERSION"] = _get_latest_scylla_release()
         os.environ["SCT_NEMESIS_GROW_SHRINK_INSTANCE_TYPE"] = "i4i.xlarge"
 
         conf = sct_config.SCTConfiguration()
@@ -1247,7 +1247,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ["SCT_CLUSTER_BACKEND"] = "gce"
         os.environ["SCT_GCE_DATACENTER"] = "us-east1 us-west1"
         os.environ["SCT_N_DB_NODES"] = "2 2"
-        os.environ["SCT_SCYLLA_VERSION"] = "6.0.0"
+        os.environ["SCT_SCYLLA_VERSION"] = _get_latest_scylla_release()
         os.environ["SCT_NEMESIS_GROW_SHRINK_INSTANCE_TYPE"] = "n2-highmem-32"
 
         conf = sct_config.SCTConfiguration()
