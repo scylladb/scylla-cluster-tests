@@ -946,11 +946,13 @@ def _oci_fetch_pricing() -> dict[str, dict[str, float]]:
     return result
 
 
-# OCI Flex shapes with their configurable OCPU ranges and per-OCPU memory/disk.
+# OCI Flex shapes with their configurable OCPU ranges and per-OCPU vCPUs/memory/disk.
+# One OCPU is one vCPU on Ampere A1 and two vCPUs on all other shapes.
 # instance_type uses SCT notation: "Shape:OCPUs" or "Shape:OCPUs:MemoryGB"
 _OCI_FLEX_SHAPES: list[dict[str, Any]] = [
     {
         "base_shape": "VM.DenseIO.E5.Flex",
+        "vcpus_per_ocpu": 2,
         "family": "DenseIO.E5",
         "series": "DenseIO.E5",
         "ocpu_options": [8, 16, 24, 32, 40, 48],
@@ -961,6 +963,7 @@ _OCI_FLEX_SHAPES: list[dict[str, Any]] = [
     },
     {
         "base_shape": "VM.DenseIO.E4.Flex",
+        "vcpus_per_ocpu": 2,
         "family": "VM.DenseIO",
         "series": "DenseIO.E4",
         "ocpu_options": [8, 16, 24, 32],
@@ -971,9 +974,10 @@ _OCI_FLEX_SHAPES: list[dict[str, Any]] = [
     },
     {
         "base_shape": "VM.Standard.A1.Flex",
+        "vcpus_per_ocpu": 1,
         "family": "VM.Standard",
         "series": "A1",
-        "ocpu_options": [1, 2, 4, 8],
+        "ocpu_options": [1, 2, 4, 8, 16, 32],
         "mem_per_ocpu": 6.0,
         "min_mem_per_ocpu": 1.0,
         "max_mem_per_ocpu": 6.0,
@@ -983,6 +987,7 @@ _OCI_FLEX_SHAPES: list[dict[str, Any]] = [
     },
     {
         "base_shape": "VM.Standard3.Flex",
+        "vcpus_per_ocpu": 2,
         "family": "VM.Standard",
         "series": "E3",
         "ocpu_options": [1, 2, 4, 8, 16, 32],
@@ -995,6 +1000,7 @@ _OCI_FLEX_SHAPES: list[dict[str, Any]] = [
     },
     {
         "base_shape": "VM.Standard.E4.Flex",
+        "vcpus_per_ocpu": 2,
         "family": "VM.Standard",
         "series": "E4",
         "ocpu_options": [1, 2, 4, 8, 16, 32, 64],
@@ -1007,6 +1013,7 @@ _OCI_FLEX_SHAPES: list[dict[str, Any]] = [
     },
     {
         "base_shape": "VM.Standard.E5.Flex",
+        "vcpus_per_ocpu": 2,
         "family": "VM.Standard",
         "series": "E5",
         "ocpu_options": [1, 2, 4, 8, 16, 32, 64, 94],
@@ -1019,6 +1026,7 @@ _OCI_FLEX_SHAPES: list[dict[str, Any]] = [
     },
     {
         "base_shape": "VM.Standard.E6.Flex",
+        "vcpus_per_ocpu": 2,
         "family": "VM.Standard",
         "series": "E6",
         "ocpu_options": [1, 2, 4, 8, 16, 32, 64],
@@ -1031,6 +1039,7 @@ _OCI_FLEX_SHAPES: list[dict[str, Any]] = [
     },
     {
         "base_shape": "VM.Standard.A4.Flex",
+        "vcpus_per_ocpu": 2,
         "family": "VM.Standard",
         "series": "A4",
         "ocpu_options": [1, 2, 4, 8, 16, 32],
@@ -1163,7 +1172,7 @@ def generate_oci_catalog(
         if not any(flex["base_shape"].startswith(f) for f in families):
             continue
         for ocpus in flex["ocpu_options"]:
-            vcpus = ocpus * 2
+            vcpus = ocpus * flex["vcpus_per_ocpu"]
             memory_gb = ocpus * flex["mem_per_ocpu"]
             local_disk_gb = ocpus * flex["local_disk_gb_per_ocpu"]
             instance_type = f"{flex['base_shape']}:{ocpus}"
