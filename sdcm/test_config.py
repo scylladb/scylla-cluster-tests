@@ -42,7 +42,8 @@ class TestConfig(metaclass=Singleton):
     TEST_WARMUP_TEARDOWN = 60
     SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
     SYSLOGNG_SSH_TUNNEL_LOCAL_PORT = 5000
-    VECTOR_SSH_TUNNEL_LOCAL_PORT = 5001
+    # Must not collide with the LDAP tunnel ports (sdcm/utils/ldap.py): all of them are bound on the node's loopback
+    VECTOR_SSH_TUNNEL_LOCAL_PORT = 5003
     IP_SSH_CONNECTIONS = "private"
     KEEP_ALIVE_DB_NODES = False
     KEEP_ALIVE_LOADER_NODES = False
