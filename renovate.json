@@ -118,6 +118,19 @@
       ]
     },
     {
+      "description": "Run the minicloud artifacts provision tests on minicloud image bumps",
+      "matchManagers": [
+        "helm-values"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/scylladb/minicloud"
+      ],
+      "addLabels": [
+        "test-provision-minicloud-aws",
+        "test-provision-minicloud-gce"
+      ]
+    },
+    {
       "description": "Open PRs for Docker Hub image updates immediately as they appear",
       "matchDatasources": [
         "docker"
