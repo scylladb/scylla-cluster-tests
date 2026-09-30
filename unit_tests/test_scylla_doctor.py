@@ -383,29 +383,79 @@ def test_download_and_extract_tarball_rejects_non_gzip(mock_node, mock_test_conf
     """When downloaded file is not a gzip tarball, ScyllaDoctorException should be raised."""
     test_config, _params = mock_test_config
 
-    # Make the file check return non-gzip
+    # Magic-byte check returns non-gzip (e.g. "3c45" for an XML error page)
     check_result = MagicMock()
     check_result.ok = True
-    check_result.stdout = "ASCII text"
+    check_result.stdout = "3c45"
 
-    head_result = MagicMock()
-    head_result.stdout = "<Error><Code>AccessDenied</Code></Error>"
+    hexdump_result = MagicMock()
+    hexdump_result.stdout = "000000 3c 45 72 72 6f 72 3e 3c  ><Error><"
+
+    dns_result = MagicMock()
+    dns_result.stdout = "93.184.216.34  example.com"
 
     rm_result = MagicMock()
     rm_result.ok = True
 
-    # First call: curl download (succeeds), second: file check, third: head, fourth: rm
+    # Flow: curl download, magic-byte check (fails), od hexdump, getent hosts, rm -f
     mock_node.remoter.run.side_effect = [
         MagicMock(ok=True),  # curl download
-        check_result,  # file check
-        head_result,  # head -c 500
+        check_result,  # head -c 2 | od (non-gzip magic bytes)
+        hexdump_result,  # od | head -20
+        dns_result,  # getent hosts
         rm_result,  # rm -f
     ]
 
     doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
 
-    with pytest.raises(ScyllaDoctorException, match="not a valid gzip tarball"):
+    with pytest.raises(ScyllaDoctorException, match="not a valid gzip tarball") as exc_info:
         doc._download_and_extract_tarball("https://example.com/bad.tar.gz")
+
+    # The exception must carry both diagnostics: the DNS probe and the hexdump
+    assert "DNS: 93.184.216.34  example.com" in str(exc_info.value)
+    assert "Hexdump:" in str(exc_info.value)
+    assert "><Error><" in str(exc_info.value)
+
+    # The download command must keep the retry/robustness flags
+    curl_cmd = mock_node.remoter.run.call_args_list[0].args[0]
+    assert "--retry" in curl_cmd
+    assert "--compressed" in curl_cmd
+    assert "-f" in curl_cmd.split() and "-L" in curl_cmd.split()
+    assert "'https://example.com/bad.tar.gz'" in curl_cmd  # quoted: pre-signed URLs contain '&'
+    # DNS probe targeted the download host
+    getent_cmd = mock_node.remoter.run.call_args_list[3].args[0]
+    assert "getent hosts example.com" in getent_cmd
+
+
+def test_download_and_extract_tarball_accepts_gzip(mock_node, mock_test_config):
+    """A valid gzip download (1f8b magic) must proceed to extraction and cleanup."""
+    test_config, _params = mock_test_config
+
+    check_result = MagicMock()
+    check_result.ok = True
+    check_result.stdout = "1f8b"
+
+    extract_result = MagicMock()
+    extract_result.ok = True
+
+    rm_result = MagicMock()
+    rm_result.ok = True
+
+    # Flow: curl download, magic-byte check (passes), mkdir (current_dir), tar extract, rm -f
+    mock_node.remoter.run.side_effect = [
+        MagicMock(ok=True),  # curl download
+        check_result,  # head -c 2 | od (gzip magic bytes)
+        MagicMock(ok=True),  # mkdir -p (current_dir cached property)
+        extract_result,  # tar -xzf
+        rm_result,  # rm -f
+    ]
+
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
+    doc._download_and_extract_tarball("https://example.com/good.tar.gz")
+
+    commands = [call.args[0] for call in mock_node.remoter.run.call_args_list]
+    assert "tar -xzf" in commands[3]
+    assert commands[4].startswith("rm -f")
 
 
 # --- _full_edition_downloaded tests ---

@@ -16,7 +16,7 @@ import unittest.mock
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
+from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT, EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.sct_events.grafana import (
     GrafanaAnnotator,
     GrafanaEventAggregator,
@@ -114,9 +114,9 @@ class TestGrafana(EventsUtilsMixin):
             assert grafana_annotator.events_counter == grafana_aggregator.events_counter
             assert grafana_postman.events_counter <= grafana_aggregator.events_counter
         finally:
-            grafana_annotator.stop(timeout=1)
-            grafana_aggregator.stop(timeout=1)
-            grafana_postman.stop(timeout=1)
+            grafana_annotator.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
+            grafana_aggregator.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
+            grafana_postman.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
 
 
 class TestGrafanaAggregatorTimeWindow(EventsUtilsMixin):
@@ -164,6 +164,6 @@ class TestGrafanaAggregatorTimeWindow(EventsUtilsMixin):
                     "a duplicate annotation seen after the time window expired must be posted again"
                 )
         finally:
-            grafana_annotator.stop(timeout=1)
-            grafana_aggregator.stop(timeout=1)
-            grafana_postman.stop(timeout=1)
+            grafana_annotator.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
+            grafana_aggregator.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
+            grafana_postman.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)

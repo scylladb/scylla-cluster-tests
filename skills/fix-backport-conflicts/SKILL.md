@@ -12,7 +12,8 @@ argument-hint: <PR-number> [PR-number...]
 
 # Fix Inline Conflicts in Backport PR
 
-You are fixing inline merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) that were
+You are fixing inline merge conflict markers (`<<<<<<<`, `|||||||`, `=======`, `>>>>>>>`
+— this repo uses `merge.conflictstyle=diff3`, so the `|||||||` base section appears too) that were
 left in commits of a backport PR. The goal is to resolve the conflicts and produce clean
 commits with original authorship and messages preserved.
 
@@ -51,7 +52,7 @@ permissions, keeping the blast radius small. Available subcommands:
 | `recommit <HASH>` | Copy files from resolved tree for one commit, commit with original author |
 | `push <REMOTE> <BRANCH>` | Force-push with --force-with-lease |
 | `update-pr <PR>` | Remove conflicts label + mark ready |
-| `verify` | Check no conflict markers remain |
+| `verify` | Grep all tracked files for leftover conflict markers (necessary, not sufficient) |
 
 ## Workflow (executed by the subagent inside its worktree)
 
@@ -92,7 +93,12 @@ Skip to step 3 (the conflict markers are already there from the rebase).
 .claude/scripts/fix-backport.sh verify
 ```
 
-If it prints "CLEAN", the rebase resolved everything automatically. Run
+`verify` only greps tracked files for leftover marker lines. "CLEAN" means no markers
+were found — it is **not** proof that the backport is correct, and it says nothing about
+a conflict that was resolved the wrong way or a hunk that was silently dropped. Always
+read the diff (step 6) as well; never treat "CLEAN" on its own as a green light.
+
+If it prints "CLEAN", the rebase likely resolved everything automatically. Run
 `rebase-continue` if needed, then skip to step 7 (push).
 
 ### 4. Understand each conflict
@@ -114,7 +120,8 @@ Then verify:
 ```
 .claude/scripts/fix-backport.sh verify
 ```
-Must print "CLEAN" before proceeding.
+Must print "CLEAN" before proceeding — necessary, but not on its own sufficient: also
+re-read each file you edited to confirm the resolution is actually correct.
 
 Then complete the rebase:
 ```

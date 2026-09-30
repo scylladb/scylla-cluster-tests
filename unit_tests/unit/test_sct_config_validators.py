@@ -9,6 +9,7 @@ from sdcm.sct_config import (
     int_or_space_separated_ints,
     str_or_list_or_eval,
 )
+from sdcm.sct_config.types import strtobool
 
 
 # ---------------------------------------------------------------------------
@@ -194,3 +195,20 @@ def test_list_of_stress_tools_with_list_stress_cmd(monkeypatch):
     conf = SCTConfiguration()
     tools = conf.list_of_stress_tools
     assert "cassandra-stress" in tools
+
+
+@pytest.mark.parametrize("value", ["y", "Yes", "T", "true", "ON", "1", " true "])
+def test_strtobool_accepts_truthy_spellings(value):
+    assert strtobool(value) is True
+
+
+@pytest.mark.parametrize("value", ["n", "No", "F", "false", "OFF", "0", " false "])
+def test_strtobool_accepts_falsy_spellings(value):
+    assert strtobool(value) is False
+
+
+@pytest.mark.parametrize("value", ["maybe", "", "2", "truthy"])
+def test_strtobool_rejects_anything_else(value):
+    """Same contract as the distutils version it replaces -- ValueError, not a silent False."""
+    with pytest.raises(ValueError, match="invalid truth value"):
+        strtobool(value)

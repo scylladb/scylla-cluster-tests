@@ -12,9 +12,9 @@ from sdcm.utils.version_utils import (
 
 @pytest.mark.need_network
 @pytest.mark.integration
-@pytest.mark.parametrize("docker_repo", ["scylladb/scylla-nightly", "scylladb/scylla-enterprise-nightly"])
-def test_get_specific_tag_of_docker_image(docker_repo):
-    assert get_specific_tag_of_docker_image(docker_repo=docker_repo) != "latest"
+def test_get_specific_tag_of_docker_image():
+    tag = get_specific_tag_of_docker_image(docker_repo="scylladb/scylla-nightly")
+    assert tag != "latest"
 
 
 def _generate_test_params_for_get_branched_repo():

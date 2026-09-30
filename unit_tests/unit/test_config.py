@@ -20,7 +20,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from sdcm import sct_config
+from sdcm.sct_config import config as sct_config
 from sdcm.keystore import KeyStore
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.test_config import TestConfig
@@ -923,7 +923,7 @@ def test_vector_store_ami_name_resolved_to_ami_id(monkeypatch):
             return f"ami-{param}"
         return param
 
-    with unittest.mock.patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=fake_convert):
+    with unittest.mock.patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=fake_convert):
         sct_config.SCTConfiguration()
 
     assert "vector-store-1-5-0-arm64-2026-03-17t07-07-32z" in resolved_names, (
@@ -991,7 +991,7 @@ def test_resolve_amis_reresolves_name_intent_via_convert(monkeypatch):
     conf._ami_params_snapshot = {"ami_id_loader": "resolve:ssm:/some/loader/path"}
     conf["ami_id_loader"] = "ami-loader-east"
 
-    with patch("sdcm.sct_config.convert_name_to_ami_if_needed", return_value="ami-loader-west") as mock_convert:
+    with patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", return_value="ami-loader-west") as mock_convert:
         conf.resolve_amis(["eu-west-1"], source_region="us-east-1")
 
     mock_convert.assert_called_once_with("resolve:ssm:/some/loader/path", ("eu-west-1",))
@@ -1004,7 +1004,7 @@ def test_resolve_amis_remaps_explicit_ami_via_find_equivalent(monkeypatch):
     conf["ami_id_db_scylla"] = "ami-source-scylla"
 
     with patch(
-        "sdcm.sct_config.find_equivalent_ami",
+        "sdcm.sct_config.config.find_equivalent_ami",
         return_value=[{"region": "eu-west-1", "ami_id": "ami-target-scylla"}],
     ) as mock_equiv:
         conf.resolve_amis(["eu-west-1"], source_region="us-east-1")
@@ -1018,7 +1018,7 @@ def test_resolve_amis_raises_region_ineligible_when_no_equivalent(monkeypatch):
     conf._ami_params_snapshot = {"ami_id_db_scylla": "ami-source-scylla"}
     conf["ami_id_db_scylla"] = "ami-source-scylla"
 
-    with patch("sdcm.sct_config.find_equivalent_ami", return_value=[]):
+    with patch("sdcm.sct_config.config.find_equivalent_ami", return_value=[]):
         with pytest.raises(RegionAMINotFoundError):
             conf.resolve_amis(["eu-west-1"], source_region="us-east-1")
 
@@ -1087,7 +1087,7 @@ def test_overlay_beats_env_when_test_id_matches(monkeypatch, placement_logdir): 
 
     # relocation re-resolves region-bound AMIs; ami-dummy is explicit so it goes through find_equivalent_ami
     with patch(
-        "sdcm.sct_config.find_equivalent_ami",
+        "sdcm.sct_config.config.find_equivalent_ami",
         return_value=[{"region": "eu-west-1", "ami_id": "ami-dummy-west"}],
     ):
         conf = sct_config.SCTConfiguration()
@@ -1112,7 +1112,7 @@ def test_resolved_placement_with_amis_applies_directly_and_skips_re_resolution(m
     )
 
     with patch(
-        "sdcm.sct_config.find_equivalent_ami",
+        "sdcm.sct_config.config.find_equivalent_ami",
         return_value=[{"region": "eu-west-1", "ami_id": "ami-reresolved"}],
     ):
         conf = sct_config.SCTConfiguration()
@@ -1476,3 +1476,49 @@ def test_docker_simulated_racks_allowed_on_branched_version(monkeypatch):
 
     assert conf.get("simulated_racks") == 2
     assert conf.get("endpoint_snitch") == GOSSIPING_SNITCH
+
+
+def test_use_dns_names_aws_multi_dc_raises(monkeypatch):
+    """EC2 private DNS names do not resolve across regions, so AWS multi-DC with DNS names is rejected."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_REGION_NAME", '["eu-west-1", "us-east-1"]')
+    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
+
+    with pytest.raises(ValueError, match="use_dns_names is not supported for AWS multi-DC tests"):
+        sct_config.SCTConfiguration()
+
+
+def test_use_dns_names_aws_single_dc_accepted(monkeypatch):
+    """Positive control: a single AWS region keeps accepting use_dns_names."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.get("use_dns_names") is True
+
+
+def test_use_dns_names_gce_multi_dc_accepted(monkeypatch):
+    """The multi-DC guard is AWS-only; GCE internal DNS is project-wide."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    _set_gce_instance_types(monkeypatch)
+    monkeypatch.setenv("SCT_GCE_DATACENTER", "us-east1 us-west1")
+    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
+    monkeypatch.setenv(
+        "SCT_GCE_IMAGE_DB",
+        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
+    )
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.gce_datacenters == ["us-east1", "us-west1"]

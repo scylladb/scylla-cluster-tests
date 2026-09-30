@@ -423,10 +423,10 @@ def test_xcloud_replication_factor_valid(monkeypatch):
     monkeypatch.setenv("SCT_XCLOUD_ENV", "fake-env")
 
     with (
-        patch("sdcm.sct_config.ScyllaCloudAPIClient", return_value=_make_xcloud_api_mock()),
-        patch("sdcm.sct_config.KeyStore"),
-        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda v, _: v),
-        patch("sdcm.sct_config.find_scylla_repo", return_value="https://fake-repo/scylla.repo"),
+        patch("sdcm.sct_config.config.ScyllaCloudAPIClient", return_value=_make_xcloud_api_mock()),
+        patch("sdcm.sct_config.config.KeyStore"),
+        patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda v, _: v),
+        patch("sdcm.sct_config.config.find_scylla_repo", return_value="https://fake-repo/scylla.repo"),
     ):
         conf = sct_config.SCTConfiguration()
         # Must not raise TypeError or ValueError
@@ -451,10 +451,10 @@ def test_xcloud_replication_factor_exceeds_min_dc(monkeypatch):
     monkeypatch.setenv("SCT_XCLOUD_ENV", "fake-env")
 
     with (
-        patch("sdcm.sct_config.ScyllaCloudAPIClient", return_value=_make_xcloud_api_mock()),
-        patch("sdcm.sct_config.KeyStore"),
-        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda v, _: v),
-        patch("sdcm.sct_config.find_scylla_repo", return_value="https://fake-repo/scylla.repo"),
+        patch("sdcm.sct_config.config.ScyllaCloudAPIClient", return_value=_make_xcloud_api_mock()),
+        patch("sdcm.sct_config.config.KeyStore"),
+        patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda v, _: v),
+        patch("sdcm.sct_config.config.find_scylla_repo", return_value="https://fake-repo/scylla.repo"),
     ):
         conf = sct_config.SCTConfiguration()
         with pytest.raises(ValueError, match="xcloud_replication_factor .* cannot be greater than n_db_nodes"):

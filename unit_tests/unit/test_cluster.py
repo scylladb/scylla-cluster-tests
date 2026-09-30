@@ -1095,3 +1095,15 @@ def test_traffic_control_targets_the_secondary_interface():
         BaseNode.traffic_control(node, "--loss 5%")
     local_runner.run.assert_called_once_with("tcset ens5 --loss 5% --tc-command")
     node.remoter.run.assert_any_call('sudo bash -cxe "tc qdisc add dev ens5 root netem loss 5%"')
+
+
+def test_destroy_marks_the_node_as_destroyed():
+    """`sdcm.nemesis.utils.node_operations.is_node_destroyed()` reads `node.destroyed`, so
+    `destroy()` must raise it for every backend, not just drop the remoter."""
+    node = unittest.mock.MagicMock()
+    node.destroyed = False
+
+    with unittest.mock.patch("sdcm.cluster.ContainerManager"):
+        BaseNode.destroy(node)
+
+    assert node.destroyed is True

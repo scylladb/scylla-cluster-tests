@@ -26,6 +26,7 @@ from sdcm.utils.version_utils import (
     ARGUS_VERSION_RE,
     VERSION_NOT_FOUND_ERROR,
     get_scylla_docker_repo_from_version,
+    get_specific_tag_of_docker_image,
     parse_scylla_version_tag,
     FullVersionTag,
     latest_unified_package,
@@ -717,10 +718,6 @@ def test_comparable_scylla_operator_versions_to_str(version_string_input, versio
         ("2024.1.1", "scylladb/scylla-enterprise"),
         ("2024.2.13", "scylladb/scylla-enterprise"),
         ("2024.2.14", "scylladb/scylla-enterprise"),
-        ("enterprise", "scylladb/scylla-enterprise-nightly"),
-        ("enterprise:latest", "scylladb/scylla-enterprise-nightly"),
-        ("2024.5.0-dev-0.20251217.55f4a2b75472", "scylladb/scylla-enterprise-nightly"),
-        ("2024.99.99-dev-0.20251217.55f4a2b75472", "scylladb/scylla-enterprise-nightly"),
         ("2025.1.0", "scylladb/scylla"),
         ("2025.2.99", "scylladb/scylla"),
         ("2025.4.0", "scylladb/scylla"),
@@ -995,14 +992,11 @@ def test_azure_version_routing_logic(version_string, should_use_released, is_ful
     "version,expected_repo",
     [
         # Full version tags → nightly repos
-        ("2024.2.5-0.20250221.cb9e2a54ae6d-1", "scylladb/scylla-enterprise-nightly"),
         ("2026.1.0~dev-0.20260119.4cde34f6f20b", "scylladb/scylla-nightly"),
         ("5.2.0-dev-0.20220829.67c91e8bcd61", "scylladb/scylla-nightly"),
-        ("2023.1.0-0.20230815.a1b2c3d4e5f6", "scylladb/scylla-enterprise-nightly"),
         # Branch/latest versions
         ("latest", "scylladb/scylla-nightly"),
         ("master:latest", "scylladb/scylla-nightly"),
-        ("enterprise:latest", "scylladb/scylla-enterprise-nightly"),
         # Simple versions
         ("5.2.1", "scylladb/scylla"),  # Release version
         ("2024.2.0", "scylladb/scylla-enterprise"),  # Release version
@@ -1143,3 +1137,25 @@ class TestLatestUnifiedPackage:
 )
 def test_get_gemini_version(output, expected):
     assert get_gemini_version(output) == expected
+
+
+@patch("sdcm.utils.version_utils.create_retry_session")
+@patch("sdcm.utils.version_utils.boto3")
+def test_get_specific_tag_of_docker_image_nightly_uses_master_without_branch_discovery(mock_boto3, mock_create_session):
+    mock_response = MagicMock()
+    mock_response.content = b"docker-image-name: scylla-nightly:5.2.0-dev-0.20220829.67c91e8bcd61\n"
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_response
+    mock_create_session.return_value = mock_session
+
+    result = get_specific_tag_of_docker_image("scylladb/scylla-nightly")
+
+    assert result == "5.2.0-dev-0.20220829.67c91e8bcd61"
+    called_url = mock_session.get.call_args[0][0]
+    assert "unstable/scylla/master/" in called_url
+    mock_boto3.client.return_value.list_objects_v2.assert_not_called()
+
+
+def test_get_specific_tag_of_docker_image_unsupported_repo_raises():
+    with pytest.raises(ValueError, match="doesn't support"):
+        get_specific_tag_of_docker_image("scylladb/some-unsupported-repo")

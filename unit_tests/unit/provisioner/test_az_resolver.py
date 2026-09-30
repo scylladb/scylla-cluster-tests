@@ -488,3 +488,32 @@ def test_is_region_peered_true_only_for_active_connection():
 
         mock_find.return_value = (None, peer_name)
         assert AZResolver._is_region_peered(*region_pair) is False
+
+
+def test_region_fallback_disabled_when_use_dns_names_is_set():
+    """With use_dns_names, relocating the cluster leaves the runner unable to resolve cql_address.
+
+    EC2 private DNS names are region-scoped and inter-region VPC peering cannot resolve them,
+    so no other region is a valid fallback target (SCT-994).
+    """
+    params = _make_params(region_name="eu-west-1", availability_zone="a", use_dns_names=True)
+    resolver = AZResolver(params)
+
+    with (
+        patch.object(AZResolver, "_is_region_peered", return_value=True),
+        patch.object(AZResolver, "_common_supported_letters", return_value=["a", "b", "c"]),
+    ):
+        assert resolver.get_region_fallback_candidates() == []
+        assert resolver.get_dc_fallback_candidates(dc_index=0) == []
+
+
+def test_region_fallback_still_enabled_without_use_dns_names():
+    """The use_dns_names gate must not block the ordinary IP-addressed fallback."""
+    params = _make_params(region_name="eu-west-1", availability_zone="a", use_dns_names=False)
+    resolver = AZResolver(params)
+
+    with (
+        patch.object(AZResolver, "_is_region_peered", return_value=True),
+        patch.object(AZResolver, "_common_supported_letters", return_value=["a", "b", "c"]),
+    ):
+        assert resolver.get_region_fallback_candidates()

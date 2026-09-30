@@ -1232,8 +1232,3 @@ class TestAutoSetDockerImageTrigger:
         params = {"scylla_version": "master:latest", "scylla_docker_image": "custom"}
         _auto_set_docker_image(params)
         assert params["scylla_docker_image"] == "custom"
-
-    def test_enterprise_nightly(self):
-        params = {"scylla_version": "enterprise:latest"}
-        _auto_set_docker_image(params)
-        assert params["scylla_docker_image"] == "scylladb/scylla-enterprise-nightly"

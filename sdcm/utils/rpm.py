@@ -12,6 +12,23 @@
 # Copyright (c) 2026 ScyllaDB
 
 
+def rpm_lock_wait(lock_timeout: int = 120) -> str:
+    """Build a shell loop which waits for the rpm lock to be released.
+
+    Quote free (uses double quotes only), so it can be embedded both into
+    ``bash -c '...'`` commands and into the generated cloud-init scripts.
+
+    Args:
+        lock_timeout: Max seconds to wait for the rpm lock (default 120, polls every 2s).
+    """
+    iterations = lock_timeout // 2
+    return (
+        f"for i in $(seq 1 {iterations}); do "
+        "fuser /var/lib/rpm/.rpm.lock &>/dev/null || break; "
+        f'echo "rpm lock held, waiting... ($i/{iterations})"; sleep 2; done'
+    )
+
+
 def rpm_cmd(pkg_manager: str, subcommand: str, lock_timeout: int = 120) -> str:
     """Build a yum/dnf/microdnf command string with rpm lock tolerance baked in.
 
@@ -34,14 +51,7 @@ def rpm_cmd(pkg_manager: str, subcommand: str, lock_timeout: int = 120) -> str:
     Returns:
         Shell command string ready for remoter.run() / remoter.sudo().
     """
-    iterations = lock_timeout // 2
-    wait = (
-        f"for i in $(seq 1 {iterations}); do "
-        "fuser /var/lib/rpm/.rpm.lock &>/dev/null || break; "
-        f'echo "rpm lock held, waiting... ($i/{iterations})"; sleep 2; done'
-    )
-
     # Escape single quotes in the command portion to prevent shell injection.
     # The wait loop is static (no external input), only pkg_manager+subcommand need escaping.
     cmd = f"{pkg_manager} {subcommand}".replace("'", r"'\''")
-    return f"bash -c '{wait} && {cmd}'"
+    return f"bash -c '{rpm_lock_wait(lock_timeout)} && {cmd}'"

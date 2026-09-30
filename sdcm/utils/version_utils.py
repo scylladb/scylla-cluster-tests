@@ -37,6 +37,7 @@ from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events.system import ScyllaRepoEvent
 from sdcm.utils.decorators import retrying
 from sdcm.utils.features import get_enabled_features
+from sdcm.utils.session import create_retry_session
 
 # Examples of ScyllaDB version strings:
 #   - 666.development-0.20200205.2816404f575
@@ -517,17 +518,23 @@ def get_systemd_version(output: str) -> int:
     return 0
 
 
-def get_scylla_docker_repo_from_version(scylla_version: str):  # noqa: PLR0911
+def get_scylla_docker_repo_from_version(scylla_version: str):
     """
     Get scylla docker repo based scylla version.
 
     Supports various version formats:
     - Simple versions: "5.2.1", "2024.2.0"
-    - Branch versions: "latest", "master:latest", "enterprise:latest"
+    - Branch versions: "latest", "master:latest"
     - Full version tags: "2024.2.5-0.20250221.cb9e2a54ae6d-1", "2026.1.0~dev-0.20260119.4cde34f6f20b"
 
+    scylladb/scylla-enterprise-nightly is not supported anymore: pre-2025.1.0 enterprise
+    versions no longer have an actively publishing nightly docker repo, so any version
+    that would have routed there now raises ValueError instead. scylladb/scylla-enterprise
+    (the release repo, returned below for release-version inputs in the same pre-2025.1.0
+    range) is deprecated as well, see SCT-882; still returned here pending a follow-up to
+    drop it too.
+
     :param scylla_version: scylla version string
-    :param docker_image: docker image name
 
     :return: scylla docker repo
     """
@@ -535,8 +542,6 @@ def get_scylla_docker_repo_from_version(scylla_version: str):  # noqa: PLR0911
     # scylla_version can take on a variety of formats, so try to match non-standard/non-semver first
     if scylla_version in ("latest", "master:latest"):
         return "scylladb/scylla-nightly"
-    elif scylla_version in ("enterprise", "enterprise:latest"):
-        return "scylladb/scylla-enterprise-nightly"
 
     # Check if this is a full version tag (e.g., "2024.2.5-0.20250221.cb9e2a54ae6d-1")
     # Full version tags are always non-release versions and go to nightly repos
@@ -547,8 +552,6 @@ def get_scylla_docker_repo_from_version(scylla_version: str):  # noqa: PLR0911
             comparable_version = ComparableScyllaVersion(base_version)
             if comparable_version <= "6.2.99" or comparable_version >= "2025.1.0~dev":
                 return "scylladb/scylla-nightly"
-            elif "6.2.99" < comparable_version < "2025.1.0~dev":
-                return "scylladb/scylla-enterprise-nightly"
         except ValueError:
             # If we can't parse the base version, default to scylla-nightly
             return "scylladb/scylla-nightly"
@@ -563,9 +566,8 @@ def get_scylla_docker_repo_from_version(scylla_version: str):  # noqa: PLR0911
                 return "scylladb/scylla-nightly"
         elif "6.2.99" < comparable_version < "2025.1.0~dev":
             if comparable_version.isReleaseVersion():
+                # scylladb/scylla-enterprise is deprecated too, see SCT-882
                 return "scylladb/scylla-enterprise"
-            else:
-                return "scylladb/scylla-enterprise-nightly"
     except ValueError:
         pass
     raise ValueError(f"Unsupported scylla version {scylla_version}, check test logic")
@@ -672,23 +674,11 @@ def get_specific_tag_of_docker_image(docker_repo: str, architecture: Literal["x8
     :raises ValueError: if docker repo is not supported or tag info cannot be found
     """
 
-    if docker_repo == "scylladb/scylla-nightly":
-        product = "scylla"
-        branch = "master"
-    elif docker_repo == "scylladb/scylla-enterprise-nightly":
-        product = "scylla-enterprise"
-        # The `enterprise` rolling branch stopped producing builds when
-        # enterprise development folded into the unified releases, and its
-        # relocatables are gone from downloads.scylladb.com. `enterprise-2024.1`
-        # is the only branch still publishing scylla-enterprise-nightly images.
-        branch = "enterprise-2024.1"
-    else:
+    if docker_repo != "scylladb/scylla-nightly":
         raise ValueError(f"SCT doesn't support getting latest from {docker_repo}")
 
-    build_url = (
-        f"https://s3.amazonaws.com/downloads.scylladb.com/unstable/{product}/{branch}/relocatable/latest/00-Build.txt"
-    )
-    res = requests.get(build_url)
+    build_url = "https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/master/relocatable/latest/00-Build.txt"
+    res = create_retry_session().get(build_url, timeout=SCYLLA_URL_RESPONSE_TIMEOUT)
     res.raise_for_status()
     # example of 00-Build.txt content: (each line is formatted as 'key: value`)
     #

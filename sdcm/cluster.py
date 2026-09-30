@@ -312,6 +312,10 @@ class NodeError(Exception):
             return ""
 
 
+class CqlAddressUnresolvableError(Exception):
+    """raised when `cql_address` is a DNS name that the sct-runner cannot resolve"""
+
+
 class PrometheusSnapshotErrorException(Exception):
     pass
 
@@ -406,10 +410,16 @@ class BaseNode(AutoSshContainerMixin):
     MANAGER_AGENT_PORT = 10001
     MANAGER_SERVER_PORT = 5080
     OLD_MANAGER_PORT = 56080
+    # how long `cql_address` may stay unresolvable before it is treated as a hard failure
+    CQL_ADDRESS_RESOLVE_TIMEOUT = 120
+    CQL_ADDRESS_RESOLVE_STEP = 5
 
     log = LOGGER
     _instance_type = "N/A"
     scylla_network_configuration: Optional[ScyllaNetworkConfiguration] = None
+    # class-level default so code checking `node.destroyed` never hits an AttributeError,
+    # even for instances built without running the full __init__ (e.g. test doubles)
+    destroyed = False
 
     GOSSIP_STATUSES_FILTER_OUT = [
         "LEFT",  # in case the node was decommissioned
@@ -453,6 +463,7 @@ class BaseNode(AutoSshContainerMixin):
         self._public_ip_address_cached = None
         self._private_ip_address_cached = None
         self._ipv6_ip_address_cached = None
+        self.destroyed = False
         self._maximum_number_of_cores_to_publish = 10
 
         self.last_line_no = 1
@@ -1810,6 +1821,7 @@ class BaseNode(AutoSshContainerMixin):
         self.stop_task_threads()
         if self.remoter:
             self.remoter.stop()
+        self.destroyed = True
         ContainerManager.destroy_all_containers(self)
         self._terminate_node_in_argus()
         LOGGER.info("%s destroyed", self)
@@ -1834,6 +1846,17 @@ class BaseNode(AutoSshContainerMixin):
         try:
             socket.create_connection((self.cql_address, port)).close()
             return True
+        except socket.gaierror as details:
+            # gaierror is an OSError, so without this branch an unresolvable `cql_address` is
+            # indistinguishable from "the port is not open yet" and the caller just times out
+            self.log.error(
+                "Cannot resolve '%s' while checking for '%s' on port %s: %s",
+                self.cql_address,
+                service_name,
+                port,
+                details,
+            )
+            return False
         except OSError:
             return False
         except Exception as details:  # noqa: BLE001
@@ -1980,11 +2003,37 @@ class BaseNode(AutoSshContainerMixin):
         except Exception as details:  # noqa: BLE001
             self.log.error("Failed to report housekeeping uuid. Error details: %s", details)
 
+    def verify_cql_address_resolvable(self, timeout: int = CQL_ADDRESS_RESOLVE_TIMEOUT) -> None:
+        """Fail fast when `cql_address` is a DNS name the sct-runner cannot resolve.
+
+        With `use_dns_names`, `cql_address` is the node's cloud-internal DNS name. A name that
+        does not resolve never starts resolving on its own, yet every CQL probe then fails with
+        `socket.gaierror` - an `OSError`, so it looks exactly like "the port is not open yet"
+        and the caller burns its whole timeout in silence. Resolving once up front turns that
+        into an immediate, named failure.
+        """
+        deadline = time.time() + timeout
+        while True:
+            try:
+                socket.getaddrinfo(self.cql_address, self.CQL_PORT, proto=socket.IPPROTO_TCP)
+                return
+            except socket.gaierror as details:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    raise CqlAddressUnresolvableError(
+                        f"{self.name}: cql_address '{self.cql_address}' did not resolve within {timeout}s: {details}. "
+                        f"On AWS this happens when the cluster was relocated to a region other than the "
+                        f"sct-runner's, because EC2 private DNS names do not resolve from another region's VPC."
+                    ) from details
+                # never sleep past the caller's deadline - `timeout` is an upper bound, not a hint
+                time.sleep(min(self.CQL_ADDRESS_RESOLVE_STEP, remaining))
+
     def wait_db_up(self, verbose=True, timeout=3600):
         text = None
         if verbose:
             text = "%s: Waiting for DB services to be up" % self.name
 
+        self.verify_cql_address_resolvable(timeout=min(self.CQL_ADDRESS_RESOLVE_TIMEOUT, timeout))
         wait.wait_for(
             func=self.db_up, step=5, text=text, timeout=timeout, throw_exc=True, stop_event=self.stop_wait_db_up_event
         )
@@ -2717,7 +2766,7 @@ class BaseNode(AutoSshContainerMixin):
             self.remoter.sudo("zypper update scylla-manager-agent -y")
         else:
             self.remoter.sudo(apt_cmd("update"), ignore_status=True)
-            self.remoter.sudo(apt_cmd("install -y scylla-manager-agent", options={"DPkg::Lock::Timeout": "300"}))
+            self.remoter.sudo(apt_cmd("install -y scylla-manager-agent"))
         self.remoter.sudo("scyllamgr_agent_setup -y")
         if start_agent_after_upgrade:
             if self.is_docker():
@@ -2757,23 +2806,26 @@ class BaseNode(AutoSshContainerMixin):
         self.clean_scylla_data()
 
     def update_repo_cache(self):
+        """Clean the package manager cache and refresh the repo metadata."""
         try:
             if self.distro.is_rhel_like:
                 # The yum makecache command was removed from here since not needed and recommended.
                 # In the past it also caused ERROR 404 of yum, reference https://wiki.centos.org/yum-errors
                 # This fixes https://github.com/scylladb/scylla-cluster-tests/issues/4977
-                self.remoter.sudo("yum clean all")
+                self.remoter.sudo(rpm_cmd("yum", "clean all"), retry=3)
                 self.remoter.sudo("rm -rf /var/cache/yum/")
             elif self.distro.is_sles:
-                self.remoter.sudo("zypper clean all")
+                self.remoter.sudo("zypper clean all", retry=3)
                 self.remoter.sudo("rm -rf /var/cache/zypp/")
                 self.remoter.sudo("zypper refresh", retry=3)
             else:
-                self.remoter.sudo("apt-get clean all")
+                # NOTE: it is `apt-get clean`, not `apt-get clean all`: unlike yum, apt-get clean
+                #       takes no arguments
+                self.remoter.sudo(apt_cmd("clean", dpkg_options=False, lock_wait=True), retry=3)
                 self.remoter.sudo("rm -rf /var/cache/apt/")
-                self.remoter.sudo(apt_cmd("update"), retry=3)
-        except Exception as ex:  # noqa: BLE001
-            self.log.error("Failed to update repo cache: %s", ex)
+                self.remoter.sudo(apt_cmd("update", lock_wait=True), retry=3)
+        except Exception as ex:
+            raise NodeSetupFailed(node=self, error_msg=f"Failed to update repo cache: {ex}") from ex
 
     def upgrade_system(self):
         if self.distro.is_rhel_like:
@@ -5266,6 +5318,18 @@ class NodeSetupTimeout(Exception):
     pass
 
 
+def _drain_queued_failures(task_queue: queue.Queue) -> list[tuple]:
+    """Pop every result already waiting on `task_queue` and return the failed ones."""
+    failures = []
+    while True:
+        try:
+            node, exception_details = task_queue.get_nowait()
+        except queue.Empty:
+            return failures
+        if exception_details:
+            failures.append((node, exception_details))
+
+
 def wait_for_init_wrap(method):
     """
     Wraps wait_for_init class method.
@@ -5326,6 +5390,11 @@ def wait_for_init_wrap(method):
             try:
                 node, setup_exception = task_queue.get(block=True, timeout=5)
                 if setup_exception:
+                    # nodes usually fail together on a shared cause, and only the first result off
+                    # the queue is ever reported - log whatever else already failed so the shared
+                    # cause is visible instead of looking like a single-node problem
+                    for other_node, other_exception in _drain_queued_failures(task_queue):
+                        cl_inst.log.error("Node %s also failed setup/startup: %s", other_node, other_exception[0])
                     raise NodeSetupFailed(node=node, error_msg=setup_exception[0], traceback_str=setup_exception[1])
                 results.append(node)
                 cl_inst.log.info(
