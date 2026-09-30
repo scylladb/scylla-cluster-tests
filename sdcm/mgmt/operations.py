@@ -6,7 +6,7 @@ from functools import cached_property
 from pathlib import Path
 from textwrap import dedent
 from time import sleep
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Iterator
 
 import boto3
 import yaml
@@ -390,40 +390,88 @@ class SnapshotOperations(ClusterTester):
         return snapshot_data
 
     @staticmethod
-    def _get_cluster_bucket_files_s3(bucket_name: str, region_name: str, prefixes: list[str]) -> set[str]:
-        file_set = set()
-        s3_client = boto3.client("s3", region_name=region_name)
-        paginator = s3_client.get_paginator("list_objects")
-        for prefix in prefixes:
-            pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
-            for page in pages:
-                # No Contents key means that no snapshot file of the cluster exist,
-                # probably no backup ran before this function
-                if "Contents" in page:
-                    file_set.update(item["Key"] for item in page["Contents"])
-        return file_set
+    def parse_backup_locations(location_list: list[str]) -> list[str]:
+        """Split comma-joined locations and strip quotes.
+
+        Cloud manager reports multi-DC locations as one string, e.g. "'AWS_EU_SOUTH_1:s3:b1,AWS_EU_WEST_1:s3:b2'".
+        """
+        return [loc.strip().strip("'\"") for item in location_list for loc in item.split(",") if loc.strip("'\" ")]
 
     @staticmethod
-    def _get_cluster_bucket_files_gce(bucket_name: str, prefixes: list[str]) -> set[str]:
-        file_set = set()
+    def _iter_s3_objects(
+        bucket_name: str, prefixes: list[str], region_name: str | None = None
+    ) -> Iterator[tuple[str, int]]:
+        """Yield (key, size) of objects under the prefixes. Bucket region is discovered if not given."""
+        if not region_name:
+            location = boto3.client("s3").get_bucket_location(Bucket=bucket_name)["LocationConstraint"]
+            region_name = location or "us-east-1"
+        paginator = boto3.client("s3", region_name=region_name).get_paginator("list_objects_v2")
+        for prefix in prefixes:
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+                # No Contents key means no files under the prefix
+                for item in page.get("Contents", []):
+                    yield item["Key"], item["Size"]
+
+    @staticmethod
+    def _iter_gcs_objects(bucket_name: str, prefixes: list[str]) -> Iterator[tuple[str, int]]:
+        """Yield (name, size) of blobs under the prefixes."""
         storage_client, _ = get_gce_storage_client()
         for prefix in prefixes:
-            blobs = storage_client.list_blobs(bucket_or_name=bucket_name, prefix=prefix)
-            for listing_object in blobs:
-                file_set.add(listing_object.name)
-        # Unlike S3, if no files match the prefix, no error will occur
-        return file_set
+            for blob in storage_client.list_blobs(bucket_or_name=bucket_name, prefix=prefix):
+                yield blob.name, blob.size
 
     @staticmethod
-    def _get_cluster_bucket_files_azure(bucket_name: str, prefixes: list[str]) -> set[str]:
-        file_set = set()
-        azure_service = AzureService()
-        container_client = azure_service.blob.get_container_client(container=bucket_name)
+    def _iter_azure_objects(bucket_name: str, prefixes: list[str]) -> Iterator[tuple[str, int]]:
+        """Yield (name, size) of blobs under the prefixes."""
+        container_client = AzureService().blob.get_container_client(container=bucket_name)
         for prefix in prefixes:
-            dir_listing = container_client.list_blobs(name_starts_with=prefix)
-            for listing_object in dir_listing:
-                file_set.add(listing_object.name)
-        return file_set
+            for blob in container_client.list_blobs(name_starts_with=prefix):
+                yield blob.name, blob.size
+
+    @property
+    def _bucket_object_listers(self) -> dict[str, Callable[[str, list[str]], Iterator[tuple[str, int]]]]:
+        """Map Manager location provider -> fn(bucket_name, prefixes) yielding (key, size). Extend to add backends."""
+        return {
+            "s3": self._iter_s3_objects,
+            "gcs": self._iter_gcs_objects,
+            "azure": self._iter_azure_objects,
+        }
+
+    def get_cluster_size_on_bucket(self, cluster_id: str, location: str) -> int | None:
+        """Return total bytes of all backup objects (sst, meta, schema) of the cluster stored in the location.
+
+        Returns None for providers without an object lister (see `_bucket_object_listers`).
+
+        Args:
+            cluster_id: Scylla Manager cluster ID.
+            location: Manager location, `[dc:]<provider>:<bucket>[/path]`, e.g. 's3:bucket', 'AWS_EU_WEST_1:s3:bucket'.
+        """
+        provider, bucket = location.split(":")[-2:]
+        lister = self._bucket_object_listers.get(provider)
+        if lister is None:
+            self.log.info("Size on bucket calculation is not implemented for '%s' backend, skipping", provider)
+            return None
+        bucket_name, _, path = bucket.strip("/").partition("/")
+        path = f"{path}/" if path else ""
+        prefixes = [f"{path}{p}/cluster/{cluster_id}/" for p in self.BACKUP_FILE_PREFIXES]
+        return sum(size for _, size in lister(bucket_name, prefixes))
+
+    def get_snapshot_size_on_bucket(self, cluster_id: str, locations: list[str]) -> float | None:
+        """Sum the cluster's backup objects across all locations, in GiB.
+
+        Returns None if any location is unsupported or listing fails, so only complete sizes are reported.
+        Cluster is expected to be fresh with a single snapshot, so everything under its prefix belongs to it.
+        """
+        try:
+            sizes = [self.get_cluster_size_on_bucket(cluster_id=cluster_id, location=loc) for loc in locations]
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to get snapshot size on bucket: %s", exc)
+            return None
+        if not sizes or any(size is None for size in sizes):
+            return None
+        size_gib = round(sum(sizes) / 1024**3, 3)
+        self.log.info("Snapshot size on bucket: %s GiB", size_gib)
+        return size_gib
 
     def get_cluster_bucket_files(
         self,
@@ -450,15 +498,12 @@ class SnapshotOperations(ClusterTester):
         prefixes = [f"{p}/cluster/{cluster_id}" for p in file_type_prefixes]
 
         if backend == "s3":
-            return self._get_cluster_bucket_files_s3(
-                bucket_name=bucket_name, region_name=region_name, prefixes=prefixes
-            )
-        elif backend == "gcs":
-            return self._get_cluster_bucket_files_gce(bucket_name=bucket_name, prefixes=prefixes)
-        elif backend == "azure":
-            return self._get_cluster_bucket_files_azure(bucket_name=bucket_name, prefixes=prefixes)
+            objects = self._iter_s3_objects(bucket_name=bucket_name, prefixes=prefixes, region_name=region_name)
+        elif lister := self._bucket_object_listers.get(backend):
+            objects = lister(bucket_name, prefixes)
         else:
             raise ValueError(f"'{backend}' backend is not supported")
+        return {key for key, _ in objects}
 
     def get_snapshot_files(
         self,
