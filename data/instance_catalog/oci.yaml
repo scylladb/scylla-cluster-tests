@@ -130,7 +130,7 @@ instances:
   price_per_hour: 0.38
 - instance_type: VM.Standard.A1.Flex:1
   family: VM.Standard
-  vcpus: 2
+  vcpus: 1
   memory_gb: 6.0
   local_disk_gb: 0.0
   local_disk_count: 0
@@ -138,9 +138,19 @@ instances:
   price_per_hour: 0.019
   min_memory_gb: 1.0
   max_memory_gb: 6.0
+- instance_type: VM.Standard.A1.Flex:16
+  family: VM.Standard
+  vcpus: 16
+  memory_gb: 96.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour: 0.304
+  min_memory_gb: 16.0
+  max_memory_gb: 96.0
 - instance_type: VM.Standard.A1.Flex:2
   family: VM.Standard
-  vcpus: 4
+  vcpus: 2
   memory_gb: 12.0
   local_disk_gb: 0.0
   local_disk_count: 0
@@ -148,9 +158,19 @@ instances:
   price_per_hour: 0.038
   min_memory_gb: 2.0
   max_memory_gb: 12.0
+- instance_type: VM.Standard.A1.Flex:32
+  family: VM.Standard
+  vcpus: 32
+  memory_gb: 192.0
+  local_disk_gb: 0.0
+  local_disk_count: 0
+  arch: arm64
+  price_per_hour: 0.608
+  min_memory_gb: 32.0
+  max_memory_gb: 192.0
 - instance_type: VM.Standard.A1.Flex:4
   family: VM.Standard
-  vcpus: 8
+  vcpus: 4
   memory_gb: 24.0
   local_disk_gb: 0.0
   local_disk_count: 0
@@ -160,7 +180,7 @@ instances:
   max_memory_gb: 24.0
 - instance_type: VM.Standard.A1.Flex:8
   family: VM.Standard
-  vcpus: 16
+  vcpus: 8
   memory_gb: 48.0
   local_disk_gb: 0.0
   local_disk_count: 0
