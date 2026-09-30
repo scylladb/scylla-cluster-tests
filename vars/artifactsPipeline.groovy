@@ -464,7 +464,6 @@ def call(Map pipelineParams) {
                                             }
                                         }
                                         stage("Send email with result ${instance_type}") {
-                                            def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {

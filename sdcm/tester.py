@@ -48,6 +48,7 @@ from argus.common.enums import TestStatus
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
+from sdcm.provision.azure.utils import azure_provisioner_config
 from sdcm.provision.gce.kms_provider import GcpKmsProvider
 from sdcm.provision.gce.zone_resolver import GceAZResolver
 from sdcm.cluster import (
@@ -1815,11 +1816,7 @@ class ClusterTester(unittest.TestCase):
                     test_id=test_id,
                     region=region,
                     availability_zone=self.params.get("availability_zone"),
-                    azure_provision_stuck_vm_timeout=self.params.get("azure_provision_stuck_vm_timeout"),
-                    azure_provision_stuck_vm_recreate_attempts=self.params.get(
-                        "azure_provision_stuck_vm_recreate_attempts"
-                    ),
-                    azure_provision_stuck_vm_total_timeout=self.params.get("azure_provision_stuck_vm_total_timeout"),
+                    **azure_provisioner_config(self.params),
                 )
             )
         if db_info["n_nodes"] is None:

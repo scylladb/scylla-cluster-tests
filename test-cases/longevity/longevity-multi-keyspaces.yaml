@@ -1,4 +1,11 @@
 # Test
+#
+# NOTE: 'longevity-multi-keyspaces-latte.yaml' replaced this test for the tier2,
+#       vnodes, raft, and gce pipelines. Keep this cassandra-stress version for
+#       on-demand runs, such as reproducing older results or comparing stress
+#       tools. No pipeline uses it, so run it explicitly with:
+#
+#           longevity_test.LongevityTest.test_batch_custom_time
 
 test_metadata:
   description: >-
@@ -7,7 +14,7 @@ test_metadata:
     SisyphusMonkey. Exercises how metadata, schema propagation and per-table overhead behave at high
     keyspace counts.
   test_type: longevity
-  tier: tier2
+  tier: ondemand
   duration_class: long
   supported_backends:
     - aws
