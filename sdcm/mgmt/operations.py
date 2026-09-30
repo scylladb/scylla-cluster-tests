@@ -6,7 +6,7 @@ from functools import cached_property
 from pathlib import Path
 from textwrap import dedent
 from time import sleep
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import boto3
 import yaml
@@ -424,6 +424,65 @@ class SnapshotOperations(ClusterTester):
             for listing_object in dir_listing:
                 file_set.add(listing_object.name)
         return file_set
+
+    @staticmethod
+    def _get_s3_prefixes_size(bucket_name: str, prefixes: list[str]) -> int:
+        """Sum object sizes (bytes) under the given prefixes."""
+        region = boto3.client("s3").get_bucket_location(Bucket=bucket_name)["LocationConstraint"] or "us-east-1"
+        paginator = boto3.client("s3", region_name=region).get_paginator("list_objects_v2")
+        total_size = 0
+        for prefix in prefixes:
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+                total_size += sum(item["Size"] for item in page.get("Contents", []))
+        return total_size
+
+    @staticmethod
+    def _get_gcs_prefixes_size(bucket_name: str, prefixes: list[str]) -> int:
+        """Sum blob sizes (bytes) under the given prefixes."""
+        storage_client, _ = get_gce_storage_client()
+        total_size = 0
+        for prefix in prefixes:
+            total_size += sum(
+                blob.size for blob in storage_client.list_blobs(bucket_or_name=bucket_name, prefix=prefix)
+            )
+        return total_size
+
+    @staticmethod
+    def _get_azure_prefixes_size(bucket_name: str, prefixes: list[str]) -> int:
+        """Sum blob sizes (bytes) under the given prefixes."""
+        container_client = AzureService().blob.get_container_client(container=bucket_name)
+        total_size = 0
+        for prefix in prefixes:
+            total_size += sum(blob.size for blob in container_client.list_blobs(name_starts_with=prefix))
+        return total_size
+
+    @property
+    def _bucket_size_getters(self) -> dict[str, Callable[[str, list[str]], int]]:
+        """Map Manager location provider -> fn(bucket_name, prefixes) returning total bytes. Extend to add backends."""
+        return {
+            "s3": self._get_s3_prefixes_size,
+            "gcs": self._get_gcs_prefixes_size,
+            "azure": self._get_azure_prefixes_size,
+        }
+
+    def get_cluster_size_on_bucket(self, cluster_id: str, location: str) -> int | None:
+        """Return total bytes of all backup objects (sst, meta, schema) of the cluster stored in the location.
+
+        Returns None for providers without a size getter (see `_bucket_size_getters`).
+
+        Args:
+            cluster_id: Scylla Manager cluster ID.
+            location: Manager location, `[dc:]<provider>:<bucket>[/path]`, e.g. 's3:bucket', 'AWS_EU_WEST_1:s3:bucket'.
+        """
+        provider, bucket = location.split(":")[-2:]
+        size_getter = self._bucket_size_getters.get(provider)
+        if size_getter is None:
+            self.log.info("Size on bucket calculation is not implemented for '%s' backend, skipping", provider)
+            return None
+        bucket_name, _, path = bucket.strip("/").partition("/")
+        path = f"{path}/" if path else ""
+        prefixes = [f"{path}{p}/cluster/{cluster_id}/" for p in self.BACKUP_FILE_PREFIXES]
+        return size_getter(bucket_name, prefixes)
 
     def get_cluster_bucket_files(
         self,
