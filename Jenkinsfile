@@ -260,7 +260,7 @@ pipeline {
                         def curr_params = createRunConfiguration('docker')
                         def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, curr_params.oci_region_name)
                         dockerLogin(params)
-                        withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
+                        withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}", "SCT_ROOT_DISK_SIZE_RUNNER=140",]) {
                             dir('scylla-cluster-tests') {
                                 checkout scm
 
