@@ -772,6 +772,9 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(conf["user_data_format_version"], "2")
 
     @pytest.mark.integration
+    # master images moved to the scylladb_dev private gallery; the gallery lookup
+    # (#12877, #13165) was never backported, so this branch can't find them
+    @pytest.mark.skip(reason="perf-v17 can't resolve Azure master images (private gallery lookup not backported)")
     def test_20_user_data_format_version_azure(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "azure"
         os.environ["SCT_AZURE_REGION_NAME"] = "eastus"
