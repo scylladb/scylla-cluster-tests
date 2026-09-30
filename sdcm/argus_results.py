@@ -183,6 +183,7 @@ class ManagerSnapshotDetails(StaticGenericResultTable):
         Columns = [
             ColumnMetadata(name="tag", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="size", unit="GB", type=ResultType.INTEGER),
+            ColumnMetadata(name="size_on_bucket", unit="GiB", type=ResultType.FLOAT),
             ColumnMetadata(name="locations", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="ks_name", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="cluster_id", unit="", type=ResultType.TEXT),
