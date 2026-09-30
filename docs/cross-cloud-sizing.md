@@ -340,4 +340,4 @@ Both `sizing_config.yaml` (the config change) and the regenerated cloud YAML (e.
 | AWS | EC2 DescribeInstanceTypes API | Requires AWS credentials |
 | GCE | Public pricing pages (scraped) | No credentials needed |
 | Azure | Azure Compute SKUs API | Requires Azure credentials; `series_patterns` regex filters SKUs |
-| OCI | OCI Compute Shapes API | Uses OCPUs (1 OCPU = 2 vCPUs); requires OCI credentials |
+| OCI | OCI Compute Shapes API | Uses OCPUs (1 OCPU = 1 vCPU on A1, 2 vCPUs on all other shapes); requires OCI credentials |
