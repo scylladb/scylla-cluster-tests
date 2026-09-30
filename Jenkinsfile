@@ -3,8 +3,8 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
-def sct_runner_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
+def target_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws', 'minicloud-aws', 'minicloud-gce']
+def sct_runner_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws', 'minicloud-aws', 'minicloud-gce']
 
 def createRunConfiguration(String backend) {
 	def scylla_version = params.scylla_version ?: getLatestScyllaRelease('scylla')
@@ -57,6 +57,28 @@ def createRunConfiguration(String backend) {
             configuration.xcloud_provider = 'aws'
             configuration.availability_zone = 'a'
             configuration.test_config = '["test-cases/PR-provision-test.yaml"]'
+        }
+    }
+
+    if (backend in ['minicloud-aws', 'minicloud-gce']) {
+        // The artifacts test against minicloud running on the sct-runner, the same tests as
+        // jenkins-pipelines/oss/minicloud/minicloud-artifact-{ami,gce-image}.jenkinsfile. The
+        // runner is a real nested-virtualization instance, sized by configurations/minicloud/*.yaml.
+        // The default scylla_version (latest release) matters: minicloud builds the guest disk
+        // from the published image, and dev images are not readable from the QA account.
+        // Not `minicloud`: curr_params is also getJenkinsLabels' overrides map, where that key
+        // selects the local KVM agent instead of the sct-runner topology used here.
+        configuration.with_minicloud = true
+        configuration.test_name = 'artifacts_test'
+        configuration.provision_type = 'on_demand'
+        if (backend == 'minicloud-aws') {
+            configuration.backend = 'aws'
+            configuration.availability_zone = 'a'
+            configuration.test_config = '["test-cases/artifacts/ami.yaml", "configurations/minicloud.yaml", "configurations/minicloud/aws.yaml"]'
+        } else {
+            configuration.backend = 'gce'
+            configuration.gce_datacenter = 'us-east1'
+            configuration.test_config = '["test-cases/artifacts/gce-image.yaml", "configurations/minicloud.yaml", "configurations/minicloud/gce.yaml"]'
         }
     }
 
@@ -343,6 +365,8 @@ pipeline {
                         "test-provision-xcloud-gce", "test-provision-xcloud-gce-reuse",
                         "test-provision-vs-docker",
                         "test-provision-vs-aws", "test-provision-vs-aws-reuse",
+                        "test-provision-minicloud-aws",
+                        "test-provision-minicloud-gce",
                     ].join(",")
                     return pullRequestContainsLabels(labels)
                 }
@@ -357,7 +381,14 @@ pipeline {
                                 def curr_params = createRunConfiguration(backend)
                                 def working_dir = "${backend}/scylla-cluster-tests"
                                 def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, curr_params.oci_region_name, curr_params)
-                                withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
+                                // Scoped with withEnv rather than startMinicloud.exportEnv(): the branches run
+                                // in parallel, and a global env write would point a concurrent AWS branch at
+                                // localhost:5000.
+                                def branch_env = ["SCT_TEST_ID=${UUID.randomUUID().toString()}",]
+                                if (curr_params.with_minicloud) {
+                                    branch_env += ["SCT_MINICLOUD_ENDPOINT_URL=http://localhost:5000",]
+                                }
+                                withEnv(branch_env) {
                                     script {
                                         dir(working_dir) {
                                             checkout scm
@@ -382,11 +413,19 @@ pipeline {
                                         try {
                                             wrap([$class: 'BuildUser']) {
                                                 dir(working_dir) {
+                                                    if (curr_params.with_minicloud) {
+                                                        // Must be up before anything calls the EC2/GCE API.
+                                                        timeout(time: 15, unit: 'MINUTES') {
+                                                            startMinicloud(curr_params)
+                                                        }
+                                                    }
                                                     timeout(time: 30, unit: 'MINUTES') {
                                                         if (curr_params.backend == 'xcloud') {
                                                             echo "Scylla Cloud backend selected: provisioning loader nodes only on ${curr_params.xcloud_provider} cloud provider"
                                                         }
-                                                        if (curr_params.backend == 'xcloud' || curr_params.backend == 'aws' || curr_params.backend == 'gce' || curr_params.backend == 'azure' || curr_params.backend == 'oci') {
+                                                        if (curr_params.with_minicloud) {
+                                                            echo 'The artifacts test provisions its own node. No additional resources to be provisioned.'
+                                                        } else if (curr_params.backend == 'xcloud' || curr_params.backend == 'aws' || curr_params.backend == 'gce' || curr_params.backend == 'azure' || curr_params.backend == 'oci') {
                                                             provisionResources(curr_params, builder.region)
                                                         } else if (curr_params.backend.contains('docker')) {
                                                             sh """
@@ -445,7 +484,8 @@ pipeline {
                                             echo "${err}"
                                             markStepFailed("Collecting logs failed: ${err}", false)
                                         }
-                                        if (!(backend in ['k8s-local-kind-aws', 'k8s-eks'])) {
+                                        // The minicloud artifacts tests run no monitor node, so there is no stack to restore.
+                                        if (!(backend in ['k8s-local-kind-aws', 'k8s-eks']) && !curr_params.with_minicloud) {
                                             try {
                                                 wrap([$class: 'BuildUser']) {
                                                     timeout(time: 25, unit: 'MINUTES') {

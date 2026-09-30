@@ -417,7 +417,11 @@ These stages run conditionally, triggered by **GitHub labels**:
 | **provision reuse** | `test-provision-<backend>-reuse` | Re-runs the provision test with `SCT_REUSE_CLUSTER` to verify cluster reuse |
 
 Available provision backends: `aws`, `gce`, `docker`, `azure`, `k8s-local-kind-aws`,
-`k8s-eks`, `xcloud-aws`, `xcloud-gce`, `vs-docker`, `vs-aws`.
+`k8s-eks`, `xcloud-aws`, `xcloud-gce`, `vs-docker`, `vs-aws`, `minicloud-aws`, `minicloud-gce`.
+
+`test-provision-minicloud-aws` and `test-provision-minicloud-gce` run the AMI and GCE image
+artifacts tests against [minicloud](minicloud.md) on an sct-runner. They have no `-reuse`
+variant. Renovate adds both labels to minicloud image bumps.
 
 ### 4.2 GitHub Actions
 
