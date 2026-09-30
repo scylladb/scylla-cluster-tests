@@ -180,6 +180,7 @@ Any change to backend-specific files.
 | `sdcm/cluster_docker.py`, `sdcm/utils/docker_utils.py` | `provision-docker` |
 | `sdcm/cluster_k8s/*`, `sdcm/utils/k8s/*` | `provision-k8s` |
 | `sdcm/cluster_baremetal.py` | `provision-baremetal` |
+| `sdcm/utils/minicloud/*`, `vars/startMinicloud.groovy`, `configurations/minicloud*` | `test-provision-minicloud-aws`, `test-provision-minicloud-gce` |
 
 ### Cross-Backend Consistency
 

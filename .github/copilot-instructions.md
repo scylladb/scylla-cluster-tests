@@ -237,6 +237,11 @@ If you modify any of these files, add the corresponding provision test label:
 - `sdcm/cluster_oci.py` - OCI cluster implementation
 - `sdcm/provision/oci/*` - OCI-specific provisioning
 
+**Minicloud** (`test-provision-minicloud-aws` / `test-provision-minicloud-gce` labels):
+- `sdcm/utils/minicloud/*` - minicloud emulator management
+- `vars/startMinicloud.groovy`, `vars/stopMinicloud.groovy` - pipeline helpers
+- `configurations/minicloud.yaml`, `configurations/minicloud/*` - minicloud overlays
+
 ### How to Add Labels
 
 In your PR description, mention the backends affected:
