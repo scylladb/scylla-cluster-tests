@@ -16,7 +16,7 @@ import unittest
 import unittest.mock
 
 from sdcm.sct_events.system import InfoEvent, SpotTerminationEvent
-from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
+from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT, EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.sct_events.events_analyzer import EventsAnalyzer, start_events_analyzer
 from sdcm.sct_events.events_processes import EVENTS_ANALYZER_ID, get_events_process
 
@@ -57,7 +57,7 @@ class TestEventsAnalyzer(unittest.TestCase, EventsUtilsMixin):
 
             mock.assert_called_once()
         finally:
-            events_analyzer.stop(timeout=1)
+            events_analyzer.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
 
     def test_can_stop_events_analyzer_during_stream_of_events(self):
         start_events_analyzer(_registry=self.events_processes_registry)
