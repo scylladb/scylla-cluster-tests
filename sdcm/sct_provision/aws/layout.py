@@ -173,6 +173,9 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
         original_env_region = os.environ.get("SCT_REGION_NAME")
 
         source_region = original_region
+        self._relocate_to_preferred_spot_region()
+        # re-read: the upfront relocation may have changed the region we start from
+        source_region = self._params.region_names[0] if self._params.region_names else source_region
         region_candidates = AZResolver(self._params).get_region_fallback_candidates()
         last_error: Exception | None = None
 
@@ -211,6 +214,39 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
         raise RuntimeError(
             f"Provisioning failed in region '{original_region}' and all fallback candidates [{tried}]"
         ) from last_error
+
+    def _relocate_to_preferred_spot_region(self) -> None:
+        """Move to a better-scoring spot region before the first attempt, if one clearly beats the current one.
+
+        Opt-in via `spot_score_region_relocation_margin`. Failure to relocate is never fatal: we simply start in
+        the configured region and let the reactive region fallback handle it as before.
+        """
+        preferred = AZResolver(self._params).get_preferred_spot_region()
+        if not preferred:
+            return
+        target_region, az_letters = preferred
+        source_region = self._params.region_names[0] if self._params.region_names else None
+        try:
+            self._switch_region(target_region, az_letters, source_region)
+        except RegionAMINotFoundError as exc:
+            LOGGER.warning(
+                "Upfront spot relocation to '%s' skipped (no equivalent AMI): %s; staying in '%s'",
+                target_region,
+                exc,
+                source_region,
+            )
+        except Exception as exc:  # noqa: BLE001
+            # This is an optimization that runs before the first provisioning attempt; the configured region is
+            # always a valid place to start. Anything `_switch_region` can raise - a KMS re-prep, an AZ lookup,
+            # a peering check - must therefore degrade to "stay put", or an opt-in tuning knob becomes a new way
+            # for runs to fail outright.
+            LOGGER.warning(
+                "Upfront spot relocation to '%s' failed (%s): %s; staying in '%s'",
+                target_region,
+                type(exc).__name__,
+                exc,
+                source_region,
+            )
 
     def _enforce_single_region_gate(self) -> None:
         enforce_single_region_gate(self._params)

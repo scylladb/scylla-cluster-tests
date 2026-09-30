@@ -298,7 +298,7 @@ def _add_image_placeholders(env: dict[str, str], backend: str, num_regions: int)
 
     # Add scylla_repo placeholder if not set and backend needs it
     if (
-        base_backend in ("aws", "gce", "azure", "oci")
+        base_backend in ("aws", "gce", "azure", "oci", "baremetal")
         and "SCT_SCYLLA_REPO" not in env
         and "SCT_SCYLLA_VERSION" not in env
     ):

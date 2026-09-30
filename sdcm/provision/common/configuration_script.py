@@ -18,6 +18,7 @@ from typing import Any
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
     configure_sshd_script,
+    disable_firewall,
     restart_sshd_service,
     configure_backoff_timeout,
     update_repo_cache,
@@ -49,6 +50,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     params: Any | None = None
     install_docker: bool = False
     install_agent: bool = False
+    # off by default: the callers which build a boot script decide, from the backend
+    disable_guest_firewall: bool = False
 
     def to_string(self) -> str:
         script = self._start_script()
@@ -118,6 +121,11 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         # 5. Make sure that whenever you use "cat <<EOF >>/file", make sure that EOF has no spaces in front of it
         script = ""
 
+        if self.disable_guest_firewall:
+            # first thing on the node: an image whose firewall accepts nothing but SSH looks
+            # exactly like a broken network to everything that comes after (SCT-479)
+            script += disable_firewall()
+
         script += configure_backoff_timeout()
         if self.logs_transport == "syslog-ng":
             script += configure_syslogng_destination_conf(
@@ -139,10 +147,10 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
             script += install_syslogng_exporter()
 
         if self.logs_transport == "vector":
-            script += update_repo_cache()
             script += install_vector_service()
             host, port = self.syslog_host_port
             script += configure_vector_target_script(host=host, port=port)
+            script += update_repo_cache()
 
         if self.configure_sshd:
             script += configure_sshd_script()

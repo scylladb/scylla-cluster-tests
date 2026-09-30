@@ -75,14 +75,14 @@ class VirtualMachineProvider:
     def get_or_create(
         self,
         definitions: List[InstanceDefinition],
-        nics_ids: List[str],
+        nics_ids: List[List[str]],
         pricing_model: PricingModel,
         deadline: Optional[float] = None,
     ) -> List[VirtualMachine]:
         v_ms = []
         pollers = []
         error_to_raise = None
-        for definition, nic_id in zip(definitions, nics_ids):
+        for definition, vm_nics_ids in zip(definitions, nics_ids):
             if definition.name in self._cache:
                 v_ms.append(self._cache[definition.name])
                 continue
@@ -103,7 +103,16 @@ class VirtualMachineProvider:
                         "vmSize": definition.type,
                     },
                     "networkProfile": {
-                        "networkInterfaces": [{"id": nic_id, "properties": {"deleteOption": "Detach"}}],
+                        # Azure needs to be told which NIC is the primary one as soon as a VM has
+                        # more than one: it is the NIC carrying the default route and the one whose
+                        # address the instance metadata reports first.
+                        "networkInterfaces": [
+                            {
+                                "id": nic_id,
+                                "properties": {"deleteOption": "Detach", "primary": index == 0},
+                            }
+                            for index, nic_id in enumerate(vm_nics_ids)
+                        ],
                     },
                     "diagnosticsProfile": {
                         "bootDiagnostics": {

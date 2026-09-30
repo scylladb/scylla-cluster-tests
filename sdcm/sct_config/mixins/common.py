@@ -157,13 +157,18 @@ class CommonConfigMixin(BaseModel):
     force_run_iotune: Boolean = SctField(
         description="Force running iotune on the DB nodes, regardless if image has predefined values",
     )
-    instance_provision: Literal["spot", "on_demand", "spot_fleet", "spot_low_price"] = SctField(
-        description="instance_provision: spot|on_demand|spot_fleet",
+    instance_provision: Literal["spot", "on_demand", "spot_fleet", "spot_low_price", "auto"] = SctField(
+        description="instance_provision: spot|on_demand|spot_fleet|auto. 'auto' defers the choice to "
+        "`spot_max_test_duration`: spot at or below the threshold, on_demand above it. Because every Jenkins "
+        "pipeline gives the `provision_type` job parameter a concrete default, 'auto' is the opt-in a job needs "
+        "for duration-based selection to apply at all. Resolved to a concrete value at config load, so nothing "
+        "downstream ever sees 'auto'.",
     )
     instance_provision_fallback_on_demand: Boolean = SctField(
-        description="instance_provision_fallback_on_demand: create instance on_demand provision type if instance with selected "
-        "'instance_provision' type creation failed. "
-        "Expected values: true|false (default - false",
+        description="Create the instance on_demand when the requested `instance_provision` type could not be "
+        "obtained, rather than failing the run. Expected values: true|false. Defaults to **true** on AWS and "
+        "Azure and to false elsewhere - see SCT-1076, which proposes making it opt-in per test family, since "
+        "it turns a spot shortage into a silent on-demand purchase.",
     )
     instance_type_db: String = SctField(
         description="AWS image type of the db node",
@@ -313,6 +318,18 @@ class CommonConfigMixin(BaseModel):
             cycle. See `docs/skip-test-stages.md` for the stage names and what each one covers.
         """,
     )
+    spot_score_overrides_configured_az: Boolean = SctField(
+        description="Let the spot capacity score override an `availability_zone` that was set explicitly - in a test "
+        "case, an SCT_* env var or on the command line. Off by default, so a deliberate AZ pin keeps its "
+        "meaning. Note this is only needed for *deliberate* pins: an `availability_zone` inherited from "
+        "`defaults/` is not treated as a choice, and the score is free to move off it regardless of this "
+        "setting. Supported backends: AWS, GCE.",
+    )
+    spot_max_test_duration: int = SctField(
+        description="Duration (min) up to which `instance_provision` defaults to spot; longer tests default to on_demand, "
+        "since interruption exposure grows with runtime. Only applies when `instance_provision` was not set "
+        "explicitly by a test case, env var or CLI - an explicit value always wins.",
+    )
     ssh_transport: Literal["libssh2", "fabric"] = SctField(
         description="""Set type of ssh library to use. Could be 'libssh2' (default) or 'fabric'""",
         default="libssh2",
@@ -339,6 +356,14 @@ class CommonConfigMixin(BaseModel):
     test_method: String = SctField(
         description="class.method used to run the test. Filled automatically with run-test sct command.",
         appendable=False,
+    )
+    use_spot_placement_scores: Boolean = SctField(
+        description="Order availability zones and region-fallback candidates by the backend's spot capacity signal "
+        "instead of alphabetically, so spot requests go to the AZ/zone most likely to have capacity: "
+        "`ec2:GetSpotPlacementScores` on AWS, Capacity Advisor obtainability (`advice.capacity`) on GCE. Scores "
+        "only reorder candidates that already passed the instance/machine-type offering filter; they never veto "
+        "one. Ignored for `instance_provision: on_demand`, and silently ignored when the permission is missing. "
+        "Supported backends: AWS, GCE.",
     )
     use_dns_names: Boolean = SctField(
         description="""Use dns names instead of ip addresses for nodes in cluster""",

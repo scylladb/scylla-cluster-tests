@@ -15,6 +15,7 @@ from argus.client.sct.client import ArgusSCTClient
 
 from sdcm.keystore import KeyStore
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
+from sdcm.provision.common.utils import guest_firewall_needs_disabling
 from sdcm.sct_events import Severity
 from sdcm.sct_events.argus import enable_argus_posting, start_posting_argus_events
 from sdcm.sct_events.system import TestFrameworkEvent
@@ -61,6 +62,12 @@ class TestConfig(metaclass=Singleton):
     LDAP_USERS_ON_SCYLLA: bool = False
     DECODING_QUEUE = None
     RESOLVED_PLACEMENT_FILENAME = "resolved_placement.yaml"
+
+    # Spot-vs-on-demand outcomes recorded during provisioning. `hydra provision-resources` runs in its own
+    # process with no events device, so SpotProvisionOutcomeEvent cannot reach Argus the normal way; the
+    # provisioning layer appends payloads here and sct.py submits them once provisioning is done. Kept as
+    # plain dicts so the provisioning layer needs no Argus import.
+    SPOT_PROVISION_OUTCOMES: list = []
 
     _test_id = None
     _test_name = None
@@ -424,6 +431,7 @@ class TestConfig(metaclass=Singleton):
             logs_transport=cls._tester_obj.params.get("logs_transport") if cls._tester_obj else "syslog-ng",
             test_config=cls(),
             install_agent=install_agent,
+            disable_guest_firewall=guest_firewall_needs_disabling(cls._tester_obj.params),
         ).to_string()
 
     @classmethod

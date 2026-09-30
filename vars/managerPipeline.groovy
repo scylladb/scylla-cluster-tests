@@ -82,7 +82,7 @@ def call(Map pipelineParams) {
 
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
             string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
-            string(defaultValue: "${pipelineParams.get('scylla_version', '2026.2')}",
+            string(defaultValue: "${pipelineParams.get('scylla_version', '2026.3')}",
                    description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
                    name: 'scylla_version')
             // When branching to manager version branch, set scylla_version to the latest release
@@ -99,7 +99,7 @@ def call(Map pipelineParams) {
                    description: '',
                    name: 'oci_image_db')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
-                   description: 'spot|on_demand|spot_fleet',
+                   description: 'spot|on_demand|spot_fleet|auto (auto: resolved by test duration, threshold spot_max_test_duration)',
                    name: 'provision_type')
             string(defaultValue: "${pipelineParams.get('instance_provision_fallback_on_demand', 'false')}",
                    description: 'true|false',

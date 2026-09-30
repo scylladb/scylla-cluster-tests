@@ -73,7 +73,14 @@ Shared elements adopted from PR #13317: backend-agnostic config naming, `fallbac
 
 ### Key AWS API Limitation
 
-AWS has no "check real-time capacity" API. `describe_instance_type_offerings` only tells you if an instance type is *offered* in an AZ, not whether capacity is currently available. The only reliable detection method is to attempt provisioning and catch the error. Strategy: **filter what we can upfront, then fallback on actual capacity errors**.
+AWS has no "check real-time capacity" API for **on-demand**. `describe_instance_type_offerings` only tells you if an instance type is *offered* in an AZ, not whether capacity is currently available. The only reliable detection method is to attempt provisioning and catch the error. Strategy: **filter what we can upfront, then fallback on actual capacity errors**.
+
+**Amended (SCT-850):** for **spot** specifically, `ec2:GetSpotPlacementScores` does provide a forward-looking signal, and SCT now uses it to *order* AZ and region candidates (`sdcm/provision/aws/spot_placement_score.py`). Two caveats keep it from replacing the strategy above:
+
+- It scores spot capacity only — it says nothing about on-demand, so the on-demand paths are unchanged.
+- Scores are explicitly "a recommendation only. No score guarantees that your Spot request will be fully or partially fulfilled", and AWS returns structurally low scores when fewer than 3 instance types are queried. So scores reorder the candidate list; the fallback machinery below remains the safety net, and no score is ever treated as a veto.
+
+This partially subsumes Phase 7's pre-flight probe for spot runs: a cheap API call can now deprioritize a bad AZ before the expensive launch-and-terminate probe runs. The probe is still the only real signal for on-demand.
 
 ---
 

@@ -101,6 +101,14 @@ class GceConfigMixin(BaseModel):
     gce_root_disk_type_monitor: String = SctField(
         description="Root disk type for monitor nodes in Google Compute Engine",
     )
+    gce_spot_obtainability_min: float = SctField(
+        description="Drop zones whose Capacity Advisor obtainability is below this value (0.0-1.0) from spot "
+        "placement candidates. Default 0 keeps every zone, matching GCP's framing of obtainability as a "
+        "likelihood rather than a guarantee. Separate from the AWS `spot_placement_score_min` because the "
+        "scales differ: GCP returns a probability, AWS an integer 1-10. If fewer zones reach the threshold "
+        "than `availability_zone` asks for, provisioning fails rather than quietly building a cluster with "
+        "fewer racks than the test was written for.",
+    )
     gce_setup_hybrid_raid: Boolean = SctField(
         description="If True, SCT configures a hybrid RAID of NVMEs and an SSD for scylla's data",
     )

@@ -115,7 +115,7 @@ def call(Map pipelineParams) {
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
-                   description: 'on_demand|spot|spot_fleet',
+                   description: 'on_demand|spot|spot_fleet|auto (auto: resolved by test duration, threshold spot_max_test_duration)',
                    name: 'provision_type')
             // Minicloud Configuration
             // Only has an effect when the jenkinsfile opts in with `minicloud: true` - see
@@ -464,7 +464,6 @@ def call(Map pipelineParams) {
                                             }
                                         }
                                         stage("Send email with result ${instance_type}") {
-                                            def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {

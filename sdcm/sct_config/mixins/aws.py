@@ -89,6 +89,21 @@ class AwsConfigMixin(BaseModel):
     spot_max_price: float = SctField(
         description="The max percentage of the on demand price we set for spot/fleet instances",
     )
+    spot_placement_score_min: int = SctField(
+        description="Drop availability zones scoring below this value (1-10) from spot placement candidates. Default 0 "
+        "keeps every AZ, which matches the AWS contract that a score is a recommendation and not a guarantee. "
+        "Note AWS returns structurally low scores when fewer than 3 instance types are requested, so a non-zero "
+        "value here is only safe alongside instance-type diversification. If fewer AZs reach the threshold "
+        "than the configured `availability_zone` asks for, provisioning fails rather than quietly spanning "
+        "fewer AZs than the test was written for.",
+    )
+    spot_score_region_relocation_margin: int = SctField(
+        description="Relocate the cluster to a better-scoring region BEFORE the first provisioning attempt, when that "
+        "region's spot placement score exceeds the configured region's by at least this many points (1-10). "
+        "Useful for `region: random` jobs that land on a poor region by chance. 0 (default) disables it, "
+        "leaving region relocation purely reactive. Only relocates to VPC-peered regions with an equivalent "
+        "AMI; note the SCT runner stays in the original region, so the cluster is reached over the peering.",
+    )
     use_capacity_reservation: Boolean = SctField(
         description="Flag to use capacity reservation for instances",
     )

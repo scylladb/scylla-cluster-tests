@@ -935,6 +935,24 @@ class ScyllaLogCollector(LogCollector):
         CommandLog(name="coredumps.info", command="sudo coredumpctl info"),
         CommandLog(name="io-properties.yaml", command="cat /etc/scylla.d/io_properties.yaml"),
         CommandLog(name="dmesg.log", command="sudo dmesg -P"),
+        # a node which is up locally but unreachable for its peers and loaders (SCT-479) can
+        # only be diagnosed with the netfilter rules and the routing state of the node at hand
+        CommandLog(
+            name="network_state.log",
+            command=(
+                "( echo '=== iptables-save ==='; sudo iptables-save; "
+                "echo '=== ip6tables-save ==='; sudo ip6tables-save; "
+                # the iptables wrappers do not show the rules written natively through nft
+                "echo '=== nft list ruleset ==='; sudo nft list ruleset; "
+                "echo '=== listening sockets ==='; sudo ss -ltnp; "
+                "echo '=== addresses ==='; ip -d addr; "
+                "echo '=== routes ==='; ip route; ip -6 route; "
+                "echo '=== routing rules ==='; ip rule; ip -6 rule; "
+                "echo '=== neighbours ==='; ip neigh; "
+                "echo '=== firewall services ==='; sudo systemctl status --full --no-pager "
+                "netfilter-persistent nftables firewalld iptables ufw )"
+            ),
+        ),
         CommandLog(name="systemctl.status", command="sudo systemctl status --all --full --no-pager"),
         # system.log here filters to scylla units only, so capture vector.dev's status/journal/config separately
         CommandLog(
@@ -1301,6 +1319,9 @@ class BaseSCTLogCollector(LogCollector):
         # each emulated guest's serial console — the only view inside a node SCT never
         # managed to SSH into, where every per-node archive comes back empty
         FileLog(name="minicloud-serial-*.log", search_locally=True),
+        # hydra's builder <-> runner transport watchdog samples (SCT-1044). The runner appends one
+        # sample every few minutes. The console gets only the anomalous ones and a periodic sample.
+        FileLog(name="hydra-watchdog.log", search_locally=True),
     ]
     cluster_log_type = "sct-runner-events"
     cluster_dir_prefix = "sct-runner-events"

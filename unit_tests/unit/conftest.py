@@ -14,6 +14,8 @@
 """Fixtures scoped to unit tests only (unit_tests/unit/).
 
 - ``fake_remoter``: ensures all unit tests use FakeRemoter, not real SSH.
+- ``drain_spot_provision_outcomes``: clears the class-level outcome buffer between
+  tests, so a recorded outcome cannot reach the next test in the same worker.
 - ``mock_cloud_services``: mocks AWS/GCE/Azure APIs so no real credentials
   are needed.  Both are autouse so unit tests get them automatically without
   any marker or explicit declaration.
@@ -27,8 +29,24 @@ import pytest
 
 from sdcm.keystore import KeyStore, SSHKey
 from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.test_config import TestConfig
 
 from unit_tests.lib.fake_remoter import FakeRemoter
+
+
+@pytest.fixture(autouse=True)
+def drain_spot_provision_outcomes():
+    """Clear ``TestConfig.SPOT_PROVISION_OUTCOMES`` around every unit test.
+
+    It is class-level state that outlives the test that filled it, and anything left in it changes what
+    the *next* test sees: `sct.py provision-resources` reports outcomes to Argus when the buffer is
+    non-empty, so a leftover entry made `test_provision_error_event.py` read the wrong `submit_event`
+    call and fail - but only in CI, and only for some test orderings. Central and autouse because the
+    recording happens deep in provisioning, far from the tests that trip over it.
+    """
+    TestConfig.SPOT_PROVISION_OUTCOMES.clear()
+    yield
+    TestConfig.SPOT_PROVISION_OUTCOMES.clear()
 
 
 @pytest.fixture(autouse=True)

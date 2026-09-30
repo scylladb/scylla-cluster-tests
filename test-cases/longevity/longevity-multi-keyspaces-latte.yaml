@@ -1,0 +1,164 @@
+# Test
+
+test_metadata:
+  description: >-
+    60-hour schema-scale longevity test: latte creates 1000 keyspaces with one table per keyspace on
+    a 6-node cluster, loads 4 million rows per table from 2 loaders, and runs a validated 48-hour
+    write/read mix while the active table window moves across all 1000 tables. It exercises metadata,
+    schema propagation, and per-table overhead at high keyspace counts, with fullscans and
+    SisyphusMonkey running in parallel.
+  test_type: longevity
+  tier: tier2
+  duration_class: long
+  supported_backends:
+    - aws
+    - gce
+    - azure
+    - oci
+  stress_tools:
+    - latte
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - tablets
+  team_ownership: core-test-infra
+
+test_duration: 3600
+prepare_stress_duration: 600
+
+# NOTE: 'ks_cf' names a table instead of using 'random'. Resolving 'random' runs 'nodetool cfstats' twice per
+#       table, which does not fit within the fullscan thread 40-minute table-selection timeout, when there
+#       are 1000 tables. Also, 'random' is not truly random: it picks the first table it finds.
+run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "schema_scale_k0001.schema_scale_t1", "interval": 30}']
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '022'
+nemesis_interval: 30
+nemesis_during_prepare: false
+
+# Env
+n_db_nodes: 6
+n_loaders: 2
+
+sizing_db:
+  vcpu: 32
+  # OCI DenseIO.E5 at 32 vCPUs provides only 192 GB (12 GB/OCPU fixed ratio).
+  # Lowered from >=256 to >=192 so OCI can match; other clouds still pick >=256 naturally.
+  memory: '>=192'
+
+root_disk_size_db: 60 # twice as as default, cause each keyspace generate lots of logs
+sizing_loader:
+  vcpu: 16
+  memory: '>=16'
+root_disk_size_monitor: 100
+root_disk_size_runner: 120
+
+user_prefix: 'longevity-1000-keyspaces'
+
+use_preinstalled_scylla: true
+
+round_robin: true
+
+# NOTE: there are 1000 keyspaces with one table per keyspace. Since 'create_schema' runs one cycle
+#       per table, '-d' must equal 'keyspace_count' * 'table_count_per_keyspace'.
+#       Use 1 latte thread and concurrency=12 to avoid the bug https://github.com/scylladb/scylladb/issues/27551.
+#       'configurations/tablets_disabled.yaml' can set 'enable_tablets=false' through
+#       'latte_schema_parameters'. Those parameters are appended after the ones below, and latte
+#       keeps the last value when the same '-P' key appears more than once.
+prepare_write_cmd:
+  - >-
+    latte run --tag create-schema -f create_schema
+    --threads=1 --concurrency=12 --connections=1
+    --warmup=0 --retries=2 --retry-interval=10s --request-timeout 300 --sampling 1s
+    -d 1000
+    -P keyspace_count=1000
+    -P table_count_per_keyspace=1
+    -P enable_tablets=true
+    -P create_index=false
+    -P replication_factor=3
+    -P compaction_strategy="\"IncrementalCompactionStrategy\""
+    -P sstable_compression="\"LZ4Compressor\""
+    data_dir/latte/schema_scale.rn
+
+# NOTE: the two loaders split population by cycle range. The 'write' function maps cycle 'i' to table 'i % 1000'
+#       and row '(i / 1000) % 4000000', so cycles 0..4e9 cover each row in every table exactly once.
+#       Because '--end-cycle' is exclusive, the two ranges below do not overlap, leave no gap, and both stay
+#       below the 2^31 cycle limit.
+#       Each command gets its own tag so its loader log file and its latte report can be told apart.
+prepare_verify_cmd:
+  - >-
+    latte run --tag populate-data-1 -f write
+    --threads=14 --concurrency=64 --connections=1
+    --warmup=0 --retries=10 --retry-interval=5s,10s --request-timeout 60 --sampling 5s
+    -d 2000000000 --start-cycle 0 --end-cycle 2000000000
+    -P keyspace_count=1000
+    -P table_count_per_keyspace=1
+    -P row_count_per_table=4000000
+    -P blob_col_size=64
+    -P text_col_size=64
+    -P gauss_mean=0
+    -P gauss_stddev=0
+    -P table_group_size=1000
+    -P table_shift_count=0
+    -P table_shift_interval_s=0
+    data_dir/latte/schema_scale.rn
+  - >-
+    latte run --tag populate-data-2 -f write
+    --threads=14 --concurrency=64 --connections=1
+    --warmup=0 --retries=10 --retry-interval=5s,10s --request-timeout 60 --sampling 5s
+    -d 2000000000 --start-cycle 2000000000 --end-cycle 4000000000
+    -P keyspace_count=1000
+    -P table_count_per_keyspace=1
+    -P row_count_per_table=4000000
+    -P blob_col_size=64
+    -P text_col_size=64
+    -P gauss_mean=0
+    -P gauss_stddev=0
+    -P table_group_size=1000
+    -P table_shift_count=0
+    -P table_shift_interval_s=0
+    data_dir/latte/schema_scale.rn
+
+# NOTE: the mixed phase uses a 100-table window that shifts by 1 table every 5 seconds. A full pass across all
+#       1000 tables takes about 83 minutes and repeats for the full 48 hours. The gauss parameters keep reads
+#       within the populated row range and preserve a stable cache hit/miss ratio. Reads are validated column
+#       by column. 'retry' handles transient mismatches during nemesis, but the command still fails if
+#       mismatches persist.
+stress_cmd:
+  - >-
+    latte run --tag mixed-1 -f write:1 -f read:5
+    --threads=14 --concurrency=32 --connections=1
+    --warmup=0 --retries=5 --retry-interval=1s,3s --request-timeout 30 --sampling 5s
+    --validation-strategy=retry
+    -d 2880m
+    -P keyspace_count=1000
+    -P table_count_per_keyspace=1
+    -P row_count_per_table=4000000
+    -P blob_col_size=64
+    -P text_col_size=64
+    -P gauss_mean=2000000
+    -P gauss_stddev=400000
+    -P table_group_size=100
+    -P table_shift_count=1
+    -P table_shift_interval_s=5
+    -P data_validation=true
+    data_dir/latte/schema_scale.rn
+  - >-
+    latte run --tag mixed-2 -f write:1 -f read:5
+    --threads=14 --concurrency=32 --connections=1
+    --warmup=0 --retries=5 --retry-interval=1s,3s --request-timeout 30 --sampling 5s
+    --validation-strategy=retry
+    -d 2880m
+    -P keyspace_count=1000
+    -P table_count_per_keyspace=1
+    -P row_count_per_table=4000000
+    -P blob_col_size=64
+    -P text_col_size=64
+    -P gauss_mean=2000000
+    -P gauss_stddev=400000
+    -P table_group_size=100
+    -P table_shift_count=1
+    -P table_shift_interval_s=5
+    -P data_validation=true
+    data_dir/latte/schema_scale.rn

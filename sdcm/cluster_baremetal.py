@@ -10,6 +10,7 @@ from typing import Optional, TypedDict
 from invoke import UnexpectedExit
 
 from sdcm import cluster
+from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 
 LOGGER = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class PhysicalMachineNode(cluster.BaseNode):
         node_prefix=None,
         after_config=None,
         dc_idx=0,
+        rack=0,
         node_index=0,
     ):
         self.node_index = node_index
@@ -70,6 +72,7 @@ class PhysicalMachineNode(cluster.BaseNode):
             node_prefix=node_prefix,
             after_config=after_config,
             dc_idx=dc_idx,
+            rack=rack,
         )
 
     def init(self):
@@ -141,7 +144,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):
     def ssh_username(self) -> str:
         return self._ssh_username
 
-    def _create_node(self, name, public_ip, private_ip, dc_idx, node_index=0, after_config=None):
+    def _create_node(self, name, public_ip, private_ip, dc_idx, rack=0, node_index=0, after_config=None):
         node = PhysicalMachineNode(
             name,
             parent_cluster=self,
@@ -151,7 +154,9 @@ class PhysicalMachineCluster(cluster.BaseCluster):
             base_logdir=self.logdir,
             node_prefix=self.node_prefix,
             dc_idx=dc_idx,
+            rack=rack,
             node_index=node_index,
+            after_config=after_config,
         )
         node.init()
         return node
@@ -159,6 +164,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):
     def _reuse_cluster_setup(self, node):
         node.run_startup_script()  # Reconfigure syslog-ng.
 
+    @mark_new_nodes_as_running_nemesis
     def add_nodes(
         self,
         count,
@@ -170,17 +176,51 @@ class PhysicalMachineCluster(cluster.BaseCluster):
         after_config=None,
     ):
         assert instance_type is None, "baremetal can't provision different types"
-        for node_index in range(count):
-            node_name = "%s-%s" % (self.node_prefix, node_index)
-            self.nodes.append(
-                self._create_node(
-                    node_name,
-                    self._node_public_ips[node_index],
-                    self._node_private_ips[node_index],
-                    dc_idx=dc_idx,
-                    node_index=node_index,
-                )
+        # Validate the whole request first: creating some of the nodes and then raising would
+        # leave them on self.nodes, and _node_index advanced, while the caller gets an exception
+        # instead of the list it needs to initialize them with.
+        #
+        # A host needs both of its addresses, and the constructor only checks the two lists
+        # against the *initial* node count -- so count the pairs, not the public IPs, or a later
+        # grow slips past this guard and dies on _node_private_ips[node_index].
+        configured_hosts = min(len(self._node_public_ips), len(self._node_private_ips))
+        if self._node_index + count > configured_hosts:
+            raise NodeIpsNotConfiguredError(
+                f"{self.node_prefix}: {count} node(s) requested from index {self._node_index}, but only "
+                f"{configured_hosts} physical host(s) are configured with both a public and a private address"
             )
+
+        added_nodes = []
+        for _ in range(count):
+            # BaseCluster._node_index persists across calls, as it does on AWS.  Counting from
+            # zero per call instead would hand a second call the same name and the same physical
+            # host as the first -- and restart the rack round-robin with it.
+            node_index = self._node_index
+            node_name = "%s-%s" % (self.node_prefix, node_index)
+            # `rack is None` is how BaseCluster says "spread the nodes yourself", which it does
+            # whenever simulated_racks is set.  A physical host has no availability zone to derive
+            # a rack from -- without this every node lands in RACK0, and SCT enables
+            # rf_rack_valid_keyspaces for every test in defaults/test_default.yaml, so any keyspace
+            # with RF > 1 is then rejected as not RF-rack-valid.  Round-robin over racks_count, as
+            # the cloud backends do; the rack reaches cassandra-rackdc.properties through
+            # SnitchConfig, which BaseScyllaCluster.node_setup applies once simulated_racks > 1.
+            node_rack = node_index % self.racks_count if rack is None else rack
+            node = self._create_node(
+                node_name,
+                self._node_public_ips[node_index],
+                self._node_private_ips[node_index],
+                dc_idx=dc_idx,
+                rack=node_rack,
+                node_index=node_index,
+                after_config=after_config,
+            )
+            self.nodes.append(node)
+            added_nodes.append(node)
+            self._node_index += 1
+        # BaseCluster.add_nodes is documented to return the list of nodes, and both cloud backends
+        # do; this one returned None, so any caller using the result (the nemesis add-node paths)
+        # would fail on it.
+        return added_nodes
 
 
 class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):

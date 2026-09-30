@@ -18,6 +18,7 @@ from contextlib import suppress
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from azure.mgmt.compute.models import GalleryImageVersion, CommunityGalleryImageVersion
 
+from sdcm.provision.network_configuration import azure_network_interfaces
 from sdcm.provision.provisioner import VmArch
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.version_utils import (
@@ -33,6 +34,19 @@ LOGGER = logging.getLogger(__name__)
 # Azure ARM instances have a 'p' immediately after the vCPU digit(s),
 # e.g. Standard_D8ps_v5, Standard_E4ps_v5, Standard_D2pds_v5
 _AZURE_ARM_RE = re.compile(r"^Standard_[A-Z]+\d+p")
+
+
+def azure_provisioner_config(params) -> dict:
+    """Backend configuration an AzureProvisioner needs, derived from the test configuration.
+
+    Shared by every code path that creates a provisioner so they cannot drift apart.
+    """
+    return {
+        "azure_provision_stuck_vm_timeout": params.get("azure_provision_stuck_vm_timeout"),
+        "azure_provision_stuck_vm_recreate_attempts": params.get("azure_provision_stuck_vm_recreate_attempts"),
+        "azure_provision_stuck_vm_total_timeout": params.get("azure_provision_stuck_vm_total_timeout"),
+        "azure_network_interfaces": azure_network_interfaces(params),
+    }
 
 
 def get_arch_from_azure_instance_type(instance_type: str) -> VmArch:

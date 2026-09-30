@@ -49,6 +49,7 @@ from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.common.oracle import ORACLE_IMAGE_PARAMS, ORACLE_USER_PREFIX_SUFFIX
+from sdcm.provision.network_configuration import azure_network_interfaces, ssh_connection_ip_type
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
 from sdcm.utils.common import (
     ami_built_by_scylla,
@@ -564,12 +565,19 @@ class SCTConfiguration(*CONFIG_GROUPS):
         merge_dicts_append_strings(self, files, SCTConfiguration)
 
         # 2) load the config files
+        user_config_keys: set[str] = set()
         if config_files:
             for conf_file in list(config_files):
                 if not os.path.exists(conf_file):
                     raise FileNotFoundError(f"Couldn't find config file: {conf_file}")
             files = anyconfig.load(list(config_files))
+            # Record which keys the user actually set, before the merge makes them indistinguishable from the
+            # `defaults/` values. Only user config files count here - the backend defaults loaded in step 1 are
+            # not an explicit choice.
+            user_config_keys = set(files.keys())
             merge_dicts_append_strings(self, files, SCTConfiguration)
+        # `env` is the SCT_* environment (Jenkins job params and the `hydra`/`sct.py` CLI both land here)
+        self._explicitly_set_params = user_config_keys | set(env.keys())
 
         regions_data = self.get("regions_data") or {}
         if regions_data:
@@ -953,6 +961,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
         # and some platfrom don't support special characters in the instance names (docker, AWS and such)
         self["user_prefix"] = re.sub(r"[^a-zA-Z0-9-]", "-", self.get("user_prefix"))
 
+        # 10.5) derive instance_provision from test duration when it was not chosen explicitly
+        self._apply_duration_based_provision_policy()
+
         # 11) validate that supported instance_provision selected
         if self.get("instance_provision") not in ["spot", "on_demand", "spot_fleet"]:
             raise ValueError(f"Selected instance_provision type '{self.get('instance_provision')}' is not supported!")
@@ -1035,6 +1046,10 @@ class SCTConfiguration(*CONFIG_GROUPS):
         # 17 Validate scylla network configuration mandatory values
         self._validate_scylla_network_config(cluster_backend=cluster_backend)
 
+        # 17.1 Validate what the Azure backend can build out of 'scylla_network_config'
+        if cluster_backend == "azure":
+            self._validate_azure_network_interfaces()
+
         # 18 Validate K8S TLS+SNI values
         if self.get("k8s_enable_sni") and not self.get("k8s_enable_tls"):
             raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
@@ -1058,6 +1073,37 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
             self.log.debug("Using random cassandra-stress driver version: %s", self["c_s_driver_version"])
+
+    def _validate_azure_network_interfaces(self) -> None:
+        """Validate what SCT can build on Azure out of 'scylla_network_config'.
+
+        The Azure NIC layout is derived from that option, so most mismatches are unrepresentable.
+        What is left are the addresses Azure cannot place where the option asks for them, and they
+        would only fail much later, while the node is coming up, so reject them here.
+        """
+        interfaces = azure_network_interfaces(self)
+
+        for address_config in self.get("scylla_network_config") or []:
+            nic = address_config["nic"]
+            address = address_config["address"]
+            if nic >= len(interfaces):
+                raise ValueError(
+                    f"'{address}' is configured on nic {nic}, but 'scylla_network_config' defines only "
+                    f"{len(interfaces)} interface(s). The 'nic' indexes must be contiguous and start at 0"
+                )
+            if address_config["ip_type"] != "ipv6" and address_config["public"] and not interfaces[nic]["public_ip"]:
+                raise ValueError(
+                    f"'{address}' asks for a public IPv4 address on nic {nic}, but on Azure SCT attaches the "
+                    f"IPv4 Public IP to the primary NIC only. Move it to nic 0 or make it private"
+                )
+
+        # checked last so that a mismatch on a specific address reports itself first, with its own message
+        if ssh_connection_ip_type(self) == "ipv6" and not interfaces[0]["public_ipv6"]:
+            raise ValueError(
+                "IPv6 SSH connections need a routable address on the primary NIC: the SCT runner lives outside "
+                "the test VNet, so the VNet-local (ULA) IPv6 address cannot reach it. Set 'test_communication' "
+                "to 'ip_type: ipv6' with 'public: true' on nic 0 in 'scylla_network_config'"
+            )
 
     def _propagate_keystore_env(self):
         """Export the resolved keystore settings so bare ``KeyStore()`` callers agree.
@@ -1109,6 +1155,111 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
         self.log.debug("Total nodes: %s", total_nodes)
         return total_nodes
+
+    def is_explicitly_set(self, param_name: str) -> bool:
+        """Indicates whether `param_name` came from a user config file, an SCT_* env var, or the CLI.
+
+        Values inherited from `defaults/` are NOT explicit: they are what a duration-based policy is allowed to
+        override. Provenance is captured during `__init__`, before the merge flattens the layers.
+        """
+        return param_name in getattr(self, "_explicitly_set_params", set())
+
+    def effective_test_duration(self) -> int:
+        """Minutes the test is actually expected to run.
+
+        Mirrors `ClusterTester._init_test_duration` (and `vars/getJobTimeouts.groovy`): when `stress_duration`
+        is set it, not `test_duration`, drives the real runtime. Reading `test_duration` alone badly
+        underestimates such runs - `prepare_stress_duration` defaults to 300, so a job passing only
+        `stress_duration` can run for days while `test_duration` still reads 60.
+        """
+        # `abs()` mirrors the normalization in step 13 of __init__, which runs *after* this policy: a
+        # negative `stress_duration` is treated there as a typo and made positive, so reading the raw value
+        # here would decide on a duration the run never has. e.g. stress=-421 + prepare=300 reads as -61
+        # (spot) but actually runs 781 min (on_demand).
+        stress_duration = self.get("stress_duration")
+        if stress_duration:
+            prepare = abs(int(self.get("prepare_stress_duration") or 0))
+            return prepare + abs(int(stress_duration)) + TestConfig.TEST_WARMUP_TEARDOWN
+        return abs(int(self.get("test_duration") or 0))
+
+    def _apply_duration_based_provision_policy(self) -> None:
+        """Derive `instance_provision` from the effective test duration.
+
+        Short tests are cheap to lose and expensive to run on-demand, so they resolve to spot; long ones resolve
+        to on_demand because spot interruption exposure grows with runtime (a reclaimed node currently fails the
+        whole run - see SCT-707).
+
+        Applies in two cases:
+          * `instance_provision: auto` - an explicit request to be decided by duration. This is the opt-in every
+            Jenkins job needs, because `vars/runSctTest.groovy` exports SCT_INSTANCE_PROVISION whenever the
+            `provision_type` job parameter is non-empty, and every pipeline defaults that parameter to a concrete
+            value ('spot' or 'on_demand'). Without `auto` the value is always "explicitly set" under Jenkins and
+            this policy would never fire there at all.
+          * the value was never set outside `defaults/` - covers local/hydra runs.
+
+        Any other explicit value wins, which is what keeps the perf jobs that pin `on_demand` on-demand.
+        """
+        requested_auto = self.get("instance_provision") == "auto"
+        if self.get("cluster_backend") not in ("aws", "gce", "azure"):
+            if requested_auto:
+                # Spot is unavailable or unsupported here (OCI DenseIO, k8s, docker), and 'auto' must never
+                # reach the step-11 validation unresolved. on_demand is the choice that works everywhere.
+                self.log.info(
+                    "instance_provision='auto' on backend '%s', which has no spot support; using 'on_demand'",
+                    self.get("cluster_backend"),
+                )
+                self["instance_provision"] = "on_demand"
+            return
+
+        if not requested_auto and self.is_explicitly_set("instance_provision"):
+            self.log.info(
+                "instance_provision='%s' was set explicitly; duration-based provision policy not applied "
+                "(use instance_provision/provision_type 'auto' to opt into duration-based selection)",
+                self.get("instance_provision"),
+            )
+            return
+
+        threshold = self.get("spot_max_test_duration")
+        test_duration = self.effective_test_duration()
+        if not threshold or not test_duration:
+            if requested_auto:
+                # 'auto' must never survive into provisioning - nothing downstream understands it. With no
+                # duration we cannot tell a 30-minute test from a 3-day one, and the two failure modes are not
+                # symmetric: guessing spot risks losing a long run to an interruption, while guessing on_demand
+                # only costs money. Take the safe one and say what to fix.
+                self.log.warning(
+                    "instance_provision='auto' but no usable duration (test_duration=%s, "
+                    "spot_max_test_duration=%s); using 'on_demand'. Set `test_duration` (or `stress_duration`) "
+                    "in the test case so the duration-based policy can pick spot for short runs.",
+                    test_duration,
+                    threshold,
+                )
+                self["instance_provision"] = "on_demand"
+            return
+
+        desired = "on_demand" if int(test_duration) > int(threshold) else "spot"
+        current = self.get("instance_provision")
+        # spot_fleet is a spot variant; leave it alone rather than flattening it to plain spot
+        if current == desired or (desired == "spot" and current == "spot_fleet"):
+            self.log.info(
+                "Duration-based provision policy: keeping instance_provision='%s' (test_duration=%s min, "
+                "threshold=%s min)",
+                current,
+                test_duration,
+                threshold,
+            )
+            return
+
+        self.log.info(
+            "Duration-based provision policy: instance_provision '%s' -> '%s' (effective duration=%s min %s "
+            "threshold=%s min). Set instance_provision explicitly to override.",
+            current,
+            desired,
+            test_duration,
+            ">" if desired == "on_demand" else "<=",
+            threshold,
+        )
+        self["instance_provision"] = desired
 
     def _apply_resolved_placement(self) -> None:
         """Apply region/AZ selected in a previous provisioning step.
@@ -2259,7 +2410,6 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if (
             self.get("db_type") not in ("cassandra",)
             and not self.get("use_preinstalled_scylla")
-            and not backend == "baremetal"
             and not self.get("unified_package")
         ):
             options_must_exist += ["scylla_repo"]
