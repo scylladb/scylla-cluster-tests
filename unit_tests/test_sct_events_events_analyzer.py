@@ -18,7 +18,7 @@ import unittest.mock
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
 from sdcm.sct_events.system import InfoEvent, SpotTerminationEvent
-from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
+from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT, EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.sct_events.events_analyzer import (
     EventsAnalyzer,
     _is_benign_gce_live_migration_of_loader,
@@ -75,7 +75,7 @@ class TestEventsAnalyzer(unittest.TestCase, EventsUtilsMixin):
 
             mock.assert_called_once()
         finally:
-            events_analyzer.stop(timeout=1)
+            events_analyzer.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
 
     def test_kill_test_not_called_for_gce_live_migration_of_loader(self):
         """A GCE host-maintenance live migration of a loader node is a known-benign, transient
@@ -94,7 +94,7 @@ class TestEventsAnalyzer(unittest.TestCase, EventsUtilsMixin):
 
                 mock.assert_not_called()
         finally:
-            events_analyzer.stop(timeout=1)
+            events_analyzer.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
 
     def test_kill_test_called_for_gce_live_migration_of_db_node(self):
         """The same live-migration event on a db node must still abort the test: the benign-event
@@ -113,7 +113,7 @@ class TestEventsAnalyzer(unittest.TestCase, EventsUtilsMixin):
 
                 mock.assert_called_once()
         finally:
-            events_analyzer.stop(timeout=1)
+            events_analyzer.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
 
     def test_kill_test_called_for_non_live_migration_gce_event_on_loader(self):
         """A CRITICAL GceInstanceEvent on a loader node that is NOT a live migration (e.g. a
@@ -133,7 +133,7 @@ class TestEventsAnalyzer(unittest.TestCase, EventsUtilsMixin):
 
                 mock.assert_called_once()
         finally:
-            events_analyzer.stop(timeout=1)
+            events_analyzer.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
 
     def test_can_stop_events_analyzer_during_stream_of_events(self):
         start_events_analyzer(_registry=self.events_processes_registry)
