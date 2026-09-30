@@ -1052,10 +1052,11 @@ _OCI_FLEX_SHAPES: list[dict[str, Any]] = [
     },
 ]
 
-# OCI fixed (non-Flex) shapes — OCI OCPUs × 2 = vCPUs
+# OCI fixed (non-Flex) shapes with their per-OCPU vCPUs.
 _OCI_FIXED_SHAPES: list[dict[str, Any]] = [
     {
         "instance_type": "BM.DenseIO.E4.128",
+        "vcpus_per_ocpu": 2,
         "family": "BM.DenseIO",
         "series": "DenseIO.E4",
         "ocpus": 128,
@@ -1066,6 +1067,7 @@ _OCI_FIXED_SHAPES: list[dict[str, Any]] = [
     },
     {
         "instance_type": "BM.DenseIO.E5.128",
+        "vcpus_per_ocpu": 2,
         "family": "BM.DenseIO",
         "series": "DenseIO.E5",
         "ocpus": 128,
@@ -1076,6 +1078,7 @@ _OCI_FIXED_SHAPES: list[dict[str, Any]] = [
     },
     {
         "instance_type": "BM.DenseIO2.52",
+        "vcpus_per_ocpu": 2,
         "family": "BM.DenseIO",
         "series": "E3",
         "ocpus": 52,
@@ -1086,6 +1089,7 @@ _OCI_FIXED_SHAPES: list[dict[str, Any]] = [
     },
     {
         "instance_type": "VM.DenseIO2.8",
+        "vcpus_per_ocpu": 2,
         "family": "VM.DenseIO",
         "series": "E3",
         "ocpus": 8,
@@ -1096,6 +1100,7 @@ _OCI_FIXED_SHAPES: list[dict[str, Any]] = [
     },
     {
         "instance_type": "VM.DenseIO2.16",
+        "vcpus_per_ocpu": 2,
         "family": "VM.DenseIO",
         "series": "E3",
         "ocpus": 16,
@@ -1106,6 +1111,7 @@ _OCI_FIXED_SHAPES: list[dict[str, Any]] = [
     },
     {
         "instance_type": "VM.DenseIO2.24",
+        "vcpus_per_ocpu": 2,
         "family": "VM.DenseIO",
         "series": "E3",
         "ocpus": 24,
@@ -1200,7 +1206,7 @@ def generate_oci_catalog(
         if not any(shape["instance_type"].startswith(f) for f in families):
             continue
         ocpus = shape["ocpus"]
-        vcpus = ocpus * 2
+        vcpus = ocpus * shape["vcpus_per_ocpu"]
         results.append(
             InstanceTypeInfo(
                 instance_type=shape["instance_type"],
