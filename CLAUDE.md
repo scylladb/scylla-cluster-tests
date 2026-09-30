@@ -31,3 +31,4 @@ Available skills (invoke via Skill tool or `/skill-name`):
 - `labeling-pipelines` — Add test_metadata to test-case YAML files
 - `reviewing-pipeline-docs` — Review test_metadata sections for accuracy
 - `stack-sync` — Manage stacked PRs via the gh-stack CLI extension (native GitHub stacked PR support)
+- `capacity-failure-analysis` — Measure AWS capacity/provisioning failures per week, region and job
