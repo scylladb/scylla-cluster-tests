@@ -16,6 +16,7 @@ from sdcm.provision.common.utils import (
     configure_vector_target_script,
     install_vector_service,
     configure_backoff_timeout,
+    update_repo_cache,
 )
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
@@ -32,4 +33,8 @@ class VectorDevUserDataObject(SctUserDataObject):
         script += install_vector_service()
         host, port = self.test_config.get_logging_service_host_port()
         script += configure_vector_target_script(host=host, port=port)
+        # NOTE: the SSH-run configuration script skips its own repo cache refresh once this boot-time
+        #       script has marked the node as done, so it must be refreshed here, otherwise packages
+        #       get installed from the (possibly stale) package lists baked into the image.
+        script += update_repo_cache()
         return script
