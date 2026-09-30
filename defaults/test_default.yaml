@@ -49,6 +49,7 @@ nemesis_interval: 5
 nemesis_add_node_cnt: 3
 
 nemesis_filter_seeds: false
+nemesis_exclude_list: []
 
 seeds_selector: "all"
 seeds_num: 1

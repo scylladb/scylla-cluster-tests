@@ -6,8 +6,10 @@ Runners can be used in nemesis_class_names config option
 import time
 from typing import Callable, List, Set, Tuple
 
+from sdcm.exceptions import NemesisPassCompleted
 from sdcm.mgmt.common import ObjectStorageUploadMode
-from sdcm.nemesis import NemesisRunner
+from sdcm.nemesis import NemesisBaseClass, NemesisRunner
+from sdcm.sct_events.system import InfoEvent
 
 
 class SisyphusMonkey(NemesisRunner):
@@ -15,6 +17,110 @@ class SisyphusMonkey(NemesisRunner):
         super().__init__(*args, **kwargs)
         self.disruptions_list = self.build_disruptions_by_selector(self.nemesis_selector)
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
+
+
+class CategorySweepMonkey(NemesisRunner):
+    """Runs every nemesis exactly once, category by category, then stops the nemesis thread.
+
+    Where SisyphusMonkey shuffles the whole set and cycles it forever, this runner is a coverage
+    sweep: the nemesis are grouped into the categories below, in that order, and each one runs
+    once. An InfoEvent announces every category as its first nemesis starts, and a final event
+    marks the completed pass, so a truncated run is distinguishable from a finished one.
+
+    Categories are matched in order and a nemesis joins the first one it matches, so they stay
+    disjoint. This matters for the nemesis that carry both schema_changes and topology_changes:
+    they are swept as schema changes.
+
+    A category listed in DISABLED_CATEGORIES is held out of the sweep entirely - currently
+    topology-changes, temporarily.
+
+    Two config options behave differently here than under SisyphusMonkey:
+
+      - nemesis_multiply_factor is ignored. Repeating the list contradicts "every nemesis once".
+      - nemesis_selector still applies, intersected with every category, so a narrowed set is
+        swept in the same category order.
+
+    Order inside a category is alphabetical by class name rather than shuffled, so a sweep is
+    reproducible without relying on nemesis_seed.
+    """
+
+    CATEGORIES: Tuple[Tuple[str, str], ...] = (
+        ("schema-changes", "schema_changes"),
+        ("topology-changes", "topology_changes and not schema_changes"),
+        ("other-disruptive", "disruptive and not topology_changes and not schema_changes"),
+        ("rest", "not disruptive and not topology_changes and not schema_changes"),
+    )
+
+    # Categories held out of the sweep for now. They stay in CATEGORIES so the table keeps
+    # describing the whole nemesis tree - a nemesis of a disabled category is skipped, not
+    # silently reassigned to another one. Drop the label here to bring the category back.
+    DISABLED_CATEGORIES: frozenset = frozenset({"topology-changes"})
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.category_by_nemesis: dict[str, str] = {}
+        self.disruptions_list = self.build_categorized_disruptions()
+        self._swept_count = 0
+        self._current_category = None
+
+    def build_categorized_disruptions(self) -> List[NemesisBaseClass]:
+        """Collect the nemesis of every category into one list, in category order."""
+        excluded = set(self.tester.params.get("nemesis_exclude_list") or [])
+        if excluded:
+            self.log.info("Nemesis excluded by nemesis_exclude_list: %s", sorted(excluded))
+        ordered = []
+        for label, category_selector in self.CATEGORIES:
+            if label in self.DISABLED_CATEGORIES:
+                self.log.info("Nemesis category %r is temporarily disabled, skipping it in this sweep", label)
+                continue
+            selector = (
+                f"({self.nemesis_selector}) and ({category_selector})" if self.nemesis_selector else category_selector
+            )
+            members = sorted(
+                self.build_disruptions_by_selector(selector), key=lambda nemesis: nemesis.__class__.__name__
+            )
+            # Excluded after the category is built, not before, so category_by_nemesis still
+            # describes the whole tree and the log line below shows what was held back and why.
+            members = [nemesis for nemesis in members if nemesis.__class__.__name__ not in excluded]
+            for nemesis in members:
+                self.category_by_nemesis[nemesis.__class__.__name__] = label
+            ordered.extend(members)
+            self.log.info(
+                "Nemesis category %r: %s", label, [nemesis.__class__.__name__ for nemesis in members] or "empty"
+            )
+        unknown = excluded - set(self.registry_names())
+        if unknown:
+            self.log.warning("nemesis_exclude_list names no such nemesis, check for typos: %s", sorted(unknown))
+        return ordered
+
+    def registry_names(self) -> Set[str]:
+        """Every nemesis class name the registry knows, used to catch typos in the exclude list."""
+        return {nemesis.__name__ for nemesis in self.nemesis_registry.get_subclasses()}
+
+    def call_next_nemesis(self):
+        """Run the next nemesis of the sweep, or end the pass once the list is exhausted.
+
+        precheck_nemesis() prunes disruptions_list in place before the first call and keeps its
+        order, so the categories stay contiguous and a category is announced whenever the label
+        changes from one nemesis to the next.
+        """
+        assert self.disruptions_list, "no nemesis were selected"
+        if self._swept_count >= len(self.disruptions_list):
+            raise NemesisPassCompleted(f"{self} completed its sweep of {self._swept_count} nemesis")
+
+        nemesis = self.disruptions_list[self._swept_count]
+        self._swept_count += 1
+        category = self.category_by_nemesis.get(nemesis.__class__.__name__)
+        if category != self._current_category:
+            self._current_category = category
+            InfoEvent(message=f"{self} starting nemesis category {category!r}").publish()
+        self.execute_nemesis(nemesis)
+        # Signalled here rather than only on the next call so a finished sweep does not idle away
+        # one nemesis_interval after its last nemesis. A nemesis that ends by raising - a skip, a
+        # teardown kill, a failure - keeps its own exception, and the guard above ends the sweep on
+        # the following call instead.
+        if self._swept_count >= len(self.disruptions_list):
+            raise NemesisPassCompleted(f"{self} completed its sweep of {self._swept_count} nemesis")
 
 
 class NoOpMonkey(NemesisRunner):

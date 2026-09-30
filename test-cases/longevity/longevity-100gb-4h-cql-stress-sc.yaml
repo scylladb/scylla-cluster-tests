@@ -1,0 +1,168 @@
+test_duration: 330
+
+test_metadata:
+  description: >-
+    Strong Consistency sanity longevity: the 100GB / 4h workload of longevity-100gb-4h, but the
+    keyspace is created strongly consistent (consistency = 'global') on tablets and the load is
+    driven by cql-stress-cassandra-stress with the Raft-leader-aware load balancing policy.
+    A 6-node cluster is preloaded with 20M rows, then parallel write and read streams run at
+    QUORUM for 4 hours under SisyphusMonkey chaos. This is the functional/stability counterpart
+    to the Strong Consistency performance jobs, which measure latency but never run nemesis.
+  test_type: longevity
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - cql-stress-cassandra-stress
+  workload: mixed
+  nemesis_labels:
+    - SisyphusMonkey
+  features:
+    - tablets
+  team_ownership: core-test-infra
+
+n_db_nodes: 6
+n_loaders: 2
+seeds_num: 3
+
+sizing_db:  # aligned with longevity-100gb-4h.yaml (i7i.2xlarge); arch is pinned because the
+            # AMI of this job is supplied by id (x86_64)
+  vcpu: 8
+  memory: '>=64'
+  arch: x86_64
+
+sizing_loader:  # default loader size (4 vCPU / 8GB), pinned to x86_64
+  vcpu: 4
+  memory: '>=8'
+  arch: x86_64
+
+# CategorySweepMonkey rather than SisyphusMonkey: this job is a coverage pass, so every
+# nemesis should run once, category by category, instead of a shuffled set cycling forever.
+# nemesis_seed has no effect under it - order inside a category is alphabetical, so a sweep
+# is reproducible without a seed.
+nemesis_class_name: 'CategorySweepMonkey'
+
+# SCT defaults this to true, which is wrong for a job whose read command validates every row it
+# reads. A nemesis running during prepare makes writes fail; with the load's fail-fast disabled
+# those rows are simply missing, and the read phase then reports them as read validation errors -
+# a data-loss signature produced by the test setup, not by the product. Keep the prepare phase
+# quiet, so the dataset is complete before the sweep starts.
+nemesis_during_prepare: false
+
+user_prefix: 'longevity-100gb-4h-sc'
+space_node_threshold: 64424
+
+# Encryption is not supported by cql-stress (see configurations/rust/cql-stress-100gb-4h.yaml),
+# and the encrypted path is already covered by longevity-100gb-4h. Keeping it off here also keeps
+# this job comparable to the Strong Consistency performance jobs, which all run unencrypted.
+server_encrypt: false
+client_encrypt: false
+
+# The keyspace is created by cql-stress itself, from the consistency=global sub-parameter of
+# -schema replication(...) in the stress commands below. SCT must therefore not create it first:
+#
+#   - pre_create_keyspace is left unset.
+#   - pre_create_schema MUST stay False. It is not merely redundant here: _pre_create_schema()
+#     calls tester.create_keyspace(), which emits no consistency clause at all, and cql-stress
+#     issues CREATE KEYSPACE IF NOT EXISTS - which does not upgrade an existing eventually
+#     consistent keyspace. Turning this on silently produces an EC run that still passes.
+#
+# The same applies to a reused cluster: SCT_REUSE_CLUSTER against a cluster that already holds an
+# eventually consistent keyspace1 will not be upgraded. Drop the keyspace before switching modes.
+pre_create_schema: false
+
+# Tablets carry the strongly-consistent-tables feature, and cql-stress cannot emit a
+# "tablets = {...}" clause - its -schema flag only reaches the replication map and the lifted
+# consistency property. Recent Scylla defaults to tablets_mode_for_new_keyspaces: enabled, but
+# pin it rather than inherit it, so the job cannot quietly turn into a vnodes run on a version
+# or config where that default differs.
+append_scylla_yaml:
+  enable_tablets: true
+  tablets_mode_for_new_keyspaces: 'enabled'
+
+hinted_handoff: 'enabled'
+parallel_node_operations: true
+
+# cl=QUORUM everywhere, and it is not optional. The cql-stress default is local_one, which a
+# strongly consistent keyspace rejects outright for writes, so the run would fail at startup.
+# Reads do accept ONE/LOCAL_ONE, but those turn leader-aware routing off and would measure the
+# wrong thing.
+#
+# "consistency=global" is a cql-stress extension to the replication(...) sub-parameters: it is
+# lifted out of the CQL replication map into a top-level keyspace property, so the emitted DDL is
+#
+#   CREATE KEYSPACE IF NOT EXISTS "keyspace1"
+#     WITH REPLICATION = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}
+#     AND consistency = 'global';
+#
+# NetworkTopologyStrategy is required with it - the cql-stress default is SimpleStrategy, which
+# 2026.2+ rejects because it cannot do tablet replication, and a non-tablet keyspace cannot carry
+# the consistency option.
+#
+# Only write and counterwrite emit that DDL, so the keyspace is created here, in the prepare
+# phase. Both commands below carry the clause: they start in parallel and race, which the
+# IF NOT EXISTS makes harmless, and whichever wins produces the same keyspace.
+#
+# "-log coordinators=true" records the coordinator of each request, which is what makes it
+# possible to confirm after the fact that leader-aware routing actually sent writes to the Raft
+# leader rather than silently falling back to round-robin.
+#
+# "-errors ignore" is on the load below (stress_cmd), and deliberately NOT on the prepare
+# commands. cql-stress defaults to fail-fast: one operation that exhausts its retries ends the
+# whole benchmark with exit 1, which SCT raises as a CRITICAL and fails the test. Every nemesis
+# that takes a node's CQL listener away - DisableBinaryGossipExecuteMajorCompaction,
+# StopStartMonkey, ScyllaKillMonkey, HardRebootNodeMonkey and the rest of the sweep - produces
+# exactly such errors on a healthy cluster, so the load cannot survive its own chaos without it.
+#
+# Strong consistency makes the default worse than it is for the EC jobs: an SC timeout is
+# reported as WriteTimeout(CL=ONE, 0/1, write_type=SIMPLE) - a placeholder in Scylla's SC
+# coordinator - and the rust driver's default retry policy treats a SIMPLE write timeout as
+# non-retryable, so it abandons the query plan instead of failing over to a replica that would
+# forward to the leader. See SCYLLADB-4671.
+#
+# Prepare keeps fail-fast because "ignore" there means silently dropped rows, and the read
+# command validates every key it was told to read: run #14 (Argus f57403f7) hit exactly that,
+# a ReadValidationError on keyspace1.standard1 after a nemesis had disturbed the prepare writes.
+# nemesis_during_prepare near the top of this file is the other half of that fix.
+prepare_write_cmd:
+  - >-
+    cql-stress-cassandra-stress write cl=QUORUM n=10485760
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,consistency=global)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=1..10485760
+    -col 'n=FIXED(10) size=FIXED(512)'
+    -log interval=5 coordinators=true
+  - >-
+    cql-stress-cassandra-stress write cl=QUORUM n=10485760
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,consistency=global)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=10485761..20971520
+    -col 'n=FIXED(10) size=FIXED(512)'
+    -log interval=5 coordinators=true
+
+# The read command deliberately keeps the same -schema: a read-only run never emits the DDL and
+# expects the keyspace to already exist, which the prepare phase above guarantees. Keeping the
+# clause identical across all four commands means there is no command from which a reader could
+# infer that this job is anything but strongly consistent.
+stress_cmd:
+  - >-
+    cql-stress-cassandra-stress write cl=QUORUM duration=240m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,consistency=global)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=1..20971520
+    -col 'n=FIXED(10) size=FIXED(512)'
+    -log interval=5 coordinators=true
+    -errors ignore
+  - >-
+    cql-stress-cassandra-stress read  cl=QUORUM duration=240m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,consistency=global)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=1..20971520
+    -col 'n=FIXED(10) size=FIXED(512)'
+    -log interval=5 coordinators=true
+    -errors ignore
