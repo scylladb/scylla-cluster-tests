@@ -2828,7 +2828,17 @@ class BaseNode(AutoSshContainerMixin):
             # NOTE: run "update" command because on K8S after each pod recreation we lose previous "update" results.
             #       And running some old Scylla docker images we may get errors refering to old/removed mirrors.
             self.remoter.sudo(update_cmd, ignore_status=ignore_status)
-        self.remoter.sudo(install_cmd, ignore_status=ignore_status)
+        try:
+            self.remoter.sudo(install_cmd, ignore_status=ignore_status)
+        except UnexpectedExit, Libssh2_UnexpectedExit:
+            if self.distro.is_rhel_like or self.distro.is_sles:
+                raise
+            # NOTE: stale apt lists (e.g. baked into an image and never refreshed on the node) make
+            #       the install fail the same way on every retry, so refresh them before the next attempt.
+            #       Not done for yum/zypper: their `update_cmd` upgrades the system, and both refresh
+            #       expired repo metadata on their own.
+            self.remoter.sudo(apt_cmd("update", lock_wait=True), ignore_status=True)
+            raise
 
     def remove_package(self, package_name: str, ignore_status: bool = True) -> None:
         """Uninstall a package, tolerating it not being installed at all."""
