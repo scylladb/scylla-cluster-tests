@@ -212,7 +212,9 @@ def test_non_preemption_failure_still_propagates(monkeypatch):
 def vm_provider():
     """A VirtualMachineProvider with its GCE clients stubbed out."""
     with patch("sdcm.provision.gce.instance_provider.get_gce_compute_instances_client") as client:
-        client.return_value = (MagicMock(), {"project_id": "test-project"})
+        instances_client = MagicMock()
+        instances_client.get.return_value.status = "RUNNING"
+        client.return_value = (instances_client, {"project_id": "test-project"})
         yield VirtualMachineProvider(
             project_id="test-project",
             zone="us-east1-b",
