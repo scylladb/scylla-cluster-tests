@@ -2998,10 +2998,17 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         return self.k8s_clusters[0].scylla_manager_cluster.nodes[0]
 
     def get_cluster_manager(
-        self, create_if_not_exists: bool = False, force_add: bool = False, **add_cluster_extra_params
+        self,
+        create_if_not_exists: bool = False,
+        force_add: bool = False,
+        retry_listing: bool = False,
+        **add_cluster_extra_params,
     ) -> AnyManagerCluster:
         return super().get_cluster_manager(
-            create_if_not_exists=create_if_not_exists, force_add=force_add, **add_cluster_extra_params
+            create_if_not_exists=create_if_not_exists,
+            force_add=force_add,
+            retry_listing=retry_listing,
+            **add_cluster_extra_params,
         )
 
     def create_cluster_manager(self, cluster_name: str, manager_tool=None, **add_cluster_extra_params):

@@ -33,6 +33,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Multi-Cloud Provisioning Resilience | `draft` | [multi-cloud-provisioning-resilience.md](infrastructure/multi-cloud-provisioning-resilience.md) |
 | AWS Capacity AZ Fallback | `draft` | [aws-capacity-az-fallback.md](infrastructure/aws-capacity-az-fallback.md) |
 | NVMe Diagnostics Collection | `draft` | [nvme-diagnostics-collection.md](infrastructure/nvme-diagnostics-collection.md) |
+| Azure Multi-VNIC Support | `complete` | [azure-multi-vnic-support.md](infrastructure/azure-multi-vnic-support.md) |
 
 ### Nemesis — Chaos engineering, disruptors
 
@@ -41,6 +42,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Nemesis Rework (Nemesis 2.0) | `in_progress` | [nemesis-rework.md](nemesis/nemesis-rework.md) |
 | Nemesis Extraction Phase 3 | `in_progress` | [nemesis-extraction.md](nemesis/nemesis-extraction.md) |
 | Nemesis Pre-Execution Skip Check (`precheck`) | `in_progress` | [nemesis-precheck.md](nemesis/nemesis-precheck.md) |
+| Preserve Coredumps During Out-of-Space Nemesis | `draft` | [coredump-preservation-oos-nemesis.md](nemesis/coredump-preservation-oos-nemesis.md) |
 
 ### Stress Tools — Load generators
 

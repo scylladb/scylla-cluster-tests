@@ -92,7 +92,14 @@ def runRestoreMonitoringStack(){
     env
 
     echo "Restoring Monitor stack for test-id \$SCT_TEST_ID"
-    ./docker/env/hydra.sh investigate show-monitor \$SCT_TEST_ID --kill true
+    # restore on the provision's own SCT runner: parallel provision branches share this builder's
+    # docker daemon, so restoring here lets their monitoring stacks collide
+    RUNNER_IP=\$(cat sct_runner_ip||echo "")
+    if [[ -n "\${RUNNER_IP}" ]] ; then
+        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} investigate show-monitor \$SCT_TEST_ID --kill true
+    else
+        ./docker/env/hydra.sh investigate show-monitor \$SCT_TEST_ID --kill true
+    fi
     """
 }
 
@@ -253,7 +260,7 @@ pipeline {
                         def curr_params = createRunConfiguration('docker')
                         def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, curr_params.oci_region_name)
                         dockerLogin(params)
-                        withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
+                        withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}", "SCT_ROOT_DISK_SIZE_RUNNER=140",]) {
                             dir('scylla-cluster-tests') {
                                 checkout scm
 
@@ -352,7 +359,6 @@ pipeline {
                                 def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, curr_params.oci_region_name, curr_params)
                                 withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                                     script {
-                                        def result = null
                                         dir(working_dir) {
                                             checkout scm
                                         }
@@ -369,8 +375,8 @@ pipeline {
                                                 }
                                             } catch(Exception err) {
                                                 echo "${err}"
-                                                result = 'FAILURE'
                                                 pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed')
+                                                markStepFailed("Creating SCT runner failed: ${err}")
                                             }
                                         }
                                         try {
@@ -396,8 +402,8 @@ pipeline {
                                             }
                                         } catch(Exception err) {
                                             echo "${err}"
-                                            result = 'FAILURE'
                                             pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Resource provisioning failed')
+                                            markStepFailed("Resource provisioning failed: ${err}")
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
@@ -409,6 +415,7 @@ pipeline {
                                             }
                                         } catch(Exception err) {
                                             echo "${err}"
+                                            markStepFailed("Creating Argus test run failed: ${err}", false)
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
@@ -417,15 +424,14 @@ pipeline {
                                                     dir(working_dir) {
                                                         echo "Run provision test"
                                                         runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
-                                                        result = 'SUCCESS'
                                                         pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
                                                     }
                                                 }
                                             }
                                         } catch(Exception err) {
                                             echo "${err}"
-                                            result = 'FAILURE'
                                             pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed')
+                                            markStepFailed("Provision test failed: ${err}")
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
@@ -437,6 +443,7 @@ pipeline {
                                             }
                                         } catch(Exception err) {
                                             echo "${err}"
+                                            markStepFailed("Collecting logs failed: ${err}", false)
                                         }
                                         if (!(backend in ['k8s-local-kind-aws', 'k8s-eks'])) {
                                             try {
@@ -449,7 +456,7 @@ pipeline {
                                                 }
                                             } catch(Exception err) {
                                                 echo "${err}"
-                                                currentBuild.result = 'FAILURE'
+                                                markStepFailed("Restoring monitoring stack failed: ${err}")
                                             }
                                         }
                                         if (pullRequestContainsLabels("test-provision-${backend}-reuse")) {
@@ -461,7 +468,6 @@ pipeline {
                                                             dir(working_dir) {
                                                                 echo "Reuse the cluster and re-run provision test"
                                                                 runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
-                                                                result = 'SUCCESS'
                                                                 pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
                                                             }
                                                         }
@@ -469,8 +475,8 @@ pipeline {
                                                 }
                                             } catch(Exception err) {
                                                 echo "${err}"
-                                                result = 'FAILURE'
                                                 pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed during cluster reuse test')
+                                                markStepFailed("Cluster reuse test failed: ${err}")
                                             }
                                         }
                                         try {
@@ -483,6 +489,7 @@ pipeline {
                                             }
                                         } catch(Exception err) {
                                             echo "${err}"
+                                            markStepFailed("Finishing Argus test run failed: ${err}", false)
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
@@ -494,10 +501,7 @@ pipeline {
                                             }
                                         } catch(Exception err) {
                                             echo "${err}"
-                                        }
-                                        if (result == 'FAILURE'){
-                                            currentBuild.result = 'FAILURE'
-                                            sh "exit 1"
+                                            markStepFailed("Cleaning up resources failed: ${err}", false)
                                         }
                                     }
                                 }

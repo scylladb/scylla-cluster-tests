@@ -239,6 +239,81 @@ def set_replication_factor(cluster, rf: int) -> None:
         keyspace.alter(replication_factor=rf)
 ```
 
+### Rule 4: Every ThreadPoolExecutor Must Be Shut Down
+
+A `ThreadPoolExecutor` worker is **non-daemon** and does not end when its task returns — it goes
+back to parking in `queue.get()` and stays alive until `shutdown()` is called. A pool that is
+never shut down therefore leaks a live thread for the rest of the process.
+
+That is not a tidiness problem, it is a hang. `concurrent.futures.thread` registers
+`_python_exit()` through CPython's internal `threading._register_atexit()`, and at interpreter
+shutdown it joins **every** live pool worker **with no timeout**:
+
+```python
+def _python_exit():
+    ...
+    for t, q in items:
+        t.join()          # no timeout, and no way to opt out
+```
+
+One leaked worker blocking on I/O is enough to hang the whole run after the test has already
+finished. This is the mechanism behind SCT-575, where a run sat idle ~25h until Jenkins killed it.
+
+There is **no supported way to skip that join** for a live non-daemon worker. `atexit.unregister`
+does not work: `_python_exit` is not in the public `atexit` registry (SCT carried such a call in
+`ParallelObject.clean_up()` for years; it never did anything). Deleting the thread from
+`concurrent.futures.thread._threads_queues` does not work either on Python 3.14+, where
+`threading._shutdown()` ends in a C-level `_thread._shutdown()` that joins all non-daemon threads
+regardless. The only fix is to not leave the worker alive.
+
+**Bad** — pool outlives the work, so the worker is still alive at exit:
+
+```python
+class RemoteLogger:
+    def __init__(self, node):
+        self._pool = ThreadPoolExecutor(max_workers=1)
+
+    def start(self):
+        self._future = self._pool.submit(self._follow)
+
+    def stop(self):
+        self._termination_event.set()
+        self._future.cancel()      # task ends -- but the worker thread does not
+```
+
+**Good** — pool lives exactly as long as the task it runs:
+
+```python
+class RemoteLogger:
+    def __init__(self, node):
+        self._pool = None
+
+    def start(self):
+        self._pool = ThreadPoolExecutor(max_workers=1)
+        self._future = self._pool.submit(self._follow)
+
+    def stop(self):
+        self._termination_event.set()
+        self._future.cancel()
+        if self._pool is not None:
+            self._pool.shutdown(wait=False, cancel_futures=True)
+            self._pool = None
+```
+
+**What to flag in review**: any `ThreadPoolExecutor(...)` that is **not** used as a context manager
+(`with ThreadPoolExecutor(...) as executor:`) and is assigned to an attribute (`self.executor = ...`).
+Then grep the class for a matching `shutdown(`. If there is none, that is a leak — ask for it.
+
+Creating the pool in `start()` rather than `__init__` is the usual shape: a pool that has been shut
+down cannot accept new work, so a class supporting a start/stop/start cycle needs a fresh one.
+
+For fire-and-forget background work that nothing ever joins, prefer `threading.Thread(daemon=True)`
+outright — daemon threads are never tracked in `_threads_queues` and are simply abandoned at exit.
+
+**Reviewing a test for this**: the assertion must be `not worker.is_alive()`. Do **not** assert the
+thread is absent from `_threads_queues` — that registry is weak-keyed, so a finished worker can
+linger in it until garbage collection, and `join()` on a finished thread returns immediately anyway.
+
 ### T6 Review Checklist
 
 ```
@@ -247,6 +322,7 @@ def set_replication_factor(cluster, rf: int) -> None:
 [ ] Event start (.begin()) and stop (.end()) always paired via try/finally
 [ ] Function inputs validated with clear error messages before use
 [ ] Exception handling does not silently swallow errors that should propagate
+[ ] Every ThreadPoolExecutor is either a `with` block or has a matching shutdown() call
 ```
 
 ---
@@ -389,6 +465,7 @@ T13  [ ] Edge cases covered: empty, single element, boundary values
 T6   [ ] Escaped errors publish SCT error events (NodeNotResponding, CoreDumpEvent, etc.)
 T6   [ ] All context manager yields use try/finally to guarantee cleanup
 T6   [ ] Inputs validated with clear ValueError messages before use
+T6   [ ] Every ThreadPoolExecutor is a `with` block or has a matching shutdown()
 T2   [ ] SctField descriptions are non-empty with purpose, default, valid range
 T2   [ ] Magic numbers have comments explaining WHY the value is correct
 T2   [ ] Public sdcm/ methods have Google-style docstrings where non-obvious

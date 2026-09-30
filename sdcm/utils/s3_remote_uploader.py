@@ -76,8 +76,7 @@ def upload_remote_files_directly_to_s3(
     extra_args = {}
     if public_read_acl is True:
         extra_args.update({"ACL": "public-read"})
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect((ssh_info.get("hostname"), ssh_info.get("port", 22)))
+    sock = socket.create_connection((ssh_info.get("hostname"), ssh_info.get("port", 22)))
     session = Session()
     session.handshake(sock)
     session.userauth_publickey_fromfile(username=ssh_info.get("user"), privatekey=expanduser(ssh_info.get("key_file")))

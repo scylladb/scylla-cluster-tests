@@ -18,6 +18,7 @@ from sdcm.provision.gce.capacity_errors import (
     is_zone_capacity_error,
     is_quota_error,
     is_type_unavailable_error,
+    is_preemption_error,
     classify_provisioning_error,
 )
 
@@ -92,6 +93,22 @@ def test_is_type_unavailable_error(message, expected):
 
 
 @pytest.mark.parametrize(
+    "message,expected",
+    [
+        # Verbatim GCE operation error for a spot VM reclaimed before it finished booting.
+        ("Instance failed to start due to preemption.", True),
+        ("Code: PREEMPTED", True),
+        # Capacity exhaustion is about the zone, preemption is about the pricing model - keep them apart.
+        ("ZONE_RESOURCE_POOL_EXHAUSTED", False),
+        ("QUOTA_EXCEEDED", False),
+        ("", False),
+    ],
+)
+def test_is_preemption_error(message, expected):
+    assert is_preemption_error(_FakeError(message)) is expected
+
+
+@pytest.mark.parametrize(
     "message,expected_class",
     [
         ("ZONE_RESOURCE_POOL_EXHAUSTED", "capacity"),
@@ -100,6 +117,7 @@ def test_is_type_unavailable_error(message, expected):
             "features are not compatible for creating instance.",
             "config",
         ),
+        ("Instance failed to start due to preemption.", "preemption"),
         ("QUOTA_EXCEEDED", "quota"),
         ("RESOURCE_NOT_FOUND", "type_unavailable"),
         ("PERMISSION_DENIED", "unknown"),

@@ -1,9 +1,12 @@
 """Unit tests for cluster_cloud module."""
 
+import inspect
+
 import pytest
 from unittest.mock import MagicMock, patch
 
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.cluster import BaseNode
 from sdcm.cluster_cloud import (
     xcloud_super_if_supported,
     ScyllaCloudCluster,
@@ -776,3 +779,17 @@ def test_prepare_cluster_config_expands_knob_to_node_count(mock_test_name, mock_
     cluster = _mock_cluster_for_prepare_config(az_knob=",".join(az_ids))
     config = ScyllaCloudCluster._prepare_cluster_config(cluster, node_count=6, instance_type=None)
     assert config["availability_zone_ids"] == az_ids * 2
+
+
+def test_cloud_node_accepts_every_wait_db_up_argument_of_its_base():
+    """`CloudNode.wait_db_up()` forwards to `BaseNode.wait_db_up()` through a decorator.
+
+    A caller passing an argument the override does not name gets a TypeError before the base
+    implementation is ever reached, so the two signatures have to stay in step.
+    """
+    base = inspect.signature(BaseNode.wait_db_up).parameters
+    override = inspect.signature(CloudNode.wait_db_up).parameters
+
+    assert set(base) <= set(override), f"missing in the CloudNode override: {set(base) - set(override)}"
+    for name, parameter in base.items():
+        assert override[name].default == parameter.default, f"'{name}' default differs from the base one"

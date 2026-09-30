@@ -100,6 +100,33 @@ Any `try/except`, `raise`, exception class definition, or error handling logic.
 
 ---
 
+## Check 3b: Thread Pool Lifecycle
+
+### Trigger
+
+Any new or modified `ThreadPoolExecutor(...)`, or a class that holds one on an attribute.
+
+### Rules
+
+1. **Every pool needs a shutdown**: either `with ThreadPoolExecutor(...) as executor:` or an
+   explicit `shutdown()` on every path that ends the work. A pool assigned to `self.<attr>` with
+   no matching `shutdown(` anywhere in the class is a leak — flag it.
+2. **Why it is not cosmetic**: pool workers are non-daemon and outlive their task. At interpreter
+   shutdown `concurrent.futures.thread._python_exit()` joins every live worker **with no timeout**,
+   so one leaked worker hangs the whole run after the test has finished (SCT-575: ~25h idle).
+3. **There is no way to opt out of that join.** Reject `atexit.unregister(_python_exit)` (wrong
+   registry — it is registered via `threading._register_atexit`) and reject deleting entries from
+   `_threads_queues` (no effect on Python 3.14+, where the join moved into C-level
+   `_thread._shutdown()`). The only fix is to not leave the worker alive.
+4. **Prefer `threading.Thread(daemon=True)`** for fire-and-forget background work nothing joins —
+   daemon threads are never tracked for the shutdown join.
+5. **Pool creation belongs in `start()`**, not `__init__`, for any class supporting a
+   start/stop/start cycle: a shut-down pool cannot accept new work.
+
+See `correctness-and-safety.md` T6 Rule 4 for the full rationale and a good/bad example.
+
+---
+
 ## Check 4: Test Coverage
 
 ### Trigger

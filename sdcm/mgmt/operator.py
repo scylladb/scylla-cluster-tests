@@ -449,8 +449,8 @@ class ScyllaManagerToolOperator(ScyllaManagerTool):
     def _initial_wait(self, seconds: int):
         pass
 
-    def get_cluster(self, cluster_name):
-        cluster = super().get_cluster(cluster_name)
+    def get_cluster(self, cluster_name, retry_listing: bool = False):
+        cluster = super().get_cluster(cluster_name, retry_listing=retry_listing)
         if cluster is None:
             cluster = self.clusterClass(
                 manager_node=self.manager_node, cluster_name=cluster_name, scylla_cluster=self.scylla_cluster

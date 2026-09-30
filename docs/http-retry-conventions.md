@@ -124,6 +124,10 @@ Rules that follow from this:
   (a `POST`/`PUT`/`DELETE` that must not be replayed). It is not a valid
   workaround for anything else; on an idempotent download it silently removes
   connection-reset protection.
+- Use `max_time` for downloads that might stall mid-transfer. `--connect-timeout`
+  only covers the handshake, so a transfer that stops making progress can still
+  hang the caller until the transport gives up. The vector.dev package download
+  uses this to keep node provisioning within its stage budget.
 
 ### curl inside bash scripts
 
@@ -132,14 +136,19 @@ easiest ones to miss — they don't match a `remoter.run("curl` grep. Interpolat
 the helper into the f-string rather than writing curl flags by hand:
 
 ```python
-vector_setup_curl = curl_with_retry(
-    "https://setup.vector.dev", silent=True, follow_redirects=True, fail_early=True, extra_flags="-S"
+download_curl = curl_with_retry(
+    "$_vector_url", silent=True, follow_redirects=True, fail_early=True,
+    max_time=VECTOR_DOWNLOAD_MAX_TIME, output="$_vector_dst", extra_flags="-S"
 )
 return dedent(f"""\
-    if bash -c "$({vector_setup_curl})"; then
-    ...
+    _vector_url=$_vector_base/$_vector_pkg
+    _vector_dst=/tmp/$_vector_pkg
+    {download_curl} || _vector_rc=$?
 """)
 ```
+
+The URL and the output path are shell variables here, so one built command
+serves every download in the loop.
 
 Build the command outside the f-string, then interpolate the variable —
 `{curl_with_retry(...)}` inline works too but reads badly in long templates.
