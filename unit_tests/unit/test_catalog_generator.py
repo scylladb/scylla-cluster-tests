@@ -140,6 +140,20 @@ def test_generate_oci_catalog_family_filter():
     assert all(r.family == "BM.DenseIO" for r in result)
 
 
+@pytest.mark.parametrize(
+    "instance_type,expected_vcpus",
+    [
+        ("VM.Standard.A1.Flex:16", 16),
+        ("VM.Standard.A4.Flex:8", 16),
+        ("VM.Standard3.Flex:8", 16),
+        ("VM.DenseIO.E5.Flex:8", 16),
+    ],
+)
+def test_generate_oci_catalog_vcpus_per_ocpu(instance_type, expected_vcpus):
+    result = {r.instance_type: r for r in generate_oci_catalog(["VM.Standard", "VM.DenseIO"])}
+    assert result[instance_type].vcpus == expected_vcpus
+
+
 def test_generate_oci_catalog_unknown_family_returns_empty():
     result = generate_oci_catalog(["NonExistentFamily99"])
     assert result == []
