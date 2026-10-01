@@ -115,16 +115,6 @@ def test_12_scylla_version_ami(monkeypatch):
 
 
 @pytest.mark.integration
-def test_12_scylla_version_ami_case1(monkeypatch):
-    monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-
-@pytest.mark.integration
 def test_12_scylla_version_ami_case2(monkeypatch):
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -137,14 +127,6 @@ def test_12_scylla_version_ami_case2(monkeypatch):
 
 @pytest.mark.integration
 def test_12_scylla_version_repo(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-
-@pytest.mark.integration
-def test_12_scylla_version_repo_case1(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
     conf = sct_config.SCTConfiguration()

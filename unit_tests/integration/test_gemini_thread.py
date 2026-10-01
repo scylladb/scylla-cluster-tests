@@ -79,26 +79,6 @@ def load_statement_ratios(gemini_schemas_dir: Path) -> str:
     return json.dumps(json.loads(ratios_path.read_text(encoding="utf-8")), separators=(",", ":"))
 
 
-@pytest.fixture(name="gemini_thread")
-def fixture_gemini_thread(request, params, docker_scylla, docker_scylla_oracle, gemini_schemas_dir):
-    """Build and teardown a GeminiStressThread for the standard oracle case.
-
-    Test functions that need to vary mode, duration, or other options should
-    call :func:`build_gemini_thread` directly instead.
-    """
-    thread = build_gemini_thread(params, docker_scylla, docker_scylla_oracle, gemini_schemas_dir=gemini_schemas_dir)
-    request.addfinalizer(thread.kill)
-    return thread
-
-
-@pytest.fixture(name="gemini_thread_no_oracle")
-def fixture_gemini_thread_no_oracle(request, params, docker_scylla, gemini_schemas_dir):
-    """Build and teardown a GeminiStressThread with no oracle cluster."""
-    thread = build_gemini_thread(params, docker_scylla, oracle_node=None, gemini_schemas_dir=gemini_schemas_dir)
-    request.addfinalizer(thread.kill)
-    return thread
-
-
 def build_gemini_thread(
     params,
     test_node,

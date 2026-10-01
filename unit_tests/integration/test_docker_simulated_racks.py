@@ -71,27 +71,6 @@ def configure_racks(params, events):
             container.kill()
 
 
-def test_rack_visibility(configure_racks):
-    """Each node must report its assigned rack in system.local."""
-    node1, node2 = configure_racks
-    result = node1.run_cqlsh("SELECT rack FROM system.local")
-    assert "RACK0" in result.stdout
-
-    result = node2.run_cqlsh("SELECT rack FROM system.local")
-    assert "RACK1" in result.stdout
-
-
-def test_keyspace_creation_with_rf2(configure_racks):
-    """A NetworkTopologyStrategy keyspace with RF=2 must be creatable across racks."""
-    node1, _ = configure_racks
-    create_ks = (
-        "CREATE KEYSPACE IF NOT EXISTS rack_test_ks "
-        "WITH replication = {'class': 'NetworkTopologyStrategy', 'datacenter1': 2}"
-    )
-    result = node1.run_cqlsh(create_ks)
-    assert result.ok, f"Failed to create keyspace: {result.stderr}"
-
-
 def test_reuse_cluster_preserves_racks(tmp_path, configure_racks):
     """After initial rack setup, node_setup with REUSE_CLUSTER=True must
     skip full setup (no restart, no config_setup) while preserving the

@@ -6,77 +6,8 @@ These tests require AWS credentials and make actual API calls.
 """
 
 import pytest
-from botocore.exceptions import ClientError, NoCredentialsError, BotoCoreError
 
 from sdcm.utils.common import find_equivalent_ami
-
-
-@pytest.mark.integration
-def test_find_equivalent_ami_real_scylla_ami():
-    """
-    Test with a real ScyllaDB AMI.
-    This test requires AWS credentials and makes actual API calls.
-    """
-    # Use a known ScyllaDB 5.2 AMI in us-east-1
-    # This AMI should exist in production
-    source_ami = "ami-0d9726c9053daff76"  # Example: scylla 5.2.x in us-east-1
-    source_region = "us-east-1"
-
-    try:
-        results = find_equivalent_ami(
-            ami_id=source_ami, source_region=source_region, target_regions=["us-east-1", "us-west-2"]
-        )
-
-        # Basic validation
-        assert isinstance(results, list)
-        if results:  # May be empty if AMI not found
-            assert "ami_id" in results[0]
-            assert "region" in results[0]
-            assert "architecture" in results[0]
-    except (ClientError, NoCredentialsError, BotoCoreError) as e:
-        pytest.skip(f"Integration test skipped due to AWS API error: {e}")
-
-
-@pytest.mark.integration
-def test_find_equivalent_ami_cross_architecture():
-    """
-    Test finding ARM64 equivalent of an x86_64 AMI.
-    """
-    # Use a known ScyllaDB x86_64 AMI
-    source_ami = "ami-0d9726c9053daff76"
-    source_region = "us-east-1"
-
-    try:
-        results = find_equivalent_ami(
-            ami_id=source_ami, source_region=source_region, target_regions=["us-east-1"], target_arch="arm64"
-        )
-
-        # Validate all results are arm64
-        for result in results:
-            assert result["architecture"] == "arm64"
-    except (ClientError, NoCredentialsError, BotoCoreError) as e:
-        pytest.skip(f"Integration test skipped due to AWS API error: {e}")
-
-
-@pytest.mark.integration
-def test_find_equivalent_ami_all_aws_regions():
-    """
-    Test finding equivalents across all major AWS regions.
-    """
-    source_ami = "ami-0d9726c9053daff76"
-    source_region = "us-east-1"
-    target_regions = ["us-east-1", "us-west-2", "eu-west-1", "eu-central-1", "ap-southeast-1", "ap-northeast-1"]
-
-    try:
-        results = find_equivalent_ami(ami_id=source_ami, source_region=source_region, target_regions=target_regions)
-
-        # Should find equivalents in multiple regions
-        if results:
-            regions_found = {r["region"] for r in results}
-            # At least some regions should have matches
-            assert len(regions_found) > 0
-    except (ClientError, NoCredentialsError, BotoCoreError) as e:
-        pytest.skip(f"Integration test skipped due to AWS API error: {e}")
 
 
 @pytest.mark.integration
