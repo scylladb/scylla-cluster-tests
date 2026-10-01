@@ -1,11 +1,11 @@
 # Mini-Plan: Prune Zero-Value and Duplicated Unit Tests
 
 **Date:** 2026-09-30
-**Estimated LOC:** ~1,400 deleted, ~1,800 moved
+**Estimated LOC:** ~5,500 deleted, ~1,000 added (moved tests)
 **Related PR:** TBD
 
 ## Problem
-An audit of `unit_tests/` found about 380 tests that cannot catch a regression. It covered 6,929 unit tests, checked with per-test line coverage and a full read, and 39 integration files, checked by reading only because they need Docker or cloud access. In addition, about 25 integration-marked tests never touch a real service, so they run only in the slower integration job. Manual-only tests are scattered across the unit and integration folders behind skip marks or env-var gates, so nothing shows they are manual on purpose. The flagged tests fall into five groups:
+An audit of `unit_tests/` found about 120 collected tests (about 100 test functions) that cannot catch a regression. It covered 6,929 unit tests, checked with per-test line coverage and a full read, and 39 integration files, checked by reading only because they need Docker or cloud access. In addition, about 50 collected integration-marked cases never touch a real service, so they run only in the slower integration job. Manual-only tests are scattered across the unit and integration folders behind skip marks or env-var gates, so nothing shows they are manual on purpose. The flagged tests fall into five groups:
 - whole files that duplicate other files or are permanently skipped as broken (manual tests are moved, not deleted)
 - tests that exercise only their own mocks or re-implement the logic under test
 - exact duplicates of other tests
@@ -168,9 +168,9 @@ Separate follow-ups, not in this PR:
 - `unit_tests/unit/test_config.py` -- receives the moved xcloud tests
 
 ## Verification
-- [ ] `uv run sct.py unit-tests` passes, with about 355 fewer collected tests than on `upstream/master`, plus the roughly 25 moved tests.
+- [ ] `uv run sct.py unit-tests` passes, with about 50 fewer collected tests than on `upstream/master`: about 99 deleted, about 49 moved in from `integration/`.
 - [ ] The moved tests pass without network access: `uv run pytest unit_tests/unit -m "not integration"` with no cloud credentials set.
-- [ ] `uv run sct.py integration-tests` runs on CI, with about 25 fewer deleted tests and about 25 fewer moved tests than on `upstream/master`, and no new failures.
+- [ ] `uv run sct.py integration-tests` runs on CI, with about 60 fewer passing tests than on `upstream/master` (moved to `unit/` or deleted), and no new failures.
 - [ ] Per-test coverage: the `sdcm/` + `utils/` covered-line set after the change equals the set before it. Run `COVERAGE_CORE=ctrace uv run --with pytest-cov pytest unit_tests -m "not integration" -n 20 --cov=sdcm --cov=utils --cov-report=` before and after, then diff `coverage json` outputs. `COVERAGE_CORE=ctrace` is required on Python 3.14.
 - [ ] `git grep` finds no remaining references to the deleted files, classes or constants, or to the old paths of the moved manual tests.
 - [ ] Collection of `unit_tests/manual/` succeeds, i.e. `uv run pytest unit_tests/manual --collect-only -p no:skipping` finds every manual test. Under the default `unit-tests` and `integration-tests` runs they all report as skipped.
