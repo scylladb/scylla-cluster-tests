@@ -38,6 +38,11 @@ def _loader_rules(commands, action):
     return [cmd for cmd in commands if cmd and f" -{action} INPUT -s {LOADER_IPS} " in cmd]
 
 
+def _port_block_rules(commands, action):
+    """``block_scylla_ports`` DROP rules issued with the given iptables action (``A`` or ``D``)."""
+    return [cmd for cmd in commands if cmd and f" -{action} " in cmd]
+
+
 def _destroy(node):
     """Apply to ``node`` what ``BaseNode.destroy()`` does to a terminated instance."""
     node.remoter = None
@@ -97,14 +102,18 @@ def test_block_loaders_payload_kill_nemesis_still_removes_rules(scylla_node, loa
     teardown) thrown into the context manager at the ``yield`` must still run the cleanup
     that removes every DROP rule, then propagate uncaught."""
     remoter = scylla_node.remoter
+    expected_rules = 2 * len(CQL_PORTS)  # iptables + ip6tables
 
     with pytest.raises(KillNemesis):
         with block_loaders_payload_for_scylla_node(scylla_node, loader_nodes=loader_nodes):
+            commands = sudo_commands(remoter)
+            assert len(_loader_rules(commands, "A")) == expected_rules
+            assert len(_loader_rules(commands, "D")) == 0
             raise KillNemesis()
 
     commands = sudo_commands(remoter)
-    assert len(_loader_rules(commands, "A")) == 2 * len(CQL_PORTS)  # iptables + ip6tables
-    assert len(_loader_rules(commands, "D")) == 2 * len(CQL_PORTS)
+    assert len(_loader_rules(commands, "A")) == expected_rules
+    assert len(_loader_rules(commands, "D")) == expected_rules
     scylla_node.stop_service.assert_called_once_with("iptables", ignore_status=True)
 
 
@@ -172,17 +181,18 @@ def test_block_scylla_ports_kill_nemesis_still_removes_every_rule(scylla_node):
     """SCT-933: ``KillNemesis`` thrown into the context manager at the ``yield`` must still
     remove every DROP rule it added, then propagate uncaught."""
     remoter = scylla_node.remoter
+    expected_rules = len(GOSSIP_PORTS) * 2 * 2  # ports x (INPUT/OUTPUT) x (iptables/ip6tables)
 
     with pytest.raises(KillNemesis):
         with block_scylla_ports(scylla_node, ports=list(GOSSIP_PORTS)):
+            commands = sudo_commands(remoter)
+            assert len(_port_block_rules(commands, "A")) == expected_rules
+            assert len(_port_block_rules(commands, "D")) == 0
             raise KillNemesis()
 
     commands = sudo_commands(remoter)
-    for port in GOSSIP_PORTS:
-        for table in ("iptables", "ip6tables"):
-            for chain in ("INPUT", "OUTPUT"):
-                assert commands.count(f"{table} -A {chain} -p tcp --dport {port} -j DROP") == 1
-                assert commands.count(f"{table} -D {chain} -p tcp --dport {port} -j DROP") == 1
+    assert len(_port_block_rules(commands, "A")) == expected_rules
+    assert len(_port_block_rules(commands, "D")) == expected_rules
     scylla_node.stop_service.assert_called_once_with("iptables", ignore_status=True)
 
 
@@ -219,11 +229,14 @@ def test_pause_scylla_with_sigstop_kill_nemesis_still_sends_sigcont(scylla_node)
     teardown) thrown into the context manager at the ``yield`` must still resume the paused
     scylla process, then propagate uncaught. Before the ``try``/``finally`` fix, SIGCONT was
     skipped entirely because the exception propagated straight out of the generator frame."""
+    remoter = scylla_node.remoter
+
     with pytest.raises(KillNemesis):
         with pause_scylla_with_sigstop(scylla_node):
+            assert sudo_commands(remoter) == ["pkill --signal SIGSTOP -e scylla"]
             raise KillNemesis()
 
-    assert sudo_commands(scylla_node.remoter) == [
+    assert sudo_commands(remoter) == [
         "pkill --signal SIGSTOP -e scylla",
         "pkill --signal SIGCONT -e scylla",
     ]
