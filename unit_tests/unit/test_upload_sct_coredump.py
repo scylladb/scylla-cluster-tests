@@ -29,7 +29,7 @@ exit 0
 # Default COREDUMPS_INCLUDE_COMM ("python*,scylla*,java") translated the same way
 # upload_sct_coredump.sh translates it, so the expected hydra call below doesn't hard-code a
 # second copy of that translation logic.
-DEFAULT_CORE_NAME_RE = ".*/core[.](python.*|scylla.*|java)[.].*"
+DEFAULT_CORE_NAME_RE = ".*/core[.](python[^.]*|scylla[^.]*|java)[.].*"
 
 # fake ./sct.py upload logs the archive path only if the archive exists
 FAKE_SCT_PY = """#!/bin/bash

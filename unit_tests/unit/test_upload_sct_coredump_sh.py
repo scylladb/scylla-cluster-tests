@@ -63,9 +63,18 @@ exit 0
 """
 
 
-def _make_core(core_dir, comm, age_seconds):
-    """Create a fake `core.<comm>.<uid>.<bootid>.<pid>.<ts>` file with a controlled mtime."""
-    name = f"core.{comm}.1000.deadbeefcafebabedeadbeefcafebabe.4242.{int(time.time())}"
+# systemd-coredump's xescape() escapes '.', ' ' and '/' out of comm as \xNN before building the
+# filename, so e.g. a "python3.14" process never leaves a literal dot in the comm field - it
+# shows up as "python3\x2e14".
+_XESCAPE_TABLE = str.maketrans({".": "\\x2e", " ": "\\x20", "/": "\\x2f"})
+
+
+def _make_core(core_dir, comm, age_seconds, uid=1000):
+    """Create a fake `core.<escaped comm>.<uid>.<bootid>.<pid>.<ts>.zst` file with a controlled
+    mtime; comm is escaped the way systemd-coredump escapes it before building the real filename.
+    """
+    escaped_comm = comm.translate(_XESCAPE_TABLE)
+    name = f"core.{escaped_comm}.{uid}.deadbeefcafebabedeadbeefcafebabe.4242.{int(time.time())}.zst"
     path = core_dir / name
     path.write_text("not a real coredump, just bytes for the tarball\n")
     mtime = time.time() - age_seconds
@@ -159,9 +168,11 @@ def _tarball(work_dir, sct_test_id):
 @pytest.mark.parametrize(
     "comm",
     ["python3.14", "python3", "scylla", "scylla-server", "java"],
-    ids=["dotted-python-version", "python3", "scylla", "scylla-server", "java-exact"],
+    ids=["escaped-dotted-version", "python3", "scylla", "scylla-server", "java-exact"],
 )
 def test_allowed_comm_is_uploaded(work_dir, bin_dir, core_dir, sct_test_id, comm):
+    # "python3.14" is a realistic comm: _make_core escapes it to "python3\x2e14" (core.<comm> has
+    # no literal dot), which "python*" (-> "python[^.]*") still matches and keeps.
     _make_core(core_dir, comm, age_seconds=60)
     since_epoch = int(time.time() - 3600)
 
@@ -290,20 +301,23 @@ def test_empty_include_comm_falls_back_to_default(work_dir, bin_dir, core_dir, s
     assert not _tarball(work_dir, sct_test_id).exists()
 
 
-def test_dotted_entry_matches_literal_dot_only(work_dir, bin_dir, core_dir, sct_test_id):
-    """A dot in an allow-list entry must match a literal dot, not "any character" (ERE '.')."""
-    exact = _make_core(core_dir, "my.app", age_seconds=60)
-    lookalike = _make_core(core_dir, "myXapp", age_seconds=60)
+def test_wildcard_does_not_cross_into_fields_after_comm(work_dir, bin_dir, core_dir, sct_test_id):
+    """'*' must translate to '[^.]*', confined to the comm field, not '.*' which can cross the
+    dot separator and absorb the uid field that follows comm in 'core.<comm>.<uid>.<bootid>...'.
+
+    With the buggy '.*' translation, entry "sshd*0" (-> "sshd.*0") matches
+    "core.sshd.0.<bootid>...": ".*" happily consumes the literal "." before uid "0", so a core
+    whose comm is just "sshd" (uid 0) is wrongly treated as allow-listed and uploaded.
+    """
+    core = _make_core(core_dir, "sshd", age_seconds=60, uid=0)
     since_epoch = int(time.time() - 3600)
 
-    result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch, include_comm="my.app")
+    result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch, include_comm="sshd*0")
 
     assert result.returncode == 0, result.stderr
     assert "skipping 1 coredump(s)" in result.stdout
-    assert lookalike.name in result.stdout
-    assert exact.name not in result.stdout
-    upload_calls = [call for call in calls if call.startswith("upload ")]
-    assert len(upload_calls) == 1
+    assert core.name in result.stdout
+    assert not any(call.startswith("upload ") for call in calls)
     assert not _tarball(work_dir, sct_test_id).exists()
 
 
@@ -315,6 +329,7 @@ def test_dotted_entry_matches_literal_dot_only(work_dir, bin_dir, core_dir, sct_
         pytest.param("a`b", id="backtick"),
         pytest.param("a,,b", id="double-comma"),
         pytest.param("a,", id="trailing-comma"),
+        pytest.param("my.app", id="literal-dot"),
     ],
 )
 def test_invalid_include_comm_fails_fast_without_any_hydra_call(work_dir, bin_dir, core_dir, sct_test_id, include_comm):
