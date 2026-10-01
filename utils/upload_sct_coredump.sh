@@ -21,16 +21,45 @@ SINCE_EPOCH="${COREDUMPS_SINCE_EPOCH:-$(( $(date +%s) - 86400 ))}"
 
 # Allow-list of comms (the systemd-coredump filename is core.<comm>.<uid>.<bootid>.<pid>.<ts>[.zst])
 # we upload; anything else is noise (sshd, agents, ...) that still ends up in the coredump
-# directory but isn't ours to investigate. Comma-separated glob entries, '*' is the only wildcard;
-# an entry with no '*' matches that comm exactly (e.g. "java" excludes "javascript").
+# directory but isn't ours to investigate. Comma-separated glob entries restricted to
+# [A-Za-z0-9._+-] plus '*' as the only wildcard; an entry with no '*' matches that comm exactly
+# (e.g. "java" excludes "javascript", and "my.app" matches only a literal dot, not any character).
 COREDUMPS_INCLUDE_COMM="${COREDUMPS_INCLUDE_COMM:-python*,scylla*,java}"
-# Single regex shared by the builder-side split below and the container-side tar filter: it must
-# contain no single quotes and no '$' because hydra.sh re-evaluates the command through
-# `eval '<cmd>'` and either would break that quoting. Anchored on "core.<comm>." so a dotted comm
-# like python3.14 still matches, while a foreign comm that merely starts with an allowed one
+
+# Validated and escaped below into a single regex shared by the builder-side split and the
+# container-side tar filter: it must contain no single quotes and no '$' because hydra.sh
+# re-evaluates the command through `eval '<cmd>'` and either would break that quoting - hence the
+# strict whitelist instead of trusting the entries as-is. Anchored on "core.<comm>." so a dotted
+# comm like python3.14 still matches, while a foreign comm that merely starts with an allowed one
 # (mypython, javascript) does not.
-CORE_NAME_ALTERNATIVES="${COREDUMPS_INCLUDE_COMM//,/|}"
-CORE_NAME_ALTERNATIVES="${CORE_NAME_ALTERNATIVES//\*/.*}"
+if [[ "${COREDUMPS_INCLUDE_COMM}" == *, ]] ; then
+    echo "ERROR: COREDUMPS_INCLUDE_COMM has a trailing comma (empty entry): '${COREDUMPS_INCLUDE_COMM}'" >&2
+    exit 1
+fi
+
+IFS=',' read -ra COREDUMPS_INCLUDE_COMM_ENTRIES <<< "${COREDUMPS_INCLUDE_COMM}"
+CORE_NAME_ALTERNATIVES=""
+for ENTRY in "${COREDUMPS_INCLUDE_COMM_ENTRIES[@]}" ; do
+    if [[ -z "${ENTRY}" ]] ; then
+        echo "ERROR: COREDUMPS_INCLUDE_COMM has an empty entry (check for a stray comma): '${COREDUMPS_INCLUDE_COMM}'" >&2
+        exit 1
+    fi
+    if [[ ! "${ENTRY}" =~ ^[A-Za-z0-9._+*-]+$ ]] ; then
+        echo "ERROR: COREDUMPS_INCLUDE_COMM entry '${ENTRY}' contains characters outside the allowed [A-Za-z0-9._+-] (plus '*' as wildcard): '${COREDUMPS_INCLUDE_COMM}'" >&2
+        exit 1
+    fi
+    # Escape ERE metacharacters in the entry itself (bracket form survives the nested
+    # eval/find/grep quoting without needing backslashes) before translating '*' to the actual
+    # wildcard, so e.g. "my.app" matches a literal dot instead of over-matching any character.
+    ESCAPED_ENTRY="${ENTRY//./[.]}"
+    ESCAPED_ENTRY="${ESCAPED_ENTRY//+/[+]}"
+    ESCAPED_ENTRY="${ESCAPED_ENTRY//\*/.*}"
+    if [[ -n "${CORE_NAME_ALTERNATIVES}" ]] ; then
+        CORE_NAME_ALTERNATIVES="${CORE_NAME_ALTERNATIVES}|${ESCAPED_ENTRY}"
+    else
+        CORE_NAME_ALTERNATIVES="${ESCAPED_ENTRY}"
+    fi
+done
 CORE_NAME_RE=".*/core[.](${CORE_NAME_ALTERNATIVES})[.].*"
 
 # List this build's coredumps. Keep hydra's exit code out of the pipeline: piping straight into

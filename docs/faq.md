@@ -147,9 +147,11 @@ first download the file to the SCT folder, and execute the following command:
 right after `core.`) is in an allow-list, by default `python*,scylla*,java`. Anything else
 (e.g. `sshd`, monitoring agents) is skipped: the skipped file names and their count are printed
 on the console, and if every coredump produced by the run is filtered out, nothing is uploaded
-at all. To widen the list, set `COREDUMPS_INCLUDE_COMM` to a comma-separated list of glob
-patterns (only `*` is supported as a wildcard; an entry without `*` matches that comm exactly),
-for example:
+at all. To widen the list, set `COREDUMPS_INCLUDE_COMM` to a comma-separated list of entries
+restricted to letters, digits, `.`, `_`, `+`, `-`, and `*` as the only wildcard (an entry without
+`*` matches that comm exactly, including any literal dot in it); an entry outside that character
+set, or an empty entry (e.g. a stray comma), makes the script exit with an error instead of
+uploading anything. For example:
 ```bash
 COREDUMPS_INCLUDE_COMM="python*,scylla*,java,my-agent*" ./utils/upload_sct_coredump.sh
 ```
