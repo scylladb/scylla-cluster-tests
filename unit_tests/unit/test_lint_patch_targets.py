@@ -19,12 +19,16 @@ replaces an attribute nobody reads, the linter falls through to the real API, an
 shows up as a confusing credential or network error in CI (or, worse, passes locally because the
 developer happens to have the credentials the patch was meant to skip).
 
-These tests make that failure mode static and loud.
+These tests make that failure mode static and loud. They only check the targets already listed;
+a lookup missing from `_CLOUD_API_PATCHES` altogether is caught by `unit_tests/unit/lint/test_validator.py`,
+which lints test pipelines with the network refused.
 """
 
 import ast
-import importlib
+import inspect
 import pathlib
+import pkgutil
+from unittest.mock import patch
 
 import pytest
 
@@ -36,15 +40,23 @@ def _target_ids():
     return sorted(_CLOUD_API_PATCHES)
 
 
+def _module_level_target_ids():
+    """Targets naming a module attribute -- the only kind an import can shadow.
+
+    A `<module>.<Class>.<method>` target patches the class object itself, which every reference to
+    the class shares, so it has nothing to shadow.
+    """
+    return [target for target in _target_ids() if inspect.ismodule(pkgutil.resolve_name(target.rpartition(".")[0]))]
+
+
 @pytest.mark.parametrize("target", _target_ids())
 def test_patch_target_attribute_exists(target):
     """The dotted path must resolve, or `mock.patch` raises at linting time."""
-    module_path, _, attr = target.rpartition(".")
-    module = importlib.import_module(module_path)
-    assert hasattr(module, attr), f"{module_path} has no attribute {attr!r}"
+    with patch(target):
+        pass
 
 
-@pytest.mark.parametrize("target", _target_ids())
+@pytest.mark.parametrize("target", _module_level_target_ids())
 def test_no_call_site_shadows_the_patch_target(target):
     """No module may `from <other> import <attr>` and call it bare while we patch `<other>`.
 
