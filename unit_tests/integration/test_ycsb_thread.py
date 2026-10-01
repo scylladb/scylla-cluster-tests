@@ -21,7 +21,7 @@ from cassandra.auth import PlainTextAuthProvider
 
 from sdcm.utils import alternator
 from sdcm.utils.decorators import timeout
-from sdcm.utils.docker_utils import running_in_docker
+from unit_tests.lib.docker_access import container_ip_reachable
 from sdcm.ycsb_thread import YcsbStressThread
 from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
@@ -49,7 +49,7 @@ def fixture_alternator_api(params):
     )
 
     def create_endpoint_url(node):
-        if running_in_docker():
+        if container_ip_reachable():
             endpoint_url = f"http://{node.internal_ip_address}:{ALTERNATOR_PORT}"
         else:
             address = node.get_port(f"{ALTERNATOR_PORT}")
@@ -65,7 +65,7 @@ def fixture_alternator_api(params):
 
 @pytest.fixture(scope="function", name="cql_driver")
 def fixture_cql_driver(docker_scylla):
-    if running_in_docker():
+    if container_ip_reachable():
         address = f"{docker_scylla.internal_ip_address}:9042"
     else:
         address = docker_scylla.get_port("9042")

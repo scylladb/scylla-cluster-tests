@@ -20,7 +20,7 @@ from cassandra.cluster import Cluster
 import pytest
 
 from sdcm.gemini_thread import GeminiStressThread
-from sdcm.utils.docker_utils import running_in_docker
+from unit_tests.lib.docker_access import container_ip_reachable
 from unit_tests.integration.conftest import configure_scylla_node
 from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 from unit_tests.lib.fake_cluster import DummyDbCluster
@@ -56,7 +56,7 @@ def fixture_docker_scylla_oracle(params):
 @pytest.fixture(name="cql_session")
 def fixture_cql_session(docker_scylla):
     """Yield an open CQL session connected to ``docker_scylla``, then shut it down."""
-    if running_in_docker():
+    if container_ip_reachable():
         address = f"{docker_scylla.internal_ip_address}:9042"
     else:
         address = docker_scylla.get_port("9042")
