@@ -90,9 +90,8 @@ Use one PR with one commit per group, so each commit can be reviewed and reverte
     - `test_base_version.py` (3 tests)
     - `test_config_get_version_based_on_conf.py`: the three `*_missing_scylla_version_tag` tests and `test_relocatable_version_resolves_unified_package`
     - `test_config.py`: the two `test_xcloud_replication_factor_*` tests
-    - `test_events.py`: the three default-filter tests
     - `test_utils_issues.py`: the two `test_parse_issue_*` tests
-  - Once the GCE bind-race test from `test_events.py` is in the unit suite, delete the tautological `unit/test_sct_events_filters.py:test_events_severity_changer_filter_gce_first_boot_bind_race`, which rebuilds the filters itself instead of calling the production code.
+  - Delete the tautological `unit/test_sct_events_filters.py:test_events_severity_changer_filter_gce_first_boot_bind_race`, which rebuilds the filters itself instead of calling the production code. The real-events default-filter tests stay in `integration/test_events.py`: each pays ~4 s of event device setup, which would slow the unit job.
 - **Check each deletion against coverage**
   - Re-run per-test coverage.
   - Confirm that no `sdcm/` or `utils/` line covered before the change is left uncovered afterwards.
@@ -166,8 +165,7 @@ Separate follow-ups, not in this PR:
 - `unit_tests/integration/test_base_version.py` -- move to `unit_tests/unit/`
 - `unit_tests/integration/test_utils_issues.py` -- move to `unit_tests/unit/`
 - `unit_tests/integration/test_config_get_version_based_on_conf.py` -- move the mocked tests to unit
-- `unit_tests/integration/test_events.py` -- move the default-filter tests to unit
-- `unit_tests/unit/test_config.py`, `unit_tests/unit/test_events.py` -- receive the moved tests
+- `unit_tests/unit/test_config.py` -- receives the moved xcloud tests
 
 ## Verification
 - [ ] `uv run sct.py unit-tests` passes, with about 355 fewer collected tests than on `upstream/master`, plus the roughly 25 moved tests.
