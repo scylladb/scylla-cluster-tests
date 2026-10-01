@@ -16,3 +16,5 @@ azure_instance_type_monitor: 'Standard_D2_v4'
 oci_instance_type_db: 'VM.DenseIO.E5.Flex:8'
 oci_instance_type_loader: 'VM.Standard3.Flex:8:32'
 oci_instance_type_monitor: 'VM.Standard3.Flex:2:16'
+# Capacity reservation and dedicated hosts are only looked up for on-demand instances.
+instance_provision: 'on_demand'
