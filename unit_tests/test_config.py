@@ -817,6 +817,9 @@ def test_20_user_data_format_version_gce_3(monkeypatch):
 
 
 @pytest.mark.integration
+# master images moved to the scylladb_dev private gallery; the gallery lookup
+# (#12877, #13165) was never backported, so this branch can't find them
+@pytest.mark.skip(reason="2026.1 can't resolve Azure master images (private gallery lookup not backported)")
 def test_20_user_data_format_version_azure(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
     monkeypatch.setenv("SCT_AZURE_REGION_NAME", "eastus")
