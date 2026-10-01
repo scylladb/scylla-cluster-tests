@@ -103,6 +103,8 @@ export SCT_REUSE_CLUSTER=$(cat ~/sct-results/latest/test_id)
 - `unit_tests/integration/` - Integration tests (~29 files) that require external services
   (Docker, AWS, GCE, Azure). Docker fixtures (`docker_scylla`, etc.) are in
   `unit_tests/integration/conftest.py`.
+- `unit_tests/manual/` - Tests that are skipped in CI and run by hand (real SSH, cloud provisioning, Docker
+  distro matrix). See `unit_tests/manual/README.md`.
 - `unit_tests/lib/` - Shared test utilities: `fake_remoter.py`, `fake_events.py`,
   `fake_provisioner.py`, `dummy_remote.py`, `s3_utils.py`, etc.
 - `unit_tests/test_data/` and `unit_tests/test_configs/` - Shared test data files

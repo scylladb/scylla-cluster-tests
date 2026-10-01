@@ -5,7 +5,7 @@ This test validates that the kernel panic checker correctly detects and
 reports kernel panics on AWS, GCE, and Azure cloud instances.
 
 To run manually:
-    pytest unit_tests/test_kernel_panic.py::test_check_kernel_panic -v -s
+    SCT_TEST_KERNEL_PANIC=1 uv run pytest unit_tests/manual/test_kernel_panic.py -v -s
 """
 
 import logging
@@ -189,9 +189,9 @@ def test_check_kernel_panic(create_sct_runner, events):
     that the KernelPanicEvent is properly detected and published.
 
     This test is marked to skip by default and should be run manually:
-        pytest unit_tests/test_kernel_panic.py::test_check_kernel_panic[aws] -v -s
-        pytest unit_tests/test_kernel_panic.py::test_check_kernel_panic[gce] -v -s
-        pytest unit_tests/test_kernel_panic.py::test_check_kernel_panic[azure] -v -s
+        SCT_TEST_KERNEL_PANIC=1 uv run pytest unit_tests/manual/test_kernel_panic.py::test_check_kernel_panic[aws] -v -s
+        SCT_TEST_KERNEL_PANIC=1 uv run pytest unit_tests/manual/test_kernel_panic.py::test_check_kernel_panic[gce] -v -s
+        SCT_TEST_KERNEL_PANIC=1 uv run pytest unit_tests/manual/test_kernel_panic.py::test_check_kernel_panic[azure] -v -s
 
     Args:
         create_sct_runner: Fixture that creates and manages SCT runner instance
