@@ -834,7 +834,13 @@ class NemesisRunner:
             else:
                 self.log.info("Waiting JMX services to start after node reboot")
                 self.target_node.wait_jmx_up()
-            self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node])
+            # The target node is still booting and cannot answer for its own state - it serves 404 on
+            # /storage_service/load_map until storage_service registers its REST routes (SCT-953).
+            # Reserve a peer for the duration of the check and verify through it.
+            with self.node_allocator.run_nemesis(
+                nemesis_label="MultipleHardRebootNode verification"
+            ) as verification_node:
+                self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node], verification_node=verification_node)
             found_cdc_error = list(cdc_expected_error)
             if found_cdc_error:
                 # if cdc error message "cdc - Could not update CDC description..."
