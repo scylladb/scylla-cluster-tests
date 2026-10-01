@@ -231,7 +231,6 @@ XCLOUD_GCE_BASE = COMMON | {
 }
 
 
-@pytest.mark.integration
 @pytest.mark.parametrize(
     "env,backend_mock",
     [
