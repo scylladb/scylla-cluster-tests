@@ -9,7 +9,8 @@ user_prefix: 'ics-cdc-gemini-basic-3h'
 ami_db_scylla_user: 'centos'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: "not enospc"
+# gemini_table_options sets IncrementalCompactionStrategy; keep it for the whole run
+nemesis_selector: "not enospc and not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey"
 
 gemini_cmd: |
   --duration 3h

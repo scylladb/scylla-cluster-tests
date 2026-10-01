@@ -42,6 +42,8 @@ instance_type_db: 'i4i.2xlarge'
 n_db_nodes: 6
 
 nemesis_class_name: 'SisyphusMonkey'
+# post_prepare_cql_cmds sets gc_grace_seconds and the test validates TTL expiration; keep table TTL settings unchanged
+nemesis_selector: 'not ModifyTableGcGraceTimeMonkey and not ModifyTableDefaultTimeToLiveMonkey'
 nemesis_seed: '033'
 nemesis_interval: 10
 
