@@ -1,0 +1,12 @@
+#!groovy
+
+// Test-only pipeline for unit_tests/lint/test_validator.py -- not a real job.
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'oci',
+    oci_region_name: 'us-ashburn-1',
+    oracle_scylla_version: 'master:latest',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: '''["unit_tests/test_data/lint/base.yaml", "unit_tests/test_data/lint/mixed-scylla.yaml"]''',
+)
