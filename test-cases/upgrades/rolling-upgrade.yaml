@@ -3,7 +3,7 @@ test_metadata:
     The main rolling-upgrade test: a 6-node encrypted cluster is preloaded with cassandra-stress and
     CL=ALL scylla-bench data, then upgraded node by node while complex-schema, large-partition and
     read workloads run, with optional Gemini comparison. Backs the AMI, ARM, GCE-image, Azure-image,
-    LDAP and enable-tablets rolling-upgrade pipelines.
+    OCI-image, LDAP and enable-tablets rolling-upgrade pipelines.
   test_type: upgrade
   tier: tier1
   duration_class: medium
@@ -11,6 +11,7 @@ test_metadata:
     - aws
     - azure
     - gce
+    - oci
   stress_tools:
     - cassandra-stress
     - scylla-bench
