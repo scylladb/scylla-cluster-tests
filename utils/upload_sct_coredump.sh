@@ -22,16 +22,19 @@ SINCE_EPOCH="${COREDUMPS_SINCE_EPOCH:-$(( $(date +%s) - 86400 ))}"
 # Allow-list of comms (the systemd-coredump filename is core.<comm>.<uid>.<bootid>.<pid>.<ts>[.zst])
 # we upload; anything else is noise (sshd, agents, ...) that still ends up in the coredump
 # directory but isn't ours to investigate. Comma-separated glob entries restricted to
-# [A-Za-z0-9._+-] plus '*' as the only wildcard; an entry with no '*' matches that comm exactly
-# (e.g. "java" excludes "javascript", and "my.app" matches only a literal dot, not any character).
+# [A-Za-z0-9_+-] plus '*' as the only wildcard; an entry with no '*' matches that comm exactly
+# (e.g. "java" excludes "javascript"). systemd-coredump escapes '.', ' ' and '/' out of comm as
+# \x2e, \x20, \x2f (xescape() in systemd's coredump-vacuum/coredump.c), so the comm field of a
+# real filename never contains a literal dot - a python3.14 process shows up as
+# "python3\x2e14". Write "python3*" rather than "python3.14".
 COREDUMPS_INCLUDE_COMM="${COREDUMPS_INCLUDE_COMM:-python*,scylla*,java}"
 
 # Validated and escaped below into a single regex shared by the builder-side split and the
 # container-side tar filter: it must contain no single quotes and no '$' because hydra.sh
 # re-evaluates the command through `eval '<cmd>'` and either would break that quoting - hence the
-# strict whitelist instead of trusting the entries as-is. Anchored on "core.<comm>." so a dotted
-# comm like python3.14 still matches, while a foreign comm that merely starts with an allowed one
-# (mypython, javascript) does not.
+# strict whitelist instead of trusting the entries as-is. '*' becomes '[^.]*', not '.*', so a
+# wildcard widens only within the comm field and can never run past the following dot into the
+# uid/bootid fields. Anchored on "core.<comm>." below.
 if [[ "${COREDUMPS_INCLUDE_COMM}" == *, ]] ; then
     echo "ERROR: COREDUMPS_INCLUDE_COMM has a trailing comma (empty entry): '${COREDUMPS_INCLUDE_COMM}'" >&2
     exit 1
@@ -44,16 +47,19 @@ for ENTRY in "${COREDUMPS_INCLUDE_COMM_ENTRIES[@]}" ; do
         echo "ERROR: COREDUMPS_INCLUDE_COMM has an empty entry (check for a stray comma): '${COREDUMPS_INCLUDE_COMM}'" >&2
         exit 1
     fi
-    if [[ ! "${ENTRY}" =~ ^[A-Za-z0-9._+*-]+$ ]] ; then
-        echo "ERROR: COREDUMPS_INCLUDE_COMM entry '${ENTRY}' contains characters outside the allowed [A-Za-z0-9._+-] (plus '*' as wildcard): '${COREDUMPS_INCLUDE_COMM}'" >&2
+    if [[ "${ENTRY}" == *.* ]] ; then
+        echo "ERROR: COREDUMPS_INCLUDE_COMM entry '${ENTRY}' contains a literal '.': systemd-coredump always escapes a dot out of comm (as \\x2e), so a dot here can never match a real coredump - use '*' instead, e.g. 'python3*' instead of 'python3.14': '${COREDUMPS_INCLUDE_COMM}'" >&2
+        exit 1
+    fi
+    if [[ ! "${ENTRY}" =~ ^[A-Za-z0-9_+*-]+$ ]] ; then
+        echo "ERROR: COREDUMPS_INCLUDE_COMM entry '${ENTRY}' contains characters outside the allowed [A-Za-z0-9_+-] (plus '*' as wildcard): '${COREDUMPS_INCLUDE_COMM}'" >&2
         exit 1
     fi
     # Escape ERE metacharacters in the entry itself (bracket form survives the nested
-    # eval/find/grep quoting without needing backslashes) before translating '*' to the actual
-    # wildcard, so e.g. "my.app" matches a literal dot instead of over-matching any character.
-    ESCAPED_ENTRY="${ENTRY//./[.]}"
-    ESCAPED_ENTRY="${ESCAPED_ENTRY//+/[+]}"
-    ESCAPED_ENTRY="${ESCAPED_ENTRY//\*/.*}"
+    # eval/find/grep quoting without needing backslashes) before translating '*' into a wildcard
+    # confined to the comm field.
+    ESCAPED_ENTRY="${ENTRY//+/[+]}"
+    ESCAPED_ENTRY="${ESCAPED_ENTRY//\*/[^.]*}"
     if [[ -n "${CORE_NAME_ALTERNATIVES}" ]] ; then
         CORE_NAME_ALTERNATIVES="${CORE_NAME_ALTERNATIVES}|${ESCAPED_ENTRY}"
     else

@@ -148,10 +148,12 @@ right after `core.`) is in an allow-list, by default `python*,scylla*,java`. Any
 (e.g. `sshd`, monitoring agents) is skipped: the skipped file names and their count are printed
 on the console, and if every coredump produced by the run is filtered out, nothing is uploaded
 at all. To widen the list, set `COREDUMPS_INCLUDE_COMM` to a comma-separated list of entries
-restricted to letters, digits, `.`, `_`, `+`, `-`, and `*` as the only wildcard (an entry without
-`*` matches that comm exactly, including any literal dot in it); an entry outside that character
-set, or an empty entry (e.g. a stray comma), makes the script exit with an error instead of
-uploading anything. For example:
+restricted to letters, digits, `_`, `+`, `-`, and `*` as the only wildcard, confined to the comm
+field (it can't widen past the following dot into the uid/bootid fields). An entry without `*`
+matches that comm exactly (e.g. "java" excludes "javascript"). systemd-coredump escapes `.`, ` `
+and `/` out of comm, so a real comm field never contains a literal dot - use `python3*` rather
+than `python3.14`; a `.` in an entry, a character outside that set, or an empty entry (e.g. a
+stray comma), makes the script exit with an error instead of uploading anything. For example:
 ```bash
 COREDUMPS_INCLUDE_COMM="python*,scylla*,java,my-agent*" ./utils/upload_sct_coredump.sh
 ```
