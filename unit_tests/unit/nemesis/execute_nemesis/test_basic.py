@@ -38,7 +38,9 @@ def test_execute_nemesis_success(nemesis, nemesis_runner, capsys):
     assert "end" in op
     assert "duration" in op
     assert op["end"] >= op["start"]
-    assert op["duration"] == op["end"] - op["start"]
+    # start/end/duration are truncated to int separately, so crossing a second boundary
+    # makes end - start exceed duration by one
+    assert 0 <= (op["end"] - op["start"]) - op["duration"] <= 1
     assert "error" not in op
     assert "skip_reason" not in op
 
