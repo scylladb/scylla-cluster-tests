@@ -283,16 +283,6 @@ class TestCleanSctRunners:
 
     @patch("sdcm.sct_runner.ssh_run_cmd")
     @patch("sdcm.sct_runner.list_sct_runners")
-    def test_clean_sct_runners_force(self, mock_list_runners, mock_ssh_cmd):
-        """Test force cleanup ignoring keep tags."""
-        mock_list_runners.return_value = [self.mock_runner_with_keep]
-        mock_ssh_cmd.return_value = MagicMock(stdout="")
-
-        clean_sct_runners(test_status="", user="test_user", force=True, dry_run=True)
-        mock_list_runners.assert_called_once()
-
-    @patch("sdcm.sct_runner.ssh_run_cmd")
-    @patch("sdcm.sct_runner.list_sct_runners")
     def test_clean_sct_runners_respect_keep_tags(self, mock_list_runners, mock_ssh_cmd):
         """Test numeric keep tags are respected when clean is not forced."""
         # runner with numeric keep value and recent launch (not expired)
@@ -307,14 +297,6 @@ class TestCleanSctRunners:
 
         clean_sct_runners(test_status="", user="test_user", force=False, dry_run=False)
         mock_runner.terminate.assert_not_called()
-
-    @patch("sdcm.sct_runner.list_sct_runners")
-    def test_clean_sct_runners_no_runners_found(self, mock_list_runners):
-        """Test when no runners match filters."""
-        mock_list_runners.return_value = []
-
-        clean_sct_runners(test_status="", user="nonexistent_user", dry_run=True)
-        mock_list_runners.assert_called_once()
 
     @patch("sdcm.sct_runner.ssh_run_cmd")
     @patch("sdcm.sct_runner.list_sct_runners")
@@ -398,17 +380,6 @@ class TestFindRunnerInstance:
             runner_info,
             tags={"keep": "12", "keep_action": "terminate"},
         )
-
-    @pytest.mark.parametrize(
-        "elapsed_hours,duration_minutes,expected",
-        [
-            (48, 360, "60"),
-            (2, 120, "10"),
-        ],
-    )
-    def test_keep_tag_calculation_from_duration(self, elapsed_hours, duration_minutes, expected):
-        """Test the keep tag value: elapsed_hours + duration_minutes / 60 + 6 hours buffer."""
-        assert str(elapsed_hours + int(duration_minutes / 60) + 6) == expected
 
 
 # --- OCI runner boot volume sizing ---

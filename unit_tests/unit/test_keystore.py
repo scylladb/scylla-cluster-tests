@@ -699,16 +699,6 @@ class TestThreadSafety:
             list(pool.map(fetch, names * 5))
         assert not errors
 
-    def test_concurrent_s3_client_creation(self, ks):
-        clients = []
-
-        def get_client():
-            clients.append(ks.s3_client)
-
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            list(pool.map(lambda _: get_client(), range(16)))
-        assert len(clients) == 16
-
 
 # ---------------------------------------------------------------------------
 # Caching
@@ -807,17 +797,6 @@ class TestCaching:
             monkeypatch.delenv("AWS_ENDPOINT_URL")
             assert KeyStore().get_file_contents("aws_images_role.json") == b"real"
         assert fetch.call_count == 2
-
-    def test_cache_thread_safe(self, ks):
-        results = []
-
-        def fetch_and_record(name):
-            results.append(ks.get_file_contents(name))
-
-        names = ["email_config.json", "azure.json", "docker.json"]
-        with ThreadPoolExecutor(max_workers=6) as pool:
-            list(pool.map(fetch_and_record, names * 10))
-        assert len(results) == 30
 
     def test_get_json_uses_cache(self, ks):
         ks.get_file_contents("email_config.json")

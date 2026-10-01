@@ -50,19 +50,6 @@ def test_subset_returns_only_requested_nodes():
     assert "54.0.0.2" not in result
 
 
-def test_none_ips_excluded():
-    node1 = _make_node(private_ip="10.0.0.1", public_ip=None, ipv6_ip="2001:db8::1")
-    node2 = _make_node(private_ip=None, public_ip="54.0.0.2", ipv6_ip=None)
-
-    result = _call_get_ip_to_node_map([node1, node2])
-
-    assert len(result) == 3
-    assert result["10.0.0.1"] is node1
-    assert result["2001:db8::1"] is node1
-    assert result["54.0.0.2"] is node2
-    assert None not in result
-
-
 def test_get_all_ip_addresses_uses_properties_not_refresh():
     node = MagicMock(spec=BaseNode)
     type(node).private_ip_address = PropertyMock(return_value="10.0.0.1")

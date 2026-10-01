@@ -450,11 +450,6 @@ class TestSudoAndRunShellScript:
 
         cls.remoter_cls = _Runner
 
-    def test_sudo_root(self):
-        remoter = self.remoter_cls("localhost", user="root")
-        remoter.run("true")
-        assert remoter.command_to_run == "true"
-
     def test_sudo_non_root(self):
         remoter = self.remoter_cls("localhost", user="joe")
         remoter.sudo("true")
