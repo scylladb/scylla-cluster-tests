@@ -268,30 +268,53 @@ def test_legacy_class_name_syntax_raises_value_error(tester, class_name, expecte
         tester.get_nemesis_class()
 
 
+class CustomNemesisByName(TestNemesisClass):
+    """Override Nemesis with a new disruption tree, built from the given names."""
+
+    def __init__(self, *args, disruptions, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disruptions_list = self.build_disruptions_by_name(disruptions)
+
+
 @pytest.mark.parametrize(
     "disruptions, expected_error",
     [
         pytest.param(["CustomNemesisA", "CustomNemesisAD"], None, id="valid_disruptions"),
-        pytest.param(["CustomNemesisX", "CustomNemesisAD"], AssertionError, id="invalid_disruptions"),
-        pytest.param(["CustomNemesisB", "CustomNemesisC"], AssertionError, id="disabled_disruption"),
+        pytest.param(["CustomNemesisAD", "CustomNemesisA"], None, id="valid_disruptions_reversed_order"),
+        pytest.param(["CustomNemesisX", "CustomNemesisAD"], ValueError, id="unknown_disruption"),
     ],
 )
 def test_build_disruptions_by_name(disruptions, expected_error):
     """
     Tests the build_disruptions_by_name method of CategoricalMonkey.
-    It checks if the method correctly builds disruptions from given names
-    and raises an error for invalid or disabled disruptions.
+    It checks if the method correctly builds disruptions from given names, regardless of
+    whether that order matches nemesis-registry discovery order, and raises an error for a
+    name that matches no known nemesis class.
     """
-
-    class CustomNemesis(TestNemesisClass):
-        """Override Nemesis with a new disruption tree"""
-
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.disruptions_list = self.build_disruptions_by_name(disruptions)
-
     tester = FakeTester()
     tester.params["nemesis_exclude_disabled"] = True
     ctx = pytest.raises(expected_error) if expected_error else nullcontext()
     with ctx:
-        CustomNemesis(tester, None)
+        nemesis = CustomNemesisByName(tester, None, disruptions=disruptions)
+        if expected_error is None:
+            assert set(nemesis._disruption_list_names) == set(disruptions)
+
+
+def test_build_disruptions_by_name_selector_excludes_one():
+    """A name that exists but is filtered out by the active nemesis_selector is skipped
+    with a warning, not raised as an error -- distinct from a name that matches no class
+    at all."""
+    tester = FakeTester()
+    # flag_a only matches CustomNemesisA, so CustomNemesisB is excluded by the selector.
+    nemesis = CustomNemesisByName(
+        tester, None, disruptions=["CustomNemesisA", "CustomNemesisB"], nemesis_selector="flag_a"
+    )
+    assert nemesis._disruption_list_names == ["CustomNemesisA"]
+
+
+def test_build_disruptions_by_name_selector_excludes_all():
+    """When the active selector excludes every requested name, construction raises instead
+    of silently leaving an empty disruptions_list for call_next_nemesis to assert on later."""
+    tester = FakeTester()
+    with pytest.raises(ValueError, match="No nemesis left"):
+        CustomNemesisByName(tester, None, disruptions=["CustomNemesisA", "CustomNemesisB"], nemesis_selector="flag_d")

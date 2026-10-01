@@ -36,7 +36,6 @@ class ScyllaCloudLimitedChaosMonkey(NemesisRunner):
                 "RefreshMonkey",
                 "StopStartMonkey",
                 "MajorCompactionMonkey",
-                "ModifyTableMonkey",
                 "EnospcMonkey",
                 "StopWaitStartMonkey",
                 "SoftRebootNodeMonkey",
