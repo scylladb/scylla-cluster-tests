@@ -188,3 +188,50 @@ def test_create_nodes_round_robin(racks_count, node_count, expected_racks, param
 **How to spot it:** if you grep the test file and find the same method bodies from `sdcm/` appearing verbatim, the tests are copies. A good test constructs the real `sdcm.*` class and mocks only at the external boundary (network, file system, cloud APIs).
 
 **Correct approach:** always instantiate the real class and mock only its external I/O. Only fall back to `MagicMock(spec=RealClass)` as a last resort when the real constructor has unavoidable heavy side effects that cannot be mocked — and document why.
+
+## AP-7: Asserting on the Text of Non-Python Code (Bash, Groovy, ...)
+
+Some SCT code is not Python: shell scripts that Python helpers generate and run on nodes (`configure_vector_target_script`, install snippets), Jenkins Groovy in `vars/*.groovy` and `*.jenkinsfile`, and standalone `*.sh` scripts. Agents sometimes "test" this code from pytest by reading it as a string, from a helper's return value or from the file on disk, and asserting on substrings. Such a test does not check behavior. The text can be exactly what the test expects and still fail when it runs: wrong path, missing package, a systemd unit that ignores the setting, a Groovy step that Jenkins rejects, a distro that behaves differently. The test also breaks on harmless edits like reordering lines, changing quoting, or rewording a comment, so it costs maintenance and gives no coverage.
+
+Real example: PR [#16165](https://github.com/scylladb/scylla-cluster-tests/pull/16165) ("fix(distro): make SCT work on current Fedora hosts") added `unit_tests/unit/provisioner/test_vector_target_script.py`. The review asked to drop the file because testing text inside a bash script is not useful. Agents have tried the same with Groovy pipeline code.
+
+❌ **Bad — tests from PR #16165, abridged (dropped in review):**
+```python
+def test_vector_stop_timeout_outlasts_graceful_shutdown():
+    script = configure_vector_target_script(host="10.0.0.1", port=6000)
+
+    drop_in = "/etc/systemd/system/vector.service.d/sct-stop-timeout.conf"
+    assert f"cat > {drop_in} <<'EOF'\n[Service]\nTimeoutStopSec=90s\nEOF" in script
+    assert script.index(drop_in) < script.index("systemctl daemon-reload") < script.index("systemctl restart vector")
+    assert "address: 10.0.0.1:6000" in script
+
+
+def test_vector_target_script_survives_single_quote_wrapping():
+    script = configure_vector_target_script(host="10.0.0.1", port=6000)
+    tokens = shlex.split(shell_script_cmd(script, quote="'"))
+    assert "TimeoutStopSec=90s" in tokens[2]
+    subprocess.run(["bash", "-n", "-c", tokens[2]], check=True)
+```
+
+Both tests copy the script back into the assertions. Neither one shows that vector actually survives its graceful shutdown on Fedora, which was the bug being fixed. `bash -n` only shows that the script parses. It does not show that the script works.
+
+✅ **Good — pick the first option that applies:**
+
+1. **Run the code with its own runtime.** If the language has a test tool (for example bats for shell, or JenkinsPipelineUnit for Groovy), test the code there, not from pytest. SCT has no such framework set up today. What it has are runnable test scripts that execute the real code and check the result, for example `.github/workflows/test_cache_issues.sh` (runs the cache-issues `gh api` pagination for real) and `scripts/test-renovate-local.sh` (runs the Renovate JSONata transform against live S3 data). Follow that pattern when the code can run outside a job.
+2. **Test the Python logic around it.** If Python code picks values or branches (distro checks, version gates, computed timeouts, which packages to install), move that decision into a function that returns plain data and test that function (`should_skip_epel` below is an illustration, not an existing helper):
+   ```python
+   @pytest.mark.parametrize("distro,expected", [
+       pytest.param(Distro.FEDORA36, True, id="fedora-skips-epel"),
+       pytest.param(Distro.ROCKY9, False, id="rocky-uses-epel"),
+   ])
+   def test_skip_epel_by_distro(distro, expected):
+       assert should_skip_epel(distro) is expected
+   ```
+   Testing how Python handles command results is also behavior testing. Use `FakeRemoter.result_map` to return command output, then assert on what the Python code *does* with it: parsed values, raised errors, retries, events. The command pattern in the map only routes the fake. It is not what the test is checking.
+3. **Otherwise, leave it to integration or manual testing in real jobs and runs.** Run a shell change on a node: an artifacts or provision test on the target distro (request the matching `test-provision-*` label), a Docker-backed integration test (see the `writing-integration-tests` skill), or a manual run on a VM. Run a Groovy or Jenkinsfile change in a real Jenkins job, for example through `staging_trigger.py` (see `docs/contrib.md`). Link the run in the PR description, and **write no unit test**.
+
+**How to spot it:** the test reads shell or Groovy code, from a helper's return value or from a file, and every assertion is an `in`, `index()`, `startswith()`, or regex match against that text, or a `shlex.split`/`bash -n` check on it.
+
+**Not covered by this rule:**
+- Functions whose output *is* a computed command line, such as stress-tool or `nodetool` argument builders. When Python decides the arguments, asserting on the resulting arguments tests that decision. Prefer comparing parsed tokens (`shlex.split(cmd)`) to substring checks.
+- Python code that parses non-Python text, such as the Jenkinsfile parser tested in `unit_tests/lint/test_jenkins_parser.py`. There the Groovy is the input, and the test checks the parser's output.
