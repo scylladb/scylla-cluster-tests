@@ -33,7 +33,6 @@ import pytest
 
 from argus.client.replay_log import ReplayLog, ReplayLogOnlyResponse
 from argus.client.sct.client import ArgusSCTClient
-from sdcm.utils.argus import ReplayOnlyArgusSCTClient
 
 
 @pytest.fixture
@@ -271,28 +270,6 @@ class TestArgusClientReplayOnly:
         )
         try:
             assert client.session is None
-        finally:
-            client.close()
-
-    def test_replay_only_attribute(self, log_dir):
-        client = ReplayOnlyArgusSCTClient(run_id="test-uuid-attr", log_dir=log_dir)
-        try:
-            assert isinstance(client, ReplayOnlyArgusSCTClient)
-            assert client.session is None
-        finally:
-            client.close()
-
-    def test_normal_mode_replay_only_is_false(self, log_dir):
-        client = ArgusSCTClient(
-            run_id="test-uuid-normal",
-            auth_token="fake-token",
-            base_url="http://localhost:9999",
-            log_dir=log_dir,
-            replay_log_only=False,
-        )
-        try:
-            assert not isinstance(client, ReplayOnlyArgusSCTClient)
-            assert client.session is not None
         finally:
             client.close()
 

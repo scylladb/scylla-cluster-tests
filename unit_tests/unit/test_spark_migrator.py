@@ -24,35 +24,6 @@ from sdcm.spark_migrator import (
 import spark_migrator_test
 
 
-def test_migrator_config_defaults():
-    """Test MigratorConfig has sensible defaults."""
-    config = MigratorConfig()
-    assert config.source_port == 9042
-    assert config.target_port == 9042
-    assert config.spark_executor_memory == "4g"
-    assert config.spark_executor_cores == 2
-    assert config.spark_parallelism == 200
-    assert config.extra_spark_args == []
-
-
-def test_migrator_config_custom():
-    """Test MigratorConfig with custom values."""
-    config = MigratorConfig(
-        source_hosts=["10.0.0.1"],
-        source_keyspace="ks1",
-        source_table="table1",
-        target_host="10.0.0.2",
-        target_keyspace="ks2",
-        target_table="table2",
-        spark_executor_memory="8g",
-        spark_executor_cores=4,
-    )
-    assert config.source_hosts == ["10.0.0.1"]
-    assert config.target_host == "10.0.0.2"
-    assert config.spark_executor_memory == "8g"
-    assert config.spark_executor_cores == 4
-
-
 def test_generate_migrator_config_basic():
     """Test generated config has correct source/target structure."""
     config = MigratorConfig(

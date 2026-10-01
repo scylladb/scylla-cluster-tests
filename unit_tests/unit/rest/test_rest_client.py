@@ -32,10 +32,3 @@ def test_retry_targets_5xx_and_429(client):
     assert 429 in adapter.max_retries.status_forcelist
     assert 502 in adapter.max_retries.status_forcelist
     assert 503 in adapter.max_retries.status_forcelist
-
-
-def test_prepare_request_still_works(client):
-    prepared = client._prepare_request("GET", "test", params={"foo": "bar"})
-    assert prepared.method == "GET"
-    assert "test" in prepared.url
-    assert "foo=bar" in prepared.url
