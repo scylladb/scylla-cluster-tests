@@ -274,3 +274,57 @@ def test_execute_on_runner_path_gives_the_same_split(work_dir, bin_dir, core_dir
     upload_calls = [call for call in calls if call.startswith("upload ")]
     assert len(upload_calls) == 1
     assert not _tarball(work_dir, sct_test_id).exists()
+
+
+def test_empty_include_comm_falls_back_to_default(work_dir, bin_dir, core_dir, sct_test_id):
+    """An explicitly empty COREDUMPS_INCLUDE_COMM is `${VAR:-default}`-equivalent to unset."""
+    _make_core(core_dir, "scylla-server", age_seconds=60)
+    since_epoch = int(time.time() - 3600)
+
+    result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch, include_comm="")
+
+    assert result.returncode == 0, result.stderr
+    assert "skipping" not in result.stdout
+    upload_calls = [call for call in calls if call.startswith("upload ")]
+    assert len(upload_calls) == 1
+    assert not _tarball(work_dir, sct_test_id).exists()
+
+
+def test_dotted_entry_matches_literal_dot_only(work_dir, bin_dir, core_dir, sct_test_id):
+    """A dot in an allow-list entry must match a literal dot, not "any character" (ERE '.')."""
+    exact = _make_core(core_dir, "my.app", age_seconds=60)
+    lookalike = _make_core(core_dir, "myXapp", age_seconds=60)
+    since_epoch = int(time.time() - 3600)
+
+    result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch, include_comm="my.app")
+
+    assert result.returncode == 0, result.stderr
+    assert "skipping 1 coredump(s)" in result.stdout
+    assert lookalike.name in result.stdout
+    assert exact.name not in result.stdout
+    upload_calls = [call for call in calls if call.startswith("upload ")]
+    assert len(upload_calls) == 1
+    assert not _tarball(work_dir, sct_test_id).exists()
+
+
+@pytest.mark.parametrize(
+    "include_comm",
+    [
+        pytest.param("a'b", id="single-quote"),
+        pytest.param("a$b", id="dollar-sign"),
+        pytest.param("a`b", id="backtick"),
+        pytest.param("a,,b", id="double-comma"),
+        pytest.param("a,", id="trailing-comma"),
+    ],
+)
+def test_invalid_include_comm_fails_fast_without_any_hydra_call(work_dir, bin_dir, core_dir, sct_test_id, include_comm):
+    _make_core(core_dir, "scylla-server", age_seconds=60)
+    since_epoch = int(time.time() - 3600)
+
+    result, calls = run_script(work_dir, bin_dir, core_dir, sct_test_id, since_epoch, include_comm=include_comm)
+
+    assert result.returncode != 0
+    assert "ERROR" in result.stderr
+    assert "COREDUMPS_INCLUDE_COMM" in result.stderr
+    assert not calls, calls
+    assert not _tarball(work_dir, sct_test_id).exists()
