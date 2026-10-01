@@ -81,8 +81,15 @@ if [[ ${HYDRA_STATUS} -ne 0 ]] ; then
     exit 0
 fi
 
-# grep drops hydra's own preamble; exit 1 here genuinely means the directory held nothing new
-NEW_COREDUMPS=$(echo "${COREDUMP_LISTING}" | grep "^$COREDUMP_DIR/" || true)
+# Keep only hydra's listing lines, dropping its own preamble: a plain `grep "^$COREDUMP_DIR/"`
+# would treat $COREDUMP_DIR as a regex, so a directory name containing ERE metacharacters
+# (".", "+", ...) could mis-match - filter by a literal prefix instead.
+NEW_COREDUMPS=""
+while IFS= read -r LISTED_PATH ; do
+    if [[ -n "${LISTED_PATH}" && "${LISTED_PATH#"${COREDUMP_DIR}"/}" != "${LISTED_PATH}" ]] ; then
+        NEW_COREDUMPS="${NEW_COREDUMPS}${NEW_COREDUMPS:+$'\n'}${LISTED_PATH}"
+    fi
+done <<< "${COREDUMP_LISTING}"
 
 if [[ -n "${NEW_COREDUMPS}" ]] ; then
     # -x anchors each match to the whole line (a full path), -E enables the (a|b|c) alternation above.
