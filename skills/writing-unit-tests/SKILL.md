@@ -1,11 +1,12 @@
 ---
 name: writing-unit-tests
 description: >-
-  Guides writing and debugging unit tests for the SCT framework using
-  pytest conventions. Use when creating new test files in unit_tests/,
-  adding test cases, mocking external services, setting up fixtures, or
-  reviewing test coverage. Covers network-blocking patterns, FakeRemoter,
-  moto for AWS mocking, monkeypatch, and common pitfalls.
+  Guides writing and debugging pytest unit tests for the SCT framework.
+  Use when creating or reviewing tests in unit_tests/, mocking external
+  services, or setting up fixtures. Triggers: "write a unit test", "add
+  a test for", "mock boto3", "fix a flaky test", "convert unittest to
+  pytest". Covers FakeRemoter and moto mocking, Singleton state leaks,
+  and why not to assert on bash or Groovy text.
 ---
 
 # Writing Unit Tests for SCT
@@ -46,6 +47,12 @@ SCT runs tests with `pytest-xdist` (`-n2` by default) and `pytest-random-order`.
 Mocking internal functions makes tests brittle and hides bugs. Mock at the outermost boundary: the HTTP call, the SSH command, the cloud SDK client. This tests the actual logic while isolating from infrastructure.
 
 **Never reimplement the code under test in a fake class.** If you find yourself copying a method body from `sdcm/` into a `FakeFoo` helper in your test, stop — you are testing the copy, not the real code. Always instantiate the real class and mock only its external I/O (network, file system, cloud APIs). See anti-pattern AP-6 for details.
+
+### Do Not Test the Text of Non-Python Code
+
+**Never write a test whose only assertions match strings inside bash, Groovy, or other non-Python code**, whether a helper generates the text or it is read from a file.
+
+Such a test copies the code into the assertions. It breaks on harmless edits and proves nothing about what happens when the code runs. In order of preference: run the code with its own runtime or test tool; test the Python logic around it (the decision that picks values or branches, or how the code handles command output); otherwise leave it to integration or manual testing in real jobs and runs, link the run in the PR, and write no unit test. See anti-pattern AP-7 for the PR #16165 example.
 
 ### No Inline Classes in Fixtures or Tests
 
@@ -243,11 +250,17 @@ uv run python -m pytest unit_tests/unit/test_config.py --cov=sdcm.sct_config --c
 | File | Content |
 |------|---------|
 | [common-pitfalls.md](references/common-pitfalls.md) | Pitfalls P-1 through P-16 with before/after fixes |
-| [anti-patterns.md](references/anti-patterns.md) | Anti-patterns AP-1 through AP-6 with before/after fixes |
+| [anti-patterns.md](references/anti-patterns.md) | Anti-patterns AP-1 through AP-7 with before/after fixes |
 
 | Workflow | Purpose |
 |----------|---------|
 | [write-a-unit-test.md](workflows/write-a-unit-test.md) | 4-phase process for writing a new unit test |
+
+The workflow in brief:
+1. **Identify**: find the code and its existing tests, list external dependencies, and confirm a unit test is the right tool (not for bash or Groovy text, see AP-7).
+2. **Mock**: reuse existing fixtures, and mock only at the external boundary (moto, `FakeRemoter.result_map`, `monkeypatch`, `tmp_path`).
+3. **Assert**: write Arrange-Act-Assert functions with `pytest.param(id=...)` cases, edge cases, and `pytest.raises`.
+4. **Verify**: run the file, check for network access and random-order isolation, and run pre-commit.
 
 ## Success Criteria
 
@@ -257,6 +270,7 @@ A well-written SCT unit test:
 - [ ] Uses pytest style (`assert`, fixtures, `@pytest.mark.parametrize`) — not unittest
 - [ ] Does NOT have `@pytest.mark.integration` marker
 - [ ] Makes zero real network calls (all external services mocked)
+- [ ] Asserts on Python behavior, not on substrings of bash, Groovy, or other non-Python code
 - [ ] Uses `monkeypatch` for environment variables, not `os.environ`
 - [ ] Uses `tmp_path` for temporary files, not hardcoded paths
 - [ ] Passes in isolation, in parallel, and in random order

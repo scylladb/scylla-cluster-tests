@@ -21,6 +21,8 @@ A 4-phase process for creating a new unit test in the SCT repository.
 
 4. **Decide the test file name.** Follow the pattern `unit_tests/test_<module_name>.py`. **If an existing file covers the module, add tests to it** — do not create a new file for the same module. Reuse existing fixtures and test utilities found in `unit_tests/conftest.py` or the existing test file.
 
+5. **Check that a unit test is the right tool.** If the change is in bash, Groovy, or other non-Python code (a generated script, `vars/*.groovy`, a `*.jenkinsfile`, a `*.sh` file), do not assert on its text. Run it with its own runtime if possible, test the Python logic around it, or leave it to integration or manual testing in real jobs (see AP-7 in `references/anti-patterns.md`). If there is no Python behavior to test, write no unit test.
+
 **Exit:** You know what to test, what to mock, and where to put the test.
 
 ---
