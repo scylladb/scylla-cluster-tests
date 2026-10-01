@@ -329,6 +329,7 @@ def test_wildcard_does_not_cross_into_fields_after_comm(work_dir, bin_dir, core_
         pytest.param("a`b", id="backtick"),
         pytest.param("a,,b", id="double-comma"),
         pytest.param("a,", id="trailing-comma"),
+        pytest.param(",a", id="leading-comma"),
         pytest.param("my.app", id="literal-dot"),
     ],
 )
