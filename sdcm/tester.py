@@ -1581,13 +1581,15 @@ class ClusterTester(unittest.TestCase):
         """
         Get a Nemesis class from parameters.
 
-        :return: list of dicts, each with keys 'nemesis', 'nemesis_selector', 'nemesis_seed'.
+        :return: list of dicts, each with keys 'nemesis', 'nemesis_selector', 'nemesis_seed',
+                 'nemesis_fixed_order'.
         :rtype: list[dict]
         """
         nemesis_threads = []
         list_class_name = self.params.get("nemesis_class_name")
         nemesis_selectors = self.params.get("nemesis_selector")
         nemesis_seeds = self.params.get("nemesis_seed")
+        nemesis_fixed_orders = self.params.get("nemesis_fixed_order")
 
         # Build the flat list of class names.  The old 'Class:N' count syntax and
         # space-separated strings are no longer supported — use an explicit YAML list.
@@ -1637,11 +1639,20 @@ class ClusterTester(unittest.TestCase):
             else:
                 nemesis_seed = int(nemesis_seeds[i])
 
+            # Fixed order: single order broadcasts to all threads; exact-length list maps 1:1.
+            if not nemesis_fixed_orders:
+                nemesis_fixed_order = []
+            elif len(nemesis_fixed_orders) == 1:
+                nemesis_fixed_order = nemesis_fixed_orders[0]
+            else:
+                nemesis_fixed_order = nemesis_fixed_orders[i]
+
             nemesis_threads.append(
                 {
                     "nemesis": runner_clazz,
                     "nemesis_selector": nemesis_selector,
                     "nemesis_seed": nemesis_seed,
+                    "nemesis_fixed_order": nemesis_fixed_order,
                 }
             )
 

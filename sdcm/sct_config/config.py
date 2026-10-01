@@ -2259,7 +2259,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         )
 
     def _validate_nemesis_parallel_config(self) -> None:
-        """Validate that nemesis_selector and nemesis_seed list lengths match nemesis_class_name."""
+        """Validate that nemesis_selector, nemesis_seed and nemesis_fixed_order list lengths match nemesis_class_name."""
         class_names = self.get("nemesis_class_name")
         if not class_names:
             return
@@ -2285,6 +2285,16 @@ class SCTConfiguration(*CONFIG_GROUPS):
                     f"  nemesis_class_name: {class_names}\n"
                     f"  nemesis_seed:       {seeds}"
                 )
+
+        fixed_orders = self.get("nemesis_fixed_order")
+        if fixed_orders and len(fixed_orders) > 1 and len(fixed_orders) != num_threads:
+            raise ValueError(
+                f"'nemesis_fixed_order' has {len(fixed_orders)} entries but 'nemesis_class_name' has "
+                f"{num_threads}. Either provide a single order (broadcast to all threads) or provide "
+                f"exactly one order per class name.\n"
+                f"  nemesis_class_name:  {class_names}\n"
+                f"  nemesis_fixed_order: {fixed_orders}"
+            )
 
     def _validate_number_of_db_nodes_divides_by_az_number(self):
         if self.get("cluster_backend").startswith("k8s"):

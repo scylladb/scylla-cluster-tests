@@ -13,11 +13,41 @@
 
 """Nemesis (chaos testing) configuration options."""
 
+import ast
 from typing import ClassVar
 
 from pydantic import BaseModel
+from pydantic.functional_validators import BeforeValidator
+from typing_extensions import Annotated
 
-from sdcm.sct_config.types import Boolean, IntOrList, SctField, String, StringOrList
+from sdcm.sct_config.types import Boolean, InputType, IntOrList, SctField, String, StringOrList
+
+
+def _list_of_string_lists(value: str | list | None) -> list[list[str]] | None:
+    """Parse into ``list[list[str]]``: one ordered nemesis-name list per FixedOrderMonkey thread.
+
+    A YAML list of lists comes through as-is. A string (e.g. an env var override) is parsed
+    with ``ast.literal_eval``, matching how the other list-typed config options accept
+    env-var strings. Always nested, even for a single thread, so a length-1
+    ``nemesis_class_name`` still writes ``[["A", "B"]]`` rather than a bare ``["A", "B"]`` --
+    one shape, no flat/nested ambiguity to disambiguate.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = ast.literal_eval(value)
+    if not isinstance(value, list) or not all(isinstance(item, list) for item in value):
+        raise ValueError(f"nemesis_fixed_order must be a list of lists of strings, e.g. [['A', 'B'], ['C']]: {value!r}")
+    return [[str(name) for name in order] for order in value]
+
+
+#: One ordered nemesis-name list per FixedOrderMonkey thread, matched by position to
+#: nemesis_class_name. Single-use type, scoped here rather than in the shared types module.
+NemesisFixedOrder = Annotated[
+    list[list[str]],
+    BeforeValidator(_list_of_string_lists),
+    InputType("list[list[str]] -- one ordered name-list per FixedOrderMonkey thread"),
+]
 
 
 class NemesisConfigMixin(BaseModel):
@@ -57,6 +87,19 @@ class NemesisConfigMixin(BaseModel):
     )
     nemesis_filter_seeds: Boolean = SctField(
         description="""If true runs the nemesis only on non seed nodes""",
+    )
+    nemesis_fixed_order: NemesisFixedOrder = SctField(
+        description="""
+                One ordered list of nemesis class names per FixedOrderMonkey thread. Each
+                thread executes its list in the given order, repeating from the start once
+                exhausted. Consumed only by FixedOrderMonkey; every other runner ignores it.
+                A name may repeat within a list to run that nemesis more than once per cycle.
+                Matched by position to nemesis_class_name, like nemesis_selector/nemesis_seed:
+                - nemesis_fixed_order: [["A", "B", "C"]]
+                  One FixedOrderMonkey thread, running A, B, C, A, B, C, ...
+                - nemesis_fixed_order: [["A", "B"], ["C", "D"]]
+                  Two FixedOrderMonkey threads: the first runs A, B, ...; the second C, D, ...
+        """,
     )
     nemesis_grow_shrink_instance_type: String = SctField(
         description="""Instance type to use for adding/removing nodes during GrowShrinkCluster nemesis""",
