@@ -135,6 +135,11 @@ def test_images(backend, scylla_version, expected_version, expected_is_enterpris
     if expected_version == "LATEST":
         expected_version = latest_release
 
+    if backend == "azure" and scylla_version.startswith("master"):
+        # master images moved to the scylladb_dev private gallery; the gallery lookup
+        # (#12877, #13165) was never backported, so this branch can't find them
+        pytest.skip("2026.2 can't resolve Azure master images (private gallery lookup not backported)")
+
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
     monkeypatch.setenv("SCT_SCYLLA_VERSION", scylla_version)
 
