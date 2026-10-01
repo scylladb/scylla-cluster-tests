@@ -398,6 +398,11 @@ class TestCleanCloudResources:
         # clean_elastic_ips_aws runs right after the failing dedicated-hosts step
         resources_cleanup.clean_elastic_ips_aws.assert_called()
 
+    def test_tag_runbyuser_only(self):
+        params = {"TestId": "1111"}
+        res = clean_cloud_resources(params, self.config)
+        assert res
+
 
 def _fleet_config(request_id, state, tags):
     return {

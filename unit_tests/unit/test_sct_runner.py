@@ -328,6 +328,16 @@ class TestCleanSctRunners:
         clean_sct_runners(test_status="", force=False, dry_run=False)
         mock_runner.terminate.assert_not_called()
 
+    @patch("sdcm.sct_runner.ssh_run_cmd")
+    @patch("sdcm.sct_runner.list_sct_runners")
+    def test_clean_sct_runners_force(self, mock_list_runners, mock_ssh_cmd):
+        """Test force cleanup ignoring keep tags."""
+        mock_list_runners.return_value = [self.mock_runner_with_keep]
+        mock_ssh_cmd.return_value = MagicMock(stdout="")
+
+        clean_sct_runners(test_status="", user="test_user", force=True, dry_run=True)
+        mock_list_runners.assert_called_once()
+
 
 class TestFindRunnerInstance:
     """Test the find-runner-instance logic (list_sct_runners + update_sct_runner_tags orchestration)."""

@@ -12,6 +12,8 @@
 # Copyright (c) 2022 ScyllaDB
 
 
+from unittest.mock import patch
+
 import pytest
 
 from sdcm.rest.rest_client import RestClient
@@ -32,3 +34,17 @@ def test_retry_targets_5xx_and_429(client):
     assert 429 in adapter.max_retries.status_forcelist
     assert 502 in adapter.max_retries.status_forcelist
     assert 503 in adapter.max_retries.status_forcelist
+
+
+def test_get_uses_session(client):
+    with patch.object(client.session, "get") as mock_get:
+        mock_get.return_value.status_code = 200
+        client.get("test")
+        mock_get.assert_called_once()
+
+
+def test_post_uses_session(client):
+    with patch.object(client.session, "post") as mock_post:
+        mock_post.return_value.status_code = 200
+        client.post("test")
+        mock_post.assert_called_once()

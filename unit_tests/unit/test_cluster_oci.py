@@ -479,3 +479,18 @@ def test_wait_for_private_dns_records_skipped_without_dns_names():
     node._wait_for_private_dns_records(timeout=5, interval=1)
 
     node.check_dns_ready.assert_not_called()
+
+
+@patch("sdcm.cluster.BaseNode.__init__", new=base_node_init)
+def test_restart_inner_performs_soft_reboot_via_oci_api() -> None:
+    """OciNode._restart_inner() must issue a soft reboot (hard=False) via the OCI instance API.
+
+    This is the primitive that RestartThenRepairNodeMonkey drives through
+    BaseNode.restart() (sdcm/nemesis/__init__.py disrupt_restart_then_repair_node).
+    """
+    instance = make_cloud_instance()
+    oci_node = OciNode(instance, MOCK_CREDENTIALS, MOCK_PARENT_CLUSTER)
+
+    oci_node._restart_inner()
+
+    instance.reboot.assert_called_once_with(wait=True, hard=False)
