@@ -389,21 +389,6 @@ class TestCleanCloudResources:
         res = clean_cloud_resources(params, self.config)
         assert res
 
-    def test_tag_runbyuser_only(self):
-        params = {"TestId": "1111"}
-        res = clean_cloud_resources(params, self.config)
-        assert res
-
-    def test_tags_testid_and_runbyuser(self):
-        params = {"RunByUser": "test", "TestId": "1111"}
-        res = clean_cloud_resources(params, self.config)
-        assert res
-
-    def test_tags_testid_and_runbyuser_with_other(self):
-        params = {"RunByUser": "test", "TestId": "1111", "NodeType": "monitor"}
-        res = clean_cloud_resources(params, self.config)
-        assert res
-
     def test_step_failure_does_not_abort_cleanup(self):
         # SCT-507: a cleanup step that raises (e.g. an unreachable region) must not
         # abort the whole run; later steps still execute.

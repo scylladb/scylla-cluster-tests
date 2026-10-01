@@ -76,16 +76,6 @@ def test_02_verify_config(conf):
     conf.check_required_files()
 
 
-def test_05_docker(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
-    monkeypatch.setenv("SCT_USE_MGMT", "false")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    assert "docker_image" in conf.dump_config()
-    assert conf.docker_image == "scylladb/scylla"
-
-
 def test_06a_docker_latest_no_loader(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")

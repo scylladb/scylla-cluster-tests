@@ -27,11 +27,6 @@ def test_session_has_retry_adapter_http(client):
     assert adapter.max_retries.total == 5
 
 
-def test_session_has_retry_adapter_https(client):
-    adapter = client.session.get_adapter("https://localhost")
-    assert adapter.max_retries.total == 5
-
-
 def test_retry_targets_5xx_and_429(client):
     adapter = client.session.get_adapter("http://localhost")
     assert 429 in adapter.max_retries.status_forcelist

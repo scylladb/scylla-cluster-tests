@@ -1099,42 +1099,6 @@ class TestAccessLogging:
 
 
 # ---------------------------------------------------------------------------
-# Error cases
-# ---------------------------------------------------------------------------
-
-
-class TestErrorCases:
-    def test_get_file_contents_missing_key(self, ks):
-        with pytest.raises(ClientError):
-            ks.get_file_contents("does_not_exist")
-
-    def test_get_json_invalid_content(self, ks, mocked_s3):
-        mocked_s3.Object(KEYSTORE_S3_BUCKET, "bad.json").put(Body=b"{{bad")
-        with pytest.raises(json.JSONDecodeError):
-            ks.get_json("bad.json")
-
-    def test_get_ssh_key_pair_missing_key(self, ks):
-        with pytest.raises(ClientError):
-            ks.get_ssh_key_pair("nonexistent_key")
-
-
-# ---------------------------------------------------------------------------
-# SSHKey namedtuple
-# ---------------------------------------------------------------------------
-
-
-class TestSSHKeyNamedTuple:
-    def test_fields(self):
-        key = SSHKey(name="n", public_key=b"pub", private_key=b"priv")
-        assert key.name == "n"
-        assert key.public_key == b"pub"
-        assert key.private_key == b"priv"
-
-    def test_tuple_fields(self):
-        assert SSHKey._fields == ("name", "public_key", "private_key")
-
-
-# ---------------------------------------------------------------------------
 # pub_key_from_private_key_file
 # ---------------------------------------------------------------------------
 

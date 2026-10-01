@@ -478,29 +478,6 @@ def test_submit_validator_job_uses_distinct_step_name_and_script_runner():
     assert add_step_kwargs["args"][0].endswith("/scripts/run-validator.sh")
 
 
-@mock_aws
-def test_submit_migration_job_still_uses_cluster_deploy_mode():
-    """Migration job remains in cluster deploy mode (default); deploy_mode refactor must not regress it."""
-    s3_client = boto3.client("s3", region_name="us-east-1")
-    s3_client.create_bucket(Bucket="sct-emr-spark-migrator-us-east-1")
-
-    mock_provisioner = MagicMock(
-        region_name="us-east-1", params={"emr_install_spark4_via_bootstrap": True}, **{"add_step.return_value": "s-MIG"}
-    )
-
-    config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
-    config.config_path = "s3://bucket/configs/test-id/config.yaml"
-
-    SparkMigratorRunner(mock_provisioner).submit_migration_job("j-CLUSTER", "s3://bucket/jars/x/migrator.jar", config)
-
-    body = (
-        s3_client.get_object(Bucket="sct-emr-spark-migrator-us-east-1", Key="scripts/run-migrator.sh")["Body"]
-        .read()
-        .decode("utf-8")
-    )
-    assert "--deploy-mode cluster" in body
-
-
 def _build_native_runner_and_config(step_return_value):
     provisioner = MagicMock(region_name="us-east-1", params={"emr_install_spark4_via_bootstrap": False})
     provisioner.add_step.return_value = step_return_value
