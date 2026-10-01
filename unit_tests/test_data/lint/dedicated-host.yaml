@@ -1,0 +1,2 @@
+# Makes SCTConfiguration.__init__ reserve AWS dedicated hosts.
+use_dedicated_host: true
