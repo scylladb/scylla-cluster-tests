@@ -1,0 +1,2 @@
+# Makes SCTConfiguration.__init__ look up AWS capacity reservations.
+use_capacity_reservation: true
