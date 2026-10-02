@@ -97,6 +97,11 @@ def test_start_without_guest_locking_runs_container_as_before(tmp_path, containe
     assert ("--memory" in cmd) == bool(container_memory)
 
 
+def test_start_passes_intercept_s3(tmp_path):
+    cmd = _started_docker_cmd(MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log")))
+    assert "--intercept-s3" in cmd
+
+
 def test_start_sizes_container_to_host_memory_by_default(tmp_path):
     """Unset caps keep the container bounded only by the host, but still without swap:
     docker needs --memory alongside --memory-swap, so the host's total RAM stands in."""
@@ -256,6 +261,7 @@ RUNNING_DEFAULT_SIZING_CMD = [
     "4GiB",
     "--lightweight-vcpus",
     "1",
+    "--intercept-s3",
     "--lock-guest-memory",
 ]
 

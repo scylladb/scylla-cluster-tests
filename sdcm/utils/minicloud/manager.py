@@ -296,6 +296,10 @@ class MinicloudManager:
                 f"--lock-guest-memory is {'--lock-guest-memory' in cmd}, this run wants {self.config.lock_guest_memory}"
             )
 
+        # --intercept-s3 is fixed at container start, so a container started without it needs a restart
+        if "--intercept-s3" not in cmd:
+            gaps.append("no --intercept-s3")
+
         # docker's own caps, read back from HostConfig: an unset cap means no flag, which docker
         # reports as 0 - so the same "0" stands for both sides of "no limit".
         memory_gib = self._container_memory_gib()
@@ -469,6 +473,8 @@ class MinicloudManager:
         minicloud_args += ["--gcp-project", self.config.gcp_project]
         if self.config.lock_guest_memory:
             minicloud_args.append("--lock-guest-memory")
+        # guest S3 names resolve to minicloud, so Manager backups reach the local store
+        minicloud_args.append("--intercept-s3")
         if self.config.lightweight:
             minicloud_args += [
                 "--lightweight",

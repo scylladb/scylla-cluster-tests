@@ -1,6 +1,6 @@
 ## Preparing AWS Cloud environment
 To run tests in different regions SCT needs pre-configured environment.
-To configure a region: create VPC and all related environment elements (Subnet, Security Group, etc.) use::
+To configure a region: create VPC and all related environment elements (Subnet, Security Group, Manager backup bucket, etc.) use::
 
 ```shell
 # by default would prepare all regions supported bt SCT

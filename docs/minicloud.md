@@ -68,6 +68,18 @@ automatic `SCT_*` env form - the code reads no bare `MINICLOUD_*` environment va
 minicloud signs its HTTPS endpoints with its own CA, so `node_setup()` installs that CA on
 every node. Temporary until minicloud injects it itself.
 
+minicloud serves all other buckets from its local S3 store, without checking credentials; the
+minicloud image must include it. SCT starts minicloud with `--intercept-s3`, so the guest DNS
+points S3 names at minicloud and nodes reach all buckets by their usual names, over HTTPS with
+the minicloud CA. A real bucket that nodes read must be on `minicloud_s3_passthrough_buckets`,
+or it answers `NoSuchBucket`.
+
+Manager backups go to the local store with the usual AWS agent config. DB nodes launch with
+`aws_instance_profile_name_db`, so IMDS gives the agent dummy credentials, and region setup
+(`AwsRegion.configure()`) creates the default `manager-backup-tests-{region}` bucket in every
+prepared region. Keep that bucket off `minicloud_s3_passthrough_buckets`, or the backups go to
+the real bucket.
+
 GCE runs on qcow2-backed disks with no NVMe passthrough - cap local SSDs in the run's config
 (e.g. `gce_n_local_ssd_disk_db: 1`) when the test-case yaml asks for more.
 
