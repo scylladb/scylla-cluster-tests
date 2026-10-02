@@ -269,6 +269,20 @@ def call(Map pipelineParams) {
                                             // create-runner-instance writes, so the container comes up on the
                                             // runner rather than on this builder. The extra 30 minutes cover the
                                             // collect-logs and cleanup stages that outlive the test timeout.
+                                            // Before the runner exists, so an abort here costs nothing. Never fails the build:
+                                            // a cost estimate is advisory, and each parallel branch provisions its own cluster,
+                                            // so the job's real cost is this figure times the number of branches.
+                                            stage("Estimate Test Cost (${instance_type})") {
+                                                catchError(stageResult: 'SUCCESS') {
+                                                    timeout(time: 5, unit: 'MINUTES') {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                estimateTestCost(params, builder.region)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                             stage("Create SCT Runner (${instance_type})") {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
