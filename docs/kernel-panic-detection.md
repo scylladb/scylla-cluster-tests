@@ -100,7 +100,8 @@ Each iteration:
    detection rule — there is no matching on `BUG:`, `Oops:`, or `Call Trace:`.
 5. **Publish** on first match only: `KernelPanicEvent` is published, then the thread sets its stop event and
    exits. At most **one event per node per test run**.
-6. **SSH probe**: a raw TCP connect to port 22, tracked as a secondary signal.
+6. **SSH probe**: a raw TCP connect to port 22, tracked as a secondary signal. On loaders and monitors, a long
+   enough run of failures publishes `NodeUnreachableEvent` and exits (see [SSH connectivity signal](#ssh-connectivity-signal)).
 
 Because the interval is implemented as `self._stop_event.wait(CHECK_INTERVAL_SECONDS)`, `stop()` interrupts the
 sleep immediately rather than waiting out the remaining 30 seconds.
@@ -129,9 +130,26 @@ The full console dump is not put in the event. It is written to the SCT log at E
 counted once the node has been reachable at least once, so a node that never finished booting does not accumulate
 failures. After three consecutive failures the `ssh_lost` property becomes true and a warning is logged.
 
-> **This signal is advisory only.** It does not publish a `KernelPanicEvent`, does not gate console-based
-> detection, and `ssh_lost` currently has no consumers outside the unit tests. It exists as a breadcrumb in the SCT
-> log for the case where the console API is unreliable. Do not rely on it to fail a test.
+For db nodes **this signal is advisory only.** It does not publish a `KernelPanicEvent`, does not gate
+console-based detection, and `ssh_lost` currently has no consumers outside the unit tests. It exists as a
+breadcrumb in the SCT log for the case where the console API is unreliable. Nemeses take db nodes down on purpose,
+so it must not fail a test there.
+
+**Loaders and monitors are different**: no nemesis disrupts them, so one that stops answering is dead. Every
+stress command that picks a dead loader afterwards only hangs on SSH timeouts, and so do the nemeses that
+reconfigure monitoring after a topology change or drive Scylla Manager, which runs on the monitor node.
+`BaseNode._start_kernel_panic_checker()` sets `fail_on_ssh_lost` on the checker of every loader and monitor node,
+and after `SSH_LOST_CRITICAL_THRESHOLD` (10) consecutive failed probes, which is about 5 minutes, the checker
+publishes a CRITICAL `NodeUnreachableEvent` and exits. A console-detected panic in the same poll wins and publishes
+`KernelPanicEvent` instead.
+`stop_task_threads()` clears `fail_on_ssh_lost` because teardown terminates the instance before the checker is
+stopped. Intentional reboots are covered by the same [suspension](#reboot-suppression) as panics.
+
+```
+(NodeUnreachableEvent Severity.CRITICAL) period_type=one-time event_id=...:
+  node=longevity-loader-node-1 message=SSH port 22 on 10.12.9.198 is unreachable for 10 consecutive checks
+  (at least 300s), the node is considered dead
+```
 
 When `host` is unset, the probe returns "reachable" rather than counting a failure.
 

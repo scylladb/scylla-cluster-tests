@@ -312,3 +312,108 @@ def test_suspended_context_manager():
         assert checker._suspended.is_set()
 
     assert not checker._suspended.is_set()
+
+
+class ScriptedSshProbe:
+    """Stands in for `_check_ssh_connectivity`: returns `results` in turn, then `default`, and stops the checker
+    after `limit` probes so a checker that never publishes does not run forever."""
+
+    def __init__(self, checker, results, default=False, limit=100):
+        self.checker = checker
+        self.results = iter(results)
+        self.default = default
+        self.limit = limit
+        self.calls = 0
+
+    def __call__(self):
+        self.calls += 1
+        if self.calls >= self.limit:
+            self.checker._stop_event.set()
+        return next(self.results, self.default)
+
+
+def _run_with_ssh_probe(checker, probe):
+    checker.CHECK_INTERVAL_SECONDS = 0.01
+    with patch.object(checker, "_check_ssh_connectivity", side_effect=probe):
+        checker.start()
+        checker.join(timeout=5)
+    assert not checker.is_alive()
+
+
+@patch("sdcm.kernel_panic_checker.NodeUnreachableEvent")
+def test_ssh_lost_publishes_critical_event_and_stops(mock_event_cls):
+    checker = FakeKernelPanicChecker(console_outputs=[NORMAL_BOOT_OUTPUT], node_name="loader-1", host="10.0.0.1")
+    checker.fail_on_ssh_lost = True
+    probe = ScriptedSshProbe(checker, [True])
+
+    _run_with_ssh_probe(checker, probe)
+
+    assert probe.calls == 1 + checker.SSH_LOST_CRITICAL_THRESHOLD
+    mock_event_cls.assert_called_once()
+    assert mock_event_cls.call_args.kwargs["node"] == "loader-1"
+    assert "10.0.0.1" in mock_event_cls.call_args.kwargs["message"]
+
+
+@patch("sdcm.kernel_panic_checker.NodeUnreachableEvent")
+def test_ssh_lost_does_not_fail_test_by_default(mock_event_cls):
+    checker = FakeKernelPanicChecker(console_outputs=[NORMAL_BOOT_OUTPUT], node_name="db-1", host="10.0.0.1")
+    probe = ScriptedSshProbe(checker, [True], limit=checker.SSH_LOST_CRITICAL_THRESHOLD * 3)
+
+    _run_with_ssh_probe(checker, probe)
+
+    assert checker._ssh_consecutive_failures > checker.SSH_LOST_CRITICAL_THRESHOLD
+    mock_event_cls.assert_not_called()
+
+
+@patch("sdcm.kernel_panic_checker.NodeUnreachableEvent")
+def test_ssh_recovery_resets_failure_count(mock_event_cls):
+    checker = FakeKernelPanicChecker(console_outputs=[NORMAL_BOOT_OUTPUT], node_name="loader-1", host="10.0.0.1")
+    checker.fail_on_ssh_lost = True
+    almost_lost = [False] * (checker.SSH_LOST_CRITICAL_THRESHOLD - 1)
+    probe = ScriptedSshProbe(checker, [True, *almost_lost, True])
+
+    _run_with_ssh_probe(checker, probe)
+
+    # without the reset the outages would add up and fire on the first probe after the recovery
+    assert probe.calls == 1 + len(almost_lost) + 1 + checker.SSH_LOST_CRITICAL_THRESHOLD
+    mock_event_cls.assert_called_once()
+
+
+@patch("sdcm.kernel_panic_checker.NodeUnreachableEvent")
+def test_ssh_lost_never_reachable_does_not_fail(mock_event_cls):
+    checker = FakeKernelPanicChecker(console_outputs=[NORMAL_BOOT_OUTPUT], node_name="loader-1", host="10.0.0.1")
+    checker.fail_on_ssh_lost = True
+    probe = ScriptedSshProbe(checker, [], limit=checker.SSH_LOST_CRITICAL_THRESHOLD * 3)
+
+    _run_with_ssh_probe(checker, probe)
+
+    mock_event_cls.assert_not_called()
+
+
+@patch("sdcm.kernel_panic_checker.NodeUnreachableEvent")
+def test_ssh_lost_disarmed_while_running_does_not_fail(mock_event_cls):
+    checker = FakeKernelPanicChecker(console_outputs=[NORMAL_BOOT_OUTPUT], node_name="loader-1", host="10.0.0.1")
+    checker.fail_on_ssh_lost = True
+    probe = ScriptedSshProbe(checker, [True], limit=checker.SSH_LOST_CRITICAL_THRESHOLD * 3)
+
+    def disarm_on_first_failure():
+        if probe.calls == 1:
+            checker.fail_on_ssh_lost = False
+        return probe()
+
+    _run_with_ssh_probe(checker, disarm_on_first_failure)
+
+    mock_event_cls.assert_not_called()
+
+
+@patch("sdcm.kernel_panic_checker.KernelPanicEvent")
+@patch("sdcm.kernel_panic_checker.NodeUnreachableEvent")
+def test_kernel_panic_wins_over_ssh_lost(mock_unreachable_cls, mock_panic_cls):
+    outputs = [NORMAL_BOOT_OUTPUT] * FakeKernelPanicChecker.SSH_LOST_CRITICAL_THRESHOLD + [PANIC_OUTPUT]
+    checker = FakeKernelPanicChecker(console_outputs=outputs, node_name="loader-1", host="10.0.0.1")
+    checker.fail_on_ssh_lost = True
+
+    _run_with_ssh_probe(checker, ScriptedSshProbe(checker, [True]))
+
+    mock_panic_cls.assert_called_once()
+    mock_unreachable_cls.assert_not_called()
