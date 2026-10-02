@@ -242,3 +242,51 @@ def test_events_severity_changer_filter_gce_first_boot_bind_race():
     startup_failed_filter.eval_filter(unrelated_event)
     prometheus_bind_filter.eval_filter(unrelated_event)
     assert unrelated_event.severity == Severity.ERROR
+
+
+def test_default_filters_downgrade_commitlog_list_descriptors_oversized_allocation_to_warning():
+    """SCT-1008/SCYLLADB-2713 (Won't Fix): an OVERSIZED_ALLOCATION whose backtrace resolves to
+    db::commitlog::segment_manager::list_descriptors is a one-off, non-fatal call on
+    startup/commitlog replay -- Scylla itself logs it at WARNING -- so `enable_default_filters()`
+    must downgrade it globally and unconditionally, without touching other OVERSIZED_ALLOCATION
+    causes or other DatabaseLogEvent types."""
+    commitlog_filter = EventsSeverityChangerFilter(
+        new_severity=Severity.WARNING,
+        event_class=DatabaseLogEvent.OVERSIZED_ALLOCATION,
+        regex=r".*commitlog::segment_manager::list_descriptors",
+    )
+
+    commitlog_list_descriptors_backtrace = (
+        "std::vector<char, std::allocator<char> >::_M_realloc_append<char const&>(char const&) at "
+        "./db/commitlog/commitlog.cc:1189\n"
+        " (inlined by) db::commitlog::segment_manager::list_descriptors(seastar::sstring) const at "
+        "./db/commitlog/commitlog.cc:1230\n"
+    )
+    oversized_allocation_line = (
+        "seastar_memory - oversized allocation: 1234567 bytes, please increase Seastar heap size"
+    )
+
+    commitlog_event = DatabaseLogEvent.OVERSIZED_ALLOCATION().add_info(
+        node="node1", line=oversized_allocation_line, line_number=1
+    )
+    commitlog_event.backtrace = commitlog_list_descriptors_backtrace
+    assert commitlog_event.severity == Severity.ERROR
+    commitlog_filter.eval_filter(commitlog_event)
+    assert commitlog_event.severity == Severity.WARNING
+
+    unrelated_backtrace_event = DatabaseLogEvent.OVERSIZED_ALLOCATION().add_info(
+        node="node1", line=oversized_allocation_line, line_number=2
+    )
+    unrelated_backtrace_event.backtrace = (
+        "seastar::rpc::client::wait_for_reply(long) at "
+        "./build/release/seastar/./seastar/include/seastar/rpc/rpc_impl.hh:349\n"
+    )
+    commitlog_filter.eval_filter(unrelated_backtrace_event)
+    assert unrelated_backtrace_event.severity == Severity.ERROR
+
+    other_event_class_with_same_backtrace = DatabaseLogEvent.BAD_ALLOC().add_info(
+        node="node1", line="std::bad_alloc", line_number=3
+    )
+    other_event_class_with_same_backtrace.backtrace = commitlog_list_descriptors_backtrace
+    commitlog_filter.eval_filter(other_event_class_with_same_backtrace)
+    assert other_event_class_with_same_backtrace.severity == Severity.ERROR
