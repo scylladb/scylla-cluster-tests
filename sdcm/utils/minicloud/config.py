@@ -41,13 +41,14 @@ MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT = "4GiB"
 MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT = 1
 # Image cache, per-instance qcow2 disks and minicloud.log all live here - tens of GiB.
 MINICLOUD_STATE_DIR_DEFAULT = "~/.cache/minicloud"
-# Backend-independent: GCE runs also reach S3 (keystore, job artifacts, downloads), so the
-# same list is passed to the container no matter which backend the test uses.
+# Backend-independent: GCE runs also reach S3 (keystore, job artifacts, downloads, test
+# sstables), so the same list is passed to the container no matter which backend the test uses.
 # Keep in sync with the default in scripts/start-minicloud.sh.
 MINICLOUD_S3_PASSTHROUGH_BUCKETS_DEFAULT = (
     "scylla-qa-keystore",
     "cloudius-jenkins-test",
     "downloads.scylladb.com",
+    "scylla-qa-team",
 )
 
 MINICLOUD_CONTAINER_NAME = "minicloud"

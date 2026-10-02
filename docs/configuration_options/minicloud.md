@@ -134,9 +134,9 @@ Narrow the AWS regions minicloud prepares (default: every SCT-supported region; 
 
 ## **minicloud_s3_passthrough_buckets** / SCT_MINICLOUD_S3_PASSTHROUGH_BUCKETS
 
-S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads). Backend-independent: GCE runs reach S3 for the same content
+S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads, test sstables). Backend-independent: GCE runs reach S3 for the same content
 
-**default:** scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com
+**default:** scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com,scylla-qa-team
 
 **type:** str | list[str] → list[str] (appendable)
 

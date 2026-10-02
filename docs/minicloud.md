@@ -61,10 +61,22 @@ Params (defaults in `defaults/test_default.yaml`, reference in
   on top of the ~1.7 GiB it reserves for the guest OS, so anything under ~3 GiB fails to boot
   with "memory per shard too low".
 
-S3 passthrough buckets (keystore, job artifacts, `downloads.scylladb.com`) are configured via
+S3 passthrough buckets (keystore, job artifacts, `downloads.scylladb.com`, test sstables) are configured via
 `minicloud_s3_passthrough_buckets`; this is why minicloud runs still need the
 `qa-aws-secret-*` credentials. Every knob is a documented `minicloud_*` config option with its
 automatic `SCT_*` env form - the code reads no bare `MINICLOUD_*` environment variables.
+
+minicloud serves all other buckets from its local S3 store, without checking credentials ; the
+minicloud image must include it. The guest DNS points S3 names at minicloud, so nodes reach all
+buckets by their usual names, over HTTPS with minicloud CA, which `node_setup()` installs on
+every node.
+A real bucket that nodes read must be on `minicloud_s3_passthrough_buckets`, or it answers
+`NoSuchBucket`.
+
+Manager backups go to the local store with the usual AWS agent config. DB nodes launch with
+`aws_instance_profile_name_db`, so IMDS gives the agent dummy credentials, and the test setup
+creates the `backup_bucket_location` bucket (`MinicloudManager.create_backup_buckets()`).
+Keep that bucket off `minicloud_s3_passthrough_buckets`, or the backups go to the real bucket.
 
 GCE runs on qcow2-backed disks with no NVMe passthrough - cap local SSDs in the run's config
 (e.g. `gce_n_local_ssd_disk_db: 1`) when the test-case yaml asks for more.
