@@ -14,6 +14,7 @@ HKP_KEYSERVERS = [
     "hkp://keys.openpgp.org",
     "hkp://pgp.mit.edu",
 ]
+GPG_KILL_CALL = mock.call("gpgconf --homedir /tmp --kill all", ignore_status=True, verbose=False, timeout=60)
 
 
 @pytest.fixture()
@@ -70,7 +71,9 @@ def test_fetch_apt_keys_first_keyserver_succeeds(node):
     node.remoter.sudo.side_effect = [
         None,  # mkdir
         _make_result(True),  # first keyserver succeeds
+        None,  # kill gpg daemons
         None,  # export
+        None,  # kill gpg daemons (finally)
         None,  # cleanup
     ]
 
@@ -82,19 +85,24 @@ def test_fetch_apt_keys_first_keyserver_succeeds(node):
         [
             mock.call("mkdir -m 0755 -p /etc/apt/keyrings"),
             _gpg_recv_call(temp_keyring, HKP_KEYSERVERS[0], APT_KEY),
+            GPG_KILL_CALL,
             _export_call(temp_keyring),
+            GPG_KILL_CALL,
             mock.call(f"rm -f {temp_keyring}", ignore_status=True),
         ]
     )
-    assert node.remoter.sudo.call_count == 4
+    assert node.remoter.sudo.call_count == 6
 
 
 def test_fetch_apt_keys_first_fails_second_succeeds(node):
     node.remoter.sudo.side_effect = [
         None,  # mkdir
         _make_result(False),  # first keyserver fails
+        None,  # kill gpg daemons
         _make_result(True),  # second keyserver succeeds
+        None,  # kill gpg daemons
         None,  # export
+        None,  # kill gpg daemons (finally)
         None,  # cleanup
     ]
 
@@ -106,22 +114,30 @@ def test_fetch_apt_keys_first_fails_second_succeeds(node):
         [
             mock.call("mkdir -m 0755 -p /etc/apt/keyrings"),
             _gpg_recv_call(temp_keyring, HKP_KEYSERVERS[0], APT_KEY),
+            GPG_KILL_CALL,
             _gpg_recv_call(temp_keyring, HKP_KEYSERVERS[1], APT_KEY),
+            GPG_KILL_CALL,
             _export_call(temp_keyring),
+            GPG_KILL_CALL,
             mock.call(f"rm -f {temp_keyring}", ignore_status=True),
         ]
     )
-    assert node.remoter.sudo.call_count == 5
+    assert node.remoter.sudo.call_count == 8
 
 
 def test_fetch_apt_keys_all_hkp_fail_https_succeeds(node):
     node.remoter.sudo.side_effect = [
         None,  # mkdir
         _make_result(False),  # first keyserver fails
+        None,  # kill gpg daemons
         _make_result(False),  # second keyserver fails
+        None,  # kill gpg daemons
         _make_result(False),  # third keyserver fails
+        None,  # kill gpg daemons
         _make_result(True),  # HTTPS fallback succeeds
+        None,  # kill gpg daemons
         None,  # export
+        None,  # kill gpg daemons (finally)
         None,  # cleanup
     ]
 
@@ -133,23 +149,33 @@ def test_fetch_apt_keys_all_hkp_fail_https_succeeds(node):
         [
             mock.call("mkdir -m 0755 -p /etc/apt/keyrings"),
             _gpg_recv_call(temp_keyring, HKP_KEYSERVERS[0], APT_KEY),
+            GPG_KILL_CALL,
             _gpg_recv_call(temp_keyring, HKP_KEYSERVERS[1], APT_KEY),
+            GPG_KILL_CALL,
             _gpg_recv_call(temp_keyring, HKP_KEYSERVERS[2], APT_KEY),
+            GPG_KILL_CALL,
             _https_fallback_call(temp_keyring, APT_KEY),
+            GPG_KILL_CALL,
             _export_call(temp_keyring),
+            GPG_KILL_CALL,
             mock.call(f"rm -f {temp_keyring}", ignore_status=True),
         ]
     )
-    assert node.remoter.sudo.call_count == 7
+    assert node.remoter.sudo.call_count == 12
 
 
 def test_fetch_apt_keys_all_sources_fail_raises_exception(node):
     node.remoter.sudo.side_effect = [
         None,  # mkdir
         _make_result(False),  # first keyserver fails
+        None,  # kill gpg daemons
         _make_result(False),  # second keyserver fails
+        None,  # kill gpg daemons
         _make_result(False),  # third keyserver fails
+        None,  # kill gpg daemons
         _make_result(False),  # HTTPS fallback fails
+        None,  # kill gpg daemons
+        None,  # kill gpg daemons (finally)
         None,  # cleanup
     ]
 
@@ -162,10 +188,36 @@ def test_fetch_apt_keys_all_sources_fail_raises_exception(node):
         [
             mock.call("mkdir -m 0755 -p /etc/apt/keyrings"),
             _gpg_recv_call(temp_keyring, HKP_KEYSERVERS[0], APT_KEY),
+            GPG_KILL_CALL,
             _gpg_recv_call(temp_keyring, HKP_KEYSERVERS[1], APT_KEY),
+            GPG_KILL_CALL,
             _gpg_recv_call(temp_keyring, HKP_KEYSERVERS[2], APT_KEY),
+            GPG_KILL_CALL,
             _https_fallback_call(temp_keyring, APT_KEY),
+            GPG_KILL_CALL,
+            GPG_KILL_CALL,
             mock.call(f"rm -f {temp_keyring}", ignore_status=True),
         ]
     )
-    assert node.remoter.sudo.call_count == 6
+    assert node.remoter.sudo.call_count == 11
+
+
+def test_fetch_apt_keys_reaps_gpg_daemons_when_export_fails(node):
+    node.remoter.sudo.side_effect = [
+        None,  # mkdir
+        _make_result(True),  # first keyserver succeeds
+        None,  # kill gpg daemons
+        RuntimeError("export failed"),  # export raises
+        None,  # kill gpg daemons (finally)
+        None,  # cleanup
+    ]
+
+    with mock.patch("sdcm.cluster.uuid.uuid4", return_value="test-uuid"):
+        with pytest.raises(RuntimeError):
+            BaseNode.fetch_apt_keys(node)
+
+    temp_keyring = "/tmp/temp-test-uuid.gpg"
+    assert node.remoter.sudo.mock_calls[-2:] == [
+        GPG_KILL_CALL,
+        mock.call(f"rm -f {temp_keyring}", ignore_status=True),
+    ]
