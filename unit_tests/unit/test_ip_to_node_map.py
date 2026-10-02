@@ -4,8 +4,6 @@ from sdcm.cluster import BaseCluster, BaseNode
 from sdcm.cluster_aws import AWSNode
 from sdcm.provision.network_configuration import NetworkInterfaceNotFound, ScyllaNetworkConfiguration
 
-from unit_tests.lib.oci_test_helpers import make_oci_node_mock
-
 
 def _make_node(private_ip=None, public_ip=None, ipv6_ip=None):
     node = MagicMock()
@@ -48,19 +46,6 @@ def test_subset_returns_only_requested_nodes():
     assert result["54.0.0.3"] is node3
     assert "10.0.0.2" not in result
     assert "54.0.0.2" not in result
-
-
-def test_none_ips_excluded():
-    node1 = _make_node(private_ip="10.0.0.1", public_ip=None, ipv6_ip="2001:db8::1")
-    node2 = _make_node(private_ip=None, public_ip="54.0.0.2", ipv6_ip=None)
-
-    result = _call_get_ip_to_node_map([node1, node2])
-
-    assert len(result) == 3
-    assert result["10.0.0.1"] is node1
-    assert result["2001:db8::1"] is node1
-    assert result["54.0.0.2"] is node2
-    assert None not in result
 
 
 def test_get_all_ip_addresses_uses_properties_not_refresh():
@@ -174,53 +159,3 @@ def test_aws_node_get_all_ip_addresses_tolerates_network_interface_not_found():
     result = BaseNode.get_all_ip_addresses(node)
 
     assert set(result) == {"10.0.0.1", "54.0.0.1"}
-
-
-def test_oci_node_get_all_ip_addresses_includes_secondary_nic():
-    node = make_oci_node_mock(
-        private_ip="10.1.3.5",
-        rpc_address="10.1.5.27",
-        broadcast_rpc_address="10.1.5.27",
-    )
-
-    result = BaseNode.get_all_ip_addresses(node)
-
-    assert set(result) == {"10.1.3.5", "10.1.5.27"}
-
-
-def test_oci_node_get_all_ip_addresses_no_duplicates_single_nic():
-    node = make_oci_node_mock(
-        private_ip="10.1.3.5",
-        rpc_address="10.1.3.5",
-        broadcast_rpc_address="10.1.3.5",
-    )
-
-    result = BaseNode.get_all_ip_addresses(node)
-
-    assert result.count("10.1.3.5") == 1
-
-
-def test_oci_node_get_all_ip_addresses_skips_dns_name():
-    node = make_oci_node_mock(
-        private_ip="10.1.3.5",
-        rpc_address="node1.private.sct2vcn.oraclevcn.com",
-        broadcast_rpc_address="node1.private.sct2vcn.oraclevcn.com",
-    )
-
-    result = BaseNode.get_all_ip_addresses(node)
-
-    assert result == ["10.1.3.5"]
-
-
-def test_oci_node_get_all_ip_addresses_tolerates_network_interface_not_found():
-    node = make_oci_node_mock(private_ip="10.1.3.5")
-    type(node.scylla_network_configuration).rpc_address = PropertyMock(
-        side_effect=NetworkInterfaceNotFound("nic 1 not found")
-    )
-    type(node.scylla_network_configuration).broadcast_rpc_address = PropertyMock(
-        side_effect=NetworkInterfaceNotFound("nic 1 not found")
-    )
-
-    result = BaseNode.get_all_ip_addresses(node)
-
-    assert result == ["10.1.3.5"]

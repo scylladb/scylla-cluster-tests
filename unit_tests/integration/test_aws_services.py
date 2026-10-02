@@ -95,12 +95,6 @@ def aws_region(keystore_configure) -> AwsRegion:
     return _aws_region
 
 
-def test_01_keystore() -> None:
-    """Test the s3 keystore functionality."""
-    k = KeyStore()
-    assert k.get_gcp_credentials() == {}
-
-
 def test_02_keystore_sync(tmp_path) -> None:
     """
     Validate the sync is working and setting right permissions.

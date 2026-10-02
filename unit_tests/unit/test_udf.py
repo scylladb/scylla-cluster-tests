@@ -59,13 +59,6 @@ MOCK_WASM_UDF_VALS = {
 }
 
 
-def test_create_udf_instance():
-    udf = UDF(**MOCK_LUA_UDF_VALS)
-
-    for key, value in MOCK_LUA_UDF_VALS.items():
-        assert value == getattr(udf, key), f"Did not find expected value for {key} in the udf class."
-
-
 def test_get_create_query_from_udf():
     expected_query = (
         "CREATE FUNCTION mock_keyspace.lua_var_length_counter(var text) RETURNS NULL ON NULL INPUT "

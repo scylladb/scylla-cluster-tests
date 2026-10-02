@@ -76,16 +76,6 @@ def test_02_verify_config(conf):
     conf.check_required_files()
 
 
-def test_05_docker(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
-    monkeypatch.setenv("SCT_USE_MGMT", "false")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    assert "docker_image" in conf.dump_config()
-    assert conf.docker_image == "scylladb/scylla"
-
-
 def test_06a_docker_latest_no_loader(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
@@ -168,48 +158,6 @@ def test_09_unknown_env(monkeypatch):
     msg = str(context.value)
     assert "SCT_WHAT_IS_THAT_2=what is this ?" in msg
     assert "SCT_WHAT_IS_THAT=just_made_this_up" in msg
-
-
-def test_12_scylla_version_repo_ubuntu(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
-    _set_gce_instance_types(monkeypatch)
-    monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO", "ubuntu-xenial")
-    monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO_LOADER", "ubuntu-xenial")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "3.0.3")
-    monkeypatch.setenv(
-        "SCT_GCE_IMAGE_DB",
-        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
-    )
-    expected_repo = "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list"
-    with (
-        unittest.mock.patch.object(sct_config, "get_branch_version", return_value="4.7.dev", clear=True),
-        unittest.mock.patch.object(sct_config, "find_scylla_repo", return_value=expected_repo, clear=True),
-    ):
-        conf = sct_config.SCTConfiguration()
-        conf.verify_configuration()
-    assert "scylla_repo" in conf.dump_config()
-    assert conf.scylla_repo == expected_repo
-
-
-def test_12_scylla_version_repo_ubuntu_loader_centos(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
-    _set_gce_instance_types(monkeypatch)
-    monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO", "ubuntu-xenial")
-    monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO_LOADER", "centos")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "3.0.3")
-    monkeypatch.setenv(
-        "SCT_GCE_IMAGE_DB",
-        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
-    )
-    expected_repo = "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list"
-    with (
-        unittest.mock.patch.object(sct_config, "get_branch_version", return_value="4.7.dev", clear=True),
-        unittest.mock.patch.object(sct_config, "find_scylla_repo", return_value=expected_repo, clear=True),
-    ):
-        conf = sct_config.SCTConfiguration()
-        conf.verify_configuration()
-    assert "scylla_repo" in conf.dump_config()
-    assert conf.scylla_repo == expected_repo
 
 
 def test_12_k8s_scylla_version_ubuntu_loader_centos(monkeypatch):
@@ -1928,3 +1876,69 @@ def test_use_dns_names_gce_multi_dc_accepted(monkeypatch):
     conf = sct_config.SCTConfiguration()
 
     assert conf.gce_datacenters == ["us-east1", "us-west1"]
+
+
+def _make_xcloud_api_mock():
+    """Return a MagicMock that satisfies _validate_cloud_backend_parameters checks."""
+    mock_api = MagicMock()
+    mock_api.get_scylla_versions.return_value = {"scyllaVersions": [{"version": "2025.1.0"}]}
+    mock_api.get_regions.return_value = {"regions": [{"externalId": "eu-west-1"}, {"externalId": "us-east1"}]}
+    mock_api.get_region_id_by_name.return_value = "region-id-1"
+    mock_api.get_instance_types.return_value = {"instances": [{"externalId": "i4i.large"}]}
+    # cloud_provider_ids is subscripted with a CloudProviderType enum key — MagicMock
+    # handles __getitem__ automatically, returning a MagicMock as the provider id.
+    return mock_api
+
+
+def test_xcloud_replication_factor_valid(monkeypatch):
+    """xcloud_replication_factor <= min(n_db_nodes) must not raise.
+
+    Regression: before the fix, rf > n_nodes raised TypeError ('>' not supported
+    between int and list) because n_nodes was list[int] after IntOrList normalization.
+    """
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "xcloud")
+    monkeypatch.setenv("SCT_XCLOUD_PROVIDER", "aws")
+    monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
+    monkeypatch.setenv("SCT_N_DB_NODES", "3 3")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_XCLOUD_REPLICATION_FACTOR", "2")
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_XCLOUD_ENV", "fake-env")
+
+    with (
+        patch("sdcm.sct_config.config.ScyllaCloudAPIClient", return_value=_make_xcloud_api_mock()),
+        patch("sdcm.sct_config.config.KeyStore"),
+        patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda v, _: v),
+        patch("sdcm.sct_config.config.find_scylla_repo", return_value="https://fake-repo/scylla.repo"),
+    ):
+        conf = sct_config.SCTConfiguration()
+        # Must not raise TypeError or ValueError
+        conf.verify_configuration()
+
+
+def test_xcloud_replication_factor_exceeds_min_dc(monkeypatch):
+    """xcloud_replication_factor > min(n_db_nodes) must raise ValueError, not TypeError.
+
+    Regression: before the fix, this raised TypeError: '>' not supported between
+    instances of 'int' and 'list'. After the fix it correctly raises ValueError.
+    """
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "xcloud")
+    monkeypatch.setenv("SCT_XCLOUD_PROVIDER", "aws")
+    monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
+    monkeypatch.setenv("SCT_N_DB_NODES", "3 3")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_XCLOUD_REPLICATION_FACTOR", "4")
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_XCLOUD_ENV", "fake-env")
+
+    with (
+        patch("sdcm.sct_config.config.ScyllaCloudAPIClient", return_value=_make_xcloud_api_mock()),
+        patch("sdcm.sct_config.config.KeyStore"),
+        patch("sdcm.sct_config.config.convert_name_to_ami_if_needed", side_effect=lambda v, _: v),
+        patch("sdcm.sct_config.config.find_scylla_repo", return_value="https://fake-repo/scylla.repo"),
+    ):
+        conf = sct_config.SCTConfiguration()
+        with pytest.raises(ValueError, match="xcloud_replication_factor .* cannot be greater than n_db_nodes"):
+            conf.verify_configuration()

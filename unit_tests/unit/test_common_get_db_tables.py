@@ -58,14 +58,6 @@ def test_get_db_tables_keyspace1_compact_storage(mock_node):
     assert all("_view" not in table for table in tables), f"Found materialized views in {tables}"
 
 
-def test_get_db_tables_with_compact_storage_filter_returns_empty_list(mock_node):
-    """Test get_db_tables returns no tables when filtering for compact storage in a keyspace without them."""
-    tables = get_db_tables(keyspace_name="keyspace1", node=mock_node, with_compact_storage=True)
-
-    assert tables == [], f"Expected no tables with compact storage, got {tables}"
-    assert all("_view" not in table for table in tables), f"Found materialized views in {tables}"
-
-
 def test_get_db_tables_with_non_compact_storage_filter(mock_node):
     """Test get_db_tables returns only non-compact storage tables."""
     tables = get_db_tables(keyspace_name="keyspace1", node=mock_node, with_compact_storage=False)

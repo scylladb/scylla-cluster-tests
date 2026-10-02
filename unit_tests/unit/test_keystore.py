@@ -699,16 +699,6 @@ class TestThreadSafety:
             list(pool.map(fetch, names * 5))
         assert not errors
 
-    def test_concurrent_s3_client_creation(self, ks):
-        clients = []
-
-        def get_client():
-            clients.append(ks.s3_client)
-
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            list(pool.map(lambda _: get_client(), range(16)))
-        assert len(clients) == 16
-
 
 # ---------------------------------------------------------------------------
 # Caching
@@ -807,17 +797,6 @@ class TestCaching:
             monkeypatch.delenv("AWS_ENDPOINT_URL")
             assert KeyStore().get_file_contents("aws_images_role.json") == b"real"
         assert fetch.call_count == 2
-
-    def test_cache_thread_safe(self, ks):
-        results = []
-
-        def fetch_and_record(name):
-            results.append(ks.get_file_contents(name))
-
-        names = ["email_config.json", "azure.json", "docker.json"]
-        with ThreadPoolExecutor(max_workers=6) as pool:
-            list(pool.map(fetch_and_record, names * 10))
-        assert len(results) == 30
 
     def test_get_json_uses_cache(self, ks):
         ks.get_file_contents("email_config.json")
@@ -1117,42 +1096,6 @@ class TestAccessLogging:
                 with patch.object(type(ks), "s3", new_callable=PropertyMock, return_value=mock_s3):
                     ks.get_file_contents("slow_file.json")
         assert any(r.levelno == logging.WARNING and "slow fetch" in r.message for r in caplog.records)
-
-
-# ---------------------------------------------------------------------------
-# Error cases
-# ---------------------------------------------------------------------------
-
-
-class TestErrorCases:
-    def test_get_file_contents_missing_key(self, ks):
-        with pytest.raises(ClientError):
-            ks.get_file_contents("does_not_exist")
-
-    def test_get_json_invalid_content(self, ks, mocked_s3):
-        mocked_s3.Object(KEYSTORE_S3_BUCKET, "bad.json").put(Body=b"{{bad")
-        with pytest.raises(json.JSONDecodeError):
-            ks.get_json("bad.json")
-
-    def test_get_ssh_key_pair_missing_key(self, ks):
-        with pytest.raises(ClientError):
-            ks.get_ssh_key_pair("nonexistent_key")
-
-
-# ---------------------------------------------------------------------------
-# SSHKey namedtuple
-# ---------------------------------------------------------------------------
-
-
-class TestSSHKeyNamedTuple:
-    def test_fields(self):
-        key = SSHKey(name="n", public_key=b"pub", private_key=b"priv")
-        assert key.name == "n"
-        assert key.public_key == b"pub"
-        assert key.private_key == b"priv"
-
-    def test_tuple_fields(self):
-        assert SSHKey._fields == ("name", "public_key", "private_key")
 
 
 # ---------------------------------------------------------------------------

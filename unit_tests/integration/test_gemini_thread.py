@@ -20,7 +20,7 @@ from cassandra.cluster import Cluster
 import pytest
 
 from sdcm.gemini_thread import GeminiStressThread
-from sdcm.utils.docker_utils import running_in_docker
+from unit_tests.lib.docker_access import container_ip_reachable
 from unit_tests.integration.conftest import configure_scylla_node
 from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 from unit_tests.lib.fake_cluster import DummyDbCluster
@@ -56,7 +56,7 @@ def fixture_docker_scylla_oracle(params):
 @pytest.fixture(name="cql_session")
 def fixture_cql_session(docker_scylla):
     """Yield an open CQL session connected to ``docker_scylla``, then shut it down."""
-    if running_in_docker():
+    if container_ip_reachable():
         address = f"{docker_scylla.internal_ip_address}:9042"
     else:
         address = docker_scylla.get_port("9042")
@@ -77,26 +77,6 @@ def fixture_cql_session(docker_scylla):
 def load_statement_ratios(gemini_schemas_dir: Path) -> str:
     ratios_path = gemini_schemas_dir / "no_delete_statement_ratios.json"
     return json.dumps(json.loads(ratios_path.read_text(encoding="utf-8")), separators=(",", ":"))
-
-
-@pytest.fixture(name="gemini_thread")
-def fixture_gemini_thread(request, params, docker_scylla, docker_scylla_oracle, gemini_schemas_dir):
-    """Build and teardown a GeminiStressThread for the standard oracle case.
-
-    Test functions that need to vary mode, duration, or other options should
-    call :func:`build_gemini_thread` directly instead.
-    """
-    thread = build_gemini_thread(params, docker_scylla, docker_scylla_oracle, gemini_schemas_dir=gemini_schemas_dir)
-    request.addfinalizer(thread.kill)
-    return thread
-
-
-@pytest.fixture(name="gemini_thread_no_oracle")
-def fixture_gemini_thread_no_oracle(request, params, docker_scylla, gemini_schemas_dir):
-    """Build and teardown a GeminiStressThread with no oracle cluster."""
-    thread = build_gemini_thread(params, docker_scylla, oracle_node=None, gemini_schemas_dir=gemini_schemas_dir)
-    request.addfinalizer(thread.kill)
-    return thread
 
 
 def build_gemini_thread(

@@ -7,7 +7,6 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEventRegistryException
 from sdcm.sct_events.database import (
     get_pattern_to_event_to_func_mapping,
-    CompactionEvent,
     IndexSpecialColumnErrorEvent,
     ScyllaServerStatusEvent,
     DatabaseLogEvent,
@@ -155,33 +154,3 @@ class TestContinuousEventsRegistry:
                         # Ignore the fact that the event is not published. It still will be created
                         if "You should create default EventsProcessRegistry first" not in str(rex):
                             raise
-
-    @pytest.mark.skip(reason="https://trello.com/c/Mu3lGc7C/4828-disable-compaction-and-repair-continuous-events")
-    def test_get_compact_events_by_continues_hash_from_log(
-        self, populated_registry: ContinuousEventsRegistry, test_data_dir
-    ):
-        self._read_events_from_file(test_data_dir, "compaction_event_start.log")
-
-        continues_hash = CompactionEvent.get_continuous_hash_from_dict(
-            {
-                "node": "node1",
-                "shard": "2",
-                "table": "system.local",
-                "compaction_process_id": "edc49670-2a65-11ec-a8b8-b62621e7624c",
-            }
-        )
-        found_events = populated_registry.find_continuous_events_by_hash(continues_hash)
-
-        self._read_events_from_file(test_data_dir, "compaction_event_end.log")
-
-        assert not populated_registry.find_continuous_events_by_hash(continues_hash), (
-            "Event was not removed from registry"
-        )
-        assert found_events
-        found_event = found_events[-1]
-        assert found_event
-        assert isinstance(found_event, CompactionEvent)
-        assert found_event.node == "node1"
-        assert found_event.shard == 2
-        assert found_event.table == "system.local"
-        assert found_event.compaction_process_id == "edc49670-2a65-11ec-a8b8-b62621e7624c"

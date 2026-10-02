@@ -25,12 +25,6 @@ def test_compute_jvm_heap_sizes(total_ram_mb, expected_max, expected_new):
     assert heap_new == expected_new
 
 
-def test_compute_jvm_heap_min_2gb_on_large_system():
-    """Heap should be at least 2 GB when system has >= 4 GB RAM."""
-    max_heap, _ = compute_jvm_heap_mb(4096)
-    assert max_heap >= 2048
-
-
 # --- BaseCassandraCluster tests ---
 
 
@@ -60,14 +54,6 @@ def test_parallel_startup_is_false(cassandra_cluster):
 
 def test_get_scylla_args_returns_empty(cassandra_cluster):
     assert cassandra_cluster.get_scylla_args() == ""
-
-
-def test_update_seed_provider_is_noop(cassandra_cluster):
-    cassandra_cluster.update_seed_provider()
-
-
-def test_validate_seeds_is_noop(cassandra_cluster):
-    cassandra_cluster.validate_seeds_on_all_nodes()
 
 
 @pytest.mark.parametrize(

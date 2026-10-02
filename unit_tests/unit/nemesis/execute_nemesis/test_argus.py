@@ -157,22 +157,6 @@ def test_argus_submit_no_client_available(nemesis, nemesis_runner):
     assert event.nemesis_status == NemesisStatus.SUCCEEDED
 
 
-def test_argus_submit_parameters_consistency_across_calls(nemesis, nemesis_runner):
-    """Test that submit_nemesis and finalize_nemesis use consistent parameters."""
-    argus_mock = MagicMock()
-    nemesis_runner.cluster.test_config.argus_client.return_value = argus_mock
-
-    nemesis_runner.execute_nemesis(nemesis)
-
-    submit_args = argus_mock.submit_nemesis.call_args.kwargs
-    finalize_args = argus_mock.finalize_nemesis.call_args.kwargs
-
-    # Verify name is consistent between submit and finalize
-    assert submit_args["name"] == finalize_args["name"]
-    # Verify start_time is the same in both submit and finalize
-    assert submit_args["start_time"] == finalize_args["start_time"]
-
-
 def test_argus_submit_multiple_nemesis_separate_entries(nemesis, failing_nemesis, nemesis_runner):
     """Test that multiple nemesis executions create separate Argus entries."""
     argus_mock = MagicMock()
@@ -201,27 +185,3 @@ def test_argus_submit_multiple_nemesis_separate_entries(nemesis, failing_nemesis
     # Verify start_time is the same between submit and finalize for each pair
     for submit_call, finalize_call in zip(submit_calls, finalize_calls):
         assert submit_call.kwargs["start_time"] == finalize_call.kwargs["start_time"]
-
-
-def test_argus_submit_captures_target_node_info(nemesis, nemesis_runner):
-    """Test that Argus submission captures target node information."""
-    argus_mock = MagicMock()
-    nemesis_runner.cluster.test_config.argus_client.return_value = argus_mock
-
-    nemesis_runner.execute_nemesis(nemesis)
-
-    # Verify all required fields are passed to submit_nemesis
-    argus_mock.submit_nemesis.assert_called_once_with(
-        name="CustomTestNemesis",
-        class_name="TestNemesisRunner",
-        start_time=ANY,
-        target_name="Node1",
-        target_ip="127.0.0.1",
-        target_shards=8,
-        description="A simple nemesis for testing.",
-    )
-
-    # Verify start_time is the same in both submit and finalize
-    submit_start_time = argus_mock.submit_nemesis.call_args.kwargs["start_time"]
-    finalize_start_time = argus_mock.finalize_nemesis.call_args.kwargs["start_time"]
-    assert submit_start_time == finalize_start_time

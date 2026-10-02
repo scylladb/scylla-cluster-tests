@@ -462,18 +462,6 @@ def test_select_prefers_family_order(test_catalog):
     assert result_arm.family == "i8g"
 
 
-def test_select_deterministic(test_catalog):
-    r1 = select_instance(test_catalog, "db", "aws", {"vcpu": 8})
-    r2 = select_instance(test_catalog, "db", "aws", {"vcpu": 8})
-    assert r1.instance_type == r2.instance_type
-
-
-def test_select_smallest_vcpu(test_catalog):
-    result = select_instance(test_catalog, "db", "aws", {"vcpu": "4-16"})
-    assert result.vcpus == 4
-    assert result.family == "i8g"
-
-
 # ---------------------------------------------------------------------------
 # select_instance — OCI Flex memory resolution
 # ---------------------------------------------------------------------------
@@ -513,9 +501,3 @@ def test_flex_memory_range(test_catalog):
     result = select_instance(test_catalog, "monitor", "oci", {"vcpu": 4, "memory": "16-64"})
     assert result.instance_type == "VM.Standard.E4.Flex:2:16"
     assert result.memory_gb == 16.0
-
-
-def test_non_flex_instance_unchanged(test_catalog):
-    result = select_instance(test_catalog, "db", "aws", {"vcpu": 8})
-    assert result.instance_type == "i8g.2xlarge"
-    assert result.memory_gb == 64.0

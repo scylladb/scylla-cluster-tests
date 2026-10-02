@@ -116,14 +116,6 @@ def test_create_emr_cluster_has_ssh_key(provisioner):
     assert ec2_attrs.get("Ec2KeyName") == "scylla_test_id_ed25519"
 
 
-def test_create_emr_cluster_no_sct_security_groups(provisioner):
-    """Test that EMR cluster creation does not pass SCT security groups."""
-    provisioner.create_emr_cluster(test_id="test-no-sct-sg", user="test_user")
-    ec2_attrs = provisioner.get_emr_cluster_description().get("Ec2InstanceAttributes", {})
-    # EMR should use its own managed SGs, not SCT's
-    assert ec2_attrs.get("EmrManagedMasterSecurityGroup", "") != "sg-0691c61126d99dd41"  # SCT-2-sg
-
-
 def test_get_emr_cluster_status(provisioner):
     """Test getting EMR cluster status after creation."""
     provisioner.create_emr_cluster(

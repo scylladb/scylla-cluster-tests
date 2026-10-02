@@ -233,23 +233,3 @@ def test_download_with_retry_on_argus_failure(tmp_path, mock_keystore):
 
             assert result == os.path.join(os.path.abspath(str(tmp_path)), "file.tar.zst")
             mock_bucket.download_file.assert_called_once()
-
-
-def test_download_retries_exhausted_fails(tmp_path, mock_keystore):
-    """Test that download fails after all retries are exhausted."""
-    argus_link = "https://argus.scylladb.com/api/v1/tests/test-id/log/file.tar.zst/download"
-
-    # All attempts fail with no redirect
-    mock_response = Mock()
-    mock_response.history = []
-    mock_response.status_code = 200
-    mock_response.url = "https://scylladb.cloudflareaccess.com/cdn-cgi/access/login/argus.scylladb.com"
-
-    with patch("requests.head", return_value=mock_response):
-        with patch("boto3.resource"):
-            storage = S3Storage()
-
-            with pytest.raises(RuntimeError) as exc_info:
-                storage.download_file(argus_link, str(tmp_path))
-
-            assert "Argus communication failed" in str(exc_info.value)

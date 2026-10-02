@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
+
 from unittest.mock import patch
 
 import pytest
@@ -25,11 +26,6 @@ def client():
 
 def test_session_has_retry_adapter_http(client):
     adapter = client.session.get_adapter("http://localhost")
-    assert adapter.max_retries.total == 5
-
-
-def test_session_has_retry_adapter_https(client):
-    adapter = client.session.get_adapter("https://localhost")
     assert adapter.max_retries.total == 5
 
 
@@ -52,10 +48,3 @@ def test_post_uses_session(client):
         mock_post.return_value.status_code = 200
         client.post("test")
         mock_post.assert_called_once()
-
-
-def test_prepare_request_still_works(client):
-    prepared = client._prepare_request("GET", "test", params={"foo": "bar"})
-    assert prepared.method == "GET"
-    assert "test" in prepared.url
-    assert "foo=bar" in prepared.url

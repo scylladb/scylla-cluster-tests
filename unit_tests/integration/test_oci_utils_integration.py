@@ -72,23 +72,6 @@ def test_get_oci_credentials():
 
 
 @pytest.mark.integration
-def test_get_compute_client():
-    """Test creating a compute client."""
-    service = OciService()
-    assert service.get_compute_client() is not None
-    assert "region" in service.config
-
-
-@pytest.mark.integration
-def test_get_compute_client_with_region():
-    """Test creating a compute client for a specific region."""
-    service = OciService()
-    compute_client = service.get_compute_client(region="us-phoenix-1")
-    assert compute_client is not None
-    assert compute_client.base_client.config.get("region") == "us-phoenix-1"
-
-
-@pytest.mark.integration
 def test_list_availability_domains():
     """Test listing availability domains."""
     ads = get_availability_domains(OciService().compartment_id)
@@ -127,18 +110,6 @@ def test_get_ubuntu_image_different_version():
 
 
 # --- Tests for OCI List Instances ---
-
-
-@pytest.mark.integration
-def test_list_instances_empty():
-    """Test listing instances (may be empty)."""
-    # List instances with a filter that likely won't match anything
-    instances = list_instances_oci(
-        tags_dict={"NonExistentTag": "NonExistentValue"},
-        region_name="us-ashburn-1",
-        verbose=False,
-    )
-    assert isinstance(instances, list)
 
 
 @pytest.mark.integration

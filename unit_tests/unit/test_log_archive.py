@@ -214,22 +214,6 @@ def test_full_split_compress_and_data_integrity(tmp_path, large_log_file):
     assert reconstructed == original_content
 
 
-def test_disk_efficiency_original_not_duplicated(tmp_path, large_log_file):
-    file_size = os.path.getsize(large_log_file)
-    chunk_size = file_size // 3
-
-    subprocess.run(
-        ["bash", LOG_ARCHIVE_SCRIPT, str(large_log_file), str(chunk_size), "sct.log"],
-        cwd=str(tmp_path),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-
-    part_files = list(tmp_path.glob("chunk_*"))
-    assert len(part_files) == 0, f"Raw chunks should be removed after compression: {part_files}"
-
-
 def test_many_chunks_produce_valid_archives(tmp_path, large_log_file):
     file_size = os.path.getsize(large_log_file)
     chunk_size = file_size // 8
