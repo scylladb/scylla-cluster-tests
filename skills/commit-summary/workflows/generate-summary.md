@@ -30,29 +30,32 @@ Step-by-step workflow for producing a curated weekly commit summary.
 1. Review each commit and classify as **keep** or **remove** using these criteria:
 
    **Keep:**
-   - New tests or test categories
-   - ScyllaDB-maintained tool updates (scylla-bench, latte, gemini, cassandra-stress, scylla-driver, argus, YCSB)
-   - Major refactorings that change code organization
-   - New implementation plans or documentation
    - New framework capabilities, backends, or infrastructure
+   - New tests, test categories or pipelines
+   - ScyllaDB-maintained tool updates (scylla-bench, latte, gemini, cassandra-stress, scylla-driver, argus, YCSB)
+   - Monitoring version moves and reporting improvements
    - Configuration system changes
    - Nemesis additions or significant nemesis changes
+   - Removal of a whole subsystem
    - Performance test additions
-   - Monitoring/reporting improvements
+   - New implementation plans
 
    **Remove:**
-   - Small, narrow-scope bug fixes
+   - Bug fixes and reliability fixes, whatever their scope or the quality of the commit message
+   - Refactors, renames, moves and cleanups
    - General dependency bumps (renovate bot, pip updates, non-ScyllaDB packages)
-   - Minor refactors (renames, moves, cleanups)
+   - CI, Jenkins and GitHub Actions changes
+   - Docs, standards, linter and convention changes
+   - Test-case labeling, quarantining or deletion
    - Hydra/container image updates
    - Typo or formatting fixes
-   - CI pipeline minor tweaks
-   - Pre-commit hook minor adjustments
+   - Pre-commit hook adjustments
 
-2. For borderline commits, lean toward including if the change affects how developers write or run tests.
-3. Group related kept commits (e.g., multiple commits in the same refactoring effort, or a tool update + its configuration change). Within a group, select only the **1–3 most representative commits** to link — typically the one that introduces the change, plus the most notable follow-up fix or final shape. Do not link every commit in the group.
+2. For borderline commits, lean toward removing. Keep one only if it changes what a test author writes or runs.
+3. Group related kept commits (e.g., multiple commits in the same effort, or a tool update + its configuration change). Within a group, select only the **1–3 most representative commits** to link — typically the one that introduces the change, plus the most notable follow-up or the final shape. Do not link every commit in the group. Keep each ScyllaDB tool bump as its own group.
+4. Cut the kept list down to **6–10 topics** before writing. The commit count in the range does not raise this number.
 
-**Exit criteria:** List of kept commits with grouping decisions noted.
+**Exit criteria:** 6–10 topics, each with 1–3 commits to link.
 
 ## Phase 4: Write the Summary
 
@@ -66,7 +69,13 @@ Step-by-step workflow for producing a curated weekly commit summary.
    gh release view <tag> --repo scylladb/<repo>
    ```
 
-   Tag formats: `vX.Y.Z` for most tools, `X.Y.Z-scylla` for `python-driver`. Fall back to `gh release list --repo scylladb/<repo> --limit 10` if the tag is unclear. Pull 1–3 concrete highlights (bug fixes, new features, behavior changes that matter to SCT test authors) and describe them briefly in plain prose. **Do not embed links to other repositories** — the only link in the paragraph must be the SCT commit that performed the bump. A bare "was bumped to vX.Y.Z" paragraph is not enough — the reader needs to know *what* changed.
+   Tag formats: `vX.Y.Z` for most tools, `X.Y.Z-scylla` for `python-driver`. Fall back to `gh release list --repo scylladb/<repo> --limit 10` if the tag is unclear. Pull 1–3 concrete highlights (bug fixes, new features, behavior changes that matter to SCT test authors) and describe them briefly in plain prose. Read every entry, including renovate-titled ones: a tool release often carries a driver or library bump that changes what the tool talks to the cluster with. Skip only entries about the upstream repository's own CI. **Do not embed links to other repositories** — the only link in the paragraph must be the SCT commit that performed the bump. A bare "was bumped to vX.Y.Z" paragraph is not enough — the reader needs to know *what* changed.
+
+   When the notes are thin, read the compare view:
+
+   ```bash
+   gh api repos/scylladb/<repo>/compare/<prev_tag>...<tag> --jq '.commits[].commit.message'
+   ```
 
 4. Follow these writing rules:
 
@@ -77,8 +86,8 @@ Step-by-step workflow for producing a curated weekly commit summary.
    - If a paragraph covers multiple commits, include a link for each
 
    **Paragraph structure:**
-   - Lead with what changed and why it matters
-   - Keep paragraphs to 1-3 sentences
+   - State what changed, in 1–2 sentences
+   - Cut any sentence that explains a root cause, narrates a failure, or describes how the change works internally
    - Use third-person, factual tone
    - Don't overuse colons — vary sentence structure
    - Don't start every paragraph with a link
@@ -102,13 +111,20 @@ Step-by-step workflow for producing a curated weekly commit summary.
 3. Check that no "removed" commits were accidentally dropped from the link URLs (all kept commits should have valid links).
 4. Read the summary aloud mentally — does it flow like previous issues?
 5. Present the summary to the user for review.
-6. **List all dropped commits** in a table so the user can judge whether any should be added back. Format:
+6. **List the commits that did not get a link**, in the chat response only — never in the report file. Split them into two tables, because they need different decisions from the user:
 
-   | SHA (8 chars) | Title | Reason dropped |
-   |---------------|-------|----------------|
+   **Covered in prose, not linked** — part of a kept group that reached its 1–3 link budget:
+
+   | SHA (8 chars) | Title | Paragraph |
+   |---------------|-------|-----------|
+   | `abcd1234` | chore(sizing): migrate kafka configs | sizing |
+
+   **Excluded** — not in the report at all:
+
+   | SHA (8 chars) | Title | Reason |
+   |---------------|-------|--------|
    | `abcd1234` | chore(deps): update foo | renovate bump |
-   | ... | ... | ... |
 
-   This lets the user quickly scan what was excluded and ask to reinstate specific commits.
+   Collapse a group that was added and then reverted inside the range into a single row, and say the net effect.
 
-**Exit criteria:** User approves the summary (including the dropped commits list).
+**Exit criteria:** User approves the summary and both tables.

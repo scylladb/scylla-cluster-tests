@@ -21,6 +21,18 @@ Generate curated weekly commit summaries that highlight changes important to SCT
 
 The raw git log contains dozens of commits. Most are routine fixes or dependency bumps that don't need attention. The summary exists to surface changes that affect how people write tests, use tools, or understand the framework. Including everything defeats the purpose — readers stop reading.
 
+### Keep It Short
+
+**Target 6–10 paragraphs of 1–2 sentences each, whatever the commit count.**
+
+A 67-commit range and a 35-commit range produce reports of the same size. The report is a scan list, not a digest: it tells the reader that something landed and where to click, nothing more. Bug fixes stay out even when their commit message is excellent — a long, well-written commit body is a signal that the author explained the fix, not that the fix belongs in the report.
+
+### State the Change, Not the Investigation
+
+**Write what the reader can now do or must now know. Leave out the failure story, the root cause and the mechanism.**
+
+Do not narrate what broke, which run hit it, which API returned which status, or how the fix works. Those belong in the commit body the link points to. Second and third sentences that begin "This was because", "On one run", "Unlike X" are the sign that the investigation leaked into the report — cut them.
+
 ### Embed Links in Context
 
 **Links belong inside the most meaningful phrase of each paragraph, not at the start.**
@@ -58,16 +70,19 @@ The report has a consistent voice across 100+ issues. Do not attribute work to a
 
 | Include | Exclude |
 |---------|---------|
-| New tests or test categories added | Small bug fixes with narrow scope |
+| New framework capabilities or cloud backends (OCI, xcloud, etc.) | Bug fixes and reliability fixes, however well documented |
+| New tests, test categories or pipelines | Refactors, renames, moves, cleanups |
 | Stress tool or driver updates (ScyllaDB-maintained: scylla-bench, latte, gemini, cassandra-stress, scylla-driver, argus, YCSB) | General package/dependency bumps (renovate, pip updates) |
-| Bigger refactorings that change how code is organized | Minor refactors (rename, move, cleanup) |
-| New implementation plans | Hydra/container image updates |
-| New framework capabilities or backends | Typo fixes, formatting changes |
-| Configuration system changes | CI pipeline tweaks (unless significant) |
-| Monitoring or reporting improvements | Merge commits (already excluded by script) |
-| Nemesis additions or major nemesis changes | Pre-commit hook minor adjustments |
-| Performance test additions or changes | |
-| Cloud backend additions (OCI, xcloud, etc.) | |
+| Monitoring version moves and reporting improvements | CI, Jenkins and GitHub Actions changes |
+| Configuration system changes | Docs, standards, linter and convention changes |
+| Nemesis additions or major nemesis changes | Test-case labeling, quarantining or deletion |
+| Removal of a whole subsystem | Hydra and container image updates |
+| Performance test additions or changes | Typo fixes, formatting changes |
+| New implementation plans | Pre-commit hook adjustments |
+
+Anything on the exclude side stays out even when the change is large, carefully argued or fixes a real outage. A reader who needs it will find it in the git log.
+
+The include side is a candidate list, not a quota. When more than 10 topics qualify, keep the ones that change what a test author writes or runs, and drop the rest.
 
 ## Quick Reference
 
@@ -113,7 +128,17 @@ If the exact tag is not found, list recent releases first:
 gh release list --repo scylladb/<repo> --limit 10
 ```
 
+Read every entry in the release notes, including ones with a renovate-style title. A tool release often carries a driver or library bump inside it — for example latte 0.51.0 raised the Rust `scylla` crate from 1.7.0 to 1.8.0 behind an "Update Rust crate scylla" entry. That bump changes what the tool talks to the cluster with, so it belongs in the paragraph. Skip only entries about the upstream repository's own CI.
+
+Give each tool bump its own paragraph. Do not fold it into the paragraph about a test or pipeline that happens to use the same tool.
+
 Use the release notes only to enrich the prose describing what changed. **Do not embed links to other repositories** (no upstream commit, PR, or release-tag links) — the only link in the paragraph must be the SCT commit that performed the bump. Summarize the 1–3 most relevant highlights in plain prose (e.g. "a libev segfault fix on shutdown, a RecursionError fix in `execute_concurrent`, and AWS PrivateLink support").
+
+If the compare view is needed to see what a release really contains:
+
+```bash
+gh api repos/scylladb/<repo>/compare/<prev_tag>...<tag> --jq '.commits[].commit.message'
+```
 
 ### Output Template
 
@@ -145,8 +170,11 @@ See you in the next issue of last week in scylla-cluster-tests.git master!
 - [ ] Issue number increments correctly from previous report
 - [ ] Start SHA matches end SHA from previous report
 - [ ] Commit count and author count are accurate (from raw output)
-- [ ] Unimportant commits are removed (small fixes, renovate, hydra)
+- [ ] Report has 6–10 body paragraphs, each 1–2 sentences
+- [ ] No paragraph explains a root cause, a failure story or how a fix works
+- [ ] No bug fix, CI change, docs change or test-case labeling made it in
 - [ ] Related commits are grouped into single paragraphs
+- [ ] Each ScyllaDB tool bump has its own paragraph
 - [ ] Every paragraph has at least one embedded GitHub commit link
 - [ ] Links are on the most descriptive phrase, not generic words
 - [ ] No paragraph starts with a bare link (varied placement)
@@ -154,4 +182,5 @@ See you in the next issue of last week in scylla-cluster-tests.git master!
 - [ ] Opening and closing lines match the template exactly
 - [ ] Tone matches previous issues — concise, factual, third-person; no author names in prose
 - [ ] Multi-commit groups link only 1–3 representative commits, not every commit in the group
-- [ ] Dropped commits listed in a table with SHA, title, and reason for exclusion
+- [ ] Groups describe the end state — no feature that was reverted inside the range
+- [ ] Chat response carries two tables: covered-but-not-linked, and excluded; neither is in the file
