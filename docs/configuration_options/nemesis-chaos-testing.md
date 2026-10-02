@@ -4,7 +4,7 @@
 
 Which disruptions run, how often, and how targets are selected.
 
-**12 options.**
+**13 options.**
 
 
 <a id="nemesis_add_node_cnt"></a>
@@ -60,6 +60,17 @@ If true runs the nemesis only on non seed nodes
 **default:** False
 
 **type:** bool
+
+
+<a id="nemesis_fixed_order"></a>
+
+## **nemesis_fixed_order** / SCT_NEMESIS_FIXED_ORDER
+
+One ordered list of nemesis class names per FixedOrderMonkey thread. Each<br>thread executes its list in the given order, repeating from the start once<br>exhausted. Consumed only by FixedOrderMonkey; every other runner ignores it.<br>A name may repeat within a list to run that nemesis more than once per cycle.<br>Matched by position to [`nemesis_class_name`](#nemesis_class_name), like nemesis_selector/nemesis_seed:<br>- [`nemesis_fixed_order`](#nemesis_fixed_order): [["A", "B", "C"]]<br>One FixedOrderMonkey thread, running A, B, C, A, B, C, ...<br>- [`nemesis_fixed_order`](#nemesis_fixed_order): [["A", "B"], ["C", "D"]]<br>Two FixedOrderMonkey threads: the first runs A, B, ...; the second C, D, ...
+
+**default:** N/A
+
+**type:** list[list[str]] -- one ordered name-list per FixedOrderMonkey thread → list[list[str]]
 
 
 <a id="nemesis_grow_shrink_instance_type"></a>

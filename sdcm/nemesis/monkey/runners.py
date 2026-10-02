@@ -17,6 +17,43 @@ class SisyphusMonkey(NemesisRunner):
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
 
+class FixedOrderMonkey(NemesisRunner):
+    """Runs nemesis in the exact order given by `nemesis_fixed_order`, repeating it.
+
+    Names are resolved directly against the nemesis registry rather than through
+    build_disruptions_by_name/nemesis_selector: an explicit ordered list needs neither AST
+    selector parsing nor the implicit "and kubernetes" gate that
+    build_disruptions_by_selector applies. A listed nemesis unsupported on the current
+    backend is left in the list for precheck_nemesis() (called from run()) to prune and
+    report as SKIPPED, rather than silently dropped here.
+    """
+
+    def __init__(self, *args, nemesis_fixed_order: List[str], **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disruptions_list = self.resolve_fixed_order(nemesis_fixed_order)
+        self.log.info(
+            "FixedOrderMonkey resolved order: %s", [nemesis.__class__.__name__ for nemesis in self.disruptions_list]
+        )
+        multiply_factor = self.cluster.params.get("nemesis_multiply_factor")
+        if multiply_factor and multiply_factor > 1:
+            self.log.info(
+                "nemesis_multiply_factor=%s is ignored by FixedOrderMonkey; only the configured order is used",
+                multiply_factor,
+            )
+
+    def resolve_fixed_order(self, names: List[str]) -> List:
+        classes_by_name = {cls.__name__: cls for cls in self.nemesis_registry.get_subclasses()}
+        instances_by_name = {}
+        resolved = []
+        for name in names:
+            if name not in classes_by_name:
+                raise ValueError(f"Unknown nemesis class name in 'nemesis_fixed_order': {name!r}")
+            if name not in instances_by_name:
+                instances_by_name[name] = classes_by_name[name](runner=self)
+            resolved.append(instances_by_name[name])
+        return resolved
+
+
 class NoOpMonkey(NemesisRunner):
     kubernetes = True
 
