@@ -20,6 +20,7 @@ def create_retry_session(
     backoff_factor: int = 1,
     status_forcelist: frozenset[int] = DEFAULT_STATUS_FORCELIST,
     allowed_methods: frozenset[str] = DEFAULT_RETRYABLE_METHODS,
+    respect_retry_after_header: bool = True,
 ) -> requests.Session:
     """Create a :class:`requests.Session` with a retry adapter on both schemes.
 
@@ -28,6 +29,7 @@ def create_retry_session(
         backoff_factor: Multiplier applied between retry attempts.
         status_forcelist: HTTP status codes that trigger a retry.
         allowed_methods: HTTP methods eligible for retry.
+        respect_retry_after_header: Whether to sleep as long as a server's Retry-After asks, instead of the backoff.
 
     Returns:
         A configured ``requests.Session``.
@@ -37,6 +39,7 @@ def create_retry_session(
         backoff_factor=backoff_factor,
         status_forcelist=status_forcelist,
         allowed_methods=allowed_methods,
+        respect_retry_after_header=respect_retry_after_header,
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session = requests.Session()
