@@ -307,6 +307,34 @@ INFO  2022-07-14 09:28:35,102 [shard 1] database - Flushed non-system tables
         with pytest.raises(NotImplementedError):
             self.node.restart()
 
+    @pytest.mark.parametrize(("node_type", "fail_on_ssh_lost"), [("loader", True), ("monitor", True), ("db", False)])
+    def test_kernel_panic_checker_fails_test_on_ssh_lost_except_for_db(self, node_type, fail_on_ssh_lost):
+        """Only db nodes are disrupted on purpose, so for loaders and monitors losing SSH must fail the test."""
+        checker = unittest.mock.MagicMock()
+        self.node.parent_cluster.params["enable_kernel_panic_checker"] = True
+
+        with (
+            unittest.mock.patch.object(self.node, "_create_kernel_panic_checker", return_value=checker),
+            unittest.mock.patch.object(
+                type(self.node), "node_type", new_callable=unittest.mock.PropertyMock, return_value=node_type
+            ),
+        ):
+            self.node._start_kernel_panic_checker()
+
+        assert checker.fail_on_ssh_lost is fail_on_ssh_lost
+        checker.start.assert_called_once()
+
+    def test_stop_task_threads_disarms_ssh_lost_failure(self):
+        """Teardown terminates the instance before stopping the checker, which must not fail the test."""
+        checker = unittest.mock.MagicMock()
+        checker.fail_on_ssh_lost = True
+        self.node.kernel_panic_checker = checker
+        self.node.termination_event.set()
+
+        self.node.stop_task_threads()
+
+        assert checker.fail_on_ssh_lost is False
+
 
 class VersionDummyRemote:
     def __init__(self, test, results):

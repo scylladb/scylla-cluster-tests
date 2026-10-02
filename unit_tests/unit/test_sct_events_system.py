@@ -20,6 +20,7 @@ from sdcm.sct_events.system import (
     StartupTestEvent,
     TestFrameworkEvent,
     SpotTerminationEvent,
+    NodeUnreachableEvent,
     ScyllaRepoEvent,
     InfoEvent,
     ThreadFailedEvent,
@@ -70,6 +71,16 @@ def test_spot_termination_event():
     assert str(event) == (
         "(SpotTerminationEvent Severity.CRITICAL) period_type=one-time "
         "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: node=node1 message=m1"
+    )
+    assert event == pickle.loads(pickle.dumps(event))
+
+
+def test_node_unreachable_event():
+    event = NodeUnreachableEvent(node="loader-1", message="m1")
+    event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
+    assert str(event) == (
+        "(NodeUnreachableEvent Severity.CRITICAL) period_type=one-time "
+        "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: node=loader-1 message=m1"
     )
     assert event == pickle.loads(pickle.dumps(event))
 

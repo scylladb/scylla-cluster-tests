@@ -35,9 +35,21 @@ export SCT_ENABLE_KERNEL_PANIC_CHECKER=false
 
 1. **Polling**: Every 30 seconds, the checker fetches the full serial console output for each node.
 2. **Detection**: Scans for patterns like `Kernel panic`, `BUG:`, `Oops:`, `Call Trace:` in the output.
-3. **SSH Verification**: Monitors SSH reachability (TCP port 22). If a node was previously reachable and becomes unreachable for 3+ consecutive checks, it's flagged as potentially crashed.
+3. **SSH Verification**: Monitors SSH reachability (TCP port 22). If a node was previously reachable and becomes unreachable for 3+ consecutive checks, it's flagged as potentially crashed. For db nodes this is advisory only (a warning in the SCT log), since nemeses take them down on purpose.
 4. **Event**: On detection, a `KernelPanicEvent` (severity: `CRITICAL`) is published, which triggers test failure via the events analyzer.
 5. **Console Log Saved**: The full serial console output is saved to `console_output.log` in the node's log directory on every poll cycle.
+
+### Unreachable loader and monitor nodes
+
+Loaders and monitors are never disrupted by a nemesis, so one that stops answering is dead. Every stress command that picks a dead loader afterwards only hangs on SSH timeouts, and so do the nemeses that reconfigure monitoring after a topology change or drive Scylla Manager, which runs on the monitor node.
+
+`BaseNode._start_kernel_panic_checker()` sets `fail_on_ssh_lost` on the checker of every loader and monitor node. After `SSH_LOST_CRITICAL_THRESHOLD` (10) consecutive failed probes, which is about 5 minutes, the checker publishes a CRITICAL `NodeUnreachableEvent` and exits. A console-detected panic in the same poll wins and publishes `KernelPanicEvent` instead. `stop_task_threads()` clears `fail_on_ssh_lost` because teardown terminates the instance before the checker is stopped. Intentional reboots are covered by the same suspension as panics.
+
+```
+(NodeUnreachableEvent Severity.CRITICAL) period_type=one-time event_id=...:
+  node=longevity-loader-node-1 message=SSH port 22 on 10.12.9.198 is unreachable for 10 consecutive checks
+  (at least 300s), the node is considered dead
+```
 
 ## Console Output Collection
 
