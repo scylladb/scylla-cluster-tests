@@ -13,6 +13,7 @@
 
 from unittest.mock import MagicMock, patch
 import pytest
+from botocore.exceptions import ClientError
 
 from sdcm.utils.aws_region import AwsRegion
 
@@ -96,3 +97,35 @@ def test_get_common_availability_zones_preferred_unavailable_ignored(aws_region)
     result = aws_region.get_common_availability_zones(["i4i.large"], preferred_azs=["us-east-1c"])
     assert set(result) == {"us-east-1a", "us-east-1b"}
     assert "us-east-1c" not in result
+
+
+def test_configure_backup_storage_keeps_an_existing_bucket(monkeypatch):
+    for var in ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL"):
+        monkeypatch.delenv(var, raising=False)
+    with (
+        patch("sdcm.utils.aws_region.boto3.client") as mock_client,
+        patch("sdcm.utils.aws_region.boto3.resource"),
+        patch("sdcm.utils.common.all_aws_regions", return_value=["us-east-1", "eu-west-1"]),
+    ):
+        s3 = mock_client.return_value
+        s3.create_bucket.side_effect = ClientError({"Error": {"Code": "BucketAlreadyOwnedByYou"}}, "CreateBucket")
+        AwsRegion(region_name="eu-west-1").configure_backup_storage()
+
+    s3.create_bucket.assert_called_once_with(
+        Bucket="manager-backup-tests-eu-west-1", CreateBucketConfiguration={"LocationConstraint": "eu-west-1"}
+    )
+    s3.put_bucket_lifecycle_configuration.assert_called_once_with(
+        Bucket="manager-backup-tests-eu-west-1",
+        LifecycleConfiguration={
+            "Rules": [
+                {
+                    "ID": "auto-deletion",
+                    "Status": "Enabled",
+                    "Filter": {},
+                    "Expiration": {"Days": 7},
+                    "NoncurrentVersionExpiration": {"NoncurrentDays": 7},
+                    "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 7},
+                }
+            ]
+        },
+    )
