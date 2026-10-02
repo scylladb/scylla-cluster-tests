@@ -16,12 +16,20 @@ BASH = shutil.which("bash") or "/bin/bash"
 SCT_TEST_ID = "0123abcd-4567-89ef-0123-456789abcdef"
 SINCE_EPOCH = 1700000000
 
-# first call prints one coredump path; all calls are logged with \x1f-separated args
+# first call prints one coredump path, with a comm ("python3") in upload_sct_coredump.sh's
+# default COREDUMPS_INCLUDE_COMM allow-list, so the host script's own comm split (which runs
+# before it ever calls hydra again) keeps it instead of treating it as filtered-out noise.
+# All calls are logged with \x1f-separated args.
 FAKE_HYDRA = """#!/bin/bash
 (IFS=$'\\x1f'; echo "$*") >> "${FAKE_HYDRA_LOG}"
-[[ $(wc -l < "${FAKE_HYDRA_LOG}") -eq 1 ]] && echo /var/lib/systemd/coredump/core.1234
+[[ $(wc -l < "${FAKE_HYDRA_LOG}") -eq 1 ]] && echo /var/lib/systemd/coredump/core.python3.1000.deadbeefcafebabedeadbeefcafebabe.4242.1700000000
 exit 0
 """
+
+# Default COREDUMPS_INCLUDE_COMM ("python*,scylla*,java") translated the same way
+# upload_sct_coredump.sh translates it, so the expected hydra call below doesn't hard-code a
+# second copy of that translation logic.
+DEFAULT_CORE_NAME_RE = ".*/core[.](python[^.]*|scylla[^.]*|java)[.].*"
 
 # fake ./sct.py upload logs the archive path only if the archive exists
 FAKE_SCT_PY = """#!/bin/bash
@@ -70,7 +78,8 @@ def test_host_script_collects_new_coredumps_in_one_hydra_run(tmp_path):
         [
             "--execute-on-runner",
             "10.0.0.5",
-            f"bash ./utils/upload_sct_coredump_inside_hydra.sh /var/lib/systemd/coredump {SINCE_EPOCH}",
+            f'bash ./utils/upload_sct_coredump_inside_hydra.sh "/var/lib/systemd/coredump" {SINCE_EPOCH} '
+            f'"{DEFAULT_CORE_NAME_RE}"',
         ]
     ]
 
@@ -87,7 +96,9 @@ def test_helper_removes_the_archive_after_the_upload(tmp_path, upload_rc):
     upload_log = tmp_path / "upload.calls"
 
     result = subprocess.run(
-        [BASH, str(HELPER_SCRIPT), str(coredump_dir), str(SINCE_EPOCH)],
+        # Catch-all regex: this test is about the archive/upload/delete lifecycle, not the comm
+        # allow-list upload_sct_coredump.sh already applied before invoking this helper.
+        [BASH, str(HELPER_SCRIPT), str(coredump_dir), str(SINCE_EPOCH), ".*"],
         cwd=checkout,
         capture_output=True,
         text=True,
