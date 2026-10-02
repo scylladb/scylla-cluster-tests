@@ -2043,6 +2043,7 @@ class Nemesis(NemesisFlags):
         self.execute_disrupt_method(disrupt_method=next(self.infinite_cycle))
 
     # End of Nemesis running code
+<<<<<<< HEAD:sdcm/nemesis.py
     @latency_calculator_decorator(legend="Run repair process with nodetool repair")
     def repair_nodetool_repair(self, node=None, publish_event=True):
         node = node if node else self.target_node
@@ -2051,8 +2052,73 @@ class Nemesis(NemesisFlags):
             self.action_log_scope(f"Start nodetool repair on {node.name} node"),
         ):
             node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
+||||||| parent of 08c928314 (fix(nemesis): enforce repair adaptive timeout to prevent indefinite hang):sdcm/nemesis/__init__.py
+    @latency_calculator_decorator(legend="Run repair process with nodetool repair", cycle_name="repair_nodetool_repair")
+    def run_repair_nodetool(self, nodes: list, publish_event=True, timeout=HOUR_IN_SEC * 3):
+        """
+        Execute a repair using Nodetool, which runs both vnode repair (repair) and tablet repairs (cluster repair)
+        """
+        for node in nodes:
+            with (
+                adaptive_timeout(Operations.REPAIR, node, timeout=timeout),
+                self.action_log_scope(f"nodetool repair on {node.name} node"),
+            ):
+                node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
+=======
+    @latency_calculator_decorator(legend="Run repair process with nodetool repair", cycle_name="repair_nodetool_repair")
+    def run_repair_nodetool(self, nodes: list, publish_event=True, timeout=HOUR_IN_SEC * 3):
+        """
+        Execute a repair using Nodetool, which runs both vnode repair (repair) and tablet repairs (cluster repair)
 
+        The command timeout is the repair adaptive timeout: the given `timeout` scaled by the
+        `adaptive_timeout_multipliers` config param (`{repair: N}`), so tests with longer repairs
+        tune it per-test yaml. On expiry the command fails and a SoftTimeoutEvent is emitted.
+        """
+        for node in nodes:
+            with (
+                adaptive_timeout(Operations.REPAIR, node, timeout=timeout) as repair_timeout,
+                self.action_log_scope(f"nodetool repair on {node.name} node"),
+            ):
+                node.run_nodetool(
+                    sub_cmd="repair",
+                    publish_event=publish_event,
+                    timeout=repair_timeout,
+                    long_running=True,
+                    retry=0,
+                )
+>>>>>>> 08c928314 (fix(nemesis): enforce repair adaptive timeout to prevent indefinite hang):sdcm/nemesis/__init__.py
+
+<<<<<<< HEAD:sdcm/nemesis.py
     def run_repair_on_nodes(self, nodes: list, ignore_down_hosts=False, publish_event=True):
+||||||| parent of 08c928314 (fix(nemesis): enforce repair adaptive timeout to prevent indefinite hang):sdcm/nemesis/__init__.py
+        target_node = nodes[0]
+        if is_tablets_feature_enabled(target_node):
+            with (
+                adaptive_timeout(Operations.REPAIR, target_node, timeout=timeout),
+                self.action_log_scope("nodetool cluster repair", target=target_node.name),
+            ):
+                target_node.run_nodetool(sub_cmd="cluster repair", publish_event=publish_event)
+
+    @latency_calculator_decorator(legend="Run repair process through Scylla manager", cycle_name="_mgmt_repair_cli")
+    def run_repair_manager(self, ignore_down_hosts: bool = False, timeout=HOUR_IN_SEC * 3):
+=======
+        target_node = nodes[0]
+        if is_tablets_feature_enabled(target_node):
+            with (
+                adaptive_timeout(Operations.REPAIR, target_node, timeout=timeout) as repair_timeout,
+                self.action_log_scope("nodetool cluster repair", target=target_node.name),
+            ):
+                target_node.run_nodetool(
+                    sub_cmd="cluster repair",
+                    publish_event=publish_event,
+                    timeout=repair_timeout,
+                    long_running=True,
+                    retry=0,
+                )
+
+    @latency_calculator_decorator(legend="Run repair process through Scylla manager", cycle_name="_mgmt_repair_cli")
+    def run_repair_manager(self, ignore_down_hosts: bool = False, timeout=HOUR_IN_SEC * 3):
+>>>>>>> 08c928314 (fix(nemesis): enforce repair adaptive timeout to prevent indefinite hang):sdcm/nemesis/__init__.py
         """
         Execute a nodetool repair on the specified nodes, disregarding errors that may
         arise from failed or unavailable nodes during the process.
