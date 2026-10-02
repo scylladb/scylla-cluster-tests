@@ -23,8 +23,10 @@ These tests make that failure mode static and loud.
 """
 
 import ast
-import importlib
+import inspect
 import pathlib
+import pkgutil
+from unittest.mock import patch
 
 import pytest
 
@@ -36,15 +38,23 @@ def _target_ids():
     return sorted(_CLOUD_API_PATCHES)
 
 
+def _module_level_target_ids():
+    """Targets naming a module attribute -- the only kind an import can shadow.
+
+    A `<module>.<Class>.<method>` target patches the class object itself, which every reference to
+    the class shares, so it has nothing to shadow.
+    """
+    return [target for target in _target_ids() if inspect.ismodule(pkgutil.resolve_name(target.rpartition(".")[0]))]
+
+
 @pytest.mark.parametrize("target", _target_ids())
 def test_patch_target_attribute_exists(target):
     """The dotted path must resolve, or `mock.patch` raises at linting time."""
-    module_path, _, attr = target.rpartition(".")
-    module = importlib.import_module(module_path)
-    assert hasattr(module, attr), f"{module_path} has no attribute {attr!r}"
+    with patch(target):
+        pass
 
 
-@pytest.mark.parametrize("target", _target_ids())
+@pytest.mark.parametrize("target", _module_level_target_ids())
 def test_no_call_site_shadows_the_patch_target(target):
     """No module may `from <other> import <attr>` and call it bare while we patch `<other>`.
 

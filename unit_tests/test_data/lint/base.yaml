@@ -1,0 +1,20 @@
+# Minimal test-case for unit_tests/lint/test_validator.py: just enough for SCTConfiguration to
+# validate, so each test pipeline only varies the input that picks a cloud lookup path.
+test_duration: 60
+n_db_nodes: 1
+n_loaders: 1
+n_monitor_nodes: 1
+user_prefix: 'lint-unit-test'
+
+# Literal instance types for every backend the test pipelines use, so no sizing lookup is needed.
+instance_type_db: 'i4i.large'
+instance_type_loader: 'c6i.2xlarge'
+instance_type_monitor: 't3.large'
+azure_instance_type_db: 'Standard_L8s_v3'
+azure_instance_type_loader: 'Standard_F2s_v2'
+azure_instance_type_monitor: 'Standard_D2_v4'
+oci_instance_type_db: 'VM.DenseIO.E5.Flex:8'
+oci_instance_type_loader: 'VM.Standard3.Flex:8:32'
+oci_instance_type_monitor: 'VM.Standard3.Flex:2:16'
+# Capacity reservation and dedicated hosts are only looked up for on-demand instances.
+instance_provision: 'on_demand'
