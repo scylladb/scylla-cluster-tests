@@ -157,3 +157,4 @@ PartitionRowsValidationEvent: CRITICAL
 FailedResultEvent: ERROR
 HDRFileMissed: ERROR
 KernelPanicEvent: CRITICAL
+NodeUnreachableEvent: CRITICAL
