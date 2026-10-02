@@ -7329,10 +7329,17 @@ class BaseLoaderSet:
                     ),
                     verbose=True,
                     ignore_status=True,
+                    # NOTE: a connection opened earlier to a vanished host never fails: opening a channel on it
+                    #       waits in 'select()' with no timeout. A new session fails on its connect timeout.
+                    new_session=True,
                 )
                 self.log.info("Killed docker loader on node: %s", loader.name)
             except Exception as ex:  # noqa: BLE001
                 self.log.warning("failed to kill docker stress command on [%s]: [%s]", str(loader), str(ex))
+                # NOTE: the loader can't be reached (e.g. a preempted spot instance), so its stress commands
+                #       won't end by themselves: a vanished host never resets the SSH connection, and the
+                #       stress thread would wait for the whole stress duration, holding the process exit.
+                loader.remoter.abort_running_commands()
 
     def update_rack_info_in_argus(self):
         for loader in self.nodes:
