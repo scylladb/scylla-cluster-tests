@@ -46,3 +46,27 @@ def test_kill_docker_loaders_removes_stress_containers_only(loader_set):
     for node in loader_set.nodes:
         node.remoter.run.assert_called_once()
         assert node.remoter.run.call_args.kwargs["cmd"] == expected_cmd
+
+
+@pytest.mark.parametrize(
+    "docker_denied",
+    [
+        "permission denied while trying to connect to the docker API at unix:///var/run/docker.sock",
+        "Got permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock",
+    ],
+    ids=["docker-api", "docker-daemon-socket"],
+)
+def test_kill_docker_loaders_logs_diagnostics_when_docker_access_is_denied(loader_set, docker_denied):
+    loader_set._log_docker_access_diagnostics = BaseLoaderSet._log_docker_access_diagnostics
+    denied, allowed = loader_set.nodes
+    denied.remoter.run.return_value.stderr = docker_denied
+    allowed.remoter.run.return_value.stderr = ""
+
+    loader_set.kill_docker_loaders()
+
+    diagnostics = denied.remoter.run.call_args_list[1].args[0]
+    for probe in ("id -nG", "getent group docker", "ls -l /var/run/docker.sock", "-p $PPID"):
+        assert probe in diagnostics
+    assert "generation" in denied.log.warning.call_args.args[0]
+    allowed.remoter.run.assert_called_once()
+    loader_set.log.info.assert_called_once_with("Killed docker loader on node: %s", allowed.name)
