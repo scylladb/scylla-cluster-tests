@@ -53,13 +53,14 @@ class AwsRegion:
         from sdcm.utils.minicloud.config import MINICLOUD_REGION_INDEX_OFFSET  # noqa: PLC0415
         from sdcm.utils.minicloud.endpoint import is_minicloud_active  # noqa: PLC0415
 
+        self._is_minicloud = is_minicloud_active()
         region_index = all_aws_regions(cached=True).index(self.region_name)
         # In minicloud mode the emulated VPC must not share its CIDR with the real SCT VPC
         # of the same region: the host running the guests (an sct-runner, or any machine
         # inside a real SCT VPC) would route guest traffic out its own interface instead of
         # the minicloud TUN device. The offset moves emulated VPCs into the dedicated
         # 10.160.0.0/11 that the minicloud host routes cover - see MINICLOUD_HOST_VPC_ROUTES.
-        if is_minicloud_active():
+        if self._is_minicloud:
             region_index += MINICLOUD_REGION_INDEX_OFFSET
         cidr = ip_network(self.SCT_VPC_CIDR_TMPL.format(region_index))
         self.vpc_ipv4_cidr = cidr
@@ -799,6 +800,36 @@ class AwsRegion:
     def sts(self):
         return boto3.client("sts", region_name=self.region_name)
 
+    @cached_property
+    def s3(self):
+        return boto3.client("s3", region_name=self.region_name)
+
+    @property
+    def backup_storage_bucket_name(self) -> str:
+        return f"manager-backup-tests-{self.region_name}"
+
+    def configure_backup_storage(self) -> None:
+        """Create the Manager backup bucket of the region, with the 7-day auto-deletion rule."""
+        bucket = self.backup_storage_bucket_name
+        create_params = {"Bucket": bucket}
+        if self.region_name != "us-east-1":
+            create_params["CreateBucketConfiguration"] = {"LocationConstraint": self.region_name}
+
+        try:
+            self.s3.create_bucket(**create_params)
+        except botocore.exceptions.ClientError as exc:
+            if exc.response["Error"]["Code"] != "BucketAlreadyOwnedByYou":
+                raise
+
+        if not self._is_minicloud:
+            self.s3.put_bucket_lifecycle_configuration(
+                Bucket=bucket,
+                LifecycleConfiguration={
+                    "Rules": [{"ID": "auto-deletion", "Status": "Enabled", "Filter": {}, "Expiration": {"Days": 7}}]
+                },
+            )
+        LOGGER.info("Backup bucket '%s' configured", bucket)
+
     def configure_ssm(self, role_name=SCT_NODES_ROLE_ARN):
         """Ensure that SSM agent can work in the region by adding necessary IAM role and instance profile"""
 
@@ -828,5 +859,6 @@ class AwsRegion:
         self.create_sct_subnets()
         self.create_sct_security_group()
         self.create_sct_ssh_security_group()
+        self.configure_backup_storage()
         self.configure_ssm()
         LOGGER.info("Region configured successfully.")
