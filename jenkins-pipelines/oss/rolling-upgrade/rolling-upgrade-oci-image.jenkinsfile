@@ -1,0 +1,17 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+rollingUpgradePipeline(
+    backend: 'oci',
+    oci_region_name: 'us-phoenix-1',
+    // No OCI base image before 2026.2 — 'auto' mode would pick the 2026.1 LTS, which has none.
+    base_versions: '2026.2',
+    linux_distro: 'ubuntu-focal',
+    use_preinstalled_scylla: true,
+    provision_type: 'on_demand',
+    test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
+    test_config: '''["test-cases/upgrades/rolling-upgrade.yaml", "configurations/oci/rolling-upgrade.yaml", "configurations/auth_cassandra.yaml"]''',
+    internode_compression: 'all'
+)

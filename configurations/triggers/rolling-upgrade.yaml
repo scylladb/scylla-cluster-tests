@@ -161,7 +161,7 @@ jobs:
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   # ===========================================================================
-  # Image-based rolling upgrades (AMI / GCE / Azure)
+  # Image-based rolling upgrades (AMI / GCE / Azure / OCI)
   # ===========================================================================
 
   - job_name: "rolling-upgrade/rolling-upgrade-ami-test"
@@ -211,6 +211,18 @@ jobs:
     exclude_versions: []
     params:
       region: "eastus"
+      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
+
+  - job_name: "rolling-upgrade/rolling-upgrade-oci-image-test"
+    backend: "oci"
+    labels:
+      - "weekly"
+      - "week-a"
+      - "image"
+      - "oci"
+    exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
+    params:
+      oci_region_name: "us-phoenix-1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   # ===========================================================================

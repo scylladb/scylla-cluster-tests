@@ -1,0 +1,11 @@
+# NOTE: it is config-wrapper for the test-cases/upgrades/rolling-upgrade.yaml
+
+user_prefix: 'rolling-upgrade-oci'
+
+simulated_racks: 0
+availability_zone: "a,b,c" # use real AZs to balance limited DenseIO shapes usage
+
+# NOTE: test-case sizing_db (vcpu: 8) has no OCI match (DenseIO min 16 vCPUs) —
+# set the minimal possible DenseIO shape size explicitly.
+oci_instance_type_db: "VM.DenseIO.E5.Flex:8" # <shape-name>:<ocpus>:<ram>:<nvmes>
+instance_provision: 'on_demand' # DenseIO shapes cannot be 'spot'
