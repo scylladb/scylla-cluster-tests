@@ -10,7 +10,7 @@ import boto3
 import oci
 import requests
 
-from sdcm.sct_events.system import KernelPanicEvent
+from sdcm.sct_events.system import KernelPanicEvent, NodeUnreachableEvent
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +27,8 @@ class BaseKernelPanicChecker(threading.Thread):
     SSH_CHECK_PORT = 22
     SSH_CONNECT_TIMEOUT = 5
     SSH_FAILURE_THRESHOLD = 3
+    # ~5 minutes of failed probes: well past a GCE live-migration pause, well short of a stress command timeout
+    SSH_LOST_CRITICAL_THRESHOLD = 10
 
     provider_name: str = "unknown"
 
@@ -40,6 +42,8 @@ class BaseKernelPanicChecker(threading.Thread):
         self._suspended = threading.Event()
         self._ssh_was_reachable = False
         self._ssh_consecutive_failures = 0
+        # Set for nodes that are never taken down on purpose, where losing SSH means the node is dead
+        self.fail_on_ssh_lost = False
         self.daemon = True
 
     @abstractmethod
@@ -79,6 +83,15 @@ class BaseKernelPanicChecker(threading.Thread):
         LOGGER.error("[%s] Full console output for %s:\n%s", self.provider_name, instance_identifier, output)
 
         KernelPanicEvent(node=self.node_name, message=message).publish()
+
+    def _publish_ssh_lost_event(self):
+        message = (
+            f"SSH port {self.SSH_CHECK_PORT} on {self.host} is unreachable for {self._ssh_consecutive_failures} "
+            f"consecutive checks (at least {self._ssh_consecutive_failures * self.CHECK_INTERVAL_SECONDS}s), "
+            "the node is considered dead"
+        )
+        LOGGER.error("[%s] %s", self.provider_name, message)
+        NodeUnreachableEvent(node=self.node_name, message=message).publish()
 
     def _save_console_output(self, output: str):
         """Save console output to a log file in the node's logdir."""
@@ -128,6 +141,10 @@ class BaseKernelPanicChecker(threading.Thread):
                             self._ssh_consecutive_failures,
                             self.host,
                         )
+                    if self.fail_on_ssh_lost and self._ssh_consecutive_failures >= self.SSH_LOST_CRITICAL_THRESHOLD:
+                        self._publish_ssh_lost_event()
+                        self._stop_event.set()
+                        break
 
             except Exception as exc:  # noqa: BLE001
                 if not self._stop_event.is_set():

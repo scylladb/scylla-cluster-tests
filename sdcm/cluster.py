@@ -666,6 +666,9 @@ class BaseNode(AutoSshContainerMixin):
             return
         self.kernel_panic_checker = self._create_kernel_panic_checker()
         if self.kernel_panic_checker:
+            # No nemesis disrupts loaders or monitors, so one that stops answering is dead: fail the test right away
+            # instead of letting every stress command and nemesis that uses it hang on SSH timeouts
+            self.kernel_panic_checker.fail_on_ssh_lost = self.node_type in ("loader", "monitor")
             self.kernel_panic_checker.start()
             LOGGER.debug("Started kernel panic monitoring for node %s", self.name)
 
@@ -1834,6 +1837,9 @@ class BaseNode(AutoSshContainerMixin):
 
     @log_run_info
     def stop_task_threads(self):
+        if self.kernel_panic_checker:
+            # Teardown terminates the instance before the checker is stopped, the node going away is expected now
+            self.kernel_panic_checker.fail_on_ssh_lost = False
         if self.termination_event.is_set():
             return
         self.log.info("Set termination_event")
