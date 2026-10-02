@@ -31,7 +31,7 @@ class TestSctEventsIntegration(RealEventsTest):
         with environment(SCT_CLUSTER_BACKEND="docker"):
             enable_default_filters(SCTConfiguration())
 
-        with self.wait_for_n_events(self.get_events_logger(), count=6):
+        with self.wait_for_n_events(self.get_events_logger(), count=7):
             DatabaseLogEvent.BACKTRACE().add_info(
                 node="A",
                 line_number=22,
@@ -63,6 +63,15 @@ class TestSctEventsIntegration(RealEventsTest):
                 line_number=22,
                 line="ERROR 2023-12-18 12:45:25,673 [shard 0: gms] raft_topology - topology change coordinator fiber got error std::runtime_error "
                 "(raft topology: exec_global_command(barrier) failed with seastar::rpc::closed_error (connection is closed))",
+            ).publish()
+
+            DatabaseLogEvent.RUNTIME_ERROR().add_info(
+                node="A",
+                line_number=23,
+                line="2026-09-26T00:01:22.660 node-1  !ERR | scylla[7700]  [shard  0: gms] raft_topology - topology change "
+                "coordinator fiber got error std::runtime_error: raft topology: exec_global_command(barrier_and_drain) "
+                "failed with seastar::rpc::closed_error: got error from node fde4bc0b-f432-4f73-90a4-c3b16283dd7f/10.1.3.114: "
+                "connection is closed",
             ).publish()
 
             DatabaseLogEvent.DATABASE_ERROR().add_info(

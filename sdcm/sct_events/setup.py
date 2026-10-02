@@ -225,11 +225,12 @@ def enable_default_filters(sct_config: SCTConfiguration):
     # upgrades and any place where the race between raft global barrier and gossipier could
     # take place. So ignore such messages globally for any sct test.
     # TODO: this should be removed after gossiper will be removed.
+    # Older Scylla formats nested exceptions as "type (message)", newer as "type: message".
     DbEventsFilter(
         db_event=DatabaseLogEvent.RUNTIME_ERROR,
         line=r".*raft_topology - topology change coordinator fiber got error std::runtime_error"
-        r" \(raft topology: exec_global_command\(barrier(?:_and_drain)?\) failed with seastar::rpc::closed_error"
-        r" \(.*connection is closed\)\)",
+        r"(?: \(|: )raft topology: exec_global_command\(barrier(?:_and_drain)?\) failed with seastar::rpc::closed_error"
+        r"(?: \(|: ).*connection is closed",
     ).publish()
 
 
