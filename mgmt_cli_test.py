@@ -1074,6 +1074,24 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         self.db_cluster.unlock_ear_key()
         return ear_key.get("keyid")
 
+    def get_snapshot_size_on_bucket(self, cluster_id: str, location_list: list[str]) -> float | None:
+        """Sum the cluster's backup objects across all locations, in GiB. None if unsupported backend or failure.
+
+        Cluster is fresh and has a single snapshot, so everything under its prefix belongs to that snapshot.
+        """
+        # cloud manager locations come as one comma-joined string, e.g. 'AWS_EU_SOUTH_1:s3:b1,AWS_EU_WEST_1:s3:b2'
+        locations = [loc for item in location_list for loc in item.split(",")]
+        try:
+            sizes = [self.get_cluster_size_on_bucket(cluster_id=cluster_id, location=loc) for loc in locations]
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to get snapshot size on bucket: %s", exc)
+            return None
+        if all(size is None for size in sizes):
+            return None
+        size_gib = round(sum(filter(None, sizes)) / 1024**3, 3)
+        self.log.info("Snapshot size on bucket: %s GiB", size_gib)
+        return size_gib
+
     def test_prepare_backup_snapshot(self):  # pylint: disable=too-many-locals  # noqa: PLR0914
         """Test prepares backup snapshot for its future use in nemesis or restore benchmarks
 
@@ -1112,6 +1130,8 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
             mgr_cluster, timeout=200000, location_list=location_list, rate_limit_list=["0"]
         )
 
+        size_on_bucket = self.get_snapshot_size_on_bucket(cluster_id=mgr_cluster.id, location_list=location_list)
+
         if is_cloud_manager:
             self.log.info("Copy bucket with snapshot since the original bucket is deleted together with cluster")
             # can be several locations for multiDC cluster, for example,
@@ -1144,6 +1164,8 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
             "ear_key_id": key_id,
             "manager_cluster_id": manager_cluster_id,
         }
+        if size_on_bucket is not None:
+            snapshot_details["size_on_bucket"] = size_on_bucket
         self.log.debug(f"Snapshot details: {snapshot_details}")
         send_manager_snapshot_details_to_argus(
             argus_client=self.test_config.argus_client(),
