@@ -96,7 +96,7 @@ from sdcm.utils.gce_utils import (
     get_gce_compute_regions_client,
     get_gce_storage_client,
 )
-from sdcm.utils.version_utils import parse_scylla_version_tag
+from sdcm.utils.version_utils import FULL_VERSION_TAG_RE, parse_scylla_version_tag
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
@@ -1183,11 +1183,6 @@ def get_vector_store_ami_versions(
     )
 
 
-# RC builds are tagged with a dotted form (2026.3.0.rc1.0.20260730.726f67a532e2) that
-# SCYLLA_VERSION_GROUPED_RE doesn't parse, yet it still points at one exact build.
-RC_VERSION_TAG_RE = re.compile(r"^\d+\.\d+\.\d+\.rc\d+\.\d+\.\d{8}\.[0-9a-f]+$")
-
-
 def gce_image_version_label(version: str) -> str:
     """Convert a full Scylla version tag to the `scylla_version` label used on GCE images.
 
@@ -1210,7 +1205,7 @@ def gce_image_version_label(version: str) -> str:
         return ""
     if version_tag := parse_scylla_version_tag(version):
         label = f"{version_tag.base_version}-{version_tag.build}-{version_tag.date}-{version_tag.commit_id}"
-    elif RC_VERSION_TAG_RE.match(version):
+    elif FULL_VERSION_TAG_RE.match(version):
         label = version
     else:
         return ""

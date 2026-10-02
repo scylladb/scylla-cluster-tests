@@ -11,7 +11,8 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-from sdcm.utils.trigger_matrix import JobConfig, build_job_parameters
+from sdcm.utils.trigger_matrix import JobConfig
+from sdcm.utils.trigger_matrix.parameters import build_job_parameters
 
 
 def test_defaults_applied():

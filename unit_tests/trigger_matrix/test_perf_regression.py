@@ -15,7 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from sdcm.utils.trigger_matrix import build_job_parameters, filter_jobs, load_matrix_config
+from sdcm.utils.trigger_matrix import load_matrix_config
+from sdcm.utils.trigger_matrix.filters import filter_jobs
+from sdcm.utils.trigger_matrix.parameters import build_job_parameters
 
 PERF_YAML = Path(__file__).parent.parent.parent / "configurations" / "triggers" / "perf-regression.yaml"
 

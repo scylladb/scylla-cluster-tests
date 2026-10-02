@@ -411,6 +411,36 @@ uv run sct.py trigger-matrix \
     --dry-run
 ```
 
+## Package Layout
+
+`sdcm/utils/trigger_matrix/` is a package. Each module owns one layer, and the dependencies
+run strictly downwards:
+
+| Module | Responsibility |
+|---|---|
+| `constants.py`, `errors.py` | Shared constants and the exception hierarchy (leaves) |
+| `versions.py` | Version string parsing — regexes, predicates, branch extraction |
+| `backends.py` | Region splitting and architecture conversion |
+| `images.py` | **Every** AWS/GCE/Azure/OCI image lookup |
+| `models.py` | Pydantic matrix models, `BackendTarget`, `BuildResult` |
+| `config.py` | YAML loading and layout validation |
+| `filters.py` | Which jobs of a matrix a trigger runs |
+| `resolution.py` | per-backend / common / aws-strict version strategies |
+| `parameters.py` | Job parameters and the Jenkins job path |
+| `groovy.py`, `jenkins_client.py` | The Script Console script and `JenkinsClient` |
+| `reporting.py` | Wait-mode email report |
+| `matrix.py` | `trigger_matrix()` — the entry point tying it together |
+
+`__init__.py` re-exports only the names used from outside the package. Import anything else
+from its own module.
+
+**Patching in tests**: patch the module whose code *calls* the name, not the one that defines
+it — `from x import f` binds a copy, so patching `x.f` leaves the caller untouched. Cloud
+lookups are the exception: submodules reach them as `images.f(...)`, so one patch of
+`sdcm.utils.trigger_matrix.images.f` covers every caller. That is what
+`unit_tests/trigger_matrix/conftest.py` relies on to keep the suite offline, and
+`unit_tests/trigger_matrix/test_patch_targets.py` enforces both rules.
+
 ## Unit Tests
 
 ```bash
