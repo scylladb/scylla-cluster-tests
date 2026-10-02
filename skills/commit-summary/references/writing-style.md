@@ -51,21 +51,55 @@ The link text "migrated from a custom dict-based implementation to pydantic" tel
 
 This creates a monotonous list. Vary placement.
 
-## Paragraph Length and Structure
+## Length Discipline
 
-Most paragraphs are 1-3 sentences. The first sentence states the change; subsequent sentences add context.
+A paragraph is 1-2 sentences. The first states the change. A second is earned only when it names another thing the reader can now use — never when it explains why the change was needed.
+
+### Bad: the investigation leaked in
+
+> Monitoring [moved to the 4.16.x branch](https://github.com/...). The overview dashboard template needed [a new merge point for the SCT rows](https://github.com/...), and the 4.16 image ships an epoch-versioned `scylla-node-exporter` that apt refuses to downgrade, so runs with `use_mgmt` set failed in `SetUp()` — the [exporter is now removed before the manager backend install](https://github.com/...) and pulled back in as a dependency of the matching Scylla package.
+
+Two of the three links are bug fixes that followed the version move. The apt epoch, `use_mgmt` and `SetUp()` are debugging detail from the commit body.
+
+### Good: the change alone
+
+> Monitoring [moved to the 4.16.x branch](https://github.com/...).
+
+### Bad: cause and effect narrated
+
+> Every xcloud DB node used to land in a single rack, which left `RackawareValidator`, rack-aware loader pinning and rack-targeting nemeses unused on that backend. Rack indexes are now [derived from the availability zone the Cloud API reports per node](https://github.com/...), with zones sorted alphabetically so the indexes line up with AWS-side loaders.
+
+### Good: the capability alone
+
+> xcloud DB nodes now [get rack indexes derived from their availability zone](https://github.com/...), so rack-aware validation, loader pinning and rack-targeting nemeses work on that backend.
+
+## Describe the End State, Not the First Commit
+
+A range often contains a feature and its walk-back. Read the **last** commit of a group before writing the sentence.
+
+- A commit that sets a version and a later commit that reverts it are one non-event. Omit both.
+- A feature added and then dropped after review inside the same range never happened. Omit it.
+- A pin applied broadly and then narrowed after review is a narrow pin, not a broad one.
+
+Review-churn commits ("per review feedback", "drop redundant test per review", comment-only follow-ups) are never link candidates.
+
+## Paragraph Structure
+
+The first sentence states the change; a second sentence, if any, adds a second concrete thing.
 
 ### Single-commit paragraph (1-2 sentences)
 
 > Due to reaching the AWS Security Groups limit, the [cloud cleanup process will now periodically remove](https://github.com/...) any unused security groups that aren't tagged with `keep:alive`.
 
-### Multi-commit paragraph (2-3 sentences)
+### Multi-commit paragraph (2 sentences)
 
-> YCSB was [updated to 1.2.0](https://github.com/...) with a native load balancer. Additionally, alternator load balancing is now [enabled by default on every workload](https://github.com/...), with the exception of performance tests.
+> YCSB was [updated to 1.2.0](https://github.com/...) with a native load balancer. Alternator load balancing is now [enabled by default on every workload](https://github.com/...), except performance tests.
 
-### Major change paragraph (2-3 sentences with broader context)
+### Large multi-commit effort (still 2 sentences)
 
-> The nemesis system underwent a major refactoring (phase 2). The old `nemesis.py` file [was replaced with a module structure](https://github.com/...), extracting all monkeys into a separate module and introducing a `gatherer.py` module for autoloading. This included [moving nemesis_registry](https://github.com/...) and [nemesis_utils into the nemesis module](https://github.com/...).
+> The constraint-based sizing rollout reached most of the test-case tree. Hardcoded `instance_type_*` parameters were replaced with `sizing_db`/`sizing_loader`/`sizing_monitor` constraint blocks across the [longevity configs](https://github.com/...) and the [alternator cases](https://github.com/...).
+
+Eleven commits, two links, no mention of the review rounds that shaped them.
 
 ## Tone
 
@@ -88,4 +122,5 @@ Most paragraphs are 1-3 sentences. The first sentence states the change; subsequ
 - Don't use bullet points — the format is flowing paragraphs
 - Don't use headers or sections within the body — it's a flat list of paragraphs
 - Don't add commentary about commit quality or code style
-- Don't mention commits you excluded — just omit them silently
+- Don't mention commits you excluded — the report file omits them silently, and the tables of unlinked and excluded commits go in the chat response instead
+- Don't let a long commit body pull you into explaining the fix — the link is the explanation
