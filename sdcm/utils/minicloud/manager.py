@@ -10,6 +10,8 @@ import threading
 import time
 from pathlib import Path
 
+import boto3
+
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.aws_region import AwsRegion
@@ -560,6 +562,32 @@ class MinicloudManager:
                 else:
                     raise
             LOGGER.info("Region '%s' prepared.", region_name)
+
+    def create_backup_buckets(self, params) -> None:
+        """Create the Manager backup bucket in minicloud local S3 store.
+
+        The store starts empty and the Manager agent never creates its backup bucket.
+        Bucket names use the first region, as Manager backup tasks do. Passthrough
+        buckets are real and are skipped.
+        """
+        if params.get("backup_bucket_backend") != "s3":
+            return
+        region = next(iter(params.region_names), "")
+        buckets = {location.format(region=region) for location in params.get("backup_bucket_location") or []}
+        buckets -= set(self.config.s3_passthrough_buckets)
+        if not buckets:
+            return
+
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=f"http://localhost:{self.config.port}",
+            region_name=self.config.region,
+            aws_access_key_id="minicloud",
+            aws_secret_access_key="minicloud",
+        )
+        for bucket in sorted(buckets):
+            s3.create_bucket(Bucket=bucket)
+            LOGGER.info("Created bucket '%s' in minicloud local S3 store", bucket)
 
     def set_env_overrides(self) -> None:
         """Point the cloud SDKs at this manager's endpoint.

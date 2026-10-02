@@ -79,7 +79,7 @@ class MinicloudConfigMixin(BaseModel):
         "each costs ~2s at start-up)",
     )
     minicloud_s3_passthrough_buckets: StringOrList = SctField(
-        description="S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads). "
+        description="S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads, test sstables). "
         "Backend-independent: GCE runs reach S3 for the same content",
     )
     minicloud_scylla_reserve_memory: String = SctField(
