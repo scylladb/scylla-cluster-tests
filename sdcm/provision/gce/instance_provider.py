@@ -14,6 +14,7 @@
 """VM instance management provider for GCE provisioning."""
 
 import logging
+import time
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
 
@@ -55,6 +56,17 @@ from sdcm.utils.decorators import retrying
 LOGGER = logging.getLogger(__name__)
 
 ZONE_EXHAUSTED_MARKER = "ZONE_RESOURCE_POOL_EXHAUSTED"
+
+# A completed insert operation does not mean the VM has started: it can still be PROVISIONING or
+# STAGING. Real GCE leaves those within seconds, but minicloud reports STAGING for as long as it
+# takes to download and convert an image it has not cached yet - over 10 minutes for the ~9 GB
+# monitor image. Nothing may SSH to the VM before it is RUNNING (the cloud-init wait budgets only
+# ~6 minutes for that), so the provider waits for it here, the one place every caller goes through.
+INSTANCE_STARTING_STATUSES = frozenset({"PROVISIONING", "STAGING"})
+INSTANCE_RUNNING_TIMEOUT = 20 * 60
+INSTANCE_RUNNING_POLL_INTERVAL = 10
+# What a spot VM preempted while booting shows instead of RUNNING.
+SPOT_PREEMPTED_STATUSES = frozenset({"STOPPING", "TERMINATED"})
 
 
 def _is_zone_exhausted(error: BaseException) -> bool:
@@ -237,7 +249,7 @@ class VirtualMachineProvider:
                     ) from err
                 if pricing_model.is_spot() and is_preemption_error(err):
                     LOGGER.warning("Spot VM %s was preempted during the insert request: %s", normalized_name, err)
-                    self._drain_pending_creations(pending_instance_creations)
+                    self._drain_pending_creations(pending_instance_creations, pricing_model)
                     raise OperationPreemptedError(
                         f"Spot instance {normalized_name} preempted during provisioning: {err}"
                     ) from err
@@ -260,8 +272,9 @@ class VirtualMachineProvider:
                     definition, operation, normalized_name, pricing_model, user_data, startup_script
                 )
                 instances.append(instance)
-            except OperationPreemptedError:
-                self._drain_pending_creations(pending_instance_creations)
+            except OperationPreemptedError, ProvisionError:
+                # ProvisionError: the VM was created but never reached RUNNING (see _wait_until_running).
+                self._drain_pending_creations(pending_instance_creations, pricing_model)
                 raise
             except ProvisionUnrecoverableError:
                 # Zone exhaustion and configuration errors are unrecoverable; let them propagate
@@ -288,23 +301,26 @@ class VirtualMachineProvider:
             raise ProvisionError(f"Failed to create instances: {error_to_raise}") from error_to_raise
         return instances
 
-    def _drain_pending_creations(self, pending_instance_creations: list) -> None:
+    def _drain_pending_creations(self, pending_instance_creations: list, pricing_model: PricingModel) -> None:
         """Resolve the insert operations still in flight when a batch is abandoned mid-way.
 
         GCE's `insert` is not idempotent, so a name whose operation was never awaited is neither in
         the cache nor free: the caller's on-demand retry would get `AlreadyExists` for it instead of
-        a VM. Each remaining operation is waited out - a VM that came up is cached and reused by the
-        retry, one that failed is deleted so its name is free again. Any error is only logged: the
-        abort that triggered the drain is the error the caller has to see.
+        a VM. Each remaining operation is waited out - a VM that came up and reached RUNNING is cached
+        and reused by the retry, one that failed is deleted so its name is free again. Any error is
+        only logged: the abort that triggered the drain is the error the caller has to see.
         """
         while pending_instance_creations:
             definition, operation, normalized_name, _, _ = pending_instance_creations.pop(0)
             try:
                 wait_for_extended_operation(operation, f"instance creation for {normalized_name}")
-                instance = self._instances_client.get(project=self.project_id, zone=self.zone, instance=normalized_name)
+                instance = self._wait_until_running(normalized_name, pricing_model)
                 self._set_instance_labels(instance, definition.tags, normalized_name)
                 self._cache[normalized_name] = instance
                 LOGGER.info("Instance %s finished creating after the abort; keeping it for the retry", normalized_name)
+            except (ProvisionError, OperationPreemptedError) as error:
+                # _wait_until_running already deleted the VM before raising.
+                LOGGER.warning("Instance %s did not start after the abort: %s", normalized_name, error)
             except Exception as error:  # noqa: BLE001 - the wait also raises TimeoutError/RuntimeError
                 LOGGER.warning("Instance %s did not finish creating after the abort: %s", normalized_name, error)
                 self.delete(normalized_name, wait=True)  # logs its own failures, never raises
@@ -326,7 +342,7 @@ class VirtualMachineProvider:
         """
         try:
             wait_for_extended_operation(operation, f"instance creation for {normalized_name}")
-            instance = self._instances_client.get(project=self.project_id, zone=self.zone, instance=normalized_name)
+            instance = self._wait_until_running(normalized_name, pricing_model)
             self._set_instance_labels(instance, definition.tags, normalized_name)
             LOGGER.info("Instance %s created successfully", normalized_name)
             self._cache[normalized_name] = instance
@@ -371,6 +387,39 @@ class VirtualMachineProvider:
             # Retry the entire creation process with retry decorator
             return self._create_instance_with_retry(definition, pricing_model, user_data, startup_script)
 
+    def _wait_until_running(self, normalized_name: str, pricing_model: PricingModel) -> compute_v1.Instance:
+        """Poll a just-created instance until it is RUNNING, and return it.
+
+        See the comment above INSTANCE_STARTING_STATUSES for why a completed insert operation is not
+        enough. A status that is neither RUNNING nor still starting (e.g. TERMINATED) will not become
+        RUNNING by waiting, so it fails right away instead of after the full timeout.
+
+        An instance that fails either way is deleted before raising: the ProvisionError sends
+        provision_with_retry round again, and GCE's `insert` is not idempotent - a leftover VM
+        would turn that retry into AlreadyExists instead of a fresh instance. A spot VM that is
+        STOPPING or TERMINATED was preempted while booting, so it raises OperationPreemptedError
+        instead, which is what the on-demand fallback reacts to.
+        """
+        deadline = time.monotonic() + INSTANCE_RUNNING_TIMEOUT
+        while True:
+            instance = self._instances_client.get(project=self.project_id, zone=self.zone, instance=normalized_name)
+            if instance.status == "RUNNING":
+                return instance
+            if instance.status not in INSTANCE_STARTING_STATUSES:
+                reason = f"its status is {instance.status}"
+                break
+            if time.monotonic() >= deadline:
+                reason = f"still {instance.status} after {INSTANCE_RUNNING_TIMEOUT}s"
+                break
+            LOGGER.info("Instance %s is %s, waiting for it to be RUNNING...", normalized_name, instance.status)
+            time.sleep(INSTANCE_RUNNING_POLL_INTERVAL)
+
+        LOGGER.error("Instance %s did not start (%s), deleting it", normalized_name, reason)
+        self.delete(normalized_name, wait=True)
+        if pricing_model.is_spot() and instance.status in SPOT_PREEMPTED_STATUSES:
+            raise OperationPreemptedError(f"Spot instance {normalized_name} preempted before it started: {reason}")
+        raise ProvisionError(f"Instance {normalized_name} did not start: {reason}")
+
     @retrying(
         n=3,
         sleep_time=900,
@@ -392,7 +441,7 @@ class VirtualMachineProvider:
                 definition, pricing_model, user_data, startup_script, normalized_name
             )
             wait_for_extended_operation(operation, f"instance creation for {normalized_name}")
-            instance = self._instances_client.get(project=self.project_id, zone=self.zone, instance=normalized_name)
+            instance = self._wait_until_running(normalized_name, pricing_model)
             self._set_instance_labels(instance, definition.tags, normalized_name)
             LOGGER.info("Instance %s created successfully on retry", normalized_name)
             self._cache[normalized_name] = instance
