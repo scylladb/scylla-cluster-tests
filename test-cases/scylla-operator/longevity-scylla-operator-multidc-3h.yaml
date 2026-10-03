@@ -1,12 +1,12 @@
 test_duration: 300
 
 prepare_write_cmd: [
-  "cassandra-stress write cl=QUORUM n=5120000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1500 -col 'n=FIXED(2) size=FIXED(512)' -pop seq=1..5120000 -log interval=5",
-  "cassandra-stress write cl=QUORUM n=5120000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1500 -col 'n=FIXED(2) size=FIXED(512)' -pop seq=5120001..10240000 -log interval=5",
+  "cassandra-stress write cl=QUORUM n=5120000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1500 -col 'n=FIXED(2) size=FIXED(512)' -pop seq=1..5120000 -log interval=5",
+  "cassandra-stress write cl=QUORUM n=5120000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1500 -col 'n=FIXED(2) size=FIXED(512)' -pop seq=5120001..10240000 -log interval=5",
 ]
 stress_cmd: [
-  "cassandra-stress mixed cl=LOCAL_QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=25 -pop 'dist=uniform(1..7680000)' -col 'n=FIXED(2) size=FIXED(512)' -log interval=5",
-  "cassandra-stress mixed cl=LOCAL_QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=25 -pop 'dist=uniform(2560001..10240000)' -col 'n=FIXED(2) size=FIXED(512)' -log interval=5",
+  "cassandra-stress mixed cl=LOCAL_QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop 'dist=uniform(1..7680000)' -col 'n=FIXED(2) size=FIXED(512)' -log interval=5",
+  "cassandra-stress mixed cl=LOCAL_QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop 'dist=uniform(2560001..10240000)' -col 'n=FIXED(2) size=FIXED(512)' -log interval=5",
 ]
 round_robin: true
 
