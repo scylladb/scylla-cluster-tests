@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import ExitStack, contextmanager
 
 from sdcm.cluster import BaseNode
@@ -56,7 +56,7 @@ class AddRemoveDcNemesis(NemesisBaseClass):
         if self.runner.cluster.is_features_enabled_on_node(
             node=self.runner.target_node, feature_list=["KEYSPACE_MULTI_RF_CHANGE"]
         ):
-            return 2
+            return 3
         return 1
 
     @property
@@ -70,7 +70,7 @@ class AddRemoveDcNemesis(NemesisBaseClass):
         return system_keyspaces
 
     @contextmanager
-    def temporary_system_keyspaces_network_topology_strategy(self) -> Iterator[None]:
+    def temporary_system_keyspaces_network_topology_strategy(self) -> Generator[None]:
         """Temporarily switch system keyspaces to NetworkTopologyStrategy."""
         with (
             temporary_replication_strategy_setter(self.runner.target_node) as ntrs_setter,
@@ -83,8 +83,45 @@ class AddRemoveDcNemesis(NemesisBaseClass):
                     ntrs_setter(**{keyspace: new_rs})
             yield
 
+    def _preserve_keyspaces_with_new_dc_replication(self, new_dc_setter: temporary_replication_strategy_setter) -> None:
+        """Add rollback records for keyspaces created while the temporary DC exists."""
+        new_dc_name = self.new_dc_name
+        if not new_dc_name:
+            return
+
+        try:
+            with self.runner.cluster.cql_connection_patient(self.runner.target_node) as session:
+                result = session.execute("SELECT keyspace_name, replication FROM system_schema.keyspaces")
+                keyspace_rows = result.current_rows
+        except Exception as exc:  # noqa: BLE001 - best-effort cleanup must not mask nemesis failure
+            self.runner.log.warning(f"Failed to discover keyspaces with replication to {new_dc_name}: {exc}")
+            return
+
+        for row in keyspace_rows:
+            keyspace = row.keyspace_name
+            replication = row.replication
+            self.runner.log.info(f"Found {keyspace=} with {replication=}")
+            if keyspace in new_dc_setter.preserved:
+                continue
+            if "NetworkTopologyStrategy" not in replication.get("class", ""):
+                continue
+            if new_dc_name not in replication:
+                continue
+
+            try:
+                strategy = ReplicationStrategy.get(self.runner.target_node, keyspace)
+                rollback_strategy = NetworkTopologyReplicationStrategy(
+                    **{**strategy.replication_factors_per_dc, new_dc_name: 0}
+                )
+            except Exception as exc:  # noqa: BLE001 - keep rollback of other keyspaces best-effort
+                self.runner.log.warning(f"Failed to preserve rollback strategy for keyspace {keyspace}: {exc}")
+                continue
+
+            self.runner.log.info(f"Preserve rollback strategy for keyspace {keyspace} with RF=0 in {new_dc_name}")
+            new_dc_setter.preserved[keyspace] = rollback_strategy
+
     @contextmanager
-    def temporary_new_dc_replication_factors(self) -> Iterator[None]:
+    def temporary_new_dc_replication_factors(self) -> Generator[None]:
         """Temporarily update replication factors for the new datacenter."""
         with (
             temporary_replication_strategy_setter(self.runner.target_node) as new_dc_setter,
@@ -104,7 +141,10 @@ class AddRemoveDcNemesis(NemesisBaseClass):
                     )
                     new_dc_setter.preserved[keyspace] = rollback_strategy
 
-            yield
+            try:
+                yield
+            finally:
+                self._preserve_keyspaces_with_new_dc_replication(new_dc_setter)
 
     @property
     def datacenters(self) -> list[str]:
