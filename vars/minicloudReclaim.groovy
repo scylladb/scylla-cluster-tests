@@ -32,12 +32,17 @@
 //                   "dangling" includes layers those jobs are mid-way through building
 //   minicloud0      the host TUN device; recreating it needs sudo we would rather not have
 def call(Map args = [:]) {
-    // Log trees and guest state age out after a few days; the AMI/image cache gets a much longer
-    // TTL because rebuilding one entry is tens of minutes and tens of GiB - it is the entire
-    // economic case for a static agent. It still needs a TTL: master images are rebuilt daily, so
-    // a cache that only ever grows fills the disk on its own.
+    // Log trees and guest state age out after a few days. The AMI/image cache is aged by LAST USE
+    // (atime) instead, because only some of it is ever reused: a Scylla image is a daily master
+    // build or a base release, and a weekly job rarely meets the same one twice, while the stock
+    // distro images (Ubuntu and friends) are what the next week's runs boot again - and rebuilding
+    // one is tens of minutes. Two weeks of no use lets a weekly job miss one Friday on this agent
+    // (they float across the minipcs) and still find its image.
     def keepDays = args.get('keepDays', 3)
-    def keepImageDays = args.get('keepImageDays', 30)
+    def keepImageDays = args.get('keepImageDays', 14)
+    // ...and a size cap on top, least recently used first: the TTL alone lets a burst of daily
+    // master images fill the disk well inside the TTL.
+    def maxImageCacheGiB = args.get('maxImageCacheGiB', 10)
     def atEnd = args.get('atEnd', false)
 
     sh """#!/bin/bash
@@ -66,13 +71,11 @@ echo "deleting minicloud state as root via: \${RECLAIM_IMAGE:-<no local miniclou
 
 RECLAIM_FAILED=0
 
-# reclaim <subdir of the state dir> [find predicates...]: delete its top-level entries that match.
-reclaim() {
-    local dir="\${STATE_DIR}/\$1"
+# remove <dir> <entries of dir...>: delete them as root, and report any that survive.
+remove() {
+    local dir="\$1"
     shift
-    [[ -d "\${dir}" ]] || return 0
-    local targets
-    mapfile -t targets < <(find "\${dir}" -mindepth 1 -maxdepth 1 "\$@" 2>/dev/null)
+    local targets=("\$@")
     [[ \${#targets[@]} -gt 0 ]] || return 0
     printf 'reclaiming %s\\n' "\${targets[@]}"
 
@@ -97,6 +100,16 @@ reclaim() {
         du -sh "\${leftovers[@]}" 2>/dev/null || printf '  %s\\n' "\${leftovers[@]}"
         set -x
     fi
+}
+
+# reclaim <subdir of the state dir> [find predicates...]: delete its top-level entries that match.
+reclaim() {
+    local dir="\${STATE_DIR}/\$1"
+    shift
+    [[ -d "\${dir}" ]] || return 0
+    local targets
+    mapfile -t targets < <(find "\${dir}" -mindepth 1 -maxdepth 1 "\$@" 2>/dev/null)
+    remove "\${dir}" "\${targets[@]}"
 }
 
 if [[ "${atEnd}" == "true" ]] ; then
@@ -124,9 +137,36 @@ else
     # Guest state an aborted build never got to clean.
     reclaim instances -mtime +${keepDays}
 
-    # The image cache, on its own long TTL - see keepImageDays. Entries are per Scylla
-    # image/AMI, so a daily master build leaves one behind every day.
-    reclaim amis -mtime +${keepImageDays}
+    # The image cache: by last use, then by size - see keepImageDays and maxImageCacheGiB.
+    AMI_CACHE="\${STATE_DIR}/amis"
+    if [[ -d "\${AMI_CACHE}" ]] ; then
+        # Aged by last READ (-atime), not by download (-mtime): every boot reads the qcow2 as a
+        # backing file, so an image in weekly use stays, where -mtime evicted it a fixed time after
+        # its download however often it was used (SCT-1145). relatime still refreshes atime once a
+        # day on read. noatime freezes atime at download time, which quietly turns all of this back
+        # into download-age eviction - say so where it will be seen rather than guess around it.
+        if findmnt -no OPTIONS -T "\${AMI_CACHE}" 2>/dev/null | tr ',' '\\n' | grep -qx noatime ; then
+            echo "WARNING: \${AMI_CACHE} is on a noatime mount - image cache eviction falls back to download age"
+        fi
+        reclaim amis -atime +${keepImageDays}
+
+        # Then hold it under maxImageCacheGiB, least recently read first. The victims are picked up
+        # front and removed in one pass: re-measuring after each delete would spin forever on an
+        # entry that cannot be removed.
+        max_kib=\$(( ${maxImageCacheGiB} * 1024 * 1024 ))
+        used_kib=\$(du -sk "\${AMI_CACHE}" 2>/dev/null | cut -f1)
+        evict=()
+        while read -r _ entry ; do
+            (( \${used_kib:-0} > max_kib )) || break
+            evict+=("\${entry}")
+            entry_kib=\$(du -sk "\${entry}" 2>/dev/null | cut -f1)
+            used_kib=\$(( used_kib - \${entry_kib:-0} ))
+        done < <(find "\${AMI_CACHE}" -maxdepth 1 -mindepth 1 -printf '%A@ %p\\n' 2>/dev/null | sort -n)
+        if [[ \${#evict[@]} -gt 0 ]] ; then
+            echo "image cache over ${maxImageCacheGiB}GiB, evicting \${#evict[@]} least recently used entr(y/ies)"
+            remove "\${AMI_CACHE}" "\${evict[@]}"
+        fi
+    fi
 
     # A stale sct_runner_ip is actively dangerous here: on a persistent workspace it would send
     # every stage down the --execute-on-runner branch and SSH to an IP that belongs to a
