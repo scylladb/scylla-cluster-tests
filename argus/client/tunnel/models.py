@@ -22,6 +22,7 @@ ALLOWED_HOST_KEY_TYPES = (
 # 3.10 (``NotRequired`` only landed in ``typing`` in 3.11).
 class _TunnelApiResponseRequired(TypedDict):
     """Required fields of the ``/client/ssh/tunnel`` response (POST register / GET fetch)."""
+
     proxy_host: str
     proxy_port: int
     proxy_user: str
@@ -32,6 +33,7 @@ class _TunnelApiResponseRequired(TypedDict):
 
 class _TunnelApiResponse(_TunnelApiResponseRequired, total=False):
     """Live response shape, with optional fields layered on the required base."""
+
     expires_at: str | None
     key_id: str | None
     tunnel_id: str | None
@@ -41,6 +43,7 @@ class _TunnelApiResponse(_TunnelApiResponseRequired, total=False):
 
 class _TunnelCachePayloadRequired(TypedDict):
     """Required fields of the on-disk cache written by :meth:`TunnelConfig.to_cache_payload`."""
+
     proxy_host: str
     proxy_port: int
     proxy_user: str
@@ -55,6 +58,7 @@ class _TunnelCachePayload(_TunnelCachePayloadRequired, total=False):
     Mirrors :class:`_TunnelApiResponse` but is independently typed so future
     cache-only fields don't leak into the API contract.
     """
+
     expires_at: str | None
     key_id: str | None
     tunnel_id: str | None
@@ -95,10 +99,10 @@ class TunnelConfig:
         proxy answers, so carry it across. Without this the tunnel loses its
         ``X-Forwarded-Key-ID`` attribution the moment it fails over.
         """
-        return (self, *(
-            replace(alternate, key_id=self.key_id, expires_at=self.expires_at)
-            for alternate in self.alternates
-        ))
+        return (
+            self,
+            *(replace(alternate, key_id=self.key_id, expires_at=self.expires_at) for alternate in self.alternates),
+        )
 
     @classmethod
     def from_api_response(cls, response: "_TunnelApiResponse | _TunnelCachePayload") -> "TunnelConfig":
@@ -141,15 +145,17 @@ class TunnelConfig:
                 port = int(entry["proxy_port"])
                 if (host, port) == primary:
                     continue
-                alternates.append(cls(
-                    proxy_host=host,
-                    proxy_port=port,
-                    proxy_user=str(entry["proxy_user"]),
-                    target_host=str(entry["target_host"]),
-                    target_port=int(entry["target_port"]),
-                    host_key_fingerprint=str(entry["host_key_fingerprint"]),
-                    tunnel_id=str(entry["tunnel_id"]) if entry.get("tunnel_id") else None,
-                ))
+                alternates.append(
+                    cls(
+                        proxy_host=host,
+                        proxy_port=port,
+                        proxy_user=str(entry["proxy_user"]),
+                        target_host=str(entry["target_host"]),
+                        target_port=int(entry["target_port"]),
+                        host_key_fingerprint=str(entry["host_key_fingerprint"]),
+                        tunnel_id=str(entry["tunnel_id"]) if entry.get("tunnel_id") else None,
+                    )
+                )
             except (KeyError, TypeError, ValueError):
                 continue
         return tuple(alternates)
@@ -181,7 +187,6 @@ class TunnelStatePaths:
     state_dir: str
     private_key: str
     public_key: str
-    key_meta: str
     config_cache: str
 
 
