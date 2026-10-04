@@ -2,7 +2,7 @@
 
 Every mutating (POST) request is recorded as JSONL lines so that, when Argus
 is unavailable, the recorded calls can be replayed against the server once it
-recovers. See ``docs/plans/request_replay.md`` for the full design.
+recovers. See ``docs/plans/archive/request_replay.md`` for the full design.
 
 After each call the caller invokes :meth:`ReplayLog.write` with the request and
 its outcome, appending one JSONL line whose ``success``/``error`` capture how
