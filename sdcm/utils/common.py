@@ -15,6 +15,7 @@
 from __future__ import absolute_import, annotations
 
 import itertools
+import math
 import json
 import os
 import logging
@@ -637,8 +638,25 @@ def aws_tags_to_dict(tags_list):
     return tags_dict
 
 
+# How long SCT waits for a requested instance to start running. A real cloud starts one within
+# seconds to a couple of minutes, so the default only has to cover an unusually slow launch.
+PENDING_INSTANCES_TIMEOUT = 600
+PENDING_INSTANCES_POLL_INTERVAL = 15
+# minicloud keeps an instance pending until its image is cached locally, and a cold cache means
+# downloading and converting the image first: ~11.5 min for a 10 GiB scylla AMI while two other
+# images downloaded alongside it (SCT-1145). Generous on purpose: a bigger image, or more of them
+# cold at once, stretches it further.
+MINICLOUD_PENDING_INSTANCES_TIMEOUT = 45 * 60
+
+
 def list_instances_aws(
-    tags_dict=None, region_name=None, running=False, group_as_region=False, verbose=False, availability_zone=None
+    tags_dict=None,
+    region_name=None,
+    running=False,
+    group_as_region=False,
+    verbose=False,
+    availability_zone=None,
+    pending_timeout=PENDING_INSTANCES_TIMEOUT,
 ):
     """
     list all instances with specific tags AWS
@@ -649,6 +667,7 @@ def list_instances_aws(
     :param group_as_region: if True the results would be grouped into regions
     :param verbose: if True will log progress information
     :param availability_zone: availability zone letter (e.g. 'a', 'b', 'c')
+    :param pending_timeout: with `running`, how long (seconds) to wait for pending instances to start
 
     :return: instances dict where region is a key
     """
@@ -690,9 +709,16 @@ def list_instances_aws(
                 try:
                     if verbose:
                         LOGGER.info(
-                            f"Waiting for {len(instance_ids)} pending instances in {curr_region_name} to become running"
+                            f"Waiting up to {pending_timeout}s for {len(instance_ids)} pending instances "
+                            f"in {curr_region_name} to become running"
                         )
-                    waiter.wait(InstanceIds=instance_ids, WaiterConfig={"Delay": 15, "MaxAttempts": 40})
+                    waiter.wait(
+                        InstanceIds=instance_ids,
+                        WaiterConfig={
+                            "Delay": PENDING_INSTANCES_POLL_INTERVAL,
+                            "MaxAttempts": math.ceil(pending_timeout / PENDING_INSTANCES_POLL_INTERVAL),
+                        },
+                    )
                     # Refresh instance data after waiting
                     response = client.describe_instances(InstanceIds=instance_ids)
                     updated_instances = [
