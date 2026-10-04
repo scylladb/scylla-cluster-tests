@@ -3,6 +3,7 @@ import logging
 from glob import glob, escape
 from pathlib import Path
 from typing import TypedDict
+from uuid import UUID
 from xml.etree import ElementTree
 
 from argus.common.sirenada_types import RawSirenadaRequest, RawSirenadaTestCase
@@ -47,11 +48,12 @@ class ArgusSirenadaClient(ArgusClient):
 
     def __init__(self, auth_token: str, base_url: str, log_dir, api_version="v1",
                  extra_headers: dict | None = None, timeout: int = 60, max_retries: int = 3,
-                 use_tunnel: bool | None = None, replay_log_only: bool = False) -> None:
+                 use_tunnel: bool | None = None, replay_log_only: bool = False,
+                 run_id: UUID | str | None = None) -> None:
         self.results_path: Path | None = None
         super().__init__(auth_token, base_url, log_dir=log_dir, api_version=api_version,
                          extra_headers=extra_headers, timeout=timeout, max_retries=max_retries,
-                         use_tunnel=use_tunnel, replay_log_only=replay_log_only)
+                         use_tunnel=use_tunnel, replay_log_only=replay_log_only, run_id=run_id)
 
     def _verify_required_files_exist(self, results_path: Path):
         assert (results_path / self._junit_xml_filename).exists(), "Missing jUnit XML results file!"
