@@ -915,6 +915,24 @@ the aws_secret_access_key that would be used for alternator
 **type:** str (appendable)
 
 
+## **alternator_loadbalancing** / SCT_ALTERNATOR_LOADBALANCING
+
+If true, enable client-side load balancing across alternator nodes
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **alternator_trust_all_certificates** / SCT_ALTERNATOR_TRUST_ALL_CERTIFICATES
+
+If true, trust all TLS certificates when connecting to alternator (useful for self-signed certs)
+
+**default:** True
+
+**type:** boolean
+
+
 ## **region_aware_loader** / SCT_REGION_AWARE_LOADER
 
 When in multi region mode, run stress on loader that is located in the same region as db node
@@ -1061,7 +1079,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 ## **gemini_schema_url** / SCT_GEMINI_SCHEMA_URL
 
-Path to a local schema JSON file or a remote URL (http/https) that Gemini will use.<br>Local files are uploaded to the loader via send_files and mounted into the Gemini Docker<br>container via --schema.<br>Remote URLs are downloaded on the loader node with curl and then mounted the same way.
+Url of the schema/configuration the gemini tool would use
 
 **default:** N/A
 
@@ -3023,9 +3041,7 @@ Availability zone to use. Specify multiple (comma separated) to deploy resources
 
 ## **aws_fallback_to_next_availability_zone** / SCT_AWS_FALLBACK_TO_NEXT_AVAILABILITY_ZONE
 
-Try all availability zones one by one in order to maximize the chances of getting<br>the requested instance capacity.
-
-Deprecated alias of `fallback_to_next_availability_zone`. Kept for backward compatibility.
+Deprecated alias of `fallback_to_next_availability_zone`. Kept for backward compatibility. Try all availability zones one by one in order to maximize the chances of getting the requested instance capacity.
 
 **default:** N/A
 
@@ -3045,14 +3061,14 @@ On capacity errors, automatically retry provisioning in the next available AZ in
 
 Filter availability zones upfront to only those that support all required instance types. Replaces invalid AZs with valid alternatives in the same region before any provisioning attempt. Supported backends: AWS, GCE.
 
-**default:** N/A
+**default:** True
 
 **type:** boolean
 
 
 ## **pre_flight_capacity_probe** / SCT_PRE_FLIGHT_CAPACITY_PROBE
 
-Run a lightweight capacity probe before provisioning to verify sufficient resources in the target AZ.
+Before provisioning, probe capacity by launching and terminating one on-demand instance per dynamic type (`instance_type_db_target`, `nemesis_grow_shrink_instance_type`) in the chosen AZ. On capacity errors, raise to trigger AZ/region fallback. Costs ~1 min per type. AWS-only.
 
 **default:** N/A
 
@@ -3540,7 +3556,7 @@ Run scylla-doctor in artifact tests
 
 Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.7')<br>to hardcode the version, or leave empty to use the latest available version. For stability,<br>artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.
 
-**default:** 1.7
+**default:** 1.14.1
 
 **type:** str (appendable)
 
@@ -3615,6 +3631,7 @@ Store adaptive timeout metrics in Argus. Disabled for performance tests only.
 **default:** True
 
 **type:** boolean
+
 
 ## **argus_email_report_template** / SCT_ARGUS_EMAIL_REPORT_TEMPLATE
 
