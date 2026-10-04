@@ -331,6 +331,21 @@ pipeline {
                                             checkout scm
                                         }
                                         dockerLogin(params)
+                                        // Before the runner or any resource exists. Advisory: never affects the PR check.
+                                        // Skipped on minicloud, whose instances cost nothing and whose endpoint is not up yet.
+                                        if (!curr_params.with_minicloud) {
+                                            try {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir(working_dir) {
+                                                        timeout(time: 5, unit: 'MINUTES') {
+                                                            estimateTestCost(curr_params, builder.region)
+                                                        }
+                                                    }
+                                                }
+                                            } catch(Exception err) {
+                                                echo "${err}"
+                                            }
+                                        }
                                         if (sct_runner_backends.contains(backend)){
                                             try {
                                                 wrap([$class: 'BuildUser']) {
