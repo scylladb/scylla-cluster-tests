@@ -109,6 +109,7 @@
       ]
     },
     {
+      "description": "Run the artifacts tests, which run scylla-doctor, on scylla-doctor bumps",
       "matchPackageNames": [
         "scylla-doctor"
       ],
@@ -117,7 +118,8 @@
       ],
       "enabled": true,
       "addLabels": [
-        "scylla-doctor"
+        "scylla-doctor",
+        "test-artifacts"
       ]
     },
     {
