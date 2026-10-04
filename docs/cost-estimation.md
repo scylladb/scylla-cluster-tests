@@ -142,6 +142,44 @@ priced on-demand. A spot setting applies only to the loaders and monitor SCT pro
 GCE **z3** types are always priced on-demand: their bundled local SSD needs live migration on
 host maintenance, which a spot VM cannot have, so SCT never provisions them as spot.
 
+## Actual cost in Argus
+
+Besides the estimate, each instance reports what it actually cost, on the run's Costs tab in
+Argus.
+
+When a node is created, SCT prices it at the lifecycle it **actually got**, so a spot request
+that fell back to on-demand is priced on-demand. It writes that price on the cloud instance as
+two tags:
+
+| Tag | Example | Meaning |
+|---|---|---|
+| `price_per_hour_micro_usd` | `439733` | hourly price in millionths of a dollar ($0.4397/h) |
+| `pricing_tier` | `spot` / `on-demand` | the lifecycle the price is for |
+
+The price is an integer because a GCE label value cannot contain a decimal point. The same two
+tags are valid on AWS, GCE, Azure and OCI.
+
+The cost is reported when the instance goes away:
+
+- **SCT terminates the node** (a nemesis replacing it, a cluster shrink): hourly price × time
+  since the node was created.
+- **The job's own cleanup stage terminates it** (`clean-resources --post-behavior`): price
+  read from the instance's tags × time since the cloud launched it. With the default
+  `execute_post_behavior: false` this is where every CI run's nodes end, so it is not marked
+  leaked.
+- **The scheduled cloud sweep terminates or stops it** (`hydra-cleanup-cloud`): same
+  calculation, reported as **leaked**. The sweep only reaches what a test failed to clean up.
+
+Cleanup runs in a different process from the test and sees only the cloud instance, which is
+why the price has to be written on it.
+
+An instance with no price tag (an unknown price, or one created before this existed) reports
+nothing, and Argus shows it as not reported rather than as zero.
+
+On OCI, tags must be defined in the `sct` tag namespace before they can be set. After
+upgrading, run `sct.py prepare-regions -c oci` once per tenancy to create the two new keys.
+Until then, OCI nodes still report their cost when SCT terminates them, but cleanup cannot price them.
+
 ## Accuracy
 
 Expect the same order of magnitude as the cloud-monitor cost site, not an exact match. That
