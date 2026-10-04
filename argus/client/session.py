@@ -16,7 +16,9 @@ from urllib3.util.retry import Retry
 from argus.client.tunnel import (
     SSHTunnel,
     TunnelConfig,
-    resolve_tunnel_config_with_reason,
+    canonical_run_id,
+    delete_key_dir_of,
+    resolve_tunnel_key,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -31,6 +33,7 @@ TUNNEL_RETRY_JITTER = 0.2
 # travel direct, so a process that exits after a couple of requests adds public
 # traffic instead of removing it. A long run passes this in seconds.
 TUNNEL_MIN_REQUESTS = 10
+TUNNEL_KEY_DISCARD_MIN_SECONDS = 3600.0
 
 
 def _resolve_use_tunnel(use_tunnel: bool | None) -> bool:
@@ -171,7 +174,9 @@ class TunneledSession(requests.Session):
     with no restart.
     """
 
-    def __init__(self, auth_token: str, original_base_url: str, max_retries: int = 3) -> None:
+    def __init__(
+        self, auth_token: str, original_base_url: str, run_id: str | None = None, max_retries: int = 3
+    ) -> None:
         super().__init__()
         adapter = _build_retry_adapter(max_retries)
         self.mount("http://", adapter)
@@ -179,6 +184,7 @@ class TunneledSession(requests.Session):
 
         self._auth_token = auth_token
         self._original_base_url = original_base_url
+        self._run_id = run_id
         self._build_id = _resolve_build_id()
         self._build_url = _resolve_build_url()
 
@@ -196,6 +202,11 @@ class TunneledSession(requests.Session):
         self._retry_max = _resolve_positive_float("ARGUS_TUNNEL_RETRY_MAX_SECONDS", TUNNEL_RETRY_MAX_SECONDS)
         self._retry_delay = self._retry_min
         self._next_retry_at = 0.0
+
+        self._key_discard_interval = _resolve_non_negative_float(
+            "ARGUS_TUNNEL_KEY_DISCARD_MIN_SECONDS", TUNNEL_KEY_DISCARD_MIN_SECONDS
+        )
+        self._last_key_discard_at: float | None = None
 
         # Held only by the monitor thread while it mutates tunnel state. The
         # request path reads ``_tunnel_port`` without it.
@@ -256,9 +267,10 @@ class TunneledSession(requests.Session):
             # forward session-level headers (e.g. Cloudflare Access tokens)
             # via extra_headers instead.
             extra_headers = dict(self.headers) if self.headers else None
-            config, config_reason = resolve_tunnel_config_with_reason(
+            config, key_path, config_reason = resolve_tunnel_key(
                 auth_token=self._auth_token,
                 base_url=self._original_base_url,
+                run_id=self._run_id,
                 force_refresh=force_refresh,
                 session=None,
                 extra_headers=extra_headers,
@@ -267,26 +279,34 @@ class TunneledSession(requests.Session):
                 self._teardown(config_reason or "failed to resolve tunnel configuration")
                 return
 
-            tunnel = SSHTunnel()
+            tunnel = SSHTunnel(key_path=key_path)
             config, local_port, establish_reason = self._establish_any(tunnel, config)
 
             if local_port is None and not force_refresh:
+                if tunnel.sshd_rejected_key:
+                    self._discard_rejected_key(key_path)
                 # The cached config may name a proxy that has since been
                 # retired. Re-fetch the live list once before giving up.
-                fresh, config_reason = resolve_tunnel_config_with_reason(
+                fresh, fresh_key_path, config_reason = resolve_tunnel_key(
                     auth_token=self._auth_token,
                     base_url=self._original_base_url,
+                    run_id=self._run_id,
                     force_refresh=True,
                     session=None,
                     extra_headers=extra_headers,
                 )
                 if fresh is not None:
+                    tunnel.shutdown()
+                    key_path = fresh_key_path
+                    tunnel = SSHTunnel(key_path=key_path)
                     config, local_port, establish_reason = self._establish_any(tunnel, fresh)
                 else:
                     establish_reason = config_reason
 
             if local_port is None or config is None:
                 tunnel.shutdown()
+                if tunnel.sshd_rejected_key:
+                    self._discard_rejected_key(key_path)
                 self._teardown(establish_reason or "failed to establish tunnel")
                 return
 
@@ -308,6 +328,24 @@ class TunneledSession(requests.Session):
                 config.key_id or "unknown",
                 local_port,
             )
+
+    def _discard_rejected_key(self, key_path: str) -> None:
+        """Delete a key that sshd rejected, so the next resolve registers a new one.
+
+        A proxy that rejects every key would otherwise cause a new registration
+        on each retry. After one discard, a rejected key stays on disk for
+        ``_key_discard_interval`` seconds.
+        """
+        now = time.monotonic()
+        if self._last_key_discard_at is not None and now - self._last_key_discard_at < self._key_discard_interval:
+            LOGGER.warning(
+                "sshd rejected the SSH tunnel key again within %.0fs of the last new key; keeping %s",
+                self._key_discard_interval,
+                key_path,
+            )
+            return
+        if delete_key_dir_of(key_path):
+            self._last_key_discard_at = now
 
     @staticmethod
     def _establish_any(
@@ -341,9 +379,9 @@ class TunneledSession(requests.Session):
     def _teardown(self, reason: str) -> None:
         """Drop the tunnel, route traffic direct, and schedule the next attempt.
 
-        The cached keypair stays on disk. It remains valid while the proxy host
-        is unreachable, and regenerating it on every retry would force a
-        pointless re-registration round-trip over Cloudflare.
+        The keypair stays on disk unless sshd rejected it. A key remains valid
+        while the proxy host is unreachable, and regenerating it on every retry
+        would force a re-registration round-trip over Cloudflare.
         """
         if not self._tunnel_warning_emitted:
             LOGGER.warning(
@@ -502,10 +540,19 @@ def create_session(
     base_url: str,
     use_tunnel: bool | None,
     max_retries: int = 3,
+    run_id: str | None = None,
 ) -> requests.Session:
+    session: requests.Session | None = None
     if _resolve_use_tunnel(use_tunnel):
-        session = TunneledSession(auth_token=auth_token, original_base_url=base_url, max_retries=max_retries)
-    else:
+        try:
+            tunnel_run_id = canonical_run_id(run_id) if run_id else None
+        except ValueError:
+            LOGGER.warning("SSH tunnel requested with run_id %r, which is not a UUID; using a direct connection", run_id)
+        else:
+            session = TunneledSession(
+                auth_token=auth_token, original_base_url=base_url, run_id=tunnel_run_id, max_retries=max_retries
+            )
+    if session is None:
         session = _build_retry_session(max_retries)
     # Both branches, so that a job which never opens a tunnel, or which falls
     # back to a direct connection, is still named in the backend metrics.
