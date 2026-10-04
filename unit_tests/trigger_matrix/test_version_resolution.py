@@ -354,7 +354,7 @@ def test_multi_dc_job_skipped_until_the_build_reaches_every_region():
 
 def test_gce_target_has_no_region():
     """GCE images are global — resolving them per region would only duplicate lookups."""
-    job = JobConfig(job_name="job", backend="gce", params={"region": "us-east1"})
+    job = JobConfig(job_name="job", backend="gce", params={"gce_datacenter": "us-east1"})
     assert target_for_job(job) == BackendTarget("gce", "", "x86_64")
 
 
@@ -377,7 +377,7 @@ def _write_matrix(tmp_path, version_resolution=None):
         "defaults": {"provision_type": "on_demand"},
         "jobs": [
             {"job_name": "tier1/aws-test", "backend": "aws", "params": {"region": "eu-west-1"}},
-            {"job_name": "tier1/gce-test", "backend": "gce", "params": {"region": "us-east1"}},
+            {"job_name": "tier1/gce-test", "backend": "gce", "params": {"gce_datacenter": "us-east1"}},
         ],
     }
     if version_resolution:

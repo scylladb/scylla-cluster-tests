@@ -876,6 +876,9 @@ def _validate_job_entry(index: int, job: object, errors: list[str]) -> None:
 
     if "params" in job:
         _validate_params_block(job["params"], f"{where}: params", errors)
+        # `region` becomes SCT_REGION_NAME on every backend - a GCE one breaks AWS AMI resolution
+        if job.get("backend") == "gce" and "region" in (job["params"] or {}):
+            errors.append(f"{where}: params: a gce job takes its region as 'gce_datacenter', not 'region'")
 
 
 def validate_matrix_layout(raw: dict) -> None:
