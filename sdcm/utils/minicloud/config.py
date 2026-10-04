@@ -62,7 +62,8 @@ MINICLOUD_HEALTH_ACTION = "DescribeVpcs"
 # cache-miss launch fail with InvalidAMIID.NotFound. Keep this on eu-west-1 until
 # minicloud's create-resource path honours the per-request region.
 MINICLOUD_DEFAULT_REGION = "eu-west-1"
-# Only used when neither the gce_project param nor SCT_GCE_PROJECT says otherwise. minicloud
+# Only used when neither the gce_project param nor SCT_GCE_PROJECT says otherwise; it is the
+# project held by the default gcp-sct-project-1 credentials secret. minicloud
 # serves the Compute API itself, but the GCS staging bucket and Cloud Build image export are
 # real services in this project, so a wrong value here creates real resources in the wrong place.
 MINICLOUD_GCP_PROJECT_DEFAULT = "sct-project-1"
@@ -245,7 +246,11 @@ class MinicloudConfig:
         if not backend:
             backend = os.environ.get("SCT_CLUSTER_BACKEND", "")
         if not gcp_project:
-            gcp_project = os.environ.get("SCT_GCE_PROJECT") or MINICLOUD_GCP_PROJECT_DEFAULT
+            gcp_project = os.environ.get("SCT_GCE_PROJECT") or ""
+        # gce_project / SCT_GCE_PROJECT name the KeyStore credentials secret ("gcp-sct-project-1"),
+        # not the project it holds ("sct-project-1") - trim it the way the pipelines do
+        # (tagBuilder.groovy), or GCS rejects the bucket with "Unknown project id".
+        gcp_project = gcp_project.removeprefix("gcp-") or MINICLOUD_GCP_PROJECT_DEFAULT
         s3_passthrough_buckets = _param_as_list(params, "minicloud_s3_passthrough_buckets") or list(
             MINICLOUD_S3_PASSTHROUGH_BUCKETS_DEFAULT
         )
