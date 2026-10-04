@@ -51,7 +51,8 @@ from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import SpotTerminationEvent, TestFrameworkEvent
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
-from sdcm.utils.common import list_instances_aws
+from sdcm.utils.common import MINICLOUD_PENDING_INSTANCES_TIMEOUT, PENDING_INSTANCES_TIMEOUT, list_instances_aws
+from sdcm.utils.minicloud.endpoint import is_minicloud_active
 from sdcm.kernel_panic_checker import AWSKernelPanicChecker
 from sdcm.utils.decorators import retrying
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
@@ -521,6 +522,9 @@ class AWSCluster(cluster.BaseCluster):
             region_name=region_name,
             group_as_region=True,
             verbose=True,
+            pending_timeout=(
+                MINICLOUD_PENDING_INSTANCES_TIMEOUT if is_minicloud_active(self.params) else PENDING_INSTANCES_TIMEOUT
+            ),
         )
         instances = results[region_name]
 

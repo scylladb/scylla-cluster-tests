@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import math
 import os
 import time
 import logging
@@ -51,13 +52,20 @@ from sdcm.utils.gce_utils import (
 from sdcm.wait import exponential_retry
 from sdcm.kernel_panic_checker import GCPKernelPanicChecker
 from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
+from sdcm.utils.common import (
+    MINICLOUD_PENDING_INSTANCES_TIMEOUT,
+    PENDING_INSTANCES_TIMEOUT,
+    list_instances_gce,
+    gce_meta_to_dict,
+)
 from sdcm.utils.decorators import retrying
+from sdcm.utils.minicloud.endpoint import is_minicloud_active
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import resolve_ip_to_dns
 
 
 SPOT_TERMINATION_CHECK_DELAY = 5 * 60
+GCE_RUNNING_POLL_INTERVAL = 30
 
 LOGGER = logging.getLogger(__name__)
 
@@ -692,19 +700,25 @@ class GCECluster(cluster.BaseCluster):
                         return instance
         return None
 
-    @retrying(
-        n=20,
-        sleep_time=30,
-        allowed_exceptions=(CreateGCENodeError,),
-        message="Waiting for GCE instance to be available and in RUNNING state...",
-        raise_on_exceeded=True,
-    )
     def _get_instance_with_retry(self, name: str, dc_idx: int) -> compute_v1.Instance:
         """Fetch GCE instance by name with retry logic.
 
         The provisioner may take some time to create the instance and bring it to RUNNING state,
-        so we retry until the instance is found and ready.
+        so we retry until the instance is found and ready. On minicloud that includes fetching an
+        image that is not cached yet, which can take far longer than a real cloud ever does.
         """
+        pending_timeout = (
+            MINICLOUD_PENDING_INSTANCES_TIMEOUT if is_minicloud_active(self.params) else PENDING_INSTANCES_TIMEOUT
+        )
+        return retrying(
+            n=math.ceil(pending_timeout / GCE_RUNNING_POLL_INTERVAL),
+            sleep_time=GCE_RUNNING_POLL_INTERVAL,
+            allowed_exceptions=(CreateGCENodeError,),
+            message="Waiting for GCE instance to be available and in RUNNING state...",
+            raise_on_exceeded=True,
+        )(self._get_running_instance)(name=name, dc_idx=dc_idx)
+
+    def _get_running_instance(self, name: str, dc_idx: int) -> compute_v1.Instance:
         instance = self._get_instances_by_name(name=name, dc_idx=dc_idx)
         if not instance:
             raise CreateGCENodeError(f"Instance {name} not found")
