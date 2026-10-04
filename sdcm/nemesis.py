@@ -2045,12 +2045,25 @@ class Nemesis(NemesisFlags):
     # End of Nemesis running code
     @latency_calculator_decorator(legend="Run repair process with nodetool repair")
     def repair_nodetool_repair(self, node=None, publish_event=True):
+        """
+        Execute a repair using nodetool repair
+
+        The command timeout is the repair adaptive timeout: the 48h default scaled by the
+        `adaptive_timeout_multipliers` config param (`{repair: N}`), so tests with longer repairs
+        tune it per-test yaml. On expiry the command fails and a SoftTimeoutEvent is emitted.
+        """
         node = node if node else self.target_node
         with (
-            adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48),
+            adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48) as repair_timeout,
             self.action_log_scope(f"Start nodetool repair on {node.name} node"),
         ):
-            node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
+            node.run_nodetool(
+                sub_cmd="repair",
+                publish_event=publish_event,
+                timeout=repair_timeout,
+                long_running=True,
+                retry=0,
+            )
 
     def run_repair_on_nodes(self, nodes: list, ignore_down_hosts=False, publish_event=True):
         """
