@@ -21,6 +21,13 @@ The stage runs before the SCT runner is created, so an abort at this point costs
 prints the table below into the console log and appends a one-line summary to the build
 description, such as `Estimated cost: $11.90 (spot) [up to $20.99 on fallback]`.
 
+The estimate is also attached to the run in Argus, where it shows on the run's Costs tab. The
+stage sends it as soon as the Argus run exists, and the test sends it again when it starts, so
+it is there even for pipelines that create the Argus run later and for local runs. Pass
+`--report-to-argus` to do the same from the command line; it uses the configured `test_id`.
+A partial or unknown estimate is not sent, because Argus would store the floor as if it were the
+whole figure.
+
 The stage **never fails a build**. Any error, a missing price or absent credentials is logged
 and the pipeline carries on. The stage is bounded by a 5-minute timeout.
 
