@@ -14,6 +14,7 @@
 import pytest
 import yaml
 
+from sdcm.provision.common.utils import minify_shell_script
 from sdcm.provision.user_data import UserDataObject, UserDataBuilder
 from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
 
@@ -71,7 +72,7 @@ def test_user_data_builder_generates_valid_yaml_from_single_user_data_object():
     )
     script_file = loaded_yaml["write_files"][0]
     assert script_file["path"] == "/var/lib/sct/cloud-init/0_ExampleUserDataObject.sh"
-    assert user_data_object_1.script_to_run in script_file["content"]
+    assert script_file["content"] == minify_shell_script(user_data_object_1.script_to_run)
     assert script_file["permissions"] == "0644"
     assert loaded_yaml["runcmd"][1] == "mkdir -p /var/lib/sct/cloud-init && touch /var/lib/sct/cloud-init/done"
 
@@ -90,8 +91,8 @@ def test_user_data_can_merge_user_data_objects_yaml():
     )
     script_files = loaded_yaml["write_files"]
     assert len(script_files) == 2, "empty script user data object should not be added"
-    assert user_data_object_1.script_to_run in script_files[0]["content"]
-    assert user_data_object_2.script_to_run in script_files[1]["content"]
+    assert script_files[0]["content"] == minify_shell_script(user_data_object_1.script_to_run)
+    assert script_files[1]["content"] == minify_shell_script(user_data_object_2.script_to_run)
 
 
 def test_only_done_runcmd_in_yaml_when_no_user_data_objects():

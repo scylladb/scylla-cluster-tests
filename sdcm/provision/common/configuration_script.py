@@ -30,8 +30,10 @@ from sdcm.provision.common.utils import (
     configure_syslogng_destination_conf,
     configure_syslogng_file_source,
     install_vector_service,
-    configure_vector_target_script,
+    define_vector_target_function,
     install_docker_service,
+    minify_shell_script,
+    VECTOR_TARGET_FUNCTION,
 )
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 from sdcm.utils.sct_agent_installer import install_agent_script
@@ -57,7 +59,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         script = self._start_script()
         script += self._script_body()
         script += self._end_script()
-        return script
+        return minify_shell_script(script)
 
     @staticmethod
     def _wait_before_running_script() -> str:
@@ -85,17 +87,12 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         restarted, to retrigger sending logs.
         """
         host, port = self.syslog_host_port
-        vector_config = configure_vector_target_script(host=host, port=port)
-        return (
-            dedent(f"""
+        return define_vector_target_function(host=host, port=port) + dedent(f"""
         if [ -f {CLOUD_INIT_SCRIPTS_PATH}/done ] && command -v vector >/dev/null 2>&1; then
-        """)
-            + vector_config
-            + dedent("""
+            {VECTOR_TARGET_FUNCTION}
             exit 0
         fi
         """)
-        )
 
     @staticmethod
     def _mark_script_as_done() -> str:
@@ -148,8 +145,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
 
         if self.logs_transport == "vector":
             script += install_vector_service()
-            host, port = self.syslog_host_port
-            script += configure_vector_target_script(host=host, port=port)
+            script += f"{VECTOR_TARGET_FUNCTION}\n"
             script += update_repo_cache()
 
         if self.configure_sshd:

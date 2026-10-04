@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import re
 from textwrap import dedent
 
 from sdcm.utils.apt import APT_LOCK_TIMEOUT, apt_lock_wait
@@ -74,7 +75,24 @@ def configure_syslogng_target_script(hostname: str = "") -> str:
     )
 
 
+VECTOR_TARGET_FUNCTION = "write_vector_target"
+
+
+def define_vector_target_function(host: str, port: int) -> str:
+    """Define a shell function which points vector at SCT and restarts it.
+
+    Boot scripts call it from two places (reused node and fresh install), so the config is
+    written into the script once - EC2 caps user data at 16 KB (SCT-1147).
+    """
+    return f"{VECTOR_TARGET_FUNCTION}() {{\n" + _vector_target_body(host=host, port=port) + "}\n"
+
+
 def configure_vector_target_script(host: str, port: int) -> str:
+    """Self-contained variant of `define_vector_target_function`, for running over SSH."""
+    return define_vector_target_function(host=host, port=port) + f"{VECTOR_TARGET_FUNCTION}\n"
+
+
+def _vector_target_body(host: str, port: int) -> str:
     """Prepare vector configuration script with client-side log filtering.
 
     Configures vector to filter verbose logs before sending them to SCT, reducing memory pressure
@@ -167,6 +185,48 @@ EOF
 
         systemctl restart vector || echo "WARNING: vector.service restart failed, will be reconfigured later by configure_remote_logging"
     """).format(host=host, port=port)
+
+
+# `cat > file <<'EOF'` and friends; `<<<` (a here-string) has no body to keep
+HEREDOC_START = re.compile(r"(?<!<)<<(-?)\s*(['\"]?)(\w+)\2")
+TRAILING_COMMENT = re.compile(r"\s+#\s.*$")
+
+
+def minify_shell_script(script: str) -> str:
+    """Drop what bash does not need from a boot script: indentation, blank lines and comments.
+
+    EC2 caps user data at 16 KB (SCT-1147) and the generated scripts are written for humans.
+    Heredoc bodies are config files (YAML among them), so they are kept byte for byte. Trailing
+    comments are dropped only from lines without quotes, where a ` #` cannot be part of a string.
+    Lines inside a multi-line quoted string are treated as code, so put text whose indentation or
+    `#` lines matter into a heredoc.
+
+    Args:
+        script: the shell script to shrink.
+
+    Returns:
+        The same script, without the parts bash ignores.
+    """
+    lines = []
+    heredoc_end, strip_tabs = None, False
+    for raw_line in script.splitlines():
+        if heredoc_end is not None:
+            lines.append(raw_line)
+            if (raw_line.lstrip("\t") if strip_tabs else raw_line) == heredoc_end:
+                heredoc_end = None
+            continue
+        if not lines and raw_line.startswith("#!"):
+            lines.append(raw_line)
+            continue
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not any(quote in line for quote in "'\"`"):
+            line = TRAILING_COMMENT.sub("", line)
+        lines.append(line)
+        if heredoc := HEREDOC_START.search(line):
+            strip_tabs, heredoc_end = bool(heredoc.group(1)), heredoc.group(3)
+    return "\n".join(lines) + "\n"
 
 
 def configure_hosts_set_hostname_script(hostname: str) -> str:
