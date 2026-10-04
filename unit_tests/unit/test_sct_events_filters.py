@@ -156,32 +156,70 @@ def test_events_severity_changer_filter():
     assert event.severity == Severity.NORMAL
 
 
-def test_upgrade_whole_run_oversized_allocation_filter_matches_symbolized_backtrace(events_function_scope):  # noqa: ARG001
+def _make_symbolized_oversized_allocation_event(node: str, symbol: str) -> DatabaseLogEvent:
+    """Build an event like the real one: the raw log line has only addresses, the decoder fills `backtrace`."""
+    event = DatabaseLogEvent.OVERSIZED_ALLOCATION().add_info(
+        node=node,
+        line_number=1,
+        line=f"2026-06-27T03:17:49.539Z {node} !WARNING | scylla[1669] [shard 0:strm] seastar_memory - "
+        "oversized allocation: 1048576 bytes. This is non-fatal, but could lead to latency and/or fragmentation "
+        "issues. Please report: at 0x5f1a2b3 0x5f1a7c4 0x5f1ad05 0x5f1b296",
+    )
+    event.backtrace = (
+        "void seastar::backtrace<seastar::current_backtrace_tasklocal()::$_0>(...)\n"
+        f"{symbol}(seastar::rpc::wait_type, std::chrono::time_point<seastar::lowres_clock>)"
+    )
+    return event
+
+
+def test_oversized_whole_run_filter(events_function_scope):  # noqa: ARG001
     """SCT-1048: the decoder writes the symbol into `event.backtrace` and leaves `event.line`
-    as the raw log line, so a `DbEventsFilter(line=...)` on the symbol never matches."""
+    as the raw log line, so a filter on `event.line` never matches the symbol."""
     published_filters = []
     upgrade_test_stub = unittest.mock.MagicMock()
     upgrade_test_stub.params.scylla_version_upgrade_target = "2026.2.0"
 
-    with unittest.mock.patch.object(DbEventsFilter, "publish", autospec=True, side_effect=published_filters.append):
+    with unittest.mock.patch.object(EventsFilter, "publish", autospec=True, side_effect=published_filters.append):
         upgrade_test.UpgradeTest.filter_oversized_allocation_for_whole_run(upgrade_test_stub)
 
     assert len(published_filters) == 1
-    db_events_filter = published_filters[0]
+    events_filter = published_filters[0]
 
-    oversized_allocation_event = DatabaseLogEvent.OVERSIZED_ALLOCATION().add_info(
-        node="node1",
-        line_number=1,
-        line="2026-06-27T03:17:49.539Z node1 !WARNING | scylla[1669] [shard 0:strm] seastar_memory - "
-        "oversized allocation: 1048576 bytes. This is non-fatal, but could lead to latency and/or fragmentation "
-        "issues. Please report: at 0x5f1a2b3 0x5f1a7c4 0x5f1ad05 0x5f1b296",
+    matching_event = _make_symbolized_oversized_allocation_event("node1", "seastar::rpc::client::wait_for_reply")
+    other_symbol_event = _make_symbolized_oversized_allocation_event("node1", "seastar::rpc::client::send")
+    # `event_class` matches every `DatabaseLogEvent` subtype: only the regex tells the types apart,
+    # even when another event quotes the type name in its own text.
+    other_type_event = DatabaseLogEvent.BAD_ALLOC().add_info(
+        node="node1", line_number=1, line="bad_alloc, see type=OVERSIZED_ALLOCATION"
     )
-    oversized_allocation_event.backtrace = (
-        "void seastar::backtrace<seastar::current_backtrace_tasklocal()::$_0>(...)\n"
-        "seastar::rpc::client::wait_for_reply(seastar::rpc::wait_type, std::chrono::time_point<seastar::lowres_clock>)"
-    )
+    other_type_event.backtrace = matching_event.backtrace
 
-    assert db_events_filter.eval_filter(oversized_allocation_event)
+    assert events_filter.eval_filter(matching_event)
+    assert not events_filter.eval_filter(other_symbol_event)
+    assert not events_filter.eval_filter(other_type_event)
+
+
+def test_upgrade_per_node_oversized_allocation_filter_matches_only_its_node(events_function_scope):  # noqa: ARG001
+    upgrade_test_stub = unittest.mock.MagicMock()
+    node = unittest.mock.MagicMock()
+    node.name = "node-1"
+
+    with unittest.mock.patch.object(EventsFilter, "publish", autospec=True):
+        upgrade_test.UpgradeTest.configure_event_filtering(upgrade_test_stub, node)
+
+    (events_filter,) = upgrade_test_stub.stacks[node].enter_context.call_args.args
+
+    symbol = "seastar::rpc::client::wait_for_reply"
+    assert events_filter.eval_filter(_make_symbolized_oversized_allocation_event("node-1", symbol))
+    assert events_filter.eval_filter(
+        _make_symbolized_oversized_allocation_event("Node node-1 [10.0.0.1 | 10.0.0.1]", symbol)
+    )
+    assert not events_filter.eval_filter(_make_symbolized_oversized_allocation_event("node-10", symbol))
+    assert not events_filter.eval_filter(_make_symbolized_oversized_allocation_event("node-2", symbol))
+    assert not events_filter.eval_filter(_make_symbolized_oversized_allocation_event("node-1-extra", symbol))
+    assert not events_filter.eval_filter(
+        _make_symbolized_oversized_allocation_event("node-1", "seastar::rpc::client::send")
+    )
 
 
 def test_events_severity_changer_filter_gce_first_boot_bind_race():
