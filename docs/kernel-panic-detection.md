@@ -291,13 +291,13 @@ For a same-run reference of what a genuine detection looks like end to end, see 
 | Test | Scope |
 |------|-------|
 | [`unit_tests/unit/test_kernel_panic_checker.py`](../unit_tests/unit/test_kernel_panic_checker.py) | Detection, line extraction, file save/overwrite semantics, SSH probe, thread lifecycle, suspend/resume. Uses a `FakeKernelPanicChecker` with scripted output — no cloud APIs. |
-| [`unit_tests/integration/test_kernel_panic.py`](../unit_tests/integration/test_kernel_panic.py) | Provisions a real runner per backend (`aws`, `gce`, `azure`, `oci`), triggers a genuine panic via `echo c > /proc/sysrq-trigger`, and waits for `KernelPanicEvent`. |
+| [`unit_tests/manual/test_kernel_panic.py`](../unit_tests/manual/test_kernel_panic.py) | Provisions a real runner per backend (`aws`, `gce`, `azure`, `oci`), triggers a genuine panic via `echo c > /proc/sysrq-trigger`, and waits for `KernelPanicEvent`. |
 
-The integration test is gated on both the `integration` marker and the `SCT_TEST_KERNEL_PANIC` environment
-variable, since it provisions real cloud instances and intentionally crashes them:
+The manual test is gated on the `SCT_TEST_KERNEL_PANIC` environment variable, since it provisions real cloud
+instances and intentionally crashes them:
 
 ```bash
-SCT_TEST_KERNEL_PANIC=1 uv run sct.py integration-tests -t integration/test_kernel_panic.py
+SCT_TEST_KERNEL_PANIC=1 uv run pytest unit_tests/manual/test_kernel_panic.py -v -s
 ```
 
 Run the unit tests with:
@@ -306,8 +306,8 @@ Run the unit tests with:
 uv run sct.py unit-tests -t unit/test_kernel_panic_checker.py
 ```
 
-Note the subdirectory in `-t`: both commands prefix the value with `unit_tests/`, so the path has to include
-`unit/` or `integration/`.
+Note the subdirectory in `-t`: `sct.py unit-tests` prefixes the value with `unit_tests/`, so the path has to include
+`unit/`.
 
 ## Adding a Checker for a New Backend
 

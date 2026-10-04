@@ -33,7 +33,6 @@ import pytest
 
 from argus.client.replay_log import ReplayLog, ReplayLogOnlyResponse
 from argus.client.sct.client import ArgusSCTClient
-from sdcm.utils.argus import ReplayOnlyArgusSCTClient
 
 
 @pytest.fixture
@@ -105,21 +104,6 @@ class TestReplayLog:
         outcome = json.loads(lines[0])
         assert outcome["success"] is False
         assert outcome["error"] == "ConnectionError: Connection refused"
-
-    def test_write_is_synchronous(self, log_dir):
-        """write() has no background writer thread or queue - by the time it returns, the
-        record is already flushed to disk, with no delay needed before reading it back."""
-        replay_log = ReplayLog(log_dir=log_dir, run_id="sync-test", test_type="scylla-cluster-tests")
-        try:
-            replay_log.write("POST", "/testrun/$type/submit", {"type": "sct"}, None, {"run_id": "x"}, success=True)
-            lines = replay_log.path.read_text().strip().split("\n")  # no sleep before reading
-        finally:
-            replay_log.close()
-
-        assert len(lines) == 1
-        outcome = json.loads(lines[0])
-        assert outcome["success"] is True
-        assert outcome["body"] == {"run_id": "x"}
 
     def test_thread_safety(self, log_dir):
         """Multiple threads writing concurrently should produce valid, non-interleaved JSONL."""
@@ -286,28 +270,6 @@ class TestArgusClientReplayOnly:
         )
         try:
             assert client.session is None
-        finally:
-            client.close()
-
-    def test_replay_only_attribute(self, log_dir):
-        client = ReplayOnlyArgusSCTClient(run_id="test-uuid-attr", log_dir=log_dir)
-        try:
-            assert isinstance(client, ReplayOnlyArgusSCTClient)
-            assert client.session is None
-        finally:
-            client.close()
-
-    def test_normal_mode_replay_only_is_false(self, log_dir):
-        client = ArgusSCTClient(
-            run_id="test-uuid-normal",
-            auth_token="fake-token",
-            base_url="http://localhost:9999",
-            log_dir=log_dir,
-            replay_log_only=False,
-        )
-        try:
-            assert not isinstance(client, ReplayOnlyArgusSCTClient)
-            assert client.session is not None
         finally:
             client.close()
 

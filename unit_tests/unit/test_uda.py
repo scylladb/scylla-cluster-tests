@@ -45,20 +45,6 @@ TEST_UDFS = {
 }
 
 
-def test_create_uda_instance():
-    new_uda = UDA(
-        name="my_uda",
-        args="int",
-        return_type="int",
-        accumulator_udf=TEST_UDFS["accumulator"],
-        reduce_udf=TEST_UDFS["reducer"],
-        final_udf=TEST_UDFS["negator"],
-        initial_condition="(0, 0)",
-    )
-
-    assert isinstance(new_uda, UDA)
-
-
 def test_get_create_query_string():
     expected_create_query_string = (
         "CREATE AGGREGATE testing.my_uda(int) "

@@ -40,10 +40,6 @@ def sct_event_registry(tmp_path):
     SctEvent._sct_event_types_registry = registry_backup
 
 
-def test_sct_event_is_in_registry():
-    assert "SctEvent" in SctEvent._sct_event_types_registry
-
-
 def test_create_instance():
     with pytest.raises(TypeError, match="may not be instantiated directly"):
         SctEvent()

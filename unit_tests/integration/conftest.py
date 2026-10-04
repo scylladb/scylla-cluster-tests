@@ -207,6 +207,21 @@ def configure_scylla_node(docker_scylla_args: dict, params, ssl_dir: Path | None
     return scylla
 
 
+def _docker_usable_without_sudo() -> bool:
+    return subprocess.run(["docker", "info"], capture_output=True, check=False).returncode == 0
+
+
+@pytest.fixture(scope="session", autouse=True)
+def docker_without_sudo():
+    """Run the docker commands of the integration fixtures without sudo when the current user can talk to docker."""
+    if not _docker_usable_without_sudo():
+        yield
+        return
+    with pytest.MonkeyPatch.context() as patcher:
+        patcher.setattr(RemoteDocker, "sudo_needed", "", raising=True)
+        yield
+
+
 @pytest.fixture(name="docker_scylla", scope="function")
 def fixture_docker_scylla(request: pytest.FixtureRequest, params, tmp_path):  # noqa: PLR0914
     docker_scylla_args = {}

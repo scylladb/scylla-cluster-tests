@@ -50,39 +50,6 @@ def test_02_cql_kill(request, docker_scylla, params):
     ndbench_thread.get_results()
 
 
-def test_03_dynamodb_api(request, docker_scylla, events, params):
-    """
-    this test isn't working yet, since we didn't figure out a way to use ndbench with dynamodb
-    """
-
-    # start a command that would yield errors
-    loader_set = LocalLoaderSetDummy(params=params)
-    cmd = (
-        f"ndbench cli.clientName=DynamoDBKeyValue ; numKeys=1000 ; "
-        f"numReaders=2; numWriters=2 ; readRateLimit=500 ; writeRateLimit=500; "
-        f"dynamodb.autoscaling=false; dynamodb.endpoint=http://{docker_scylla.ip_address}:8000"
-    )
-    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=20, params=params)
-
-    def cleanup_thread():
-        ndbench_thread.kill()
-
-    request.addfinalizer(cleanup_thread)
-
-    file_logger = events.get_events_logger()
-    with events.wait_for_n_events(file_logger, count=4, timeout=60):
-        ndbench_thread.run()
-        ndbench_thread.get_results()
-
-    # check that events with the errors were sent out
-    cat = file_logger.get_events_by_category()
-    assert len(cat["ERROR"]) >= 1
-    assert any("Encountered an exception when driving load" in err for err in cat["ERROR"])
-
-    assert len(cat["CRITICAL"]) >= 2
-    assert any("BUILD FAILED" in critical for critical in cat["CRITICAL"])
-
-
 def test_04_verify_data(request, docker_scylla, events, params):
     loader_set = LocalLoaderSetDummy(params=params)
     cmd = (

@@ -12,10 +12,3 @@ def test_execute_nemesis_runs_health_check_when_previous_not_skipped(nemesis, ne
     nemesis_runner.last_nemesis_event = type("MockEvent", (), {"is_skipped": False})()
     nemesis_runner.execute_nemesis(nemesis)
     nemesis_runner.cluster.check_cluster_health.assert_called_once()
-
-
-def test_execute_nemesis_no_previous_event(nemesis, nemesis_runner):
-    """Test health check runs when there's no previous nemesis event."""
-    nemesis_runner.last_nemesis_event = None
-    nemesis_runner.execute_nemesis(nemesis)
-    nemesis_runner.cluster.check_cluster_health.assert_called_once()

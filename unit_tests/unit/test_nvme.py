@@ -133,71 +133,8 @@ NVME_LIST_JSON_FLAT = json.dumps(
 NVME_LIST_EMPTY_JSON = json.dumps({"Devices": []})
 
 # nvme-cli pads the entry index and prints hex values with a "0x" prefix
-ERROR_LOG_TEXT_PADDED_OUTPUT = """\
-Error Log Entries for device:nvme1n1 entries:2
-Entry[ 0]
-.................
-error_count	: 7
-sqid	: 0
-cmdid	: 0x12
-status_field	: 0x4004
-parm_error_location	: 0
-lba	: 0
-nsid	: 0x1
-vs	: 0
-trtype	: 0
-cs	: 0
-opcode	: 0x2
-.................
-Entry[ 1]
-.................
-error_count	: 6
-sqid	: 0
-cmdid	: 0xa
-status_field	: 0x4004
-parm_error_location	: 0
-lba	: 0x1000
-nsid	: 0x1
-vs	: 0
-trtype	: 0
-cs	: 0
-opcode	: 0x1
-.................
-"""
 
 # Format printed by nvme-cli itself: hex values and its own field names
-SELF_TEST_LOG_TEXT_NVME_CLI_OUTPUT = """\
-Device Self Test Log for NVME device:nvme1n1
-Current operation  : 0x2
-Current Completion : 67%
-Self Test Result[0]:
-  Operation Result             : 0x0
-  Self Test Code               : 0x1
-  Valid Diagnostic Information : 0x0
-  Power on hours (POH)         : 0x2238
-  Namespace Identifier         : 0x1
-  Failing LBA                  : 0x0
-  Status Code Type             : 0x0
-  Status Code                  : 0x0
-  Segment Number               : 0x0
-Self Test Result[1]:
-  Operation Result             : 0x7
-  Self Test Code               : 0x2
-  Valid Diagnostic Information : 0x1
-  Power on hours (POH)         : 0x2000
-  Namespace Identifier         : 0x1
-  Failing LBA                  : 0x1234
-  Status Code Type             : 0x1
-  Status Code                  : 0x3
-  Segment Number               : 0x2
-"""
-
-SELF_TEST_LOG_IN_PROGRESS_TEXT = """\
-Device Self Test Log for NVME device:nvme1n1
-Current operation  : 2
-Current Completion : 67
-"""
-
 
 # ---------------------------------------------------------------------------
 # Tests: parse_nvme_list_output

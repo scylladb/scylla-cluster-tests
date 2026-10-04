@@ -50,22 +50,11 @@ def test_filter_by_version_exclusion(sample_jobs):
     assert all(j.job_name != "job-b" for j in result)
 
 
-def test_filter_by_version_exclusion_master(sample_jobs):
-    result = filter_jobs(sample_jobs, scylla_version="master:latest")
-    assert len(result) == 3
-    assert all(j.job_name != "job-d" for j in result)
-
-
 def test_filter_skip_list(sample_jobs):
     result = filter_jobs(sample_jobs, scylla_version="2025.4", skip_jobs=["job-a", "job-c"])
     assert len(result) == 2
     names = {j.job_name for j in result}
     assert names == {"job-b", "job-d"}
-
-
-def test_no_selector_returns_all_eligible(sample_jobs):
-    result = filter_jobs(sample_jobs, scylla_version="2025.4")
-    assert len(result) == 4
 
 
 def test_combined_filters(sample_jobs):

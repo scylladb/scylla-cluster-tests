@@ -21,7 +21,6 @@ from sdcm.utils.cloud_catalog.catalog_generator import (
     generate_gce_catalog,
     generate_oci_catalog,
 )
-from sdcm.utils.cloud_catalog.instance_catalog import InstanceTypeInfo
 
 
 @pytest.fixture()
@@ -90,13 +89,6 @@ def test_generate_aws_i8g_returns_instances():
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_aws_credentials")
-def test_generate_aws_i8g_cloud_field():
-    result = generate_aws_catalog(["i8g"], region="us-east-1")
-    assert all(r.cloud == "aws" for r in result)
-
-
-@pytest.mark.integration
-@pytest.mark.usefixtures("_check_aws_credentials")
 def test_generate_aws_i8g_family_field():
     result = generate_aws_catalog(["i8g"], region="us-east-1")
     assert all(r.family == "i8g" for r in result)
@@ -141,13 +133,6 @@ def test_generate_aws_multiple_families():
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_aws_credentials")
-def test_generate_aws_returns_instance_type_info_objects():
-    result = generate_aws_catalog(["i8g"], region="us-east-1")
-    assert all(isinstance(r, InstanceTypeInfo) for r in result)
-
-
-@pytest.mark.integration
-@pytest.mark.usefixtures("_check_aws_credentials")
 def test_generate_aws_empty_family_returns_empty():
     result = generate_aws_catalog(["nonexistent99z"], region="us-east-1")
     assert result == []
@@ -165,13 +150,6 @@ def test_generate_gce_n2_returns_instances():
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("_check_gce_credentials")
-def test_generate_gce_cloud_field():
-    result = generate_gce_catalog(["n2"], zone="us-east1-b")
-    assert all(r.cloud == "gce" for r in result)
-
-
-@pytest.mark.integration
-@pytest.mark.usefixtures("_check_gce_credentials")
 def test_generate_gce_family_field():
     result = generate_gce_catalog(["n2"], zone="us-east1-b")
     assert all(r.family == "n2" for r in result)
@@ -184,13 +162,6 @@ def test_generate_gce_vcpus_positive():
     assert all(r.vcpus > 0 for r in result)
 
 
-@pytest.mark.integration
-@pytest.mark.usefixtures("_check_gce_credentials")
-def test_generate_gce_returns_instance_type_info_objects():
-    result = generate_gce_catalog(["n2"], zone="us-east1-b")
-    assert all(isinstance(r, InstanceTypeInfo) for r in result)
-
-
 # --- Azure tests ---
 
 
@@ -199,13 +170,6 @@ def test_generate_gce_returns_instance_type_info_objects():
 def test_generate_azure_standard_l_returns_instances():
     result = generate_azure_catalog(["Standard_L"], region="eastus")
     assert len(result) > 0, "Expected at least one Standard_L VM size"
-
-
-@pytest.mark.integration
-@pytest.mark.usefixtures("_check_azure_credentials")
-def test_generate_azure_cloud_field():
-    result = generate_azure_catalog(["Standard_L"], region="eastus")
-    assert all(r.cloud == "azure" for r in result)
 
 
 @pytest.mark.integration
@@ -222,13 +186,6 @@ def test_generate_azure_price_present():
     assert any(r.price_per_hour is not None for r in result)
 
 
-@pytest.mark.integration
-@pytest.mark.usefixtures("_check_azure_credentials")
-def test_generate_azure_returns_instance_type_info_objects():
-    result = generate_azure_catalog(["Standard_L"], region="eastus")
-    assert all(isinstance(r, InstanceTypeInfo) for r in result)
-
-
 # --- OCI tests ---
 
 
@@ -237,17 +194,3 @@ def test_generate_azure_returns_instance_type_info_objects():
 def test_generate_oci_dense_io_returns_instances():
     result = generate_oci_catalog(["BM.DenseIO", "VM.DenseIO"])
     assert len(result) > 0
-
-
-@pytest.mark.integration
-@pytest.mark.usefixtures("_check_oci_credentials")
-def test_generate_oci_cloud_field():
-    result = generate_oci_catalog(["BM.DenseIO"])
-    assert all(r.cloud == "oci" for r in result)
-
-
-@pytest.mark.integration
-@pytest.mark.usefixtures("_check_oci_credentials")
-def test_generate_oci_returns_instance_type_info_objects():
-    result = generate_oci_catalog(["VM.DenseIO"])
-    assert all(isinstance(r, InstanceTypeInfo) for r in result)

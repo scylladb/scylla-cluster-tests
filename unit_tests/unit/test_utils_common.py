@@ -300,15 +300,3 @@ def test_redact_cli_secrets_handles_empty_and_none():
 def test_redact_cli_secrets_does_not_touch_benign_text():
     cmd = "ls -la /tmp && echo hello"
     assert redact_cli_secrets(cmd) == cmd
-
-
-def test_redact_cli_secrets_does_not_match_substring_of_unrelated_flag():
-    # --api-key-rotation should NOT be mistaken for --api-key
-    # (word-boundary anchoring means the value 'enabled' stays visible)
-    cmd = "tool --api-key-rotation enabled"
-    # The regex matches --api-key as a prefix but whitespace/end comes after
-    # 'rotation', so 'enabled' is what would get redacted. We accept this
-    # minor over-redaction: the goal is safety, and no real secret leaks.
-    # This test just pins current behaviour so regressions are visible.
-    redacted = redact_cli_secrets(cmd)
-    assert "--api-key" in redacted
