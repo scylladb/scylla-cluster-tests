@@ -11,11 +11,15 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
+import gzip
+import json
+from email import message_from_string
+
 import pytest
 import yaml
 
 from sdcm.provision.common.utils import minify_shell_script
-from sdcm.provision.user_data import UserDataObject, UserDataBuilder
+from sdcm.provision.user_data import UserDataObject, UserDataBuilder, gzipped_mime_part
 from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
 
 
@@ -48,6 +52,12 @@ class EmptyScriptUserDataObject(UserDataObject):
     @property
     def packages_to_install(self) -> set[str]:
         return {"pkg-from-empty", "another-pkg-to-install"}
+
+
+class ScyllaImageUserDataObject(UserDataObject):
+    @property
+    def scylla_machine_image_json(self) -> str:
+        return json.dumps({"start_scylla_on_first_boot": False})
 
 
 class NotApplicableUserDataObject(UserDataObject):
@@ -133,3 +143,32 @@ def test_walinuxagent_applicability(node_type, backend, expected):
     )
 
     assert user_data_object.is_applicable is expected
+
+
+@pytest.mark.parametrize("with_scylla_image_json", [True, False], ids=["scylla-db", "loader"])
+def test_mime_user_data_carries_the_cloud_config_compressed(with_scylla_image_json):
+    user_data_objects = [ExampleUserDataObject()]
+    if with_scylla_image_json:
+        user_data_objects.append(ScyllaImageUserDataObject())
+    builder = UserDataBuilder(user_data_objects=user_data_objects)
+
+    parts = {
+        part.get_content_type(): part
+        for part in message_from_string(builder.build_mime_multipart_user_data()).walk()
+        if not part.is_multipart()
+    }
+
+    # compressed for the OCI metadata limit; cloud-init unpacks it back into a cloud-config part
+    cloud_config = gzip.decompress(parts.pop("application/x-gzip").get_payload(decode=True)).decode()
+    assert cloud_config == builder.build_user_data_yaml()
+    if with_scylla_image_json:
+        # scylla-machine-image reads this part as plain text, so it must stay uncompressed
+        assert json.loads(parts.pop("x-scylla/json").get_payload()) == {"start_scylla_on_first_boot": False}
+    assert not parts
+
+
+@pytest.mark.parametrize("content", ["echo no shebang\n", "packages: []\n", "\n#!/bin/bash\n"])
+def test_gzipped_part_refuses_content_cloud_init_would_skip(content):
+    # unpacked, the part has no MIME type left: cloud-init only runs it by its first line
+    with pytest.raises(ValueError, match="first line"):
+        gzipped_mime_part(content, filename="user-script.txt")

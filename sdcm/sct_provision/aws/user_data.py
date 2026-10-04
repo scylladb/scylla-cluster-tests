@@ -15,6 +15,7 @@ from sdcm.provision.common.user_data import (
     ScyllaUserDataBuilderBase,
     RaidLevelType,
 )
+from sdcm.provision.user_data import gzipped_mime_part
 from sdcm.provision.network_configuration import is_ip_ssh_connections_ipv6, network_interfaces_count
 from sdcm.provision.scylla_yaml import ScyllaYaml
 from sdcm.sct_config import SCTConfiguration
@@ -108,10 +109,8 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
         part.add_header("Content-Disposition", 'attachment; filename="cloud-config.txt"')
         msg.attach(part)
 
-        part = MIMEBase("text", "x-shellscript")
-        part.set_payload(base64.b64decode(self.post_configuration_script))
-        part.add_header("Content-Disposition", 'attachment; filename="user-script.txt"')
-        msg.attach(part)
+        script = base64.b64decode(self.post_configuration_script).decode("utf-8")
+        msg.attach(gzipped_mime_part(script, filename="user-script.txt"))
 
         return str(msg)
 
@@ -150,4 +149,7 @@ class AWSInstanceUserDataBuilder(UserDataBuilderBase):
             install_agent=self.install_agent,
             disable_guest_firewall=guest_firewall_needs_disabling(self.params),
         ).to_string()
-        return post_boot_script
+        # compressed like the scylla user data: a loader with docker and the agent is ~14.5 KB otherwise
+        msg = MIMEMultipart()
+        msg.attach(gzipped_mime_part(post_boot_script, filename="user-script.txt"))
+        return msg.as_string()

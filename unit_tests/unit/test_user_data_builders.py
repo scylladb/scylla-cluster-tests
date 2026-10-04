@@ -1,4 +1,7 @@
+import base64
+import gzip
 import json
+from email import message_from_string
 
 import pytest
 
@@ -63,4 +66,9 @@ def test_user_data_format_version_v3_building(logs_transport, test_config):
     assert "Content-Type: multipart/mixed" in output
     assert "Content-Type: x-scylla/json" in output
     assert "Content-Type: text/cloud-config" in output
-    assert "Content-Type: text/x-shellscript" in output
+
+    # compressed to fit the EC2 user data limit; cloud-init unpacks it into a shell script part
+    parts = {part.get_content_type(): part for part in message_from_string(output).walk()}
+    script = gzip.decompress(parts["application/x-gzip"].get_payload(decode=True)).decode()
+    assert script == base64.b64decode(builder.post_configuration_script).decode()
+    assert script.startswith("#!/bin/bash")
