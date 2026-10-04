@@ -20,7 +20,12 @@
 //
 // Always safe to call: it is a no-op when there is no container, so callers can put it in a
 // `finally` without guarding.
-def call(Map params = [:], Object build = null) {
+//
+// `logsSubdir` keeps parallel branches of one build apart: they archive into the same build, so
+// without it the last one to finish overwrites the others' minicloud-logs/ (SCT-1145). Callers
+// with a single branch leave it empty and keep the flat layout.
+def call(Map params = [:], Object build = null, String logsSubdir = '') {
+    def logsDir = logsSubdir ? "minicloud-logs/${logsSubdir}" : 'minicloud-logs'
     def keepAlways = ['db_nodes', 'loader_nodes', 'monitor_nodes'].every {
         params."post_behavior_${it}" == 'keep'
     }
@@ -49,10 +54,15 @@ fi
 # Capture the log before removing the container - this is the only place the emulator's own view of
 # the run survives, and it is what tells you whether guests failed to boot or the API rejected a
 # call. Bounded: a long run can produce a lot.
-mkdir -p ./minicloud-logs
-docker logs --tail 5000 minicloud > ./minicloud-logs/minicloud-container.log 2>&1
+# The workspace outlives the build on a static agent: start from an empty dir, or whatever an
+# earlier build left in it is archived again as if it belonged to this one. Only this caller's
+# own slice - a sibling branch may be writing its subdir right now - and only that slice is
+# archived below, so a stale sibling subdir left by an older build never ships either.
+rm -rf ./${logsDir}
+mkdir -p ./${logsDir}
+docker logs --tail 5000 minicloud > ./${logsDir}/minicloud-container.log 2>&1
 echo "--- last 50 lines of the minicloud container log ---"
-tail -50 ./minicloud-logs/minicloud-container.log
+tail -50 ./${logsDir}/minicloud-container.log
 
 # Every guest's serial console, straight off the builder's state dir. minicloud runs each VM
 # with `-serial file:<state_dir>/instances/<id>/serial.log` and keeps that file after the
@@ -60,15 +70,24 @@ tail -50 ./minicloud-logs/minicloud-container.log
 # where every per-node archive comes back empty and the container log only shows the API side.
 # The state dir is read off the container's own bind mount, so a non-default
 # minicloud_state_dir is picked up without this needing to know about it.
+# The dir is shared with earlier builds on this agent - an aborted one leaves its guests behind for
+# days - so only serial logs written since this container was created belong to this run. Created,
+# not StartedAt, so a restart of the same container does not drop the guests launched before it.
+# If the time cannot be read, fall back to collecting everything rather than nothing.
 MINICLOUD_MOUNT_TEMPLATE='{{range .Mounts}}{{if eq .Destination "/root/.cache/minicloud"}}{{.Source}}{{end}}{{end}}'
 MINICLOUD_STATE_DIR="\$(docker inspect minicloud --format "\${MINICLOUD_MOUNT_TEMPLATE}" 2>/dev/null)"
+RUN_START_MARKER="\$(mktemp)"
+trap 'rm -f "\${RUN_START_MARKER}"' EXIT
+MINICLOUD_CREATED="\$(docker inspect minicloud --format '{{.Created}}' 2>/dev/null)"
+touch -d "\${MINICLOUD_CREATED:-@0}" "\${RUN_START_MARKER}" 2>/dev/null || touch -d @0 "\${RUN_START_MARKER}"
 if [[ -d "\${MINICLOUD_STATE_DIR}/instances" ]] ; then
     for serial in "\${MINICLOUD_STATE_DIR}"/instances/*/serial.log ; do
         [[ -f "\$serial" ]] || continue
+        [[ "\$serial" -nt "\${RUN_START_MARKER}" ]] || continue
         instance_id="\$(basename "\$(dirname "\$serial")")"
-        cp "\$serial" "./minicloud-logs/minicloud-serial-\${instance_id}.log"
+        cp "\$serial" "./${logsDir}/minicloud-serial-\${instance_id}.log"
     done
-    echo "collected \$(ls -1 ./minicloud-logs/minicloud-serial-*.log 2>/dev/null | wc -l) guest serial log(s)"
+    echo "collected \$(ls -1 ./${logsDir}/minicloud-serial-*.log 2>/dev/null | wc -l) guest serial log(s) from this run"
 else
     echo "no minicloud instances dir found (state dir: \${MINICLOUD_STATE_DIR:-unknown}) - no guest serial logs"
 fi
@@ -88,5 +107,5 @@ docker rm -f minicloud
 # Leave ~/.cache/minicloud/amis alone: it is the expensive, reusable part. See minicloudReclaim.
 exit 0
 """
-    archiveArtifacts artifacts: 'minicloud-logs/**', allowEmptyArchive: true
+    archiveArtifacts artifacts: "${logsDir}/**", allowEmptyArchive: true
 }
