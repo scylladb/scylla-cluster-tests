@@ -28,11 +28,14 @@ from google.cloud.compute_v1.types import Instance as GceInstance
 from mypy_boto3_ec2 import EC2Client
 
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, ScyllaCloudAPIError
+from sdcm.cluster_baremetal import PhysicalHost
+from sdcm.keystore import KeyStore
 from sdcm.provision.oci.constants import TAG_NAMESPACE
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.aws.emr_provisioner import list_emr_clusters
 from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.argus import (
     ArgusError,
     ReplayOnlyArgusSCTClient,
@@ -137,6 +140,9 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
     if cluster_backend.startswith("k8s-local"):
         LOGGER.info("No remote resources are expected in the local K8S setups. Skipping.")
         return
+    if cluster_backend == "baremetal":
+        clean_resources_baremetal(tags_dict, config=config, dry_run=dry_run)
+        return True
     if cluster_backend in ("k8s-eks", ""):
         for name, clean_func in (
             ("EKS clusters", clean_clusters_eks),
@@ -221,6 +227,55 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
             ", ".join(name for name, _ in failures),
         )
     return True
+
+
+# post behavior node type -> section of the bare-metal hosts config (s3_baremetal_config)
+BAREMETAL_HOSTS_SECTIONS = {"scylla-db": "db_nodes", "loader": "loader_nodes", "monitor": "monitor_nodes"}
+
+
+def clean_resources_baremetal(tags_dict: dict, config, dry_run: bool = False) -> None:
+    """Leave the hosts of a bare-metal run clean for the next run.
+
+    SCT neither creates nor destroys physical hosts, so cleaning them up means undoing what the run left on them that
+    breaks the next one: the SSH tunnel ports it bound, with `ip_ssh_connections: public`, and the scylla disk setup
+    of a DB host, unless Scylla came preinstalled. Runs in the cleanup phase, after the logs were collected, for the
+    node types the post behavior asks to clean (`NodeType`, all of them when not given).
+    """
+    node_types = tags_dict.get("NodeType")
+    node_types = list(BAREMETAL_HOSTS_SECTIONS) if node_types is None else node_types
+    if not (node_types := [node_type for node_type in node_types if node_type in BAREMETAL_HOSTS_SECTIONS]):
+        LOGGER.info("No bare-metal hosts to clean up")
+        return
+    tunnel_ports = config.get("ip_ssh_connections") == "public"
+    if tunnel_ports:
+        # The run's tunnel containers go first: one left running would reconnect and bind its port on the host again
+        clean_resources_docker(tags_dict, dry_run=dry_run)
+
+    hosts_config = KeyStore().get_baremetal_config(config.get("s3_baremetal_config"))
+    for node_type in node_types:
+        section = hosts_config[BAREMETAL_HOSTS_SECTIONS[node_type]]
+        scylla_disk_setup = node_type == "scylla-db" and not config.get("use_preinstalled_scylla")
+        for host_ips in section["node_list"]:
+            address = host_ips["public_ip"] if tunnel_ports else host_ips["private_ip"]
+            if dry_run:
+                LOGGER.info(
+                    "Would clean up %s host %s (tunnel ports: %s, scylla disk setup: %s)",
+                    node_type,
+                    address,
+                    tunnel_ports,
+                    scylla_disk_setup,
+                )
+                continue
+            LOGGER.info("Cleaning up %s host %s", node_type, address)
+            remoter = RemoteCmdRunnerBase.create_remoter(
+                hostname=address, user=section["username"], key_file=config.get("user_credentials_path")
+            )
+            try:
+                PhysicalHost(name=f"{node_type} {address}", remoter=remoter).clean_up_host(
+                    tunnel_ports=tunnel_ports, scylla_disk_setup=scylla_disk_setup
+                )
+            finally:
+                remoter.stop()
 
 
 def clean_resources_docker(tags_dict: dict, dry_run: bool = False) -> None:
