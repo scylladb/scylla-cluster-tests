@@ -170,6 +170,23 @@ def test_09_unknown_env(monkeypatch):
     assert "SCT_WHAT_IS_THAT=just_made_this_up" in msg
 
 
+@pytest.mark.parametrize("backend, region, resolved", [("gce", "us-central1", False), ("aws", "eu-west-1", True)])
+def test_ami_params_resolved_only_on_aws(monkeypatch, backend, region, resolved):
+    """A shared overlay's `resolve:ssm:` AMI must not reach AWS on a non-AWS backend."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
+    _set_gce_instance_types(monkeypatch)
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
+    monkeypatch.setenv("SCT_REGION_NAME", region)
+    monkeypatch.setenv(
+        "SCT_GCE_IMAGE_DB", "https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/family/debian-13"
+    )
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/ami-id")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    with patch.object(sct_config, "convert_name_to_ami_if_needed", return_value="ami-resolved") as convert:
+        sct_config.SCTConfiguration()
+    assert any(call.args[0].startswith("resolve:ssm:") for call in convert.call_args_list) is resolved
+
+
 def test_12_scylla_version_repo_ubuntu(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     _set_gce_instance_types(monkeypatch)
