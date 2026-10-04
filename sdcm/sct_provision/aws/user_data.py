@@ -97,15 +97,12 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
         scylla_image_configuration = self.model_dump()
         scylla_image_configuration.pop("post_configuration_script", False)
         part = MIMEBase("x-scylla", "json")
-        part.set_payload(json.dumps(scylla_image_configuration, indent=4, sort_keys=True))
+        # compact: EC2 caps the whole user data at 16 KB (SCT-1147)
+        part.set_payload(json.dumps(scylla_image_configuration, separators=(",", ":"), sort_keys=True))
         part.add_header("Content-Disposition", 'attachment; filename="scylla_machine_image.json"')
         msg.attach(part)
 
-        cloud_config = """
-        #cloud-config
-        cloud_final_modules:
-        - [scripts-user, always]
-        """
+        cloud_config = "#cloud-config\ncloud_final_modules:\n- [scripts-user, always]\n"
         part = MIMEBase("text", "cloud-config")
         part.set_payload(cloud_config)
         part.add_header("Content-Disposition", 'attachment; filename="cloud-config.txt"')

@@ -24,7 +24,7 @@ from unittest.mock import Mock
 import pytest
 
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
-from sdcm.provision.common.utils import disable_firewall, guest_firewall_needs_disabling
+from sdcm.provision.common.utils import disable_firewall, guest_firewall_needs_disabling, minify_shell_script
 from sdcm.sct_provision.user_data_objects.firewall import DisableFirewallUserDataObject
 
 
@@ -91,7 +91,7 @@ def test_the_other_boot_path_runs_the_very_same_script():
     """
     script = ConfigurationScriptBuilder(logs_transport="libssh2", disable_guest_firewall=True).to_string()
 
-    assert disable_firewall() in script
+    assert minify_shell_script(disable_firewall()) in script
     # first thing on the node: whatever comes after needs the node to be reachable
     assert script.index("netfilter-persistent") < script.index("backoff")
 

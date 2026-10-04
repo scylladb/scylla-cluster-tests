@@ -17,6 +17,7 @@ from sdcm.provision.common.configuration_script import ConfigurationScriptBuilde
 from sdcm.provision.common.utils import (
     configure_backoff_timeout,
     install_vector_service,
+    minify_shell_script,
     update_repo_cache,
 )
 
@@ -39,7 +40,7 @@ def test_both_log_transports_refresh_os_package_lists_for_later_node_setup():
         configure_sshd=False,
     )
 
-    refresh = update_repo_cache()
+    refresh = minify_shell_script(update_repo_cache())
 
     config.logs_transport = "vector"
     vector_script = config.to_string()

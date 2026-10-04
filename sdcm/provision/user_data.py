@@ -20,6 +20,8 @@ from typing import List, Dict
 
 import yaml
 
+from sdcm.provision.common.utils import minify_shell_script
+
 CLOUD_INIT_SCRIPTS_PATH = "/var/lib/sct/cloud-init"
 
 
@@ -103,7 +105,13 @@ class UserDataBuilder:
             script_path = f"{CLOUD_INIT_SCRIPTS_PATH}/{idx}_{user_data_object.name}.sh"
             packages.update(user_data_object.packages_to_install)
             if user_data_object.script_to_run:
-                scripts.append({"content": user_data_object.script_to_run, "path": script_path, "permissions": "0644"})
+                scripts.append(
+                    {
+                        "content": minify_shell_script(user_data_object.script_to_run),
+                        "path": script_path,
+                        "permissions": "0644",
+                    }
+                )
                 runcmds.append(
                     f"cd {CLOUD_INIT_SCRIPTS_PATH}; bash -eux {script_path}; test  $? = 0 || touch {script_path}.failed"
                 )
