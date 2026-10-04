@@ -8,6 +8,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.768
+  spot_price_per_hour: 0.161971
 - instance_type: Standard_D16_v5
   family: Standard_D
   vcpus: 16
@@ -16,6 +17,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.768
+  spot_price_per_hour: 0.162125
 - instance_type: Standard_D16as_v5
   family: Standard_D
   vcpus: 16
@@ -24,6 +26,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.688
+  spot_price_per_hour: 0.145237
 - instance_type: Standard_D16as_v6
   family: Standard_D
   vcpus: 16
@@ -32,6 +35,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.726
+  spot_price_per_hour: 0.15217
 - instance_type: Standard_D16pds_v6
   family: Standard_D
   vcpus: 16
@@ -40,6 +44,7 @@ instances:
   local_disk_count: 2
   arch: arm64
   price_per_hour: 0.734
+  spot_price_per_hour: 0.264827
 - instance_type: Standard_D16ps_v6
   family: Standard_D
   vcpus: 16
@@ -48,6 +53,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.562
+  spot_price_per_hour: 0.20277
 - instance_type: Standard_D16s_v4
   family: Standard_D
   vcpus: 16
@@ -56,6 +62,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.96
+  spot_price_per_hour: 0.161971
 - instance_type: Standard_D16s_v5
   family: Standard_D
   vcpus: 16
@@ -64,6 +71,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.768
+  spot_price_per_hour: 0.162125
 - instance_type: Standard_D2_v4
   family: Standard_D
   vcpus: 2
@@ -72,6 +80,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.096
+  spot_price_per_hour: 0.020246
 - instance_type: Standard_D2_v5
   family: Standard_D
   vcpus: 2
@@ -80,6 +89,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.096
+  spot_price_per_hour: 0.020266
 - instance_type: Standard_D2as_v5
   family: Standard_D
   vcpus: 2
@@ -88,6 +98,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.086
+  spot_price_per_hour: 0.018155
 - instance_type: Standard_D2as_v6
   family: Standard_D
   vcpus: 2
@@ -96,6 +107,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.0908
+  spot_price_per_hour: 0.019032
 - instance_type: Standard_D2pds_v6
   family: Standard_D
   vcpus: 2
@@ -104,6 +116,7 @@ instances:
   local_disk_count: 1
   arch: arm64
   price_per_hour: 0.0918
+  spot_price_per_hour: 0.033121
 - instance_type: Standard_D2ps_v6
   family: Standard_D
   vcpus: 2
@@ -112,6 +125,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.0702
+  spot_price_per_hour: 0.025328
 - instance_type: Standard_D2s_v4
   family: Standard_D
   vcpus: 2
@@ -120,6 +134,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.096
+  spot_price_per_hour: 0.020246
 - instance_type: Standard_D2s_v5
   family: Standard_D
   vcpus: 2
@@ -128,6 +143,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.096
+  spot_price_per_hour: 0.020266
 - instance_type: Standard_D32_v4
   family: Standard_D
   vcpus: 32
@@ -136,6 +152,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.536
+  spot_price_per_hour: 0.323942
 - instance_type: Standard_D32_v5
   family: Standard_D
   vcpus: 32
@@ -144,6 +161,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.536
+  spot_price_per_hour: 0.32425
 - instance_type: Standard_D32as_v5
   family: Standard_D
   vcpus: 32
@@ -152,6 +170,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.848
+  spot_price_per_hour: 0.290474
 - instance_type: Standard_D32as_v6
   family: Standard_D
   vcpus: 32
@@ -160,6 +179,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.453
+  spot_price_per_hour: 0.304549
 - instance_type: Standard_D32pds_v6
   family: Standard_D
   vcpus: 32
@@ -168,6 +188,7 @@ instances:
   local_disk_count: 4
   arch: arm64
   price_per_hour: 1.469
+  spot_price_per_hour: 0.530015
 - instance_type: Standard_D32ps_v6
   family: Standard_D
   vcpus: 32
@@ -176,6 +197,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 1.123
+  spot_price_per_hour: 0.405178
 - instance_type: Standard_D32s_v4
   family: Standard_D
   vcpus: 32
@@ -184,6 +206,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.536
+  spot_price_per_hour: 0.323942
 - instance_type: Standard_D32s_v5
   family: Standard_D
   vcpus: 32
@@ -192,6 +215,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.536
+  spot_price_per_hour: 0.32425
 - instance_type: Standard_D48_v4
   family: Standard_D
   vcpus: 48
@@ -200,6 +224,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.304
+  spot_price_per_hour: 0.485914
 - instance_type: Standard_D48_v5
   family: Standard_D
   vcpus: 48
@@ -208,6 +233,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.304
+  spot_price_per_hour: 0.486374
 - instance_type: Standard_D48as_v5
   family: Standard_D
   vcpus: 48
@@ -216,6 +242,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.064
+  spot_price_per_hour: 0.43571
 - instance_type: Standard_D48as_v6
   family: Standard_D
   vcpus: 48
@@ -224,6 +251,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.179
+  spot_price_per_hour: 0.456718
 - instance_type: Standard_D48pds_v6
   family: Standard_D
   vcpus: 48
@@ -232,6 +260,7 @@ instances:
   local_disk_count: 6
   arch: arm64
   price_per_hour: 2.203
+  spot_price_per_hour: 0.794842
 - instance_type: Standard_D48ps_v6
   family: Standard_D
   vcpus: 48
@@ -240,6 +269,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 1.685
+  spot_price_per_hour: 0.607948
 - instance_type: Standard_D48s_v4
   family: Standard_D
   vcpus: 48
@@ -248,6 +278,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.304
+  spot_price_per_hour: 0.485914
 - instance_type: Standard_D48s_v5
   family: Standard_D
   vcpus: 48
@@ -256,6 +287,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.304
+  spot_price_per_hour: 0.486374
 - instance_type: Standard_D4_v4
   family: Standard_D
   vcpus: 4
@@ -264,6 +296,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.192
+  spot_price_per_hour: 0.040493
 - instance_type: Standard_D4_v5
   family: Standard_D
   vcpus: 4
@@ -272,6 +305,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.192
+  spot_price_per_hour: 0.040531
 - instance_type: Standard_D4as_v5
   family: Standard_D
   vcpus: 4
@@ -280,6 +314,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.356
+  spot_price_per_hour: 0.036309
 - instance_type: Standard_D4as_v6
   family: Standard_D
   vcpus: 4
@@ -288,6 +323,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.182
+  spot_price_per_hour: 0.038147
 - instance_type: Standard_D4pds_v6
   family: Standard_D
   vcpus: 4
@@ -296,6 +332,7 @@ instances:
   local_disk_count: 1
   arch: arm64
   price_per_hour: 0.184
+  spot_price_per_hour: 0.066387
 - instance_type: Standard_D4ps_v6
   family: Standard_D
   vcpus: 4
@@ -304,6 +341,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.14
+  spot_price_per_hour: 0.050512
 - instance_type: Standard_D4s_v4
   family: Standard_D
   vcpus: 4
@@ -312,6 +350,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.24
+  spot_price_per_hour: 0.040493
 - instance_type: Standard_D4s_v5
   family: Standard_D
   vcpus: 4
@@ -320,6 +359,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.192
+  spot_price_per_hour: 0.040531
 - instance_type: Standard_D64_v4
   family: Standard_D
   vcpus: 64
@@ -328,6 +368,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.072
+  spot_price_per_hour: 0.647885
 - instance_type: Standard_D64_v5
   family: Standard_D
   vcpus: 64
@@ -336,6 +377,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.072
+  spot_price_per_hour: 0.648499
 - instance_type: Standard_D64as_v5
   family: Standard_D
   vcpus: 64
@@ -344,6 +386,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 5.696
+  spot_price_per_hour: 0.580947
 - instance_type: Standard_D64as_v6
   family: Standard_D
   vcpus: 64
@@ -352,6 +395,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.906
+  spot_price_per_hour: 0.609098
 - instance_type: Standard_D64pds_v6
   family: Standard_D
   vcpus: 64
@@ -360,6 +404,7 @@ instances:
   local_disk_count: 8
   arch: arm64
   price_per_hour: 2.938
+  spot_price_per_hour: 1.06003
 - instance_type: Standard_D64ps_v6
   family: Standard_D
   vcpus: 64
@@ -368,6 +413,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 2.246
+  spot_price_per_hour: 0.810357
 - instance_type: Standard_D64s_v4
   family: Standard_D
   vcpus: 64
@@ -376,6 +422,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.072
+  spot_price_per_hour: 0.647885
 - instance_type: Standard_D64s_v5
   family: Standard_D
   vcpus: 64
@@ -384,6 +431,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.072
+  spot_price_per_hour: 0.648499
 - instance_type: Standard_D8_v4
   family: Standard_D
   vcpus: 8
@@ -392,6 +440,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.384
+  spot_price_per_hour: 0.080986
 - instance_type: Standard_D8_v5
   family: Standard_D
   vcpus: 8
@@ -400,6 +449,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.384
+  spot_price_per_hour: 0.081062
 - instance_type: Standard_D8as_v5
   family: Standard_D
   vcpus: 8
@@ -408,6 +458,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.344
+  spot_price_per_hour: 0.072618
 - instance_type: Standard_D8as_v6
   family: Standard_D
   vcpus: 8
@@ -416,6 +467,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.363
+  spot_price_per_hour: 0.076085
 - instance_type: Standard_D8pds_v6
   family: Standard_D
   vcpus: 8
@@ -424,6 +476,7 @@ instances:
   local_disk_count: 1
   arch: arm64
   price_per_hour: 0.367
+  spot_price_per_hour: 0.132414
 - instance_type: Standard_D8ps_v6
   family: Standard_D
   vcpus: 8
@@ -432,6 +485,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 0.281
+  spot_price_per_hour: 0.101385
 - instance_type: Standard_D8s_v4
   family: Standard_D
   vcpus: 8
@@ -440,6 +494,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.384
+  spot_price_per_hour: 0.080986
 - instance_type: Standard_D8s_v5
   family: Standard_D
   vcpus: 8
@@ -448,6 +503,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.384
+  spot_price_per_hour: 0.081062
 - instance_type: Standard_D96_v5
   family: Standard_D
   vcpus: 96
@@ -456,6 +512,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 4.608
+  spot_price_per_hour: 0.972749
 - instance_type: Standard_D96as_v5
   family: Standard_D
   vcpus: 96
@@ -464,6 +521,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 8.544
+  spot_price_per_hour: 0.871421
 - instance_type: Standard_D96as_v6
   family: Standard_D
   vcpus: 96
@@ -472,6 +530,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 4.358
+  spot_price_per_hour: 0.913437
 - instance_type: Standard_D96pds_v6
   family: Standard_D
   vcpus: 96
@@ -480,6 +539,7 @@ instances:
   local_disk_count: 12
   arch: arm64
   price_per_hour: 4.406
+  spot_price_per_hour: 1.589685
 - instance_type: Standard_D96ps_v6
   family: Standard_D
   vcpus: 96
@@ -488,6 +548,7 @@ instances:
   local_disk_count: 0
   arch: arm64
   price_per_hour: 3.37
+  spot_price_per_hour: 1.215896
 - instance_type: Standard_D96s_v5
   family: Standard_D
   vcpus: 96
@@ -496,6 +557,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 4.608
+  spot_price_per_hour: 0.972749
 - instance_type: Standard_E16as_v5
   family: Standard_E
   vcpus: 16
@@ -504,6 +566,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.64
+  spot_price_per_hour: 0.190382
 - instance_type: Standard_E16as_v6
   family: Standard_E
   vcpus: 16
@@ -512,6 +575,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.954
+  spot_price_per_hour: 0.199958
 - instance_type: Standard_E16s_v4
   family: Standard_E
   vcpus: 16
@@ -520,6 +584,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.008
+  spot_price_per_hour: 0.212184
 - instance_type: Standard_E16s_v5
   family: Standard_E
   vcpus: 16
@@ -528,6 +593,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.008
+  spot_price_per_hour: 0.212285
 - instance_type: Standard_E20as_v5
   family: Standard_E
   vcpus: 20
@@ -536,6 +602,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.05
+  spot_price_per_hour: 0.237978
 - instance_type: Standard_E20as_v6
   family: Standard_E
   vcpus: 20
@@ -544,6 +611,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.192
+  spot_price_per_hour: 0.249843
 - instance_type: Standard_E20s_v4
   family: Standard_E
   vcpus: 20
@@ -552,6 +620,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.26
+  spot_price_per_hour: 0.26523
 - instance_type: Standard_E20s_v5
   family: Standard_E
   vcpus: 20
@@ -560,6 +629,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.26
+  spot_price_per_hour: 0.265356
 - instance_type: Standard_E2as_v5
   family: Standard_E
   vcpus: 2
@@ -568,6 +638,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.205
+  spot_price_per_hour: 0.023798
 - instance_type: Standard_E2as_v6
   family: Standard_E
   vcpus: 2
@@ -576,6 +647,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.119
+  spot_price_per_hour: 0.024942
 - instance_type: Standard_E2s_v4
   family: Standard_E
   vcpus: 2
@@ -584,6 +656,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.126
+  spot_price_per_hour: 0.026523
 - instance_type: Standard_E2s_v5
   family: Standard_E
   vcpus: 2
@@ -592,6 +665,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.126
+  spot_price_per_hour: 0.026536
 - instance_type: Standard_E32as_v5
   family: Standard_E
   vcpus: 32
@@ -600,6 +674,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.808
+  spot_price_per_hour: 0.380765
 - instance_type: Standard_E32as_v6
   family: Standard_E
   vcpus: 32
@@ -608,6 +683,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.907
+  spot_price_per_hour: 0.399707
 - instance_type: Standard_E32s_v4
   family: Standard_E
   vcpus: 32
@@ -616,6 +692,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.016
+  spot_price_per_hour: 0.424368
 - instance_type: Standard_E32s_v5
   family: Standard_E
   vcpus: 32
@@ -624,6 +701,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.016
+  spot_price_per_hour: 0.42457
 - instance_type: Standard_E48as_v5
   family: Standard_E
   vcpus: 48
@@ -632,6 +710,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 4.92
+  spot_price_per_hour: 0.571147
 - instance_type: Standard_E48as_v6
   family: Standard_E
   vcpus: 48
@@ -640,6 +719,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.861
+  spot_price_per_hour: 0.599666
 - instance_type: Standard_E48s_v4
   family: Standard_E
   vcpus: 48
@@ -648,6 +728,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.024
+  spot_price_per_hour: 0.636552
 - instance_type: Standard_E48s_v5
   family: Standard_E
   vcpus: 48
@@ -656,6 +737,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.024
+  spot_price_per_hour: 0.636854
 - instance_type: Standard_E4as_v5
   family: Standard_E
   vcpus: 4
@@ -664,6 +746,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.41
+  spot_price_per_hour: 0.047596
 - instance_type: Standard_E4as_v6
   family: Standard_E
   vcpus: 4
@@ -672,6 +755,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.238
+  spot_price_per_hour: 0.049885
 - instance_type: Standard_E4s_v4
   family: Standard_E
   vcpus: 4
@@ -680,6 +764,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.32
+  spot_price_per_hour: 0.053046
 - instance_type: Standard_E4s_v5
   family: Standard_E
   vcpus: 4
@@ -688,6 +773,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.252
+  spot_price_per_hour: 0.053071
 - instance_type: Standard_E64as_v5
   family: Standard_E
   vcpus: 64
@@ -696,6 +782,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.616
+  spot_price_per_hour: 0.76153
 - instance_type: Standard_E64as_v6
   family: Standard_E
   vcpus: 64
@@ -704,6 +791,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.814
+  spot_price_per_hour: 0.799414
 - instance_type: Standard_E64s_v4
   family: Standard_E
   vcpus: 64
@@ -712,6 +800,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 4.032
+  spot_price_per_hour: 0.848736
 - instance_type: Standard_E64s_v5
   family: Standard_E
   vcpus: 64
@@ -720,6 +809,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 4.032
+  spot_price_per_hour: 0.849139
 - instance_type: Standard_E8as_v5
   family: Standard_E
   vcpus: 8
@@ -728,6 +818,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.452
+  spot_price_per_hour: 0.095191
 - instance_type: Standard_E8as_v6
   family: Standard_E
   vcpus: 8
@@ -736,6 +827,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.477
+  spot_price_per_hour: 0.099979
 - instance_type: Standard_E8s_v4
   family: Standard_E
   vcpus: 8
@@ -744,6 +836,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.504
+  spot_price_per_hour: 0.106092
 - instance_type: Standard_E8s_v5
   family: Standard_E
   vcpus: 8
@@ -752,6 +845,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.504
+  spot_price_per_hour: 0.106142
 - instance_type: Standard_E96as_v5
   family: Standard_E
   vcpus: 96
@@ -760,6 +854,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 5.424
+  spot_price_per_hour: 1.142294
 - instance_type: Standard_E96as_v6
   family: Standard_E
   vcpus: 96
@@ -768,6 +863,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 5.722
+  spot_price_per_hour: 1.199331
 - instance_type: Standard_E96s_v5
   family: Standard_E
   vcpus: 96
@@ -776,6 +872,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 6.048
+  spot_price_per_hour: 1.273709
 - instance_type: Standard_F16as_v6
   family: Standard_F
   vcpus: 16
@@ -784,6 +881,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.093
+  spot_price_per_hour: 0.230404
 - instance_type: Standard_F16s_v2
   family: Standard_F
   vcpus: 16
@@ -792,6 +890,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.677
+  spot_price_per_hour: 0.14894
 - instance_type: Standard_F1as_v6
   family: Standard_F
   vcpus: 1
@@ -800,6 +899,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.0683
+  spot_price_per_hour: 0.014398
 - instance_type: Standard_F2as_v6
   family: Standard_F
   vcpus: 2
@@ -808,6 +908,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.137
+  spot_price_per_hour: 0.02888
 - instance_type: Standard_F2s_v2
   family: Standard_F
   vcpus: 2
@@ -816,6 +917,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.0846
+  spot_price_per_hour: 0.018612
 - instance_type: Standard_F32as_v6
   family: Standard_F
   vcpus: 32
@@ -824,6 +926,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.186
+  spot_price_per_hour: 0.460809
 - instance_type: Standard_F32s_v2
   family: Standard_F
   vcpus: 32
@@ -832,6 +935,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 1.353
+  spot_price_per_hour: 0.29766
 - instance_type: Standard_F48as_v6
   family: Standard_F
   vcpus: 48
@@ -840,6 +944,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.278
+  spot_price_per_hour: 0.691002
 - instance_type: Standard_F48s_v2
   family: Standard_F
   vcpus: 48
@@ -848,6 +953,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 2.03
+  spot_price_per_hour: 0.4466
 - instance_type: Standard_F4as_v6
   family: Standard_F
   vcpus: 4
@@ -856,6 +962,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.273
+  spot_price_per_hour: 0.057548
 - instance_type: Standard_F4s_v2
   family: Standard_F
   vcpus: 4
@@ -864,6 +971,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.169
+  spot_price_per_hour: 0.03718
 - instance_type: Standard_F64as_v6
   family: Standard_F
   vcpus: 64
@@ -872,6 +980,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 4.371
+  spot_price_per_hour: 0.921407
 - instance_type: Standard_F64s_v2
   family: Standard_F
   vcpus: 64
@@ -880,6 +989,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 3.936
+  spot_price_per_hour: 0.59532
 - instance_type: Standard_F72as_v6
   family: Standard_F
   vcpus: 72
@@ -888,6 +998,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 4.918
+  spot_price_per_hour: 1.036714
 - instance_type: Standard_F72s_v2
   family: Standard_F
   vcpus: 72
@@ -896,6 +1007,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 4.428
+  spot_price_per_hour: 0.6699
 - instance_type: Standard_F8as_v6
   family: Standard_F
   vcpus: 8
@@ -904,6 +1016,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.546
+  spot_price_per_hour: 0.115097
 - instance_type: Standard_F8s_v2
   family: Standard_F
   vcpus: 8
@@ -912,6 +1025,7 @@ instances:
   local_disk_count: 0
   arch: x86_64
   price_per_hour: 0.492
+  spot_price_per_hour: 0.07436
 - instance_type: Standard_L16s_v3
   family: Standard_L
   vcpus: 16
@@ -920,6 +1034,7 @@ instances:
   local_disk_count: 2
   arch: x86_64
   price_per_hour: 1.392
+  spot_price_per_hour: 0.293016
 - instance_type: Standard_L16s_v4
   family: Standard_L
   vcpus: 16
@@ -928,6 +1043,7 @@ instances:
   local_disk_count: 2
   arch: x86_64
   price_per_hour: 1.392
+  spot_price_per_hour: 0.292181
 - instance_type: Standard_L2s_v4
   family: Standard_L
   vcpus: 2
@@ -936,6 +1052,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 0.174
+  spot_price_per_hour: 0.036523
 - instance_type: Standard_L32s_v3
   family: Standard_L
   vcpus: 32
@@ -944,6 +1061,7 @@ instances:
   local_disk_count: 4
   arch: x86_64
   price_per_hour: 2.784
+  spot_price_per_hour: 0.586032
 - instance_type: Standard_L32s_v4
   family: Standard_L
   vcpus: 32
@@ -952,6 +1070,7 @@ instances:
   local_disk_count: 4
   arch: x86_64
   price_per_hour: 2.784
+  spot_price_per_hour: 0.584362
 - instance_type: Standard_L48s_v3
   family: Standard_L
   vcpus: 48
@@ -960,6 +1079,7 @@ instances:
   local_disk_count: 6
   arch: x86_64
   price_per_hour: 4.176
+  spot_price_per_hour: 0.879048
 - instance_type: Standard_L48s_v4
   family: Standard_L
   vcpus: 48
@@ -968,6 +1088,7 @@ instances:
   local_disk_count: 6
   arch: x86_64
   price_per_hour: 4.176
+  spot_price_per_hour: 0.876542
 - instance_type: Standard_L4s_v4
   family: Standard_L
   vcpus: 4
@@ -976,6 +1097,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 0.348
+  spot_price_per_hour: 0.073045
 - instance_type: Standard_L64s_v3
   family: Standard_L
   vcpus: 64
@@ -984,6 +1106,7 @@ instances:
   local_disk_count: 8
   arch: x86_64
   price_per_hour: 5.568
+  spot_price_per_hour: 1.172064
 - instance_type: Standard_L64s_v4
   family: Standard_L
   vcpus: 64
@@ -992,6 +1115,7 @@ instances:
   local_disk_count: 8
   arch: x86_64
   price_per_hour: 5.568
+  spot_price_per_hour: 1.168723
 - instance_type: Standard_L80s_v3
   family: Standard_L
   vcpus: 80
@@ -1000,6 +1124,7 @@ instances:
   local_disk_count: 10
   arch: x86_64
   price_per_hour: 6.96
+  spot_price_per_hour: 1.46508
 - instance_type: Standard_L80s_v4
   family: Standard_L
   vcpus: 80
@@ -1008,6 +1133,7 @@ instances:
   local_disk_count: 10
   arch: x86_64
   price_per_hour: 6.96
+  spot_price_per_hour: 1.460904
 - instance_type: Standard_L8s_v3
   family: Standard_L
   vcpus: 8
@@ -1016,6 +1142,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 0.696
+  spot_price_per_hour: 0.146508
 - instance_type: Standard_L8s_v4
   family: Standard_L
   vcpus: 8
@@ -1024,6 +1151,7 @@ instances:
   local_disk_count: 1
   arch: x86_64
   price_per_hour: 0.696
+  spot_price_per_hour: 0.14609
 - instance_type: Standard_L96s_v4
   family: Standard_L
   vcpus: 96
@@ -1032,3 +1160,4 @@ instances:
   local_disk_count: 12
   arch: x86_64
   price_per_hour: 8.352
+  spot_price_per_hour: 1.753085
