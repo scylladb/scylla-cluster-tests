@@ -288,7 +288,7 @@ kafka_backend: null
 kafka_connectors: []
 
 run_scylla_doctor: true
-scylla_doctor_version: "1.10"
+scylla_doctor_version: "1.14.1"
 scylla_doctor_edition: "basic"
 nemesis_double_load_during_grow_shrink_duration: 0
 
