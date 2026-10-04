@@ -4,7 +4,9 @@ import os
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime, timezone
+from collections.abc import Callable, Iterator
+from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 try:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -21,41 +23,159 @@ except ImportError:
     PrivateFormat = None
     PublicFormat = None
 
-from argus.client.tunnel.models import TunnelClientError, TunnelConfig, TunnelStatePaths, parse_datetime
+from argus.client.tunnel.models import TunnelClientError, TunnelConfig, TunnelStatePaths
 
 
 LOGGER = logging.getLogger(__name__)
 
+TUNNELING_SUBDIR = "argus_tunneling"
+DIRNAME_EXPIRY_SEPARATOR = ".exp"
+STAGING_DIR_PREFIX = ".staging-"
+SHARED_KEY_NAME = "shared"
+LOCAL_FALLBACK_TTL = timedelta(hours=24)
 
-def get_tunnel_state_paths() -> TunnelStatePaths:
-    state_dir = _resolve_state_dir()
+
+def canonical_run_id(run_id: UUID | str) -> str:
+    try:
+        return str(UUID(str(run_id)))
+    except ValueError as exc:
+        raise ValueError(f"run_id must be a UUID, got {run_id!r}") from exc
+
+
+def _key_name(run_id: UUID | str | None) -> str:
+    return SHARED_KEY_NAME if run_id is None else canonical_run_id(run_id)
+
+
+def _dirname_for(run_id: UUID | str | None, expires_at: datetime) -> str:
+    return f"{_key_name(run_id)}{DIRNAME_EXPIRY_SEPARATOR}{int(expires_at.timestamp())}"
+
+
+def _parse_dirname(entry: str) -> tuple[str, datetime] | None:
+    prefix, separator, suffix = entry.rpartition(DIRNAME_EXPIRY_SEPARATOR)
+    if not separator or not prefix or not suffix.isdigit():
+        return None
+    return prefix, datetime.fromtimestamp(int(suffix), tz=timezone.utc)
+
+
+def _paths_for_dir(dir_path: str) -> TunnelStatePaths:
     return TunnelStatePaths(
-        state_dir=state_dir,
-        private_key=os.path.join(state_dir, "id_argus_proxy"),
-        public_key=os.path.join(state_dir, "id_argus_proxy.pub"),
-        key_meta=os.path.join(state_dir, "id_argus_proxy.meta.json"),
-        config_cache=os.path.join(state_dir, "tunnel_config.json"),
+        state_dir=dir_path,
+        private_key=os.path.join(dir_path, "key"),
+        public_key=os.path.join(dir_path, "key.pub"),
+        config_cache=os.path.join(dir_path, "tunnel_config.json"),
     )
 
 
-def delete_cached_tunnel_state() -> None:
-    """Delete cached tunnel key/config state used by the client."""
+def tunneling_root() -> str:
+    return os.path.join(_resolve_state_dir(), TUNNELING_SUBDIR)
+
+
+def _iter_key_entries(root: str) -> Iterator[tuple[str, str, datetime]]:
     try:
-        paths = get_tunnel_state_paths()
+        entries = os.listdir(root)
     except OSError:
         return
-
-    for file_path in (paths.private_key, paths.public_key, paths.key_meta, paths.config_cache):
-        try:
-            _unlink(file_path)
-        except OSError:
-            LOGGER.debug("Failed removing cached tunnel state file: %s", file_path, exc_info=True)
+    for entry in entries:
+        parsed = _parse_dirname(entry)
+        if parsed is not None:
+            yield (entry, *parsed)
 
 
-def generate_keypair_if_needed(paths: TunnelStatePaths) -> None:
-    if is_key_valid(paths):
+def find_existing_key_dir(run_id: UUID | str | None = None) -> TunnelStatePaths | None:
+    root = tunneling_root()
+    canonical = _key_name(run_id)
+    now = datetime.now(tz=timezone.utc)
+
+    newest: tuple[datetime, str] | None = None
+    for entry, prefix, expires_at in _iter_key_entries(root):
+        if prefix != canonical or now >= expires_at:
+            continue
+        if not _holds_keypair(_paths_for_dir(os.path.join(root, entry))):
+            continue
+        if newest is None or expires_at > newest[0]:
+            newest = (expires_at, entry)
+
+    if newest is None:
+        return None
+    return _paths_for_dir(os.path.join(root, newest[1]))
+
+
+def _holds_keypair(paths: TunnelStatePaths) -> bool:
+    return os.path.isfile(paths.private_key) and os.path.isfile(paths.public_key)
+
+
+def build_key_location(run_id: UUID | str | None, expires_at: datetime | None) -> TunnelStatePaths:
+    resolved_expiry = expires_at or (datetime.now(tz=timezone.utc) + LOCAL_FALLBACK_TTL)
+    root = tunneling_root()
+    return _paths_for_dir(os.path.join(root, _dirname_for(run_id, resolved_expiry)))
+
+
+def delete_key_dir(paths: TunnelStatePaths) -> None:
+    shutil.rmtree(paths.state_dir, ignore_errors=True)
+
+
+def delete_key_dir_of(private_key: str) -> bool:
+    root = tunneling_root()
+    state_dir = os.path.dirname(os.path.abspath(private_key))
+    if os.path.dirname(state_dir) != os.path.abspath(root) or _parse_dirname(os.path.basename(state_dir)) is None:
+        LOGGER.warning("Refusing to delete %s: it is not an SSH tunnel key directory", state_dir)
+        return False
+    if not os.path.isdir(state_dir):
+        return False
+    shutil.rmtree(state_dir, ignore_errors=True)
+    return True
+
+
+def delete_cached_tunnel_state(run_id: UUID | str | None = None) -> None:
+    try:
+        paths = find_existing_key_dir(run_id)
+    except ValueError:
         return
+    if paths is not None:
+        delete_key_dir(paths)
 
+
+def sweep_stale_tunnel_keys() -> None:
+    root = tunneling_root()
+    now = datetime.now(tz=timezone.utc)
+    for entry, _prefix, expires_at in _iter_key_entries(root):
+        if now < expires_at:
+            continue
+        delete_key_dir(_paths_for_dir(os.path.join(root, entry)))
+
+
+def generate_and_register_key(
+    run_id: UUID | str | None, register: Callable[[str], TunnelConfig]
+) -> tuple[TunnelConfig, str]:
+    _key_name(run_id)
+    root = tunneling_root()
+    os.makedirs(root, mode=0o700, exist_ok=True)
+    staging_dir = tempfile.mkdtemp(prefix=STAGING_DIR_PREFIX, dir=root)
+    staging_paths = _paths_for_dir(staging_dir)
+    try:
+        _generate_keypair(staging_paths)
+        with open(staging_paths.public_key, encoding="utf-8") as fh:
+            public_key = fh.read().strip()
+
+        config = register(public_key)
+        write_tunnel_cache(staging_paths, config)
+
+        final_paths = build_key_location(run_id, config.expires_at)
+        try:
+            os.rename(staging_dir, final_paths.state_dir)
+        except OSError:
+            if not os.path.isdir(final_paths.state_dir):
+                raise
+            published = read_cached_tunnel_config(final_paths)
+            if published is None or not os.path.exists(final_paths.private_key):
+                raise
+            return published, final_paths.private_key
+        return config, final_paths.private_key
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+
+
+def _generate_keypair(paths: TunnelStatePaths) -> None:
     if _generate_keypair_with_cryptography(paths):
         return
 
@@ -116,28 +236,6 @@ def _generate_keypair_with_cryptography(paths: TunnelStatePaths) -> bool:
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Falling back to ssh-keygen due to cryptography key generation failure: %s", exc)
         return False
-
-
-def is_key_valid(paths: TunnelStatePaths) -> bool:
-    if not os.path.exists(paths.private_key) or not os.path.exists(paths.public_key) or not os.path.exists(paths.key_meta):
-        return False
-
-    try:
-        key_meta = json.loads(_read_text(paths.key_meta))
-        expires_at = parse_datetime(key_meta.get("expires_at"))
-    except (OSError, json.JSONDecodeError, TypeError, ValueError):
-        return False
-
-    now = datetime.now(tz=timezone.utc)
-    return now < expires_at
-
-
-def write_key_meta(paths: TunnelStatePaths, expires_at: datetime | None) -> None:
-    if expires_at is None:
-        return
-    payload = {"expires_at": expires_at.astimezone(timezone.utc).isoformat()}
-    _write_text(paths.key_meta, json.dumps(payload))
-    os.chmod(paths.key_meta, 0o600)
 
 
 def read_cached_tunnel_config(paths: TunnelStatePaths) -> TunnelConfig | None:
@@ -201,12 +299,7 @@ def _prepare_state_dir(path: str) -> bool:
         return False
 
 
-# ---------------------------------------------------------------------------
-# Small helpers to replace pathlib method calls with plain os / builtins
-# ---------------------------------------------------------------------------
-
 def _unlink(path: str) -> None:
-    """Remove a file; silently ignore if it does not exist."""
     try:
         os.unlink(path)
     except FileNotFoundError:

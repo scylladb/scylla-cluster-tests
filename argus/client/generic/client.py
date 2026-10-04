@@ -14,6 +14,10 @@ class ArgusGenericClient(ArgusClient):
     class Routes(ArgusClient.Routes):
         TRIGGER_JOBS = "/planning/plan/trigger"
 
+    # The planner router is mounted at /api/<ver>/planning, outside the
+    # /client sub-tree every other route lives under.
+    non_client_routes = frozenset({Routes.TRIGGER_JOBS})
+
     def __init__(self, auth_token: str, base_url: str, log_dir, api_version="v1",
                  extra_headers: dict | None = None, timeout: int = 180, max_retries: int = 3,
                  use_tunnel: bool | None = None, replay_log_only: bool = False,

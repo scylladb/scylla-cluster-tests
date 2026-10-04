@@ -16,39 +16,46 @@ from argus.client.tunnel.models import (
     TunnelClientError,
     TunnelConfig,
 )
-from argus.client.tunnel.state import get_tunnel_state_paths
-
+from argus.client.tunnel.state import find_existing_key_dir
 
 LOGGER = logging.getLogger(__name__)
+
+SSHD_REJECTED_KEY_MARKERS = ("permission denied", "too many authentication failures")
 
 
 class SSHTunnel:
     def __init__(self, key_path: str | None = None) -> None:
-        state_paths = get_tunnel_state_paths()
-        self._key_path = key_path or state_paths.private_key
+        if key_path is None:
+            existing = find_existing_key_dir()
+            key_path = existing.private_key if existing is not None else None
+        self._key_path = key_path
         self._process: subprocess.Popen[str] | None = None
         self._local_port: int | None = None
         self._known_hosts_path: str | None = None
         self._atexit_registered = False
+        self.sshd_rejected_key = False
+        self._ssh_bin = shutil.which("ssh")
+        self._preflight_error = self._detect_preflight_error()
+
+    def _detect_preflight_error(self) -> str | None:
+        if self._ssh_bin is None:
+            return "ssh binary was not found on PATH"
+        if shutil.which("ssh-keyscan") is None:
+            return "ssh-keyscan binary was not found on PATH"
+        if self._key_path is None:
+            return "no SSH private key exists for the shared tunnel key"
+        if not os.path.exists(self._key_path):
+            return f"SSH private key does not exist: {self._key_path}"
+        return None
 
     @property
     def local_port(self) -> int | None:
         return self._local_port
 
     def establish(self, config: TunnelConfig) -> tuple[int | None, str | None]:
-        ssh_bin = shutil.which("ssh")
-        if ssh_bin is None:
-            reason = "ssh binary was not found on PATH"
-            LOGGER.warning(reason)
-            return None, reason
-        if shutil.which("ssh-keyscan") is None:
-            reason = "ssh-keyscan binary was not found on PATH"
-            LOGGER.warning(reason)
-            return None, reason
-        if not os.path.exists(self._key_path):
-            reason = f"SSH private key does not exist: {self._key_path}"
-            LOGGER.warning(reason)
-            return None, reason
+        if self._preflight_error is not None:
+            LOGGER.warning(self._preflight_error)
+            return None, self._preflight_error
 
         self.shutdown()
         try:
@@ -64,7 +71,6 @@ class SSHTunnel:
                 config=config,
                 local_port=local_port,
                 known_hosts_path=known_hosts_path,
-                ssh_bin=ssh_bin,
             )
 
             try:
@@ -99,6 +105,7 @@ class SSHTunnel:
                 )
                 continue
 
+            self.sshd_rejected_key = self.sshd_rejected_key or is_sshd_key_rejection(error_text)
             reason = f"establish attempt {attempt} failed: {error_text or 'unknown error'}"
             LOGGER.warning("SSH tunnel %s", reason)
             _unlink(known_hosts_path)
@@ -139,9 +146,9 @@ class SSHTunnel:
         atexit.register(self.shutdown)
         self._atexit_registered = True
 
-    def _build_ssh_command(self, config: TunnelConfig, local_port: int, known_hosts_path: str, ssh_bin: str = "ssh") -> list[str]:
+    def _build_ssh_command(self, config: TunnelConfig, local_port: int, known_hosts_path: str) -> list[str]:
         return [
-            ssh_bin,
+            self._ssh_bin,
             "-N",
             "-L",
             f"127.0.0.1:{local_port}:{config.target_host}:{config.target_port}",
@@ -230,9 +237,7 @@ class SSHTunnel:
             )
             return write_temp_known_hosts(matched_line)
 
-        raise TunnelClientError(
-            f"host_key_fingerprint has unrecognised format: {raw[:32]!r}"
-        )
+        raise TunnelClientError(f"host_key_fingerprint has unrecognised format: {raw[:32]!r}")
 
     @staticmethod
     def _terminate_process(process: subprocess.Popen[str]) -> None:
@@ -359,3 +364,8 @@ def is_local_port_open(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         probe.settimeout(0.5)
         return probe.connect_ex(("127.0.0.1", port)) == 0
+
+
+def is_sshd_key_rejection(error_text: str) -> bool:
+    lowered = error_text.lower()
+    return any(marker in lowered for marker in SSHD_REJECTED_KEY_MARKERS)
