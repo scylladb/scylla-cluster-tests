@@ -845,6 +845,9 @@ class AWSNode(cluster.BaseNode):
             Resources=[self._instance.id], Tags=[{"Key": "keep", "Value": str(duration_in_hours)}]
         )
 
+    def _add_tags(self, tags: Dict[str, str]) -> None:
+        self._ec2_service.create_tags(Resources=[self._instance.id], Tags=tags_as_ec2_tags(tags))
+
     @property
     def vm_region(self):
         return self._ec2_service.meta.client.meta.region_name

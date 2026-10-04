@@ -247,6 +247,10 @@ class AzureNode(cluster.BaseNode):
     def _set_keep_duration(self, duration_in_hours: int) -> None:
         self._instance.add_tags({"keep": str(duration_in_hours)})
 
+    @retrying(n=6, sleep_time=1)
+    def _add_tags(self, tags: Dict[str, str]) -> None:
+        self._instance.add_tags(tags)
+
     def _refresh_instance_state(self):
         if self.scylla_network_configuration:
             self.refresh_network_interfaces_info()
