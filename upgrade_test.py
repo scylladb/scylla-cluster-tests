@@ -51,7 +51,7 @@ from sdcm.sct_events.database import (
     IndexSpecialColumnErrorEvent,
     DatabaseLogEvent,
 )
-from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.sct_events.filters import EventsFilter
 from sdcm.sct_events.group_common_events import (
     decorate_with_context,
     ignore_abort_requested_errors,
@@ -74,6 +74,9 @@ NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
 # (jira:SCYLLADB-1541) which landed on master only. The backports were declined both for 2026.1
 # (jira:SCYLLADB-3023) and for 2026.2 (jira:SCYLLADB-3021), so it's never going to be fixed on those branches.
 OVERSIZED_RPC_ALLOCATION_FIXED_FROM = "2026.3.0~dev"
+OVERSIZED_RPC_ALLOCATION_SYMBOL = "seastar::rpc::client::wait_for_reply"
+# The event type as `str(event)` prints it, on the first line.
+OVERSIZED_ALLOCATION_TYPE = "type=OVERSIZED_ALLOCATION"
 
 
 def truncate_entries(func):
@@ -168,11 +171,14 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.stacks[node] = contextlib.ExitStack()
         # ignoring those oversized allocation errors, till both ends of the upgrade would have
         # fixes for jira:SCYLLADB-2533
+        # The symbol exists only in the decoded backtrace, so match on the event text (see `EventsFilter`).
+        # `node=` holds `str(node)`. Use lookarounds, not `\b`: `-` is a non-word character,
+        # so `\bnode-1\b` would also match inside `node-1-2`.
         self.stacks[node].enter_context(
-            DbEventsFilter(
-                node=node,
-                db_event=DatabaseLogEvent.OVERSIZED_ALLOCATION,
-                line=r"seastar::rpc::client::wait_for_reply",
+            EventsFilter(
+                event_class=DatabaseLogEvent,
+                regex=rf"[^\n]* {OVERSIZED_ALLOCATION_TYPE}\b[^\n]* node=[^\n]*"
+                rf"(?<=[\s=]){re.escape(node.name)}(?!\S).*{OVERSIZED_RPC_ALLOCATION_SYMBOL}",
                 extra_time_to_expiration=30,
             )
         )
@@ -192,9 +198,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             message=f"filtering out jira:SCYLLADB-2533 oversized allocations for the whole run, "
             f"it's not fixed in {target_version or 'the version being upgraded to'}"
         ).publish()
-        DbEventsFilter(
-            db_event=DatabaseLogEvent.OVERSIZED_ALLOCATION,
-            line=r"seastar::rpc::client::wait_for_reply",
+        EventsFilter(
+            event_class=DatabaseLogEvent,
+            regex=rf"[^\n]* {OVERSIZED_ALLOCATION_TYPE}\b.*{OVERSIZED_RPC_ALLOCATION_SYMBOL}",
         ).publish()
 
     orig_ver = None
