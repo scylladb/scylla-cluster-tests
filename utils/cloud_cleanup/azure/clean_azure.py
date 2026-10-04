@@ -81,7 +81,7 @@ def get_keep_action(v_m) -> Callable:
     return keep_action
 
 
-def delete_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False):
+def delete_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False, tags=None, launch_time=None):
     if dry_run:
         LOGGER.info("[DRY RUN] Would delete VM: %s in resource group: %s", vm_name, resource_group_name)
     else:
@@ -93,10 +93,12 @@ def delete_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False)
                 "Failed to delete VM: %s in resource group: %s with exception: %s", vm_name, resource_group_name, exc
             )
             return
-        update_argus_resource_status(test_id=test_id, resource_name=vm_name, action="terminate")
+        update_argus_resource_status(
+            test_id=test_id, resource_name=vm_name, action="terminate", tags=tags, launch_time=launch_time
+        )
 
 
-def stop_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False):
+def stop_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False, tags=None, launch_time=None):
     if dry_run:
         LOGGER.info("[DRY RUN] Would stop VM: %s in resource group: %s", vm_name, resource_group_name)
     else:
@@ -108,7 +110,9 @@ def stop_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False):
                 "Failed to stop VM: %s in resource group: %s with exception: %s", vm_name, resource_group_name, exc
             )
             return
-        update_argus_resource_status(test_id=test_id, resource_name=vm_name, action="stop")
+        update_argus_resource_status(
+            test_id=test_id, resource_name=vm_name, action="stop", tags=tags, launch_time=launch_time
+        )
 
 
 def delete_resource_group(resource_group_name, dry_run=False):
@@ -139,25 +143,28 @@ def clean_azure_instances(dry_run=False):
         vms_to_process = []
         for v_m in compute_client.virtual_machines.list(resource_group.name):
             test_id = v_m.tags.get("TestId", "").lower() if v_m.tags else ""
+            vm_creation_time = get_vm_creation_time(v_m, resource_group.name)
             if should_keep(
-                creation_time=get_vm_creation_time(v_m, resource_group.name),
+                creation_time=vm_creation_time,
                 keep_hours=get_keep_hours_from_tags(v_m.tags if v_m.tags else {}),
             ):
                 LOGGER.info("Keeping VM: %s in resource group: %s", v_m.name, resource_group.name)
                 clean_group = False  # skip cleaning group if there's at least one VM to keep
             elif get_keep_action(v_m) == "terminate":
-                vms_to_process.append((delete_virtual_machine, v_m.name, test_id))
+                vms_to_process.append((delete_virtual_machine, v_m.name, test_id, v_m.tags or {}, vm_creation_time))
             else:
-                vms_to_process.append((stop_virtual_machine, v_m.name, test_id))
+                vms_to_process.append((stop_virtual_machine, v_m.name, test_id, v_m.tags or {}, vm_creation_time))
                 clean_group = False  # skip cleaning group if there's at least one VM to stop
 
         if clean_group:
             delete_resource_group(resource_group.name, dry_run=dry_run)
-            for _, vm_name, test_id in vms_to_process:
-                update_argus_resource_status(test_id=test_id, resource_name=vm_name, action="terminate")
+            for _, vm_name, test_id, tags, launch_time in vms_to_process:
+                update_argus_resource_status(
+                    test_id=test_id, resource_name=vm_name, action="terminate", tags=tags, launch_time=launch_time
+                )
         else:
-            for action, vm_name, test_id in vms_to_process:
-                action(resource_group.name, vm_name, test_id, dry_run=dry_run)
+            for action, vm_name, test_id, tags, launch_time in vms_to_process:
+                action(resource_group.name, vm_name, test_id, dry_run=dry_run, tags=tags, launch_time=launch_time)
 
 
 if __name__ == "__main__":
