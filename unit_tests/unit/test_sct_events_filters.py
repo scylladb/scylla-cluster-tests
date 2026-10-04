@@ -15,6 +15,7 @@ import re
 import pickle
 import unittest.mock
 
+import upgrade_test
 from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.database import DatabaseLogEvent
@@ -242,3 +243,31 @@ def test_ignore_drop_table_during_repair_errors(events_function_scope):  # noqa:
     assert db_events_filter.eval_filter(matching_event)
     assert not db_events_filter.eval_filter(other_database_error_event)
     assert not db_events_filter.eval_filter(other_event_class_with_same_line)
+
+
+def test_upgrade_whole_run_oversized_allocation_filter_matches_symbolized_backtrace(events_function_scope):  # noqa: ARG001
+    """SCT-1048: the decoder writes the symbol into `event.backtrace` and leaves `event.line`
+    as the raw log line, so a `DbEventsFilter(line=...)` on the symbol never matches."""
+    published_filters = []
+    upgrade_test_stub = unittest.mock.MagicMock()
+    upgrade_test_stub.params.scylla_version_upgrade_target = "2026.2.0"
+
+    with unittest.mock.patch.object(DbEventsFilter, "publish", autospec=True, side_effect=published_filters.append):
+        upgrade_test.UpgradeTest.filter_oversized_allocation_for_whole_run(upgrade_test_stub)
+
+    assert len(published_filters) == 1
+    db_events_filter = published_filters[0]
+
+    oversized_allocation_event = DatabaseLogEvent.OVERSIZED_ALLOCATION().add_info(
+        node="node1",
+        line_number=1,
+        line="2026-06-27T03:17:49.539Z node1 !WARNING | scylla[1669] [shard 0:strm] seastar_memory - "
+        "oversized allocation: 1048576 bytes. This is non-fatal, but could lead to latency and/or fragmentation "
+        "issues. Please report: at 0x5f1a2b3 0x5f1a7c4 0x5f1ad05 0x5f1b296",
+    )
+    oversized_allocation_event.backtrace = (
+        "void seastar::backtrace<seastar::current_backtrace_tasklocal()::$_0>(...)\n"
+        "seastar::rpc::client::wait_for_reply(seastar::rpc::wait_type, std::chrono::time_point<seastar::lowres_clock>)"
+    )
+
+    assert db_events_filter.eval_filter(oversized_allocation_event)
