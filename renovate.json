@@ -52,6 +52,19 @@
       "depNameTemplate": "scylla-doctor",
       "datasourceTemplate": "custom.scylla-doctor",
       "versioningTemplate": "semver-coerced"
+    },
+    {
+      "customType": "regex",
+      "description": "Keep the generated scylla-doctor config docs in step with defaults/test_default.yaml",
+      "managerFilePatterns": [
+        "/^docs/configuration_options/scylla-doctor\\.md$/"
+      ],
+      "matchStrings": [
+        "## \\*\\*scylla_doctor_version\\*\\*[\\s\\S]*?\\*\\*default:\\*\\* (?<currentValue>[\\d.]+)"
+      ],
+      "depNameTemplate": "scylla-doctor",
+      "datasourceTemplate": "custom.scylla-doctor",
+      "versioningTemplate": "semver-coerced"
     }
   ],
   "packageRules": [
