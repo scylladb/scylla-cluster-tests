@@ -270,7 +270,7 @@ jobs:
     pre_release: ["rc1", "rc3"]
     labels: ["gce-custom-monthly"]
     params:
-      region: "us-east1"
+      gce_datacenter: "us-east1"
       sub_tests: '["test_latency_steady_state"]'
 
   - job_name: "/scylla-master/perf-regression/latte-perf-regression-latency-steady-state-custom-d1-workload1-tablets"
@@ -279,7 +279,7 @@ jobs:
     pre_release: ["rc1", "rc3"]
     labels: ["gce-custom-monthly"]
     params:
-      region: "us-east1"
+      gce_datacenter: "us-east1"
       sub_tests: '["test_latency_steady_state"]'
 
   # === i8g tablets (aarch64) — weekly ===

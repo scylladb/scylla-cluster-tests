@@ -34,7 +34,7 @@ jobs:
   - job_name: "longevity/longevity-10gb-3h-gce-test"
     backend: "gce"
     params:
-      region: "us-east1"
+      gce_datacenter: "us-east1"
     labels: []
     exclude_versions: []
 
