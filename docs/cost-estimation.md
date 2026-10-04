@@ -7,6 +7,26 @@ The `Estimate Test Cost` pipeline stage prints it, and you can ask for it yourse
 hydra estimate-cost -b aws test-cases/longevity/longevity-10gb-3h.yaml
 ```
 
+## In Jenkins
+
+The `Estimate Test Cost` stage runs in every shared pipeline that provisions hardware:
+longevity, byo-longevity, artifacts, jepsen, manager, rolling upgrade, rolling operator upgrade,
+and both parallel performance pipelines, plus the PR provision tests in the root `Jenkinsfile`.
+In the parallel pipelines it runs inside each branch, because each branch provisions its own
+cluster. Pipelines that only trigger other jobs
+(`triggerMatrixPipeline`, `perfRegressionParallelPipelinebyRegion`, `sdReleaseGatingPipeline`,
+`createTestJobPipeline`) have no estimate.
+
+The stage runs before the SCT runner is created, so an abort at this point costs nothing. It
+prints the table below into the console log and appends a one-line summary to the build
+description, such as `Estimated cost: $11.90 (spot) [up to $20.99 on fallback]`.
+
+The stage **never fails a build**. Any error, a missing price or absent credentials is logged
+and the pipeline carries on. The stage is bounded by a 5-minute timeout.
+
+It honours the job's `provision_type` and `instance_provision_fallback_on_demand` parameters,
+so a job explicitly set to `on_demand` is priced on-demand even when its config says spot.
+
 ## Reading the output
 
 ```
