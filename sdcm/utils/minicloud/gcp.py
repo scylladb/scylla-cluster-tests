@@ -202,11 +202,9 @@ def prepare_gce_network(config: MinicloudConfig) -> None:
     networks = compute_v1.NetworksClient(credentials=credentials, **client_options)
     subnets = compute_v1.SubnetworksClient(credentials=credentials, **client_options)
     # The project the *VM requests* will use, which is what this network has to be reachable
-    # from: GceProvisioner takes it from the credentials (provision/gce/provisioner.py), while
-    # config.gcp_project is the container's own --gcp-project for GCS image staging. Those two
-    # differ whenever the gce_project job parameter is empty (credentials default to
-    # gcp-sct-project-1, the config default is sct-project-1), which would prepare qa-vpc in a
-    # project the launches never look at.
+    # from: GceProvisioner takes it from the credentials (provision/gce/provisioner.py).
+    # config.gcp_project normally names the same project (the gce_project secret name with its
+    # gcp- prefix trimmed), but GCS_KEY_FILE credentials can belong to a different one.
     project = creds.get("project_id") or config.gcp_project
 
     try:

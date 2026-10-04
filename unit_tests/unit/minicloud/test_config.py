@@ -272,7 +272,7 @@ def test_minicloud_config_gce_project_param_wins_over_env(monkeypatch):
     """
     monkeypatch.setenv("SCT_GCE_PROJECT", "gcp-from-env")
     config = MinicloudConfig.from_env(params={"gce_project": "gcp-from-yaml"})
-    assert config.gcp_project == "gcp-from-yaml"
+    assert config.gcp_project == "from-yaml"
 
 
 def test_minicloud_config_gce_project_falls_back_to_env_then_default(monkeypatch):
@@ -282,8 +282,35 @@ def test_minicloud_config_gce_project_falls_back_to_env_then_default(monkeypatch
     assert MinicloudConfig.from_env(params={"gce_project": ""}).gcp_project == MINICLOUD_GCP_PROJECT_DEFAULT
 
     monkeypatch.setenv("SCT_GCE_PROJECT", "gcp-from-env")
-    assert MinicloudConfig.from_env().gcp_project == "gcp-from-env"
-    assert MinicloudConfig.from_env(params={"gce_project": ""}).gcp_project == "gcp-from-env"
+    assert MinicloudConfig.from_env().gcp_project == "from-env"
+    assert MinicloudConfig.from_env(params={"gce_project": ""}).gcp_project == "from-env"
+
+
+@pytest.mark.parametrize(
+    "gce_project, expected",
+    [
+        # the KeyStore secret names the pipelines pass, mapped to the project each one holds
+        ("gcp-sct-project-1", "sct-project-1"),
+        ("gcp-local-ssd-latency", "local-ssd-latency"),
+        # an already bare project id passes through untouched
+        ("sct-project-1", "sct-project-1"),
+        # only the prefix is trimmed, never a later "gcp-"
+        ("my-gcp-project", "my-gcp-project"),
+        # a bare prefix trims to nothing and falls back to the default
+        ("gcp-", MINICLOUD_GCP_PROJECT_DEFAULT),
+    ],
+)
+def test_minicloud_config_gce_project_secret_name_trimmed_to_project(monkeypatch, gce_project, expected):
+    """gce_project names the credentials secret, not the GCP project (SCT-1144).
+
+    Using it verbatim made ensure_gcs_bucket() create gcp-sct-project-1-minicloud-staging in a
+    project called gcp-sct-project-1, which GCS rejects with "Unknown project id".
+    """
+    monkeypatch.delenv("SCT_GCE_PROJECT", raising=False)
+    assert MinicloudConfig.from_env(params={"gce_project": gce_project}).gcp_project == expected
+
+    monkeypatch.setenv("SCT_GCE_PROJECT", gce_project)
+    assert MinicloudConfig.from_env().gcp_project == expected
 
 
 def test_minicloud_config_skip_memory_check_param():
