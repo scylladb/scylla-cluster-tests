@@ -81,6 +81,7 @@ from sdcm.utils.trigger_matrix.images import resolve_image_architecture, resolve
 from sdcm.utils.trigger_matrix.matrix import trigger_matrix as run_trigger_matrix
 from sdcm.utils.trigger_matrix.resolution import resolve_to_full_version
 from sdcm.utils.cloud_catalog.cost import RunCostEstimate, estimate_run_cost
+from sdcm.utils.cost_reporting import report_estimated_cost
 from sdcm.utils.argus import (
     ReplayOnlyArgusSCTClient,
     argus_offline_collect_events,
@@ -1723,6 +1724,21 @@ def output_conf(config_files, backend):
     sys.exit(0)
 
 
+def _report_estimate_to_argus(config: SCTConfiguration, estimate: RunCostEstimate) -> None:
+    """Attach the estimate to the run's Argus record. Never raises: the estimate is advisory."""
+    test_id = config.get("test_id")
+    if not test_id:
+        LOGGER.warning("No test_id is set, so there is no Argus run to report the cost estimate to")
+        return
+    try:
+        test_config = get_test_config()
+        test_config.set_test_id_only(test_id)
+        test_config.init_argus_client(config)
+        report_estimated_cost(test_config.argus_client(), estimate)
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Could not report the cost estimate to Argus", exc_info=True)
+
+
 @cli.command("estimate-cost", help="Estimate a test run's instance-hour cost from its configuration")
 @click.argument("config_files", type=str, default="")
 @click.option("-b", "--backend", type=click.Choice(available_backends))
@@ -1734,12 +1750,19 @@ def output_conf(config_files, backend):
     default=None,
     help="Also write the estimate as JSON to this file, for a pipeline to read.",
 )
-def estimate_cost(config_files, backend, duration, output_file):
+@click.option(
+    "--report-to-argus",
+    is_flag=True,
+    default=False,
+    help="Also attach the estimate to the Argus run of the configured test_id.",
+)
+def estimate_cost(config_files, backend, duration, output_file, report_to_argus):
     """Print the estimated instance-hour cost of a run, before anything is provisioned.
 
-    Reads configuration only - no cloud API calls, no runner, no Argus - so it is safe to
-    call as a pipeline pre-flight step. Always exits 0: an unpriceable configuration
-    reports a null total rather than failing the caller.
+    Reads configuration only - no runner, and no cloud API call except one AWS spot price
+    lookup per region - so it is safe to call as a pipeline pre-flight step. Always exits 0:
+    an unpriceable configuration reports a null total rather than failing the caller, and a
+    failure to reach Argus is logged rather than raised.
     """
     add_file_logger()
 
@@ -1762,6 +1785,8 @@ def estimate_cost(config_files, backend, duration, output_file):
         sys.exit(0)
 
     estimate = estimate_run_cost(config, duration_minutes=duration)
+    if report_to_argus:
+        _report_estimate_to_argus(config, estimate)
 
     if output_file:
         with open(output_file, "w", encoding="utf-8") as fobj:

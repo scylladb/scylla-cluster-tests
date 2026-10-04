@@ -103,7 +103,7 @@ Map call(Map params, String region, String instanceTypeDb = '') {
             esac
         fi
 
-        ./docker/env/hydra.sh estimate-cost -b "${params.backend}" --output "${estimate_file}"
+        ./docker/env/hydra.sh estimate-cost -b "${params.backend}" --output "${estimate_file}" --report-to-argus
         """
         sh(script: cmd)
 
