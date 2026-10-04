@@ -13,6 +13,7 @@ from argus.client.session import create_session
 from argus.client.generic_result import GenericResultTable
 from argus.client.replay_log import ReplayLog, ReplayLogOnlyResponse
 from argus.client.sct.types import LogLink
+from argus.client.types import CostItem
 
 JSON = dict[str, Any] | list[Any] | int | str | float | bool | Type[None]
 LOGGER = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ class ArgusClientError(Exception):
 class ArgusClient:
     schema_version: str | None = None
 
-    class Routes():
+    class Routes:
         SUBMIT = "/testrun/$type/submit"
         GET = "/testrun/$type/$id/get"
         HEARTBEAT = "/testrun/$type/$id/heartbeat"
@@ -53,18 +54,34 @@ class ArgusClient:
         SET_PRODUCT_VERSION = "/testrun/$type/$id/update_product_version"
         SUBMIT_LOGS = "/testrun/$type/$id/logs/submit"
         SUBMIT_RESULTS = "/testrun/$type/$id/submit_results"
-        FETCH_RESULTS = "/testrun/$type/$id/fetch_results"
         FINALIZE = "/testrun/$type/$id/finalize"
+        SET_ESTIMATED_COST = "/testrun/$id/cost/estimated"
+        SUBMIT_COST_ITEMS = "/testrun/$id/cost/items"
 
     # Subclasses override ``test_type`` as a class attribute; ``run_id`` is
     # set on the instance by subclass constructors. Both are surfaced in the
     # replay-log filename.
     test_type: str | None = None
 
-    def __init__(self, auth_token: str, base_url: str, log_dir: str | Path, api_version="v1",
-                 extra_headers: dict | None = None, timeout: int = 60, max_retries: int = 3,
-                 use_tunnel: bool | None = None, replay_log_only: bool = False,
-                 run_id: UUID | str | None = None) -> None:
+    # Route templates mounted directly under /api/<ver> instead of the
+    # /api/<ver>/client sub-tree. Kept as a lookup on the template (not baked
+    # into the route string) so replay logs keep recording the same endpoint
+    # values the backend skip-list knows.
+    non_client_routes: frozenset[str] = frozenset()
+
+    def __init__(
+        self,
+        auth_token: str,
+        base_url: str,
+        log_dir: str | Path,
+        api_version="v1",
+        extra_headers: dict | None = None,
+        timeout: int = 60,
+        max_retries: int = 3,
+        use_tunnel: bool | None = None,
+        replay_log_only: bool = False,
+        run_id: UUID | str | None = None,
+    ) -> None:
         self._auth_token = auth_token
         self._base_url = base_url
         self._api_ver = api_version
@@ -84,6 +101,7 @@ class ArgusClient:
                 base_url=base_url,
                 use_tunnel=use_tunnel,
                 max_retries=max_retries,
+                run_id=str(run_id) if run_id is not None else None,
             )
             if extra_headers:
                 self.session.headers.update(extra_headers)
@@ -135,23 +153,31 @@ class ArgusClient:
         response_data: JSON = response.json()
         LOGGER.debug("API Response: status=%s", response_data.get("status"))
         if response_data.get("status") != "ok":
-            exc_args = response_data["response"]["arguments"]
+            # The standard error envelope carries a dict with "arguments"
+            # (error_handlers.api_exception_handler), but some responses put
+            # a plain string under "response" instead -- e.g. the DB-outage
+            # handler.
+            error_body = response_data.get("response")
+            if isinstance(error_body, dict):
+                exc_args = error_body.get("arguments") or ()
+                detail = exc_args[0] if len(exc_args) > 0 else error_body.get("exception", "#NoMessage")
+            else:
+                detail = error_body if error_body is not None else "#NoMessage"
             raise ArgusClientError(
                 f"API Error encountered using endpoint: {response.request.method} {response.request.path_url}",
-                exc_args[0] if len(exc_args) > 0 else response_data.get("response", {}).get("exception", "#NoMessage"),
+                detail,
             )
 
     def get_url_for_endpoint(self, endpoint: str, location_params: dict[str, str] | None) -> str:
+        prefix = "" if endpoint in self.non_client_routes else "/client"
         if self.verify_location_params(endpoint, location_params):
             for param, value in location_params.items():
                 endpoint = endpoint.replace(f"${param}", str(value))
-        return f"{self._base_url}/api/{self._api_ver}/client{endpoint}"
+        return f"{self._base_url}/api/{self._api_ver}{prefix}{endpoint}"
 
     @property
     def generic_body(self) -> dict:
-        return {
-            "schema_version": self.schema_version
-        }
+        return {"schema_version": self.schema_version}
 
     @property
     def request_headers(self):
@@ -168,17 +194,9 @@ class ArgusClient:
         if self._replay_log_only:
             LOGGER.debug("GET [replay-log-only] %s params: %s", endpoint, params)
             return ReplayLogOnlyResponse(endpoint=endpoint)
-        url = self.get_url_for_endpoint(
-            endpoint=endpoint,
-            location_params=location_params
-        )
+        url = self.get_url_for_endpoint(endpoint=endpoint, location_params=location_params)
         LOGGER.debug("GET Request: %s, params: %s", url, params)
-        response = self.session.get(
-            url=url,
-            params=params,
-            headers=self.request_headers,
-            timeout=self._timeout
-        )
+        response = self.session.get(url=url, params=params, headers=self.request_headers, timeout=self._timeout)
         LOGGER.debug("GET Response: %s %s", response.status_code, response.url)
 
         return response
@@ -190,9 +208,7 @@ class ArgusClient:
         params: dict = None,
         body: dict = None,
     ) -> requests.Response:
-        record = functools.partial(
-            self._replay_log.write, "POST", endpoint, location_params, params, body
-        )
+        record = functools.partial(self._replay_log.write, "POST", endpoint, location_params, params, body)
 
         if self._replay_log_only:
             # Record the request so a future replay can re-send it, but skip
@@ -201,18 +217,11 @@ class ArgusClient:
             record(success=False)
             return ReplayLogOnlyResponse(endpoint=endpoint)
 
-        url = self.get_url_for_endpoint(
-            endpoint=endpoint,
-            location_params=location_params
-        )
+        url = self.get_url_for_endpoint(endpoint=endpoint, location_params=location_params)
         LOGGER.debug("POST Request: %s, params: %s", url, params)
         try:
             response = self.session.post(
-                url=url,
-                params=params,
-                json=body,
-                headers=self.request_headers,
-                timeout=self._timeout
+                url=url, params=params, json=body, headers=self.request_headers, timeout=self._timeout
             )
         except Exception as exc:
             record(success=False, error=f"{type(exc).__name__}: {exc}")
@@ -223,10 +232,9 @@ class ArgusClient:
         return response
 
     def submit_run(self, run_type: str, run_body: dict) -> requests.Response:
-        return self.post(endpoint=self.Routes.SUBMIT, location_params={"type": run_type}, body={
-            **self.generic_body,
-            **run_body
-        })
+        return self.post(
+            endpoint=self.Routes.SUBMIT, location_params={"type": run_type}, body={**self.generic_body, **run_body}
+        )
 
     def get_run(self, run_type: str = None, run_id: UUID | str = None) -> requests.Response:
 
@@ -265,30 +273,21 @@ class ArgusClient:
         return self.post(
             endpoint=self.Routes.SET_STATUS,
             location_params={"type": run_type, "id": str(run_id)},
-            body={
-                **self.generic_body,
-                "new_status": new_status.value
-            }
+            body={**self.generic_body, "new_status": new_status.value},
         )
 
     def update_product_version(self, run_type: str, run_id: UUID, product_version: str) -> requests.Response:
         return self.post(
             endpoint=self.Routes.SET_PRODUCT_VERSION,
             location_params={"type": run_type, "id": str(run_id)},
-            body={
-                **self.generic_body,
-                "product_version": product_version
-            }
+            body={**self.generic_body, "product_version": product_version},
         )
 
     def submit_logs(self, run_type: str, run_id: UUID, logs: list[LogLink]) -> requests.Response:
         return self.post(
             endpoint=self.Routes.SUBMIT_LOGS,
             location_params={"type": run_type, "id": str(run_id)},
-            body={
-                **self.generic_body,
-                "logs": [asdict(l) for l in logs]
-            }
+            body={**self.generic_body, "logs": [asdict(l) for l in logs]},
         )
 
     def finalize_run(self, run_type: str, run_id: UUID, body: dict = None) -> requests.Response:
@@ -299,7 +298,7 @@ class ArgusClient:
             body={
                 **self.generic_body,
                 **body,
-            }
+            },
         )
 
     def heartbeat(self, run_type: str, run_id: UUID) -> None:
@@ -308,7 +307,7 @@ class ArgusClient:
             location_params={"type": run_type, "id": str(run_id)},
             body={
                 **self.generic_body,
-            }
+            },
         )
         self.check_response(response)
 
@@ -319,7 +318,42 @@ class ArgusClient:
             body={
                 **self.generic_body,
                 "run_id": str(self.run_id),
-                ** result.as_dict(),
+                **result.as_dict(),
+            },
+        )
+        self.check_response(response)
+
+    def set_estimated_cost(self, run_id: UUID, value: float) -> None:
+        """Set the estimated cost of a run, in USD.
+
+        Send it before the run provisions anything. A repeated call replaces
+        the stored estimate. The amount is zero or more, and finite.
+        """
+        response = self.post(
+            endpoint=self.Routes.SET_ESTIMATED_COST,
+            location_params={"id": str(run_id)},
+            body={
+                **self.generic_body,
+                "value": value,
+            }
+        )
+        self.check_response(response)
+
+    def submit_cost_items(self, run_id: UUID, items: list[CostItem]) -> None:
+        """Submit the final cost of one or more named resources, in USD.
+
+        Send an item as soon as its price is known. Argus sums the items of
+        the run into the run's actual cost. Send nothing for a resource whose
+        price is unknown, because a zero is stored as a real figure. An item
+        is keyed by its name, so a repeated name replaces that item, and the
+        names are unique within one call.
+        """
+        response = self.post(
+            endpoint=self.Routes.SUBMIT_COST_ITEMS,
+            location_params={"id": str(run_id)},
+            body={
+                **self.generic_body,
+                "items": [asdict(item) for item in items],
             }
         )
         self.check_response(response)
