@@ -61,6 +61,7 @@ from sdcm.utils.common import (
 )
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.context_managers import environment
+from sdcm.utils.cost_reporting import report_costs_from_tags
 from sdcm.utils.decorators import retrying
 from sdcm.utils.gce_utils import (
     GkeCleaner,
@@ -272,6 +273,10 @@ def clean_instances_oci(tags_dict: dict, dry_run=False):
             try:
                 compute_client.terminate_instance(instance_id)
                 argus_client = init_argus_client(test_id)
+                # OCI keeps listing a terminated instance for a while. SCT already reported its exact
+                # cost when it terminated the node; re-pricing it up to now would replace that.
+                if instance.lifecycle_state not in ("TERMINATING", "TERMINATED"):
+                    report_costs_from_tags(argus_client, [(display_name, tags, instance.time_created)], leaked=False)
                 terminate_resource_in_argus(client=argus_client, resource_name=display_name)
                 LOGGER.info("Terminated OCI instance %s (id: %s)", display_name, instance_id)
             except Exception as e:  # noqa: BLE001
@@ -375,6 +380,10 @@ def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
             if not dry_run:
                 response = client.terminate_instances(InstanceIds=[instance_id])
                 argus_client = init_argus_client(tags_dict.get("TestId"))
+                # AWS keeps listing a terminated instance for a while. SCT already reported its exact
+                # cost when it terminated the node; re-pricing it up to now would replace that.
+                if instance.get("State", {}).get("Name") not in ("shutting-down", "terminated"):
+                    report_costs_from_tags(argus_client, [(name, tags, instance.get("LaunchTime"))], leaked=False)
                 terminate_resource_in_argus(client=argus_client, resource_name=name)
                 LOGGER.debug("Done. Result: %s\n", response["TerminatingInstances"])
 
@@ -584,6 +593,9 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
             )
             res.done()
             argus_client = init_argus_client(tags_dict.get("TestId"))
+            report_costs_from_tags(
+                argus_client, [(instance.name, instance.labels, instance.creation_timestamp)], leaked=False
+            )
             terminate_resource_in_argus(client=argus_client, resource_name=instance.name)
             LOGGER.info("%s deleted=%s", instance.name, res)
 
@@ -617,6 +629,9 @@ def clean_instances_azure(tags_dict: dict, regions=None, dry_run=False):
             if not dry_run:
                 provisioner.cleanup(wait=False)
                 argus_client = init_argus_client(tags_dict.get("TestId"))
+                report_costs_from_tags(
+                    argus_client, [(i.name, i.tags, i.creation_time) for i in instances_to_clean], leaked=False
+                )
                 for instance in instances_to_clean:
                     terminate_resource_in_argus(client=argus_client, resource_name=instance.name)
         else:
@@ -629,6 +644,11 @@ def clean_instances_azure(tags_dict: dict, regions=None, dry_run=False):
             if not dry_run:
                 for instance in instances_to_clean:
                     instance.terminate(wait=False)
+                report_costs_from_tags(
+                    init_argus_client(tags_dict.get("TestId")),
+                    [(i.name, i.tags, i.creation_time) for i in instances_to_clean],
+                    leaked=False,
+                )
 
 
 def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:

@@ -401,3 +401,32 @@ class TestCleanCloudResources:
         params = {"RunByUser": "test", "TestId": "1111", "NodeType": "monitor"}
         res = clean_cloud_resources(params, self.config)
         assert res
+
+
+@pytest.mark.parametrize("state, reported", [("running", True), ("terminated", False), ("shutting-down", False)])
+def test_clean_instances_aws_prices_only_instances_it_terminates(state, reported):
+    """AWS keeps listing terminated instances; their exact cost was sent when SCT ended them."""
+    instance = {"InstanceId": "i-1111", "State": {"Name": state}, "Tags": [{"Key": "Name", "Value": "db-1"}]}
+    with (
+        patch("boto3.client"),
+        patch.object(resources_cleanup, "list_instances_aws", Mock(return_value={"eu-north-1": [instance]})),
+        patch.object(resources_cleanup, "init_argus_client"),
+        patch.object(resources_cleanup, "terminate_resource_in_argus"),
+        patch.object(resources_cleanup, "report_costs_from_tags") as report_costs,
+    ):
+        clean_instances_aws({"TestId": 1111})
+    assert report_costs.called is reported
+
+
+@pytest.mark.parametrize("state, reported", [("RUNNING", True), ("TERMINATED", False), ("TERMINATING", False)])
+def test_clean_instances_oci_prices_only_instances_it_terminates(oci_instance, state, reported):
+    """OCI keeps listing terminated instances; their exact cost was sent when SCT ended them."""
+    with (
+        patch.object(resources_cleanup, "list_instances_oci", return_value=[oci_instance(lifecycle_state=state)]),
+        patch.object(resources_cleanup, "OciService"),
+        patch.object(resources_cleanup, "init_argus_client"),
+        patch.object(resources_cleanup, "terminate_resource_in_argus"),
+        patch.object(resources_cleanup, "report_costs_from_tags") as report_costs,
+    ):
+        clean_instances_oci({"TestId": "1111"})
+    assert report_costs.called is reported

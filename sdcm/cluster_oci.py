@@ -331,6 +331,10 @@ class OciNode(cluster.BaseNode):
     def _set_keep_duration(self, duration_in_hours: int) -> None:
         self._instance.add_tags({"keep": str(duration_in_hours)})
 
+    def _add_tags(self, tags: Dict[str, str]) -> None:
+        # Not retried: until `prepare-regions` defines the tag keys, OCI rejects them every time.
+        self._instance.add_tags(tags)
+
     @property
     def vm_region(self):
         return self._instance.region
