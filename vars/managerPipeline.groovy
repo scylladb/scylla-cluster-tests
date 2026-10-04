@@ -269,6 +269,21 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('Estimate Test Cost') {
+                steps {
+                    catchError(stageResult: 'SUCCESS') {
+                        timeout(time: 5, unit: 'MINUTES') {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        estimateTestCost(params, builder.region)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('Create SCT Runner') {
                 options {
                     timeout(time: 5, unit: 'MINUTES')
