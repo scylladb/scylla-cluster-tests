@@ -77,7 +77,7 @@ def sample_matrix_yaml(tmp_path):
                 "backend": "gce",
                 "labels": [],
                 "exclude_versions": [],
-                "params": {"region": "us-east1"},
+                "params": {"gce_datacenter": "us-east1"},
             },
             {
                 "job_name": "/scylla-enterprise/perf-regression/perf-test",
@@ -107,7 +107,9 @@ def sample_jobs():
             exclude_versions=["2024.1"],
             params={"region": "eastus"},
         ),
-        JobConfig(job_name="job-c", backend="gce", labels=[], exclude_versions=[], params={"region": "us-east1"}),
+        JobConfig(
+            job_name="job-c", backend="gce", labels=[], exclude_versions=[], params={"gce_datacenter": "us-east1"}
+        ),
         JobConfig(
             job_name="job-d",
             backend="aws",

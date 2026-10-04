@@ -142,6 +142,15 @@ def test_list_valued_cron_param_rejected(tmp_path):
         load_matrix_config(path)
 
 
+def test_gce_job_region_param_rejected(tmp_path):
+    """A GCE region in `region` becomes SCT_REGION_NAME and breaks AWS AMI resolution."""
+    path = write_matrix(
+        tmp_path, {"jobs": [{"job_name": "test", "backend": "gce", "params": {"region": "us-central1"}}]}
+    )
+    with pytest.raises(MatrixValidationError, match="a gce job takes its region as 'gce_datacenter'"):
+        load_matrix_config(path)
+
+
 @pytest.mark.parametrize("filename", sorted(p.name for p in TRIGGERS_DIR.glob("*.yaml")))
 def test_production_matrices_pass_layout_validation(filename):
     """Every shipped trigger matrix must keep its Jenkins parameters under `params:`."""
