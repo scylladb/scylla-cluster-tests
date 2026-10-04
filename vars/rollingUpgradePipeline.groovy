@@ -576,7 +576,7 @@ def call(Map pipelineParams) {
                                                         script {
                                                             dir('scylla-cluster-tests') {
                                                                 timeout(time: 10, unit: 'MINUTES') {
-                                                                    stopMinicloud(params_mapping[base_version], currentBuild)
+                                                                    stopMinicloud(params_mapping[base_version], currentBuild, "base-${base_version}")
                                                                     // Leave the agent clean for
                                                                     // the next job on it.
                                                                     minicloudReclaim(atEnd: true)
