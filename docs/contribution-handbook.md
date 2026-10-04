@@ -423,6 +423,11 @@ Available provision backends: `aws`, `gce`, `docker`, `azure`, `k8s-local-kind-a
 artifacts tests against [minicloud](minicloud.md) on an sct-runner. They have no `-reuse`
 variant. Renovate adds both labels to minicloud image bumps.
 
+`test-artifacts` runs the AMI (aws), CentOS 9 and Ubuntu 22.04 (gce) artifacts tests, the same
+as `jenkins-pipelines/oss/artifacts/artifacts-{ami,centos9,ubuntu2204}.jenkinsfile`, each
+reporting its own `jenkins/provision_artifacts-*` status. The generic `test-provision` label
+does not run them. Renovate adds it to scylla-doctor bumps, as those tests run scylla-doctor.
+
 ### 4.2 GitHub Actions
 
 Beyond Jenkins, several GitHub Actions workflows handle automation. The goal is to

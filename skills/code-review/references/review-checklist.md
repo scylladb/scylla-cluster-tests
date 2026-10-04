@@ -181,6 +181,7 @@ Any change to backend-specific files.
 | `sdcm/cluster_k8s/*`, `sdcm/utils/k8s/*` | `provision-k8s` |
 | `sdcm/cluster_baremetal.py` | `provision-baremetal` |
 | `sdcm/utils/minicloud/*`, `vars/startMinicloud.groovy`, `configurations/minicloud*` | `test-provision-minicloud-aws`, `test-provision-minicloud-gce` |
+| `utils/scylla_doctor.py`, `artifacts_test.py`, `test-cases/artifacts/*` | `test-artifacts` |
 
 ### Cross-Backend Consistency
 

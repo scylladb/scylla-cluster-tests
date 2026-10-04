@@ -3,8 +3,10 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws', 'minicloud-aws', 'minicloud-gce']
-def sct_runner_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws', 'minicloud-aws', 'minicloud-gce']
+def target_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws', 'minicloud-aws', 'minicloud-gce', 'artifacts-ami', 'artifacts-centos9', 'artifacts-ubuntu2204']
+def sct_runner_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws', 'minicloud-aws', 'minicloud-gce', 'artifacts-ami', 'artifacts-centos9', 'artifacts-ubuntu2204']
+// Run only by the `test-artifacts` label, never by the `test-provision*` labels.
+def artifacts_backends = ['artifacts-ami', 'artifacts-centos9', 'artifacts-ubuntu2204']
 
 def createRunConfiguration(String backend) {
 	def scylla_version = params.scylla_version ?: getLatestScyllaRelease('scylla')
@@ -79,6 +81,21 @@ def createRunConfiguration(String backend) {
             configuration.backend = 'gce'
             configuration.gce_datacenter = 'us-east1'
             configuration.test_config = '["test-cases/artifacts/gce-image.yaml", "configurations/minicloud.yaml", "configurations/minicloud/gce.yaml"]'
+        }
+    }
+
+    if (backend in ['artifacts-ami', 'artifacts-centos9', 'artifacts-ubuntu2204']) {
+        // The same tests as jenkins-pipelines/oss/artifacts/artifacts-{ami,centos9,ubuntu2204}.jenkinsfile,
+        // which run scylla-doctor among their checks. Renovate adds `test-artifacts` to scylla-doctor bumps.
+        configuration.test_name = 'artifacts_test'
+        if (backend == 'artifacts-ami') {
+            configuration.backend = 'aws'
+            configuration.availability_zone = 'a'
+            configuration.test_config = 'test-cases/artifacts/ami.yaml'
+        } else {
+            configuration.backend = 'gce'
+            configuration.gce_datacenter = 'us-east1'
+            configuration.test_config = backend == 'artifacts-centos9' ? 'test-cases/artifacts/centos9.yaml' : 'test-cases/artifacts/ubuntu2204.yaml'
         }
     }
 
@@ -367,6 +384,7 @@ pipeline {
                         "test-provision-vs-aws", "test-provision-vs-aws-reuse",
                         "test-provision-minicloud-aws",
                         "test-provision-minicloud-gce",
+                        "test-artifacts",
                     ].join(",")
                     return pullRequestContainsLabels(labels)
                 }
@@ -376,7 +394,8 @@ pipeline {
                     def sctParallelTests = [:]
                     target_backends.each {
                         def backend = it
-                        if (pullRequestContainsLabels("test-provision,test-provision-${backend},test-provision-${backend}-reuse")) {
+                        def trigger_labels = backend in artifacts_backends ? "test-artifacts" : "test-provision,test-provision-${backend},test-provision-${backend}-reuse"
+                        if (pullRequestContainsLabels(trigger_labels)) {
                             sctParallelTests["provision test on ${backend}"] = {
                                 def curr_params = createRunConfiguration(backend)
                                 def working_dir = "${backend}/scylla-cluster-tests"
@@ -424,6 +443,8 @@ pipeline {
                                                             echo "Scylla Cloud backend selected: provisioning loader nodes only on ${curr_params.xcloud_provider} cloud provider"
                                                         }
                                                         if (curr_params.with_minicloud) {
+                                                            echo 'The artifacts test provisions its own node. No additional resources to be provisioned.'
+                                                        } else if (backend in artifacts_backends) {
                                                             echo 'The artifacts test provisions its own node. No additional resources to be provisioned.'
                                                         } else if (curr_params.backend == 'xcloud' || curr_params.backend == 'aws' || curr_params.backend == 'gce' || curr_params.backend == 'azure' || curr_params.backend == 'oci') {
                                                             provisionResources(curr_params, builder.region)
@@ -485,7 +506,8 @@ pipeline {
                                             markStepFailed("Collecting logs failed: ${err}", false)
                                         }
                                         // The minicloud artifacts tests run no monitor node, so there is no stack to restore.
-                                        if (!(backend in ['k8s-local-kind-aws', 'k8s-eks']) && !curr_params.with_minicloud) {
+                                        // Neither do the artifacts tests.
+                                        if (!(backend in ['k8s-local-kind-aws', 'k8s-eks']) && !curr_params.with_minicloud && !(backend in artifacts_backends)) {
                                             try {
                                                 wrap([$class: 'BuildUser']) {
                                                     timeout(time: 25, unit: 'MINUTES') {
