@@ -653,10 +653,11 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
         self._ami_params_snapshot = {key: self.get(key) for key in self.ami_id_params}
 
-        # 5) overwrite AMIs
-        for key in self.ami_id_params:
-            if param := self.get(key):
-                self[key] = convert_name_to_ami_if_needed(param, tuple(self.region_names))
+        # 5) overwrite AMIs - AWS only: a shared overlay's `resolve:ssm:` AMI must not call AWS on other backends
+        if backend_to_cloud(self.get("cluster_backend"), self.get("xcloud_provider")) == "aws":
+            for key in self.ami_id_params:
+                if param := self.get(key):
+                    self[key] = convert_name_to_ami_if_needed(param, tuple(self.region_names))
 
         # 6) handle scylla_version if exists
         scylla_linux_distro = self.get("scylla_linux_distro")
