@@ -11,7 +11,9 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+import gzip
 import subprocess
+from email import message_from_string
 from textwrap import dedent
 from unittest.mock import Mock
 
@@ -19,7 +21,7 @@ import pytest
 
 from sdcm.provision.aws.configuration_script import AWSConfigurationScriptBuilder
 from sdcm.provision.common.utils import minify_shell_script
-from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
+from sdcm.sct_provision.aws.user_data import AWSInstanceUserDataBuilder, ScyllaUserDataBuilder
 
 # EC2 rejects user data above this many bytes, counted before base64 (SCT-1147)
 EC2_USER_DATA_LIMIT = 16384
@@ -86,8 +88,43 @@ class _Params(dict):
         return super().get(key, default)
 
 
-def test_aws_user_data_fits_the_ec2_limit_with_everything_enabled():
-    """The largest boot script SCT sends to EC2: a loader with docker, the agent and the ipv6 workaround."""
+def _scylla_user_data(params, test_config, install_docker):
+    return ScyllaUserDataBuilder.model_construct(
+        params=params,
+        cluster_name="longevity-test-cust-time-loader-set-03290f28",
+        user_data_format_version="3",
+        syslog_host_port=("10.4.12.200", 49153),
+        test_config=test_config,
+        install_docker=install_docker,
+        install_agent=True,
+    ).to_string()
+
+
+def _instance_user_data(params, test_config, install_docker):
+    return AWSInstanceUserDataBuilder.model_construct(
+        params=params,
+        syslog_host_port=("10.4.12.200", 49153),
+        test_config=test_config,
+        aws_additional_interface=False,
+        install_docker=install_docker,
+        install_agent=True,
+    ).to_string()
+
+
+@pytest.mark.parametrize(
+    "build_user_data,install_docker",
+    [
+        pytest.param(_scylla_user_data, True, id="sct-runner-provisioned-loader"),
+        pytest.param(_instance_user_data, True, id="provision-resources-loader"),
+        pytest.param(_instance_user_data, False, id="provision-resources-monitor"),
+    ],
+)
+def test_aws_user_data_fits_the_ec2_limit_with_everything_enabled(build_user_data, install_docker):
+    """The largest boot scripts SCT sends to EC2: docker, the agent and the ipv6 workaround all on.
+
+    Both AWS paths: the cluster classes of the test itself, and `provision-resources`, which builds
+    loaders and monitors with `AWSInstanceUserDataBuilder`.
+    """
     params = _Params(
         data_volume_disk_num=0,
         raid_level=0,
@@ -105,15 +142,11 @@ def test_aws_user_data_fits_the_ec2_limit_with_everything_enabled():
     test_config = Mock()
     test_config.agent_api_key.return_value = "k" * 64
     # model_construct: validation would turn the dict into an SCTConfiguration, with the agent disabled
-    user_data = ScyllaUserDataBuilder.model_construct(
-        params=params,
-        cluster_name="longevity-test-cust-time-loader-set-03290f28",
-        user_data_format_version="3",
-        syslog_host_port=("10.4.12.200", 49153),
-        test_config=test_config,
-        install_docker=True,
-        install_agent=True,
-    ).to_string()
+    user_data = build_user_data(params, test_config, install_docker)
 
-    assert "sct-agent" in user_data, "the agent install must be part of what is measured"
-    assert len(user_data.encode()) < EC2_USER_DATA_LIMIT
+    parts = {part.get_content_type(): part for part in message_from_string(user_data).walk()}
+    script = gzip.decompress(parts["application/x-gzip"].get_payload(decode=True)).decode()
+    assert script.startswith("#!/bin/bash")
+    assert "sct-agent" in script, "the agent install must be part of what is measured"
+    # half the limit: room for what a test config can still add, like a longer scylla_yaml
+    assert len(user_data.encode()) < EC2_USER_DATA_LIMIT // 2

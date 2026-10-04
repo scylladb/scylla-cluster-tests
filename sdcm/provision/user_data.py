@@ -12,7 +12,9 @@
 # Copyright (c) 2022 ScyllaDB
 
 import abc
+import gzip
 from dataclasses import dataclass, field
+from email.mime.application import MIMEApplication
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from textwrap import dedent
@@ -23,6 +25,37 @@ import yaml
 from sdcm.provision.common.utils import minify_shell_script
 
 CLOUD_INIT_SCRIPTS_PATH = "/var/lib/sct/cloud-init"
+# what cloud-init recognizes a gzipped part by, once unpacked
+CLOUD_INIT_HEADERS = ("#!", "#cloud-config")
+
+
+def gzipped_mime_part(content: str, filename: str) -> MIMEApplication:
+    """A user data part as gzip, which cloud-init unpacks and handles like the plain part.
+
+    Cloud user data is small: EC2 allows 16 KB, OCI 32,000 bytes of base64 for all metadata
+    (SCT-1147); compressed, a boot script takes about a third of the room. Never compress the
+    whole user data: scylla-machine-image reads it as text to find its x-scylla/json part, and
+    falls back to its defaults (starting scylla itself) when it cannot decode it.
+
+    Once unpacked, the part has no MIME type of its own: cloud-init picks the handler from its
+    first line, and silently skips content which starts with neither `#!` nor `#cloud-config`.
+
+    Args:
+        content: the part, a shell script or a cloud-config, starting with its `#!` / `#cloud-config` line.
+        filename: the name of the uncompressed part.
+
+    Returns:
+        The MIME part to attach.
+
+    Raises:
+        ValueError: when cloud-init could not tell what the unpacked content is.
+    """
+    if not content.startswith(CLOUD_INIT_HEADERS):
+        raise ValueError(f"{filename}: cloud-init needs a {' or '.join(CLOUD_INIT_HEADERS)} first line to run it")
+    # mtime=0 keeps the payload identical between runs of the same config
+    part = MIMEApplication(gzip.compress(content.encode("utf-8"), mtime=0), "x-gzip")
+    part.add_header("Content-Disposition", f'attachment; filename="{filename}.gz"')
+    return part
 
 
 @dataclass
@@ -138,21 +171,16 @@ class UserDataBuilder:
         smi_json = self.get_scylla_machine_image_json()
         yaml_content = self.build_user_data_yaml()
 
-        if not smi_json:
-            return yaml_content
-
         msg = MIMEMultipart()
 
         # Scylla JSON
-        part = MIMEBase("x-scylla", "json")
-        part.set_payload(smi_json)
-        part.add_header("Content-Disposition", 'attachment; filename="scylla_machine_image.json"')
-        msg.attach(part)
+        if smi_json:
+            part = MIMEBase("x-scylla", "json")
+            part.set_payload(smi_json)
+            part.add_header("Content-Disposition", 'attachment; filename="scylla_machine_image.json"')
+            msg.attach(part)
 
-        # Cloud config
-        part = MIMEBase("text", "cloud-config")
-        part.set_payload(yaml_content)
-        part.add_header("Content-Disposition", 'attachment; filename="cloud-config.txt"')
-        msg.attach(part)
+        # Cloud config, compressed even without a JSON part: loaders and monitors carry the most scripts
+        msg.attach(gzipped_mime_part(yaml_content, filename="cloud-config.txt"))
 
         return msg.as_string()
