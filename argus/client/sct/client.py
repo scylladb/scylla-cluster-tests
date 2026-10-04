@@ -198,7 +198,7 @@ class ArgusSCTClient(ArgusClient):
             location_params={},
             body={
                 **self.generic_body,
-                "run_id": self.run_id,
+                "run_id": str(self.run_id),
                 "title": title,
                 "recipients": recipients,
                 "sections": sections or [],
