@@ -138,6 +138,21 @@ def call() {
                   dockerLogin(params)
                }
             }
+            stage('Estimate Test Cost') {
+                steps {
+                    catchError(stageResult: 'SUCCESS') {
+                        timeout(time: 5, unit: 'MINUTES') {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        estimateTestCost(params, builder.region)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('Create SCT Runner') {
                 steps {
                     script {
