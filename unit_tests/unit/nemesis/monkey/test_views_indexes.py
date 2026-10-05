@@ -307,6 +307,29 @@ def test_kill_mv_coordinator_happy_path(kill_runner):
     kill_runner._kill_scylla_daemon.assert_called_once()
 
 
+@pytest.mark.parametrize("base_has_rows", [False, True])
+def test_kill_mv_coordinator_empty_view(kill_runner, base_has_rows):
+    """An empty view passes only when the base table has no live row with the view key column set."""
+    session = kill_runner.cluster.cql_connection_patient.return_value.__enter__.return_value
+    session.execute.return_value = []
+    with (
+        patch(f"{_MODULE}.get_topology_coordinator_node", return_value=MagicMock(name="coordinator")),
+        patch(f"{_MODULE}.create_materialized_view_for_random_column", return_value="col1"),
+        patch(f"{_MODULE}.wait_materialized_view_building_tasks_started"),
+        patch(f"{_MODULE}.adaptive_timeout") as mock_timeout,
+        patch(f"{_MODULE}.wait_for_view_to_be_built"),
+        patch(f"{_MODULE}.base_table_has_rows_with_column", return_value=base_has_rows) as mock_base_check,
+        patch(f"{_MODULE}.drop_materialized_view") as mock_drop,
+    ):
+        mock_timeout.return_value.__enter__.return_value = 100
+        monkey = KillMVBuildingCoordinator(kill_runner)
+        with pytest.raises(AssertionError, match="was not built") if base_has_rows else nullcontext():
+            monkey.disrupt()
+
+    mock_base_check.assert_called_once_with(session, "ks1", "tbl1", "col1")
+    mock_drop.assert_called_once()
+
+
 def test_kill_mv_coordinator_drops_view_when_build_fails(kill_runner):
     """If the view never finishes building, the MV is still dropped (finally)."""
     coordinator = MagicMock(name="coordinator")
