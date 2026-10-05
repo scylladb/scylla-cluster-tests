@@ -67,6 +67,7 @@ def test_start_passes_lightweight_vcpus(tmp_path):
         )
     )
     assert "--lightweight" in cmd
+    assert "--cross-arch=fail" in cmd
     assert cmd[cmd.index("--lightweight-memory") + 1] == "6GiB"
     assert cmd[cmd.index("--lightweight-vcpus") + 1] == "2"
 

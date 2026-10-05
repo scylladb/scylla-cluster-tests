@@ -425,6 +425,9 @@ class MinicloudManager:
             self.config.region,
             "--s3-passthrough-buckets",
             ",".join(self.config.s3_passthrough_buckets),
+            # A cross-arch instance type (aarch64 on an x86-64 host) boots under TCG emulation,
+            # many times slower - fail the launch fast instead of silently crawling.
+            "--cross-arch=fail",
         ]
         if self.config.gcs_bucket:
             minicloud_args += ["--gcs-bucket", self.config.gcs_bucket]
