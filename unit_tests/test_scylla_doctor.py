@@ -572,7 +572,7 @@ def test_collect_results_finds_log_archive_in_either_location(doctor, cwd_archiv
     doctor.node.parent_cluster.get_db_auth = MagicMock(return_value=None)
     doctor.node.remoter.run.side_effect = _ls_side_effects(cwd_archive, tmp_archive)
 
-    with patch.object(ScyllaDoctor, "run"):
+    with patch.object(ScyllaDoctor, "_ensure_lspci"), patch.object(ScyllaDoctor, "run"):
         doctor.run_scylla_doctor_and_collect_results()
 
     assert doctor.scylla_logs_file == expected
@@ -584,6 +584,7 @@ def test_collect_results_fails_when_log_archive_is_missing_everywhere(doctor):
     doctor.node.remoter.run.side_effect = _ls_side_effects()
 
     with (
+        patch.object(ScyllaDoctor, "_ensure_lspci"),
         patch.object(ScyllaDoctor, "run"),
         pytest.raises(AssertionError, match="Scylla log archive has not been created"),
     ):
@@ -596,8 +597,22 @@ def test_collect_results_skips_log_archive_lookup_on_docker(doctor):
     doctor.node.parent_cluster.get_db_auth = MagicMock(return_value=None)
     doctor.node.remoter.run.side_effect = _ls_side_effects()
 
-    with patch.object(ScyllaDoctor, "run"):
+    with patch.object(ScyllaDoctor, "_ensure_lspci"), patch.object(ScyllaDoctor, "run"):
         doctor.run_scylla_doctor_and_collect_results()
 
     assert doctor.scylla_logs_file == ""
     assert doctor.node.remoter.run.call_count == 1
+
+
+@pytest.mark.parametrize("lspci_present", [True, False], ids=["lspci_present", "lspci_missing"])
+def test_ensure_lspci_installs_pciutils_only_when_missing(doctor, lspci_present):
+    """scylla-doctor's LSPCICollector fails without lspci, so pciutils must be installed when missing."""
+    doctor.node.remoter.sudo.return_value = MagicMock(ok=lspci_present)
+    doctor.node.install_package = MagicMock()
+
+    doctor._ensure_lspci()
+
+    if lspci_present:
+        doctor.node.install_package.assert_not_called()
+    else:
+        doctor.node.install_package.assert_called_once_with("pciutils")
