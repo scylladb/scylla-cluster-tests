@@ -2,8 +2,9 @@ test_metadata:
   description: >-
     The canonical provisioning smoke test for SCT itself: a constraint-sized 3-node cluster with
     forced io-tune is preloaded with scylla-bench and YCSB (with data validation), then runs
-    one-minute cassandra-stress, cql-stress and gemini writes under a non-disruptive SisyphusMonkey.
-    Used by the pull-request job and by the documented manual runs on every cloud backend.
+    one-minute cassandra-stress, cql-stress, gemini and latte writes under a non-disruptive
+    SisyphusMonkey. Used by the pull-request job and by the documented manual runs on every cloud
+    backend.
   test_type: longevity
   tier: sanity
   duration_class: short
@@ -16,6 +17,7 @@ test_metadata:
     - cassandra-stress
     - cql-stress-cassandra-stress
     - gemini
+    - latte
     - scylla-bench
     - ycsb
   workload: write
@@ -39,6 +41,7 @@ pre_create_keyspace: [
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5",
              "cql-stress-cassandra-stress write cl=QUORUM duration=1m -schema 'keyspace=cqlstress replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -pop seq=1..1000000 -log interval=5",
              "gemini --duration 3m --warmup 10s --concurrency 4 --mode write --dataset-size small",
+             "latte run --function insert --consistency QUORUM --duration 1m --threads 2 --concurrency 32 --rate 1000 -P row_count=100000 data_dir/latte/validation.rn",
              ]
 
 prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -max-rate=300 -replication-factor=3 -partition-count=10 -clustering-row-count=100 -clustering-row-size=5120 -concurrency=7 -rows-per-request=10",
