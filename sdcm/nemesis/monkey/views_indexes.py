@@ -21,6 +21,7 @@ from sdcm.exceptions import UnsupportedNemesis
 from sdcm.nemesis import NemesisBaseClass, target_data_nodes, target_all_nodes
 from sdcm.nemesis.utils.indexes import (
     ViewFinishedBuildingException,
+    base_table_has_rows_with_column,
     get_random_column_name,
     create_index,
     wait_for_index_to_be_built,
@@ -261,7 +262,7 @@ class KillMVBuildingCoordinator(NemesisBaseClass):
             ks_name, base_table_name = self.runner.random.choice(ks_cfs).split(".")
             view_name = f"{base_table_name}_view_{str(uuid4())[:8]}"
             try:
-                create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
+                column = create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
                 wait_materialized_view_building_tasks_started(session, ks_name, view_name)
             except ViewFinishedBuildingException:
                 drop_materialized_view(session, ks_name, view_name)
@@ -295,6 +296,14 @@ class KillMVBuildingCoordinator(NemesisBaseClass):
                 result = list(
                     session.execute(SimpleStatement(f"SELECT * FROM {ks_name}.{view_name} limit 1", fetch_size=10))
                 )
-                assert len(result) >= 1, f"MV {ks_name}.{view_name} was not built"
+                if not result:
+                    # An empty view is correct when the base table has no live row with the view key column set,
+                    # e.g. all rows expired by TTL (SCT-502). Only then is it not a build failure.
+                    assert not base_table_has_rows_with_column(session, ks_name, base_table_name, column), (
+                        f"MV {ks_name}.{view_name} was not built"
+                    )
+                    self.runner.log.info(
+                        "MV %s.%s is empty: base table has no live rows with column %s set", ks_name, view_name, column
+                    )
             finally:
                 drop_materialized_view(session, ks_name, view_name)
