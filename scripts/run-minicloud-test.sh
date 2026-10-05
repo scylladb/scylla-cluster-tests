@@ -94,6 +94,8 @@ esac
 TEST_CASE="${SCT_TEST_CASE:-$DEFAULT_CASE}"
 # A --config given by the caller replaces the overlay's base, so do not shrink someone else's yaml.
 [[ -n "${SCT_TEST_CASE:-}" ]] && EXTRA_CONFIGS=()
+# SCT_TEST_CASE is this script's option, not an SCT config option: sct.py rejects unknown SCT_* env vars.
+unset SCT_TEST_CASE
 
 if [[ "$FLAVOR" != "provision" && -z "${SCT_SCYLLA_VERSION:-}" &&
       -z "${SCT_AMI_ID_DB_SCYLLA:-}" && -z "${SCT_GCE_IMAGE_DB:-}" ]]; then
