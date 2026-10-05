@@ -5,8 +5,7 @@ description: >-
   Use when creating or reviewing tests in unit_tests/, mocking external
   services, or setting up fixtures. Triggers: "write a unit test", "add
   a test for", "mock boto3", "fix a flaky test", "convert unittest to
-  pytest". Covers FakeRemoter and moto mocking, Singleton state leaks,
-  and why not to assert on bash or Groovy text.
+  pytest". Covers mocking, fixtures, and test-quality checks.
 ---
 
 # Writing Unit Tests for SCT
@@ -48,6 +47,12 @@ Mocking internal functions makes tests brittle and hides bugs. Mock at the outer
 
 **Never reimplement the code under test in a fake class.** If you find yourself copying a method body from `sdcm/` into a `FakeFoo` helper in your test, stop — you are testing the copy, not the real code. Always instantiate the real class and mock only its external I/O (network, file system, cloud APIs). See anti-pattern AP-6 for details.
 
+### A Test Must Fail for the Real Reason
+
+**Before calling a test done, break the code under test and confirm the test fails.**
+
+A green test proves only that its assertions held, not that the code under test ran. Assert on behavior through the public entry point, not on constants or fakes read back from their definition (AP-8). Make every claim in the test name an assertion (P-17). Feed it test-only inputs from `unit_tests/test_data/`, never production pipelines or configs (AP-9). Don't stub out the path where the bug lives. PR #16093 had tests that passed CI and a bot review with every stub removed, and PR #16142 had a stub that hid the failing case (P-18).
+
 ### Do Not Test the Text of Non-Python Code
 
 **Never write a test whose only assertions match strings inside bash, Groovy, or other non-Python code**, whether a helper generates the text or it is read from a file.
@@ -77,7 +82,7 @@ The `events_function_scope` fixture (from `unit_tests/conftest.py`) creates a fu
 
 ## When NOT to Use
 
-- Writing integration tests that need Docker or real services — use the `writing-integration-tests` skill
+- The test can only pass with a running Docker daemon, real cloud credentials, or a live endpoint: that is an integration test, so use the `writing-integration-tests` skill. If every external call can be mocked, it is a unit test.
 - Running or configuring CI pipelines — edit Jenkins pipeline files directly
 - Writing functional tests for K8s operators — see `functional_tests/`
 - Fixing production code bugs — edit the source in `sdcm/` directly
@@ -223,6 +228,13 @@ def test_config_1(): ...
 def test_it_works(): ...
 ```
 
+Every test function and fixture gets a docstring that says what the test checks and why it matters, not how it does it. The name says *what*; the docstring says the goal. PR #16142 review asked for this on every test:
+
+```python
+def test_stop_releases_the_pool_worker(logger):
+    """stop() must retire the pool worker; a live one would block interpreter shutdown."""
+```
+
 ## Running Tests
 
 ```bash
@@ -249,8 +261,8 @@ uv run python -m pytest unit_tests/unit/test_config.py --cov=sdcm.sct_config --c
 
 | File | Content |
 |------|---------|
-| [common-pitfalls.md](references/common-pitfalls.md) | Pitfalls P-1 through P-16 with before/after fixes |
-| [anti-patterns.md](references/anti-patterns.md) | Anti-patterns AP-1 through AP-7 with before/after fixes |
+| [common-pitfalls.md](references/common-pitfalls.md) | Pitfalls P-1 through P-20 with before/after fixes |
+| [anti-patterns.md](references/anti-patterns.md) | Anti-patterns AP-1 through AP-12 with before/after fixes |
 
 | Workflow | Purpose |
 |----------|---------|
@@ -260,7 +272,7 @@ The workflow in brief:
 1. **Identify**: find the code and its existing tests, list external dependencies, and confirm a unit test is the right tool (not for bash or Groovy text, see AP-7).
 2. **Mock**: reuse existing fixtures, and mock only at the external boundary (moto, `FakeRemoter.result_map`, `monkeypatch`, `tmp_path`).
 3. **Assert**: write Arrange-Act-Assert functions with `pytest.param(id=...)` cases, edge cases, and `pytest.raises`.
-4. **Verify**: run the file, check for network access and random-order isolation, and run pre-commit.
+4. **Verify**: run the file, mutation-check each test (break the code, see it fail), check for network access and random-order isolation, and run pre-commit.
 
 ## Success Criteria
 
@@ -271,9 +283,16 @@ A well-written SCT unit test:
 - [ ] Does NOT have `@pytest.mark.integration` marker
 - [ ] Makes zero real network calls (all external services mocked)
 - [ ] Asserts on Python behavior, not on substrings of bash, Groovy, or other non-Python code
+- [ ] Asserts on behavior, not on constants or fake objects read back from their definition (AP-8)
+- [ ] Asserts what the test name claims, e.g. "never reaches the network" has an assert on recorded connections (P-17)
+- [ ] Fails when the code under test is broken (mutation-checked, P-18)
+- [ ] No dependency on files under `jenkins-pipelines/`, `test-cases/` or `configurations/` — inputs live in `unit_tests/test_data/` (AP-9)
+- [ ] Imports no `_private` names from `sdcm/`; no test-only guards added to production code (AP-12, P-20)
+- [ ] Real `sdcm` classes, not stub subclasses; one parametrized fixture per type, not a factory helper (AP-6, P-15)
+- [ ] Fixtures and helper classes at module top or in `conftest.py`, no leading underscore; no `pytest.skip` for parameters that should be filtered out (P-19, AP-11)
 - [ ] Uses `monkeypatch` for environment variables, not `os.environ`
 - [ ] Uses `tmp_path` for temporary files, not hardcoded paths
 - [ ] Passes in isolation, in parallel, and in random order
 - [ ] Has all imports at the top of the file
-- [ ] Follows Google docstring format for test docstrings
+- [ ] Every test function and fixture has a docstring saying what behavior it checks (Google format)
 - [ ] Passes `uv run sct.py pre-commit` checks

@@ -1,6 +1,6 @@
 # Unit Test Anti-Patterns
 
-Broader testing anti-patterns that reduce test value. See also: [common-pitfalls.md](common-pitfalls.md) for specific pitfalls (P-1 through P-15).
+Broader testing anti-patterns that reduce test value. See also: [common-pitfalls.md](common-pitfalls.md) for specific pitfalls (P-1 through P-20).
 
 ## AP-1: Testing Implementation, Not Behavior
 
@@ -185,6 +185,34 @@ def test_create_nodes_round_robin(racks_count, node_count, expected_racks, param
     assert actual_racks == expected_racks
 ```
 
+**Variant — stub subclasses that override the logic under test.** A subclass of the real class that overrides a method the test depends on has the same problem: the override runs, the real method does not.
+
+❌ **Bad — PR [#16142](https://github.com/scylladb/scylla-cluster-tests/pull/16142) overrode `remote_pid` and the command template:**
+```python
+class _StubSSHLogger(SSHGeneralSystemdLogger):
+    @property
+    def _logger_cmd_template(self) -> str:
+        return "cat {since}"
+
+    @property
+    def remote_pid(self) -> str:
+        return "1234"
+```
+
+✅ **Good — the real class; mock only the node, so the real `remote_pid` runs:**
+```python
+def _node(remote_pid: str = "1234") -> MagicMock:
+    """A node whose remoter answers the pid-file lookup done by SSHLoggerBase.remote_pid."""
+    node = MagicMock()
+    node.remoter.run.return_value = SimpleNamespace(ok=bool(remote_pid), stdout=remote_pid)
+    return node
+
+
+logger = SSHGeneralSystemdLogger(node=_node(), target_log_file=str(tmp_path / "target.log"))
+```
+
+The no-pid case is then the same real class with `_node(remote_pid="")`, not another stub subclass.
+
 **How to spot it:** if you grep the test file and find the same method bodies from `sdcm/` appearing verbatim, the tests are copies. A good test constructs the real `sdcm.*` class and mocks only at the external boundary (network, file system, cloud APIs).
 
 **Correct approach:** always instantiate the real class and mock only its external I/O. Only fall back to `MagicMock(spec=RealClass)` as a last resort when the real constructor has unavoidable heavy side effects that cannot be mocked — and document why.
@@ -235,3 +263,176 @@ Both tests copy the script back into the assertions. Neither one shows that vect
 **Not covered by this rule:**
 - Functions whose output *is* a computed command line, such as stress-tool or `nodetool` argument builders. When Python decides the arguments, asserting on the resulting arguments tests that decision. Prefer comparing parsed tokens (`shlex.split(cmd)`) to substring checks.
 - Python code that parses non-Python text, such as the Jenkinsfile parser tested in `unit_tests/lint/test_jenkins_parser.py`. There the Groovy is the input, and the test checks the parser's output.
+
+## AP-8: Asserting on Constants and Definitions
+
+A test that reads a constant, a lookup table, or a fake object back from the module that defines it only restates the definition. It passes whenever the definition is unchanged and says nothing about whether the code that *uses* the constant works. Test the behavior the constant exists for, through the public entry point.
+
+Real example: PR [#16093](https://github.com/scylladb/scylla-cluster-tests/pull/16093) (pipeline linter cloud-API isolation). The review called these tests valueless because they "verify a constant".
+
+❌ **Bad — restating `_CLOUD_API_PATCHES` and `_FAKE_IMAGE` (dropped in review):**
+```python
+@pytest.mark.parametrize("target", [
+    "sdcm.provision.azure.utils.get_released_scylla_images",
+    "sdcm.utils.oci_utils.get_scylla_images_by_version",
+    ...
+])
+def test_every_cloud_lookup_reached_from_sct_configuration_is_stubbed(target):
+    assert target in _CLOUD_API_PATCHES
+
+
+@pytest.mark.parametrize("attribute", ["image_id", "self_link", "id", "unique_id", "name"])
+def test_fake_image_carries_every_attribute_the_resolvers_read(attribute):
+    assert getattr(_FAKE_IMAGE, attribute)
+```
+
+✅ **Good — lint a pipeline that takes each lookup path and assert it never reaches the network (abridged from the PR):**
+```python
+@pytest.mark.parametrize("pipeline", [
+    pytest.param("azure-released-image", id="azure-released-image"),
+    pytest.param("oci-released-image", id="oci-released-image"),
+    ...
+])
+def test_validate_pipeline_cloud_lookup_never_reaches_the_network(pipeline, remote_connections, test_data_dir):
+    pipeline_path = test_data_dir / "lint" / f"{pipeline}.jenkinsfile"
+    is_error, message = validate_pipeline(pipeline_path, build_env(parse_jenkinsfile(pipeline_path)))
+
+    assert remote_connections == [], f"linting {pipeline} reached the network: {remote_connections}"
+    assert not is_error, message
+```
+
+A missing patch entry now makes the matching pipeline try to connect, and a `_FAKE_IMAGE` missing a field breaks the resolver that reads it. Both fail for the real reason.
+
+**How to spot it:** the assertion is `x in CONSTANT`, `getattr(FAKE, attr)`, or `CONSTANT[key] == literal`, and the parametrize list copies the constant's contents.
+
+## AP-9: Depending on Production Pipelines and Configs
+
+A unit test that reads a real file from `jenkins-pipelines/`, `test-cases/`, or `configurations/` breaks whenever someone edits that job for an unrelated reason, and silently stops covering the path if the job stops using the feature. Unit tests check the machinery, so they need inputs that belong to the test.
+
+❌ **Bad — PR #16093 linted a real perf job (dropped in review):**
+```python
+# An aws pipeline whose test-case enables capacity reservation.
+_CAPACITY_RESERVATION_PIPELINE = Path(
+    "jenkins-pipelines/performance/branch-perf-v17/scylla-enterprise/perf-regression/"
+    "latte-perf-regression-predefined-throughput-steps-tablets.jenkinsfile"
+)
+```
+
+✅ **Good — a minimal test-only pipeline under `unit_tests/test_data/`, loaded with the `test_data_dir` fixture:**
+```groovy
+// unit_tests/test_data/lint/aws-capacity-reservation.jenkinsfile
+// Test-only pipeline for unit_tests/lint/test_validator.py -- not a real job.
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: '''["unit_tests/test_data/lint/base.yaml", "unit_tests/test_data/lint/capacity-reservation.yaml"]''',
+)
+```
+
+Keep each fixture to the few keys that select the path under test, and say in a comment that it is not a real job. Code whose *purpose* is to process every production file (the `lint-pipelines` command itself) is not a unit test and is out of scope here.
+
+## AP-10: Reimplementing Library Behavior in the Test
+
+When a test needs to know how a library interprets its input, call the library. A helper that re-derives the library's rules is a second implementation that can drift from the real one, and it needs its own tests.
+
+❌ **Bad — PR #16093 re-derived how `mock.patch` resolves a dotted target (dropped in review):**
+```python
+def _split_target(target):
+    """Split a patch target the way `mock.patch` does: longest importable prefix, then attributes."""
+    parts = target.split(".")
+    for split_at in range(len(parts) - 1, 0, -1):
+        try:
+            module = importlib.import_module(".".join(parts[:split_at]))
+        except ImportError:
+            continue
+        return module, ".".join(parts[:split_at]), parts[split_at:]
+    raise AssertionError(f"no importable module in {target!r}")
+
+
+def test_patch_target_attribute_exists(target):
+    obj, module_path, attrs = _split_target(target)
+    for attr in attrs:
+        assert hasattr(obj, attr)
+        obj = getattr(obj, attr)
+```
+
+✅ **Good — let `mock.patch` (or `pkgutil.resolve_name`) do it:**
+```python
+def test_patch_target_attribute_exists(target):
+    """The dotted path must resolve, or `mock.patch` raises at linting time."""
+    with patch(target):
+        pass
+```
+
+When the test needs the resolved object itself, use `pkgutil.resolve_name(target)` from the standard library.
+
+## AP-11: `pytest.skip` for a Parameter That Should Not Be Generated
+
+A `pytest.skip` inside a parametrized test that fires for a fixed subset of parameters means the parameter list is wrong. The skipped cases add noise to every run and hide the real rule for which inputs the test applies to. Filter the list when building it. Keep `pytest.skip` for conditions known only at run time, such as a missing optional tool.
+
+❌ **Bad — PR #16093 generated class-attribute targets, then skipped them:**
+```python
+@pytest.mark.parametrize("target", _target_ids())
+def test_no_call_site_shadows_the_patch_target(target):
+    _, module_path, attrs = _split_target(target)
+    if len(attrs) > 1:
+        pytest.skip(f"{target} patches an attribute on a class object -- an import cannot shadow it")
+    ...
+```
+
+✅ **Good — only generate the parameters the test applies to:**
+```python
+def _module_level_target_ids():
+    """Targets naming a module attribute -- the only kind an import can shadow."""
+    return [t for t in _target_ids() if inspect.ismodule(pkgutil.resolve_name(t.rpartition(".")[0]))]
+
+
+@pytest.mark.parametrize("target", _module_level_target_ids())
+def test_no_call_site_shadows_the_patch_target(target):
+    ...
+```
+
+## AP-12: Importing Private Names Into Tests
+
+`from sdcm.x import _helper` in a test is a smell. Either the test is coupled to internals and should go through the public entry point (see AP-8), or `_helper` is really test infrastructure and belongs in a `conftest.py` fixture (see P-20). If a name is legitimately part of the module's tested contract, drop the underscore.
+
+❌ **Bad — PR #16093 imported four private names from production code:**
+```python
+from sdcm.utils.lint.validator import (
+    _CLOUD_API_PATCHES,
+    _FAKE_IMAGE,
+    _FAKE_OCI_IMAGE,
+    LintNetworkAccessError,
+    _no_remote_network,
+    validate_pipeline,
+)
+```
+
+✅ **Good — test the public function; the network guard moved to a fixture:**
+```python
+from sdcm.utils.lint.validator import validate_pipeline
+```
+
+**The same goes for library internals.** PR [#16142](https://github.com/scylladb/scylla-cluster-tests/pull/16142) imported `concurrent.futures.thread._threads_queues` to find live pool workers. A private stdlib name can change in any Python release. Observe the behavior directly instead:
+
+❌ **Bad:**
+```python
+from concurrent.futures.thread import _threads_queues
+
+def _live_pool_workers() -> set[threading.Thread]:
+    return {thread for thread in _threads_queues if thread.is_alive()}
+```
+
+✅ **Good — the stubbed task records the thread it ran on, and the test checks that thread:**
+```python
+def journal_task():
+    state.worker = threading.current_thread()
+    ...
+
+logger.stop()
+journal.worker.join(timeout=10)
+assert not journal.worker.is_alive(), "pool worker still alive after stop()"
+```
+
+**Exception:** a test whose subject *is* a private table, such as checking that every string target in `_CLOUD_API_PATCHES` still resolves, may import it. Keep that to the one test that needs it.

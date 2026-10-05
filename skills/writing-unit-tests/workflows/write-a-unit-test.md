@@ -88,9 +88,10 @@ A 4-phase process for creating a new unit test in the SCT repository.
 
 **Actions:**
 
-1. **Follow the Arrange-Act-Assert pattern:**
+1. **Follow the Arrange-Act-Assert pattern, with a docstring that states the test's goal:**
    ```python
    def test_parse_version():
+       """A dotted release string splits into numeric major/minor parts."""
        # Arrange
        version_string = "5.2.1-0.20230101.abc123"
 
@@ -168,11 +169,15 @@ A 4-phase process for creating a new unit test in the SCT repository.
    uv run python -m pytest unit_tests/test_your_module.py -v -p random-order
    ```
 
-5. **Run pre-commit checks:**
+5. **Mutation-check each new test.** Break the code under test the way the test claims to catch (delete the stub, invert the branch, return early), confirm the test fails, then revert. A test that stays green is testing setup or a default. See P-18.
+
+6. **Check every claim in the test name has an assertion.** "never reaches the network", "does not retry", "logs a warning": each needs an assert that fails if it happens. See P-17.
+
+7. **Run pre-commit checks:**
    ```bash
    uv run sct.py pre-commit
    ```
 
-6. **Verify the test is excluded from integration runs.** Do NOT add `@pytest.mark.integration` — unit tests run with `-m "not integration"` by default.
+8. **Verify the test is excluded from integration runs.** Do NOT add `@pytest.mark.integration` — unit tests run with `-m "not integration"` by default.
 
-**Exit:** All tests pass, no external service calls, pre-commit clean.
+**Exit:** All tests pass, each one fails under its mutation, no external service calls, pre-commit clean.
