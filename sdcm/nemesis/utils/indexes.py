@@ -275,6 +275,20 @@ def create_materialized_view_for_random_column(session, keyspace_name, base_tabl
             primary_key_columns,
             mv_columns=[column] + primary_key_columns,
         )
+    return column
+
+
+def base_table_has_rows_with_column(session, ks, cf, column, sample_size=1000) -> bool:
+    """
+    Return True if any of the first `sample_size` live rows of `ks.cf` has `column` set.
+    A view keyed by `column` can only contain base rows where it is not null, so an empty view
+    is legitimate when this returns False (e.g. all base rows expired by TTL).
+    """
+    column = cql_quote_if_needed(cql_unquote_if_needed(column))
+    rows = session.execute(
+        SimpleStatement(f"SELECT {column} FROM {ks}.{cf} LIMIT {sample_size}", fetch_size=100), timeout=600
+    )
+    return any(row[0] is not None for row in rows)
 
 
 class ViewFinishedBuildingException(Exception):
