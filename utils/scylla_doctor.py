@@ -219,7 +219,17 @@ class ScyllaDoctor:
         assert python3_path, f"Python3 binary is not found under local Scylla installation '{user_home}/scylladb'"
         return python3_path
 
+    def _ensure_lspci(self):
+        """Install pciutils (provides lspci) if not already present."""
+        result = self.node.remoter.sudo("which lspci", ignore_status=True, verbose=False)
+        if result.ok:
+            LOGGER.info("lspci already installed, proceeding...")
+            return
+        LOGGER.info("lspci not found, installing pciutils...")
+        self.node.install_package("pciutils")
+
     def run_scylla_doctor_and_collect_results(self):
+        self._ensure_lspci()
         auth_options = ""
         if credentials := self.node.parent_cluster.get_db_auth():
             auth_options = "-sov CQL,user,{} -sov CQL,password,{} ".format(*credentials)
