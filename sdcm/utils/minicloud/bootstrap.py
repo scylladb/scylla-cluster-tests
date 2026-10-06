@@ -36,10 +36,10 @@ def ensure_minicloud_ready(backend: str = "aws", params=None) -> None:
             set_minicloud_endpoint_env(endpoint, backend)
             # Adopting a running container skips manager.preflight_check() below, and with it
             # the overlay validation. A standalone provision-resources against an already-healthy
-            # emulator would then proceed with spot, public-IP SSH, KMS, placement groups or
-            # capacity reservations still enabled, and fail on the unsupported operation instead
-            # of here. Only the parameter check is repeated - the host-level checks (KVM, docker,
-            # credentials, memory) were satisfied by whoever started the container.
+            # emulator would then proceed with spot, public-IP SSH or KMS still enabled, and fail
+            # on the unsupported operation instead of here. Only the parameter check is repeated -
+            # the host-level checks (KVM, docker, credentials, memory) were satisfied by whoever
+            # started the container.
             if params is not None:
                 validate_minicloud_params(params)
             return

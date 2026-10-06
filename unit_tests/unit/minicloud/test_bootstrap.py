@@ -68,8 +68,8 @@ def test_ensure_minicloud_ready_validates_params_when_adopting_a_healthy_contain
 
     The healthy path returns before manager.preflight_check(), so a standalone
     provision-resources against an already-started container would otherwise proceed with
-    spot, public-IP SSH, KMS, placement groups or capacity reservations still enabled and
-    fail on the unsupported operation instead of here.
+    spot, public-IP SSH or KMS still enabled and fail on the unsupported operation instead of
+    here.
     """
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
     params = MagicMock()
