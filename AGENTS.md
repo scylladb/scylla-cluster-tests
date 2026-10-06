@@ -322,6 +322,32 @@ Critical environment variables:
 
 ## Common Issues and Solutions
 
+<<<<<<< HEAD
+||||||| parent of a7f1294a7 (build(python): move to Python 3.15)
+### Python Version Compatibility
+
+`.python-version` is pinned to a specific version (currently `3.14`) and **must never be modified in a commit**.
+If a dependency fails to build with the pinned version (e.g. `fastavro` wheel not yet available for `3.14`):
+
+1. Temporarily override it in your local workspace only: `echo "3.12" > .python-version` (do **not** stage this file)
+2. Create the venv and run tests: `uv sync && .venv/bin/python -m pytest …`
+3. Restore the original value: `git checkout -- .python-version`
+4. Add a comment to the PR explaining the compatibility issue so a maintainer can update
+   the pinned version if needed.
+
+=======
+### Python Version Compatibility
+
+`.python-version` is pinned to a specific version (currently `3.15`) and **must never be modified in a commit**.
+If a dependency fails to build with the pinned version (e.g. `fastavro` wheel not yet available for `3.14`):
+
+1. Temporarily override it in your local workspace only: `echo "3.12" > .python-version` (do **not** stage this file)
+2. Create the venv and run tests: `uv sync && .venv/bin/python -m pytest …`
+3. Restore the original value: `git checkout -- .python-version`
+4. Add a comment to the PR explaining the compatibility issue so a maintainer can update
+   the pinned version if needed.
+
+>>>>>>> a7f1294a7 (build(python): move to Python 3.15)
 ### AWS/Cloud Authentication
 - Use OKTA for AWS access (preferred)
 - Or configure AWS CLI: `aws configure`
