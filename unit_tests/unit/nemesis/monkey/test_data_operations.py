@@ -269,30 +269,86 @@ def test_delete_overlapping_generates_range_queries(delete_overlapping_monkey, m
 def test_delete_by_rows_range_uses_half_partition_path(delete_rows_range_monkey, mock_run_deletions):
     # random() > 0.5 → takes half_partition path
     delete_rows_range_monkey.random.random.return_value = 0.7
-
-    # Patch instance methods to avoid real CQL
-    delete_rows_range_monkey.delete_half_partition = MagicMock(return_value={1: [0, 50]})
+    delete_rows_range_monkey.choose_partitions_for_delete = MagicMock(side_effect=[{1: [0, 50]}, {2: [0, 90]}])
+    delete_rows_range_monkey.delete_half_partition = MagicMock()
     delete_rows_range_monkey.delete_range_in_few_partitions = MagicMock()
 
     delete_rows_range_monkey.disrupt()
 
-    delete_rows_range_monkey.delete_half_partition.assert_called_once_with("scylla_bench.test")
-    delete_rows_range_monkey.delete_range_in_few_partitions.assert_called_once_with("scylla_bench.test", {1: [0, 50]})
+    delete_rows_range_monkey.delete_half_partition.assert_called_once_with("scylla_bench.test", {1: [0, 50]})
+    delete_rows_range_monkey.delete_range_in_few_partitions.assert_called_once_with(
+        "scylla_bench.test", {2: [0, 90]}, (30, 59)
+    )
 
 
 def test_delete_by_rows_range_uses_timestamp_path(delete_rows_range_monkey, mock_run_deletions):
     # random() <= 0.5 → takes timestamp path
     delete_rows_range_monkey.random.random.return_value = 0.3
-
-    delete_rows_range_monkey.delete_by_range_using_timestamp = MagicMock(return_value={2: [0, 80]})
+    delete_rows_range_monkey.choose_partitions_for_delete = MagicMock(side_effect=[{1: []}, {2: [0, 90]}])
+    delete_rows_range_monkey.delete_by_range_using_timestamp = MagicMock()
     delete_rows_range_monkey.delete_range_in_few_partitions = MagicMock()
 
     delete_rows_range_monkey.disrupt()
 
     delete_rows_range_monkey.delete_by_range_using_timestamp.assert_called_once_with(
-        "scylla_bench.test", log_prefix="delete_by_rows_range"
+        "scylla_bench.test", {1: []}, log_prefix="delete_by_rows_range"
     )
-    delete_rows_range_monkey.delete_range_in_few_partitions.assert_called_once_with("scylla_bench.test", {2: [0, 80]})
+    delete_rows_range_monkey.delete_range_in_few_partitions.assert_called_once_with(
+        "scylla_bench.test", {2: [0, 90]}, (30, 59)
+    )
+
+
+def test_delete_by_rows_range_step2_excludes_step1_partitions(delete_rows_range_monkey, mock_run_deletions):
+    delete_rows_range_monkey.random.random.return_value = 0.7
+    delete_rows_range_monkey.choose_partitions_for_delete = MagicMock(side_effect=[{1: [0, 50]}, {2: [0, 90]}])
+
+    delete_rows_range_monkey.disrupt()
+
+    step2_call = delete_rows_range_monkey.choose_partitions_for_delete.call_args_list[1]
+    assert step2_call.kwargs["exclude_partitions"] == [1]
+
+
+@pytest.mark.parametrize("empty_call", [0, 1])
+def test_delete_by_rows_range_skips_before_deleting_when_no_partitions(
+    delete_rows_range_monkey, mock_run_deletions, empty_call
+):
+    delete_rows_range_monkey.random.random.return_value = 0.7
+    selections = [{1: [0, 50]}, {2: [0, 90]}]
+    selections[empty_call] = {}
+    delete_rows_range_monkey.choose_partitions_for_delete = MagicMock(side_effect=selections)
+
+    with pytest.raises(UnsupportedNemesis):
+        delete_rows_range_monkey.disrupt()
+
+    mock_run_deletions.assert_not_called()
+
+
+def test_delete_by_rows_range_skips_before_deleting_when_no_shared_range(delete_rows_range_monkey, mock_run_deletions):
+    delete_rows_range_monkey.random.random.return_value = 0.7
+    delete_rows_range_monkey.choose_partitions_for_delete = MagicMock(side_effect=[{1: [0, 50]}, {2: [0, 0]}])
+
+    with pytest.raises(UnsupportedNemesis):
+        delete_rows_range_monkey.disrupt()
+
+    mock_run_deletions.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "partitions,expected",
+    [
+        pytest.param({1: [0, 90]}, (30, 59), id="middle-third"),
+        pytest.param({1: [0, 90], 2: [0, 30]}, (10, 19), id="bounded-by-smallest-partition"),
+        pytest.param({1: [0, 2]}, (0, 1), id="falls-back-to-whole-range"),
+    ],
+)
+def test_shared_clustering_range(partitions, expected):
+    assert DeleteByRowsRangeMonkey.shared_clustering_range(partitions) == expected
+
+
+@pytest.mark.parametrize("partitions", [{1: [0, 0]}, {1: [0, 1], 2: [5, 9]}])
+def test_shared_clustering_range_raises_when_nothing_deletable(partitions):
+    with pytest.raises(UnsupportedNemesis):
+        DeleteByRowsRangeMonkey.shared_clustering_range(partitions)
 
 
 # ---------------------------------------------------------------------------
