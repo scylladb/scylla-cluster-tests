@@ -24,14 +24,8 @@ logger = logging.getLogger(__name__)
 #     The numeric part must stay representative of what an unpinned pipeline actually
 #     runs (master / latest release), because validations may compare it: a 0.0.0
 #     placeholder read as "ancient Scylla" and failed every version-gated check.
-#   - k8s_scylla_operator_docker_image: only k8s-eks requires it; a plain image
-#     reference is enough for the structural check.
 _RUNTIME_REQUIRED_PARAM_PLACEHOLDERS: dict[str, tuple[str, str]] = {
     "scylla_version": ("SCT_SCYLLA_VERSION", "2026.1.0-lint-placeholder"),
-    "k8s_scylla_operator_docker_image": (
-        "SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE",
-        "scylladb/scylla-operator:lint-placeholder",
-    ),
 }
 
 # Precompute, per backend, the placeholder env vars to inject — derived from
@@ -304,7 +298,7 @@ def _add_image_placeholders(env: dict[str, str], backend: str, num_regions: int)
     ):
         env["SCT_SCYLLA_REPO"] = _SCYLLA_REPO_PLACEHOLDER
 
-    # Some required params (scylla_version, k8s_scylla_operator_docker_image, ...)
+    # Some required params (i.e. scylla_version)
     # are supplied by Jenkins at runtime and never pinned in the pipeline file.
     # Inject placeholders for those so linting validates config structure instead
     # of failing on a runtime-only param — they stay mandatory for the actual check.

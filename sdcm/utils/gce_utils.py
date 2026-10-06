@@ -18,7 +18,7 @@ import random
 import logging
 import time
 import uuid
-from functools import cached_property
+from functools import cache, cached_property
 from typing import Any, Callable, List, Literal, TYPE_CHECKING
 
 import google.api_core.exceptions
@@ -32,7 +32,7 @@ from google.api_core.extended_operation import ExtendedOperation
 from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
+from sdcm.utils.docker_utils import ContainerManager, DockerClient, DockerException, Container
 
 if TYPE_CHECKING:
     from sdcm.provision.provisioner import VmArch
@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:437.0.1"
 
 LOGGER = logging.getLogger(__name__)
+GCLOUD_EXEC_TIMEOUT = 3600  # seconds
 
 
 def gce_instance_name(node_prefix: str, dc_idx: int, node_index: int) -> str:
@@ -545,6 +546,13 @@ def get_gce_image_tags(link: str) -> dict:
     return image.labels
 
 
+@cache
+def _gcloud_exec_docker_client() -> DockerClient:
+    # gcloud blocks silently until long operations finish (i.e. GKE cluster create takes 5-10 min),
+    # which outlasts the default Docker API call timeout used for reading the exec output
+    return DockerClient.from_env(timeout=GCLOUD_EXEC_TIMEOUT)
+
+
 class GcloudContextManager:
     def __init__(self, instance: "GcloudContainerMixin", name: str):
         self._instance = instance
@@ -591,7 +599,8 @@ class GcloudContextManager:
             if kube_config_path := getattr(self._instance, "kube_config_path", ""):
                 command = f"KUBECONFIG={kube_config_path} {command}"
             LOGGER.debug("Execute `%s'", command)
-            res = self._container.exec_run(["sh", "-c", command])
+            container = _gcloud_exec_docker_client().containers.get(self._container.id)
+            res = container.exec_run(["sh", "-c", command])
             if res.exit_code:
                 raise DockerException(f"{self._container}: {res.output.decode('utf-8')}")
             return res.output.decode("utf-8")
