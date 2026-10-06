@@ -1,3 +1,24 @@
+test_metadata:
+  description: >-
+    Main predefined-throughput-steps test: preloads a 3-node i4i.4xlarge cluster,
+    then measures cassandra-stress latency at fixed throughput steps for write,
+    read, disk-only read and mixed sub-tests. Release pipelines run vnodes and
+    tablets variants on several instance types, cloud and Azure.
+  test_type: performance
+  tier: release
+  duration_class: medium
+  supported_backends:
+    - aws
+    - gce
+    - azure
+    - xcloud
+  stress_tools:
+    - cassandra-stress
+  features:
+    - tablets
+    - vnodes
+  team_ownership: core-test-infra
+
 test_duration: 500
 
 # Keyspace and table used by cassandra-stress commands below

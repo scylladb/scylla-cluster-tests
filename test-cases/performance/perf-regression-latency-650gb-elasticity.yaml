@@ -1,3 +1,22 @@
+test_metadata:
+  description: >-
+    Elasticity latency test with a 650GB dataset on a 3-node i4i.2xlarge cluster:
+    runs fixed-rate cassandra-stress write, read and mixed workloads while
+    GrowShrinkClusterNemesis grows and shrinks the cluster with parallel node
+    operations, doubling the load during growth. GCE pipelines reuse it with z4d
+    nodes and 2.5TB.
+  test_type: performance
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+    - gce
+  stress_tools:
+    - cassandra-stress
+  features:
+    - tablets
+  team_ownership: core-test-infra
+
 test_duration: 3000
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..162500000",
                     "cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=162500000..325000000",

@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Base 30-minute throughput regression test: preloads 30M keys into a 3-node
+    i3.2xlarge cluster, then runs cassandra-stress write, read and mixed workloads
+    at QUORUM from 4 loaders. Also used by the EKS operator throughput pipeline and
+    the EBS-volume variants.
+  test_type: performance
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+    - k8s-eks
+  stress_tools:
+    - cassandra-stress
+  features: []
+  team_ownership: core-test-infra
+
 test_duration: 300
 
 stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"

@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Row-level repair performance test on a 3-node i3.4xlarge cluster with hinted
+    handoff disabled: populates large partitions with scylla-bench, writes different
+    rows to each node, then times repair on one node. The 1TB cassandra-stress
+    preload is for the other row-level repair test methods.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+    - scylla-bench
+  features:
+    - large-partitions
+  team_ownership: core-test-infra
+
 test_duration: 900
 
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=125000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..125000000",

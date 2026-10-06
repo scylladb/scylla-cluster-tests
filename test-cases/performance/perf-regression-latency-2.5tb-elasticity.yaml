@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Elasticity latency test with a 2.5TB dataset on a 3-node i8g.4xlarge cluster:
+    runs fixed-rate cassandra-stress write, read and mixed workloads while
+    GrowShrinkClusterNemesis adds 6 i8g.2xlarge nodes in parallel and removes them,
+    doubling the load during growth.
+  test_type: performance
+  tier: release
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  features:
+    - tablets
+  team_ownership: core-test-infra
+
 test_duration: 3000
 
 # for i8g.4xlarge - prepare phase is not throttled

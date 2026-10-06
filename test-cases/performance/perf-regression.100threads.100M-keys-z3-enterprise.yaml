@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Throughput regression test on GCE z3-highmem-88 storage-optimized nodes:
+    preloads 200M keys into a 3-node cluster, then runs cassandra-stress write, read
+    and mixed workloads at QUORUM from 5 loaders. Runs a pinned Ubuntu image and
+    kernel to match a reference release.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - gce
+  stress_tools:
+    - cassandra-stress
+  features: []
+  team_ownership: core-test-infra
+
 test_duration: 1200
 
 prepare_write_cmd: "cassandra-stress write no-warmup cl=ALL n=200M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=500 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=601M..800M"
