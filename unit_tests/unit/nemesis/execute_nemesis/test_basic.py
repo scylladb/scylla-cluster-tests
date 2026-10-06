@@ -1,3 +1,4 @@
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -38,11 +39,24 @@ def test_execute_nemesis_success(nemesis, nemesis_runner, capsys):
     assert "end" in op
     assert "duration" in op
     assert op["end"] >= op["start"]
-    # start/end/duration are truncated to int separately, so crossing a second boundary
-    # makes end - start exceed duration by one
-    assert 0 <= (op["end"] - op["start"]) - op["duration"] <= 1
+    assert op["duration"] == op["end"] - op["start"]
     assert "error" not in op
     assert "skip_reason" not in op
+
+
+def test_execute_nemesis_duration_across_second_boundary(nemesis, nemesis_runner, monkeypatch):
+    """duration must equal end - start even when the run straddles a whole second (SCT-1010)."""
+    clock = [1000.98]
+    fake_time = MagicMock(wraps=time)
+    fake_time.time.side_effect = lambda: clock[0]
+    monkeypatch.setattr("sdcm.nemesis.time", fake_time)
+    monkeypatch.setattr(nemesis, "disrupt", lambda: clock.__setitem__(0, 1001.02))
+
+    nemesis_runner.execute_nemesis(nemesis)
+
+    op = nemesis_runner.operation_log[0]
+    assert (op["start"], op["end"], op["duration"]) == (1000, 1001, 1)
+    assert nemesis_runner.last_nemesis_event.duration == 1
 
 
 def test_execute_nemesis_failure(failing_nemesis, nemesis_runner):

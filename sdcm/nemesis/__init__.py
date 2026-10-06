@@ -1982,14 +1982,15 @@ class NemesisRunner:
                     self.log.error("Unhandled exception in method %s", nemesis.disrupt, exc_info=True)
                 finally:
                     self.last_nemesis_event = nemesis_event
-                    end_time = time.time()
-                    time_elapsed = int(end_time - start_time)
+                    # Truncate the endpoints once and derive duration from them, so duration == end - start
+                    start_s, end_s = int(start_time), int(time.time())
+                    time_elapsed = end_s - start_s
                     nemesis_event.duration = time_elapsed
 
                     # Build log_info once from nemesis_event — single source of truth
                     log_info = {
-                        "start": int(start_time),
-                        "end": int(end_time),
+                        "start": start_s,
+                        "end": end_s,
                         "duration": time_elapsed,
                         "node": str(self.target_node),
                         "subtype": str(nemesis_event.nemesis_status.value),
