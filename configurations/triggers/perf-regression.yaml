@@ -68,8 +68,8 @@ jobs:
   # 2025.2, 2025.3, 2025.4 — spelled out rather than matched by prefix, so adding a branch
   # is a deliberate edit), and the x86 (i4i/i3en) job variants those branches were the only
   # consumers of are retired. Their entries are kept here for reference and turned off with
-  # `disabled: true`. The weekly microbenchmarks have no version filter and still run for
-  # every branch.
+  # `disabled: true`. The weekly simple-query microbenchmarks have no version filter and still
+  # run for every branch; the cql-raw ones are excluded from every release before 2026.2.
   #
   # Vnodes coverage now lives on master only: the release entries of the i8g vnodes jobs are
   # left in place for 2026.x and up, while the master-labelled ones keep their own schedule.
@@ -205,11 +205,11 @@ jobs:
       microbenchmark: "true"
       requested_by_user: "juliayakovlev"
 
-  # The `scylla perf-cql-raw` tool is not available in 2026.1 and will not be supported there,
-  # so these jobs are excluded from that release.
+  # The `scylla perf-cql-raw` tool is not available before 2026.2 and will not be backported
+  # to 2026.1 or any older release, so these jobs are excluded from all of them.
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_x86_64"
     backend: "aws"
-    exclude_versions: ["2026.1"]
+    exclude_versions: ["2026.1", "2025.4", "2025.3", "2025.2", "2025.1", "2024.2", "2024.1"]
     labels: []
     params:
       region: "us-east-1"
@@ -218,7 +218,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_x86_64-write"
     backend: "aws"
-    exclude_versions: ["2026.1"]
+    exclude_versions: ["2026.1", "2025.4", "2025.3", "2025.2", "2025.1", "2024.2", "2024.1"]
     labels: []
     params:
       region: "us-east-1"
@@ -228,7 +228,7 @@ jobs:
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_arm64"
     backend: "aws"
     arch: "aarch64"
-    exclude_versions: ["2026.1"]
+    exclude_versions: ["2026.1", "2025.4", "2025.3", "2025.2", "2025.1", "2024.2", "2024.1"]
     labels: []
     params:
       region: "us-east-1"
@@ -238,7 +238,7 @@ jobs:
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_arm64-write"
     backend: "aws"
     arch: "aarch64"
-    exclude_versions: ["2026.1"]
+    exclude_versions: ["2026.1", "2025.4", "2025.3", "2025.2", "2025.1", "2024.2", "2024.1"]
     labels: []
     params:
       region: "us-east-1"
