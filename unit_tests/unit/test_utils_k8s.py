@@ -1,6 +1,8 @@
 from copy import deepcopy
 from unittest import mock
 
+import invoke
+import pytest
 import yaml
 
 from sdcm.utils.k8s import (
@@ -322,3 +324,42 @@ def test_manifest_loader_keeps_bare_equals_sign_as_string():
     # NOTE: prometheus-operator CRDs have '=' in enums, which plain SafeLoader can't construct
     manifest = "enum: [=, '!=', =~]"
     assert yaml.load(manifest, Loader=_ManifestLoader) == {"enum": ["=", "!=", "=~"]}  # noqa: S506
+
+
+def _tar_missing_error():
+    return invoke.exceptions.UnexpectedExit(
+        mock.Mock(stderr='exec: "tar": executable file not found in $PATH', return_code=1)
+    )
+
+
+@pytest.mark.parametrize(
+    "src,dst,expected_cmd",
+    [
+        pytest.param(
+            "scylla/pod-0:/etc/my file.yaml",
+            "/tmp/a b",
+            "exec pod-0 -c scylla -- cat '/etc/my file.yaml' > '/tmp/a b'",
+            id="from-pod",
+        ),
+        pytest.param(
+            "/tmp/a b",
+            "scylla/pod-0:/etc/my file.yaml",
+            "exec -i pod-0 -c scylla -- sh -c 'cat > '\"'\"'/etc/my file.yaml'\"'\"'' < '/tmp/a b'",
+            id="to-pod",
+        ),
+    ],
+)
+def test_copy_file_without_tar_in_container_streams_through_cat(src, dst, expected_cmd):
+    with mock.patch.object(KubernetesOps, "kubectl", side_effect=[_tar_missing_error(), None]) as kubectl:
+        KubernetesOps.copy_file(kluster=None, src=src, dst=dst, container="scylla")
+    assert kubectl.call_args.args == (None, expected_cmd)
+    assert kubectl.call_args.kwargs["namespace"] == "scylla"
+
+
+def test_copy_file_reraises_other_errors():
+    error = invoke.exceptions.UnexpectedExit(mock.Mock(stderr="pod not found", return_code=1))
+    with (
+        mock.patch.object(KubernetesOps, "kubectl", side_effect=error),
+        pytest.raises(invoke.exceptions.UnexpectedExit),
+    ):
+        KubernetesOps.copy_file(kluster=None, src="/tmp/a", dst="scylla/pod-0:/tmp/a")

@@ -311,9 +311,9 @@ def test_rolling_restart_cluster(db_cluster):
         scylla_log = db_cluster.k8s_cluster.kubectl(
             f"logs {pod_name_and_status['name']} -c scylla", namespace=db_cluster.namespace
         )
-        assert "scylla_io_setup" not in scylla_log.stdout, (
-            f"iotune was run after reboot on {pod_name_and_status['name']}"
-        )
+        # NOTE: look for iotune's own output: the entrypoint always logs 'running: scylla_io_setup', which exits
+        #       early when io properties exist or in developer mode, and Scylla's I/O warning names it too.
+        assert "] iotune - " not in scylla_log.stdout, f"iotune was run after reboot on {pod_name_and_status['name']}"
 
 
 @pytest.mark.required_operator("v1.10.0")

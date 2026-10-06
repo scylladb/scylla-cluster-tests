@@ -19,6 +19,7 @@ import time
 import queue
 import logging
 import re
+import shlex
 import threading
 import multiprocessing
 import contextlib
@@ -405,7 +406,23 @@ class KubernetesOps:
         command = ["cp", src, dst]
         if container:
             command.extend(("-c", container))
-        cls.kubectl(kluster, *command, timeout=timeout)
+        try:
+            cls.kubectl(kluster, *command, timeout=timeout)
+        except invoke.exceptions.UnexpectedExit as exc:
+            if '"tar": executable file not found' not in exc.result.stderr:
+                raise
+            # NOTE: 'kubectl cp' needs tar in the container, which newer ScyllaDB images don't ship,
+            #       so stream a single file through 'cat' instead.
+            container_arg = f"-c {container}" if container else ""
+            if ":" in src:
+                pod, path = src.split(":", 1)
+                namespace, pod = pod.split("/", 1)
+                cmd = f"exec {pod} {container_arg} -- cat {shlex.quote(path)} > {shlex.quote(dst)}"
+            else:
+                pod, path = dst.split(":", 1)
+                namespace, pod = pod.split("/", 1)
+                cmd = f"exec -i {pod} {container_arg} -- sh -c {shlex.quote(f'cat > {shlex.quote(path)}')} < {shlex.quote(src)}"
+            cls.kubectl(kluster, cmd, namespace=namespace, timeout=timeout)
 
     @classmethod
     def expose_pod_ports(
