@@ -1955,6 +1955,11 @@ class BasePodContainer(cluster.BaseNode):
     pod_readiness_timeout = 10  # minutes
     pod_terminate_timeout = 5  # minutes
 
+    def do_default_installations(self):
+        # NOTE: files get to pods via kubectl, so there's no use for 'rsync' here, and non-root images
+        #       (i.e. scylla-manager ones) can't install packages at all
+        pass
+
     def __init__(
         self,
         name: str,
