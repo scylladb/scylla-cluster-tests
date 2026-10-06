@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Example throughput test on pre-provisioned bare-metal hosts: preloads a small
+    5GB dataset into a 3-node cluster and runs the cassandra-stress write sub-test
+    from 1 loader. Host IPs and the SSH key come from the S3 bare-metal config.
+  test_type: performance
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - baremetal
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  features: []
+  team_ownership: core-test-infra
+
 test_duration: 90
 
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=312500 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..312500",

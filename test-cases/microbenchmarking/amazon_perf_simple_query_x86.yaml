@@ -1,3 +1,17 @@
+test_metadata:
+  description: >-
+    Overlay for the perf-simple-query microbenchmark that switches the single DB
+    node to c7i.large (x86_64). Applied on top of amazon_perf_simple_query_ARM.yaml
+    by the x86_64 read and write microbenchmark pipelines.
+  test_type: microbenchmarking
+  tier: release
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools: []
+  features: []
+  team_ownership: core-test-infra
+
 instance_type_db: 'c7i.large'
 user_prefix: 'perf-microbenchmarking-amazon-x86'
 argus_email_report_template: email_report_performance.yaml

@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Measures mixed-workload latency on a 6-node i4i.2xlarge cluster while Scylla
+    Manager backs up the data to S3 or GCS (native or rclone uploader). Prepare and
+    stress commands come from a dataset overlay, such as 2TB_backup_dataset.yaml,
+    that the pipeline must add.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+    - gce
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  features: []
+  team_ownership: core-test-infra
+
 test_duration: 1200
 
 # Note: the running test MUST be supplied with a dataset file

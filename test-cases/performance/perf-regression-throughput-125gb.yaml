@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Throughput regression test with a 125GB dataset that fits partly in cache:
+    preloads 31M keys per loader into a 3-node i3.2xlarge cluster, then runs
+    unthrottled cassandra-stress write, read and mixed workloads to measure peak
+    throughput.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  features: []
+  team_ownership: core-test-infra
+
 test_duration: 580
 
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=31250000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..31250000",

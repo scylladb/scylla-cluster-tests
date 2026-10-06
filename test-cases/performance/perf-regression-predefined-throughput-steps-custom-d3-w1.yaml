@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Predefined-throughput-steps test that replays a customer workload (custom_d3
+    workflow1) with latte rune scripts on a 6-node GCE cluster across 2 simulated
+    racks. Tablets keyspace with RF=2 and ICS; measures a mixed 2:1 read/write load
+    at fixed throughput steps.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - gce
+  stress_tools:
+    - latte
+  workload: mixed
+  features:
+    - tablets
+  team_ownership: core-test-infra
+
 test_duration: 600
 
 n_db_nodes: 6

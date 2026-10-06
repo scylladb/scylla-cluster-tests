@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Throughput regression test on a 3-node n2-highmem-8 GCE cluster: preloads 30M
+    keys, then runs one-hour cassandra-stress write, read and mixed workloads at
+    QUORUM from 6 loaders.
+  test_type: performance
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - gce
+  stress_tools:
+    - cassandra-stress
+  features: []
+  team_ownership: core-test-infra
+
 test_duration: 300
 
 stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=60 -pop seq=1..30000000"
