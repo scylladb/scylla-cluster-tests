@@ -182,3 +182,38 @@ def test_spot_instance_that_never_leaves_staging_is_not_treated_as_preempted(vm_
 
     with patch.object(vm_provider, "delete"), pytest.raises(ProvisionError, match="still STAGING"):
         _create(vm_provider, PricingModel.SPOT)
+
+
+def test_failed_start_drains_the_rest_of_the_batch(vm_provider, clock):
+    """A VM that never starts must not abandon its siblings' in-flight inserts.
+
+    The sibling is waited out until RUNNING and cached, so the ProvisionError retry reuses it
+    instead of re-issuing an insert for a name GCE already holds (AlreadyExists).
+    """
+    running = _instance("RUNNING")
+    statuses = {"node-1": iter([_instance("TERMINATED")]), "node-2": iter([_instance("STAGING"), running])}
+    vm_provider._instances_client.get.side_effect = lambda project, zone, instance: next(statuses[instance])
+
+    with patch.object(vm_provider, "delete") as delete, pytest.raises(ProvisionError, match="node-1 did not start"):
+        vm_provider.get_or_create(
+            definitions=[_definition("node-1"), _definition("node-2")], pricing_model=PricingModel.ON_DEMAND
+        )
+
+    delete.assert_called_once_with("node-1", wait=True)
+    # Cached only once RUNNING, not as the STAGING snapshot the insert operation left behind.
+    assert vm_provider._cache["node-2"] is running
+    assert "node-1" not in vm_provider._cache
+
+
+def test_drained_instance_that_does_not_start_is_not_cached(vm_provider, clock):
+    statuses = {"node-1": iter([_instance("TERMINATED")]), "node-2": iter([_instance("SUSPENDED")])}
+    vm_provider._instances_client.get.side_effect = lambda project, zone, instance: next(statuses[instance])
+
+    with patch.object(vm_provider, "delete") as delete, pytest.raises(ProvisionError, match="node-1 did not start"):
+        vm_provider.get_or_create(
+            definitions=[_definition("node-1"), _definition("node-2")], pricing_model=PricingModel.ON_DEMAND
+        )
+
+    # Each VM is deleted exactly once, by _wait_until_running; the drain does not delete it again.
+    assert [call.args[0] for call in delete.call_args_list] == ["node-1", "node-2"]
+    assert not vm_provider._cache
