@@ -102,7 +102,7 @@ Specifies the version of the GKE cluster to be used.
 **type:** str (appendable)
 
 **backend overrides:**
-- `1.31`: k8s-gke
+- `1.35`: k8s-gke
 
 
 <a id="gke_k8s_release_channel"></a>
@@ -114,6 +114,9 @@ K8S release channel name to be used. Expected values are: 'rapid', 'regular', 's
 **default:** N/A
 
 **type:** str (appendable)
+
+**backend overrides:**
+- `stable`: k8s-gke
 
 
 <a id="k8s_cert_manager_version"></a>

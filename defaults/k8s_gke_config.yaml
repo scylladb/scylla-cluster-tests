@@ -3,8 +3,8 @@ gce_datacenter: 'us-east1'
 availability_zone: 'c'
 gce_network: 'qa-vpc'
 
-gke_cluster_version: '1.31'
-gke_k8s_release_channel: ''
+gke_cluster_version: '1.35'
+gke_k8s_release_channel: 'stable'
 
 gce_instance_type_db: 'n2-standard-8'
 gce_root_disk_type_db: 'pd-ssd'
