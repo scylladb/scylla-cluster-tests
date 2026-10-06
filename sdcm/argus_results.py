@@ -453,6 +453,12 @@ def send_microbenchmark_result_to_argus(
     result_table.validation_rules = validation_rules
     LOGGER.debug("result_table.validation_rules result: %s", result_table.validation_rules)
     for key, value in stats.items():
+        # Scylla adds stats to the benchmark output from time to time. A stat gets a column only once
+        # someone asks to track it, so one the table doesn't know is left out, rather than failing a
+        # run whose benchmark succeeded.
+        if key not in result_table.column_types:
+            LOGGER.warning("%s: skipping stat '%s' that has no column in the Argus table", benchmark_name, key)
+            continue
         result_table.add_result(column=key, row="#1", value=value, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)
 
