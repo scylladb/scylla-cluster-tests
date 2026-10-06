@@ -417,6 +417,7 @@ def test_scylla_cluster_monitoring_type_platform(db_cluster: ScyllaPodCluster):
 
 
 # NOTE: Scylla manager versions notes:
+#       - '3.2.x' and older create their keyspace with SimpleStrategy, which fails on tablets-enabled Scylla
 #       - '2.6.3' is broken: https://github.com/scylladb/scylla-manager/issues/3156
 #       - '2.5.4' is broken: https://github.com/scylladb/scylla-manager/issues/3147
 #       - '2.5.3' is broken: https://github.com/scylladb/scylla-manager/issues/3150
@@ -425,7 +426,7 @@ def test_scylla_cluster_monitoring_type_platform(db_cluster: ScyllaPodCluster):
 #         invalid character '\\x1f' looking for beginning of value
 #       - '2.3.x' and ''2.4.x' are not covered as old ones.
 @pytest.mark.requires_mgmt
-@pytest.mark.parametrize("manager_version", ("3.2.6",))
+@pytest.mark.parametrize("manager_version", ("3.12.0",))
 def test_mgmt_repair(db_cluster, manager_version):
     reinstall_scylla_manager(db_cluster, manager_version)
 
@@ -440,6 +441,7 @@ def test_mgmt_repair(db_cluster, manager_version):
 
 
 # NOTE: Scylla manager versions notes:
+#       - '3.2.x' and older create their keyspace with SimpleStrategy, which fails on tablets-enabled Scylla
 #       - '2.6.3' is broken: https://github.com/scylladb/scylla-manager/issues/3156
 #       - '2.5.4' is broken: https://github.com/scylladb/scylla-manager/issues/3147
 #       - '2.5.3' is broken: https://github.com/scylladb/scylla-manager/issues/3150
@@ -448,15 +450,15 @@ def test_mgmt_repair(db_cluster, manager_version):
 #         invalid character '\\x1f' looking for beginning of value
 #       - '2.3.x' and ''2.4.x' are not covered as old ones.
 @pytest.mark.requires_mgmt
-@pytest.mark.parametrize("manager_version", ("3.2.6",))
+@pytest.mark.parametrize("manager_version", ("3.12.0",))
 def test_mgmt_backup(db_cluster, manager_version):
     reinstall_scylla_manager(db_cluster, manager_version)
 
     # Run manager backup operation
     mgr_cluster = db_cluster.get_cluster_manager()
     region = next(iter(db_cluster.params.region_names), "")
-    backup_bucket_location = db_cluster.params.get("backup_bucket_location").format(region=region)
-    bucket_name = f"s3:{backup_bucket_location.split()[0]}"
+    backup_bucket_location = db_cluster.params.get("backup_bucket_location")[0].format(region=region)
+    bucket_name = f"s3:{backup_bucket_location}"
     mgr_task = mgr_cluster.create_backup_task(
         location_list=[
             bucket_name,

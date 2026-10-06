@@ -66,3 +66,6 @@ append_scylla_args: '--abort-on-lsa-bad-alloc 1 --abort-on-internal-error 1 --ab
 docker_image: ''
 backup_bucket_backend: 's3'
 backup_bucket_location: 'minio-bucket'
+
+# SCT tracks DB pods by their pod IPs, so clients must be pointed at those (operator defaults to ServiceClusterIP)
+k8s_db_node_to_client_broadcast_ip_type: PodIP

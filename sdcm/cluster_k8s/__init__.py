@@ -1499,13 +1499,14 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
     def get_grafana_ip(self, cluster_name: str, namespace: str) -> str:
         if self.cluster_backend in ("k8s-eks", "k8s-gke"):
+            # NOTE: during a Grafana rollout an old and a new pod may coexist, so take a single running one
             cmd = (
                 f"get pod -l scylla-operator.scylladb.com/deployment-name={cluster_name}-grafana"
-                " --no-headers -o custom-columns=:.status.podIP"
+                " --field-selector=status.phase=Running --no-headers -o custom-columns=:.status.podIP"
             )
         else:
             cmd = f"get svc {cluster_name}-grafana --no-headers -o custom-columns=:.spec.clusterIP"
-        return self.kubectl(cmd, namespace=namespace).stdout.strip()
+        return self.kubectl(cmd, namespace=namespace).stdout.split()[0]
 
     @property
     def grafana_port(self) -> int:
