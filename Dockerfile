@@ -1,4 +1,10 @@
+<<<<<<< HEAD
 ARG PYTHON_IMAGE_TAG=3.13.4-slim-bookworm
+||||||| parent of a7f1294a7 (build(python): move to Python 3.15)
+ARG PYTHON_IMAGE_TAG=3.14.0-slim-trixie
+=======
+ARG PYTHON_IMAGE_TAG=3.15-slim-trixie
+>>>>>>> a7f1294a7 (build(python): move to Python 3.15)
 
 FROM python:$PYTHON_IMAGE_TAG AS apt_base
 ENV DEBIAN_FRONTEND=noninteractive
@@ -19,14 +25,49 @@ RUN echo 'deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.
 RUN curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
 RUN chmod a+r /usr/share/keyrings/cloud.google.gpg
 
+# confluent-kafka has no cp315 wheels, so it builds from source, against a newer librdkafka than trixie ships.
+RUN curl -fsSL https://packages.confluent.io/clients/deb/archive.key | gpg --dearmor -o /usr/share/keyrings/confluent-clients.gpg
+RUN echo 'deb [signed-by=/usr/share/keyrings/confluent-clients.gpg] https://packages.confluent.io/clients/deb trixie main' | tee /etc/apt/sources.list.d/confluent-clients.list
+
 # Download, build and install Python packages.
 FROM apt_base AS python_packages
 ENV PIP_NO_CACHE_DIR=1
 ENV UV_PROJECT_ENVIRONMENT="/usr/local/"
+<<<<<<< HEAD
 RUN apt-get install -y --no-install-recommends build-essential cmake libssl-dev zlib1g-dev libffi-dev
+||||||| parent of a7f1294a7 (build(python): move to Python 3.15)
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libssl-dev \
+    zlib1g-dev \
+    libffi-dev \
+    libev4 \
+    libev-dev
+=======
+COPY --from=apt_repos /usr/share/keyrings/confluent-clients.gpg /usr/share/keyrings/confluent-clients.gpg
+COPY --from=apt_repos /etc/apt/sources.list.d/confluent-clients.list /etc/apt/sources.list.d/confluent-clients.list
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libssl-dev \
+    zlib1g-dev \
+    libffi-dev \
+    libev4 \
+    libev-dev \
+    librdkafka-dev
+>>>>>>> a7f1294a7 (build(python): move to Python 3.15)
 ADD uv.lock  .
 ADD pyproject.toml .
+<<<<<<< HEAD
 RUN pip install uv==0.12.23
+||||||| parent of a7f1294a7 (build(python): move to Python 3.15)
+COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
+=======
+COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /uvx /bin/
+>>>>>>> a7f1294a7 (build(python): move to Python 3.15)
 RUN uv sync --frozen
 
 FROM python:$PYTHON_IMAGE_TAG
@@ -41,6 +82,8 @@ COPY --from=apt_repos /etc/apt/keyrings/docker.asc /etc/apt/keyrings/docker.asc
 COPY --from=apt_repos /etc/apt/sources.list.d/docker.list /etc/apt/sources.list.d/docker.list
 COPY --from=apt_repos /usr/share/keyrings/cloud.google.gpg /usr/share/keyrings/cloud.google.gpg
 COPY --from=apt_repos /etc/apt/sources.list.d/google-cloud-sdk.list /etc/apt/sources.list.d/google-cloud-sdk.list
+COPY --from=apt_repos /usr/share/keyrings/confluent-clients.gpg /usr/share/keyrings/confluent-clients.gpg
+COPY --from=apt_repos /etc/apt/sources.list.d/confluent-clients.list /etc/apt/sources.list.d/confluent-clients.list
 # The google-cloud-sdk* names were transitional since 467.0.0 and have now been
 # dropped from the cloud-sdk repo; google-cloud-cli* are the only ones published.
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
@@ -63,7 +106,18 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
         psmisc \
         procps \
         docker-ce-cli \
+<<<<<<< HEAD
         docker-compose-plugin && \
+||||||| parent of a7f1294a7 (build(python): move to Python 3.15)
+        docker-compose-plugin \
+        libev4 \
+        libev-dev && \
+=======
+        docker-compose-plugin \
+        libev4 \
+        libev-dev \
+        librdkafka1 && \
+>>>>>>> a7f1294a7 (build(python): move to Python 3.15)
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 RUN curl -fsSLo /usr/local/bin/kubectl https://dl.k8s.io/release/v$KUBECTL_VERSION/bin/linux/amd64/kubectl && \

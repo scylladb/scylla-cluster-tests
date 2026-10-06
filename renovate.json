@@ -3,6 +3,20 @@
   "extends": [
     "config:recommended"
   ],
+<<<<<<< HEAD
+||||||| parent of a7f1294a7 (build(python): move to Python 3.15)
+  "commitBodyTable": true,
+  "constraints": {
+    "uv": "0.12.23"
+  },
+  "recreateWhen": "always",
+=======
+  "commitBodyTable": true,
+  "constraints": {
+    "uv": "0.13.0"
+  },
+  "recreateWhen": "always",
+>>>>>>> a7f1294a7 (build(python): move to Python 3.15)
   "ignorePresets": [
     "group:monorepos",
     "group:recommended"
