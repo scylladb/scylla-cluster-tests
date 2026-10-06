@@ -21,6 +21,7 @@ from argus.client.generic_result import Cell, Status
 from sdcm.argus_results import (
     ReactorStallStatsResult,
     send_iotune_results_to_argus,
+    send_microbenchmark_result_to_argus,
     send_result_to_argus,
     LatencyCalculatorMixedResult,
 )
@@ -115,3 +116,67 @@ def test_send_iotune_results_to_argus_skips_when_no_run(run):
     send_iotune_results_to_argus(argus_client=argus_mock, results={}, node=MagicMock(), params={})
 
     argus_mock.submit_results.assert_not_called()
+
+
+# The stats a released Scylla reports, all of which have a column in the Argus table.
+RELEASE_MICROBENCHMARK_STATS = {
+    "allocs_per_op": 58.1,
+    "cpu_cycles_per_op": 17806.4,
+    "instructions_per_op": 31937.9,
+    "logallocs_per_op": 0.0,
+    "mad tps": 2607.5,
+    "max tps": 248039.5,
+    "median tps": 245432.0,
+    "min tps": 238422.8,
+    "tasks_per_op": 14.1,
+}
+
+
+def test_send_microbenchmark_result_to_argus_skips_unknown_stats():
+    """Stats Scylla added after the table was defined are skipped, not raised, and the known ones are still sent."""
+    argus_mock = MagicMock()
+    new_stats = {
+        "polls_per_op": 0.3,
+        "reads_per_op": 0.0,
+        "read_bytes_per_op": 0.0,
+        "writes_per_op": 0.0,
+        "write_bytes_per_op": 0.0,
+        "cache_hits_per_op": 1.0,
+        "cache_misses_per_op": 0.0,
+        "median instructions_per_op": 31939.4,
+        "mad instructions_per_op": 12.5,
+        "min instructions_per_op": 31900.0,
+        "max instructions_per_op": 32010.0,
+        "median cpu_cycles_per_op": 19457.5,
+        "mad cpu_cycles_per_op": 210.0,
+        "min cpu_cycles_per_op": 19100.0,
+        "max cpu_cycles_per_op": 20300.0,
+    }
+    stats = RELEASE_MICROBENCHMARK_STATS | new_stats
+    result = {"stats": stats, "test_properties": {"type": "read"}, "parameters": {"concurrency": 100}}
+
+    send_microbenchmark_result_to_argus(argus_client=argus_mock, result=result, error_thresholds={})
+
+    table = argus_mock.submit_results.call_args.args[0]
+    assert table.name == "read - Perf Simple Query"
+    assert {cell.column: cell.value for cell in table.results} == RELEASE_MICROBENCHMARK_STATS
+
+
+def test_send_microbenchmark_result_to_argus_release_stats():
+    """A released Scylla reports only stats the table has columns for: all of them are sent, validated as before."""
+    argus_mock = MagicMock()
+    result = {
+        "stats": RELEASE_MICROBENCHMARK_STATS,
+        "test_properties": {"type": "read"},
+        "parameters": {"concurrency": 100},
+    }
+    error_thresholds = {
+        "read": {"instructions_per_op": {"fixed_limit": 40000.0}, "allocs_per_op": {"fixed_limit": 66.19}}
+    }
+
+    send_microbenchmark_result_to_argus(argus_client=argus_mock, result=result, error_thresholds=error_thresholds)
+
+    submitted = argus_mock.submit_results.call_args.args[0].as_dict()
+    assert {cell["column"]: cell["value"] for cell in submitted["results"]} == RELEASE_MICROBENCHMARK_STATS
+    assert {column["name"] for column in submitted["meta"]["columns_meta"]} == set(RELEASE_MICROBENCHMARK_STATS)
+    assert submitted["meta"]["validation_rules"]["instructions_per_op"]["fixed_limit"] == 40000.0
