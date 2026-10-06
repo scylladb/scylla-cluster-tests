@@ -165,6 +165,9 @@ Defines the source of the IP address to be used for the 'broadcast_rpc_address' 
 
 **type:** str (appendable)
 
+**backend overrides:**
+- `PodIP`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke, k8s-eks
+
 
 <a id="k8s_db_node_to_node_broadcast_ip_type"></a>
 

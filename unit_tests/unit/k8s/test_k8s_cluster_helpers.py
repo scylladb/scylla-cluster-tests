@@ -60,3 +60,16 @@ def test_deploy_prometheus_operator_restarts_scylla_operator_only_for_new_crds(c
         KubernetesCluster.deploy_prometheus_operator(cluster)
     restart = mock.call("rollout restart deployment scylla-operator", namespace=SCYLLA_OPERATOR_NAMESPACE)
     assert (restart in cluster.kubectl.call_args_list) is restarted
+
+
+@pytest.mark.parametrize(
+    "backend,stdout",
+    [
+        pytest.param("k8s-eks", "10.4.0.1\n10.4.0.2\n", id="two-grafana-pods-during-rollout"),
+        pytest.param("k8s-local-kind", "10.4.0.1\n", id="service-ip"),
+    ],
+)
+def test_get_grafana_ip_takes_first(backend, stdout):
+    cluster = _cluster(cluster_backend=backend)
+    cluster.kubectl.return_value = mock.Mock(stdout=stdout)
+    assert KubernetesCluster.get_grafana_ip(cluster, "sct-cluster", "scylla") == "10.4.0.1"
