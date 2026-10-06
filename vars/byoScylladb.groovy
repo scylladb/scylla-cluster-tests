@@ -107,14 +107,21 @@ def call(Map params, boolean build_image){
         booleanParam(name: 'DEBUG_MAIL', value: true),
         booleanParam(name: 'DRY_RUN', value: false),
     ]
+    // NOTE: propagate=false makes a failed BYO job return its result instead of throwing,
+    //       so the failure handling below gets to run.
+    def jobResults = null
     try {
-        jobResults=build job: jobToTrigger,
+        jobResults = build job: jobToTrigger,
             parameters: byoParameterList,
-            propagate: true,
+            propagate: false,
             wait: true
     } catch(Exception ex) {
-        echo "Could not trigger jon $jobToTrigger due to"
+        echo "Could not trigger job $jobToTrigger due to"
         println(ex.toString())
+    }
+    if (jobResults == null) {
+        currentBuild.description = ('BYO ScyllaDB failed')
+        error("Could not trigger the BYO job: ${jobToTrigger}")
     }
     def byoBuildInfo = jobResults.getBuildVariables();
     try {
@@ -125,8 +132,8 @@ def call(Map params, boolean build_image){
     scyllaBuildFailed = !(jobResults.result == "SUCCESS")
     if (scyllaBuildFailed) {
         currentBuild.description = ('BYO ScyllaDB failed')
-        currentBuild.result = 'FAILED'
-        error('BYO ScyllaDB failed')
+        currentBuild.result = 'FAILURE'
+        error("BYO ScyllaDB failed: ${jobResults.absoluteUrl}")
     }
 
     // NOTE: export appropriate env vars to be reused further by the SCT

@@ -187,6 +187,15 @@ SCT_PERF_GRADUAL_THREADS={"read": [450, 400, 450], "write": 400, "mixed": 1900}
 SCT_PERF_GRADUAL_THROTTLE_STEPS={"read": ['700000', 'unthrottled', 'unthrottled'], "mixed": ['50000', '150000', '300000', '450000', 'unthrottled'], "write": ['200000', '300000', 'unthrottled']}
 ```
 
+## Can I run an SCT test against my own ScyllaDB branch (BYO ScyllaDB)?
+
+Yes. The longevity, perf-regression-parallel and rolling-upgrade Jenkins jobs can
+build ScyllaDB from any GitHub fork and branch before the test starts. The SCT job
+triggers a release engineering CI job (from the `scylla-pkg` project), which builds
+a custom ScyllaDB image, and the test then runs on that image.
+
+See [BYO ScyllaDB](./byo-scylladb.md) for usage, how it works and limitations.
+
 ## How does the Claude AI code review work?
 
 Claude code review is **on-demand**, not automatic. To request a review, mention
