@@ -309,7 +309,13 @@ def list_instances_azure(
     azure_service = AzureService()
     res = azure_service.resource_graph_query(query=" | ".join(query_bits))
     get_virtual_machine = azure_service.compute.virtual_machines.get
-    instances = [get_virtual_machine(resource_group_name=vm["resourceGroup"], vm_name=vm["name"]) for vm in res]
+    instances = []
+    for vm in res:
+        try:
+            instances.append(get_virtual_machine(resource_group_name=vm["resourceGroup"], vm_name=vm["name"]))
+        except ResourceNotFoundError:
+            # Resource Graph lags behind ARM, so it can still list a VM that was just deleted
+            LOGGER.debug("VM %s/%s is listed but already gone, skipping", vm["resourceGroup"], vm["name"])
     if verbose:
         LOGGER.info("Done. Found total of %s instances.", len(instances))
 
