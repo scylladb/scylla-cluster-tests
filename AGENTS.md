@@ -300,7 +300,7 @@ Critical environment variables:
 
 ### Python Version Compatibility
 
-`.python-version` is pinned to a specific version (currently `3.14`) and **must never be modified in a commit**.
+`.python-version` is pinned to a specific version (currently `3.15`) and **must never be modified in a commit**.
 If a dependency fails to build with the pinned version (e.g. `fastavro` wheel not yet available for `3.14`):
 
 1. Temporarily override it in your local workspace only: `echo "3.12" > .python-version` (do **not** stage this file)
