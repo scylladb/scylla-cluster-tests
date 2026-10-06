@@ -1,7 +1,10 @@
 from copy import deepcopy
 from unittest import mock
 
+import yaml
+
 from sdcm.utils.k8s import (
+    _ManifestLoader,
     HelmValues,
     KubernetesOps,
     ScyllaPodsIPChangeTrackerThread,
@@ -313,3 +316,9 @@ def test_scylla_pods_ip_change_tracker_02_negative():
     ip_tracker._process_line(no_ns_str)
 
     assert not ip_mapper, ip_mapper
+
+
+def test_manifest_loader_keeps_bare_equals_sign_as_string():
+    # NOTE: prometheus-operator CRDs have '=' in enums, which plain SafeLoader can't construct
+    manifest = "enum: [=, '!=', =~]"
+    assert yaml.load(manifest, Loader=_ManifestLoader) == {"enum": ["=", "!=", "=~"]}  # noqa: S506

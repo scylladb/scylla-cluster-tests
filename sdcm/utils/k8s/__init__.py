@@ -56,6 +56,13 @@ K8S_CONFIGS_PATH_SCT = sct_abs_path("sdcm/k8s_configs")
 JSON_PATCH_TYPE = "application/json-patch+json"
 
 LOGGER = logging.getLogger(__name__)
+
+
+class _ManifestLoader(yaml.SafeLoader):
+    """SafeLoader that keeps a bare '=' (YAML 1.1 'value' type, i.e. in prometheus-operator CRD enums) as a string"""
+
+
+_ManifestLoader.add_constructor("tag:yaml.org,2002:value", yaml.SafeLoader.construct_yaml_str)
 K8S_MEM_CPU_RE = re.compile("^([0-9]+)([a-zA-Z]*)$")
 K8S_MEM_CONVERSION_MAP = {
     "e": lambda x: x * 1073741824,
@@ -370,7 +377,7 @@ class KubernetesOps:
                 else:
                     with open(current_config_path, encoding="utf-8") as config_file_stream:
                         data = config_file_stream.read()
-                file_content = yaml.safe_load_all(data)
+                file_content = yaml.load_all(data, Loader=_ManifestLoader)  # noqa: S506
 
                 for doc in file_content:
                     if modifiers:
