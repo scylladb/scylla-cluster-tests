@@ -316,13 +316,26 @@ def test_rolling_restart_cluster(db_cluster):
         assert "] iotune - " not in scylla_log.stdout, f"iotune was run after reboot on {pod_name_and_status['name']}"
 
 
+def get_tablets_keyspaces(db_cluster) -> set[str]:
+    with db_cluster.cql_connection_patient(db_cluster.nodes[0]) as session:
+        return {
+            row.keyspace_name
+            for row in session.execute("SELECT * FROM system_schema.scylla_keyspaces")
+            if getattr(row, "initial_tablets", None) is not None
+        }
+
+
 @pytest.mark.required_operator("v1.10.0")
 def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
     log_followers, need_to_collect_logs, stop_ks_creation = {}, True, False
     k8s_cluster = db_cluster.k8s_cluster
     logdir = f"{os.path.join(k8s_cluster.logdir, 'test_add_new_node_and_check_old_nodes_are_cleaned_up')}"
+    # NOTE: tablets keyspaces need no cleanup after topology changes, so the operator triggers none for them
+    tablets_keyspaces = get_tablets_keyspaces(db_cluster)
+    log.info("Not expecting cleanup for tablets keyspaces: %s", tablets_keyspaces)
+    keyspaces = set(db_cluster.nodes[0].run_cqlsh("describe keyspaces").stdout.split()) - tablets_keyspaces
     for node in db_cluster.nodes:
-        for keyspace in db_cluster.nodes[0].run_cqlsh("describe keyspaces").stdout.split():
+        for keyspace in keyspaces:
             log_followers[f"{node.name}--{keyspace}"] = node.follow_system_log(
                 patterns=[
                     f"api - force_keyspace_cleanup: keyspace={keyspace} ",
@@ -497,13 +510,14 @@ def test_drain_kubernetes_node_then_wait_and_replace_scylla_node(db_cluster):
 
 
 def test_drain_kubernetes_node_then_decommission_and_add_scylla_node(db_cluster):
-    target_rack = random.choice([*db_cluster.racks])
-    target_node = db_cluster.get_rack_nodes(target_rack)[-1]
+    # NOTE: add the new node first: with tablets, decommissioning below the keyspace RF is refused
+    #       ('Unable to find new replica for tablet'), and the operator would retry it forever.
+    #       Only the last node of a rack can be decommissioned, so target the added one.
+    target_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)[0]
+    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
     log.info("Drain K8S node that hosts '%s' scylla node not waiting for pod absence", target_node)
     target_node.drain_k8s_node()
     db_cluster.decommission(target_node)
-    db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
 
 @pytest.mark.readonly
@@ -627,6 +641,11 @@ def test_orphaned_services_after_shrink_cluster(db_cluster):
 @pytest.mark.requires_scylla_versions(("5.2.7", None), ("2023.1.1", None))
 def test_orphaned_services_multi_rack(db_cluster):
     """Issue https://github.com/scylladb/scylla-operator/issues/514"""
+    if tablets_keyspaces := get_tablets_keyspaces(db_cluster):
+        pytest.skip(
+            "the only node of a rack can't be decommissioned when tablets keyspaces exist "
+            f"(no replica left in its rack to move tablets to): {tablets_keyspaces}"
+        )
     log.info("Add node to the rack 1")
     new_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=1)[0]
 
@@ -1074,6 +1093,11 @@ def test_can_recover_from_fatal_pod_termination(db_cluster):
 #       https://github.com/scylladb/scylla-operator/issues/1077
 @pytest.mark.requires_backend("k8s-eks")
 def test_nodetool_flush_and_reshard(db_cluster: ScyllaPodCluster):
+    if tablets_keyspaces := get_tablets_keyspaces(db_cluster):
+        pytest.skip(
+            "resharding of tablets keyspaces doesn't go through the vnodes resharding compaction this test "
+            f"waits for: {tablets_keyspaces}"
+        )
     target_node = db_cluster.nodes[0]
 
     # Calculate new value for the CPU cores dedicated for Scylla pods

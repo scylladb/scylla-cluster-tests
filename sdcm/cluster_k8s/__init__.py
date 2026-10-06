@@ -3365,10 +3365,14 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                 kwarg = {"replication_factor": 3, "session": session}
 
                 SstableLoadUtils.upload_sstables(
-                    node=node, test_data=test_data[0], create_schema=create_schema, **kwarg
+                    node=node,
+                    test_data=test_data[0],
+                    keyspace_name=test_keyspace_name,
+                    create_schema=create_schema,
+                    **kwarg,
                 )
 
-            SstableLoadUtils.run_refresh(node, test_data=test_data[0])
+            SstableLoadUtils.run_refresh(node, test_data=test_data[0], keyspace_name=test_keyspace_name)
             if create_schema:
                 create_schema = False
 
