@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import time
+import codecs
 import socket
 import logging
 import subprocess
@@ -624,8 +625,10 @@ class K8sClientLogger(LoggerBase):
     def _read_log_lines(self, stream) -> Generator[tuple[str, str], None, None]:
         """Reads log lines. Returns a tuple of timestamp and log line"""
         buffer = ""
+        # NOTE: a fixed-size chunk may end in the middle of a multi-byte character (i.e. 'µs' in operator logs)
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         while not self._termination_event.is_set():
-            chunk = stream.read(self.CHUNK_SIZE).decode("utf-8")
+            chunk = decoder.decode(stream.read(self.CHUNK_SIZE))
             if not chunk:
                 break
             buffer += chunk

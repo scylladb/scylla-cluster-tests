@@ -318,16 +318,10 @@ def test_build_env_injects_scylla_version_placeholder(backend):
     assert env["SCT_SCYLLA_VERSION"] == "2026.1.0-lint-placeholder"
 
 
-def test_build_env_injects_operator_docker_image_for_eks():
-    """k8s-eks requires k8s_scylla_operator_docker_image (Jenkins runtime param) — lint fills it."""
-    config = _make_config(params={"backend": "k8s-eks"})
-    env = build_env(config)
-    assert env["SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE"] == "scylladb/scylla-operator:lint-placeholder"
-
-
-def test_build_env_no_operator_docker_image_for_gke():
-    """k8s-gke requires a helm repo, not the operator docker image — no placeholder injected."""
-    config = _make_config(params={"backend": "k8s-gke"})
+@pytest.mark.parametrize("backend", ["k8s-eks", "k8s-gke"])
+def test_build_env_no_operator_docker_image_placeholder(backend):
+    """K8S backends require a helm repo, not the operator docker image (empty = chart's image)."""
+    config = _make_config(params={"backend": backend})
     env = build_env(config)
     assert "SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE" not in env
 
