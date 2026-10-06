@@ -474,45 +474,75 @@ class DeleteByRowsRangeMonkey(DeleteMonkeyBase):
     middle third common to all of them - across a fresh set of partitions, excluding the
     ones step 1 already touched, so the two steps touch disjoint partitions.
 
-    The timestamp variant additionally needs partitions that still contain rows, and
-    raises PartitionNotFound / TimestampNotFound if a partition it selected turns out to
-    be empty by the time it probes it.
+    Both steps' partitions and the shared range are selected up front (plan_deletions),
+    so a missing partition or an empty shared range raises UnsupportedNemesis before any
+    data is deleted. After that, failures are real: the timestamp variant raises
+    PartitionNotFound / TimestampNotFound if a selected partition was emptied by other
+    load before it probes it.
     """
 
-    def delete_half_partition(self, ks_cf):
-        """Delete half of each selected partition by clustering key range."""
-        LOGGER.debug("Delete by range - half of partition")
+    def plan_deletions(self, ks_cf):
+        """
+        Select everything both steps will touch, before any data is deleted.
 
-        partitions_amount = self.runner.tester.partitions_attrs.non_validated_partitions // 2
-        LOGGER.debug("delete_half_partition.partitions_amount: %s", partitions_amount)
-        partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=partitions_amount, ks_cf=ks_cf, with_clustering_key_data=True
+        Selection only reads, so an empty selection or an empty shared clustering-key
+        range raises UnsupportedNemesis while the table is still untouched.
+
+        Returns:
+            Tuple of (use_half_partition, step1_partitions, step2_partitions, step2_ck_range)
+        """
+        non_validated = self.runner.tester.partitions_attrs.non_validated_partitions
+        use_half_partition = self.random.random() > 0.5
+        if use_half_partition:
+            step1_partitions = self.choose_partitions_for_delete(
+                partitions_amount=non_validated // 2, ks_cf=ks_cf, with_clustering_key_data=True
+            )
+        else:
+            step1_partitions = self.choose_partitions_for_delete(
+                partitions_amount=non_validated // self.partition_deletion_divisor,
+                ks_cf=ks_cf,
+                with_clustering_key_data=False,
+            )
+        step2_partitions = self.choose_partitions_for_delete(
+            partitions_amount=non_validated // self.partition_deletion_divisor,
+            ks_cf=ks_cf,
+            with_clustering_key_data=True,
+            exclude_partitions=list(step1_partitions),
         )
-        if not partitions_for_delete:
+        if not step1_partitions or not step2_partitions:
             raise UnsupportedNemesis("Not found partitions for delete. Nemesis can not be run")
+        return use_half_partition, step1_partitions, step2_partitions, self.shared_clustering_range(step2_partitions)
 
+    @staticmethod
+    def shared_clustering_range(partitions_for_delete):
+        """
+        Return the (first, last) clustering keys, inclusive, of the middle third common to all partitions.
+
+        Falls back to the whole common range when the middle third is empty.
+        Raises UnsupportedNemesis when the partitions share no deletable clustering key.
+        """
+        min_clustering_key = max(v[0] for v in partitions_for_delete.values())
+        max_clustering_key = min(v[1] for v in partitions_for_delete.values())
+        third_ck = (max_clustering_key - min_clustering_key) // 3
+        first, last = min_clustering_key + third_ck, max_clustering_key - third_ck - 1
+        if last < first:
+            first, last = min_clustering_key, max_clustering_key - 1
+        if last < first:
+            raise UnsupportedNemesis("Selected partitions do not share a deletable clustering-key range.")
+        return first, last
+
+    def delete_half_partition(self, ks_cf, partitions_for_delete):
+        """Delete half of each given partition by clustering key range."""
+        LOGGER.debug("Delete by range - half of partition")
         self.runner.actions_log.info(f"Deleting half ({len(partitions_for_delete)}) of partitions on {ks_cf} table")
         queries = []
         for pkey, ckey in partitions_for_delete.items():
             queries.append(f"delete from {ks_cf} where pk = {pkey} and ck > {int(ckey[1] / 2)}")
         run_deletions(self.runner.cluster, self.runner.target_node, queries=queries, ks_cf=ks_cf)
-        return partitions_for_delete
 
-    def delete_by_range_using_timestamp(self, ks_cf, log_prefix=""):
-        """Delete partitions using USING TIMESTAMP clause."""
+    def delete_by_range_using_timestamp(self, ks_cf, partitions_for_delete, log_prefix=""):
+        """Delete the given partitions using USING TIMESTAMP clause."""
         LOGGER.debug("Delete by range - using timestamp")
-
-        partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=self.runner.tester.partitions_attrs.non_validated_partitions
-            // self.partition_deletion_divisor,
-            ks_cf=ks_cf,
-            with_clustering_key_data=False,
-        )
-        if not partitions_for_delete:
-            message = "Unable to find partitions to delete"
-            LOGGER.error(message)
-            raise PartitionNotFound(message)
-
         queries = []
         verification_queries = []
         partition_percentage = self.random.randint(25, 75) / 100
@@ -521,7 +551,7 @@ class DeleteByRowsRangeMonkey(DeleteMonkeyBase):
             f" Partitions count: {len(partitions_for_delete)}, "
             f"partitions percentage: {partition_percentage}"
         )
-        for pkey, _ in partitions_for_delete.items():
+        for pkey in partitions_for_delete:
             LOGGER.debug("Using USING TIMESTAMP clause in the deletion for this partition: %s", pkey)
             timestamp, clustering_key = get_random_timestamp_from_partition(
                 self.runner.cluster,
@@ -536,8 +566,6 @@ class DeleteByRowsRangeMonkey(DeleteMonkeyBase):
 
         run_deletions(self.runner.cluster, self.runner.target_node, queries=queries, ks_cf=ks_cf)
         self.verify_using_timestamp_deletions(ks_cf=ks_cf, verification_queries=verification_queries)
-
-        return partitions_for_delete
 
     def verify_using_timestamp_deletions(self, ks_cf, verification_queries):
         """Verify that rows deleted via USING TIMESTAMP are actually gone."""
@@ -566,56 +594,31 @@ class DeleteByRowsRangeMonkey(DeleteMonkeyBase):
                     except InvalidRequest:
                         mv_not_configured = True
 
-    def delete_range_in_few_partitions(self, ks_cf, partitions_for_exclude_dict):
-        """Delete the same clustering key range across multiple partitions."""
+    def delete_range_in_few_partitions(self, ks_cf, partitions_for_delete, clustering_range):
+        """Delete the inclusive clustering key range (first, last) across the given partitions."""
         LOGGER.debug("Delete same range in the few partitions")
-
-        partitions_for_exclude = list(partitions_for_exclude_dict.keys())
-        partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=self.runner.tester.partitions_attrs.non_validated_partitions
-            // self.partition_deletion_divisor,
-            ks_cf=ks_cf,
-            with_clustering_key_data=True,
-            exclude_partitions=partitions_for_exclude,
-        )
-        if not partitions_for_delete:
-            raise UnsupportedNemesis("No partitions for deletion found. Cannot execute a range deletion.")
-
-        min_clustering_key = max([v[0] for v in partitions_for_delete.values()])
-        max_clustering_key = min([v[1] for v in partitions_for_delete.values()])
-        clustering_keys = []
-        if max_clustering_key > min_clustering_key:
-            third_ck = int((max_clustering_key - min_clustering_key) / 3)
-            clustering_keys = range(min_clustering_key + third_ck, max_clustering_key - third_ck)
-
-        if not clustering_keys:
-            clustering_keys = range(min_clustering_key, max_clustering_key)
-
+        first_ck, last_ck = clustering_range
         self.runner.actions_log.info(
             f"Delete same range in the few partitions in {ks_cf} table. Partitions count: {len(partitions_for_delete)}"
         )
         queries = []
-        for pkey in partitions_for_delete.keys():
-            queries.append(
-                f"delete from {ks_cf} where pk = {pkey} and ck >= {clustering_keys[0]} and ck <= {clustering_keys[-1]}"
-            )
-
+        for pkey in partitions_for_delete:
+            queries.append(f"delete from {ks_cf} where pk = {pkey} and ck >= {first_ck} and ck <= {last_ck}")
         run_deletions(self.runner.cluster, self.runner.target_node, queries=queries, ks_cf=ks_cf)
-
-        return list(partitions_for_delete.keys()) + partitions_for_exclude
 
     def disrupt(self):
         verify_scylla_bench_keyspace_exists(self.runner.cluster)
 
         ks_cf = self.KS_CF
+        use_half_partition, step1_partitions, step2_partitions, clustering_range = self.plan_deletions(ks_cf)
 
         # Step 1: delete_half_partition or delete_by_range_using_timestamp
-        if self.random.random() > 0.5:
-            partitions_for_exclude = self.delete_half_partition(ks_cf)
+        if use_half_partition:
+            self.delete_half_partition(ks_cf, step1_partitions)
         else:
-            partitions_for_exclude = self.delete_by_range_using_timestamp(ks_cf, log_prefix="delete_by_rows_range")
+            self.delete_by_range_using_timestamp(ks_cf, step1_partitions, log_prefix="delete_by_rows_range")
         # Step 2: delete_range_in_few_partitions
-        self.delete_range_in_few_partitions(ks_cf, partitions_for_exclude)
+        self.delete_range_in_few_partitions(ks_cf, step2_partitions, clustering_range)
 
 
 class AddDropColumnMonkey(NemesisBaseClass):
