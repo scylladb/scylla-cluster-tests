@@ -172,27 +172,42 @@ def call(Map pipelineParams) {
                    name: 'extra_environment_variables')
 
             // NOTE: Optional parameters for BYO ScyllaDB stage
-            separator(name: 'BYO_SCYLLA', sectionHeader: 'BYO ScyllaDB Configuration')
+            separator(name: 'BYO_SCYLLA', sectionHeader: 'BYO ScyllaDB Configuration (<a href="https://github.com/scylladb/scylla-cluster-tests/blob/master/docs/byo-scylladb.md">docs</a>)')
             string(defaultValue: '',
                    description: (
-                       'Custom "scylladb" repo to use. Leave empty if byo is not needed. ' +
-                       'If set then it must be proper GH repo. Example: git@github.com:personal-username/scylla.git\n' +
-                       'and, in case of an "rolling upgrade", need to define "base_versions" param explicitly.'),
+                       'SSH URL of a custom ScyllaDB GitHub repo (fork) to build and test, e.g. git@github.com:personal-username/scylla.git. ' +
+                       'It must be readable by the Jenkins "github-promoter" SSH key. Leave empty if BYO is not needed. ' +
+                       'Supported backends: aws, gce, azure, oci. ' +
+                       'The build becomes the upgrade target: leave "new_scylla_repo" empty. ' +
+                       'With empty "base_versions" (auto mode), base versions are detected from the BYO build repo.'),
                    name: 'byo_scylla_repo')
             string(defaultValue: '',
-                   description: 'Branch of the custom "scylladb" repo. Leave empty if byo is not needed.',
+                   description: (
+                       'Branch of "byo_scylla_repo" to build. It is built as is, without rebasing onto "byo_default_branch". ' +
+                       'Leave empty if BYO is not needed.'),
                    name: 'byo_scylla_branch')
             string(defaultValue: '/scylla-master/byo/byo_build_tests_dtest',
-                   description: 'Used when byo scylladb repo+branch is provided. Default "/scylla-master/byo/byo_build_tests_dtest"',
+                   description: (
+                       'scylla-pkg Jenkins job that builds ScyllaDB and the DB image. ' +
+                       'A value starting with "./" is resolved relative to the folder of this job. ' +
+                       'To build on top of a release branch, point it to that release folder, ' +
+                       'e.g. "/scylla-RELEASE/byo/byo_build_tests_dtest", and change "byo_default_branch" to match.'),
                    name: 'byo_job_path')
             string(defaultValue: 'scylla',
-                   description: '"scylla" or "scylla-enterprise". Default is "scylla".',
+                   description: (
+                       'Product name used to pick the base repos: scylladb/PRODUCT, PRODUCT-machine-image ' +
+                       'and PRODUCT-pkg. Default is "scylla".'),
                    name: 'byo_default_product')
             string(defaultValue: 'next',
-                   description: 'Default branch to be used for scylla and other repositories. Default is "next".',
+                   description: (
+                       'Branch used for the base repos: scylladb/PRODUCT, PRODUCT-machine-image and PRODUCT-pkg. ' +
+                       'Must be the stable or next branch of the "byo_job_path" folder ' +
+                       '("master" or "next" for /scylla-master/). Default is "next".'),
                    name: 'byo_default_branch')
             booleanParam(defaultValue: false,
-                   description: 'Build images for both architectures (ARM and x86). Useful for reusing BYO artifacts across multiple test runs.',
+                   description: (
+                       'Build packages for both x86_64 and ARM, not only the architecture the test needs (detected from the DB instance type). ' +
+                       'Useful for reusing BYO artifacts across multiple test runs.'),
                    name: 'byo_build_both_arch')
         }
         options {
@@ -241,14 +256,18 @@ def call(Map pipelineParams) {
 
                                         completed_stages = [:]
 
-                                        ArrayList base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
-                                        supportedVersions = supportedUpgradeFromVersions(
-                                            base_versions_list,
-                                            pipelineParams.linux_distro,
-                                            params.new_scylla_repo,
-                                            params.backend,
-                                            params.base_version_all_sts_versions
-                                        )
+                                        // NOTE: with BYO ScyllaDB the upgrade target repo is known only after
+                                        //       the BYO stage, so base versions are detected there instead.
+                                        if (!(params.byo_scylla_repo && params.byo_scylla_branch)) {
+                                            ArrayList base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
+                                            supportedVersions = supportedUpgradeFromVersions(
+                                                base_versions_list,
+                                                pipelineParams.linux_distro,
+                                                params.new_scylla_repo,
+                                                params.backend,
+                                                params.base_version_all_sts_versions
+                                            )
+                                        }
                                         (testDuration,
                                          testRunTimeout,
                                          runnerTimeout,
@@ -274,6 +293,18 @@ def call(Map pipelineParams) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: 240, unit: 'MINUTES') {
                                         byoScylladb(params, false)
+                                    }
+                                    if (params.byo_scylla_repo && params.byo_scylla_branch) {
+                                        // NOTE: the BYO build is the upgrade target, so detect base versions
+                                        //       from its repo (exported by byoScylladb as SCT_NEW_SCYLLA_REPO).
+                                        ArrayList base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
+                                        supportedVersions = supportedUpgradeFromVersions(
+                                            base_versions_list,
+                                            pipelineParams.linux_distro,
+                                            env.SCT_NEW_SCYLLA_REPO,
+                                            params.backend,
+                                            params.base_version_all_sts_versions
+                                        )
                                     }
                                 }
                             }
