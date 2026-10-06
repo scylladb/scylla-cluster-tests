@@ -160,6 +160,26 @@ def test_2024_and_2025_releases_keep_microbenchmarks_only(perf_config, scylla_ve
         )
 
 
+@pytest.mark.parametrize(
+    "scylla_version,resolved_version",
+    [
+        *RETIRED_VERSIONS,
+        pytest.param("2026.1:latest", "2026.1.2-0.20260525.abc", id="2026.1"),
+        pytest.param("2025.1.16", "2025.1.16", id="2025.1.16-promote-release"),
+    ],
+)
+def test_cql_raw_microbenchmarks_not_selected_before_2026_2(perf_config, scylla_version, resolved_version):
+    """The `scylla perf-cql-raw` tool does not exist before 2026.2, so a release trigger for
+    2026.1 or any 2024.x/2025.x minor must not select the cql-raw microbenchmarks.
+    """
+    selected = [
+        job.job_name.rsplit("/", 1)[-1]
+        for job in filter_jobs(perf_config.jobs, scylla_version=scylla_version, resolved_version=resolved_version)
+    ]
+    cql_raw = [name for name in selected if "perf-cql-raw" in name]
+    assert not cql_raw, f"{scylla_version} selects {cql_raw}"
+
+
 def test_master_keeps_the_vnodes_jobs(perf_config):
     """Vnodes coverage is kept on master: the monthly i8g vnodes entries must stay selectable
     even though no release branch runs a vnodes job any more.
