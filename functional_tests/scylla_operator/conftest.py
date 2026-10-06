@@ -50,7 +50,9 @@ def pytest_runtest_makereport(item, call):
     rep = outcome.get_result()
     if rep.skipped:
         item._test_result = ("SKIPPED", rep.longrepr[2])
-        TESTER.update_test_status(item.nodeid, *item._test_result)
+        # NOTE: a statically skipped test runs no fixtures, so if it is the only selected one there is no TESTER yet
+        if TESTER:
+            TESTER.update_test_status(item.nodeid, *item._test_result)
     elif rep.passed:
         item._test_result = ("SUCCESS", None)
     elif not rep.passed:
