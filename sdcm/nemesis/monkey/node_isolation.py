@@ -75,7 +75,8 @@ def refuse_connection_from_banned_node(runner, use_iptables: bool = False) -> No
         target_host_id = runner.target_node.host_id
 
         def _finalizer(exc_type, *_):
-            if exc_type is not KillNemesis:
+            # Cleanup can raise during a kill and replace KillNemesis, so also check the termination event.
+            if exc_type is not KillNemesis and not runner.termination_event.is_set():
                 runner._remove_node_add_node(
                     verification_node=working_node,
                     node_to_remove=runner.target_node,
