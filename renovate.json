@@ -6,7 +6,7 @@
   ],
   "commitBodyTable": true,
   "constraints": {
-    "uv": "0.12.23"
+    "uv": "0.13.0"
   },
   "recreateWhen": "always",
   "ignorePresets": [
