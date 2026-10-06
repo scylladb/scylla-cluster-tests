@@ -113,7 +113,9 @@ class SstableLoadUtils:
             with RemoteTemporaryFolder(node=node) as tmp_folder:
                 # Extract tarball to temporary folder when test keyspace and table do not exist and need to be created
                 node.remoter.run(untar_cmd(test_data.sstable_file, f"{tmp_folder.folder_name}/"))
-                SstableLoadUtils.create_keyspace(node=node, replication_factor=kwargs["replication_factor"])
+                SstableLoadUtils.create_keyspace(
+                    node=node, keyspace_name=keyspace_name, replication_factor=kwargs["replication_factor"]
+                )
 
                 SstableLoadUtils.create_table_for_load(
                     node=node, schema_file_and_path=f"{tmp_folder.folder_name}/schema.cql", session=kwargs["session"]
@@ -164,14 +166,14 @@ class SstableLoadUtils:
             node.remoter.run(load_api_cmd)
 
     @staticmethod
-    def run_refresh(node, test_data: namedtuple) -> Iterable[str]:
+    def run_refresh(node, test_data: namedtuple, keyspace_name: str = "keyspace_refresh") -> Iterable[str]:
         LOGGER.debug("Loading %s keys to %s by refresh", test_data.keys_num, node.name)
         # Resharding of the loaded sstable files is performed before they are moved from upload to the main folder.
         # So we need to validate that resharded files are placed in the "upload" folder before moving.
         # Find the compaction output that reported about the resharding
 
         system_log_follower = node.follow_system_log(patterns=[r"Resharded.*"])
-        node.run_nodetool(sub_cmd="refresh", args="-- keyspace_refresh standard1")
+        node.run_nodetool(sub_cmd="refresh", args=f"-- {keyspace_name} standard1")
         return system_log_follower
 
     @staticmethod
@@ -261,7 +263,7 @@ class SstableLoadUtils:
         session.execute(schema.replace("\n", ""))
 
     @classmethod
-    def validate_data_count_after_upload(cls, node, keyspace_name: str = "keyspace1", table_name: str = "standard2"):
+    def validate_data_count_after_upload(cls, node, keyspace_name: str = "keyspace1", table_name: str = "standard1"):
         result = node.run_cqlsh(f"consistency QUORUM;SELECT COUNT(*) FROM {keyspace_name}.{table_name}")
 
         next_line_is_result = False
