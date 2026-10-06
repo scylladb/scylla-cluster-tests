@@ -59,6 +59,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Pipeline Labeling and Documentation | `draft` | [pipeline-labeling-and-documentation.md](jenkins/pipeline-labeling-and-documentation.md) |
 | Jenkins Uno-Choice Billing Project | `draft` | [jenkins-uno-choice-billing-project.md](jenkins/jenkins-uno-choice-billing-project.md) |
 | Centralized Trigger Matrix | `draft` | [centralized-trigger-matrix.md](jenkins/centralized-trigger-matrix.md) |
+| Lab Builders as Baremetal Test Nodes | `draft` | [lab-builders-baremetal.md](jenkins/lab-builders-baremetal.md) |
 | i8g Performance Jobs Migration | `draft` | [i8g-performance-jobs-migration.md](i8g-performance-jobs-migration.md) |
 | Perf-Simple-Query Offline Installer Trigger | `complete` | [perf-simple-query-offline-installer-trigger.md](jenkins/perf-simple-query-offline-installer-trigger.md), [#14340](https://github.com/scylladb/scylla-cluster-tests/pull/14340) |
 
