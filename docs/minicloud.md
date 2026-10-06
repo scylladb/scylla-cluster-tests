@@ -137,6 +137,10 @@ for the GCE path's image export). The AWS **image** path needs more than bucket 
 builds each guest disk over the EBS direct API, so the IAM identity also needs
 `ebs:ListSnapshotBlocks` and `ebs:GetSnapshotBlock` (the minicloud README carries a ready-made
 policy). Without them the first AWS run fails at image resolution, not at start-up.
+With `minicloud_lock_guest_memory` on (the default) the container needs to lock memory: rootful
+docker allows it out of the box, rootless docker needs an unlimited memlock hard limit for your
+user (`/etc/security/limits.conf`), and the host needs RAM for every guest up front. Short on RAM,
+turn it off - see [Guest memory locking](#guest-memory-locking).
 One-time network setup (the `minicloud0` TUN device carrying
 `10.127.0.1`) is created by the container's setup script under sudo, or pre-create it via a
 boot-time unit and no sudo is needed at run time. A networking-setup failure aborts the start -
@@ -358,7 +362,7 @@ config option with a default in `defaults/test_default.yaml`; the pipeline layer
 |---|---|---|
 | `minicloud_lightweight_memory` | `minicloud_lightweight_memory` | keep the yaml value (4GiB) |
 | `minicloud_lightweight_vcpus` | `minicloud_lightweight_vcpus` | keep the yaml value (1) |
-| `minicloud_container_memory` | `minicloud_container_memory` | no docker limit on the container |
+| `minicloud_container_memory` | `minicloud_container_memory` | no docker cap on the container |
 | — (jenkinsfile / `extra_environment_variables` only) | `minicloud_container_cpus` | no docker limit |
 | — (jenkinsfile / `extra_environment_variables` only) | `minicloud_state_dir` | `~/.cache/minicloud` |
 | — (jenkinsfile / `extra_environment_variables` only) | `minicloud_container_name` | `minicloud` |
@@ -378,6 +382,24 @@ per-build choices; set them in the jenkinsfile, or per run via `extra_environmen
 Setting `minicloud_container_memory` also moves the preflight guest-memory gate onto that cap
 instead of the host's free memory - the cgroup OOM killer enforces the cap, so measuring the host
 would pass a test the cap then kills.
+
+### Guest memory locking
+
+Guest RAM swapped out on the host freezes every guest at once, and Scylla reads that as a
+cluster-wide network outage. `minicloud_lock_guest_memory` (`SCT_MINICLOUD_LOCK_GUEST_MEMORY`)
+picks one of two consistent setups:
+
+| | on (default, CI) | off (development machines short on RAM) |
+|---|---|---|
+| minicloud | `--lock-guest-memory`: guest RAM locked and preallocated | unchanged |
+| container | `--ulimit memlock=-1:-1 --cap-add IPC_LOCK`, no swap (`--memory-swap` = `--memory`, the cap or the host's MemTotal) | unchanged |
+| Scylla in the guest | keeps `--lock-memory=1` from `/etc/scylla.d/memory.conf` | `--lock-memory=1` dropped, so a guest only takes the host RAM it touches |
+
+On, a host that cannot fit the guests fails at instance launch. Off, the guests can still be
+swapped out, but they hold far less memory: with `--lock-memory` Seastar prefaults all of Scylla's
+memory. `developer_mode` does not control that lock - only `memory.conf` does. Switching modes
+restarts a reused container. Off also pairs well with aggressive KSM scanning on the host
+(`/sys/kernel/mm/ksm/pages_to_scan`, `sleep_millisecs`).
 
 ### Triggering from staging_trigger.py
 

@@ -190,6 +190,15 @@ def test_minicloud_config_lightweight_stays_on_when_param_absent():
     assert config.lightweight is True
 
 
+@pytest.mark.parametrize(
+    "params, expected",
+    [({"minicloud_lock_guest_memory": False}, False), ({"cluster_backend": "aws"}, True)],
+    ids=["disabled-by-param", "on-when-param-absent"],
+)
+def test_minicloud_config_lock_guest_memory(params, expected):
+    assert MinicloudConfig.from_env(params=params).lock_guest_memory is expected
+
+
 def test_minicloud_config_falls_back_to_defaults_on_empty_params():
     """An unset/blank param must not blank out the default."""
     config = MinicloudConfig.from_env(

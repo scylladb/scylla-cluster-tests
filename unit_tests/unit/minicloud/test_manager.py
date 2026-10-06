@@ -72,11 +72,60 @@ def test_start_passes_lightweight_vcpus(tmp_path):
     assert cmd[cmd.index("--lightweight-vcpus") + 1] == "2"
 
 
-def test_start_omits_container_limits_by_default(tmp_path):
-    """Unset caps must reproduce the previous behaviour: no docker limit flags at all."""
+def test_start_locks_guest_memory_by_default(tmp_path):
+    """minicloud locks guest RAM, and QEMU can only mlockall() with a memlock rlimit and IPC_LOCK."""
     cmd = _started_docker_cmd(MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log")))
-    assert "--memory" not in cmd
+    assert cmd[cmd.index("--ulimit") + 1] == "memlock=-1:-1"
+    assert "IPC_LOCK" in cmd
+    assert "--lock-guest-memory" in cmd
+    assert "--memory-swap" in cmd
+
+
+@pytest.mark.parametrize("container_memory", ["", "32GiB"])
+def test_start_without_guest_locking_runs_container_as_before(tmp_path, container_memory):
+    """Off means untouched: no locking flags, no swap limit, and --memory only for a configured cap."""
+    cmd = _started_docker_cmd(
+        MinicloudConfig(
+            state_dir=str(tmp_path),
+            log_file=str(tmp_path / "minicloud.log"),
+            container_memory=container_memory,
+            lock_guest_memory=False,
+        )
+    )
+    for flag in ("--ulimit", "IPC_LOCK", "--memory-swap", "--lock-guest-memory"):
+        assert flag not in cmd
+    assert ("--memory" in cmd) == bool(container_memory)
+
+
+def test_start_sizes_container_to_host_memory_by_default(tmp_path):
+    """Unset caps keep the container bounded only by the host, but still without swap:
+    docker needs --memory alongside --memory-swap, so the host's total RAM stands in."""
+    with patch.object(MinicloudManager, "_container_memory_gib", return_value=62.5):
+        cmd = _started_docker_cmd(MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log")))
+    assert cmd[cmd.index("--memory") + 1] == "62.5g"
+    assert cmd[cmd.index("--memory-swap") + 1] == "62.5g"
     assert "--cpus" not in cmd
+
+
+def test_start_omits_memory_flags_without_meminfo(tmp_path):
+    """A host with no /proc/meminfo has nothing to size against: no memory flags at all."""
+    with patch.object(MinicloudManager, "_container_memory_gib", return_value=0.0):
+        cmd = _started_docker_cmd(MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log")))
+    assert "--memory" not in cmd
+    assert "--memory-swap" not in cmd
+
+
+def test_container_memory_gib_falls_back_to_host_total(tmp_path):
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("MemTotal:       65536000 kB\nMemAvailable:   1024 kB\n")
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
+    with patch("sdcm.utils.minicloud.manager.Path", return_value=meminfo):
+        assert manager._container_memory_gib() == 65536000 / 1024**2
+
+
+def test_container_memory_gib_unset_without_guest_locking(tmp_path):
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lock_guest_memory=False))
+    assert manager._container_memory_gib() == 0.0
 
 
 def test_start_applies_container_limits(tmp_path):
@@ -90,6 +139,7 @@ def test_start_applies_container_limits(tmp_path):
         )
     )
     assert cmd[cmd.index("--memory") + 1] == "32g"
+    assert cmd[cmd.index("--memory-swap") + 1] == "32g"
     assert cmd[cmd.index("--cpus") + 1] == "7.5"
 
 
@@ -206,15 +256,18 @@ RUNNING_DEFAULT_SIZING_CMD = [
     "4GiB",
     "--lightweight-vcpus",
     "1",
+    "--lock-guest-memory",
 ]
 
 
-def _inspect_stub(cmd=None, memory=0, nano_cpus=0):
-    """Stand in for `docker inspect` on the three fields the sizing comparison reads."""
+def _inspect_stub(cmd=None, memory=0, nano_cpus=0, memory_swap=None):
+    """Stand in for `docker inspect` on the fields the sizing comparison reads."""
 
     def _inspect(go_template):
         if "Config.Cmd" in go_template:
             return cmd
+        if "HostConfig.MemorySwap" in go_template:
+            return memory if memory_swap is None else memory_swap
         if "HostConfig.Memory" in go_template:
             return memory
         if "HostConfig.NanoCpus" in go_template:
@@ -224,10 +277,57 @@ def _inspect_stub(cmd=None, memory=0, nano_cpus=0):
     return _inspect
 
 
+HOST_MEMORY_GIB = 62.5
+
+
+def _host_memory_stub():
+    return patch.object(MinicloudManager, "_container_memory_gib", return_value=HOST_MEMORY_GIB)
+
+
 def test_container_sizing_gaps_none_when_unchanged(tmp_path):
+    """An unset cap sizes to host RAM; reading that back must not restart the container every run."""
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
-    with patch.object(MinicloudManager, "_inspect_container", side_effect=_inspect_stub(RUNNING_DEFAULT_SIZING_CMD)):
+    with (
+        _host_memory_stub(),
+        patch.object(
+            MinicloudManager,
+            "_inspect_container",
+            side_effect=_inspect_stub(RUNNING_DEFAULT_SIZING_CMD, memory=int(HOST_MEMORY_GIB * 1024**3)),
+        ),
+    ):
         assert manager._container_sizing_gaps() == []
+
+
+@pytest.mark.parametrize("running_locked", [True, False])
+def test_container_sizing_gaps_detects_changed_locking_mode(tmp_path, running_locked):
+    """The locking flags are fixed at docker run, so switching modes must restart the container."""
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lock_guest_memory=not running_locked))
+    running = RUNNING_DEFAULT_SIZING_CMD if running_locked else RUNNING_DEFAULT_SIZING_CMD[:-1]
+    with (
+        _host_memory_stub(),
+        patch.object(
+            MinicloudManager,
+            "_inspect_container",
+            side_effect=_inspect_stub(running, memory=int(HOST_MEMORY_GIB * 1024**3)),
+        ),
+    ):
+        assert f"--lock-guest-memory is {running_locked}, this run wants {not running_locked}" in (
+            manager._container_sizing_gaps()
+        )
+
+
+def test_container_sizing_gaps_detects_swap_allowed(tmp_path):
+    """A container started before --memory-swap was passed can still swap: restart it once."""
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
+    with (
+        _host_memory_stub(),
+        patch.object(
+            MinicloudManager,
+            "_inspect_container",
+            side_effect=_inspect_stub(RUNNING_DEFAULT_SIZING_CMD, memory=int(HOST_MEMORY_GIB * 1024**3), memory_swap=0),
+        ),
+    ):
+        assert manager._container_sizing_gaps() == ["--memory-swap is 0, this run wants 62.5"]
 
 
 def test_container_sizing_gaps_detects_changed_guest_sizing(tmp_path):
@@ -235,7 +335,14 @@ def test_container_sizing_gaps_detects_changed_guest_sizing(tmp_path):
     manager = MinicloudManager(
         config=MinicloudConfig(state_dir=str(tmp_path), lightweight_memory="8GiB", lightweight_vcpus=2)
     )
-    with patch.object(MinicloudManager, "_inspect_container", side_effect=_inspect_stub(RUNNING_DEFAULT_SIZING_CMD)):
+    with (
+        _host_memory_stub(),
+        patch.object(
+            MinicloudManager,
+            "_inspect_container",
+            side_effect=_inspect_stub(RUNNING_DEFAULT_SIZING_CMD, memory=int(HOST_MEMORY_GIB * 1024**3)),
+        ),
+    ):
         assert manager._container_sizing_gaps() == [
             "--lightweight-memory is 4GiB, this run wants 8GiB",
             "--lightweight-vcpus is 1, this run wants 2",
@@ -251,6 +358,7 @@ def test_container_sizing_gaps_detects_changed_docker_caps(tmp_path):
         assert manager._container_sizing_gaps() == [
             "--memory is 0, this run wants 48",
             "--cpus is 0, this run wants 4",
+            "--memory-swap is 0, this run wants 48",
         ]
 
 

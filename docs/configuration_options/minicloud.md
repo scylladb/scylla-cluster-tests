@@ -6,7 +6,7 @@ Minicloud is an AWS-API-compatible environment rather than a cloud of its own: i
 `cluster_backend: aws` and an endpoint override, and these options control the local minicloud
 service.
 
-**15 options.**
+**16 options.**
 
 
 <a id="minicloud_container_cpus"></a>
@@ -117,6 +117,17 @@ vCPUs per guest in lightweight mode. Scylla runs one shard per vCPU, so this mul
 **default:** 1
 
 **type:** int
+
+
+<a id="minicloud_lock_guest_memory"></a>
+
+## **minicloud_lock_guest_memory** / SCT_MINICLOUD_LOCK_GUEST_MEMORY
+
+Keep guest RAM from being swapped out on the host. On: Scylla keeps its own --lock-memory, minicloud locks and preallocates every guest's RAM (--lock-guest-memory), and the container gets no swap - a host that cannot fit the guests fails at instance launch. Off: SCT drops --lock-memory from Scylla on the guests, so they only take the host RAM they touch, and the minicloud container runs with no memory-locking flags - for development machines short on RAM
+
+**default:** True
+
+**type:** bool
 
 
 <a id="minicloud_regions"></a>

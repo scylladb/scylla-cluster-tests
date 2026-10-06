@@ -74,6 +74,14 @@ class MinicloudConfigMixin(BaseModel):
         "multiplies with minicloud_lightweight_memory across every guest in the test — raise it "
         "only on a host with cores to spare",
     )
+    minicloud_lock_guest_memory: Boolean = SctField(
+        description="Keep guest RAM from being swapped out on the host. On: Scylla keeps its own "
+        "--lock-memory, minicloud locks and preallocates every guest's RAM (--lock-guest-memory), and "
+        "the container gets no swap - a host that cannot fit the guests fails at instance launch. "
+        "Off: SCT drops --lock-memory from Scylla on the guests, so they only take the host RAM "
+        "they touch, and the minicloud container runs with no memory-locking flags - for "
+        "development machines short on RAM",
+    )
     minicloud_regions: StringOrList = SctField(
         description="Narrow the AWS regions minicloud prepares (default: every SCT-supported region; "
         "each costs ~2s at start-up)",

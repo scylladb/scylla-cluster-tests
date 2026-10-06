@@ -289,25 +289,51 @@ class MinicloudManager:
                 if (running := running_arg(flag)) != wanted:
                     gaps.append(f"{flag} is {running or 'unset'}, this run wants {wanted}")
 
-        # docker's own caps, read back from HostConfig: unset means no flag, which docker reports
-        # as 0 - so the same "0" stands for both sides of "no limit" and the comparison is exact.
-        for field, wanted_value, flag, divisor in (
-            ("Memory", self.config.container_memory, "--memory", 1024**3),
-            ("NanoCpus", self.config.container_cpus, "--cpus", 10**9),
-        ):
+        # The memlock ulimit, IPC_LOCK and --memory-swap all come and go with this flag, so
+        # comparing it alone tells whether the container was started for the other locking mode.
+        if self.config.lock_guest_memory != ("--lock-guest-memory" in cmd):
+            gaps.append(
+                f"--lock-guest-memory is {'--lock-guest-memory' in cmd}, this run wants {self.config.lock_guest_memory}"
+            )
+
+        # docker's own caps, read back from HostConfig: an unset cap means no flag, which docker
+        # reports as 0 - so the same "0" stands for both sides of "no limit".
+        memory_gib = self._container_memory_gib()
+        caps = [
+            ("Memory", memory_gib, "--memory", 1024**3),
+            ("NanoCpus", float(self.config.container_cpus or 0), "--cpus", 10**9),
+        ]
+        if self.config.lock_guest_memory:
+            caps.append(("MemorySwap", memory_gib, "--memory-swap", 1024**3))
+        for field, wanted, flag, divisor in caps:
             raw = self._inspect_container(f"{{{{json .HostConfig.{field}}}}}")
             if not isinstance(raw, (int, float)):
                 continue
-            wanted = (
-                parse_memory_gib(wanted_value, "minicloud_container_memory")
-                if flag == "--memory" and wanted_value
-                else float(wanted_value or 0)
-            )
             # format both through :g so the GiB->flag rounding docker was given is the same
             # rounding this comparison sees, and an unchanged config never looks like a change
             if f"{raw / divisor:g}" != f"{wanted:g}":
                 gaps.append(f"{flag} is {raw / divisor:g}, this run wants {wanted:g}")
         return gaps
+
+    def _container_memory_gib(self) -> float:
+        """The container's --memory in GiB, 0 for no flag.
+
+        The configured cap if there is one. Without a cap, guest-memory locking still needs a
+        --memory value, because docker only accepts --memory-swap together with --memory: the
+        host's MemTotal stands in, limiting nothing the host would not. 0 when not locking, or
+        when there is no /proc/meminfo - a non-Linux box cannot run the container.
+        """
+        if self.config.container_memory:
+            return parse_memory_gib(self.config.container_memory, "minicloud_container_memory")
+        if not self.config.lock_guest_memory:
+            return 0.0
+        meminfo = Path("/proc/meminfo")
+        if not meminfo.exists():
+            return 0.0
+        for line in meminfo.read_text().splitlines():
+            if line.startswith("MemTotal:"):
+                return int(line.split()[1]) / 1024**2
+        return 0.0
 
     def _force_stop_container(self) -> None:
         # Target the ID we started when we know it, so we can never remove a different
@@ -379,16 +405,25 @@ class MinicloudManager:
             f"{self.config.state_dir}:/root/.cache/minicloud",
         ]
 
-        # Optional docker limits. Unset means no flag at all, so the container stays bounded only
-        # by the host - what every run did before these were configurable. A cap is what stops a
+        # Guest RAM swapped out on the host freezes every guest at once, and Scylla reads that as
+        # a cluster-wide network outage. minicloud_lock_guest_memory picks one of two answers:
+        # on - minicloud locks and preallocates guest RAM (--lock-guest-memory, below), which
+        #      needs mlockall() in the container: an unlimited memlock rlimit and IPC_LOCK, neither
+        #      a docker default. The container also gets no swap (--memory-swap == --memory).
+        # off - none of that here; the guests drop Scylla's own --lock-memory instead, so they
+        #      only take the host RAM they touch (BaseScyllaCluster.node_setup).
+        if self.config.lock_guest_memory:
+            docker_cmd += ["--ulimit", "memlock=-1:-1", "--cap-add", "IPC_LOCK"]
+
+        # Optional docker limits. Unset means no cap, so the container stays bounded only by the
+        # host - what every run did before these were configurable. A cap is what stops a
         # runaway emulator from taking the whole dev box (or CI agent) down with it.
-        if self.config.container_memory:
+        if memory_gib := self._container_memory_gib():
             # docker --memory speaks b/k/m/g, not the GiB form the rest of the minicloud config
             # uses, so convert rather than make the user remember two unit styles.
-            docker_cmd += [
-                "--memory",
-                f"{parse_memory_gib(self.config.container_memory, 'minicloud_container_memory'):g}g",
-            ]
+            docker_cmd += ["--memory", f"{memory_gib:g}g"]
+            if self.config.lock_guest_memory:
+                docker_cmd += ["--memory-swap", f"{memory_gib:g}g"]
         if self.config.container_cpus:
             docker_cmd += ["--cpus", str(self.config.container_cpus)]
 
@@ -432,6 +467,8 @@ class MinicloudManager:
         if self.config.gcs_bucket:
             minicloud_args += ["--gcs-bucket", self.config.gcs_bucket]
         minicloud_args += ["--gcp-project", self.config.gcp_project]
+        if self.config.lock_guest_memory:
+            minicloud_args.append("--lock-guest-memory")
         if self.config.lightweight:
             minicloud_args += [
                 "--lightweight",
