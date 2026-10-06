@@ -332,7 +332,7 @@ def call(Map pipelineParams = [:]) {
                    description: 'on_demand|spot|spot_fleet|auto (auto: resolved by test duration, threshold spot_max_test_duration)')
 
             separator(name: 'NOTIFICATION_CONFIG', sectionHeader: 'Notification Configuration')
-            string(name: 'email_recipients', defaultValue: 'vladz@scylladb.com',
+            string(name: 'email_recipients', defaultValue: 'scylla-doctor-rel-qa-automated-testing@scylladb.com',
                    description: 'Email recipients for the gating summary report')
             string(name: 'requested_by_user', defaultValue: 'scylla-doctor',
                    description: 'Actual user requesting job start, for automated job builds')
