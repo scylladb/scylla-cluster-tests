@@ -1,5 +1,6 @@
 """Tests for sdcm.nemesis.monkey.node_isolation module."""
 
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -91,6 +92,7 @@ def runner(base_runner):
     target.remoter.run.return_value = MagicMock(ok=False, stdout="")  # scylla no longer running once banned
     target.parent_cluster.get_nodetool_status.return_value = {"dc1": {}}  # target no longer listed -> removed
 
+    base_runner.termination_event = threading.Event()
     base_runner._is_it_on_kubernetes = MagicMock(return_value=False)
     base_runner._remove_node_add_node = MagicMock()
     base_runner.cluster.params = MagicMock(artifact_scylla_version=None)
@@ -192,6 +194,29 @@ def test_kill_nemesis_during_removal_skips_finalizer_cleanup(runner):
     working_node.run_nodetool.side_effect = KillNemesis()
 
     with pytest.raises(KillNemesis):
+        refuse_connection_from_banned_node(runner, use_iptables=True)
+
+    runner._remove_node_add_node.assert_not_called()
+
+
+def test_cleanup_failure_during_kill_skips_remove_add(runner):
+    """`stop_nemesis` sets the termination event, then raises KillNemesis. If a context
+    manager cleanup raises while that happens, the new exception replaces KillNemesis.
+    The finalizer must still skip _remove_node_add_node, because the event is set."""
+    working_node = _working_node(runner)
+
+    def _kill_nemesis(*_, **__):
+        runner.termination_event.set()
+        raise KillNemesis()
+
+    def _failing_cleanup(cmd, **_):
+        if "iptables -D" in cmd:
+            raise RuntimeError("iptables cleanup failed")
+
+    working_node.run_nodetool.side_effect = _kill_nemesis
+    runner.target_node.remoter.sudo.side_effect = _failing_cleanup
+
+    with pytest.raises(RuntimeError, match="iptables cleanup failed"):
         refuse_connection_from_banned_node(runner, use_iptables=True)
 
     runner._remove_node_add_node.assert_not_called()
