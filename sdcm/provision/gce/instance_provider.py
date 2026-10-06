@@ -204,13 +204,19 @@ class VirtualMachineProvider:
                 LOGGER.error("Error when sending create vm request for instance %s: %s", normalized_name, str(err))
                 error_to_raise = err
 
-        # Second loop: Wait for all operations to complete and collect instances
-        for definition, operation, normalized_name, user_data, startup_script in pending_instance_creations:
+        # Second loop: Wait for all operations to complete and collect instances. Entries are popped
+        # as they are taken, so on an abort the list holds exactly the operations still in flight.
+        while pending_instance_creations:
+            definition, operation, normalized_name, user_data, startup_script = pending_instance_creations.pop(0)
             try:
                 instance = self._wait_for_instance_creation(
                     definition, operation, normalized_name, pricing_model, user_data, startup_script
                 )
                 instances.append(instance)
+            except OperationPreemptedError, ProvisionError:
+                # ProvisionError: the VM was created but never reached RUNNING (see _wait_until_running).
+                self._drain_pending_creations(pending_instance_creations, pricing_model)
+                raise
             except ZoneResourcesExhaustedError:
                 # Zone exhaustion is unrecoverable; let it propagate immediately.
                 # Successfully-created instances remain in self._cache so callers
@@ -227,6 +233,30 @@ class VirtualMachineProvider:
                 ) from error_to_raise
             raise ProvisionError(f"Failed to create instances: {error_to_raise}") from error_to_raise
         return instances
+
+    def _drain_pending_creations(self, pending_instance_creations: list, pricing_model: PricingModel) -> None:
+        """Resolve the insert operations still in flight when a batch is abandoned mid-way.
+
+        GCE's `insert` is not idempotent, so a name whose operation was never awaited is neither in
+        the cache nor free: the caller's on-demand retry would get `AlreadyExists` for it instead of
+        a VM. Each remaining operation is waited out - a VM that came up and reached RUNNING is cached
+        and reused by the retry, one that failed is deleted so its name is free again. Any error is
+        only logged: the abort that triggered the drain is the error the caller has to see.
+        """
+        while pending_instance_creations:
+            definition, operation, normalized_name, _, _ = pending_instance_creations.pop(0)
+            try:
+                wait_for_extended_operation(operation, f"instance creation for {normalized_name}")
+                instance = self._wait_until_running(normalized_name, pricing_model)
+                self._set_instance_labels(instance, definition.tags, normalized_name)
+                self._cache[normalized_name] = instance
+                LOGGER.info("Instance %s finished creating after the abort; keeping it for the retry", normalized_name)
+            except (ProvisionError, OperationPreemptedError) as error:
+                # _wait_until_running already deleted the VM before raising.
+                LOGGER.warning("Instance %s did not start after the abort: %s", normalized_name, error)
+            except Exception as error:  # noqa: BLE001 - the wait also raises TimeoutError/RuntimeError
+                LOGGER.warning("Instance %s did not finish creating after the abort: %s", normalized_name, error)
+                self.delete(normalized_name, wait=True)  # logs its own failures, never raises
 
     def _wait_for_instance_creation(
         self,
