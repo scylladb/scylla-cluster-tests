@@ -74,7 +74,9 @@ class NemesisConfigMixin(BaseModel):
         description="""nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has
         ALL the properties in that list which are set to true (the intersection of all properties).
         (In other words filters out all nemesis that doesn't ONE of these properties set to true)
-        IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.""",
+        IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.
+        For FixedOrderMonkey, it is instead a comma-separated ordered list of nemesis class names
+        (e.g. "DecommissionMonkey, RepairMonkey"), executed in that order and repeated once exhausted.""",
     )
     nemesis_sequence_sleep_between_ops: int = SctField(
         description="""Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests""",

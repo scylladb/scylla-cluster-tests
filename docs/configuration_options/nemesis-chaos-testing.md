@@ -110,7 +110,7 @@ A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
 
 ## **nemesis_selector** / SCT_NEMESIS_SELECTOR
 
-[`nemesis_selector`](#nemesis_selector) gets a list of "nemesis properties" and filters IN all the nemesis that has<br>ALL the properties in that list which are set to true (the intersection of all properties).<br>(In other words filters out all nemesis that doesn't ONE of these properties set to true)<br>IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.
+[`nemesis_selector`](#nemesis_selector) gets a list of "nemesis properties" and filters IN all the nemesis that has<br>ALL the properties in that list which are set to true (the intersection of all properties).<br>(In other words filters out all nemesis that doesn't ONE of these properties set to true)<br>IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.<br>For FixedOrderMonkey, it is instead a comma-separated ordered list of nemesis class names<br>(e.g. "DecommissionMonkey, RepairMonkey"), executed in that order and repeated once exhausted.
 
 **default:** N/A
 
