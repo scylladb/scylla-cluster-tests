@@ -26,7 +26,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sdcm.utils.remote_logger import HDRHistogramFileLogger, SSHGeneralSystemdLogger
+from sdcm.utils.remote_logger import HDRHistogramFileLogger, K8sClientLogger, SSHGeneralSystemdLogger
 
 
 def _node(remote_pid: str = "1234") -> MagicMock:
@@ -105,3 +105,17 @@ def test_stop_without_remote_pid_warns_instead_of_running_bare_kill(tmp_path, ca
 
     assert not any("kill" in str(call) for call in logger._remoter.run.call_args_list)
     assert "No remote pid file" in caplog.text
+
+
+def test_k8s_client_logger_reads_multibyte_char_split_across_chunks():
+    data = "2026-10-06T00:00:00Z duration=530µs\n2026-10-06T00:00:01Z next\n".encode()
+    cut = data.index("µ".encode()) + 1
+    chunks = [data[:cut], data[cut:], b""]
+    stream = MagicMock(read=lambda _size: chunks.pop(0))
+    k8s_logger = K8sClientLogger.__new__(K8sClientLogger)
+    k8s_logger._termination_event = threading.Event()
+
+    assert list(k8s_logger._read_log_lines(stream)) == [
+        ("2026-10-06T00:00:00Z", "duration=530µs\n"),
+        ("2026-10-06T00:00:01Z", "next\n"),
+    ]

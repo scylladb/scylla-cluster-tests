@@ -1222,11 +1222,20 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                     modifiers=config_modifiers + [example_disk_modifier] + [image_modifier],
                     envsubst=False,
                 )
-                self.kubectl("rollout status daemonset.apps/xfs-disk-setup", namespace="xfs-disk-setup")
+                # NOTE: cold nodes pull several images per pod, which can outlast the default kubectl timeout
+                self.kubectl(
+                    "rollout status daemonset.apps/xfs-disk-setup --timeout=15m",
+                    namespace="xfs-disk-setup",
+                    timeout=930,
+                )
 
             path_to_csi_driver_config = sct_abs_path(f"{repo_dst_dir}/deploy/kubernetes")
             self.apply_file(path_to_csi_driver_config, modifiers=config_modifiers + [image_modifier], envsubst=False)
-            self.kubectl("rollout status daemonset.apps/local-csi-driver", namespace="local-csi-driver")
+            self.kubectl(
+                "rollout status daemonset.apps/local-csi-driver --timeout=15m",
+                namespace="local-csi-driver",
+                timeout=930,
+            )
 
     @log_run_info
     def prepare_k8s_scylla_nodes(self, node_pools: list[CloudK8sNodePool] | CloudK8sNodePool) -> None:
@@ -3236,7 +3245,11 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         scylla_shards = node.scylla_shards
 
         timeout = timeout or (node.pod_terminate_timeout * 60)
-        with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
+        # NOTE: the pod may already be going away (i.e. its K8S node got drained), and then nothing can be
+        #       executed in it to gather load metrics for the adaptive timeout.
+        pod = node._pod
+        node_available = bool(pod and not pod.metadata.deletion_timestamp and pod.status.phase == "Running")
+        with adaptive_timeout(operation=Operations.DECOMMISSION, node=node, node_available=node_available):
             self.replace_scylla_cluster_value(
                 f"/spec/datacenter/racks/{rack}/members", current_members - 1, dc_idx=dc_idx
             )
