@@ -38,6 +38,7 @@ from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
     convert_cpu_value_from_k8s_to_units,
+    get_helm_pool_affinity_values,
     HelmValues,
     KubernetesOps,
 )
@@ -815,12 +816,28 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     https://github.com/scylladb/scylla-operator/pull/502
 
     Deploy Scylla using helm chart with only default values.
-    Storage capacity expected to be 10Gi
+    Storage capacity expected to be the chart's default one.
     """
+    k8s_cluster = db_cluster.k8s_cluster
+    if k8s_cluster.params.get("cluster_backend").startswith("k8s-local"):
+        pytest.skip("chart defaults (120Gi disks, 4Gi pods, no developer mode) don't fit local K8S nodes")
 
     target_chart_name, namespace = ("t-default-values",) * 2
-    expected_capacity = "10Gi"
-    need_to_collect_logs, k8s_cluster = True, db_cluster.k8s_cluster
+    chart_values = yaml.safe_load(
+        k8s_cluster.helm(
+            f"show values scylla-operator/scylla --devel --version {k8s_cluster.scylla_operator_chart_version}"
+        )
+    )
+    expected_capacity = chart_values["racks"][0]["storage"]["capacity"]
+    # NOTE: the chart's default placement targets nodes labeled and tainted the scylla-operator way, while SCT's
+    #       scylla pool uses its own pool label and 'role' taint, so keep every default except where racks run
+    placement = get_helm_pool_affinity_values(k8s_cluster.POOL_LABEL_NAME, k8s_cluster.SCYLLA_POOL_NAME)["affinity"]
+    placement["tolerations"] = [
+        {"key": "role", "value": "scylla-clusters", "operator": "Equal", "effect": "NoSchedule"}
+    ]
+    for rack in chart_values["racks"]:
+        rack["placement"] = placement
+    need_to_collect_logs = True
     logdir = f"{os.path.join(k8s_cluster.logdir, 'test_deploy_helm_with_default_values')}"
 
     k8s_cluster.create_namespace(namespace=namespace)
@@ -833,6 +850,7 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
             source_chart_name="scylla-operator/scylla",
             version=k8s_cluster.scylla_operator_chart_version,
             use_devel=True,
+            values=HelmValues(chart_values),
             namespace=namespace,
         )
     )
@@ -907,7 +925,7 @@ def test_rolling_config_change_internode_compression(db_cluster, scylla_yaml):
     new_compression = random.choice(values_to_toggle)
 
     with scylla_yaml() as props:
-        props[internode_compression_option_name] = new_compression
+        props.internode_compression = new_compression
 
     db_cluster.restart_scylla()
 
@@ -923,7 +941,7 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):
     hh_throttle_option_name = "hinted_handoff_throttle_in_kb"
 
     with scylla_yaml() as props:
-        configmap_scylla_yaml_content = props
+        configmap_scylla_yaml_content = props.model_dump(exclude_none=True, exclude_unset=True)
 
     original_hinted_handoff_throttle_in_kb, new_hinted_handoff_throttle_in_kb = None, None
 
@@ -934,11 +952,11 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):
 
     log.info("configMap's scylla.yaml = %s", configmap_scylla_yaml_content)
 
-    assert isinstance(original_hinted_handoff, bool), (
-        f"configMap scylla.yaml have unexpected '{hh_enabled_option_name}' type: {type(original_hinted_handoff)}. "
-        "Expected 'bool'"
-    )
-    new_hinted_handoff = not original_hinted_handoff
+    # NOTE: scylla.yaml allows a bool or a string ('disabled' or a list of DCs) here, i.e. SCT sets 'disabled'
+    if isinstance(original_hinted_handoff, bool):
+        new_hinted_handoff = not original_hinted_handoff
+    else:
+        new_hinted_handoff = original_hinted_handoff == "disabled"
 
     if original_hinted_handoff_throttle_in_kb:
         assert isinstance(original_hinted_handoff_throttle_in_kb, int), (
@@ -947,12 +965,13 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):
         )
         new_hinted_handoff_throttle_in_kb = original_hinted_handoff_throttle_in_kb * 2
 
+    # NOTE: the ConfigMap scylla.yaml is a ScyllaYaml model, and options set to None get dropped from it
     with scylla_yaml() as props:
-        props[hh_enabled_option_name] = new_hinted_handoff
+        setattr(props, hh_enabled_option_name, new_hinted_handoff)
         if new_hinted_handoff_throttle_in_kb:
-            props[hh_throttle_option_name] = new_hinted_handoff_throttle_in_kb
+            setattr(props, hh_throttle_option_name, new_hinted_handoff_throttle_in_kb)
         else:
-            dict(props).pop(hh_throttle_option_name)
+            setattr(props, hh_throttle_option_name, None)
 
     # NOTE: sleep for some time to avoid race between following restart and configmap object
     #       update which gets made in the above 'with scylla_yaml() as props' context manager.
@@ -972,15 +991,11 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):
 
     with scylla_yaml() as props:
         assert dict(props).get(hh_enabled_option_name) == new_hinted_handoff
-        if hh_enabled_option_name not in configmap_scylla_yaml_content:
-            props.pop(hh_enabled_option_name, None)
-        else:
-            props[hh_enabled_option_name] = configmap_scylla_yaml_content[hh_enabled_option_name]
-
+        setattr(props, hh_enabled_option_name, configmap_scylla_yaml_content.get(hh_enabled_option_name))
         if new_hinted_handoff_throttle_in_kb:
-            props.pop(hh_throttle_option_name, None)
+            setattr(props, hh_throttle_option_name, None)
         else:
-            props[hh_throttle_option_name] = configmap_scylla_yaml_content[hh_throttle_option_name]
+            setattr(props, hh_throttle_option_name, configmap_scylla_yaml_content[hh_throttle_option_name])
 
     time.sleep(5)
     db_cluster.restart_scylla()
@@ -993,7 +1008,7 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):
         db_cluster.wait_for_nodes_up_and_normal(nodes=db_cluster.nodes, verification_node=node)
 
     with scylla_yaml() as props:
-        assert configmap_scylla_yaml_content == props
+        assert configmap_scylla_yaml_content == props.model_dump(exclude_none=True, exclude_unset=True)
 
 
 @pytest.mark.readonly
