@@ -6,14 +6,19 @@ set -euo pipefail
 # ── 1. Install uv ────────────────────────────────────────────────────────
 if ! command -v uv &>/dev/null; then
     echo "Installing uv..."
-    curl -LsSf https://astral.sh/uv/0.12.23/install.sh | sh
+    curl -LsSf https://astral.sh/uv/0.13.0/install.sh | sh
     export PATH="$HOME/.local/bin:$PATH"
 fi
 
 echo "uv version: $(uv --version)"
 
+# confluent-kafka has no wheels for newer Pythons, so it builds against librdkafka >= 2.12.1.
+echo "Installing librdkafka-dev..."
+sudo apt-get update -q
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends librdkafka-dev
+
 # ── 2. Install managed Python ────────────────────────────────────────────
-PYTHON_VERSION=$(cat .python-version 2>/dev/null || echo "3.14")
+PYTHON_VERSION=$(cat .python-version 2>/dev/null || echo "3.15")
 echo "Installing Python $PYTHON_VERSION..."
 uv python install "$PYTHON_VERSION"
 

@@ -6,7 +6,7 @@ set -euo pipefail
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 
 # ── 1. Install managed Python and create venv ────────────────────────────
-PYTHON_VERSION=$(cat "$PROJECT_DIR/.python-version" 2>/dev/null || echo "3.14")
+PYTHON_VERSION=$(cat "$PROJECT_DIR/.python-version" 2>/dev/null || echo "3.15")
 
 if ! uv python list --only-installed 2>/dev/null | grep -q "$PYTHON_VERSION"; then
     echo "Installing Python $PYTHON_VERSION via uv..." >&2
