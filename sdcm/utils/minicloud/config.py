@@ -182,6 +182,9 @@ class MinicloudConfig:
     # arithmetic is deliberately conservative and a developer who knows the workload's
     # real footprint should not be blocked by it.
     skip_memory_check: bool = False
+    # minicloud_lock_guest_memory: lock guest RAM in the host instead of dropping Scylla's own
+    # --lock-memory in the guests. See MinicloudManager.start() for what each side changes.
+    lock_guest_memory: bool = True
 
     @property
     def region(self) -> str:
@@ -217,6 +220,7 @@ class MinicloudConfig:
         container_cpus = ""
         container_name = MINICLOUD_CONTAINER_NAME
         skip_memory_check = False
+        lock_guest_memory = True
         gcs_bucket = ""
         gcp_project = ""
         if params:
@@ -237,6 +241,8 @@ class MinicloudConfig:
             container_name = params.get("minicloud_container_name") or container_name
             state_dir = params.get("minicloud_state_dir") or state_dir
             skip_memory_check = bool(params.get("minicloud_skip_memory_check"))
+            if (explicit_lock := params.get("minicloud_lock_guest_memory")) is not None:
+                lock_guest_memory = bool(explicit_lock)
             gcs_bucket = params.get("minicloud_gcs_bucket") or ""
             # the SCT param wins over the environment: gce_project can be set from a
             # test-case yaml or defaults without ever reaching os.environ, and this project
@@ -275,6 +281,7 @@ class MinicloudConfig:
             log_file=os.path.join(state_dir, "minicloud.log"),
             backend=backend,
             skip_memory_check=skip_memory_check,
+            lock_guest_memory=lock_guest_memory,
         )
 
     @staticmethod

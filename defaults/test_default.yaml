@@ -435,6 +435,10 @@ minicloud_state_dir: ''
 minicloud_container_name: 'minicloud'
 minicloud_keep_alive: false
 minicloud_skip_memory_check: false
+# On: guest RAM is locked in the host (minicloud --lock-guest-memory, no container swap) and Scylla
+# keeps --lock-memory. Off: Scylla's --lock-memory is dropped on the guests instead, and the
+# container runs without any memory-locking flags - for development machines short on RAM.
+minicloud_lock_guest_memory: true
 # Backend-independent: GCE runs reach S3 for the same content (keystore, artifacts, downloads)
 minicloud_s3_passthrough_buckets: 'scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com'
 # Empty = prepare every SCT-supported AWS region (~2s each)
