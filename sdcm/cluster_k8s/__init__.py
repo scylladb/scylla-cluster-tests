@@ -37,6 +37,7 @@ from textwrap import dedent
 from threading import Lock, RLock
 from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Tuple, Callable
 
+import requests
 import yaml
 import kubernetes as k8s
 from kubernetes.client import exceptions as k8s_exceptions
@@ -1429,18 +1430,43 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
     def deploy_prometheus_operator(self) -> None:
         self.log.info("Deploy Prometheus operator")
         if not self.params.get("reuse_cluster"):
-            # NOTE: apply configs on the 'server' side to avoid following error:
-            #         The CustomResourceDefinition "prometheuses.monitoring.coreos.com" is invalid:\
-            #           metadata.annotations: Too long: must have at most 262144 bytes
-            self.apply_file(
-                PROMETHEUS_OPERATOR_CONFIG_PATH,
-                namespace=PROMETHEUS_OPERATOR_NAMESPACE,
-                modifiers=self._affinity_modifiers_for_monitoring_resources,
-                envsubst=False,
-                server_side=True,
-            )
+            with TemporaryDirectory() as tmp_dir_name:
+                # NOTE: apply configs on the 'server' side to avoid following error:
+                #         The CustomResourceDefinition "prometheuses.monitoring.coreos.com" is invalid:\
+                #           metadata.annotations: Too long: must have at most 262144 bytes
+                self.apply_file(
+                    self._get_prometheus_operator_config(tmp_dir_name),
+                    namespace=PROMETHEUS_OPERATOR_NAMESPACE,
+                    modifiers=self._affinity_modifiers_for_monitoring_resources,
+                    envsubst=False,
+                    server_side=True,
+                )
             time.sleep(3)
         self.kubectl("rollout status deployment prometheus-operator", namespace=PROMETHEUS_OPERATOR_NAMESPACE)
+        # NOTE: scylla-operator starts its ScyllaDBMonitoring controller only if Prometheus Operator CRDs exist
+        #       when it starts, so restart it in case it was deployed first.
+        if self.kubectl("get deployment scylla-operator", namespace=SCYLLA_OPERATOR_NAMESPACE, ignore_status=True).ok:
+            self.kubectl("rollout restart deployment scylla-operator", namespace=SCYLLA_OPERATOR_NAMESPACE)
+            self.kubectl("rollout status deployment scylla-operator", namespace=SCYLLA_OPERATOR_NAMESPACE)
+
+    def _get_prometheus_operator_config(self, dst_dir: str) -> str:
+        """Use the Prometheus Operator bundle the deployed scylla-operator is tested with, if it ships one"""
+        chart_version = self.scylla_operator_chart_version
+        # NOTE: 'latest' charts look like 'v1.22.0-13-g5aa939b-latest', released ones like 'v1.21.0'
+        git_ref = match.group(1) if (match := re.search(r"-g([0-9a-f]{7,})", chart_version)) else chart_version
+        url = (
+            f"https://raw.githubusercontent.com/scylladb/scylla-operator/{git_ref}"
+            "/examples/third-party/prometheus-operator.yaml"
+        )
+        resp = requests.get(url, timeout=120)
+        if not resp.ok:
+            self.log.warning("No Prometheus Operator bundle at %s (%s), using the SCT one", url, resp.status_code)
+            return PROMETHEUS_OPERATOR_CONFIG_PATH
+        config_path = os.path.join(dst_dir, "prometheus-operator.yaml")
+        with open(config_path, mode="w", encoding="utf-8") as config_file:
+            config_file.write(resp.text)
+        self.log.info("Using Prometheus Operator bundle from %s", url)
+        return config_path
 
     def deploy_scylla_cluster_monitoring(
         self, cluster_name: str, namespace: str, monitoring_type: str = "Platform"

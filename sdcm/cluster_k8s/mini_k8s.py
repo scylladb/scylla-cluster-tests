@@ -38,7 +38,6 @@ from sdcm.cluster_k8s import (
     COMMON_CONTAINERS_RESOURCES,
     INGRESS_CONTROLLER_CONFIG_PATH,
     K8S_LOCAL_VOLUME_PROVISIONER_VERSION,
-    LOCAL_MINIO_DIR,
     LOCAL_PROVISIONER_FILE,
     OPERATOR_CONTAINERS_RESOURCES,
     SCYLLA_MANAGER_AGENT_RESOURCES,
@@ -363,15 +362,6 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
         """
 
     @cached_property
-    def minio_images(self):
-        with open(LOCAL_MINIO_DIR + "/values.yaml", mode="r", encoding="utf8") as minio_config_stream:
-            minio_config = yaml.safe_load(minio_config_stream)
-            return [
-                f"{minio_config['image']['repository']}:{minio_config['image']['tag']}",
-                f"{minio_config['mcImage']['repository']}:{minio_config['mcImage']['tag']}",
-            ]
-
-    @cached_property
     def static_local_volume_provisioner_image(self):
         with open(LOCAL_PROVISIONER_FILE, mode="r", encoding="utf8") as provisioner_config_stream:
             for doc in yaml.safe_load_all(provisioner_config_stream):
@@ -694,7 +684,8 @@ class LocalKindCluster(LocalMinimalClusterBase):
 
             images_to_cache.append(self.scylla_image)
         if self.params.get("use_mgmt"):
-            images_to_cache.extend(self.minio_images)
+            # NOTE: minio images are pinned by digest, so nodes pull them by digest: a preloaded single-platform
+            #       copy under the same name breaks containerd's record of the pulled image.
             images_to_cache.append(f"scylladb/scylla-manager-agent:{SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER}")
             if self.params.get("mgmt_docker_image"):
                 images_to_cache.append(self.params.get("mgmt_docker_image"))
