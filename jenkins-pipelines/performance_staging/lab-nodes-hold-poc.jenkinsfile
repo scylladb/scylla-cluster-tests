@@ -1,0 +1,166 @@
+#!groovy
+
+// Proof of concept for docs/plans/jenkins/lab-builders-baremetal.md, Phase 0 (SCT-900).
+// Throwaway: it checks that the approach is feasible on the live Jenkins and gets deleted once
+// the plan's hold helper (Phase 3) lands.
+//
+// It is deliberately not tied to lab hosts. The defaults hold AWS ASG builders, which are
+// plentiful and disposable. Point runner_label / held_labels at spider/minipc labels once the
+// approach is proven.
+//
+// Jenkins is only the resource manager here. Each held slot is a branch that sits in
+// node(<label>) and runs nothing, which keeps that agent's single executor busy so Jenkins
+// schedules no other build on it. The runner branch, on another agent, then:
+//   1. gets the held agents' names and resolves their addresses without touching them
+//      (lab DNS for hostnames, EC2 API for ASG instance ids),
+//   2. writes and archives a BareMetalCredentials-shaped hosts file,
+//   3. inside hydra, syncs the SSH key from the KeyStore and reads that hosts file back from
+//      hydra's working directory, the way the baremetal backend will,
+//   4. SSHes to every held agent out of band (login and passwordless sudo),
+//   5. waits for "Release" (or hold_minutes), then lets every holder branch end.
+// Whatever ends the build (Release, failure, abort, timeout), the holder branches end with it
+// and the executors are freed.
+//
+// While the agents are held, queue any job on the held label: it must wait for, or get, a
+// different agent.
+
+properties([
+    parameters([
+        string(name: 'runner_label', defaultValue: 'aws-sct-builders-eu-west-1-v4-asg',
+               description: 'Node name or label of the agent that plays the SCT runner'),
+        string(name: 'held_labels',
+               defaultValue: 'aws-sct-builders-eu-west-1-v4-asg,aws-sct-builders-eu-west-1-v4-asg',
+               description: 'Comma-separated node names or labels, one held agent per entry (repeats allowed)'),
+        string(name: 'aws_region', defaultValue: 'eu-west-1',
+               description: 'Region used to resolve held agents named by an EC2 instance id'),
+        string(name: 'ssh_user', defaultValue: 'jenkins',
+               description: 'User the runner logs in as on the held agents'),
+        string(name: 'acquire_minutes', defaultValue: '20',
+               description: 'Fail if not every held agent is acquired by then (ASG scale-up included)'),
+        string(name: 'hold_minutes', defaultValue: '30',
+               description: 'Release automatically after this long if nobody presses Release'),
+    ])
+])
+
+if (params.held_labels == null) {
+    // First build of a new job: Jenkins only learns the parameters above by running it once.
+    currentBuild.result = 'NOT_BUILT'
+    currentBuild.description = 'parameters registered, nothing held'
+    return
+}
+
+def wanted = params.held_labels.split(',').collect { it.trim() }.findAll { it }
+if (!wanted) {
+    error('held_labels is empty')
+}
+def acquireMinutes = params.acquire_minutes as int
+def holdMinutes = params.hold_minutes as int
+def sshKey = '~/.ssh/scylla_test_id_ed25519'
+def heldBySlot = [:]
+def released = false
+
+timeout(time: acquireMinutes + holdMinutes + 20, unit: 'MINUTES') {
+    def branches = [:]
+
+    for (int i = 0; i < wanted.size(); i++) {
+        def slot = i
+        def label = wanted[i]
+        branches["hold ${slot}: ${label}"] = {
+            node(label) {
+                // Nothing runs on the held agent: the branch only keeps its executor busy.
+                heldBySlot[slot] = env.NODE_NAME
+                echo "Holding ${env.NODE_NAME}"
+                waitUntil(initialRecurrencePeriod: 5000, quiet: true) { released }
+                echo "Releasing ${env.NODE_NAME}"
+            }
+        }
+    }
+
+    branches['runner'] = {
+        node(params.runner_label) {
+            try {
+                timeout(time: acquireMinutes, unit: 'MINUTES') {
+                    waitUntil(initialRecurrencePeriod: 5000, quiet: true) { heldBySlot.size() == wanted.size() }
+                }
+                def hosts = (0..<wanted.size()).collect { heldBySlot[it] }
+                currentBuild.description = "runner ${env.NODE_NAME}, holding ${hosts.join(', ')}"
+
+                checkout scm
+                def findings = []
+
+                withCredentials([string(credentialsId: 'qa-aws-secret-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                                 string(credentialsId: 'qa-aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    // 1. Addresses, resolved on the runner. Static agents are named by hostname;
+                    //    ec2-fleet agents are named by instance id.
+                    def nodeList = hosts.collect { host ->
+                        def script = host ==~ /i-[0-9a-f]+/
+                            ? "aws ec2 describe-instances --region ${params.aws_region} --instance-ids ${host} " +
+                              "--query 'Reservations[0].Instances[0].PrivateIpAddress' --output text"
+                            : "getent ahostsv4 '${host}' | awk 'NR==1 {print \$1}'"
+                        def ip = sh(returnStdout: true, script: script).trim()
+                        if (!ip || ip == 'None') {
+                            findings << "${host}: could not resolve an address"
+                            ip = ''
+                        }
+                        [host: host, ip: ip]
+                    }
+
+                    // 2. Hosts file, in the shape sdcm/cluster_baremetal.py:BareMetalCredentials expects.
+                    def configName = "lab-poc-${env.BUILD_NUMBER}"
+                    def entries = nodeList.collect { [public_ip: it.ip, private_ip: it.ip] }
+                    writeJSON file: "${configName}.json", pretty: 2, json: [
+                        db_nodes: [username: params.ssh_user, node_list: entries.take(1)],
+                        loader_nodes: [username: params.ssh_user, node_list: entries.drop(1)],
+                        monitor_nodes: [username: params.ssh_user, node_list: []],
+                    ]
+                    archiveArtifacts artifacts: "${configName}.json"
+
+                    // 3. hydra runs with the checkout as its working dir and the home dir mounted:
+                    //    sync the SSH key the way sct.py does, then read the hosts file back the
+                    //    way the baremetal backend does (local <name>.json before S3).
+                    writeFile file: 'lab_poc_hydra_check.py', text: '''
+import sys
+from pathlib import Path
+from sdcm.keystore import KeyStore
+KeyStore().sync(keys=["scylla_test_id_ed25519"], local_path=Path.home() / ".ssh", permissions=0o600)
+config = KeyStore().get_baremetal_config(sys.argv[1])
+print("hosts file read by hydra:", [n["public_ip"] for section in config.values() for n in section["node_list"]])
+'''
+                    if (sh(returnStatus: true,
+                           script: "./docker/env/hydra.sh python3 lab_poc_hydra_check.py ${configName}") != 0) {
+                        findings << "hydra could not sync the SSH key or read ${configName}.json from its working directory"
+                    }
+
+                    // 4. Out-of-band SSH from the runner, the way SCT will do it.
+                    nodeList.findAll { it.ip }.each { n ->
+                        def rc = sh(returnStatus: true, script: """
+                            ssh -i ${sshKey} -o BatchMode=yes -o StrictHostKeyChecking=no \
+                                -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
+                                ${params.ssh_user}@${n.ip} 'hostname && sudo -n true && echo SUDO_OK'
+                        """)
+                        if (rc != 0) {
+                            findings << "${n.host}: ssh ${params.ssh_user}@${n.ip} with sudo -n failed (rc=${rc})"
+                        }
+                    }
+                }
+
+                if (findings) {
+                    error("POC findings:\n  - " + findings.join('\n  - '))
+                }
+
+                // 5. Hold until someone presses Release; running out of hold_minutes aborts the
+                //    build, which releases the agents the same way.
+                echo "All checks passed. Holding ${hosts.join(', ')} for up to ${holdMinutes} minutes."
+                timeout(time: holdMinutes, unit: 'MINUTES') {
+                    input id: 'Release', message: "Release ${hosts.join(', ')}?"
+                }
+            } finally {
+                released = true
+            }
+        }
+    }
+
+    // failFast: if the runner fails, holders still queued for an agent are cancelled too.
+    branches.failFast = true
+    parallel branches
+}
