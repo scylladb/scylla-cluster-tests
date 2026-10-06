@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 import abc
 import getpass
+import json
 import logging
 import os
 import re
@@ -58,6 +59,8 @@ DST_APISERVER_AUDIT_LOG = "/var/log/kubernetes/kube-apiserver-audit.log"
 CNI_CALICO_CONFIG = sct_abs_path("sdcm/k8s_configs/cni-calico.yaml")
 CNI_CALICO_VERSION = "v3.24.5"
 HELM_VERSION = "v3.12.1"
+# Keep in sync with KUBECTL_VERSION in the hydra Dockerfile
+DEFAULT_KUBECTL_VERSION = "1.34.2"
 LOGGER = logging.getLogger(__name__)
 POOL_LABEL_NAME = "minimal-k8s-nodepool"
 
@@ -142,9 +145,13 @@ class MinimalK8SOps:
         )
 
         # NOTE: if running in Hydra then it must have '/dev' mount from host as 'rw'
-        for i in range(7, 41):
-            cmd = f"if ! [ -e /dev/loop{i} ]; then mknod -m 660 /dev/loop{i} b 7 {i}; fi"
-            node.remoter.sudo(f'bash -cxe "{cmd}"')
+        # Kind nodes see a snapshot of host's /dev, so loop devices must exist before the cluster is created.
+        # Add spare ones above the highest one in use, since a dev host may already use many (i.e. snaps).
+        cmd = (
+            'last=$(losetup -a | sed -n "s#^/dev/loop\\([0-9]*\\):.*#\\1#p" | sort -n | tail -1); '
+            "for i in $(seq 0 $(( ${last:-0} + 40 ))); do [ -e /dev/loop$i ] || mknod -m 660 /dev/loop$i b 7 $i; done"
+        )
+        node.remoter.sudo(f"bash -ce '{cmd}'")
 
     @classmethod
     def setup_docker(cls, node: cluster.BaseNode, target_user: str = None) -> None:
@@ -182,7 +189,7 @@ class MinimalK8SOps:
     @staticmethod
     def setup_kubectl_ubuntu(node: cluster.BaseNode, kubectl_version: str) -> None:
         kubectl_curl = curl_with_retry(
-            f"https://storage.googleapis.com/kubernetes-release/release/v{kubectl_version}/bin/linux/amd64/kubectl",
+            f"https://dl.k8s.io/release/v{kubectl_version}/bin/linux/amd64/kubectl",
             silent=True,
             follow_redirects=True,
             fail_early=True,
@@ -238,7 +245,8 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
         values = super().get_scylla_cluster_helm_values(
             cpu_limit=cpu_limit, memory_limit=memory_limit, pool_name=pool_name, cluster_name=cluster_name
         )
-        values.set("cpuset", False)
+        # NOTE: pinned CPUs (kubelet static CPU manager) keep scylla from seeing all host CPUs
+        values.set("cpuset", True)
         values.set("developerMode", False)
         values.set("hostNetworking", False)
         return values
@@ -278,10 +286,11 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
 
     @cached_property
     def local_kubectl_version(self):
-        # Example of kubectl command output:
-        #   $ kubectl version --client --short
-        #   Client Version: v1.18.5
-        return LOCALRUNNER.run("kubectl version --client").stdout.rsplit(None, 1)[-1][1:]
+        # Locally (outside hydra) kubectl may be absent: that's the reason we're asked to install it
+        result = LOCALRUNNER.run("kubectl version --client -o json", ignore_status=True)
+        if not result.ok:
+            return DEFAULT_KUBECTL_VERSION
+        return json.loads(result.stdout)["clientVersion"]["gitVersion"].lstrip("v")
 
     def docker_pull(self, image):
         self.log.info("Pull `%s' to docker environment", image)
@@ -525,6 +534,16 @@ class LocalKindCluster(LocalMinimalClusterBase):
         if self.params.get("k8s_log_api_calls"):
             audit_log_path_option = f"audit-log-path: {DST_APISERVER_AUDIT_LOG}"
         pod_subnet, service_subnet = "10.16.0.0/16", "10.19.0.0/16"
+        # Let kubelet pull with host's Docker Hub login, otherwise nodes hit the anonymous pull rate limit
+        docker_config = os.path.expanduser("~/.docker/config.json")
+        docker_auth_mount = (
+            f"""
+            - hostPath: {docker_config}
+              containerPath: /var/lib/kubelet/config.json
+              readOnly: true"""
+            if os.path.exists(docker_config)
+            else ""
+        )
         script_start_part = f"""
         sysctl fs.protected_regular=0
         ip link set docker0 promisc on
@@ -542,6 +561,8 @@ class LocalKindCluster(LocalMinimalClusterBase):
           kind: KubeletConfiguration
           evictionHard:
             nodefs.available: 0%
+          cpuManagerPolicy: static
+          reservedSystemCPUs: "0"
         nodes:
           - role: control-plane
             kubeadmConfigPatches:
@@ -567,7 +588,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
             extraMounts:
             - hostPath: {SRC_APISERVER_AUDIT_POLICY}
               containerPath: {DST_APISERVER_AUDIT_POLICY}
-              readOnly: true
+              readOnly: true{docker_auth_mount}
 
         """
         for node_pool_type, node_num in (
@@ -581,6 +602,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
           - role: worker
             labels:
               {POOL_LABEL_NAME}: {node_pool_type}
+            extraMounts:{docker_auth_mount or " []"}
                 """
         script_end_part = f"""
         EndOfSpec
@@ -612,10 +634,21 @@ class LocalKindCluster(LocalMinimalClusterBase):
     def stop_k8s_software(self):
         self.host_node.remoter.run("/var/tmp/kind delete cluster", ignore_status=True)
 
+    def kind_load_image(self, image: str) -> None:
+        # 'kind load docker-image' fails for multi-arch images on Docker's containerd image store (Docker 29+),
+        # so fall back to an archive holding only the platform the kind nodes run.
+        archive = f"/tmp/kind-load-{image.replace('/', '_').replace(':', '_')}.tar"
+        self.host_node.remoter.run(
+            f"/var/tmp/kind load docker-image {image} || "
+            f"(docker save --platform linux/amd64 {image} -o {archive} && /var/tmp/kind load image-archive {archive}); "
+            f"rm -f {archive}",
+            ignore_status=True,
+        )
+
     def load_images(self, images_list: [str]):
         for image in images_list:
             self.docker_pull(image)
-            self.host_node.remoter.run(f"/var/tmp/kind load docker-image {image}", ignore_status=True)
+            self.kind_load_image(image)
 
     def on_deploy_completed(self):
         images_to_cache, images_to_retag, new_scylla_image_tag = [], {}, ""
@@ -684,7 +717,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
             self.params["scylla_version"] = new_scylla_image_tag
         for src_image, dst_image in images_to_retag.items():
             self.docker_tag(src_image, dst_image)
-            self.host_node.remoter.run(f"/var/tmp/kind load docker-image {dst_image}", ignore_status=True)
+            self.kind_load_image(dst_image)
 
         self.setup_pod_network_connectivity()
 

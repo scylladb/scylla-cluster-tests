@@ -564,4 +564,4 @@ Specifies the version of the mini K8S cluster to be used.
 **type:** str (appendable)
 
 **backend overrides:**
-- `0.20.0`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce
+- `0.33.0`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce
