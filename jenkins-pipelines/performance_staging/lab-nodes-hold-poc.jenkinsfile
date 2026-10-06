@@ -4,9 +4,12 @@
 // Throwaway: it checks that the approach is feasible on the live Jenkins and gets deleted once
 // the plan's hold helper (Phase 3) lands.
 //
-// It is deliberately not tied to lab hosts. The defaults hold AWS ASG builders, which are
-// plentiful and disposable. Point runner_label / held_labels at spider/minipc labels once the
-// approach is proven.
+// It runs in two steps, picked with the `target` parameter:
+//   aws-asg - step 1: runner and held agents are AWS ASG builders, plentiful and disposable.
+//   lab     - step 2: the runner is a minipc and the held agents are one spider and one minipc,
+//             all chosen by label, so it also proves the lab network path. Run it when the lab is
+//             quiet (weekend; not Friday night, when the weekly-minicloud cron uses the minipcs).
+// runner_label / held_labels / acquire_minutes override the target's defaults when set.
 //
 // Jenkins is only the resource manager here. Each held slot is a branch that sits in
 // node(<label>) and runs nothing, which keeps that agent's single executor busy so Jenkins
@@ -24,36 +27,54 @@
 // While the agents are held, queue any job on the held label: it must wait for, or get, a
 // different agent.
 
+def targets = [
+    'aws-asg': [
+        runner: 'aws-sct-builders-eu-west-1-v4-asg',
+        held: 'aws-sct-builders-eu-west-1-v4-asg,aws-sct-builders-eu-west-1-v4-asg',
+        acquireMinutes: '20',
+    ],
+    // spiders carry builders_x86, minipcs carry minicloud-kvm-builders-rolling-upgrades. Lab hosts
+    // are taken only when idle, so acquiring can wait for running dtest/minicloud builds to end.
+    'lab': [
+        runner: 'minicloud-kvm-builders-rolling-upgrades',
+        held: 'builders_x86,minicloud-kvm-builders-rolling-upgrades',
+        acquireMinutes: '120',
+    ],
+]
+
 properties([
     parameters([
-        string(name: 'runner_label', defaultValue: 'aws-sct-builders-eu-west-1-v4-asg',
-               description: 'Node name or label of the agent that plays the SCT runner'),
-        string(name: 'held_labels',
-               defaultValue: 'aws-sct-builders-eu-west-1-v4-asg,aws-sct-builders-eu-west-1-v4-asg',
-               description: 'Comma-separated node names or labels, one held agent per entry (repeats allowed)'),
+        choice(name: 'target', choices: ['aws-asg', 'lab'],
+               description: 'Which agents to use: aws-asg (step 1) or lab spider/minipc hosts (step 2)'),
+        string(name: 'runner_label', defaultValue: '',
+               description: 'Node name or label of the runner agent; empty = the target default'),
+        string(name: 'held_labels', defaultValue: '',
+               description: 'Comma-separated node names or labels, one held agent per entry (repeats allowed); empty = the target default'),
         string(name: 'aws_region', defaultValue: 'eu-west-1',
                description: 'Region used to resolve held agents named by an EC2 instance id'),
         string(name: 'ssh_user', defaultValue: 'jenkins',
                description: 'User the runner logs in as on the held agents'),
-        string(name: 'acquire_minutes', defaultValue: '20',
-               description: 'Fail if not every held agent is acquired by then (ASG scale-up included)'),
+        string(name: 'acquire_minutes', defaultValue: '',
+               description: 'Fail if not every held agent is acquired by then; empty = the target default'),
         string(name: 'hold_minutes', defaultValue: '30',
                description: 'Release automatically after this long if nobody presses Release'),
     ])
 ])
 
-if (params.held_labels == null) {
+if (params.target == null) {
     // First build of a new job: Jenkins only learns the parameters above by running it once.
     currentBuild.result = 'NOT_BUILT'
     currentBuild.description = 'parameters registered, nothing held'
     return
 }
 
-def wanted = params.held_labels.split(',').collect { it.trim() }.findAll { it }
+def target = targets[params.target]
+def runnerLabel = params.runner_label?.trim() ?: target.runner
+def wanted = (params.held_labels?.trim() ?: target.held).split(',').collect { it.trim() }.findAll { it }
 if (!wanted) {
     error('held_labels is empty')
 }
-def acquireMinutes = params.acquire_minutes as int
+def acquireMinutes = (params.acquire_minutes?.trim() ?: target.acquireMinutes) as int
 def holdMinutes = params.hold_minutes as int
 def sshKey = '~/.ssh/scylla_test_id_ed25519'
 def heldBySlot = [:]
@@ -77,13 +98,13 @@ timeout(time: acquireMinutes + holdMinutes + 20, unit: 'MINUTES') {
     }
 
     branches['runner'] = {
-        node(params.runner_label) {
+        node(runnerLabel) {
             try {
                 timeout(time: acquireMinutes, unit: 'MINUTES') {
                     waitUntil(initialRecurrencePeriod: 5000, quiet: true) { heldBySlot.size() == wanted.size() }
                 }
                 def hosts = (0..<wanted.size()).collect { heldBySlot[it] }
-                currentBuild.description = "runner ${env.NODE_NAME}, holding ${hosts.join(', ')}"
+                currentBuild.description = "${params.target}: runner ${env.NODE_NAME}, holding ${hosts.join(', ')}"
 
                 checkout scm
                 def findings = []
