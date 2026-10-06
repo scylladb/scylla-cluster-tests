@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Weekly ScyllaDB perf-simple-query microbenchmark run directly on a single
+    c7g.large (ARM) DB node, with no loaders and no monitor. The pipeline selects
+    the read or write mode; results are compared per release in Argus. Also the base
+    config for the x86_64 variant.
+  test_type: microbenchmarking
+  tier: release
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools: []
+  features: []
+  team_ownership: core-test-infra
+
 test_duration: 60
 backtrace_decoding: false
 cluster_backend: 'aws'

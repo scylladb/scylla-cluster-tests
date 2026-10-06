@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Search for the best throughput configuration: raises the cassandra-stress thread
+    count step by step on a 3-node cluster and stops when throughput gains fall
+    below 5%, for write, read and mixed workloads. Argus reporting is off.
+  test_type: performance
+  tier: ondemand
+  duration_class: long
+  supported_backends:
+    - aws
+    - gce
+  stress_tools:
+    - cassandra-stress
+  features: []
+  team_ownership: core-test-infra
+
 test_duration: 3000
 
 stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop seq=1..30000000"

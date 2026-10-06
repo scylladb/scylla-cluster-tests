@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Predefined-throughput-steps performance test driven by latte instead of
+    cassandra-stress: preloads 650M rows into a 3-node i8g.4xlarge vnodes cluster
+    with 4 loaders, then measures latency at fixed throughput steps for write, read,
+    disk-only read and mixed sub-tests.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  features:
+    - vnodes
+  team_ownership: core-test-infra
+
 test_duration: 500
 
 # Note: latte's --duration flag accepts an integer iteration count (number of cycles to run)

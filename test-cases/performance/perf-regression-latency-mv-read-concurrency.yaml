@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Reproducer for the hardest materialized-view update case on a 3-node i4i.2xlarge
+    cluster: measures throttled cassandra-stress read latency on one table while
+    scylla-bench rewrites another table before, during and after building a view on
+    it. A known open problem, not for regular runs.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+    - scylla-bench
+  workload: mv
+  features: []
+  team_ownership: core-test-infra
+
 test_duration: 680
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=100000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..2000000",
                     "scylla-bench -workload=sequential -mode=write -replication-factor=2 -partition-count=10 -partition-offset=0 -clustering-row-count=1000000 -clustering-row-size=uniform:100..5120 -concurrency=1000 -rows-per-request=10 -timeout=30s -connection-count 1000  -consistency-level=all",

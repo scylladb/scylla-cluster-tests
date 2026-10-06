@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Materialized-view write performance test on a 6-node i3.2xlarge cluster:
+    measures cassandra-stress user-profile inserts into a base table without views.
+    The with-view stress_cmd_mv steps are commented out; marked as not yet
+    qualified, and no pipeline uses it.
+  test_type: performance
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mv
+  features: []
+  team_ownership: core-test-infra
+
 # TODO: need to qualify
 test_duration: 90
 
