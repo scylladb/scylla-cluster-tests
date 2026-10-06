@@ -23,6 +23,13 @@ nemesis_selector: 'not enospc and not manager_operation'
 # And if we do repairs, it takes too long making data validation exceed retries.
 use_mgmt: false
 
+# Timeouts tuned for 5000 tables, see https://scylladb.atlassian.net/browse/SCT-281
+# DECOMMISSION took up to 55 min and timed out at the 22-30 min hard timeout; x5 raises it to ~2 h
+# REPAIR (nodetool cluster repair) took 3.5-6 h and timed out at the 3 h soft timeout; x3 raises it to 9 h
+adaptive_timeout_multipliers:
+  decommission: 5
+  repair: 3
+
 root_disk_size_monitor: 120
 root_disk_size_runner: 120
 
