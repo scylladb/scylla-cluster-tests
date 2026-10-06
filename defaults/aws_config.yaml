@@ -1,5 +1,4 @@
 instance_provision: 'spot'
-instance_provision_fallback_on_demand: true
 region_name:
   - eu-west-1
 user_credentials_path: '~/.ssh/scylla_test_id_ed25519'

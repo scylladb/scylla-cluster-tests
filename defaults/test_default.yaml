@@ -54,6 +54,7 @@ seeds_selector: "all"
 seeds_num: 1
 
 instance_provision: "spot"
+instance_provision_fallback_on_demand: false
 
 minicloud_endpoint_url: ""
 

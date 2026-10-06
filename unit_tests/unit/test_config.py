@@ -1945,3 +1945,24 @@ def test_use_dns_names_gce_multi_dc_accepted(monkeypatch):
     conf = sct_config.SCTConfiguration()
 
     assert conf.gce_datacenters == ["us-east1", "us-west1"]
+
+
+@pytest.mark.parametrize(
+    "backend, config_file, expected",
+    [
+        ("aws", "test-cases/longevity/longevity-10gb-3h.yaml", False),
+        ("azure", "test-cases/longevity/longevity-10gb-3h.yaml", False),
+        ("aws", "test-cases/artifacts/ami.yaml", True),
+        ("aws", "test-cases/microbenchmarking/amazon_perf_simple_query_ARM.yaml", True),
+    ],
+)
+def test_fallback_on_demand_is_opt_in(monkeypatch, backend, config_file, expected):
+    """SCT-1005: backend defaults must not turn spot shortages into on-demand runs; only explicit test cases do."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_AZURE_IMAGE_DB", "image-dummy")
+    monkeypatch.setenv("SCT_CONFIG_FILES", config_file)
+
+    conf = sct_config.SCTConfiguration()
+    # strict `is`: None must fail too - ProvisionPlanBuilder rejects it as a non-bool
+    assert conf.get("instance_provision_fallback_on_demand") is expected

@@ -166,9 +166,9 @@ class CommonConfigMixin(BaseModel):
     )
     instance_provision_fallback_on_demand: Boolean = SctField(
         description="Create the instance on_demand when the requested `instance_provision` type could not be "
-        "obtained, rather than failing the run. Expected values: true|false. Defaults to **true** on AWS and "
-        "Azure and to false elsewhere - see SCT-1076, which proposes making it opt-in per test family, since "
-        "it turns a spot shortage into a silent on-demand purchase.",
+        "obtained, rather than failing the run. Expected values: true|false (default - false). Opt-in per test "
+        "case (artifact tests set it), since it turns a spot shortage into an on-demand purchase at several "
+        "times the cost.",
     )
     instance_type_db: String = SctField(
         description="AWS image type of the db node",

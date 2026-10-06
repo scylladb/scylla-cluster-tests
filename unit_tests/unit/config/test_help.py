@@ -59,8 +59,8 @@ def test_dump_help_config_markdown_types(help_markdown, field_name, type_text):
         pytest.param(
             "instance_provision_fallback_on_demand",
             "**backend overrides:**\n- `True`: aws, azure, aws-siren, k8s-local-kind-aws, k8s-eks",
-            True,
-            id="instance_provision_fallback_on_demand-true-overrides",
+            False,
+            id="instance_provision_fallback_on_demand-no-backend-overrides",
         ),
         pytest.param(
             "use_preinstalled_scylla",
