@@ -5838,6 +5838,22 @@ class BaseScyllaCluster:
         self.log.info("minicloud: reserving %s of guest memory for the OS (--reserve-memory)", reserve)
         return f"{args} --reserve-memory {reserve}".strip()
 
+    def _drop_minicloud_scylla_memory_lock(self, node: BaseNode) -> None:
+        """Start Scylla without --lock-memory on a minicloud guest that is not locked in the host.
+
+        scylla_setup (and so every Scylla machine image) writes --lock-memory=1 to memory.conf,
+        and with it Seastar prefaults all of its memory: every guest soon takes its whole RAM
+        from the host. With minicloud_lock_guest_memory off, guests should only take the host
+        RAM they touch. Developer mode does not turn the lock off; only memory.conf does.
+        """
+        if not is_minicloud_active(self.params) or self.params.get("minicloud_lock_guest_memory"):
+            return
+        node.log.info("minicloud: dropping --lock-memory from /etc/scylla.d/memory.conf")
+        node.remoter.sudo(
+            "sed -i 's/--lock-memory=1//' /etc/scylla.d/memory.conf",
+            ignore_status=True,  # no memory.conf means nothing locks memory anyway
+        )
+
     def get_rack_nodes(self, rack: int) -> list:
         return sorted([node for node in self.nodes if node.rack == rack], key=lambda n: n.name)
 
@@ -6664,6 +6680,7 @@ class BaseScyllaCluster:
             with remote_file(remoter=node.remoter, remote_path=f"/etc/scylla.d/{config_file.name}", sudo=True) as fobj:
                 fobj.truncate(0)  # first clear the file
                 fobj.write(config_file.read_text())
+        self._drop_minicloud_scylla_memory_lock(node)
 
         # code to increase java heap memory to scylla-jmx (because of #7609)
         if jmx_memory := self.params.get("jmx_heap_memory"):

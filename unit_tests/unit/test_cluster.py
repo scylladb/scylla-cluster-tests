@@ -1343,6 +1343,30 @@ def test_minicloud_reserve_memory_defers_to_a_test_that_sized_scylla_itself(exis
     assert _append_minicloud_reserve(args) == args
 
 
+def _drop_minicloud_memory_lock(**params) -> unittest.mock.MagicMock:
+    """Run the memory.conf hook against a stand-in cluster and return the node it touched."""
+    cluster = SimpleNamespace(params={"minicloud_endpoint_url": "http://localhost:5000", **params})
+    node = unittest.mock.MagicMock()
+    BaseScyllaCluster._drop_minicloud_scylla_memory_lock(cluster, node)
+    return node
+
+
+def test_minicloud_without_guest_locking_drops_scylla_memory_lock():
+    node = _drop_minicloud_memory_lock(minicloud_lock_guest_memory=False)
+    node.remoter.sudo.assert_called_once_with(
+        "sed -i 's/--lock-memory=1//' /etc/scylla.d/memory.conf", ignore_status=True
+    )
+
+
+@pytest.mark.parametrize(
+    "params",
+    [{"minicloud_lock_guest_memory": True}, {"minicloud_endpoint_url": "", "minicloud_lock_guest_memory": False}],
+    ids=["guest-locking-on", "not-minicloud"],
+)
+def test_scylla_memory_lock_kept(params):
+    assert not _drop_minicloud_memory_lock(**params).remoter.sudo.called
+
+
 def test_minicloud_reserve_memory_is_not_confused_by_an_unrelated_memory_flag():
     args = f"{MINICLOUD_BASE_SCYLLA_ARGS} --max-memory-for-unlimited-query-soft-limit 1M"
     assert _append_minicloud_reserve(args) == f"{args} --reserve-memory 3072M"
