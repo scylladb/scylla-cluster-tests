@@ -2426,14 +2426,14 @@ class BaseNode(AutoSshContainerMixin):
             if package_version < packaging.version.parse("3"):
                 install_cmds = dedent("""
                     tar xvfz ./unified_package.tar.gz
-                    ./install.sh --housekeeping
+                    ./install.sh
                     rm -f /tmp/scylla.yaml
                 """)
             else:
                 install_cmds = dedent("""
                     tar xvfz ./unified_package.tar.gz
                     cd ./scylla-*
-                    ./install.sh --housekeeping
+                    ./install.sh
                     cd -
                     rm -f /tmp/scylla.yaml
                 """)
