@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Alternator longevity test of about 3 hours of load on a 6-node cluster with SisyphusMonkey.
+    YCSB runs 50/50 read and update on an LWT table and a non-LWT table, while cassandra-stress
+    runs CQL write and read workloads at QUORUM on the same cluster.
+  test_type: longevity
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+    - ycsb
+  workload: alternator
+  team_ownership: scylladb/alternator
+
 test_duration: 360
 prepare_write_cmd:
   - >-

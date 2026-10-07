@@ -19,7 +19,7 @@ Bulk-add or audit `test_metadata:` labels across test-case YAML files.
 3. Check `stress_cmd*` fields → add tools to `stress_tools`
 4. Check `server_encrypt`, `n_db_nodes` → add to `features`
 5. Check `cluster_backend` → add to `supported_backends` (or leave null for all)
-6. Set `team_ownership` to the QA team responsible for maintaining this test (see taxonomy)
+6. Set `team_ownership` to the team responsible for maintaining this test: a QA team, or the GitHub team (`scylladb/<team>`) that owns the feature (see taxonomy)
 7. Write a 2-4 sentence `description` explaining what the test validates
 8. Run the `lint-test-docs` CLI with `--test-case-file` flag pointing to your file to verify
 

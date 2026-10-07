@@ -41,7 +41,7 @@ It flows to Argus at test runtime.
 | `stress_tools` | list | no | tool names from stress commands |
 | `workload` | Literal | no | write/read/mixed/scan/counter |
 | `features` | list | no | tls-ssl, multi-dc, cdc, etc. |
-| `team_ownership` | Literal | no | QA team responsible for maintaining this test |
+| `team_ownership` | Literal | no | QA team, or GitHub team (`scylladb/<team>`), responsible for maintaining this test |
 
 Note: `nemesis_labels` appears in older examples but is not currently a validated
 `TestMetadata` field (no taxonomy/pydantic support) — omit it from new
