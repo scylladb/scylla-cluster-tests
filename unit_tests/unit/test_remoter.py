@@ -604,7 +604,9 @@ def test_minicloud_channel_timeout_alert_activates_from_test_config(_clean_minic
     with (
         patch.dict(os.environ, {}, clear=True),  # no SCT_MINICLOUD_ENDPOINT_URL anywhere
         patch("sdcm.test_config.TestConfig") as test_config,
-        patch.object(TestFrameworkEvent, "publish_or_dump", autospec=True) as publish,
+        patch.object(
+            TestFrameworkEvent, "publish_or_dump", autospec=True, side_effect=TestFrameworkEvent.dont_publish
+        ) as publish,
     ):
         test_config.return_value.tester_obj.return_value = tester
         for _ in range(MINICLOUD_CHANNEL_TIMEOUT_ALERT_THRESHOLD):
@@ -619,7 +621,9 @@ def test_minicloud_channel_timeout_alert_survives_a_missing_tester(_clean_minicl
     with (
         patch.dict(os.environ, {}, clear=True),
         patch("sdcm.test_config.TestConfig") as test_config,
-        patch.object(TestFrameworkEvent, "publish_or_dump", autospec=True) as publish,
+        patch.object(
+            TestFrameworkEvent, "publish_or_dump", autospec=True, side_effect=TestFrameworkEvent.dont_publish
+        ) as publish,
     ):
         test_config.return_value.tester_obj.return_value = None
         for _ in range(MINICLOUD_CHANNEL_TIMEOUT_ALERT_THRESHOLD):
@@ -633,7 +637,9 @@ def test_minicloud_channel_timeout_alert_counts_every_guest_together(_clean_mini
     hosts = [f"10.0.0.{index}" for index in range(1, 9)]
     with (
         patch("sdcm.utils.minicloud.endpoint.is_minicloud_active", return_value=True),
-        patch.object(TestFrameworkEvent, "publish_or_dump", autospec=True) as publish,
+        patch.object(
+            TestFrameworkEvent, "publish_or_dump", autospec=True, side_effect=TestFrameworkEvent.dont_publish
+        ) as publish,
     ):
         for _ in range(2):  # 16 timeouts, no single guest above 2
             for host in hosts:
@@ -654,7 +660,9 @@ def test_minicloud_channel_timeout_alert_fires_once_with_a_real_event(_clean_min
     runner = SimpleNamespace(hostname="10.0.0.9")
     with (
         patch("sdcm.utils.minicloud.endpoint.is_minicloud_active", return_value=True),
-        patch.object(TestFrameworkEvent, "publish_or_dump", autospec=True) as publish,
+        patch.object(
+            TestFrameworkEvent, "publish_or_dump", autospec=True, side_effect=TestFrameworkEvent.dont_publish
+        ) as publish,
     ):
         for _ in range(MINICLOUD_CHANNEL_TIMEOUT_ALERT_THRESHOLD * 3):
             RemoteLibSSH2CmdRunner._record_minicloud_channel_timeout(runner)
