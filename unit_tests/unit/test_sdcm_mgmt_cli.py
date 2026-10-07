@@ -73,26 +73,27 @@ def test_parsed_client_version(version_string, expected):
     assert result == expected
 
 
-def _manager_node_mock(*, is_docker, container_name="sct-manager-server"):
+def _manager_node_mock(*, is_docker, is_kubernetes=False, container_name="sct-manager-server"):
     node = mock.MagicMock()
     node.is_docker.return_value = is_docker
+    node.is_kubernetes.return_value = is_kubernetes
     node.parent_cluster.manager_container_name = container_name if is_docker else None
     return node
 
 
 @pytest.mark.parametrize(
-    "is_docker, expected_runner",
-    [(False, SCTool), (True, SCToolDocker)],
-    ids=["host", "docker"],
+    "is_docker, is_kubernetes, expected_runner",
+    [(False, False, SCTool), (True, False, SCToolDocker), (True, True, SCTool)],
+    ids=["host", "docker", "k8s-pod"],
 )
-def test_every_sctool_user_gets_the_backend_specific_runner(is_docker, expected_runner):
+def test_every_sctool_user_gets_the_backend_specific_runner(is_docker, is_kubernetes, expected_runner):
     """A ManagerCluster or a task must not fall back to the host runner on Docker.
 
     On Docker sctool only exists inside the manager container. Objects that built their own
     plain SCTool would run `sudo sctool` on the monitor node, where there is no such binary,
     so `cluster list` returns nothing and every backup/repair fails.
     """
-    node = _manager_node_mock(is_docker=is_docker)
+    node = _manager_node_mock(is_docker=is_docker, is_kubernetes=is_kubernetes)
 
     # SCToolDocker subclasses SCTool, so isinstance() would pass either way -- compare exact types.
     assert type(create_sctool(manager_node=node)) is expected_runner
