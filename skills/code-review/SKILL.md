@@ -4,8 +4,9 @@ description: >-
   Guides AI-assisted code review of SCT pull requests. Use when reviewing
   a PR, checking a diff for correctness, evaluating method signature changes
   across class hierarchies, verifying override compatibility, checking import
-  conventions, error handling patterns, backend impact, test coverage, or
-  provision label requirements. Covers inheritance safety, polymorphic method
+  conventions, error handling patterns, backend impact, test coverage,
+  provision label requirements, or trigger-matrix arch after a test's DB
+  instance type changes. Covers inheritance safety, polymorphic method
   audits, and SCT-specific review criteria.
 ---
 
@@ -181,6 +182,14 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
 - Localhost/metadata calls may use `retry=0` but must still use the utility for consistent `--connect-timeout`
 - Full convention reference: [docs/http-retry-conventions.md](../../docs/http-retry-conventions.md)
 
+### Check 10: DB Instance Type vs. Trigger-Matrix Arch
+
+**Trigger**: PR changes `instance_type_db`, `sizing_db` (or its `arch`) in a `test-cases/` or `configurations/` file, or the test config list of a jenkinsfile — including backports to `branch-*`.
+
+- Follow the change to the job's entries in `configurations/triggers/*.yaml`; if the DB arch changes, the entry's `arch` must change for the releases this branch serves
+- Verify with `uv run sct.py trigger-matrix-audit --remote upstream`
+- How to split an entry by release: [review-checklist.md](references/review-checklist.md#trigger-matrix-arch-skillmd-check-10)
+
 ## Reference Index
 
 | File | Content |
@@ -206,3 +215,4 @@ A complete code review:
 - [ ] Commit message validated — Conventional Commits format followed
 - [ ] Missing code identified — defaults, docstrings, tests, other backends
 - [ ] HTTP resilience verified — no bare curl or requests calls without retry
+- [ ] Trigger-matrix arch checked — DB instance/arch changes are reflected in `configurations/triggers/*.yaml`

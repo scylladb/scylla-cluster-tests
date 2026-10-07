@@ -218,3 +218,44 @@ body (min 30 chars)
 - Subject: 10-120 characters, no trailing period
 - Header (type + scope + subject): maximum 100 characters
 - Body: minimum 30 characters, max 120 chars per line
+
+---
+
+## Trigger-Matrix Arch (SKILL.md Check 10)
+
+### Trigger
+
+PR changes `instance_type_db`, `sizing_db` (or its `arch`) in a `test-cases/` or `configurations/` file, or the
+test config list of a jenkinsfile — including backports to `branch-*`.
+
+### Why This Matters
+
+A trigger-matrix entry's `arch` never reaches the Jenkins job: the job gets `scylla_version` and runs on whatever
+its own config resolves to, on the SCT branch of that release (`scylla-2026.1/*` jobs run `branch-2026.1`).
+`<branch>/ami` starts each trigger once per arch AMI, and each run keeps only the entries of its own arch. A stale
+entry fires the job from the wrong run, or twice (SCT-1168 — see [common-issues.md](common-issues.md)).
+
+### How to Check
+
+1. Find the jobs using the changed file: `grep -rln "<file>" jenkins-pipelines/`
+2. Find their entries: `grep -rn "<job-name>" configurations/triggers/`
+3. Work out the new DB arch: a literal `instance_type_db` (`i8g`, `c7g`, `im4gn` are Graviton), or `sizing_db` —
+   without `arch:` it resolves to Graviton on AWS
+4. If it differs from the entry's arch (`arch:`, else an `aarch64` label, else x86_64), the entry must change for the
+   releases this branch serves. When branches differ, split it by version range — the open-ended entry follows
+   master, since new branches inherit it:
+
+```yaml
+  - job_name: "tier1/longevity-mv-si-4days-streaming-test"
+    arch: "x86_64"                               # i4i on these branches
+    include_versions: ["2024", "2025", "2026.1"]
+  - job_name: "tier1/longevity-mv-si-4days-streaming-test"
+    arch: "aarch64"                              # sizing_db → i8g from 2026.2 on
+    exclude_versions: ["2024", "2025", "2026.1"]
+```
+
+5. Verify: `uv run sct.py trigger-matrix-audit --remote upstream` (after
+   `git fetch upstream 'refs/heads/branch-20*:refs/remotes/upstream/branch-20*'`)
+
+Entries on two arches whose version ranges overlap fail matrix validation; the weekly
+`QA-tools/trigger-matrix-arch-audit` job mails any drift that slips through.
