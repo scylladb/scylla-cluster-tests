@@ -167,12 +167,13 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
         )
     k8s_cluster.wait_all_node_pools_to_be_ready()
 
-    k8s_cluster.create_ebs_csi_driver_serviceaccount()
-    k8s_cluster.eks_client.create_addon(
-        clusterName=k8s_cluster.short_cluster_name,
-        addonName="aws-ebs-csi-driver",
-    )
-    k8s_cluster.deploy_ebs_csi_driver()
+    if not params.get("reuse_cluster"):
+        k8s_cluster.create_ebs_csi_driver_serviceaccount()
+        k8s_cluster.eks_client.create_addon(
+            clusterName=k8s_cluster.short_cluster_name,
+            addonName="aws-ebs-csi-driver",
+        )
+        k8s_cluster.deploy_ebs_csi_driver()
 
     k8s_cluster.deploy_cert_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
     if params.get("k8s_enable_sni"):
@@ -498,6 +499,10 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         )
 
     def deploy(self):
+        if self.params.get("reuse_cluster"):
+            self.log.info("Reuse EKS cluster `%s'", self.short_cluster_name)
+            self.patch_kubectl_config()
+            return
         self.log.info("Create EKS cluster `%s'", self.short_cluster_name)
         self.create_eks_cluster()
         self.log.info("Patch kubectl config")
@@ -588,6 +593,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
 
     def deploy_node_pool(self, pool: EksNodePool, wait_till_ready=True) -> None:
         self._add_pool(pool)
+        pool.is_deployed |= bool(self.params.get("reuse_cluster"))
         if pool.is_deployed:
             return
         if wait_till_ready:
