@@ -35,6 +35,7 @@ from oci.work_requests import WorkRequestClient
 from sdcm.keystore import KeyStore
 from sdcm.provision.provisioner import VmArch
 from sdcm.utils.metaclasses import Singleton
+from sdcm.utils.scylla_sha import scylla_sha_from_version, scylla_version_matches_sha, sha_selector
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1002,14 +1003,15 @@ def get_scylla_images_by_branch(
     """Get OCI Scylla images filtered by branch tag.
 
     Args:
-        branch: Branch specifier, e.g. "master:latest" or "branch-2024.1:all"
+        branch: Branch specifier, e.g. "master:latest", "branch-2024.1:all", or "master:bedcc69" (Scylla SHA)
         region: OCI region. If None, uses config default.
         arch: VM architecture to filter by.
 
     Returns:
         List of OCI Image objects matching the criteria.
     """
-    branch_name, build_id = branch.split(":", 1)
+    branch_name, selector = branch.split(":", 1)
+    sha = sha_selector(selector)
     filtered_images = []
     for img in _get_images(region=region):
         if img.display_name.startswith("debug-") or "-debug-" in img.display_name:
@@ -1021,25 +1023,23 @@ def get_scylla_images_by_branch(
             continue
         if tags.get("build_mode") and tags.get("build_mode") != "release":
             continue
-        if build_id not in ("latest", "all") and tags.get("build_tag", "") != build_id:
+        if sha and not scylla_version_matches_sha(tags.get("scylla_version"), sha):
             continue
         filtered_images.append(img)
 
-    if build_id == "latest" and filtered_images:
-        filtered_images = [filtered_images[0]]
+    if selector != "all":
+        filtered_images = filtered_images[:1]
 
     rows = []
     for img in filtered_images:
         tags = (img.defined_tags or {}).get("scylla", {})
-        build_tag = tags.get("build_tag", "")
-        build_id = build_tag.rsplit("-", 1)[-1] if build_tag else "N/A"
         rows.append(
             [
                 "OCI",
                 img.display_name,
                 img.id,
                 str(img.time_created.strftime("%Y-%m-%dT%H:%M:%S") if img.time_created else "N/A"),
-                build_id,
+                scylla_sha_from_version(tags.get("scylla_version")) or "N/A",
                 tags.get("arch", "N/A"),
                 tags.get("scylla_version", "N/A"),
             ]

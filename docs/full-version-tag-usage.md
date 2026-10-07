@@ -21,6 +21,7 @@ Branch-based nightly builds:
 ```bash
 export SCT_SCYLLA_VERSION=master:latest
 export SCT_SCYLLA_VERSION=branch-2019.1:all
+export SCT_SCYLLA_VERSION=master:bedcc69   # pin a Scylla commit SHA (7-40 hex chars)
 ```
 
 ### 3. Full Version Tags (NEW)

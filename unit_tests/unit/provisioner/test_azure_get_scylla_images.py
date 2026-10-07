@@ -38,6 +38,12 @@ def test_can_get_scylla_images_based_on_branch(azure_service):
     assert len(images) == 1
 
 
+@pytest.mark.parametrize("sha, expected_names", [("abc1234", ["2026.0108.151759"]), ("0000000", [])])
+def test_can_get_scylla_images_based_on_branch_scylla_sha(azure_service, sha, expected_names):
+    images = get_scylla_images(f"master:{sha}", "eastus", azure_service=azure_service)
+    assert [image.name for image in images] == expected_names
+
+
 def test_can_get_scylla_images_based_on_branch_arm64(azure_service):
     images = get_scylla_images("master:latest", "eastus", azure_service=azure_service, arch=VmArch.ARM)
     assert images[0].name == "2026.0108.145545"
