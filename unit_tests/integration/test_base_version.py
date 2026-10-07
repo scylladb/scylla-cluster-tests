@@ -136,6 +136,17 @@ def test_master_deb():
     assert ComparableScyllaVersion(version_list[0]) >= "2025.1"
 
 
+def test_master_oci():
+    """
+    OCI images exist only from 2026.2, so master must upgrade from a 2026.2+ release
+    even though the last LTS (2026.1) predates OCI.
+    """
+    scylla_repo = url_base + "/master/deb/unified/latest/scylladb-master/scylla.list"
+    version_list = general_test(scylla_repo, "ubuntu-focal", cloud_provider="oci")
+    assert len(version_list) == 1
+    assert ComparableScyllaVersion(version_list[0]) >= "2026.2"
+
+
 @pytest.mark.parametrize("linux_distro", ["centos-9", "ubuntu-focal"])
 def test_live_supported_version_base_versions(linux_distro, live_supported_versions):
     """Base-version detection for every currently-supported (live) ScyllaDB release.

@@ -37,7 +37,11 @@ start_support_versions = {
     # oss isn't really supported on rocky10, but we add it here sinc code can't get None value
     "rocky-10": {"scylla": None, "enterprise": "2025.3"},
 }
-start_support_backend = {"azure": {"scylla": "5.2", "enterprise": "2023.1"}}
+start_support_backend = {
+    "azure": {"scylla": "5.2", "enterprise": "2023.1"},
+    # first release with an OCI image
+    "oci": {"scylla": None, "enterprise": "2026.2"},
+}
 
 # list of versions that are available, but aren't supported, and we shouldn't test upgrades from
 unsupported_versions = [
@@ -213,8 +217,9 @@ class UpgradeBaseVersion:
                     source_available_base_version.append(last_lts)
                 if last_sts and last_sts != last_lts:
                     source_available_base_version.append(last_sts)
-            elif last_lts:
-                source_available_base_version.append(last_lts)
+            elif last_lts or last_sts:
+                # a backend whose start support version is past the last LTS has no LTS to upgrade from yet
+                source_available_base_version.append(last_lts or last_sts)
         elif re.match(r"\d+.\d+", version):
             relevant_versions = [v for v in source_available_release_list if ComparableScyllaVersion(v) < version]
             # If dest version is smaller than the first supported release,
