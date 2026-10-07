@@ -76,7 +76,10 @@
       "matchPackageNames": [
         "!scylla-driver"
       ],
-      "enabled": true
+      "enabled": true,
+      "addLabels": [
+        "New Hydra Version"
+      ]
     },
     {
       "groupName": "all non-major dependencies",
