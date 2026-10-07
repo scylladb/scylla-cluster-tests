@@ -54,6 +54,11 @@ logging.getLogger("parso.python.diff").setLevel(logging.WARNING)
 LOGGER = logging.getLogger(__name__)
 
 
+def journal_time(since: str) -> str:
+    """A `journalctl --since` value of the form @<seconds since the epoch>, as a UTC time a reader can follow."""
+    return datetime.fromtimestamp(int(since.removeprefix("@")), timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
 class LoggerBase(metaclass=ABCMeta):
     def __init__(self, target_log_file: str):
         self._target_log_file = target_log_file
@@ -70,6 +75,8 @@ class SSHLoggerBase(LoggerBase):
     RETRIEVE_LOG_MESSAGE_TEMPLATE = "SSHLogger reading {log_file} from {since}"
     VERBOSE_RETRIEVE = True
     READINESS_CHECK_DELAY = 10  # seconds
+    # Follows the journal, so honours the `since' it is given; a follower of a log file reads all of it
+    READS_JOURNAL = False
 
     def __init__(self, node: BaseNode, target_log_file: str):
         super().__init__(target_log_file=target_log_file)
@@ -115,13 +122,25 @@ class SSHLoggerBase(LoggerBase):
 
     @raise_event_on_failure
     def _journal_thread(self) -> None:
-        read_from_timestamp = None
+        read_from_timestamp = self._node.journal_since if self.READS_JOURNAL else None
+        if read_from_timestamp:
+            self._mark_run_start(since=read_from_timestamp)
         while not self._termination_event.is_set():
             if self._is_ready_to_retrieve():
                 self._retrieve(since=read_from_timestamp)
-                read_from_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                # As seconds since the epoch: journalctl reads a date without a zone in the host's local time, which a
+                # physical host may not keep in UTC, and systemd < 220 (CentOS 7, Amazon Linux 2) rejects a zone
+                read_from_timestamp = f"@{int(time.time())}"
             else:
                 time.sleep(self.READINESS_CHECK_DELAY)
+
+    def _mark_run_start(self, since: str) -> None:
+        """Say in the log file where this run starts reading a journal that outlives it."""
+        with open(self._target_log_file, "a", encoding="utf-8") as log_file:
+            log_file.write(
+                f"==== SCT test {self._node.test_config.test_id()} starts on {self._node.name}: reading its journal "
+                f"from {journal_time(since)}, older entries there belong to earlier runs on this host ====\n"
+            )
 
     def _is_ready_to_retrieve(self) -> bool:
         return self._remoter.is_up()
@@ -300,6 +319,8 @@ class HDRHistogramFileLogger(SSHLoggerBase):
 
 
 class SSHScyllaSystemdLogger(SSHLoggerBase):
+    READS_JOURNAL = True
+
     def _is_ready_to_retrieve(self) -> bool:
         return super()._is_ready_to_retrieve() and self._remoter.sudo(cmd="which python3", ignore_status=True).ok
 
@@ -358,6 +379,8 @@ class SSHNonRootScyllaSystemdLogger(SSHLoggerBase):
 
 
 class SSHGeneralSystemdLogger(SSHLoggerBase):
+    READS_JOURNAL = True
+
     @cached_property
     def _logger_cmd_template(self) -> str:
         return "sudo journalctl -f --no-tail --no-pager --utc {since} "
