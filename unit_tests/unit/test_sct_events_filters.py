@@ -239,6 +239,31 @@ def test_oversized_whole_run_filter(events_function_scope):  # noqa: ARG001
     assert not events_filter.eval_filter(other_type_event)
 
 
+def test_oversized_ack2_allocation_filter(events_function_scope):  # noqa: ARG001
+    """SCYLLADB-3114: filtered for the whole run, whatever the upgrade target is."""
+    published_filters = []
+    upgrade_test_stub = unittest.mock.MagicMock()
+
+    with unittest.mock.patch.object(EventsFilter, "publish", autospec=True, side_effect=published_filters.append):
+        upgrade_test.UpgradeTest.filter_oversized_ack2_allocation(upgrade_test_stub)
+
+    (events_filter,) = published_filters
+    # `publish` is mocked here too - see test_oversized_whole_run_filter
+    events_filter.dont_publish()
+
+    # frames as decoded in a real rolling-upgrade run
+    ack2_event = _make_symbolized_oversized_allocation_event("node-2", "gms::gossiper::do_send_ack2_msg")
+    ack_event = _make_symbolized_oversized_allocation_event("node-2", "gms::gossiper::do_send_ack_msg")
+    other_type_event = DatabaseLogEvent.BAD_ALLOC().add_info(
+        node="node-2", line_number=1, line="bad_alloc, see type=OVERSIZED_ALLOCATION"
+    )
+    other_type_event.backtrace = ack2_event.backtrace
+
+    assert events_filter.eval_filter(ack2_event)
+    assert not events_filter.eval_filter(ack_event)
+    assert not events_filter.eval_filter(other_type_event)
+
+
 def test_upgrade_per_node_oversized_allocation_filter_matches_only_its_node(events_function_scope):  # noqa: ARG001
     upgrade_test_stub = unittest.mock.MagicMock()
     node = unittest.mock.MagicMock()
