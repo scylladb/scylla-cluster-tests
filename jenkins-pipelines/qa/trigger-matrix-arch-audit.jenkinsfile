@@ -1,0 +1,71 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// Weekly check that every trigger-matrix entry's arch matches what its job runs on, on each
+// supported release's SCT branch (SCT-1168). Mails the drift; quiet when there is none.
+
+// Staging copies (PR testing) run on demand only, so they don't mail every week alongside the real job.
+def cronSpec = env.JOB_NAME?.startsWith('scylla-staging/') ? '' : 'H 06 * * 1'
+
+pipeline {
+    agent {
+        label {
+            label "aws-sct-builders-eu-west-1-v3-CI"
+        }
+    }
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+    }
+    parameters {
+        string(
+            defaultValue: 'fruch@scylladb.com',
+            description: 'comma-separated recipients of the drift report',
+            name: 'email_recipients'
+        )
+        string(
+            defaultValue: '',
+            description: 'comma-separated releases to check besides master; empty = the officially supported ones',
+            name: 'versions'
+        )
+    }
+    triggers {
+        cron(cronSpec)
+    }
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                dir('scylla-cluster-tests') {
+                    checkout scm
+                    // The audit reads each release's jenkinsfiles and configs from its upstream branch
+                    // tip. Fetch from upstream explicitly: in a staging copy `origin` is a fork whose
+                    // release branches may be stale. The repo is public, so no credentials are needed.
+                    sh "git fetch --no-tags --depth=1 https://github.com/scylladb/scylla-cluster-tests.git '+refs/heads/master:refs/remotes/upstream/master' '+refs/heads/branch-20*:refs/remotes/upstream/branch-20*'"
+                }
+            }
+        }
+        stage('Audit') {
+            steps {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    timeout(time: 30, unit: 'MINUTES') {
+                        dir('scylla-cluster-tests') {
+                            sh """#!/bin/bash
+                                set -xe
+                                ./docker/env/hydra.sh trigger-matrix-audit --remote upstream \
+                                    ${params.email_recipients ? "--email-recipients '${params.email_recipients}'" : ''} \
+                                    ${params.versions ? "--versions '${params.versions}'" : ''}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

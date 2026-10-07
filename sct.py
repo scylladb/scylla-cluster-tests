@@ -49,6 +49,7 @@ from argus.common.sct_types import RawEventPayload
 import sct_sizing
 import sct_ssh
 import sct_scan_issues
+from sdcm import sct_abs_path
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.cluster_cloud import extract_short_test_id_from_name
 from sdcm.keystore import KeyStore
@@ -76,9 +77,11 @@ from sdcm.sct_runner import (
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.decorators import retrying
 from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
+from sdcm.utils.trigger_matrix.audit import audit_matrices
 from sdcm.utils.trigger_matrix.constants import VERSION_RESOLUTION_STRATEGIES
 from sdcm.utils.trigger_matrix.images import resolve_image_architecture, resolve_scylla_version_from_image
 from sdcm.utils.trigger_matrix.matrix import trigger_matrix as run_trigger_matrix
+from sdcm.utils.trigger_matrix.reporting import send_arch_audit_email
 from sdcm.utils.trigger_matrix.resolution import resolve_to_full_version
 from sdcm.utils.argus import (
     ReplayOnlyArgusSCTClient,
@@ -268,6 +271,7 @@ def cli(ctx):
         "unit-tests",
         "lint-pipelines",
         "trigger-matrix",
+        "trigger-matrix-audit",
     ):
         try_auth_with_okta()
 
@@ -3818,6 +3822,39 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
         for job in results["failed"]:
             click.echo(f"  ! {job}")
         sys.exit(1)
+
+
+@cli.command(
+    "trigger-matrix-audit",
+    help="Check that every trigger-matrix entry's arch matches what its job runs on, on each release's SCT branch",
+)
+@click.option(
+    "--versions",
+    default="",
+    help="Comma-separated releases to check besides master. Default: the officially supported releases",
+)
+@click.option("--remote", default="origin", help="Git remote holding master and the branch-<release> branches")
+@click.option("--email-recipients", default="", help="Comma-separated; mailed only when drift is found")
+def trigger_matrix_audit_cmd(versions, remote, email_recipients):
+    add_file_logger()
+    releases = [v.strip() for v in versions.split(",") if v.strip()] or fetch_official_supported_versions()
+    matrices = sorted(Path(sct_abs_path("configurations/triggers")).glob("*.yaml"))
+    report = audit_matrices(matrices, ["master", *releases], remote=remote)
+
+    click.echo(f"Checked releases: {', '.join(report.versions)}")
+    for drift in report.drifts:
+        click.echo(
+            f"DRIFT {drift.matrix}: {drift.job_name} [{', '.join(drift.versions)}] "
+            f"declared {drift.declared}, runs on {drift.actual} ({drift.instance})"
+        )
+    for item in report.unchecked:
+        click.echo(f"unchecked {item.matrix}: {item.job_name} [{', '.join(item.versions)}] - {item.reason}")
+    if not report.drifts:
+        click.echo("No arch drift found")
+        return
+    if recipients := [r.strip() for r in email_recipients.split(",") if r.strip()]:
+        send_arch_audit_email(report, recipients, job_url=os.environ.get("BUILD_URL"))
+    sys.exit(1)
 
 
 cli.add_command(sct_ssh.ssh)
