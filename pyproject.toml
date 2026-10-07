@@ -52,7 +52,7 @@ dependencies = [
     "pre-commit==4.0.1",
     "prometheus_client==0.11.0",
     "pycryptodome==3.19.1",
-    "pydantic==2.12.0",
+    "pydantic==2.13.5",
     "PyGithub==2.1.1",
     "pytest-random-order==1.2.0",
     "pytest-xdist==3.8.0",
@@ -95,6 +95,9 @@ environments = ["sys_platform != 'win32'"]
 # Reference: https://github.com/okta/okta-sdk-python/issues/496
 # See also: https://staturdays.com/2025/03/25/how-one-setuptools-release-broke-everything-and-what-we-can-learn-from-it/
 build-constraint-dependencies = ["setuptools>=65.0.0,<75"]
+# gimme-aws-creds caps urllib3<2 but only uses APIs that urllib3 2 still has
+# (Retry(allowed_methods=...), disable_warnings); kubernetes>=37 needs urllib3>=2.8.
+override-dependencies = ["urllib3>=2"]
 
 [tool.uv.sources]
 ssh2-python = [
