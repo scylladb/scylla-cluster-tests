@@ -764,7 +764,9 @@ def install_docker_service():
             sleep $(backoff $n)
         done
 
+        # get-docker.sh runs a plain apt-get update, which fails at once while a cloud agent holds the apt lock
         for n in 1 2 3; do
+            {apt_lock_wait()}
             if sh get-docker.sh ; then
                 break
             fi
