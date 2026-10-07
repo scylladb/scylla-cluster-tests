@@ -220,6 +220,10 @@ def test_oversized_whole_run_filter(events_function_scope):  # noqa: ARG001
 
     assert len(published_filters) == 1
     events_filter = published_filters[0]
+    # `publish` is mocked, so the filter is still flagged ready-to-publish: without this its
+    # `__del__` logs "[SCT internal warning] ... has not been published" into whichever test
+    # happens to garbage-collect it on the same worker
+    events_filter.dont_publish()
 
     matching_event = _make_symbolized_oversized_allocation_event("node1", "seastar::rpc::client::wait_for_reply")
     other_symbol_event = _make_symbolized_oversized_allocation_event("node1", "seastar::rpc::client::send")
@@ -244,6 +248,8 @@ def test_upgrade_per_node_oversized_allocation_filter_matches_only_its_node(even
         upgrade_test.UpgradeTest.configure_event_filtering(upgrade_test_stub, node)
 
     (events_filter,) = upgrade_test_stub.stacks[node].enter_context.call_args.args
+    # `publish` is mocked here too - see test_oversized_whole_run_filter
+    events_filter.dont_publish()
 
     symbol = "seastar::rpc::client::wait_for_reply"
     assert events_filter.eval_filter(_make_symbolized_oversized_allocation_event("node-1", symbol))
