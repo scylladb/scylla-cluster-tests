@@ -1,0 +1,2 @@
+# ARM variant of test-cases/artifacts/ami.yaml - same shape as the other configurations/arm/* overlays
+instance_type_db: 'im4gn.xlarge'
