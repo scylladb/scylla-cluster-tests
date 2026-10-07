@@ -71,6 +71,9 @@ Ask: Is there a test for this change? Is there a default value for this config o
 Detailed checklist with examples in [review-checklist.md](references/review-checklist.md).
 Real incident catalog in [common-issues.md](references/common-issues.md).
 
+**Order**: run Check 1 first — a missing override parameter is blocking, so report it before anything
+else. Then run only the checks whose **Trigger** matches the diff; most PRs hit three or four of them.
+
 ### Check 1: Override & Inheritance Safety
 
 **Trigger**: Any PR that adds, removes, or changes parameters on a method definition.
@@ -170,17 +173,10 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
 
 **Trigger**: PR touches files with `curl`, `requests.get`, `requests.post`, or `remoter.run("curl`.
 
-- All `remoter.run("curl ...")` calls use `curl_with_retry()` from `sdcm/utils/curl.py` (exception: document with `# no-retry: <reason>`) — flag raw `curl` strings that bypass the helper
-- **Inline bash scripts via `shell_script_cmd()`** must also use `curl_with_retry()` — interpolate the helper into the f-string (e.g. `f"{curl_with_retry(url, output='file', follow_redirects=True)}"`)
-- Watch for curl calls hidden inside multi-line `shell_script_cmd(f"""...""")` blocks in `sct_config.py`, `cluster.py`, `sct_runner.py`, and similar files — these are easy to miss
-- `curl_with_retry()` retries connection resets (curl exit 35/56) by default via `RETRY_ALL_ERRORS_PROBE` - a runtime capability check that expands to `--retry-all-errors` only when the executing curl supports it (>= 7.71)
-- Flag any **bare `--retry-all-errors` literal** in shell/userdata scripts - it hard-fails on curl < 7.71 (rhel7/8-family, ubuntu2004); it must go through the probe (`RETRY_ALL_ERRORS_PROBE` constant, or its snippet verbatim in plain-string scripts)
-- Flag `retry_all_errors=False` on idempotent downloads - the only valid justification is a non-idempotent request (POST/PUT/DELETE)
-- Flag curl in userdata/cloud-init scripts (`provision/common/utils.py`, `sct_agent_installer.py`) that is missing plain `--retry` flags
-- All `requests.get/post/put/delete` calls go through a `requests.Session` with `HTTPAdapter(max_retries=Retry(...))` — follow `sdcm/rest/rest_client.py` pattern
-- No bare `requests.get()` / `requests.post()` without session+retry
-- Localhost/metadata calls may use `retry=0` but must still use the utility for consistent `--connect-timeout`
-- Full convention reference: [docs/http-retry-conventions.md](../../docs/http-retry-conventions.md)
+- `curl` goes through `curl_with_retry()` (`sdcm/utils/curl.py`) — including inside `shell_script_cmd(f"""...""")` blocks, where it is easy to miss
+- No bare `--retry-all-errors` literal (breaks curl < 7.71) — use the `RETRY_ALL_ERRORS_PROBE`
+- `requests` calls use a `Session` with `HTTPAdapter(max_retries=Retry(...))`, as in `sdcm/rest/rest_client.py`
+- Full rules: [review-checklist.md](references/review-checklist.md#http-resilience--retry-patterns-skillmd-check-9) and [docs/http-retry-conventions.md](../../docs/http-retry-conventions.md)
 
 ### Check 10: DB Instance Type vs. Trigger-Matrix Arch
 
