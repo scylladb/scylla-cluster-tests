@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Long-running Alternator TTL test on a 6-node cluster with SisyphusMonkey and four YCSB
+    loaders. Items go to a non-LWT table with a 12-hour TTL, a 1-hour TTL scan period and 2-hour
+    gc_grace. The nemesis selector skips the TTL and gc_grace modify nemeses.
+  test_type: features
+  tier: tier2
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: alternator
+  team_ownership: scylladb/alternator
+
 test_duration: 3000
 
 # ( The prepare_write_cmd is for the later read-stress and in order to trigger post_prepare_cql_cmds )

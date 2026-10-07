@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Long-running Alternator TTL test on a 6-node cluster with SisyphusMonkey. YCSB writes items
+    with a 36-minute TTL, then rewrites the same keys after they expire. The TTL scan period is 4
+    minutes and gc_grace is 8 minutes.
+  test_type: features
+  tier: tier2
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: alternator
+  team_ownership: scylladb/alternator
+
 test_duration: 3000
 
 # ( The prepare_write_cmd is for the later read-stress and in order to trigger post_prepare_cql_cmds )

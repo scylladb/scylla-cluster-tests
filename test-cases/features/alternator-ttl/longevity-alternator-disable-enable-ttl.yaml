@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Long-running Alternator TTL test that disables and enables TTL on a table while YCSB writes
+    items with a 10-minute TTL. Runs on a 6-node cluster with a 4-minute TTL scan period and no
+    nemesis, and checks the table with a YCSB read workload.
+  test_type: features
+  tier: tier2
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: alternator
+  team_ownership: scylladb/alternator
+
 test_duration: 3000
 
 # ( The prepare_write_cmd is for the later read-stress and in order to trigger post_prepare_cql_cmds )

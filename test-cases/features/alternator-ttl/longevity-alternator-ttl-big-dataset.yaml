@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Long-running Alternator TTL test on a 6-node cluster with a very large dataset of about 2
+    billion small items. Four YCSB loaders write items with a 12-hour TTL to a non-LWT table, with a
+    1-hour TTL scan period and no nemesis, to check expiry at scale.
+  test_type: features
+  tier: tier2
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: alternator
+  team_ownership: scylladb/alternator
+
 test_duration: 3000
 
 # ( The prepare_write_cmd is just a dummy in order to trigger post_prepare_cql_cmds )

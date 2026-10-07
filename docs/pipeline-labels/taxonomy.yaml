@@ -113,3 +113,5 @@ team_ownership:
     - storage-qa
     - cloud-qa
     - qa-tools
+    - scylladb/alternator
+    - scylladb/mgmt
