@@ -6,7 +6,7 @@ set -euo pipefail
 # ── 1. Install uv ────────────────────────────────────────────────────────
 if ! command -v uv &>/dev/null; then
     echo "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    curl -LsSf https://astral.sh/uv/0.12.23/install.sh | sh
     export PATH="$HOME/.local/bin:$PATH"
 fi
 
