@@ -47,13 +47,10 @@ from sdcm.utils.version_utils import (
     ComparableScyllaVersion,
 )
 from sdcm.sct_events.system import InfoEvent
-from sdcm.sct_events.database import (
-    IndexSpecialColumnErrorEvent,
-    DatabaseLogEvent,
-)
-from sdcm.sct_events.filters import EventsFilter
+from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
 from sdcm.sct_events.group_common_events import (
     decorate_with_context,
+    oversized_allocation_filter,
     ignore_abort_requested_errors,
     ignore_upgrade_schema_errors,
     ignore_ycsb_connection_refused,
@@ -74,8 +71,9 @@ NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
 # (jira:SCYLLADB-3023) and for 2026.2 (jira:SCYLLADB-3021), so it's never going to be fixed on those branches.
 OVERSIZED_RPC_ALLOCATION_FIXED_FROM = "2026.3.0~dev"
 OVERSIZED_RPC_ALLOCATION_SYMBOL = "seastar::rpc::client::wait_for_reply"
-# The event type as `str(event)` prints it, on the first line.
-OVERSIZED_ALLOCATION_TYPE = "type=OVERSIZED_ALLOCATION"
+# jira:SCYLLADB-3114 - gossip ack2 formatted for debug logging on every send. The fix
+# (scylladb/scylladb#31937) is master only, so the base side of every upgrade keeps hitting it.
+OVERSIZED_ACK2_ALLOCATION_SYMBOL = "gms::gossiper::do_send_ack2_msg"
 
 
 def truncate_entries(func):
@@ -165,42 +163,38 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         for node in self.db_cluster.nodes:
             self.configure_event_filtering(node)
         self.filter_oversized_allocation_for_whole_run()
+        self.filter_oversized_ack2_allocation()
 
     def configure_event_filtering(self, node):
         self.stacks[node] = contextlib.ExitStack()
-        # ignoring those oversized allocation errors, till both ends of the upgrade would have
+        # downgrading those oversized allocation errors, till both ends of the upgrade would have
         # fixes for jira:SCYLLADB-2533
-        # The symbol exists only in the decoded backtrace, so match on the event text (see `EventsFilter`).
-        # `node=` holds `str(node)`. Use lookarounds, not `\b`: `-` is a non-word character,
-        # so `\bnode-1\b` would also match inside `node-1-2`.
         self.stacks[node].enter_context(
-            EventsFilter(
-                event_class=DatabaseLogEvent,
-                regex=rf"[^\n]* {OVERSIZED_ALLOCATION_TYPE}\b[^\n]* node=[^\n]*"
-                rf"(?<=[\s=]){re.escape(node.name)}(?!\S).*{OVERSIZED_RPC_ALLOCATION_SYMBOL}",
-                extra_time_to_expiration=30,
+            oversized_allocation_filter(
+                OVERSIZED_RPC_ALLOCATION_SYMBOL, node_name=node.name, extra_time_to_expiration=30
             )
         )
 
     def filter_oversized_allocation_for_whole_run(self):
-        """Filter out jira:SCYLLADB-2533 for the whole run, when it's not going to be fixed on either end.
+        """Downgrade jira:SCYLLADB-2533 for the whole run, when it's not going to be fixed on either end.
 
         The per node filters above cover only the window where the node still runs the pre-upgrade version,
         on the assumption the version we upgrade to has the fix. When we upgrade to a version that never got
         it (see `OVERSIZED_RPC_ALLOCATION_FIXED_FROM`), the allocation shows up on the upgraded nodes just
-        the same, so filter that backtrace for the whole run instead.
+        the same, so downgrade that backtrace for the whole run instead.
         """
         target_version = self.params.scylla_version_upgrade_target or self.params.get("target_upgrade_version")
         if target_version and ComparableScyllaVersion(target_version) >= OVERSIZED_RPC_ALLOCATION_FIXED_FROM:
             return
         InfoEvent(
-            message=f"filtering out jira:SCYLLADB-2533 oversized allocations for the whole run, "
+            message=f"downgrading jira:SCYLLADB-2533 oversized allocations for the whole run, "
             f"it's not fixed in {target_version or 'the version being upgraded to'}"
         ).publish()
-        EventsFilter(
-            event_class=DatabaseLogEvent,
-            regex=rf"[^\n]* {OVERSIZED_ALLOCATION_TYPE}\b.*{OVERSIZED_RPC_ALLOCATION_SYMBOL}",
-        ).publish()
+        oversized_allocation_filter(OVERSIZED_RPC_ALLOCATION_SYMBOL).publish()
+
+    def filter_oversized_ack2_allocation(self):
+        """Downgrade jira:SCYLLADB-3114 for the whole run: no base version we upgrade from will get the fix."""
+        oversized_allocation_filter(OVERSIZED_ACK2_ALLOCATION_SYMBOL).publish()
 
     orig_ver = None
     new_ver = None
