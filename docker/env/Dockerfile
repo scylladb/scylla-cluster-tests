@@ -24,7 +24,7 @@ FROM apt_base AS python_packages
 ENV PIP_NO_CACHE_DIR=1
 RUN apt-get install -y --no-install-recommends build-essential cmake libssl-dev zlib1g-dev libffi-dev
 ADD requirements.txt .
-RUN pip install uv -U
+RUN pip install uv==0.12.23
 RUN uv pip install --system "setuptools>=65.0.0,<70"
 
 RUN echo "setuptools<70" > build-constraints.txt && \
