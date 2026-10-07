@@ -658,3 +658,61 @@ def test_other_transports_keep_the_short_hostname(tmp_path):
 
     assert node.short_hostname == "ip-10-4-13-234"
     node.remoter.run.assert_called_once_with("hostname -s")
+
+
+TEST_ID = "7fba7abb-891c-4199-b61d-bf9ca12d671d"
+
+
+def _node_answering_date(date_output: str) -> PhysicalMachineNode:
+    node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.test_config = MagicMock()
+    node.test_config.test_id.return_value = TEST_ID
+    node.log = MagicMock()
+    node.remoter = MagicMock()
+    node.remoter.run.return_value = MagicMock(stdout=date_output)
+    return node
+
+
+def test_the_journal_is_read_from_the_start_of_the_run():
+    """A reused host's journal holds every earlier run on it: read it from the mark this run writes."""
+    node = _node_answering_date("1791382530\n")
+
+    node.mark_run_start_in_journal()
+
+    assert node.journal_since == "@1791382530"
+    cmd = node.remoter.run.call_args.args[0]
+    assert cmd.index("date +%s") < cmd.index("logger"), "the mark must come after the time the journal is read from"
+    assert f"SCT test {TEST_ID} starts on this host" in cmd
+
+
+@pytest.mark.parametrize("date_output", ["", "date: command not found\n", "2026-10-07 14:05:30\n"])
+def test_the_whole_journal_is_read_when_the_host_time_is_unknown(date_output):
+    node = _node_answering_date(date_output)
+
+    node.mark_run_start_in_journal()
+
+    assert node.journal_since is None
+    node.log.warning.assert_called_once()
+
+
+def test_the_start_of_the_run_is_marked_once():
+    node = _node_answering_date("1791382530\n")
+    node.mark_run_start_in_journal()
+    node.remoter.run.return_value = MagicMock(stdout="1791386000\n")
+
+    node.mark_run_start_in_journal()
+
+    assert node.journal_since == "@1791382530"
+    node.remoter.run.assert_called_once()
+
+
+def test_the_run_is_marked_before_the_log_followers_start(monkeypatch):
+    node = _node_answering_date("1791382530\n")
+    seen_by_task_threads = []
+    monkeypatch.setattr(
+        sdcm_cluster.BaseNode, "start_task_threads", lambda self: seen_by_task_threads.append(self.journal_since)
+    )
+
+    node.start_task_threads()
+
+    assert seen_by_task_threads == ["@1791382530"]
