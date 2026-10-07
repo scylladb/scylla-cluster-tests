@@ -3,11 +3,18 @@ name: Build hydra image
 on:
   pull_request_target:
     types: [labeled]
+    # GitHub runs pull_request_target from the default branch's copy of this file,
+    # also for PRs into release branches, so these paths must cover every
+    # branch's image inputs, not only master's.
     paths:
       - 'Dockerfile'
       - 'docker/env/build_n_push.sh'
       - 'uv.lock'
       - 'pyproject.toml'
+      # branch-2025.1 (and older) layout
+      - 'docker/env/Dockerfile'
+      - 'requirements.in'
+      - 'requirements.txt'
 
 permissions:
   actions: write
