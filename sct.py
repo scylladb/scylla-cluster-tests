@@ -168,6 +168,7 @@ from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, GceZoneResolver, gce_public_addresses
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
+from sdcm.utils.scylla_sha import scylla_sha_from_version
 from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
@@ -1235,7 +1236,8 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
     "-br",
     "--branch",
     type=str,
-    help="Branch to query images for. Defaults to 'master:latest' Mutually exclusive with --version.",
+    help="Branch to query images for, as <branch>:latest|all|<scylla-sha>. Defaults to 'master:latest'. "
+    "Mutually exclusive with --version.",
 )
 @click.option(
     "-v",
@@ -1273,14 +1275,15 @@ def list_images(  # noqa: PLR0912, PLR0914
     version_fields = ["Backend", "Name", "ImageId", "CreationDate", "ScyllaVersion"]
     version_fields_aws = ["Backend", "Name", "ImageId", "CreationDate", "NameTag", "ScyllaVersion"]
 
-    branch_fields = ["Backend", "Name", "ImageId", "CreationDate", "BuildId", "Arch", "ScyllaVersion"]
+    branch_fields = ["Backend", "Name", "ImageId", "CreationDate", "ScyllaSHA", "Arch", "ScyllaVersion"]
+    azure_branch_fields = ["Backend", "Name", "ImageId", "CreationDate", "ScyllaSHA", "ScyllaVersion"]
     branch_fields_aws = [
         "Backend",
         "Name",
         "ImageId",
         "CreationDate",
         "NameTag",
-        "BuildId",
+        "ScyllaSHA",
         "Arch",
         "ScyllaVersion",
         "OwnerId",
@@ -1414,17 +1417,20 @@ def list_images(  # noqa: PLR0912, PLR0914
                     )
                     rows = []
                     for image in azure_images:
-                        rows.append(["Azure", image.name, image.id, "N/A", image.tags.get("scylla_version", "N/A")])
+                        version = image.tags.get("scylla_version", "N/A")
+                        rows.append(
+                            ["Azure", image.name, image.id, "N/A", scylla_sha_from_version(version) or "N/A", version]
+                        )
 
                     if output_format == "table":
                         click.echo(
                             rich_table_to_string(
-                                create_pretty_table(rows=rows, field_names=version_fields),
+                                create_pretty_table(rows=rows, field_names=azure_branch_fields),
                                 title="Azure Machine Images by version",
                             )
                         )
                     elif output_format == "json":
-                        azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
+                        azure_images_json = images_dict_in_json_format(rows=rows, field_names=azure_branch_fields)
                         click.echo(azure_images_json)
                 case "oci":
                     oci_images = get_scylla_images_by_branch(branch=branch, region=region, arch=arch_enum)

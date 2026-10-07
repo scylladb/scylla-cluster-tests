@@ -14,6 +14,7 @@ import logging
 import pprint
 import re
 from contextlib import suppress
+from functools import partial
 
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from azure.mgmt.compute.models import GalleryImageVersion, CommunityGalleryImageVersion
@@ -27,6 +28,7 @@ from sdcm.utils.version_utils import (
     ComparableScyllaVersion,
     parse_scylla_version_tag,
 )
+from sdcm.utils.scylla_sha import scylla_version_matches_sha, sha_selector
 
 LOGGER = logging.getLogger(__name__)
 
@@ -103,14 +105,11 @@ def get_scylla_images_private_galleries(
         return []
     else:
         # Branched version, like master:latest
-        branch, build_id = version_bucket
+        branch, selector = version_bucket
         tags_to_search["branch"] = branch
-        if build_id == "latest":
-            only_latest = True
-        elif build_id == "all":
-            pass
-        else:
-            tags_to_search["build-id"] = build_id
+        only_latest = selector != "all"
+        if sha := sha_selector(selector):
+            tags_to_search["scylla_version"] = partial(scylla_version_matches_sha, sha=sha)
 
     output = []
     unparsable_scylla_versions = []
@@ -188,14 +187,11 @@ def get_scylla_images(
             tags_to_search["scylla_version"] = lambda ver: ver and scylla_version[:9] in ver
     else:
         # Branched version, like master:latest
-        branch, build_id = version_bucket
+        branch, selector = version_bucket
         tags_to_search["branch"] = branch
-        if build_id == "latest":
-            only_latest = True
-        elif build_id == "all":
-            pass
-        else:
-            tags_to_search["build-id"] = build_id
+        only_latest = selector != "all"
+        if sha := sha_selector(selector):
+            tags_to_search["scylla_version"] = partial(scylla_version_matches_sha, sha=sha)
     output = []
     unparsable_scylla_versions = []
     with suppress(AzureResourceNotFoundError):

@@ -169,7 +169,7 @@ def _resolve_version_via_branched_oci_image(scylla_version: str, region: str, ar
     try:
         from sdcm.utils import oci_utils  # noqa: PLC0415 - optional cloud dependency
 
-        # rows are [backend, name, image_id, created, build_id, arch, scylla_version]
+        # rows are [backend, name, image_id, created, scylla_sha, arch, scylla_version]
         rows = oci_utils.get_scylla_images_by_branch(branch=scylla_version, region=region or None, arch=_vm_arch(arch))
         if rows and (version := rows[0][-1]) and version != "N/A":
             logger.info("Resolved '%s' → full version '%s' (via OCI image %s)", scylla_version, version, rows[0][1])

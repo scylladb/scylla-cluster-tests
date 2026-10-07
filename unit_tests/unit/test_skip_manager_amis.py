@@ -107,3 +107,19 @@ def test_get_branched_ami_skips_manager_ami(ec2_with_both_images):
 def test_get_branched_ami_all_skips_manager_ami(ec2_with_both_images):
     amis = get_branched_ami(scylla_version="master:all", region_name="us-east-1", arch="arm64")
     assert [ami.image_id for ami in amis] == ["ami-scylla"]
+
+
+@pytest.mark.parametrize(("sha", "expected"), [("abcdef1", ["ami-scylla"]), ("abcdef123456", ["ami-scylla"])])
+def test_get_branched_ami_by_scylla_sha(ec2_with_both_images, sha, expected):
+    amis = get_branched_ami(scylla_version=f"master:{sha}", region_name="us-east-1", arch="arm64")
+    assert [ami.image_id for ami in amis] == expected
+
+
+def test_get_branched_ami_unknown_sha_not_found(ec2_with_both_images):
+    with pytest.raises(AssertionError, match="not found"):
+        get_branched_ami(scylla_version="master:0000000", region_name="us-east-1", arch="arm64")
+
+
+def test_get_branched_ami_rejects_job_number_before_lookup(ec2_with_both_images):
+    with pytest.raises(ValueError, match="not a Scylla SHA"):
+        get_branched_ami(scylla_version="master:2131", region_name="us-east-1", arch="arm64")
