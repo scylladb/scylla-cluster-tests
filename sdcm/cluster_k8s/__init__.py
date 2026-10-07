@@ -1380,7 +1380,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
         if self.params.get("reuse_cluster"):
             try:
-                self.wait_till_cluster_is_operational()
+                # nothing was just created, so don't wait for a GKE post-create API restart (wait_till_cluster_is_operational)
+                self.wait_all_node_pools_to_be_ready()
                 self.log.debug("Check Scylla cluster")
                 self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=namespace)
                 self.start_scylla_cluster_events_thread()
@@ -1438,19 +1439,19 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
     @log_run_info
     def deploy_prometheus_operator(self) -> None:
         self.log.info("Deploy Prometheus operator")
-        if not self.params.get("reuse_cluster"):
-            with TemporaryDirectory() as tmp_dir_name:
-                # NOTE: apply configs on the 'server' side to avoid following error:
-                #         The CustomResourceDefinition "prometheuses.monitoring.coreos.com" is invalid:\
-                #           metadata.annotations: Too long: must have at most 262144 bytes
-                self.apply_file(
-                    self._get_prometheus_operator_config(tmp_dir_name),
-                    namespace=PROMETHEUS_OPERATOR_NAMESPACE,
-                    modifiers=self._affinity_modifiers_for_monitoring_resources,
-                    envsubst=False,
-                    server_side=True,
-                )
-            time.sleep(3)
+        # NOTE: apply even on reuse: it's idempotent, and a reused cluster may not have it yet
+        with TemporaryDirectory() as tmp_dir_name:
+            # NOTE: apply configs on the 'server' side to avoid following error:
+            #         The CustomResourceDefinition "prometheuses.monitoring.coreos.com" is invalid:\
+            #           metadata.annotations: Too long: must have at most 262144 bytes
+            self.apply_file(
+                self._get_prometheus_operator_config(tmp_dir_name),
+                namespace=PROMETHEUS_OPERATOR_NAMESPACE,
+                modifiers=self._affinity_modifiers_for_monitoring_resources,
+                envsubst=False,
+                server_side=True,
+            )
+        time.sleep(3)
         self.kubectl("rollout status deployment prometheus-operator", namespace=PROMETHEUS_OPERATOR_NAMESPACE)
         # NOTE: scylla-operator starts its ScyllaDBMonitoring controller only if Prometheus Operator CRDs exist
         #       when it starts, so restart it in case it was deployed first.
