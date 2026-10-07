@@ -12,8 +12,13 @@ fi
 
 echo "uv version: $(uv --version)"
 
+# confluent-kafka has no wheels for newer Pythons, so it builds against librdkafka >= 2.12.1.
+echo "Installing librdkafka-dev..."
+sudo apt-get update -q
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends librdkafka-dev
+
 # ── 2. Install managed Python ────────────────────────────────────────────
-PYTHON_VERSION=$(cat .python-version 2>/dev/null || echo "3.14")
+PYTHON_VERSION=$(cat .python-version 2>/dev/null || echo "3.15")
 echo "Installing Python $PYTHON_VERSION..."
 uv python install "$PYTHON_VERSION"
 

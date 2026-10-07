@@ -19,12 +19,17 @@ Before you begin, ensure you have the following installed on your system:
 
 - Git
 - Basic system development tools (build-essential, or equivalent for your distro)
+- librdkafka headers, version 2.12.1 or newer (`librdkafka-dev` on Ubuntu 26.04, `librdkafka-devel` on Fedora,
+  `brew install librdkafka` on macOS). `confluent-kafka` has no Python 3.15 wheels yet and builds from source.
+  Older distros (e.g. Debian trixie ships 2.8) can use [Confluent's APT repository](https://docs.confluent.io/platform/current/installation/installing_cp/deb-ubuntu.html#get-the-software).
 
 ## Installation
 
 ### 1. Install uv
 
 [uv](https://docs.astral.sh/uv/) is a fast Python package installer and resolver, written in Rust.
+SCT needs uv 0.12.9 or newer (enforced by `required-version` in `pyproject.toml`); older uv resolves
+Python 3.15 to an early pre-release that current binary wheels can't load. Run `uv self update` if needed.
 
 #### On Linux/macOS:
 ```bash
