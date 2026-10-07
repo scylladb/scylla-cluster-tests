@@ -1348,6 +1348,31 @@ def test_minicloud_reserve_memory_is_not_confused_by_an_unrelated_memory_flag():
     assert _append_minicloud_reserve(args) == f"{args} --reserve-memory 3072M"
 
 
+def _install_minicloud_ca(monkeypatch, **params):
+    """Run the real method against a stand-in node and return the commands it ran."""
+    for var in ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL"):
+        monkeypatch.delenv(var, raising=False)
+    commands = []
+    node = SimpleNamespace(
+        parent_cluster=SimpleNamespace(params=params),
+        distro=SimpleNamespace(is_rhel_like=False),
+        remoter=SimpleNamespace(sudo=commands.append),
+    )
+    BaseNode.install_minicloud_ca(node)
+    return commands
+
+
+def test_minicloud_ca_goes_into_the_system_trust_store(monkeypatch):
+    assert _install_minicloud_ca(monkeypatch, minicloud_endpoint_url="http://localhost:5000") == [
+        "curl -fsS -o /usr/local/share/ca-certificates/minicloud.crt http://169.254.169.254/minicloud/ca.pem",
+        "update-ca-certificates",
+    ]
+
+
+def test_minicloud_ca_is_not_installed_off_minicloud(monkeypatch):
+    assert _install_minicloud_ca(monkeypatch, minicloud_endpoint_url="") == []
+
+
 # the ruleset the OCI images ship: SSH is accepted, everything else gets an ICMP host-prohibited
 OCI_IMAGE_RULESET = """\
 *filter

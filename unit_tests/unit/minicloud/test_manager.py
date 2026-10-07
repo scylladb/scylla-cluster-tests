@@ -553,3 +553,36 @@ def test_death_watch_silent_when_we_stopped_it(tmp_path):
     with patch("sdcm.utils.minicloud.manager.TestFrameworkEvent") as mock_event:
         manager._watch_container_death(log_process)
     mock_event.assert_not_called()
+
+
+class BackupParams(dict):
+    """The two things `create_backup_buckets` reads from SCTConfiguration."""
+
+    region_names = ["eu-west-1"]
+
+
+@pytest.mark.parametrize(
+    "params,created",
+    [
+        pytest.param(
+            BackupParams(backup_bucket_backend="s3", backup_bucket_location=["manager-backup-tests-{region}"]),
+            ["manager-backup-tests-eu-west-1"],
+            id="s3-backend-bucket-is-created",
+        ),
+        pytest.param(
+            BackupParams(backup_bucket_backend="s3", backup_bucket_location=["scylla-qa-keystore"]),
+            [],
+            id="passthrough-bucket-is-left-alone",
+        ),
+    ],
+)
+def test_create_backup_buckets(tmp_path, params, created):
+    manager = MinicloudManager(config=MinicloudConfig(port=5000, state_dir=str(tmp_path)))
+
+    with patch("sdcm.utils.minicloud.manager.boto3.client") as mock_client:
+        manager.create_backup_buckets(params)
+
+    calls = mock_client.return_value.create_bucket.call_args_list
+    assert [c.kwargs["Bucket"] for c in calls] == created
+    if created:
+        assert mock_client.call_args.kwargs["endpoint_url"] == "http://localhost:5000"
