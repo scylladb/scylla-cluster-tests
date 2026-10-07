@@ -79,10 +79,21 @@ jobs:
       - "additional"
     exclude_versions: []
 
+  # Moved to sizing_db (Graviton) on master only; release branches still run i4i.
   - job_name: "longevity/longevity-large-partition-asymmetric-cluster-3h-test"
     backend: "aws"
+    arch: "x86_64"
     params:
       region: "eu-west-1"
     labels:
       - "additional"
-    exclude_versions: []
+    include_versions: ["2024", "2025", "2026.1", "2026.2", "2026.3"]
+
+  - job_name: "longevity/longevity-large-partition-asymmetric-cluster-3h-test"
+    backend: "aws"
+    arch: "aarch64"
+    params:
+      region: "eu-west-1"
+    labels:
+      - "additional"
+    exclude_versions: ["2024", "2025", "2026.1", "2026.2", "2026.3"]

@@ -47,6 +47,7 @@ jobs:
   # --- ARM64 microbenchmarks simple-query ---
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64"
     backend: "aws"
+    arch: "aarch64"
     wait: false
     labels:
       - "pgo-arm"
@@ -58,6 +59,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-write"
     backend: "aws"
+    arch: "aarch64"
     wait: false
     labels:
       - "pgo-arm"
@@ -93,6 +95,7 @@ jobs:
   # --- ARM64 microbenchmarks cql_raw ---
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_arm64"
     backend: "aws"
+    arch: "aarch64"
     wait: false
     labels:
       - "pgo-arm"
@@ -104,6 +107,7 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-cql-raw-weekly-microbenchmark_arm64-write"
     backend: "aws"
+    arch: "aarch64"
     wait: false
     labels:
       - "pgo-arm"
