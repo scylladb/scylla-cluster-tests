@@ -53,8 +53,9 @@ Step-by-step process for reviewing a pull request on the SCT repository.
 1. **Config changes**: New options in `sct_config.py` have defaults in `defaults/*.yaml`
 2. **Backend labels**: Files in `sdcm/cluster_*.py` or `sdcm/provision/` trigger the correct provision test labels
 3. **Cross-backend parity**: If one backend is changed, assess whether other backends need the same change
+4. **Trigger-matrix arch**: If a test's DB instance type or `sizing_db` changed, its `configurations/triggers/*.yaml` entries declare the arch it now runs on, per release (SKILL.md Check 10)
 
-**Exit criteria**: Configuration defaults verified. Backend labels confirmed or requested.
+**Exit criteria**: Configuration defaults verified. Backend labels confirmed or requested. Trigger-matrix arch matches.
 
 ---
 

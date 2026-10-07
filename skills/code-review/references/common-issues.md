@@ -147,3 +147,23 @@ PR #13509's initial migration grepped for `remoter.run("curl ...")` patterns but
 - **Grep pattern**: `grep -rn "curl" sdcm/ --include="*.py" | grep -v curl_with_retry | grep -v "# no-retry"`
 - **Fix pattern**: Interpolate `curl_with_retry()` into the f-string: `f"{curl_with_retry(url, output='file', follow_redirects=True)}"`
 - **Conventions**: [docs/http-retry-conventions.md](../../../docs/http-retry-conventions.md)
+
+---
+
+## Issue 6: Instance-Type Change Leaves the Trigger Matrix on the Old Arch
+
+**Severity**: HIGH
+**Incident**: [SCT-1168](https://scylladb.atlassian.net/browse/SCT-1168) — tier1 jobs ran twice per release, both on ARM
+
+### What Happens
+
+`<branch>/ami` starts each trigger twice, with the x86 and the ARM AMI, and each run triggers the matrix entries of its own arch. The triggered job only gets `scylla_version` and runs on whatever its config resolves to. The sizing migration moved tier1 jobs from `i4i` to `sizing_db` without `arch:` (→ `i8g`) on 2026.2+, while the matrix still listed them as x86 — and two jobs were listed under both arches, so each release ran them twice on ARM.
+
+### Why It Was Missed
+
+The PRs changed `test-cases/*.yaml` only; nothing pointed reviewers at `configurations/triggers/`, and the drift differs per release branch.
+
+### Prevention
+
+- **During review**: Check 10 in SKILL.md — follow a DB instance/arch change to the job's trigger-matrix entries
+- **Verify**: `uv run sct.py trigger-matrix-audit --remote upstream`; the weekly `qa/trigger-matrix-arch-audit` job mails any drift
