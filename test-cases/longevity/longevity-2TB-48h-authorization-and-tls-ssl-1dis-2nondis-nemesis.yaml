@@ -1,4 +1,5 @@
 test_duration: 3120 # 7h (preapre) + 41h for stress + 4h spare.
+prepare_stress_duration: 500 # slowest loader needs ~6.5h to write 537M rows (SCT-521)
 prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..536870912",
                     "cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=536870913..1073741824",
                     "cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1073741825..1610612736",
