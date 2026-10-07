@@ -4,7 +4,7 @@
 
 Scylla Manager server and agent: versions, repos and backup/restore settings.
 
-**26 options.**
+**27 options.**
 
 
 <a id="backup_bucket_backend"></a>
@@ -104,6 +104,17 @@ Keyspaces and tables to back up by the Scylla Manager backup nemeses, as pattern
 **default:** N/A
 
 **type:** str | list[str] → list[str] (appendable)
+
+
+<a id="mgmt_backup_repaired_percent"></a>
+
+## **mgmt_backup_repaired_percent** / SCT_MGMT_BACKUP_REPAIRED_PERCENT
+
+Percent of the backup dataset ([`mgmt_prepare_snapshot_size`](#mgmt_prepare_snapshot_size)) repaired by incremental repair before the backup, the rest is left unrepaired. Used by Scylla API backup tests, e.g. 85
+
+**default:** 0
+
+**type:** int
 
 
 <a id="mgmt_docker_image"></a>

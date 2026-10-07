@@ -63,6 +63,12 @@ class ManagerConfigMixin(BaseModel):
                        When not set, 'MgmtBackup' backs up all the keyspaces,
                        and 'MgmtBackupSpecificKeyspaces' all the test keyspaces.""",
     )
+    mgmt_backup_repaired_percent: int = SctField(
+        ge=0,
+        le=100,
+        description="Percent of the backup dataset (`mgmt_prepare_snapshot_size`) repaired by incremental repair "
+        "before the backup, the rest is left unrepaired. Used by Scylla API backup tests, e.g. 85",
+    )
     mgmt_docker_image: String = SctField(
         description="Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'",
     )
