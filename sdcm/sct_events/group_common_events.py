@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 import logging
+import re
 from contextlib import contextmanager, ExitStack, ContextDecorator
 from functools import wraps
 from typing import ContextManager, Callable, Sequence
@@ -699,16 +700,29 @@ def ignore_aborted_snapshot_upload_storage_io_errors():
         yield
 
 
+def oversized_allocation_filter(
+    symbol: str, node_name: str | None = None, extra_time_to_expiration: int | None = None
+) -> EventsSeverityChangerFilter:
+    """Downgrade to WARNING an OVERSIZED_ALLOCATION whose decoded backtrace contains `symbol`.
+
+    A known allocation stays a WARNING instead of being dropped, so it still reaches Argus.
+    The symbol exists only in the decoded backtrace, so the regex runs over the multi-line event text.
+    `node_name` limits it to one node. Use it as a context manager, or `.publish()` it for the whole run.
+    """
+    # `node=` holds `str(node)`. Use lookarounds, not `\b`: `-` is a non-word character,
+    # so `\bnode-1\b` would also match inside `node-1-2`.
+    node = rf"[^\n]* node=[^\n]*(?<=[\s=]){re.escape(node_name)}(?!\S)" if node_name else ""
+    return EventsSeverityChangerFilter(
+        new_severity=Severity.WARNING,
+        event_class=DatabaseLogEvent,
+        regex=rf"[^\n]* type=OVERSIZED_ALLOCATION\b{node}.*{re.escape(symbol)}",
+        extra_time_to_expiration=extra_time_to_expiration,
+    )
+
+
 @contextmanager
 def ignore_snapshot_listing_oversized_allocation():
-    with ExitStack() as stack:
-        stack.enter_context(
-            EventsSeverityChangerFilter(
-                new_severity=Severity.WARNING,
-                event_class=DatabaseLogEvent,
-                regex=r".*OVERSIZED_ALLOCATION.*storage_service_json::snapshot",
-            )
-        )
+    with oversized_allocation_filter("storage_service_json::snapshot"):
         yield
 
 
