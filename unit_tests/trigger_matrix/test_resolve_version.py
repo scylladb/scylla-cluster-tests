@@ -16,8 +16,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.utils.trigger_matrix.errors import TriggerMatrixError
-from sdcm.utils.trigger_matrix.images import resolve_image_architecture
+from sdcm.utils.trigger_matrix.images import resolve_image_architecture, resolve_scylla_version_from_image
 from sdcm.utils.trigger_matrix.resolution import resolve_to_full_version
+from sdcm.utils.trigger_matrix.versions import determine_job_folder
 from sdcm.utils.trigger_matrix.images import _arch_from_image_name, resolve_architecture_from_ami
 
 
@@ -216,3 +217,37 @@ def test_resolve_image_architecture_no_arch_hint():
     result = resolve_image_architecture(gce_image_db="projects/scylla-images/global/images/scylla-2026-07")
 
     assert result == ""
+
+
+GCE_IMAGE = "https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/5085257658201422675"
+
+
+@pytest.mark.parametrize(
+    "label, version, folder",
+    [
+        pytest.param(
+            "2026-2-9-0-20261005-ba124f221b89", "2026.2.9-0.20261005.ba124f221b89", "scylla-2026.2", id="release"
+        ),
+        pytest.param(
+            "2026-3-0-rc1-0-20260730-726f67a532e2", "2026.3.0.rc1.0.20260730.726f67a532e2", "scylla-2026.3", id="rc"
+        ),
+        pytest.param(
+            "2026-4-0-dev-0-20260804-9a3aba9e452a", "2026.4.0~dev-0.20260804.9a3aba9e452a", "scylla-2026.4", id="dev"
+        ),
+    ],
+)
+def test_gce_image_label_resolves_to_a_version_with_a_job_folder(label, version, folder):
+    """SCT-1181: the dashed label used to come back as all dots, which no job folder matches."""
+    with patch("sdcm.utils.gce_utils.get_gce_image_tags", return_value={"scylla_version": label}):
+        resolved = resolve_scylla_version_from_image(gce_image_db=GCE_IMAGE)
+
+    assert resolved == version
+    assert determine_job_folder(resolved) == folder
+
+
+def test_gce_image_with_unparsable_label_is_an_error():
+    with (
+        patch("sdcm.utils.gce_utils.get_gce_image_tags", return_value={"scylla_version": "not-a-version"}),
+        pytest.raises(TriggerMatrixError, match="Cannot resolve scylla_version from images"),
+    ):
+        resolve_scylla_version_from_image(gce_image_db=GCE_IMAGE)
