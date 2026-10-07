@@ -25,7 +25,9 @@ else
     echo "Hydra image with version $VERSION not found locally. Building..."
     cd "${DOCKER_ENV_DIR}"
     REQUIREMENTS_IN=$(realpath --relative-to=${DOCKER_ENV_DIR} ${SCT_DIR}/requirements.in)
-    uv pip compile $REQUIREMENTS_IN --generate-hashes > ${SCT_DIR}/${PY_PREREQS_FILE}
+    # resolve for the image's Python, not the Python of whatever machine runs this script
+    PYTHON_VERSION=$(sed -n 's/^ARG PYTHON_IMAGE_TAG=\([0-9]*\.[0-9]*\).*/\1/p' Dockerfile)
+    uv pip compile $REQUIREMENTS_IN --python-version ${PYTHON_VERSION} --generate-hashes > ${SCT_DIR}/${PY_PREREQS_FILE}
     sed 's|\.\./\.\./requirements.in|requirements.in|' -i  ${SCT_DIR}/requirements.txt
     cp -f ${SCT_DIR}/${PY_PREREQS_FILE} .
     docker build --network=host -t scylladb/hydra:${VERSION} .
