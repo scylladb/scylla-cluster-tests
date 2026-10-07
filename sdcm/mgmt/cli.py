@@ -1694,7 +1694,8 @@ def create_sctool(manager_node) -> SCTool:
     and ManagerTask all build their sctool here, because a ManagerCluster or a backup/repair
     task that fell back to the plain host runner would silently fail on Docker.
     """
-    if manager_node.is_docker():
+    # NOTE: k8s pods also report is_docker(), but their sctool runs in the manager pod through the k8s remoter
+    if manager_node.is_docker() and not manager_node.is_kubernetes():
         parent_cluster = getattr(manager_node, "parent_cluster", None)
         container_name = getattr(parent_cluster, "manager_container_name", None)
         if not container_name:
