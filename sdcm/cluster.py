@@ -451,6 +451,10 @@ class BaseNode(AutoSshContainerMixin):
     _private_ip_address_resolved = False
     _ipv6_ip_address_resolved = False
     destroyed = False
+    # Where the SSH log followers start reading the node's journal, as `journalctl --since` @<seconds since the epoch>.
+    # None reads the whole journal, which is what a node created for this run wants: it holds this run's logs only,
+    # boot included.
+    journal_since: str | None = None
 
     GOSSIP_STATUSES_FILTER_OUT = [
         "LEFT",  # in case the node was decommissioned

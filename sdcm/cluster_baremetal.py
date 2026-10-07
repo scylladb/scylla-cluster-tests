@@ -12,6 +12,7 @@ from sdcm import cluster
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.test_config import TestConfig
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT
+from sdcm.utils.remote_logger import journal_time
 
 LOGGER = logging.getLogger(__name__)
 
@@ -246,6 +247,35 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
     def init(self):
         super().init()
         self.set_hostname()
+
+    def start_task_threads(self):
+        self.mark_run_start_in_journal()
+        super().start_task_threads()
+
+    def mark_run_start_in_journal(self):
+        """Mark in the host's journal where this run starts, and read the journal from there.
+
+        A physical host outlives the run, and so does its journal: SCT never reboots it, and even a volatile journal
+        lasts until a reboot. Read from its beginning, it replays every earlier run on the host into this run's logs,
+        where an earlier crash or backtrace raises its events again. The time is taken from the host's clock, before the
+        mark is written, so the mark is the first entry read.
+        """
+        if self.journal_since:
+            return
+        test_id = self.test_config.test_id()
+        result = self.remoter.run(
+            f'date +%s; logger -t scylla-cluster-tests "SCT test {test_id} starts on this host"', ignore_status=True
+        )
+        epoch = next(iter(result.stdout.splitlines()), "").strip()
+        if not epoch.isdigit():
+            self.log.warning("Could not mark the start of the run in the journal, its logs include earlier runs")
+            return
+        self.journal_since = f"@{epoch}"
+        self.log.info(
+            "SCT test %s starts on this host at %s, its journal is read from there",
+            test_id,
+            journal_time(self.journal_since),
+        )
 
     def _init_port_mapping(self):
         if self.test_config.IP_SSH_CONNECTIONS == "public":
