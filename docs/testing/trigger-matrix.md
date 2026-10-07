@@ -317,6 +317,21 @@ done
 
 **Expected**: Each file loads successfully and reports triggered/skipped counts.
 
+### Arch audit
+
+A matrix entry's `arch` never reaches the job — the job runs on whatever its own config resolves to, on
+the SCT branch of that release. `trigger-matrix-audit` checks every entry against that, for master and
+each officially supported release, reading the branches straight from git:
+
+```bash
+git fetch upstream 'refs/heads/branch-20*:refs/remotes/upstream/branch-20*'
+uv run sct.py trigger-matrix-audit --remote upstream            # or --versions 2026.1,2026.2
+```
+
+It prints each drift (entry, releases, declared vs. actual arch, DB instance) and exits 1 when there is
+any; jobs it can't map to a jenkinsfile are listed as unchecked. `jenkins-pipelines/qa/trigger-matrix-arch-audit.jenkinsfile`
+runs it every Monday and mails the drift report (SCT-1168).
+
 ## Version Resolution
 
 The trigger matrix always passes a **full version tag** (e.g., `2026.2.0~dev-0.20260322.f51126483167`) to all triggered jobs via the `scylla_version` parameter. Image parameters (`scylla_ami_id`, `gce_image_db`, etc.) are **not** passed to downstream jobs — they are only used to resolve the version.
@@ -428,7 +443,8 @@ run strictly downwards:
 | `resolution.py` | per-backend / common / aws-strict version strategies |
 | `parameters.py` | Job parameters and the Jenkins job path |
 | `groovy.py`, `jenkins_client.py` | The Script Console script and `JenkinsClient` |
-| `reporting.py` | Wait-mode email report |
+| `reporting.py` | Wait-mode and arch-audit email reports |
+| `audit.py` | Arch audit: declared arch vs. what each job resolves to on each release's branch |
 | `matrix.py` | `trigger_matrix()` — the entry point tying it together |
 
 `__init__.py` re-exports nothing: import each name from the module that defines it.

@@ -11,11 +11,13 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""Email report for wait-mode trigger runs."""
+"""Email reports for wait-mode trigger runs and the arch audit."""
 
+import html
 import logging
 
 from sdcm.utils.cloud_monitor.cloud_monitor import Email
+from sdcm.utils.trigger_matrix.audit import AuditReport
 from sdcm.utils.trigger_matrix.constants import DEFAULT_EMAIL_RECIPIENTS
 from sdcm.utils.trigger_matrix.models import BuildResult
 
@@ -86,3 +88,33 @@ def send_trigger_matrix_email(
         logger.info("Email report sent to %s", recipients)
     except Exception as exc:  # noqa: BLE001 - email failure is non-fatal
         logger.warning("Failed to send email report: %s", exc)
+
+
+def send_arch_audit_email(report: AuditReport, recipients: list[str], job_url: str | None = None) -> None:
+    """Email the trigger-matrix entries whose declared arch differs from what their job runs on."""
+    rows = "".join(
+        f"<tr><td>{d.matrix}</td><td>{html.escape(d.job_name)}</td><td>{', '.join(d.versions)}</td>"
+        f"<td>{d.declared}</td><td><b>{d.actual}</b></td><td>{html.escape(d.instance)}</td></tr>"
+        for d in report.drifts
+    )
+    unchecked = "".join(
+        f"<li>{u.matrix}: {html.escape(u.job_name)} ({', '.join(u.versions)}) - {html.escape(u.reason)}</li>"
+        for u in report.unchecked
+    )
+    job_line = f'<p><a href="{job_url}">Audit run</a></p>' if job_url else ""
+    body = f"""<html><body>
+<h2>Trigger matrix arch drift - {len(report.drifts)} entries</h2>
+<p>These entries declare an arch their job does not run on, for the listed releases (checked against
+each release's SCT branch: {", ".join(report.versions)}). The x86 and ARM release runs therefore trigger
+them from the wrong run, or twice. Fix the entry's <code>arch</code>, splitting it by version range where
+releases differ - see docs/testing/trigger-matrix.md, "Architecture".</p>
+{job_line}
+<table border="1" cellpadding="5" cellspacing="0">
+<tr><th>Matrix</th><th>Job</th><th>Releases</th><th>Declared</th><th>Runs on</th><th>DB instance</th></tr>
+{rows}
+</table>
+<h3>Not checked</h3><ul>{unchecked or "<li>none</li>"}</ul>
+</body></html>"""
+    subject = f"[Trigger Matrix] arch drift in {len(report.drifts)} entries"
+    Email().send(subject=subject, content=body, recipients=recipients, html=True)
+    logger.info("Arch audit report sent to %s", recipients)
