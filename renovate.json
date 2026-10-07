@@ -5,6 +5,9 @@
     "helpers:pinGitHubActionDigestsToSemver"
   ],
   "commitBodyTable": true,
+  "constraints": {
+    "uv": "0.12.23"
+  },
   "recreateWhen": "always",
   "ignorePresets": [
     "group:monorepos",
@@ -65,6 +68,24 @@
       "depNameTemplate": "scylla-doctor",
       "datasourceTemplate": "custom.scylla-doctor",
       "versioningTemplate": "semver-coerced"
+    },
+    {
+      "customType": "regex",
+      "description": "Keep every uv pin on one version: Renovate's own lock runs, the hydra image, the image build job and the devcontainer",
+      "managerFilePatterns": [
+        "/^renovate\\.json$/",
+        "/^Dockerfile$/",
+        "/^\\.github/workflows/build-docker-image\\.yaml$/",
+        "/^\\.devcontainer/setup\\.sh$/"
+      ],
+      "matchStrings": [
+        "\"uv\":\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\"",
+        "ghcr\\.io/astral-sh/uv:(?<currentValue>\\d+\\.\\d+\\.\\d+)",
+        "pip install uv==(?<currentValue>\\d+\\.\\d+\\.\\d+)",
+        "astral\\.sh/uv/(?<currentValue>\\d+\\.\\d+\\.\\d+)/install\\.sh"
+      ],
+      "depNameTemplate": "uv",
+      "datasourceTemplate": "pypi"
     }
   ],
   "packageRules": [
@@ -157,6 +178,19 @@
         "at any time"
       ],
       "enabled": true
+    },
+    {
+      "description": "uv bumps change the hydra image, and the image build re-locks uv.lock with the new uv",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchPackageNames": [
+        "uv"
+      ],
+      "enabled": true,
+      "addLabels": [
+        "New Hydra Version"
+      ]
     }
   ],
   "vulnerabilityAlerts": {
