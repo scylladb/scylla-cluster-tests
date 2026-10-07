@@ -26,7 +26,7 @@ ENV UV_PROJECT_ENVIRONMENT="/usr/local/"
 RUN apt-get install -y --no-install-recommends build-essential cmake libssl-dev zlib1g-dev libffi-dev
 ADD uv.lock  .
 ADD pyproject.toml .
-RUN pip install uv
+RUN pip install uv==0.12.23
 RUN uv sync --frozen
 
 FROM python:$PYTHON_IMAGE_TAG
