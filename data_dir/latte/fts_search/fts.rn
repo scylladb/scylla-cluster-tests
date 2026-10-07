@@ -1,7 +1,7 @@
 //! Full-text search (BM25) workload - schema, load, build_index and search phases.
 //!
 //! Origin: scylladb/vector-store, latte/full-text-search/. This copy is the one test runs use --
-//! LatteStressThread resolves .rn paths inside the SCT tree and copies the whole containing
+//! LatteStressThread resolves .rn paths inside the SCT tree and mounts the files of the containing
 //! directory into the loader container, so the script cannot be loaded from the vector-store repo
 //! directly. Mirror any change back to vector-store, and keep the phase names and -P parameter
 //! names in sync with fts_test.py, which invokes them.

@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import os
 import re
 import types
 
@@ -18,6 +19,7 @@ import pytest
 import yaml
 
 from sdcm import sct_abs_path
+from sdcm.stress import latte_thread
 from sdcm.stress.latte_thread import (
     LatteStressThread,
     find_latte_fn_names,
@@ -204,11 +206,7 @@ def test_complex_schema_cmds_cover_every_row(config_file, param_name):
 
 
 class _ContainerRunner:
-    """Stands in for the 'RemoteDocker' runner of one latte call, recording what is copied in.
-
-    'test -f' answers "already there", so the rune script directory is skipped and only the
-    per-invocation files show up.
-    """
+    """Stands in for the 'RemoteDocker' runner of one latte call, recording what is copied in."""
 
     def __init__(self, copy_ok=True):
         self.copied = []
@@ -296,3 +294,136 @@ def test_a_run_records_hdr_when_use_hdrhistogram_is_on():
 )
 def test_no_hdr_is_recorded(stress_cmd, use_hdrhistogram, kwargs):
     assert not _hdr_thread(stress_cmd, use_hdrhistogram, **kwargs).records_hdr()
+
+
+# The script directory is staged once per loader, not copied into every container
+
+
+class _FakeRemoter:
+    """Records the commands run on the loader host and the files sent to it."""
+
+    def __init__(self):
+        self.commands = []
+        self.sent = []
+
+    def run(self, cmd, **_):
+        self.commands.append(cmd)
+        return types.SimpleNamespace(stdout="/home/loader\n" if cmd == "echo $HOME" else "")
+
+    def send_files(self, src, dst, **_):
+        self.sent.append((os.path.basename(src), dst))
+        return True
+
+
+def _loader(name="loader-1"):
+    return types.SimpleNamespace(name=name, remoter=_FakeRemoter())
+
+
+def _thread(stress_cmd="latte run -f load data_dir/latte/bench/bench.rn -d 100"):
+    return LatteStressThread(
+        loader_set=types.SimpleNamespace(
+            get_db_auth=lambda: None,
+            test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
+        ),
+        stress_cmd=stress_cmd,
+        timeout=60,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": "docker"},
+    )
+
+
+@pytest.fixture(autouse=True)
+def nothing_sent_yet(monkeypatch):
+    monkeypatch.setattr(latte_thread, "_SENT_TO_LOADERS", {})
+    monkeypatch.setattr(latte_thread, "_SEND_LOCKS", {})
+    monkeypatch.setattr(latte_thread, "_LOADER_HOMES", {})
+    monkeypatch.setattr(latte_thread, "_STAGING_RUN", "run")
+
+
+@pytest.fixture
+def script_dir(tmp_path, monkeypatch):
+    """A rune script directory under a fake SCT root, with a subdirectory that must not be sent."""
+    directory = tmp_path / "data_dir" / "latte" / "bench"
+    (directory / "corpus").mkdir(parents=True)
+    for name in ("bench.rn", "helpers.rn", "plan.yaml"):
+        (directory / name).write_text(name, encoding="utf-8")
+    (directory / "corpus" / "documents.tsv").write_text("too big to ship", encoding="utf-8")
+    monkeypatch.setattr(latte_thread, "get_sct_root_path", lambda: str(tmp_path))
+    return directory
+
+
+def test_the_script_directory_is_sent_once_per_loader(script_dir):
+    loader = _loader()
+
+    first = _thread()._script_dir_mount(loader)
+    second = _thread("latte run -f search data_dir/latte/bench/bench.rn -d 10s")._script_dir_mount(loader)
+
+    host_dir = "/home/loader/latte-staging/run/loader-1/scripts/data_dir/latte/bench"
+    assert first == second == f"-v {host_dir}:/data_dir/latte/bench:ro,z"
+    assert loader.remoter.sent == [
+        ("bench.rn", f"{host_dir}/bench.rn"),
+        ("helpers.rn", f"{host_dir}/helpers.rn"),
+        ("plan.yaml", f"{host_dir}/plan.yaml"),
+    ], "top-level files only, each sent once -- the second call reuses the copy"
+    assert loader.remoter.commands.count("echo $HOME") == 1
+
+
+def test_another_run_on_the_same_host_stages_apart(script_dir, monkeypatch):
+    """Parallel runs on one docker host share its home and their loaders' names."""
+    loader = _loader()
+    _thread()._script_dir_mount(loader)
+    monkeypatch.setattr(latte_thread, "_STAGING_RUN", "other-run")
+    monkeypatch.setattr(latte_thread, "_SENT_TO_LOADERS", {})
+
+    _thread()._script_dir_mount(loader)
+
+    first, second = loader.remoter.sent[:3], loader.remoter.sent[3:]
+    assert {dst for _, dst in first}.isdisjoint(dst for _, dst in second)
+
+
+def test_every_loader_gets_a_copy_of_its_own(script_dir):
+    first, second = _loader("loader-1"), _loader("loader-2")
+
+    _thread()._script_dir_mount(first)
+    _thread()._script_dir_mount(second)
+
+    # Docker loaders share one host, so the copies must not share a directory either.
+    assert len(first.remoter.sent) == len(second.remoter.sent) == 3
+    assert {dst for _, dst in first.remoter.sent}.isdisjoint(dst for _, dst in second.remoter.sent)
+
+
+def test_a_changed_file_is_sent_again(script_dir):
+    loader = _loader()
+    _thread()._script_dir_mount(loader)
+
+    edited = script_dir / "bench.rn"
+    edited.write_text("BENCH.RN", encoding="utf-8")  # the same size: only the mtime tells
+    os.utime(edited, ns=(edited.stat().st_atime_ns, edited.stat().st_mtime_ns + 1))
+    _thread()._script_dir_mount(loader)
+
+    assert [name for name, _ in loader.remoter.sent] == ["bench.rn", "helpers.rn", "plan.yaml", "bench.rn"]
+
+
+def test_a_failed_send_fails_the_call_and_is_retried(script_dir):
+    loader = _loader()
+    loader.remoter.send_files = lambda src, dst, **_: False
+    with pytest.raises(RuntimeError, match="Failed to send"):
+        _thread()._script_dir_mount(loader)
+
+    loader.remoter = _FakeRemoter()
+    _thread()._script_dir_mount(loader)
+
+    assert len(loader.remoter.sent) == 3, "a failed send must not count as sent"
+
+
+def test_host_paths_are_quoted(script_dir):
+    loader = _loader("loader 1")
+
+    mount = _thread()._script_dir_mount(loader)
+
+    assert (
+        mount == "-v '/home/loader/latte-staging/run/loader 1/scripts/data_dir/latte/bench:/data_dir/latte/bench:ro,z'"
+    )
+    assert (
+        loader.remoter.commands[-1] == "mkdir -p '/home/loader/latte-staging/run/loader 1/scripts/data_dir/latte/bench'"
+    )

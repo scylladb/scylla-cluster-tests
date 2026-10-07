@@ -14,7 +14,10 @@
 import contextlib
 import logging
 import os
+import posixpath
 import re
+import shlex
+import threading
 import uuid
 from pathlib import Path
 
@@ -91,6 +94,70 @@ def get_latte_operation_type(stress_cmd):
         return "mixed"
 
 
+# What this run sent to loader hosts: (loader name, host path) -> (local path, size, mtime) of the
+# file sent there. Only these count as sent -- a file an earlier run left on a host may hold anything.
+_SENT_TO_LOADERS: dict[tuple[str, str], tuple[str, int, int]] = {}
+_SEND_LOCKS: dict[tuple[str, str], threading.Lock] = {}
+_LOADER_HOMES: dict[str, str] = {}
+_LOADER_FILES_LOCK = threading.Lock()
+# Keeps apart the runs (and test workers) that share a host and loader names -- a docker host, say.
+_STAGING_RUN = uuid.uuid4().hex[:8]
+
+
+def loader_path(loader, relative: str) -> str:
+    """Where *relative* lives on *loader*'s host, under 'latte-staging/<run>/<loader name>' in its
+    home.
+
+    Docker loaders all run on one host; the loader name keeps their files apart. The home is
+    resolved, not written as '$HOME': rsync sends the destination with '--secluded-args', so no
+    remote shell expands it.
+    """
+    with _LOADER_FILES_LOCK:
+        home = _LOADER_HOMES.get(loader.name)
+    if home is None:
+        home = loader.remoter.run("echo $HOME", verbose=False).stdout.strip()
+        if not home.startswith("/"):
+            raise RuntimeError(f"Cannot resolve the home directory on {loader.name}: got {home!r}")
+        with _LOADER_FILES_LOCK:
+            _LOADER_HOMES[loader.name] = home
+    return posixpath.join(home, "latte-staging", _STAGING_RUN, loader.name, relative.lstrip("/"))
+
+
+def _fingerprint(local_path: str) -> tuple[str, int, int]:
+    stat = os.stat(local_path)
+    return local_path, stat.st_size, stat.st_mtime_ns
+
+
+def _send_lock(key: tuple[str, str]) -> threading.Lock:
+    with _LOADER_FILES_LOCK:
+        return _SEND_LOCKS.setdefault(key, threading.Lock())
+
+
+def send_to_loader(loader, files: list[tuple[str, str]]) -> None:
+    """Send '(local_path, host_path)' pairs to *loader*'s host, skipping a file this run already sent
+    there unchanged.
+    """
+    pending = [
+        (local_path, host_path)
+        for local_path, host_path in files
+        if _SENT_TO_LOADERS.get((loader.name, host_path)) != _fingerprint(local_path)
+    ]
+    if not pending:
+        return
+    parents = sorted({posixpath.dirname(host_path) for _, host_path in pending})
+    loader.remoter.run(f"mkdir -p {' '.join(map(shlex.quote, parents))}", verbose=False)
+    for local_path, host_path in pending:
+        key = (loader.name, host_path)
+        with _send_lock(key):
+            fingerprint = _fingerprint(local_path)
+            if _SENT_TO_LOADERS.get(key) == fingerprint:
+                continue
+            # One call per file: the local and agent runners take a single path, not a list.
+            if not loader.remoter.send_files(local_path, host_path, verbose=False):
+                raise RuntimeError(f"Failed to send {local_path} to {loader.name}:{host_path}")
+            _SENT_TO_LOADERS[key] = fingerprint
+
+
 class LatteStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
     SCHEMA_CMD_CALL_COUNTER = {}
@@ -98,7 +165,7 @@ class LatteStressThread(DockerBasedStressThread):
     def __init__(self, *args, extra_files_to_stage=None, record_hdr=True, **kwargs):
         """*extra_files_to_stage* is a list of '(local_path, container_path)' pairs only this
         invocation needs, such as a dataset shard. 'build_stress_cmd' copies them into the loader
-        container with the rune script's directory; the container is removed after the run.
+        container; the container is removed after the run.
 
         *record_hdr* set to False skips the HDR histogram of this invocation even when
         'use_hdrhistogram' is on, for a command whose latency nobody reads.
@@ -116,6 +183,9 @@ class LatteStressThread(DockerBasedStressThread):
 
     def set_stress_operation(self, stress_cmd):
         return get_latte_operation_type(self.stress_cmd)
+
+    def _script_name(self) -> str:
+        return re.search(r"([/\w-]*\.rn)", self.stress_cmd).group(0)
 
     def _build_ssl_config(self, cmd_runner, loader):
         """Build SSL configuration flags and upload SSL files to the loader."""
@@ -162,18 +232,23 @@ class LatteStressThread(DockerBasedStressThread):
                     raise RuntimeError(f"Could not find proper dc-pair for the loader rack value: {rack}")
         return datacenter, rack
 
+    def _script_dir_mount(self, loader) -> str:
+        """Send the top-level files of the rune script's directory to the loader host, and return the
+        docker option mounting them where the command looks for the script.
+
+        Every latte call gets a container of its own, so copying them into the container cost a
+        transfer per file per call; on the host they are sent once, and again only if changed.
+        """
+        script_dir = Path(self._script_name()).parent
+        host_dir = loader_path(loader, f"scripts/{script_dir}")
+        files = sorted(path for path in (Path(get_sct_root_path()) / script_dir).iterdir() if path.is_file())
+        send_to_loader(loader, [(str(path), f"{host_dir}/{path.name}") for path in files])
+        return "-v " + shlex.quote(f"{host_dir}:/{str(script_dir).lstrip('/')}:ro,z")
+
     def build_stress_cmd(self, cmd_runner, loader, hosts):
-        # extract the script so we know which files to mount into the docker image
-        script_name_regx = re.compile(r"([/\w-]*\.rn)")
-        script_name = script_name_regx.search(self.stress_cmd).group(0)
+        script_name = self._script_name()
         if script_name not in self.SCHEMA_CMD_CALL_COUNTER:
             self.SCHEMA_CMD_CALL_COUNTER[script_name] = 0
-
-        for src_file in (Path(get_sct_root_path()) / script_name).parent.iterdir():
-            if src_file.is_file():
-                remote_path = str(Path(script_name).parent / src_file.name)
-                if not cmd_runner.run(f"test -f {remote_path}", ignore_status=True, verbose=False).ok:
-                    cmd_runner.send_files(str(src_file), remote_path)
 
         for local_path, container_path in self.extra_files_to_stage:
             if not cmd_runner.send_files(local_path, container_path, verbose=False):
@@ -305,6 +380,8 @@ class LatteStressThread(DockerBasedStressThread):
                 "--security-opt seccomp=unconfined "
                 f"--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker}"
                 f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}:z"
+                # The script path in the command is relative, so it resolves against the workdir.
+                f" --workdir / {self._script_dir_mount(loader)}"
             ),
         )
         hosts = " ".join([i.cql_address for i in self.node_list])
