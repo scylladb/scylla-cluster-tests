@@ -4,7 +4,7 @@
 
 Scylla Manager server and agent: versions, repos and backup/restore settings.
 
-**25 options.**
+**26 options.**
 
 
 <a id="backup_bucket_backend"></a>
@@ -93,6 +93,17 @@ Manager agent backup general configuration: checkers, transfers, low_level_retri
 **default:** N/A
 
 **type:** sdcm.mgmt.common.AgentBackupParameters
+
+
+<a id="mgmt_backup_repaired_percent"></a>
+
+## **mgmt_backup_repaired_percent** / SCT_MGMT_BACKUP_REPAIRED_PERCENT
+
+Percent of the backup dataset ([`mgmt_prepare_snapshot_size`](#mgmt_prepare_snapshot_size)) repaired by incremental repair before the backup, the rest is left unrepaired. Used by Scylla API backup tests, e.g. 85
+
+**default:** 0
+
+**type:** int
 
 
 <a id="mgmt_docker_image"></a>

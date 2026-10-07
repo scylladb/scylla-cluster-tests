@@ -1,0 +1,18 @@
+test_duration: 720
+
+instance_type_db: 'i8ge.xlarge'
+sizing_loader:
+  vcpu: 4
+  memory: '>=16'
+
+n_db_nodes: 3
+n_loaders: 4
+
+# dataset per rack (1 row = 1Kb, RF=3), override with SCT_MGMT_PREPARE_SNAPSHOT_SIZE
+mgmt_prepare_snapshot_size: 1000  # GB
+mgmt_backup_repaired_percent: 85
+user_profile_table_count: 1
+
+user_prefix: scylla-api-backup-restore
+
+fallback_to_next_region: false

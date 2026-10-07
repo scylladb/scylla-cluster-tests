@@ -57,6 +57,12 @@ class ManagerConfigMixin(BaseModel):
     mgmt_agent_backup_config: Annotated[AgentBackupParameters | None, BeforeValidator(dict_or_str)] = SctField(
         description="Manager agent backup general configuration: checkers, transfers, low_level_retries. For example, {'checkers': 100, 'transfers': 2, 'low_level_retries': 20}",
     )
+    mgmt_backup_repaired_percent: int = SctField(
+        ge=0,
+        le=100,
+        description="Percent of the backup dataset (`mgmt_prepare_snapshot_size`) repaired by incremental repair "
+        "before the backup, the rest is left unrepaired. Used by Scylla API backup tests, e.g. 85",
+    )
     mgmt_docker_image: String = SctField(
         description="Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'",
     )

@@ -195,6 +195,7 @@ jepsen_test_run_policy: all
 max_events_severities: ""
 scylla_mgmt_agent_version: '3.12.0'
 mgmt_docker_image: 'scylladb/scylla-manager:3.12.0'
+mgmt_backup_repaired_percent: 0
 k8s_log_api_calls: false
 k8s_deploy_monitoring: false
 k8s_minio_storage_size: '10Gi'

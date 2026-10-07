@@ -377,6 +377,7 @@ class SnapshotData:
       created via c-s user profile.
     - node_ids: list of node ids where backup was created
     - one_one_restore_params: dict with parameters for 1-1 restore ('account_credential_id' and 'sm_cluster_id')
+    - prefix: backup prefix in the bucket, for backups made via Scylla API instead of Manager
     """
 
     locations: list[str]
@@ -389,6 +390,7 @@ class SnapshotData:
     prohibit_verification_read: bool
     node_ids: list[str]
     one_one_restore_params: dict[str, str | int] | None
+    prefix: str | None = None
 
 
 class SnapshotOperations(ClusterTester):
@@ -425,6 +427,7 @@ class SnapshotOperations(ClusterTester):
             prohibit_verification_read=snapshot_dict["prohibit_verification_read"],
             node_ids=snapshot_dict.get("node_ids"),
             one_one_restore_params=snapshot_dict.get("one_one_restore_params"),
+            prefix=snapshot_dict.get("prefix"),
         )
         return snapshot_data
 
