@@ -23,7 +23,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from sdcm.utils.trigger_matrix.constants import (
     DEFAULT_ARCH,
@@ -117,6 +117,52 @@ class MatrixConfig(BaseModel):
     cron_triggers: list[CronTriggerConfig] = Field(default_factory=list)
     email_recipients: list[str] = Field(default_factory=list)
     jenkinsfiles: list[JenkinsfileEntry] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def reject_cross_arch_twins(self) -> "MatrixConfig":
+        """A Jenkins job must not be listed under two architectures for the same version (SCT-1168).
+
+        Downstream jobs receive only `scylla_version`; their architecture comes from their own
+        instance type. A per-arch "twin" therefore runs on the same arch both times, and since
+        release triggers run the matrix once per arch image, it fires the job twice. Entries on
+        different archs are fine when their version ranges are disjoint - that is how a job whose
+        instance type differs between release branches is described.
+        """
+        by_name: dict[str, list[JobConfig]] = {}
+        for job in self.jobs:
+            if not job.disabled:
+                by_name.setdefault(job.job_name, []).append(job)
+        twins = sorted(
+            name
+            for name, jobs in by_name.items()
+            if any(
+                job_arch(a) != job_arch(b) and _version_ranges_overlap(a, b)
+                for i, a in enumerate(jobs)
+                for b in jobs[i + 1 :]
+            )
+        )
+        if twins:
+            raise ValueError(
+                f"jobs listed under more than one arch for the same versions: {twins}. The arch is not "
+                "passed to the job, so each version range needs one entry, with the arch its instance "
+                "type actually runs on in that release"
+            )
+        return self
+
+
+def _matches_version(job: JobConfig, version: str) -> bool:
+    """Same prefix rules as filters.filter_jobs uses for include_versions / exclude_versions."""
+    if job.include_versions and not any(version.startswith(p) for p in job.include_versions):
+        return False
+    return not any(version.startswith(p) for p in job.exclude_versions)
+
+
+def _version_ranges_overlap(a: JobConfig, b: JobConfig) -> bool:
+    # Probe every listed prefix, a version under each of them, master, and a future release
+    # neither entry names - enough to find a version both entries would accept.
+    prefixes = {*a.include_versions, *a.exclude_versions, *b.include_versions, *b.exclude_versions}
+    probes = {"master", "9999.9", *prefixes, *(f"{p}.999" for p in prefixes)}
+    return any(_matches_version(a, v) and _matches_version(b, v) for v in probes)
 
 
 # Keys allowed directly on a job entry — anything else is a Jenkins parameter and

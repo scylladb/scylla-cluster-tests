@@ -114,6 +114,55 @@ def test_valid_backends_accepted(tmp_path, backend):
     assert config.jobs[0].backend == backend
 
 
+def test_same_job_under_two_arches_rejected(tmp_path):
+    """SCT-1168: an x86 + aarch64 twin of one Jenkins job fires it twice on the same arch."""
+    path = tmp_path / "twins.yaml"
+    twin = {"job_name": "tier1/twcs", "backend": "aws"}
+    path.write_text(yaml.dump({"jobs": [twin, {**twin, "labels": ["aarch64"]}]}))
+    with pytest.raises(MatrixValidationError, match=r"more than one arch for the same versions: \['tier1/twcs'\]"):
+        load_matrix_config(path)
+
+
+@pytest.mark.parametrize(
+    "x86_range, arm_range",
+    [
+        pytest.param({"exclude_versions": ["2026.1"]}, {"include_versions": ["2026"]}, id="2026.2-is-in-both"),
+        pytest.param({"include_versions": ["2025"]}, {"exclude_versions": ["2026"]}, id="master-is-in-both"),
+    ],
+)
+def test_same_job_under_two_arches_with_overlapping_versions_rejected(tmp_path, x86_range, arm_range):
+    path = tmp_path / "twins.yaml"
+    job = {"job_name": "tier1/twcs", "backend": "aws"}
+    path.write_text(yaml.dump({"jobs": [{**job, **x86_range}, {**job, "arch": "aarch64", **arm_range}]}))
+    with pytest.raises(MatrixValidationError, match="more than one arch"):
+        load_matrix_config(path)
+
+
+def test_same_job_under_two_arches_split_by_release_allowed(tmp_path):
+    """A job whose instance type moved to Graviton on newer branches gets one entry per range."""
+    path = tmp_path / "split.yaml"
+    job = {"job_name": "tier1/mv-si", "backend": "aws"}
+    older = ["2024", "2025", "2026.1"]
+    path.write_text(
+        yaml.dump(
+            {
+                "jobs": [
+                    {**job, "arch": "x86_64", "include_versions": older},
+                    {**job, "arch": "aarch64", "exclude_versions": older},
+                ]
+            }
+        )
+    )
+    assert [j.arch for j in load_matrix_config(path).jobs] == ["x86_64", "aarch64"]
+
+
+def test_same_job_repeated_on_one_arch_allowed(tmp_path):
+    path = tmp_path / "repeats.yaml"
+    twin = {"job_name": "perf", "backend": "aws", "arch": "aarch64"}
+    path.write_text(yaml.dump({"jobs": [{**twin, "include_versions": ["master"]}, {**twin, "labels": ["weekly"]}]}))
+    assert len(load_matrix_config(path).jobs) == 2
+
+
 def test_pre_release_loaded_from_yaml(tmp_path):
     data = {
         "jobs": [

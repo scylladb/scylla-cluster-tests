@@ -221,7 +221,7 @@ def test_default_scylla_version_used_when_empty(tmp_path):
 
 
 def test_duplicate_job_names_deduplicated(tmp_path):
-    """When same job_name appears multiple times (e.g. x86 + aarch64), only trigger once."""
+    """When same job_name matches more than once (e.g. overlapping labels), only trigger once."""
     data = {
         "defaults": {"provision_type": "on_demand"},
         "jobs": [
@@ -233,7 +233,7 @@ def test_duplicate_job_names_deduplicated(tmp_path):
             {
                 "job_name": "tier1/longevity-twcs-48h-test",
                 "backend": "aws",
-                "labels": ["weekly", "aarch64"],
+                "labels": ["weekly", "week-a"],
             },
             {
                 "job_name": "tier1/longevity-2tb-5days-test",
