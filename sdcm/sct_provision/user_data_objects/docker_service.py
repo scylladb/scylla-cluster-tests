@@ -12,7 +12,7 @@
 # Copyright (c) 2025 ScyllaDB
 from dataclasses import dataclass
 
-from sdcm.provision.common.utils import install_docker_service
+from sdcm.provision.common.utils import configure_backoff_timeout, install_docker_service
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
 
@@ -24,5 +24,5 @@ class DockerUserDataObject(SctUserDataObject):
 
     @property
     def script_to_run(self) -> str:
-        script = install_docker_service()
-        return script
+        # each user data object runs as its own script, so it has to define backoff() itself
+        return configure_backoff_timeout() + install_docker_service()
