@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Short test that adds and removes LDAP role permissions on a 3-node cluster with an OpenLDAP server
+    and LDAP authorization. Runs a light cassandra-stress write at QUORUM to check that Scylla applies
+    each permission change.
+  test_type: features
+  tier: tier2
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  features:
+    - authorization
+  team_ownership: core-qa
+
 test_duration: 120
 
 use_ldap: true

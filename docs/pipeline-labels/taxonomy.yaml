@@ -107,10 +107,12 @@ features:
     - elasticity
 
 team_ownership:
-  description: "QA team responsible for maintaining this test"
+  description: "QA team, or the GitHub team (scylladb/<team>) that owns the feature, responsible for maintaining this test"
   values:
     - core-test-infra
     - core-qa
     - storage-qa
     - cloud-qa
     - qa-tools
+    - scylladb/alternator
+    - scylladb/mgmt

@@ -35,5 +35,5 @@ tls-ssl, multi-dc, cdc, tablets, vnodes, alternator, encryption-at-rest, ldap, a
 aws, gce, azure, docker, k8s-eks, k8s-gke, k8s-local-kind, baremetal, xcloud, oci
 
 ## team_ownership
-core-test-infra, core-qa, storage-qa, cloud-qa, qa-tools — the QA team responsible
-for maintaining this test.
+core-test-infra, core-qa, storage-qa, cloud-qa, qa-tools, scylladb/alternator, scylladb/mgmt — the team
+responsible for maintaining this test: a QA team, or the GitHub team (`scylladb/<team>`) that owns the feature.

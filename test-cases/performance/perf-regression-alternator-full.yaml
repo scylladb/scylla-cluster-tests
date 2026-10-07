@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Alternator performance regression test on a 3-node cluster with 9 YCSB loaders. Loads 18M items,
+    then runs write, read and mixed workloads in unthrottled and throttled phases. Checks latency
+    against fixed P90 and P99 limits.
+  test_type: performance
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: alternator
+  team_ownership: scylladb/alternator
+
 test_duration: 840
 
 prepare_write_cmd:

@@ -142,7 +142,9 @@ def test_invalid_team_ownership():
         TestMetadata(team_ownership="not-a-team")
 
 
-@pytest.mark.parametrize("team", ["core-test-infra", "core-qa", "storage-qa", "cloud-qa", "qa-tools"])
+@pytest.mark.parametrize(
+    "team", ["core-test-infra", "core-qa", "storage-qa", "cloud-qa", "qa-tools", "scylladb/alternator", "scylladb/mgmt"]
+)
 def test_all_valid_team_ownership(team):
     m = TestMetadata(team_ownership=team)
     assert m.team_ownership == team
