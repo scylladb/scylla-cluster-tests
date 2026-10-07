@@ -23,10 +23,10 @@ jenkinsfiles:
 # "weekly" on its own still selects the FULL set — labels are AND-matched, so
 # release / scylla-pkg triggers passing labels_selector=weekly are unaffected.
 #
-# NOTE: entries that resolve to the same Jenkins job (the x86 + aarch64 twins of
-# longevity-twcs-48h-test and elasticity-90-percent-with-nemesis-test) MUST share
-# the same week label. Only the first match is triggered (dedup by resolved path),
-# so twins on different weeks would make the job fire every week again.
+# NOTE: never list the same Jenkins job twice (e.g. an x86 + aarch64 "twin").
+# Downstream jobs get only scylla_version, so the arch comes from the job's own
+# instance type, not from the matrix entry. Release triggers run this matrix once
+# per arch image, so a twin fires the same job twice on the same arch (SCT-1168).
 
 # Tier1 jobs are independent of each other, so every backend runs its own latest build
 # rather than waiting for one build to be published everywhere. This is the default, spelled
@@ -100,14 +100,6 @@ jobs:
       - "week-b"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
-  - job_name: "tier1/longevity-twcs-48h-test"
-    backend: "aws"
-    params:
-      region: "us-east-1"
-    labels:
-      - "weekly"
-      - "week-b"
-
   - job_name: "tier1/longevity-50gb-3days-test"
     backend: "aws"
     params:
@@ -117,15 +109,6 @@ jobs:
       - "weekly"
       - "week-a"
     include_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
-
-  - job_name: "tier1/elasticity-90-percent-with-nemesis-test"
-    backend: "aws"
-    params:
-      region: "us-east-1"
-    labels:
-      - "weekly"
-      - "week-a"
-    exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   - job_name: "tier1/longevity-multidc-schema-topology-changes-12h-test"
     backend: "aws"
@@ -144,7 +127,7 @@ jobs:
       region: "us-east-1"
     labels:
       - "weekly"
-      - "week-b"  # must match the x86 twin above
+      - "week-b"
       - "aarch64"
     exclude_versions: ["2024.1", "2025.1"]
 
@@ -164,7 +147,7 @@ jobs:
       region: "us-east-1"
     labels:
       - "weekly"
-      - "week-a"  # must match the x86 twin above
+      - "week-a"
       - "aarch64"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
