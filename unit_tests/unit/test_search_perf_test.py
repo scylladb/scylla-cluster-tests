@@ -18,6 +18,7 @@ what FTS happens to be called cannot make these pass or fail. fts_test's own des
 in test_fts_test.py.
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -284,6 +285,17 @@ class _PhaseTester:
 
     def _load_shard(self, *args):
         return search_perf_test.SearchPerformanceTest._load_shard(self, *args)
+
+
+def test_setup_phases_record_no_hdr(monkeypatch):
+    monkeypatch.setattr(search_perf_test, "DbEventsFilter", lambda **_: contextlib.nullcontext())
+    monkeypatch.setattr(search_perf_test, "wait_for_index_build_seconds", lambda *_: 1.0)
+    tester = _PhaseTester()
+
+    search_perf_test.SearchPerformanceTest._load_shard(tester, "/local", "/remote", "records.tsv", 10, 60)
+    search_perf_test.SearchPerformanceTest._build_index(tester, 10, 60, "bench_idx_1", "bench")
+
+    assert [asked["record_hdr"] for asked in tester.asked] == [False, False]
 
 
 def _load(tester, local_ds_dir, *shard_ids):
