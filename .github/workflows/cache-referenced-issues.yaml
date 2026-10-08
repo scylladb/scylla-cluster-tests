@@ -1,0 +1,89 @@
+name: Cache referenced issues
+# Referenced-only GitHub issue cache (QAINFRA-104 / SCT-1172).
+#
+# Instead of crawling every issue and PR of every repo (cache-issues.yaml), cache only
+# the GitHub issues that test code references:
+#   scan     (weekly)  scan SCT's active branches and publish issues/refs/scylla-cluster-tests.json.
+#                      dtest publishes issues/refs/scylla-dtest.json the same way, from its own repo.
+#   refresh  (every 2h) read the union of all issues/refs/*.json, fetch the state of each GitHub
+#                      ref, write the reader-compatible CSVs, and mark each item as in use: the
+#                      `used-by-sct` / `used-by-dtest` labels, or one marker comment where the
+#                      token may not label. Jira refs are refreshed by dtest.
+#
+# SHADOW MODE: CSVs go to `issues-v2/` and labels run as dry-run, while cache-issues.yaml keeps
+# producing `issues/`. Each run compares the two. The cutover (QAINFRA-149) points CACHE_PREFIX
+# at `issues/`, defaults LABELS to `on`, and removes cache-issues.yaml.
+#
+# Local testing: see the docstring of .github/scripts/issues_cache.py.
+permissions: {}
+on:
+  schedule:
+    - cron: '30 4 * * 1'   # weekly scan (+ refresh)
+    - cron: '15 */2 * * *' # refresh
+  workflow_dispatch:
+    inputs:
+      scan:
+        description: 'Rescan SCT branches before refreshing'
+        type: boolean
+        default: false
+      labels:
+        description: 'In-use labels/comments: off, dry-run (log the plan only) or on'
+        type: choice
+        options: [dry-run, on, off]
+        default: dry-run
+
+env:
+  CACHE_PREFIX: issues-v2
+  LABELS: ${{ github.event.inputs.labels || 'dry-run' }}
+
+jobs:
+  cache:
+    runs-on: ubuntu-latest
+    # run only on main repository, won't work on forks
+    if: github.repository == 'scylladb/scylla-cluster-tests'
+    concurrency:
+      group: cache-referenced-issues
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.S3_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-east-1
+      BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GRANT_FULL: full=id=${{ secrets.CLOUDIUS_SYSTEMS_CANONICAL_ID }}
+      GRANT_READ: read=id=${{ secrets.DBAAS_DATA_QA_CANONICAL_ID }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # all branches are scanned, so the scan needs every remote ref
+          fetch-depth: ${{ (github.event.schedule == '30 4 * * 1' || github.event.inputs.scan == 'true') && '0' || '1' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Scan SCT branches and publish the ref manifest
+        if: github.event.schedule == '30 4 * * 1' || github.event.inputs.scan == 'true'
+        run: |
+          python .github/scripts/issues_cache.py scan --repo-dir . --out manifest.json
+          aws s3 cp manifest.json "s3://$BUCKET/issues/refs/scylla-cluster-tests.json" --grants "$GRANT_FULL" "$GRANT_READ"
+
+      - name: Refresh GitHub issue states and in-use markers
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
+        run: |
+          mkdir -p refs state
+          aws s3 cp "s3://$BUCKET/issues/refs/" refs/ --recursive
+          aws s3 cp "s3://$BUCKET/$CACHE_PREFIX/cache-state-github.json" state/ || echo "no previous state (first run)"
+          python .github/scripts/issues_cache.py refresh-github \
+            --refs-dir refs --out-dir out --state state/cache-state-github.json --labels "$LABELS"
+          # --delete is scoped to the GitHub CSVs; dtest owns jira_*.csv under the same prefix
+          aws s3 sync out/ "s3://$BUCKET/$CACHE_PREFIX/" --delete \
+            --exclude '*' --include '*.csv' --exclude 'jira_*' --grants "$GRANT_FULL" "$GRANT_READ"
+          aws s3 cp state/cache-state-github.json "s3://$BUCKET/$CACHE_PREFIX/cache-state-github.json" --grants "$GRANT_FULL" "$GRANT_READ"
+
+      - name: Shadow check against the full cache
+        if: env.CACHE_PREFIX != 'issues'
+        run: |
+          aws s3 sync "s3://$BUCKET/issues/" old/ --exclude '*' --include 'scylladb_*.csv' --include 'pull-requests/scylladb_*.csv'
+          python .github/scripts/issues_cache.py compare --new-dir out --old-dir old
