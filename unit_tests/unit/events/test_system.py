@@ -14,6 +14,7 @@
 import pickle
 from textwrap import dedent
 
+import pytest
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import (
@@ -31,98 +32,84 @@ from sdcm.sct_events.system import (
 )
 
 
-def test_startup_test_event():
-    event = StartupTestEvent()
-    event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-    assert str(event) == (
-        "(StartupTestEvent Severity.NORMAL) period_type=not-set event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_test_framework_event():
-    event = TestFrameworkEvent(
-        source="s1",
-        source_method="m1",
-        args=(
-            "a1",
-            "a2",
+@pytest.mark.parametrize(
+    "event_class, kwargs, expected",
+    [
+        pytest.param(
+            StartupTestEvent,
+            {},
+            "(StartupTestEvent Severity.NORMAL) period_type=not-set event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e",
+            id="startup-test",
         ),
-        kwargs={
-            "k1": "v1",
-            "k2": "v2",
-        },
-        message="msg1",
-        exception="e1",
-    )
+        pytest.param(
+            TestFrameworkEvent,
+            {
+                "source": "s1",
+                "source_method": "m1",
+                "args": ("a1", "a2"),
+                "kwargs": {"k1": "v1", "k2": "v2"},
+                "message": "msg1",
+                "exception": "e1",
+            },
+            "(TestFrameworkEvent Severity.ERROR) period_type=one-time "
+            "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e, source=s1.m1(args=('a1', 'a2'), "
+            "kwargs={'k1': 'v1', 'k2': 'v2'})"
+            " message=msg1\nexception=e1",
+            id="test-framework",
+        ),
+        pytest.param(
+            SpotTerminationEvent,
+            {"node": "node1", "message": "m1"},
+            "(SpotTerminationEvent Severity.CRITICAL) period_type=one-time "
+            "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: node=node1 message=m1",
+            id="spot-termination",
+        ),
+        pytest.param(
+            NodeUnreachableEvent,
+            {"node": "loader-1", "message": "m1"},
+            "(NodeUnreachableEvent Severity.CRITICAL) period_type=one-time "
+            "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: node=loader-1 message=m1",
+            id="node-unreachable",
+        ),
+        pytest.param(
+            ScyllaRepoEvent,
+            {"url": "u1", "error": "e1"},
+            "(ScyllaRepoEvent Severity.WARNING) period_type=one-time "
+            "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: url=u1 error=e1",
+            id="scylla-repo",
+        ),
+        pytest.param(
+            InfoEvent,
+            {"message": "m1"},
+            "(InfoEvent Severity.NORMAL) period_type=not-set event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: message=m1",
+            id="info",
+        ),
+        pytest.param(
+            ThreadFailedEvent,
+            {"message": "m1", "traceback": "t1"},
+            "(ThreadFailedEvent Severity.ERROR) period_type=one-time "
+            "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: message=m1\nt1",
+            id="thread-failed",
+        ),
+        pytest.param(
+            CoreDumpEvent,
+            {"node": "node1", "corefile_url": "url1", "backtrace": "b1", "download_instructions": "d1"},
+            dedent("""\
+                (CoreDumpEvent Severity.ERROR) period_type=one-time event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e node=node1
+                corefile_url=url1
+                backtrace=b1
+                Info about modules can be found in SCT logs by search for 'Coredump Modules info'
+                download_instructions:
+                d1
+                """),
+            id="coredump",
+        ),
+    ],
+)
+def test_system_event_msgfmt(event_class, kwargs, expected):
+    event = event_class(**kwargs)
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-    assert str(event) == (
-        "(TestFrameworkEvent Severity.ERROR) period_type=one-time "
-        "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e, source=s1.m1(args=('a1', 'a2'), "
-        "kwargs={'k1': 'v1', 'k2': 'v2'})"
-        " message=msg1\nexception=e1"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_spot_termination_event():
-    event = SpotTerminationEvent(node="node1", message="m1")
-    event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-    assert str(event) == (
-        "(SpotTerminationEvent Severity.CRITICAL) period_type=one-time "
-        "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: node=node1 message=m1"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_node_unreachable_event():
-    event = NodeUnreachableEvent(node="loader-1", message="m1")
-    event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-    assert str(event) == (
-        "(NodeUnreachableEvent Severity.CRITICAL) period_type=one-time "
-        "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: node=loader-1 message=m1"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_scylla_repo_event():
-    event = ScyllaRepoEvent(url="u1", error="e1")
-    event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-    assert str(event) == (
-        "(ScyllaRepoEvent Severity.WARNING) period_type=one-time "
-        "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: url=u1 error=e1"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_info_event():
-    event = InfoEvent(message="m1")
-    event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-    assert str(event) == (
-        "(InfoEvent Severity.NORMAL) period_type=not-set event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: message=m1"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_thread_failed_event():
-    event = ThreadFailedEvent(message="m1", traceback="t1")
-    event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-    assert str(event) == (
-        "(ThreadFailedEvent Severity.ERROR) period_type=one-time "
-        "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: message=m1\nt1"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_coredump_event():
-    event = CoreDumpEvent(node="node1", corefile_url="url1", backtrace="b1", download_instructions="d1")
-    event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-    assert str(event) == (
-        "(CoreDumpEvent Severity.ERROR) period_type=one-time "
-        "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e node=node1\ncorefile_url=url1\nbacktrace=b1\n"
-        "Info about modules can be found in SCT logs by search for 'Coredump Modules info'\n"
-        "download_instructions:\nd1\n"
-    )
+    assert str(event) == expected
     assert event == pickle.loads(pickle.dumps(event))
 
 
@@ -186,36 +173,23 @@ def test_known_system_status_events():
     assert issubclass(InstanceStatusEvent.POWER_OFF, InstanceStatusEvent)
 
 
-def test_instance_startup_event():
-    event1 = InstanceStatusEvent.STARTUP()
-    assert event1.severity == Severity.WARNING
+@pytest.mark.parametrize(
+    "event_class, line",
+    [
+        pytest.param(InstanceStatusEvent.STARTUP, "kernel: Linux version", id="startup"),
+        pytest.param(InstanceStatusEvent.REBOOT, "Stopped target Host and Network Name Lookups", id="reboot"),
+        pytest.param(InstanceStatusEvent.POWER_OFF, "Powering Off", id="power-off"),
+    ],
+)
+def test_instance_status_event(event_class, line):
+    event = event_class()
+    assert event.severity == Severity.WARNING
 
-    assert event1 is event1.add_info(node="n1", line="kernel: Linux version", line_number=0)
-    assert event1.severity == Severity.WARNING
-    assert event1.node == "n1"
-    assert event1.line == "kernel: Linux version"
-    assert event1.line_number == 0
-
-
-def test_instance_reboot_event():
-    event1 = InstanceStatusEvent.REBOOT()
-    assert event1.severity == Severity.WARNING
-
-    assert event1 is event1.add_info(node="n1", line="Stopped target Host and Network Name Lookups", line_number=0)
-    assert event1.severity == Severity.WARNING
-    assert event1.node == "n1"
-    assert event1.line == "Stopped target Host and Network Name Lookups"
-    assert event1.line_number == 0
-
-
-def test_instance_poweroff_event():
-    event1 = InstanceStatusEvent.POWER_OFF()
-    assert event1.severity == Severity.WARNING
-    assert event1 is event1.add_info(node="n1", line="Powering Off", line_number=0)
-    assert event1.severity == Severity.WARNING
-    assert event1.node == "n1"
-    assert event1.line == "Powering Off"
-    assert event1.line_number == 0
+    assert event is event.add_info(node="n1", line=line, line_number=0)
+    assert event.severity == Severity.WARNING
+    assert event.node == "n1"
+    assert event.line == line
+    assert event.line_number == 0
 
 
 def test_instance_status_events_patterns(test_data_dir):
