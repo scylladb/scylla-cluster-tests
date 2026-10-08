@@ -237,12 +237,25 @@ jobs:
   # Adding a "release"-labelled twin here would be a byte-identical entry, not
   # additional coverage.
 
+  # Moved to sizing_db (Graviton) on master only; release branches still run i4i.
   - job_name: "rolling-upgrade/rolling-upgrade-multidc-test"
     backend: "aws"
+    arch: "x86_64"
     labels:
       - "release"
       - "deb"
-    exclude_versions: []
+    include_versions: ["2024", "2025", "2026.1", "2026.2", "2026.3"]
+    params:
+      region: "eu-west-1"
+      new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
+
+  - job_name: "rolling-upgrade/rolling-upgrade-multidc-test"
+    backend: "aws"
+    arch: "aarch64"
+    labels:
+      - "release"
+      - "deb"
+    exclude_versions: ["2024", "2025", "2026.1", "2026.2", "2026.3"]
     params:
       region: "eu-west-1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"

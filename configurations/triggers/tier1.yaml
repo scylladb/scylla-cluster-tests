@@ -23,10 +23,13 @@ jenkinsfiles:
 # "weekly" on its own still selects the FULL set — labels are AND-matched, so
 # release / scylla-pkg triggers passing labels_selector=weekly are unaffected.
 #
-# NOTE: entries that resolve to the same Jenkins job (the x86 + aarch64 twins of
-# longevity-twcs-48h-test and elasticity-90-percent-with-nemesis-test) MUST share
-# the same week label. Only the first match is triggered (dedup by resolved path),
-# so twins on different weeks would make the job fire every week again.
+# NOTE: an entry's arch must be the arch the job's own config resolves to on that
+# release's SCT branch. Downstream jobs get only scylla_version, so the matrix arch
+# cannot change it; it only decides which per-arch release run (x86 or ARM AMI)
+# triggers the job and which images resolve its version. When branches differ,
+# split the entry by version range: the open-ended entry follows master (new
+# branches inherit it), the other lists the older branches. Two arches whose
+# version ranges overlap fire the job twice (SCT-1168) and fail validation.
 
 # Tier1 jobs are independent of each other, so every backend runs its own latest build
 # rather than waiting for one build to be published everywhere. This is the default, spelled
@@ -75,38 +78,57 @@ jobs:
       - "week-b"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
+  # Moved to sizing_db (Graviton) in 2026.2; older branches still run i4i.
   - job_name: "tier1/longevity-mv-si-4days-streaming-test"
     backend: "aws"
+    arch: "x86_64"
     params:
       region: "eu-west-1"
     labels:
       - "weekly"
       - "week-a"
+    include_versions: ["2024", "2025", "2026.1"]
+
+  - job_name: "tier1/longevity-mv-si-4days-streaming-test"
+    backend: "aws"
+    arch: "aarch64"
+    params:
+      region: "eu-west-1"
+    labels:
+      - "weekly"
+      - "week-a"
+    exclude_versions: ["2024", "2025", "2026.1"]
+
+  # Moved to sizing_db (Graviton) in 2026.2; older branches still run i4i.
+  - job_name: "tier1/longevity-schema-topology-changes-12h-test"
+    backend: "aws"
+    arch: "x86_64"
+    params:
+      region: "eu-west-1"
+    labels:
+      - "weekly"
+      - "week-a"
+    include_versions: ["2024", "2025", "2026.1"]
 
   - job_name: "tier1/longevity-schema-topology-changes-12h-test"
     backend: "aws"
+    arch: "aarch64"
     params:
       region: "eu-west-1"
     labels:
       - "weekly"
       - "week-a"
+    exclude_versions: ["2024", "2025", "2026.1"]
 
   - job_name: "tier1/scale-schema-5000-tables-latte-test"
     backend: "aws"
+    arch: "aarch64"
     params:
       region: "eu-west-1"
     labels:
       - "weekly"
       - "week-b"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
-
-  - job_name: "tier1/longevity-twcs-48h-test"
-    backend: "aws"
-    params:
-      region: "us-east-1"
-    labels:
-      - "weekly"
-      - "week-b"
 
   - job_name: "tier1/longevity-50gb-3days-test"
     backend: "aws"
@@ -117,15 +139,6 @@ jobs:
       - "weekly"
       - "week-a"
     include_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
-
-  - job_name: "tier1/elasticity-90-percent-with-nemesis-test"
-    backend: "aws"
-    params:
-      region: "us-east-1"
-    labels:
-      - "weekly"
-      - "week-a"
-    exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   - job_name: "tier1/longevity-multidc-schema-topology-changes-12h-test"
     backend: "aws"
@@ -144,7 +157,7 @@ jobs:
       region: "us-east-1"
     labels:
       - "weekly"
-      - "week-b"  # must match the x86 twin above
+      - "week-b"
       - "aarch64"
     exclude_versions: ["2024.1", "2025.1"]
 
@@ -164,7 +177,7 @@ jobs:
       region: "us-east-1"
     labels:
       - "weekly"
-      - "week-a"  # must match the x86 twin above
+      - "week-a"
       - "aarch64"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 

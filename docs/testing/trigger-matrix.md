@@ -142,9 +142,9 @@ release path uses, so releases keep testing everything.
 Two invariants are enforced by `unit_tests/trigger_matrix/test_biweekly_split.py`:
 
 - **Every `weekly` job has exactly one week label.** None means it never runs; both means it runs weekly.
-- **Entries that resolve to the same Jenkins job share a week label.** The x86 and `aarch64` twins of
-  `longevity-twcs-48h-test` / `elasticity-90-percent-with-nemesis-test` are deduplicated by resolved path,
-  so twins on different weeks would make the job fire on *both* weeks — silently undoing the alternation.
+- **Entries that resolve to the same Jenkins job share a week label.** Entries that split one job by
+  release (see "Architecture" below) are deduplicated by resolved path, so splits on different weeks
+  would make the job fire on *both* weeks — silently undoing the alternation.
 
 **Why the cron expressions look odd.** Cron has no "every 2 weeks" — there is no week-number field, and
 `*/14` in day-of-month restarts each month (days 1, 15, 29), so AND-ed with Saturday it fires only when
@@ -371,8 +371,33 @@ uv run sct.py trigger-matrix --matrix configurations/triggers/perf-regression.ya
     --scylla-version "master:latest" --version-resolution common --dry-run
 ```
 
-ARM jobs must declare `arch: "aarch64"` in the matrix YAML — images are published per architecture, and
-without it their version is resolved against x86_64 images.
+#### Architecture
+
+A matrix entry's `arch` (or the legacy `aarch64` label) does **not** reach the Jenkins job — the job only
+gets `scylla_version` and runs on whatever arch its own config resolves to (`instance_type_db`, or
+`sizing_db`, which picks Graviton on AWS unless it sets `arch:`). The matrix arch only decides:
+
+- which release run triggers the job — `<branch>/ami` starts the trigger once with the x86_64 AMI and once
+  with the aarch64 AMI, and each run keeps only the entries of its own arch;
+- which images the job's version is resolved against.
+
+So an entry's `arch` must match what the job resolves to **on the SCT branch of that release**
+(`scylla-2026.1/*` jobs run `branch-2026.1`). When branches differ, split the entry by version range: the
+open-ended entry follows master, since new branches inherit it, and the other lists the older branches:
+
+```yaml
+  - job_name: "tier1/longevity-mv-si-4days-streaming-test"
+    backend: "aws"
+    arch: "x86_64"                               # i4i on these branches
+    include_versions: ["2024", "2025", "2026.1"]
+  - job_name: "tier1/longevity-mv-si-4days-streaming-test"
+    backend: "aws"
+    arch: "aarch64"                              # sizing_db → i8g from 2026.2 on
+    exclude_versions: ["2024", "2025", "2026.1"]
+```
+
+Loading a matrix fails when one job has entries on two arches whose version ranges overlap — such a "twin"
+fires the job from both release runs, on the same arch both times (SCT-1168).
 
 ### Triggering from an Image (scylla-pkg flow)
 
