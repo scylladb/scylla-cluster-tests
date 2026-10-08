@@ -44,6 +44,19 @@ def real_events():
         RealEventsTest.teardown_class()
 
 
+@pytest.fixture
+def clean_events_log(real_events):
+    """Truncate events.log before the test runs.
+
+    ``real_events`` is module-scoped (starting the real event pipeline costs
+    ~4s), so events.log accumulates everything published by earlier tests in
+    this module. Tests that assert on the file's exact content need this;
+    tests that only check for/absence of their own unique substrings don't.
+    """
+    Path(real_events.temp_dir, "events_log", "events.log").write_text("", encoding="utf-8")
+    return real_events
+
+
 def test_disruption_skipped_event():
     with (
         pytest.raises(UnsupportedNemesis),
@@ -150,7 +163,8 @@ def test_disruption_normal_event():
     )
 
 
-def test_filter(real_events):
+def test_filter(clean_events_log):
+    real_events = clean_events_log
     enospc_line_1 = (
         "[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment "
         "reservation: storage_io_error (Storage I/O error: 28: No space left on device)"
@@ -160,8 +174,6 @@ def test_filter(real_events):
         "error: std::filesystem::__cxx11::filesystem_error (error system:28, filesystem error: open failed: No "
         "space left on device [/var/lib/scylla/hints/2/172.30.0.116/HintsLog-1-36028797019122576.log])"
     )
-
-    log_content_before = real_events.get_event_log_file("events.log")
 
     # 13 events in total: 2 events per filter x 4 filters + 5 events.
     with real_events.wait_for_n_events(real_events.get_events_logger(), count=13, timeout=3):
@@ -177,7 +189,7 @@ def test_filter(real_events):
             DatabaseLogEvent.DATABASE_ERROR().add_info(node="A", line_number=22, line=enospc_line_1).publish()
             DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="A", line_number=22, line=enospc_line_1).publish()
 
-    assert log_content_before == real_events.get_event_log_file("events.log")
+    assert real_events.get_event_log_file("events.log") == ""
 
 
 def test_general_filter(real_events):
