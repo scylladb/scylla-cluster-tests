@@ -154,6 +154,18 @@ local_smoke's second build (step 2) has no load -- it rebuilds the index on the 
 first step already loaded, so its build time reflects only the index rebuild, not the load. See
 "Repeated builds on the same data" below.
 
+The pieces that can be checked without a cluster already are, so a failure here is more likely to be
+the orchestration than the plumbing underneath it:
+
+```bash
+# vector-store's 'latest' is too old for now (scylladb/vector-store#635)
+export SCT_FTS_IT_VECTOR_STORE_IMAGE=scylladb/vector-store:1.11.0
+# staging, the load and the whole dataset cycle, against ScyllaDB and vector-store
+pytest -m integration unit_tests/integration/test_search_perf_test.py
+# index-status polling and the build-time log parsing, against a real vector-store
+pytest -m integration unit_tests/integration/test_vector_store.py
+```
+
 ### Expected noise (all harmless)
 
 - `Dashboard with title 'Overview' was not found`, then a connection failure to

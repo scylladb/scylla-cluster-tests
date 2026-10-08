@@ -21,6 +21,7 @@ in test_fts_test.py.
 import json
 import logging
 import os
+import types
 
 import pytest
 
@@ -43,6 +44,7 @@ WORKLOAD = SearchWorkload(
     item_noun="docs",
     index_prefix="bench_idx",
     default_keyspace="bench",
+    container_root="/tmp/bench",
     params=LatteScriptParams(
         dataset_dir="data_dir",
         records_file="records_file",
@@ -260,7 +262,51 @@ def test_a_missing_shard_is_named_in_the_error(tmp_path):
         log = logging.getLogger("test")
 
     with pytest.raises(FileNotFoundError, match=r"Shard shards/records_000\.tsv is not in the dataset directory"):
-        search_perf_test.SearchPerformanceTest._load_step_shards(_Tester, {"shards": [0]}, str(tmp_path), 60)
+        search_perf_test.SearchPerformanceTest._load_step_shards(
+            _Tester, {"shards": [0]}, str(tmp_path), "/tmp/bench/ds", 60
+        )
+
+
+class _PhaseTester:
+    """Records the kwargs each phase hands '_run_latte'."""
+
+    WORKLOAD = WORKLOAD
+
+    def __init__(self):
+        self.log = logging.getLogger("test")
+        self.asked = []
+
+    def _run_latte(self, stress_cmd, **kwargs):
+        self.asked.append(kwargs)
+
+    def _vector_store_node(self):
+        return types.SimpleNamespace(system_log="system.log")
+
+    def _load_shard(self, *args):
+        return search_perf_test.SearchPerformanceTest._load_shard(self, *args)
+
+
+def _load(tester, local_ds_dir, *shard_ids):
+    """Load one step of *shard_ids*, written into *local_ds_dir* first."""
+    shards = local_ds_dir / "shards"
+    shards.mkdir(exist_ok=True)
+    for shard in shard_ids:
+        (shards / f"records_{shard:03d}.tsv").write_text(f"doc_{shard}\tbody\n", encoding="utf-8")
+    step = {"shards": list(shard_ids)}
+    return search_perf_test.SearchPerformanceTest._load_step_shards(
+        tester, step, str(local_ds_dir), "/tmp/bench/ds", 60
+    )
+
+
+def test_each_shard_is_staged_for_the_load_that_reads_it(tmp_path):
+    tester = _PhaseTester()
+
+    assert _load(tester, tmp_path, 0, 1) == 2
+
+    assert [asked["files_to_stage"] for asked in tester.asked] == [
+        [(f"{tmp_path}/shards/records_000.tsv", "/tmp/bench/ds/shards/records_000.tsv")],
+        [(f"{tmp_path}/shards/records_001.tsv", "/tmp/bench/ds/shards/records_001.tsv")],
+    ]
 
 
 # ---------------------------------------------------------------------------

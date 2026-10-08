@@ -30,18 +30,13 @@ example, and docs/fts-search-test.md for the plan format.
 The query phase -- running a step's query sets against the index that was just built and reporting
 their latency -- is not here yet. It needs the hdr-tag workload detection fix, and lands on top of
 this.
-
-Corpus files reach the loader container the only way the stress framework offers out of the box:
-'LatteStressThread.build_stress_cmd' copies every top-level file of the rune script's directory in, so
-a shard is copied there for the duration of the run that loads it. That works, and it does not scale
-past a local corpus -- see '_load_shard'.
 """
 
 import json
 import math
 import os
+import posixpath
 import re
-import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
@@ -124,6 +119,7 @@ class SearchWorkload:
     item_noun: str  # 'docs' -- the unit record counts are logged in
     index_prefix: str  # 'fts_idx' -- prefixes every index this test builds
     default_keyspace: str
+    container_root: str  # container directory datasets are staged under
     params: LatteScriptParams
     # Plan keys and defaults naming the data files of a step, in the same vocabulary as the script.
     step_records_file_key: str
@@ -158,9 +154,9 @@ def _checked_name(name: str, kind: str) -> str:
 def _checked_data_file(name: str, kind: str) -> str:
     """Validate a plan-supplied, dataset-relative data file name.
 
-    The name is interpolated into the shell command that stages the file into the loader container
-    and joined onto the local dataset directory, so reject both shell metacharacters and anything
-    that escapes the dataset directory.
+    The name is interpolated into the shell commands that stage the file on a loader and remove it
+    again, and joined onto the local dataset directory, so reject both shell metacharacters and
+    anything that escapes the dataset directory.
     """
     if not isinstance(name, str) or not SAFE_DATA_FILE_RE.fullmatch(name):
         raise ValueError(f"Invalid {kind} {name!r}: expected only letters, digits, '.', '-', '_' and '/'")
@@ -248,10 +244,15 @@ class SearchPerformanceTest(PerformanceRegressionTest):
 
     WORKLOAD: SearchWorkload = None
 
-    def _run_latte(self, stress_cmd, **kwargs):
-        """Run one latte command to completion and return its stress thread."""
+    def _run_latte(self, stress_cmd, files_to_stage=None, **kwargs):
+        """Run one latte command to completion and return its stress thread.
+
+        Bypasses `run_stress_thread` so that the per-run data files of this command are staged into
+        the loader container. `files_to_stage` is a list of `(local_path, container_path)` pairs.
+        """
         thread = self.run_latte_thread(
             stress_cmd=stress_cmd,
+            extra_files_to_stage=files_to_stage or [],
             # NOTE: every phase here is a single command -- one schema change, one shard, one index
             #       build -- so it belongs on one loader. Without this the thread fans out to *all*
             #       of them ('DockerBasedStressThread.configure_executer'), which on a multi-loader
@@ -300,41 +301,26 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         self.log.info("Creating schema")
         self._run_latte(f"latte schema {self.WORKLOAD.script}", duration=_timeout_minutes(DEFAULT_SCHEMA_TIMEOUT))
 
-    def _load_shard(self, local_ds_dir, shard_file, shard_records, max_load_wait):
-        """Load a single shard file into Scylla via the loader container.
+    def _load_shard(self, local_ds_dir, container_ds_dir, shard_file, shard_records, max_load_wait):
+        """Load a single shard file into Scylla via the loader container."""
+        params = self.WORKLOAD.params
+        self.log.info("Loading shard %s (%d %s)", shard_file, shard_records, self.WORKLOAD.item_noun)
+        self._run_latte(
+            # NOTE: latte's '-d' is a cycle count here, not a duration, so the phase gets an
+            #       explicit 'duration' -- see DEFAULT_MAX_SHARD_LOAD.
+            stress_cmd=(
+                f"latte run -f load {self.WORKLOAD.script} "
+                f"-d {shard_records} "
+                rf"-P {params.dataset_dir}=\"{container_ds_dir}\" "
+                rf"-P {params.records_file}=\"{shard_file}\" "
+            ),
+            files_to_stage=[
+                (os.path.join(local_ds_dir, shard_file), posixpath.join(container_ds_dir, shard_file)),
+            ],
+            duration=_timeout_minutes(max_load_wait),
+        )
 
-        The shard has to be inside the container for latte to read it, and the only way in that the
-        stress framework offers is 'LatteStressThread.build_stress_cmd', which copies every top-level
-        file of the rune script's directory. So the shard is copied there, loaded, and removed again.
-
-        That is enough for a corpus small enough to live in the repo, and no further: a real shard is
-        hundreds of megabytes, this routes it through the SCT source tree, and every latte invocation
-        of the run -- schema, build, drop -- then ships it too. It also rules out fetching a shard,
-        loading it and deleting it one at a time, which is what a corpus that does not fit on the
-        runner needs. A later commit replaces this with a file staged on the loader and mounted.
-        """
-        workload = self.WORKLOAD
-        params = workload.params
-        staged_name = os.path.basename(shard_file)
-        staged_path = _local_path(workload, staged_name)
-        self.log.info("Loading shard %s (%d %s)", shard_file, shard_records, workload.item_noun)
-        shutil.copyfile(os.path.join(local_ds_dir, shard_file), staged_path)
-        try:
-            self._run_latte(
-                # NOTE: latte's '-d' is a cycle count here, not a duration, so the phase gets an
-                #       explicit 'duration' -- see DEFAULT_MAX_SHARD_LOAD.
-                stress_cmd=(
-                    f"latte run -f load {workload.script} "
-                    f"-d {shard_records} "
-                    rf"-P {params.dataset_dir}=\"{os.path.dirname(workload.script)}\" "
-                    rf"-P {params.records_file}=\"{staged_name}\" "
-                ),
-                duration=_timeout_minutes(max_load_wait),
-            )
-        finally:
-            os.remove(staged_path)
-
-    def _load_step_shards(self, step, local_ds_dir, max_load_wait):
+    def _load_step_shards(self, step, local_ds_dir, container_ds_dir, max_load_wait):
         """Load all shard files for a step. Returns the record count."""
         workload = self.WORKLOAD
         if "shards" in step:
@@ -355,7 +341,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
                 self.log.warning("Shard file %s is empty, skipping", local_shard_path)
                 continue
 
-            self._load_shard(local_ds_dir, shard_file, shard_records, max_load_wait)
+            self._load_shard(local_ds_dir, container_ds_dir, shard_file, shard_records, max_load_wait)
             record_count += shard_records
         return record_count
 
@@ -476,6 +462,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             raise ValueError(f"Dataset '{dataset_name}' has no steps to run")
 
         local_ds_dir = _local_path(workload, dataset_name)
+        container_ds_dir = f"{workload.container_root}/{dataset_name}"
         # The corpora are generated rather than tracked, so name the directory that is missing
         # instead of failing further down on an unhelpful open() of a shard inside it.
         if not os.path.isdir(local_ds_dir):
@@ -495,7 +482,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             if index_name is not None:
                 self._drop_index(index_name, keyspace, max_index_wait)
 
-            total_record_count += self._load_step_shards(step, local_ds_dir, max_load_wait)
+            total_record_count += self._load_step_shards(step, local_ds_dir, container_ds_dir, max_load_wait)
 
             index_name = f"{workload.index_prefix}_{dataset_name}_{step_idx}"
             build_seconds = self._build_index(

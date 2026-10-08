@@ -36,6 +36,7 @@ FTS_WORKLOAD = SearchWorkload(
     item_noun="docs",
     index_prefix="fts_idx",
     default_keyspace="fts_bench",
+    container_root="/tmp/fts",
     # The names fts.rn uses. It is mirrored from scylladb/vector-store, so they are its to choose --
     # test_fts_test.py checks that each one is still a parameter of the script.
     params=LatteScriptParams(
