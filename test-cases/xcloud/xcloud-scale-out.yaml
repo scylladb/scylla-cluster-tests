@@ -1,0 +1,47 @@
+test_metadata:
+  description: >-
+    Scylla Cloud (xcloud) storage-based auto-scaling under load: populates a 3-node cluster over
+    the storage scaling threshold, then runs cassandra-stress mixed load against the whole populated
+    range until scaling completes. Verifies the mixed load had no errors during scaling, cluster
+    storage increased, new nodes were added, and all populated rows are readable afterwards.
+  test_type: features
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - xcloud
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  team_ownership: cloud-qa
+
+test_duration: 300
+
+# Write load to push 3 x i8g.large cluster over the scaling threshold
+prepare_write_cmd:
+  - >-
+    cassandra-stress write n=41000000 cl=QUORUM -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -mode cql3 native -rate threads=100 -col 'n=FIXED(10) size=FIXED(900)' -pop seq=1..41000000 -log interval=5
+
+# Mixed load running during the scaling, killed by the test once scaling completes
+stress_cmd_m:
+  - >-
+    cassandra-stress mixed no-warmup 'ratio(write=1,read=9)' cl=QUORUM duration=180m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -mode cql3 native -rate threads=10 -col 'n=FIXED(10) size=FIXED(900)' -pop 'dist=uniform(1..41000000)' -log interval=5
+
+# Full-range verification of the populated data after scaling
+stress_read_cmd:
+  - >-
+    cassandra-stress read n=41000000 cl=QUORUM -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -mode cql3 native -rate threads=100 -col 'n=FIXED(10) size=FIXED(900)' -pop seq=1..41000000 -log interval=5
+
+n_db_nodes: 3
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
+sizing_loader:
+  vcpu: 8
+  memory: '>=16'
+n_loaders: 1
+
+user_prefix: 'xcloud-scale-out'

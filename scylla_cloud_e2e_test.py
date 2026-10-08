@@ -198,6 +198,11 @@ class ScyllaCloudTestBase(ClusterTester, LoaderUtilsMixin):
             cluster_name=self.db_cluster.name,
         )
 
+    def get_active_cluster_node_ids(self) -> set[int]:
+        """Return IDs of active DB nodes."""
+        nodes = self.cloud_api_client.get_cluster_nodes(account_id=self.account_id, cluster_id=self.cluster_id)
+        return {node["id"] for node in nodes if node["status"].upper() not in ("DELETED", "PENDING_DELETE")}
+
     def get_cluster_total_storage(self) -> float:
         """Return total storage (GB) of the cluster DB nodes as reported by Cloud API."""
         cluster_info = self.cloud_api_client.get_cluster_details(
@@ -209,6 +214,12 @@ class ScyllaCloudTestBase(ClusterTester, LoaderUtilsMixin):
         cluster_nodes = [node for node in cluster_info["nodes"] if not node.get("nodeType")]
         return cluster_info["instance"]["totalStorage"] * len(cluster_nodes)
 
+    def get_cluster_used_storage(self) -> float:
+        """Return used storage (GB) of the cluster as reported by Cloud API."""
+        clusters = self.cloud_api_client.get_clusters(account_id=self.account_id, metrics="STORAGE_USED")
+        cluster = next(cluster for cluster in clusters if cluster["id"] == self.cluster_id)
+        return cluster["metrics"]["STORAGE_USED"] / (1024**3)  # Convert bytes to GB
+
     def wait_for_cluster_disk_utilization(
         self, target_utilization: int, check_interval: int = 30, wait_timeout: int = 3600
     ) -> None:
@@ -218,11 +229,7 @@ class ScyllaCloudTestBase(ClusterTester, LoaderUtilsMixin):
         self.log.debug("Waiting for cluster disk utilization to reach %d%%...", target_utilization)
         start_time = time.time()
         while time.time() - start_time < wait_timeout:
-            clusters = self.cloud_api_client.get_clusters(account_id=self.account_id, metrics="STORAGE_USED")
-            cluster = next(cluster for cluster in clusters if cluster["id"] == self.cluster_id)
-            storage_used = cluster["metrics"]["STORAGE_USED"] / (1024**3)  # Convert bytes to GB
-
-            current_disk_utilization = (storage_used / total_storage) * 100
+            current_disk_utilization = (self.get_cluster_used_storage() / total_storage) * 100
             if current_disk_utilization >= target_utilization:
                 self.log.info("Target disk utilization of %d%% reached", target_utilization)
                 return
@@ -327,3 +334,57 @@ class XCloudVectorSearchTest(ScyllaCloudTestBase):
             raise AssertionError(
                 f"Vector search validation failed {self.vector_thread.validation_failures} times during cluster scaling"
             )
+
+
+class XCloudScalingTest(ScyllaCloudTestBase):
+    """Verify that XCloud cluster auto-scales on storage utilization, background C-S mixed load reports no issues.
+
+    C-S mixed load errors are caught as they happen, via CassandraStressEvent raised by the stress events publisher.
+    """
+
+    def test_xcloud_cluster_scaling_under_load(self) -> None:
+        """Test cluster scaling triggered by storage utilization succeeds without disrupting C-S mixed load."""
+        node_ids_before_scaling = self.get_active_cluster_node_ids()
+        total_storage_before_scaling = self.get_cluster_total_storage()
+        self.log.debug("Cluster total storage before scaling: %.2f GB", total_storage_before_scaling)
+
+        self.log.info("Populate the cluster over the scaling threshold")
+        self.run_prepare_write_cmd()
+
+        self.log.info("Start C-S mixed load against the populated data")
+        mixed_load_queues = []
+        self.assemble_and_run_all_stress_cmd(
+            stress_queue=mixed_load_queues,
+            stress_cmd=self.params.get("stress_cmd_m"),
+            keyspace_num=1,
+        )
+
+        self.log.info("Wait for cluster scaling to complete")
+        request_id = self.wait_for_resize_request()
+        self.wait_for_cluster_scale_out(request_id=request_id)
+
+        self.log.info("Cluster scaling completed, stop C-S mixed load")
+        # Mixed load errors during scaling are already reported as CassandraStressEvent,
+        # killing the load is reported as WARNING only
+        for queue in mixed_load_queues:
+            queue.kill()
+
+        self.log.info("Verify cluster available storage increased after scaling")
+        total_storage_after_scaling = self.get_cluster_total_storage()
+        self.log.debug("Cluster total storage after scaling: %.2f GB", total_storage_after_scaling)
+        assert total_storage_after_scaling > total_storage_before_scaling, "Total storage didn't increase after scaling"
+
+        self.log.info("Verify new nodes were added to cluster")
+        node_ids_after_scaling = self.get_active_cluster_node_ids()
+        self.log.debug("Cluster nodes before scaling: %s, after: %s", node_ids_before_scaling, node_ids_after_scaling)
+        assert node_ids_after_scaling - node_ids_before_scaling, "No new nodes were added"
+
+        self.log.info("Verify all pre-populated data is readable after cluster scaling")
+        read_queue = []
+        self.assemble_and_run_all_stress_cmd(
+            stress_queue=read_queue,
+            stress_cmd=self.params.get("stress_read_cmd"),
+            keyspace_num=1,
+        )
+        for queue in read_queue:
+            assert self.verify_stress_thread(queue), "Pre-populated data verification failed after cluster scaling"
