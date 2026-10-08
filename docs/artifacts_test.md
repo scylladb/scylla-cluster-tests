@@ -142,6 +142,10 @@ The configured version is used for both:
 - Offline installations (downloading from S3)
 - Package manager installations (apt/yum/dnf)
 
+Artifact tests run the basic Scylla Doctor edition by default. The full edition (with analyzers),
+SD-only mode and the release gating pipeline that validates new Scylla Doctor builds are described in
+[Scylla Doctor testing and release gating](./scylla-doctor-testing.md).
+
 ## Current Configuration
 
 The Scylla Doctor version is configured in `defaults/test_default.yaml`:
