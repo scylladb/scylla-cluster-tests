@@ -95,6 +95,17 @@ class LatteStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
     SCHEMA_CMD_CALL_COUNTER = {}
 
+    def __init__(self, *args, extra_files_to_stage=None, **kwargs):
+        """*extra_files_to_stage* is a list of '(local_path, container_path)' pairs only this
+        invocation needs, such as a dataset shard. 'build_stress_cmd' copies them into the loader
+        container with the rune script's directory; the container is removed after the run.
+        """
+        super().__init__(*args, **kwargs)
+        self.extra_files_to_stage: list[tuple[str, str]] = extra_files_to_stage or []
+        for _, container_path in self.extra_files_to_stage:
+            if not container_path.startswith("/"):
+                raise ValueError(f"Container path {container_path!r} of a staged file is not absolute")
+
     def set_stress_operation(self, stress_cmd):
         return get_latte_operation_type(self.stress_cmd)
 
@@ -155,6 +166,10 @@ class LatteStressThread(DockerBasedStressThread):
                 remote_path = str(Path(script_name).parent / src_file.name)
                 if not cmd_runner.run(f"test -f {remote_path}", ignore_status=True, verbose=False).ok:
                     cmd_runner.send_files(str(src_file), remote_path)
+
+        for local_path, container_path in self.extra_files_to_stage:
+            if not cmd_runner.send_files(local_path, container_path, verbose=False):
+                raise RuntimeError(f"Failed to copy {local_path} into the loader container at {container_path}")
 
         ssl_config = self._build_ssl_config(cmd_runner, loader)
 

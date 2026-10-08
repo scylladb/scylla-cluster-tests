@@ -26,6 +26,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.base import SctEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.stress.latte_thread import LatteStressThread
 from sdcm.test_config import TestConfig
 from sdcm.tester import ClusterTester, silence
 from sdcm.utils.common import get_post_behavior_actions
@@ -859,3 +860,54 @@ def test_gather_failure_statistics_scylla_doctor_stuck_node_does_not_block_teard
         for record in caplog.records
         if record.levelno == logging.WARNING and "stuck-node" in record.getMessage()
     ], "the node whose scylla-doctor never finished was not reported"
+
+
+# run_latte_thread: per-invocation options reach the thread
+
+
+def _fake_latte_tester():
+    """The 'ClusterTester' attributes 'run_latte_thread' reads, and nothing else."""
+    return types.SimpleNamespace(
+        loaders="loader-set",
+        db_cluster=types.SimpleNamespace(nodes=["node-1"]),
+        _stress_duration=None,
+        params={"stop_test_on_stress_failure": True},
+        get_duration=lambda duration: 60 * duration,
+    )
+
+
+def test_run_latte_thread_forwards_the_files_to_stage():
+    """A caller with per-invocation data -- a dataset shard -- reaches the thread through here, so
+    it does not have to reimplement this helper's timeout resolution and loader fan-out."""
+    files = [("/local/documents_000.tsv", "/tmp/fts/ds/documents_000.tsv")]
+    with (
+        patch.object(LatteStressThread, "__init__", return_value=None) as mock_init,
+        patch.object(LatteStressThread, "run", return_value="thread-pool") as mock_run,
+    ):
+        result = ClusterTester.run_latte_thread(
+            _fake_latte_tester(),
+            stress_cmd="latte run -f load data_dir/latte/x.rn",
+            duration=10,
+            extra_files_to_stage=files,
+        )
+
+    assert result == "thread-pool"
+    assert mock_run.call_count == 1
+    assert mock_init.call_args.kwargs["extra_files_to_stage"] == files
+    # the resolved timeout is the reason to go through the helper instead of constructing directly
+    assert mock_init.call_args.kwargs["timeout"] == 600
+
+
+def test_run_latte_thread_stages_nothing_by_default():
+    with (
+        patch.object(LatteStressThread, "__init__", return_value=None) as mock_init,
+        patch.object(LatteStressThread, "run", return_value="thread-pool") as mock_run,
+    ):
+        result = ClusterTester.run_latte_thread(
+            _fake_latte_tester(), stress_cmd="latte run -f search data_dir/latte/x.rn", duration=10
+        )
+
+    assert result == "thread-pool"
+    assert mock_run.call_count == 1
+    assert mock_init.call_args.kwargs["extra_files_to_stage"] is None
+    assert mock_init.call_args.kwargs["timeout"] == 600
