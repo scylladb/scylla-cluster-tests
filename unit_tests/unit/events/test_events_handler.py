@@ -13,6 +13,7 @@
 import time
 import unittest.mock
 
+import pytest
 
 from sdcm.sct_events.event_handler import start_events_handler
 from sdcm.sct_events.events_processes import get_events_process, EVENTS_HANDLER_ID
@@ -21,7 +22,19 @@ from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT, EVENTS_SUBSCRIBER
 from sdcm.test_config import TestConfig
 
 
-def test_events_handler(main_events_context):
+@pytest.fixture
+def tester_obj():
+    """Provide a tester object to code reading it off the TestConfig singleton.
+
+    TestConfig keeps the tester object on a class attribute and set_tester_obj() assigns it only once,
+    so a test that sets it can never unset it and leaks into every test that runs afterwards.
+    Patching the accessor gives the same value without touching the singleton state.
+    """
+    with unittest.mock.patch.object(TestConfig, "tester_obj", return_value="abc") as mock:
+        yield mock
+
+
+def test_events_handler(main_events_context, tester_obj):
     with unittest.mock.patch(
         "sdcm.sct_events.handlers.schema_disagreement.SchemaDisagreementHandler.handle", spec=True
     ) as mock:
@@ -29,9 +42,6 @@ def test_events_handler(main_events_context):
         events_handler = get_events_process(
             name=EVENTS_HANDLER_ID, _registry=main_events_context.events_processes_registry
         )
-        time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
-
-        TestConfig().set_tester_obj("abc")
         time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
         try:
@@ -43,5 +53,6 @@ def test_events_handler(main_events_context):
                 main_events_context.events_main_device.publish_event(event1)
             mock.assert_called_once()
             assert mock.call_args.kwargs["event"] == event1
+            assert mock.call_args.kwargs["tester_obj"] == tester_obj.return_value
         finally:
             events_handler.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
