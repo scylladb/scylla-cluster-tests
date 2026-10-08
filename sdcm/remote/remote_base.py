@@ -164,7 +164,9 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         pass
 
     def _bind_generation_to_connection(self, connection: object):
-        setattr(connection, "_context_generation", self._context_generation)
+        # NOTE: not `setattr`: fabric's `Connection` turns it into a write to its `Config`, shared by all
+        #       connections of this remoter, so one thread's reconnect would mark every thread's as current
+        object.__setattr__(connection, "_context_generation", self._context_generation)
 
     def _is_connection_generation_ok(self, connection: object):
         return getattr(connection, "_context_generation", self._context_generation) == self._context_generation
