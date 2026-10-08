@@ -1,7 +1,7 @@
 import json
+from unittest.mock import MagicMock
 
 import pytest
-from unittest.mock import MagicMock
 
 from sdcm.cluster_gce import GCENode
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
@@ -35,6 +35,13 @@ def _make_gce_iface(ip, public_ip=None):
     else:
         iface.access_configs = []
     return iface
+
+
+class FakeRefreshNode:
+    def __init__(self, scylla_network_configuration=None, network_interfaces=None):
+        self.network_configuration = {"old": "data"}
+        self.scylla_network_configuration = scylla_network_configuration
+        self.network_interfaces = network_interfaces or []
 
 
 def test_gce_node_network_interfaces_with_remoter_and_device_names():
@@ -157,15 +164,10 @@ def test_gce_network_configuration_of_a_destroyed_node():
 
 
 def test_gce_refresh_network_interfaces_info():
-    class FakeNode:
-        scylla_network_configuration = MagicMock()
-        network_interfaces = [MagicMock()]
-
-    node = FakeNode()
     # the MAC to device mapping is not dropped here: it only goes stale when the remoter is
     # replaced, and re-running `ip -j link` on every refresh is what makes an unreachable node
     # cost minutes of SSH connect timeouts per access
-    node.__dict__["network_configuration"] = {"old": "data"}
+    node = FakeRefreshNode(scylla_network_configuration=MagicMock(), network_interfaces=[MagicMock()])
     GCENode.refresh_network_interfaces_info(node)
 
     assert node.__dict__["network_configuration"] == {"old": "data"}
@@ -173,11 +175,7 @@ def test_gce_refresh_network_interfaces_info():
 
 
 def test_gce_refresh_network_interfaces_info_no_scylla_config():
-    class FakeNode:
-        scylla_network_configuration = None
-        network_interfaces = []
-
-    node = FakeNode()
+    node = FakeRefreshNode(scylla_network_configuration=None)
     GCENode.refresh_network_interfaces_info(node)
 
 
