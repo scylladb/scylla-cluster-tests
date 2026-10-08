@@ -1,0 +1,7 @@
+# Adds an oracle cluster, so SCTConfiguration.__init__ resolves oracle_scylla_version to an image.
+# Image lookups for the main cluster never run while linting: build_env always fills a placeholder
+# image, so the oracle resolvers are the image lookups a pipeline can actually reach.
+db_type: mixed_scylla
+n_test_oracle_db_nodes: 1
+azure_instance_type_db_oracle: 'Standard_L8s_v3'
+oci_instance_type_db_oracle: 'VM.DenseIO.E5.Flex:8'
