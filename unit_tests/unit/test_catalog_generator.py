@@ -15,7 +15,11 @@ from pathlib import Path
 
 import pytest
 
-from sdcm.utils.cloud_catalog.catalog_generator import generate_oci_catalog, write_catalog_file
+from sdcm.utils.cloud_catalog.catalog_generator import (
+    _gce_spot_price_for,
+    generate_oci_catalog,
+    write_catalog_file,
+)
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo
 
 _FAKE_OCI_PRICING = {
@@ -157,3 +161,8 @@ def test_generate_oci_catalog_vcpus_per_ocpu(instance_type, expected_vcpus):
 def test_generate_oci_catalog_unknown_family_returns_empty():
     result = generate_oci_catalog(["NonExistentFamily99"])
     assert result == []
+
+
+def test_gce_spot_price_is_vcpu_plus_ram_per_region():
+    rates = {"n2": {"us-central1": {"core": 0.01, "ram": 0.002}, "us-east1": {"core": 0.01}}}
+    assert _gce_spot_price_for(rates, "n2-highmem", 8, 64.0) == {"us-central1": pytest.approx(8 * 0.01 + 64 * 0.002)}

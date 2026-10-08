@@ -33,6 +33,9 @@ SCT_TAG_KEYS = (
     "ssh_user",
     "ssh_key",
     "logs_collected",
+    # The instance's hourly price, written when it is created so cleanup can cost it.
+    "price_per_hour_micro_usd",
+    "pricing_tier",
 )
 
 # NOTE: Oracle cloud uses short region identifiers in its APIs, so match it to the user-facing ones

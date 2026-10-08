@@ -7,6 +7,7 @@ from typing import Literal, Callable
 from argus.client.sct.client import ArgusSCTClient
 
 from sdcm.keystore import KeyStore
+from sdcm.utils.cost_reporting import report_costs_from_tags
 from sdcm.utils.log import setup_stdout_logger
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -23,12 +24,29 @@ def argus_client_factory() -> Callable[[str], ArgusSCTClient]:
     )
 
 
-def update_argus_resource_status(test_id: str, resource_name: str, action: Literal["terminate", "stop"]):
+def update_argus_resource_status(
+    test_id: str,
+    resource_name: str,
+    action: Literal["terminate", "stop"],
+    tags: dict | None = None,
+    launch_time: datetime | str | None = None,
+):
+    """Record that the scheduled sweep ended a resource, and what it cost.
+
+    This sweep only reaches resources a test failed to clean up, so it is the one place their
+    cost is reported as leaked. The price comes from the tags written when the instance was
+    created; without them, nothing is sent.
+    """
     if not test_id and not resource_name:
         LOGGER.error("Skip update Argus due missing test_id and resource_name")
         return
     try:
         client = argus_client_factory()(test_id)
+        # A stopped instance terminated in a later sweep is re-reported over its whole
+        # lifetime (replacing, not adding to, the earlier item), so it overstates by the time it
+        # sat stopped. Track stop time in a tag if that ever matters.
+        if tags is not None:
+            report_costs_from_tags(client, [(resource_name, tags, launch_time)], leaked=True)
         client.terminate_resource(name=resource_name, reason=f"cloud-cleanup: {action} resource due to expiration")
     except Exception as exc:  # noqa: BLE001 catching all to make sure it does not break the main process
         LOGGER.error("Failed to update Argus resource status: %s", exc)
