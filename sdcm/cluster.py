@@ -846,39 +846,53 @@ class BaseNode(AutoSshContainerMixin):
 
     def _init_port_mapping(self):
         if self.test_config.IP_SSH_CONNECTIONS == "public":
+            tunnels = []  # (container name, runner port, node port)
             if self.test_config.SYSLOGNG_ADDRESS:
-                try:
-                    ContainerManager.destroy_container(self, "auto_ssh:syslog_ng", ignore_keepalive=True)
-                except NotFound:
-                    pass
-                ContainerManager.run_container(
-                    self,
-                    "auto_ssh:syslog_ng",
-                    local_port=self.test_config.SYSLOGNG_ADDRESS[1],
-                    remote_port=self.test_config.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT,
+                tunnels.append(
+                    (
+                        "auto_ssh:syslog_ng",
+                        self.test_config.SYSLOGNG_ADDRESS[1],
+                        self.test_config.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT,
+                    )
                 )
             if self.test_config.VECTOR_ADDRESS:
-                try:
-                    ContainerManager.destroy_container(self, "auto_ssh:vector", ignore_keepalive=True)
-                except NotFound:
-                    pass
-                ContainerManager.run_container(
-                    self,
-                    "auto_ssh:vector",
-                    local_port=self.test_config.VECTOR_ADDRESS[1],
-                    remote_port=self.test_config.VECTOR_SSH_TUNNEL_LOCAL_PORT,
+                tunnels.append(
+                    (
+                        "auto_ssh:vector",
+                        self.test_config.VECTOR_ADDRESS[1],
+                        self.test_config.VECTOR_SSH_TUNNEL_LOCAL_PORT,
+                    )
                 )
             if self.test_config.LDAP_ADDRESS and self.parent_cluster.node_type == "scylla-db":
+                tunnels.append(("auto_ssh:ldap", self.test_config.LDAP_ADDRESS[1], LDAP_SSH_TUNNEL_LOCAL_PORT))
+            # NOTE: not the syslog-ng port: syslog-ng runs confined and can only send to `syslogd_port_t`
+            self._allow_reverse_tunnel_ports_in_selinux(
+                [node_port for name, _, node_port in tunnels if name != "auto_ssh:syslog_ng"]
+            )
+            for name, runner_port, node_port in tunnels:
                 try:
-                    ContainerManager.destroy_container(self, "auto_ssh:ldap", ignore_keepalive=True)
+                    ContainerManager.destroy_container(self, name, ignore_keepalive=True)
                 except NotFound:
                     pass
-                ContainerManager.run_container(
-                    self,
-                    "auto_ssh:ldap",
-                    local_port=self.test_config.LDAP_ADDRESS[1],
-                    remote_port=LDAP_SSH_TUNNEL_LOCAL_PORT,
-                )
+                ContainerManager.run_container(self, name, local_port=runner_port, remote_port=node_port)
+
+    def _allow_reverse_tunnel_ports_in_selinux(self, ports: list[int]) -> None:
+        """Let sshd listen on the reverse SSH tunnel ports, which enforcing SELinux allows only for `ssh_port_t`."""
+        try:
+            if (
+                not ports
+                or self.remoter.run("getenforce", ignore_status=True, verbose=False).stdout.strip() != "Enforcing"
+            ):
+                return
+            if not self.remoter.run("command -v semanage", ignore_status=True, verbose=False).ok:
+                self.install_package("policycoreutils-python-utils")
+            for port in ports:
+                # NOTE: `-a` also relabels a port the policy already defines, with an "already defined" warning
+                self.remoter.sudo(f"semanage port -a -t ssh_port_t -p tcp {port}")
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning(
+                "Could not allow SSH tunnel ports %s in SELinux, their tunnels may not open: %s", ports, exc
+            )
 
     @property
     def vm_region(self):
@@ -6637,21 +6651,17 @@ class BaseScyllaCluster:
                 # log file (as described in the https://github.com/scylladb/scylladb/issues/7131).
                 # To allow syslog-ng to read logs from the file and send them to test runner, we need to:
                 # - change SELinux context of the scylla installation directory
-                # - allow syslog-ng/vector to use the port of the remote log destination
+                # - allow syslog-ng to use the port of the remote log destination
                 node.remoter.sudo(f"chcon -R -t var_log_t {node.offline_install_dir}")
                 self._allow_logging_port_in_selinux(node)
                 if self.params.get("logs_transport") == "syslog-ng":
                     node.remoter.sudo("systemctl restart syslog-ng")
-                elif self.params.get("logs_transport") == "vector":
-                    node.remoter.sudo("systemctl restart vector")
             return
         if "no-selinux-setup" in (self.params.get("append_scylla_setup_args") or ""):
-            # If Scylla doesn't configure SELinux policies, allow syslog-ng/vector to use the remote log destination port
+            # If Scylla doesn't configure SELinux policies, allow syslog-ng to use the remote log destination port
             self._allow_logging_port_in_selinux(node)
             if self.params.get("logs_transport") == "syslog-ng":
                 node.remoter.sudo("systemctl restart syslog-ng")
-            elif self.params.get("logs_transport") == "vector":
-                node.remoter.sudo("systemctl restart vector")
         simulated_regions_num = self.params.get("simulated_regions")
         if self.test_config.MULTI_REGION or simulated_regions_num > 1 or self.params.get("simulated_racks") > 1:
             if simulated_regions_num > 1:
@@ -6874,6 +6884,9 @@ class BaseScyllaCluster:
 
     def _allow_logging_port_in_selinux(self, node: BaseNode) -> None:
         """Allow syslog-ng to use the remote log destination port under the syslogd_port_t SELinux context."""
+        if self.params.get("logs_transport") != "syslog-ng":
+            # NOTE: vector runs unconfined, and relabelling its port would take it away from its reverse SSH tunnel
+            return
         node.install_package("policycoreutils-python-utils")
         _, syslogng_port = self.test_config.get_logging_service_host_port()
         node.remoter.sudo(f"semanage port -a -t syslogd_port_t -p tcp {syslogng_port}")
