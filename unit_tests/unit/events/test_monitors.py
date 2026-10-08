@@ -13,26 +13,28 @@
 
 import pickle
 
+import pytest
+
 from sdcm.sct_events import Severity
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 
 
-RAW_ALERT = dict(
-    annotations=dict(
-        description="[10.0.201.178] has been down for more than 30 seconds.",
-        summary="Instance [10.0.201.178] down",
-    ),
-    endsAt="2019-12-26T06:21:09.591Z",
-    startsAt="2019-12-24T17:00:09.591Z",
-    updatedAt="2019-12-26T06:18:09.593Z",
-    labels=dict(
-        alertname="InstanceDown",
-        instance="[10.0.201.178]",
-        job="scylla",
-        monitor="scylla-monitor",
-        sct_severity="ERROR",
-    ),
-)
+RAW_ALERT = {
+    "annotations": {
+        "description": "[10.0.201.178] has been down for more than 30 seconds.",
+        "summary": "Instance [10.0.201.178] down",
+    },
+    "endsAt": "2019-12-26T06:21:09.591Z",
+    "startsAt": "2019-12-24T17:00:09.591Z",
+    "updatedAt": "2019-12-26T06:18:09.593Z",
+    "labels": {
+        "alertname": "InstanceDown",
+        "instance": "[10.0.201.178]",
+        "job": "scylla",
+        "monitor": "scylla-monitor",
+        "sct_severity": "ERROR",
+    },
+}
 
 
 def test_prometheus_alert_manager_event_msgfmt():
@@ -51,19 +53,17 @@ def test_prometheus_alert_manager_event_msgfmt():
     assert event == pickle.loads(pickle.dumps(event))
 
 
-def test_prometheus_alert_manager_event_sct_severity():
-    event = PrometheusAlertManagerEvent(raw_alert=dict(labels=dict(sct_severity="CRITICAL")))
+@pytest.mark.parametrize(
+    "sct_severity, expected_severity",
+    [
+        pytest.param("CRITICAL", Severity.CRITICAL, id="critical"),
+        pytest.param("WRONG", Severity.NORMAL, id="wrong-defaults-to-normal"),
+    ],
+)
+def test_prometheus_alert_manager_event_sct_severity(sct_severity, expected_severity):
+    event = PrometheusAlertManagerEvent(raw_alert={"labels": {"sct_severity": sct_severity}})
     event.publish_event = False
     event.end_event()
-    assert event.severity == Severity.CRITICAL
-    assert str(event).startswith("(PrometheusAlertManagerEvent Severity.CRITICAL)")
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-def test_prometheus_alert_manager_event_sct_severity_wrong():
-    event = PrometheusAlertManagerEvent(raw_alert=dict(labels=dict(sct_severity="WRONG")))
-    event.publish_event = False
-    event.end_event()
-    assert event.severity == Severity.NORMAL
-    assert str(event).startswith("(PrometheusAlertManagerEvent Severity.NORMAL)")
+    assert event.severity == expected_severity
+    assert str(event).startswith(f"(PrometheusAlertManagerEvent {expected_severity})")
     assert event == pickle.loads(pickle.dumps(event))
