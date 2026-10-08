@@ -157,7 +157,8 @@ class JiraIssueRetriever:
     @lru_cache
     def get_issue(self, issue_id: str) -> Issue | None:
         try:
-            return self.s3_cache.get_issue(issue_id)
+            if (issue := self.s3_cache.get_issue(issue_id)) is not None:  # a miss falls through to the live API
+                return issue
         except Exception as ex:  # noqa: BLE001
             warnings.warn(f"failed to get issue from cache: {ex}", DeprecationWarning)
 
