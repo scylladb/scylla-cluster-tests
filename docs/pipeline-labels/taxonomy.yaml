@@ -102,3 +102,4 @@ features:
     - twcs
     - zero-token-nodes
     - alternator-streams
+    - elasticity
