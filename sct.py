@@ -742,7 +742,7 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
         except RuntimeError as exc:
             click.echo(f"ERROR: minicloud is not reachable — refusing to clean against a fresh/empty emulator: {exc}")
             sys.exit(1)
-        set_minicloud_endpoint_env(endpoint, _minicloud_backend(backend))
+        set_minicloud_endpoint_env(endpoint, os.environ["SCT_CLUSTER_BACKEND"])
 
     if post_behavior:
         click.echo(f"Use {logdir} as a logdir")
