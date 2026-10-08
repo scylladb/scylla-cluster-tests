@@ -1,3 +1,22 @@
+test_metadata:
+  description: >-
+    Elasticity feature test that fills a cluster to ~90% disk utilization with data written under a
+    12000-second TTL and TWCS expiration, then runs a mixed cassandra-stress workload with major-
+    compaction nemesis to validate space reclamation via TTL expiry.
+  test_type: features
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  features:
+    - elasticity
+    - twcs
+    - tablets
+  team_ownership: storage-qa
+
 # Test case for ScyllaDB elasticity at 90% utilization
 # The test writes approximately 1.5 TB of data to fill the cluster at around 90% utilization.
 # A 3rd of the data is written to a keyspace with a 12,000 seconds TTL (chosen to be more than the time it takes to write the data).
