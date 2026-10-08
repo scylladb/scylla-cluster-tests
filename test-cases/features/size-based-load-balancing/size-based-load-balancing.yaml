@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Feature test validating tablets size-based load balancing on a heterogeneous cluster: populates
+    ~1.2TB of data with varied partition sizes, scales out with a different instance type per rack,
+    and checks per-rack disk usage stays balanced within a 5% threshold during scale-out and scale-
+    in.
+  test_type: features
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - scylla-bench
+  workload: write
+  features:
+    - tablets
+  team_ownership: storage-qa
+
 # Size-based load balancing test.
 # This test ensures storage utilization within each rack stays within the allowed threshold.
 # - Work with a heterogenous cluster: add 'nemesis_add_node_cnt' nodes of type 'nemesis_grow_shrink_instance_type' to the base cluster (n_db_nodes = 6).
