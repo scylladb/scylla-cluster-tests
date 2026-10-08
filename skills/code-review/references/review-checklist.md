@@ -218,3 +218,62 @@ body (min 30 chars)
 - Subject: 10-120 characters, no trailing period
 - Header (type + scope + subject): maximum 100 characters
 - Body: minimum 30 characters, max 120 chars per line
+
+---
+
+## HTTP Resilience & Retry Patterns (SKILL.md Check 9)
+
+**Trigger**: PR touches files with `curl`, `requests.get`, `requests.post`, or `remoter.run("curl`.
+
+- All `remoter.run("curl ...")` calls use `curl_with_retry()` from `sdcm/utils/curl.py` (exception: document with `# no-retry: <reason>`) — flag raw `curl` strings that bypass the helper
+- **Inline bash scripts via `shell_script_cmd()`** must also use `curl_with_retry()` — interpolate the helper into the f-string (e.g. `f"{curl_with_retry(url, output='file', follow_redirects=True)}"`)
+- Watch for curl calls hidden inside multi-line `shell_script_cmd(f"""...""")` blocks in `sct_config.py`, `cluster.py`, `sct_runner.py`, and similar files — these are easy to miss
+- `curl_with_retry()` retries connection resets (curl exit 35/56) by default via `RETRY_ALL_ERRORS_PROBE` - a runtime capability check that expands to `--retry-all-errors` only when the executing curl supports it (>= 7.71)
+- Flag any **bare `--retry-all-errors` literal** in shell/userdata scripts - it hard-fails on curl < 7.71 (rhel7/8-family, ubuntu2004); it must go through the probe (`RETRY_ALL_ERRORS_PROBE` constant, or its snippet verbatim in plain-string scripts)
+- Flag `retry_all_errors=False` on idempotent downloads - the only valid justification is a non-idempotent request (POST/PUT/DELETE)
+- Flag curl in userdata/cloud-init scripts (`provision/common/utils.py`, `sct_agent_installer.py`) that is missing plain `--retry` flags
+- All `requests.get/post/put/delete` calls go through a `requests.Session` with `HTTPAdapter(max_retries=Retry(...))` — follow `sdcm/rest/rest_client.py` pattern
+- No bare `requests.get()` / `requests.post()` without session+retry
+- Localhost/metadata calls may use `retry=0` but must still use the utility for consistent `--connect-timeout`
+- Full convention reference: [docs/http-retry-conventions.md](../../../docs/http-retry-conventions.md)
+
+---
+
+## Trigger-Matrix Arch (SKILL.md Check 10)
+
+### Trigger
+
+PR changes `instance_type_db`, `sizing_db` (or its `arch`) in a `test-cases/` or `configurations/` file, or the
+test config list of a jenkinsfile — including backports to `branch-*`.
+
+### Why This Matters
+
+A trigger-matrix entry's `arch` never reaches the Jenkins job: the job gets `scylla_version` and runs on whatever
+its own config resolves to, on the SCT branch of that release (`scylla-2026.1/*` jobs run `branch-2026.1`).
+`<branch>/ami` starts each trigger once per arch AMI, and each run keeps only the entries of its own arch. A stale
+entry fires the job from the wrong run, or twice (SCT-1168 — see [common-issues.md](common-issues.md)).
+
+### How to Check
+
+1. Find the jobs using the changed file: `grep -rln "<file>" jenkins-pipelines/`
+2. Find their entries: `grep -rn "<job-name>" configurations/triggers/`
+3. Work out the new DB arch: a literal `instance_type_db` (`i8g`, `c7g`, `im4gn` are Graviton), or `sizing_db` —
+   without `arch:` it resolves to Graviton on AWS
+4. If it differs from the entry's arch (`arch:`, else an `aarch64` label, else x86_64), the entry must change for the
+   releases this branch serves. When branches differ, split it by version range — the open-ended entry follows
+   master, since new branches inherit it:
+
+```yaml
+  - job_name: "tier1/longevity-mv-si-4days-streaming-test"
+    arch: "x86_64"                               # i4i on these branches
+    include_versions: ["2024", "2025", "2026.1"]
+  - job_name: "tier1/longevity-mv-si-4days-streaming-test"
+    arch: "aarch64"                              # sizing_db → i8g from 2026.2 on
+    exclude_versions: ["2024", "2025", "2026.1"]
+```
+
+5. Verify: `uv run sct.py trigger-matrix-audit --remote upstream` (after
+   `git fetch upstream 'refs/heads/branch-20*:refs/remotes/upstream/branch-20*'`)
+
+Entries on two arches whose version ranges overlap fail matrix validation; the weekly
+`QA-tools/trigger-matrix-arch-audit` job mails any drift that slips through.
