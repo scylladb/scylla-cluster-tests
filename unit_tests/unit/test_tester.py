@@ -1196,3 +1196,17 @@ def test_run_latte_thread_stress_duration_overrides_time_based_duration(stress_c
 
     assert latte_thread_mock.call_args.kwargs["stress_cmd"] == expected_cmd
     assert latte_thread_mock.call_args.kwargs["timeout"] == 30 * 60 + 600
+
+
+@pytest.mark.parametrize("record_hdr", [True, False])
+def test_run_latte_thread_forwards_record_hdr(record_hdr):
+    """'run_latte_thread' swallows unknown kwargs, so a missing pass-through would go unnoticed."""
+    with (
+        patch.object(LatteStressThread, "__init__", return_value=None) as mock_init,
+        patch.object(LatteStressThread, "run", return_value="thread-pool"),
+    ):
+        ClusterTester.run_latte_thread(
+            _fake_latte_tester(), stress_cmd="latte run -f load data_dir/latte/x.rn", duration=10, record_hdr=record_hdr
+        )
+
+    assert mock_init.call_args.kwargs["record_hdr"] is record_hdr
