@@ -220,6 +220,18 @@ def enable_default_filters(sct_config: SCTConfiguration):
         regex=r".*\brpc\b.*aborting on shard \d+",
     ).publish()
 
+    # db::commitlog::segment_manager::list_descriptors builds the vector of commitlog segment
+    # descriptors once, on startup/commitlog replay; it's non-fatal, Scylla itself logs it at
+    # WARNING, and it won't be fixed upstream -- see SCYLLADB-2713 (Won't Fix) and SCT-1008.
+    # This only downgrades the event when the backtrace was decoded (backtrace_decoding, on by
+    # default): if backtrace decoding is disabled, the raw hex backtrace never contains
+    # "list_descriptors" and the event stays at ERROR.
+    EventsSeverityChangerFilter(
+        new_severity=Severity.WARNING,
+        event_class=DatabaseLogEvent.OVERSIZED_ALLOCATION,
+        regex=r".*commitlog::segment_manager::list_descriptors",
+    ).publish()
+
     # As written in https://github.com/scylladb/scylladb/issues/20950#issuecomment-2411387784
     # raft error messages with connection close could be ignored during topology operations,
     # upgrades and any place where the race between raft global barrier and gossipier could
