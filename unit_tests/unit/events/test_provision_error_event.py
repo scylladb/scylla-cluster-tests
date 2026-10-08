@@ -19,6 +19,7 @@ import pytest
 from click.testing import CliRunner
 from ssh2.exceptions import AuthenticationError
 
+from sct import provision_resources
 from sdcm.remote.base import RetryableNetworkException
 from sdcm.remote.libssh2_client.exceptions import ConnectTimeout, FailedToRunCommand
 
@@ -61,8 +62,6 @@ def test_provision_resources_sends_error_event_to_argus():
         # SCT_CLUSTER_BACKEND is set via --backend flag, no env var needed
 
         # Use Click's CliRunner to invoke the command
-        from sct import provision_resources  # noqa: PLC0415
-
         runner = CliRunner()
         result = runner.invoke(provision_resources, ["--backend", "aws", "--test-name", "test"])
 
@@ -135,8 +134,6 @@ def test_provision_resources_reports_config_init_failure_to_argus(monkeypatch, t
         mock_argus_client = MagicMock()
         mock_get_argus_client.return_value = mock_argus_client
 
-        from sct import provision_resources  # noqa: PLC0415
-
         runner = CliRunner()
         result = runner.invoke(provision_resources, ["--backend", "aws", "--test-name", "test"])
 
@@ -190,8 +187,6 @@ def test_provision_resources_no_argus_report_without_test_id(monkeypatch):
         mock_argus_client = MagicMock()
         test_config_instance.argus_client.return_value = mock_argus_client
         mock_test_config.return_value = test_config_instance
-
-        from sct import provision_resources  # noqa: PLC0415
 
         runner = CliRunner()
         result = runner.invoke(provision_resources, ["--backend", "aws", "--test-name", "test"])
