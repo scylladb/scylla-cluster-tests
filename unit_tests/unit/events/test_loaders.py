@@ -387,8 +387,10 @@ def test_stress_event_with_errors(event_class, severity, event_id):
 
 
 def assert_cassandra_stress_log_event(line, expected_type, expected_severity):
-    for pattern, event in chain(CS_NORMAL_EVENTS_PATTERNS, CS_ERROR_EVENTS_PATTERNS):
+    for pattern, prototype in chain(CS_NORMAL_EVENTS_PATTERNS, CS_ERROR_EVENTS_PATTERNS):
         if pattern.search(line):
+            # the events in the pattern lists are module-level prototypes, mutating them leaks across tests
+            event = prototype.clone()
             event.add_info(node="self.node", line=line, line_number=1).dont_publish()
             assert event.type == expected_type, f'Unexpected event.type {event.type}. Expected "{expected_type}"'
             assert event.severity == expected_severity, (
@@ -475,8 +477,10 @@ def test_cs_normal_shared_awarnes_event():
 
 
 def assert_scylla_bench_log_event(line, expected_type, expected_severity):
-    for pattern, event in chain(SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS):
+    for pattern, prototype in chain(SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS):
         if pattern.search(line):
+            # the events in the pattern lists are module-level prototypes, mutating them leaks across tests
+            event = prototype.clone()
             event.add_info(node="self.node", line=line, line_number=1).dont_publish()
             assert event.type == expected_type, f'Unexpected event.type {event.type}. Expected "{expected_type}"'
             assert event.severity == expected_severity, (
