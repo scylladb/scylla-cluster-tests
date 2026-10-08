@@ -65,11 +65,11 @@ def lint_test_metadata(config_path: Path, taxonomy_path: Path | None = None) -> 
     elif len(meta.description.strip()) < 20:
         result.errors.append(f"TD-002: 'description' is too short ({len(meta.description.strip())} chars, minimum 20)")
 
-    # TD-004: test_type should match directory name
+    # TD-004: test_type should match one of the directory names in the path
     if meta.test_type:
-        parent_dir = config_path.parent.name
-        if meta.test_type not in parent_dir and parent_dir not in meta.test_type:
-            result.warnings.append(f"TD-004: test_type '{meta.test_type}' may not match directory '{parent_dir}'")
+        ancestor_dirs = [p.name for p in config_path.parents if p.name and p.name != "test-cases"]
+        if not any(meta.test_type in d or d in meta.test_type for d in ancestor_dirs):
+            result.warnings.append(f"TD-004: test_type '{meta.test_type}' may not match directory path '{config_path}'")
 
     # TD-010: tier appropriate for duration
     if meta.tier and meta.duration_class:
