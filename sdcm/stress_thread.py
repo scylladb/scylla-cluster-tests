@@ -395,7 +395,7 @@ class CassandraStressThread(DockerBasedStressThread):
                 remote_safepoint_log_full_path = loader.remoter.run(
                     f"realpath $HOME/{safepoint_log_name}", ignore_status=False, verbose=False
                 ).stdout.strip()
-                safepoint_volume_opt = f" -v {remote_safepoint_log_full_path}:/{safepoint_log_name}"
+                safepoint_volume_opt = f" -v {remote_safepoint_log_full_path}:/{safepoint_log_name}:z"
                 jvm_opts_value = f"{jvm_opts_value} {self._safepoint_jvm_opts(f'/{safepoint_log_name}')}".strip()
                 LOGGER.info("cassandra-stress safepoint log on %s: %s", loader.name, remote_safepoint_log_full_path)
 
@@ -413,7 +413,7 @@ class CassandraStressThread(DockerBasedStressThread):
                 f"--label shell_marker={self.shell_marker}"
                 f" --entrypoint /bin/bash"
                 f" -w /"
-                f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}"
+                f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}:z"
                 f"{safepoint_volume_opt}"
                 f"{jvm_opts}",
             )

@@ -102,7 +102,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):
                 create_network_cmd = "docker network create --driver bridge nosql"
                 graphite_run_cmd = (
                     "docker run -d -p 9108:9108 -p 9109:9109 -p 9109:9109/udp "
-                    "-v /tmp/graphite_mapping.conf:/tmp/graphite_mapping.conf "
+                    "-v /tmp/graphite_mapping.conf:/tmp/graphite_mapping.conf:z "
                     "--name=graphite-exporter "
                     "--network=nosql "
                     "prom/graphite-exporter --graphite.mapping-config=/tmp/graphite_mapping.conf"

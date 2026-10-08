@@ -211,7 +211,7 @@ class GeminiStressThread(DockerBasedStressThread):
                     )
                 loader.remoter.send_files(src=schema_url, dst=f"$HOME/{self.gemini_schema_file}")
             schema_path = f"/{self.gemini_schema_file}"
-            schema_mount = f"-v $HOME/{self.gemini_schema_file}:/{self.gemini_schema_file} "
+            schema_mount = f"-v $HOME/{self.gemini_schema_file}:/{self.gemini_schema_file}:z "
 
         for file_name in [
             self.gemini_result_file,
@@ -231,10 +231,10 @@ class GeminiStressThread(DockerBasedStressThread):
             "--security-opt seccomp=unconfined "
             '--entrypoint="" '
             f"--label shell_marker={self.shell_marker} "
-            f"-v $HOME/{self.gemini_result_file}:/{self.gemini_result_file} "
-            f"-v $HOME/{self.gemini_test_statements_file}:/{self.gemini_test_statements_file} "
-            f"-v $HOME/{self.gemini_oracle_statements_file}:/{self.gemini_oracle_statements_file} "
-            f"-v $HOME/{self.gemini_summary_file}:/{self.gemini_summary_file} "
+            f"-v $HOME/{self.gemini_result_file}:/{self.gemini_result_file}:z "
+            f"-v $HOME/{self.gemini_test_statements_file}:/{self.gemini_test_statements_file}:z "
+            f"-v $HOME/{self.gemini_oracle_statements_file}:/{self.gemini_oracle_statements_file}:z "
+            f"-v $HOME/{self.gemini_summary_file}:/{self.gemini_summary_file}:z "
             f"{schema_mount}",
         )
 

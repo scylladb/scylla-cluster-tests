@@ -287,7 +287,7 @@ class ScyllaBenchThread(DockerBasedStressThread):
         extra_docker_opts = (
             f"{cpu_options} --label shell_marker={self.shell_marker} "
             '--network=host --entrypoint="" --security-opt seccomp=unconfined '
-            f"-v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}"
+            f"-v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}:z"
         )
 
         if "k8s" in self.params.get("cluster_backend"):

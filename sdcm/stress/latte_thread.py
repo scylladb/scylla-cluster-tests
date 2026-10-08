@@ -281,7 +281,7 @@ class LatteStressThread(DockerBasedStressThread):
                 "--network=host "
                 "--security-opt seccomp=unconfined "
                 f"--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker}"
-                f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}"
+                f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}:z"
             ),
         )
         hosts = " ".join([i.cql_address for i in self.node_list])
