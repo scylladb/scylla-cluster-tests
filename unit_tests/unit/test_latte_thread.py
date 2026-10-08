@@ -266,3 +266,33 @@ def test_nothing_is_staged_by_default():
 def test_a_staged_file_needs_an_absolute_container_path():
     with pytest.raises(ValueError, match="not absolute"):
         _staging_thread([("/local/documents.tsv", "documents.tsv")])
+
+
+def _hdr_thread(stress_cmd, use_hdrhistogram=True, **kwargs):
+    return LatteStressThread(
+        loader_set=types.SimpleNamespace(
+            get_db_auth=lambda: None,
+            test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
+        ),
+        stress_cmd=stress_cmd,
+        timeout=60,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": "docker", "use_hdrhistogram": use_hdrhistogram},
+        **kwargs,
+    )
+
+
+def test_a_run_records_hdr_when_use_hdrhistogram_is_on():
+    assert _hdr_thread("latte run -f search data_dir/latte/x.rn").records_hdr()
+
+
+@pytest.mark.parametrize(
+    "stress_cmd, use_hdrhistogram, kwargs",
+    [
+        pytest.param("latte run -f load data_dir/latte/x.rn", True, {"record_hdr": False}, id="opted-out"),
+        pytest.param("latte schema data_dir/latte/x.rn", True, {}, id="schema"),
+        pytest.param("latte run -f search data_dir/latte/x.rn", False, {}, id="hdr-off"),
+    ],
+)
+def test_no_hdr_is_recorded(stress_cmd, use_hdrhistogram, kwargs):
+    assert not _hdr_thread(stress_cmd, use_hdrhistogram, **kwargs).records_hdr()
