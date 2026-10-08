@@ -31,13 +31,13 @@ def info_event() -> Generator[InfoEvent, None, None]:
 @pytest.fixture(scope="function")
 def populated_registry(registry: ContinuousEventsRegistry) -> Generator[ContinuousEventsRegistry, None, None]:
     for _ in range(100):
-        NodetoolEvent(nodetool_command="mock cmd", publish_event=False)
+        NodetoolEvent(nodetool_command="mock cmd", publish_event=False).begin_event(publish=False)
 
     yield registry
 
 
 def test_add_event(registry: ContinuousEventsRegistry):
-    # continuous events are added to the registry on event instantiation
+    # continuous events are added to the registry when they begin
     event = NodetoolEvent(nodetool_command="mock cmd").begin_event(publish=False)
 
     assert event in registry.continuous_events
