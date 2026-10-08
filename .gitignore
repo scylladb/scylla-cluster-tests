@@ -69,6 +69,9 @@ fabric.properties
 # SSL artifacts
 data_dir/ssl_conf/
 
+# Generated FTS corpora (generate_local_dataset.py), read in place by a run.
+data_dir/latte/fts_search/*/
+
 # Internal private repo
 scylla-qa-internal/
 
