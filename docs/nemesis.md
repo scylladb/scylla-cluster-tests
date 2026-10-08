@@ -94,7 +94,7 @@ Nemesis behavior is controlled through test YAML configs or environment variable
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `nemesis_class_name` | `str` | `'NoOpMonkey'` | Runner class to use. Supports parallel syntax: `"SisyphusMonkey:2"` runs 2 threads |
+| `nemesis_class_name` | `str` | `'NoOpMonkey'` | Runner class to use. Accepts a YAML list; repeat a class to run parallel threads, e.g. `["SisyphusMonkey", "SisyphusMonkey"]` |
 | `nemesis_selector` | `str` | `None` | Boolean flag expression to filter nemesis (e.g. `"not disruptive"`). For `FixedOrderMonkey`: ordered, comma-separated nemesis class names |
 | `nemesis_interval` | `int` | `5` | Sleep interval between operations, in **minutes** |
 | `nemesis_seed` | `int` | random | Seed for reproducible nemesis sequences |
@@ -113,11 +113,13 @@ The `nemesis_class_name` parameter supports several formats:
 nemesis_class_name: 'SisyphusMonkey'
 
 # Single nemesis runner, 2 parallel threads
-nemesis_class_name: 'SisyphusMonkey:2'
+nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']
 
-# Multiple runners with different thread counts
-nemesis_class_name: 'SisyphusMonkey:1 NoOpMonkey:1'
+# Multiple different runners
+nemesis_class_name: ['SisyphusMonkey', 'NoOpMonkey']
 ```
+
+The former `Class:N` count syntax (e.g. `'SisyphusMonkey:2'`) and space-separated strings are rejected with a `ValueError`.
 
 ### `nemesis_selector` Syntax
 
@@ -173,7 +175,7 @@ nemesis_interval: 5
 
 **Multiple parallel nemesis threads:**
 ```yaml
-nemesis_class_name: "SisyphusMonkey:3"
+nemesis_class_name: ["SisyphusMonkey", "SisyphusMonkey", "SisyphusMonkey"]
 nemesis_interval: 2
 ```
 
@@ -185,7 +187,7 @@ nemesis_selector: "not disruptive"
 
 **Non-disruptive nemesis only (list selector syntax):**
 ```yaml
-nemesis_class_name: "SisyphusMonkey:2"
+nemesis_class_name: ["SisyphusMonkey", "SisyphusMonkey"]
 nemesis_selector: ["not disruptive", ""]
 ```
 
