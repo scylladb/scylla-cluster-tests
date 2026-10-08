@@ -48,6 +48,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     configure_sshd: bool = True
     hostname: str = ""
     log_file: str = ""
+    # vector ships the journal from now on, not from the checkpoint or boot: for a host that outlives the run
+    vector_journal_from_now: bool = False
     test_config: Any | None = None
     params: Any | None = None
     install_docker: bool = False
@@ -87,7 +89,9 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         restarted, to retrigger sending logs.
         """
         host, port = self.syslog_host_port
-        return define_vector_target_function(host=host, port=port) + dedent(f"""
+        return define_vector_target_function(
+            host=host, port=port, journal_from_now=self.vector_journal_from_now
+        ) + dedent(f"""
         if [ -f {CLOUD_INIT_SCRIPTS_PATH}/done ] && command -v vector >/dev/null 2>&1; then
             {VECTOR_TARGET_FUNCTION}
             exit 0

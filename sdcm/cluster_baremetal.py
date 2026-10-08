@@ -210,6 +210,7 @@ class PhysicalHostCleanup:
 
 class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
     log = LOGGER
+    journal_outlives_run = True
 
     def __init__(
         self,
