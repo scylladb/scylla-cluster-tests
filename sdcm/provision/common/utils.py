@@ -78,13 +78,14 @@ def configure_syslogng_target_script(hostname: str = "") -> str:
 VECTOR_TARGET_FUNCTION = "write_vector_target"
 
 
-def define_vector_target_function(host: str, port: int) -> str:
+def define_vector_target_function(host: str, port: int, journal_from_now: bool = False) -> str:
     """Define a shell function which points vector at SCT and restarts it.
 
     Boot scripts call it from two places (reused node and fresh install), so the config is
     written into the script once - EC2 caps user data at 16 KB (SCT-1147).
     """
-    return f"{VECTOR_TARGET_FUNCTION}() {{\n" + _vector_target_body(host=host, port=port) + "}\n"
+    body = _vector_target_body(host=host, port=port, journal_from_now=journal_from_now)
+    return f"{VECTOR_TARGET_FUNCTION}() {{\n" + body + "}\n"
 
 
 def configure_vector_target_script(host: str, port: int) -> str:
@@ -92,7 +93,14 @@ def configure_vector_target_script(host: str, port: int) -> str:
     return define_vector_target_function(host=host, port=port) + f"{VECTOR_TARGET_FUNCTION}\n"
 
 
-def _vector_target_body(host: str, port: int) -> str:
+# vector resumes the journal from its checkpoint; without one, `since_now` makes it start at the present
+VECTOR_JOURNAL_FROM_NOW = """
+        systemctl stop vector || true
+        rm -f /var/lib/vector/journald/checkpoint.txt
+"""
+
+
+def _vector_target_body(host: str, port: int, journal_from_now: bool = False) -> str:
     """Prepare vector configuration script with client-side log filtering.
 
     Configures vector to filter verbose logs before sending them to SCT, reducing memory pressure
@@ -106,12 +114,15 @@ def _vector_target_body(host: str, port: int) -> str:
         - filter_system_services: remove unnecessary system services logs
         - filter_verbose_scylla: remove compaction/repair/streaming scylla logs
         - filter_suppress_warnings: remove Severity.SUPPRESS events
+
+    With `journal_from_now`, vector forgets where it stopped reading the journal and starts at the present: a host
+    that outlives the run (bare metal) keeps one journal for every run on it, and vector would ship the earlier ones.
     """
-    return dedent("""
+    return dedent("""{journal_reset}
         cat > /etc/vector/vector.yaml <<'EOF'
 sources:
     journald:
-        type: journald
+        type: journald{since_now}
     vector_metrics:
         type: internal_metrics
 
@@ -184,7 +195,12 @@ EOF
         systemctl daemon-reload
 
         systemctl restart vector || echo "WARNING: vector.service restart failed, will be reconfigured later by configure_remote_logging"
-    """).format(host=host, port=port)
+    """).format(
+        host=host,
+        port=port,
+        journal_reset=VECTOR_JOURNAL_FROM_NOW if journal_from_now else "",
+        since_now="\n        since_now: true" if journal_from_now else "",
+    )
 
 
 # `cat > file <<'EOF'` and friends; `<<<` (a here-string) has no body to keep

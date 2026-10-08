@@ -455,6 +455,8 @@ class BaseNode(AutoSshContainerMixin):
     # None reads the whole journal, which is what a node created for this run wants: it holds this run's logs only,
     # boot included.
     journal_since: str | None = None
+    # A host that outlives the run (bare metal) keeps one journal for every run on it
+    journal_outlives_run: bool = False
 
     GOSSIP_STATUSES_FILTER_OUT = [
         "LEFT",  # in case the node was decommissioned
@@ -4158,6 +4160,8 @@ class BaseNode(AutoSshContainerMixin):
             logs_transport=self.parent_cluster.params.get("logs_transport"),
             hostname=self.name,
             log_file=log_file,
+            # NOTE: only before the run start is marked: a later call keeps the checkpoint of this run
+            vector_journal_from_now=self.journal_outlives_run and not self.journal_since,
             test_config=self.test_config,
             # NOTE: no 'disable_guest_firewall' here on purpose - this one re-runs on a live node
             #       to re-point the logs, long after boot, and flushing the tables there would
