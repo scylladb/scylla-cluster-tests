@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Latency-under-operations test with a 650GB dataset on a 3-node i3en.2xlarge
+    cluster: runs fixed-rate cassandra-stress write, read and mixed workloads while
+    SisyphusMonkey runs a NemesisSequence, and measures latency per disruption. The
+    pipelines run both vnodes and tablets variants.
+  test_type: performance
+  tier: release
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  features:
+    - tablets
+    - vnodes
+  team_ownership: core-test-infra
+
 test_duration: 840
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..162500000",
                     "cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=162500000..325000000",

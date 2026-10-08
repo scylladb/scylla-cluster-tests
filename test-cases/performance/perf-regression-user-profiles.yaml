@@ -1,3 +1,19 @@
+test_metadata:
+  description: >-
+    Performance test that runs a set of customer-derived cassandra-stress user
+    profiles (counters, time series, documents, events) for 60 minutes each on a
+    3-node cluster. Marked as not yet qualified, and no pipeline uses it.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: user-profile
+  features: []
+  team_ownership: core-test-infra
+
 # TODO: need to qualify
 
 test_duration: 800
