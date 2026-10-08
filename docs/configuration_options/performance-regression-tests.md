@@ -5,7 +5,7 @@
 Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram
 settings.
 
-**18 options.**
+**19 options.**
 
 
 <a id="max_deviation"></a>
@@ -138,6 +138,17 @@ Flag for running db node benchmarks before the tests
 **default:** False
 
 **type:** bool
+
+
+<a id="search_test_config"></a>
+
+## **search_test_config** / SCT_SEARCH_TEST_CONFIG
+
+Search test definition (datasets, shards and their runtime settings).<br>Accepts an absolute path, or one relative to the SCT root, e.g. data_dir/latte/fts_search/plan.yaml.<br>Required by a search test: it is the definition of what to run, so there is nothing to fall back on.<br>Per-dataset load and index-wait limits live inside this file, not in SCT params.
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 <a id="stop_on_hw_perf_failure"></a>
