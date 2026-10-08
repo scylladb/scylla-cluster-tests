@@ -26,7 +26,7 @@ import pytest
 from sdcm.utils.trigger_matrix.config import load_matrix_config
 from sdcm.utils.trigger_matrix.filters import filter_jobs
 
-TRIGGERS_DIR = Path(__file__).parent.parent.parent / "configurations" / "triggers"
+TRIGGERS_DIR = Path(__file__).parent.parent.parent.parent / "configurations" / "triggers"
 BIWEEKLY_MATRICES = ["tier1.yaml", "rolling-upgrade.yaml"]
 WEEK_LABELS = {"week-a", "week-b"}
 

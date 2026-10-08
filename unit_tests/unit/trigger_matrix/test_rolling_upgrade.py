@@ -21,7 +21,7 @@ from sdcm.utils.trigger_matrix.filters import filter_jobs
 from sdcm.utils.trigger_matrix.parameters import build_job_parameters
 from sdcm.utils.trigger_matrix.versions import _branch_directory_id, _extract_branch_from_version
 
-ROLLING_UPGRADE_YAML = Path(__file__).parent.parent.parent / "configurations" / "triggers" / "rolling-upgrade.yaml"
+ROLLING_UPGRADE_YAML = Path(__file__).parents[3] / "configurations" / "triggers" / "rolling-upgrade.yaml"
 
 
 @pytest.mark.parametrize(
@@ -313,7 +313,7 @@ def test_rolling_upgrade_jobs_have_matching_jenkinsfile():
     on disk — guards against a trigger pointing at a job whose Jenkinsfile was deleted
     (e.g. an EOL Debian release removed without updating the trigger config).
     """
-    pipelines_dir = Path(__file__).parent.parent.parent / "jenkins-pipelines" / "oss" / "rolling-upgrade"
+    pipelines_dir = Path(__file__).parents[3] / "jenkins-pipelines" / "oss" / "rolling-upgrade"
     config = load_matrix_config(ROLLING_UPGRADE_YAML)
     for job in config.jobs:
         stem = job.job_name.split("/")[-1].removesuffix("-test")
@@ -327,7 +327,7 @@ def test_rolling_upgrade_jobs_have_new_scylla_repo():
     blanks scylla_version with no repo to fall back on, and provisioning fails downstream
     with 'missing options: [ami_id_db_scylla]'.
     """
-    triggers_dir = Path(__file__).parent.parent.parent / "configurations" / "triggers"
+    triggers_dir = Path(__file__).parents[3] / "configurations" / "triggers"
     for yaml_path in sorted(triggers_dir.glob("*.yaml")):
         config = load_matrix_config(yaml_path)
         for job in config.jobs:

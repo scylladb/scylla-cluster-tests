@@ -11,21 +11,83 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+"""Tests for job selection and parameter building against a synthetic matrix.
+
+These use an in-memory matrix (not configurations/triggers/perf-regression.yaml) so they
+exercise filter_jobs()/build_job_parameters() logic and stay green when the real matrix
+changes — see PR #15380 discussion. The retirement guards at the end of the module are the
+exception: they pin the production perf-regression.yaml via the `production_perf_config` fixture
+and must be updated together with an intentional change to that file.
+"""
+
 from pathlib import Path
 
 import pytest
+import yaml
 
 from sdcm.utils.trigger_matrix.config import load_matrix_config
 from sdcm.utils.trigger_matrix.filters import filter_jobs
 from sdcm.utils.trigger_matrix.parameters import build_job_parameters
 
-PERF_YAML = Path(__file__).parent.parent.parent / "configurations" / "triggers" / "perf-regression.yaml"
+
+PERF_YAML = Path(__file__).parents[3] / "configurations" / "triggers" / "perf-regression.yaml"
+
+
+def write_matrix(tmp_path, data) -> Path:
+    path = tmp_path / "matrix.yaml"
+    path.write_text(yaml.dump(data))
+    return path
 
 
 @pytest.fixture()
-def perf_config():
-    if not PERF_YAML.exists():
-        pytest.skip("perf-regression.yaml not found")
+def perf_config(tmp_path):
+    path = write_matrix(
+        tmp_path,
+        {
+            "jobs": [
+                {
+                    "job_name": "aws-perf-i8g-tablets-master",
+                    "backend": "aws",
+                    "labels": ["master-2weeks"],
+                },
+                {
+                    "job_name": "gce-perf-latte-1",
+                    "backend": "gce",
+                    "labels": ["gce-custom-monthly"],
+                    "pre_release": ["rc1"],
+                },
+                {
+                    "job_name": "gce-perf-latte-2",
+                    "backend": "gce",
+                    "labels": ["gce-custom-monthly"],
+                    "pre_release": ["rc1"],
+                },
+                {
+                    "job_name": "aws-rolling-upgrade",
+                    "backend": "aws",
+                    "params": {
+                        "rolling_upgrade_test": "true",
+                        "new_scylla_repo": "http://downloads.scylladb.com/deb/scylla/{branch_id}/deb/"
+                        "unstable/scylladb-{branch}/scylla.list",
+                    },
+                },
+                {
+                    "job_name": "gce-rolling-upgrade",
+                    "backend": "gce",
+                    "params": {
+                        "rolling_upgrade_test": "true",
+                        "new_scylla_repo": "http://downloads.scylladb.com/deb/scylla/{branch_id}/deb/"
+                        "unstable/scylladb-{branch}/scylla.list",
+                    },
+                },
+            ]
+        },
+    )
+    return load_matrix_config(path)
+
+
+@pytest.fixture()
+def production_perf_config():
     return load_matrix_config(PERF_YAML)
 
 
@@ -109,26 +171,26 @@ LIVE_VERSIONS = [
 
 
 @pytest.mark.parametrize("job_name", RETIRED_X86_JOBS)
-def test_retired_x86_jobs_stay_disabled(perf_config, job_name):
+def test_retired_x86_jobs_stay_disabled(production_perf_config, job_name):
     """The x86 (i4i/i3en) release variants are retired and kept in the matrix for reference
     only, so they must stay `disabled: true`. Emptying their `include_versions` instead does
     the opposite of switching them off: filter_jobs() treats an empty list as no filter, so
     the job would run for every version, master included.
     """
-    entries = [job for job in perf_config.jobs if job.job_name.rsplit("/", 1)[-1] == job_name]
+    entries = [job for job in production_perf_config.jobs if job.job_name.rsplit("/", 1)[-1] == job_name]
     assert entries, f"{job_name} not found in perf-regression.yaml"
     for job in entries:
         assert job.disabled, f"{job_name} is retired but not disabled"
 
 
 @pytest.mark.parametrize("scylla_version,resolved_version", RETIRED_VERSIONS + LIVE_VERSIONS)
-def test_retired_x86_jobs_never_selected(perf_config, scylla_version, resolved_version):
+def test_retired_x86_jobs_never_selected(production_perf_config, scylla_version, resolved_version):
     """No version may select a retired x86 variant, on any labels selector."""
     for labels_selector in ("", "gce-custom-monthly", "master-monthly", "master-2weeks", "master-3weeks"):
         selected = {
             job.job_name.rsplit("/", 1)[-1]
             for job in filter_jobs(
-                perf_config.jobs,
+                production_perf_config.jobs,
                 scylla_version=scylla_version,
                 resolved_version=resolved_version,
                 labels_selector=labels_selector,
@@ -139,7 +201,7 @@ def test_retired_x86_jobs_never_selected(perf_config, scylla_version, resolved_v
 
 
 @pytest.mark.parametrize("scylla_version,resolved_version", RETIRED_VERSIONS)
-def test_2024_and_2025_releases_keep_microbenchmarks_only(perf_config, scylla_version, resolved_version):
+def test_2024_and_2025_releases_keep_microbenchmarks_only(production_perf_config, scylla_version, resolved_version):
     """No 2024.x or 2025.x minor runs a perf regression job any more: the x86 variants are
     retired and every version filter names all six of those branches, which leaves the weekly
     microbenchmarks as the only jobs such a release trigger selects.
@@ -148,7 +210,7 @@ def test_2024_and_2025_releases_keep_microbenchmarks_only(perf_config, scylla_ve
         selected = [
             job.job_name.rsplit("/", 1)[-1]
             for job in filter_jobs(
-                perf_config.jobs,
+                production_perf_config.jobs,
                 scylla_version=scylla_version,
                 resolved_version=resolved_version,
                 labels_selector=labels_selector,
@@ -168,26 +230,28 @@ def test_2024_and_2025_releases_keep_microbenchmarks_only(perf_config, scylla_ve
         pytest.param("2025.1.16", "2025.1.16", id="2025.1.16-promote-release"),
     ],
 )
-def test_cql_raw_microbenchmarks_not_selected_before_2026_2(perf_config, scylla_version, resolved_version):
+def test_cql_raw_microbenchmarks_not_selected_before_2026_2(production_perf_config, scylla_version, resolved_version):
     """The `scylla perf-cql-raw` tool does not exist before 2026.2, so a release trigger for
     2026.1 or any 2024.x/2025.x minor must not select the cql-raw microbenchmarks.
     """
     selected = [
         job.job_name.rsplit("/", 1)[-1]
-        for job in filter_jobs(perf_config.jobs, scylla_version=scylla_version, resolved_version=resolved_version)
+        for job in filter_jobs(
+            production_perf_config.jobs, scylla_version=scylla_version, resolved_version=resolved_version
+        )
     ]
     cql_raw = [name for name in selected if "perf-cql-raw" in name]
     assert not cql_raw, f"{scylla_version} selects {cql_raw}"
 
 
-def test_master_keeps_the_vnodes_jobs(perf_config):
+def test_master_keeps_the_vnodes_jobs(production_perf_config):
     """Vnodes coverage is kept on master: the monthly i8g vnodes entries must stay selectable
     even though no release branch runs a vnodes job any more.
     """
     selected = {
         job.job_name.rsplit("/", 1)[-1]
         for job in filter_jobs(
-            perf_config.jobs,
+            production_perf_config.jobs,
             scylla_version="master:latest",
             resolved_version="2026.3.0~dev-0.20260525.abc",
             labels_selector="master-monthly",
@@ -206,8 +270,8 @@ def test_rolling_upgrade_jobs_resolve_new_scylla_repo(perf_config):
     rolling_upgrade_jobs = [
         job for job in perf_config.jobs if str(job.params.get("rolling_upgrade_test", "")).lower() == "true"
     ]
-    assert len(rolling_upgrade_jobs) == 4, (
-        f"Expected 4 rolling_upgrade_test jobs in perf-regression.yaml, found {len(rolling_upgrade_jobs)}"
+    assert len(rolling_upgrade_jobs) == 2, (
+        f"Expected 2 rolling_upgrade_test jobs in the synthetic matrix, found {len(rolling_upgrade_jobs)}"
     )
 
     for job in rolling_upgrade_jobs:
