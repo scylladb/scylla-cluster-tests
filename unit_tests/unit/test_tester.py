@@ -1106,3 +1106,17 @@ def test_reliable_replication_factor(tablets_enabled, append_scylla_yaml, n_db_n
         tablets_enabled=tablets_enabled,
     )
     assert rf == expected_rf
+
+
+@pytest.mark.parametrize("record_hdr", [True, False])
+def test_run_latte_thread_forwards_record_hdr(record_hdr):
+    """'run_latte_thread' swallows unknown kwargs, so a missing pass-through would go unnoticed."""
+    with (
+        patch.object(LatteStressThread, "__init__", return_value=None) as mock_init,
+        patch.object(LatteStressThread, "run", return_value="thread-pool"),
+    ):
+        ClusterTester.run_latte_thread(
+            _fake_latte_tester(), stress_cmd="latte run -f load data_dir/latte/x.rn", duration=10, record_hdr=record_hdr
+        )
+
+    assert mock_init.call_args.kwargs["record_hdr"] is record_hdr

@@ -319,6 +319,9 @@ class SearchPerformanceTest(PerformanceRegressionTest):
                 (os.path.join(local_ds_dir, shard_file), posixpath.join(container_ds_dir, shard_file)),
             ],
             duration=_timeout_minutes(max_load_wait),
+            # NOTE: nothing reads the latency of a setup phase, and its 'fn--load' tag is neither a
+            #       read nor a write to the HDR exporter, which fails the command on such a tag.
+            record_hdr=False,
         )
 
     def _load_step_shards(self, step, local_ds_dir, container_ds_dir, max_load_wait):
@@ -378,6 +381,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
                 # An outer bound past the script's own give-up, so a clean "index never built" is
                 # not turned into a killed loader by both expiring in the same second.
                 duration=_timeout_minutes(max_index_wait + INDEX_BUILD_TIMEOUT_GRACE_SECS),
+                record_hdr=False,  # a setup phase, as in '_load_shard'
             )
         return wait_for_index_build_seconds(self._vector_store_node().system_log, keyspace, index_name)
 
