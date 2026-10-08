@@ -198,6 +198,56 @@ class ScyllaCloudTestBase(ClusterTester, LoaderUtilsMixin):
             cluster_name=self.db_cluster.name,
         )
 
+    def get_cluster_total_storage(self) -> float:
+        """Return total storage (GB) of the cluster DB nodes as reported by Cloud API."""
+        cluster_info = self.cloud_api_client.get_cluster_details(
+            account_id=self.account_id,
+            cluster_id=self.cluster_id,
+            enriched=True,
+        )
+        # DB nodes are missing nodeType field, thus, can be filtered out this way
+        cluster_nodes = [node for node in cluster_info["nodes"] if not node.get("nodeType")]
+        return cluster_info["instance"]["totalStorage"] * len(cluster_nodes)
+
+    def wait_for_cluster_disk_utilization(
+        self, target_utilization: int, check_interval: int = 30, wait_timeout: int = 3600
+    ) -> None:
+        """Wait until cluster disk utilization reaches the target percentage."""
+        total_storage = self.get_cluster_total_storage()
+
+        self.log.debug("Waiting for cluster disk utilization to reach %d%%...", target_utilization)
+        start_time = time.time()
+        while time.time() - start_time < wait_timeout:
+            clusters = self.cloud_api_client.get_clusters(account_id=self.account_id, metrics="STORAGE_USED")
+            cluster = next(cluster for cluster in clusters if cluster["id"] == self.cluster_id)
+            storage_used = cluster["metrics"]["STORAGE_USED"] / (1024**3)  # Convert bytes to GB
+
+            current_disk_utilization = (storage_used / total_storage) * 100
+            if current_disk_utilization >= target_utilization:
+                self.log.info("Target disk utilization of %d%% reached", target_utilization)
+                return
+
+            self.log.debug("Current disk utilization: %.2f%%, waiting...", current_disk_utilization)
+            time.sleep(check_interval)
+
+        raise TimeoutError(f"Disk utilization did not reach {target_utilization}% within {wait_timeout}s")
+
+    @retrying(n=20, sleep_time=60, allowed_exceptions=(Retry,))
+    def wait_for_resize_request(self) -> int:
+        requests = self.cloud_api_client.get_cluster_requests(account_id=self.account_id, cluster_id=self.cluster_id)
+        resize_request = next((r for r in requests if r["requestType"] == "RESIZE_CLUSTER_V3"), None)
+        if resize_request and resize_request["status"] == "IN_PROGRESS":
+            return resize_request["id"]
+        raise Retry("Resize request not found")
+
+    @retrying(n=180, sleep_time=60, allowed_exceptions=(AssertionError,))
+    def wait_for_cluster_scale_out(self, request_id: int) -> None:
+        request = self.cloud_api_client.get_cluster_request_details(account_id=self.account_id, request_id=request_id)
+        status = request["status"]
+        if status in ("FAILED", "CANCELLED"):
+            raise ScaleOutFailedException("Cluster scale out failed")
+        assert status == "COMPLETED", f"Cluster resize is not completed yet. Current status: {status}"
+
 
 class XCloudVectorSearchTest(ScyllaCloudTestBase):
     """Verify that vector search operations remain functional during XCloud cluster auto-scaling."""
@@ -251,52 +301,6 @@ class XCloudVectorSearchTest(ScyllaCloudTestBase):
             session.execute(create_index_cql)
 
         self.log.debug("Table %s.%s created successfully", self.KEYSPACE_NAME, self.TABLE_NAME)
-
-    def wait_for_cluster_disk_utilization(
-        self, target_utilization: int, check_interval: int = 30, wait_timeout: int = 3600
-    ) -> None:
-        """Wait until cluster disk utilization reaches the target percentage."""
-        cluster_info = self.cloud_api_client.get_cluster_details(
-            account_id=self.account_id,
-            cluster_id=self.cluster_id,
-            enriched=True,
-        )
-        # DB nodes are missing nodeType field, thus, can be filtered out this way
-        cluster_nodes = [node for node in cluster_info["nodes"] if not node.get("nodeType")]
-        total_storage = cluster_info["instance"]["totalStorage"] * len(cluster_nodes)
-
-        self.log.debug("Waiting for cluster disk utilization to reach %d%%...", target_utilization)
-        start_time = time.time()
-        while time.time() - start_time < wait_timeout:
-            clusters = self.cloud_api_client.get_clusters(account_id=self.account_id, metrics="STORAGE_USED")
-            cluster = next(cluster for cluster in clusters if cluster["id"] == self.cluster_id)
-            storage_used = cluster["metrics"]["STORAGE_USED"] / (1024**3)  # Convert bytes to GB
-
-            current_disk_utilization = (storage_used / total_storage) * 100
-            if current_disk_utilization >= target_utilization:
-                self.log.info("Target disk utilization of %d%% reached", target_utilization)
-                return
-
-            self.log.debug("Current disk utilization: %.2f%%, waiting...", current_disk_utilization)
-            time.sleep(check_interval)
-
-        raise TimeoutError(f"Disk utilization did not reach {target_utilization}% within {wait_timeout}s")
-
-    @retrying(n=20, sleep_time=60, allowed_exceptions=(Retry,))
-    def wait_for_resize_request(self) -> int:
-        requests = self.cloud_api_client.get_cluster_requests(account_id=self.account_id, cluster_id=self.cluster_id)
-        resize_request = next((r for r in requests if r["requestType"] == "RESIZE_CLUSTER_V3"), None)
-        if resize_request and resize_request["status"] == "IN_PROGRESS":
-            return resize_request["id"]
-        raise Retry("Resize request not found")
-
-    @retrying(n=180, sleep_time=60, allowed_exceptions=(AssertionError,))
-    def wait_for_cluster_scale_out(self, request_id: int) -> None:
-        request = self.cloud_api_client.get_cluster_request_details(account_id=self.account_id, request_id=request_id)
-        status = request["status"]
-        if status in ("FAILED", "CANCELLED"):
-            raise ScaleOutFailedException("Cluster scale out failed")
-        assert status == "COMPLETED", f"Cluster resize is not completed yet. Current status: {status}"
 
     def test_vs_functions_while_xcloud_cluster_scaling(self) -> None:
         """Test vector search functionality during cluster scaling operations."""
