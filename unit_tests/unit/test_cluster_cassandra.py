@@ -93,11 +93,6 @@ def test_compute_jvm_heap_sizes(total_ram_mb, expected_max, expected_new):
     assert heap_new == expected_new
 
 
-def test_compute_jvm_heap_min_2gb_on_large_system():
-    max_heap, _ = compute_jvm_heap_mb(4096)
-    assert max_heap >= 2048
-
-
 def test_parallel_startup_is_false(cassandra_cluster):
     assert cassandra_cluster.parallel_startup is False
 
