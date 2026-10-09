@@ -11,39 +11,22 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
-
 import pytest
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
+from sdcm.sct_events.events_processes import EVENTS_FILE_LOGGER_ID
 from sdcm.sct_events.file_logger import (
-    EventsFileLogger,
     start_events_logger,
-    get_events_logger,
     get_events_grouped_by_category,
     get_logger_event_summary,
 )
 
 
 @pytest.fixture
-def file_logger(main_events_context):
-    """A running EventsFileLogger wired to the test's events registry, stopped after the test."""
-    start_events_logger(_registry=main_events_context.events_processes_registry)
-    logger = get_events_logger(_registry=main_events_context.events_processes_registry)
-
-    time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
-
-    assert isinstance(logger, EventsFileLogger)
-    assert logger.is_alive()
-    assert logger._registry == main_events_context.events_main_device._registry
-    assert logger._registry == main_events_context.events_processes_registry
-
-    try:
-        yield logger
-    finally:
-        logger.stop(timeout=3)
+def file_logger(start_events_subscriber):
+    """A running EventsFileLogger wired to the test's events registry."""
+    return start_events_subscriber(start_events_logger, EVENTS_FILE_LOGGER_ID)
 
 
 def test_file_logger_counts_and_groups_events_by_severity(main_events_context, file_logger) -> None:
