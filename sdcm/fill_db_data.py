@@ -1193,14 +1193,13 @@ class FillDatabaseData(ClusterTester):
                 "#SORTED SELECT k FROM no_range_ghost_test",
                 "DELETE FROM no_range_ghost_test WHERE k = 2",
                 "#SORTED SELECT k FROM no_range_ghost_test",
-                "USE ks_no_range_ghost_test",
                 "INSERT INTO ks_no_range_ghost_test.users (KEY, password) VALUES ('user1', 'ch@ngem3a')",
                 "UPDATE ks_no_range_ghost_test.users SET gender = 'm', birth_year = 1980 WHERE KEY = 'user1'",
                 "TRUNCATE ks_no_range_ghost_test.users",
                 "SELECT * FROM ks_no_range_ghost_test.users",
                 "SELECT * FROM ks_no_range_ghost_test.users WHERE KEY='user1'",
             ],
-            "results": [[[k] for k in range(5)], [], [[k] for k in range(5) if not k == 2], [], [], [], [], [], []],
+            "results": [[[k] for k in range(5)], [], [[k] for k in range(5) if not k == 2], [], [], [], [], []],
             "min_version": "",
             "max_version": "",
             "skip": "",
@@ -3493,7 +3492,9 @@ class FillDatabaseData(ClusterTester):
                 CREATE KEYSPACE IF NOT EXISTS truncate_ks
                 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND durable_writes = true;
                 """)
-            session.set_keyspace("truncate_ks")
+
+        with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0], keyspace="truncate_ks") as session:
+            session.default_consistency_level = ConsistencyLevel.QUORUM
 
             # Create all tables according the above list
             self.cql_create_simple_tables(session, rows=insert_rows)
@@ -3758,8 +3759,6 @@ class FillDatabaseData(ClusterTester):
 
         for test_num, item in enumerate(self.all_verification_items):
             test_name = item.get("name", "Test #" + str(test_num))
-            # Some queries contains statement of switch keyspace, reset keyspace at the beginning
-            session.set_keyspace(self.base_ks)
             # TODO: fix following condition to make "skip_condition" really skip stuff
             # when it is True, not False as it is now.
             # As of now it behaves as "run_condition".
@@ -3795,12 +3794,11 @@ class FillDatabaseData(ClusterTester):
         """
         node = self.db_cluster.nodes[0]
 
-        with self.db_cluster.cql_connection_patient(node) as session:
+        with self.db_cluster.cql_connection_patient(node, keyspace=self.base_ks) as session:
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
             # clean original test data by truncate
             try:
-                session.set_keyspace(self.base_ks)
                 self.truncate_tables(session)
             except Exception as ex:  # noqa: BLE001
                 # Deliberately non-fatal - the first fill_db_data() of a run has nothing to truncate
@@ -3831,7 +3829,9 @@ class FillDatabaseData(ClusterTester):
                 CREATE KEYSPACE IF NOT EXISTS {self.base_ks}
                 WITH replication = {{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}} AND durable_writes = true;
                 """)
-            session.set_keyspace(self.base_ks)
+
+        with self.db_cluster.cql_connection_patient(node, keyspace=self.base_ks) as session:
+            session.default_consistency_level = ConsistencyLevel.QUORUM
 
             # Create all tables according the above list
             self.cql_create_tables(session)
