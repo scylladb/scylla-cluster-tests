@@ -27,7 +27,6 @@ from argus.client.sct.client import ArgusSCTClient
 from sdcm.sct_events import Severity
 from sdcm.sct_events import events_processes as events_processes_module
 from sdcm.sct_events.base import SctEvent
-from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, stop_events_device
 from sdcm.sct_events.argus import (
     ArgusEventAggregator,
     ArgusEventCollector,
@@ -36,8 +35,7 @@ from sdcm.sct_events.argus import (
     start_argus_pipeline,
     start_argus_postman,
 )
-from sdcm.sct_events.events_device import start_events_main_device
-from sdcm.sct_events.events_processes import EVENTS_ARGUS_AGGREGATOR_ID, EventsProcessesRegistry, get_events_process
+from sdcm.sct_events.events_processes import EVENTS_ARGUS_AGGREGATOR_ID, get_events_process
 from sdcm.test_config import TestConfig
 from sdcm.utils.argus import Argus, ArgusError, ReplayOnlyArgusSCTClient
 
@@ -96,28 +94,23 @@ def unresolved_argus_test_config(monkeypatch, tmp_path):
 
 
 @pytest.fixture
-def argus_pipeline(tmp_path):
-    """Start an isolated Argus pipeline (collector/aggregator/postman) on its own registry.
+def argus_pipeline(main_events_context):
+    """Start an Argus pipeline (collector/aggregator/postman) on main_events_context's isolated registry.
 
     The postman is intentionally left not-enabled, so its run() loop parks and only the
     stop()/drain path touches the aggregator's outbound_queue - making the tests deterministic.
+    main_events_context stops the pipeline on teardown.
     """
-    registry = EventsProcessesRegistry(log_dir=tmp_path)
-    # Start the main device first so the collector has a valid upstream to consume from.
-    start_events_main_device(_registry=registry)
-    time.sleep(EVENTS_DEVICE_START_DELAY)
+    registry = main_events_context.events_processes_registry
     start_argus_pipeline(_registry=registry)
     postman = get_argus_postman(_registry=registry)
     aggregator = get_events_process(EVENTS_ARGUS_AGGREGATOR_ID, _registry=registry)
     postman._argus_client = MagicMock()
-    try:
-        yield postman, aggregator
-    finally:
-        stop_events_device(_registry=registry)
+    return postman, aggregator
 
 
 @pytest.fixture
-def unwired_argus_postman(events_function_scope, monkeypatch, tmp_path):
+def unwired_argus_postman(events_function_scope, unresolved_argus_test_config, monkeypatch):
     """A running ArgusEventPostman and aggregator with no Argus client, the state right before init_argus_client().
 
     Reuses the isolated registry events_function_scope already set up on
@@ -136,9 +129,6 @@ def unwired_argus_postman(events_function_scope, monkeypatch, tmp_path):
     registry = SctEvent._events_processes_registry
     monkeypatch.setattr(events_processes_module, "_EVENTS_PROCESSES", registry)
     monkeypatch.setattr(Argus, "INSTANCE", None)
-    monkeypatch.setattr(TestConfig, "_argus_client", None)
-    monkeypatch.setattr(TestConfig, "_argus_client_resolved", False)
-    monkeypatch.setattr(TestConfig, "_logdir", str(tmp_path))
 
     aggregator = ArgusEventAggregator(_registry=registry)
     registry._registry_dict[EVENTS_ARGUS_AGGREGATOR_ID] = aggregator  # noqa: SLF001
@@ -283,10 +273,13 @@ def test_init_argus_client_real_connection_leaves_argus_singleton_unset(monkeypa
         TestConfig._argus_client.close()
 
 
-def test_start_argus_event_pipeline_wires_up_replay_only_postman(unwired_argus_postman, monkeypatch):
-    """With enable_argus=False the postman submits through a replay-only client, so events are still captured.
+def test_start_argus_event_pipeline_wires_replay_only_postman_that_writes_events_to_disk(unwired_argus_postman):
+    """With enable_argus=False the postman submits through a replay-only client that writes each event to disk.
 
-    Leaving the client unset would make every event a silent no-op.
+    Leaving the client unset would make every event a silent no-op. Drives the real
+    ReplayOnlyArgusSCTClient all the way to its on-disk JSONL replay log, through the real
+    postman thread and the real ArgusSCTClient.submit_event()/post() code - the only thing
+    replay-only mode itself never touches is the network layer.
     """
     postman, aggregator = unwired_argus_postman
     test_id = str(uuid.uuid4())
@@ -297,29 +290,6 @@ def test_start_argus_event_pipeline_wires_up_replay_only_postman(unwired_argus_p
     assert isinstance(postman._argus_client, ReplayOnlyArgusSCTClient)
     assert postman._argus_client.run_id == test_id
     assert Argus.get().client is postman._argus_client  # what ArgusEventCollector.run() reads
-
-    submit_event = MagicMock()
-    monkeypatch.setattr(postman._argus_client, "submit_event", submit_event)
-    aggregator.outbound_queue.put(argus_event(Severity.ERROR, "err"))
-    postman.stop(timeout=5)
-
-    submit_event.assert_called_once()  # drained and posted, not a silent no-op
-
-
-def test_start_argus_event_pipeline_postman_really_writes_the_event_to_disk(unwired_argus_postman):
-    """The replay-only postman writes each drained event to its on-disk JSONL replay log.
-
-    Same wiring as test_start_argus_event_pipeline_wires_up_replay_only_postman above,
-    but without mocking submit_event() away: drives the real ReplayOnlyArgusSCTClient all
-    the way to its on-disk JSONL replay log, through the real postman thread and the real
-    ArgusSCTClient.submit_event()/post() code - the only thing replay-only mode itself
-    never touches is the network layer.
-    """
-    postman, aggregator = unwired_argus_postman
-    test_id = str(uuid.uuid4())
-
-    TestConfig.init_argus_client(params={"enable_argus": False}, test_id=test_id)
-    TestConfig.start_argus_event_pipeline()
 
     aggregator.outbound_queue.put(argus_event(Severity.ERROR, "a real, unmocked event"))
     postman.stop(timeout=5)
@@ -385,7 +355,9 @@ def test_init_argus_client_falls_back_to_replay_permanently_after_exhausting_ret
     assert isinstance(TestConfig._argus_client, ReplayOnlyArgusSCTClient)
 
 
-def test_start_argus_event_pipeline_handles_postman_not_yet_registered(monkeypatch, caplog, tmp_path):
+def test_start_argus_event_pipeline_handles_postman_not_yet_registered(
+    monkeypatch, caplog, tmp_path, events_processes_registry
+):
     """start_argus_event_pipeline() logs a warning when the argus postman is not registered yet.
 
     enable_argus_posting()/start_posting_argus_events() raise AttributeError - not
@@ -399,8 +371,8 @@ def test_start_argus_event_pipeline_handles_postman_not_yet_registered(monkeypat
     reports it - not what ClusterTester.init_argus_run() does with a client left
     unwired, which is out of scope for this test_config-level test.
     """
-    registry = EventsProcessesRegistry(log_dir=tmp_path)  # exists, but nothing registered in it
-    monkeypatch.setattr(events_processes_module, "_EVENTS_PROCESSES", registry)
+    # The registry exists, but nothing is registered in it.
+    monkeypatch.setattr(events_processes_module, "_EVENTS_PROCESSES", events_processes_registry)
     monkeypatch.setattr(Argus, "INSTANCE", None)
     replay_client = ReplayOnlyArgusSCTClient(run_id="r1", log_dir=str(tmp_path))
     monkeypatch.setattr(TestConfig, "_argus_client", replay_client)

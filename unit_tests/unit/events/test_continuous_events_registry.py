@@ -19,7 +19,7 @@ from sdcm.sct_events.system import InfoEvent
 
 
 @pytest.fixture(scope="function")
-def registry():
+def continuous_registry():
     """A ContinuousEventsRegistry that collects the continuous events begun by the test."""
     yield ContinuousEventsRegistry()
 
@@ -31,12 +31,14 @@ def info_event() -> Generator[InfoEvent, None, None]:
 
 
 @pytest.fixture(scope="function")
-def populated_registry(registry: ContinuousEventsRegistry) -> Generator[ContinuousEventsRegistry, None, None]:
+def populated_registry(
+    continuous_registry: ContinuousEventsRegistry,
+) -> Generator[ContinuousEventsRegistry, None, None]:
     """A registry already holding 100 NodetoolEvents, so lookups must pick the right event among many."""
     for _ in range(100):
         NodetoolEvent(nodetool_command="mock cmd", publish_event=False).begin_event(publish=False)
 
-    yield registry
+    yield continuous_registry
 
 
 @pytest.fixture
@@ -61,20 +63,20 @@ def read_events_from_file(test_data_dir):
     return read_events
 
 
-def test_add_event(registry: ContinuousEventsRegistry):
+def test_add_event(continuous_registry: ContinuousEventsRegistry):
     """A continuous event joins the registry when it begins, so its end can be matched later."""
     event = NodetoolEvent(nodetool_command="mock cmd").begin_event(publish=False)
 
-    assert event in registry.continuous_events
+    assert event in continuous_registry.continuous_events
 
 
-def test_add_multiple_events(registry: ContinuousEventsRegistry):
+def test_add_multiple_events(continuous_registry: ContinuousEventsRegistry):
     """Every begun continuous event is kept in the registry as its own entry."""
-    pre_insertion_item_count = len(list(registry.continuous_events))
+    pre_insertion_item_count = len(list(continuous_registry.continuous_events))
     number_of_insertions = 10
     for _ in range(number_of_insertions):
         GeminiStressEvent(node=uuid.uuid1(), cmd="gemini hello", publish_event=False).begin_event()
-    assert pre_insertion_item_count + number_of_insertions == len(list(registry.continuous_events))
+    assert pre_insertion_item_count + number_of_insertions == len(list(continuous_registry.continuous_events))
 
 
 def test_add_nemesis_sub_context_to_continuous_event():
@@ -161,10 +163,10 @@ def test_add_nemesis_sub_context_to_db_log_event():
     assert event.to_json()
 
 
-def test_adding_a_non_continuous_event_raises_error(registry: ContinuousEventsRegistry, info_event):
+def test_adding_a_non_continuous_event_raises_error(continuous_registry: ContinuousEventsRegistry, info_event):
     """The registry rejects a non-continuous event, since it could never be ended and removed."""
     with pytest.raises(ContinuousEventRegistryException):
-        registry.add_event(info_event)
+        continuous_registry.add_event(info_event)
 
 
 @pytest.mark.skip(reason="https://trello.com/c/Mu3lGc7C/4828-disable-compaction-and-repair-continuous-events")

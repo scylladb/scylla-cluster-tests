@@ -19,13 +19,11 @@ import pytest
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
 from sdcm.sct_events.system import InfoEvent, SpotTerminationEvent
-from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT, EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.sct_events.events_analyzer import (
-    EventsAnalyzer,
     _is_benign_gce_live_migration_of_loader,
     start_events_analyzer,
 )
-from sdcm.sct_events.events_processes import EVENTS_ANALYZER_ID, get_events_process
+from sdcm.sct_events.events_processes import EVENTS_ANALYZER_ID
 
 LIVE_MIGRATION_METHOD = "compute.instances.migrateOnHostMaintenance"
 TERMINATE_ON_MAINTENANCE_METHOD = "compute.instances.terminateOnHostMaintenance"
@@ -45,25 +43,14 @@ def make_gce_instance_event(node_name: str, method: str, severity: Severity = Se
 
 
 @pytest.fixture
-def events_analyzer(main_events_context):
-    """Start the events analyzer on the main events device and stop it after the test."""
-    start_events_analyzer(_registry=main_events_context.events_processes_registry)
-    analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=main_events_context.events_processes_registry)
-    time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
-    try:
-        yield analyzer
-    finally:
-        analyzer.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
+def events_analyzer(start_events_subscriber):
+    """A running events analyzer wired to the test's events registry."""
+    return start_events_subscriber(start_events_analyzer, EVENTS_ANALYZER_ID)
 
 
 def test_events_analyzer_kills_test_on_critical_event(main_events_context, events_analyzer):
     """The analyzer consumes every published event and calls kill_test once a CRITICAL one arrives."""
     initial_events_no = main_events_context.events_main_device.events_counter
-
-    assert isinstance(events_analyzer, EventsAnalyzer)
-    assert events_analyzer.is_alive()
-    assert events_analyzer._registry == main_events_context.events_main_device._registry
-    assert events_analyzer._registry == main_events_context.events_processes_registry
 
     event1 = InfoEvent(message="m1")
     event2 = SpotTerminationEvent(node="n1", message="m2")
@@ -77,25 +64,15 @@ def test_events_analyzer_kills_test_on_critical_event(main_events_context, event
     mock.assert_called_once()
 
 
-@pytest.mark.parametrize(
-    "node_name, method, expected_kill_calls",
-    [
-        pytest.param("loader-node-1", LIVE_MIGRATION_METHOD, 0, id="live-migration-of-loader-not-killed"),
-        pytest.param("db-node-1", LIVE_MIGRATION_METHOD, 1, id="live-migration-of-db-node-killed"),
-        pytest.param("loader-node-1", TERMINATE_ON_MAINTENANCE_METHOD, 1, id="non-live-migration-on-loader-killed"),
-    ],
-)
-def test_events_analyzer_critical_gce_event_kills_test_except_loader_live_migration(
-    main_events_context, events_analyzer, node_name, method, expected_kill_calls
-):
-    """A loader live migration is benign and keeps the test running; any other CRITICAL GCE event aborts it."""
-    event = make_gce_instance_event(node_name, method)
+def test_events_analyzer_keeps_test_running_on_loader_live_migration(main_events_context, events_analyzer):
+    """A CRITICAL loader live migration does not kill the test, proving the analyzer consults the benign-event check."""
+    event = make_gce_instance_event("loader-node-1", LIVE_MIGRATION_METHOD)
 
     with unittest.mock.patch("sdcm.sct_events.events_analyzer.EventsAnalyzer.kill_test") as mock:
         with main_events_context.wait_for_n_events(events_analyzer, count=1, timeout=1):
             main_events_context.events_main_device.publish_event(event)
 
-        assert mock.call_count == expected_kill_calls
+        mock.assert_not_called()
 
 
 def test_can_stop_events_analyzer_during_stream_of_events(main_events_context, events_analyzer):

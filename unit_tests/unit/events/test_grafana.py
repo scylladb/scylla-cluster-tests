@@ -18,11 +18,7 @@ import pytest
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT, EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.sct_events.grafana import (
-    GrafanaAnnotator,
-    GrafanaEventAggregator,
-    GrafanaEventPostman,
     get_grafana_postman,
     set_grafana_url,
     start_grafana_pipeline,
@@ -37,45 +33,19 @@ from sdcm.wait import wait_for
 
 
 @pytest.fixture
-def grafana_pipeline(main_events_context):
-    """The running Grafana annotator, aggregator and postman processes, stopped after the test."""
-    start_grafana_pipeline(_registry=main_events_context.events_processes_registry)
-    grafana_annotator = get_events_process(
-        EVENTS_GRAFANA_ANNOTATOR_ID, _registry=main_events_context.events_processes_registry
-    )
+def grafana_pipeline(main_events_context, start_events_subscriber):
+    """The running Grafana annotator, aggregator and postman processes."""
+    grafana_annotator = start_events_subscriber(start_grafana_pipeline, EVENTS_GRAFANA_ANNOTATOR_ID)
     grafana_aggregator = get_events_process(
         EVENTS_GRAFANA_AGGREGATOR_ID, _registry=main_events_context.events_processes_registry
     )
     grafana_postman = get_grafana_postman(_registry=main_events_context.events_processes_registry)
-
-    time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
-
-    try:
-        yield grafana_annotator, grafana_aggregator, grafana_postman
-    finally:
-        grafana_annotator.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
-        grafana_aggregator.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
-        grafana_postman.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
+    return grafana_annotator, grafana_aggregator, grafana_postman
 
 
 def test_grafana_pipeline_posts_duplicates_up_to_max_duplicates(main_events_context, grafana_pipeline):
     """The pipeline holds annotations until the URL is set, then posts each duplicate at most max_duplicates times."""
     grafana_annotator, grafana_aggregator, grafana_postman = grafana_pipeline
-
-    assert isinstance(grafana_annotator, GrafanaAnnotator)
-    assert grafana_annotator.is_alive()
-    assert grafana_annotator._registry == main_events_context.events_main_device._registry
-    assert grafana_annotator._registry == main_events_context.events_processes_registry
-
-    assert isinstance(grafana_aggregator, GrafanaEventAggregator)
-    assert grafana_aggregator.is_alive()
-    assert grafana_aggregator._registry == main_events_context.events_main_device._registry
-    assert grafana_aggregator._registry == main_events_context.events_processes_registry
-
-    assert isinstance(grafana_postman, GrafanaEventPostman)
-    assert grafana_postman.is_alive()
-    assert grafana_postman._registry == main_events_context.events_main_device._registry
-    assert grafana_postman._registry == main_events_context.events_processes_registry
 
     # The aggregator's default 90 s time window is kept as-is, so every event published
     # below is aggregated inside one window and only the first `max_duplicates` of them
