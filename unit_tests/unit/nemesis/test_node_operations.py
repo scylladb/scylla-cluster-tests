@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from sdcm.exceptions import KillNemesis
 from sdcm.nemesis.utils.node_operations import (
     block_loaders_payload_for_scylla_node,
     block_scylla_ports,
@@ -35,6 +36,11 @@ def loader_nodes():
 def _loader_rules(commands, action):
     """Loader-blocking INPUT rules issued with the given iptables action (``A`` or ``D``)."""
     return [cmd for cmd in commands if cmd and f" -{action} INPUT -s {LOADER_IPS} " in cmd]
+
+
+def _port_block_rules(commands, action):
+    """``block_scylla_ports`` DROP rules issued with the given iptables action (``A`` or ``D``)."""
+    return [cmd for cmd in commands if cmd and f" -{action} " in cmd]
 
 
 def _destroy(node):
@@ -88,6 +94,26 @@ def test_block_loaders_payload_live_node_removes_every_rule(scylla_node, loader_
         assert commands.count(f"iptables -D {rule}") == 1
         assert commands.count(f"ip6tables -D {rule}") == 1
     scylla_node.install_package.assert_called_once_with("iptables")
+    scylla_node.stop_service.assert_called_once_with("iptables", ignore_status=True)
+
+
+def test_block_loaders_payload_kill_nemesis_still_removes_rules(scylla_node, loader_nodes):
+    """SCT-933: ``KillNemesis`` (a ``BaseException``, delivered into the nemesis thread at
+    teardown) thrown into the context manager at the ``yield`` must still run the cleanup
+    that removes every DROP rule, then propagate uncaught."""
+    remoter = scylla_node.remoter
+    expected_rules = 2 * len(CQL_PORTS)  # iptables + ip6tables
+
+    with pytest.raises(KillNemesis):
+        with block_loaders_payload_for_scylla_node(scylla_node, loader_nodes=loader_nodes):
+            commands = sudo_commands(remoter)
+            assert len(_loader_rules(commands, "A")) == expected_rules
+            assert len(_loader_rules(commands, "D")) == 0
+            raise KillNemesis()
+
+    commands = sudo_commands(remoter)
+    assert len(_loader_rules(commands, "A")) == expected_rules
+    assert len(_loader_rules(commands, "D")) == expected_rules
     scylla_node.stop_service.assert_called_once_with("iptables", ignore_status=True)
 
 
@@ -151,6 +177,25 @@ def test_block_scylla_ports_live_node_removes_every_rule(scylla_node):
     scylla_node.stop_service.assert_called_once_with("iptables", ignore_status=True)
 
 
+def test_block_scylla_ports_kill_nemesis_still_removes_every_rule(scylla_node):
+    """SCT-933: ``KillNemesis`` thrown into the context manager at the ``yield`` must still
+    remove every DROP rule it added, then propagate uncaught."""
+    remoter = scylla_node.remoter
+    expected_rules = len(GOSSIP_PORTS) * 2 * 2  # ports x (INPUT/OUTPUT) x (iptables/ip6tables)
+
+    with pytest.raises(KillNemesis):
+        with block_scylla_ports(scylla_node, ports=list(GOSSIP_PORTS)):
+            commands = sudo_commands(remoter)
+            assert len(_port_block_rules(commands, "A")) == expected_rules
+            assert len(_port_block_rules(commands, "D")) == 0
+            raise KillNemesis()
+
+    commands = sudo_commands(remoter)
+    assert len(_port_block_rules(commands, "A")) == expected_rules
+    assert len(_port_block_rules(commands, "D")) == expected_rules
+    scylla_node.stop_service.assert_called_once_with("iptables", ignore_status=True)
+
+
 def test_block_scylla_ports_destroyed_node_skips_cleanup(scylla_node):
     """Hardening against the SCT-920 failure mode: a caller that removes and terminates the
     node it just blocked must not make the unblock step raise on the dropped remoter."""
@@ -174,6 +219,24 @@ def test_pause_scylla_with_sigstop_live_node_sends_sigcont(scylla_node):
         pass
 
     assert sudo_commands(scylla_node.remoter) == [
+        "pkill --signal SIGSTOP -e scylla",
+        "pkill --signal SIGCONT -e scylla",
+    ]
+
+
+def test_pause_scylla_with_sigstop_kill_nemesis_still_sends_sigcont(scylla_node):
+    """SCT-933: ``KillNemesis`` (a ``BaseException``, delivered into the nemesis thread at
+    teardown) thrown into the context manager at the ``yield`` must still resume the paused
+    scylla process, then propagate uncaught. Before the ``try``/``finally`` fix, SIGCONT was
+    skipped entirely because the exception propagated straight out of the generator frame."""
+    remoter = scylla_node.remoter
+
+    with pytest.raises(KillNemesis):
+        with pause_scylla_with_sigstop(scylla_node):
+            assert sudo_commands(remoter) == ["pkill --signal SIGSTOP -e scylla"]
+            raise KillNemesis()
+
+    assert sudo_commands(remoter) == [
         "pkill --signal SIGSTOP -e scylla",
         "pkill --signal SIGCONT -e scylla",
     ]
