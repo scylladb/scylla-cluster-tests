@@ -995,6 +995,28 @@ class SCTConfiguration(*CONFIG_GROUPS):
                     "When enabling `alternator_enforce_authorization` both `authenticator` and `authorizer` should be defined"
                 )
 
+        # 12.1) validate vector_store_scylla_username requirements
+        if self.get("vector_store_scylla_username"):
+            if self.get("authenticator") != "PasswordAuthenticator":
+                raise ValueError("vector_store_scylla_username requires authenticator=PasswordAuthenticator")
+            if not self.get("authenticator_user") or not self.get("authenticator_password"):
+                raise ValueError(
+                    "vector_store_scylla_username requires authenticator_user and authenticator_password to be set "
+                    "(needed to create roles and service levels via CQL)"
+                )
+            if not self.get("vector_store_scylla_password"):
+                raise ValueError("vector_store_scylla_password must be set when vector_store_scylla_username is set")
+            append_scylla_yaml = self.get("append_scylla_yaml") or {}
+            if append_scylla_yaml.get("auth_superuser_name") != self.get(
+                "authenticator_user"
+            ) or not append_scylla_yaml.get("auth_superuser_salted_password"):
+                raise ValueError(
+                    "vector_store_scylla_username requires append_scylla_yaml.auth_superuser_name set to "
+                    "authenticator_user, and append_scylla_yaml.auth_superuser_salted_password. "
+                    "Scylla 2026.2 and later create no default superuser. "
+                    "Use configurations/auth_cassandra.yaml to set both."
+                )
+
         # 13) validate stress and prepare duration:
         if stress_duration := self.get("stress_duration"):
             try:

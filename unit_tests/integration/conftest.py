@@ -130,6 +130,8 @@ def configure_scylla_node(docker_scylla_args: dict, params, ssl_dir: Path | None
     ssl_mount = f" -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z" if ssl else ""
 
     env_vars = "-e VECTOR_SEARCH_TEST=true" if docker_scylla_args.get("scylla_docker_image") else ""
+    if docker_scylla_args.get("vector_store_auth"):
+        env_vars += " -e VECTOR_SEARCH_AUTH=true"
     # native_entrypoint=True bypasses the SCT entry.sh wrapper (which enables
     # PasswordAuthenticator) and lets the image's own entrypoint run, so the node
     # boots without authentication. Used by rack tests against Scylla >= 2026.1.
@@ -285,6 +287,10 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
             "vector_store_port": 6080,
             "vector_store_scylla_port": 9042,
             "vector_store_threads": 2,
+            # Dummy credentials: the role exists only in this throwaway Scylla container.
+            "vector_store_scylla_username": "vs_user" if docker_scylla_args.get("vector_store_auth") else "",
+            "vector_store_scylla_password": "vs_dummy_password" if docker_scylla_args.get("vector_store_auth") else "",
+            "vector_store_service_level_shares": 1000,
             "docker_network": docker_scylla_args.get("docker_network") or "bridge",
             "user_prefix": "test-vector",
             "vector_store_docker_image": vs_docker_image,
