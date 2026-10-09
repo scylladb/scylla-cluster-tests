@@ -1,0 +1,73 @@
+name: Fix hydra image on backport PRs
+# Backport PRs that touch the hydra image inputs arrive with master's
+# `chore(hydra): create image` commit and with master's uv.lock hunks.
+# After the backport bot's run finishes, this drops that commit, re-locks
+# uv.lock from the release branch inside each backported commit, and adds
+# `New Hydra Version` so build-docker-image.yaml builds an image for the
+# release branch. See .github/scripts/backport_hydra_fixup.py.
+#
+# Triggered by workflow_run rather than pull_request_target: GitHub always
+# runs this file from master, no PR can start it, and it never checks out
+# anything the triggering run points at. It reads the PRs from the API.
+#
+# The `workflows:` name must match call_backport_with_jira.yaml's `name:`.
+# Renaming that workflow silently stops this one.
+#
+# Local testing: see the docstring of .github/scripts/backport_hydra_fixup.py
+
+on:
+  workflow_run:
+    workflows: ['Backport with Jira Integration']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'Only this PR number (also re-runs one already handled)'
+        required: false
+      dry_run:
+        description: 'Show what would be done; push and edit nothing'
+        type: boolean
+        required: false
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: backport-hydra-fixup
+  cancel-in-progress: false
+
+jobs:
+  fixup:
+    runs-on: ubuntu-latest
+    # run only on the main repository, the bot's token doesn't exist on forks
+    if: >-
+      github.repository == 'scylladb/scylla-cluster-tests'
+      && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Install uv
+        run: pip install "uv==$(jq -r .constraints.uv renovate.json)"
+
+      - name: Configure Git
+        run: |
+          git config --global user.name scylladbbot
+          git config --global user.email scylladbbot@users.noreply.github.com
+
+      - name: Fix backport PRs
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
+          ONLY_PR: ${{ inputs.pr }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          python .github/scripts/backport_hydra_fixup.py \
+            ${ONLY_PR:+--pr "$ONLY_PR"} \
+            $([ "$DRY_RUN" = true ] && echo --dry-run)
