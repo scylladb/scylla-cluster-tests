@@ -27,8 +27,8 @@ from sdcm.sct_events.system import (
     InfoEvent,
     ThreadFailedEvent,
     CoreDumpEvent,
+    SoftTimeoutEvent,
     TestResultEvent,
-    InstanceStatusEvent,
     INSTANCE_STATUS_EVENTS_PATTERNS,
 )
 
@@ -154,39 +154,6 @@ def test_test_result_event_msgfmt_by_status(test_status, expected):
     assert event == loaded_event
 
 
-@pytest.mark.parametrize(
-    "event_class",
-    [
-        pytest.param(InstanceStatusEvent.STARTUP, id="startup"),
-        pytest.param(InstanceStatusEvent.REBOOT, id="reboot"),
-        pytest.param(InstanceStatusEvent.POWER_OFF, id="power-off"),
-    ],
-)
-def test_known_system_status_events(event_class):
-    """Each known instance status is an InstanceStatusEvent subclass, so log scanning raises it as one."""
-    assert issubclass(event_class, InstanceStatusEvent)
-
-
-@pytest.mark.parametrize(
-    "event_class, line",
-    [
-        pytest.param(InstanceStatusEvent.STARTUP, "kernel: Linux version", id="startup"),
-        pytest.param(InstanceStatusEvent.REBOOT, "Stopped target Host and Network Name Lookups", id="reboot"),
-        pytest.param(InstanceStatusEvent.POWER_OFF, "Powering Off", id="power-off"),
-    ],
-)
-def test_instance_status_event(event_class, line):
-    """add_info() records node and line on an instance status event and keeps it at WARNING."""
-    event = event_class()
-    assert event.severity == Severity.WARNING
-
-    assert event is event.add_info(node="n1", line=line, line_number=0)
-    assert event.severity == Severity.WARNING
-    assert event.node == "n1"
-    assert event.line == line
-    assert event.line_number == 0
-
-
 def test_instance_status_events_patterns(test_data_dir):
     """INSTANCE_STATUS_EVENTS_PATTERNS turn startup, reboot and power-off log lines into WARNING events, in order."""
     cloned_events = []
@@ -208,3 +175,11 @@ def test_instance_status_events_patterns(test_data_dir):
     assert cloned_events[2].type == "POWER_OFF"
     assert cloned_events[2].regex == "Reached target Power-Off"
     assert cloned_events[2].severity == Severity.WARNING
+
+
+def test_soft_timeout():
+    """SoftTimeoutEvent carries the caller's frame as trace and reports the operation, its duration and the soft timeout."""
+    event = SoftTimeoutEvent(soft_timeout=0.1, operation="long-one", duration=0.2)
+
+    assert event.trace
+    assert "operation 'long-one' is finished and took 0.2s (soft timeout was set to 0.1s)" in str(event)

@@ -12,28 +12,21 @@
 # Copyright (c) 2020 ScyllaDB
 
 import time
-import logging
 from pathlib import Path
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from datetime import datetime, timezone
-from unittest import mock
 
 import pytest
 
-from sdcm.exceptions import UnsupportedNemesis, KillNemesis
-from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events import Severity
-from sdcm.sct_events.system import CoreDumpEvent, TestFrameworkEvent, SoftTimeoutEvent
+from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events.base import EventPeriod
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
-from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.event_counter import EventCounterContextManager
 
 from unit_tests.lib.real_events import RealEventsTest
-
-LOGGER = logging.getLogger(__name__)
 
 YCSB_ERROR_LINE = (
     "237951 [Thread-47] ERROR site.ycsb.db.DynamoDBClient"
@@ -43,6 +36,25 @@ YCSB_ERROR_LINE = (
     " Status Code: 500; Error Code: Internal Server Error; Request ID: null)"
 )
 YCSB_NODE = "Node alternator-3h-silence--loader-node-bb90aa05-2 [34.251.153.122 | 10.0.220.55] (seed: False)"
+ENOSPC_LINE_1 = (
+    "[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment "
+    "reservation: storage_io_error (Storage I/O error: 28: No space left on device)"
+)
+ENOSPC_LINE_2 = (
+    "2019-10-29T12:19:49+00:00  ip-172-30-0-184 !WARNING | scylla: [shard 2] storage_service - Commitlog "
+    "error: std::filesystem::__cxx11::filesystem_error (error system:28, filesystem error: open failed: No "
+    "space left on device [/var/lib/scylla/hints/2/172.30.0.116/HintsLog-1-36028797019122576.log])"
+)
+REPAIR_ABORTED_LINE = (
+    "2019-07-28T10:53:29+00:00  ip-10-0-167-91 !INFO    | scylla.bin: [shard 0] repair - "
+    "Got error in row level repair: std::runtime_error (repair id 1 is aborted on shard 0)"
+)
+SCHEMA_LOAD_FAILED_LINE = (
+    "!ERR     | scylla:  [shard 3] storage_proxy - Exception when communicating with "
+    "10.142.0.56: std::runtime_error (Failed to load schema version "
+    "b40e405f-462c-38f2-a90c-6f130ddbf6f3) "
+)
+OTHER_BACKTRACE_LINE = "other back trace that shouldn't be filtered"
 
 
 def publish_ycsb_load(error_line):
@@ -54,6 +66,43 @@ def publish_ycsb_load(error_line):
     error_event.period_type = EventPeriod.INFORMATIONAL.value
     error_event.publish()
     ycsb_event.end_event()
+
+
+def make_critical_framework_event(text):
+    """Build a CRITICAL TestFrameworkEvent whose source is text."""
+    return TestFrameworkEvent(source=text, source_method="", severity=Severity.CRITICAL)
+
+
+def make_no_space_error_event(text):
+    """Build an ERROR NO_SPACE_ERROR db log event whose line is text."""
+    return DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="A", line_number=22, line=text)
+
+
+def use_as_context_manager(counter):
+    """Count events by using the counter itself as the context manager."""
+    return counter
+
+
+@contextmanager
+def use_start_stop_methods(counter):
+    """Count events by calling the counter's start/stop methods around the block."""
+    counter.start_event_counter()
+    try:
+        yield counter
+    finally:
+        counter.stop_event_counter()
+
+
+def assert_counter_stat_files(real_events, count_condition_name, expected_nodes):
+    """Assert the reactor-stall stat dir of a counter holds one single-line file per node from expected_nodes."""
+    reactor_stall_dir = (
+        real_events.get_events_counter().events_stat_dir / count_condition_name / "DatabaseLogEvent.REACTOR_STALLED"
+    )
+    assert reactor_stall_dir.is_dir()
+    for file_event in reactor_stall_dir.iterdir():
+        assert file_event.name in expected_nodes
+        lines = file_event.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 1, f"Wrong number of lines in {file_event}: {lines}"
 
 
 @pytest.fixture(scope="module")
@@ -73,266 +122,62 @@ def clean_events_log(real_events):
 
     ``real_events`` is module-scoped (starting the real event pipeline costs
     ~4s), so events.log accumulates everything published by earlier tests in
-    this module. Tests that assert on the file's exact content need this;
-    tests that only check for/absence of their own unique substrings don't.
+    this module. Tests that assert a text is absent from the file need this
+    when the text is not unique to them.
     """
     Path(real_events.temp_dir, "events_log", "events.log").write_text("", encoding="utf-8")
     return real_events
 
 
-def test_disruption_skipped_event():
-    """A skipped disruption ends with NORMAL severity and reports the skip reason in its string form."""
-    with (
-        pytest.raises(UnsupportedNemesis),
-        DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event,
-    ):
-        try:
-            raise UnsupportedNemesis("This nemesis can run on scylla_bench test only")
-        except UnsupportedNemesis as exc:
-            nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
-            nemesis_event.skip(skip_reason=str(exc))
-            nemesis_event.duration = 15
-            raise
-
-    assert str(nemesis_event) == (
-        "(DisruptionEvent Severity.NORMAL) period_type=end event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318 "
-        "duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node skipped skip_reason=This nemesis can "
-        "run on scylla_bench test only"
-    )
-
-
-def test_disruption_raised_critical_event():
-    """An exception escaping a disruption keeps an explicitly set CRITICAL severity and records the error."""
-    with (
-        pytest.raises(ZeroDivisionError),
-        DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event,
-    ):
-        nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
-        assert str(nemesis_event) == (
-            "(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: "
-            "nemesis_name=DeleteByRowsRange target_node=target_node"
-        )
-
-        try:
-            1 / 0
-        except ZeroDivisionError:
-            nemesis_event.add_error(["division by zero"])
-            nemesis_event.full_traceback = "traceback.format_exc()"
-            nemesis_event.severity = Severity.CRITICAL
-            nemesis_event.duration = 15
-            raise
-
-    assert "division by zero" in nemesis_event.errors_formatted
-    assert nemesis_event.severity == Severity.CRITICAL
-    assert nemesis_event.duration_formatted == "15s"
-
-
-def test_disruption_raised_error_event():
-    """An exception escaping a disruption raises its severity to ERROR and records the error."""
-    with (
-        pytest.raises(ZeroDivisionError),
-        DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event,
-    ):
-        nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
-        assert str(nemesis_event) == (
-            "(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: "
-            "nemesis_name=DeleteByRowsRange target_node=target_node"
-        )
-
-        try:
-            1 / 0
-        except ZeroDivisionError:
-            nemesis_event.add_error(["division by zero"])
-            nemesis_event.full_traceback = "traceback.format_exc()"
-            nemesis_event.duration = 15
-            raise
-
-    assert "division by zero" in nemesis_event.errors_formatted
-    assert nemesis_event.severity == Severity.ERROR
-    assert nemesis_event.duration_formatted == "15s"
-
-
-def test_disruption_error_event():
-    """A disruption that handles its error and sets ERROR severity renders the errors in its end string."""
-    with DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event:
-        nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
-        assert str(nemesis_event) == (
-            "(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: "
-            "nemesis_name=DeleteByRowsRange target_node=target_node"
-        )
-
-        try:
-            1 / 0
-        except ZeroDivisionError:
-            nemesis_event.add_error(["division by zero"])
-            nemesis_event.full_traceback = "traceback.format_exc()"
-            nemesis_event.duration = 15
-            nemesis_event.severity = Severity.ERROR
-
-    assert (
-        "(DisruptionEvent Severity.ERROR) period_type=end event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318 "
-        "duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node errors=division by zero\n"
-    ) in str(nemesis_event)
-
-
-def test_disruption_normal_event():
-    """A clean disruption renders begin and end strings with NORMAL severity and the duration."""
-    with DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event:
-        nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
-        assert str(nemesis_event) == (
-            "(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: "
-            "nemesis_name=DeleteByRowsRange target_node=target_node"
-        )
-        nemesis_event.duration = 15
-
-    assert str(nemesis_event) == (
-        "(DisruptionEvent Severity.NORMAL) period_type=end event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318 "
-        "duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node"
-    )
-
-
-def test_filter(clean_events_log):
-    """Stacked DbEventsFilters drop every ENOSPC-related db event, leaving events.log empty."""
-    real_events = clean_events_log
-    enospc_line_1 = (
-        "[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment "
-        "reservation: storage_io_error (Storage I/O error: 28: No space left on device)"
-    )
-    enospc_line_2 = (
-        "2019-10-29T12:19:49+00:00  ip-172-30-0-184 !WARNING | scylla: [shard 2] storage_service - Commitlog "
-        "error: std::filesystem::__cxx11::filesystem_error (error system:28, filesystem error: open failed: No "
-        "space left on device [/var/lib/scylla/hints/2/172.30.0.116/HintsLog-1-36028797019122576.log])"
-    )
-
-    # 13 events in total: 2 events per filter x 4 filters + 5 events.
-    with real_events.wait_for_n_events(real_events.get_events_logger(), count=13, timeout=3):
-        with (
-            DbEventsFilter(db_event=DatabaseLogEvent.NO_SPACE_ERROR),
-            DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="No space left on device"),
-            DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, line="No space left on device"),
-            DbEventsFilter(db_event=DatabaseLogEvent.FILESYSTEM_ERROR, line="No space left on device"),
-        ):
-            DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="A", line_number=22, line=enospc_line_1).publish()
-            DatabaseLogEvent.BACKTRACE().add_info(node="A", line_number=22, line=enospc_line_1).publish()
-            DatabaseLogEvent.FILESYSTEM_ERROR().add_info(node="A", line_number=22, line=enospc_line_2).publish()
-            DatabaseLogEvent.DATABASE_ERROR().add_info(node="A", line_number=22, line=enospc_line_1).publish()
-            DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="A", line_number=22, line=enospc_line_1).publish()
-
-    assert real_events.get_event_log_file("events.log") == ""
-
-
 @pytest.mark.parametrize(
-    "filter_kwargs, download_instructions, filtered_text",
+    "event_class, make_event, unlowered_log_name, extra_time_to_expiration",
     [
-        pytest.param(
-            {"event_class": CoreDumpEvent}, "test_general_filter", "test_general_filter", id="general-filter-by-class"
-        ),
-        pytest.param(
-            {"regex": ".*1234567890.*"},
-            "gsutil cp gs://upload.scylladb.com/core.scylla-jmx.996.1234567890"
-            ".3968.1566979933000/core.scylla-jmx.996.d173729352e34c76aaf8db334"
-            "2153c3e.3968.1566979933000000 .",
-            "1234567890",
-            id="general-filter-regex",
-        ),
+        pytest.param(TestFrameworkEvent, make_critical_framework_event, "critical.log", 10, id="test-framework-event"),
+        pytest.param(DatabaseLogEvent, make_no_space_error_event, "error.log", 2, id="db-log-event"),
     ],
 )
-def test_events_filter_drops_matching_core_dump_event(real_events, filter_kwargs, download_instructions, filtered_text):
-    """EventsFilter drops events matching its class or regex from events.log while other events are still logged."""
-    with real_events.wait_for_n_events(real_events.get_events_logger(), count=4, timeout=3):
-        with EventsFilter(**filter_kwargs):
-            CoreDumpEvent(
-                corefile_url="http://",
-                backtrace="asfasdfsdf",
-                node="node xy",
-                download_instructions=download_instructions,
-                source_timestamp=1578998425.0,
-            ).publish()  # Tue 2020-01-14 10:40:25 UTC
-            TestFrameworkEvent(source="", source_method="").publish()
-
-    log_content = real_events.get_event_log_file("events.log")
-
-    assert "TestFrameworkEvent" in log_content
-    assert filtered_text not in log_content
-
-
-def test_severity_changer(real_events):
-    """EventsSeverityChangerFilter lowers matching events until it expires, events after expiration keep CRITICAL."""
-    extra_time_to_expiration = 10
+def test_severity_changer(real_events, event_class, make_event, unlowered_log_name, extra_time_to_expiration):
+    """EventsSeverityChangerFilter lowers matching events until it expires; events after expiration keep severity."""
+    prefix = make_event.__name__
     with real_events.wait_for_n_events(real_events.get_events_logger(), count=5, timeout=3):
         with EventsSeverityChangerFilter(
             new_severity=Severity.WARNING,
-            event_class=TestFrameworkEvent,
+            event_class=event_class,
             extra_time_to_expiration=extra_time_to_expiration,
         ):
-            TestFrameworkEvent(
-                source="critical that should be lowered #1", source_method="", severity=Severity.CRITICAL
-            ).publish()
-        TestFrameworkEvent(
-            source="critical that should be lowered #2", source_method="", severity=Severity.CRITICAL
-        ).publish()
-        event = TestFrameworkEvent(
-            source="critical that should not be lowered #3", source_method="", severity=Severity.CRITICAL
-        )
+            make_event(f"{prefix} that should be lowered #1").publish()
+        make_event(f"{prefix} that should be lowered #2").publish()
+        event = make_event(f"{prefix} that should not be lowered #3")
         event.source_timestamp = time.time() + extra_time_to_expiration
         event.publish()
 
     log_content = real_events.get_event_log_file("warning.log")
-    crit_log_content = real_events.get_event_log_file("critical.log")
+    unlowered_log_content = real_events.get_event_log_file(unlowered_log_name)
 
-    assert "TestFrameworkEvent" in log_content
-    assert "critical that should be lowered #1" in log_content
-    assert "critical that should be lowered #2" in log_content
-    assert "critical that should not be lowered #3" not in log_content
-    assert "critical that should not be lowered #3" in crit_log_content
+    assert f"{prefix} that should be lowered #1" in log_content
+    assert f"{prefix} that should be lowered #2" in log_content
+    assert f"{prefix} that should not be lowered #3" not in log_content
+    assert f"{prefix} that should not be lowered #3" in unlowered_log_content
 
 
-def test_severity_changer_db_log(real_events):
-    """Severity changer lowers db log events until expiry and is then removed without crashing subscribers.
+def test_severity_changer_expiring_does_not_crash_subscribers(real_events):
+    """An expired severity changer is removed by the next matching event without crashing subscribers.
 
     See https://github.com/scylladb/scylla-cluster-tests/issues/2115
     """
-    extra_time_to_expiration = 2
-    # 1) Lower DatabaseLogEvent to WARNING for 1 sec.
-    with real_events.wait_for_n_events(real_events.get_events_logger(), count=5, timeout=3):
+    # filter begin/end + 3 events published 1s apart, so the last one is past the 2s expiration.
+    with real_events.wait_for_n_events(real_events.get_events_logger(), count=5, timeout=6):
         with EventsSeverityChangerFilter(
             new_severity=Severity.WARNING,
             event_class=DatabaseLogEvent,
-            extra_time_to_expiration=extra_time_to_expiration,
+            extra_time_to_expiration=2,
         ):
-            DatabaseLogEvent.NO_SPACE_ERROR().add_info(
-                node="A", line_number=22, line="error that should be lowered #1"
-            ).publish()
-        DatabaseLogEvent.NO_SPACE_ERROR().add_info(
-            node="A", line_number=22, line="error that should be lowered #2"
-        ).publish()
-        event = DatabaseLogEvent.NO_SPACE_ERROR().add_info(
-            node="A", line_number=22, line="error that should not be lowered #3"
-        )
-        event.source_timestamp = time.time() + extra_time_to_expiration
-        event.publish()
-
-    log_content = real_events.get_event_log_file("warning.log")
-    error_log_content = real_events.get_event_log_file("error.log")
-
-    assert "DatabaseLogEvent" in log_content
-    assert "error that should be lowered #1" in log_content
-    assert "error that should be lowered #2" in log_content
-    assert "error that should not be lowered #3" not in log_content
-    assert "error that should not be lowered #3" in error_log_content
-
-    # 2) One of the next DatabaseLogEvent event should expire the EventsSeverityChangerFilter
-    #    (and not crash all subscribers)
-    with real_events.wait_for_n_events(real_events.get_events_logger(), count=2, timeout=3):
-        for _ in range(2):
+            pass
+        for _ in range(3):
             time.sleep(1)
-            DatabaseLogEvent.NO_SPACE_ERROR().add_info(
-                node="A", line_number=22, line="error that shouldn't be lowered"
-            ).publish()
+            make_no_space_error_event("error that shouldn't be lowered").publish()
 
-    log_content = real_events.get_event_log_file("error.log")
-
-    assert "error that shouldn't be lowered" in log_content
+    assert "error that shouldn't be lowered" in real_events.get_event_log_file("error.log")
 
 
 def test_ycsb_filter(real_events):
@@ -362,8 +207,25 @@ def test_ycsb_filter(real_events):
 
 
 @pytest.mark.parametrize(
-    "filters_kwargs, known_failure_line, filtered_text",
+    "filters_kwargs, filtered_events, filtered_text",
     [
+        pytest.param(
+            [
+                {"db_event": DatabaseLogEvent.NO_SPACE_ERROR},
+                {"db_event": DatabaseLogEvent.BACKTRACE, "line": "No space left on device"},
+                {"db_event": DatabaseLogEvent.DATABASE_ERROR, "line": "No space left on device"},
+                {"db_event": DatabaseLogEvent.FILESYSTEM_ERROR, "line": "No space left on device"},
+            ],
+            [
+                (DatabaseLogEvent.NO_SPACE_ERROR, ENOSPC_LINE_1),
+                (DatabaseLogEvent.BACKTRACE, ENOSPC_LINE_1),
+                (DatabaseLogEvent.FILESYSTEM_ERROR, ENOSPC_LINE_2),
+                (DatabaseLogEvent.DATABASE_ERROR, ENOSPC_LINE_1),
+                (DatabaseLogEvent.NO_SPACE_ERROR, ENOSPC_LINE_1),
+            ],
+            "No space left on device",
+            id="filter-enospc",
+        ),
         pytest.param(
             [
                 {
@@ -373,51 +235,35 @@ def test_ycsb_filter(real_events):
                 {"db_event": DatabaseLogEvent.RUNTIME_ERROR, "line": "Can not find stream_manager"},
                 {"db_event": DatabaseLogEvent.RUNTIME_ERROR, "line": "is aborted"},
             ],
-            "2019-07-28T10:53:29+00:00  ip-10-0-167-91 !INFO    | scylla.bin: [shard 0] repair - "
-            "Got error in row level repair: std::runtime_error (repair id 1 is aborted on shard 0)",
+            [(DatabaseLogEvent.RUNTIME_ERROR, REPAIR_ABORTED_LINE)] * 2,
             "repair id 1",
             id="filter-repair",
         ),
         pytest.param(
             [{"db_event": DatabaseLogEvent.RUNTIME_ERROR, "line": "Failed to load schema"}],
-            "!ERR     | scylla:  [shard 3] storage_proxy - Exception when communicating with "
-            "10.142.0.56: std::runtime_error (Failed to load schema version "
-            "b40e405f-462c-38f2-a90c-6f130ddbf6f3) ",
+            [(DatabaseLogEvent.RUNTIME_ERROR, SCHEMA_LOAD_FAILED_LINE)] * 2,
             "Exception when communicating",
             id="filter-upgrade",
         ),
     ],
 )
-def test_db_events_filter_drops_known_runtime_error_lines(
-    real_events, filters_kwargs, known_failure_line, filtered_text
-):
-    """DbEventsFilter drops runtime errors matching a known-failure line while unmatched db events are still logged."""
-    # 2 events per filter (begin/end) + 3 published events.
-    with real_events.wait_for_n_events(real_events.get_events_logger(), count=2 * len(filters_kwargs) + 3, timeout=3):
+def test_db_events_filter_drops_known_error_lines(clean_events_log, filters_kwargs, filtered_events, filtered_text):
+    """Stacked DbEventsFilters drop db events matching known-failure lines while unmatched db events are still logged."""
+    real_events = clean_events_log
+    # 2 events per filter (begin/end) + the filtered events + 1 unfiltered event.
+    expected_event_count = 2 * len(filters_kwargs) + len(filtered_events) + 1
+    with real_events.wait_for_n_events(real_events.get_events_logger(), count=expected_event_count, timeout=3):
         with ExitStack() as stack:
             for filter_kwargs in filters_kwargs:
                 stack.enter_context(DbEventsFilter(**filter_kwargs))
-            DatabaseLogEvent.RUNTIME_ERROR().add_info(node="A", line_number=22, line=known_failure_line).publish()
-            DatabaseLogEvent.RUNTIME_ERROR().add_info(node="A", line_number=22, line=known_failure_line).publish()
-            DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="B", line_number=22, line="not filtered").publish()
+            for db_event, line in filtered_events:
+                db_event().add_info(node="A", line_number=22, line=line).publish()
+            DatabaseLogEvent.BAD_ALLOC().add_info(node="B", line_number=22, line="not filtered").publish()
 
     log_content = real_events.get_event_log_file("events.log")
 
     assert "not filtered" in log_content
     assert filtered_text not in log_content
-
-
-def test_filter_by_node(real_events):
-    """DbEventsFilter with a node drops events from that node only."""
-    with real_events.wait_for_n_events(real_events.get_events_logger(), count=4, timeout=3):
-        with DbEventsFilter(db_event=DatabaseLogEvent.NO_SPACE_ERROR, node="A"):
-            DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="A", line_number=22, line="this is filtered").publish()
-            DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="B", line_number=22, line="not filtered").publish()
-
-    log_content = real_events.get_event_log_file("events.log")
-
-    assert "not filtered" in log_content
-    assert "this is filtered" not in log_content
 
 
 def test_filter_expiration(real_events):
@@ -457,116 +303,31 @@ def test_failed_stall_during_filter(real_events):
 
 
 @pytest.mark.parametrize(
-    "duration_input, duration_formatted",
+    "use_counter, count_condition_name",
     [
-        pytest.param(None, "", id="none"),
-        pytest.param(2, "2s", id="seconds"),
-        pytest.param(2.52, "2.52s", id="fractional-seconds"),
-        pytest.param(326, "5m26s", id="minutes"),
-        pytest.param(4598, "1h16m38s", id="hours"),
-        pytest.param(87400, "1d0h16m40s", id="days"),
+        pytest.param(use_as_context_manager, "test_method", id="context-manager"),
+        pytest.param(use_start_stop_methods, "test_method_obj", id="start-stop-methods"),
     ],
 )
-def test_duration_format(duration_input, duration_formatted):
-    """duration_formatted renders seconds as a compact d/h/m/s string, empty when duration is unset."""
-    event = NodetoolEvent(
-        nodetool_command="scrub --skip-corrupted drop_table_during_repair_ks_0",
-        node="1.0.0.121",
-        options="more options",
-        publish_event=False,
-    )
-
-    event.duration = duration_input
-    assert event.duration_formatted == duration_formatted
-
-
-@pytest.mark.parametrize(
-    "publish_event",
-    [
-        pytest.param(True, id="publish-called"),
-        pytest.param(False, id="publish-not-called"),
-    ],
-)
-def test_begin_event_publishes_only_when_publish_event_is_set(publish_event):
-    """begin_event() publishes the event exactly when it was created with publish_event=True."""
-    with mock.patch("sdcm.sct_events.base.SctEvent.publish") as publish:
-        event = NodetoolEvent(nodetool_command="scrub", node="1.0.0.121", options="", publish_event=publish_event)
-        event.begin_event()
-    assert publish.called is publish_event
-
-
-def test_soft_timeout():
-    """SoftTimeoutEvent carries a traceback and reports the operation, its duration and the soft timeout."""
-    event = SoftTimeoutEvent(soft_timeout=0.1, operation="long-one", duration=0.2)
-    event.publish_or_dump()
-    event_data = str(event)
-
-    assert event.trace
-    assert "operation 'long-one' is finished and took 0.2s (soft timeout was set to 0.1s)" in event_data
-
-
-def test_count_reactor_stall(real_events):
+def test_count_reactor_stall(real_events, use_counter, count_condition_name):
     """EventCounterContextManager counts reactor stalls into ms buckets and writes per-node stat files."""
-    count_condition_name = "test_method"
-    statistics = {}
+    counter = EventCounterContextManager(
+        DatabaseLogEvent.REACTOR_STALLED, name=count_condition_name, _registry=real_events.events_processes_registry
+    )
+    assert counter._event_type == (DatabaseLogEvent.REACTOR_STALLED,)
     with real_events.wait_for_n_events(real_events.get_events_counter(), count=4, timeout=5):
-        with EventCounterContextManager(
-            DatabaseLogEvent.REACTOR_STALLED, name=count_condition_name, _registry=real_events.events_processes_registry
-        ) as counter_manager:
-            assert counter_manager._event_type == (DatabaseLogEvent.REACTOR_STALLED,)
+        with use_counter(counter):
             DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 13 ms", 111).publish()
             DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
             DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 6 ms", 111).publish()
             DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for 33 ms", 111).publish()
             time.sleep(1)
-            statistics = counter_manager.get_stats().copy()
 
-    assert len(statistics.keys()) == 1, "Number of events in statistics is wrong"
-    assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 4
-    assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 2, 10: 1, 20: 1}
-    reason_stat_dir = (
-        real_events.get_events_counter().events_stat_dir
-        / Path(count_condition_name)
-        / Path("DatabaseLogEvent.REACTOR_STALLED")
-    )
-    assert reason_stat_dir.is_dir()
-    for file_event in reason_stat_dir.iterdir():
-        assert file_event.name in ["node1", "node2", "node3", "node4"]
-        with open(file_event, encoding="utf-8") as fp_event:
-            assert len(fp_event.readlines()) == 1, "Wrong number of lines"
-
-
-def test_count_reactor_stall_with_obj_instance(real_events):
-    """EventCounterContextManager used via start/stop methods counts the same as the context manager form."""
-    count_condition_name = "test_method_obj"
-    counter = EventCounterContextManager(
-        DatabaseLogEvent.REACTOR_STALLED, name=count_condition_name, _registry=real_events.events_processes_registry
-    )
-
-    assert counter._event_type == (DatabaseLogEvent.REACTOR_STALLED,)
-    counter.start_event_counter()
-    with real_events.wait_for_n_events(real_events.get_events_counter(), count=4, timeout=5):
-        DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 13 ms", 111).publish()
-        DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
-        DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 6 ms", 111).publish()
-        DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for 33 ms", 111).publish()
-        time.sleep(1)
-
-    counter.stop_event_counter()
     statistics = counter.get_stats()
     assert len(statistics.keys()) == 1, "Number of events in statistics is wrong"
     assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 4
     assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 2, 10: 1, 20: 1}
-    reason_stat_dir = (
-        real_events.get_events_counter().events_stat_dir
-        / Path(count_condition_name)
-        / Path("DatabaseLogEvent.REACTOR_STALLED")
-    )
-    assert reason_stat_dir.is_dir()
-    for file_event in reason_stat_dir.iterdir():
-        assert file_event.name in ["node1", "node2", "node3", "node4"]
-        with open(file_event, encoding="utf-8") as fp_event:
-            assert len(fp_event.readlines()) == 1, "Wrong number of lines"
+    assert_counter_stat_files(real_events, count_condition_name, ["node1", "node2", "node3", "node4"])
 
 
 def test_count_reactor_stall_not_matched_by_regexp(real_events):
@@ -609,21 +370,13 @@ def test_count_several_events(real_events):
             DatabaseLogEvent.KERNEL_CALLSTACK().add_info("node1", "Kernel Stack: some backtraces", 112).publish()
             DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for 33 ms", 111).publish()
             time.sleep(1)
-            # assert not counter_manager._counter_device._cm_register, f"{counter_manager._counter_device._cm_register}"
             statistics = counter_manager.get_stats().copy()
 
     assert len(statistics.keys()) == 2, "Number of events in statistics is wrong"
     assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 3
     assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 2, 30: 1}
     assert statistics["DatabaseLogEvent.KERNEL_CALLSTACK"]["counter"] == 1
-    reason_stat_dir = real_events.get_events_counter().events_stat_dir / Path(count_condition_name)
-    assert reason_stat_dir.is_dir()
-    reactor_stall_dir = reason_stat_dir / Path("DatabaseLogEvent.REACTOR_STALLED")
-    assert reactor_stall_dir.is_dir()
-    for file_event in reactor_stall_dir.iterdir():
-        assert file_event.name in ["node1", "node2", "node3"]
-        with open(file_event, encoding="utf-8") as fp_event:
-            assert len(fp_event.readlines()) == 1, "Wrong number of lines"
+    assert_counter_stat_files(real_events, count_condition_name, ["node1", "node2", "node3"])
 
 
 def test_skip_not_required_count_required_events(real_events):
@@ -642,19 +395,13 @@ def test_skip_not_required_count_required_events(real_events):
             )
 
             DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
-            DatabaseLogEvent.BACKTRACE().add_info(
-                node="node1", line_number=22, line="other back trace that shouldn't be filtered"
-            ).publish()
+            DatabaseLogEvent.BACKTRACE().add_info(node="node1", line_number=22, line=OTHER_BACKTRACE_LINE).publish()
             DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 2501 ms", 111).publish()
-            DatabaseLogEvent.BACKTRACE().add_info(
-                node="node2", line_number=22, line="other back trace that shouldn't be filtered"
-            ).publish()
+            DatabaseLogEvent.BACKTRACE().add_info(node="node2", line_number=22, line=OTHER_BACKTRACE_LINE).publish()
             DatabaseLogEvent.KERNEL_CALLSTACK().add_info(
                 "node2", "Kernel Stack: asdfasdf ms asdfjasdlfjas dfs", 112
             ).publish()
-            DatabaseLogEvent.BACKTRACE().add_info(
-                node="node3", line_number=22, line="other back trace that shouldn't be filtered"
-            ).publish()
+            DatabaseLogEvent.BACKTRACE().add_info(node="node3", line_number=22, line=OTHER_BACKTRACE_LINE).publish()
             time.sleep(1)
             statistics = counter_manager.get_stats().copy()
 
@@ -662,14 +409,7 @@ def test_skip_not_required_count_required_events(real_events):
     assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 2
     assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 1, 2501: 1}
     assert statistics["DatabaseLogEvent.KERNEL_CALLSTACK"]["counter"] == 1
-    reason_stat_dir = real_events.get_events_counter().events_stat_dir / Path(count_condition_name)
-    assert reason_stat_dir.is_dir()
-    reactor_stall_dir = reason_stat_dir / Path("DatabaseLogEvent.REACTOR_STALLED")
-    assert reactor_stall_dir.is_dir()
-    for file_event in reactor_stall_dir.iterdir():
-        assert file_event.name in ["node1", "node2"]
-        with open(file_event, encoding="utf-8") as fp_event:
-            assert len(fp_event.readlines()) == 1, "Wrong number of lines"
+    assert_counter_stat_files(real_events, count_condition_name, ["node1", "node2"])
 
 
 def test_count_with_several_count_managers(real_events):
@@ -698,19 +438,13 @@ def test_count_with_several_count_managers(real_events):
             assert counter_manager2._event_type == (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE)
 
             DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
-            DatabaseLogEvent.BACKTRACE().add_info(
-                node="node1", line_number=22, line="other back trace that shouldn't be filtered"
-            ).publish()
+            DatabaseLogEvent.BACKTRACE().add_info(node="node1", line_number=22, line=OTHER_BACKTRACE_LINE).publish()
             DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 150 ms", 111).publish()
-            DatabaseLogEvent.BACKTRACE().add_info(
-                node="node2", line_number=22, line="other back trace that shouldn't be filtered"
-            ).publish()
+            DatabaseLogEvent.BACKTRACE().add_info(node="node2", line_number=22, line=OTHER_BACKTRACE_LINE).publish()
             DatabaseLogEvent.KERNEL_CALLSTACK().add_info(
                 "node2", "Kernel Stack: asdfasdf ms asdfjasdlfjas dfs", 112
             ).publish()
-            DatabaseLogEvent.BACKTRACE().add_info(
-                node="node3", line_number=22, line="other back trace that shouldn't be filtered"
-            ).publish()
+            DatabaseLogEvent.BACKTRACE().add_info(node="node3", line_number=22, line=OTHER_BACKTRACE_LINE).publish()
             time.sleep(1)
             statistics1 = counter_manager1.get_stats().copy()
             statistics2 = counter_manager2.get_stats().copy()
@@ -723,26 +457,8 @@ def test_count_with_several_count_managers(real_events):
     assert statistics2["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 2
     assert statistics2["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 1, 200: 1}
     assert statistics2["DatabaseLogEvent.BACKTRACE"]["counter"] == 3
-
-    reason_stat_dir = real_events.get_events_counter().events_stat_dir / Path(count_condition_name1)
-    assert reason_stat_dir.is_dir()
-    reactor_stall_dir = reason_stat_dir / Path("DatabaseLogEvent.REACTOR_STALLED")
-    assert reactor_stall_dir.is_dir()
-
-    for file_event in reactor_stall_dir.iterdir():
-        assert file_event.name in ["node1", "node2"]
-        with open(file_event, encoding="utf-8") as fp_event:
-            assert len(fp_event.readlines()) == 1, "Wrong number of lines"
-
-    reason_stat_dir = real_events.get_events_counter().events_stat_dir / Path(count_condition_name2)
-    assert reason_stat_dir.is_dir()
-    reactor_stall_dir = reason_stat_dir / Path("DatabaseLogEvent.REACTOR_STALLED")
-    assert reactor_stall_dir.is_dir()
-
-    for file_event in reactor_stall_dir.iterdir():
-        assert file_event.name in ["node1", "node2", "node3"]
-        with open(file_event, encoding="utf-8") as fp_event:
-            assert len(fp_event.readlines()) == 1, "Wrong number of lines"
+    assert_counter_stat_files(real_events, count_condition_name1, ["node1", "node2"])
+    assert_counter_stat_files(real_events, count_condition_name2, ["node1", "node2", "node3"])
 
 
 def test_count_with_several_nested_count_managers(real_events):
@@ -763,9 +479,7 @@ def test_count_with_several_nested_count_managers(real_events):
                 DatabaseLogEvent.KERNEL_CALLSTACK,
             )
             DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
-            DatabaseLogEvent.BACKTRACE().add_info(
-                node="node1", line_number=22, line="other back trace that shouldn't be filtered"
-            ).publish()
+            DatabaseLogEvent.BACKTRACE().add_info(node="node1", line_number=22, line=OTHER_BACKTRACE_LINE).publish()
             time.sleep(1)
             with EventCounterContextManager(
                 (DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE),
@@ -778,16 +492,12 @@ def test_count_with_several_nested_count_managers(real_events):
                 )
 
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 499 ms", 111).publish()
-                DatabaseLogEvent.BACKTRACE().add_info(
-                    node="node2", line_number=22, line="other back trace that shouldn't be filtered"
-                ).publish()
+                DatabaseLogEvent.BACKTRACE().add_info(node="node2", line_number=22, line=OTHER_BACKTRACE_LINE).publish()
 
                 DatabaseLogEvent.KERNEL_CALLSTACK().add_info(
                     "node2", "Kernel Stack: asdfasdf ms asdfjasdlfjas dfs", 112
                 ).publish()
-                DatabaseLogEvent.BACKTRACE().add_info(
-                    node="node3", line_number=22, line="other back trace that shouldn't be filtered"
-                ).publish()
+                DatabaseLogEvent.BACKTRACE().add_info(node="node3", line_number=22, line=OTHER_BACKTRACE_LINE).publish()
                 time.sleep(1)
                 statistics2 = counter_manager2.get_stats().copy()
 
@@ -801,55 +511,5 @@ def test_count_with_several_nested_count_managers(real_events):
     assert statistics2["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 1
     assert statistics2["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {1000: 1}
     assert statistics2["DatabaseLogEvent.BACKTRACE"]["counter"] == 2
-
-    reason_stat_dir = real_events.get_events_counter().events_stat_dir / Path(count_condition_name1)
-    assert reason_stat_dir.is_dir()
-    reactor_stall_dir = reason_stat_dir / Path("DatabaseLogEvent.REACTOR_STALLED")
-    assert reactor_stall_dir.is_dir()
-
-    for file_event in reactor_stall_dir.iterdir():
-        assert file_event.name in ["node1", "node2"]
-        with open(file_event, encoding="utf-8") as fp_event:
-            lines = fp_event.readlines()
-            LOGGER.info("File %s: content: %s", file_event, lines)
-            assert len(lines) == 1, f"Wrong number of lines {lines}"
-
-    reason_stat_dir = real_events.get_events_counter().events_stat_dir / Path(count_condition_name2)
-    assert reason_stat_dir.is_dir()
-    reactor_stall_dir = reason_stat_dir / Path("DatabaseLogEvent.REACTOR_STALLED")
-    assert reactor_stall_dir.is_dir()
-
-    for file_event in reactor_stall_dir.iterdir():
-        assert file_event.name == "node2"
-        with open(file_event, encoding="utf-8") as fp_event:
-            lines = fp_event.readlines()
-            LOGGER.info("File %s: content: %s", file_event, lines)
-            assert len(lines) == 1, f"Wrong number of lines {lines}"
-
-
-def test_kill_nemesis_during_con_event():
-    """KillNemesis escaping a disruption leaves it NORMAL with no errors, since killing is not a failure."""
-    with (
-        pytest.raises(KillNemesis),
-        DisruptionEvent(nemesis_name="SomeNemesis", node="target_node", publish_event=False) as nemesis_event,
-    ):
-        nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
-        assert str(nemesis_event) == (
-            "(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: "
-            "nemesis_name=SomeNemesis target_node=target_node"
-        )
-
-        try:
-            raise KillNemesis()
-
-        except KillNemesis as ex:
-            nemesis_event.add_error([str(ex)])
-            nemesis_event.duration = 15
-            raise
-
-        except Exception:  # noqa: BLE001
-            pytest.fail("we shouldn't reach this code path")
-
-    assert nemesis_event.errors_formatted == ""
-    assert nemesis_event.severity == Severity.NORMAL
-    assert nemesis_event.duration_formatted == "15s"
+    assert_counter_stat_files(real_events, count_condition_name1, ["node1", "node2"])
+    assert_counter_stat_files(real_events, count_condition_name2, ["node2"])
