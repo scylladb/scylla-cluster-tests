@@ -20,30 +20,56 @@ from sdcm.sct_events.system import InfoEvent
 
 @pytest.fixture(scope="function")
 def registry():
+    """A ContinuousEventsRegistry that collects the continuous events begun by the test."""
     yield ContinuousEventsRegistry()
 
 
 @pytest.fixture(scope="function")
 def info_event() -> Generator[InfoEvent, None, None]:
+    """A non-continuous InfoEvent, for checking the registry accepts only continuous events."""
     yield InfoEvent(message="This is a mock InfoEvent")
 
 
 @pytest.fixture(scope="function")
 def populated_registry(registry: ContinuousEventsRegistry) -> Generator[ContinuousEventsRegistry, None, None]:
+    """A registry already holding 100 NodetoolEvents, so lookups must pick the right event among many."""
     for _ in range(100):
         NodetoolEvent(nodetool_command="mock cmd", publish_event=False).begin_event(publish=False)
 
     yield registry
 
 
+@pytest.fixture
+def read_events_from_file(test_data_dir):
+    """Feed every line of a test-data log through the DB log event patterns, as the DB log reader does."""
+
+    def read_events(file_name: str):
+        with (test_data_dir / file_name).open(encoding="utf-8") as sct_log:
+            for line in sct_log.readlines():
+                db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(node="node1")
+                for item in db_event_pattern_func_map:
+                    event_match = item.pattern.search(line)
+                    if not event_match:
+                        continue
+                    try:
+                        item.period_func(match=event_match)
+                    except RuntimeError as rex:
+                        # Ignore the fact that the event is not published. It still will be created
+                        if "You should create default EventsProcessRegistry first" not in str(rex):
+                            raise
+
+    return read_events
+
+
 def test_add_event(registry: ContinuousEventsRegistry):
-    # continuous events are added to the registry when they begin
+    """A continuous event joins the registry when it begins, so its end can be matched later."""
     event = NodetoolEvent(nodetool_command="mock cmd").begin_event(publish=False)
 
     assert event in registry.continuous_events
 
 
 def test_add_multiple_events(registry: ContinuousEventsRegistry):
+    """Every begun continuous event is kept in the registry as its own entry."""
     pre_insertion_item_count = len(list(registry.continuous_events))
     number_of_insertions = 10
     for _ in range(number_of_insertions):
@@ -52,6 +78,7 @@ def test_add_multiple_events(registry: ContinuousEventsRegistry):
 
 
 def test_add_nemesis_sub_context_to_continuous_event():
+    """A continuous event names the nemeses running at its begin and at its end, so failures map to disruptions."""
     event = ScyllaServerStatusEvent(node=str(uuid.uuid1()), publish_event=False).begin_event(publish=False)
     # event not during nemesis
     assert event.subcontext == []
@@ -86,6 +113,7 @@ def test_add_nemesis_sub_context_to_continuous_event():
 
 
 def test_add_nemesis_sub_context_to_information_event():
+    """An information event names the nemeses running when it is created."""
     event = IndexSpecialColumnErrorEvent(message="This is a mock Event")
     # event not during nemesis
     assert event.subcontext == []
@@ -107,6 +135,7 @@ def test_add_nemesis_sub_context_to_information_event():
 
 
 def test_add_nemesis_sub_context_to_db_log_event():
+    """A DB log event and its clones start with no subcontext and name the nemeses running when cloned."""
     event = DatabaseLogEvent.ABORTING_ON_SHARD()
     # event not during nemesis
     assert event.subcontext == []
@@ -133,29 +162,17 @@ def test_add_nemesis_sub_context_to_db_log_event():
 
 
 def test_adding_a_non_continuous_event_raises_error(registry: ContinuousEventsRegistry, info_event):
+    """The registry rejects a non-continuous event, since it could never be ended and removed."""
     with pytest.raises(ContinuousEventRegistryException):
         registry.add_event(info_event)
 
 
-def read_events_from_file(test_data_dir, file_name: str):
-    with (test_data_dir / file_name).open(encoding="utf-8") as sct_log:
-        for line in sct_log.readlines():
-            db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(node="node1")
-            for item in db_event_pattern_func_map:
-                event_match = item.pattern.search(line)
-                if not event_match:
-                    continue
-                try:
-                    item.period_func(match=event_match)
-                except RuntimeError as rex:
-                    # Ignore the fact that the event is not published. It still will be created
-                    if "You should create default EventsProcessRegistry first" not in str(rex):
-                        raise
-
-
 @pytest.mark.skip(reason="https://trello.com/c/Mu3lGc7C/4828-disable-compaction-and-repair-continuous-events")
-def test_get_compact_events_by_continues_hash_from_log(populated_registry: ContinuousEventsRegistry, test_data_dir):
-    read_events_from_file(test_data_dir, "compaction_event_start.log")
+def test_get_compact_events_by_continues_hash_from_log(
+    populated_registry: ContinuousEventsRegistry, read_events_from_file
+):
+    """Compaction start/end log lines open and close a CompactionEvent findable by its continuous hash."""
+    read_events_from_file("compaction_event_start.log")
 
     continues_hash = CompactionEvent.get_continuous_hash_from_dict(
         {
@@ -167,7 +184,7 @@ def test_get_compact_events_by_continues_hash_from_log(populated_registry: Conti
     )
     found_events = populated_registry.find_continuous_events_by_hash(continues_hash)
 
-    read_events_from_file(test_data_dir, "compaction_event_end.log")
+    read_events_from_file("compaction_event_end.log")
 
     assert not populated_registry.find_continuous_events_by_hash(continues_hash), "Event was not removed from registry"
     assert found_events

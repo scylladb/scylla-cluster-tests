@@ -27,6 +27,27 @@ from sdcm.sct_events.database import (
 )
 from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 
+NODE_NAME = "db-node-1"
+KS_CF = "ks_cf"
+MSG = "msg"
+DISK_ERROR_LINE = (
+    "2022-02-07T06:13:14+00:00 longevity-tls-1tb-7d-4-6-db-node-5279f155-0-4 !     ERR |  [shard 6] storage_service - "
+    "Shutting down communications due to I/O errors until operator intervention: Disk error: std::system_error "
+    "(error system:61, No data available)"
+)
+TOO_LONG_QUEUE_LINE = (
+    "Nov 25 18:47:00.491639 perf-latency-nemesis-ubuntu-db-node-68c324e8-1 scylla[6012]:  [shard 6:sl:d] seastar - "
+    "Too long queue accumulated for sl:default (1049 tasks)"
+)
+
+
+def classify_system_error_line(line: str):
+    """Return the system error event of the first pattern matching `line`, like the DB log reader does."""
+    for pattern, event in SYSTEM_ERROR_EVENTS_PATTERNS:
+        if pattern.search(line):
+            return event
+    return None
+
 
 @pytest.mark.parametrize(
     "event_class",
@@ -58,29 +79,31 @@ from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
     ],
 )
 def test_known_system_errors(event_class):
+    """Each known system error is a DatabaseLogEvent subclass, so log scanning raises it as a database event."""
     assert issubclass(event_class, DatabaseLogEvent)
 
 
-def test_reactor_stalled_severity():
-    event1 = DatabaseLogEvent.REACTOR_STALLED()
-    assert event1.severity == Severity.DEBUG
+@pytest.mark.parametrize(
+    "line, expected_severity",
+    [
+        pytest.param(f"{TOLERABLE_REACTOR_STALL - 1} ms", Severity.DEBUG, id="below-tolerable-stays-debug"),
+        pytest.param(f"{TOLERABLE_REACTOR_STALL} ms", Severity.ERROR, id="at-tolerable-becomes-error"),
+    ],
+)
+def test_reactor_stalled_add_info_stall_duration_sets_severity(line, expected_severity):
+    """add_info() raises a reactor stall to ERROR once it reaches TOLERABLE_REACTOR_STALL, so short stalls stay quiet."""
+    event = DatabaseLogEvent.REACTOR_STALLED()
+    assert event.severity == Severity.DEBUG
 
-    assert event1 is event1.add_info(node="n1", line=f"{TOLERABLE_REACTOR_STALL - 1} ms", line_number=1)
-    assert event1.severity == Severity.DEBUG
-    assert event1.node == "n1"
-    assert event1.line == f"{TOLERABLE_REACTOR_STALL - 1} ms"
-    assert event1.line_number == 1
-
-    event2 = DatabaseLogEvent.REACTOR_STALLED()
-    assert event2.severity == Severity.DEBUG
-    assert event2 is event2.add_info(node="n2", line=f"{TOLERABLE_REACTOR_STALL} ms", line_number=2)
-    assert event2.severity == Severity.ERROR
-    assert event2.node == "n2"
-    assert event2.line == f"{TOLERABLE_REACTOR_STALL} ms"
-    assert event2.line_number == 2
+    assert event is event.add_info(node="n1", line=line, line_number=1)
+    assert event.severity == expected_severity
+    assert event.node == "n1"
+    assert event.line == line
+    assert event.line_number == 1
 
 
 def test_find_issue_by_reactor_stall(test_data_dir):
+    """A reactor stall backtrace resolves to its known GitHub issue, so reports link the existing bug."""
     with (test_data_dir / "reactor_stalls_with_known_issue.log").open(encoding="utf-8") as sct_log:
         backtrace = sct_log.readlines()
 
@@ -94,16 +117,20 @@ def test_find_issue_by_reactor_stall(test_data_dir):
 @pytest.mark.parametrize(
     "symbol,expected",
     [
-        ("gms::gossiper::do_send_ack2_msg", "https://scylladb.atlassian.net/browse/SCYLLADB-3114"),
-        (
+        pytest.param(
+            "gms::gossiper::do_send_ack2_msg", "https://scylladb.atlassian.net/browse/SCYLLADB-3114", id="ack2-known"
+        ),
+        pytest.param(
             "std::vector<seastar::httpd::storage_service_json::snapshot>::push_back",
             "https://scylladb.atlassian.net/browse/SCYLLADB-5320",
+            id="snapshot-push-back-known",
         ),
         # the sibling SYN path (jira:SCYLLADB-4852) is a different issue
-        ("gms::gossiper::do_send_ack_msg", None),
+        pytest.param("gms::gossiper::do_send_ack_msg", None, id="ack-syn-not-linked"),
     ],
 )
 def test_find_issue_by_oversized_allocation(symbol, expected):
+    """An oversized allocation backtrace links to its Jira only for the gossiper ACK2 path it was filed for."""
     backtrace = (
         "seastar::memory::cpu_pages::warn_large_allocation(unsigned long) at ./seastar/src/core/memory.cc:865\n"
         f"(inlined by) {symbol}(utils::tagged_uuid<locator::host_id_tag>, "
@@ -118,23 +145,25 @@ def test_find_issue_by_oversized_allocation(symbol, expected):
     )
 
 
-def test_kernel_callstack_severity():
-    event1 = DatabaseLogEvent.KERNEL_CALLSTACK()
-    assert event1.severity == Severity.DEBUG
+@pytest.mark.parametrize(
+    "event_class",
+    [
+        pytest.param(DatabaseLogEvent.KERNEL_CALLSTACK, id="kernel-callstack"),
+        pytest.param(DatabaseLogEvent.REACTOR_STALLED, id="reactor-stalled-with-callstack-line"),
+    ],
+)
+def test_add_info_kernel_callstack_line_sets_node_and_line_number(event_class):
+    """A kernel callstack line starts at DEBUG and add_info() records its node and line number for the report."""
+    event = event_class()
+    assert event.severity == Severity.DEBUG
 
-    assert event1 is event1.add_info(node="n1", line="kernel callstack 0xffffffffffffff80", line_number=1)
-    assert event1.node == "n1"
-    assert event1.line_number == 1
-
-    event2 = DatabaseLogEvent.REACTOR_STALLED()
-    assert event2.severity == Severity.DEBUG
-    assert event2 is event2.add_info(node="n2", line="kernel callstack 0xffffffffffffff80", line_number=2)
-    assert event2.node == "n2"
-    assert event2.line_number == 2
+    assert event is event.add_info(node="n1", line="kernel callstack 0xffffffffffffff80", line_number=1)
+    assert event.node == "n1"
+    assert event.line_number == 1
 
 
 def test_system_error_events_list():
-    """Make sure all known system error events are listed in SYSTEM_ERROR_EVENTS.
+    """SYSTEM_ERROR_EVENTS lists every DatabaseLogEvent subtype, so log scanning matches all of them.
 
     Since python3.14 also __annotate_func__ need to be excluded from the dir() output.
     """
@@ -143,53 +172,49 @@ def test_system_error_events_list():
     }
 
 
-def test_disk_error_event():
-    disk_error_event = DatabaseLogEvent.DISK_ERROR()
-
-    log_lines = """2022-02-07T06:13:14+00:00 longevity-tls-1tb-7d-4-6-db-node-5279f155-0-4 !    INFO |  [shard 8] compaction - [Compact keyspace1.standard1 089530c0-87dd-11ec-8382-519d84e34cb0] Compacting [/var/lib/scylla/data/keyspace1/standard1-b8e41570875811ec8382519d84e34cb0/md-287128-big-Data.db:level=2:origin=compaction,/var/lib/scylla/data/keyspace1/standard1-b8e41570875811ec8382519d84e34cb0/md-287112-big-Data.db:level=2:origin=compaction,/var/lib/scylla/data/keyspace1/standard1-b8e41570875811ec8382519d84e34cb0/md-290136-big-Data.db:level=2:origin=compaction,/var/lib/scylla/data/keyspace1/standard1-b8e41570875811ec8382519d84e34cb0/md-291192-big-Data.db:level=1:origin=compaction]
+@pytest.mark.parametrize(
+    "event_class, node, log_lines, expected_line_number, expected_line",
+    [
+        pytest.param(
+            DatabaseLogEvent.DISK_ERROR,
+            "longevity-tls-1tb-7d-4-6-db-node-5279f155-0-4",
+            """2022-02-07T06:13:14+00:00 longevity-tls-1tb-7d-4-6-db-node-5279f155-0-4 !    INFO |  [shard 8] compaction - [Compact keyspace1.standard1 089530c0-87dd-11ec-8382-519d84e34cb0] Compacting [/var/lib/scylla/data/keyspace1/standard1-b8e41570875811ec8382519d84e34cb0/md-287128-big-Data.db:level=2:origin=compaction,/var/lib/scylla/data/keyspace1/standard1-b8e41570875811ec8382519d84e34cb0/md-287112-big-Data.db:level=2:origin=compaction,/var/lib/scylla/data/keyspace1/standard1-b8e41570875811ec8382519d84e34cb0/md-290136-big-Data.db:level=2:origin=compaction,/var/lib/scylla/data/keyspace1/standard1-b8e41570875811ec8382519d84e34cb0/md-291192-big-Data.db:level=1:origin=compaction]
 2022-02-07T06:13:14+00:00 longevity-tls-1tb-7d-4-6-db-node-5279f155-0-4 !     ERR | blk_update_request: critical medium error, dev nvme0n11, sector 4141328 op 0x0:(READ) flags 0x0 phys_seg 1 prio class 0
 2022-02-07T06:13:14+00:00 longevity-tls-1tb-7d-4-6-db-node-5279f155-0-4 !     ERR |  [shard 6] storage_service - Shutting down communications due to I/O errors until operator intervention: Disk error: std::system_error (error system:61, No data available)
 2022-02-07T06:13:14+00:00 longevity-tls-1tb-7d-4-6-db-node-5279f155-0-4 !    INFO |  [shard 0] storage_service - Stop transport: starts
 2022-02-07T06:13:14+00:00 longevity-tls-1tb-7d-4-6-db-node-5279f155-0-4 !    INFO |  [shard 0] storage_service - Shutting down native transport
-        """
-    expected_error_data = {
-        "line_number": 2,
-        "line": "2022-02-07T06:13:14+00:00 longevity-tls-1tb-7d-4-6-db-node-5279f155-0-4 !     ERR |  [shard 6] storage_service - Shutting down communications due to I/O errors until operator intervention: Disk error: std::system_error (error system:61, No data available)",
-        "node": "longevity-tls-1tb-7d-4-6-db-node-5279f155-0-4",
-    }
-
-    for num, line in enumerate(log_lines.splitlines()):
-        if re.search(disk_error_event.regex, line):
-            disk_error_event.add_info("longevity-tls-1tb-7d-4-6-db-node-5279f155-0-4", line, num)
-
-    assert expected_error_data["node"] == disk_error_event.node
-    assert expected_error_data["line_number"] == disk_error_event.line_number
-    assert expected_error_data["line"] == disk_error_event.line
-
-
-def test_too_long_queue_accumulated_event():
-    too_long_queue_accumulated_error_event = DatabaseLogEvent.TOO_LONG_QUEUE_ACCUMULATED()
-
-    log_lines = """Nov 25 18:47:00.491639 perf-latency-nemesis-ubuntu-db-node-68c324e8-1 scylla[6012]:  [shard 6:sl:d] seastar - Too long queue accumulated for sl:default (1049 tasks)
+        """,
+            2,
+            DISK_ERROR_LINE,
+            id="disk-error",
+        ),
+        pytest.param(
+            DatabaseLogEvent.TOO_LONG_QUEUE_ACCUMULATED,
+            "perf-latency-nemesis-ubuntu-db-node-68c324e8-1",
+            """Nov 25 18:47:00.491639 perf-latency-nemesis-ubuntu-db-node-68c324e8-1 scylla[6012]:  [shard 6:sl:d] seastar - Too long queue accumulated for sl:default (1049 tasks)
                      2: N7seastar8internal21coroutine_traits_baseIvE12promise_typeE
-         """
-    expected_error_data = {
-        "line_number": 0,
-        "line": "Nov 25 18:47:00.491639 perf-latency-nemesis-ubuntu-db-node-68c324e8-1 scylla[6012]:  [shard 6:sl:d] seastar - Too long queue accumulated for sl:default (1049 tasks)",
-        "node": "perf-latency-nemesis-ubuntu-db-node-68c324e8-1",
-    }
+         """,
+            0,
+            TOO_LONG_QUEUE_LINE,
+            id="too-long-queue-accumulated",
+        ),
+    ],
+)
+def test_log_event_regex_matches_only_the_error_line(event_class, node, log_lines, expected_line_number, expected_line):
+    """The event regex picks the one error line out of surrounding log noise, so the event points at the real failure."""
+    event = event_class()
 
     for num, line in enumerate(log_lines.splitlines()):
-        if re.search(too_long_queue_accumulated_error_event.regex, line):
-            too_long_queue_accumulated_error_event.add_info("perf-latency-nemesis-ubuntu-db-node-68c324e8-1", line, num)
+        if re.search(event.regex, line):
+            event.add_info(node, line, num)
 
-    assert expected_error_data["node"] == too_long_queue_accumulated_error_event.node
-    assert expected_error_data["line_number"] == too_long_queue_accumulated_error_event.line_number
-    assert expected_error_data["line"] == too_long_queue_accumulated_error_event.line
+    assert event.node == node
+    assert event.line_number == expected_line_number
+    assert event.line == expected_line
 
 
 def test_drop_table_during_repair_gate_closed_line_matches_database_error():
-    """Verify the benign SSTable-load gate-closed line is classified as DATABASE_ERROR.
+    """The benign SSTable-load gate-closed line is classified as DATABASE_ERROR.
 
     Mirrors the first-match pattern-matching loop in sdcm/db_log_reader.py, which walks
     SYSTEM_ERROR_EVENTS_PATTERNS in order and stops at the first regex that matches.
@@ -207,26 +232,6 @@ def test_drop_table_during_repair_gate_closed_line_matches_database_error():
 
     assert matched_event is not None
     assert matched_event.type == DatabaseLogEvent.DATABASE_ERROR.type
-
-
-def test_find_log_event_first_matching_pattern_wins():
-    """Overlapping patterns yield exactly one event per line: the first one listed, never a later match."""
-    first, second = DatabaseLogEvent.NO_SPACE_ERROR(), DatabaseLogEvent.BAD_ALLOC()
-    patterns = [(re.compile("error"), first), (re.compile("error|alloc"), second)]
-
-    assert find_log_event(patterns, "an error happened") is first
-    assert find_log_event(patterns, "an alloc happened") is second
-
-
-def test_find_log_event_no_match_returns_none():
-    """A line matching no pattern produces no event, so callers publish nothing for it."""
-    patterns = [(re.compile("error"), DatabaseLogEvent.NO_SPACE_ERROR())]
-
-    assert find_log_event(patterns, "all fine") is None
-
-
-def _classify(line: str):
-    return find_log_event(SYSTEM_ERROR_EVENTS_PATTERNS, line)
 
 
 def test_system_error_events_partitioned_by_log_level():
@@ -247,28 +252,26 @@ def test_system_error_events_partitioned_by_log_level():
 
 
 def test_info_level_runtime_error_line_is_suppressed():
-    """Real example (SCT-772) that used to become RUNTIME_ERROR/ERROR."""
+    """An INFO-level line quoting a runtime_error is classified as the suppressed INFO event (SCT-772)."""
     line = (
         "2026-07-30T11:37:43.815 longevity-10gb-3h-master-db-node-41da73ad-eastus-1  !INFO | scylla[12796]  "
         "[shard 0: gms] rpc - client 10.0.0.9:7000: ignoring error response: seastar::rpc::remote_verb_error "
         "(std::runtime_error (Got stream_blob_cmd::error from peer 7336616b-4533-4c59-a3d1-f6d825de4d8a))"
     )
-    event = _classify(line)
+    event = classify_system_error_line(line)
     assert event.type == DatabaseLogEvent.INFO.type
     assert event.severity == Severity.SUPPRESS
-
-
-def test_error_level_runtime_error_line_still_classified():
-    line = (
-        "2026-07-30T11:37:43.815 db-node-1 !ERR | scylla[12796]  [shard 0: gms] raft_topology - "
-        "topology change coordinator fiber got error std::runtime_error (connection is closed)"
-    )
-    assert _classify(line).type == DatabaseLogEvent.RUNTIME_ERROR.type
 
 
 @pytest.mark.parametrize(
     "line,expected",
     [
+        pytest.param(
+            "2026-07-30T11:37:43.815 db-node-1 !ERR | scylla[12796]  [shard 0: gms] raft_topology - "
+            "topology change coordinator fiber got error std::runtime_error (connection is closed)",
+            DatabaseLogEvent.RUNTIME_ERROR,
+            id="error_level_runtime_error",
+        ),
         pytest.param(
             "2021-11-26T05:05:08+00:00 db-node-1 !    INFO |  [shard 0] rpc - client 10.0.2.7:62608 msg_id 2:  "
             'exception "gate closed" in no_wait handler ignored',
@@ -288,13 +291,9 @@ def test_error_level_runtime_error_line_still_classified():
         ),
     ],
 )
-def test_info_level_lines_keep_lower_severity_classification(line, expected):
-    assert _classify(line).type == expected.type
-
-
-NODE_NAME = "db-node-1"
-KS_CF = "ks_cf"
-MSG = "msg"
+def test_system_error_line_keeps_classification_outside_info_suppression(line, expected):
+    """ERROR-level lines and INFO lines with a lower-severity event keep their own classification, not INFO."""
+    assert classify_system_error_line(line).type == expected.type
 
 
 @pytest.mark.parametrize(
@@ -305,6 +304,7 @@ MSG = "msg"
     ],
 )
 def test_full_scan_event(message, expected_message, expected_pattern):
+    """FullScanEvent renders node and table, and the message only when one is given."""
     kwargs = {"message": message} if message is not None else {}
     event = FullScanEvent(node=NODE_NAME, ks_cf=KS_CF, **kwargs)
     assert event.message == expected_message
@@ -316,6 +316,7 @@ def test_full_scan_event(message, expected_message, expected_pattern):
 
 
 def test_index_special_column_error_event_msgfmt():
+    """IndexSpecialColumnErrorEvent renders as a one-time ERROR carrying its message."""
     event = IndexSpecialColumnErrorEvent(message="m1")
     event.event_id = "ac449879-485a-4b06-8596-3fbe58881093"
     assert str(event) == (

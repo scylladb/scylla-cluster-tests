@@ -24,6 +24,7 @@ SSH_LOGIN_INFO = {"hostname": "10.0.0.1", "user": "scylla-test", "key_file": "~/
 
 
 def make_node(name: str, is_docker: bool = False, ssh_login_info: dict | None = SSH_LOGIN_INFO) -> MagicMock:
+    """Builds a node stub reporting the given backend kind and SSH access."""
     node = MagicMock()
     node.name = name
     node.is_docker.return_value = is_docker
@@ -60,6 +61,7 @@ def test_uploads_only_from_the_nodes_with_ssh_access():
 
 
 def test_records_no_link_when_the_upload_fails():
+    """A failed upload returns an empty link, which the event leaves out so it carries only usable links."""
     _, links = handle([make_node("db-node-1")], link="")
 
     assert links == []

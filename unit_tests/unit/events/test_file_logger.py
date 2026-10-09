@@ -29,6 +29,7 @@ from sdcm.sct_events.file_logger import (
 
 @pytest.fixture
 def file_logger(main_events_context):
+    """A running EventsFileLogger wired to the test's events registry, stopped after the test."""
     start_events_logger(_registry=main_events_context.events_processes_registry)
     logger = get_events_logger(_registry=main_events_context.events_processes_registry)
 
@@ -45,34 +46,22 @@ def file_logger(main_events_context):
         logger.stop(timeout=3)
 
 
-def test_file_logger(main_events_context, file_logger) -> None:
-    event_normal = SpotTerminationEvent(node="n1", message="m1")
-    event_normal.severity = Severity.NORMAL
-    event_warning = SpotTerminationEvent(node="n2", message="m2")
-    event_warning.severity = Severity.WARNING
-    event_error = SpotTerminationEvent(node="n3", message="m3")
-    event_error.severity = Severity.ERROR
-    event_critical = SpotTerminationEvent(node="n4", message="m4")
-    event_critical.severity = Severity.CRITICAL
-    event_debug = SpotTerminationEvent(node="n5", message="m5")
-    event_debug.severity = Severity.DEBUG
+def test_file_logger_counts_and_groups_events_by_severity(main_events_context, file_logger) -> None:
+    """The file logger counts and groups every published event by severity, which feeds the test result summary."""
+    published_counts = {
+        Severity.NORMAL: 1,
+        Severity.WARNING: 2,
+        Severity.ERROR: 3,
+        Severity.CRITICAL: 4,
+        Severity.DEBUG: 5,
+    }
 
-    with main_events_context.wait_for_n_events(file_logger, count=15, timeout=3):
-        main_events_context.events_main_device.publish_event(event_normal)
-        main_events_context.events_main_device.publish_event(event_warning)
-        main_events_context.events_main_device.publish_event(event_warning)
-        main_events_context.events_main_device.publish_event(event_error)
-        main_events_context.events_main_device.publish_event(event_error)
-        main_events_context.events_main_device.publish_event(event_error)
-        main_events_context.events_main_device.publish_event(event_critical)
-        main_events_context.events_main_device.publish_event(event_critical)
-        main_events_context.events_main_device.publish_event(event_critical)
-        main_events_context.events_main_device.publish_event(event_critical)
-        main_events_context.events_main_device.publish_event(event_debug)
-        main_events_context.events_main_device.publish_event(event_debug)
-        main_events_context.events_main_device.publish_event(event_debug)
-        main_events_context.events_main_device.publish_event(event_debug)
-        main_events_context.events_main_device.publish_event(event_debug)
+    with main_events_context.wait_for_n_events(file_logger, count=sum(published_counts.values()), timeout=3):
+        for node_num, (severity, count) in enumerate(published_counts.items(), start=1):
+            event = SpotTerminationEvent(node=f"n{node_num}", message=f"m{node_num}")
+            event.severity = severity
+            for _ in range(count):
+                main_events_context.events_main_device.publish_event(event)
 
     assert main_events_context.events_main_device.events_counter == file_logger.events_counter
 
@@ -94,6 +83,7 @@ def test_file_logger(main_events_context, file_logger) -> None:
 
 
 def test_get_events_grouped_by_category_limit(main_events_context, file_logger) -> None:
+    """The limit keeps the first CRITICAL events and the latest events of other severities, so reports stay short."""
     with main_events_context.wait_for_n_events(file_logger, count=len(Severity) * 10, timeout=3):
         for severity in Severity:
             for num in range(10):
