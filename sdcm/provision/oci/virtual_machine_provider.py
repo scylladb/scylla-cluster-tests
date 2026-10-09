@@ -533,6 +533,12 @@ class VirtualMachineProvider:
         if oci_instance.preemptible_instance_config:
             pricing_model = PricingModel.SPOT
 
+        # A Flex shape is sized at launch, so the bare shape name says nothing about its size.
+        # Carry the OCPU count, as `oci_instance_type_*` and the instance catalog both spell it.
+        instance_type = oci_instance.shape
+        if oci_instance.shape_config and oci_instance.shape_config.ocpus and "Flex" in instance_type:
+            instance_type = f"{instance_type}:{int(oci_instance.shape_config.ocpus)}"
+
         # Extract SCT metadata from tags if available
         tags = oci_instance.defined_tags or {}
         sct_tags = tags.get(TAG_NAMESPACE, {})
@@ -550,7 +556,7 @@ class VirtualMachineProvider:
             pricing_model=pricing_model,
             image=oci_instance.image_id,
             creation_time=oci_instance.time_created,
-            instance_type=oci_instance.shape,
+            instance_type=instance_type,
             _provisioner=provisioner_ref,
             private_dns_name=private_dns_name,
         )

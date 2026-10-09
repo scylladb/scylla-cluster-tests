@@ -1,0 +1,192 @@
+# Test cost estimation
+
+SCT can tell you roughly what a test run will cost **before** it provisions anything.
+The `Estimate Test Cost` pipeline stage prints it, and you can ask for it yourself:
+
+```bash
+hydra estimate-cost -b aws test-cases/longevity/longevity-10gb-3h.yaml
+```
+
+## In Jenkins
+
+The `Estimate Test Cost` stage runs in every shared pipeline that provisions hardware:
+longevity, byo-longevity, artifacts, jepsen, manager, rolling upgrade, rolling operator upgrade,
+and both parallel performance pipelines, plus the PR provision tests in the root `Jenkinsfile`.
+In the parallel pipelines it runs inside each branch, because each branch provisions its own
+cluster. Pipelines that only trigger other jobs
+(`triggerMatrixPipeline`, `perfRegressionParallelPipelinebyRegion`, `sdReleaseGatingPipeline`,
+`createTestJobPipeline`) have no estimate.
+
+The stage runs before the SCT runner is created, so an abort at this point costs nothing. It
+prints the table below into the console log and appends a one-line summary to the build
+description, such as `Estimated cost: $11.90 (spot) [up to $20.99 on fallback]`.
+
+The estimate is also attached to the run in Argus, where it shows on the run's Costs tab. The
+stage sends it as soon as the Argus run exists, and the test sends it again when it starts, so
+it is there even for pipelines that create the Argus run later and for local runs. Pass
+`--report-to-argus` to do the same from the command line; it uses the configured `test_id`.
+A partial or unknown estimate is not sent, because Argus would store the floor as if it were the
+whole figure.
+
+The stage **never fails a build**. Any error, a missing price or absent credentials is logged
+and the pipeline carries on. The stage is bounded by a 5-minute timeout.
+
+It honours the job's `provision_type` and `instance_provision_fallback_on_demand` parameters,
+so a job explicitly set to `on_demand` is priced on-demand even when its config says spot.
+
+## Reading the output
+
+```
+Estimated cost of this run: $11.77 (4.25 hours at spot rates; up to $21.02 if it falls back to on-demand)
+
+  role       nodes  instance type              $/hour   hours      cost
+  db             6  i7i.2xlarge                0.7550    4.25    $19.25
+  loader         2  t3.xlarge                  0.1664    4.25     $1.41
+  monitor        1  t3.large                   0.0832    4.25     $0.35
+```
+
+The headline is the cost of the **whole run**: every node, for the full configured test
+duration, which it states — the figure means nothing without it. Each row is one cluster role:
+node count times hourly rate times duration.
+
+Those hours are `test_duration` from the configuration, overridable with `--duration` (in
+minutes). A run that finishes early costs less; one that overruns costs more.
+
+The instance types shown are the *resolved* ones. If a config uses sizing constraints rather
+than literal types, what you see here is what those constraints resolved to.
+
+## What it does not include
+
+Instance hours only. Not counted: storage and volumes, network egress, S3, managed-service
+overhead (EKS/GKE control planes), or anything the test creates itself.
+
+Treat it as an order-of-magnitude figure for deciding whether a run is reasonable — not as a
+bill.
+
+## "PARTIAL" and "unknown"
+
+```
+Estimated cost of this run: $1.77 (4.25 hours at on-demand rates) -- PARTIAL, no price for: db
+  db             6  m5.24xlarge                     -    4.25   unknown
+```
+
+A role shows `unknown` when there is no price for its instance type. The total then covers
+only the roles that *could* be priced, and is marked `PARTIAL` — it is a floor, not the
+answer. This is deliberate: a missing price is never reported as zero, because a silent `0`
+reads as "free" and is worse than admitting ignorance.
+
+Causes:
+
+- **Instance types outside the catalog.** The catalog covers what SCT actually uses; an
+  unusual type will not be there. Currently the only gaps are the shared-core GCE types
+  (`e2-medium`, `e2-small`, `e2-micro`), which the catalog carries without a price.
+- **A role whose instance type never resolved.** It is listed as `(unresolved)` with its node
+  count, rather than dropped — an estimate missing an entire cluster is worse than one that
+  admits the gap.
+- **Backends with no cloud instances** — `docker`, `k8s-local-kind*`, `baremetal` — resolve no
+  priceable roles at all.
+
+## Where the prices come from
+
+The checked-in instance catalog under `data/instance_catalog/`, refreshed by
+`sct.py sizing update-catalog`.
+
+The one exception is **AWS spot**, which is queried live. Its prices change a few times a day
+per availability zone, so a checked-in value would be wrong in a way that matters. The query
+costs one call per region for the whole run, regardless of node count, and if it cannot be
+reached the rate is reported unknown rather than guessed.
+
+Everything else makes **no cloud API calls**. It runs on a Jenkins builder before anything
+exists, and a number telling you what a run will cost should not depend on a pricing endpoint
+being reachable. A type missing from the catalog is reported unknown rather than looked up
+live.
+
+Prices are list prices and do not reflect any negotiated discount.
+
+## Spot runs
+
+A run configured for spot is priced at **spot rates**, and the headline says so.
+
+When `instance_provision_fallback_on_demand` is enabled, the on-demand figure is shown beside
+it as a ceiling:
+
+```
+Estimated cost of this run: $11.77 (4.25 hours at spot rates; up to $21.02 if it falls back to on-demand)
+```
+
+That ceiling is not decoration — SCT really does fall back to on-demand when spot capacity is
+short, so the spot figure is a **lower bound, not a prediction**, and anything deciding whether
+a run is too expensive should read the ceiling.
+
+With fallback disabled the run cannot reach that figure, so it is not mentioned:
+
+```
+Estimated cost of this run: $11.77 (4.25 hours at spot rates)
+```
+
+Each cloud is priced the way it is cheapest to ask:
+
+| Cloud | Source | Typical saving |
+|---|---|---|
+| AWS | queried live, one call per region | varies by AZ and type |
+| GCE | catalog, per region | 40-78%, strongly region-dependent |
+| Azure | catalog | ~79% |
+| OCI | derived — a flat documented 50% off | 50% |
+
+A type with no spot price is reported **unknown**. It never silently falls back to the
+on-demand rate, which would quote a figure several times too high under a spot label.
+
+On **xcloud**, Scylla Cloud runs the db nodes and never uses spot for them, so they are always
+priced on-demand. A spot setting applies only to the loaders and monitor SCT provisions itself.
+
+GCE **z3** types are always priced on-demand: their bundled local SSD needs live migration on
+host maintenance, which a spot VM cannot have, so SCT never provisions them as spot.
+
+## Actual cost in Argus
+
+Besides the estimate, each instance reports what it actually cost, on the run's Costs tab in
+Argus.
+
+When a node is created, SCT prices it at the lifecycle it **actually got**, so a spot request
+that fell back to on-demand is priced on-demand. It writes that price on the cloud instance as
+two tags:
+
+| Tag | Example | Meaning |
+|---|---|---|
+| `price_per_hour_micro_usd` | `439733` | hourly price in millionths of a dollar ($0.4397/h) |
+| `pricing_tier` | `spot` / `on-demand` | the lifecycle the price is for |
+
+The price is an integer because a GCE label value cannot contain a decimal point. The same two
+tags are valid on AWS, GCE, Azure and OCI.
+
+The cost is reported when the instance goes away:
+
+- **SCT terminates the node** (a nemesis replacing it, a cluster shrink): hourly price × time
+  since the node was created.
+- **The job's own cleanup stage terminates it** (`clean-resources --post-behavior`): price
+  read from the instance's tags × time since the cloud launched it. With the default
+  `execute_post_behavior: false` this is where every CI run's nodes end, so it is not marked
+  leaked.
+- **The scheduled cloud sweep terminates or stops it** (`hydra-cleanup-cloud`): same
+  calculation, reported as **leaked**. The sweep only reaches what a test failed to clean up.
+
+Cleanup runs in a different process from the test and sees only the cloud instance, which is
+why the price has to be written on it.
+
+An instance with no price tag (an unknown price, or one created before this existed) reports
+nothing, and Argus shows it as not reported rather than as zero.
+
+On OCI, tags must be defined in the `sct` tag namespace before they can be set. After
+upgrading, run `sct.py prepare-regions -c oci` once per tenancy to create the two new keys.
+Until then, OCI nodes still report their cost when SCT terminates them, but cleanup cannot price them.
+
+## Accuracy
+
+Expect the same order of magnitude as the cloud-monitor cost site, not an exact match. That
+site rounds up to whole hours; this estimate uses fractional hours and list prices, with no
+negotiated discount applied.
+
+For spot there are two further reasons to expect a gap. AWS spot prices differ across
+availability zones by tens of percent and the estimate cannot know which zone a node will land
+in, so it reports the mean. And a run that fell back to on-demand costs the ceiling, not the
+estimate.

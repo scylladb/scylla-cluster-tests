@@ -81,7 +81,16 @@ def clean_oci_instances(default_keep_hours: int, dry_run: bool = False) -> None:
                 continue
             try:
                 compute_client.terminate_instance(instance.id)
-                update_argus_resource_status(tags.get("TestId", ""), instance.display_name, "terminate")
+                # The listing includes already-terminated instances, whose cost was reported when
+                # they ended; only price what this sweep actually terminates.
+                alive = instance.lifecycle_state not in ("TERMINATING", "TERMINATED")
+                update_argus_resource_status(
+                    tags.get("TestId", ""),
+                    instance.display_name,
+                    "terminate",
+                    tags if alive else None,
+                    instance.time_created,
+                )
             except Exception as exc:  # noqa: BLE001
                 LOGGER.error("Failed to terminate OCI instance %s: %s", instance.display_name, exc)
             continue
@@ -97,7 +106,9 @@ def clean_oci_instances(default_keep_hours: int, dry_run: bool = False) -> None:
                 continue
             try:
                 compute_client.instance_action(instance.id, "STOP")
-                update_argus_resource_status(tags.get("TestId", ""), instance.display_name, "stop")
+                update_argus_resource_status(
+                    tags.get("TestId", ""), instance.display_name, "stop", tags, instance.time_created
+                )
             except Exception as exc:  # noqa: BLE001
                 LOGGER.error("Failed to stop OCI instance %s: %s", instance.display_name, exc)
 

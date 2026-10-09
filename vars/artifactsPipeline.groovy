@@ -156,6 +156,19 @@ def call(Map pipelineParams) {
                                             }
                                             dockerLogin(params)
                                         }
+                                        // Never fails the build: a cost estimate is advisory, and each parallel branch provisions its own
+                                        // cluster, so the job's real cost is this figure times the number of branches.
+                                        stage("Estimate Test Cost (${instance_type})") {
+                                            catchError(stageResult: 'SUCCESS') {
+                                                timeout(time: 5, unit: 'MINUTES') {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        dir('scylla-cluster-tests') {
+                                                            estimateTestCost(params, builder.region, instance_type)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                         stage('Create Argus Test Run') {
                                             catchError(stageResult: 'FAILURE') {
                                                 script {

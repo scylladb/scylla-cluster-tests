@@ -212,6 +212,20 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
+                                        // Before the runner exists, so an abort here costs nothing. Never fails the build:
+                                        // a cost estimate is advisory, and each parallel branch provisions its own cluster,
+                                        // so the job's real cost is this figure times the number of branches.
+                                        stage("Estimate Test Cost for ${sub_test}") {
+                                            catchError(stageResult: 'SUCCESS') {
+                                                timeout(time: 5, unit: 'MINUTES') {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        dir('scylla-cluster-tests') {
+                                                            estimateTestCost(params, builder.region)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                         stage("Create SCT Runner for ${sub_test}") {
                                             wrap([$class: 'BuildUser']) {
                                                 dir('scylla-cluster-tests') {

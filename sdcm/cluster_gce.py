@@ -205,11 +205,15 @@ class GCENode(cluster.BaseNode):
         )
 
     def _set_keep_duration(self, duration_in_hours: int) -> None:
+        self._add_tags({"keep": str(duration_in_hours)})
+
+    def _add_tags(self, tags: Dict[str, str]) -> None:
+        # Labels are updated against the instance's fingerprint, so refresh it first.
         self._refresh_instance_state()
         gce_set_labels(
             instances_client=self._gce_service,
             instance=self._instance,
-            new_labels={"keep": str(duration_in_hours)},
+            new_labels=tags,
             project=self.project,
             zone=self.zone,
         )
@@ -296,7 +300,9 @@ class GCENode(cluster.BaseNode):
 
     @property
     def is_spot(self):
-        return self._instance.scheduling.preemptible
+        # SCT requests spot through the provisioning model; `preemptible` is only the legacy flag.
+        scheduling = self._instance.scheduling
+        return scheduling.provisioning_model == "SPOT" or bool(scheduling.preemptible)
 
     def check_spot_termination(self):
         """Check if a spot instance termination was initiated by the cloud.

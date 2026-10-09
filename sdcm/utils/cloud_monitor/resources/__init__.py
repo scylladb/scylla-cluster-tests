@@ -3,6 +3,9 @@ from math import ceil
 
 CLOUD_PROVIDERS = ("aws", "gce", "azure")
 
+#: Placeholder for a field a cloud does not report.
+NA = "N/A"
+
 
 class CloudInstance:
     pricing = None  # need to be set in the child class

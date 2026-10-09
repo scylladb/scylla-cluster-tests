@@ -101,6 +101,9 @@ from sdcm.remote.remote_long_running import run_long_running_cmd
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
 from sdcm import wait, mgmt
 from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_config.config import backend_to_cloud
+from sdcm.utils.cloud_catalog.cost import InstanceRate, get_hourly_rate
+from sdcm.utils.cost_reporting import ON_DEMAND, SPOT, instance_cost_item, price_tags, report_cost_items
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_events.system import AwsKmsEvent
 from sdcm.snitch_configuration import SnitchConfig
@@ -442,6 +445,10 @@ class BaseNode(AutoSshContainerMixin):
         self._public_ip_address_cached = None
         self._private_ip_address_cached = None
         self._ipv6_ip_address_cached = None
+        # When this node's instance-hours start, for the cost reported at teardown. Taken here
+        # rather than from the cloud's launch time, so a reused node is costed for this run only.
+        self._created_at = datetime.now(tz=timezone.utc)
+        self.hourly_rate: InstanceRate | None = None
         self._maximum_number_of_cores_to_publish = 10
 
         self.last_line_no = 1
@@ -577,6 +584,7 @@ class BaseNode(AutoSshContainerMixin):
         self._init_port_mapping()
 
         self.set_keep_alive()
+        self._record_hourly_rate()
         if (
             self.node_type == "db"
             and not self.is_kubernetes()
@@ -641,6 +649,7 @@ class BaseNode(AutoSshContainerMixin):
     def _terminate_node_in_argus(self):
         try:
             client = self.test_config.argus_client()
+            self._report_cost_in_argus(client)
             reason = self.running_nemesis if self.running_nemesis else "GracefulShutdown"
             client.terminate_resource(name=self.name, reason=reason)
         except Exception:
@@ -891,6 +900,55 @@ class BaseNode(AutoSshContainerMixin):
     def _set_keep_alive(self):
         ContainerManager.set_all_containers_keep_alive(self)
         return True
+
+    def _add_tags(self, tags: Dict[str, str]) -> None:
+        """Add tags to this node's cloud instance. Only cloud backends have an instance to tag."""
+        raise NotImplementedError()
+
+    def _record_hourly_rate(self) -> None:
+        """Price this node at the lifecycle it actually got, and write that price on its instance.
+
+        The in-memory rate is what this node's own teardown reports. The tag is for whatever
+        else may terminate the instance - a cleanup or reaper job in another process sees only
+        the cloud instance, so the price has to be on it. Best-effort: a node that cannot be
+        priced or tagged reports no cost, which Argus shows as unknown rather than zero.
+        """
+        params = self.parent_cluster.params if self.parent_cluster else {}
+        cloud = backend_to_cloud(params.get("cluster_backend"), params.get("xcloud_provider"))
+        if not cloud or self._instance_type in (None, "", "N/A"):
+            return
+        try:
+            self.hourly_rate = get_hourly_rate(cloud, self.vm_region, self._instance_type, is_spot=self.is_spot)
+            if tags := price_tags(self.hourly_rate):
+                self._add_tags(tags)
+        except NotImplementedError:
+            self.log.debug("No cloud instance to tag with this node's hourly price")
+        except Exception:  # noqa: BLE001
+            self.log.warning("Could not record this node's hourly price", exc_info=True)
+
+    def _report_cost_in_argus(self, client) -> None:
+        """Send this node's final cost: its hourly rate times the time since it was created.
+
+        Priced at the lifecycle the node actually got, so a spot node that fell back to
+        on-demand reports on-demand. A node without a known rate sends nothing.
+        """
+        if not self.hourly_rate or not self.hourly_rate.known:
+            return
+        node_type = self.parent_cluster.node_type if self.parent_cluster else self.node_type
+        if self._is_zero_token_node:
+            node_type = "zero-token-db"
+        report_cost_items(
+            client,
+            [
+                instance_cost_item(
+                    name=self.name,
+                    node_type=node_type,
+                    price_per_hour=self.hourly_rate.price_per_hour,
+                    pricing_tier=SPOT if self.hourly_rate.is_spot else ON_DEMAND,
+                    started_at=self._created_at,
+                )
+            ],
+        )
 
     def _set_keep_duration(self, duration_in_hours: int) -> None:
         raise NotImplementedError()
