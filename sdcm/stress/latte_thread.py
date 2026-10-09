@@ -13,6 +13,7 @@
 
 import contextlib
 import os
+import posixpath
 import re
 import uuid
 import logging
@@ -91,9 +92,70 @@ def get_latte_operation_type(stress_cmd):
         return "mixed"
 
 
+# Where staged files live on a loader's host: under their path in the container, so a file meant for
+# one container path always lands in the same place.
+LOADER_FILES_DIR = "$HOME/latte-files"
+
+
+def loader_file_path(container_path: str) -> str:
+    """Where a file staged for *container_path* lives on the loader's host."""
+    return f"{LOADER_FILES_DIR}{container_path}"
+
+
+def send_files_to_loader(loader, files: list[tuple[str, str]]) -> None:
+    """Send '(local_path, container_path)' pairs to their place on *loader*'s host."""
+    parents = sorted({posixpath.dirname(loader_file_path(container_path)) for _, container_path in files})
+    loader.remoter.run(f"mkdir -p {' '.join(parents)}", verbose=False)
+    for local_path, container_path in files:
+        # One call per file: the local and agent runners take a single path, not a list.
+        if not loader.remoter.send_files(local_path, loader_file_path(container_path), verbose=False):
+            raise RuntimeError(f"Failed to send {local_path} to {loader.name}:{loader_file_path(container_path)}")
+
+
+def remove_files_from_loader(loader, files: list[tuple[str, str]]) -> None:
+    staged = " ".join(loader_file_path(container_path) for _, container_path in files)
+    loader.remoter.run(f"rm -f {staged}", verbose=False, ignore_status=True)
+
+
 class LatteStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
     SCHEMA_CMD_CALL_COUNTER = {}
+
+    def __init__(self, *args, extra_files_to_stage=None, **kwargs):
+        """*extra_files_to_stage* is a list of '(local_path, container_path)' pairs only this
+        invocation needs, such as a dataset shard: each is sent to the host of the loader the
+        command runs on, mounted read-only at its container path and removed afterwards -- the way
+        'GeminiStressThread' ships its schema file.
+        """
+        super().__init__(*args, **kwargs)
+        self.extra_files_to_stage: list[tuple[str, str]] = extra_files_to_stage or []
+        for _, container_path in self.extra_files_to_stage:
+            if not container_path.startswith("/"):
+                raise ValueError(f"Container path {container_path!r} of a staged file is not absolute")
+        # NOTE: a staged file's place on the host follows from its container path alone, so two
+        #       commands on one loader would share it and the first to finish would remove it.
+        #       Round-robin runs a single command whatever 'stress_num' says.
+        if self.extra_files_to_stage and self.stress_num > 1 and not self.round_robin:
+            raise ValueError("Files are staged per loader, so 'extra_files_to_stage' needs stress_num=1")
+        if self.extra_files_to_stage and "k8s" in self.params.get("cluster_backend"):
+            raise ValueError("'extra_files_to_stage' mounts files from a loader's docker host, which k8s loaders lack")
+
+    @contextlib.contextmanager
+    def _staged_files(self, loader):
+        """Put 'extra_files_to_stage' on *loader*'s host for the command, and yield the docker
+        options mounting them. They are removed afterwards, whether the command ran or not."""
+        if not self.extra_files_to_stage:
+            yield ""
+            return
+        try:
+            send_files_to_loader(loader, self.extra_files_to_stage)
+            # 'z' relabels the file for SELinux loaders, like every other stress tool mount.
+            yield "".join(
+                f" -v {loader_file_path(container_path)}:{container_path}:ro,z"
+                for _, container_path in self.extra_files_to_stage
+            )
+        finally:
+            remove_files_from_loader(loader, self.extra_files_to_stage)
 
     def set_stress_operation(self, stress_cmd):
         return get_latte_operation_type(self.stress_cmd)
@@ -247,6 +309,10 @@ class LatteStressThread(DockerBasedStressThread):
         return output
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
+        with self._staged_files(loader) as staged_file_mounts:
+            return self._run_container(loader, loader_idx, cpu_idx, staged_file_mounts)
+
+    def _run_container(self, loader, loader_idx, cpu_idx, staged_file_mounts):
         cpu_options = ""
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
@@ -282,6 +348,7 @@ class LatteStressThread(DockerBasedStressThread):
                 "--security-opt seccomp=unconfined "
                 f"--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker}"
                 f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}:z"
+                f"{staged_file_mounts}"
             ),
         )
         hosts = " ".join([i.cql_address for i in self.node_list])

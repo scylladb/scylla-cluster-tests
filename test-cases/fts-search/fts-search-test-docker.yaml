@@ -1,0 +1,86 @@
+# Local correctness run of fts_test.FtsSearchTest.test_fts_search on the docker backend.
+#
+# Purpose: validate the *orchestration* of the FTS test (schema reset, shard
+# staging, index build timing from vector-store's 'full scan' log lines, the results file) without
+# provisioning AWS.
+# The numbers this produces are meaningless -- under a thousand synthetic documents on a
+# containerised Scylla.
+# An aws test case for actual performance runs lands with the S3 dataset support.
+#
+# Prerequisites:
+#   Generate the tiny dataset (not tracked in git; a one-off after a fresh clone):
+#        python3 data_dir/latte/fts_search/generate_local_dataset.py
+#
+# Run:
+#   ./docker/env/hydra.sh run-test fts_test.FtsSearchTest.test_fts_search --backend docker \
+#     --config test-cases/fts-search/fts-search-test-docker.yaml
+# What to check afterwards is in docs/fts-search-test.md.
+#
+# Argus: run with JOB_NAME=local_run (see docs/fts-search-test.md), which keeps the client in
+# replay-only mode. `enable_argus` stays at its default of true so that latte's "schema once per
+# script" behaviour matches a real run.
+
+test_metadata:
+  description: >-
+    Local correctness run of the full-text search (BM25) performance test on the docker backend.
+    Loads a tiny synthetic dataset and builds a fulltext_index against released ScyllaDB and
+    vector-store images, recording build time and indexing throughput. Validates the test
+    orchestration and its results file rather than producing meaningful performance numbers.
+  test_type: performance
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - docker
+  stress_tools:
+    - latte
+  workload: read
+  nemesis_labels: []
+  features:
+    - tablets
+
+test_duration: 180
+
+n_db_nodes: 1
+n_loaders: 1
+# No monitoring stack locally: nothing this test reports needs it -- index build time comes from the
+# vector-store log and results go to a file in the run's log directory. It also keeps the run from
+# uploading Grafana screenshots to the shared 's3://cloudius-jenkins-test' bucket. Set it to 1 when
+# the dashboards are needed.
+n_monitor_nodes: 0
+n_vector_store_nodes: 1
+
+# Clean up after ourselves. 'execute_post_behavior' defaults to false because in Jenkins a separate
+# pipeline stage destroys the resources -- there is no such stage behind a local run, so without this
+# every run leaves its db and vector-store containers running (tester.py: "Resources will continue to
+# run"). 'keep-on-failure' rather than 'destroy' so a failed run stays open for inspection.
+execute_post_behavior: true
+post_behavior_db_nodes: 'keep-on-failure'
+post_behavior_loader_nodes: 'keep-on-failure'
+post_behavior_monitor_nodes: 'keep-on-failure'
+post_behavior_vector_store_nodes: 'keep-on-failure'
+
+# Scylla Manager is rejected outright on the docker backend
+# (sct_config.py:_validate_docker_backend_parameters).
+use_mgmt: false
+
+# On the docker backend `scylla_version` is used as the image tag. Full-text indexes need 2026.3+.
+# A cached 'latest' is not re-pulled: 'docker pull scylladb/scylla:latest' to refresh it.
+docker_image: 'scylladb/scylla'
+scylla_version: 'latest'
+
+# The docker backend takes a prebuilt image only -- to test an unreleased vector-store, build it
+# locally ('docker build -t local/vector-store:dev .') and point these at it. Do NOT set
+# vector_store_source_repo or vector_store_source_ref: they request a source build, which
+# sct_config.py rejects on this backend.
+# Until scylladb/vector-store#635 is fixed, vector-store's 'latest' is 1.5.1, too old for full-text
+# indexes: run with SCT_VECTOR_STORE_VERSION=1.11.0.
+vector_store_docker_image: 'scylladb/vector-store'
+vector_store_version: 'latest'
+
+user_prefix: 'fts-docker-local'
+
+search_test_config: 'data_dir/latte/fts_search/local_config.yaml'
+
+latte_schema_parameters:
+  keyspace: 'fts_bench'
+  table: 'documents'

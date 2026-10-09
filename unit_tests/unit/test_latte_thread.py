@@ -12,6 +12,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 import re
+import types
 
 import pytest
 import yaml
@@ -198,3 +199,99 @@ def test_complex_schema_cmds_cover_every_row(config_file, param_name):
     row_count = re.search(r"-P row_count=(\d+)", cmd)
     assert cycles and row_count, f"missing -d or -P row_count in: {cmd}"
     assert cycles.group(1) == row_count.group(1)
+
+
+class _LoaderRemoter:
+    """Records what is run on, and sent to, one loader's host."""
+
+    def __init__(self, send_ok=True):
+        self.ran, self.sent = [], []
+        self.send_ok = send_ok
+
+    def run(self, cmd, **_):
+        self.ran.append(cmd)
+
+    def send_files(self, src, dst, **_):
+        self.sent.append((src, dst))
+        return self.send_ok
+
+
+def _staging_thread(files, backend="docker", **kwargs):
+    loader_set = types.SimpleNamespace(
+        get_db_auth=lambda: None,
+        test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
+    )
+    return LatteStressThread(
+        loader_set=loader_set,
+        stress_cmd="latte run -f load data_dir/latte/fts_search/fts.rn -d 100",
+        timeout=60,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": backend, "client_encrypt": False, "latte_schema_parameters": {}},
+        extra_files_to_stage=files,
+        **kwargs,
+    )
+
+
+SHARD = ("/local/ds/shards/documents_000.tsv", "/tmp/fts/ds/shards/documents_000.tsv")
+HOST_SHARD = "$HOME/latte-files/tmp/fts/ds/shards/documents_000.tsv"
+
+
+def test_a_staged_file_goes_to_the_loaders_host_and_is_mounted_read_only():
+    loader = types.SimpleNamespace(name="loader-1", remoter=_LoaderRemoter())
+
+    with _staging_thread([SHARD])._staged_files(loader) as mounts:
+        assert loader.remoter.sent == [(SHARD[0], HOST_SHARD)]
+        assert mounts == f" -v {HOST_SHARD}:{SHARD[1]}:ro,z"
+
+    assert loader.remoter.ran == ["mkdir -p $HOME/latte-files/tmp/fts/ds/shards", f"rm -f {HOST_SHARD}"]
+
+
+def test_a_staged_file_is_removed_even_when_the_command_fails():
+    loader = types.SimpleNamespace(name="loader-1", remoter=_LoaderRemoter())
+
+    with pytest.raises(RuntimeError, match="latte failed"), _staging_thread([SHARD])._staged_files(loader):
+        raise RuntimeError("latte failed")
+
+    assert loader.remoter.ran[-1] == f"rm -f {HOST_SHARD}"
+
+
+def test_a_file_that_failed_to_send_is_removed_too():
+    """A send that fails partway can leave a partial file behind."""
+    loader = types.SimpleNamespace(name="loader-1", remoter=_LoaderRemoter(send_ok=False))
+
+    with pytest.raises(RuntimeError, match="Failed to send"), _staging_thread([SHARD])._staged_files(loader):
+        pytest.fail("the command must not run without its file")
+
+    assert loader.remoter.ran[-1] == f"rm -f {HOST_SHARD}"
+
+
+def test_nothing_is_staged_by_default():
+    """The default has to stay empty: every existing caller stages nothing, and pays nothing for it."""
+    loader = types.SimpleNamespace(name="loader-1", remoter=_LoaderRemoter())
+
+    with _staging_thread(None)._staged_files(loader) as mounts:
+        assert mounts == ""
+
+    assert loader.remoter.ran == []
+    assert loader.remoter.sent == []
+
+
+def test_a_staged_file_needs_an_absolute_container_path():
+    with pytest.raises(ValueError, match="not absolute"):
+        _staging_thread([("/local/documents.tsv", "documents.tsv")])
+
+
+def test_staged_files_need_one_command_per_loader():
+    """Two commands on one loader would share the file, and the first to finish would remove it."""
+    with pytest.raises(ValueError, match="needs stress_num=1"):
+        _staging_thread([SHARD], stress_num=2)
+
+
+def test_round_robin_stages_files_whatever_stress_num_says():
+    """Round-robin runs a single command per call, so the file is never shared."""
+    assert _staging_thread([SHARD], stress_num=2, round_robin=True).extra_files_to_stage == [SHARD]
+
+
+def test_staged_files_need_a_docker_loader():
+    with pytest.raises(ValueError, match="k8s loaders lack"):
+        _staging_thread([SHARD], backend="k8s-eks")

@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-532 options across 29 groups.
+533 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -54,7 +54,7 @@ concerns first, then one page per backend, then one per test type.
 | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) | 12 | Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options. |
 | [Minicloud](configuration_options/minicloud.md) | 16 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with `cluster_backend: aws` and an... |
 | [Longevity tests](configuration_options/longevity-tests.md) | 13 | Options specific to long-running longevity test scenarios. |
-| [Performance regression tests](configuration_options/performance-regression-tests.md) | 18 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
+| [Performance regression tests](configuration_options/performance-regression-tests.md) | 19 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
 | [Upgrade tests](configuration_options/upgrade-tests.md) | 20 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
 | [Grow cluster tests](configuration_options/grow-cluster-tests.md) | 2 | Scaling the cluster up and down during a test. |
 | [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) | 6 | Loading pre-built SSTables into a running cluster via nodetool refresh. |
@@ -471,6 +471,7 @@ concerns first, then one page per backend, then one per test type.
 | [`scylla_repo_m`](configuration_options/scylla-manager.md#scylla_repo_m) | `SCT_SCYLLA_REPO_M` | [Scylla Manager](configuration_options/scylla-manager.md) |
 | [`scylla_rsyslog_setup`](configuration_options/monitoring-events-and-reporting.md#scylla_rsyslog_setup) | `SCT_SCYLLA_RSYSLOG_SETUP` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
 | [`scylla_version`](configuration_options/scylla-installation-and-configuration.md#scylla_version) | `SCT_SCYLLA_VERSION` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
+| [`search_test_config`](configuration_options/performance-regression-tests.md#search_test_config) | `SCT_SEARCH_TEST_CONFIG` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`seeds_num`](configuration_options/general-and-provisioning.md#seeds_num) | `SCT_SEEDS_NUM` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`seeds_selector`](configuration_options/general-and-provisioning.md#seeds_selector) | `SCT_SEEDS_SELECTOR` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`server_encrypt`](configuration_options/scylla-installation-and-configuration.md#server_encrypt) | `SCT_SERVER_ENCRYPT` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
