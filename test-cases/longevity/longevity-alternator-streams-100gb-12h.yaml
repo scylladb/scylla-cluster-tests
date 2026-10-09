@@ -1,3 +1,20 @@
+test_metadata:
+  description: >-
+    Roughly 12-hour Alternator Streams test on a 6-node cluster. YCSB loads a table of about 78M
+    items while hydra-kcl consumes the stream, then table_compare checks the source and destination
+    tables. The base config runs with NoOpMonkey.
+  test_type: longevity
+  tier: tier2
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: alternator
+  features:
+    - alternator-streams
+  team_ownership: scylladb/alternator
+
 test_duration: 750
 
 prepare_write_cmd:

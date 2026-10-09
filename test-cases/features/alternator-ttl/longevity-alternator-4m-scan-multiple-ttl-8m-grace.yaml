@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Long-running Alternator TTL test on a 6-node cluster. YCSB loaders write items with 16
+    different TTL values, from 111 seconds to 10 days. The TTL scan period is 4 minutes, gc_grace is
+    8 minutes and no nemesis runs.
+  test_type: features
+  tier: tier2
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: alternator
+  team_ownership: scylladb/alternator
+
 test_duration: 3000
 # The prepare_write_cmd is in order to trigger post_prepare_cql_cmds
 prepare_write_cmd:

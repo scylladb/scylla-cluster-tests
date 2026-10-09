@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Scylla Manager backup test for Alternator on a 3-node single-DC cluster with Alternator
+    authorization. YCSB loads a table with TTL, a GSI and an LSI and reads it back with data
+    integrity checks.
+  test_type: manager
+  tier: tier2
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: alternator
+  team_ownership: scylladb/mgmt
+
 test_duration: 240
 
 round_robin: true

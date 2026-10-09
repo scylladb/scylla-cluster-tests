@@ -1,3 +1,18 @@
+test_metadata:
+  description: >-
+    Long-running Alternator TTL test on a 6-node cluster. Loads about 400M YCSB items with a
+    5-minute TTL on the default LWT table, with a 7-minute TTL scan period and no nemesis, to check
+    that expired items are removed.
+  test_type: features
+  tier: tier2
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: alternator
+  team_ownership: scylladb/alternator
+
 test_duration: 3000
 prepare_write_cmd:
   - >-

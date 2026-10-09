@@ -1,3 +1,21 @@
+test_metadata:
+  description: >-
+    Alternator longevity test of about 3 hours of load on a multi-DC cluster with 3 nodes in each of
+    2 DCs and SisyphusMonkey. YCSB runs 50/50 read and update on an LWT table and a non-LWT table
+    with rack-aware and region-aware loaders.
+  test_type: longevity
+  tier: tier2
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - ycsb
+  workload: alternator
+  features:
+    - multi-dc
+    - rack-aware
+  team_ownership: scylladb/alternator
+
 test_duration: 480
 prepare_write_cmd:
   - >-
