@@ -19,6 +19,8 @@ import pytest
 
 import upgrade_test
 from sdcm.sct_events import Severity
+from sdcm.sct_events import setup as events_setup
+from sdcm.sct_events.base import BaseFilter
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.group_common_events import (
@@ -42,6 +44,20 @@ std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>> f
 (inlined by) gms::gossiper::do_send_ack2_msg(utils::tagged_uuid<locator::host_id_tag>, utils::chunked_vector<gms::gossip_digest, 131072ul>) at ./gms/gossiper.cc:389
 gms::gossiper::handle_ack_msg(utils::tagged_uuid<locator::host_id_tag>, gms::gossip_digest_ack) at ./gms/gossiper.cc:334
 """
+GCE_PROMETHEUS_BIND_LINE = (
+    "2026-06-27T03:17:49.539Z rolling-upgrade-ubuntu-db-node-b3848dee-0-5 !ERR | scylla[1669] "
+    "[shard 0:strm] init - Could not start Prometheus API server on 10.128.0.47:9180: "
+    "std::system_error (error system:99, posix_listen failed for address 10.128.0.47:9180: "
+    "Cannot assign requested address)"
+)
+GCE_STARTUP_BIND_LINE = (
+    "2026-06-27T03:17:49.546Z rolling-upgrade-ubuntu-db-node-b3848dee-0-5 !ERR | scylla[1669] "
+    "[shard 0:main] init - Startup failed: std::system_error (error system:99, posix_listen "
+    "failed for address 10.128.0.47:9180: Cannot assign requested address)"
+)
+UNRELATED_STARTUP_FAILED_LINE = (
+    "!ERR | scylla[1] [shard 0:main] init - Startup failed: std::runtime_error (config file not found)"
+)
 
 
 def make_oversized_allocation_event(node: str, backtrace: str) -> DatabaseLogEvent:
@@ -76,7 +92,7 @@ def is_downgraded(events_filter: EventsSeverityChangerFilter, event: DatabaseLog
 def published_filters(publishing_call) -> list:
     """Run `publishing_call` with publishing mocked out and return the filters it published."""
     published = []
-    with unittest.mock.patch.object(EventsFilter, "publish", autospec=True, side_effect=published.append):
+    with unittest.mock.patch.object(BaseFilter, "publish", autospec=True, side_effect=published.append):
         publishing_call()
     # `publish` is mocked, so the filters are still flagged ready-to-publish: without this their
     # `__del__` logs "[SCT internal warning] ... has not been published" into whichever test
@@ -97,6 +113,12 @@ def make_other_type_event() -> DatabaseLogEvent:
     )
     event.backtrace = ACK2_OVERSIZED_ALLOCATION_BACKTRACE
     return event
+
+
+def default_filters_for_backend(cluster_backend: str) -> list:
+    """Return the filters `enable_default_filters()` publishes for `cluster_backend`."""
+    with unittest.mock.patch.object(events_setup, "SkipPerIssues", return_value=False):
+        return published_filters(lambda: events_setup.enable_default_filters({"cluster_backend": cluster_backend}))
 
 
 def test_db_events_filter_just_type():
@@ -360,56 +382,26 @@ def test_upgrade_per_node_oversized_rpc_filter_matches_only_its_node():
     assert not is_downgraded(events_filter, make_rpc_oversized_allocation_event("node-1-2"))
 
 
-def test_events_severity_changer_filter_gce_first_boot_bind_race():
-    """GCE first-boot posix_listen EADDRNOTAVAIL races are downgraded to WARNING (SCT-545/SCT-411).
+@pytest.mark.parametrize(
+    "line,cluster_backend,expected_severity",
+    [
+        pytest.param(GCE_PROMETHEUS_BIND_LINE, "gce", Severity.WARNING, id="gce-prometheus-bind-downgraded"),
+        pytest.param(GCE_STARTUP_BIND_LINE, "gce", Severity.WARNING, id="gce-startup-bind-downgraded"),
+        pytest.param(UNRELATED_STARTUP_FAILED_LINE, "gce", Severity.ERROR, id="gce-unrelated-startup-failure-kept"),
+        pytest.param(GCE_PROMETHEUS_BIND_LINE, "aws", Severity.ERROR, id="aws-prometheus-bind-kept"),
+        pytest.param(GCE_STARTUP_BIND_LINE, "aws", Severity.ERROR, id="aws-startup-bind-kept"),
+    ],
+)
+@pytest.mark.usefixtures("events_function_scope")
+def test_default_filters_downgrade_gce_first_boot_bind_race(line, cluster_backend, expected_severity):
+    """On GCE the default filters downgrade first-boot posix_listen EADDRNOTAVAIL races to WARNING (SCT-545/SCT-411).
 
-    Covers the transient Prometheus API server bind failures the filters published from
-    `enable_default_filters()` for the "gce" backend downgrade.
+    The race is a transient, self-recovering infra issue on GCE only; other backends and other
+    startup failures keep their ERROR severity.
     """
-    startup_failed_filter = EventsSeverityChangerFilter(
-        new_severity=Severity.WARNING,
-        event_class=DatabaseLogEvent,
-        regex=r".*init - Startup failed:.*Cannot assign requested address",
-    )
-    prometheus_bind_filter = EventsSeverityChangerFilter(
-        new_severity=Severity.WARNING,
-        event_class=DatabaseLogEvent,
-        regex=r".*init - Could not start Prometheus API server.*Cannot assign requested address",
-    )
+    event = DatabaseLogEvent.DATABASE_ERROR().add_info(node="node1", line_number=1, line=line)
 
-    prometheus_bind_event = DatabaseLogEvent.DATABASE_ERROR().add_info(
-        node="rolling-upgrade-ubuntu-db-node-b3848dee-0-5",
-        line_number=1,
-        line="2026-06-27T03:17:49.539Z rolling-upgrade-ubuntu-db-node-b3848dee-0-5 !ERR | scylla[1669] "
-        "[shard 0:strm] init - Could not start Prometheus API server on 10.128.0.47:9180: "
-        "std::system_error (error system:99, posix_listen failed for address 10.128.0.47:9180: "
-        "Cannot assign requested address)",
-    )
-    assert prometheus_bind_event.severity == Severity.ERROR
-    # EventsSeverityChangerFilter.eval_filter() always returns False (it never "consumes"/hides
-    # the event) — its only effect on a match is the in-place severity rewrite.
-    startup_failed_filter.eval_filter(prometheus_bind_event.clone())  # unrelated regex: no-op
-    assert prometheus_bind_event.severity == Severity.ERROR
-    prometheus_bind_filter.eval_filter(prometheus_bind_event)
-    assert prometheus_bind_event.severity == Severity.WARNING
+    for events_filter in default_filters_for_backend(cluster_backend):
+        events_filter.eval_filter(event)
 
-    startup_failed_event = DatabaseLogEvent.DATABASE_ERROR().add_info(
-        node="rolling-upgrade-ubuntu-db-node-b3848dee-0-5",
-        line_number=2,
-        line="2026-06-27T03:17:49.546Z rolling-upgrade-ubuntu-db-node-b3848dee-0-5 !ERR | scylla[1669] "
-        "[shard 0:main] init - Startup failed: std::system_error (error system:99, posix_listen "
-        "failed for address 10.128.0.47:9180: Cannot assign requested address)",
-    )
-    assert startup_failed_event.severity == Severity.ERROR
-    startup_failed_filter.eval_filter(startup_failed_event)
-    assert startup_failed_event.severity == Severity.WARNING
-
-    # a real "Startup failed" for an unrelated reason must not be swallowed
-    unrelated_event = DatabaseLogEvent.DATABASE_ERROR().add_info(
-        node="node1",
-        line_number=3,
-        line="!ERR | scylla[1] [shard 0:main] init - Startup failed: std::runtime_error (config file not found)",
-    )
-    startup_failed_filter.eval_filter(unrelated_event)
-    prometheus_bind_filter.eval_filter(unrelated_event)
-    assert unrelated_event.severity == Severity.ERROR
+    assert event.severity == expected_severity
