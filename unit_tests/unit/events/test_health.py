@@ -21,30 +21,6 @@ from sdcm.sct_events.health import ClusterHealthValidatorEvent, DataValidatorEve
 EVENT_ID = "712128d0-4837-4213-8a60-d6e2ec106c52"
 
 
-@pytest.mark.parametrize(
-    "parent_class, subevent_name",
-    [
-        pytest.param(ClusterHealthValidatorEvent, "NodeStatus", id="cluster-health-node-status"),
-        pytest.param(ClusterHealthValidatorEvent, "NodePeersNulls", id="cluster-health-node-peers-nulls"),
-        pytest.param(ClusterHealthValidatorEvent, "NodeSchemaVersion", id="cluster-health-node-schema-version"),
-        pytest.param(ClusterHealthValidatorEvent, "NodesNemesis", id="cluster-health-nodes-nemesis"),
-        pytest.param(
-            ClusterHealthValidatorEvent,
-            "ScyllaCloudClusterServerDiagnostic",
-            id="cluster-health-scylla-cloud-cluster-server-diagnostic",
-        ),
-        pytest.param(DataValidatorEvent, "DataValidator", id="data-validator-data-validator"),
-        pytest.param(DataValidatorEvent, "ImmutableRowsValidator", id="data-validator-immutable-rows-validator"),
-        pytest.param(DataValidatorEvent, "UpdatedRowsValidator", id="data-validator-updated-rows-validator"),
-        pytest.param(DataValidatorEvent, "DeletedRowsValidator", id="data-validator-deleted-rows-validator"),
-    ],
-)
-def test_health_subevent_is_subclass_of_parent(parent_class, subevent_name):
-    """Each health sub-event is reachable on its parent event and inherits from it, so it reports under that name."""
-    assert hasattr(parent_class, subevent_name)
-    assert issubclass(getattr(parent_class, subevent_name), parent_class)
-
-
 def test_cluster_health_validator_event_msgfmt():
     """A cluster health check renders as begin, then as end with its duration and message."""
     chc_event = ClusterHealthValidatorEvent()
@@ -94,6 +70,13 @@ def test_cluster_health_validator_event_msgfmt():
             "(ClusterHealthValidatorEvent Severity.WARNING) period_type=one-time "
             f"event_id={EVENT_ID}: type=NodesNemesis node=n4 message=m4",
             id="cluster-health-nodes-nemesis",
+        ),
+        pytest.param(
+            ClusterHealthValidatorEvent.ScyllaCloudClusterServerDiagnostic,
+            {"severity": Severity.ERROR, "node": "n5", "error": "e5"},
+            "(ClusterHealthValidatorEvent Severity.ERROR) period_type=one-time "
+            f"event_id={EVENT_ID}: type=ScyllaCloudClusterServerDiagnostic node=n5 error=e5",
+            id="cluster-health-scylla-cloud-cluster-server-diagnostic",
         ),
         pytest.param(
             DataValidatorEvent.DataValidator,
