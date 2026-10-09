@@ -249,6 +249,8 @@ def test_scylla_yaml():
             "enable_node_aggregated_table_metrics": None,
             "enable_repair_based_node_ops": None,
             "allowed_repair_based_node_ops": None,
+            "auto_repair_enabled_default": None,
+            "auto_repair_threshold_default_in_seconds": None,
             "enable_shard_aware_drivers": None,
             "enable_small_table_optimization_for_rbno": None,
             "enable_sstable_data_integrity_check": None,
