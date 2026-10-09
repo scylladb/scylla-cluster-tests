@@ -22,8 +22,7 @@ from sct import provision_resources
 
 
 def test_provision_resources_sends_error_event_to_argus():
-    """Test that provision_resources sends error event to Argus on failure."""
-
+    """A provisioning failure reaches Argus as a CRITICAL event, error status and finalized run, so it is visible there."""
     # Mock the necessary components
     with (
         patch("sct.init_and_verify_sct_config") as mock_config,
@@ -96,12 +95,12 @@ def test_provision_resources_sends_error_event_to_argus():
 @pytest.mark.parametrize(
     "tunnel_env_val,expected_use_tunnel",
     [
-        ("true", True),
-        ("false", False),
+        pytest.param("true", True, id="ssh-tunnel-on"),
+        pytest.param("false", False, id="ssh-tunnel-off"),
     ],
 )
 def test_provision_resources_reports_config_init_failure_to_argus(monkeypatch, tunnel_env_val, expected_use_tunnel):
-    """Test that provision_resources reports to Argus when init_and_verify_sct_config fails.
+    """A config init failure is reported to Argus through a client built from the env test_id and tunnel flag.
 
     This covers the scenario where the unified package download fails with 404,
     raising a FileNotFoundError before provisioning even begins.
@@ -180,8 +179,8 @@ def test_provision_resources_reports_config_init_failure_to_argus(monkeypatch, t
         mock_argus_client.finalize_sct_run.assert_called_once()
 
 
-def test_provision_resources_no_argus_report_without_test_id(monkeypatch):
-    """Test that Argus reporting is skipped when no test_id is available."""
+def test_provision_resources_without_test_id_skips_argus_report(monkeypatch):
+    """Without a test_id there is no Argus run to report to, so provisioning failures stay local."""
     monkeypatch.delenv("SCT_TEST_ID", raising=False)
 
     with (

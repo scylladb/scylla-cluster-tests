@@ -38,6 +38,7 @@ RAW_ALERT = {
 
 
 def test_prometheus_alert_manager_event_msgfmt():
+    """An alert renders its name, node, times, description and labels, and survives a pickle round trip."""
     event = PrometheusAlertManagerEvent(raw_alert=RAW_ALERT)
     event.event_id = "536eaf22-3d8f-418a-9381-fe0bcdce7ad9"
     event.publish_event = False
@@ -61,6 +62,7 @@ def test_prometheus_alert_manager_event_msgfmt():
     ],
 )
 def test_prometheus_alert_manager_event_sct_severity(sct_severity, expected_severity):
+    """The sct_severity label sets the event severity, and an unknown value falls back to NORMAL."""
     event = PrometheusAlertManagerEvent(raw_alert={"labels": {"sct_severity": sct_severity}})
     event.publish_event = False
     event.end_event()

@@ -26,8 +26,81 @@ from sdcm.sct_events.group_common_events import (
     oversized_allocation_filter,
 )
 
+WAIT_FOR_REPLY_SYMBOL = "seastar::rpc::client::wait_for_reply"
+# Decoded backtrace of a real SCYLLADB-3114 event (rolling-upgrade-oci-image-test #5), trimmed: the symbol the
+# filters look for sits many lines below the first line of the event.
+ACK2_OVERSIZED_ALLOCATION_BACKTRACE = """\
+[Backtrace #0]
+void seastar::backtrace<seastar::current_backtrace_tasklocal()::$_0>(seastar::current_backtrace_tasklocal()::$_0&&, bool) at ./build/release/seastar/./seastar/include/seastar/util/backtrace.hh:85
+seastar::memory::cpu_pages::warn_large_allocation(unsigned long) at ./build/release/seastar/./seastar/src/core/memory.cc:865
+(inlined by) __libc_malloc at ./build/release/seastar/./seastar/src/core/memory.cc:2282
+?? at ??:0
+fmt::v11::detail::vformat_to(fmt::v11::detail::buffer<char>&, fmt::v11::basic_string_view<char>, fmt::v11::basic_format_args<fmt::v11::context>, fmt::v11::detail::locale_ref) at ??:0
+(inlined by) fmt::v11::formatter<gms::endpoint_state, char, void>::format(gms::endpoint_state const&, fmt::v11::context&) const at ./gms/endpoint_state.cc:110
+(inlined by) fmt::v11::formatter<gms::gossip_digest_ack2, char, void>::format(gms::gossip_digest_ack2 const&, fmt::v11::context&) const at ./gms/gossip_digest_ack2.cc:18
+std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>> fmt::v11::format<gms::gossip_digest_ack2&>(fmt::v11::fstring<gms::gossip_digest_ack2&>::t, gms::gossip_digest_ack2&) at /usr/include/fmt/format.h:4200
+(inlined by) gms::gossiper::do_send_ack2_msg(utils::tagged_uuid<locator::host_id_tag>, utils::chunked_vector<gms::gossip_digest, 131072ul>) at ./gms/gossiper.cc:389
+gms::gossiper::handle_ack_msg(utils::tagged_uuid<locator::host_id_tag>, gms::gossip_digest_ack) at ./gms/gossiper.cc:334
+"""
+
+
+def make_oversized_allocation_event(node: str, backtrace: str) -> DatabaseLogEvent:
+    """Build an event like the real one: the raw log line has only addresses, the decoder fills `backtrace`."""
+    event = DatabaseLogEvent.OVERSIZED_ALLOCATION().add_info(
+        node=node,
+        line_number=1,
+        line=f"2026-06-27T03:17:49.539Z {node} !WARNING | scylla[1669] [shard 0:strm] seastar_memory - "
+        "oversized allocation: 1048576 bytes. This is non-fatal, but could lead to latency and/or fragmentation "
+        "issues. Please report: at 0x5f1a2b3 0x5f1a7c4 0x5f1ad05 0x5f1b296",
+    )
+    event.backtrace = backtrace
+    return event
+
+
+def make_rpc_oversized_allocation_event(node: str, symbol: str = WAIT_FOR_REPLY_SYMBOL) -> DatabaseLogEvent:
+    """Build an oversized allocation event whose decoded backtrace has `symbol` as the RPC call site."""
+    return make_oversized_allocation_event(
+        node,
+        "void seastar::backtrace<seastar::current_backtrace_tasklocal()::$_0>(...)\n"
+        f"{symbol}(seastar::rpc::wait_type, std::chrono::time_point<seastar::lowres_clock>)",
+    )
+
+
+def is_downgraded(events_filter: EventsSeverityChangerFilter, event: DatabaseLogEvent) -> bool:
+    """A severity changer never drops the event, it only lowers its severity when it matches."""
+    assert event.severity == Severity.ERROR
+    assert not events_filter.eval_filter(event)
+    return event.severity == Severity.WARNING
+
+
+def published_filters(publishing_call) -> list:
+    """Run `publishing_call` with publishing mocked out and return the filters it published."""
+    published = []
+    with unittest.mock.patch.object(EventsFilter, "publish", autospec=True, side_effect=published.append):
+        publishing_call()
+    # `publish` is mocked, so the filters are still flagged ready-to-publish: without this their
+    # `__del__` logs "[SCT internal warning] ... has not been published" into whichever test
+    # happens to garbage-collect them on the same worker
+    for events_filter in published:
+        events_filter.dont_publish()
+    return published
+
+
+def make_other_type_event() -> DatabaseLogEvent:
+    """Build a BAD_ALLOC event quoting OVERSIZED_ALLOCATION with the ACK2 backtrace.
+
+    `event_class` matches every `DatabaseLogEvent` subtype: only the regex tells the types apart,
+    even when another event quotes the type name in its own text.
+    """
+    event = DatabaseLogEvent.BAD_ALLOC().add_info(
+        node="node-2", line_number=1, line="bad_alloc, see type=OVERSIZED_ALLOCATION"
+    )
+    event.backtrace = ACK2_OVERSIZED_ALLOCATION_BACKTRACE
+    return event
+
 
 def test_db_events_filter_just_type():
+    """DbEventsFilter with only a type matches every event of that type and survives pickle and JSON."""
     db_events_filter = DbEventsFilter(db_event=DatabaseLogEvent.REACTOR_STALLED)
     assert db_events_filter == pickle.loads(pickle.dumps(db_events_filter))
     db_events_filter.to_json()
@@ -37,123 +110,121 @@ def test_db_events_filter_just_type():
     assert not db_events_filter.eval_filter(event2)
 
 
-def test_db_events_filter_type_with_line():
-    db_events_filter = DbEventsFilter(db_event=DatabaseLogEvent.BAD_ALLOC, line="y")
-    event1 = DatabaseLogEvent.BAD_ALLOC().add_info(node="node1", line="xyz", line_number=1)
-    event2 = event1.clone().add_info(node="node2", line="abc", line_number=1)
-    event3 = DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="node1", line="xyz", line_number=1)
-    assert db_events_filter.eval_filter(event1)
-    assert not db_events_filter.eval_filter(event2)
-    assert not db_events_filter.eval_filter(event3)
-
-
-def test_db_events_filter_type_with_node():
-    db_events_filter = DbEventsFilter(db_event=DatabaseLogEvent.BAD_ALLOC, node="node1")
-    event1 = DatabaseLogEvent.BAD_ALLOC().add_info(node="node1", line="xyz", line_number=1)
-    event2 = event1.clone().add_info(node="node2", line="xyz", line_number=1)
-    event3 = DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="node1", line="xyz", line_number=1)
-    assert db_events_filter.eval_filter(event1)
-    assert not db_events_filter.eval_filter(event2)
-    assert not db_events_filter.eval_filter(event3)
-
-
-def test_db_events_filter_type_with_line_and_node():
-    db_events_filter = DbEventsFilter(db_event=DatabaseLogEvent.BAD_ALLOC, node="node1", line="y")
-    event1 = DatabaseLogEvent.BAD_ALLOC().add_info(node="node1", line="xyz", line_number=1)
-    event2 = event1.clone().add_info(node="node1", line="abc", line_number=1)
-    event3 = DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="node1", line="xyz", line_number=1)
-    assert db_events_filter.eval_filter(event1)
-    assert not db_events_filter.eval_filter(event2)
-    assert not db_events_filter.eval_filter(event3)
-
-
-def test_db_events_filter_type_with_regex_line():
-    regex = re.compile(
-        r".*raft_topology - drain rpc failed, proceed to fence "
-        r"old writes:.*connection is closed"
-    )
-    db_events_filter = DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line=regex)
-    event1 = DatabaseLogEvent.RUNTIME_ERROR().add_info(
-        node="node1",
-        line="raft_topology - drain rpc failed, proceed to fence old writes: connection is closed",
-        line_number=1,
-    )
-    event2 = event1.clone().add_info(node="node2", line="unrelated log entry", line_number=1)
-    event3 = DatabaseLogEvent.NO_SPACE_ERROR().add_info(
-        node="node1",
-        line="raft_topology - drain rpc failed, proceed to fence old writes: connection is closed",
-        line_number=1,
-    )
-    assert db_events_filter.eval_filter(event1)
-    assert not db_events_filter.eval_filter(event2)
-    assert not db_events_filter.eval_filter(event3)
+@pytest.mark.parametrize(
+    "db_event,filter_kwargs,matching_info,same_type_mismatch_info",
+    [
+        pytest.param(
+            DatabaseLogEvent.BAD_ALLOC,
+            {"line": "y"},
+            {"node": "node1", "line": "xyz"},
+            {"node": "node2", "line": "abc"},
+            id="type-with-line",
+        ),
+        pytest.param(
+            DatabaseLogEvent.BAD_ALLOC,
+            {"node": "node1"},
+            {"node": "node1", "line": "xyz"},
+            {"node": "node2", "line": "xyz"},
+            id="type-with-node",
+        ),
+        pytest.param(
+            DatabaseLogEvent.BAD_ALLOC,
+            {"node": "node1", "line": "y"},
+            {"node": "node1", "line": "xyz"},
+            {"node": "node1", "line": "abc"},
+            id="type-with-line-and-node",
+        ),
+        pytest.param(
+            DatabaseLogEvent.RUNTIME_ERROR,
+            {
+                "line": re.compile(
+                    r".*raft_topology - drain rpc failed, proceed to fence "
+                    r"old writes:.*connection is closed"
+                )
+            },
+            {
+                "node": "node1",
+                "line": "raft_topology - drain rpc failed, proceed to fence old writes: connection is closed",
+            },
+            {"node": "node2", "line": "unrelated log entry"},
+            id="type-with-regex-line",
+        ),
+    ],
+)
+def test_db_events_filter_matches_only_its_type_line_and_node(
+    db_event, filter_kwargs, matching_info, same_type_mismatch_info
+):
+    """DbEventsFilter hides an event only when type, line and node all match, so unrelated errors stay visible."""
+    db_events_filter = DbEventsFilter(db_event=db_event, **filter_kwargs)
+    matching_event = db_event().add_info(**matching_info, line_number=1)
+    same_type_mismatch_event = matching_event.clone().add_info(**same_type_mismatch_info, line_number=1)
+    other_type_event = DatabaseLogEvent.NO_SPACE_ERROR().add_info(**matching_info, line_number=1)
+    assert db_events_filter.eval_filter(matching_event)
+    assert not db_events_filter.eval_filter(same_type_mismatch_event)
+    assert not db_events_filter.eval_filter(other_type_event)
 
 
 def test_events_filter_event_class_and_regex_none():
+    """EventsFilter stores the event class as a type-name prefix and keeps a missing regex as None."""
     db_events_filter = EventsFilter(event_class=DatabaseLogEvent, regex=None)
     assert db_events_filter.event_class == "DatabaseLogEvent."
     assert db_events_filter.regex is None
 
 
-def test_events_filter_regex_pattern():
-    pattern = re.compile("lalala")
-    db_events_filter = EventsFilter(regex=pattern)
-    assert db_events_filter._regex == pattern
-    assert db_events_filter.regex == pattern.pattern
-    assert db_events_filter == pickle.loads(pickle.dumps(db_events_filter))
-    db_events_filter.to_json()
-
-
-def test_events_filter_regex_string():
-    db_events_filter = EventsFilter(regex="lalala")
-    assert db_events_filter._regex == re.compile("lalala", re.MULTILINE | re.DOTALL)
-    assert db_events_filter._regex.pattern == "lalala"
+@pytest.mark.parametrize(
+    "regex,expected_compiled",
+    [
+        pytest.param(re.compile("lalala"), re.compile("lalala"), id="compiled-pattern-kept-as-is"),
+        pytest.param("lalala", re.compile("lalala", re.MULTILINE | re.DOTALL), id="string-compiled-multiline-dotall"),
+    ],
+)
+def test_events_filter_regex_stored_compiled_and_exposed_as_pattern_string(regex, expected_compiled):
+    """EventsFilter compiles the regex for matching and exposes its source string, surviving pickle and JSON."""
+    db_events_filter = EventsFilter(regex=regex)
+    assert db_events_filter._regex == expected_compiled
     assert db_events_filter.regex == "lalala"
     assert db_events_filter == pickle.loads(pickle.dumps(db_events_filter))
     db_events_filter.to_json()
 
 
-def test_events_filter_eval_filter_event_class():
-    db_events_filter = EventsFilter(event_class=DatabaseLogEvent.BAD_ALLOC)
+@pytest.mark.parametrize(
+    "event_class,no_space_error_matches",
+    [
+        pytest.param(DatabaseLogEvent.BAD_ALLOC, False, id="exact-event-class"),
+        pytest.param(DatabaseLogEvent, True, id="common-parent-class"),
+    ],
+)
+def test_events_filter_event_class_matches_class_and_its_subclasses(event_class, no_space_error_matches):
+    """EventsFilter matches events of its class and of every subclass, so a parent class filters a whole family."""
+    db_events_filter = EventsFilter(event_class=event_class)
     assert db_events_filter == pickle.loads(pickle.dumps(db_events_filter))
     db_events_filter.to_json()
-    event1 = DatabaseLogEvent.BAD_ALLOC()
-    event2 = DatabaseLogEvent.NO_SPACE_ERROR()
-    assert db_events_filter.eval_filter(event1)
-    assert not db_events_filter.eval_filter(event2)
+    assert db_events_filter.eval_filter(DatabaseLogEvent.BAD_ALLOC())
+    assert db_events_filter.eval_filter(DatabaseLogEvent.NO_SPACE_ERROR()) is no_space_error_matches
 
 
-def test_events_filter_eval_filter_event_class_common_parent():
-    db_events_filter = EventsFilter(event_class=DatabaseLogEvent)
-    assert db_events_filter == pickle.loads(pickle.dumps(db_events_filter))
-    db_events_filter.to_json()
-    event1 = DatabaseLogEvent.BAD_ALLOC()
-    event2 = DatabaseLogEvent.NO_SPACE_ERROR()
-    assert db_events_filter.eval_filter(event1)
-    assert db_events_filter.eval_filter(event2)
-
-
-def test_events_filter_eval_filter_regex():
-    db_events_filter = EventsFilter(regex=".*xyz.*")
-    event1 = DatabaseLogEvent.BAD_ALLOC().add_info(node="node1", line="xyz", line_number=1)
-    event2 = DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="node1", line="xyz", line_number=1)
-    event3 = DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="node1", line="abc", line_number=1)
-    assert db_events_filter.eval_filter(event1)
-    assert db_events_filter.eval_filter(event2)
-    assert not db_events_filter.eval_filter(event3)
-
-
-def test_events_filter_eval_filter_event_class_and_regex():
-    db_events_filter = EventsFilter(event_class=DatabaseLogEvent.BAD_ALLOC, regex=".*xyz.*")
-    event1 = DatabaseLogEvent.BAD_ALLOC().add_info(node="node1", line="xyz", line_number=1)
-    event2 = DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="node1", line="xyz", line_number=1)
-    event3 = DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="node1", line="abc", line_number=1)
-    assert db_events_filter.eval_filter(event1)
-    assert not db_events_filter.eval_filter(event2)
-    assert not db_events_filter.eval_filter(event3)
+@pytest.mark.parametrize(
+    "filter_kwargs,other_type_same_line_matches",
+    [
+        pytest.param({"regex": ".*xyz.*"}, True, id="regex-only"),
+        pytest.param(
+            {"event_class": DatabaseLogEvent.BAD_ALLOC, "regex": ".*xyz.*"}, False, id="event-class-and-regex"
+        ),
+    ],
+)
+def test_events_filter_regex_matches_event_line(filter_kwargs, other_type_same_line_matches):
+    """EventsFilter matches the regex against the event line, narrowed by the event class when one is given."""
+    db_events_filter = EventsFilter(**filter_kwargs)
+    matching_event = DatabaseLogEvent.BAD_ALLOC().add_info(node="node1", line="xyz", line_number=1)
+    other_type_same_line_event = DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="node1", line="xyz", line_number=1)
+    other_line_event = DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="node1", line="abc", line_number=1)
+    assert db_events_filter.eval_filter(matching_event)
+    assert db_events_filter.eval_filter(other_type_same_line_event) is other_type_same_line_matches
+    assert not db_events_filter.eval_filter(other_line_event)
 
 
 def test_events_severity_changer_filter():
+    """EventsSeverityChangerFilter rewrites the severity of matching events in place."""
     db_events_filter = EventsSeverityChangerFilter(new_severity=Severity.NORMAL, event_class=DatabaseLogEvent)
     event = DatabaseLogEvent.BAD_ALLOC()
     assert event.severity == Severity.ERROR
@@ -161,7 +232,9 @@ def test_events_severity_changer_filter():
     assert event.severity == Severity.NORMAL
 
 
-def test_ignore_drop_table_during_repair_errors(events_function_scope):  # noqa: ARG001
+@pytest.mark.usefixtures("events_function_scope")
+def test_ignore_drop_table_during_repair_errors():
+    """The drop-table-during-repair filter hides only the closed-gate SSTable DATABASE_ERROR it was made for."""
     # Capture the real DbEventsFilter instance the context manager builds, so the test
     # exercises the actual filter object rather than reimplementing its regex.
     created_filters = []
@@ -197,73 +270,6 @@ def test_ignore_drop_table_during_repair_errors(events_function_scope):  # noqa:
     assert not db_events_filter.eval_filter(other_event_class_with_same_line)
 
 
-# Decoded backtrace of a real SCYLLADB-3114 event (rolling-upgrade-oci-image-test #5), trimmed: the symbol the
-# filters look for sits many lines below the first line of the event.
-ACK2_OVERSIZED_ALLOCATION_BACKTRACE = """\
-[Backtrace #0]
-void seastar::backtrace<seastar::current_backtrace_tasklocal()::$_0>(seastar::current_backtrace_tasklocal()::$_0&&, bool) at ./build/release/seastar/./seastar/include/seastar/util/backtrace.hh:85
-seastar::memory::cpu_pages::warn_large_allocation(unsigned long) at ./build/release/seastar/./seastar/src/core/memory.cc:865
-(inlined by) __libc_malloc at ./build/release/seastar/./seastar/src/core/memory.cc:2282
-?? at ??:0
-fmt::v11::detail::vformat_to(fmt::v11::detail::buffer<char>&, fmt::v11::basic_string_view<char>, fmt::v11::basic_format_args<fmt::v11::context>, fmt::v11::detail::locale_ref) at ??:0
-(inlined by) fmt::v11::formatter<gms::endpoint_state, char, void>::format(gms::endpoint_state const&, fmt::v11::context&) const at ./gms/endpoint_state.cc:110
-(inlined by) fmt::v11::formatter<gms::gossip_digest_ack2, char, void>::format(gms::gossip_digest_ack2 const&, fmt::v11::context&) const at ./gms/gossip_digest_ack2.cc:18
-std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>> fmt::v11::format<gms::gossip_digest_ack2&>(fmt::v11::fstring<gms::gossip_digest_ack2&>::t, gms::gossip_digest_ack2&) at /usr/include/fmt/format.h:4200
-(inlined by) gms::gossiper::do_send_ack2_msg(utils::tagged_uuid<locator::host_id_tag>, utils::chunked_vector<gms::gossip_digest, 131072ul>) at ./gms/gossiper.cc:389
-gms::gossiper::handle_ack_msg(utils::tagged_uuid<locator::host_id_tag>, gms::gossip_digest_ack) at ./gms/gossiper.cc:334
-"""
-
-
-def make_oversized_allocation_event(node: str, backtrace: str) -> DatabaseLogEvent:
-    """Build an event like the real one: the raw log line has only addresses, the decoder fills `backtrace`."""
-    event = DatabaseLogEvent.OVERSIZED_ALLOCATION().add_info(
-        node=node,
-        line_number=1,
-        line=f"2026-06-27T03:17:49.539Z {node} !WARNING | scylla[1669] [shard 0:strm] seastar_memory - "
-        "oversized allocation: 1048576 bytes. This is non-fatal, but could lead to latency and/or fragmentation "
-        "issues. Please report: at 0x5f1a2b3 0x5f1a7c4 0x5f1ad05 0x5f1b296",
-    )
-    event.backtrace = backtrace
-    return event
-
-
-def make_rpc_oversized_allocation_event(node: str, symbol: str = "seastar::rpc::client::wait_for_reply"):
-    return make_oversized_allocation_event(
-        node,
-        "void seastar::backtrace<seastar::current_backtrace_tasklocal()::$_0>(...)\n"
-        f"{symbol}(seastar::rpc::wait_type, std::chrono::time_point<seastar::lowres_clock>)",
-    )
-
-
-def is_downgraded(events_filter: EventsSeverityChangerFilter, event: DatabaseLogEvent) -> bool:
-    """A severity changer never drops the event, it only lowers its severity when it matches."""
-    assert event.severity == Severity.ERROR
-    assert not events_filter.eval_filter(event)
-    return event.severity == Severity.WARNING
-
-
-def published_filters(publishing_call) -> list:
-    published = []
-    with unittest.mock.patch.object(EventsFilter, "publish", autospec=True, side_effect=published.append):
-        publishing_call()
-    # `publish` is mocked, so the filters are still flagged ready-to-publish: without this their
-    # `__del__` logs "[SCT internal warning] ... has not been published" into whichever test
-    # happens to garbage-collect them on the same worker
-    for events_filter in published:
-        events_filter.dont_publish()
-    return published
-
-
-def make_other_type_event() -> DatabaseLogEvent:
-    # `event_class` matches every `DatabaseLogEvent` subtype: only the regex tells the types apart,
-    # even when another event quotes the type name in its own text.
-    event = DatabaseLogEvent.BAD_ALLOC().add_info(
-        node="node-2", line_number=1, line="bad_alloc, see type=OVERSIZED_ALLOCATION"
-    )
-    event.backtrace = ACK2_OVERSIZED_ALLOCATION_BACKTRACE
-    return event
-
-
 @pytest.mark.parametrize(
     "symbol,make_event,expected",
     [
@@ -283,6 +289,7 @@ def make_other_type_event() -> DatabaseLogEvent:
     ],
 )
 def test_oversized_allocation_filter_matches_symbol_in_multiline_backtrace(symbol, make_event, expected):
+    """The oversized allocation filter downgrades only its own event type with the symbol anywhere in the backtrace."""
     events_filter = oversized_allocation_filter(symbol)
     events_filter.dont_publish()
 
@@ -292,24 +299,29 @@ def test_oversized_allocation_filter_matches_symbol_in_multiline_backtrace(symbo
 @pytest.mark.parametrize(
     "node,symbol,expected",
     [
-        pytest.param("node-1", "seastar::rpc::client::wait_for_reply", True, id="same-node"),
-        pytest.param("Node node-1 [10.0.0.1 | 10.0.0.1]", "seastar::rpc::client::wait_for_reply", True, id="node-repr"),
-        pytest.param("node-10", "seastar::rpc::client::wait_for_reply", False, id="node-name-prefix"),
-        pytest.param("node-2", "seastar::rpc::client::wait_for_reply", False, id="other-node"),
-        pytest.param("node-1-extra", "seastar::rpc::client::wait_for_reply", False, id="node-name-suffix"),
+        pytest.param("node-1", WAIT_FOR_REPLY_SYMBOL, True, id="same-node"),
+        pytest.param("Node node-1 [10.0.0.1 | 10.0.0.1]", WAIT_FOR_REPLY_SYMBOL, True, id="node-repr"),
+        pytest.param("node-10", WAIT_FOR_REPLY_SYMBOL, False, id="node-name-prefix"),
+        pytest.param("node-2", WAIT_FOR_REPLY_SYMBOL, False, id="other-node"),
+        pytest.param("node-1-extra", WAIT_FOR_REPLY_SYMBOL, False, id="node-name-suffix"),
         pytest.param("node-1", "seastar::rpc::client::send", False, id="other-symbol"),
     ],
 )
 def test_oversized_allocation_filter_for_one_node(node, symbol, expected):
-    events_filter = oversized_allocation_filter("seastar::rpc::client::wait_for_reply", node_name="node-1")
+    """A per-node oversized allocation filter downgrades the event only on that exact node."""
+    events_filter = oversized_allocation_filter(WAIT_FOR_REPLY_SYMBOL, node_name="node-1")
     events_filter.dont_publish()
 
     assert is_downgraded(events_filter, make_rpc_oversized_allocation_event(node, symbol)) is expected
 
 
-def test_upgrade_oversized_rpc_whole_run_filter(events_function_scope):  # noqa: ARG001
-    """SCT-1048: the decoder writes the symbol into `event.backtrace` and leaves `event.line`
-    as the raw log line, so a filter on `event.line` never matches the symbol."""
+@pytest.mark.usefixtures("events_function_scope")
+def test_upgrade_oversized_rpc_whole_run_filter():
+    """The whole-run RPC filter matches the decoded symbol in the backtrace (SCT-1048).
+
+    The decoder writes the symbol into `event.backtrace` and leaves `event.line` as the raw log line,
+    so a filter on `event.line` never matches the symbol.
+    """
     upgrade_test_stub = unittest.mock.MagicMock()
     upgrade_test_stub.params.scylla_version_upgrade_target = "2026.2.0"
 
@@ -321,7 +333,8 @@ def test_upgrade_oversized_rpc_whole_run_filter(events_function_scope):  # noqa:
     assert not is_downgraded(events_filter, make_rpc_oversized_allocation_event("node1", "seastar::rpc::client::send"))
 
 
-def test_upgrade_oversized_ack2_filter_downgrades_the_real_event(events_function_scope):  # noqa: ARG001
+@pytest.mark.usefixtures("events_function_scope")
+def test_upgrade_oversized_ack2_filter_downgrades_the_real_event():
     """SCYLLADB-3114: downgraded for the whole run, whatever the upgrade target is."""
     (events_filter,) = published_filters(
         lambda: upgrade_test.UpgradeTest.filter_oversized_ack2_allocation(unittest.mock.MagicMock())
@@ -330,7 +343,9 @@ def test_upgrade_oversized_ack2_filter_downgrades_the_real_event(events_function
     assert is_downgraded(events_filter, make_oversized_allocation_event("node-2", ACK2_OVERSIZED_ALLOCATION_BACKTRACE))
 
 
-def test_upgrade_per_node_oversized_rpc_filter_matches_only_its_node(events_function_scope):  # noqa: ARG001
+@pytest.mark.usefixtures("events_function_scope")
+def test_upgrade_per_node_oversized_rpc_filter_matches_only_its_node():
+    """The upgrade's per-node RPC filter downgrades the oversized allocation only on the node it was built for."""
     upgrade_test_stub = unittest.mock.MagicMock()
     node = unittest.mock.MagicMock()
     node.name = "node-1"
@@ -346,9 +361,11 @@ def test_upgrade_per_node_oversized_rpc_filter_matches_only_its_node(events_func
 
 
 def test_events_severity_changer_filter_gce_first_boot_bind_race():
-    """SCT-545/SCT-411: GCE first-boot posix_listen EADDRNOTAVAIL races (e.g. transient
-    Prometheus API server bind failures) should be downgraded to WARNING by the filters
-    published from `enable_default_filters()` for the "gce" backend."""
+    """GCE first-boot posix_listen EADDRNOTAVAIL races are downgraded to WARNING (SCT-545/SCT-411).
+
+    Covers the transient Prometheus API server bind failures the filters published from
+    `enable_default_filters()` for the "gce" backend downgrade.
+    """
     startup_failed_filter = EventsSeverityChangerFilter(
         new_severity=Severity.WARNING,
         event_class=DatabaseLogEvent,

@@ -42,20 +42,60 @@ from sdcm.sct_events.loaders import (
     SCYLLA_BENCH_NORMAL_EVENTS,
 )
 
+EVENT_ID = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
+BEGIN_TIMESTAMP = 1623596860.1202102
+
+# Stress events using the continuous event pattern with a `node=...\nstress_cmd=...` message.
+CONTINUOUS_STRESS_EVENTS_WITH_ERROR = [
+    pytest.param(ScyllaBenchEvent, id="scylla_bench"),
+    pytest.param(YcsbStressEvent, id="ycsb"),
+    pytest.param(CassandraHarryEvent, id="cassandra_harry"),
+]
+CONTINUOUS_STRESS_EVENTS = [
+    pytest.param(CassandraStressEvent, id="cassandra_stress"),
+    *CONTINUOUS_STRESS_EVENTS_WITH_ERROR,
+]
+
+CS_LOG_PATTERNS = list(chain(CS_NORMAL_EVENTS_PATTERNS, CS_ERROR_EVENTS_PATTERNS))
+SCYLLA_BENCH_LOG_PATTERNS = list(chain(SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS))
+
+
+@pytest.fixture
+def continuous_stress_event(event_class):
+    """Unpublished continuous stress event of the parametrized class with a fixed event_id."""
+    event = event_class(node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False)
+    event.event_id = EVENT_ID
+    return event
+
+
+def assert_stress_begin_event(begin_event):
+    """Assert the begin event of a stress continuous event renders node/stress_cmd and survives pickling."""
+    begin_event.event_timestamp = begin_event.begin_timestamp = BEGIN_TIMESTAMP
+    assert str(begin_event) == (
+        f"({type(begin_event).__name__} Severity.NORMAL) period_type=begin "
+        f"event_id={EVENT_ID}: node=node\nstress_cmd=stress_cmd"
+    )
+    assert begin_event.event_timestamp == BEGIN_TIMESTAMP
+    assert begin_event.timestamp == BEGIN_TIMESTAMP
+    assert begin_event == pickle.loads(pickle.dumps(begin_event))
+
+
+def assert_gemini_begin_event(begin_event, cmd):
+    """Assert the begin event of a gemini continuous event renders node/gemini_cmd and survives pickling."""
+    begin_event.event_timestamp = begin_event.begin_timestamp = BEGIN_TIMESTAMP
+    assert str(begin_event) == (
+        f"(GeminiStressEvent Severity.NORMAL) period_type=begin event_id={EVENT_ID}: node=node gemini_cmd={cmd}"
+    )
+    assert begin_event.event_timestamp == BEGIN_TIMESTAMP
+    assert begin_event.timestamp == BEGIN_TIMESTAMP
+    assert begin_event == pickle.loads(pickle.dumps(begin_event))
+
 
 def test_gemini_continuous_event_with_error():
+    """Gemini end event carries ERROR severity and the error list, so failed runs are reported."""
     gemini_stress_event = GeminiStressEvent(node="node", cmd="gemini_cmd", publish_event=False)
-    begin_event_timestamp = 1623596860.1202102
-    gemini_stress_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
-    begin_event = gemini_stress_event.begin_event()
-    begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
-    assert str(begin_event) == (
-        "(GeminiStressEvent Severity.NORMAL) period_type=begin "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node gemini_cmd=gemini_cmd"
-    )
-    assert begin_event.event_timestamp == begin_event_timestamp
-    assert begin_event.timestamp == begin_event_timestamp
-    assert begin_event == pickle.loads(pickle.dumps(gemini_stress_event))
+    gemini_stress_event.event_id = EVENT_ID
+    assert_gemini_begin_event(gemini_stress_event.begin_event(), cmd="gemini_cmd")
 
     gemini_stress_event.add_error(errors=["error1", "error2"])
     gemini_stress_event.severity = Severity.ERROR
@@ -64,25 +104,17 @@ def test_gemini_continuous_event_with_error():
     gemini_stress_event.event_timestamp = gemini_stress_event.end_timestamp = 1623597850.6610544
     assert str(gemini_stress_event) == (
         "(GeminiStressEvent Severity.ERROR) period_type=end "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=16m30s: node=node gemini_cmd=gemini_cmd"
+        f"event_id={EVENT_ID} duration=16m30s: node=node gemini_cmd=gemini_cmd"
         "\nerrors=['error1', 'error2']"
     )
     assert gemini_stress_event == pickle.loads(pickle.dumps(gemini_stress_event))
 
 
 def test_gemini_continuous_event_with_result():
+    """add_result() keeps the exit code, trimmed stdout tail and stderr as an error in the end event."""
     gemini_stress_event = GeminiStressEvent(node="node", cmd="cat", publish_event=False)
-    begin_event_timestamp = 1623596860.1202102
-    gemini_stress_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
-    begin_event = gemini_stress_event.begin_event()
-    begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
-    assert str(begin_event) == (
-        "(GeminiStressEvent Severity.NORMAL) period_type=begin "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node gemini_cmd=cat"
-    )
-    assert begin_event.event_timestamp == begin_event_timestamp
-    assert begin_event.timestamp == begin_event_timestamp
-    assert begin_event == pickle.loads(pickle.dumps(begin_event))
+    gemini_stress_event.event_id = EVENT_ID
+    assert_gemini_begin_event(gemini_stress_event.begin_event(), cmd="cat")
 
     gemini_stress_event.add_result(
         result=Result(stdout="  \n\nline1\n  line2  \nline3\n  ", stderr="\terr\t", exited=1)
@@ -94,7 +126,7 @@ def test_gemini_continuous_event_with_result():
     assert gemini_stress_event.result == result
     assert str(gemini_stress_event) == (
         "(GeminiStressEvent Severity.NORMAL) period_type=end "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=50m0s: node=node gemini_cmd=cat\n"
+        f"event_id={EVENT_ID} duration=50m0s: node=node gemini_cmd=cat\n"
         "result=Exit code: 1\nCommand output: ['  line2  ', 'line3']\n\n"
         "errors=['Command error: \\terr\\t\\n']"
     )
@@ -103,45 +135,29 @@ def test_gemini_continuous_event_with_result():
 
 
 def test_gemini_continuous_event_without_result():
+    """Gemini end event without a result renders only node/cmd and the run duration."""
     gemini_stress_event = GeminiStressEvent(node="node", cmd="cat", publish_event=False)
-    begin_event_timestamp = 1623596860.1202102
-    gemini_stress_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
-    begin_event = gemini_stress_event.begin_event()
-    begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
-    assert str(begin_event) == (
-        "(GeminiStressEvent Severity.NORMAL) period_type=begin "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node gemini_cmd=cat"
-    )
-    assert begin_event.event_timestamp == begin_event_timestamp
-    assert begin_event.timestamp == begin_event_timestamp
-    assert begin_event == pickle.loads(pickle.dumps(begin_event))
+    gemini_stress_event.event_id = EVENT_ID
+    assert_gemini_begin_event(gemini_stress_event.begin_event(), cmd="cat")
 
     gemini_stress_event.end_event()
     gemini_stress_event.event_timestamp = gemini_stress_event.end_timestamp = 1623696860.1202102
     assert gemini_stress_event.result == ""
     assert str(gemini_stress_event) == (
         "(GeminiStressEvent Severity.NORMAL) period_type=end "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=1d3h46m40s: node=node gemini_cmd=cat"
+        f"event_id={EVENT_ID} duration=1d3h46m40s: node=node gemini_cmd=cat"
     )
 
     assert gemini_stress_event == pickle.loads(pickle.dumps(gemini_stress_event))
 
 
 def test_cassandra_stress_continuous_event_with_errors():
-    begin_event_timestamp = 1623596860.1202102
+    """c-s errors accumulate across end and a follow-up one-time error event, raising severity to CRITICAL."""
     cs_event = CassandraStressEvent(
         node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False
     )
-    cs_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
-    begin_event = cs_event.begin_event()
-    begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
-    assert str(begin_event) == (
-        "(CassandraStressEvent Severity.NORMAL) period_type=begin "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd"
-    )
-    assert begin_event.event_timestamp == begin_event_timestamp
-    assert begin_event.timestamp == begin_event_timestamp
-    assert begin_event == pickle.loads(pickle.dumps(begin_event))
+    cs_event.event_id = EVENT_ID
+    assert_stress_begin_event(cs_event.begin_event())
 
     cs_event.add_error(errors=["error1", "error2"])
     cs_event.severity = Severity.ERROR
@@ -151,7 +167,7 @@ def test_cassandra_stress_continuous_event_with_errors():
     cs_event.event_timestamp = cs_event.end_timestamp = end_event_timestamp
     assert str(cs_event) == (
         "(CassandraStressEvent Severity.ERROR) period_type=end "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=0s: node=node\nstress_cmd=stress_cmd"
+        f"event_id={EVENT_ID} duration=0s: node=node\nstress_cmd=stress_cmd"
         "\nerrors:\n\nerror1\nerror2"
     )
     assert cs_event.event_timestamp == end_event_timestamp
@@ -164,7 +180,7 @@ def test_cassandra_stress_continuous_event_with_errors():
     cs_event.event_timestamp = error_event_timestamp
     assert str(cs_event) == (
         "(CassandraStressEvent Severity.CRITICAL) period_type=one-time "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=0s: node=node\n"
+        f"event_id={EVENT_ID} duration=0s: node=node\n"
         "stress_cmd=stress_cmd\nerrors:\n\nerror1\nerror2\nOne more error"
     )
     assert cs_event.log_file_name == "log_file_name"
@@ -173,150 +189,40 @@ def test_cassandra_stress_continuous_event_with_errors():
     assert cs_event == pickle.loads(pickle.dumps(cs_event))
 
 
-def test_cassandra_stress_continuous_event_without_errors():
-    begin_event_timestamp = 1623596860.1202102
-    cs_event = CassandraStressEvent(
-        node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False
+@pytest.mark.parametrize("event_class", CONTINUOUS_STRESS_EVENTS)
+def test_continuous_stress_event_without_error_renders_normal_end(continuous_stress_event):
+    """A stress run ending cleanly emits a NORMAL end event with the run duration and survives pickling."""
+    assert_stress_begin_event(continuous_stress_event.begin_event())
+
+    end_event_timestamp = 1623596861.1202102
+    continuous_stress_event.end_event()
+    continuous_stress_event.event_timestamp = continuous_stress_event.end_timestamp = end_event_timestamp
+    assert str(continuous_stress_event) == (
+        f"({type(continuous_stress_event).__name__} Severity.NORMAL) period_type=end "
+        f"event_id={EVENT_ID} duration=1s: node=node\nstress_cmd=stress_cmd"
     )
-    cs_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
-    begin_event = cs_event.begin_event()
-    begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
-    assert str(begin_event) == (
-        "(CassandraStressEvent Severity.NORMAL) period_type=begin "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd"
-    )
-    assert begin_event.event_timestamp == begin_event_timestamp
-    assert begin_event.timestamp == begin_event_timestamp
-    assert begin_event == pickle.loads(pickle.dumps(begin_event))
-
-    end_event_timestamp = 1623596870.1202102
-    cs_event.end_event()
-    cs_event.event_timestamp = cs_event.end_timestamp = end_event_timestamp
-    assert str(cs_event) == (
-        "(CassandraStressEvent Severity.NORMAL) period_type=end "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=10s: node=node\n"
-        "stress_cmd=stress_cmd"
-    )
-    assert cs_event.event_timestamp == end_event_timestamp
-    assert cs_event.timestamp == end_event_timestamp
-    assert cs_event == pickle.loads(pickle.dumps(cs_event))
+    assert continuous_stress_event.event_timestamp == end_event_timestamp
+    assert continuous_stress_event.timestamp == end_event_timestamp
+    assert continuous_stress_event == pickle.loads(pickle.dumps(continuous_stress_event))
 
 
-def test_scylla_bench_continuous_event_with_error():
-    begin_event_timestamp = 1623596860.1202102
-    scylla_bench_event = ScyllaBenchEvent(
-        node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False
-    )
-    scylla_bench_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
-    begin_event = scylla_bench_event.begin_event()
-    begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
-    assert str(begin_event) == (
-        "(ScyllaBenchEvent Severity.NORMAL) period_type=begin "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd"
-    )
-    assert begin_event.event_timestamp == begin_event_timestamp
-    assert begin_event.timestamp == begin_event_timestamp
-    assert begin_event == pickle.loads(pickle.dumps(begin_event))
+@pytest.mark.parametrize("event_class", CONTINUOUS_STRESS_EVENTS_WITH_ERROR)
+def test_continuous_stress_event_with_error_renders_error_end(continuous_stress_event):
+    """A failed stress run emits an ERROR end event listing the errors, so the failure reaches the report."""
+    assert_stress_begin_event(continuous_stress_event.begin_event())
 
-    try:
-        raise ValueError("Stress command completed with bad status 1")
-    except Exception as exc:  # noqa: BLE001
-        scylla_bench_event.severity = Severity.ERROR
-        scylla_bench_event.add_error([str(exc)])
+    continuous_stress_event.severity = Severity.ERROR
+    continuous_stress_event.add_error(["Stress command completed with bad status 1"])
 
-    scylla_bench_event.end_event()
-    scylla_bench_event.end_timestamp = scylla_bench_event.event_timestamp = 1623596960.1202102
-
-    assert str(scylla_bench_event) == (
-        "(ScyllaBenchEvent Severity.ERROR) period_type=end "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=1m40s: "
+    continuous_stress_event.end_event()
+    continuous_stress_event.end_timestamp = continuous_stress_event.event_timestamp = 1623596960.1202102
+    assert str(continuous_stress_event) == (
+        f"({type(continuous_stress_event).__name__} Severity.ERROR) period_type=end "
+        f"event_id={EVENT_ID} duration=1m40s: "
         "node=node\nstress_cmd=stress_cmd\nerrors:"
         "\n\nStress command completed with bad status 1"
     )
-    scylla_bench_event.log_file_name = "log_file_name"
-    assert scylla_bench_event == pickle.loads(pickle.dumps(scylla_bench_event))
-
-
-def test_scylla_bench_continuous_event_without_error():
-    begin_event_timestamp = 1623596860.1202102
-    scylla_bench_event = ScyllaBenchEvent(
-        node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False
-    )
-    scylla_bench_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
-    begin_event = scylla_bench_event.begin_event()
-    begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
-    assert str(begin_event) == (
-        "(ScyllaBenchEvent Severity.NORMAL) period_type=begin "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd"
-    )
-    assert begin_event.event_timestamp == begin_event_timestamp
-    assert begin_event.timestamp == begin_event_timestamp
-    assert begin_event == pickle.loads(pickle.dumps(begin_event))
-
-    scylla_bench_event.end_event()
-    scylla_bench_event.event_timestamp = scylla_bench_event.end_timestamp = 1623596861.1202102
-    assert str(scylla_bench_event) == (
-        "(ScyllaBenchEvent Severity.NORMAL) period_type=end "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=1s: "
-        "node=node\nstress_cmd=stress_cmd"
-    )
-    scylla_bench_event.log_file_name = "log_file_name"
-    assert scylla_bench_event == pickle.loads(pickle.dumps(scylla_bench_event))
-
-
-# Stress events that moved from `.start()`/`.finish()` subevents to the continuous event pattern.
-CONVERTED_STRESS_EVENTS = [YcsbStressEvent, CassandraHarryEvent]
-
-
-def make_converted_stress_event(event_class):
-    event = event_class(node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False)
-    event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
-    return event
-
-
-def assert_converted_stress_begin_event(event_class, begin_event):
-    begin_event.event_timestamp = begin_event.begin_timestamp = 1623596860.1202102
-    assert str(begin_event) == (
-        f"({event_class.__name__} Severity.NORMAL) period_type=begin "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd"
-    )
-    assert begin_event.event_timestamp == 1623596860.1202102
-    assert begin_event.timestamp == 1623596860.1202102
-    assert begin_event == pickle.loads(pickle.dumps(begin_event))
-
-
-@pytest.mark.parametrize("event_class", CONVERTED_STRESS_EVENTS)
-def test_converted_stress_continuous_event_without_error(event_class):
-    event = make_converted_stress_event(event_class)
-    assert_converted_stress_begin_event(event_class, event.begin_event())
-
-    event.end_event()
-    event.event_timestamp = event.end_timestamp = 1623596861.1202102
-    assert str(event) == (
-        f"({event_class.__name__} Severity.NORMAL) period_type=end "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=1s: "
-        "node=node\nstress_cmd=stress_cmd"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-@pytest.mark.parametrize("event_class", CONVERTED_STRESS_EVENTS)
-def test_converted_stress_continuous_event_with_error(event_class):
-    event = make_converted_stress_event(event_class)
-    assert_converted_stress_begin_event(event_class, event.begin_event())
-
-    event.severity = Severity.ERROR
-    event.add_error(["Stress command completed with bad status 1"])
-
-    event.end_event()
-    event.end_timestamp = event.event_timestamp = 1623596960.1202102
-    assert str(event) == (
-        f"({event_class.__name__} Severity.ERROR) period_type=end "
-        "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=1m40s: "
-        "node=node\nstress_cmd=stress_cmd\nerrors:"
-        "\n\nStress command completed with bad status 1"
-    )
-    assert event == pickle.loads(pickle.dumps(event))
+    assert continuous_stress_event == pickle.loads(pickle.dumps(continuous_stress_event))
 
 
 @pytest.mark.parametrize(
@@ -328,6 +234,7 @@ def test_converted_stress_continuous_event_with_error(event_class):
     ],
 )
 def test_stress_subevents(event_class, has_error_subevent):
+    """Subevent-style stress events expose failure/start/finish (and error where defined) as subclasses."""
     assert issubclass(event_class.failure, event_class)
     assert issubclass(event_class.start, event_class)
     assert issubclass(event_class.finish, event_class)
@@ -349,6 +256,7 @@ def test_stress_subevents(event_class, has_error_subevent):
     ],
 )
 def test_stress_event_without_errors(event_class, subevent, severity, event_id):
+    """A subevent built from node/stress_cmd/log_file_name keeps them, has the subevent severity and pickles."""
     event = getattr(event_class, subevent)(node=[], stress_cmd="c-s", log_file_name="1.log")
     assert event.severity == severity
     assert event.node == "[]"
@@ -372,6 +280,7 @@ def test_stress_event_without_errors(event_class, subevent, severity, event_id):
     ],
 )
 def test_stress_event_with_errors(event_class, severity, event_id):
+    """A failure subevent renders its errors and carries the class-specific failure severity."""
     event = event_class.failure(node="node1", errors=["e1", "e2"])
     assert event.severity == severity
     assert event.node == "node1"
@@ -386,140 +295,124 @@ def test_stress_event_with_errors(event_class, severity, event_id):
     assert event == pickle.loads(pickle.dumps(event))
 
 
-def assert_cassandra_stress_log_event(line, expected_type, expected_severity):
-    for pattern, prototype in chain(CS_NORMAL_EVENTS_PATTERNS, CS_ERROR_EVENTS_PATTERNS):
-        if pattern.search(line):
-            # the events in the pattern lists are module-level prototypes, mutating them leaks across tests
-            event = prototype.clone()
-            event.add_info(node="self.node", line=line, line_number=1).dont_publish()
-            assert event.type == expected_type, f'Unexpected event.type {event.type}. Expected "{expected_type}"'
-            assert event.severity == expected_severity, (
-                f'Unexpected event.severity {event.severity}. Expected "{expected_severity}"'
-            )
-            return
-
-    raise ValueError(
-        f"Event is not recognized in the line {line}. Expected exception type is {expected_type},"
-        f"expected severity is {expected_severity}"
-    )
+# --- stress tool log events ---
 
 
-def test_known_cs_errors():
-    assert issubclass(CassandraStressLogEvent.IOException, CassandraStressLogEvent)
-    assert issubclass(CassandraStressLogEvent.ConsistencyError, CassandraStressLogEvent)
-    assert issubclass(CassandraStressLogEvent.OperationOnKey, CassandraStressLogEvent)
-    assert issubclass(CassandraStressLogEvent.TooManyHintsInFlight, CassandraStressLogEvent)
-    assert issubclass(CassandraStressLogEvent.SchemaDisagreement, CassandraStressLogEvent)
+@pytest.mark.parametrize(
+    ("log_event_class", "subevent"),
+    [
+        pytest.param(CassandraStressLogEvent, "IOException", id="cs_io_exception"),
+        pytest.param(CassandraStressLogEvent, "ConsistencyError", id="cs_consistency_error"),
+        pytest.param(CassandraStressLogEvent, "OperationOnKey", id="cs_operation_on_key"),
+        pytest.param(CassandraStressLogEvent, "TooManyHintsInFlight", id="cs_too_many_hints_in_flight"),
+        pytest.param(CassandraStressLogEvent, "SchemaDisagreement", id="cs_schema_disagreement"),
+        pytest.param(CassandraStressLogEvent, "ShardAwareDriver", id="cs_shard_aware_driver"),
+        pytest.param(CassandraStressLogEvent, "RackAwarePolicy", id="cs_rack_aware_policy"),
+        pytest.param(ScyllaBenchLogEvent, "ConsistencyError", id="sb_consistency_error"),
+        pytest.param(ScyllaBenchLogEvent, "DataValidationError", id="sb_data_validation_error"),
+        pytest.param(ScyllaBenchLogEvent, "ParseDistributionError", id="sb_parse_distribution_error"),
+        pytest.param(ScyllaBenchLogEvent, "RackAwarePolicy", id="sb_rack_aware_policy"),
+    ],
+)
+def test_stress_log_event_known_subevent_is_subclass(log_event_class, subevent):
+    """Known stress-tool log subevents subclass their log event, so they are filtered and reported as such."""
+    assert issubclass(getattr(log_event_class, subevent), log_event_class)
 
 
-def test_known_cs_normal():
-    assert issubclass(CassandraStressLogEvent.ShardAwareDriver, CassandraStressLogEvent)
-    assert issubclass(CassandraStressLogEvent.RackAwarePolicy, CassandraStressLogEvent)
+@pytest.mark.parametrize(
+    ("log_event_class", "listed_events"),
+    [
+        pytest.param(CassandraStressLogEvent, list(chain(CS_NORMAL_EVENTS, CS_ERROR_EVENTS)), id="cassandra_stress"),
+        pytest.param(
+            ScyllaBenchLogEvent, list(chain(SCYLLA_BENCH_NORMAL_EVENTS, SCYLLA_BENCH_ERROR_EVENTS)), id="scylla_bench"
+        ),
+    ],
+)
+def test_stress_log_event_subevents_all_listed(log_event_class, listed_events):
+    """Every subevent of a stress-tool log event is in its NORMAL/ERROR event lists, so log parsing covers it.
 
-
-def test_cs_all_events_list():
-    """Check that all events are listed in CS_ERROR_EVENTS and CS_NORMAL_EVENTS
-    since python3.14 also __annotate_func__ need to be excluded from the dir() output
+    Since python3.14 `__annotate_func__` also shows up in dir() and is excluded.
     """
-
-    assert set(dir(CassandraStressLogEvent)) - set(dir(LogEvent)) - {"__annotate_func__"} == {
-        ev.type for ev in chain(CS_NORMAL_EVENTS, CS_ERROR_EVENTS)
-    }
+    assert set(dir(log_event_class)) - set(dir(LogEvent)) - {"__annotate_func__"} == {ev.type for ev in listed_events}
 
 
-def test_cs_hint_in_flight_error():
-    assert_cassandra_stress_log_event(
-        line="java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: "
-        "(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) was overloaded: Too many "
-        "in flight hints: 10490670",
-        expected_type="TooManyHintsInFlight",
-        expected_severity=Severity.ERROR,
-    )
+@pytest.mark.parametrize(
+    ("patterns", "line", "expected_type", "expected_severity"),
+    [
+        pytest.param(
+            CS_LOG_PATTERNS,
+            "java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: "
+            "(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) was overloaded: Too many "
+            "in flight hints: 10490670",
+            "TooManyHintsInFlight",
+            Severity.ERROR,
+            id="cs_too_many_in_flight_hints",
+        ),
+        pytest.param(
+            CS_LOG_PATTERNS,
+            "java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: "
+            "(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) was overloaded: Too many "
+            "hints in flight: 10490670",
+            "TooManyHintsInFlight",
+            Severity.ERROR,
+            id="cs_too_many_hints_in_flight",
+        ),
+        pytest.param(
+            CS_LOG_PATTERNS,
+            "java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: "
+            "(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) ",
+            "OperationOnKey",
+            Severity.CRITICAL,
+            id="cs_operation_on_key",
+        ),
+        pytest.param(
+            CS_LOG_PATTERNS,
+            "java.io.IOException: Connection reset by peer",
+            "IOException",
+            Severity.ERROR,
+            id="cs_io_exception",
+        ),
+        pytest.param(
+            CS_LOG_PATTERNS,
+            "03:56:37.572 [cluster1-nio-worker-4] DEBUG com.datastax.driver.core.Connection - Connection["
+            "/10.0.3.121:9042-11, inFlight=5, closed=false] Response received on stream 17856 but no "
+            "handler set anymore (either the request has timed out or it was closed due to another error). "
+            "Received message is ERROR UNAVAILABLE: Cannot achieve consistency level for cl QUORUM. "
+            "Requires 2, alive 1",
+            "ConsistencyError",
+            Severity.ERROR,
+            id="cs_consistency_error",
+        ),
+        pytest.param(
+            CS_LOG_PATTERNS,
+            "com.datastax.driver.core.Cluster - ===== Using optimized driver!!! =====",
+            "ShardAwareDriver",
+            Severity.NORMAL,
+            id="cs_shard_aware_driver",
+        ),
+        pytest.param(
+            SCYLLA_BENCH_LOG_PATTERNS,
+            "[2025-11-01 04:15:03.653] Using provided rack name 'RACK0' for RackAwareRoundRobinPolicy",
+            "RackAwarePolicy",
+            Severity.NORMAL,
+            id="sb_rack_aware_policy",
+        ),
+    ],
+)
+def test_stress_log_line_first_matching_pattern_yields_event(patterns, line, expected_type, expected_severity):
+    """The first pattern matching a stress-tool log line yields the event type and severity the line maps to."""
+    prototype = next((proto for pattern, proto in patterns if pattern.search(line)), None)
+    assert prototype is not None, f"Event is not recognized in the line {line}"
 
-    assert_cassandra_stress_log_event(
-        line="java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: "
-        "(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) was overloaded: Too many "
-        "hints in flight: 10490670",
-        expected_type="TooManyHintsInFlight",
-        expected_severity=Severity.ERROR,
-    )
-
-    assert_cassandra_stress_log_event(
-        line="java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: "
-        "(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) ",
-        expected_type="OperationOnKey",
-        expected_severity=Severity.CRITICAL,
-    )
-
-    assert_cassandra_stress_log_event(
-        line="java.io.IOException: Connection reset by peer",
-        expected_type="IOException",
-        expected_severity=Severity.ERROR,
-    )
-
-    assert_cassandra_stress_log_event(
-        line="03:56:37.572 [cluster1-nio-worker-4] DEBUG com.datastax.driver.core.Connection - Connection["
-        "/10.0.3.121:9042-11, inFlight=5, closed=false] Response received on stream 17856 but no "
-        "handler set anymore (either the request has timed out or it was closed due to another error). "
-        "Received message is ERROR UNAVAILABLE: Cannot achieve consistency level for cl QUORUM. "
-        "Requires 2, alive 1",
-        expected_type="ConsistencyError",
-        expected_severity=Severity.ERROR,
-    )
-
-
-def test_cs_normal_shared_awarnes_event():
-    assert_cassandra_stress_log_event(
-        line="com.datastax.driver.core.Cluster - ===== Using optimized driver!!! =====",
-        expected_type="ShardAwareDriver",
-        expected_severity=Severity.NORMAL,
-    )
-
-
-def assert_scylla_bench_log_event(line, expected_type, expected_severity):
-    for pattern, prototype in chain(SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS):
-        if pattern.search(line):
-            # the events in the pattern lists are module-level prototypes, mutating them leaks across tests
-            event = prototype.clone()
-            event.add_info(node="self.node", line=line, line_number=1).dont_publish()
-            assert event.type == expected_type, f'Unexpected event.type {event.type}. Expected "{expected_type}"'
-            assert event.severity == expected_severity, (
-                f'Unexpected event.severity {event.severity}. Expected "{expected_severity}"'
-            )
-            return
-
-    raise ValueError(
-        f"Event is not recognized in the line {line}. Expected exception type is {expected_type},"
-        f"expected severity is {expected_severity}"
-    )
-
-
-def test_scylla_bench_normal_rack_awarness_event():
-    assert_scylla_bench_log_event(
-        line="[2025-11-01 04:15:03.653] Using provided rack name 'RACK0' for RackAwareRoundRobinPolicy",
-        expected_type="RackAwarePolicy",
-        expected_severity=Severity.NORMAL,
-    )
-
-
-def test_known_scylla_bench_errors():
-    assert issubclass(ScyllaBenchLogEvent.ConsistencyError, ScyllaBenchLogEvent)
-    assert issubclass(ScyllaBenchLogEvent.DataValidationError, ScyllaBenchLogEvent)
-    assert issubclass(ScyllaBenchLogEvent.ParseDistributionError, ScyllaBenchLogEvent)
-    assert issubclass(ScyllaBenchLogEvent.RackAwarePolicy, ScyllaBenchLogEvent)
-
-
-def test_scylla_bench_error_events_list():
-    """
-    Check that all events are listed in SCYLLA_BENCH_ERROR_EVENTS
-    since python3.14 also __annotate_func__ need to be excluded from the dir() output
-    """
-    assert set(dir(ScyllaBenchLogEvent)) - set(dir(LogEvent)) - {"__annotate_func__"} == {
-        ev.type for ev in chain(SCYLLA_BENCH_NORMAL_EVENTS, SCYLLA_BENCH_ERROR_EVENTS)
-    }
+    # the events in the pattern lists are module-level prototypes, mutating them leaks across tests
+    event = prototype.clone()
+    event.add_info(node="self.node", line=line, line_number=1).dont_publish()
+    assert event.type == expected_type
+    assert event.severity == expected_severity
 
 
 def test_gemini_log_json_line():
+    """A gemini JSON log line is parsed into timestamp, message and logger name, ready to publish."""
     event = GeminiStressLogEvent.GeminiEvent()
     event.add_info(
         node="node1",
@@ -543,6 +436,7 @@ def test_gemini_log_json_line():
 
 
 def test_gemini_log_non_json_line():
+    """A non-JSON gemini log line leaves the event CRITICAL and unpopulated, so it is not published as parsed."""
     event = GeminiStressLogEvent.GeminiEvent()
     event_timestamp = event.event_timestamp
     event.add_info(node="node1", line="1961-04-12T06:07:00+00:00 Poyekhalee!", line_number=1)

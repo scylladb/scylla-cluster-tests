@@ -14,6 +14,7 @@
 import time
 import logging
 from pathlib import Path
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from unittest import mock
 
@@ -34,9 +35,30 @@ from unit_tests.lib.real_events import RealEventsTest
 
 LOGGER = logging.getLogger(__name__)
 
+YCSB_ERROR_LINE = (
+    "237951 [Thread-47] ERROR site.ycsb.db.DynamoDBClient"
+    " -com.amazonaws.AmazonServiceException: Internal server error:"
+    " exceptions::unavailable_exception (Cannot achieve consistency"
+    " level for cl LOCAL_ONE. Requires 1, alive 0) (Service: AmazonDynamoDBv2;"
+    " Status Code: 500; Error Code: Internal Server Error; Request ID: null)"
+)
+YCSB_NODE = "Node alternator-3h-silence--loader-node-bb90aa05-2 [34.251.153.122 | 10.0.220.55] (seed: False)"
+
+
+def publish_ycsb_load(error_line):
+    """Mimic what YcsbStressThread publishes: begin/end around per-error-line events sharing the event_id."""
+    ycsb_event = YcsbStressEvent(node=YCSB_NODE, stress_cmd="ycsb")
+    ycsb_event.begin_event()
+    error_event = YcsbStressEvent(node=YCSB_NODE, stress_cmd="ycsb", severity=Severity.ERROR, errors=[error_line])
+    error_event.event_id = ycsb_event.event_id
+    error_event.period_type = EventPeriod.INFORMATIONAL.value
+    error_event.publish()
+    ycsb_event.end_event()
+
 
 @pytest.fixture(scope="module")
 def real_events():
+    """Run the real events pipeline (device, logger, counter) shared by all tests in this module."""
     events = RealEventsTest()
     RealEventsTest.setup_class()
     try:
@@ -59,6 +81,7 @@ def clean_events_log(real_events):
 
 
 def test_disruption_skipped_event():
+    """A skipped disruption ends with NORMAL severity and reports the skip reason in its string form."""
     with (
         pytest.raises(UnsupportedNemesis),
         DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event,
@@ -79,6 +102,7 @@ def test_disruption_skipped_event():
 
 
 def test_disruption_raised_critical_event():
+    """An exception escaping a disruption keeps an explicitly set CRITICAL severity and records the error."""
     with (
         pytest.raises(ZeroDivisionError),
         DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event,
@@ -104,6 +128,7 @@ def test_disruption_raised_critical_event():
 
 
 def test_disruption_raised_error_event():
+    """An exception escaping a disruption raises its severity to ERROR and records the error."""
     with (
         pytest.raises(ZeroDivisionError),
         DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event,
@@ -128,6 +153,7 @@ def test_disruption_raised_error_event():
 
 
 def test_disruption_error_event():
+    """A disruption that handles its error and sets ERROR severity renders the errors in its end string."""
     with DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event:
         nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
         assert str(nemesis_event) == (
@@ -150,6 +176,7 @@ def test_disruption_error_event():
 
 
 def test_disruption_normal_event():
+    """A clean disruption renders begin and end strings with NORMAL severity and the duration."""
     with DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event:
         nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
         assert str(nemesis_event) == (
@@ -165,6 +192,7 @@ def test_disruption_normal_event():
 
 
 def test_filter(clean_events_log):
+    """Stacked DbEventsFilters drop every ENOSPC-related db event, leaving events.log empty."""
     real_events = clean_events_log
     enospc_line_1 = (
         "[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment "
@@ -193,14 +221,31 @@ def test_filter(clean_events_log):
     assert real_events.get_event_log_file("events.log") == ""
 
 
-def test_general_filter(real_events):
+@pytest.mark.parametrize(
+    "filter_kwargs, download_instructions, filtered_text",
+    [
+        pytest.param(
+            {"event_class": CoreDumpEvent}, "test_general_filter", "test_general_filter", id="general-filter-by-class"
+        ),
+        pytest.param(
+            {"regex": ".*1234567890.*"},
+            "gsutil cp gs://upload.scylladb.com/core.scylla-jmx.996.1234567890"
+            ".3968.1566979933000/core.scylla-jmx.996.d173729352e34c76aaf8db334"
+            "2153c3e.3968.1566979933000000 .",
+            "1234567890",
+            id="general-filter-regex",
+        ),
+    ],
+)
+def test_events_filter_drops_matching_core_dump_event(real_events, filter_kwargs, download_instructions, filtered_text):
+    """EventsFilter drops events matching its class or regex from events.log while other events are still logged."""
     with real_events.wait_for_n_events(real_events.get_events_logger(), count=4, timeout=3):
-        with EventsFilter(event_class=CoreDumpEvent):
+        with EventsFilter(**filter_kwargs):
             CoreDumpEvent(
                 corefile_url="http://",
                 backtrace="asfasdfsdf",
                 node="node xy",
-                download_instructions="test_general_filter",
+                download_instructions=download_instructions,
                 source_timestamp=1578998425.0,
             ).publish()  # Tue 2020-01-14 10:40:25 UTC
             TestFrameworkEvent(source="", source_method="").publish()
@@ -208,30 +253,11 @@ def test_general_filter(real_events):
     log_content = real_events.get_event_log_file("events.log")
 
     assert "TestFrameworkEvent" in log_content
-    assert "test_general_filter" not in log_content
-
-
-def test_general_filter_regex(real_events):
-    with real_events.wait_for_n_events(real_events.get_events_logger(), count=4, timeout=3):
-        with EventsFilter(regex=".*1234567890.*"):
-            CoreDumpEvent(
-                corefile_url="http://",
-                backtrace="asfasdfsdf",
-                node="node xy",
-                download_instructions="gsutil cp gs://upload.scylladb.com/core.scylla-jmx.996.1234567890"
-                ".3968.1566979933000/core.scylla-jmx.996.d173729352e34c76aaf8db334"
-                "2153c3e.3968.1566979933000000 .",
-                source_timestamp=1578998425.0,
-            ).publish()  # Tue 2020-01-14 10:40:25 UTC
-            TestFrameworkEvent(source="", source_method="").publish()
-
-    log_content = real_events.get_event_log_file("events.log")
-
-    assert "TestFrameworkEvent" in log_content
-    assert "1234567890" not in log_content
+    assert filtered_text not in log_content
 
 
 def test_severity_changer(real_events):
+    """EventsSeverityChangerFilter lowers matching events until it expires, events after expiration keep CRITICAL."""
     extra_time_to_expiration = 10
     with real_events.wait_for_n_events(real_events.get_events_logger(), count=5, timeout=3):
         with EventsSeverityChangerFilter(
@@ -262,7 +288,8 @@ def test_severity_changer(real_events):
 
 
 def test_severity_changer_db_log(real_events):
-    """
+    """Severity changer lowers db log events until expiry and is then removed without crashing subscribers.
+
     See https://github.com/scylladb/scylla-cluster-tests/issues/2115
     """
     extra_time_to_expiration = 2
@@ -308,28 +335,8 @@ def test_severity_changer_db_log(real_events):
     assert "error that shouldn't be lowered" in log_content
 
 
-YCSB_ERROR_LINE = (
-    "237951 [Thread-47] ERROR site.ycsb.db.DynamoDBClient"
-    " -com.amazonaws.AmazonServiceException: Internal server error:"
-    " exceptions::unavailable_exception (Cannot achieve consistency"
-    " level for cl LOCAL_ONE. Requires 1, alive 0) (Service: AmazonDynamoDBv2;"
-    " Status Code: 500; Error Code: Internal Server Error; Request ID: null)"
-)
-YCSB_NODE = "Node alternator-3h-silence--loader-node-bb90aa05-2 [34.251.153.122 | 10.0.220.55] (seed: False)"
-
-
-def publish_ycsb_load(error_line):
-    """Mimic what YcsbStressThread publishes: begin/end around per-error-line events sharing the event_id."""
-    ycsb_event = YcsbStressEvent(node=YCSB_NODE, stress_cmd="ycsb")
-    ycsb_event.begin_event()
-    error_event = YcsbStressEvent(node=YCSB_NODE, stress_cmd="ycsb", severity=Severity.ERROR, errors=[error_line])
-    error_event.event_id = ycsb_event.event_id
-    error_event.period_type = EventPeriod.INFORMATIONAL.value
-    error_event.publish()
-    ycsb_event.end_event()
-
-
 def test_ycsb_filter(real_events):
+    """An active YCSB error filter drops only the error event; once it exits, YCSB errors are logged again."""
     with real_events.wait_for_n_events(real_events.get_events_logger(), count=6, timeout=5):
         with EventsFilter(
             event_class=YcsbStressEvent, regex=".*Internal server error: exceptions::unavailable_exception.*"
@@ -354,40 +361,42 @@ def test_ycsb_filter(real_events):
     assert "YcsbStressEvent Severity.ERROR" in log_content
 
 
-def test_filter_repair(real_events):
-    failed_repaired_line = (
-        "2019-07-28T10:53:29+00:00  ip-10-0-167-91 !INFO    | scylla.bin: [shard 0] repair - "
-        "Got error in row level repair: std::runtime_error (repair id 1 is aborted on shard 0)"
-    )
-
-    # 9 events in total: 2 events per filter x 3 filters + 3 events.
-    with real_events.wait_for_n_events(real_events.get_events_logger(), count=9, timeout=3):
-        with (
-            DbEventsFilter(
-                db_event=DatabaseLogEvent.DATABASE_ERROR, line="repair's stream failed: streaming::stream_exception"
-            ),
-            DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="Can not find stream_manager"),
-            DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="is aborted"),
-        ):
-            DatabaseLogEvent.RUNTIME_ERROR().add_info(node="A", line_number=22, line=failed_repaired_line).publish()
-            DatabaseLogEvent.RUNTIME_ERROR().add_info(node="A", line_number=22, line=failed_repaired_line).publish()
-            DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="B", line_number=22, line="not filtered").publish()
-
-    log_content = real_events.get_event_log_file("events.log")
-
-    assert "not filtered" in log_content
-    assert "repair id 1" not in log_content
-
-
-def test_filter_upgrade(real_events):
-    known_failure_line = (
-        "!ERR     | scylla:  [shard 3] storage_proxy - Exception when communicating with "
-        "10.142.0.56: std::runtime_error (Failed to load schema version "
-        "b40e405f-462c-38f2-a90c-6f130ddbf6f3) "
-    )
-
-    with real_events.wait_for_n_events(real_events.get_events_logger(), count=5, timeout=3):
-        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="Failed to load schema"):
+@pytest.mark.parametrize(
+    "filters_kwargs, known_failure_line, filtered_text",
+    [
+        pytest.param(
+            [
+                {
+                    "db_event": DatabaseLogEvent.DATABASE_ERROR,
+                    "line": "repair's stream failed: streaming::stream_exception",
+                },
+                {"db_event": DatabaseLogEvent.RUNTIME_ERROR, "line": "Can not find stream_manager"},
+                {"db_event": DatabaseLogEvent.RUNTIME_ERROR, "line": "is aborted"},
+            ],
+            "2019-07-28T10:53:29+00:00  ip-10-0-167-91 !INFO    | scylla.bin: [shard 0] repair - "
+            "Got error in row level repair: std::runtime_error (repair id 1 is aborted on shard 0)",
+            "repair id 1",
+            id="filter-repair",
+        ),
+        pytest.param(
+            [{"db_event": DatabaseLogEvent.RUNTIME_ERROR, "line": "Failed to load schema"}],
+            "!ERR     | scylla:  [shard 3] storage_proxy - Exception when communicating with "
+            "10.142.0.56: std::runtime_error (Failed to load schema version "
+            "b40e405f-462c-38f2-a90c-6f130ddbf6f3) ",
+            "Exception when communicating",
+            id="filter-upgrade",
+        ),
+    ],
+)
+def test_db_events_filter_drops_known_runtime_error_lines(
+    real_events, filters_kwargs, known_failure_line, filtered_text
+):
+    """DbEventsFilter drops runtime errors matching a known-failure line while unmatched db events are still logged."""
+    # 2 events per filter (begin/end) + 3 published events.
+    with real_events.wait_for_n_events(real_events.get_events_logger(), count=2 * len(filters_kwargs) + 3, timeout=3):
+        with ExitStack() as stack:
+            for filter_kwargs in filters_kwargs:
+                stack.enter_context(DbEventsFilter(**filter_kwargs))
             DatabaseLogEvent.RUNTIME_ERROR().add_info(node="A", line_number=22, line=known_failure_line).publish()
             DatabaseLogEvent.RUNTIME_ERROR().add_info(node="A", line_number=22, line=known_failure_line).publish()
             DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="B", line_number=22, line="not filtered").publish()
@@ -395,10 +404,11 @@ def test_filter_upgrade(real_events):
     log_content = real_events.get_event_log_file("events.log")
 
     assert "not filtered" in log_content
-    assert "Exception when communicating" not in log_content
+    assert filtered_text not in log_content
 
 
 def test_filter_by_node(real_events):
+    """DbEventsFilter with a node drops events from that node only."""
     with real_events.wait_for_n_events(real_events.get_events_logger(), count=4, timeout=3):
         with DbEventsFilter(db_event=DatabaseLogEvent.NO_SPACE_ERROR, node="A"):
             DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="A", line_number=22, line="this is filtered").publish()
@@ -411,6 +421,7 @@ def test_filter_by_node(real_events):
 
 
 def test_filter_expiration(real_events):
+    """DbEventsFilter drops events up to its exit time and logs later events from the same node."""
     with real_events.wait_for_n_events(real_events.get_events_logger(), count=4, timeout=10):
         line_prefix = f"{datetime.now(timezone.utc):%Y-%m-%dT%H:%M:%S+00:00}"
 
@@ -431,6 +442,7 @@ def test_filter_expiration(real_events):
 
 
 def test_failed_stall_during_filter(real_events):
+    """Reactor stalls published under unrelated db filters keep their DEBUG severity."""
     with real_events.wait_for_n_events(real_events.get_events_logger(), count=5, timeout=3):
         with (
             DbEventsFilter(db_event=DatabaseLogEvent.NO_SPACE_ERROR),
@@ -447,15 +459,16 @@ def test_failed_stall_during_filter(real_events):
 @pytest.mark.parametrize(
     "duration_input, duration_formatted",
     [
-        (None, ""),
-        (2, "2s"),
-        (2.52, "2.52s"),
-        (326, "5m26s"),
-        (4598, "1h16m38s"),
-        (87400, "1d0h16m40s"),
+        pytest.param(None, "", id="none"),
+        pytest.param(2, "2s", id="seconds"),
+        pytest.param(2.52, "2.52s", id="fractional-seconds"),
+        pytest.param(326, "5m26s", id="minutes"),
+        pytest.param(4598, "1h16m38s", id="hours"),
+        pytest.param(87400, "1d0h16m40s", id="days"),
     ],
 )
 def test_duration_format(duration_input, duration_formatted):
+    """duration_formatted renders seconds as a compact d/h/m/s string, empty when duration is unset."""
     event = NodetoolEvent(
         nodetool_command="scrub --skip-corrupted drop_table_during_repair_ks_0",
         node="1.0.0.121",
@@ -467,21 +480,23 @@ def test_duration_format(duration_input, duration_formatted):
     assert event.duration_formatted == duration_formatted
 
 
-@mock.patch("sdcm.sct_events.base.SctEvent.publish")
-def test_publish_called(publish):
-    event = NodetoolEvent(nodetool_command="scrub", node="1.0.0.121", options="", publish_event=True)
-    event.begin_event()
-    assert publish.called, "Publish function was not called unexpectedly"
-
-
-@mock.patch("sdcm.sct_events.base.SctEvent.publish")
-def test_publish_not_called(publish):
-    event = NodetoolEvent(nodetool_command="scrub", node="1.0.0.121", options="", publish_event=False)
-    event.begin_event()
-    assert not publish.called, "Publish function was called unexpectedly"
+@pytest.mark.parametrize(
+    "publish_event",
+    [
+        pytest.param(True, id="publish-called"),
+        pytest.param(False, id="publish-not-called"),
+    ],
+)
+def test_begin_event_publishes_only_when_publish_event_is_set(publish_event):
+    """begin_event() publishes the event exactly when it was created with publish_event=True."""
+    with mock.patch("sdcm.sct_events.base.SctEvent.publish") as publish:
+        event = NodetoolEvent(nodetool_command="scrub", node="1.0.0.121", options="", publish_event=publish_event)
+        event.begin_event()
+    assert publish.called is publish_event
 
 
 def test_soft_timeout():
+    """SoftTimeoutEvent carries a traceback and reports the operation, its duration and the soft timeout."""
     event = SoftTimeoutEvent(soft_timeout=0.1, operation="long-one", duration=0.2)
     event.publish_or_dump()
     event_data = str(event)
@@ -491,6 +506,7 @@ def test_soft_timeout():
 
 
 def test_count_reactor_stall(real_events):
+    """EventCounterContextManager counts reactor stalls into ms buckets and writes per-node stat files."""
     count_condition_name = "test_method"
     statistics = {}
     with real_events.wait_for_n_events(real_events.get_events_counter(), count=4, timeout=5):
@@ -521,6 +537,7 @@ def test_count_reactor_stall(real_events):
 
 
 def test_count_reactor_stall_with_obj_instance(real_events):
+    """EventCounterContextManager used via start/stop methods counts the same as the context manager form."""
     count_condition_name = "test_method_obj"
     counter = EventCounterContextManager(
         DatabaseLogEvent.REACTOR_STALLED, name=count_condition_name, _registry=real_events.events_processes_registry
@@ -553,6 +570,7 @@ def test_count_reactor_stall_with_obj_instance(real_events):
 
 
 def test_count_reactor_stall_not_matched_by_regexp(real_events):
+    """Reactor stalls whose line lacks a parsable ms value are counted in the 0 ms bucket."""
     count_condition_name = "test_method1"
     statistics = {}
     with real_events.wait_for_n_events(real_events.get_events_counter(), count=4, timeout=5):
@@ -572,6 +590,7 @@ def test_count_reactor_stall_not_matched_by_regexp(real_events):
 
 
 def test_count_several_events(real_events):
+    """A counter for several event types keeps separate stats and stat dirs per type."""
     count_condition_name = "test_method2"
     statistics = {}
     with real_events.wait_for_n_events(real_events.get_events_counter(), count=4, timeout=5):
@@ -608,6 +627,7 @@ def test_count_several_events(real_events):
 
 
 def test_skip_not_required_count_required_events(real_events):
+    """A counter counts only its configured event types and ignores others published alongside."""
     count_condition_name = "test_method3"
     statistics = {}
     with real_events.wait_for_n_events(real_events.get_events_counter(), count=6, timeout=5):
@@ -653,6 +673,7 @@ def test_skip_not_required_count_required_events(real_events):
 
 
 def test_count_with_several_count_managers(real_events):
+    """Concurrent counters with overlapping event types each count all their matching events."""
     count_condition_name1 = "test_method4"
     count_condition_name2 = "test_method5"
     statistics1 = {}
@@ -725,6 +746,7 @@ def test_count_with_several_count_managers(real_events):
 
 
 def test_count_with_several_nested_count_managers(real_events):
+    """A nested counter counts only events published while it is active; the outer one counts all."""
     time.sleep(5)
     count_condition_name1 = "test_method6"
     count_condition_name2 = "test_method7"
@@ -806,6 +828,7 @@ def test_count_with_several_nested_count_managers(real_events):
 
 
 def test_kill_nemesis_during_con_event():
+    """KillNemesis escaping a disruption leaves it NORMAL with no errors, since killing is not a failure."""
     with (
         pytest.raises(KillNemesis),
         DisruptionEvent(nemesis_name="SomeNemesis", node="target_node", publish_event=False) as nemesis_event,
