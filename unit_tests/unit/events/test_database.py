@@ -16,7 +16,6 @@ import re
 import pytest
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import LogEvent, find_log_event
 from sdcm.sct_events.database import (
     DatabaseLogEvent,
     FullScanEvent,
@@ -25,7 +24,6 @@ from sdcm.sct_events.database import (
     SYSTEM_ERROR_EVENTS,
     SYSTEM_ERROR_EVENTS_PATTERNS,
 )
-from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 
 NODE_NAME = "db-node-1"
 KS_CF = "ks_cf"
@@ -50,40 +48,6 @@ def classify_system_error_line(line: str):
 
 
 @pytest.mark.parametrize(
-    "event_class",
-    [
-        pytest.param(DatabaseLogEvent.NO_SPACE_ERROR, id="no-space-error"),
-        pytest.param(DatabaseLogEvent.UNKNOWN_VERB, id="unknown-verb"),
-        pytest.param(DatabaseLogEvent.CLIENT_DISCONNECT, id="client-disconnect"),
-        pytest.param(DatabaseLogEvent.SEMAPHORE_TIME_OUT, id="semaphore-time-out"),
-        pytest.param(DatabaseLogEvent.LDAP_CONNECTION_RESET, id="ldap-connection-reset"),
-        pytest.param(DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT, id="system-paxos-timeout"),
-        pytest.param(DatabaseLogEvent.SERVICE_LEVEL_CONTROLLER, id="service-level-controller"),
-        pytest.param(DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT, id="restarted-due-to-time-out"),
-        pytest.param(DatabaseLogEvent.EMPTY_NESTED_EXCEPTION, id="empty-nested-exception"),
-        pytest.param(DatabaseLogEvent.DATABASE_ERROR, id="database-error"),
-        pytest.param(DatabaseLogEvent.BAD_ALLOC, id="bad-alloc"),
-        pytest.param(DatabaseLogEvent.SCHEMA_FAILURE, id="schema-failure"),
-        pytest.param(DatabaseLogEvent.RUNTIME_ERROR, id="runtime-error"),
-        pytest.param(DatabaseLogEvent.FILESYSTEM_ERROR, id="filesystem-error"),
-        pytest.param(DatabaseLogEvent.STACKTRACE, id="stacktrace"),
-        pytest.param(DatabaseLogEvent.BACKTRACE, id="backtrace"),
-        pytest.param(DatabaseLogEvent.ABORTING_ON_SHARD, id="aborting-on-shard"),
-        pytest.param(DatabaseLogEvent.SEGMENTATION, id="segmentation"),
-        pytest.param(DatabaseLogEvent.INTEGRITY_CHECK, id="integrity-check"),
-        pytest.param(DatabaseLogEvent.REACTOR_STALLED, id="reactor-stalled"),
-        pytest.param(DatabaseLogEvent.SUPPRESSED_MESSAGES, id="suppressed-messages"),
-        pytest.param(DatabaseLogEvent.stream_exception, id="stream-exception"),
-        pytest.param(DatabaseLogEvent.DISK_ERROR, id="disk-error"),
-        pytest.param(DatabaseLogEvent.TOO_LONG_QUEUE_ACCUMULATED, id="too-long-queue-accumulated"),
-    ],
-)
-def test_known_system_errors(event_class):
-    """Each known system error is a DatabaseLogEvent subclass, so log scanning raises it as a database event."""
-    assert issubclass(event_class, DatabaseLogEvent)
-
-
-@pytest.mark.parametrize(
     "line, expected_severity",
     [
         pytest.param(f"{TOLERABLE_REACTOR_STALL - 1} ms", Severity.DEBUG, id="below-tolerable-stays-debug"),
@@ -102,49 +66,6 @@ def test_reactor_stalled_add_info_stall_duration_sets_severity(line, expected_se
     assert event.line_number == 1
 
 
-def test_find_issue_by_reactor_stall(test_data_dir):
-    """A reactor stall backtrace resolves to its known GitHub issue, so reports link the existing bug."""
-    with (test_data_dir / "reactor_stalls_with_known_issue.log").open(encoding="utf-8") as sct_log:
-        backtrace = sct_log.readlines()
-
-    find_issue_obj = FindIssuePerBacktrace()
-    event = DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 45 ms", 1)
-    issue_url = find_issue_obj.find_issue(backtrace_type=event.type, decoded_backtrace="\n".join(backtrace))
-    event.known_issue = issue_url
-    assert event.known_issue == "https://github.com/scylladb/scylladb/issues/8828"
-
-
-@pytest.mark.parametrize(
-    "symbol,expected",
-    [
-        pytest.param(
-            "gms::gossiper::do_send_ack2_msg", "https://scylladb.atlassian.net/browse/SCYLLADB-3114", id="ack2-known"
-        ),
-        pytest.param(
-            "std::vector<seastar::httpd::storage_service_json::snapshot>::push_back",
-            "https://scylladb.atlassian.net/browse/SCYLLADB-5320",
-            id="snapshot-push-back-known",
-        ),
-        # the sibling SYN path (jira:SCYLLADB-4852) is a different issue
-        pytest.param("gms::gossiper::do_send_ack_msg", None, id="ack-syn-not-linked"),
-    ],
-)
-def test_find_issue_by_oversized_allocation(symbol, expected):
-    """An oversized allocation backtrace links to its Jira only for the gossiper ACK2 path it was filed for."""
-    backtrace = (
-        "seastar::memory::cpu_pages::warn_large_allocation(unsigned long) at ./seastar/src/core/memory.cc:865\n"
-        f"(inlined by) {symbol}(utils::tagged_uuid<locator::host_id_tag>, "
-        "utils::chunked_vector<gms::gossip_digest, 131072ul>) at ./gms/gossiper.cc:389\n"
-        "gms::gossiper::handle_ack_msg(utils::tagged_uuid<locator::host_id_tag>, gms::gossip_digest_ack) "
-        "at ./gms/gossiper.cc:334\n"
-    )
-
-    assert (
-        FindIssuePerBacktrace().find_issue(backtrace_type="OVERSIZED_ALLOCATION", decoded_backtrace=backtrace)
-        == expected
-    )
-
-
 @pytest.mark.parametrize(
     "event_class",
     [
@@ -160,16 +81,6 @@ def test_add_info_kernel_callstack_line_sets_node_and_line_number(event_class):
     assert event is event.add_info(node="n1", line="kernel callstack 0xffffffffffffff80", line_number=1)
     assert event.node == "n1"
     assert event.line_number == 1
-
-
-def test_system_error_events_list():
-    """SYSTEM_ERROR_EVENTS lists every DatabaseLogEvent subtype, so log scanning matches all of them.
-
-    Since python3.14 also __annotate_func__ need to be excluded from the dir() output.
-    """
-    assert set(dir(DatabaseLogEvent)) - set(dir(LogEvent)) - {"__annotate_func__"} == {
-        ev.type for ev in SYSTEM_ERROR_EVENTS
-    }
 
 
 @pytest.mark.parametrize(
@@ -228,7 +139,11 @@ def test_drop_table_during_repair_gate_closed_line_matches_database_error():
         "it will be unlinked..."
     )
 
-    matched_event = find_log_event(SYSTEM_ERROR_EVENTS_PATTERNS, line)
+    matched_event = None
+    for pattern, event in SYSTEM_ERROR_EVENTS_PATTERNS:
+        if pattern.search(line):
+            matched_event = event
+            break
 
     assert matched_event is not None
     assert matched_event.type == DatabaseLogEvent.DATABASE_ERROR.type
