@@ -108,70 +108,63 @@ from sdcm.sct_events.system import (
     ],
 )
 def test_system_event_msgfmt(event_class, kwargs, expected):
+    """Each system event renders its fields in the log format and survives a pickle round trip between processes."""
     event = event_class(**kwargs)
     event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert str(event) == expected
     assert event == pickle.loads(pickle.dumps(event))
 
 
-def test_test_result_event_fail():
-    event = TestResultEvent(
-        test_status="FAILED",
-        events={
-            "g1": [
-                "e1",
-                "e2",
-            ],
-            "g2": [
-                "e3",
-            ],
-        },
-    )
-    event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-    assert str(event) == dedent("""\
-        ================================= TEST RESULTS =================================
+@pytest.mark.parametrize(
+    "test_status, expected",
+    [
+        pytest.param(
+            "FAILED",
+            dedent("""\
+                ================================= TEST RESULTS =================================
 
-        ----- LAST g1 EVENT ----------------------------------------------------------
-        e1
-        e2
-        ----- LAST g2 EVENT ----------------------------------------------------------
-        e3
-        ================================================================================
-        FAILED :(
-    """)
+                ----- LAST g1 EVENT ----------------------------------------------------------
+                e1
+                e2
+                ----- LAST g2 EVENT ----------------------------------------------------------
+                e3
+                ================================================================================
+                FAILED :(
+            """),
+            id="failed-lists-last-events",
+        ),
+        pytest.param(
+            "SUCCESS",
+            dedent("""\
+                ================================= TEST RESULTS =================================
+                ================================================================================
+                SUCCESS :)
+            """),
+            id="success-omits-events",
+        ),
+    ],
+)
+def test_test_result_event_msgfmt_by_status(test_status, expected):
+    """TestResultEvent lists the last events per group only on failure and survives a pickle round trip."""
+    event = TestResultEvent(test_status=test_status, events={"g1": ["e1", "e2"], "g2": ["e3"]})
+    event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
+    assert str(event) == expected
     loaded_event = pickle.loads(pickle.dumps(event))
     loaded_event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
     assert event == loaded_event
 
 
-def test_test_result_event_ok():
-    event = TestResultEvent(
-        test_status="SUCCESS",
-        events={
-            "g1": [
-                "e1",
-                "e2",
-            ],
-            "g2": [
-                "e3",
-            ],
-        },
-    )
-    event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-    assert str(event) == dedent("""\
-        ================================= TEST RESULTS =================================
-        ================================================================================
-        SUCCESS :)
-    """)
-    loaded_event = pickle.loads(pickle.dumps(event))
-    loaded_event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-    assert event == loaded_event
-
-
-def test_known_system_status_events():
-    assert issubclass(InstanceStatusEvent.STARTUP, InstanceStatusEvent)
-    assert issubclass(InstanceStatusEvent.REBOOT, InstanceStatusEvent)
-    assert issubclass(InstanceStatusEvent.POWER_OFF, InstanceStatusEvent)
+@pytest.mark.parametrize(
+    "event_class",
+    [
+        pytest.param(InstanceStatusEvent.STARTUP, id="startup"),
+        pytest.param(InstanceStatusEvent.REBOOT, id="reboot"),
+        pytest.param(InstanceStatusEvent.POWER_OFF, id="power-off"),
+    ],
+)
+def test_known_system_status_events(event_class):
+    """Each known instance status is an InstanceStatusEvent subclass, so log scanning raises it as one."""
+    assert issubclass(event_class, InstanceStatusEvent)
 
 
 @pytest.mark.parametrize(
@@ -183,6 +176,7 @@ def test_known_system_status_events():
     ],
 )
 def test_instance_status_event(event_class, line):
+    """add_info() records node and line on an instance status event and keeps it at WARNING."""
     event = event_class()
     assert event.severity == Severity.WARNING
 
@@ -194,6 +188,7 @@ def test_instance_status_event(event_class, line):
 
 
 def test_instance_status_events_patterns(test_data_dir):
+    """INSTANCE_STATUS_EVENTS_PATTERNS turn startup, reboot and power-off log lines into WARNING events, in order."""
     cloned_events = []
     with open(str(test_data_dir / "system_status_events.log"), encoding="utf-8") as sct_log:
         for index, line in enumerate(sct_log.readlines()):

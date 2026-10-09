@@ -14,6 +14,7 @@ class MainEventsContext(EventsUtilsMixin):
 
 @pytest.fixture
 def main_events_context():
+    """Run a real main events device in an isolated events registry for one test."""
     MainEventsContext.setup_events_processes(
         events_device=False,
         events_main_device=True,
