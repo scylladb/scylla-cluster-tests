@@ -76,6 +76,9 @@ OVERSIZED_RPC_ALLOCATION_FIXED_FROM = "2026.3.0~dev"
 OVERSIZED_RPC_ALLOCATION_SYMBOL = "seastar::rpc::client::wait_for_reply"
 # The event type as `str(event)` prints it, on the first line.
 OVERSIZED_ALLOCATION_TYPE = "type=OVERSIZED_ALLOCATION"
+# jira:SCYLLADB-3114 - gossip ack2 formatted for debug logging on every send. The fix
+# (scylladb/scylladb#31937) is master only, so the base side of every upgrade keeps hitting it.
+OVERSIZED_ACK2_ALLOCATION_SYMBOL = "gms::gossiper::do_send_ack2_msg"
 
 
 def truncate_entries(func):
@@ -165,6 +168,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         for node in self.db_cluster.nodes:
             self.configure_event_filtering(node)
         self.filter_oversized_allocation_for_whole_run()
+        self.filter_oversized_ack2_allocation()
 
     def configure_event_filtering(self, node):
         self.stacks[node] = contextlib.ExitStack()
@@ -200,6 +204,13 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         EventsFilter(
             event_class=DatabaseLogEvent,
             regex=rf"[^\n]* {OVERSIZED_ALLOCATION_TYPE}\b.*{OVERSIZED_RPC_ALLOCATION_SYMBOL}",
+        ).publish()
+
+    def filter_oversized_ack2_allocation(self):
+        """Filter out jira:SCYLLADB-3114 for the whole run: no base version we upgrade from will get the fix."""
+        EventsFilter(
+            event_class=DatabaseLogEvent,
+            regex=rf"[^\n]* {OVERSIZED_ALLOCATION_TYPE}\b.*{OVERSIZED_ACK2_ALLOCATION_SYMBOL}",
         ).publish()
 
     orig_ver = None
