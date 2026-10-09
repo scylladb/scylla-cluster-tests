@@ -237,15 +237,9 @@ def test_resolve_multi_region_multi_az_drops_unsupported_and_fills(mock_multi_re
         ([-1, 0], False),
         (["2", "0"], True),
         (["0"], False),
-        # strings
-        ("", False),
-        ("0", False),
-        ("3", True),
-        ("3 4", True),
-        ("0 0", False),
-        ("-1", False),
-        ("abc", False),
         # unsupported types
+        ("3", False),
+        ("3 4", False),
         ({"a": 1}, False),
     ],
 )
@@ -556,8 +550,8 @@ class TestSpotPlacementScoreOrdering:
         resolver = AZResolver(self._spot_params(n_db_nodes=6, n_loaders=2, n_monitor_nodes=1))
         assert resolver.spot_target_capacity() == 6
 
-    def test_target_capacity_handles_multi_dc_strings(self):
-        resolver = AZResolver(self._spot_params(n_db_nodes="3 3", n_loaders="1 1", n_monitor_nodes=1))
+    def test_target_capacity_handles_multi_dc_lists(self):
+        resolver = AZResolver(self._spot_params(n_db_nodes=[3, 3], n_loaders=[1, 1], n_monitor_nodes=1))
         assert resolver.spot_target_capacity() == 6
 
     def test_target_capacity_includes_zero_token_nodes(self):

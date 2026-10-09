@@ -40,9 +40,8 @@ from sdcm.sct_config.types import (
     IntOrList,
     SctField,
     StringOrList,
-    boolean_or_space_separated_booleans,
     dict_or_str,
-    int_or_space_separated_ints,
+    int_or_list_or_eval,
     str_or_list_or_eval,
 )
 
@@ -56,11 +55,10 @@ __all__ = [
     "StringOrList",
     "available_backends",
     "backend_to_cloud",
-    "boolean_or_space_separated_booleans",
     "count_regions",
     "dict_or_str",
     "init_and_verify_sct_config",
-    "int_or_space_separated_ints",
+    "int_or_list_or_eval",
     "is_arm_instance_type",
     "simulated_racks_enabled",
     "str_or_list_or_eval",

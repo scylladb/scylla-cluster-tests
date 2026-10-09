@@ -5,8 +5,8 @@ stress_cmd:      "scylla-bench -workload=uniform -mode=counter_update -replicati
 stress_read_cmd: "scylla-bench -workload=uniform -mode=counter_read   -replication-factor=3 -partition-count=1000 -clustering-row-count=10 -concurrency 512 -duration 360m -validate-data"
 
 availability_zone: 'a,b,c'
-n_db_nodes: '3 3 3'
-n_loaders:  '1 1 1'
+n_db_nodes: [3, 3, 3]
+n_loaders:  [1, 1, 1]
 
 rack_aware_loader: true
 region_aware_loader: true
@@ -19,7 +19,7 @@ user_prefix: longevity-counters-multidc
 space_node_threshold: 6442
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '011'
+nemesis_seed: 11
 nemesis_interval: 15
 
 server_encrypt: true

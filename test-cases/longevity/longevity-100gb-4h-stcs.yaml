@@ -15,7 +15,7 @@ instance_type_db: 'i7i.2xlarge'
 nemesis_class_name: 'SisyphusMonkey'
 # the test targets SizeTieredCompactionStrategy; keep it for the whole run
 nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
-nemesis_seed: '032'
+nemesis_seed: 32
 
 user_prefix: 'longevity-100gb-4h-stcs'
 space_node_threshold: 64424

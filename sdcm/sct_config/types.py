@@ -71,8 +71,8 @@ class InputType:
 
         IntOrList = Annotated[
             list[int],
-            BeforeValidator(int_or_space_separated_ints),
-            InputType("int | list[int] | space-separated ints"),
+            BeforeValidator(int_or_list_or_eval),
+            InputType("int | list[int]"),
         ]
     """
 
@@ -109,31 +109,42 @@ def _check_file_exists(value: str) -> None:
 
 
 def str_or_list_or_eval(value: Union[str, List[str], None]) -> List[str] | None:
-    """Convert an environment variable into a Python's list.
+    """Convert a config value into a list of strings.
 
-    Always returns list[str] | None. Single strings are wrapped in a list.
+    Accepts:
+    - None -> None
+    - str -> [str]  (always wrapped in a list)
+    - str containing a Python list literal of strings (e.g. "['a', 'b']") -> list[str]
+    - list[str] -> list[str]  (elements must already be strings; no coercion)
+
+    All list elements must be strings. Non-string elements raise ValueError.
     """
-
     if value is None:
         return None
+
     if isinstance(value, str):
         try:
-            result = ast.literal_eval(value)
-            return result if isinstance(result, list) else [result]
-        except Exception:  # noqa: BLE001
-            pass
-        return [str(value)] if str(value) else []
+            parsed = ast.literal_eval(value.strip())
+        except ValueError, SyntaxError:
+            # literal_eval failed — treat the whole input as a plain string.
+            return [value] if value else []
+
+        # some values may be json encoded strings, so they pass trough
+        if isinstance(parsed, str):
+            return [parsed] if parsed else []
+
+        if not isinstance(parsed, list):
+            raise ValueError(f"{value} parsed to {parsed}, expected a list of strings")
+
+        value = parsed  # fall through to list validation below
 
     if isinstance(value, list):
-        ret_values = []
-        for val in value:
-            try:
-                ret_values += [ast.literal_eval(val)]
-            except Exception:  # noqa: BLE001
-                ret_values += [str(val)]
-        return ret_values
+        for el in value:
+            if not isinstance(el, str):
+                raise ValueError(f"List element {el} isn't a string in {value}")
+        return value
 
-    raise ValueError(f"{value} isn't a string or a list")
+    raise ValueError(f"{value} (type {type(value).__name__}) isn't a valid string or list[str]")
 
 
 #: Config type that always returns list[str]. Accepts str, list[str], or evaluable expressions.
@@ -145,85 +156,49 @@ StringOrList = Annotated[
 ]
 
 
-def int_or_space_separated_ints(value: str | int | list[int]) -> list[int] | None:
-    """Coerce an int, a list of ints, or a space-separated string of ints into a list of ints."""
-    if value is None:
-        return None
-    try:
-        return [int(value)]
-    except Exception:  # noqa: BLE001
-        pass
-
-    if isinstance(value, list):
-        # Handle list of ints or list of strings that can be converted to ints
-        try:
-            return [int(v) for v in value]
-        except (ValueError, TypeError) as exc:
-            raise ValueError(f"{value} isn't a list of integers") from exc
-
-    if isinstance(value, str):
-        try:
-            values = value.split()
-            return [int(v) for v in values]
-        except Exception:  # noqa: BLE001
-            pass
-
-    raise ValueError(f"{value} isn't int or list")
-
-
-#: Config type that always returns list[int]. Accepts int, list[int], or space-separated string of ints.
-IntOrList = Annotated[
-    list[int],
-    BeforeValidator(int_or_space_separated_ints),
-    InputType("int | list[int] | space-separated ints"),
-]
-
-
-def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -> list[bool] | None:  # noqa: PLR0911
-    """Convert value to a list of bools.
+def int_or_list_or_eval(value: str | int | list[int]) -> list[int] | None:
+    """Coerce value to a single int or a list of ints.
 
     Accepts:
     - None -> None
-    - bool -> [bool]
-    - list of bools -> list of bools
-    - list of strings (true/false/yes/no/1/0) -> list of bools
-    - space-separated string of boolean values -> list of bools
+    - int -> list[int]
+    - list[int] ->  list[int]
+    - str containing a single integer (e.g. from an env var) -> list[int]
+    - str containing a Python list literal of ints (e.g. "[2, 2]" from an env var) -> list[int]
+
+    List elements must already be ints; string elements (e.g. ["3", "1"]) are rejected.
+    Space-separated strings (e.g. '3 3') are no longer accepted.
+    Use a YAML list instead: [3, 3].
     """
     if value is None:
         return None
 
-    if isinstance(value, bool):
+    # bool is a subclass of int in Python, so we need to exclude bools explicitly to avoid accepting True/False as valid ints.
+    if isinstance(value, int) and not isinstance(value, bool):
         return [value]
 
     if isinstance(value, list):
-        # Handle list of bools or list of strings that can be converted to bools
-        try:
-            result = []
-            for v in value:
-                if isinstance(v, bool):
-                    result.append(v)
-                else:
-                    result.append(bool(strtobool(str(v))))
-            return result
-        except (ValueError, TypeError) as exc:
-            raise ValueError(f"{value} isn't a list of booleans") from exc
+        for v in value:
+            if not isinstance(v, int) or isinstance(v, bool):
+                raise ValueError(f"List element {v} isn't an integer in {value}")
+        return value
 
     if isinstance(value, str):
+        # Try literal_eval first — handles "[2, 2]", "[3]", "3", etc.
         try:
-            values = value.split()
-            return [bool(strtobool(v)) for v in values]
-        except Exception:  # noqa: BLE001
+            parsed = ast.literal_eval(value.strip())
+        except ValueError, SyntaxError:
             pass
+        else:
+            if isinstance(parsed, list):
+                return int_or_list_or_eval(parsed)  # recursively validate list elements
+            if isinstance(parsed, int) and not isinstance(parsed, bool):
+                return [parsed]
 
-    raise ValueError(f"{value} isn't bool or list")
+    raise ValueError(f"{value} (type {type(value).__name__}) isn't a valid int or list[int]")
 
 
-#: Config type that always returns list[bool]. Accepts bool, list[bool], or space-separated boolean strings.
-BooleanOrList = Annotated[
-    list[bool],
-    BeforeValidator(boolean_or_space_separated_booleans),
-    InputType("bool | list[bool] | space-separated booleans"),
-]
+IntOrList = Annotated[list[int], BeforeValidator(int_or_list_or_eval), InputType("int | list[int]")]
 
 
 def dict_or_str(value: dict | str | None) -> dict | None:

@@ -76,36 +76,17 @@ stress_cmd:
 **Use cases**: Commands, file paths, package lists
 
 #### IntOrList
-Always returns a `list[int]`. Accepts integer, list of integers, or space-separated string — all normalized to a list:
+Always returns a `list[int]`. Accepts an integer or a list of integers — normalized to a list. Space-separated strings (`'3 3'`) are rejected; in `SCT_*` environment variables use a list literal, e.g. `SCT_N_DB_NODES='[3, 3]'`:
 
 ```yaml
 # Single integer → [3]
 n_db_nodes: 3
 
-# Space-separated string (for multi-DC) → [3, 3]
-n_db_nodes: "3 3"
-
-# List of integers → [3, 3, 0]
+# List of integers (for multi-DC)
 n_db_nodes: [3, 3, 0]
 ```
 
 **Use cases**: Node counts, timeouts, thresholds
-
-#### BooleanOrList
-Always returns a `list[bool]`. Accepts boolean, list of booleans, or space-separated string — all normalized to a list:
-
-```yaml
-# Single boolean → [true]
-nemesis_during_prepare: true
-
-# Space-separated string → [true, false]
-nemesis_during_prepare: "true false"
-
-# String values (yes/no/1/0) → [true]
-nemesis_during_prepare: "yes"
-```
-
-**Use cases**: Feature flags, per-tenant boolean settings
 
 #### Enum and Literal (Choices)
 For configuration options with a fixed set of allowed values, use `Literal`:
@@ -193,7 +174,6 @@ Select the type based on your needs:
 | `bool` | Single boolean value |
 | `StringOrList` | Multi-value strings (always `list[str]`) |
 | `IntOrList` | Multi-value integers (always `list[int]`) |
-| `BooleanOrList` | Multi-value booleans (always `list[bool]`) |
 | `Literal["choice1", "choice2", ...]` | Fixed set of allowed string values (choices/enum) |
 | `dict` | Dictionary/mapping |
 | `DictOrStrOrPydantic` | Dict, string, or Pydantic BaseModel for nested configs |
@@ -337,9 +317,9 @@ hydra run-test longevity_test.LongevityTest.test_custom_time \
 ### Multi-DC Configuration
 
 ```yaml
-# Use space-separated strings for multi-DC
-n_db_nodes: "3 3 0"  # 3 nodes in DC1, 3 in DC2, 0 in DC3
-n_loaders: "2 2"     # 2 loaders in each DC
+# Use YAML lists for multi-DC
+n_db_nodes: [3, 3, 0]  # 3 nodes in DC1, 3 in DC2, 0 in DC3
+n_loaders: [2, 2]      # 2 loaders in each DC
 ```
 
 ### Multitenant Configuration
@@ -424,7 +404,7 @@ scylla-cluster-tests/
 
 ## Best Practices
 
-1. **Use appropriate types**: Choose `StringOrList`, `IntOrList`, or `BooleanOrList` when you need flexibility
+1. **Use appropriate types**: Choose `StringOrList` or `IntOrList` when you need flexibility
 2. **Add validation**: Use Pydantic validators for complex validation logic
 3. **Document thoroughly**: Add clear descriptions to all fields
 4. **Always set defaults in YAML**: All configuration options MUST have defaults defined in `defaults/test_default.yaml` or backend-specific files - never in code

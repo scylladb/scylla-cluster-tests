@@ -84,8 +84,7 @@ sizing_db:
 n_db_nodes: 6
 
 nemesis_class_name: 'NoOpMonkey'
-nemesis_seed: '033'
-
+nemesis_seed: 33
 user_prefix: 'longevity-alternator-multiple-ttl'
 
 alternator_port: 8080

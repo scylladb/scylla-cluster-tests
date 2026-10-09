@@ -462,8 +462,8 @@ def sizing_preview(  # noqa: PLR0912, PLR0914, PLR0915
         if not role_values and not default_value:
             continue
 
-        node_count_raw = str(merged_config.get(NODE_COUNT_PARAMS.get(role, ""), 0))
-        node_count = sum(int(x) for x in node_count_raw.split())
+        node_count_raw = merged_config.get(NODE_COUNT_PARAMS.get(role, "")) or 0
+        node_count = sum(node_count_raw) if isinstance(node_count_raw, list) else int(node_count_raw)
         if node_count == 0:
             continue
         if role == "db_oracle" and merged_config.get("db_type") not in ("mixed_scylla", "mixed_cassandra"):

@@ -94,7 +94,7 @@ Number list of oracle test nodes in multiple data centers.
 
 **default:** 1
 
-**type:** int | list[int] | space-separated ints → list[int]
+**type:** int | list[int] → list[int]
 
 
 <a id="oracle_scylla_version"></a>

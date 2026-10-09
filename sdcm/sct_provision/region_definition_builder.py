@@ -225,7 +225,7 @@ class DefinitionBuilder(abc.ABC):
         """generates node count for each region from configuration parameter string (e.g. n_db_nodes).
         When parameter string has less regions defined than regions, fills with zero for each missing region.
 
-        E.g. regions: 'eastus westus centralus' and n_db_nodes: '2 1' - will generate [2, 1, 0] list"""
+        E.g. regions: 'eastus westus centralus' and n_db_nodes: [2, 1] - will generate [2, 1, 0] list"""
         regions = self.params.get(self.REGION_MAP)
         region_count = len(regions)
         return ((n_list_or_int if isinstance(n_list_or_int, list) else [n_list_or_int]) + [0] * region_count)[
