@@ -3,16 +3,18 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from enum import Enum
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from sdcm.sct_events.system import SoftTimeoutEvent, HardTimeoutEvent
 from sdcm.utils.adaptive_timeouts.load_info_store import (
-    NodeLoadInfoService,
     AdaptiveTimeoutStore,
     ArgusAdaptiveTimeoutStore,
     NodeLoadInfoServices,
 )
 from sdcm.utils.features import is_tablets_feature_enabled
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,24 +35,53 @@ def _get_operation_timeout_factor(params, operation: "Operations") -> float:
 TABLETS_SOFT_TIMEOUT = 1 * 60 * 60
 TABLETS_HARD_TIMEOUT = 3 * 60 * 60
 _STREAMING_OVERHEAD = 600  # add 10 minutes overhead for operations other than streaming
+_BARRIER_OVERHEAD_PER_NODE = 60  # raft topology barriers wait for every node at each stage
+_TABLET_OVERHEAD = 2  # group0 stage transitions per migrated tablet
+_LOAD_THROUGHPUT_PENALTY = 3  # streaming gets ~1/4 of the disk bandwidth on a fully loaded node
+_RBNO_FACTOR = 2  # repair-based streaming is considerably slower than plain streaming
+
+
+def _is_decommission_repair_based(node: "BaseNode") -> bool:
+    enabled = node.get_scylla_config_param("enable_repair_based_node_ops", verbose=False)
+    allowed = node.get_scylla_config_param("allowed_repair_based_node_ops", verbose=False)
+    if not enabled or not allowed:
+        return False
+    return enabled.strip().strip('"') == "true" and "decommission" in allowed.strip().strip('"').split(",")
 
 
 def _get_decommission_timeout(
-    node_info_service: NodeLoadInfoService, tablets_enabled: bool = False
+    node: "BaseNode", tablets_enabled: bool = False
 ) -> tuple[tuple[int, int | None], dict[str, Any]]:
-    """Calculate timeout for decommission operation based on node load info. Still experimental, used to gather historical data."""
+    """Calculate decommission timeout from node load info.
+
+    Tablets:
+        soft = _STREAMING_OVERHEAD + (streaming_time + barrier_overhead + tablets_overhead) * rbno_factor
+        hard = 2 * soft
+        streaming_time   = data_size_mb / (expected_throughput / (1 + 3 * cpu_load)), cpu_load = load5 / shards in [0, 1]
+          this results in 100% throughput at 0% load, reducing to 25% throughput at 100% load
+        barrier_overhead = 60 * nodes in cluster
+        tablets_overhead = 2 * tablet replicas on the node
+        rbno_factor      = 2 when decommission is in allowed_repair_based_node_ops, else 1
+    Vnodes: rough estimation from previous runs, ~9h for 1TB, 2h minimum, no hard timeout.
+    """
     try:
+        node_info_service = NodeLoadInfoServices().get(node)
         node_info = node_info_service.as_dict()
         LOGGER.debug(f"Estimating decommission timeout with {node_info=}")
         if tablets_enabled:
             node_info["tablets_enabled"] = True
-            estimated = int(node_info_service.node_data_size_mb / node_info_service.expected_throughput)
-            soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
+            cpu_load = min(node_info_service.cpu_load_5 / node_info_service.shards_count, 1.0)
+            effective_throughput = node_info_service.expected_throughput / (1 + _LOAD_THROUGHPUT_PENALTY * cpu_load)
+            streaming_time = node_info_service.node_data_size_mb / effective_throughput
+            barrier_overhead = _BARRIER_OVERHEAD_PER_NODE * len(node.parent_cluster.nodes)
+            tablets_overhead = _TABLET_OVERHEAD * node_info_service.tablets_count
+            rbno_factor = _RBNO_FACTOR if _is_decommission_repair_based(node) else 1
+            soft_timeout = int(
+                _STREAMING_OVERHEAD + (streaming_time + barrier_overhead + tablets_overhead) * rbno_factor
+            )
             return (soft_timeout, soft_timeout * 2), node_info
         else:
-            # For non-tablet cases, calculate based on data size
-            # rough estimation from previous runs almost 9h for 1TB
-            soft_timeout = max(int(node_info_service.node_data_size_mb * 0.03), 7200)  # 2 hours minimum
+            soft_timeout = max(int(node_info_service.node_data_size_mb * 0.03), 7200)
             return (soft_timeout, None), node_info
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Failed to calculate decommission timeout: \n%s \nDefaulting to 6 hours", exc)
@@ -58,13 +89,13 @@ def _get_decommission_timeout(
 
 
 def _get_new_node_timeout(
-    node_info_service: NodeLoadInfoService,
+    node: "BaseNode",
     timeout: int | float = None,
     tablets_enabled: bool = False,
 ) -> tuple[tuple[int, int | None], dict[str, Any]]:
     """Calculate timeout for adding a new node operation"""
     try:
-        node_info = node_info_service.as_dict()
+        node_info = NodeLoadInfoServices().get(node).as_dict()
         if tablets_enabled:
             node_info["tablets_enabled"] = True
             return (TABLETS_SOFT_TIMEOUT, TABLETS_HARD_TIMEOUT), node_info
@@ -76,7 +107,7 @@ def _get_new_node_timeout(
 
 
 def _get_tablet_migration_timeout(
-    node_info_service: NodeLoadInfoService,
+    node: "BaseNode",
     timeout: int | float = None,
     tablets_enabled: bool = False,
 ) -> tuple[tuple[int, int | None], dict[str, Any]]:
@@ -89,6 +120,7 @@ def _get_tablet_migration_timeout(
     Falls back to the caller-supplied timeout on error.
     """
     try:
+        node_info_service = NodeLoadInfoServices().get(node)
         node_info = node_info_service.as_dict()
         LOGGER.debug(f"Estimating tablet migration timeout with {node_info=}")
         if tablets_enabled:
@@ -106,44 +138,38 @@ def _get_tablet_migration_timeout(
         return (timeout or 6 * 60 * 60, None), {}
 
 
-def _get_soft_timeout(
-    node_info_service: NodeLoadInfoService, timeout: int | float = None
-) -> tuple[int | float, dict[str, Any]]:
+def _get_soft_timeout(node: "BaseNode", timeout: int | float = None) -> tuple[int | float, dict[str, Any]]:
     # no timeout calculation - just return the timeout passed as argument along with node load info
     try:
-        return timeout, node_info_service.as_dict()
+        return timeout, NodeLoadInfoServices().get(node).as_dict()
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Failed to get node info for timeout: \n%s", exc)
         return timeout, {}
 
 
-def _get_soft_timeout_no_node_info(
-    node_info_service: NodeLoadInfoService, timeout: int | float = None
-) -> tuple[int | float, dict[str, Any]]:
+def _get_soft_timeout_no_node_info(node: "BaseNode", timeout: int | float = None) -> tuple[int | float, dict[str, Any]]:
     # no timeout calculation - just return the timeout passed as argument without node load info
     return timeout, {}
 
 
 def _get_query_timeout(
-    node_info_service: NodeLoadInfoService, timeout: int | float = None, query: str = None
+    node: "BaseNode", timeout: int | float = None, query: str = None
 ) -> tuple[int | float, dict[str, Any]]:
-    timeout, stats = _get_soft_timeout(node_info_service=node_info_service, timeout=timeout)
+    timeout, stats = _get_soft_timeout(node=node, timeout=timeout)
     stats["query"] = query
     return timeout, stats
 
 
 def _get_service_level_propagation_timeout(
-    node_info_service: NodeLoadInfoService, timeout: int | float = None, service_level_for_test_step: str = None
+    node: "BaseNode", timeout: int | float = None, service_level_for_test_step: str = None
 ) -> tuple[int | float, dict[str, Any]]:
     """service_level_for_test_step will report in ES on which step of test the timeout happened"""
-    timeout, stats = _get_soft_timeout(node_info_service=node_info_service, timeout=timeout)
+    timeout, stats = _get_soft_timeout(node=node, timeout=timeout)
     stats["service_level_for_test_step"] = service_level_for_test_step
     return timeout, stats
 
 
-def _get_compaction_timeout(
-    node_info_service: NodeLoadInfoService, timeout: int | float = None
-) -> tuple[int | float, dict[str, Any]]:
+def _get_compaction_timeout(node: "BaseNode", timeout: int | float = None) -> tuple[int | float, dict[str, Any]]:
     """
     Experimentally got these timings
     Using the estimate = (MB / shards) / 25 + 120
@@ -167,6 +193,7 @@ def _get_compaction_timeout(
     FIXED_OVERHEAD = 120  # seconds
     SAFETY_FACTOR = 2  # timeout is doubled to account for load, instance type, etc. variations
     try:
+        node_info_service = NodeLoadInfoServices().get(node)
         data_size = node_info_service.node_data_size_mb  # MB
         shards = node_info_service.shards_count
         if data_size and shards:
@@ -178,7 +205,7 @@ def _get_compaction_timeout(
         return timeout, {}
 
 
-def _get_cleanup_timeout(node_info_service, timeout=None):
+def _get_cleanup_timeout(node: "BaseNode", timeout: int | float = None) -> tuple[int | float, dict[str, Any]]:
     """Calculate cleanup timeout based on node data size.
     After decommission/topology change, cleanup removes data that no longer
     belongs to a node. The amount of data to process is proportional to total
@@ -198,6 +225,7 @@ def _get_cleanup_timeout(node_info_service, timeout=None):
     MIN_CLEANUP_TIMEOUT = 120  # seconds
     SAFETY_FACTOR = 2.0
     try:
+        node_info_service = NodeLoadInfoServices().get(node)
         data_size_mb = node_info_service.node_data_size_mb
         throughput = node_info_service.expected_throughput  # MB/s
         if data_size_mb and throughput:
@@ -246,7 +274,7 @@ class Operations(Enum):
 
 class TestInfoServices:
     @staticmethod
-    def get(node: "BaseNode") -> dict:  # noqa: F821
+    def get(node: "BaseNode") -> dict:
         return dict(
             n_db_nodes=len(node.parent_cluster.nodes),
         )
@@ -307,7 +335,7 @@ class TimeoutMonitor:
 @contextmanager
 def adaptive_timeout(  # noqa: PLR0914
     operation: Operations,
-    node: "BaseNode",  # noqa: F821
+    node: "BaseNode",
     stats_storage: AdaptiveTimeoutStore = ArgusAdaptiveTimeoutStore(),
     **kwargs,
 ):
@@ -326,15 +354,10 @@ def adaptive_timeout(  # noqa: PLR0914
     _, timeout_func, required_arg_names = operation.value
     args = {arg: kwargs[arg] for arg in required_arg_names}
 
-    # if node is known to be not available, skip metrics gathering and use default timeouts
     store_metrics = node.parent_cluster.params.get("adaptive_timeout_store_metrics") and kwargs["node_available"]
-    if store_metrics:
-        metrics = NodeLoadInfoServices().get(node)
-    else:
-        metrics = {}
     if tablet_sensitive_op:
         args["tablets_enabled"] = tablets_enabled
-    result = timeout_func(node_info_service=metrics, **args)
+    result = timeout_func(node=node if kwargs["node_available"] else None, **args)
     if tablet_sensitive_op:
         (soft_timeout, hard_timeout), load_metrics = result
     else:
