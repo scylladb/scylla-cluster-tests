@@ -5,10 +5,10 @@
 /docker                         @fruch @soyacz
 
 # manager related files
-/jenkins-pipelines/manager      @mikliapko
-/test-cases/manager             @mikliapko
-/configurations/manager         @mikliapko
-/sdcm/mgmt                      @mikliapko
+/jenkins-pipelines/manager      @mikliapko @Michal-Leszczynski
+/test-cases/manager             @mikliapko @Michal-Leszczynski
+/configurations/manager         @mikliapko @Michal-Leszczynski
+/sdcm/mgmt                      @mikliapko @Michal-Leszczynski
 
 # backends for different clouds
 /sdcm/provision/aws         @fruch
