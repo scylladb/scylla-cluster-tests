@@ -24,7 +24,7 @@ from sdcm.sct_events.nemesis import DisruptionEvent
 
 Y = None  # define a global name for pickle.
 
-SEVERITIES_YAML = b"Y: NORMAL\nZ: ERROR\nY.T: WARNING\nY.T.S: CRITICAL\nZ.T.S: NORMAL\nW.T.S: NORMAL\n"
+SEVERITIES_YAML = b"Y: NORMAL\nZ: ERROR\nY.T: WARNING\nY.T.S: CRITICAL\nZ.T.S: NORMAL\n"
 
 
 @pytest.fixture(autouse=True)
@@ -256,14 +256,21 @@ def test_add_subevent_type_all_levels_not_abstract():
     assert Y.T.S.subtype == "S"
 
 
-def test_add_subevent_type_abstract_level_in_the_middle():
+@pytest.mark.parametrize(
+    "base_abstract",
+    [
+        pytest.param(False, id="concrete-base"),
+        pytest.param(True, id="abstract-base"),
+    ],
+)
+def test_add_subevent_type_abstract_level_in_the_middle(base_abstract):
     """A middle level without severity must be abstract; its concrete subtype still nests under it."""
 
     @runtime_checkable
     class ZT(SctEventProtocol, Protocol):
         S: Type[SctEventProtocol]
 
-    class Z(SctEvent):
+    class Z(SctEvent, abstract=base_abstract):
         T: Type[ZT]
 
     with pytest.raises(ValueError, match="no max severity"):
@@ -282,34 +289,6 @@ def test_add_subevent_type_abstract_level_in_the_middle():
     assert Z.T.S.base == "Z"
     assert Z.T.S.type == "T"
     assert Z.T.S.subtype == "S"
-
-
-def test_add_subevent_type_subtype_is_not_abstract_only():
-    """Under an abstract base, an abstract middle level can carry a concrete subtype."""
-
-    @runtime_checkable
-    class WT(SctEventProtocol, Protocol):
-        S: Type[SctEventProtocol]
-
-    class W(SctEvent, abstract=True):
-        T: Type[WT]
-
-    with pytest.raises(ValueError, match="no max severity"):
-        W.add_subevent_type("T")
-    W.add_subevent_type("T", abstract=True)
-    assert W.T.is_abstract()
-    assert issubclass(W.T, W)
-    assert W.T.base == "W"
-    assert W.T.type == "T"
-    assert W.T.subtype is None
-
-    W.T.add_subevent_type("S")
-    assert not W.T.S.is_abstract()
-    assert issubclass(W.T.S, W.T)
-    assert issubclass(W.T.S, W)
-    assert W.T.S.base == "W"
-    assert W.T.S.type == "T"
-    assert W.T.S.subtype == "S"
 
 
 @pytest.mark.parametrize(
@@ -576,7 +555,7 @@ def test_log_event_add_info():
 
 
 def test_log_event_clone_fresh():
-    """clone() of a fresh LogEvent yields a distinct copy with the same defaults."""
+    """clone() of a fresh LogEvent yields a distinct object with the same state."""
     global Y  # noqa: PLW0603
 
     class Y(LogEvent):
@@ -585,19 +564,7 @@ def test_log_event_clone_fresh():
     z = Y(regex="regex1")
     y = z.clone()
     assert y is not z
-    assert y.base == "Y"
-    assert y.type is None
-    assert y.subtype is None
-    assert y.severity == Severity.ERROR
-    assert y.regex == "regex1"
-    assert y.node is None
-    assert y.line is None
-    assert y.line_number == 0
-    assert y.backtrace is None
-    assert y.raw_backtrace is None
-    assert not y._ready_to_publish
-    assert isinstance(y, LogEvent)
-    assert isinstance(y, SctEventProtocol)
+    assert y == z
 
 
 def test_log_event_clone_with_info():

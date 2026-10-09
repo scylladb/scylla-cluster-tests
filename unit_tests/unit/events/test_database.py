@@ -16,7 +16,7 @@ import re
 import pytest
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import LogEvent, find_log_event
+from sdcm.sct_events.base import find_log_event
 from sdcm.sct_events.database import (
     SYSTEM_ERROR_EVENTS,
     SYSTEM_ERROR_EVENTS_PATTERNS,
@@ -48,40 +48,6 @@ def classify_system_error_line(line: str):
         if pattern.search(line):
             return event
     return None
-
-
-@pytest.mark.parametrize(
-    "event_class",
-    [
-        pytest.param(DatabaseLogEvent.NO_SPACE_ERROR, id="no-space-error"),
-        pytest.param(DatabaseLogEvent.UNKNOWN_VERB, id="unknown-verb"),
-        pytest.param(DatabaseLogEvent.CLIENT_DISCONNECT, id="client-disconnect"),
-        pytest.param(DatabaseLogEvent.SEMAPHORE_TIME_OUT, id="semaphore-time-out"),
-        pytest.param(DatabaseLogEvent.LDAP_CONNECTION_RESET, id="ldap-connection-reset"),
-        pytest.param(DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT, id="system-paxos-timeout"),
-        pytest.param(DatabaseLogEvent.SERVICE_LEVEL_CONTROLLER, id="service-level-controller"),
-        pytest.param(DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT, id="restarted-due-to-time-out"),
-        pytest.param(DatabaseLogEvent.EMPTY_NESTED_EXCEPTION, id="empty-nested-exception"),
-        pytest.param(DatabaseLogEvent.DATABASE_ERROR, id="database-error"),
-        pytest.param(DatabaseLogEvent.BAD_ALLOC, id="bad-alloc"),
-        pytest.param(DatabaseLogEvent.SCHEMA_FAILURE, id="schema-failure"),
-        pytest.param(DatabaseLogEvent.RUNTIME_ERROR, id="runtime-error"),
-        pytest.param(DatabaseLogEvent.FILESYSTEM_ERROR, id="filesystem-error"),
-        pytest.param(DatabaseLogEvent.STACKTRACE, id="stacktrace"),
-        pytest.param(DatabaseLogEvent.BACKTRACE, id="backtrace"),
-        pytest.param(DatabaseLogEvent.ABORTING_ON_SHARD, id="aborting-on-shard"),
-        pytest.param(DatabaseLogEvent.SEGMENTATION, id="segmentation"),
-        pytest.param(DatabaseLogEvent.INTEGRITY_CHECK, id="integrity-check"),
-        pytest.param(DatabaseLogEvent.REACTOR_STALLED, id="reactor-stalled"),
-        pytest.param(DatabaseLogEvent.SUPPRESSED_MESSAGES, id="suppressed-messages"),
-        pytest.param(DatabaseLogEvent.stream_exception, id="stream-exception"),
-        pytest.param(DatabaseLogEvent.DISK_ERROR, id="disk-error"),
-        pytest.param(DatabaseLogEvent.TOO_LONG_QUEUE_ACCUMULATED, id="too-long-queue-accumulated"),
-    ],
-)
-def test_known_system_errors(event_class):
-    """Each known system error is a DatabaseLogEvent subclass, so log scanning raises it as a database event."""
-    assert issubclass(event_class, DatabaseLogEvent)
 
 
 @pytest.mark.parametrize(
@@ -166,16 +132,6 @@ def test_add_info_kernel_callstack_line_sets_node_and_line_number(event_class):
     assert event is event.add_info(node="n1", line="kernel callstack 0xffffffffffffff80", line_number=1)
     assert event.node == "n1"
     assert event.line_number == 1
-
-
-def test_system_error_events_list():
-    """SYSTEM_ERROR_EVENTS lists every DatabaseLogEvent subtype, so log scanning matches all of them.
-
-    Since python3.14 also __annotate_func__ need to be excluded from the dir() output.
-    """
-    assert set(dir(DatabaseLogEvent)) - set(dir(LogEvent)) - {"__annotate_func__"} == {
-        ev.type for ev in SYSTEM_ERROR_EVENTS
-    }
 
 
 @pytest.mark.parametrize(

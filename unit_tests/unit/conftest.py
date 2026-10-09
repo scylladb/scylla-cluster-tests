@@ -40,7 +40,7 @@ def drain_spot_provision_outcomes():
 
     It is class-level state that outlives the test that filled it, and anything left in it changes what
     the *next* test sees: `sct.py provision-resources` reports outcomes to Argus when the buffer is
-    non-empty, so a leftover entry made `test_provision_error_event.py` read the wrong `submit_event`
+    non-empty, so a leftover entry made `test_sct_provision_resources_command.py` read the wrong `submit_event`
     call and fail - but only in CI, and only for some test orderings. Central and autouse because the
     recording happens deep in provisioning, far from the tests that trip over it.
     """
