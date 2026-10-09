@@ -5179,14 +5179,12 @@ class BaseCluster:
             connect_timeout=connect_timeout,
             **kwargs,
         )
-        session = cluster_driver.connect()
+        # The control-connection fallback path rejects USE statements.
+        session = cluster_driver.connect(keyspace)
 
         # temporarily increase client-side timeout to 1m to determine
         # if the cluster is simply responding slowly to requests
         session.default_timeout = 60.0
-
-        if keyspace is not None:
-            session.set_keyspace(keyspace)
 
         # override driver default consistency level of LOCAL_QUORUM
         session.default_consistency_level = ConsistencyLevel.ONE
