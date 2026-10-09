@@ -79,3 +79,5 @@ user_prefix: 'longevity-mv-si-4d'
 space_node_threshold: 644245094
 
 use_preinstalled_scylla: true
+
+topology_barrier_stall_events: true

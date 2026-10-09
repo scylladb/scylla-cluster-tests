@@ -94,13 +94,13 @@ class DbLogReader(Process):
         """Check if backtrace decoding should be skipped for this event.
 
         Returns True if the event should skip decoding based on:
-        1. backtrace_stall_decoding=False and event is REACTOR_STALLED
+        1. backtrace_stall_decoding=False and event is REACTOR_STALLED or TOPOLOGY_BARRIER_STALL
         2. backtrace_decoding_disable_regex matches the event type
         """
 
-        # Check if reactor stall decoding is disabled
-        if not self._backtrace_stall_decoding and event.type == "REACTOR_STALLED":
-            LOGGER.debug("Skipping backtrace decoding for reactor stall event (backtrace_stall_decoding=False)")
+        # Check if stall decoding is disabled
+        if not self._backtrace_stall_decoding and event.type in ("REACTOR_STALLED", "TOPOLOGY_BARRIER_STALL"):
+            LOGGER.debug("Skipping backtrace decoding for stall event (backtrace_stall_decoding=False)")
             return True
 
         # Check if event type matches the disable regex
@@ -159,14 +159,17 @@ class DbLogReader(Process):
                         LOGGER.debug("Found build-id: %s", self._build_id)
 
                     one_line_backtrace = []
-                    if ("backtrace:" in line.lower() or "report: at" in line.lower()) and "0x" in line:
+                    if (
+                        any(marker in line.lower() for marker in ("backtrace:", "report: at", "released at:"))
+                        and "0x" in line
+                    ):
                         # This part handles the backtrases are printed in one line.
                         # Example:
                         # [shard 2] seastar - Exceptional future ignored: exceptions::mutation_write_timeout_exception
                         # (Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE.),
                         # backtrace:   0x3316f4d#012  0x2e2d177#012  0x189d397#012  0x2e76ea0#012  0x2e770af#012
                         # 0x2eaf065#012  0x2ebd68c#012  0x2e48d5d#012  /opt/scylladb/libreloc/libpthread.so.0+0x94e1#012
-                        splitted_line = re.split("backtrace:|report: at", line, flags=re.IGNORECASE)
+                        splitted_line = re.split("backtrace:|report: at|released at:", line, flags=re.IGNORECASE)
                         for trace_line in splitted_line[1].split():
                             if trace_line.startswith("0x") or "scylladb/lib" in trace_line:
                                 one_line_backtrace.append(trace_line)
