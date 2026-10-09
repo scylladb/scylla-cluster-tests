@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Callable, Iterator
 
 import boto3
 import yaml
+from botocore.config import Config
 from google.api_core.exceptions import Forbidden
 from invoke import exceptions
 
@@ -397,15 +398,39 @@ class SnapshotOperations(ClusterTester):
         """
         return [loc.strip().strip("'\"") for item in location_list for loc in item.split(",") if loc.strip("'\" ")]
 
-    @staticmethod
+    def _backup_s3_client(self, region_name: str | None = None):
+        """boto3 S3 client for the backup bucket.
+
+        OCI exposes object storage through an S3-compatible API, so it needs the OCI endpoint,
+        the OCI backup keys (instead of the runner's AWS ones) and path-style addressing.
+        """
+        if self.params.get("cluster_backend") != "oci":
+            return boto3.client("s3", region_name=region_name)
+        # same source as BaseNode.update_manager_agent_backup_config; both read the first endpoint
+        endpoints = (self.params.get("append_scylla_yaml") or {}).get("object_storage_endpoints")
+        if not endpoints:
+            raise ValueError("OCI backup bucket access needs object_storage_endpoints in append_scylla_yaml")
+        creds = TestConfig().backup_oci_credentials
+        return boto3.client(
+            "s3",
+            region_name=region_name or endpoints[0]["aws_region"],
+            endpoint_url=endpoints[0]["name"],
+            aws_access_key_id=creds["access_key_id"],
+            aws_secret_access_key=creds["secret_access_key"],
+            config=Config(s3={"addressing_style": "path"}),
+        )
+
     def _iter_s3_objects(
-        bucket_name: str, prefixes: list[str], region_name: str | None = None
+        self, bucket_name: str, prefixes: list[str], region_name: str | None = None
     ) -> Iterator[tuple[str, int]]:
-        """Yield (key, size) of objects under the prefixes. Bucket region is discovered if not given."""
-        if not region_name:
+        """Yield (key, size) of objects under the prefixes. Bucket region is discovered if not given.
+
+        On OCI the region comes from the configured endpoint instead (see `_backup_s3_client`).
+        """
+        if not region_name and self.params.get("cluster_backend") != "oci":
             location = boto3.client("s3").get_bucket_location(Bucket=bucket_name)["LocationConstraint"]
             region_name = location or "us-east-1"
-        paginator = boto3.client("s3", region_name=region_name).get_paginator("list_objects_v2")
+        paginator = self._backup_s3_client(region_name).get_paginator("list_objects_v2")
         for prefix in prefixes:
             for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
                 # No Contents key means no files under the prefix
