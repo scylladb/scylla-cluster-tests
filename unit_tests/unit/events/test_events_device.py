@@ -18,15 +18,8 @@ import threading
 import pytest
 
 from sdcm.sct_events.events_device import EventsDevice, get_events_main_device, start_events_main_device
-from sdcm.sct_events.events_processes import EventsProcessesRegistry
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.wait import wait_for
-
-
-@pytest.fixture
-def events_processes_registry(tmp_path):
-    """Provide an events registry logging to a per-test directory."""
-    return EventsProcessesRegistry(log_dir=str(tmp_path))
 
 
 @pytest.fixture
