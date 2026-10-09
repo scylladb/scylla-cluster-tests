@@ -24,12 +24,14 @@ from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, Continuou
 from sdcm.sct_events.system import TestFrameworkEvent
 
 TOLERABLE_REACTOR_STALL: int = 500  # ms
+TOLERABLE_TOPOLOGY_BARRIER_STALL: int = 10  # s
 
 LOGGER = logging.getLogger(__name__)
 
 
 class DatabaseLogEvent(LogEvent, abstract=True):
     OVERSIZED_ALLOCATION: Type[LogEventProtocol]
+    TOPOLOGY_BARRIER_STALL: Type[LogEventProtocol]
     WARNING: Type[LogEventProtocol]
     INFO: Type[LogEventProtocol]
     NO_SPACE_ERROR: Type[LogEventProtocol]
@@ -104,12 +106,38 @@ class ReactorStalledMixin(Generic[T_log_event]):
         return super().add_info(node=node, line=line, line_number=line_number)
 
 
+HELD_SECONDS_RE = re.compile(r"held for (\d+(?:\.\d+)?) \[s\]")
+
+
+class TopologyBarrierStallMixin(BacktraceAggregationMixin, Generic[T_log_event]):
+    tolerable_topology_barrier_stall: int = TOLERABLE_TOPOLOGY_BARRIER_STALL
+
+    def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event:
+        try:
+            # Dynamically handle topology barrier stall severity by hold time.
+            if float(HELD_SECONDS_RE.findall(line)[0]) >= self.tolerable_topology_barrier_stall:
+                self.severity = Severity.ERROR
+        except (
+            ValueError,
+            IndexError,
+        ):
+            LOGGER.warning("failed to read TOPOLOGY_BARRIER_STALL line=[%s] ", line)
+        return super().add_info(node=node, line=line, line_number=line_number)
+
+
 # cause this is warning level, it's need to be before WARNING being suppressed
 DatabaseLogEvent.add_subevent_type(
     "OVERSIZED_ALLOCATION",
     mixin=BacktraceAggregationMixin,
     severity=Severity.ERROR,
     regex="seastar_memory - oversized allocation:",
+)
+# cause this is warning level, it's need to be before WARNING being suppressed
+DatabaseLogEvent.add_subevent_type(
+    "TOPOLOGY_BARRIER_STALL",
+    mixin=TopologyBarrierStallMixin,
+    severity=Severity.WARNING,
+    regex=r"token_metadata - topology version \d+ held for",
 )
 DatabaseLogEvent.add_subevent_type(
     "WARNING", severity=Severity.SUPPRESS, regex=r"(^WARN(ING)?|!\s*?WARN(ING)?).*\[shard.*\]"
@@ -248,6 +276,7 @@ DatabaseLogEvent.add_subevent_type("TABLET_MERGE", severity=Severity.DEBUG, rege
 SYSTEM_ERROR_EVENTS = (
     # 1. WARN-level
     DatabaseLogEvent.OVERSIZED_ALLOCATION(),
+    DatabaseLogEvent.TOPOLOGY_BARRIER_STALL(),
     DatabaseLogEvent.WARNING(),
     # 2. WARNING/NORMAL/DEBUG
     DatabaseLogEvent.UNKNOWN_VERB(),
@@ -292,6 +321,21 @@ SYSTEM_ERROR_EVENTS = (
 SYSTEM_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = [
     (re.compile(event.regex, re.IGNORECASE), event) for event in SYSTEM_ERROR_EVENTS
 ]
+
+
+def get_system_error_events_patterns(topology_barrier_stall_events: bool) -> List[Tuple[re.Pattern, LogEventProtocol]]:
+    """Return the system error patterns, omitting TOPOLOGY_BARRIER_STALL unless it is enabled.
+
+    A line whose pattern is omitted falls through to the generic WARNING rule and is suppressed.
+    """
+    if topology_barrier_stall_events:
+        return SYSTEM_ERROR_EVENTS_PATTERNS
+    return [
+        (pattern, event)
+        for pattern, event in SYSTEM_ERROR_EVENTS_PATTERNS
+        if event.type != DatabaseLogEvent.TOPOLOGY_BARRIER_STALL.type
+    ]
+
 
 # BACKTRACE_RE should match those:
 # 2022-03-05T08:33:48+00:00 rolling-*-0-1 !    INFO |   /opt/scylladb/libreloc/libc.so.6+0x35a15

@@ -226,6 +226,30 @@ def test_backtrace_decoding_configuration(
             )
 
 
+@pytest.mark.parametrize(
+    "stall_decoding,expected_backtrace",
+    [
+        pytest.param(True, DECODED_BY_SERVICE, id="decoded_when_stall_decoding_enabled"),
+        pytest.param(False, None, id="skipped_when_stall_decoding_disabled"),
+    ],
+)
+def test_topology_barrier_stall_decoding_follows_stall_decoding_option(
+    test_config, dummy_node, monitor_node, events_function_scope, test_data_dir, stall_decoding, expected_backtrace
+):
+    """backtrace_stall_decoding governs topology barrier stalls as it does reactor stalls."""
+    dummy_node.system_log = str(test_data_dir / "system_topology_barrier_stall.log")
+    db_log_reader = _make_db_log_reader(dummy_node, test_config.DECODING_QUEUE, stall_decoding)
+
+    with patch("sdcm.cluster.requests.post", return_value=_service_response()):
+        _run_decode_thread_over_log(monitor_node, db_log_reader)
+
+    stalls = [e for e in events_function_scope.published_events if e["type"] == "TOPOLOGY_BARRIER_STALL"]
+    assert len(stalls) == 2
+    for stall in stalls:
+        assert stall["raw_backtrace"]
+        assert stall.get("backtrace") == expected_backtrace
+
+
 def _run_decode_with_queue_item(monitor_node, build_id, raw_backtrace):
     """Helper: enqueue one fake event, run decode_backtrace(), return the event mock."""
     config = TestConfig()

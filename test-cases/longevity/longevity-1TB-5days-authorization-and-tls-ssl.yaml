@@ -36,3 +36,5 @@ client_encrypt: true
 
 nemesis_during_prepare: false
 use_preinstalled_scylla: true
+
+topology_barrier_stall_events: true

@@ -53,3 +53,5 @@ seeds_num: 3
 teardown_validators:
   scrub:
     enabled: true
+
+topology_barrier_stall_events: true
