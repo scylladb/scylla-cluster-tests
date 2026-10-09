@@ -58,6 +58,7 @@ from sdcm.sct_events.operator import ScyllaOperatorLogEvent
     ],
 )
 def test_scylla_operator_log_event(event_class, log_record, expected_timestamp_kwargs, expected_str):
+    """Operator log events match their log line, take its timestamp when present, and render the line in the report."""
     event = event_class()
     pattern = re.compile(event.regex, re.IGNORECASE)
 

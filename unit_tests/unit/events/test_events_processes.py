@@ -24,6 +24,8 @@ from sdcm.sct_events.events_processes import (
 
 
 class FakeProcess:
+    """Minimal events process recording whether the registry started it."""
+
     def __init__(self, _registry=None):
         self._registry = _registry
         self.started = False
@@ -34,15 +36,18 @@ class FakeProcess:
 
 @pytest.fixture
 def registry():
+    """Provide an empty, non-default events processes registry."""
     return EventsProcessesRegistry("some_path")
 
 
 def test_fresh(registry):
+    """A new registry holds no processes and exposes its log dir as a Path."""
     assert registry._registry_dict == {}
     assert registry.log_dir == Path("some_path")
 
 
 def test_start_events_process(registry):
+    """start_events_process creates, registers and starts the process bound to this registry."""
     registry.start_events_process("test", FakeProcess)
     assert len(registry._registry_dict) == 1
     assert "test" in registry._registry_dict
@@ -51,6 +56,7 @@ def test_start_events_process(registry):
 
 
 def test_get_events_process(registry):
+    """get_events_process returns None for unknown names and the started process once registered."""
     process = registry.get_events_process("test")
     assert process is None
     registry.start_events_process("test", FakeProcess)
@@ -61,6 +67,7 @@ def test_get_events_process(registry):
 
 @patch("sdcm.sct_events.events_processes._EVENTS_PROCESSES", not None)
 def test_create_default_registry_exists():
+    """Creating a second default registry raises, so one test run cannot have two default registries."""
     with pytest.raises(RuntimeError):
         create_default_events_process_registry(log_dir="some_path")
     assert get_default_events_process_registry() == (not None)
@@ -68,6 +75,7 @@ def test_create_default_registry_exists():
 
 @patch("sdcm.sct_events.events_processes._EVENTS_PROCESSES", None)
 def test_create_default_registry():
+    """An explicit registry passes through; without one, the default is required and creation sets it."""
     assert get_default_events_process_registry(not None) == (not None)
     with pytest.raises(RuntimeError):
         get_default_events_process_registry()

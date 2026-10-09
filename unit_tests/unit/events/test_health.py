@@ -18,23 +18,35 @@ import pytest
 from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent, DataValidatorEvent
 
+EVENT_ID = "712128d0-4837-4213-8a60-d6e2ec106c52"
+
 
 @pytest.mark.parametrize(
-    "subevent_name",
+    "parent_class, subevent_name",
     [
-        pytest.param("NodeStatus", id="node-status"),
-        pytest.param("NodePeersNulls", id="node-peers-nulls"),
-        pytest.param("NodeSchemaVersion", id="node-schema-version"),
-        pytest.param("NodesNemesis", id="nodes-nemesis"),
-        pytest.param("ScyllaCloudClusterServerDiagnostic", id="scylla-cloud-cluster-server-diagnostic"),
+        pytest.param(ClusterHealthValidatorEvent, "NodeStatus", id="cluster-health-node-status"),
+        pytest.param(ClusterHealthValidatorEvent, "NodePeersNulls", id="cluster-health-node-peers-nulls"),
+        pytest.param(ClusterHealthValidatorEvent, "NodeSchemaVersion", id="cluster-health-node-schema-version"),
+        pytest.param(ClusterHealthValidatorEvent, "NodesNemesis", id="cluster-health-nodes-nemesis"),
+        pytest.param(
+            ClusterHealthValidatorEvent,
+            "ScyllaCloudClusterServerDiagnostic",
+            id="cluster-health-scylla-cloud-cluster-server-diagnostic",
+        ),
+        pytest.param(DataValidatorEvent, "DataValidator", id="data-validator-data-validator"),
+        pytest.param(DataValidatorEvent, "ImmutableRowsValidator", id="data-validator-immutable-rows-validator"),
+        pytest.param(DataValidatorEvent, "UpdatedRowsValidator", id="data-validator-updated-rows-validator"),
+        pytest.param(DataValidatorEvent, "DeletedRowsValidator", id="data-validator-deleted-rows-validator"),
     ],
 )
-def test_cluster_health_validator_event(subevent_name):
-    assert hasattr(ClusterHealthValidatorEvent, subevent_name)
-    assert issubclass(getattr(ClusterHealthValidatorEvent, subevent_name), ClusterHealthValidatorEvent)
+def test_health_subevent_is_subclass_of_parent(parent_class, subevent_name):
+    """Each health sub-event is reachable on its parent event and inherits from it, so it reports under that name."""
+    assert hasattr(parent_class, subevent_name)
+    assert issubclass(getattr(parent_class, subevent_name), parent_class)
 
 
 def test_cluster_health_validator_event_msgfmt():
+    """A cluster health check renders as begin, then as end with its duration and message."""
     chc_event = ClusterHealthValidatorEvent()
     chc_event.publish_event = False
     chc_event.event_id = "7208cfbb-a083-4b7a-b0db-1982d88f6da0"
@@ -59,88 +71,63 @@ def test_cluster_health_validator_event_msgfmt():
             ClusterHealthValidatorEvent.NodeStatus,
             {"severity": Severity.CRITICAL, "node": "n1", "error": "e1"},
             "(ClusterHealthValidatorEvent Severity.CRITICAL) period_type=one-time "
-            "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=NodeStatus node=n1 error=e1",
-            id="node-status",
+            f"event_id={EVENT_ID}: type=NodeStatus node=n1 error=e1",
+            id="cluster-health-node-status",
         ),
         pytest.param(
             ClusterHealthValidatorEvent.NodePeersNulls,
             {"severity": Severity.ERROR, "node": "n2", "error": "e2"},
             "(ClusterHealthValidatorEvent Severity.ERROR) period_type=one-time "
-            "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=NodePeersNulls node=n2 error=e2",
-            id="node-peers-nulls",
+            f"event_id={EVENT_ID}: type=NodePeersNulls node=n2 error=e2",
+            id="cluster-health-node-peers-nulls",
         ),
         pytest.param(
             ClusterHealthValidatorEvent.NodeSchemaVersion,
             {"severity": Severity.WARNING, "node": "n3", "message": "m3"},
             "(ClusterHealthValidatorEvent Severity.WARNING) period_type=one-time "
-            "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=NodeSchemaVersion node=n3 message=m3",
-            id="node-schema-version",
+            f"event_id={EVENT_ID}: type=NodeSchemaVersion node=n3 message=m3",
+            id="cluster-health-node-schema-version",
         ),
         pytest.param(
             ClusterHealthValidatorEvent.NodesNemesis,
             {"severity": Severity.WARNING, "node": "n4", "message": "m4"},
             "(ClusterHealthValidatorEvent Severity.WARNING) period_type=one-time "
-            "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=NodesNemesis node=n4 message=m4",
-            id="nodes-nemesis",
+            f"event_id={EVENT_ID}: type=NodesNemesis node=n4 message=m4",
+            id="cluster-health-nodes-nemesis",
         ),
-    ],
-)
-def test_cluster_health_validator_subevent_msgfmt(event_class, kwargs, expected):
-    event = event_class(**kwargs)
-    event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
-    assert str(event) == expected
-    assert event == pickle.loads(pickle.dumps(event))
-
-
-@pytest.mark.parametrize(
-    "subevent_name",
-    [
-        pytest.param("DataValidator", id="data-validator"),
-        pytest.param("ImmutableRowsValidator", id="immutable-rows-validator"),
-        pytest.param("UpdatedRowsValidator", id="updated-rows-validator"),
-        pytest.param("DeletedRowsValidator", id="deleted-rows-validator"),
-    ],
-)
-def test_data_validator_event(subevent_name):
-    assert hasattr(DataValidatorEvent, subevent_name)
-    assert issubclass(getattr(DataValidatorEvent, subevent_name), DataValidatorEvent)
-
-
-@pytest.mark.parametrize(
-    "event_class, kwargs, expected",
-    [
         pytest.param(
             DataValidatorEvent.DataValidator,
             {"severity": Severity.ERROR, "error": "e1"},
             "(DataValidatorEvent Severity.ERROR) period_type=one-time "
-            "event_id=3916da00-643c-4886-bdd0-963d3ebac536: type=DataValidator error=e1",
-            id="data-validator",
+            f"event_id={EVENT_ID}: type=DataValidator error=e1",
+            id="data-validator-data-validator",
         ),
         pytest.param(
             DataValidatorEvent.ImmutableRowsValidator,
             {"severity": Severity.ERROR, "error": "e2"},
             "(DataValidatorEvent Severity.ERROR) period_type=one-time "
-            "event_id=3916da00-643c-4886-bdd0-963d3ebac536: type=ImmutableRowsValidator error=e2",
-            id="immutable-rows-validator",
+            f"event_id={EVENT_ID}: type=ImmutableRowsValidator error=e2",
+            id="data-validator-immutable-rows-validator",
         ),
         pytest.param(
             DataValidatorEvent.UpdatedRowsValidator,
             {"severity": Severity.WARNING, "message": "m3"},
             "(DataValidatorEvent Severity.WARNING) period_type=one-time "
-            "event_id=3916da00-643c-4886-bdd0-963d3ebac536: type=UpdatedRowsValidator message=m3",
-            id="updated-rows-validator",
+            f"event_id={EVENT_ID}: type=UpdatedRowsValidator message=m3",
+            id="data-validator-updated-rows-validator",
         ),
         pytest.param(
             DataValidatorEvent.DeletedRowsValidator,
             {"severity": Severity.NORMAL, "message": "m4"},
             "(DataValidatorEvent Severity.NORMAL) period_type=one-time "
-            "event_id=3916da00-643c-4886-bdd0-963d3ebac536: type=DeletedRowsValidator message=m4",
-            id="deleted-rows-validator",
+            f"event_id={EVENT_ID}: type=DeletedRowsValidator message=m4",
+            id="data-validator-deleted-rows-validator",
         ),
     ],
 )
-def test_data_validator_event_msgfmt(event_class, kwargs, expected):
+def test_health_subevent_msgfmt(event_class, kwargs, expected):
+    """Each health sub-event renders its type and fields in the log format and survives a pickle round trip."""
     event = event_class(**kwargs)
-    event.event_id = "3916da00-643c-4886-bdd0-963d3ebac536"
+    event.event_id = EVENT_ID
     assert str(event) == expected
     assert event == pickle.loads(pickle.dumps(event))

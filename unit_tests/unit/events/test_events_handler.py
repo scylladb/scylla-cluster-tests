@@ -35,6 +35,7 @@ def tester_obj():
 
 
 def test_events_handler(main_events_context, tester_obj):
+    """The events handler dispatches a schema disagreement event to its handler along with the tester object."""
     with unittest.mock.patch(
         "sdcm.sct_events.handlers.schema_disagreement.SchemaDisagreementHandler.handle", spec=True
     ) as mock:
