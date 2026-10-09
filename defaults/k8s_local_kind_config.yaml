@@ -1,5 +1,5 @@
 # Version of the kind to be used
-mini_k8s_version: '0.20.0'
+mini_k8s_version: '0.33.0'
 
 n_db_nodes: 4
 k8s_n_scylla_pods_per_cluster: 3
@@ -42,3 +42,6 @@ backtrace_decoding: false
 append_scylla_args: '--abort-on-lsa-bad-alloc 1 --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1'
 docker_image: ''
 backup_bucket_location: 'minio-bucket'
+
+# SCT tracks DB pods by their pod IPs, so clients must be pointed at those (operator defaults to ServiceClusterIP)
+k8s_db_node_to_client_broadcast_ip_type: PodIP

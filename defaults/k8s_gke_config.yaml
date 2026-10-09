@@ -3,8 +3,8 @@ gce_datacenter: 'us-east1'
 availability_zone: 'c'
 gce_network: 'qa-vpc'
 
-gke_cluster_version: '1.31'
-gke_k8s_release_channel: ''
+gke_cluster_version: '1.35'
+gke_k8s_release_channel: 'stable'
 
 gce_instance_type_db: 'n2-standard-8'
 gce_root_disk_type_db: 'pd-ssd'
@@ -66,3 +66,6 @@ append_scylla_args: '--abort-on-lsa-bad-alloc 1 --abort-on-internal-error 1 --ab
 docker_image: ''
 backup_bucket_backend: 's3'
 backup_bucket_location: 'minio-bucket'
+
+# SCT tracks DB pods by their pod IPs, so clients must be pointed at those (operator defaults to ServiceClusterIP)
+k8s_db_node_to_client_broadcast_ip_type: PodIP

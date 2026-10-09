@@ -360,6 +360,19 @@ class GkeCluster(KubernetesCluster):
         return f"{type(self).__name__} {self.name} | Region: {self.gce_region} | Version: {self.gke_cluster_version}"
 
     def deploy(self):
+        if self.params.get("reuse_cluster"):
+            self.log.info("Reuse GKE cluster `%s'", self.short_cluster_name)
+            self.patch_kubectl_config()
+            self._add_pool(
+                GkeNodePool(
+                    name=self.AUXILIARY_POOL_NAME,
+                    num_nodes=self.n_nodes,
+                    instance_type=self.gce_instance_type,
+                    k8s_cluster=self,
+                    is_deployed=True,
+                )
+            )
+            return
         self.log.info(
             "Create GKE cluster `%s' with %d node(s) in %s",
             self.short_cluster_name,
@@ -420,6 +433,7 @@ class GkeCluster(KubernetesCluster):
 
     def deploy_node_pool(self, pool: GkeNodePool, wait_till_ready=True) -> None:
         self._add_pool(pool)
+        pool.is_deployed |= bool(self.params.get("reuse_cluster"))
         if pool.is_deployed:
             return
         self.log.info("Create %s pool with %d node(s) in GKE cluster `%s'", pool.name, pool.num_nodes, self.name)

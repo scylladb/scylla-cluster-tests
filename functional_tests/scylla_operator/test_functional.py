@@ -38,6 +38,7 @@ from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
     convert_cpu_value_from_k8s_to_units,
+    get_helm_pool_affinity_values,
     HelmValues,
     KubernetesOps,
 )
@@ -311,9 +312,18 @@ def test_rolling_restart_cluster(db_cluster):
         scylla_log = db_cluster.k8s_cluster.kubectl(
             f"logs {pod_name_and_status['name']} -c scylla", namespace=db_cluster.namespace
         )
-        assert "scylla_io_setup" not in scylla_log.stdout, (
-            f"iotune was run after reboot on {pod_name_and_status['name']}"
-        )
+        # NOTE: look for iotune's own output: the entrypoint always logs 'running: scylla_io_setup', which exits
+        #       early when io properties exist or in developer mode, and Scylla's I/O warning names it too.
+        assert "] iotune - " not in scylla_log.stdout, f"iotune was run after reboot on {pod_name_and_status['name']}"
+
+
+def get_tablets_keyspaces(db_cluster) -> set[str]:
+    with db_cluster.cql_connection_patient(db_cluster.nodes[0]) as session:
+        return {
+            row.keyspace_name
+            for row in session.execute("SELECT * FROM system_schema.scylla_keyspaces")
+            if getattr(row, "initial_tablets", None) is not None
+        }
 
 
 @pytest.mark.required_operator("v1.10.0")
@@ -321,8 +331,12 @@ def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
     log_followers, need_to_collect_logs, stop_ks_creation = {}, True, False
     k8s_cluster = db_cluster.k8s_cluster
     logdir = f"{os.path.join(k8s_cluster.logdir, 'test_add_new_node_and_check_old_nodes_are_cleaned_up')}"
+    # NOTE: tablets keyspaces need no cleanup after topology changes, so the operator triggers none for them
+    tablets_keyspaces = get_tablets_keyspaces(db_cluster)
+    log.info("Not expecting cleanup for tablets keyspaces: %s", tablets_keyspaces)
+    keyspaces = set(db_cluster.nodes[0].run_cqlsh("describe keyspaces").stdout.split()) - tablets_keyspaces
     for node in db_cluster.nodes:
-        for keyspace in db_cluster.nodes[0].run_cqlsh("describe keyspaces").stdout.split():
+        for keyspace in keyspaces:
             log_followers[f"{node.name}--{keyspace}"] = node.follow_system_log(
                 patterns=[
                     f"api - force_keyspace_cleanup: keyspace={keyspace} ",
@@ -417,6 +431,7 @@ def test_scylla_cluster_monitoring_type_platform(db_cluster: ScyllaPodCluster):
 
 
 # NOTE: Scylla manager versions notes:
+#       - '3.2.x' and older create their keyspace with SimpleStrategy, which fails on tablets-enabled Scylla
 #       - '2.6.3' is broken: https://github.com/scylladb/scylla-manager/issues/3156
 #       - '2.5.4' is broken: https://github.com/scylladb/scylla-manager/issues/3147
 #       - '2.5.3' is broken: https://github.com/scylladb/scylla-manager/issues/3150
@@ -425,7 +440,7 @@ def test_scylla_cluster_monitoring_type_platform(db_cluster: ScyllaPodCluster):
 #         invalid character '\\x1f' looking for beginning of value
 #       - '2.3.x' and ''2.4.x' are not covered as old ones.
 @pytest.mark.requires_mgmt
-@pytest.mark.parametrize("manager_version", ("3.2.6",))
+@pytest.mark.parametrize("manager_version", ("3.12.0",))
 def test_mgmt_repair(db_cluster, manager_version):
     reinstall_scylla_manager(db_cluster, manager_version)
 
@@ -440,6 +455,7 @@ def test_mgmt_repair(db_cluster, manager_version):
 
 
 # NOTE: Scylla manager versions notes:
+#       - '3.2.x' and older create their keyspace with SimpleStrategy, which fails on tablets-enabled Scylla
 #       - '2.6.3' is broken: https://github.com/scylladb/scylla-manager/issues/3156
 #       - '2.5.4' is broken: https://github.com/scylladb/scylla-manager/issues/3147
 #       - '2.5.3' is broken: https://github.com/scylladb/scylla-manager/issues/3150
@@ -448,15 +464,15 @@ def test_mgmt_repair(db_cluster, manager_version):
 #         invalid character '\\x1f' looking for beginning of value
 #       - '2.3.x' and ''2.4.x' are not covered as old ones.
 @pytest.mark.requires_mgmt
-@pytest.mark.parametrize("manager_version", ("3.2.6",))
+@pytest.mark.parametrize("manager_version", ("3.12.0",))
 def test_mgmt_backup(db_cluster, manager_version):
     reinstall_scylla_manager(db_cluster, manager_version)
 
     # Run manager backup operation
     mgr_cluster = db_cluster.get_cluster_manager()
     region = next(iter(db_cluster.params.region_names), "")
-    backup_bucket_location = db_cluster.params.get("backup_bucket_location").format(region=region)
-    bucket_name = f"s3:{backup_bucket_location.split()[0]}"
+    backup_bucket_location = db_cluster.params.get("backup_bucket_location")[0].format(region=region)
+    bucket_name = f"s3:{backup_bucket_location}"
     mgr_task = mgr_cluster.create_backup_task(
         location_list=[
             bucket_name,
@@ -495,13 +511,14 @@ def test_drain_kubernetes_node_then_wait_and_replace_scylla_node(db_cluster):
 
 
 def test_drain_kubernetes_node_then_decommission_and_add_scylla_node(db_cluster):
-    target_rack = random.choice([*db_cluster.racks])
-    target_node = db_cluster.get_rack_nodes(target_rack)[-1]
+    # NOTE: add the new node first: with tablets, decommissioning below the keyspace RF is refused
+    #       ('Unable to find new replica for tablet'), and the operator would retry it forever.
+    #       Only the last node of a rack can be decommissioned, so target the added one.
+    target_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)[0]
+    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
     log.info("Drain K8S node that hosts '%s' scylla node not waiting for pod absence", target_node)
     target_node.drain_k8s_node()
     db_cluster.decommission(target_node)
-    db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
 
 @pytest.mark.readonly
@@ -625,6 +642,11 @@ def test_orphaned_services_after_shrink_cluster(db_cluster):
 @pytest.mark.requires_scylla_versions(("5.2.7", None), ("2023.1.1", None))
 def test_orphaned_services_multi_rack(db_cluster):
     """Issue https://github.com/scylladb/scylla-operator/issues/514"""
+    if tablets_keyspaces := get_tablets_keyspaces(db_cluster):
+        pytest.skip(
+            "the only node of a rack can't be decommissioned when tablets keyspaces exist "
+            f"(no replica left in its rack to move tablets to): {tablets_keyspaces}"
+        )
     log.info("Add node to the rack 1")
     new_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=1)[0]
 
@@ -794,12 +816,28 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     https://github.com/scylladb/scylla-operator/pull/502
 
     Deploy Scylla using helm chart with only default values.
-    Storage capacity expected to be 10Gi
+    Storage capacity expected to be the chart's default one.
     """
+    k8s_cluster = db_cluster.k8s_cluster
+    if k8s_cluster.params.get("cluster_backend").startswith("k8s-local"):
+        pytest.skip("chart defaults (120Gi disks, 4Gi pods, no developer mode) don't fit local K8S nodes")
 
     target_chart_name, namespace = ("t-default-values",) * 2
-    expected_capacity = "10Gi"
-    need_to_collect_logs, k8s_cluster = True, db_cluster.k8s_cluster
+    chart_values = yaml.safe_load(
+        k8s_cluster.helm(
+            f"show values scylla-operator/scylla --devel --version {k8s_cluster.scylla_operator_chart_version}"
+        )
+    )
+    expected_capacity = chart_values["racks"][0]["storage"]["capacity"]
+    # NOTE: the chart's default placement targets nodes labeled and tainted the scylla-operator way, while SCT's
+    #       scylla pool uses its own pool label and 'role' taint, so keep every default except where racks run
+    placement = get_helm_pool_affinity_values(k8s_cluster.POOL_LABEL_NAME, k8s_cluster.SCYLLA_POOL_NAME)["affinity"]
+    placement["tolerations"] = [
+        {"key": "role", "value": "scylla-clusters", "operator": "Equal", "effect": "NoSchedule"}
+    ]
+    for rack in chart_values["racks"]:
+        rack["placement"] = placement
+    need_to_collect_logs = True
     logdir = f"{os.path.join(k8s_cluster.logdir, 'test_deploy_helm_with_default_values')}"
 
     k8s_cluster.create_namespace(namespace=namespace)
@@ -812,6 +850,7 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
             source_chart_name="scylla-operator/scylla",
             version=k8s_cluster.scylla_operator_chart_version,
             use_devel=True,
+            values=HelmValues(chart_values),
             namespace=namespace,
         )
     )
@@ -886,7 +925,7 @@ def test_rolling_config_change_internode_compression(db_cluster, scylla_yaml):
     new_compression = random.choice(values_to_toggle)
 
     with scylla_yaml() as props:
-        props[internode_compression_option_name] = new_compression
+        props.internode_compression = new_compression
 
     db_cluster.restart_scylla()
 
@@ -902,7 +941,7 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):
     hh_throttle_option_name = "hinted_handoff_throttle_in_kb"
 
     with scylla_yaml() as props:
-        configmap_scylla_yaml_content = props
+        configmap_scylla_yaml_content = props.model_dump(exclude_none=True, exclude_unset=True)
 
     original_hinted_handoff_throttle_in_kb, new_hinted_handoff_throttle_in_kb = None, None
 
@@ -913,11 +952,11 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):
 
     log.info("configMap's scylla.yaml = %s", configmap_scylla_yaml_content)
 
-    assert isinstance(original_hinted_handoff, bool), (
-        f"configMap scylla.yaml have unexpected '{hh_enabled_option_name}' type: {type(original_hinted_handoff)}. "
-        "Expected 'bool'"
-    )
-    new_hinted_handoff = not original_hinted_handoff
+    # NOTE: scylla.yaml allows a bool or a string ('disabled' or a list of DCs) here, i.e. SCT sets 'disabled'
+    if isinstance(original_hinted_handoff, bool):
+        new_hinted_handoff = not original_hinted_handoff
+    else:
+        new_hinted_handoff = original_hinted_handoff == "disabled"
 
     if original_hinted_handoff_throttle_in_kb:
         assert isinstance(original_hinted_handoff_throttle_in_kb, int), (
@@ -926,12 +965,13 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):
         )
         new_hinted_handoff_throttle_in_kb = original_hinted_handoff_throttle_in_kb * 2
 
+    # NOTE: the ConfigMap scylla.yaml is a ScyllaYaml model, and options set to None get dropped from it
     with scylla_yaml() as props:
-        props[hh_enabled_option_name] = new_hinted_handoff
+        setattr(props, hh_enabled_option_name, new_hinted_handoff)
         if new_hinted_handoff_throttle_in_kb:
-            props[hh_throttle_option_name] = new_hinted_handoff_throttle_in_kb
+            setattr(props, hh_throttle_option_name, new_hinted_handoff_throttle_in_kb)
         else:
-            dict(props).pop(hh_throttle_option_name)
+            setattr(props, hh_throttle_option_name, None)
 
     # NOTE: sleep for some time to avoid race between following restart and configmap object
     #       update which gets made in the above 'with scylla_yaml() as props' context manager.
@@ -951,15 +991,11 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):
 
     with scylla_yaml() as props:
         assert dict(props).get(hh_enabled_option_name) == new_hinted_handoff
-        if hh_enabled_option_name not in configmap_scylla_yaml_content:
-            props.pop(hh_enabled_option_name, None)
-        else:
-            props[hh_enabled_option_name] = configmap_scylla_yaml_content[hh_enabled_option_name]
-
+        setattr(props, hh_enabled_option_name, configmap_scylla_yaml_content.get(hh_enabled_option_name))
         if new_hinted_handoff_throttle_in_kb:
-            props.pop(hh_throttle_option_name, None)
+            setattr(props, hh_throttle_option_name, None)
         else:
-            props[hh_throttle_option_name] = configmap_scylla_yaml_content[hh_throttle_option_name]
+            setattr(props, hh_throttle_option_name, configmap_scylla_yaml_content[hh_throttle_option_name])
 
     time.sleep(5)
     db_cluster.restart_scylla()
@@ -972,7 +1008,7 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):
         db_cluster.wait_for_nodes_up_and_normal(nodes=db_cluster.nodes, verification_node=node)
 
     with scylla_yaml() as props:
-        assert configmap_scylla_yaml_content == props
+        assert configmap_scylla_yaml_content == props.model_dump(exclude_none=True, exclude_unset=True)
 
 
 @pytest.mark.readonly
@@ -1072,6 +1108,11 @@ def test_can_recover_from_fatal_pod_termination(db_cluster):
 #       https://github.com/scylladb/scylla-operator/issues/1077
 @pytest.mark.requires_backend("k8s-eks")
 def test_nodetool_flush_and_reshard(db_cluster: ScyllaPodCluster):
+    if tablets_keyspaces := get_tablets_keyspaces(db_cluster):
+        pytest.skip(
+            "resharding of tablets keyspaces doesn't go through the vnodes resharding compaction this test "
+            f"waits for: {tablets_keyspaces}"
+        )
     target_node = db_cluster.nodes[0]
 
     # Calculate new value for the CPU cores dedicated for Scylla pods

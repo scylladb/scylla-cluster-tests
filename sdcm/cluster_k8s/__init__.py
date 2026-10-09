@@ -37,6 +37,7 @@ from textwrap import dedent
 from threading import Lock, RLock
 from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Tuple, Callable
 
+import requests
 import yaml
 import kubernetes as k8s
 from kubernetes.client import exceptions as k8s_exceptions
@@ -1221,11 +1222,20 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                     modifiers=config_modifiers + [example_disk_modifier] + [image_modifier],
                     envsubst=False,
                 )
-                self.kubectl("rollout status daemonset.apps/xfs-disk-setup", namespace="xfs-disk-setup")
+                # NOTE: cold nodes pull several images per pod, which can outlast the default kubectl timeout
+                self.kubectl(
+                    "rollout status daemonset.apps/xfs-disk-setup --timeout=15m",
+                    namespace="xfs-disk-setup",
+                    timeout=930,
+                )
 
             path_to_csi_driver_config = sct_abs_path(f"{repo_dst_dir}/deploy/kubernetes")
             self.apply_file(path_to_csi_driver_config, modifiers=config_modifiers + [image_modifier], envsubst=False)
-            self.kubectl("rollout status daemonset.apps/local-csi-driver", namespace="local-csi-driver")
+            self.kubectl(
+                "rollout status daemonset.apps/local-csi-driver --timeout=15m",
+                namespace="local-csi-driver",
+                timeout=930,
+            )
 
     @log_run_info
     def prepare_k8s_scylla_nodes(self, node_pools: list[CloudK8sNodePool] | CloudK8sNodePool) -> None:
@@ -1370,7 +1380,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
         if self.params.get("reuse_cluster"):
             try:
-                self.wait_till_cluster_is_operational()
+                # nothing was just created, so don't wait for a GKE post-create API restart (wait_till_cluster_is_operational)
+                self.wait_all_node_pools_to_be_ready()
                 self.log.debug("Check Scylla cluster")
                 self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=namespace)
                 self.start_scylla_cluster_events_thread()
@@ -1428,19 +1439,44 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
     @log_run_info
     def deploy_prometheus_operator(self) -> None:
         self.log.info("Deploy Prometheus operator")
-        if not self.params.get("reuse_cluster"):
+        # NOTE: apply even on reuse: it's idempotent, and a reused cluster may not have it yet
+        with TemporaryDirectory() as tmp_dir_name:
             # NOTE: apply configs on the 'server' side to avoid following error:
             #         The CustomResourceDefinition "prometheuses.monitoring.coreos.com" is invalid:\
             #           metadata.annotations: Too long: must have at most 262144 bytes
             self.apply_file(
-                PROMETHEUS_OPERATOR_CONFIG_PATH,
+                self._get_prometheus_operator_config(tmp_dir_name),
                 namespace=PROMETHEUS_OPERATOR_NAMESPACE,
                 modifiers=self._affinity_modifiers_for_monitoring_resources,
                 envsubst=False,
                 server_side=True,
             )
-            time.sleep(3)
+        time.sleep(3)
         self.kubectl("rollout status deployment prometheus-operator", namespace=PROMETHEUS_OPERATOR_NAMESPACE)
+        # NOTE: scylla-operator starts its ScyllaDBMonitoring controller only if Prometheus Operator CRDs exist
+        #       when it starts, so restart it in case it was deployed first.
+        if self.kubectl("get deployment scylla-operator", namespace=SCYLLA_OPERATOR_NAMESPACE, ignore_status=True).ok:
+            self.kubectl("rollout restart deployment scylla-operator", namespace=SCYLLA_OPERATOR_NAMESPACE)
+            self.kubectl("rollout status deployment scylla-operator", namespace=SCYLLA_OPERATOR_NAMESPACE)
+
+    def _get_prometheus_operator_config(self, dst_dir: str) -> str:
+        """Use the Prometheus Operator bundle the deployed scylla-operator is tested with, if it ships one"""
+        chart_version = self.scylla_operator_chart_version
+        # NOTE: 'latest' charts look like 'v1.22.0-13-g5aa939b-latest', released ones like 'v1.21.0'
+        git_ref = match.group(1) if (match := re.search(r"-g([0-9a-f]{7,})", chart_version)) else chart_version
+        url = (
+            f"https://raw.githubusercontent.com/scylladb/scylla-operator/{git_ref}"
+            "/examples/third-party/prometheus-operator.yaml"
+        )
+        resp = requests.get(url, timeout=120)
+        if not resp.ok:
+            self.log.warning("No Prometheus Operator bundle at %s (%s), using the SCT one", url, resp.status_code)
+            return PROMETHEUS_OPERATOR_CONFIG_PATH
+        config_path = os.path.join(dst_dir, "prometheus-operator.yaml")
+        with open(config_path, mode="w", encoding="utf-8") as config_file:
+            config_file.write(resp.text)
+        self.log.info("Using Prometheus Operator bundle from %s", url)
+        return config_path
 
     def deploy_scylla_cluster_monitoring(
         self, cluster_name: str, namespace: str, monitoring_type: str = "Platform"
@@ -1473,13 +1509,14 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
     def get_grafana_ip(self, cluster_name: str, namespace: str) -> str:
         if self.cluster_backend in ("k8s-eks", "k8s-gke"):
+            # NOTE: during a Grafana rollout an old and a new pod may coexist, so take a single running one
             cmd = (
                 f"get pod -l scylla-operator.scylladb.com/deployment-name={cluster_name}-grafana"
-                " --no-headers -o custom-columns=:.status.podIP"
+                " --field-selector=status.phase=Running --no-headers -o custom-columns=:.status.podIP"
             )
         else:
             cmd = f"get svc {cluster_name}-grafana --no-headers -o custom-columns=:.spec.clusterIP"
-        return self.kubectl(cmd, namespace=namespace).stdout.strip()
+        return self.kubectl(cmd, namespace=namespace).stdout.split()[0]
 
     @property
     def grafana_port(self) -> int:
@@ -1927,6 +1964,11 @@ class BasePodContainer(cluster.BaseNode):
     pod_readiness_delay = 30  # seconds
     pod_readiness_timeout = 10  # minutes
     pod_terminate_timeout = 5  # minutes
+
+    def do_default_installations(self):
+        # NOTE: files get to pods via kubectl, so there's no use for 'rsync' here, and non-root images
+        #       (i.e. scylla-manager ones) can't install packages at all
+        pass
 
     def __init__(
         self,
@@ -3204,7 +3246,11 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         scylla_shards = node.scylla_shards
 
         timeout = timeout or (node.pod_terminate_timeout * 60)
-        with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
+        # NOTE: the pod may already be going away (i.e. its K8S node got drained), and then nothing can be
+        #       executed in it to gather load metrics for the adaptive timeout.
+        pod = node._pod
+        node_available = bool(pod and not pod.metadata.deletion_timestamp and pod.status.phase == "Running")
+        with adaptive_timeout(operation=Operations.DECOMMISSION, node=node, node_available=node_available):
             self.replace_scylla_cluster_value(
                 f"/spec/datacenter/racks/{rack}/members", current_members - 1, dc_idx=dc_idx
             )
@@ -3333,10 +3379,14 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                 kwarg = {"replication_factor": 3, "session": session}
 
                 SstableLoadUtils.upload_sstables(
-                    node=node, test_data=test_data[0], create_schema=create_schema, **kwarg
+                    node=node,
+                    test_data=test_data[0],
+                    keyspace_name=test_keyspace_name,
+                    create_schema=create_schema,
+                    **kwarg,
                 )
 
-            SstableLoadUtils.run_refresh(node, test_data=test_data[0])
+            SstableLoadUtils.run_refresh(node, test_data=test_data[0], keyspace_name=test_keyspace_name)
             if create_schema:
                 create_schema = False
 

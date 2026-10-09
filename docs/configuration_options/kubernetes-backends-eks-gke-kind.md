@@ -102,7 +102,7 @@ Specifies the version of the GKE cluster to be used.
 **type:** str (appendable)
 
 **backend overrides:**
-- `1.31`: k8s-gke
+- `1.35`: k8s-gke
 
 
 <a id="gke_k8s_release_channel"></a>
@@ -114,6 +114,9 @@ K8S release channel name to be used. Expected values are: 'rapid', 'regular', 's
 **default:** N/A
 
 **type:** str (appendable)
+
+**backend overrides:**
+- `stable`: k8s-gke
 
 
 <a id="k8s_cert_manager_version"></a>
@@ -161,6 +164,9 @@ Defines the source of the IP address to be used for the 'broadcast_rpc_address' 
 **default:** N/A
 
 **type:** str (appendable)
+
+**backend overrides:**
+- `PodIP`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke, k8s-eks
 
 
 <a id="k8s_db_node_to_node_broadcast_ip_type"></a>
@@ -564,4 +570,4 @@ Specifies the version of the mini K8S cluster to be used.
 **type:** str (appendable)
 
 **backend overrides:**
-- `0.20.0`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce
+- `0.33.0`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce

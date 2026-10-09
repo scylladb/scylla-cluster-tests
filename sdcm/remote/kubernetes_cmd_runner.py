@@ -104,6 +104,12 @@ class KubernetesRunner(Runner):
                 )
             except k8s.client.rest.ApiException as exc:
                 raise ConnectionError(str(exc)) from None
+            except AttributeError as exc:
+                # NOTE: when the exec websocket fails without a response body (i.e. the pod is gone or not ready),
+                #       the kubernetes client crashes on 'e.body.decode()' while building its ApiException
+                if "'NoneType' object has no attribute 'decode'" not in str(exc):
+                    raise
+                raise ConnectionError(f"exec into pod failed without a response body: {exc}") from None
 
     def kill(self) -> None:
         self.stop()

@@ -56,6 +56,13 @@ K8S_CONFIGS_PATH_SCT = sct_abs_path("sdcm/k8s_configs")
 JSON_PATCH_TYPE = "application/json-patch+json"
 
 LOGGER = logging.getLogger(__name__)
+
+
+class _ManifestLoader(yaml.SafeLoader):
+    """SafeLoader that keeps a bare '=' (YAML 1.1 'value' type, i.e. in prometheus-operator CRD enums) as a string"""
+
+
+_ManifestLoader.add_constructor("tag:yaml.org,2002:value", yaml.SafeLoader.construct_yaml_str)
 K8S_MEM_CPU_RE = re.compile("^([0-9]+)([a-zA-Z]*)$")
 K8S_MEM_CONVERSION_MAP = {
     "e": lambda x: x * 1073741824,
@@ -370,7 +377,7 @@ class KubernetesOps:
                 else:
                     with open(current_config_path, encoding="utf-8") as config_file_stream:
                         data = config_file_stream.read()
-                file_content = yaml.safe_load_all(data)
+                file_content = yaml.load_all(data, Loader=_ManifestLoader)  # noqa: S506
 
                 for doc in file_content:
                     if modifiers:
@@ -398,7 +405,23 @@ class KubernetesOps:
         command = ["cp", src, dst]
         if container:
             command.extend(("-c", container))
-        cls.kubectl(kluster, *command, timeout=timeout)
+        try:
+            cls.kubectl(kluster, *command, timeout=timeout)
+        except invoke.exceptions.UnexpectedExit as exc:
+            if '"tar": executable file not found' not in exc.result.stderr:
+                raise
+            # NOTE: 'kubectl cp' needs tar in the container, which newer ScyllaDB images don't ship,
+            #       so stream a single file through 'cat' instead.
+            container_arg = f"-c {container}" if container else ""
+            if ":" in src:
+                pod, path = src.split(":", 1)
+                namespace, pod = pod.split("/", 1)
+                cmd = f"exec {pod} {container_arg} -- cat {path} > {dst}"
+            else:
+                pod, path = dst.split(":", 1)
+                namespace, pod = pod.split("/", 1)
+                cmd = f"exec -i {pod} {container_arg} -- sh -c 'cat > {path}' < {src}"
+            cls.kubectl(kluster, cmd, namespace=namespace, timeout=timeout)
 
     @classmethod
     def expose_pod_ports(

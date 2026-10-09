@@ -414,7 +414,7 @@ class NodeLoadInfoServices(metaclass=Singleton):
         self._services: dict[str, NodeLoadInfoService] = {}
 
     def get(self, node: BaseNode) -> NodeLoadInfoService:  # noqa: F821
-        if node not in self._services:
+        if node.name not in self._services:
             self._services[node.name] = NodeLoadInfoService(
                 node.remoter, node.name, node.scylla_version_detailed, node_idx=str(getattr(node, "node_index", ""))
             )

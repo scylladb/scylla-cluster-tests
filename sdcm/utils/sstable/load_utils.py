@@ -22,6 +22,15 @@ from sdcm.wait import wait_for_log_lines
 LOCAL_CMD_RUNNER = LocalCmdRunner()
 
 
+def untar_cmd(archive: str, dst_dir: str) -> str:
+    # Newer ScyllaDB container images ship no 'tar', so fall back to the python bundled with scylla
+    return (
+        f"sh -c 'if command -v tar >/dev/null; then tar xvfz {archive} -C {dst_dir}; "
+        f'else /opt/scylladb/python3/bin/python3 -c "import sys, tarfile; '
+        f"tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter=tarfile.data_filter)\" {archive} {dst_dir}; fi'"
+    )
+
+
 class SstableLoadUtils:
     LOAD_AND_STREAM_RUN_EXPR = r"(?:storage_service|sstables_loader) - load_and_stream:"
     LOAD_AND_STREAM_DONE_EXPR = (
@@ -103,8 +112,10 @@ class SstableLoadUtils:
         if create_schema:
             with RemoteTemporaryFolder(node=node) as tmp_folder:
                 # Extract tarball to temporary folder when test keyspace and table do not exist and need to be created
-                node.remoter.run(f"tar xvfz {test_data.sstable_file} -C {tmp_folder.folder_name}/")
-                SstableLoadUtils.create_keyspace(node=node, replication_factor=kwargs["replication_factor"])
+                node.remoter.run(untar_cmd(test_data.sstable_file, f"{tmp_folder.folder_name}/"))
+                SstableLoadUtils.create_keyspace(
+                    node=node, keyspace_name=keyspace_name, replication_factor=kwargs["replication_factor"]
+                )
 
                 SstableLoadUtils.create_table_for_load(
                     node=node, schema_file_and_path=f"{tmp_folder.folder_name}/schema.cql", session=kwargs["session"]
@@ -121,7 +132,9 @@ class SstableLoadUtils:
         table_folder = f"/var/lib/scylla/data/{keyspace_name}/{upload_dir}" if not table_name else upload_dir
 
         # Extract tarball again (in case create_schema=True) directly to Scylla table upload folder to simplify the code
-        node.remoter.sudo(f"tar xvfz {test_data.sstable_file} -C {table_folder}/upload/", user="scylla")
+        node.remoter.sudo(untar_cmd(test_data.sstable_file, f"{table_folder}/upload/"))
+        # NOTE: no 'sudo -u scylla' since newer ScyllaDB container images ship no sudo (and already run as scylla)
+        node.remoter.sudo(f"chown -R scylla:scylla {table_folder}/upload/")
 
         # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
         node.remoter.sudo(f"rm -f {table_folder}/upload/schema.cql")
@@ -153,14 +166,14 @@ class SstableLoadUtils:
             node.remoter.run(load_api_cmd)
 
     @staticmethod
-    def run_refresh(node, test_data: namedtuple) -> Iterable[str]:
+    def run_refresh(node, test_data: namedtuple, keyspace_name: str = "keyspace_refresh") -> Iterable[str]:
         LOGGER.debug("Loading %s keys to %s by refresh", test_data.keys_num, node.name)
         # Resharding of the loaded sstable files is performed before they are moved from upload to the main folder.
         # So we need to validate that resharded files are placed in the "upload" folder before moving.
         # Find the compaction output that reported about the resharding
 
         system_log_follower = node.follow_system_log(patterns=[r"Resharded.*"])
-        node.run_nodetool(sub_cmd="refresh", args="-- keyspace_refresh standard1")
+        node.run_nodetool(sub_cmd="refresh", args=f"-- {keyspace_name} standard1")
         return system_log_follower
 
     @staticmethod
@@ -250,7 +263,7 @@ class SstableLoadUtils:
         session.execute(schema.replace("\n", ""))
 
     @classmethod
-    def validate_data_count_after_upload(cls, node, keyspace_name: str = "keyspace1", table_name: str = "standard2"):
+    def validate_data_count_after_upload(cls, node, keyspace_name: str = "keyspace1", table_name: str = "standard1"):
         result = node.run_cqlsh(f"consistency QUORUM;SELECT COUNT(*) FROM {keyspace_name}.{table_name}")
 
         next_line_is_result = False
