@@ -10,3 +10,10 @@ REACTOR_STALLED: # event type
 
   - keyword: logalloc::region_impl::object_descriptor::encode stalls
     issue: https://github.com/scylladb/scylladb/issues/8828
+
+OVERSIZED_ALLOCATION:
+  - keyword: gms::gossiper::do_send_ack2_msg
+    issue: https://scylladb.atlassian.net/browse/SCYLLADB-3114
+
+  - keyword: seastar::rpc::client::wait_for_reply
+    issue: https://scylladb.atlassian.net/browse/SCYLLADB-2533
