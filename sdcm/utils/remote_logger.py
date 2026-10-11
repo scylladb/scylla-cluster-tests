@@ -19,6 +19,7 @@ import os
 import socket
 import subprocess
 import time
+import uuid
 from abc import ABCMeta, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -86,6 +87,12 @@ class SSHLoggerBase(LoggerBase):
         self._termination_event = ThreadEvent()
         self._child_thread = None
         self._thread = None
+        # A node runs several of these loggers (a loader follows its journal and each HDR file), all from
+        # the same SCT process: keyed on the pid alone they shared one pid file, and stop() killed
+        # whichever follower had written it last.
+        remote_files_prefix = f"/tmp/logger_{os.getpid()}_{uuid.uuid4().hex[:8]}"
+        self._remote_pid_file = f"{remote_files_prefix}.pid"
+        self._remote_cmd_file = f"{remote_files_prefix}.sh"
 
     def start(self) -> None:
         self._termination_event.clear()
@@ -93,9 +100,12 @@ class SSHLoggerBase(LoggerBase):
         self._thread = self._child_thread.submit(self._journal_thread)
 
     def stop(self, timeout: float | None = None) -> None:
+        # Already stopped: node teardown calls stop() twice, and the first call removed the pid file
+        if self._child_thread is None:
+            return
         self._termination_event.set()
         if remote_pid := self.remote_pid:
-            self._remoter.run(f"kill -9 -{remote_pid}", ignore_status=True)
+            self._kill_follower(remote_pid)
         else:
             # Without the pid the remote follower keeps running, so _retrieve() stays blocked and
             # the pool worker outlives stop() -- and would still hang interpreter shutdown.
@@ -103,9 +113,36 @@ class SSHLoggerBase(LoggerBase):
                 "No remote pid file for the log follower of %s; can't kill it, its pool worker may outlive stop()",
                 self._target_log_file,
             )
+        self._remove_remote_files()
         if self._thread.running():
             self._thread.cancel()
         self._shutdown_pool()
+
+    def _kill_follower(self, remote_pid: str) -> None:
+        """Kill the follower's process group, as root, while its leader is still our script.
+
+        As root: the group holds `sudo journalctl`, which an unprivileged kill can't signal -- and that kill
+        still exits 0 once it has killed the user's own shell, leaving journalctl holding the SSH channel
+        open. With nothing downstream to die of SIGPIPE, it outlives the run.
+
+        A root kill of a stale pgid could hit anything, e.g. a scylla group on a DB node, so the leader's
+        command line must still be the `setsid bash <cmd file>` that _retrieve() started.
+        """
+        leader = self._remoter.sudo(f"cat /proc/{remote_pid}/cmdline | tr '\\0' ' '", ignore_status=True)
+        if leader.stdout.strip() != f"bash {self._remote_cmd_file}":
+            self._log.debug(
+                "Process %s on %s is no longer the log follower of %s (%r), not killing it",
+                remote_pid,
+                self._node.name,
+                self._target_log_file,
+                leader.stdout,
+            )
+            return
+        self._remoter.sudo(f"kill -9 -{remote_pid}", ignore_status=True)
+
+    def _remove_remote_files(self) -> None:
+        """Remove the pid and command files: a host that outlives the run would collect one pair per logger."""
+        self._remoter.run(f"rm -f {self._remote_pid_file} {self._remote_cmd_file}", ignore_status=True)
 
     def _shutdown_pool(self) -> None:
         """Release the pool's worker thread once the journal task is done.
@@ -153,10 +190,9 @@ class SSHLoggerBase(LoggerBase):
         Returns the PID of the remote logger process.
         This is used to ensure that the logger is running and to manage its lifecycle.
         """
-        remote_pid_file = f"/tmp/logger_{os.getpid()}.pid"
-        if not self._remoter.run(f"test -f {remote_pid_file}", ignore_status=True).ok:
+        if not self._remoter.run(f"test -f {self._remote_pid_file}", ignore_status=True).ok:
             return ""
-        return self._remoter.run(f"cat {remote_pid_file}").stdout.strip()
+        return self._remoter.run(f"cat {self._remote_pid_file}").stdout.strip()
 
     def _retrieve(self, since: str) -> None:
         self._log.debug(
@@ -164,11 +200,10 @@ class SSHLoggerBase(LoggerBase):
         )
         try:
             # Write the remote PID to a file before running the logger command
-            remote_pid_file = f"/tmp/logger_{os.getpid()}.pid"
             cmd = self._logger_cmd_template.format(since=f'--since "{since}" ' if since else "")
             remote_cmd = (
-                f"cat <<'EOF' > /tmp/logger_cmd_{os.getpid()}.sh\n{cmd}\nEOF\n"
-                f"setsid bash /tmp/logger_cmd_{os.getpid()}.sh & echo $! > {remote_pid_file}; wait"
+                f"cat <<'EOF' > {self._remote_cmd_file}\n{cmd}\nEOF\n"
+                f"setsid bash {self._remote_cmd_file} & echo $! > {self._remote_pid_file}; wait"
             )
             self._remoter.run(
                 cmd=remote_cmd,
@@ -225,6 +260,7 @@ class HDRHistogramFileLogger(SSHLoggerBase):
             self._termination_event.set()
             # ensure the tail command to be stopped
             self._remoter.run(f"pkill -f '{self._remote_log_file}'", ignore_status=True)
+            self._remove_remote_files()
             if self._thread.running():
                 self._thread.cancel()
             self._shutdown_pool()
