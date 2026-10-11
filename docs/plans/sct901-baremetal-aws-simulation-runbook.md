@@ -8,8 +8,8 @@ Runbook for the experiment asked for in
 
 Scripts: [`scripts/baremetal-simulation/`](../../scripts/baremetal-simulation/).
 Everything this runbook produces outside that directory (the node JSON, the
-generated test case, the `distro.py` patch) is deliberately uncommitted local
-state, removed again by step 9.
+generated test case) is deliberately uncommitted local state, removed again by
+step 9.
 
 ## 1. What "simulate bare metal" means here
 
@@ -43,11 +43,11 @@ it produces the first data point for the drift question SCT-901 has to answer.
 
 ### Traps — read before starting
 
-1. **Fedora > 36 is unknown to SCT.** `sdcm/utils/distro.py:43` declares
-   `("FEDORA", "fedora", ["34", "35", "36"], DistroBase.RHEL)`. On Fedora 44 the
-   enum resolves to `Distro.UNKNOWN`, `is_rhel_like` is `False`, and
-   `install_scylla()` falls into the **Debian/apt** branch and dies on an RPM host.
-   Step 3 patches it locally; the patch deserves its own PR plus a unit test.
+1. **Fedora > 36 was unknown to SCT** -- fixed on master by #16165. `sdcm/utils/distro.py`
+   used to declare only Fedora 34/35/36, so Fedora 44 resolved to `Distro.UNKNOWN`,
+   `is_rhel_like` was `False`, and `install_scylla()` fell into the **Debian/apt**
+   branch on an RPM host; `install_epel()` then failed on Fedora too. The simulation
+   used to patch both locally (a step 3 that is now gone).
 2. **`db_nodes_public_ip` / `loaders_public_ip` / `monitor_nodes_*` are dead ends.**
    They exist in `sdcm/sct_config/mixins/baremetal.py` but `get_cluster_baremetal()`
    never reads them — only the JSON named by `s3_baremetal_config`. The existing
@@ -117,8 +117,7 @@ uv run python scripts/baremetal-simulation/00_preflight.py
 ```
 
 Checks AWS reachability, the VPC/subnet/SG/key pair, the SSH key's mode, hydra and
-the container runtime, resolves the Fedora AMI, and warns if the distro patch is
-not applied yet. Blocking problems exit non-zero.
+the container runtime, and resolves the Fedora AMI. Blocking problems exit non-zero.
 
 ### Step 1 — provision the "physical" hosts
 
@@ -156,12 +155,10 @@ there are fewer IPs than nodes.
 The script then waits for SSH and prints the facts that decide whether the run can
 work at all: distro, SELinux mode, and what `detect_disks(nvme=True)` would return.
 
-### Step 3 — the one code change
+### Step 3 — none any more
 
-```bash
-uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --apply
-# undo later with --revert, inspect with --check
-```
+This step patched `sdcm/utils/distro.py` and `install_epel()` for current Fedora.
+Both are fixed on master (#16165), so there is nothing to patch.
 
 ### Step 4 — render the test case
 
@@ -232,12 +229,11 @@ invalidates the DB-node conclusion.
 
 ```bash
 uv run python scripts/baremetal-simulation/99_teardown.py --yes --all
-uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --revert
 ```
 
 ## 4. Pass/fail criteria to record on SCT-901
 
-- [ ] `Distro.FEDORA44` detected after the step-3 patch, RPM install branch taken.
+- [ ] `Distro.FEDORA44` detected, RPM install branch taken.
 - [ ] `scylla` RPM installed from the CentOS repo file on Fedora with no unresolved
       dependencies. *(Main unknown: Scylla RPMs are built for CentOS/RHEL 9 and
       Fedora carries newer glibc/openssl/python3. A failure here is a finding, not a
@@ -272,7 +268,7 @@ uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --revert
 ## 6. What to write back on the ticket
 
 - Whether the comment's recipe works, with the exact failure if it does not.
-- The Fedora gap in `sdcm/utils/distro.py`, as a concrete follow-up PR.
+- The Fedora gap in `sdcm/utils/distro.py` (since fixed by #16165).
 - Install wall-clock for repo-install vs unified-package on the same host.
 - The dirty-host repeat result — the first real data point for criterion 2.
 - Confirmation of the three known holes that Phase 3 of the ticket proposes to fix:

@@ -18,11 +18,6 @@ sim_load_config
 config_json="$(sim_require_config_json)"
 [[ -f "${REPO_ROOT}/${SIM_TEST_CASE}" ]] || sim_die "${SIM_TEST_CASE} is missing -- run 04_render_test_case.py"
 
-if ! grep -qE '"4[1-9]"' "${REPO_ROOT}/sdcm/utils/distro.py"; then
-    sim_log "WARNING: sdcm/utils/distro.py does not know Fedora 41+; the install will take the apt branch."
-    sim_log "         run: uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --apply"
-fi
-
 SCT_TEST_ID="${SCT_TEST_ID:-$(sim_new_test_id artifact)}"
 export SCT_TEST_ID
 export SCT_S3_BAREMETAL_CONFIG="${SIM_BAREMETAL_CONFIG_NAME}"

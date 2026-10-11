@@ -39,10 +39,9 @@ Each step is also runnable on its own:
 
 | Step | Command | Does |
 | --- | --- | --- |
-| 0 | `uv run python scripts/baremetal-simulation/00_preflight.py` | AWS creds, SCT VPC/subnet/SG/key pair, SSH key, hydra, Fedora AMI, distro patch |
+| 0 | `uv run python scripts/baremetal-simulation/00_preflight.py` | AWS creds, SCT VPC/subnet/SG/key pair, SSH key, hydra, Fedora AMI |
 | 1 | `uv run python scripts/baremetal-simulation/01_launch_hosts.py` | launches the Fedora hosts + a security group for your own IP |
 | 2 | `uv run python scripts/baremetal-simulation/02_write_baremetal_config.py` | writes `<repo>/baremetal_sct901.json` and probes the hosts |
-| 3 | `uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --apply` | teaches `sdcm/utils/distro.py` about Fedora 41-45 |
 | 4 | `uv run python scripts/baremetal-simulation/04_render_test_case.py` | `test-cases/artifacts/baremetal-fedora.yaml` is committed; this only writes it if missing. Pass `--force` to re-render it from `config.env` (e.g. after changing node counts or setting `SIM_UNIFIED_PACKAGE`). |
 | 5 | `scripts/baremetal-simulation/05_run_artifact_test.sh` | `hydra run-test artifacts_test ... --backend baremetal` |
 | 6 | `scripts/baremetal-simulation/06_collect_logs.sh` | `hydra collect-logs` through the bare-metal collector |
@@ -51,8 +50,9 @@ Each step is also runnable on its own:
 | 9 | `scripts/baremetal-simulation/08_run_perf_test.sh` | optional perf smoke, needs db + loader + monitor hosts |
 | 10 | `uv run python scripts/baremetal-simulation/99_teardown.py --yes --all` | terminates everything, removes the generated files and restores the committed test case. Refuses while one of this simulation's runs is still executing — a passing pytest summary is not the end of a run, log collection follows it. `--force` overrides. |
 
-Steps 3 and 4 produce **uncommitted local state**; step 9 (`--all`) and
-`03_patch_sct_for_fedora.py --revert` undo them.
+Step 2 writes the node JSON, uncommitted local state that step 10 (`--all`) removes.
+There is no step 3: SCT supports current Fedora releases itself since
+`fix(distro): recognize current Fedora releases and skip EPEL on them` (#16165).
 
 ## Configuration
 
@@ -69,10 +69,6 @@ Phase B (perf smoke) is `SIM_DB_COUNT=3 SIM_LOADER_COUNT=1 SIM_MONITOR_COUNT=1`.
 
 ## Things that will bite you
 
-- **Fedora > 36 is unknown to SCT.** `sdcm/utils/distro.py` lists only 34/35/36, so
-  Fedora 44 resolves to `Distro.UNKNOWN`, `is_rhel_like` is `False`, and
-  `install_scylla()` takes the **apt** branch on an RPM host. Step 3 patches it;
-  this is the one real code finding of the exercise and deserves its own PR.
 - **`SCT-2-sg` only allows traffic inside itself** — a runner outside the VPC cannot
   even SSH in. Step 1 creates a second, IP-scoped security group for that.
 - **Instance type must have a local NVMe disk** (`i4i.large` by default).

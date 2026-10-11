@@ -6,8 +6,6 @@
     --yes    do not ask for confirmation
     --all    also remove the generated local files: <name>.json and .state/, and
              restore the committed test case if it was re-rendered with --force
-             (the distro.py patch is reverted separately, with
-             03_patch_sct_for_fedora.py --revert)
     --force  terminate even while a run of this simulation is still executing
 
 Terminates by the TestId tag, then deletes the workstation security group created
@@ -144,7 +142,6 @@ def remove_local_files() -> None:
     if STATE_DIR.exists():
         shutil.rmtree(STATE_DIR)
         log(f"removed {STATE_DIR}")
-    log("remember: uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --revert")
 
 
 def main() -> int:

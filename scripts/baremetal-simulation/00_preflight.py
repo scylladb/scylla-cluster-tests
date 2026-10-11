@@ -4,13 +4,12 @@
     uv run python scripts/baremetal-simulation/00_preflight.py
 
 Checks AWS reachability, the SCT infrastructure the hosts are launched into, the
-SSH key, hydra/docker, and whether the Fedora distro patch (step 3) is applied.
+SSH key and hydra/docker.
 Exits non-zero if a hard prerequisite is missing; soft findings are warnings.
 """
 
 from __future__ import annotations
 
-import re
 import shutil
 import subprocess
 import sys
@@ -102,20 +101,6 @@ def check_hydra() -> None:
         )
 
 
-def check_distro_patch() -> None:
-    """Fedora > 36 resolves to Distro.UNKNOWN, which routes the install to apt."""
-    distro_py = REPO_ROOT / "sdcm" / "utils" / "distro.py"
-    line = next((ln for ln in distro_py.read_text(encoding="utf-8").splitlines() if '"FEDORA"' in ln), "")
-    versions = re.findall(r'"(\d+)"', line)
-    patched = any(int(v) >= 41 for v in versions)
-    check(
-        "fedora distro support",
-        patched,
-        f"sdcm/utils/distro.py knows Fedora {versions or '?'} -- run 03_patch_sct_for_fedora.py --apply",
-        hard=False,
-    )
-
-
 def main() -> int:
     log(f"preflight for region {cfg('SIM_REGION')}, tag {cfg('SIM_TEST_TAG')}")
     check_aws()
@@ -123,7 +108,6 @@ def main() -> int:
     check_ssh_key()
     check_ami()
     check_hydra()
-    check_distro_patch()
 
     print()
     if FAILURES:

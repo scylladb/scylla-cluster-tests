@@ -15,7 +15,7 @@ length, and PhysicalMachineCluster only raises NodeIpsNotConfiguredError when
 there are fewer IPs than nodes.
 
 The script also waits for SSH and prints the host facts that decide whether the
-run can work at all: the distro (Fedora > 36 is unknown to SCT) and an unpartitioned
+run can work at all: the distro and an unpartitioned
 local NVMe disk (detect_disks). The SELinux mode is printed for information only:
 enforcing is fine, scylla_setup switches it to permissive itself.
 """
@@ -126,7 +126,7 @@ def main() -> int:
     if problems:
         return 1
 
-    log("hosts are usable -- next: 03_patch_sct_for_fedora.py --apply")
+    log("hosts are usable -- next: 04_render_test_case.py")
     return 0
 
 

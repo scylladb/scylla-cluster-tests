@@ -10,7 +10,7 @@ Runs the numbered step scripts in order, times each one, records progress in
 
 Defaults chosen so a single command answers the ticket:
 
-  * phase A  -- preflight, launch, node JSON, distro patch, test case, artifact
+  * phase A  -- preflight, launch, node JSON, test case, artifact
     test, log collection, then a host reset and a second artifact test -- which is
     SCT-901 criterion 1, two runs of the same build on the same host.
     ``--reset-passes 0`` drops the repeat.
@@ -19,8 +19,8 @@ Defaults chosen so a single command answers the ticket:
     reason.  It is off by default, and the run stops when it fails.
   * the hosts are LEFT RUNNING at the end, so a failure can be investigated on
     the box.  They carry keep=<SIM_KEEP_HOURS>/keep_action=terminate, so they
-    cannot leak past that window.  ``--teardown`` terminates them (and reverts
-    the distro patch) once the run is over.
+    cannot leak past that window.  ``--teardown`` terminates them once the run
+    is over.
   * a failing step stops the run; ``--resume`` starts again after the last step
     that succeeded, so a re-run does not re-provision the hosts.
 
@@ -66,7 +66,6 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
         python_step("launch", "launch the simulated hosts", "01_launch_hosts.py"),
         python_step("nodes", "write the bare-metal node JSON", "02_write_baremetal_config.py"),
         shell_step("peers", "map peer addresses between hosts", "10_map_peer_addresses.sh"),
-        python_step("distro", "patch SCT for Fedora", "03_patch_sct_for_fedora.py", "--apply"),
     ]
 
     if args.phase == "artifact":
@@ -103,7 +102,6 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
 
     if args.teardown:
         steps += [
-            python_step("revert", "revert the Fedora patches", "03_patch_sct_for_fedora.py", "--revert"),
             python_step("teardown", "terminate the hosts", "99_teardown.py", "--yes"),
         ]
     return steps
@@ -157,7 +155,6 @@ def print_summary(results: list[tuple[Step, bool, float]], args: argparse.Namesp
     if not args.teardown:
         log("hosts are still running -- terminate with:")
         log("  uv run python scripts/baremetal-simulation/99_teardown.py --yes --all")
-        log("  uv run python scripts/baremetal-simulation/03_patch_sct_for_fedora.py --revert")
     log("record on SCT-901: distro detected, RPM install outcome, scylla_setup + /var/lib/scylla mount,")
     log("install wall-clock, log collection, and the io.conf diff between passes (.state/host-state-*).")
     log("=" * 68)
