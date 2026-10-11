@@ -22,7 +22,7 @@ these loggers per node, so a leak here is a leak per node. See SCT-803.
 
 import threading
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 
@@ -103,7 +103,8 @@ def test_stop_without_remote_pid_warns_instead_of_running_bare_kill(tmp_path, ca
     with caplog.at_level("WARNING"):
         logger.stop()
 
-    assert not any("kill" in str(call) for call in logger._remoter.run.call_args_list)
+    remote_calls = logger._remoter.run.call_args_list + logger._remoter.sudo.call_args_list
+    assert not any("kill" in str(call) for call in remote_calls)
     assert "No remote pid file" in caplog.text
 
 
@@ -119,3 +120,108 @@ def test_k8s_client_logger_reads_multibyte_char_split_across_chunks():
         ("2026-10-06T00:00:00Z", "duration=530µs\n"),
         ("2026-10-06T00:00:01Z", "next\n"),
     ]
+
+
+def _answer_leader_cmdline(logger, leader: str | None = None) -> None:
+    """Make the remoter report `leader` as the pid's command line; by default, the follower script of `logger`."""
+    if leader is None:
+        leader = f"bash {logger._remote_cmd_file} "
+
+    def sudo(cmd, **_kwargs):
+        return SimpleNamespace(ok=True, stdout=leader if "/cmdline" in cmd else "")
+
+    logger._remoter.sudo.side_effect = sudo
+
+
+def _stopped_systemd_logger(tmp_path, leader: str | None = None) -> SSHGeneralSystemdLogger:
+    logger = SSHGeneralSystemdLogger(node=_node(remote_pid="1522"), target_log_file=str(tmp_path / "target.log"))
+    _answer_leader_cmdline(logger, leader)
+    journal = _stub_journal_task(logger)
+    logger.start()
+    assert journal.entered.wait(timeout=10)
+    logger.stop()
+    return logger
+
+
+def _kill_calls(remoter_method) -> list:
+    return [call for call in remoter_method.call_args_list if "kill" in str(call)]
+
+
+def test_stop_kills_the_follower_group_as_root(tmp_path):
+    """The group holds `sudo journalctl`; an unprivileged kill can't signal it and the follower outlives stop()."""
+    logger = _stopped_systemd_logger(tmp_path)
+
+    assert _kill_calls(logger._remoter.sudo) == [call("kill -9 -1522", ignore_status=True)]
+    assert not _kill_calls(logger._remoter.run)
+
+
+@pytest.mark.parametrize(
+    "leader",
+    [
+        pytest.param("/usr/bin/scylla --options-file /etc/scylla/scylla.yaml ", id="pid_reused_by_another_process"),
+        pytest.param("bash /tmp/logger_7_0123abcd.sh ", id="pid_reused_by_another_logger"),
+        pytest.param("", id="follower_already_gone"),
+    ],
+)
+def test_stop_does_not_kill_a_group_the_follower_no_longer_leads(tmp_path, leader):
+    """A root kill of a stale pgid could hit anything, e.g. scylla on a DB node: only our script's group dies."""
+    logger = _stopped_systemd_logger(tmp_path, leader=leader)
+
+    assert not _kill_calls(logger._remoter.sudo)
+    assert not _kill_calls(logger._remoter.run)
+
+
+@pytest.mark.parametrize("leader", [None, ""], ids=["follower_killed", "follower_already_gone"])
+def test_stop_removes_the_remote_pid_and_cmd_files(tmp_path, leader):
+    """A host that outlives the run would otherwise collect a pid and a cmd file per logger."""
+    logger = _stopped_systemd_logger(tmp_path, leader=leader)
+
+    logger._remoter.run.assert_any_call(
+        f"rm -f {logger._remote_pid_file} {logger._remote_cmd_file}", ignore_status=True
+    )
+
+
+def test_hdr_logger_stop_removes_the_remote_pid_and_cmd_files(tmp_path):
+    """A loader starts an HDR logger per stress command, so these files pile up fastest there."""
+    logger = HDRHistogramFileLogger(
+        node=_node(), remote_log_file="/tmp/remote.hdr", target_log_file=str(tmp_path / "target.hdr")
+    )
+    journal = _stub_journal_task(logger)
+    logger.start()
+    assert journal.entered.wait(timeout=10)
+    logger.stop()
+
+    logger._remoter.run.assert_any_call(
+        f"rm -f {logger._remote_pid_file} {logger._remote_cmd_file}", ignore_status=True
+    )
+
+
+def test_second_stop_neither_kills_nor_warns(tmp_path, caplog):
+    """Node teardown calls stop() twice; the first already removed the pid file, so the second must be a no-op."""
+    logger = _stopped_systemd_logger(tmp_path)
+    logger._remoter.reset_mock()
+    logger._remoter.run.return_value = SimpleNamespace(ok=False, stdout="")
+
+    with caplog.at_level("WARNING"):
+        logger.stop()
+
+    assert not logger._remoter.sudo.called
+    assert not logger._remoter.run.called
+    assert "No remote pid file" not in caplog.text
+
+
+def test_loggers_on_one_node_keep_separate_pid_files(tmp_path):
+    """A loader follows its journal and an HDR file at once; stopping one must not kill the other's follower."""
+    node = _node()
+    journal_logger = SSHGeneralSystemdLogger(node=node, target_log_file=str(tmp_path / "journal.log"))
+    hdr_logger = HDRHistogramFileLogger(
+        node=node, remote_log_file="/tmp/remote.hdr", target_log_file=str(tmp_path / "target.hdr")
+    )
+
+    assert journal_logger._remote_pid_file != hdr_logger._remote_pid_file
+    assert journal_logger._remote_cmd_file != hdr_logger._remote_cmd_file
+
+    journal_logger._retrieve(since="")
+    remote_cmd = node.remoter.run.call_args.kwargs["cmd"]
+    assert f"> {journal_logger._remote_pid_file};" in remote_cmd
+    assert f"setsid bash {journal_logger._remote_cmd_file} " in remote_cmd
