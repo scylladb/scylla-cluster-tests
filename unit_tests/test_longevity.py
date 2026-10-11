@@ -26,6 +26,9 @@ def test_test_user_batch_custom_time(params):
             # - test_nemesis.py::test_list_nemesis_of_added_disrupt_methods
             # So, disable health checks here.
             self.params["cluster_health_check"] = False
+            # The real config's SisyphusMonkey keeps running after this test ends and its
+            # errors land in whatever test runs next; NoOpMonkey only sleeps.
+            self.params["nemesis_class_name"] = "NoOpMonkey"
 
         def start_argus_heartbeat_thread(self):
             # prevent from heartbeat thread to start
