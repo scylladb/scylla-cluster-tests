@@ -51,6 +51,8 @@ MINICLOUD_S3_PASSTHROUGH_BUCKETS_DEFAULT = (
 )
 
 MINICLOUD_CONTAINER_NAME = "minicloud"
+# EC2 tag minicloud puts on an instance whose guest runs under TCG emulation (value "tcg")
+MINICLOUD_ACCEL_TAG = "minicloud:accel"
 MINICLOUD_HEALTH_TIMEOUT = 30
 MINICLOUD_HEALTH_INTERVAL = 1
 # EC2 action used as the liveness probe. Must be an action minicloud actually implements

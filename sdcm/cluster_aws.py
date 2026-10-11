@@ -41,7 +41,11 @@ from sdcm.provision.network_configuration import (
     ssh_connection_ip_type,
 )
 from sdcm.provision.scylla_yaml import SeedProvider
-from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
+from sdcm.provision.helpers.cloud_init import (
+    CLOUD_INIT_EMULATED_WAIT_TIMEOUT,
+    CLOUD_INIT_WAIT_TIMEOUT,
+    wait_cloud_init_completes,
+)
 from sdcm.provision.provisioner import ProvisionError
 from sdcm.sct_provision.aws.cluster import PlacementGroup
 
@@ -52,6 +56,7 @@ from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import SpotTerminationEvent, TestFrameworkEvent
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
 from sdcm.utils.common import MINICLOUD_PENDING_INSTANCES_TIMEOUT, PENDING_INSTANCES_TIMEOUT, list_instances_aws
+from sdcm.utils.minicloud.config import MINICLOUD_ACCEL_TAG
 from sdcm.utils.minicloud.endpoint import is_minicloud_active
 from sdcm.kernel_panic_checker import AWSKernelPanicChecker
 from sdcm.utils.decorators import retrying
@@ -820,7 +825,20 @@ class AWSNode(cluster.BaseNode):
     def wait_for_cloud_init(self):
         self.remoter.is_up(timeout=300)
         if self.remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:
-            wait_cloud_init_completes(self.remoter, self)
+            wait_cloud_init_completes(self.remoter, self, timeout=self._cloud_init_wait_timeout())
+
+    def _cloud_init_wait_timeout(self) -> int:
+        """Longer for a guest minicloud runs under TCG emulation.
+
+        minicloud tags the instance when it falls back to emulation after launch, so the tags
+        cached at RunInstances time may predate it - re-read them.
+        """
+        if is_minicloud_active():
+            self._instance.reload()
+            if {"Key": MINICLOUD_ACCEL_TAG, "Value": "tcg"} in (self._instance.tags or []):
+                self.log.info("Guest runs under TCG emulation, waiting longer for cloud-init")
+                return CLOUD_INIT_EMULATED_WAIT_TIMEOUT
+        return CLOUD_INIT_WAIT_TIMEOUT
 
     @property
     def short_hostname(self):

@@ -140,3 +140,18 @@ def test_wait_cloud_init_completes_happy_path_applies_timeout_bound():
         f"timeout --kill-after=10s --signal=TERM {CLOUD_INIT_WAIT_TIMEOUT} cloud-init status --format=json --wait"
         in status_calls[0].args[0]
     )
+
+
+def test_wait_cloud_init_completes_uses_given_timeout():
+    """An emulated guest gets a longer bound; it must reach both the remote `timeout` and the message."""
+    remoter = _remoter()
+    FakeRemoter.result_map = {
+        r"sudo bash -c 'command -v cloud-init'": CLOUD_INIT_PRESENT,
+        r"cloud-init --version 2>&1": JSON_STATUS_VERSION,
+        r"sudo timeout --kill-after=10s --signal=TERM 1800 cloud-init status --format=json --wait": Result(
+            stdout="", stderr="", exited=124
+        ),
+        r"sudo tail -n \d+ /var/log/cloud-init-output\.log": Result(stdout=TAIL_LOG_CONTENT, exited=0),
+    }
+    with pytest.raises(TimeoutError, match="within 1800 seconds"):
+        wait_cloud_init_completes(remoter, _instance(), timeout=1800)
