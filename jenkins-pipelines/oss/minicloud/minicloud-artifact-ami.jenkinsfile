@@ -24,6 +24,9 @@ artifactsPipeline(
     scylla_version: '2026.3.0-rc0',
 
     provision_type: 'on_demand',
-    timeout: [time: 60, unit: 'MINUTES'],
+    // On a local agent too old for the image's CPU level (monster), minicloud runs the guest
+    // under TCG emulation and the test stage takes ~50 min (#33) instead of ~25. The bound is
+    // only there to stop a stuck run.
+    timeout: [time: 120, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy',
 )
