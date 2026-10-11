@@ -4,8 +4,9 @@
     uv run python scripts/baremetal-simulation/99_teardown.py [--yes] [--all] [--force]
 
     --yes    do not ask for confirmation
-    --all    also remove the generated local files: <name>.json, the rendered test
-             case, and .state/ (the distro.py patch is reverted separately, with
+    --all    also remove the generated local files: <name>.json and .state/, and
+             restore the committed test case if it was re-rendered with --force
+             (the distro.py patch is reverted separately, with
              03_patch_sct_for_fedora.py --revert)
     --force  terminate even while a run of this simulation is still executing
 
@@ -123,9 +124,21 @@ def delete_workstation_security_group(client) -> None:
     log(f"security group {name} ({sg_id}) still has dependencies -- delete it by hand")
 
 
+def is_tracked(path: Path) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "ls-files", "--error-unmatch", str(path)], capture_output=True, check=False
+    )
+    return result.returncode == 0
+
+
 def remove_local_files() -> None:
     for path in (baremetal_config_path(), REPO_ROOT / cfg("SIM_TEST_CASE")):
-        if path.exists():
+        # The artifact test case is committed: put back what git has instead of deleting it,
+        # which also undoes a `04_render_test_case.py --force` re-render.
+        if is_tracked(path):
+            subprocess.run(["git", "-C", str(REPO_ROOT), "checkout", "--", str(path)], check=True)
+            log(f"restored {path} from git")
+        elif path.exists():
             path.unlink()
             log(f"removed {path}")
     if STATE_DIR.exists():
