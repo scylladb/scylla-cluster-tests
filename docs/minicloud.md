@@ -203,7 +203,7 @@ The `upgrade` flavor runs `upgrade_test.UpgradeTest.test_rolling_upgrade` - the 
 
 ```bash
 SCT_SCYLLA_VERSION=2026.1 \
-SCT_NEW_SCYLLA_REPO=http://downloads.scylladb.com/deb/unified/2026.2/scylladb-2026.2/scylla.list \
+SCT_NEW_SCYLLA_REPO=https://downloads.scylladb.com/deb/debian/scylla-2026.2.list \
   scripts/run-minicloud-test.sh -f upgrade -b aws
 ```
 
