@@ -27,11 +27,6 @@ LOGGER = logging.getLogger(__name__)
 # provisioning stage). 600s fails at roughly a third of the stage, leaving ample room for the
 # error, log collection and node termination to happen inside SCT.
 CLOUD_INIT_WAIT_TIMEOUT = 600
-# A minicloud guest running under TCG emulation (an x86-64-v3 image on an older host, or
-# minicloud_cpu_mode=emulate) runs its user-data several times slower: on an Ivy Bridge host it
-# was still in apt-get update at 600s. Still inside a 1h test stage.
-# ponytail: fixed 3x, measure per-host and make it a config option if it proves wrong
-CLOUD_INIT_EMULATED_WAIT_TIMEOUT = CLOUD_INIT_WAIT_TIMEOUT * 3
 CLOUD_INIT_SSH_TIMEOUT_MARGIN = 60
 CLOUD_INIT_OUTPUT_LOG = "/var/log/cloud-init-output.log"
 CLOUD_INIT_LOG_TAIL_LINES = 50

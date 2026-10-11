@@ -9,7 +9,6 @@ from unittest.mock import Mock, patch
 import botocore.exceptions
 
 from sdcm.cluster_aws import AWSNode
-from sdcm.provision.helpers.cloud_init import CLOUD_INIT_EMULATED_WAIT_TIMEOUT, CLOUD_INIT_WAIT_TIMEOUT
 from sdcm.sct_events import Severity
 
 
@@ -177,17 +176,17 @@ def test_destroy_continues_when_release_address_fails(mock_aws_node, release_err
 @pytest.mark.parametrize(
     "minicloud, tags, expected",
     [
-        (True, [{"Key": "minicloud:accel", "Value": "tcg"}], CLOUD_INIT_EMULATED_WAIT_TIMEOUT),
-        (True, [{"Key": "Name", "Value": "db-1"}], CLOUD_INIT_WAIT_TIMEOUT),
-        (True, None, CLOUD_INIT_WAIT_TIMEOUT),
-        (False, [{"Key": "minicloud:accel", "Value": "tcg"}], CLOUD_INIT_WAIT_TIMEOUT),
+        (True, [{"Key": "minicloud:accel", "Value": "tcg"}], True),
+        (True, [{"Key": "Name", "Value": "db-1"}], False),
+        (True, None, False),
+        (False, [{"Key": "minicloud:accel", "Value": "tcg"}], False),
     ],
     ids=["emulated", "kvm", "no-tags", "real-aws"],
 )
-def test_cloud_init_wait_timeout_longer_for_emulated_guest(minicloud, tags, expected):
+def test_emulated_guest_from_minicloud_tag(minicloud, tags, expected):
     """minicloud tags the instance when it falls back to TCG after launch, so the tags must be re-read."""
     node = Mock()
     node._instance.tags = tags
     with patch("sdcm.cluster_aws.is_minicloud_active", return_value=minicloud):
-        assert AWSNode._cloud_init_wait_timeout(node) == expected
+        assert AWSNode.emulated_guest.func(node) is expected
     assert node._instance.reload.called == minicloud

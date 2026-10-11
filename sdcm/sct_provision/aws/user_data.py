@@ -19,6 +19,8 @@ from sdcm.provision.user_data import gzipped_mime_part
 from sdcm.provision.network_configuration import is_ip_ssh_connections_ipv6, network_interfaces_count
 from sdcm.provision.scylla_yaml import ScyllaYaml
 from sdcm.sct_config import SCTConfiguration
+from sdcm.utils.minicloud.config import MINICLOUD_IMAGE_SETUP_TIMEOUT_SEC
+from sdcm.utils.minicloud.endpoint import is_minicloud_active
 
 LOGGER = logging.getLogger()
 
@@ -104,6 +106,8 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
         msg.attach(part)
 
         cloud_config = "#cloud-config\ncloud_final_modules:\n- [scripts-user, always]\n"
+        if is_minicloud_active(self.params):
+            cloud_config += self.minicloud_image_setup_bootcmd()
         part = MIMEBase("text", "cloud-config")
         part.set_payload(cloud_config)
         part.add_header("Content-Disposition", 'attachment; filename="cloud-config.txt"')
@@ -113,6 +117,23 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
         msg.attach(gzipped_mime_part(script, filename="user-script.txt"))
 
         return str(msg)
+
+    @staticmethod
+    def minicloud_image_setup_bootcmd() -> str:
+        """Raise scylla-image-setup.service's start timeout on minicloud guests.
+
+        Under TCG emulation the image's own 15 min limit kills the setup mid update-initramfs, and
+        the node never gets /etc/scylla/machine_image_configured. bootcmd is the earliest user-data
+        hook; it may run after the service started, which is fine: daemon-reload re-arms a running
+        job's timeout from the new value.
+        """
+        drop_in = "/etc/systemd/system/scylla-image-setup.service.d/minicloud-timeout.conf"
+        return (
+            "bootcmd:\n"
+            f"- mkdir -p {drop_in.rsplit('/', 1)[0]}\n"
+            f"- printf '[Service]\\nTimeoutStartSec={MINICLOUD_IMAGE_SETUP_TIMEOUT_SEC}\\n' > {drop_in}\n"
+            "- systemctl daemon-reload\n"
+        )
 
     def return_in_format_v2(self) -> str:
         return json.dumps(
