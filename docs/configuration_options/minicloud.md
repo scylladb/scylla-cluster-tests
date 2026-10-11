@@ -6,7 +6,7 @@ Minicloud is an AWS-API-compatible environment rather than a cloud of its own: i
 `cluster_backend: aws` and an endpoint override, and these options control the local minicloud
 service.
 
-**16 options.**
+**17 options.**
 
 
 <a id="minicloud_container_cpus"></a>
@@ -128,6 +128,17 @@ Keep guest RAM from being swapped out on the host. On: Scylla keeps its own --lo
 **default:** True
 
 **type:** bool
+
+
+<a id="minicloud_cpu_mode"></a>
+
+## **minicloud_cpu_mode** / SCT_MINICLOUD_CPU_MODE
+
+minicloud --cpu-mode: 'auto' (KVM, falling back to TCG emulation when the guest image needs CPU features the host lacks, e.g. an x86-64-v3 image on an x86-64-v2 host), 'kvm' (never emulate, fail the launch fast instead) or 'emulate' (TCG for every guest, many times slower). Empty passes no flag, so minicloud images that predate the option still start
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 <a id="minicloud_regions"></a>

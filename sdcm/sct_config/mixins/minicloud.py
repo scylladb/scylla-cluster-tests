@@ -82,6 +82,12 @@ class MinicloudConfigMixin(BaseModel):
         "they touch, and the minicloud container runs with no memory-locking flags - for "
         "development machines short on RAM",
     )
+    minicloud_cpu_mode: String = SctField(
+        description="minicloud --cpu-mode: 'auto' (KVM, falling back to TCG emulation when the guest "
+        "image needs CPU features the host lacks, e.g. an x86-64-v3 image on an x86-64-v2 host), "
+        "'kvm' (never emulate, fail the launch fast instead) or 'emulate' (TCG for every guest, many "
+        "times slower). Empty passes no flag, so minicloud images that predate the option still start",
+    )
     minicloud_regions: StringOrList = SctField(
         description="Narrow the AWS regions minicloud prepares (default: every SCT-supported region; "
         "each costs ~2s at start-up)",

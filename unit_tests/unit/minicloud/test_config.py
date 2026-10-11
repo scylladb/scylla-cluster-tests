@@ -337,3 +337,8 @@ def test_minicloud_error_preserves_message():
     msg = "KVM not available on this host"
     err = MinicloudError(msg)
     assert str(err) == msg
+
+
+@pytest.mark.parametrize("params, expected", [({"minicloud_cpu_mode": "emulate"}, "emulate"), ({}, "")])
+def test_minicloud_config_cpu_mode(params, expected):
+    assert MinicloudConfig.from_env(params=params).cpu_mode == expected
