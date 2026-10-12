@@ -15,6 +15,7 @@ def test_no_existing_issue(events, params):
     assert events_list[-1]["severity"] == "WARNING"
 
 
+@pytest.mark.requires_aws
 def test_open_issues(params):
     params.artifact_scylla_version = "2023.1.3"
     assert SkipPerIssues(
@@ -26,21 +27,25 @@ def test_open_issues(params):
     )
 
 
+@pytest.mark.requires_aws
 def test_closed_issues(params):
     params.artifact_scylla_version = "2023.1.3"
     assert not SkipPerIssues(["https://github.com/scylladb/qa-tasks/issues/1614", "scylladb/qa-tasks#1614"], params)
 
 
+@pytest.mark.requires_aws
 def test_closed_issues_with_skip_tag(params):
     params.artifact_scylla_version = "2023.1.3"
     assert SkipPerIssues(["https://github.com/scylladb/qa-tasks/issues/1615", "scylladb/qa-tasks#1615"], params)
 
 
+@pytest.mark.requires_aws
 def test_no_version(params):
     params.artifact_scylla_version = None
     assert SkipPerIssues(["https://github.com/scylladb/qa-tasks/issues/1613", "scylladb/qa-tasks#1613"], params)
 
 
+@pytest.mark.requires_aws
 def test_opened_issue_with_closed_issue(params):
     params.artifact_scylla_version = "2023.1.3"
     assert SkipPerIssues(["scylladb/qa-tasks#1613", "scylladb/qa-tasks#1614"], params)
@@ -48,6 +53,7 @@ def test_opened_issue_with_closed_issue(params):
     assert SkipPerIssues(["scylladb/qa-tasks#1614", "scylladb/qa-tasks#1613"], params)
 
 
+@pytest.mark.requires_aws
 def test_closed_issue_with_tag_not_matching_version(params):
     params.artifact_scylla_version = "2019.1.3"
     assert SkipPerIssues(["scylladb/qa-tasks#1613", "scylladb/qa-tasks#1615"], params)
@@ -55,12 +61,14 @@ def test_closed_issue_with_tag_not_matching_version(params):
     assert SkipPerIssues(["scylladb/qa-tasks#1615", "scylladb/qa-tasks#1613"], params)
 
 
+@pytest.mark.requires_aws
 def test_opened_issue_tag_not_matching_version_tag(params):
     params.artifact_scylla_version = "2019.1.3"
 
     assert not SkipPerIssues(["scylladb/qa-tasks#1615"], params)
 
 
+@pytest.mark.requires_aws
 def test_closed_pull_request(params):
     params.artifact_scylla_version = "2019.1.3"
 
@@ -79,6 +87,7 @@ def test_closed_pull_request(params):
         ),  # non-existing JIRA issue
     ],
 )
+@pytest.mark.requires_aws
 def test_jira_issues(params, issue, opened):
     """
     Test that JIRA issues are correctly identified as closed or open based on their state.

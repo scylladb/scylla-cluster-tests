@@ -12,6 +12,7 @@ from sdcm.utils.common import find_equivalent_ami
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_find_equivalent_ami_real_scylla_ami():
     """
     Test with a real ScyllaDB AMI.
@@ -38,6 +39,7 @@ def test_find_equivalent_ami_real_scylla_ami():
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_find_equivalent_ami_cross_architecture():
     """
     Test finding ARM64 equivalent of an x86_64 AMI.
@@ -59,6 +61,7 @@ def test_find_equivalent_ami_cross_architecture():
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_find_equivalent_ami_all_aws_regions():
     """
     Test finding equivalents across all major AWS regions.
@@ -80,6 +83,7 @@ def test_find_equivalent_ami_all_aws_regions():
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_integration_find_equivalent_ami():
     """
     Integration test: Validates that find_equivalent_ami returns the correct ARM64 equivalent AMI in 'us-east-1'
