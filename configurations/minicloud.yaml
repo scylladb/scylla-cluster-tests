@@ -40,3 +40,14 @@ enable_kernel_panic_checker: false
 # not replace it.)
 append_scylla_yaml:
   developer_mode: true
+
+# minicloud runs with --cross-arch=fail: an aarch64 type on the x86-64 hosts fails at launch
+# instead of crawling under TCG. Pin sizing to x86_64 so full-size test-cases, whose sizing
+# constraints resolve to Graviton on AWS, still launch. Merges with any sizing the test-case
+# sets; a literal instance_type_* skips sizing and is unaffected.
+sizing_db:
+  arch: x86_64
+sizing_loader:
+  arch: x86_64
+sizing_monitor:
+  arch: x86_64
