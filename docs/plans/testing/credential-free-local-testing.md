@@ -155,6 +155,7 @@ Phases are ordered by dependency. Phases 2-4 unblock Docker; 5-6 unblock kind; 7
 ### Phase 2: Credential profile - "do I have AWS?" in one place
 
 **Importance**: Critical
+**PR**: [#16447](https://github.com/scylladb/scylla-cluster-tests/pull/16447) (together with Phase 3)
 **Description**: One small helper answers "are AWS credentials available?" (boto3 credential
 chain resolves, without network calls) and "does this run need them?" (derived from
 `cluster_backend`: `docker`, `k8s-local-kind`, and minicloud-offline do not; every real cloud
@@ -166,14 +167,18 @@ creds-present / creds-absent / creds-expired cases.
 **Definition of Done**:
 - [ ] Helper returns "not needed" for `docker` and `k8s-local-kind`, "needed" for `aws`, `gce`,
       `azure`, `oci`, `k8s-eks`, `k8s-gke`, `xcloud`, baremetal
-- [ ] No network call when deciding availability
+- [ ] No AWS API call when deciding availability (boto3's credential chain may still probe
+      instance metadata on a host without credentials)
 - [ ] Unit tests pass
 
 ### Phase 3: Lazy CLI start-up gate
 
 **Importance**: Critical
+**PR**: [#16447](https://github.com/scylladb/scylla-cluster-tests/pull/16447)
 **Description**: Replace the hard-coded allow-list in `sct.py:cli` with a per-command decision.
-Commands that resolve a config (`run-test`, `conf`, `integration-tests`, `provision-resources`)
+Commands that resolve a config (`run-test`, `run-pytest`, `conf`, `integration-tests`,
+`provision-resources`) decide for themselves once their `--backend` is known (the click group
+callback runs before the subcommand's options are parsed), and
 run Okta auth and the shared-key sync **only when the profile says AWS is needed**, or when
 credentials are present (keeps today's behaviour for staff). Otherwise:
 
@@ -190,25 +195,37 @@ and outsiders.
 - [ ] `sct.py conf -b aws ...` with creds hidden fails fast with an actionable message
 - [ ] An existing `~/.ssh/scylla_test_id_ed25519` is never overwritten
 
-### Phase 4: Integration-test credential markers
+### Phase 4: Integration-test credential marker
 
 **Importance**: Critical
-**Description**: Add markers `requires_aws`, `requires_gce`, `requires_azure`, `requires_oci`
-(registered in `unit_tests/pytest.ini`). An `unit_tests/integration/conftest.py` hook skips a
-marked test when the Phase 2 helper (or its GCE/Azure/OCI equivalent) reports the credential
-missing, with reason `"needs AWS credentials (scylla QA account)"`. Label the ~12 real-cloud files
-from the Current State inventory; moto-server files need no label. Fold the existing ad-hoc OCI
-skip and `test_catalog_generator.py` fixtures into the markers.
+**PR**: [#16453](https://github.com/scylladb/scylla-cluster-tests/pull/16453)
+**Description**: Add a `requires_aws` marker (registered in `unit_tests/pytest.ini`). A
+`unit_tests/integration/conftest.py` hook skips a marked test when the Phase 2 helper finds no AWS
+credentials, with reason `"needs AWS credentials for the SCT AWS account"`. In CI (`JOB_NAME` set)
+the same condition **fails** the test instead, so a broken credential setup can't quietly hide a
+whole class of tests.
 
-`sct.py integration-tests` drops its Okta dependency via Phase 3 and accepts
-`-m "integration and not requires_aws"`-style filtering unchanged. The `need_network` marker stays
-orthogonal (public internet ≠ credentials).
+Which tests get the marker is decided by measurement, not inspection: run the integration suite
+with every credential hidden and mark what fails for lack of credentials. Tests that read cached
+data from S3 can *pass by accident* without credentials (an unreadable cache reads as "empty"), so
+they are marked too. Moto-server tests must not need real credentials at all: fix them rather than
+mark them.
+
+One marker is enough: SCT reads its GCE, Azure and OCI credentials from KeyStore, which itself
+needs AWS, and every measured credential failure was AWS. Tests that use a cloud SDK directly
+(OCI utils, catalog generator) keep their existing skips. `try/except ClientError → skip` blocks
+stay too; they cover API errors, not missing credentials.
+
+`sct.py integration-tests` no longer needs Okta (Phase 3) and accepts
+`-m "integration and not requires_aws"` filtering. The `need_network` marker stays orthogonal
+(public internet ≠ credentials).
 
 **Definition of Done**:
-- [ ] `sct.py integration-tests` with creds hidden: all Docker-only files pass, all cloud files
-      skip with a credential reason, 0 errors
-- [ ] Same run with creds present: identical pass set to master (no test silently skipped)
-- [ ] A lint/collection check fails if a test calls real boto3/GCE/Azure without a marker -
+- [ ] Integration suite with creds hidden: every cloud-dependent test skips with a credential
+      reason, 0 credential failures (measured on the marked files: 43 passed, 81 skipped)
+- [ ] Same run with creds present: no test skipped by the marker
+- [ ] With `JOB_NAME` set and creds hidden, marked tests fail
+- [ ] A lint/collection check fails if a test calls real boto3 without the marker -
       **Needs Investigation**: whether a cheap collection-time heuristic is reliable, or
       whether this stays a review checklist item in the `writing-integration-tests` skill
 
@@ -270,8 +287,7 @@ For minicloud, define an **offline mode** used when the AMI/image is already in
 **Description**: A GitHub Actions workflow with **no secrets** that runs on every PR (fork PRs
 included, `pull_request` trigger - not `pull_request_target`):
 - full unit suite (`sct.py unit-tests`);
-- `sct.py integration-tests -m "integration and not requires_aws and not requires_gce and not
-  requires_azure and not requires_oci"` on the runner's Docker.
+- `sct.py integration-tests -m "integration and not requires_aws"` on the runner's Docker.
 
 This is the contract test for Goals 1-2: anything that sneaks a credential dependency into these
 paths turns the job red. Jenkins stages stay as they are.
