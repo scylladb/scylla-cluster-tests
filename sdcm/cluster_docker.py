@@ -719,7 +719,9 @@ class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
                 ContainerManager.destroy_container(node, "node")
                 ContainerManager.run_container(node, "node")
                 ContainerManager.wait_for_status(node, "node", status="running")
-                self.log.debug("Successfully reconfigured container %s", node.name)
+                node._private_ip_address_cached = node._public_ip_address_cached = node._ipv6_ip_address_cached = None
+                node.reset_vector_store_client()
+                self.log.debug("Successfully reconfigured container %s at %s", node.name, node.vector_store_uri)
             except Exception as e:  # noqa: BLE001
                 self.log.error("Failed to reconfigure container %s: %s", node.name, e)
                 raise
