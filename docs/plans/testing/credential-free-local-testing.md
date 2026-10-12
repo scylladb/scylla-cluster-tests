@@ -232,14 +232,15 @@ stay too; they cover API errors, not missing credentials.
 ### Phase 5: Unsigned reads of public buckets
 
 **Importance**: Important
+**PR**: [#16454](https://github.com/scylladb/scylla-cluster-tests/pull/16454)
 **Description**: Repo/version lookups against the public `downloads.scylladb.com` bucket
 (`get_s3_scylla_repos_mapping`, `find_scylla_repo`, `get_branched_repo` and siblings) use
 unsigned S3 requests, like the helpers next to them already do. Removes a credential dependency
 from config resolution for every backend and from minicloud's `downloads` passthrough.
 
 **Definition of Done**:
-- [ ] Repo lookup integration tests pass with creds hidden (they move from `requires_aws` to
-      `need_network`)
+- [ ] Repo lookup integration tests pass with creds hidden and drop `requires_aws` (32 tests:
+      repo lookups, base versions, baremetal and OCI config)
 - [ ] No change in resolved URLs vs. master for a fixed set of versions
 
 ### Phase 6: Optional Docker Hub secret on local k8s
