@@ -77,7 +77,6 @@ def test_10_longevity(monkeypatch):
 
 
 @pytest.mark.integration
-@pytest.mark.requires_aws
 def test_10_oci_user_prefix_fits_x509_cn_limit(monkeypatch):
     """OCI node names include region; user_prefix must be short enough for the full name to fit X.509 CN 64-char limit."""
     user_prefix = "longevity-5gb-1h-ToggleAuditRulesNemesisSyslog"

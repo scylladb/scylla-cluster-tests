@@ -93,7 +93,6 @@ def test_docker(
         pytest.param("branch-LATEST:latest", None, True, id="branch"),
     ],
 )
-@pytest.mark.requires_aws
 def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, distro, monkeypatch, latest_release):
     scylla_version = scylla_version.replace("LATEST", latest_release)
     if expected_version == "LATEST":
@@ -145,7 +144,6 @@ def test_images(backend, scylla_version, expected_version, expected_is_enterpris
         assert expected_version in _version
 
 
-@pytest.mark.requires_aws
 def test_baremetal(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "baremetal")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "6.1")
