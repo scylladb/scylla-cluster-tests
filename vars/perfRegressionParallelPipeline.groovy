@@ -173,10 +173,10 @@ def call(Map pipelineParams) {
                      '\tSCT_USE_MGMT=false'
                      ),
                  name: 'extra_environment_variables')
-            booleanParam(defaultValue: false,
+            booleanParam(defaultValue: "${pipelineParams.get('use_job_throttling', false)}",
                          description: 'if true, use job throttling to limit the number of concurrent builds',
                          name: 'use_job_throttling')
-            string(defaultValue: null,
+            string(defaultValue: "${pipelineParams.get('job_throttle_category', '')}",
                 description: 'if set would override the default job throttling category',
                 name: 'job_throttle_category')
 
