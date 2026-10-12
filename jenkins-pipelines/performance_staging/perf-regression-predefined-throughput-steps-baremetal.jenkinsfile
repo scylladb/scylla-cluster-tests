@@ -1,0 +1,18 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// The sub_tests run as parallel branches, and on baremetal every branch would use the same physical hosts.
+// The throttle lets only one branch hold a node at a time, so they run one after another. It needs the
+// "SCT-perf-baremetal" category in Jenkins (Throttle Concurrent Builds) with a maximum total of 1, which
+// also keeps any other job in that category off the hosts while this one runs.
+perfRegressionParallelPipeline(
+    backend: "baremetal",
+    region: "eu-west-1",
+    test_name: "performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest",
+    test_config: '''["test-cases/performance/perf-regression-predefined-throughput-steps.yaml", "configurations/performance/cassandra_stress_gradual_load_steps_enterprise.yaml", "configurations/disable_kms.yaml", "configurations/disable_speculative_retry.yaml", "configurations/performance/perf-predefined-throughput-steps-baremetal.yaml"]''',
+    sub_tests: ["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_read_disk_only_gradual_increase_load"],
+    use_job_throttling: true,
+    job_throttle_category: "SCT-perf-baremetal",
+)
