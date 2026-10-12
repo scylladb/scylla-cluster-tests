@@ -21,6 +21,7 @@ import pytest
 from invoke import Result
 
 from sdcm.cluster import BaseMonitorSet, BaseNode
+from sdcm.cluster_docker import VectorStoreDockerNode, VectorStoreSetDocker
 from sdcm.db_log_reader import DbLogReader
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
@@ -1003,3 +1004,28 @@ def test_traffic_control_targets_the_secondary_interface():
         BaseNode.traffic_control(node, "--loss 5%")
     local_runner.run.assert_called_once_with("tcset ens5 --loss 5% --tc-command")
     node.remoter.run.assert_any_call('sudo bash -cxe "tc qdisc add dev ens5 root netem loss 5%"')
+
+
+def test_vector_store_address_follows_the_re_created_container():
+    """The Vector Store reconfiguration destroys the container and runs a new one."""
+    parent_cluster = unittest.mock.MagicMock()
+    parent_cluster.params = {"vector_store_port": 6080}
+    vs_set = unittest.mock.MagicMock()
+
+    with unittest.mock.patch("sdcm.cluster_docker.ContainerManager") as container_manager:
+        container_manager.get_ip_address.return_value = "172.17.0.4"
+
+        def run_container_with_a_new_address(*_):
+            container_manager.get_ip_address.return_value = "172.17.0.2"
+
+        container_manager.run_container.side_effect = run_container_with_a_new_address
+
+        node = VectorStoreDockerNode(parent_cluster=parent_cluster)
+        vs_set.nodes = [node]
+        assert node.get_vector_store_api_client().base_url == "http://172.17.0.4:6080"
+
+        VectorStoreSetDocker._reconfigure_vector_store_nodes(vs_set)
+
+        assert node.private_ip_address == "172.17.0.2"
+        assert node.vector_store_uri == "http://172.17.0.2:6080"
+        assert node.get_vector_store_api_client().base_url == "http://172.17.0.2:6080"
