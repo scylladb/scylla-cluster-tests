@@ -8,7 +8,8 @@ These tests require AWS credentials and make actual API calls.
 import pytest
 from botocore.exceptions import ClientError, NoCredentialsError, BotoCoreError
 
-from sdcm.utils.common import find_equivalent_ami
+from sdcm.utils.common import find_equivalent_ami, get_ec2_image_version_tag, get_scylla_ami_versions
+from utils.get_supported_scylla_base_versions import fetch_official_supported_versions
 
 
 @pytest.mark.integration
@@ -82,13 +83,25 @@ def test_find_equivalent_ami_all_aws_regions():
 @pytest.mark.integration
 def test_integration_find_equivalent_ami():
     """
-    Integration test: Validates that find_equivalent_ami returns the correct ARM64 equivalent AMI in 'us-east-1'
-    for a given source AMI in 'eu-west-1', and checks all expected fields.
+    Integration test: Validates that find_equivalent_ami returns the ARM64 AMI in 'us-east-1' with the same
+    Scylla version as the x86_64 source AMI in 'eu-west-1', and checks all expected fields.
+
+    Uses the GA AMI of the oldest officially supported release, and resolves the AMI IDs by version tag.
     """
+    release = min(fetch_official_supported_versions(), key=lambda version: tuple(map(int, version.split("."))))
+    source_amis = [
+        ami
+        for ami in get_scylla_ami_versions(region_name="eu-west-1", arch="x86_64", version=f"{release}.0")
+        if get_ec2_image_version_tag(ami).startswith(f"{release}.0-")
+    ]
+    assert len(source_amis) == 1, f"Expected 1 x86_64 AMI of {release}.0 in eu-west-1, got {len(source_amis)}"
+    scylla_version = get_ec2_image_version_tag(source_amis[0])
+    target_amis = get_scylla_ami_versions(region_name="us-east-1", arch="arm64", version=scylla_version)
+    assert len(target_amis) == 1, f"Expected 1 arm64 AMI of {scylla_version} in us-east-1, got {len(target_amis)}"
 
     # Execute
     results = find_equivalent_ami(
-        ami_id="ami-0bf2296b393980c53",
+        ami_id=source_amis[0].image_id,
         source_region="eu-west-1",
         target_arch="arm64",
         target_regions=["us-east-1"],
@@ -96,9 +109,11 @@ def test_integration_find_equivalent_ami():
 
     # Verify
     assert len(results) == 1, f"Expected 1 result, got {len(results)}"
-    assert results[0]["ami_id"] == "ami-079625cf3fec09303", f"Expected ami-result456, got {results[0]['ami_id']}"
+    assert results[0]["ami_id"] == target_amis[0].image_id, (
+        f"Expected {target_amis[0].image_id}, got {results[0]['ami_id']}"
+    )
     assert results[0]["region"] == "us-east-1", f"Expected us-east-1, got {results[0]['region']}"
     assert results[0]["architecture"] == "arm64", f"Expected arm64, got {results[0]['architecture']}"
-    assert results[0]["scylla_version"] == "2025.4.0~rc2-0.20251015.83babc20e3f7", (
-        f"Expected 2025.4.0~rc2-0.20251015.83babc20e3f7, got {results[0]['scylla_version']}"
+    assert results[0]["scylla_version"] == scylla_version, (
+        f"Expected {scylla_version}, got {results[0]['scylla_version']}"
     )
