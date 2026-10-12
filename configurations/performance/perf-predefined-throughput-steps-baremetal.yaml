@@ -1,0 +1,76 @@
+# Baremetal variant of test-cases/performance/perf-regression-predefined-throughput-steps.yaml, layered after
+# the same stack the enterprise tablets job uses:
+#
+#   test-cases/performance/perf-regression-predefined-throughput-steps.yaml
+#   configurations/performance/cassandra_stress_gradual_load_steps_enterprise.yaml
+#   configurations/disable_kms.yaml
+#   configurations/disable_speculative_retry.yaml
+#   configurations/performance/perf-predefined-throughput-steps-baremetal.yaml
+#
+# The load is small: one loader, one stress command per phase, a 2M-row dataset and three short steps per
+# workload. The latency-decorator threshold file is left out of the stack: its limits are set for i4i.4xlarge
+# nodes at hundreds of thousands of ops/s, not for these steps.
+#
+# Used by jenkins-pipelines/performance_staging/perf-regression-predefined-throughput-steps-baremetal.jenkinsfile.
+# The pipeline runs sub_tests as parallel branches, and every one here would land on the same physical hosts,
+# so that job throttles them to one at a time (job_throttle_category "SCT-perf-baremetal").
+
+cluster_backend: 'baremetal'
+# The hosts: a JSON in the QA keystore listing db_nodes, loader_nodes and monitor_nodes (see
+# baremetal_config_example.json). Override per build with SCT_S3_BAREMETAL_CONFIG.
+s3_baremetal_config: 'baremetal_config'
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+# A physical host has no availability zone to derive a rack from, so without this every node lands in RACK0
+# and the RF=3 keyspace is rejected as not RF-rack-valid. One rack per db node.
+simulated_racks: 3
+
+# Scylla is installed on the hosts, so the build has to supply scylla_repo or scylla_version.
+use_preinstalled_scylla: false
+# The SCT runner reaches the hosts over their public IPs. When the runner sits in the lab network with the
+# hosts, use 'private' instead.
+ip_ssh_connections: 'public'
+
+# Per sub-test: Scylla install and setup, ~15m preload, compaction + tablet-split waits, cache warmup plus
+# the test's fixed 4m sleep, then 3 steps x 3m.
+test_duration: 150
+# The 2M-row preload takes minutes; a long timeout would only hide a stuck preload.
+prepare_stress_duration: 30
+
+user_prefix: 'perf-predefined-steps-baremetal'
+
+# Two throttled steps and the unthrottled step every production workload ends with, 3m each. "write" is not
+# run by these jobs and only keeps the dicts complete.
+perf_gradual_threads: {"read": 20, "write": 20, "mixed": 20, "read_disk_only": 20}
+perf_gradual_throttle_steps: {"read": ['1000', '3000', 'unthrottled'], "mixed": ['1000', '2000', 'unthrottled'], "write": ['1000', 'unthrottled'], "read_disk_only": ['500', '1000', 'unthrottled']}
+perf_gradual_step_duration: {"read": '3m', "write": None, "mixed": '3m', "read_disk_only": '3m'}
+
+# One loader, so every list holds ONE command: round_robin hands each command to the next loader, so with a
+# single loader four commands would all run on it at once, and current_throttle() divides the step rate by
+# num_loaders only - each of the four would run at the full step rate.
+#
+# Dataset: 2M rows x 1KiB. read and mixed keep production's "small hot set out of a large dataset" shape with
+# 100k rows the warmup pulls into cache; read_disk_only reads the whole dataset. Keyspace, CL, column size and
+# replication are the same as production.
+prepare_write_cmd: [
+    "cassandra-stress write  cl=ALL n=2000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=20 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..2000000"
+]
+
+stress_cmd_cache_warmup: [
+  "cassandra-stress read  cl=ALL n=100000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..100000"
+]
+
+stress_cmd_r: [
+  "cassandra-stress read no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..100000"
+]
+
+stress_cmd_m: [
+  "cassandra-stress mixed no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..100000"
+]
+
+# Read the entire data set to ensure disk only reads
+stress_cmd_read_disk: [
+  "cassandra-stress read no-warmup  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..2000000"
+]
