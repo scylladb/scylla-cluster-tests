@@ -64,7 +64,6 @@ def _generate_test_params_for_get_branched_repo():
     "scylla_version,distro,expected_repo",
     _generate_test_params_for_get_branched_repo(),
 )
-@pytest.mark.requires_aws
 def test_get_branched_repo(scylla_version, distro, expected_repo):
     expected_template = "https://s3.amazonaws.com/downloads.scylladb.com/{}"
     actual_repo = get_branched_repo(scylla_version, distro)

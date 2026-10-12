@@ -112,7 +112,6 @@ def live_supported_versions():
     return versions
 
 
-@pytest.mark.requires_aws
 def test_master_rpm():
     """
     Test that master branch select on specific version for upgrade.
@@ -125,7 +124,6 @@ def test_master_rpm():
     assert ComparableScyllaVersion(version_list[0]) >= "2025.1"
 
 
-@pytest.mark.requires_aws
 def test_master_deb():
     """
     Test that master branch select on specific version for upgrade.
@@ -138,7 +136,6 @@ def test_master_deb():
     assert ComparableScyllaVersion(version_list[0]) >= "2025.1"
 
 
-@pytest.mark.requires_aws
 def test_master_oci():
     """
     OCI images exist only from 2026.2, so master must upgrade from a 2026.2+ release
@@ -151,7 +148,6 @@ def test_master_oci():
 
 
 @pytest.mark.parametrize("linux_distro", ["centos-9", "ubuntu-focal"])
-@pytest.mark.requires_aws
 def test_live_supported_version_base_versions(linux_distro, live_supported_versions):
     """Base-version detection for every currently-supported (live) ScyllaDB release.
 
