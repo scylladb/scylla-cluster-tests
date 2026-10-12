@@ -14,6 +14,7 @@
 import pytest
 import re
 import requests
+import time
 
 from sdcm import sct_abs_path
 from sdcm.stress.latte_thread import (
@@ -22,7 +23,6 @@ from sdcm.stress.latte_thread import (
     find_latte_tags,
     get_latte_operation_type,
 )
-from sdcm.utils.decorators import timeout
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
@@ -87,29 +87,32 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
 
     latte_thread.run()
 
-    # NOTE: the gauge shows up in /metrics (as '# HELP'/'# TYPE' lines) as soon as the exporter
-    #       is constructed, long before it has parsed a single latte sample line. So waiting for
-    #       samples is the whole point of the retry here - matching nothing used to satisfy the
-    #       'all(...)' check vacuously and let the test pass without asserting anything.
+    # NOTE: matching only sample lines, because the '# HELP'/'# TYPE' lines of the gauge show up as soon
+    #       as the exporter is constructed, before it has parsed a single latte sample line.
     sample_regex = re.compile(
         r'^sct_latte_user_gauge\{[^}]*type="(?P<type>[^"]+)"[^}]*\}\s+(?P<value>[-+0-9.eE]+)$', re.MULTILINE
     )
 
-    @timeout(timeout=120)
-    def check_metrics():
-        output = requests.get("http://{}/metrics".format(prom_address)).text
-        assert "sct_latte_user_gauge" in output
-
-        samples = {match["type"]: float(match["value"]) for match in sample_regex.finditer(output)}
-        assert samples, f"latte exporter has not published any sample yet:\n{output}"
+    # NOTE: poll the metrics while the stress task is running and not after it. Latte flushes its last,
+    #       usually empty, sampling period when the run duration ends and prints it as an all-zero line,
+    #       which is what the exporter publishes last. And polling with a fixed timeout counted from 'run()'
+    #       fails on a loaded runner, where the task may spend minutes before the exporter even gets created.
+    metrics, published = "", False
+    while not published and not all(future.done() for future in latte_thread.results_futures):
+        metrics = requests.get(f"http://{prom_address}/metrics").text
+        samples = {match["type"]: float(match["value"]) for match in sample_regex.finditer(metrics)}
         # NOTE: 'errors' is the latte 'Errors [op]' column, which is legitimately 0 on a healthy
         #       run, so only the latency/throughput samples are expected to be positive.
         positive = {name: value for name, value in samples.items() if name != "errors"}
-        assert positive and all(value > 0 for value in positive.values()), output
+        published = bool(positive) and all(value > 0 for value in positive.values())
+        time.sleep(0.5)
 
-    check_metrics()
+    # NOTE: check the errors first, because a failed latte command, for example one that could not connect,
+    #       also leaves the metrics empty, and the real error is only in the stress event.
+    output, errors = latte_thread.parse_results()
+    assert not errors, f"latte stress command failed: {errors}"
+    assert published, f"latte exporter has not published any non-zero sample during the run:\n{metrics}"
 
-    output, _ = latte_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 
