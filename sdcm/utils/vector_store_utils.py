@@ -11,8 +11,6 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-from functools import cached_property
-
 from sdcm.utils.vector_store_client import VectorStoreClient
 
 
@@ -37,11 +35,17 @@ class VectorStoreNodeMixin:
             self._vector_store_client = VectorStoreClient(self.vector_store_uri)
         return self._vector_store_client
 
-    @cached_property
+    @property
     def vector_store_uri(self) -> str:
         """Get Vector Store URI"""
         ip = self.public_ip_address if self.test_config.IP_SSH_CONNECTIONS == "public" else self.private_ip_address
         return f"http://{ip}:{self.parent_cluster.params.get('vector_store_port')}"
+
+    def reset_vector_store_client(self) -> None:
+        """Drop the cached Vector Store API client, so that the next access connects to the current URI."""
+        if self._vector_store_client is not None:
+            self._vector_store_client.close()
+            self._vector_store_client = None
 
     @property
     def scylla_uri(self) -> str:
