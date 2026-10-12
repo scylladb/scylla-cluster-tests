@@ -1,0 +1,15 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// SCT-1215: DB node in AWS, loader + monitor on one lab host (monster), SCT on that host's agent
+longevityPipeline(
+    backend: 'baremetal',
+    region: 'eu-west-1',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: '''["test-cases/PR-provision-test.yaml", "configurations/baremetal/loader-monitor-shared-host.yaml"]''',
+    local_agent: true,
+    jenkins_label: 'minicloud-kvm-builders-artifacts',
+    provision_type: 'on_demand',
+)
