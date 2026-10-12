@@ -51,8 +51,8 @@ takes every VM down at once and surfaces as a wall of SSH timeouts far from the 
 A new file under `configurations/minicloud/`, layered *after* the production test-case.
 
 **Why:** a copy silently misses any param the test-case later grows. With an overlay a new key
-arrives at its production value — too big for one host — so the memory gate reports it
-immediately, at the right place.
+arrives at its production value — too big for one host. The memory gate counts guests only, so
+it cannot see stress keys. The overlay must override every stress key the test reads.
 
 ### Cut Volume, Keep Shape
 

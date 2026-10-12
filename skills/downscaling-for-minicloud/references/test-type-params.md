@@ -43,7 +43,7 @@ asserts on most of them.
 
 **Sizes the load** — every one of these is a stress command to shrink in place:
 `prepare_write_stress`, `write_stress_during_entire_test`, `stress_cmd_read_cl_quorum`,
-`verify_stress_after_cluster_upgrade`, `stress_after_cluster_upgrade`,
+`stress_cmd_read_10m`, `stress_cmd_read_60m`, `verify_stress_after_cluster_upgrade`, `stress_after_cluster_upgrade`,
 `large_partition_stress_during_upgrade`, and the four `stress_cmd_complex_*` keys.
 
 **Must not change:**

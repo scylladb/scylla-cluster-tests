@@ -7,8 +7,9 @@
 #
 # An overlay rather than a self-contained test-case copy on purpose: upgrade_test.test_rolling_upgrade
 # reads a dozen stress params, and a copy would silently miss any new one the real test-case grows.
-# This way a new key arrives with its production value - too big for one host, which the preflight
-# memory gate reports immediately, instead of absent and failing somewhere obscure mid-run.
+# This way a new key arrives with its production value instead of absent. The preflight memory gate
+# counts guests only, so it cannot see stress keys. This overlay must override every stress key
+# that upgrade_test.test_rolling_upgrade reads.
 #
 # Guest budget: 3 db + 1 loader + 1 monitor = 5 guests x minicloud_lightweight_memory (4GiB) = 20GiB,
 # plus ~2GiB host headroom. Raise minicloud_lightweight_memory only if the host has room for
@@ -63,6 +64,10 @@ prepare_write_stress:
   - "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=100 -clustering-row-size=1024 -concurrency=4 -rows-per-request=10 -consistency-level=all"
 
 stress_cmd_read_cl_quorum: "cassandra-stress read no-warmup cl=QUORUM duration=2m -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10 -pop seq=1..200000"
+# Reads must stay inside the range that prepare_write_stress writes. The test blocks on the 60m read in
+# Step6, and with 3 nodes Steps 3-5 take ~15m, so 60m would idle past test_duration - 10m spans them.
+stress_cmd_read_10m: "cassandra-stress read no-warmup cl=QUORUM duration=10m -schema 'keyspace=keyspace1 replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=SnappyCompressor' -mode cql3 native compression=snappy -rate threads=10 -pop seq=1..200000 -log interval=5"
+stress_cmd_read_60m: "cassandra-stress read no-warmup cl=QUORUM duration=10m -schema 'keyspace=keyspace1 replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=10 -pop seq=1..200000 -log interval=5"
 stress_after_cluster_upgrade: "cassandra-stress read no-warmup cl=QUORUM n=100000 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10 -pop seq=1..100000"
 
 # Runs while nodes are being upgraded, so CL=QUORUM not ALL - not every node is available.
