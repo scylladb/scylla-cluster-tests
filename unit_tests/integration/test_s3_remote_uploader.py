@@ -128,6 +128,7 @@ def s3_test_key():
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_upload_remote_files_directly_to_s3(ssh_docker_server, s3_test_key):
     """
     Integration test for uploading a file from a remote SSH server directly to S3.
