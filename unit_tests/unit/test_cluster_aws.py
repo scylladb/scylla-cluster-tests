@@ -171,3 +171,22 @@ def test_destroy_continues_when_release_address_fails(mock_aws_node, release_err
     assert mock_event.call_args.kwargs["severity"] is Severity.WARNING
     assert "eipalloc-05bed6a4528b5369f" in mock_event.call_args.kwargs["message"]
     mock_event.return_value.publish_or_dump.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "minicloud, tags, expected",
+    [
+        (True, [{"Key": "minicloud:accel", "Value": "tcg"}], True),
+        (True, [{"Key": "Name", "Value": "db-1"}], False),
+        (True, None, False),
+        (False, [{"Key": "minicloud:accel", "Value": "tcg"}], False),
+    ],
+    ids=["emulated", "kvm", "no-tags", "real-aws"],
+)
+def test_emulated_guest_from_minicloud_tag(minicloud, tags, expected):
+    """minicloud tags the instance when it falls back to TCG after launch, so the tags must be re-read."""
+    node = Mock()
+    node._instance.tags = tags
+    with patch("sdcm.cluster_aws.is_minicloud_active", return_value=minicloud):
+        assert AWSNode.emulated_guest.func(node) is expected
+    assert node._instance.reload.called == minicloud

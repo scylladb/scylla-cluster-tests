@@ -366,6 +366,7 @@ config option with a default in `defaults/test_default.yaml`; the pipeline layer
 | — (jenkinsfile / `extra_environment_variables` only) | `minicloud_container_cpus` | no docker limit |
 | — (jenkinsfile / `extra_environment_variables` only) | `minicloud_state_dir` | `~/.cache/minicloud` |
 | — (jenkinsfile / `extra_environment_variables` only) | `minicloud_container_name` | `minicloud` |
+| — (jenkinsfile / `extra_environment_variables` only) | `minicloud_cpu_mode` | no `--cpu-mode` flag: minicloud's default (`auto`) |
 
 `startMinicloud.exportSizing()` resolves each one as **`extra_environment_variables` > job
 parameter > jenkinsfile `pipelineParams`**, and exports it build-wide. Build-wide matters for the

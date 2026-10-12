@@ -4,6 +4,8 @@ import json
 from email import message_from_string
 
 import pytest
+import yaml
+from unittest.mock import patch
 
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
 from sdcm.utils.sct_cmd_helpers import get_test_config
@@ -72,3 +74,24 @@ def test_user_data_format_version_v3_building(logs_transport, test_config):
     script = gzip.decompress(parts["application/x-gzip"].get_payload(decode=True)).decode()
     assert script == base64.b64decode(builder.post_configuration_script).decode()
     assert script.startswith("#!/bin/bash")
+
+
+@pytest.mark.parametrize("minicloud", [True, False], ids=["minicloud", "real-aws"])
+def test_v3_raises_image_setup_timeout_only_on_minicloud(logs_transport, test_config, minicloud):
+    """Under TCG emulation the image's own 15 min scylla-image-setup limit kills the setup."""
+    builder = ScyllaUserDataBuilder(
+        cluster_name="test",
+        user_data_format_version="3",
+        syslog_host_port=("0.0.0.0", 1234),
+        test_config=test_config,
+        params={"data_volume_disk_num": 0, "logs_transport": logs_transport},
+    )
+    with patch("sdcm.sct_provision.aws.user_data.is_minicloud_active", return_value=minicloud):
+        output = builder.return_in_format_v3()
+    parts = {part.get_content_type(): part for part in message_from_string(output).walk()}
+    cloud_config = yaml.safe_load(parts["text/cloud-config"].get_payload())
+    if minicloud:
+        assert "TimeoutStartSec=3600" in " ".join(cloud_config["bootcmd"])
+        assert cloud_config["bootcmd"][-1] == "systemctl daemon-reload"
+    else:
+        assert "bootcmd" not in cloud_config

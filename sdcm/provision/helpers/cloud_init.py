@@ -38,11 +38,11 @@ class CloudInitError(Exception):
 
 
 @retrying(n=20, sleep_time=10, allowed_exceptions=(CloudInitError,), message="waiting for cloud-init to complete")
-def wait_cloud_init_completes(remoter: RemoteCmdRunnerBase, instance: VmInstance):
+def wait_cloud_init_completes(
+    remoter: RemoteCmdRunnerBase, instance: VmInstance, timeout: int = CLOUD_INIT_WAIT_TIMEOUT
+):
     """Connects to VM with SSH and waits for cloud-init to complete. Verify if everything went ok."""
-    LOGGER.info(
-        "Waiting up to %s seconds for cloud-init to complete on node %s...", CLOUD_INIT_WAIT_TIMEOUT, instance.name
-    )
+    LOGGER.info("Waiting up to %s seconds for cloud-init to complete on node %s...", timeout, instance.name)
     errors_found = False
     remoter.is_up(60 * 5)
     # Check if cloud-init is installed before trying to use it
@@ -54,7 +54,7 @@ def wait_cloud_init_completes(remoter: RemoteCmdRunnerBase, instance: VmInstance
     # cloud-init supports json output from version 23.4, see:
     # https://cloudinit.readthedocs.io/en/latest/explanation/return_codes.html#id1
     if cloud_init_version >= Version("23.4"):
-        result = _wait_for_cloud_init_status(remoter, instance, "cloud-init status --format=json --wait")
+        result = _wait_for_cloud_init_status(remoter, instance, "cloud-init status --format=json --wait", timeout)
         status = json.loads(result.stdout)
 
         LOGGER.debug("cloud-init status: %s", status)
@@ -62,7 +62,7 @@ def wait_cloud_init_completes(remoter: RemoteCmdRunnerBase, instance: VmInstance
             LOGGER.error("Some errors during cloud-init %s", status)
             errors_found = True
     else:
-        result = _wait_for_cloud_init_status(remoter, instance, "cloud-init status --wait")
+        result = _wait_for_cloud_init_status(remoter, instance, "cloud-init status --wait", timeout)
         status = result.stdout
         if "done" not in status or result.return_code == 1:
             LOGGER.error("Some errors during cloud-init %s", status)
@@ -72,7 +72,9 @@ def wait_cloud_init_completes(remoter: RemoteCmdRunnerBase, instance: VmInstance
         raise CloudInitError("Errors during cloud-init provisioning phase. See logs for errors.")
 
 
-def _wait_for_cloud_init_status(remoter: RemoteCmdRunnerBase, instance: VmInstance, status_cmd: str) -> Result:
+def _wait_for_cloud_init_status(
+    remoter: RemoteCmdRunnerBase, instance: VmInstance, status_cmd: str, timeout: int
+) -> Result:
     """Run a cloud-init status/wait command bounded by an independent SCT-side timeout.
 
     `cloud-init status --wait` can block forever if a user-data script hangs (e.g. apt-get stuck
@@ -82,9 +84,9 @@ def _wait_for_cloud_init_status(remoter: RemoteCmdRunnerBase, instance: VmInstan
     timeout kills the whole job with zero SCT-side diagnostics.
     """
     result = remoter.sudo(
-        f"timeout --kill-after=10s --signal=TERM {CLOUD_INIT_WAIT_TIMEOUT} {status_cmd}",
+        f"timeout --kill-after=10s --signal=TERM {timeout} {status_cmd}",
         ignore_status=True,
-        timeout=CLOUD_INIT_WAIT_TIMEOUT + CLOUD_INIT_SSH_TIMEOUT_MARGIN,
+        timeout=timeout + CLOUD_INIT_SSH_TIMEOUT_MARGIN,
         # retry=0: this call is already bounded by the SCT-side `timeout` wrapper above; the
         # default SSH-level retry-on-transient-network-error would multiply that bound and could
         # blow past the CI stage's time budget, so it is deliberately disabled here.
@@ -97,7 +99,7 @@ def _wait_for_cloud_init_status(remoter: RemoteCmdRunnerBase, instance: VmInstan
         # convention (see sdcm/provision/aws/emr_provisioner.py, sdcm/provision/aws/dedicated_host.py).
         raise TimeoutError(
             f"cloud-init did not complete on node {instance.name} within "
-            f"{CLOUD_INIT_WAIT_TIMEOUT} seconds. The node is most likely stuck inside a "
+            f"{timeout} seconds. The node is most likely stuck inside a "
             f"user-data script (e.g. a hanging package-manager update against an unresponsive "
             f"mirror). Check {CLOUD_INIT_OUTPUT_LOG} on the node; its last {CLOUD_INIT_LOG_TAIL_LINES} "
             f"lines are:\n{_cloud_init_output_log_tail(remoter)}"

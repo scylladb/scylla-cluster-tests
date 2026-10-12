@@ -146,6 +146,9 @@ def exportSizing(Map params, Map pipelineParams) {
     if ((value = pickSizing(params, pipelineParams, 'minicloud_container_name'))) {
         env.SCT_MINICLOUD_CONTAINER_NAME = env.SCT_MINICLOUD_CONTAINER_NAME ?: value
     }
+    if ((value = pickSizing(params, pipelineParams, 'minicloud_cpu_mode'))) {
+        env.SCT_MINICLOUD_CPU_MODE = env.SCT_MINICLOUD_CPU_MODE ?: value
+    }
 
     println("minicloud sizing: lightweight=${env.SCT_MINICLOUD_LIGHTWEIGHT ?: 'yaml default'} " +
             "memory=${env.SCT_MINICLOUD_LIGHTWEIGHT_MEMORY ?: 'yaml default'} " +
@@ -153,7 +156,8 @@ def exportSizing(Map params, Map pipelineParams) {
             "container_memory=${env.SCT_MINICLOUD_CONTAINER_MEMORY ?: 'no limit'} " +
             "container_cpus=${env.SCT_MINICLOUD_CONTAINER_CPUS ?: 'no limit'} " +
             "state_dir=${env.SCT_MINICLOUD_STATE_DIR ?: 'yaml default'} " +
-            "container=${env.SCT_MINICLOUD_CONTAINER_NAME ?: 'minicloud'}")
+            "container=${env.SCT_MINICLOUD_CONTAINER_NAME ?: 'minicloud'} " +
+            "cpu_mode=${env.SCT_MINICLOUD_CPU_MODE ?: 'minicloud default'}")
 }
 
 // Bring the minicloud container up and prepare its regions.

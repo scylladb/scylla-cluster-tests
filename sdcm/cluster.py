@@ -213,6 +213,7 @@ from sdcm.utils.ldap import (
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.minicloud.endpoint import is_minicloud_active
 from sdcm.utils.minicloud.preflight import scylla_reserve_memory
+from sdcm.utils.minicloud.config import MINICLOUD_EMULATED_WAIT_FACTOR
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
@@ -4243,9 +4244,15 @@ class BaseNode(AutoSshContainerMixin):
         result = self.remoter.run(cmd=f"test -e {smi_configured_path}", ignore_status=True, verbose=False)
         return result.ok
 
+    @property
+    def emulated_guest(self) -> bool:
+        """Whether the guest runs under CPU emulation (minicloud TCG), so every boot-time wait needs longer."""
+        return False
+
     def wait_for_machine_image_configured(self):
-        self.log.info("Waiting for Scylla Machine Image setup to finish...")
-        wait.wait_for(self.is_machine_image_configured, step=10, timeout=600, throw_exc=True)
+        timeout = 600 * (MINICLOUD_EMULATED_WAIT_FACTOR if self.emulated_guest else 1)
+        self.log.info("Waiting up to %ss for Scylla Machine Image setup to finish...", timeout)
+        wait.wait_for(self.is_machine_image_configured, step=10, timeout=timeout, throw_exc=True)
 
     def get_sysctl_properties(self) -> Dict[str, str]:
         sysctl_properties = {}

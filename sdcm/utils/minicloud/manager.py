@@ -296,6 +296,9 @@ class MinicloudManager:
                 f"--lock-guest-memory is {'--lock-guest-memory' in cmd}, this run wants {self.config.lock_guest_memory}"
             )
 
+        if (running := running_arg("--cpu-mode")) != self.config.cpu_mode:
+            gaps.append(f"--cpu-mode is {running or 'unset'}, this run wants {self.config.cpu_mode or 'unset'}")
+
         # docker's own caps, read back from HostConfig: an unset cap means no flag, which docker
         # reports as 0 - so the same "0" stands for both sides of "no limit".
         memory_gib = self._container_memory_gib()
@@ -469,6 +472,8 @@ class MinicloudManager:
         minicloud_args += ["--gcp-project", self.config.gcp_project]
         if self.config.lock_guest_memory:
             minicloud_args.append("--lock-guest-memory")
+        if self.config.cpu_mode:
+            minicloud_args += ["--cpu-mode", self.config.cpu_mode]
         if self.config.lightweight:
             minicloud_args += [
                 "--lightweight",

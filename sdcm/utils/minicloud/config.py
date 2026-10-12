@@ -51,6 +51,14 @@ MINICLOUD_S3_PASSTHROUGH_BUCKETS_DEFAULT = (
 )
 
 MINICLOUD_CONTAINER_NAME = "minicloud"
+# EC2 tag minicloud puts on an instance whose guest runs under TCG emulation (value "tcg")
+MINICLOUD_ACCEL_TAG = "minicloud:accel"
+# How much longer SCT waits on a TCG-emulated guest. On an Ivy Bridge host (monster) cloud-init
+# took ~13 min and scylla-image-setup >15 min where KVM needs a few.
+# ponytail: fixed factor, make it a config option if hosts differ too much
+MINICLOUD_EMULATED_WAIT_FACTOR = 3
+# scylla-image-setup.service start timeout set on minicloud guests (the image ships 15 min)
+MINICLOUD_IMAGE_SETUP_TIMEOUT_SEC = 3600
 MINICLOUD_HEALTH_TIMEOUT = 30
 MINICLOUD_HEALTH_INTERVAL = 1
 # EC2 action used as the liveness probe. Must be an action minicloud actually implements
@@ -185,6 +193,8 @@ class MinicloudConfig:
     # minicloud_lock_guest_memory: lock guest RAM in the host instead of dropping Scylla's own
     # --lock-memory in the guests. See MinicloudManager.start() for what each side changes.
     lock_guest_memory: bool = True
+    # minicloud_cpu_mode: --cpu-mode for the container; empty passes no flag (minicloud's own default)
+    cpu_mode: str = ""
 
     @property
     def region(self) -> str:
@@ -221,6 +231,7 @@ class MinicloudConfig:
         container_name = MINICLOUD_CONTAINER_NAME
         skip_memory_check = False
         lock_guest_memory = True
+        cpu_mode = ""
         gcs_bucket = ""
         gcp_project = ""
         if params:
@@ -243,6 +254,7 @@ class MinicloudConfig:
             skip_memory_check = bool(params.get("minicloud_skip_memory_check"))
             if (explicit_lock := params.get("minicloud_lock_guest_memory")) is not None:
                 lock_guest_memory = bool(explicit_lock)
+            cpu_mode = params.get("minicloud_cpu_mode") or ""
             gcs_bucket = params.get("minicloud_gcs_bucket") or ""
             # the SCT param wins over the environment: gce_project can be set from a
             # test-case yaml or defaults without ever reaching os.environ, and this project
@@ -282,6 +294,7 @@ class MinicloudConfig:
             backend=backend,
             skip_memory_check=skip_memory_check,
             lock_guest_memory=lock_guest_memory,
+            cpu_mode=cpu_mode,
         )
 
     @staticmethod

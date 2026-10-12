@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-532 options across 29 groups.
+533 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -52,7 +52,7 @@ concerns first, then one page per backend, then one per test type.
 | [Docker backend](configuration_options/docker-backend.md) | 2 | Running the cluster as local Docker containers. |
 | [Baremetal backend](configuration_options/baremetal-backend.md) | 7 | Running against pre-existing hosts that SCT does not provision. |
 | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) | 12 | Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options. |
-| [Minicloud](configuration_options/minicloud.md) | 16 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with `cluster_backend: aws` and an... |
+| [Minicloud](configuration_options/minicloud.md) | 17 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with `cluster_backend: aws` and an... |
 | [Longevity tests](configuration_options/longevity-tests.md) | 13 | Options specific to long-running longevity test scenarios. |
 | [Performance regression tests](configuration_options/performance-regression-tests.md) | 18 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
 | [Upgrade tests](configuration_options/upgrade-tests.md) | 20 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
@@ -347,6 +347,7 @@ concerns first, then one page per backend, then one per test type.
 | [`minicloud_container_cpus`](configuration_options/minicloud.md#minicloud_container_cpus) | `SCT_MINICLOUD_CONTAINER_CPUS` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_container_memory`](configuration_options/minicloud.md#minicloud_container_memory) | `SCT_MINICLOUD_CONTAINER_MEMORY` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_container_name`](configuration_options/minicloud.md#minicloud_container_name) | `SCT_MINICLOUD_CONTAINER_NAME` | [Minicloud](configuration_options/minicloud.md) |
+| [`minicloud_cpu_mode`](configuration_options/minicloud.md#minicloud_cpu_mode) | `SCT_MINICLOUD_CPU_MODE` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_docker_image`](configuration_options/minicloud.md#minicloud_docker_image) | `SCT_MINICLOUD_DOCKER_IMAGE` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_endpoint_url`](configuration_options/minicloud.md#minicloud_endpoint_url) | `SCT_MINICLOUD_ENDPOINT_URL` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_gcs_bucket`](configuration_options/minicloud.md#minicloud_gcs_bucket) | `SCT_MINICLOUD_GCS_BUCKET` | [Minicloud](configuration_options/minicloud.md) |

@@ -81,6 +81,18 @@ def test_start_locks_guest_memory_by_default(tmp_path):
     assert "--memory-swap" in cmd
 
 
+@pytest.mark.parametrize("cpu_mode", ["", "emulate"])
+def test_start_passes_cpu_mode_only_when_set(tmp_path, cpu_mode):
+    """Unset must pass no flag: minicloud images that predate --cpu-mode reject it."""
+    cmd = _started_docker_cmd(
+        MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log"), cpu_mode=cpu_mode)
+    )
+    if cpu_mode:
+        assert cmd[cmd.index("--cpu-mode") + 1] == cpu_mode
+    else:
+        assert "--cpu-mode" not in cmd
+
+
 @pytest.mark.parametrize("container_memory", ["", "32GiB"])
 def test_start_without_guest_locking_runs_container_as_before(tmp_path, container_memory):
     """Off means untouched: no locking flags, no swap limit, and --memory only for a configured cap."""
@@ -661,3 +673,17 @@ def test_death_watch_silent_when_we_stopped_it(tmp_path):
     with patch("sdcm.utils.minicloud.manager.TestFrameworkEvent") as mock_event:
         manager._watch_container_death(log_process)
     mock_event.assert_not_called()
+
+
+def test_container_sizing_gaps_detects_changed_cpu_mode(tmp_path):
+    """--cpu-mode is fixed at docker run, so asking for emulation must restart a KVM container."""
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), cpu_mode="emulate"))
+    with (
+        _host_memory_stub(),
+        patch.object(
+            MinicloudManager,
+            "_inspect_container",
+            side_effect=_inspect_stub(RUNNING_DEFAULT_SIZING_CMD, memory=int(HOST_MEMORY_GIB * 1024**3)),
+        ),
+    ):
+        assert manager._container_sizing_gaps() == ["--cpu-mode is unset, this run wants emulate"]
