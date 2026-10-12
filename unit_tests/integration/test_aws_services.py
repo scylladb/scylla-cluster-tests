@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 import boto3
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
 # we need to set the environment variable before importing moto
 # otherwise it won't pick it up
 
@@ -26,15 +28,6 @@ pytestmark = pytest.mark.integration
 AWS_REGION = "us-east-1"
 
 
-@pytest.fixture(scope="session", autouse=True)
-def fixture_get_real_keys():
-    KeyStore().sync(
-        keys=["scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"],
-        local_path=Path("~/.ssh/").expanduser(),
-        permissions=0o0600,
-    )
-
-
 @pytest.fixture(scope="module", autouse=True)
 def moto_server():
     """Fixture to run a mocked AWS server for testing."""
@@ -49,8 +42,15 @@ def moto_server():
     # blocking unittests from touching actual AWS service
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("AWS_ENDPOINT_URL", aws_endpoint_url)
+        # moto accepts any credentials, but boto3 won't sign a request without some
+        mp.setenv("AWS_ACCESS_KEY_ID", "testing")
+        mp.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+        mp.delenv("AWS_SESSION_TOKEN", raising=False)
+        boto3.DEFAULT_SESSION = None
         yield aws_endpoint_url
     server.stop()
+    # the default session caches the fake credentials; drop it so later modules resolve the real ones
+    boto3.DEFAULT_SESSION = None
     # KeyStore's cache is process-wide; drop the fake entries seeded below so no later
     # module can be handed them once it talks to the real services again.
     KeyStore().clear_cache()
@@ -64,8 +64,10 @@ def keystore_configure(moto_server):
             b'{"role_arn": "arn:aws:iam::123456789012:role/role-name", "role_session_name": "role-session-name"}'
         ),
     }
-    for file in ("scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"):
-        entries[file] = (Path("~/.ssh").expanduser() / file).read_bytes()
+    # a throwaway key pair: the mocked keystore only has to hand back a valid one
+    ssh_key = Ed25519PrivateKey.generate()
+    entries["scylla_test_id_ed25519"] = ssh_key.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption())
+    entries["scylla_test_id_ed25519.pub"] = ssh_key.public_key().public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH)
 
     s3 = boto3.resource(service_name="s3", region_name=AWS_REGION, endpoint_url=moto_server)
     bucket = s3.Bucket(KEYSTORE_S3_BUCKET)
