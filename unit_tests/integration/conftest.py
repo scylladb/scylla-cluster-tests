@@ -19,16 +19,19 @@ is inherited from the root ``unit_tests/conftest.py``.
 """
 
 import collections
+import itertools
 import logging
 import os
 import shutil
 import subprocess
 import uuid
 from contextlib import contextmanager, nullcontext
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from mypy_boto3_ec2.service_resource import Image as EC2Image
 
 from sdcm import wait
 from sdcm.cluster import BaseNode
@@ -43,7 +46,8 @@ from sdcm.provision.helpers.certificate import (
     create_certificate,
 )
 from sdcm.test_config import TestConfig
-from sdcm.utils.common import get_data_dir_path
+from sdcm.utils.aws_utils import AwsArchType
+from sdcm.utils.common import get_data_dir_path, get_ec2_image_version_tag, get_scylla_ami_versions
 from sdcm.utils.docker_remote import RemoteDocker
 
 from unit_tests.lib.dummy_remote import LocalNode, LocalScyllaClusterDummy
@@ -327,3 +331,45 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
         raise
     finally:
         destroy_vector_store_cluster(vector_store_cluster)
+
+
+# Regions and architectures the `latest_scylla_ami_build` fixture resolves AMIs for
+LATEST_SCYLLA_AMI_BUILD_REGIONS = ("eu-west-1", "us-east-1")
+LATEST_SCYLLA_AMI_BUILD_ARCHES: tuple[AwsArchType, ...] = ("x86_64", "arm64")
+LATEST_SCYLLA_AMI_BUILD_CANDIDATES = 10
+
+
+@dataclass(frozen=True)
+class ScyllaAmiBuild:
+    """AMIs of one Scylla build, keyed by (region, arch)."""
+
+    scylla_version: str
+    amis: dict[tuple[str, AwsArchType], EC2Image]
+
+
+@pytest.fixture(name="latest_scylla_ami_build", scope="session")
+def fixture_latest_scylla_ami_build() -> ScyllaAmiBuild:
+    """Newest Scylla build that has an AMI in each of the LATEST_SCYLLA_AMI_BUILD_REGIONS for each of the
+    LATEST_SCYLLA_AMI_BUILD_ARCHES.
+
+    AMIs get deregistered over time, so tests use this fixture instead of hardcoding AMI IDs.
+
+    External services: AWS EC2 (ScyllaDB images account)
+    """
+    candidates = get_scylla_ami_versions(
+        region_name=LATEST_SCYLLA_AMI_BUILD_REGIONS[0], arch=LATEST_SCYLLA_AMI_BUILD_ARCHES[0]
+    )[:LATEST_SCYLLA_AMI_BUILD_CANDIDATES]
+    for candidate in candidates:
+        scylla_version = get_ec2_image_version_tag(candidate)
+        amis = {}
+        for region, arch in itertools.product(LATEST_SCYLLA_AMI_BUILD_REGIONS, LATEST_SCYLLA_AMI_BUILD_ARCHES):
+            if not (build_amis := get_scylla_ami_versions(region_name=region, arch=arch, version=scylla_version)):
+                LOGGER.debug("Scylla build %s has no %s AMI in %s, skipping it", scylla_version, arch, region)
+                break
+            amis[(region, arch)] = build_amis[0]
+        else:
+            return ScyllaAmiBuild(scylla_version=scylla_version, amis=amis)
+    pytest.fail(
+        f"None of the {len(candidates)} newest Scylla builds has AMIs"
+        f" in all of {LATEST_SCYLLA_AMI_BUILD_REGIONS} for all of {LATEST_SCYLLA_AMI_BUILD_ARCHES}"
+    )

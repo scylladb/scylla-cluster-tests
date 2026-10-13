@@ -80,25 +80,35 @@ def test_find_equivalent_ami_all_aws_regions():
 
 
 @pytest.mark.integration
-def test_integration_find_equivalent_ami():
+def test_integration_find_equivalent_ami(latest_scylla_ami_build):
     """
     Integration test: Validates that find_equivalent_ami returns the correct ARM64 equivalent AMI in 'us-east-1'
-    for a given source AMI in 'eu-west-1', and checks all expected fields.
+    for the x86_64 AMI of the latest ScyllaDB build in 'eu-west-1', and checks all expected fields.
+
+    The expected ARM64 AMI is resolved independently by the fixture, by the `scylla_version` tag only.
     """
+    scylla_version = latest_scylla_ami_build.scylla_version
+    source_ami = latest_scylla_ami_build.amis[("eu-west-1", "x86_64")]
+    expected_ami = latest_scylla_ami_build.amis[("us-east-1", "arm64")]
 
     # Execute
     results = find_equivalent_ami(
-        ami_id="ami-0bf2296b393980c53",
+        ami_id=source_ami.image_id,
         source_region="eu-west-1",
         target_arch="arm64",
         target_regions=["us-east-1"],
     )
 
     # Verify
-    assert len(results) == 1, f"Expected 1 result, got {len(results)}"
-    assert results[0]["ami_id"] == "ami-079625cf3fec09303", f"Expected ami-result456, got {results[0]['ami_id']}"
+    assert len(results) == 1, (
+        f"Expected 1 ARM64 equivalent of {source_ami.image_id} ({scylla_version}), got {len(results)}: "
+        f"{[result['ami_id'] for result in results]}"
+    )
+    assert results[0]["ami_id"] == expected_ami.image_id, (
+        f"Expected {expected_ami.image_id}, got {results[0]['ami_id']}"
+    )
     assert results[0]["region"] == "us-east-1", f"Expected us-east-1, got {results[0]['region']}"
     assert results[0]["architecture"] == "arm64", f"Expected arm64, got {results[0]['architecture']}"
-    assert results[0]["scylla_version"] == "2025.4.0~rc2-0.20251015.83babc20e3f7", (
-        f"Expected 2025.4.0~rc2-0.20251015.83babc20e3f7, got {results[0]['scylla_version']}"
+    assert results[0]["scylla_version"] == scylla_version, (
+        f"Expected {scylla_version}, got {results[0]['scylla_version']}"
     )
