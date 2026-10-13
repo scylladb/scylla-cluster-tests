@@ -120,6 +120,10 @@ class SctEvent:
         self.log_level = LOG_LEVEL_MAPPING.get(severity, logging.ERROR)
         self.subcontext = []
 
+    def argus_aggregation_id(self) -> str:
+        """Id the Argus aggregator dedups on; events returning the same id are posted once per time window."""
+        return self.event_id
+
     @classmethod
     def is_abstract(cls) -> bool:
         return cls._abstract
