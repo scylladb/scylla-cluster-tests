@@ -1,38 +1,135 @@
-# scylla-cluster-tests pipelines
+# SCT Jenkins pipelines
 
-## Goals
-1. Pipeline should be reusable as much as possible
-2. All of the data should be inside sct code base, so it can be reviewed
-3. Some pipelines should be parallels (i.e. rolling upgrades, artifacts)
-4. we should have one pipeline for unit-tests of sct itself, which run as part of each PR (which nowdays called provision tests)
-5. Some values should be hardcoded, and can't be overwritten when running the pipelines
+Every SCT job in Jenkins is a short `*.jenkinsfile` that calls one of the shared pipelines in
+`vars/`. The pipeline runs a fixed list of stages, and each stage is a `hydra` command. All of it
+lives in this repo, so a pipeline change is reviewed like any other code change.
 
-# Directory Structure/Layout
+```mermaid
+flowchart LR
+    jf["jenkins-pipelines/**/*.jenkinsfile<br/>backend · region · test_name · test_config"] --> pipe["vars/&lt;name&gt;Pipeline.groovy<br/>the stage list"]
+    pipe --> helpers["vars/ helpers<br/>createSctRunner · provisionResources<br/>runSctTest · runCollectLogs · ..."]
+    helpers --> hydra["hydra &lt;command&gt;<br/>on the SCT runner"]
+```
 
-SCT directory structure should match exactly release directory
-
-Readable name for folders would be a mapping on the code
-
-Enterprise features would be under a unique folder
-
-![Overview](./sct_pipelines.png?raw=true "Directory")
-
-### TODOs:
-- [ ] arrange the pipelines as folders
-- [ ] fix the generation code to create the job in jenkins
-- [ ] manually move master/enterprise jobs (if we want to save history, is argus o.k. with moving jobs ?)
-- [ ] fix the triggers all over the place to match
-
-## longevity-10gb-3h.jenkinsfile
+A jenkinsfile only picks the pipeline and its parameters:
 
 ```groovy
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
-    test_name: 'longevity_test.py:LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-10gb-3h.yaml',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: 'test-cases/longevity/longevity-10gb-3h.yaml'
 )
 ```
+
+For how the test method and `test_config` YAML are written, see [writing a test](writing-a-test.md).
+
+## The standard flow: `longevityPipeline`
+
+`longevityPipeline` is used by about 900 jobs: longevity, features, gemini, nemesis, tier1/2 and
+all Scylla Operator (k8s) longevity jobs. Most other pipelines are variations of it.
+
+```mermaid
+flowchart LR
+    subgraph prep["Prepare (Jenkins builder)"]
+        direction TB
+        a1["Checkout"] --> a2["Create Argus test run"] --> a3["Get test duration<br/>(timeouts)"] --> a4["Estimate cost"]
+    end
+    subgraph run["Run (on the SCT runner)"]
+        direction TB
+        b1["Create SCT runner"] --> b2["Provision resources<br/>DB · loaders · monitor"] --> b3["Run SCT test"]
+    end
+    subgraph wrap["Wrap up"]
+        direction TB
+        c1["Collect logs"] --> c2["Clean resources"] --> c3["Finish Argus run"] --> c4["Send email"] --> c5["Clean SCT runner"]
+    end
+    prep --> run --> wrap
+    run -. "failure / abort" .-> recover["post always:<br/>re-run any wrap-up stage<br/>that did not finish"]
+```
+
+| Stage | `hydra` command |
+|---|---|
+| Create Argus test run | `create-argus-test-run` |
+| Get test duration | `output-conf` (derives the job, runner, log-collection and cleanup timeouts) |
+| Estimate cost | `estimate-cost` (advisory; a failure does not fail the job) |
+| BYO ScyllaDB *(optional)* | builds a custom ScyllaDB first, see [BYO ScyllaDB](byo-scylladb.md) |
+| Create SCT runner | `find-runner-instance` / `create-runner-instance`, see [SCT runners](sct-runners.md) |
+| Provision resources | `provision-resources` |
+| Run SCT test | `run-test <test_name> --backend <backend>` (or `run-pytest`), then `fetch-junit-from-runner` |
+| Collect logs | `collect-logs` |
+| Clean resources | `clean-resources` (honours `post_behavior_*`) |
+| Finish Argus run | `finish-argus-test-run` |
+| Send email | `send-email` |
+| Clean SCT runner | `set-runner-tags` + `clean-runner-instances` |
+
+Every command runs on the SCT runner through `hydra --execute-on-runner` when one exists, and on the
+builder otherwise. The `post { always }` block remembers which stages completed, so an aborted or
+failed build still collects logs, cleans resources and closes the Argus run.
+
+## Pipeline variants and why they differ
+
+```mermaid
+flowchart TB
+    subgraph single["One lifecycle per job"]
+        direction LR
+        L["longevityPipeline<br/>managerPipeline<br/>jepsenPipeline<br/>byoLongevityPipeline"] --> one["1 runner → 1 cluster → 1 test"]
+    end
+    subgraph fan["Parallel fan-out: one full lifecycle per item"]
+        direction LR
+        U["rollingUpgradePipeline"] -->|"per base version"| many["N runners → N clusters → N Argus runs"]
+        P["perfRegressionParallelPipeline"] -->|"per sub_test"| many
+        A["artifactsPipeline"] -->|"per instance type / image"| small["N single-node installs<br/>no loaders, no monitor"]
+        O["rollingOperatorUpgradePipeline"] -->|"per operator version, one runner"| phases["N upgrade phases"]
+    end
+    subgraph orch["Orchestrators: only start other jobs"]
+        direction LR
+        T["triggerMatrixPipeline"] -->|"configurations/triggers/*.yaml"| jobs["other SCT jobs"]
+        S["sdReleaseGatingPipeline"] -->|"OS × version"| jobs
+    end
+    single ~~~ fan ~~~ orch
+```
+
+| Pipeline | Used for | How it differs | Why |
+|---|---|---|---|
+| `longevityPipeline` | longevity, features, gemini, nemesis, tier1/2, k8s operator longevity | the standard flow above | |
+| `managerPipeline` | Scylla Manager | provisions only on aws/gce/azure/oci; adds *Running downstream jobs* on success | chains manager upgrade jobs after a green run |
+| `jepsenPipeline` | Jepsen | no provision stage; always `run-test jepsen_test --backend gce` | Jepsen brings its own repo and command and runs on GCE only |
+| `rollingUpgradePipeline` | rolling upgrade | parallel branch per base version from `get-scylla-base-versions`, each with its own test id | one job proves upgrades from every supported source version |
+| `perfRegressionParallelPipeline` | performance regression | parallel branch per entry in `sub_tests` | several workloads (read, write, mixed) measured against the same build |
+| `artifactsPipeline` | package and image checks | parallel branch per `instance_type`; no provision stage; runs on the builder | single-node install checks need no loaders or monitoring |
+| `rollingOperatorUpgradePipeline` | Scylla Operator upgrade | one runner, a phase per operator base version | operator upgrades are sequential phases on one k8s cluster |
+| `perfSearchBestConfigParallelPipeline` | perf best-config search | like perf regression | |
+| `byoLongevityPipeline` | longevity on a custom build | older minimal flow, no Argus or timeouts stage | |
+| `triggerMatrixPipeline` | scheduled runs | reads a trigger matrix and starts jobs | one place to define what runs on which branch and when; see [trigger matrix](testing/trigger-matrix.md) |
+| `sdReleaseGatingPipeline` | scylla-doctor release gating | starts artifact jobs per OS × version, then reports | |
+| `createTestJobPipeline` | job creation | creates the Jenkins job tree for a branch from `jenkins-pipelines/` | jobs are generated, never hand-made |
+
+Kubernetes jobs do not have their own pipeline: they use `longevityPipeline` with the `k8s_*`
+parameters, and the k8s cluster is created as part of provisioning.
+
+## Directory layout
+
+The Jenkins folder tree is generated from `jenkins-pipelines/`, so a jenkinsfile's path is its job
+path. Folder names and job metadata come from `_folder_definitions.yaml` (older folders still use
+`_display_name`).
+
+```
+jenkins-pipelines/
+├── oss/                 # core ScyllaDB tests
+│   ├── longevity/  features/  gemini/  nemesis/  tier1/  tier2/
+│   ├── rolling-upgrade/  artifacts/  artifacts-offline-install/
+│   ├── alternator/  jepsen/  raft/  scale/  kafka_connectors/ ...
+│   └── minicloud/  reproducers/  customer-cases/
+├── performance/         # perf regression (+ performance_staging/)
+├── manager/             # Scylla Manager
+├── operator/            # Scylla Operator on k8s
+├── scylla-doctor/  vector-search/
+├── master-triggers/     # trigger-matrix jobs
+├── qa/                  # job creation and maintenance jobs
+└── quarantined/         # stale pipelines kept out of the schedule
+```
+
+Job definitions and their generation: [job_defines_format](job_defines_format.md).
 
 ## Running on a local Jenkins agent
 
