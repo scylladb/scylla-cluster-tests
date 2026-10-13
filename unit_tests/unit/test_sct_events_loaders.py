@@ -19,7 +19,7 @@ import pytest
 from invoke.runners import Result
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import LogEvent
+from sdcm.sct_events.base import LogEvent, find_log_event
 from sdcm.sct_events.loaders import (
     GeminiStressEvent,
     CassandraStressEvent,
@@ -431,14 +431,13 @@ class TestKclStressEvent:
 class TestCassandraStressLogEvent:
     @staticmethod
     def get_event(line, expected_type, expected_severity):
-        for pattern, event in chain(CS_NORMAL_EVENTS_PATTERNS, CS_ERROR_EVENTS_PATTERNS):
-            if pattern.search(line):
-                event.add_info(node="self.node", line=line, line_number=1).dont_publish()
-                assert event.type == expected_type, f'Unexpected event.type {event.type}. Expected "{expected_type}"'
-                assert event.severity == expected_severity, (
-                    f'Unexpected event.severity {event.severity}. Expected "{expected_severity}"'
-                )
-                return
+        if event := find_log_event(chain(CS_NORMAL_EVENTS_PATTERNS, CS_ERROR_EVENTS_PATTERNS), line):
+            event.add_info(node="self.node", line=line, line_number=1).dont_publish()
+            assert event.type == expected_type, f'Unexpected event.type {event.type}. Expected "{expected_type}"'
+            assert event.severity == expected_severity, (
+                f'Unexpected event.severity {event.severity}. Expected "{expected_severity}"'
+            )
+            return
 
         raise ValueError(
             f"Event is not recognized in the line {line}. Expected exception type is {expected_type},"
@@ -516,14 +515,15 @@ class TestCassandraStressLogEvent:
 class TestScyllaBenchLogEvent:
     @staticmethod
     def get_event(line, expected_type, expected_severity):
-        for pattern, event in chain(SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS):
-            if pattern.search(line):
-                event.add_info(node="self.node", line=line, line_number=1).dont_publish()
-                assert event.type == expected_type, f'Unexpected event.type {event.type}. Expected "{expected_type}"'
-                assert event.severity == expected_severity, (
-                    f'Unexpected event.severity {event.severity}. Expected "{expected_severity}"'
-                )
-                return
+        if event := find_log_event(
+            chain(SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS), line
+        ):
+            event.add_info(node="self.node", line=line, line_number=1).dont_publish()
+            assert event.type == expected_type, f'Unexpected event.type {event.type}. Expected "{expected_type}"'
+            assert event.severity == expected_severity, (
+                f'Unexpected event.severity {event.severity}. Expected "{expected_severity}"'
+            )
+            return
 
         raise ValueError(
             f"Event is not recognized in the line {line}. Expected exception type is {expected_type},"

@@ -16,7 +16,7 @@ import re
 import pytest
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import LogEvent
+from sdcm.sct_events.base import LogEvent, find_log_event
 from sdcm.sct_events.database import (
     DatabaseLogEvent,
     FullScanEvent,
@@ -193,21 +193,30 @@ def test_drop_table_during_repair_gate_closed_line_matches_database_error():
         "it will be unlinked..."
     )
 
-    matched_event = None
-    for pattern, event in SYSTEM_ERROR_EVENTS_PATTERNS:
-        if pattern.search(line):
-            matched_event = event
-            break
+    matched_event = find_log_event(SYSTEM_ERROR_EVENTS_PATTERNS, line)
 
     assert matched_event is not None
     assert matched_event.type == DatabaseLogEvent.DATABASE_ERROR.type
 
 
+def test_find_log_event_first_matching_pattern_wins():
+    """Overlapping patterns yield exactly one event per line: the first one listed, never a later match."""
+    first, second = DatabaseLogEvent.NO_SPACE_ERROR(), DatabaseLogEvent.BAD_ALLOC()
+    patterns = [(re.compile("error"), first), (re.compile("error|alloc"), second)]
+
+    assert find_log_event(patterns, "an error happened") is first
+    assert find_log_event(patterns, "an alloc happened") is second
+
+
+def test_find_log_event_no_match_returns_none():
+    """A line matching no pattern produces no event, so callers publish nothing for it."""
+    patterns = [(re.compile("error"), DatabaseLogEvent.NO_SPACE_ERROR())]
+
+    assert find_log_event(patterns, "all fine") is None
+
+
 def _classify(line: str):
-    for pattern, event in SYSTEM_ERROR_EVENTS_PATTERNS:
-        if pattern.search(line):
-            return event
-    return None
+    return find_log_event(SYSTEM_ERROR_EVENTS_PATTERNS, line)
 
 
 def test_system_error_events_partitioned_by_log_level():
