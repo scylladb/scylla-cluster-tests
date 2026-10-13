@@ -15,10 +15,9 @@
 import logging
 from typing import List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, InstanceOf, field_validator
 
 from sdcm.provision.common.builders import AttrBuilder
-from sdcm.sct_config import SCTConfiguration
 
 SEED_PROVIDERS = [
     "org.apache.cassandra.locator.SimpleSeedProvider",
@@ -107,7 +106,7 @@ EndPointSnitchType = Literal[
 
 
 class ScyllaYamlAttrBuilderBase(AttrBuilder):
-    params: Union[SCTConfiguration, dict] = Field(exclude=True)
+    params: Union[InstanceOf[BaseModel], dict] = Field(exclude=True)
 
     @property
     def _cluster_backend(self) -> str:
