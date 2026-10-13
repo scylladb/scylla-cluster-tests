@@ -17,8 +17,8 @@ from typing import Annotated, ClassVar
 
 from pydantic import BaseModel, BeforeValidator
 
-from sdcm.sct_config.nemesis_runners import NemesisConfig
-from sdcm.sct_config.types import Boolean, IntOrList, SctField, String, StringOrList, dict_or_str_or_pydantic
+from sdcm.sct_config.nemesis_runners import NemesisConfig, yaml_from_str
+from sdcm.sct_config.types import Boolean, IntOrList, SctField, String, StringOrList
 
 
 class NemesisConfigMixin(BaseModel):
@@ -32,31 +32,16 @@ class NemesisConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Nemesis (chaos testing)"
 
-    nemesis: Annotated[NemesisConfig, BeforeValidator(dict_or_str_or_pydantic)] = SctField(
+    nemesis: Annotated[NemesisConfig, BeforeValidator(yaml_from_str)] = SctField(
         description="""
                 Nemesis configuration: nemesis-wide settings, defaults shared by all runners, and the
-                runners to start, one thread each. Each runner is a single-key mapping of the runner
-                class to its options; the options accepted depend on the runner class. Options a
-                runner leaves unset take the `nemesis` defaults; a runner without `seed` gets a
-                random one. `selector` is a logical expression over nemesis flags filtering the
-                disruptions a runner runs.
-                YAML example:
-                  nemesis:
-                    interval: 5
-                    during_prepare: false
-                    grow_shrink:
-                      add_node_cnt: 3
-                      instance_type: i4i.xlarge
-                    runners:
-                      - SisyphusMonkey:
-                          selector: "disruptive"
-                          interval: 15
-                      - CategoricalMonkey:
-                          dist: {StopStartMonkey: 2}
-                Environment variable examples:
-                  SCT_NEMESIS__INTERVAL=10
-                  SCT_NEMESIS__GROW_SHRINK='{"add_node_cnt": 5}'
-                  SCT_NEMESIS__RUNNERS='[{"SisyphusMonkey": {"selector": "disruptive"}}]'
+                runners to start, one thread each. `runners` is a list of single-key mappings of a
+                runner class to its options, e.g. `{SisyphusMonkey: {selector: disruptive, interval: 15}}`;
+                the options accepted depend on the runner class. Options a runner leaves unset take
+                the `nemesis` defaults; a runner without `seed` gets a random one. `selector` is a
+                logical expression over nemesis flags filtering the disruptions a runner runs.
+                Accepts YAML or JSON from the environment, for the whole option or one sub-key, e.g.
+                SCT_NEMESIS__INTERVAL=10 or SCT_NEMESIS__RUNNERS='[{"SisyphusMonkey": {"selector": "disruptive"}}]'.
         """,
     )
     nemesis_add_node_cnt: int = SctField(

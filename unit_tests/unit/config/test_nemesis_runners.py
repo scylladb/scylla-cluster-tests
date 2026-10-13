@@ -74,6 +74,17 @@ def test_env_vars_set_nested_grow_shrink_options(monkeypatch):
     assert conf.get("nemesis.grow_shrink.double_load_duration") == 0
 
 
+def test_env_var_sets_whole_nested_nemesis_option_from_json(monkeypatch):
+    monkeypatch.setenv("SCT_CONFIG_FILES", RUNNERS_YAML)
+    monkeypatch.setenv("SCT_NEMESIS", '{"during_prepare": false, "interval": 11}')
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.get("nemesis.during_prepare") is False
+    assert conf.get("nemesis.interval") == 11
+    assert len(conf.get("nemesis").runners) == 4
+
+
 def test_categorical_monkey_dist_naming_unknown_nemesis_fails_config_load(monkeypatch):
     monkeypatch.setenv("SCT_CONFIG_FILES", RUNNERS_YAML)
     monkeypatch.setenv("SCT_NEMESIS__RUNNERS", '[{"CategoricalMonkey": {"dist": {"nodetool_decommission": 1}}}]')
