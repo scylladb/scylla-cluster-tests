@@ -4,8 +4,16 @@ from unittest import mock
 import pytest
 from packaging.version import Version
 
+from sdcm.mgmt.cli import (
+    BackupStageNotReachedError,
+    BackupTask,
+    ManagerCluster,
+    ManagerTask,
+    SCTool,
+    SCToolDocker,
+    create_sctool,
+)
 from sdcm.mgmt.common import ScyllaManagerError
-from sdcm.mgmt.cli import ManagerCluster, ManagerTask, SCTool, SCToolDocker, create_sctool
 
 
 def test_01_get_task_info_dict():
@@ -106,3 +114,69 @@ def test_docker_sctool_without_a_container_name_fails_loudly():
 
     with pytest.raises(ScyllaManagerError, match="manager_container_name"):
         create_sctool(manager_node=node)
+
+
+def backup_task_with_progress_statuses(statuses):
+    """BackupTask whose consecutive `sctool progress` calls report the given `Status:` values."""
+    task = BackupTask(
+        task_id="backup/2a4125d6-5d5a-45b9-9d8d-dec038b3732d", cluster_id="c1", manager_node=mock.MagicMock()
+    )
+    task.sctool.run = mock.Mock(
+        side_effect=[
+            mock.Mock(stdout=f"Run:\t\t{i}\nStatus:\t\t{status}\nSnapshot Tag:\tsm_x\n")
+            for i, status in enumerate(statuses)
+        ]
+    )
+    return task
+
+
+@pytest.mark.parametrize(
+    "statuses,expected_calls",
+    [
+        (["RUNNING (taking snapshot)", "RUNNING (uploading data)"], 2),
+        (["RUNNING (indexing files)", "RUNNING (uploading schema)", "RUNNING (moving manifests)"], 3),
+        (["RUNNING (retention)"], 1),
+    ],
+)
+def test_wait_for_started_upload_stage_returns_once_the_upload_started(statuses, expected_calls):
+    task = backup_task_with_progress_statuses(statuses)
+    with mock.patch("sdcm.utils.decorators.time.sleep"):
+        assert task.wait_for_started_upload_stage(timeout=60) is True
+    assert task.sctool.run.call_count == expected_calls
+
+
+@pytest.mark.parametrize(
+    "final_status",
+    [
+        "DONE",
+        "ERROR (taking snapshot)",
+        "ERROR (uploading data)",
+        "STOPPED (uploading data)",
+        "ABORTED (indexing files)",
+        "WAITING (uploading data)",
+    ],
+)
+def test_wait_for_stage_fails_fast_once_the_task_is_not_running(final_status):
+    task = backup_task_with_progress_statuses(["RUNNING (taking snapshot)", final_status])
+    with mock.patch("sdcm.utils.decorators.time.sleep"), pytest.raises(ScyllaManagerError, match="can't be reached"):
+        task.wait_for_uploading_stage(timeout=60)
+    assert task.sctool.run.call_count == 2
+
+
+@pytest.mark.parametrize("status", ["NEW", "STARTING"])
+def test_wait_for_stage_keeps_waiting_while_the_task_has_not_started(status):
+    task = backup_task_with_progress_statuses([status, status, "RUNNING (uploading data)"])
+    with mock.patch("sdcm.utils.decorators.time.sleep"):
+        assert task.wait_for_uploading_stage(timeout=60) is True
+    assert task.sctool.run.call_count == 3
+
+
+@pytest.mark.parametrize("stage", ["taking snapshot", "indexing files", "uploading manifests", "uploading schema"])
+def test_wait_for_started_upload_stage_keeps_waiting_before_the_upload(stage):
+    task = backup_task_with_progress_statuses([f"RUNNING ({stage})"] * 3)
+    with (
+        mock.patch("sdcm.utils.decorators.time.sleep"),
+        mock.patch("sdcm.utils.decorators.time.time", side_effect=[0, 5, 100]),
+        pytest.raises(BackupStageNotReachedError),
+    ):
+        task.wait_for_started_upload_stage(timeout=10)
