@@ -33,7 +33,7 @@ from functools import cached_property
 import anyconfig
 from argus.client.sct.types import Package
 from packaging import version
-from pydantic import Field, ConfigDict, fields as pydantic_fields
+from pydantic import BaseModel, Field, ConfigDict, fields as pydantic_fields
 from typing_extensions import Annotated
 from pydantic.functional_validators import BeforeValidator
 from sdcm import sct_abs_path
@@ -1657,9 +1657,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if key is None:
             return None
 
-        if key and "." in key:
-            if ret_val := self._dotted_get(key):
-                return ret_val
+        if "." in key:
+            return self._dotted_get(key)
         ret_val = getattr(self, key, None)
 
         if key in self.multi_region_params and isinstance(ret_val, list):
@@ -1669,15 +1668,18 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     def _dotted_get(self, key: str):
         """
-        if key for retrieval is dot notation, ex. 'stress_image.ycsb'
-        we assume `stress_image` would be a dict
+        if key for retrieval is dot notation, ex. 'stress_image.ycsb' or 'nemesis.interval'
+        we assume `stress_image` would be a dict and `nemesis` a pydantic model
         """
         keys = key.split(".")
         current = self.get(keys[0])
         for k in keys[1:]:
-            if not isinstance(current, dict):
+            if isinstance(current, BaseModel):
+                current = getattr(current, k, None)
+            elif isinstance(current, dict):
+                current = current.get(k)
+            else:
                 break
-            current = current.get(k)
         return current
 
     def _validate_value(self, field_name: str, field: pydantic_fields.FieldInfo):

@@ -96,6 +96,11 @@ def merge_dicts_append_strings(d1, d2, model: type[BaseModel]):
                 d1[key] = []
             d1[key].extend(value[1:])
             del d2[key]
+        if isinstance(value, dict) and key in d1 and isinstance(d1[key], BaseModel):
+            # A pydantic-model option deep-merges like a dict: the new source only overrides the keys it sets.
+            merged = d1[key].model_dump(exclude_unset=True)
+            anyconfig.merge(merged, value, ac_merge=anyconfig.MS_DICTS)
+            d2[key] = merged
 
     anyconfig.merge(d1, d2, ac_merge=anyconfig.MS_DICTS)
 
