@@ -352,18 +352,17 @@ def call(Map pipelineParams) {
                         // lab agents have no IMDS, so tagBuilder() would fail there.
                         if (!localAgent) {
                             tagBuilder()
+                        } else {
+                            // A persistent workspace may hold ./sct_runner_ip from an earlier runner
+                            // build; with no runner created here, later stages would SSH to it.
+                            // minicloudReclaim() clears it as well, this covers baremetal.
+                            sh 'rm -fv scylla-cluster-tests/sct_runner_ip'
                         }
                     }
                     dir('scylla-cluster-tests') {
                         timeout(time: 5, unit: 'MINUTES') {
                             checkout scm
                             checkoutQaInternal(params)
-                        }
-                        // A persistent workspace may hold ./sct_runner_ip from an earlier runner
-                        // build; with no runner created here, later stages would SSH to it.
-                        // minicloudReclaim() clears it as well, this covers baremetal.
-                        if (localAgent) {
-                            sh 'rm -fv sct_runner_ip'
                         }
                     }
                     dockerLogin(params)
