@@ -60,7 +60,7 @@ Params (defaults in `defaults/test_default.yaml`, reference in
   on top of the ~1.7 GiB it reserves for the guest OS, so anything under ~3 GiB fails to boot
   with "memory per shard too low".
 
-S3 passthrough buckets (keystore, job artifacts, `downloads.scylladb.com`) are configured via
+S3 passthrough buckets (keystore, job artifacts, `downloads.scylladb.com`, test sstables) are configured via
 `minicloud_s3_passthrough_buckets`; this is why minicloud runs still need the
 `qa-aws-secret-*` credentials. Every knob is a documented `minicloud_*` config option with its
 automatic `SCT_*` env form - the code reads no bare `MINICLOUD_*` environment variables.
