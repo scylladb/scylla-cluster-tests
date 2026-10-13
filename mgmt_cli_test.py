@@ -1044,16 +1044,24 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
         self.log.info("finishing test_suspend_and_resume_without_starting_tasks")
 
     def test_suspend_and_resume(self):
-        with self.subTest("Suspend and resume backup task"):
-            self._test_suspend_and_resume_task_template(task_type="backup")
-        with self.subTest("Suspend and resume repair task"):
-            self._test_suspend_and_resume_task_template(task_type="repair")
-        with self.subTest("Suspend and resume without starting task"):
-            self._test_suspend_and_resume_without_starting_tasks()
-        with self.subTest("Suspend with on resume start tasks flag after duration has passed"):
-            self._test_suspend_with_on_resume_start_tasks_flag_template(wait_for_duration=True)
-        with self.subTest("Suspend with on resume start tasks flag before duration has passed"):
-            self._test_suspend_with_on_resume_start_tasks_flag_template(wait_for_duration=False)
+        # Suspending Manager aborts the running native backup task, which makes Scylla log the same
+        # snapshot upload errors as stopping the task (https://github.com/scylladb/scylladb/issues/24642)
+        ctx = (
+            ignore_aborted_snapshot_upload_storage_io_errors()
+            if self.params.get("manager_backup_restore_method") == "native"
+            else nullcontext()
+        )
+        with ctx:
+            with self.subTest("Suspend and resume backup task"):
+                self._test_suspend_and_resume_task_template(task_type="backup")
+            with self.subTest("Suspend and resume repair task"):
+                self._test_suspend_and_resume_task_template(task_type="repair")
+            with self.subTest("Suspend and resume without starting task"):
+                self._test_suspend_and_resume_without_starting_tasks()
+            with self.subTest("Suspend with on resume start tasks flag after duration has passed"):
+                self._test_suspend_with_on_resume_start_tasks_flag_template(wait_for_duration=True)
+            with self.subTest("Suspend with on resume start tasks flag before duration has passed"):
+                self._test_suspend_with_on_resume_start_tasks_flag_template(wait_for_duration=False)
 
 
 class ManagerHelperTests(ManagerTestFunctionsMixIn):
