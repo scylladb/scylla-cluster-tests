@@ -5,7 +5,7 @@ import pytest
 from sdcm.nemesis.monkey.runners import FixedOrderMonkey
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from unit_tests.lib.fake_tester import ClusterTesterForTests
-from unit_tests.unit.nemesis import CustomNemesisA, CustomNemesisB, CustomNemesisC, TestNemesisClass
+from unit_tests.unit.nemesis import CustomNemesisA, CustomNemesisB, CustomNemesisC, TestNemesisClass, runner_config
 from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
 
 
@@ -14,9 +14,9 @@ class FakeFixedOrderMonkey(FixedOrderMonkey, TestNemesisClass):
 
 
 def build_fixed_order_monkey(order, separator=", "):
-    """Build via a comma-separated nemesis_selector, as the per-thread nemesis_selector."""
+    """Build via a comma-separated selector, as the per-thread `nemesis.runners` selector."""
     params = dict(PARAMS)
-    return FakeFixedOrderMonkey(FakeTester(params=params), None, nemesis_selector=separator.join(order))
+    return FakeFixedOrderMonkey(FakeTester(params=params), None, config=runner_config(selector=separator.join(order)))
 
 
 @pytest.fixture()
@@ -71,7 +71,7 @@ def test_precheck_prunes_entry_while_remaining_order_is_unchanged(events_functio
     ],
 )
 def test_selector_whitespace_and_empty_entries_are_ignored(selector):
-    nemesis = FakeFixedOrderMonkey(FakeTester(params=dict(PARAMS)), None, nemesis_selector=selector)
+    nemesis = FakeFixedOrderMonkey(FakeTester(params=dict(PARAMS)), None, runner_config(selector=selector))
     assert [d.__class__ for d in nemesis.disruptions_list] == [CustomNemesisA, CustomNemesisB]
 
 
@@ -83,7 +83,7 @@ def test_single_name_selector_yields_single_entry():
 @pytest.mark.parametrize("selector", ["", " , ", None])
 def test_empty_selector_raises_value_error(selector):
     with pytest.raises(ValueError, match="requires 'nemesis_selector'"):
-        FakeFixedOrderMonkey(FakeTester(params=dict(PARAMS)), None, nemesis_selector=selector)
+        FakeFixedOrderMonkey(FakeTester(params=dict(PARAMS)), None, runner_config(selector=selector))
 
 
 def test_flag_expression_selector_is_rejected_as_unknown_name():
@@ -92,19 +92,25 @@ def test_flag_expression_selector_is_rejected_as_unknown_name():
 
 
 def test_per_thread_selectors_map_one_to_one_to_fixed_order_threads(tester):
-    tester.params["nemesis_class_name"] = ["FixedOrderMonkey", "FixedOrderMonkey"]
-    tester.params["nemesis_selector"] = ["CustomNemesisA, CustomNemesisB", "CustomNemesisC"]
+    tester.params["nemesis"] = {
+        "runners": [
+            {"FixedOrderMonkey": {"selector": "CustomNemesisA, CustomNemesisB"}},
+            {"FixedOrderMonkey": {"selector": "CustomNemesisC"}},
+        ]
+    }
 
     threads = tester.get_nemesis_class()
 
-    assert [t["nemesis"] for t in threads] == [FixedOrderMonkey, FixedOrderMonkey]
-    assert [t["nemesis_selector"] for t in threads] == ["CustomNemesisA, CustomNemesisB", "CustomNemesisC"]
+    assert [t.runner_class for t in threads] == [FixedOrderMonkey, FixedOrderMonkey]
+    assert [t.config.selector for t in threads] == ["CustomNemesisA, CustomNemesisB", "CustomNemesisC"]
 
 
 def test_single_selector_broadcasts_to_all_fixed_order_threads(tester):
-    tester.params["nemesis_class_name"] = ["FixedOrderMonkey", "FixedOrderMonkey"]
-    tester.params["nemesis_selector"] = ["CustomNemesisA, CustomNemesisB"]
+    tester.params["nemesis"] = {
+        "selector": "CustomNemesisA, CustomNemesisB",
+        "runners": [{"FixedOrderMonkey": {}}, {"FixedOrderMonkey": {}}],
+    }
 
     threads = tester.get_nemesis_class()
 
-    assert [t["nemesis_selector"] for t in threads] == ["CustomNemesisA, CustomNemesisB"] * 2
+    assert [t.config.selector for t in threads] == ["CustomNemesisA, CustomNemesisB"] * 2

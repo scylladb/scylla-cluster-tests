@@ -3,8 +3,16 @@
 from abc import ABC, abstractmethod
 from unittest.mock import MagicMock
 
-from sdcm.nemesis import NemesisBaseClass, NemesisRunner
+from pydantic import NonNegativeFloat
+
+from sdcm.nemesis import NemesisBaseClass, NemesisRunner, NemesisRunnerConfig
 from sdcm.nemesis.registry import NemesisRegistry
+from sdcm.sct_config.nemesis_runners import NemesisDefaults
+
+
+def runner_config(config_model=NemesisRunnerConfig, **options) -> NemesisRunnerConfig:
+    """Runner config with ``options``, the rest resolved from the `nemesis` defaults as the tester does."""
+    return NemesisDefaults().resolve(config_model(**options))
 
 
 def make_mock_node(name="node1", rack="rack1", is_seed=False, dc_idx=0, ip_address=None):
@@ -175,8 +183,33 @@ class TestNemesisClass(NemesisRunner):
     flag_common = False
     __test__ = False
 
-    def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
-        super().__init__(
-            tester_obj, termination_event, *args, nemesis_selector=nemesis_selector, nemesis_seed=nemesis_seed, **kwargs
-        )
+    def __init__(self, tester_obj, termination_event, config):
+        super().__init__(tester_obj, termination_event, config=config)
         self.nemesis_registry = NemesisRegistry(base_class=TestBaseClass, flag_class=TestBaseClass)
+
+
+class TestRunnerBase:
+    """Root of a test-only runner hierarchy for `nemesis.runners` config tests.
+
+    Follows the ``config_model`` contract of ``NemesisRunner`` without touching the real runner
+    tree; pass ``NemesisRegistry(base_class=TestRunnerBase, ...).get_subclasses()`` to
+    ``nemesis_config_model``.
+    """
+
+    __test__ = False
+    config_model = NemesisRunnerConfig
+
+
+class PlainTestRunner(TestRunnerBase):
+    """Runner accepting only the shared runner options."""
+
+
+class WeightedTestRunnerConfig(NemesisRunnerConfig):
+    weights: dict[str, NonNegativeFloat]
+    default_weight: NonNegativeFloat = 1
+
+
+class WeightedTestRunner(TestRunnerBase):
+    """Runner with options of its own."""
+
+    config_model = WeightedTestRunnerConfig

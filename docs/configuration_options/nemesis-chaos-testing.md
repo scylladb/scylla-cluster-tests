@@ -4,7 +4,18 @@
 
 Which disruptions run, how often, and how targets are selected.
 
-**12 options.**
+**13 options.**
+
+
+<a id="nemesis"></a>
+
+## **nemesis** / SCT_NEMESIS
+
+Nemesis runners to start, one thread each, and defaults shared by all of them.<br>Each runner is a single-key mapping of the runner class to its options; the options<br>accepted depend on the runner class. Options a runner leaves unset take the<br>[`nemesis`](#nemesis) defaults; a runner without `seed` gets a random one. `selector` is a<br>logical expression over nemesis flags filtering the disruptions a runner runs.<br>YAML example:<br>nemesis:<br>interval: 5<br>runners:<br>- SisyphusMonkey:<br>selector: "disruptive"<br>interval: 15<br>- CategoricalMonkey:<br>dist: {StopStartMonkey: 2}<br>Environment variable examples:<br>SCT_NEMESIS__INTERVAL=10<br>SCT_NEMESIS__RUNNERS='[{"SisyphusMonkey": {"selector": "disruptive"}}]'
+
+**default:** {'runners': [{'NoOpMonkey': {}}]}
+
+**type:** sdcm.sct_config.nemesis_runners.NemesisConfig
 
 
 <a id="nemesis_add_node_cnt"></a>
@@ -22,7 +33,7 @@ Add/remove nodes during GrowShrinkCluster nemesis
 
 ## **nemesis_class_name** / SCT_NEMESIS_CLASS_NAME
 
-Nemesis class to use (possible types in sdcm.nemesis).<br>Supported syntax:<br>- [`nemesis_class_name`](#nemesis_class_name): "NemesisName"<br>Run one nemesis in a single thread.<br>- [`nemesis_class_name`](#nemesis_class_name): ["NemesisA", "NemesisB"]<br>Run NemesisA and NemesisB each in their own thread.<br>- [`nemesis_class_name`](#nemesis_class_name): ["SisyphusMonkey", "SisyphusMonkey"]<br>Run two SisyphusMonkey threads in parallel.<br>Note: the former 'Class:N' count syntax (e.g. "ChaosMonkey:2") and<br>space-separated strings (e.g. "DisruptiveMonkey NonDisruptiveMonkey") are no<br>longer supported. Use an explicit YAML list instead.
+Not read; replaced by `nemesis.runners`.
 
 **default:** NoOpMonkey
 
@@ -55,7 +66,7 @@ Run nemesis during prepare stage of the test
 
 ## **nemesis_filter_seeds** / SCT_NEMESIS_FILTER_SEEDS
 
-If true runs the nemesis only on non seed nodes
+Not read; replaced by `nemesis.filter_seeds`.
 
 **default:** False
 
@@ -77,7 +88,7 @@ Instance type to use for adding/removing nodes during GrowShrinkCluster nemesis
 
 ## **nemesis_interval** / SCT_NEMESIS_INTERVAL
 
-Nemesis sleep interval to use if None provided specifically in the test
+Not read; replaced by `nemesis.interval`.
 
 **default:** 5
 
@@ -88,7 +99,7 @@ Nemesis sleep interval to use if None provided specifically in the test
 
 ## **nemesis_multiply_factor** / SCT_NEMESIS_MULTIPLY_FACTOR
 
-Multiply the list of nemesis to execute by the specified factor
+Not read; replaced by `nemesis.multiply_factor`.
 
 **default:** 2
 
@@ -99,7 +110,7 @@ Multiply the list of nemesis to execute by the specified factor
 
 ## **nemesis_seed** / SCT_NEMESIS_SEED
 
-A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
+Not read; replaced by `nemesis.seed`.
 
 **default:** N/A
 
@@ -110,7 +121,7 @@ A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
 
 ## **nemesis_selector** / SCT_NEMESIS_SELECTOR
 
-[`nemesis_selector`](#nemesis_selector) gets a list of "nemesis properties" and filters IN all the nemesis that has<br>ALL the properties in that list which are set to true (the intersection of all properties).<br>(In other words filters out all nemesis that doesn't ONE of these properties set to true)<br>IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.<br>For FixedOrderMonkey, it is instead a comma-separated ordered list of nemesis class names<br>(e.g. "DecommissionMonkey, RepairMonkey"), executed in that order and repeated once exhausted.
+Not read; replaced by `nemesis.selector`.
 
 **default:** N/A
 

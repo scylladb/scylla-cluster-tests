@@ -1,13 +1,16 @@
 """
 NemesisRunner override, also known as Complex Nemesis
-Runners can be used in nemesis_class_names config option
+Runners can be used in the nemesis_class_name config option or as entries of `nemesis.runners`;
+each runner's `config_model` validates its `nemesis.runners` entry.
 """
 
 import time
 from typing import Callable, List, Set, Tuple
 
+from pydantic import Field, NonNegativeFloat
+
 from sdcm.mgmt.common import ObjectStorageUploadMode
-from sdcm.nemesis import NemesisRunner
+from sdcm.nemesis import NemesisRunner, NemesisRunnerConfig
 from sdcm.nemesis.monkey.manager import manager_backup
 
 
@@ -32,7 +35,7 @@ class FixedOrderMonkey(NemesisRunner):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        names = [name.strip() for name in self.nemesis_selector.split(",") if name.strip()]
+        names = [name.strip() for name in (self.nemesis_selector or "").split(",") if name.strip()]
         if not names:
             raise ValueError("FixedOrderMonkey requires 'nemesis_selector' to list nemesis class names, e.g. 'A, B'")
         self.disruptions_list = self.resolve_fixed_order(names)
@@ -182,20 +185,27 @@ class EnableDisableTableEncryptionAwsKmsProviderMonkey(NemesisRunner):
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
 
+class CategoricalMonkeyConfig(NemesisRunnerConfig):
+    dist: dict[str, NonNegativeFloat] = Field(description="Weight of each disruption, keyed by nemesis class name")
+    default_weight: NonNegativeFloat = Field(default=1, description="Weight of disruptions not listed in `dist`")
+
+
 class CategoricalMonkey(NemesisRunner):
     """Randomly picks disruptions to execute using the given categorical distribution.
 
     Each disruption is assigned a weight. The probability that a disruption D with weight W
     will be executed is W / T, where T is the sum of weights of all disruptions.
 
-    The distribution is passed into the monkey's constructor as a dictionary.
+    The distribution is the `dist` dictionary of the monkey's config (its `nemesis.runners` entry).
     Keys in the dictionary are names of the disruption methods (from the `Nemesis` class)
     e.g. `disrupt_hard_reboot_node`. The value for each key is the weight of this disruption.
     You can omit the ``disrupt_'' prefix from the key, e.g. `hard_reboot_node`.
 
-    A default weight can be passed; it will be assigned to each disruption that is not listed.
+    The config's `default_weight` is assigned to each disruption that is not listed.
     In particular if the default weight is 0 then the unlisted disruptions won't be executed.
     """
+
+    config_model = CategoricalMonkeyConfig
 
     def get_disruption_distribution(self, dist: dict, default_weight: float) -> Tuple[List[Callable], List[float]]:
         def is_nonnegative_number(val):
@@ -241,9 +251,9 @@ class CategoricalMonkey(NemesisRunner):
 
         return population, weights
 
-    def __init__(self, tester_obj, termination_event, dist: dict, *args, default_weight: float = 1, **kwargs):
-        super().__init__(tester_obj, termination_event, *args, **kwargs)
-        population, weights = self.get_disruption_distribution(dist, default_weight)
+    def __init__(self, tester_obj, termination_event, config: CategoricalMonkeyConfig):
+        super().__init__(tester_obj, termination_event, config=config)
+        population, weights = self.get_disruption_distribution(self.config.dist, self.config.default_weight)
         self._weight_by_nemesis = dict(zip(population, weights))
         self.disruptions_list = population
         self.disruption_distribution = (population, weights)

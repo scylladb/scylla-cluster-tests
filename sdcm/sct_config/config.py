@@ -1695,16 +1695,6 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
         param_value = self.get(field_name)
 
-        # Handle list-based validation (e.g. nemesis_selector when multiple nemesis classes)
-        if field_name == "nemesis_selector" and len(self.get("nemesis_class_name")) > 1:
-            for list_element in param_value:
-                try:
-                    from_env_func(list_element)
-                except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
-                    raise ValueError(f"failed to validate {field_name}") from ex
-            return
-
-        # Regular single-value validation
         from_env_func(param_value)
 
     @staticmethod
@@ -1804,10 +1794,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
         if self.get("n_db_nodes"):
             self._validate_seeds_number()
-            self._validate_nemesis_can_run_on_non_seed()
             self._validate_number_of_db_nodes_divides_by_az_number()
-
-        self._validate_nemesis_parallel_config()
 
         if self.get("use_zero_nodes"):
             self._validate_zero_token_backend_support(backend)
@@ -2246,43 +2233,6 @@ class SCTConfiguration(*CONFIG_GROUPS):
         assert not num_of_db_nodes or seeds_num <= num_of_db_nodes, (
             f"Seeds number ({seeds_num}) should be not more then nodes number ({num_of_db_nodes})"
         )
-
-    def _validate_nemesis_can_run_on_non_seed(self) -> None:
-        if self.get("nemesis_filter_seeds") is False or self.get("nemesis_class_name") == ["NoOpMonkey"]:
-            return
-        seeds_num = self.get("seeds_num")
-        num_of_db_nodes = sum(self.get("n_db_nodes")) + self.get("add_node_cnt")
-        assert num_of_db_nodes > seeds_num, (
-            "Nemesis cannot run when 'nemesis_filter_seeds' is true and seeds number is equal to nodes number"
-        )
-
-    def _validate_nemesis_parallel_config(self) -> None:
-        """Validate that nemesis_selector and nemesis_seed list lengths match nemesis_class_name."""
-        class_names = self.get("nemesis_class_name")
-        if not class_names:
-            return
-        num_threads = len(class_names)
-
-        selectors = self.get("nemesis_selector")
-        if selectors and len(selectors) > 1 and len(selectors) != num_threads:
-            raise ValueError(
-                f"'nemesis_selector' has {len(selectors)} entries but 'nemesis_class_name' has "
-                f"{num_threads}. Either use a single selector (broadcast to all threads) or provide "
-                f"exactly one selector per class name.\n"
-                f"  nemesis_class_name: {class_names}\n"
-                f"  nemesis_selector:   {selectors}"
-            )
-
-        seeds = self.get("nemesis_seed")
-        if seeds is not None:
-            if len(seeds) > 1 and len(seeds) != num_threads:
-                raise ValueError(
-                    f"'nemesis_seed' has {len(seeds)} entries but 'nemesis_class_name' has "
-                    f"{num_threads}. Either use a single seed (broadcast to all threads) or provide "
-                    f"exactly one seed per class name.\n"
-                    f"  nemesis_class_name: {class_names}\n"
-                    f"  nemesis_seed:       {seeds}"
-                )
 
     def _validate_number_of_db_nodes_divides_by_az_number(self):
         if self.get("cluster_backend").startswith("k8s"):

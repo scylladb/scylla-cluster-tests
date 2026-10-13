@@ -28,13 +28,13 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-529 options across 29 groups.
+530 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 74 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
-| [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
+| [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 13 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 72 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 16 | The monitoring stack, event severities, Argus reporting and email reports. |
 | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) | 13 | How logs and diagnostics are collected, and what happens to the resources when the test ends. |
@@ -369,6 +369,7 @@ concerns first, then one page per backend, then one per test type.
 | [`n_stress_process`](configuration_options/performance-regression-tests.md#n_stress_process) | `SCT_N_STRESS_PROCESS` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`n_test_oracle_db_nodes`](configuration_options/auxiliary-db-cluster-oracle-cassandra.md#n_test_oracle_db_nodes) | `SCT_N_TEST_ORACLE_DB_NODES` | [Auxiliary DB cluster (oracle / Cassandra)](configuration_options/auxiliary-db-cluster-oracle-cassandra.md) |
 | [`n_vector_store_nodes`](configuration_options/vector-store.md#n_vector_store_nodes) | `SCT_N_VECTOR_STORE_NODES` | [Vector Store](configuration_options/vector-store.md) |
+| [`nemesis`](configuration_options/nemesis-chaos-testing.md#nemesis) | `SCT_NEMESIS` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
 | [`nemesis_add_node_cnt`](configuration_options/nemesis-chaos-testing.md#nemesis_add_node_cnt) | `SCT_NEMESIS_ADD_NODE_CNT` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
 | [`nemesis_class_name`](configuration_options/nemesis-chaos-testing.md#nemesis_class_name) | `SCT_NEMESIS_CLASS_NAME` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
 | [`nemesis_double_load_during_grow_shrink_duration`](configuration_options/nemesis-chaos-testing.md#nemesis_double_load_during_grow_shrink_duration) | `SCT_NEMESIS_DOUBLE_LOAD_DURING_GROW_SHRINK_DURATION` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |

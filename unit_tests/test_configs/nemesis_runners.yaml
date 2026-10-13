@@ -1,0 +1,15 @@
+nemesis:
+  interval: 7
+  seed: 42
+  runners:
+    - SisyphusMonkey:
+        selector: "not disruptive"
+    - SisyphusMonkey:
+        selector: "disruptive"
+        interval: 15
+        seed: 456
+        multiply_factor: 2
+    - CategoricalMonkey:
+        dist: {StopStartMonkey: 2, HardRebootNodeMonkey: 1}
+        default_weight: 0
+    - ManagerRcloneBackup: {}

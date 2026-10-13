@@ -23,6 +23,7 @@ from unit_tests.unit.nemesis.execute_nemesis import (
     PrecheckSkipNemesis,
     TestNemesisRunner,
 )
+from unit_tests.unit.nemesis import runner_config
 from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS
 
 # Fields that vary with time or identity — excluded from full-dict event assertions.
@@ -88,7 +89,7 @@ def runner(events_function_scope):
     tester = FakeTester(params=PARAMS)
     tester.db_cluster.check_cluster_health = MagicMock()
     tester.db_cluster.test_config = MagicMock()
-    instance = TestNemesisRunner(tester, termination_event)
+    instance = TestNemesisRunner(tester, termination_event, runner_config())
     instance.interval = 0
     return instance
 

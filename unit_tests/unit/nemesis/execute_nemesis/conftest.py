@@ -3,6 +3,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from unit_tests.unit.nemesis import runner_config
+
 from unit_tests.unit.nemesis.execute_nemesis import (
     TestNemesisRunner,
     CustomTestNemesis,
@@ -20,7 +22,7 @@ def nemesis_runner(events):
     tester = FakeTester(params=PARAMS)
     tester.db_cluster.check_cluster_health = MagicMock()
     tester.db_cluster.test_config = MagicMock()
-    runner = TestNemesisRunner(tester, termination_event, nemesis_selector="flag_a")
+    runner = TestNemesisRunner(tester, termination_event, runner_config(selector="flag_a"))
     return runner
 
 

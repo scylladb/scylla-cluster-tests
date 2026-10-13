@@ -5,13 +5,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sdcm.nemesis.monkey.runners import CategoricalMonkey
-from unit_tests.unit.nemesis import TestNemesisClass
+from sdcm.nemesis.monkey.runners import CategoricalMonkey, CategoricalMonkeyConfig
+from unit_tests.unit.nemesis import TestNemesisClass, runner_config
 from unit_tests.unit.nemesis.fake_cluster import FakeTester
 
 
 class FakeCategorialMonkey(CategoricalMonkey, TestNemesisClass):
     """Override CategoricalMonkey with a new disruption tree"""
+
+
+def categorical_config(dist):
+    """Config running only the disruptions listed in ``dist``."""
+    return runner_config(CategoricalMonkeyConfig, dist=dist, default_weight=0)
 
 
 @pytest.fixture()
@@ -21,7 +26,7 @@ def categorical_runner():
     tester.db_cluster.check_cluster_health = MagicMock()
 
     def build(dist):
-        instance = FakeCategorialMonkey(tester, threading.Event(), dist, default_weight=0)
+        instance = FakeCategorialMonkey(tester, threading.Event(), categorical_config(dist))
         instance.interval = 0
         return instance
 
@@ -43,12 +48,25 @@ def _member_named(nemesis, name):
     ],
 )
 def test_categorical_monkey_simple(dist, output, capsys):
-    nemesis = FakeCategorialMonkey(FakeTester(), None, dist, default_weight=0)
+    nemesis = FakeCategorialMonkey(FakeTester(), None, categorical_config(dist))
     method = nemesis.select_next_nemesis()
 
     method.disrupt()
     captured = capsys.readouterr()
     assert output in captured.out
+
+
+def test_categorical_monkey_default_weight_applies_to_unlisted_disruptions():
+    config = runner_config(CategoricalMonkeyConfig, dist={"CustomNemesisC": 2, "CustomNemesisA": 0}, default_weight=0.5)
+
+    nemesis = FakeCategorialMonkey(FakeTester(), None, config)
+
+    population, weights = nemesis.disruption_distribution
+    assert dict(zip((member.__class__.__name__ for member in population), weights)) == {
+        "CustomNemesisC": 2.0,
+        "CustomNemesisB": 0.5,
+        "CustomNemesisAD": 0.5,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +77,7 @@ def test_categorical_monkey_simple(dist, output, capsys):
 def test_categorical_monkey_precheck_prunes_distribution(events_function_scope):
     """precheck() removes an infeasible member from both population and weights,
     keeping them zipped, and leaves the runnable member's weight untouched."""
-    nemesis = FakeCategorialMonkey(FakeTester(), None, {"CustomNemesisA": 1, "CustomNemesisC": 2}, default_weight=0)
+    nemesis = FakeCategorialMonkey(FakeTester(), None, categorical_config({"CustomNemesisA": 1, "CustomNemesisC": 2}))
     _member_named(nemesis, "CustomNemesisA").precheck = MagicMock(return_value="not feasible")
 
     excluded = nemesis.precheck_nemesis()
@@ -73,7 +91,7 @@ def test_categorical_monkey_precheck_prunes_distribution(events_function_scope):
 
 def test_categorical_monkey_precheck_all_excluded(events_function_scope):
     """When every member is excluded, the distribution ends up empty on both sides."""
-    nemesis = FakeCategorialMonkey(FakeTester(), None, {"CustomNemesisA": 1, "CustomNemesisC": 2}, default_weight=0)
+    nemesis = FakeCategorialMonkey(FakeTester(), None, categorical_config({"CustomNemesisA": 1, "CustomNemesisC": 2}))
     _member_named(nemesis, "CustomNemesisA").precheck = MagicMock(return_value="not feasible")
     _member_named(nemesis, "CustomNemesisC").precheck = MagicMock(return_value="also not feasible")
 

@@ -13,11 +13,12 @@
 
 """Nemesis (chaos testing) configuration options."""
 
-from typing import ClassVar
+from typing import Annotated, ClassVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, BeforeValidator
 
-from sdcm.sct_config.types import Boolean, IntOrList, SctField, String, StringOrList
+from sdcm.sct_config.nemesis_runners import NemesisConfig
+from sdcm.sct_config.types import Boolean, IntOrList, SctField, String, StringOrList, dict_or_str_or_pydantic
 
 
 class NemesisConfigMixin(BaseModel):
@@ -31,23 +32,32 @@ class NemesisConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Nemesis (chaos testing)"
 
+    nemesis: Annotated[NemesisConfig, BeforeValidator(dict_or_str_or_pydantic)] = SctField(
+        description="""
+                Nemesis runners to start, one thread each, and defaults shared by all of them.
+                Each runner is a single-key mapping of the runner class to its options; the options
+                accepted depend on the runner class. Options a runner leaves unset take the
+                `nemesis` defaults; a runner without `seed` gets a random one. `selector` is a
+                logical expression over nemesis flags filtering the disruptions a runner runs.
+                YAML example:
+                  nemesis:
+                    interval: 5
+                    runners:
+                      - SisyphusMonkey:
+                          selector: "disruptive"
+                          interval: 15
+                      - CategoricalMonkey:
+                          dist: {StopStartMonkey: 2}
+                Environment variable examples:
+                  SCT_NEMESIS__INTERVAL=10
+                  SCT_NEMESIS__RUNNERS='[{"SisyphusMonkey": {"selector": "disruptive"}}]'
+        """,
+    )
     nemesis_add_node_cnt: int = SctField(
         description="""Add/remove nodes during GrowShrinkCluster nemesis""",
     )
     nemesis_class_name: StringOrList = SctField(
-        description="""
-                Nemesis class to use (possible types in sdcm.nemesis).
-                Supported syntax:
-                - nemesis_class_name: "NemesisName"
-                  Run one nemesis in a single thread.
-                - nemesis_class_name: ["NemesisA", "NemesisB"]
-                  Run NemesisA and NemesisB each in their own thread.
-                - nemesis_class_name: ["SisyphusMonkey", "SisyphusMonkey"]
-                  Run two SisyphusMonkey threads in parallel.
-                Note: the former 'Class:N' count syntax (e.g. "ChaosMonkey:2") and
-                space-separated strings (e.g. "DisruptiveMonkey NonDisruptiveMonkey") are no
-                longer supported. Use an explicit YAML list instead.
-        """,
+        description="Not read; replaced by `nemesis.runners`.",
     )
     nemesis_double_load_during_grow_shrink_duration: int = SctField(
         description="After growing (and before shrink) in GrowShrinkCluster nemesis it will double the load for provided duration.",
@@ -56,27 +66,22 @@ class NemesisConfigMixin(BaseModel):
         description="""Run nemesis during prepare stage of the test""",
     )
     nemesis_filter_seeds: Boolean = SctField(
-        description="""If true runs the nemesis only on non seed nodes""",
+        description="Not read; replaced by `nemesis.filter_seeds`.",
     )
     nemesis_grow_shrink_instance_type: String = SctField(
         description="""Instance type to use for adding/removing nodes during GrowShrinkCluster nemesis""",
     )
     nemesis_interval: int = SctField(
-        description="""Nemesis sleep interval to use if None provided specifically in the test""",
+        description="Not read; replaced by `nemesis.interval`.",
     )
     nemesis_multiply_factor: int = SctField(
-        description="Multiply the list of nemesis to execute by the specified factor",
+        description="Not read; replaced by `nemesis.multiply_factor`.",
     )
     nemesis_seed: IntOrList = SctField(
-        description="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey""",
+        description="Not read; replaced by `nemesis.seed`.",
     )
     nemesis_selector: StringOrList = SctField(
-        description="""nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has
-        ALL the properties in that list which are set to true (the intersection of all properties).
-        (In other words filters out all nemesis that doesn't ONE of these properties set to true)
-        IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.
-        For FixedOrderMonkey, it is instead a comma-separated ordered list of nemesis class names
-        (e.g. "DecommissionMonkey, RepairMonkey"), executed in that order and repeated once exhausted.""",
+        description="Not read; replaced by `nemesis.selector`.",
     )
     nemesis_sequence_sleep_between_ops: int = SctField(
         description="""Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests""",

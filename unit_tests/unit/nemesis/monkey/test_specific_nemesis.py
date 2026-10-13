@@ -10,7 +10,7 @@ from sdcm.cluster_k8s.eks import EksScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
 from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
 from unit_tests.unit.nemesis.fake_cluster import FakeTester
-from unit_tests.unit.nemesis import TestNemesisClass
+from unit_tests.unit.nemesis import TestNemesisClass, runner_config
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,5 +35,5 @@ def test_is_it_on_kubernetes(parent, result):
             self.nodes = []
 
     params = {"nemesis_interval": 10, "nemesis_filter_seeds": 1}
-    nemesis = TestNemesisClass(FakeTester(db_cluster=FakeClass(), params=params), None)
+    nemesis = TestNemesisClass(FakeTester(db_cluster=FakeClass(), params=params), None, runner_config())
     assert nemesis._is_it_on_kubernetes() == result

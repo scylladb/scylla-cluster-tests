@@ -124,7 +124,7 @@ def test_run_does_not_crash_on_skipped_nemesis():
     tester = FakeTester(params=PARAMS)
     tester.db_cluster.check_cluster_health = MagicMock()
     tester.db_cluster.test_config = MagicMock()
-    runner = TestNemesisRunner(tester, termination_event, nemesis_selector="flag_a")
+    runner = TestNemesisRunner(tester, termination_event, config=NemesisRunnerConfig(selector="flag_a"))
     ...
 ```
 
