@@ -89,6 +89,10 @@ def test_find_issue_by_reactor_stall(test_data_dir):
     "symbol,expected",
     [
         ("gms::gossiper::do_send_ack2_msg", "https://scylladb.atlassian.net/browse/SCYLLADB-3114"),
+        (
+            "std::vector<seastar::httpd::storage_service_json::snapshot>::push_back",
+            "https://scylladb.atlassian.net/browse/SCYLLADB-5320",
+        ),
         # the sibling SYN path (jira:SCYLLADB-4852) is a different issue
         ("gms::gossiper::do_send_ack_msg", None),
     ],

@@ -707,7 +707,17 @@ def oversized_allocation_filter(
 
 @contextmanager
 def ignore_snapshot_listing_oversized_allocation():
-    with oversized_allocation_filter("storage_service_json::snapshot"):
+    """Ignore the oversized allocation Scylla makes when listing snapshots, while SCYLLADB-5320 is open.
+
+    scylladb/scylladb#26736 fixed only the copy in json_list_template; api::set_snapshot still builds a
+    std::vector<storage_service_json::snapshot> per table, tracked in SCYLLADB-5320.
+    """
+    with ExitStack() as stack:
+        if SkipPerIssues(
+            issues="https://scylladb.atlassian.net/browse/SCYLLADB-5320",
+            params=TestConfig().tester_obj().params,
+        ):
+            stack.enter_context(oversized_allocation_filter("storage_service_json::snapshot"))
         yield
 
 

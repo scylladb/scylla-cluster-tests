@@ -63,7 +63,6 @@ from sdcm.sct_events.group_common_events import (
     ignore_aborted_snapshot_upload_storage_io_errors,
 )
 from sdcm.utils.tablets.common import TabletsConfiguration
-from sdcm.utils.version_utils import ComparableScyllaVersion
 
 
 class ManagerRestoreTests(ManagerTestFunctionsMixIn):
@@ -262,12 +261,8 @@ class ManagerBackupTests(ManagerRestoreTests):
         for node in self.db_cluster.nodes:
             node.run_nodetool("compact")
 
-        ctx = (
-            ignore_snapshot_listing_oversized_allocation()
-            if ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version) <= "2026.3.0"
-            else nullcontext()
-        )
-        with ctx:
+        # Filter is active only while https://scylladb.atlassian.net/browse/SCYLLADB-5320 is open
+        with ignore_snapshot_listing_oversized_allocation():
             backup_task.start(continue_task=False)
             backup_task.wait_and_get_final_status(step=10)
 

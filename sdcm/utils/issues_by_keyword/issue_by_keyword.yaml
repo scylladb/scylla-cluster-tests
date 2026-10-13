@@ -17,3 +17,6 @@ OVERSIZED_ALLOCATION:
 
   - keyword: seastar::rpc::client::wait_for_reply
     issue: https://scylladb.atlassian.net/browse/SCYLLADB-2533
+
+  - keyword: storage_service_json::snapshot
+    issue: https://scylladb.atlassian.net/browse/SCYLLADB-5320
