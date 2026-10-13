@@ -20,6 +20,7 @@ import shutil
 import tempfile
 import time
 import threading
+import uuid
 from path import Path
 
 from invoke.watchers import StreamWatcher
@@ -68,6 +69,10 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         proxy_password: str = None,
         proxy_key: str = None,
     ):
+        # Key of this remoter's connections in `connection_thread_map`. Not `id(self)`: CPython reuses the
+        # id of a garbage-collected remoter, and a new remoter would pick up its connection to another host
+        # from any thread that still holds it.
+        self._connection_key = uuid.uuid4().hex
         if port is not None:
             self.port = port
         if connect_timeout is not None:
@@ -101,10 +106,10 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         Map connection to current thread.
         If there is no such thread, create it.
         """
-        connection = getattr(self.connection_thread_map, str(id(self)), None)
+        connection = getattr(self.connection_thread_map, self._connection_key, None)
         if connection is None:
             connection = self._create_connection()
-            setattr(self.connection_thread_map, str(id(self)), connection)
+            setattr(self.connection_thread_map, self._connection_key, connection)
             self._bind_generation_to_connection(connection)
         return connection
 
