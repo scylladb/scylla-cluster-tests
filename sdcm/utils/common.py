@@ -1596,6 +1596,11 @@ def find_equivalent_ami(
         try:
             ami = ec2_resource.Image(ami_id)
             ami.load()
+            # DescribeImages returns an empty list (not an error) for an AMI that is deregistered
+            # or not visible to this account, and boto3 leaves meta.data as None in that case
+            if ami.meta.data is None:
+                LOGGER.debug("AMI %s not found in region %s with current credentials", ami_id, source_region)
+                continue
             # First successful load sets the source_ami and architecture
             if source_ami is None:
                 source_ami = ami
@@ -1625,8 +1630,11 @@ def find_equivalent_ami(
     else:
         search_regions = target_regions
 
-    # Use all tags from the source AMI for matching, except "Name" and "arch"
-    matching_tags = [(key, value) for key, value in source_tags.items() if key not in ("Name", "arch")]
+    # Use all tags from the source AMI for matching, except the ones that differ between the per-arch
+    # images of the same build: "Name", "arch" and "creation_timestamp" (stamped per image, often 1s apart)
+    matching_tags = [
+        (key, value) for key, value in source_tags.items() if key not in ("Name", "arch", "creation_timestamp")
+    ]
 
     if not matching_tags:
         LOGGER.warning("Source AMI %s has no tags to match after filtering", ami_id)
