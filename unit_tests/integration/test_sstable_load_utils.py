@@ -13,6 +13,7 @@ pytestmark = [
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_sstable_load_utils_usage(docker_scylla, params, request):
     """test the sstable load utils base on the refrash monkey flow localy with a docker based scylla"""
 
