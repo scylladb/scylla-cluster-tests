@@ -189,6 +189,10 @@ class CategoricalMonkeyConfig(NemesisRunnerConfig):
     dist: dict[str, NonNegativeFloat] = Field(description="Weight of each disruption, keyed by nemesis class name")
     default_weight: NonNegativeFloat = Field(default=1, description="Weight of disruptions not listed in `dist`")
 
+    def check_disruptions(self, disruption_names: frozenset[str]) -> None:
+        if unknown := sorted(set(self.dist) - disruption_names):
+            raise ValueError(f"`dist` names unknown nemesis classes: {unknown}")
+
 
 class CategoricalMonkey(NemesisRunner):
     """Randomly picks disruptions to execute using the given categorical distribution.
@@ -197,9 +201,8 @@ class CategoricalMonkey(NemesisRunner):
     will be executed is W / T, where T is the sum of weights of all disruptions.
 
     The distribution is the `dist` dictionary of the monkey's config (its `nemesis.runners` entry).
-    Keys in the dictionary are names of the disruption methods (from the `Nemesis` class)
-    e.g. `disrupt_hard_reboot_node`. The value for each key is the weight of this disruption.
-    You can omit the ``disrupt_'' prefix from the key, e.g. `hard_reboot_node`.
+    Keys in the dictionary are nemesis class names, e.g. `HardRebootNodeMonkey`; the value for
+    each key is the weight of that disruption.
 
     The config's `default_weight` is assigned to each disruption that is not listed.
     In particular if the default weight is 0 then the unlisted disruptions won't be executed.

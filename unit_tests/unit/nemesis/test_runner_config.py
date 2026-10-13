@@ -17,7 +17,8 @@ from unit_tests.unit.nemesis import (
 )
 
 TestNemesisConfig = nemesis_config_model(
-    NemesisRegistry(base_class=TestRunnerBase, flag_class=TestBaseClass).get_subclasses()
+    NemesisRegistry(base_class=TestRunnerBase, flag_class=TestBaseClass).get_subclasses(),
+    NemesisRegistry(base_class=TestBaseClass, flag_class=TestBaseClass).get_subclasses(),
 )
 
 
@@ -58,6 +59,12 @@ def test_runner_entry_is_validated_by_its_class_config_model():
         ),
         pytest.param({"NoSuchRunner": {}}, "runners.0", "does not match any of the expected tags", id="unknown_class"),
         pytest.param(
+            {"WeightedTestRunner": {"weights": {"NoSuchNemesis": 1}}},
+            "",
+            "runners.0.WeightedTestRunner: `weights` names unknown nemesis classes: ['NoSuchNemesis']",
+            id="unknown_disruption",
+        ),
+        pytest.param(
             {"PlainTestRunner": {}, "WeightedTestRunner": {}},
             "runners.0",
             "exactly one key",
@@ -80,7 +87,7 @@ def test_nemesis_threads_resolve_unset_options_from_defaults():
             "interval": 7,
             "runners": [
                 {"PlainTestRunner": {"interval": 15, "seed": 3}},
-                {"WeightedTestRunner": {"weights": {"A": 1}}},
+                {"WeightedTestRunner": {"weights": {"CustomNemesisA": 1}}},
             ],
         }
     )

@@ -288,6 +288,9 @@ class NemesisRunnerConfig(BaseModel):
         default=None, description="How many times the disruption list is repeated before shuffling"
     )
 
+    def check_disruptions(self, disruption_names: frozenset[str]) -> None:
+        """Raise ``ValueError`` when the config names a nemesis class outside ``disruption_names``."""
+
 
 class NemesisRunner:
     #: Model validating this runner's entry in the nested `nemesis.runners` config.

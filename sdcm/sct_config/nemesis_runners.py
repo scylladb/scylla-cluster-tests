@@ -33,12 +33,22 @@ subclass of it next to the runner.
 """
 
 import random
-from typing import Annotated, NamedTuple, Union
+from typing import Annotated, ClassVar, NamedTuple, Union
 
 import yaml
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Discriminator, Field, PositiveInt, Tag, create_model
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Discriminator,
+    Field,
+    PositiveInt,
+    Tag,
+    create_model,
+    model_validator,
+)
 
-from sdcm.nemesis import NemesisFlags, NemesisRunner, NemesisRunnerConfig
+from sdcm.nemesis import NemesisBaseClass, NemesisFlags, NemesisRunner, NemesisRunnerConfig
 from sdcm.nemesis.registry import NemesisRegistry
 
 
@@ -110,6 +120,9 @@ class NemesisDefaults(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    #: Nemesis class names runner configs may name (e.g. CategoricalMonkey `dist` keys); empty skips the check.
+    disruption_names: ClassVar[frozenset[str]] = frozenset()
+
     during_prepare: bool = Field(default=True, description="Run nemesis during the prepare stage of the test")
     sequence_sleep_between_ops: PositiveInt | None = Field(
         default=None, description="Minutes to sleep between the operations of sequence nemeses"
@@ -124,6 +137,17 @@ class NemesisDefaults(BaseModel):
     selector: str | None = Field(default=None, description="Default for runner `selector`")
     multiply_factor: PositiveInt = Field(default=2, description="Default for runner `multiply_factor`")
     runners: list[NemesisRunnerConfig] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_runner_disruptions(self):
+        """Fail when a runner config names a nemesis class outside ``disruption_names``."""
+        if self.disruption_names:
+            for index, runner in enumerate(self.runners):
+                try:
+                    runner.check_disruptions(self.disruption_names)
+                except ValueError as error:
+                    raise ValueError(f"runners.{index}.{runner.class_name}: {error}") from error
+        return self
 
     def resolve(self, runner: NemesisRunnerConfig) -> NemesisRunnerConfig:
         """Return a copy of ``runner`` with unset options taken from these defaults, and a random seed if still unset.
@@ -144,9 +168,12 @@ class NemesisDefaults(BaseModel):
         return [NemesisThread(runner.runner_class, self.resolve(runner)) for runner in self.runners]
 
 
-def nemesis_config_model(runner_classes) -> type[NemesisDefaults]:
-    """Build the `nemesis` option model whose runner entries may name any of ``runner_classes``."""
-    return create_model(
+def nemesis_config_model(runner_classes, disruption_classes=()) -> type[NemesisDefaults]:
+    """Build the `nemesis` option model whose runner entries may name any of ``runner_classes``.
+
+    Runner configs may name only ``disruption_classes`` as disruptions.
+    """
+    model = create_model(
         "NemesisConfig",
         __base__=NemesisDefaults,
         runners=(
@@ -154,8 +181,11 @@ def nemesis_config_model(runner_classes) -> type[NemesisDefaults]:
             Field(default_factory=list, description="Runners to start, one thread each"),
         ),
     )
+    model.disruption_names = frozenset(disruption.__name__ for disruption in disruption_classes)
+    return model
 
 
 NemesisConfig = nemesis_config_model(
-    NemesisRegistry(base_class=NemesisRunner, flag_class=NemesisFlags).get_subclasses()
+    NemesisRegistry(base_class=NemesisRunner, flag_class=NemesisFlags).get_subclasses(),
+    NemesisRegistry(base_class=NemesisBaseClass, flag_class=NemesisFlags).get_subclasses(),
 )

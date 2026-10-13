@@ -74,6 +74,14 @@ def test_env_vars_set_nested_grow_shrink_options(monkeypatch):
     assert conf.get("nemesis.grow_shrink.double_load_duration") == 0
 
 
+def test_categorical_monkey_dist_naming_unknown_nemesis_fails_config_load(monkeypatch):
+    monkeypatch.setenv("SCT_CONFIG_FILES", RUNNERS_YAML)
+    monkeypatch.setenv("SCT_NEMESIS__RUNNERS", '[{"CategoricalMonkey": {"dist": {"nodetool_decommission": 1}}}]')
+
+    with pytest.raises(ValueError, match=r"`dist` names unknown nemesis classes: \['nodetool_decommission'\]"):
+        sct_config.SCTConfiguration()
+
+
 @pytest.mark.parametrize("module", ["sdcm.nemesis", "sdcm.sct_config"])
 def test_config_and_nemesis_import_without_cycle(module):
     """The config builds its runner models from the nemesis classes, so nemesis must not need the config at import."""
