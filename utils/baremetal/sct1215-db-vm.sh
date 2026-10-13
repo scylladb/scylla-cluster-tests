@@ -52,7 +52,7 @@ create() {
         --query 'SecurityGroups[0].GroupId' --output text)
     if [[ $sg == None ]]; then
         sg=$(ec2 create-security-group --vpc-id "$vpc" --group-name "$SG_NAME" \
-            --description "SCT-1215: monster -> baremetal DB" --tag-specifications "$(tags security-group)" \
+            --description "SCT-1215 monster to baremetal DB" --tag-specifications "$(tags security-group)" \
             --query GroupId --output text)
     fi
     # All TCP from monster only: SSH, CQL 9042/19042, the Prometheus scrapes 9180/9100, REST 10000
