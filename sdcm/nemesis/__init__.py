@@ -1801,8 +1801,8 @@ class NemesisRunner:
     def _k8s_fake_enospc_error(self, node):
         """Fakes ENOSPC error for scylla container (for /var/lib/scylla dir) using chaos-mesh without filling up disk."""
 
-        if SkipPerIssues("https://github.com/scylladb/scylla-cluster-tests/issues/6327", params=self.tester.params):
-            raise UnsupportedNemesis("https://github.com/scylladb/scylla-cluster-tests/issues/6327")
+        if SkipPerIssues("https://scylladb.atlassian.net/browse/SCT-1265", params=self.tester.params):
+            raise UnsupportedNemesis("Fake ENOSPC on K8S is broken, see https://scylladb.atlassian.net/browse/SCT-1265")
 
         if not node.k8s_cluster.chaos_mesh.initialized:
             raise UnsupportedNemesis("Chaos Mesh is not installed. Set 'k8s_use_chaos_mesh' config option to 'true'")
@@ -1828,10 +1828,12 @@ class NemesisRunner:
             assert no_space_errors, "There are no 'No space left on device' errors in db log during enospc disruption."
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
-        if ComparableScyllaVersion(self.target_node.scylla_version) > "2025.3.99":
+        if ComparableScyllaVersion(self.target_node.scylla_version) > "2025.3.99" and SkipPerIssues(
+            "https://scylladb.atlassian.net/browse/SCYLLADB-481", params=self.tester.params
+        ):
             raise UnsupportedNemesis(
-                "Applicalbe only for 2025.3 and lower."
-                " See https://github.com/scylladb/scylla-cluster-tests/issues/12989"
+                "Skipped on 2025.4+ while https://scylladb.atlassian.net/browse/SCYLLADB-481 is open."
+                " See https://scylladb.atlassian.net/browse/SCT-1261"
             )
         if all_nodes:
             nodes = self.cluster.data_nodes
