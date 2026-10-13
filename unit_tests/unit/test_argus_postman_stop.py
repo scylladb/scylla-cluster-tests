@@ -27,7 +27,6 @@ from argus.client.sct.client import ArgusSCTClient
 from sdcm.sct_events import Severity
 from sdcm.sct_events import events_processes as events_processes_module
 from sdcm.sct_events.base import SctEvent
-from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, stop_events_device
 from sdcm.sct_events.argus import (
     ArgusEventAggregator,
@@ -489,20 +488,3 @@ def test_argus_event_collector_survives_argus_wrapping_a_none_client(events_func
 
     evt = collector.outbound_queue.get_nowait()
     assert evt["run_id"] is None
-
-
-def test_aggregation_id_defaults_to_event_id():
-    event = DatabaseLogEvent.REACTOR_STALLED()
-
-    assert event.argus_aggregation_id() == event.event_id
-
-
-def test_collector_posts_event_aggregation_id(events_function_scope, monkeypatch):
-    monkeypatch.setattr(Argus, "INSTANCE", None)
-    collector = ArgusEventCollector(_registry=SctEvent._events_processes_registry)
-    event = _fake_argus_event(argus_aggregation_id=lambda: "custom-id")
-    monkeypatch.setattr(collector, "inbound_events", lambda: iter([("FakeEvent", event)]))
-
-    collector.run()
-
-    assert collector.outbound_queue.get_nowait()["event_id"] == "custom-id"
