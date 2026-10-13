@@ -70,6 +70,10 @@ class ScyllaManagerBase:
         return self.sctool.get_table_value(parsed_table=parsed_table, column_name=column_name, identifier=self.id)
 
 
+class BackupStageNotReachedError(Exception):
+    """Raised by the backup stage poll to let `retrying` try again."""
+
+
 class ManagerTask:
     def __init__(self, task_id, cluster_id, manager_node):
         self.manager_node = manager_node
@@ -474,18 +478,65 @@ class BackupTask(ManagerTask):
         LOGGER.debug("Snapshot tag: %s", snapshot_tag)
         return snapshot_tag
 
-    def is_task_in_uploading_stage(self):
-        full_progress_string = self.progress_string(
-            parse_table_res=False, is_verify_errorless_result=True
-        ).stdout.lower()
-        return "uploading data" in full_progress_string.lower()
+    def progress_status(self) -> str:
+        """Returns the lower-cased `Status:` line of `sctool progress`, e.g. `running (uploading data)` or `done`."""
+        output = self.progress_string(parse_table_res=False, is_verify_errorless_result=True).stdout
+        for line in output.splitlines():
+            if line.lower().startswith("status:"):
+                return line.split(":", 1)[1].strip().lower()
+        return ""
 
-    def wait_for_uploading_stage(self, timeout=1440, step=10):
-        text = f"Waiting until backup task: {self.id} starts to upload snapshots"
-        is_status_reached = wait.wait_for(
-            func=self.is_task_in_uploading_stage, step=step, text=text, timeout=timeout, throw_exc=True
+    def progress_state_and_stage(self) -> tuple[str, str]:
+        """Splits the `Status:` line of `sctool progress` into the run state and the backup stage.
+
+        `sctool progress` prints the stage next to every state but NEW and DONE, e.g. `RUNNING (uploading data)`,
+        so the stage is empty for them and for an output without a `Status:` line.
+        """
+        state, _, stage = self.progress_status().partition(" ")
+        return state, stage.strip("()")
+
+    def is_task_in_uploading_stage(self):
+        return self.progress_state_and_stage() == ("running", "uploading data")
+
+    def _wait_for_stage(self, stages: tuple[str, ...], text: str, timeout: int, step: int) -> bool:
+        """Polls `sctool progress` until the run is running in one of the given stages.
+
+        Fails right away once the run is not running anymore, as the awaited stage can't be reached and waiting
+        for the full timeout only hides the actual problem (e.g. an upload that was too fast to catch).
+        An output without a `Status:` line is treated like NEW.
+        """
+
+        @retrying(n=0, sleep_time=step, timeout=timeout, allowed_exceptions=(BackupStageNotReachedError,))
+        def check_stage() -> bool:
+            state, stage = self.progress_state_and_stage()
+            if state == "running" and stage in stages:
+                return True
+            if state not in ("", "new", "starting", "running"):
+                raise ScyllaManagerError(
+                    f"{text}: the task is '{state} ({stage})', so the stage can't be reached anymore"
+                )
+            raise BackupStageNotReachedError(f"{text}: current status '{state} ({stage})'")
+
+        return check_stage()
+
+    def wait_for_uploading_stage(self, timeout=1440, step=1):
+        text = f"Waiting until backup task {self.id} starts to upload snapshots"
+        return self._wait_for_stage(stages=("uploading data",), text=text, timeout=timeout, step=step)
+
+    def wait_for_started_upload_stage(self, timeout=1440, step=1):
+        """Waits until the run started uploading data, so it can be stopped and resumed with the same snapshot."""
+        # Stage names as printed by `sctool progress` (managerclient BackupStageName), in execution order, starting
+        # from the data upload. Every one of them is resumable in Scylla Manager, so a run stopped from the data
+        # upload on is resumed with the same snapshot on the next start.
+        stages = (
+            "uploading data",
+            "moving manifests",
+            "setting retention locks",
+            "migrating legacy metadata",
+            "retention",
         )
-        return is_status_reached
+        text = f"Waiting until backup task {self.id} starts to upload data"
+        return self._wait_for_stage(stages=stages, text=text, timeout=timeout, step=step)
 
     def delete_backup_snapshot(self, snapshot_tag: str | None = None):
         if snapshot_tag is None:
