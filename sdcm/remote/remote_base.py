@@ -20,6 +20,13 @@ import shutil
 import tempfile
 import time
 import threading
+<<<<<<< HEAD
+||||||| parent of 658e06d36 (fix(remoter): key SSH connections by a per-remoter token, not id())
+import weakref
+=======
+import uuid
+import weakref
+>>>>>>> 658e06d36 (fix(remoter): key SSH connections by a per-remoter token, not id())
 from path import Path
 
 from invoke.watchers import StreamWatcher
@@ -68,6 +75,10 @@ class RemoteCmdRunnerBase(CommandRunner):
         proxy_password: str = None,
         proxy_key: str = None,
     ):
+        # Key of this remoter's connections in `connection_thread_map`. Not `id(self)`: CPython reuses the
+        # id of a garbage-collected remoter, and a new remoter would pick up its connection to another host
+        # from any thread that still holds it. Set first, so `__del__` -> `stop()` works if `__init__` fails.
+        self._connection_key = uuid.uuid4().hex
         if port is not None:
             self.port = port
         if connect_timeout is not None:
@@ -101,10 +112,18 @@ class RemoteCmdRunnerBase(CommandRunner):
         Map connection to current thread.
         If there is no such thread, create it.
         """
-        connection = getattr(self.connection_thread_map, str(id(self)), None)
+        connection = getattr(self.connection_thread_map, self._connection_key, None)
         if connection is None:
             connection = self._create_connection()
+<<<<<<< HEAD
             setattr(self.connection_thread_map, str(id(self)), connection)
+||||||| parent of 658e06d36 (fix(remoter): key SSH connections by a per-remoter token, not id())
+            self._track_connection(connection)
+            setattr(self.connection_thread_map, str(id(self)), connection)
+=======
+            self._track_connection(connection)
+            setattr(self.connection_thread_map, self._connection_key, connection)
+>>>>>>> 658e06d36 (fix(remoter): key SSH connections by a per-remoter token, not id())
             self._bind_generation_to_connection(connection)
         return connection
 
@@ -161,10 +180,81 @@ class RemoteCmdRunnerBase(CommandRunner):
 
     def stop(self):
         self._close_connection()
+<<<<<<< HEAD
+||||||| parent of 658e06d36 (fix(remoter): key SSH connections by a per-remoter token, not id())
+        # Clean up connection from thread map to prevent id() reuse issues
+        # When a remoter is garbage collected, Python may reuse its id() for a new object.
+        # Without cleanup, the new object would inherit the stale connection.
+        self._remove_connection_from_thread_map()
+
+    def abort_running_commands(self):
+        """Make commands running on this remoter in any thread fail right away, instead of waiting for their timeout.
+
+        Use it when the host is known to be gone (e.g. a preempted spot instance), so threads blocked on
+        its long-running commands (stress tools) can finish. Commands run later on the same connections
+        fail right away too.
+        """
+        with self._abortable_connections_lock:
+            connections = list(self._abortable_connections)
+        for connection in connections:
+            if abort := getattr(connection, "abort", None):
+                abort()
+
+    def _track_connection(self, connection):
+        # NOTE: `WeakSet` is not thread-safe, a connection added by another thread while
+        #       `abort_running_commands()` copies the set would fail the copy
+        with self._abortable_connections_lock:
+            self._abortable_connections.add(connection)
+
+    def _remove_connection_from_thread_map(self):
+        """Remove connection from thread map to prevent stale connection reuse when id() is recycled."""
+        key = str(id(self))
+        if hasattr(self.connection_thread_map, key):
+            delattr(self.connection_thread_map, key)
+=======
+        self._remove_connection_from_thread_map()
+
+    def abort_running_commands(self):
+        """Make commands running on this remoter in any thread fail right away, instead of waiting for their timeout.
+
+        Use it when the host is known to be gone (e.g. a preempted spot instance), so threads blocked on
+        its long-running commands (stress tools) can finish. Commands run later on the same connections
+        fail right away too.
+        """
+        with self._abortable_connections_lock:
+            connections = list(self._abortable_connections)
+        for connection in connections:
+            if abort := getattr(connection, "abort", None):
+                abort()
+
+    def _track_connection(self, connection):
+        # NOTE: `WeakSet` is not thread-safe, a connection added by another thread while
+        #       `abort_running_commands()` copies the set would fail the copy
+        with self._abortable_connections_lock:
+            self._abortable_connections.add(connection)
+
+    def _remove_connection_from_thread_map(self):
+        """Remove this thread's connection from the thread map, so the closed connection isn't kept alive."""
+        if hasattr(self.connection_thread_map, self._connection_key):
+            delattr(self.connection_thread_map, self._connection_key)
+>>>>>>> 658e06d36 (fix(remoter): key SSH connections by a per-remoter token, not id())
 
     def _close_connection(self):
+<<<<<<< HEAD
         if self.connection:
             self.connection.close()
+||||||| parent of 658e06d36 (fix(remoter): key SSH connections by a per-remoter token, not id())
+        # Get connection directly from thread map without triggering recreation via self.connection property
+        key = str(id(self))
+        connection = getattr(self.connection_thread_map, key, None)
+        if connection:
+            connection.close()
+=======
+        # Get connection directly from thread map without triggering recreation via self.connection property
+        connection = getattr(self.connection_thread_map, self._connection_key, None)
+        if connection:
+            connection.close()
+>>>>>>> 658e06d36 (fix(remoter): key SSH connections by a per-remoter token, not id())
 
     def _open_connection(self):
         self.connection.open()
