@@ -19,7 +19,7 @@ import pytest
 from invoke.runners import Result
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import LogEvent
+from sdcm.sct_events.base import LogEvent, find_log_event
 from sdcm.sct_events.database import DatabaseLogEvent, SYSTEM_ERROR_EVENTS
 from sdcm.sct_events.loaders import (
     GeminiStressEvent,
@@ -351,7 +351,7 @@ def test_log_event_subevents_all_listed(log_event_class, listed_events):
 )
 def test_stress_log_line_first_matching_pattern_yields_event(patterns, line, expected_type, expected_severity):
     """The first pattern matching a stress-tool log line yields the event type and severity the line maps to."""
-    prototype = next((proto for pattern, proto in patterns if pattern.search(line)), None)
+    prototype = find_log_event(patterns, line)
     assert prototype is not None, f"Event is not recognized in the line {line}"
 
     # the events in the pattern lists are module-level prototypes, mutating them leaks across tests

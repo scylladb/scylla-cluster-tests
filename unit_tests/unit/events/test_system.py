@@ -17,7 +17,6 @@ from textwrap import dedent
 import pytest
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import find_log_event
 from sdcm.sct_events.system import (
     StartupTestEvent,
     TestFrameworkEvent,
@@ -31,6 +30,7 @@ from sdcm.sct_events.system import (
     TestResultEvent,
     INSTANCE_STATUS_EVENTS_PATTERNS,
 )
+from sdcm.sct_events.base import find_log_event
 
 
 @pytest.mark.parametrize(
