@@ -24,6 +24,7 @@ from sdcm.sct_events.database import (
     SYSTEM_ERROR_EVENTS,
     SYSTEM_ERROR_EVENTS_PATTERNS,
 )
+from sdcm.sct_events.base import find_log_event
 
 NODE_NAME = "db-node-1"
 KS_CF = "ks_cf"
@@ -37,14 +38,6 @@ TOO_LONG_QUEUE_LINE = (
     "Nov 25 18:47:00.491639 perf-latency-nemesis-ubuntu-db-node-68c324e8-1 scylla[6012]:  [shard 6:sl:d] seastar - "
     "Too long queue accumulated for sl:default (1049 tasks)"
 )
-
-
-def classify_system_error_line(line: str):
-    """Return the system error event of the first pattern matching `line`, like the DB log reader does."""
-    for pattern, event in SYSTEM_ERROR_EVENTS_PATTERNS:
-        if pattern.search(line):
-            return event
-    return None
 
 
 @pytest.mark.parametrize(
@@ -127,8 +120,7 @@ def test_log_event_regex_matches_only_the_error_line(event_class, node, log_line
 def test_drop_table_during_repair_gate_closed_line_matches_database_error():
     """The benign SSTable-load gate-closed line is classified as DATABASE_ERROR.
 
-    Mirrors the first-match pattern-matching loop in sdcm/db_log_reader.py, which walks
-    SYSTEM_ERROR_EVENTS_PATTERNS in order and stops at the first regex that matches.
+    sdcm/db_log_reader.py classifies each line with find_log_event over SYSTEM_ERROR_EVENTS_PATTERNS.
     """
     line = (
         "2026-06-17T02:54:28.468+00:00 long-100gb-4h-oci-master-db-node-485a782c-us-ashburn-1-4 "
@@ -139,11 +131,7 @@ def test_drop_table_during_repair_gate_closed_line_matches_database_error():
         "it will be unlinked..."
     )
 
-    matched_event = None
-    for pattern, event in SYSTEM_ERROR_EVENTS_PATTERNS:
-        if pattern.search(line):
-            matched_event = event
-            break
+    matched_event = find_log_event(SYSTEM_ERROR_EVENTS_PATTERNS, line)
 
     assert matched_event is not None
     assert matched_event.type == DatabaseLogEvent.DATABASE_ERROR.type
@@ -173,7 +161,7 @@ def test_info_level_runtime_error_line_is_suppressed():
         "[shard 0: gms] rpc - client 10.0.0.9:7000: ignoring error response: seastar::rpc::remote_verb_error "
         "(std::runtime_error (Got stream_blob_cmd::error from peer 7336616b-4533-4c59-a3d1-f6d825de4d8a))"
     )
-    event = classify_system_error_line(line)
+    event = find_log_event(SYSTEM_ERROR_EVENTS_PATTERNS, line)
     assert event.type == DatabaseLogEvent.INFO.type
     assert event.severity == Severity.SUPPRESS
 
@@ -208,7 +196,7 @@ def test_info_level_runtime_error_line_is_suppressed():
 )
 def test_system_error_line_keeps_classification_outside_info_suppression(line, expected):
     """ERROR-level lines and INFO lines with a lower-severity event keep their own classification, not INFO."""
-    assert classify_system_error_line(line).type == expected.type
+    assert find_log_event(SYSTEM_ERROR_EVENTS_PATTERNS, line).type == expected.type
 
 
 @pytest.mark.parametrize(

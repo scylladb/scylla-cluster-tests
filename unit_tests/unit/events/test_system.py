@@ -30,6 +30,7 @@ from sdcm.sct_events.system import (
     TestResultEvent,
     INSTANCE_STATUS_EVENTS_PATTERNS,
 )
+from sdcm.sct_events.base import find_log_event
 
 
 @pytest.mark.parametrize(
@@ -158,11 +159,8 @@ def test_instance_status_events_patterns(test_data_dir):
     cloned_events = []
     with open(str(test_data_dir / "system_status_events.log"), encoding="utf-8") as sct_log:
         for index, line in enumerate(sct_log.readlines()):
-            for pattern, event in INSTANCE_STATUS_EVENTS_PATTERNS:
-                match = pattern.search(line)
-                if match:
-                    cloned_events.append(event.clone().add_info(node="test-node", line_number=index, line=line))
-                    break
+            if event := find_log_event(INSTANCE_STATUS_EVENTS_PATTERNS, line):
+                cloned_events.append(event.clone().add_info(node="test-node", line_number=index, line=line))
 
     assert len(cloned_events) == 3
 

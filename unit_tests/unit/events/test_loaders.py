@@ -42,6 +42,7 @@ from sdcm.sct_events.loaders import (
     SCYLLA_BENCH_ERROR_EVENTS_PATTERNS,
     SCYLLA_BENCH_NORMAL_EVENTS,
 )
+from sdcm.sct_events.base import find_log_event
 
 EVENT_ID = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
 BEGIN_TIMESTAMP = 1623596860.1202102
@@ -351,7 +352,7 @@ def test_log_event_subevents_all_listed(log_event_class, listed_events):
 )
 def test_stress_log_line_first_matching_pattern_yields_event(patterns, line, expected_type, expected_severity):
     """The first pattern matching a stress-tool log line yields the event type and severity the line maps to."""
-    prototype = next((proto for pattern, proto in patterns if pattern.search(line)), None)
+    prototype = find_log_event(patterns, line)
     assert prototype is not None, f"Event is not recognized in the line {line}"
 
     # the events in the pattern lists are module-level prototypes, mutating them leaks across tests
