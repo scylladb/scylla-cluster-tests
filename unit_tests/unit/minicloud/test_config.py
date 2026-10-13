@@ -17,7 +17,7 @@ from sdcm.utils.minicloud import (
     default_minicloud_image,
 )
 
-DEFAULT_BUCKETS = ["scylla-qa-keystore", "cloudius-jenkins-test", "downloads.scylladb.com"]
+DEFAULT_BUCKETS = ["scylla-qa-keystore", "cloudius-jenkins-test", "downloads.scylladb.com", "scylla-qa-team"]
 
 
 def test_minicloud_config_defaults():
