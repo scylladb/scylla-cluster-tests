@@ -20,6 +20,7 @@ import shutil
 import tempfile
 import time
 import threading
+import uuid
 from path import Path
 
 from invoke.watchers import StreamWatcher
@@ -68,6 +69,10 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         proxy_password: str = None,
         proxy_key: str = None,
     ):
+        # Key of this remoter's connections in `connection_thread_map`. Not `id(self)`: CPython reuses the
+        # id of a garbage-collected remoter, and a new remoter would pick up its connection to another host
+        # from any thread that still holds it. Set first, so `__del__` -> `stop()` works if `__init__` fails.
+        self._connection_key = uuid.uuid4().hex
         if port is not None:
             self.port = port
         if connect_timeout is not None:
@@ -101,10 +106,10 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         Map connection to current thread.
         If there is no such thread, create it.
         """
-        connection = getattr(self.connection_thread_map, str(id(self)), None)
+        connection = getattr(self.connection_thread_map, self._connection_key, None)
         if connection is None:
             connection = self._create_connection()
-            setattr(self.connection_thread_map, str(id(self)), connection)
+            setattr(self.connection_thread_map, self._connection_key, connection)
             self._bind_generation_to_connection(connection)
         return connection
 
@@ -165,21 +170,16 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
 
     def stop(self):
         self._close_connection()
-        # Clean up connection from thread map to prevent id() reuse issues
-        # When a remoter is garbage collected, Python may reuse its id() for a new object.
-        # Without cleanup, the new object would inherit the stale connection.
         self._remove_connection_from_thread_map()
 
     def _remove_connection_from_thread_map(self):
-        """Remove connection from thread map to prevent stale connection reuse when id() is recycled."""
-        key = str(id(self))
-        if hasattr(self.connection_thread_map, key):
-            delattr(self.connection_thread_map, key)
+        """Remove this thread's connection from the thread map, so the closed connection isn't kept alive."""
+        if hasattr(self.connection_thread_map, self._connection_key):
+            delattr(self.connection_thread_map, self._connection_key)
 
     def _close_connection(self):
         # Get connection directly from thread map without triggering recreation via self.connection property
-        key = str(id(self))
-        connection = getattr(self.connection_thread_map, key, None)
+        connection = getattr(self.connection_thread_map, self._connection_key, None)
         if connection:
             connection.close()
 
