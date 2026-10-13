@@ -2,7 +2,7 @@
 status: draft
 domain: testing
 created: 2026-10-12
-last_updated: 2026-10-12
+last_updated: 2026-10-13
 owner: fruch
 ---
 
@@ -246,11 +246,15 @@ from config resolution for every backend and from minicloud's `downloads` passth
 ### Phase 6: Optional Docker Hub secret on local k8s
 
 **Importance**: Important
+**PR**: [#16468](https://github.com/scylladb/scylla-cluster-tests/pull/16468)
 **Description**: `KubernetesCluster.create_namespace` creates the Docker Hub auth secret only when
 credentials are obtainable; on `k8s-local-kind` without them it logs once and relies on
 anonymous Docker Hub pulls (subject to the anonymous rate limit, acceptable for a laptop).
+The Helm charts keep referencing the secret: kubelet reports the missing pull secret and
+pulls anonymously.
 
 **Definition of Done**:
+- [ ] A pod referencing the missing pull secret on a kind cluster pulls anonymously and starts
 - [ ] `k8s-local-kind` functional smoke test (`test-cases/scylla-operator/functional.yaml`
       with a narrowed test selection - **Needs Investigation**: cheapest selection that still
       creates a namespace) passes with creds hidden
