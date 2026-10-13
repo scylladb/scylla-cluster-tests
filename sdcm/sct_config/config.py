@@ -48,7 +48,6 @@ from sdcm.provision.network_configuration import azure_network_interfaces, ssh_c
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.sct_config.defaults import (
     AMI_ID_PARAMS,
-    AWS_SUPPORTED_REGIONS,
     BACKEND_REQUIRED_PARAMS,
     DEFAULTS_CONFIG_FILES,
     PER_PROVIDER_MULTI_REGION_PARAMS,
@@ -78,6 +77,12 @@ from sdcm.utils import oci_utils
 from sdcm.utils.aws_utils import aws_check_instance_type_supported, get_arch_from_instance_type
 from sdcm.utils.azure_utils import (
     azure_check_instance_type_available,
+)
+from sdcm.utils.cloud_backends import (
+    AWS_SUPPORTED_REGIONS,
+    SIZING_ROLE_PARAMS,
+    backend_to_cloud,
+    oracle_cluster_in_use,
 )
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
 from sdcm.utils.cloud_catalog.instance_matcher import ARCH_ALIASES, NoMatchingInstanceError, select_instance
@@ -170,17 +175,6 @@ def is_arm_instance_type(cloud: str, instance_type: str) -> bool:
 
 _SIZING_SKIP_BACKENDS = frozenset({"docker", "baremetal", "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"})
 
-_BACKEND_TO_CLOUD: dict[str, str] = {
-    "aws": "aws",
-    "aws-siren": "aws",
-    "k8s-eks": "aws",
-    "gce": "gce",
-    "gce-siren": "gce",
-    "k8s-gke": "gce",
-    "azure": "azure",
-    "oci": "oci",
-}
-
 _AMD64_ONLY_STRESS_TOOLS: dict[str, tuple[str, ...]] = {
     "harry": ("cassandra-harry",),
     "kcl": ("hydra-kcl",),
@@ -189,50 +183,6 @@ _AMD64_ONLY_STRESS_TOOLS: dict[str, tuple[str, ...]] = {
 }
 
 _YCSB_COMMAND_MARKER = "bin/ycsb"
-
-SIZING_ROLE_PARAMS: dict[str, dict[str, str]] = {
-    "aws": {
-        "db": "instance_type_db",
-        "db_oracle": "instance_type_db_oracle",
-        "zero_token": "zero_token_instance_type_db",
-        "loader": "instance_type_loader",
-        "monitor": "instance_type_monitor",
-    },
-    "gce": {
-        "db": "gce_instance_type_db",
-        "db_oracle": "gce_instance_type_db_oracle",
-        "loader": "gce_instance_type_loader",
-        "monitor": "gce_instance_type_monitor",
-    },
-    "azure": {
-        "db": "azure_instance_type_db",
-        "db_oracle": "azure_instance_type_db_oracle",
-        "loader": "azure_instance_type_loader",
-        "monitor": "azure_instance_type_monitor",
-    },
-    "oci": {
-        "db": "oci_instance_type_db",
-        "db_oracle": "oci_instance_type_db_oracle",
-        "loader": "oci_instance_type_loader",
-        "monitor": "oci_instance_type_monitor",
-    },
-}
-
-
-def oracle_cluster_in_use(db_type: str | None) -> bool:
-    """Whether a run has an oracle cluster at all.
-
-    The oracle node-count parameter defaults to 1 even when no oracle cluster exists, so the
-    db_type is what actually decides. Shared so the rule has one definition rather than being
-    restated wherever roles are walked.
-    """
-    return str(db_type or "") in ("mixed_scylla", "mixed_cassandra")
-
-
-def backend_to_cloud(backend: str | None, xcloud_provider: str | None = None) -> str | None:
-    if backend == "xcloud":
-        return xcloud_provider or None
-    return _BACKEND_TO_CLOUD.get(str(backend))
 
 
 def substitute_arch_markers(template: str, arch: str) -> str:

@@ -59,6 +59,7 @@ from google.cloud.exceptions import GoogleCloudError
 from invoke.exceptions import Failure, UnexpectedExit
 from invoke.runners import Result
 from paramiko import SSHException
+from pydantic import BaseModel
 from tenacity import RetryError
 
 from argus.client.sct.types import LogLink
@@ -136,8 +137,6 @@ from sdcm.remote.agent_cmd_runner import AgentCmdRunner
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.remote.remote_file import dict_to_yaml_file, remote_file, yaml_file_to_dict
 from sdcm.remote.remote_long_running import run_long_running_cmd
-from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_config.config import backend_to_cloud
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent, add_severity_limit_rules, max_severity
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
@@ -164,6 +163,7 @@ from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.cloud_backends import backend_to_cloud
 from sdcm.utils.cloud_catalog.cost import InstanceRate, get_hourly_rate
 from sdcm.utils.common import (
     PageFetcher,
@@ -1729,10 +1729,10 @@ class BaseNode(AutoSshContainerMixin):
                 severity=Severity.ERROR,
             ).publish()
         # We want to figure out all places where "params" attribute has type that not consistent
-        elif not isinstance(self.parent_cluster.params, SCTConfiguration):
+        elif not isinstance(self.parent_cluster.params, BaseModel):
             TestFrameworkEvent(
                 source=self.__class__.__name__,
-                message=f"The 'params' attribute expected to by 'SCTConfiguration`, "
+                message=f"The 'params' attribute expected to be a config model (`SCTConfiguration`), "
                 f"but actually it is a `{type(self.parent_cluster.params)}`",
                 trace=sys._getframe().f_back,
                 severity=Severity.ERROR,

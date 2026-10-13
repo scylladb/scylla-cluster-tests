@@ -14,12 +14,11 @@ import abc
 from dataclasses import dataclass, replace
 from functools import cache
 from pathlib import Path
-from typing import Any, Dict, List, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Type
 
 from sdcm.keystore import KeyStore, SSHKey
 from sdcm.provision.network_configuration import network_interfaces_count, ssh_connection_ip_type
 from sdcm.provision.provisioner import DataDisk, InstanceDefinition
-from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.types import NodeTypeType
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 from sdcm.sct_provision.user_data_objects.apt_daily_triggers import DisableAptTriggersUserDataObject
@@ -32,6 +31,9 @@ from sdcm.sct_provision.user_data_objects.syslog_ng import SyslogNgExporterUserD
 from sdcm.sct_provision.user_data_objects.vector_dev import VectorDevUserDataObject
 from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
 from sdcm.test_config import TestConfig
+
+if TYPE_CHECKING:
+    from sdcm.sct_config import SCTConfiguration
 
 
 @dataclass
@@ -77,7 +79,7 @@ class DefinitionBuilder(abc.ABC):
     SCT_PARAM_MAPPER: Dict[NodeTypeType, ConfigParamsMap]
     REGION_MAP: str
 
-    def __init__(self, params: SCTConfiguration, test_config: TestConfig) -> None:
+    def __init__(self, params: "SCTConfiguration", test_config: TestConfig) -> None:
         self.params = params
         self.test_config = test_config
         self.test_id = self.params.get("test_id")
@@ -266,7 +268,9 @@ class RegionDefinitionBuilder:
         Must be used before calling RegionDefinitionBuilder for given backend."""
         self._builder_classes[backend] = builder_class
 
-    def get_builder(self, params: SCTConfiguration, test_config: TestConfig, backend: str = None) -> DefinitionBuilder:
+    def get_builder(
+        self, params: "SCTConfiguration", test_config: TestConfig, backend: str = None
+    ) -> DefinitionBuilder:
         """Creates RegionDefinition for each region based on SCTConfiguration.
 
         Args:
