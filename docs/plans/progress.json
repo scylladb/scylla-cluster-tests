@@ -22,6 +22,16 @@
       "phases_done": 0
     },
     {
+      "id": "baremetal-shared-host-setup",
+      "title": "Baremetal Setup on Shared, Pre-configured Hosts",
+      "file": "infrastructure/baremetal-shared-host-setup.md",
+      "domain": "cluster",
+      "status": "draft",
+      "created": "2026-10-13",
+      "phases_total": 8,
+      "phases_done": 0
+    },
+    {
       "id": "full-version-tag-lookup",
       "title": "Full Version Tag Lookup",
       "file": "config/full-version-tag-lookup.md",
