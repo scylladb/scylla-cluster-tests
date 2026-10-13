@@ -163,12 +163,18 @@ class BucketOperations(ClusterTester):
 
     def install_gsutil_dependencies(self, node):
         if node.distro.is_ubuntu or node.distro.is_debian:
-            cmd = dedent("""
-                echo 'deb https://packages.cloud.google.com/apt cloud-sdk main' | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
-                curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-                sudo apt-get update
+            # apt-key is gone from Ubuntu 26.04 (apt 3), so register the Google key as a keyring
+            # referenced by signed-by, as https://cloud.google.com/sdk/docs/install#deb documents
+            key_curl = curl_with_retry("https://packages.cloud.google.com/apt/doc/apt-key.gpg", silent=True)
+            cmd = dedent(f"""
+                command -v gpg >/dev/null || (apt-get update && apt-get install -y gnupg)
+                install -d -m 0755 /etc/apt/keyrings
+                {key_curl} | gpg --dearmor --yes -o /etc/apt/keyrings/cloud.google.gpg
+                echo 'deb [signed-by=/etc/apt/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main' \\
+                    | tee /etc/apt/sources.list.d/google-cloud-sdk.list
+                apt-get update
             """)
-            self._run_cmd_with_retry(executor=node.remoter.run, cmd=shell_script_cmd(cmd))
+            self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd(cmd))
             node.install_package("google-cloud-cli")
         else:
             raise NotImplementedError("At the moment, we only support debian installation")
