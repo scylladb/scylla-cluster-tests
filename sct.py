@@ -2933,6 +2933,10 @@ def create_manager_test_release_jobs(branch, username, password, sct_branch, sct
         f"{server.base_sct_dir}/jenkins-pipelines/manager",
         create_freestyle_jobs=triggers,
         template_context={"release_version": get_latest_scylla_release(product="scylla-enterprise")},
+        # Name jobs exactly after their jenkinsfile, like the manager-master folder and
+        # scylla-pkg's manager-triggers_file.yaml expect; the default "-test" suffix would
+        # leave manager-build unable to find the SCT jobs in the release folder.
+        job_name_suffix="",
     )
     server.raise_on_failures()
 
