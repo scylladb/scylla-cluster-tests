@@ -4,11 +4,17 @@
 Unit tests for find_ami_equivalent functionality.
 """
 
+import itertools
+import logging
+from dataclasses import dataclass
+
 import pytest
 from unittest.mock import Mock, patch
 from botocore.exceptions import ClientError, NoCredentialsError, BotoCoreError
+from mypy_boto3_ec2.service_resource import Image as EC2Image
 
-from sdcm.utils.common import find_equivalent_ami
+from sdcm.utils.aws_utils import AwsArchType
+from sdcm.utils.common import find_equivalent_ami, get_ec2_image_version_tag, get_scylla_ami_versions
 
 
 def create_client_error(error_code="InvalidAMIID.NotFound"):
@@ -312,6 +318,54 @@ def test_find_equivalent_ami_source_not_found(mock_get_scylla_resource, mock_bot
 
 @patch("sdcm.utils.common.boto3.resource")
 @patch("sdcm.utils.common.get_scylla_images_ec2_resource")
+def test_find_equivalent_ami_source_deregistered(mock_get_scylla_resource, mock_boto3_resource):
+    """Test behavior when DescribeImages returns no image, so boto3 leaves meta.data as None."""
+    # Any image attribute access (architecture, tags) raises AttributeError, as it does with real boto3
+    mock_ami = Mock(spec=["load", "meta"])
+    mock_ami.meta.data = None
+
+    mock_resource = Mock()
+    mock_resource.Image.return_value = mock_ami
+
+    mock_boto3_resource.return_value = mock_resource
+    mock_get_scylla_resource.return_value = mock_resource
+
+    results = find_equivalent_ami(ami_id="ami-deregistered", source_region="eu-west-1")
+
+    assert results == []
+
+
+@patch("sdcm.utils.common.boto3.resource")
+@patch("sdcm.utils.common.get_scylla_images_ec2_resource")
+def test_find_equivalent_ami_ignores_per_image_tags(mock_get_scylla_resource, mock_boto3_resource):
+    """Test that tags which differ between per-arch images of the same build are not used as search filters."""
+    mock_source_ami = Mock()
+    mock_source_ami.architecture = "x86_64"
+    mock_source_ami.tags = [
+        {"Key": "Name", "Value": "scylla-2026.2.9-x86_64-2026-10-05T11-03-42"},
+        {"Key": "arch", "Value": "x86_64"},
+        {"Key": "creation_timestamp", "Value": "2026-10-05T11-03-42"},
+        {"Key": "scylla_version", "Value": "2026.2.9-0.20261005.ba124f221b89"},
+    ]
+
+    mock_resource = Mock()
+    mock_resource.Image.return_value = mock_source_ami
+    mock_resource.images.filter.return_value = []
+
+    mock_boto3_resource.return_value = mock_resource
+    mock_get_scylla_resource.return_value = mock_resource
+
+    find_equivalent_ami(ami_id="ami-x86", source_region="us-east-1", target_arch="arm64")
+
+    filters = mock_resource.images.filter.call_args.kwargs["Filters"]
+    assert filters == [
+        {"Name": "architecture", "Values": ["arm64"]},
+        {"Name": "tag:scylla_version", "Values": ["2026.2.9-0.20261005.ba124f221b89"]},
+    ]
+
+
+@patch("sdcm.utils.common.boto3.resource")
+@patch("sdcm.utils.common.get_scylla_images_ec2_resource")
 @patch("sdcm.utils.common.SCYLLA_AMI_OWNER_ID_LIST", ["797456418907", "158855661827"])
 def test_find_equivalent_ami_sorted_by_date(mock_get_scylla_resource, mock_boto3_resource):
     """Test that results are sorted by creation date (newest first)."""
@@ -445,26 +499,78 @@ def test_find_equivalent_ami_all_aws_regions():
         pytest.skip(f"Integration test skipped due to AWS API error: {e}")
 
 
+# Regions and architectures the `latest_scylla_ami_build` fixture resolves AMIs for
+LATEST_SCYLLA_AMI_BUILD_REGIONS = ("eu-west-1", "us-east-1")
+LATEST_SCYLLA_AMI_BUILD_ARCHES: tuple[AwsArchType, ...] = ("x86_64", "arm64")
+LATEST_SCYLLA_AMI_BUILD_CANDIDATES = 10
+
+
+@dataclass(frozen=True)
+class ScyllaAmiBuild:
+    """AMIs of one Scylla build, keyed by (region, arch)."""
+
+    scylla_version: str
+    amis: dict[tuple[str, AwsArchType], EC2Image]
+
+
+@pytest.fixture(name="latest_scylla_ami_build", scope="session")
+def fixture_latest_scylla_ami_build() -> ScyllaAmiBuild:
+    """Newest Scylla build that has an AMI in each of the LATEST_SCYLLA_AMI_BUILD_REGIONS for each of the
+    LATEST_SCYLLA_AMI_BUILD_ARCHES.
+
+    AMIs get deregistered over time, so tests use this fixture instead of hardcoding AMI IDs.
+
+    External services: AWS EC2 (ScyllaDB images account)
+    """
+    candidates = get_scylla_ami_versions(
+        region_name=LATEST_SCYLLA_AMI_BUILD_REGIONS[0], arch=LATEST_SCYLLA_AMI_BUILD_ARCHES[0]
+    )[:LATEST_SCYLLA_AMI_BUILD_CANDIDATES]
+    for candidate in candidates:
+        scylla_version = get_ec2_image_version_tag(candidate)
+        amis = {}
+        for region, arch in itertools.product(LATEST_SCYLLA_AMI_BUILD_REGIONS, LATEST_SCYLLA_AMI_BUILD_ARCHES):
+            if not (build_amis := get_scylla_ami_versions(region_name=region, arch=arch, version=scylla_version)):
+                logging.debug("Scylla build %s has no %s AMI in %s, skipping it", scylla_version, arch, region)
+                break
+            amis[(region, arch)] = build_amis[0]
+        else:
+            return ScyllaAmiBuild(scylla_version=scylla_version, amis=amis)
+    pytest.fail(
+        f"None of the {len(candidates)} newest Scylla builds has AMIs"
+        f" in all of {LATEST_SCYLLA_AMI_BUILD_REGIONS} for all of {LATEST_SCYLLA_AMI_BUILD_ARCHES}"
+    )
+
+
 @pytest.mark.integration
-def test_integration_find_equivalent_ami():
+def test_integration_find_equivalent_ami(latest_scylla_ami_build):
     """
     Integration test: Validates that find_equivalent_ami returns the correct ARM64 equivalent AMI in 'us-east-1'
-    for a given source AMI in 'eu-west-1', and checks all expected fields.
+    for the x86_64 AMI of the latest ScyllaDB build in 'eu-west-1', and checks all expected fields.
+
+    The expected ARM64 AMI is resolved independently by the fixture, by the `scylla_version` tag only.
     """
+    scylla_version = latest_scylla_ami_build.scylla_version
+    source_ami = latest_scylla_ami_build.amis[("eu-west-1", "x86_64")]
+    expected_ami = latest_scylla_ami_build.amis[("us-east-1", "arm64")]
 
     # Execute
     results = find_equivalent_ami(
-        ami_id="ami-0bf2296b393980c53",
+        ami_id=source_ami.image_id,
         source_region="eu-west-1",
         target_arch="arm64",
         target_regions=["us-east-1"],
     )
 
     # Verify
-    assert len(results) == 1, f"Expected 1 result, got {len(results)}"
-    assert results[0]["ami_id"] == "ami-079625cf3fec09303", f"Expected ami-result456, got {results[0]['ami_id']}"
+    assert len(results) == 1, (
+        f"Expected 1 ARM64 equivalent of {source_ami.image_id} ({scylla_version}), got {len(results)}: "
+        f"{[result['ami_id'] for result in results]}"
+    )
+    assert results[0]["ami_id"] == expected_ami.image_id, (
+        f"Expected {expected_ami.image_id}, got {results[0]['ami_id']}"
+    )
     assert results[0]["region"] == "us-east-1", f"Expected us-east-1, got {results[0]['region']}"
     assert results[0]["architecture"] == "arm64", f"Expected arm64, got {results[0]['architecture']}"
-    assert results[0]["scylla_version"] == "2025.4.0~rc2-0.20251015.83babc20e3f7", (
-        f"Expected 2025.4.0~rc2-0.20251015.83babc20e3f7, got {results[0]['scylla_version']}"
+    assert results[0]["scylla_version"] == scylla_version, (
+        f"Expected {scylla_version}, got {results[0]['scylla_version']}"
     )
