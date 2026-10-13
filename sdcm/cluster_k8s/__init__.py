@@ -50,7 +50,6 @@ from sdcm import sct_abs_path, cluster
 from sdcm.cluster import ClusterNodesNotReady
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
-from sdcm.sct_config import init_and_verify_sct_config
 from sdcm.test_config import TestConfig
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import LOCALRUNNER, NETWORK_EXCEPTIONS
@@ -1696,7 +1695,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             container="scylla-manager",
             cluster_prefix="mgr-",
             node_prefix="mgr-node-",
-            params=init_and_verify_sct_config(),
+            params=self.params,
             n_nodes=1,
         )
 
