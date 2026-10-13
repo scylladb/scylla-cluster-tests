@@ -59,7 +59,7 @@ def test_required_machine_types_collects_all_role_types_when_active():
         gce_instance_type_monitor="n2-highmem-4",
         gce_instance_type_db_oracle="n2-highmem-16",
         instance_type_db_target="n2d-standard-8",
-        nemesis_grow_shrink_instance_type="n2-highmem-16",
+        **{"nemesis.grow_shrink.instance_type": "n2-highmem-16"},
         zero_token_instance_type_db="e2-medium",
         instance_type_vector_store="e2-medium",
         n_loaders=1,
@@ -254,7 +254,7 @@ def test_required_machine_types_skips_target_when_none():
     params = _make_params(
         gce_instance_type_db="n2-highmem-8",
         instance_type_db_target=None,
-        nemesis_grow_shrink_instance_type="",
+        **{"nemesis.grow_shrink.instance_type": ""},
         gce_instance_type_loader="",
         n_loaders=0,
         gce_instance_type_monitor="",

@@ -35,18 +35,18 @@ class LongevityBalancerTest(LongevityTest):
     Test to ensure that the cluster is balanced correctly in difficult conditions.
 
     Required config params:
-    - nemesis_add_node_cnt:
+    - nemesis.grow_shrink.add_node_cnt:
         - At the beginning of the test, this many nodes will be added to the cluster
         - In the middle of the test, this many nodes will be added and then removed from the cluster
-    - nemesis_grow_shrink_instance_type: The instance type to use when adding nodes to the cluster
+    - nemesis.grow_shrink.instance_type: The instance type to use when adding nodes to the cluster
     - prepare_write_cmd: The stress command to use for the initial data population
     - stress_cmd: The stress command to use for the second data population, after adding and removing nodes
     """
 
     def expand_cluster_heterogenous(self):
         new_nodes = self.db_cluster.add_nodes(
-            count=self.params.get("nemesis_add_node_cnt"),
-            instance_type=self.params.get("nemesis_grow_shrink_instance_type"),
+            count=self.params.get("nemesis").grow_shrink.add_node_cnt,
+            instance_type=self.params.get("nemesis").grow_shrink.instance_type,
             enable_auto_bootstrap=True,
             rack=None,
         )
@@ -79,7 +79,7 @@ class LongevityBalancerTest(LongevityTest):
     def scale_out(self):
         added_nodes = self.db_cluster.add_nodes(
             count=self.db_cluster.racks_count,
-            instance_type=self.params.get("nemesis_grow_shrink_instance_type"),
+            instance_type=self.params.get("nemesis").grow_shrink.instance_type,
             enable_auto_bootstrap=True,
             rack=None,
         )

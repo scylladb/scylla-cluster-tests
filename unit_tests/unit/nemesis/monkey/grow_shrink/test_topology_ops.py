@@ -10,7 +10,7 @@ from sdcm.nemesis.utils.topology_ops import (
     grow_cluster,
     shrink_cluster,
 )
-from unit_tests.unit.nemesis.monkey.grow_shrink import OPS_MODULE
+from unit_tests.unit.nemesis.monkey.grow_shrink import OPS_MODULE, nemesis_params
 
 # ---------------------------------------------------------------------------
 # grow_cluster
@@ -21,7 +21,7 @@ def test_grow_cluster_adds_all_nodes_at_once_when_parallel_operations_enabled(ru
     """With parallel node operations a single add_new_nodes call adds every node."""
     new_nodes = [make_data_node("new1"), make_data_node("new2")]
     runner.add_new_nodes.return_value = new_nodes
-    runner.tester.params = {"nemesis_add_node_cnt": 2, "nemesis_grow_shrink_instance_type": None}
+    runner.tester.params = nemesis_params(add_node_cnt=2)
 
     with patch(f"{OPS_MODULE}.time.sleep"):
         result = grow_cluster(runner, rack=None)
@@ -37,7 +37,7 @@ def test_grow_cluster_round_robins_racks_when_operations_are_serial(runner, make
     """Without parallel node operations nodes are added one by one, spread over racks."""
     runner.cluster.parallel_node_operations = False
     runner.cluster.racks_count = 2
-    runner.tester.params = {"nemesis_add_node_cnt": 3, "nemesis_grow_shrink_instance_type": "i4i.large"}
+    runner.tester.params = nemesis_params(add_node_cnt=3, instance_type="i4i.large")
     runner.add_new_nodes.side_effect = lambda **kwargs: [make_data_node(f"new{kwargs['rack']}")]
 
     with patch(f"{OPS_MODULE}.time.sleep"):
@@ -51,7 +51,7 @@ def test_grow_cluster_round_robins_racks_when_operations_are_serial(runner, make
 def test_grow_cluster_defaults_rack_to_zero_on_kubernetes(runner):
     """On k8s an unspecified rack is pinned to rack 0 instead of round-robin."""
     runner._is_it_on_kubernetes.return_value = True
-    runner.tester.params = {"nemesis_add_node_cnt": 1, "nemesis_grow_shrink_instance_type": None}
+    runner.tester.params = nemesis_params(add_node_cnt=1)
 
     with patch(f"{OPS_MODULE}.time.sleep"):
         grow_cluster(runner, rack=None)
@@ -67,7 +67,7 @@ def test_grow_cluster_defaults_rack_to_zero_on_kubernetes(runner):
 def test_shrink_cluster_decommissions_down_to_initial_size(runner, make_data_node):
     """Only the nodes added on top of the initial cluster size are decommissioned."""
     runner.cluster.data_nodes = [make_data_node(f"node{i}") for i in range(5)]
-    runner.tester.params = {"nemesis_add_node_cnt": 3, "n_db_nodes": [3]}
+    runner.tester.params = nemesis_params(add_node_cnt=3) | {"n_db_nodes": [3]}
 
     with patch(f"{OPS_MODULE}.decommission_nodes_by_criteria") as decommission:
         shrink_cluster(runner, rack=None)
@@ -79,7 +79,7 @@ def test_shrink_cluster_passes_exact_nodes_through(runner, make_data_node):
     """When exact nodes are given they are decommissioned instead of freshly picked ones."""
     exact_nodes = [make_data_node("new1")]
     runner.cluster.data_nodes = [make_data_node(f"node{i}") for i in range(4)]
-    runner.tester.params = {"nemesis_add_node_cnt": 1, "n_db_nodes": [3]}
+    runner.tester.params = nemesis_params(add_node_cnt=1) | {"n_db_nodes": [3]}
 
     with patch(f"{OPS_MODULE}.decommission_nodes_by_criteria") as decommission:
         shrink_cluster(runner, rack=None, new_nodes=exact_nodes)
@@ -91,11 +91,7 @@ def test_shrink_cluster_uses_k8s_pods_per_cluster_as_initial_size(runner, make_d
     """On k8s the initial size comes from k8s_n_scylla_pods_per_cluster and seeds are not filtered."""
     runner._is_it_on_kubernetes.return_value = True
     runner.cluster.data_nodes = [make_data_node(f"node{i}") for i in range(5)]
-    runner.tester.params = {
-        "nemesis_add_node_cnt": 3,
-        "n_db_nodes": [3],
-        "k8s_n_scylla_pods_per_cluster": 4,
-    }
+    runner.tester.params = nemesis_params(add_node_cnt=3) | {"n_db_nodes": [3], "k8s_n_scylla_pods_per_cluster": 4}
 
     with patch(f"{OPS_MODULE}.decommission_nodes_by_criteria") as decommission:
         shrink_cluster(runner, rack=1)
@@ -106,7 +102,7 @@ def test_shrink_cluster_uses_k8s_pods_per_cluster_as_initial_size(runner, make_d
 def test_shrink_cluster_raises_when_cluster_is_already_at_initial_size(runner, make_data_node):
     """Shrinking below the configured cluster size is refused."""
     runner.cluster.data_nodes = [make_data_node(f"node{i}") for i in range(3)]
-    runner.tester.params = {"nemesis_add_node_cnt": 2, "n_db_nodes": [3]}
+    runner.tester.params = nemesis_params(add_node_cnt=2) | {"n_db_nodes": [3]}
 
     with (
         patch(f"{OPS_MODULE}.decommission_nodes_by_criteria") as decommission,

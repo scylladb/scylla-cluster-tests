@@ -42,15 +42,16 @@ class GrowShrinkClusterNemesis(NemesisBaseClass):
     topology_changes = True
 
     def disrupt(self):
-        sleep_time_between_ops = self.runner.cluster.params.get("nemesis_sequence_sleep_between_ops")
+        nemesis_config = self.runner.tester.params.get("nemesis")
+        sleep_time_between_ops = nemesis_config.sequence_sleep_between_ops
         if not self.runner.has_steady_run and sleep_time_between_ops:
             self.runner.steady_state_latency()
             self.runner.has_steady_run = True
         new_nodes = grow_cluster(self.runner, rack=None)
 
         # pass on the exact nodes only if we have specific types for them
-        new_nodes = new_nodes if self.runner.tester.params.get("nemesis_grow_shrink_instance_type") else None
-        if duration := self.runner.tester.params.get("nemesis_double_load_during_grow_shrink_duration"):
+        new_nodes = new_nodes if nemesis_config.grow_shrink.instance_type else None
+        if duration := nemesis_config.grow_shrink.double_load_duration:
             with self.runner.action_log_scope("Double load after grow cluster"):
                 _double_cluster_load(self.runner, duration)
         shrink_cluster(self.runner, rack=None, new_nodes=new_nodes)

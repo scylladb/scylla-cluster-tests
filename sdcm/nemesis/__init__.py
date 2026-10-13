@@ -3112,7 +3112,7 @@ class NemesisRunner:
         InfoEvent(message="FinishEvent - Steady State sleep has been finished").publish()
 
     def disrupt_run_unique_sequence(self):
-        sleep_time_between_ops = self.cluster.params.get("nemesis_sequence_sleep_between_ops")
+        sleep_time_between_ops = self.tester.params.get("nemesis").sequence_sleep_between_ops
         sleep_time_between_ops = sleep_time_between_ops if sleep_time_between_ops else 8
         sleep_time_between_ops = sleep_time_between_ops * 60
         if not self.has_steady_run:

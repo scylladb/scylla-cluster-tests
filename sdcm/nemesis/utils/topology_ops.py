@@ -66,7 +66,7 @@ def decommission_nodes_by_criteria(
 
 
 def grow_cluster(runner, rack: int | None = None) -> list[BaseNode]:
-    """Add ``nemesis_add_node_cnt`` nodes to the cluster and release them from the nemesis.
+    """Add `nemesis.grow_shrink.add_node_cnt` nodes to the cluster and release them from the nemesis.
 
     Args:
         runner: The ``NemesisRunner`` owning the cluster and the node allocator.
@@ -77,14 +77,14 @@ def grow_cluster(runner, rack: int | None = None) -> list[BaseNode]:
     """
     if rack is None and runner._is_it_on_kubernetes():
         rack = 0
-    add_nodes_number = runner.tester.params.get("nemesis_add_node_cnt")
+    add_nodes_number = runner.tester.params.get("nemesis").grow_shrink.add_node_cnt
     new_nodes = []
     with runner.action_log_scope(f"Grow cluster by {add_nodes_number} nodes"):
         if runner.cluster.parallel_node_operations:
             new_nodes = runner.add_new_nodes(
                 count=add_nodes_number,
                 rack=rack,
-                instance_type=runner.tester.params.get("nemesis_grow_shrink_instance_type"),
+                instance_type=runner.tester.params.get("nemesis").grow_shrink.instance_type,
             )
         else:
             for idx in range(add_nodes_number):
@@ -93,7 +93,7 @@ def grow_cluster(runner, rack: int | None = None) -> list[BaseNode]:
                 new_nodes += runner.add_new_nodes(
                     count=1,
                     rack=rack_idx,
-                    instance_type=runner.tester.params.get("nemesis_grow_shrink_instance_type"),
+                    instance_type=runner.tester.params.get("nemesis").grow_shrink.instance_type,
                 )
     time.sleep(runner.interval)
     for node in new_nodes:
@@ -112,7 +112,7 @@ def shrink_cluster(runner, rack: int | None = None, new_nodes: list[BaseNode] | 
     Raises:
         Exception: If the cluster does not have enough nodes above its initial size.
     """
-    add_nodes_number = runner.tester.params.get("nemesis_add_node_cnt")
+    add_nodes_number = runner.tester.params.get("nemesis").grow_shrink.add_node_cnt
     InfoEvent(message=f"Start shrink cluster by {add_nodes_number} nodes").publish()
     # Check that number of nodes is enough for decommission:
     runner.log.debug(

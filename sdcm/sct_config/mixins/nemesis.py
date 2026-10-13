@@ -34,14 +34,19 @@ class NemesisConfigMixin(BaseModel):
 
     nemesis: Annotated[NemesisConfig, BeforeValidator(dict_or_str_or_pydantic)] = SctField(
         description="""
-                Nemesis runners to start, one thread each, and defaults shared by all of them.
-                Each runner is a single-key mapping of the runner class to its options; the options
-                accepted depend on the runner class. Options a runner leaves unset take the
-                `nemesis` defaults; a runner without `seed` gets a random one. `selector` is a
-                logical expression over nemesis flags filtering the disruptions a runner runs.
+                Nemesis configuration: nemesis-wide settings, defaults shared by all runners, and the
+                runners to start, one thread each. Each runner is a single-key mapping of the runner
+                class to its options; the options accepted depend on the runner class. Options a
+                runner leaves unset take the `nemesis` defaults; a runner without `seed` gets a
+                random one. `selector` is a logical expression over nemesis flags filtering the
+                disruptions a runner runs.
                 YAML example:
                   nemesis:
                     interval: 5
+                    during_prepare: false
+                    grow_shrink:
+                      add_node_cnt: 3
+                      instance_type: i4i.xlarge
                     runners:
                       - SisyphusMonkey:
                           selector: "disruptive"
@@ -50,26 +55,27 @@ class NemesisConfigMixin(BaseModel):
                           dist: {StopStartMonkey: 2}
                 Environment variable examples:
                   SCT_NEMESIS__INTERVAL=10
+                  SCT_NEMESIS__GROW_SHRINK='{"add_node_cnt": 5}'
                   SCT_NEMESIS__RUNNERS='[{"SisyphusMonkey": {"selector": "disruptive"}}]'
         """,
     )
     nemesis_add_node_cnt: int = SctField(
-        description="""Add/remove nodes during GrowShrinkCluster nemesis""",
+        description="Not read; replaced by `nemesis.grow_shrink.add_node_cnt`.",
     )
     nemesis_class_name: StringOrList = SctField(
         description="Not read; replaced by `nemesis.runners`.",
     )
     nemesis_double_load_during_grow_shrink_duration: int = SctField(
-        description="After growing (and before shrink) in GrowShrinkCluster nemesis it will double the load for provided duration.",
+        description="Not read; replaced by `nemesis.grow_shrink.double_load_duration`.",
     )
     nemesis_during_prepare: Boolean = SctField(
-        description="""Run nemesis during prepare stage of the test""",
+        description="Not read; replaced by `nemesis.during_prepare`.",
     )
     nemesis_filter_seeds: Boolean = SctField(
         description="Not read; replaced by `nemesis.filter_seeds`.",
     )
     nemesis_grow_shrink_instance_type: String = SctField(
-        description="""Instance type to use for adding/removing nodes during GrowShrinkCluster nemesis""",
+        description="Not read; replaced by `nemesis.grow_shrink.instance_type`.",
     )
     nemesis_interval: int = SctField(
         description="Not read; replaced by `nemesis.interval`.",
@@ -84,7 +90,7 @@ class NemesisConfigMixin(BaseModel):
         description="Not read; replaced by `nemesis.selector`.",
     )
     nemesis_sequence_sleep_between_ops: int = SctField(
-        description="""Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests""",
+        description="Not read; replaced by `nemesis.sequence_sleep_between_ops`.",
     )
     # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
     sla: Boolean = SctField(

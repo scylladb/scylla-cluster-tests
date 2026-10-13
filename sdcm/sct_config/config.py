@@ -2317,8 +2317,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
                             f"is not supported in region '{region}'"
                         )
 
-        # Validate nemesis_grow_shrink_instance_type
-        if instance_type := self.get("nemesis_grow_shrink_instance_type"):
+        # Validate nemesis.grow_shrink.instance_type
+        if instance_type := self.get("nemesis.grow_shrink.instance_type"):
             match backend:
                 case "aws":
                     for region in self.region_names:
@@ -2350,7 +2350,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
                                 f"Instance type [{instance_type}] not supported in region [{region}]"
                             )
                 case _:
-                    raise ValueError(f"Unsupported backend [{backend}] for using nemesis_grow_shrink_instance_type")
+                    raise ValueError(f"Unsupported backend [{backend}] for using nemesis.grow_shrink.instance_type")
 
     def _check_version_supplied(self, backend: str):
         options_must_exist = []

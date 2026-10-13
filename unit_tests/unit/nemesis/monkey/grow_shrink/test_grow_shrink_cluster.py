@@ -3,16 +3,12 @@
 from unittest.mock import MagicMock, patch
 
 from sdcm.nemesis.monkey.grow_shrink import GrowShrinkClusterNemesis
-from unit_tests.unit.nemesis.monkey.grow_shrink import MODULE
+from unit_tests.unit.nemesis.monkey.grow_shrink import MODULE, nemesis_params
 
 
 def test_runs_steady_state_once_then_grows_and_shrinks(runner, make_data_node):
     """The first run captures steady-state latency, then grows and shrinks the cluster."""
-    runner.cluster.params = {"nemesis_sequence_sleep_between_ops": 5}
-    runner.tester.params = {
-        "nemesis_grow_shrink_instance_type": None,
-        "nemesis_double_load_during_grow_shrink_duration": 0,
-    }
+    runner.tester.params = nemesis_params(sequence_sleep_between_ops=5, instance_type=None, double_load_duration=0)
     runner.has_steady_run = False
     runner.steady_state_latency = MagicMock()
 
@@ -34,11 +30,9 @@ def test_runs_steady_state_once_then_grows_and_shrinks(runner, make_data_node):
 def test_shrinks_exact_nodes_when_instance_type_configured(runner, make_data_node):
     """A dedicated grow/shrink instance type pins the shrink to the freshly added nodes."""
     new_nodes = [make_data_node("new1")]
-    runner.cluster.params = {"nemesis_sequence_sleep_between_ops": 0}
-    runner.tester.params = {
-        "nemesis_grow_shrink_instance_type": "i4i.large",
-        "nemesis_double_load_during_grow_shrink_duration": 0,
-    }
+    runner.tester.params = nemesis_params(
+        sequence_sleep_between_ops=None, instance_type="i4i.large", double_load_duration=0
+    )
     runner.has_steady_run = False
     runner.steady_state_latency = MagicMock()
 
@@ -54,11 +48,7 @@ def test_shrinks_exact_nodes_when_instance_type_configured(runner, make_data_nod
 
 def test_doubles_load_between_grow_and_shrink(runner):
     """A configured double-load duration triggers the extra load run after the grow."""
-    runner.cluster.params = {"nemesis_sequence_sleep_between_ops": 0}
-    runner.tester.params = {
-        "nemesis_grow_shrink_instance_type": None,
-        "nemesis_double_load_during_grow_shrink_duration": 15,
-    }
+    runner.tester.params = nemesis_params(sequence_sleep_between_ops=None, instance_type=None, double_load_duration=15)
     runner.has_steady_run = True
 
     with (

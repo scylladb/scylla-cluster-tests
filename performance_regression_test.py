@@ -291,10 +291,10 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         )
         all_hdr_tags = [tag for queue in stress_queues for tag in queue.hdr_tags]
         if nemesis:
-            interval = self.params.get("nemesis_interval")
-            time.sleep(interval * 60)  # Sleeping one interval (in minutes) before starting the nemesis
+            # Sleeping one default nemesis interval (in minutes) before starting the nemesis
+            time.sleep(self.params.get("nemesis").interval * 60)
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self, hdr_tags=all_hdr_tags)
-            self.db_cluster.start_nemesis(interval=interval, cycles_count=1)
+            self.db_cluster.start_nemesis(cycles_count=1)
             self._stop_load_when_nemesis_threads_end()
 
         results = []
@@ -515,7 +515,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     @latency_calculator_decorator
     def steady_state_latency(self, hdr_tags: list[str], sleep_time: Optional[int] = None):
         # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
-        sleep_time = sleep_time or self.db_cluster.params.get("nemesis_interval") * 60
+        sleep_time = sleep_time or self.db_cluster.params.get("nemesis").interval * 60
         InfoEvent(message="Starting Steady State calculation for %ss" % sleep_time).publish()
         time.sleep(sleep_time)
         InfoEvent(message="Ended Steady State calculation. Took %ss" % sleep_time).publish()
@@ -861,7 +861,7 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
     @latency_calculator_decorator
     def post_upgrades_steady_state(self, hdr_tags: list[str]):
         # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
-        sleep_time = self.db_cluster.params.get("nemesis_interval") * 60
+        sleep_time = self.db_cluster.params.get("nemesis").interval * 60
         InfoEvent(message="Starting Post-Upgrade Steady State calculation for %ss" % sleep_time).publish()
         time.sleep(sleep_time)
         InfoEvent(message="Ended Post-Upgrade Steady State calculation. Took %ss" % sleep_time).publish()

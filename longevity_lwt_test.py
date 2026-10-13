@@ -82,7 +82,7 @@ class LWTLongevityTest(LongevityTest):
             self.data_validator.save_count_rows_for_deletion()
 
         # Run nemesis during stress as it was stopped before copy expected data
-        if self.params.get("nemesis_during_prepare"):
+        if self.params.get("nemesis").during_prepare:
             self.start_nemesis()
 
     def start_nemesis(self):

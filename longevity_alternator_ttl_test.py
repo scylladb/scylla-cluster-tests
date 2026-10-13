@@ -125,7 +125,7 @@ class AlternatorTtlLongevityTest(LongevityTest):
             }
             self._run_all_stress_cmds(stress_queue, params)
 
-        if not prepare_write_cmd or not self.params.get("nemesis_during_prepare"):
+        if not prepare_write_cmd or not self.params.get("nemesis").during_prepare:
             self.db_cluster.start_nemesis()
 
         for stress in stress_queue:

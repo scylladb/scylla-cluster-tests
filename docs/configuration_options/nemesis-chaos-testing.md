@@ -11,7 +11,7 @@ Which disruptions run, how often, and how targets are selected.
 
 ## **nemesis** / SCT_NEMESIS
 
-Nemesis runners to start, one thread each, and defaults shared by all of them.<br>Each runner is a single-key mapping of the runner class to its options; the options<br>accepted depend on the runner class. Options a runner leaves unset take the<br>[`nemesis`](#nemesis) defaults; a runner without `seed` gets a random one. `selector` is a<br>logical expression over nemesis flags filtering the disruptions a runner runs.<br>YAML example:<br>nemesis:<br>interval: 5<br>runners:<br>- SisyphusMonkey:<br>selector: "disruptive"<br>interval: 15<br>- CategoricalMonkey:<br>dist: {StopStartMonkey: 2}<br>Environment variable examples:<br>SCT_NEMESIS__INTERVAL=10<br>SCT_NEMESIS__RUNNERS='[{"SisyphusMonkey": {"selector": "disruptive"}}]'
+Nemesis configuration: nemesis-wide settings, defaults shared by all runners, and the<br>runners to start, one thread each. Each runner is a single-key mapping of the runner<br>class to its options; the options accepted depend on the runner class. Options a<br>runner leaves unset take the [`nemesis`](#nemesis) defaults; a runner without `seed` gets a<br>random one. `selector` is a logical expression over nemesis flags filtering the<br>disruptions a runner runs.<br>YAML example:<br>nemesis:<br>interval: 5<br>during_prepare: false<br>grow_shrink:<br>[`add_node_cnt`](general-and-provisioning.md#add_node_cnt): 3<br>instance_type: i4i.xlarge<br>runners:<br>- SisyphusMonkey:<br>selector: "disruptive"<br>interval: 15<br>- CategoricalMonkey:<br>dist: {StopStartMonkey: 2}<br>Environment variable examples:<br>SCT_NEMESIS__INTERVAL=10<br>SCT_NEMESIS__GROW_SHRINK='{"[`add_node_cnt`](general-and-provisioning.md#add_node_cnt)": 5}'<br>SCT_NEMESIS__RUNNERS='[{"SisyphusMonkey": {"selector": "disruptive"}}]'
 
 **default:** {'runners': [{'NoOpMonkey': {}}]}
 
@@ -22,7 +22,7 @@ Nemesis runners to start, one thread each, and defaults shared by all of them.<b
 
 ## **nemesis_add_node_cnt** / SCT_NEMESIS_ADD_NODE_CNT
 
-Add/remove nodes during GrowShrinkCluster nemesis
+Not read; replaced by `nemesis.grow_shrink.add_node_cnt`.
 
 **default:** 3
 
@@ -44,7 +44,7 @@ Not read; replaced by `nemesis.runners`.
 
 ## **nemesis_double_load_during_grow_shrink_duration** / SCT_NEMESIS_DOUBLE_LOAD_DURING_GROW_SHRINK_DURATION
 
-After growing (and before shrink) in GrowShrinkCluster nemesis it will double the load for provided duration.
+Not read; replaced by `nemesis.grow_shrink.double_load_duration`.
 
 **default:** 0
 
@@ -55,7 +55,7 @@ After growing (and before shrink) in GrowShrinkCluster nemesis it will double th
 
 ## **nemesis_during_prepare** / SCT_NEMESIS_DURING_PREPARE
 
-Run nemesis during prepare stage of the test
+Not read; replaced by `nemesis.during_prepare`.
 
 **default:** True
 
@@ -77,7 +77,7 @@ Not read; replaced by `nemesis.filter_seeds`.
 
 ## **nemesis_grow_shrink_instance_type** / SCT_NEMESIS_GROW_SHRINK_INSTANCE_TYPE
 
-Instance type to use for adding/removing nodes during GrowShrinkCluster nemesis
+Not read; replaced by `nemesis.grow_shrink.instance_type`.
 
 **default:** N/A
 
@@ -132,7 +132,7 @@ Not read; replaced by `nemesis.selector`.
 
 ## **nemesis_sequence_sleep_between_ops** / SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS
 
-Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests
+Not read; replaced by `nemesis.sequence_sleep_between_ops`.
 
 **default:** N/A
 

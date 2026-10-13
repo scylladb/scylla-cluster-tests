@@ -61,6 +61,19 @@ def test_env_vars_override_nested_nemesis(monkeypatch):
     assert [(runner.class_name, runner.interval) for runner in conf.nemesis.runners] == [("NoOpMonkey", 1)]
 
 
+def test_env_vars_set_nested_grow_shrink_options(monkeypatch):
+    monkeypatch.setenv("SCT_CONFIG_FILES", RUNNERS_YAML)
+    monkeypatch.setenv("SCT_NEMESIS__DURING_PREPARE", "false")
+    monkeypatch.setenv("SCT_NEMESIS__GROW_SHRINK", '{"add_node_cnt": 5, "instance_type": "i4i.xlarge"}')
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.get("nemesis.during_prepare") is False
+    assert conf.get("nemesis.grow_shrink.add_node_cnt") == 5
+    assert conf.get("nemesis.grow_shrink.instance_type") == "i4i.xlarge"
+    assert conf.get("nemesis.grow_shrink.double_load_duration") == 0
+
+
 @pytest.mark.parametrize("module", ["sdcm.nemesis", "sdcm.sct_config"])
 def test_config_and_nemesis_import_without_cycle(module):
     """The config builds its runner models from the nemesis classes, so nemesis must not need the config at import."""

@@ -133,6 +133,27 @@ def test_request_includes_instance_type_db_target(params):
 
 
 @pytest.mark.parametrize(
+    "grow_shrink_instance_type, expected_request",
+    [
+        pytest.param("i4i.xlarge", {"i4i.large": 1, "i4i.xlarge": 3}, id="own_instance_type"),
+        pytest.param(None, {"i4i.large": 4}, id="db_instance_type"),
+    ],
+)
+def test_request_includes_grow_shrink_nodes(params, grow_shrink_instance_type, expected_request):
+    """Nodes a grow/shrink nemesis adds are reserved as its instance type, or as DB nodes when it has none."""
+    params.update(
+        {
+            "nemesis.grow_shrink.add_node_cnt": 3,
+            "nemesis.grow_shrink.instance_type": grow_shrink_instance_type,
+        }
+    )
+
+    request, _ = SCTCapacityReservation._get_cr_request_based_on_sct_config(params)
+
+    assert {instance_type: request[instance_type] for instance_type in expected_request} == expected_request
+
+
+@pytest.mark.parametrize(
     "db_type, expected_present",
     [
         ("mixed_scylla", True),

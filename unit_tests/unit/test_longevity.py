@@ -31,7 +31,7 @@ class DummyLongevityTest(LongevityTest):
         self.params = params
         self.params["cluster_health_check"] = False
         self.params["n_monitor_nodes"] = 0
-        self.params["nemesis_interval"] = 1
+        self.params.get("nemesis").interval = 1
         self.timeout_thread = None
         self.k8s_clusters = []
         self.kafka_cluster = None

@@ -383,7 +383,7 @@ class LoaderUtilsMixin:
                 self.run_cs_user_profiles(cs_profiles=prepare_cs_user_profiles, stress_queue=write_queue)
         # In some cases we don't want the nemesis to run during the "prepare" stage in order to be 100% sure that
         # all keys were written succesfully
-        if self.params.get("nemesis_during_prepare"):
+        if self.params.get("nemesis").during_prepare:
             # Wait for some data (according to the param in the yaml) to be populated, for multi keyspace need to
             # pay attention to the fact it checks only on keyspace1
             self.db_cluster.wait_total_space_used_per_node(keyspace=None)

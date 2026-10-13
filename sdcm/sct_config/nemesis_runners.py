@@ -88,13 +88,35 @@ def runner_entry_type(runner_classes):
     ]
 
 
+class GrowShrinkConfig(BaseModel):
+    """Options of the nemeses that add nodes and decommission them back (e.g. GrowShrinkCluster)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    add_node_cnt: int = Field(default=3, description="Number of nodes added and removed")
+    instance_type: str | None = Field(
+        default=None, description="Instance type of the added nodes; the cluster's DB instance type when unset"
+    )
+    double_load_duration: int = Field(
+        default=0, description="Minutes to double the load for after growing and before shrinking; 0 disables it"
+    )
+
+
 class NemesisDefaults(BaseModel):
-    """The `nemesis` option: defaults for options a runner's own entry leaves unset.
+    """The `nemesis` option: nemesis-wide settings and defaults for options a runner's own entry leaves unset.
 
     `nemesis_config_model` adds the runners.
     """
 
     model_config = ConfigDict(extra="forbid")
+
+    during_prepare: bool = Field(default=True, description="Run nemesis during the prepare stage of the test")
+    sequence_sleep_between_ops: PositiveInt | None = Field(
+        default=None, description="Minutes to sleep between the operations of sequence nemeses"
+    )
+    grow_shrink: Annotated[GrowShrinkConfig, BeforeValidator(yaml_from_str)] = Field(
+        default_factory=GrowShrinkConfig, description="Options of the nemeses that grow and shrink the cluster"
+    )
 
     interval: PositiveInt = Field(default=5, description="Default for runner `interval`")
     seed: int | None = Field(default=None, description="Default for runner `seed`; a random one when unset")

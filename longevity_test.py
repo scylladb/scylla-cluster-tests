@@ -273,7 +273,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                                 self._run_all_stress_cmds(stress_queue, params)
 
         # Check if we shall wait for total_used_space or if nemesis wasn't started
-        if not prepare_write_cmd or not self.params.get("nemesis_during_prepare"):
+        if not prepare_write_cmd or not self.params.get("nemesis").during_prepare:
             self.db_cluster.wait_total_space_used_per_node(keyspace=None)
             self.db_cluster.start_nemesis()
 

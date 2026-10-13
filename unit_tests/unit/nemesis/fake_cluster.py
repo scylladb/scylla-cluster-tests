@@ -6,10 +6,11 @@ from unittest.mock import MagicMock
 
 from sdcm.cluster import BaseScyllaCluster
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
+from sdcm.sct_config.nemesis_runners import NemesisDefaults
 from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 
-PARAMS = dict(nemesis_interval=1, nemesis_filter_seeds=False)
+PARAMS = dict(nemesis=NemesisDefaults())
 
 
 @dataclass
