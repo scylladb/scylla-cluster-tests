@@ -592,13 +592,30 @@ def test_nothing_is_killed_without_stale_tunnels():
 def test_stale_tunnels_released_only_when_tunnels_are_used(ip_ssh_connections, released, monkeypatch):
     node = _node_with_listeners("")
     node.test_config.IP_SSH_CONNECTIONS = ip_ssh_connections
+    node._public_ip = "10.0.0.60"
     release = MagicMock()
+    monkeypatch.setattr(PhysicalMachineNode, "_tunnel_ports_released_on", set())
     monkeypatch.setattr(node, "_release_stale_tunnel_ports", release)
     monkeypatch.setattr(sdcm_cluster.BaseNode, "_init_port_mapping", lambda self: None)
 
     node._init_port_mapping()
 
     assert release.called is released
+
+
+def test_stale_tunnels_released_once_per_shared_host(monkeypatch):
+    """A loader and a monitor on one host: the second node must not kill the tunnel the first one just opened."""
+    monkeypatch.setattr(PhysicalMachineNode, "_tunnel_ports_released_on", set())
+    monkeypatch.setattr(sdcm_cluster.BaseNode, "_init_port_mapping", lambda self: None)
+    releases = []
+    for public_ip in ("10.0.0.60", "10.0.0.60", "10.0.0.61"):
+        node = _node_with_listeners("")
+        node.test_config.IP_SSH_CONNECTIONS = "public"
+        node._public_ip = public_ip
+        monkeypatch.setattr(node, "_release_stale_tunnel_ports", lambda ip=public_ip: releases.append(ip))
+        node._init_port_mapping()
+
+    assert releases == ["10.0.0.60", "10.0.0.61"]
 
 
 def test_reset_undoes_the_coredump_bind_scylla_setup_made():
