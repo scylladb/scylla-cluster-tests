@@ -5,16 +5,18 @@ import warnings
 import logging
 from functools import lru_cache, cache, cached_property
 from dataclasses import dataclass
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import github
 import github.Auth
 from jira import JIRA
 
 from sdcm.keystore import KeyStore
-from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.base import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
+
+if TYPE_CHECKING:
+    from sdcm.sct_config import SCTConfiguration
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_GH_USER = "scylladb"
@@ -274,7 +276,7 @@ class SkipPerIssues:
             LOGGER.debug(rate.raw_data)
         return cls._github
 
-    def __init__(self, issues: list[str] | str, params: SCTConfiguration | dict):
+    def __init__(self, issues: list[str] | str, params: "SCTConfiguration | dict"):
         self.params = params
         issues = [issues] if isinstance(issues, str) else issues
 

@@ -33,7 +33,8 @@ from sdcm.sct_config.config import (
     is_arm_instance_type,
     substitute_arch_markers,
 )
-from sdcm.sct_config.defaults import AWS_SUPPORTED_REGIONS, BACKEND_IMAGE_FIELD, available_backends
+from sdcm.sct_config.defaults import BACKEND_IMAGE_FIELD, available_backends
+from sdcm.utils.cloud_backends import AWS_SUPPORTED_REGIONS
 from sdcm.sct_config.helpers import count_regions, simulated_racks_enabled
 from sdcm.sct_config.types import (
     AdaptiveTimeoutMultipliers,

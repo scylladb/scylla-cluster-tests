@@ -41,17 +41,6 @@ available_backends: list[str] = [
     "oci",
 ]
 
-AWS_SUPPORTED_REGIONS: list[str] = [
-    "eu-west-1",
-    "eu-west-2",
-    "eu-west-3",
-    "us-west-2",
-    "us-east-1",
-    "us-east-2",
-    "eu-north-1",
-    "eu-central-1",
-]
-
 # Maps each cloud backend to the SCT config field that holds its machine image.
 # Used by the pipeline linter to generate placeholder values for validation.
 BACKEND_IMAGE_FIELD: dict[str, str] = {

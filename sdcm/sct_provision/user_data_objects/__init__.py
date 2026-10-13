@@ -12,15 +12,19 @@
 # Copyright (c) 2022 ScyllaDB
 from dataclasses import dataclass
 
+from typing import TYPE_CHECKING
+
 from sdcm.provision.user_data import UserDataObject
-from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.types import NodeTypeType
 from sdcm.test_config import TestConfig
+
+if TYPE_CHECKING:
+    from sdcm.sct_config import SCTConfiguration
 
 
 @dataclass
 class SctUserDataObject(UserDataObject):
     test_config: TestConfig
-    params: SCTConfiguration
+    params: "SCTConfiguration"
     instance_name: str
     node_type: NodeTypeType

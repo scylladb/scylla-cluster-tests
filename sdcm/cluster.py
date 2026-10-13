@@ -48,6 +48,7 @@ import packaging.version
 
 import yaml
 import requests
+from pydantic import BaseModel
 from paramiko import SSHException
 from tenacity import RetryError
 from invoke.exceptions import UnexpectedExit, Failure
@@ -104,8 +105,7 @@ from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.remote.remote_long_running import run_long_running_cmd
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
 from sdcm import wait, mgmt
-from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_config.config import backend_to_cloud
+from sdcm.utils.cloud_backends import backend_to_cloud
 from sdcm.utils.cloud_catalog.cost import InstanceRate, get_hourly_rate
 from sdcm.utils.cost_reporting import ON_DEMAND, SPOT, instance_cost_item, price_tags, report_cost_items
 from sdcm.utils.apt import apt_cmd
@@ -1730,10 +1730,10 @@ class BaseNode(AutoSshContainerMixin):
                 severity=Severity.ERROR,
             ).publish()
         # We want to figure out all places where "params" attribute has type that not consistent
-        elif not isinstance(self.parent_cluster.params, SCTConfiguration):
+        elif not isinstance(self.parent_cluster.params, BaseModel):
             TestFrameworkEvent(
                 source=self.__class__.__name__,
-                message=f"The 'params' attribute expected to by 'SCTConfiguration`, "
+                message=f"The 'params' attribute expected to be a config model (`SCTConfiguration`), "
                 f"but actually it is a `{type(self.parent_cluster.params)}`",
                 trace=sys._getframe().f_back,
                 severity=Severity.ERROR,

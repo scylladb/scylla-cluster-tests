@@ -27,14 +27,9 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from sdcm.sct_config.config import (
-    SIZING_ROLE_PARAMS,
-    SCTConfiguration,
-    backend_to_cloud,
-    oracle_cluster_in_use,
-)
+from sdcm.utils.cloud_backends import SIZING_ROLE_PARAMS, backend_to_cloud, oracle_cluster_in_use
 from sdcm.provision.gce.constants import BUNDLED_LOCAL_SSD_FAMILIES
 from sdcm.utils.cloud_catalog.lifecycle import InstanceLifecycle
 from sdcm.utils.cloud_catalog.pricing import (
@@ -45,6 +40,9 @@ from sdcm.utils.cloud_catalog.pricing import (
     catalog_price,
     catalog_spot_price,
 )
+
+if TYPE_CHECKING:
+    from sdcm.sct_config import SCTConfiguration
 
 LOGGER = logging.getLogger(__name__)
 
@@ -294,7 +292,7 @@ class RunCostEstimate:
         }
 
 
-def _node_count(config: SCTConfiguration, role: str, param: str) -> int:
+def _node_count(config: "SCTConfiguration", role: str, param: str) -> int:
     """Total nodes across every DC/region; config resolves counts to a list of ints.
 
     A scale test grows the db cluster to `cluster_target_size`, so the db role is priced at that
@@ -306,7 +304,7 @@ def _node_count(config: SCTConfiguration, role: str, param: str) -> int:
     return count
 
 
-def _first_region(config: SCTConfiguration, param: str) -> str:
+def _first_region(config: "SCTConfiguration", param: str) -> str:
     """First region the run provisions in.
 
     Not simply `config.get(param)[0]`: `get()` space-joins the backend's multi-region params
@@ -321,7 +319,7 @@ def _first_region(config: SCTConfiguration, param: str) -> str:
     return regions[0] if regions else ""
 
 
-def estimate_run_cost(config: SCTConfiguration, duration_minutes: float | None = None) -> RunCostEstimate:  # noqa: PLR0914
+def estimate_run_cost(config: "SCTConfiguration", duration_minutes: float | None = None) -> RunCostEstimate:  # noqa: PLR0914
     """Estimate a run's instance-hour cost from a resolved `SCTConfiguration`.
 
     Reads only config, so it works on a Jenkins builder before anything is provisioned —
