@@ -797,6 +797,20 @@ Structured metadata for test documentation and labeling, embedded in the test-ca
 
 **type:** sdcm.test_metadata.TestMetadata
 
+**sub-options:**
+
+| option | type | default | description |
+|---|---|---|---|
+| `description` | str | N/A |  |
+| `test_type` | str | N/A |  |
+| `tier` | str | ondemand |  |
+| `duration_class` | str | N/A |  |
+| `supported_backends` | list[str] | N/A |  |
+| `stress_tools` | list[str] | [] |  |
+| `workload` | str | N/A |  |
+| `features` | list[str] | [] |  |
+| `team_ownership` | str | N/A |  |
+
 
 <a id="test_method"></a>
 

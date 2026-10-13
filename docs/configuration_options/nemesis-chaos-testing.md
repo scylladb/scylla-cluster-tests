@@ -17,6 +17,22 @@ Nemesis configuration: nemesis-wide settings, defaults shared by all runners, an
 
 **type:** sdcm.sct_config.nemesis_runners.NemesisConfig
 
+**sub-options:**
+
+| option | type | default | description |
+|---|---|---|---|
+| `during_prepare` | bool | True | Run nemesis during the prepare stage of the test |
+| `sequence_sleep_between_ops` | int | N/A | Minutes to sleep between the operations of sequence nemeses |
+| `grow_shrink.add_node_cnt` | int | 3 | Number of nodes added and removed |
+| `grow_shrink.instance_type` | str | N/A | Instance type of the added nodes; the cluster's DB instance type when unset |
+| `grow_shrink.double_load_duration` | int | 0 | Minutes to double the load for after growing and before shrinking; 0 disables it |
+| `interval` | int | 5 | Default for runner `interval` |
+| `seed` | int | N/A | Default for runner `seed`; a random one when unset |
+| `filter_seeds` | bool | False | Default for runner `filter_seeds` |
+| `selector` | str | N/A | Default for runner `selector` |
+| `multiply_factor` | int | 2 | Default for runner `multiply_factor` |
+| `runners` | list[...] | [] | Runners to start, one thread each |
+
 
 <a id="nemesis_add_node_cnt"></a>
 

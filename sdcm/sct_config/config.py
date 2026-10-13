@@ -17,6 +17,7 @@ Handling Scylla-cluster-test configuration loading
 
 import os
 import random
+import inspect
 import re
 import json
 import logging
@@ -33,7 +34,7 @@ from functools import cached_property
 import anyconfig
 from argus.client.sct.types import Package
 from packaging import version
-from pydantic import BaseModel, Field, ConfigDict, fields as pydantic_fields
+from pydantic import BaseModel, Field, ConfigDict, RootModel, fields as pydantic_fields
 from typing_extensions import Annotated
 from pydantic.functional_validators import BeforeValidator
 from sdcm import sct_abs_path
@@ -2866,6 +2867,38 @@ class SCTConfiguration(*CONFIG_GROUPS):
             out.append("".join(p if i % 2 else bare_pattern.sub(link_bare, p) for i, p in enumerate(parts)))
         return "\n".join(out)
 
+    @staticmethod
+    def _docs_model_of(annotation) -> type[BaseModel] | None:
+        """The pydantic model an option or sub-option holds directly (or optionally), if it has named fields."""
+        for candidate in (annotation, *get_args(annotation)):
+            if (
+                inspect.isclass(candidate)
+                and issubclass(candidate, BaseModel)
+                and not issubclass(candidate, RootModel)
+                and candidate.model_fields
+            ):
+                return candidate
+        return None
+
+    @classmethod
+    def _docs_sub_options(cls, model: type[BaseModel], prefix: str = "") -> list[str]:
+        """Markdown table rows for the fields of a model-typed option; nested models become dotted names."""
+        rows = []
+        for name, sub_field in model.model_fields.items():
+            if (sub_model := cls._docs_model_of(sub_field.annotation)) is not None:
+                rows += cls._docs_sub_options(sub_model, f"{prefix}{name}.")
+                continue
+            type_str = re.sub(r"\b(?:[a-z_]\w*\.)+(\w+)", r"\1", cls.get_annotations_as_strings(sub_field.annotation))
+            if len(type_str) > 60:
+                type_str = type_str.split("[", 1)[0] + "[...]"
+            if sub_field.is_required():
+                default = "required"
+            else:
+                default = cls._format_default_value_for_docs(sub_field.get_default(call_default_factory=True))
+            description = " ".join((sub_field.description or "").split()).replace("|", "\\|")
+            rows.append(f"| `{prefix}{name}` | {type_str} | {default} | {description} |")
+        return rows
+
     @classmethod
     def dump_help_config_markdown(cls):
         """All options as one markdown string, grouped by domain (used by `sct.py conf-docs`)."""
@@ -2933,6 +2966,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 )
                 if backend_overrides:
                     page += f"\n\n**backend overrides:**\n{backend_overrides}"
+                if (option_model := cls._docs_model_of(field.annotation)) is not None:
+                    page += "\n\n**sub-options:**\n\n| option | type | default | description |\n|---|---|---|---|\n"
+                    page += "\n".join(cls._docs_sub_options(option_model))
                 page += "\n"
 
             pages[f"{cls.DOCS_DIR}/{slug}.md"] = cls._link_option_mentions(page, option_index, f"{slug}.md")

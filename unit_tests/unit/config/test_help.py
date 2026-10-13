@@ -94,3 +94,16 @@ def test_dump_help_config_markdown_backend_overrides(help_markdown, field_name, 
         assert backend_override_text in help_markdown
     else:
         assert backend_override_text not in help_markdown
+
+
+@pytest.mark.parametrize(
+    "sub_option_row",
+    [
+        pytest.param("| `interval` | int | 5 | Default for runner `interval` |", id="sub_option"),
+        pytest.param(
+            "| `grow_shrink.add_node_cnt` | int | 3 | Number of nodes added and removed |", id="nested_sub_option"
+        ),
+    ],
+)
+def test_dump_help_config_markdown_lists_sub_options_of_model_options(help_markdown, sub_option_row):
+    assert sub_option_row in help_markdown

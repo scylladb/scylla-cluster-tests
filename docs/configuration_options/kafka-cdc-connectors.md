@@ -27,3 +27,20 @@ Kafka Connect connectors to deploy, as a list of connector definitions.<br><br>E
 **default:** []
 
 **type:** list[sdcm.kafka.kafka_config.SctKafkaConfiguration]
+
+**sub-options:**
+
+| option | type | default | description |
+|---|---|---|---|
+| `source` | str | required |  |
+| `name` | str | required |  |
+| `config.connector_class` | str | required |  |
+| `config.topics` | str | N/A |  |
+| `config.scylla_name` | str | N/A |  |
+| `config.scylla_table_names` | str | N/A |  |
+| `config.scylla_user` | str | N/A |  |
+| `config.scylla_password` | str | N/A |  |
+| `config.scylladb_contact_points` | str | N/A |  |
+| `config.scylladb_keyspace` | str | N/A |  |
+| `config.scylladb_username` | str | N/A |  |
+| `config.scylladb_password` | str | N/A |  |
