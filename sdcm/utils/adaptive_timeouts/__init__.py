@@ -35,13 +35,21 @@ TABLETS_HARD_TIMEOUT = 3 * 60 * 60
 _STREAMING_OVERHEAD = 600  # add 10 minutes overhead for operations other than streaming
 
 
-def _get_decommission_timeout(
-    node_info_service: NodeLoadInfoService, tablets_enabled: bool = False
+def _get_streaming_timeout(
+    node_info_service: NodeLoadInfoService, timeout: int | float = None, tablets_enabled: bool = False
 ) -> tuple[tuple[int, int | None], dict[str, Any]]:
-    """Calculate timeout for decommission operation based on node load info. Still experimental, used to gather historical data."""
+    """Calculate the timeout for an operation that streams a node's worth of data.
+
+    Decommission, removenode and rebuild all move the data of one node across the cluster, so they
+    share this estimate. With tablets the soft timeout is twice the data size over the expected
+    throughput (plus overhead) and the hard timeout twice the soft one, which lets the timeout
+    monitor publish events while the operation is still running. On vnodes only a soft timeout is
+    estimated, from previous runs of almost 9h for 1TB. Falls back to the caller-supplied timeout,
+    or 6 hours, when the node load info cannot be gathered.
+    """
     try:
         node_info = node_info_service.as_dict()
-        LOGGER.debug(f"Estimating decommission timeout with {node_info=}")
+        LOGGER.debug(f"Estimating streaming timeout with {node_info=}")
         if tablets_enabled:
             node_info["tablets_enabled"] = True
             estimated = int(node_info_service.node_data_size_mb / node_info_service.expected_throughput)
@@ -53,8 +61,8 @@ def _get_decommission_timeout(
             soft_timeout = max(int(node_info_service.node_data_size_mb * 0.03), 7200)  # 2 hours minimum
             return (soft_timeout, None), node_info
     except Exception as exc:  # noqa: BLE001
-        LOGGER.warning("Failed to calculate decommission timeout: \n%s \nDefaulting to 6 hours", exc)
-        return (6 * 60 * 60, None), {}
+        LOGGER.warning("Failed to calculate streaming timeout: \n%s \nDefaulting to caller timeout or 6 hours", exc)
+        return (timeout or 6 * 60 * 60, None), {}
 
 
 def _get_new_node_timeout(
@@ -216,7 +224,7 @@ class Operations(Enum):
 
     maps to (function, (required arguments))"""
 
-    DECOMMISSION = ("decommission", _get_decommission_timeout, ())
+    DECOMMISSION = ("decommission", _get_streaming_timeout, ())
     NEW_NODE = ("new_node", _get_new_node_timeout, ("timeout",))
     CREATE_INDEX = ("create_index", _get_soft_timeout, ("timeout",))
     START_SCYLLA = ("start_scylla", _get_soft_timeout, ("timeout",))
@@ -227,9 +235,9 @@ class Operations(Enum):
     MGMT_REPAIR = ("mgmt_repair", _get_soft_timeout, ("timeout",))
     BACKUP = ("backup", _get_soft_timeout, ("timeout",))
     RESTORE = ("restore", _get_soft_timeout, ("timeout",))
-    REBUILD = ("rebuild", _get_soft_timeout, ("timeout",))
+    REBUILD = ("rebuild", _get_streaming_timeout, ())
     CLEANUP = ("cleanup", _get_cleanup_timeout, ("timeout",))
-    REMOVE_NODE = ("remove_node", _get_soft_timeout, ("timeout",))
+    REMOVE_NODE = ("remove_node", _get_streaming_timeout, ())
     SCRUB = ("scrub", _get_soft_timeout, ("timeout",))
     SOFT_TIMEOUT = ("soft_timeout", _get_soft_timeout, ("timeout",))
     FLUSH = ("flush", _get_soft_timeout, ("timeout",))
@@ -317,7 +325,13 @@ def adaptive_timeout(  # noqa: PLR0914
     Also store node load info and timeout value in AdaptiveTimeoutStore (ES by default) for future reference.
     Use Operation.SOFT_TIMEOUT to set timeout explicitly without calculations.
     """
-    tablet_sensitive_op = operation in {Operations.DECOMMISSION, Operations.NEW_NODE, Operations.TABLET_MIGRATION}
+    tablet_sensitive_op = operation in {
+        Operations.DECOMMISSION,
+        Operations.REMOVE_NODE,
+        Operations.REBUILD,
+        Operations.NEW_NODE,
+        Operations.TABLET_MIGRATION,
+    }
     kwargs.setdefault("node_available", True)
 
     # in some situations we may want to skip tablet check, since it depends on ssh connectivity

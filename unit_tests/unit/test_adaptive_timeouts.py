@@ -203,27 +203,32 @@ def test_soft_timeout_is_not_raised_when_timeout_not_reached(publish_or_dump, fa
     assert adaptive_timeout_store.get(operation="SOFT_TIMEOUT", timeout_occurred=False)
 
 
+STREAMING_OPERATIONS = [Operations.DECOMMISSION, Operations.REMOVE_NODE, Operations.REBUILD]
+
+
+@pytest.mark.parametrize("operation", STREAMING_OPERATIONS, ids=lambda operation: operation.name.lower())
 @mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
-def test_decommission_timeout_is_calculated_and_stored(publish_or_dump, fake_node, adaptive_timeout_store):
-    with adaptive_timeout(
-        operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
-    ) as timeout:
+def test_streaming_timeout_is_calculated_and_stored(publish_or_dump, fake_node, adaptive_timeout_store, operation):
+    """On vnodes every operation that streams a node's data gets the 2-hour-minimum soft timeout from
+    its data size and no hard timeout, instead of a fixed value picked by each caller."""
+    with adaptive_timeout(operation=operation, node=fake_node, stats_storage=adaptive_timeout_store) as timeout:
         assert timeout == 7200  # based on data size
     publish_or_dump.assert_not_called()
-    metrics = adaptive_timeout_store.get(operation=Operations.DECOMMISSION.name, timeout_occurred=False)
+    metrics = adaptive_timeout_store.get(operation=operation.name, timeout_occurred=False)
     assert metrics
-    assert metrics[0]["hard_timeout"] is None  # non-tablet decommission has no hard timeout
+    assert metrics[0]["hard_timeout"] is None  # non-tablet streaming operations have no hard timeout
 
 
+@pytest.mark.parametrize("operation", STREAMING_OPERATIONS, ids=lambda operation: operation.name.lower())
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
 @mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
-def test_tablets_decommission_timeout_is_calculated_from_data_size(
-    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
+def test_tablets_streaming_timeout_is_calculated_from_data_size(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature, operation
 ):
+    """With tablets, decommission, removenode and rebuild get a soft and a hard timeout from the data
+    size, so the timeout monitor can report them while they are still running."""
     mock_tablets_feature.return_value = True
-    with adaptive_timeout(
-        operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
-    ) as timeout:
+    with adaptive_timeout(operation=operation, node=fake_node, stats_storage=adaptive_timeout_store) as timeout:
         # node_data_size_mb=102400, expected_throughput=69/2*3=103.5 → estimated≈989.4s
         # soft = int(estimated) * 2 + 600 (10-minute overhead); hard = soft * 2
         throughput = _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
@@ -234,9 +239,28 @@ def test_tablets_decommission_timeout_is_calculated_from_data_size(
 
     soft_timeout_mock.assert_not_called()
     hard_timeout_mock.assert_not_called()
-    metrics = adaptive_timeout_store.get(operation=Operations.DECOMMISSION.name)
+    metrics = adaptive_timeout_store.get(operation=operation.name)
     assert metrics[0].get("tablets_enabled") is True
     assert metrics[0]["hard_timeout"] == expected_hard
+
+
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_tablets_removenode_publishes_timeouts_while_still_running(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
+):
+    """A removenode on tablets that outlives its soft and hard timeouts raises both events before it
+    returns, which a 15-hour removenode used to reach only through the test teardown."""
+    mock_tablets_feature.return_value = True
+    # scale the data-size estimate (soft ~2578s, hard ~5156s) down to fractions of a second
+    fake_node.parent_cluster.params["adaptive_timeout_multipliers"] = {"remove_node": 0.00005}
+    real_sleep = time.sleep
+    # the monitor polls every 5 seconds; shorten its naps so the test takes about a second
+    with mock.patch("sdcm.utils.adaptive_timeouts.time.sleep", side_effect=lambda seconds: real_sleep(0.02)):
+        with adaptive_timeout(operation=Operations.REMOVE_NODE, node=fake_node, stats_storage=adaptive_timeout_store):
+            real_sleep(1.0)
+            soft_timeout_mock.assert_called_once()
+            hard_timeout_mock.assert_called_once()
 
 
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
@@ -410,7 +434,7 @@ def test_multiplier_model_rejects_invalid_input(input_val, match_pattern):
     "multipliers,operation,timeout_arg,expected",
     [
         pytest.param({"new_node": 3}, Operations.NEW_NODE, 600, 1800, id="multiplier-scales-timeout"),
-        pytest.param({"decommission": 4}, Operations.REMOVE_NODE, 600, 600, id="missing-key-unscaled"),
+        pytest.param({"decommission": 4}, Operations.REPAIR, 600, 600, id="missing-key-unscaled"),
         pytest.param({}, Operations.DECOMMISSION, None, 7200, id="empty-config-preserves-base"),
     ],
 )

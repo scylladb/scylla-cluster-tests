@@ -2223,7 +2223,7 @@ class NemesisRunner:
             self.run_repair_manager(ignore_down_hosts=ignore_down_hosts, timeout=timeout)
 
     def repair_nodetool_rebuild(self):
-        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC):
+        with adaptive_timeout(Operations.REBUILD, self.target_node):
             self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
 
     def rebuild_or_repair(self, target_node, reason=""):
@@ -3072,7 +3072,7 @@ class NemesisRunner:
                 self.log.info(
                     f"Running removenode command on {rnd_node.ip_address}, Removing node with the following host_id: {host_id}"
                 )
-                with adaptive_timeout(Operations.REMOVE_NODE, rnd_node, timeout=HOUR_IN_SEC * 48):
+                with adaptive_timeout(Operations.REMOVE_NODE, rnd_node):
                     res = rnd_node.run_nodetool(
                         f"removenode {host_id}", ignore_status=True, verbose=True, long_running=True, retry=0
                     )
@@ -3349,7 +3349,7 @@ class NemesisRunner:
         with self.action_log_scope(f"Rebuild data after destroy on {self.target_node.name} node"):
             ParallelObject(objects=[trigger, watcher], timeout=timeout + 60).call_objects()
         self.target_node.wait_node_fully_start(timeout=300)
-        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
+        with adaptive_timeout(Operations.REBUILD, self.target_node):
             with self.action_log_scope(f"Rebuild data after destroy on {self.target_node.name} node"):
                 self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
 
