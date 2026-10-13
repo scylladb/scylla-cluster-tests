@@ -312,6 +312,54 @@ def test_find_equivalent_ami_source_not_found(mock_get_scylla_resource, mock_bot
 
 @patch("sdcm.utils.common.boto3.resource")
 @patch("sdcm.utils.common.get_scylla_images_ec2_resource")
+def test_find_equivalent_ami_source_deregistered(mock_get_scylla_resource, mock_boto3_resource):
+    """Test behavior when DescribeImages returns no image, so boto3 leaves meta.data as None."""
+    # Any image attribute access (architecture, tags) raises AttributeError, as it does with real boto3
+    mock_ami = Mock(spec=["load", "meta"])
+    mock_ami.meta.data = None
+
+    mock_resource = Mock()
+    mock_resource.Image.return_value = mock_ami
+
+    mock_boto3_resource.return_value = mock_resource
+    mock_get_scylla_resource.return_value = mock_resource
+
+    results = find_equivalent_ami(ami_id="ami-deregistered", source_region="eu-west-1")
+
+    assert results == []
+
+
+@patch("sdcm.utils.common.boto3.resource")
+@patch("sdcm.utils.common.get_scylla_images_ec2_resource")
+def test_find_equivalent_ami_ignores_per_image_tags(mock_get_scylla_resource, mock_boto3_resource):
+    """Test that tags which differ between per-arch images of the same build are not used as search filters."""
+    mock_source_ami = Mock()
+    mock_source_ami.architecture = "x86_64"
+    mock_source_ami.tags = [
+        {"Key": "Name", "Value": "scylla-2026.2.9-x86_64-2026-10-05T11-03-42"},
+        {"Key": "arch", "Value": "x86_64"},
+        {"Key": "creation_timestamp", "Value": "2026-10-05T11-03-42"},
+        {"Key": "scylla_version", "Value": "2026.2.9-0.20261005.ba124f221b89"},
+    ]
+
+    mock_resource = Mock()
+    mock_resource.Image.return_value = mock_source_ami
+    mock_resource.images.filter.return_value = []
+
+    mock_boto3_resource.return_value = mock_resource
+    mock_get_scylla_resource.return_value = mock_resource
+
+    find_equivalent_ami(ami_id="ami-x86", source_region="us-east-1", target_arch="arm64")
+
+    filters = mock_resource.images.filter.call_args.kwargs["Filters"]
+    assert filters == [
+        {"Name": "architecture", "Values": ["arm64"]},
+        {"Name": "tag:scylla_version", "Values": ["2026.2.9-0.20261005.ba124f221b89"]},
+    ]
+
+
+@patch("sdcm.utils.common.boto3.resource")
+@patch("sdcm.utils.common.get_scylla_images_ec2_resource")
 @patch("sdcm.utils.common.SCYLLA_AMI_OWNER_ID_LIST", ["797456418907", "158855661827"])
 def test_find_equivalent_ami_sorted_by_date(mock_get_scylla_resource, mock_boto3_resource):
     """Test that results are sorted by creation date (newest first)."""
