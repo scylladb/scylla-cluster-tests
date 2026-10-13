@@ -1,255 +1,275 @@
 # SCT - Scylla Cluster Tests
 
-SCT tests are designed to test Scylla database on physical/virtual servers under high read/write load.
-Currently, the tests are run using built in unittest
-These tests automatically create:
+SCT tests ScyllaDB clusters under heavy read/write load on real or virtual machines.
+A single test run provisions everything it needs, runs the workload, injects failures, collects logs,
+and tears down. Each run creates:
 
-* Scylla clusters - Run Scylla database
-* Loader machines - used to run load generators like cassandra-stress
-* Monitoring server - uses official Scylla Monitoring [repo](https://github.com/scylladb/scylla-monitoring) to monitor Scylla clusters and Loaders
+* **DB cluster**: the ScyllaDB nodes under test
+* **Loaders**: machines that run load generators (cassandra-stress, latte, scylla-bench, ...)
+* **Monitor**: a [Scylla Monitoring](https://github.com/scylladb/scylla-monitoring) stack for the DB cluster and loaders
 
-## Quickstart
+Tests run inside **Hydra**, a container image with all SCT dependencies preinstalled.
 
-#### Option 1 - Config AWS using OKTA (preferred option)
+- [1. Set up](#1-set-up)
+- [2. Run your first test (Docker backend)](#2-run-your-first-test-docker-backend)
+- [3. Run on a cloud backend](#3-run-on-a-cloud-backend)
+- [4. Everyday tasks](#4-everyday-tasks)
+- [5. Configuring a test](#5-configuring-a-test)
+- [6. Types of tests](#6-types-of-tests)
+- [7. Diagnostics and results](#7-diagnostics-and-results)
+- [8. CI and Jenkins](#8-ci-and-jenkins)
+- [9. Contributing](#9-contributing)
+- [10. Maintainer reference](#10-maintainer-reference)
 
-https://scylladb.atlassian.net/wiki/spaces/RND/pages/386138322/AWS+Setup+and+Okta+Integration+for+Scylla+Cluster+Tests
+## 1. Set up
 
-#### Option 2 - Config AWS using AWS credentials
+**Prerequisites:** Linux, Docker or Podman, `sudo` access, and an AWS account (SCT reads its
+SSH keys and credentials from S3, so even local runs need AWS access).
+
+1. **Configure AWS access** using Okta (internal):
+   [AWS Setup and Okta Integration for SCT](https://scylladb.atlassian.net/wiki/spaces/RND/pages/386138322/AWS+Setup+and+Okta+Integration+for+Scylla+Cluster+Tests).
+   Then export the profile in every shell where you run `hydra`:
+   ```bash
+   export AWS_PROFILE=DeveloperAccessRole   # the name of your Okta-created profile
+   ```
+   Without Okta, ask your AWS admin for an access key and run `aws configure`
+   ([install the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)).
+
+2. **Install Hydra:**
+   ```bash
+   sudo ./install-hydra.sh
+   hydra bash   # sanity check: drops you into the SCT container
+   ```
+
+3. **Podman only:** allow short image names, otherwise the monitoring stack fails to start inside Hydra:
+   ```bash
+   cat > ~/.config/containers/registries.conf <<'EOF'
+   unqualified-search-registries = ["registry.fedoraproject.org", "registry.access.redhat.com", "docker.io", "quay.io"]
+   short-name-mode="permissive"
+   EOF
+   ```
+
+Other cloud accounts: [AWS environment](docs/aws_configuration.md) ·
+[GCP project setup](docs/gcp_create_new_project.md) · [Azure networking](docs/azure_configuration.md) ·
+[AWS EMR permissions](docs/aws-emr-permissions.md).
+
+To develop SCT itself (IDE, unit tests, pre-commit), also set up the
+[local development environment](docs/install-local-env.md).
+
+## 2. Run your first test (Docker backend)
+
+The Docker backend runs the whole cluster as containers on your machine. It is the fastest
+way to check that your setup works and to debug test or nemesis logic.
+
+1. Your user needs [passwordless sudo](https://unix.stackexchange.com/a/468417).
+2. Raise the async I/O limit (once per machine):
+   ```bash
+   echo "fs.aio-max-nr=3000000" | sudo tee /etc/sysctl.d/99-sct-aio.conf
+   sudo sysctl --system
+   ```
+3. Run a short longevity test:
+   ```bash
+   export SCT_SCYLLA_VERSION=2025.1
+   export SCT_ENABLE_ARGUS=false   # don't report local runs to Argus
+   hydra run-test longevity_test.LongevityTest.test_custom_time \
+       --backend docker --config test-cases/PR-provision-test-docker.yaml
+   ```
+4. Check the results in `~/sct-results/latest/`. It holds the logs, `test_id`, and events.
+   See [collected log files](docs/collected-logs.md) for what each file contains.
+
+Docker-specific notes: [overview](docs/docker-backend-overview.md) ·
+[which nemeses work on Docker](docs/docker-backend-nemesis.md) · [SSL/TLS](docs/docker-backend-ssl.md).
+
+## 3. Run on a cloud backend
+
+> **Cloud runs cost money.** Always [clean up](#clean-up-resources) when you are done.
+
+All backends use the same command. Only `--backend` and a few settings change:
+
 ```bash
-# install aws cli
-sudo apt install awscli # Debian/Ubuntu
-sudo dnf install awscli # Redhat/Fedora
-# or follow amazon instructions to get it: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
-
-# Ask your AWS account admin to create a user and access key for AWS) and then configure AWS
-
-> aws configure
-AWS Access Key ID [****************7S5A]:
-AWS Secret Access Key [****************5NcH]:
-Default region name [us-east-1]:
-Default output format [None]:
-
-# if using OKTA, use any of the tools to create the AWS profile, and export it as such,
-# anywhere you are gonna use hydra command (replace DeveloperAccessRole with the name of your profile):
-export AWS_PROFILE=DeveloperAccessRole
-
-# Install hydra (docker holding all requirements for running SCT)
-sudo ./install-hydra.sh
-
-# if using podman, we need to disable enforcing of short name usage, without it monitoring stack won't run from withing hydra
-echo 'unqualified-search-registries = ["registry.fedoraproject.org", "registry.access.redhat.com", "docker.io", "quay.io"]
-short-name-mode="permissive"
-' > ~/.config/containers/registries.conf
-```
-
-### Run a test
-#### Disable Argus (if not needed for testing)
-To disable Argus reporting during testing, set the following environment variable:
-```bash
-export SCT_ENABLE_ARGUS=false
-```
-### Logs Location
-
-All logs generated during test runs can be found in the `~/sct-results` directory.
-
-Example running test using Hydra using `test-cases/PR-provision-test.yaml` configuration file
-
-#### Run test locally with AWS backend:
-```bash
-export SCT_SCYLLA_VERSION=5.2.1
-# Test fails to report to Argus. So we need to disable it
-export SCT_ENABLE_ARGUS=false
-# configuration is needed for running from a local development machine (default communication is via private addresses)
-hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml --config configurations/network_config/test_communication_public.yaml
-
-# Run with IPv6 configuration
-hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml --config configurations/network_config/all_addresses_ipv6_public.yaml
-
-```
-
-#### Run test using [SCT Runner](./docs/sct-runners.md) with AWS backend:
-```bash
-hydra create-runner-instance --cloud-provider <cloud_name> -r <region_name> -z <az> -t <test-id> -d <run_duration>
-
-export SCT_SCYLLA_VERSION=5.2.1
-# For choose correct network configuration, check test jenkins pipeline.
-# All predefined configurations are located under `configurations/network_config`
-hydra --execute-on-runner <runner-ip|`cat sct_runner_ip> "run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml"
-```
-
-#### Run test locally with GCE backend:
-```bash
-export SCT_SCYLLA_VERSION=5.2.1
-export SCT_IP_SSH_CONNECTIONS="public"
-hydra run-test longevity_test.LongevityTest.test_custom_time --backend gce --config test-cases/PR-provision-test.yaml
-```
-
-#### Run test locally with Azure backend:
-```bash
-export SCT_SCYLLA_VERSION=5.2.1
-hydra run-test longevity_test.LongevityTest.test_custom_time --backend azure --config test-cases/PR-provision-test.yaml
-```
-
-#### Run test locally with docker backend:
-If you wish to run the tests on a local machine, ensure you have Docker installed and running.
-If necessary, set a higher value for asynchronous I/O by:
-```bash
-echo "fs.aio-max-nr=3000000" | sudo tee /etc/sysctl.d/99-sct-aio.conf
-sudo sysctl --system
-```
-For the purpose of debugging a simple logic of a nemesis, for example, it would be recommended to use Docker backend.
-```bash
-# **NOTE:** user should be part of sudo group, and setup with passwordless access,
-# see https://unix.stackexchange.com/a/468417 for example on how to setup
-
-# example of running specific docker version
-export SCT_SCYLLA_VERSION=5.2.1
-hydra run-test longevity_test.LongevityTest.test_custom_time --backend docker --config test-cases/PR-provision-test-docker.yaml
-```
-
-#### Run test with ScyllaDB Cloud (xcloud) backend:
-```bash
-export SCT_SCYLLA_VERSION=2025.3.0
-export SCT_XCLOUD_PROVIDER=aws
-export SCT_XCLOUD_ENV=lab
-
-hydra run-test longevity_test.LongevityTest.test_custom_time --backend xcloud --config test-cases/PR-provision-test.yaml
-```
-For more details on xcloud backend, see [xcloud backend documentation](./docs/xcloud-backend.md)
-
-You can specify a specific scylla version by:
-```bash
-# Simple version (release)
 export SCT_SCYLLA_VERSION=2025.1
-
-# Branch version (nightly)
-export SCT_SCYLLA_VERSION=master:latest
-
-# Full version tag (specific build with commit hash)
-export SCT_SCYLLA_VERSION=2024.2.5-0.20250221.cb9e2a54ae6d-1
+export SCT_ENABLE_ARGUS=false
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend <backend> --config test-cases/PR-provision-test.yaml [extra --config ...]
 ```
 
-For detailed information on full version tag support, see `docs/full-version-tag-usage.md`
+| Backend | Extra settings for a run from your laptop | Notes |
+|---|---|---|
+| `aws` | `--config configurations/network_config/test_communication_public.yaml` (or `all_addresses_ipv6_public.yaml` for IPv6) | Most used backend; most longevity tests run here. By default SCT talks to nodes over private IPs, so laptops need the public network config. |
+| `gce` | `export SCT_IP_SSH_CONNECTIONS=public` | Most artifact and rolling-upgrade tests run here. |
+| `azure` | none | [Azure networking](docs/azure_configuration.md) |
+| `oci` | none | Oracle Cloud |
+| `xcloud` | `export SCT_XCLOUD_PROVIDER=aws SCT_XCLOUD_ENV=lab` | ScyllaDB Cloud managed clusters. [xcloud backend](docs/xcloud-backend.md) |
+| `baremetal` | | **Experimental.** Runs against an already-provisioned cluster. |
+| `k8s-eks`, `k8s-gke` | | Scylla Operator on managed Kubernetes. [K8S functional tests](docs/k8s-functional-test.md) |
+| `k8s-local-kind`, `k8s-local-kind-aws`, `k8s-local-kind-gce` | | Kubernetes functional tests on a local or single-VM kind cluster. |
 
-For debugging a standard nemesis setup you can simply use a default nemesis setup.
-Use the yaml files as in https://github.com/scylladb/scylla-cluster-tests/blob/master/jenkins-pipelines/oss/nemesis/longevity-5gb-1h-AbortRepairMonkey-docker.jenkinsfile:
+**Without cloud compute:** [minicloud](docs/minicloud.md) emulates the EC2 and GCE APIs with local
+QEMU/KVM VMs, so `aws`/`gce` test-cases run on one machine without paying for instances.
+
+**Close to the cluster:** run Hydra on an [SCT Runner](docs/sct-runners.md), a cloud VM in the
+same network as the cluster, as Jenkins does:
+
+```bash
+hydra create-runner-instance --cloud-provider aws -r <region> -z <az> -t <test-id> -d <duration>
+hydra --execute-on-runner "$(cat sct_runner_ip)" "run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml"
+```
+
+Copy the network config from the test's Jenkins pipeline. The predefined configs are in
+`configurations/network_config/`.
+
+## 4. Everyday tasks
+
+### Choose a ScyllaDB version
+
+```bash
+export SCT_SCYLLA_VERSION=2025.1                               # release
+export SCT_SCYLLA_VERSION=master:latest                        # nightly of a branch
+export SCT_SCYLLA_VERSION=2024.2.5-0.20250221.cb9e2a54ae6d-1   # exact build
+```
+
+See [full version tag usage](docs/full-version-tag-usage.md). To test your own build, see
+[BYO ScyllaDB](docs/byo-scylladb.md). To find a regression, see [bisecting with SCT](docs/bisecting-with-sct.md).
+
+### Find the logs
+
+Every run writes to `~/sct-results/<timestamp>/`, and `~/sct-results/latest` points to the most recent run.
+[What each log archive contains](docs/collected-logs.md).
+
+### Debug a nemesis
+
+Run the default nemesis setup on Docker. These configs are the ones the
+[AbortRepairMonkey docker pipeline](jenkins-pipelines/oss/nemesis/longevity-5gb-1h-AbortRepairMonkey-docker.jenkinsfile) uses:
+
 ```bash
 hydra run-test longevity_test.LongevityTest.test_custom_time --backend docker \
--c configurations/nemesis/longevity-5gb-1h-nemesis.yaml \
--c configurations/nemesis/AbortRepairMonkey.yaml \
--c configurations/nemesis/additional_configs/docker_backend.yaml
+    -c configurations/nemesis/longevity-5gb-1h-nemesis.yaml \
+    -c configurations/nemesis/AbortRepairMonkey.yaml \
+    -c configurations/nemesis/additional_configs/docker_backend.yaml
 ```
-For debugging a specific nemesis setup you can edit the nemesis configuration to run.
-Change the relevant parameters in test-cases/PR-provision-test-docker.yaml like below:
+
+To run one specific nemesis, edit `test-cases/PR-provision-test-docker.yaml`:
+
 ```yaml
 test_duration: 60
 stress_cmd: "cassandra-stress write cl=QUORUM duration=5m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) ' -mode cql3 native -rate threads=10 -pop seq=1..100000 -log interval=5"
 n_db_nodes: 4
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'DecommissionMonkey'  # Filter to run only DecommissionMonkey
+nemesis_class_name: 'SisyphusMonkey'     # the runner
+nemesis_selector: 'DecommissionMonkey'   # only run this nemesis (class names or flag expressions)
 nemesis_interval: 5
 ```
-The `nemesis_class_name` specifies the runner (e.g. `SisyphusMonkey`), while `nemesis_selector` filters which nemesis classes to include using boolean flag expressions or class names.
-For more details on nemesis architecture, flags, and configuration, see the [Nemesis Developer Guide](./docs/nemesis.md).
-For docker backend supported nemesis, check [docker backend specifics](./docs/docker-backend-overview.md).
-```bash
-#### You can also enter the containerized SCT environment using:
-```bash
-hydra bash
-```
 
-#### List resources being used by user:
-```bash
-# NOTE: Only use `whoami` if your local use is the same as your okta/email username
-hydra list-resources --user `whoami`
-```
+For architecture, flags, and writing new ones, see the [Nemesis Developer Guide](docs/nemesis.md).
 
-#### Reuse already running cluster:
+### Reuse a running cluster
+
+Skip provisioning when you re-run against the cluster from your last run:
+
 ```bash
 export SCT_REUSE_CLUSTER=$(cat ~/sct-results/latest/test_id)
-hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml --config configurations/network_config/test_communication_public.yaml
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws \
+    --config test-cases/PR-provision-test.yaml \
+    --config configurations/network_config/test_communication_public.yaml
 ```
-More details on reusing a cluster can be found in [reuse_cluster](./docs/reuse_cluster.md)
 
-#### Clear resources:
+See [reusing a cluster](docs/reuse_cluster.md) and [skipping test stages](docs/skip-test-stages.md).
+
+### Connect to test machines
+
 ```bash
-hydra clean-resources --user `whoami`
-# by default, it only cleans aws resources
-# to clean other backends, specify manually
-hydra clean-resources --user `whoami` -b gce
+hydra ssh --user <your-okta-username>   # pick one of your machines
+hydra ssh --test-id <test_id>
 ```
 
-#### Clear resources being used by the last test run:
+See the [FAQ](docs/faq.md#how-can-i-connect-to-test-machines-in-aws-) for more options.
+
+### Clean up resources
+
 ```bash
-SCT_CLUSTER_BACKEND= hydra clean-resources --test-id `cat ~/sct-results/latest/test_id`
+# list what you own (use your Okta/email username, which may differ from `whoami`)
+hydra list-resources --user <username>
+
+# everything from your last run
+SCT_CLUSTER_BACKEND= hydra clean-resources --test-id "$(cat ~/sct-results/latest/test_id)"
+
+# everything you own; AWS by default, use -b for other backends
+hydra clean-resources --user <username>
+hydra clean-resources --user <username> -b gce
 ```
 
-## [Install local development environment](docs/install-local-env.md)
-## [Frequently Asked Questions (FAQ)](docs/faq.md)
-## [Contribution instructions](docs/contrib.md)
-## [HTTP retry & timeout conventions](docs/http-retry-conventions.md)
+### Estimate cost
 
-## AI code review on PRs
+[Test cost estimation](docs/cost-estimation.md) shows what a test-case costs before you run it.
 
-Claude code review is **on-demand**. To get a review, comment `@claude please review this PR`
-on the pull request. Available to scylladb org members and collaborators.
-See [How does the Claude AI code review work?](docs/faq.md#how-does-the-claude-ai-code-review-work) for details.
+## 5. Configuring a test
 
-## Supported backends
+A run is defined by layered YAML files. Each `--config` overrides the ones before it, and
+`SCT_*` environment variables override all of them.
 
-* `aws` - the mostly used backed, most longevity run on top of this backend
-* `gce` - most of the artifacts and rolling upgrades run on top of this backend
-* `azure` -
-* `docker` - should be used for local development
-* `baremetal` - **experimental** — can be used to run with an already-provisioned cluster
-* `xcloud` - ScyllaDB Cloud managed clusters
+| Directory | What it holds |
+|---|---|
+| `test-cases/` | Full test definitions: cluster size, instance types, stress commands, duration |
+| `configurations/` | Reusable overlays: network, nemesis, backend tweaks |
+| `jenkins-pipelines/` | Jenkins jobs that combine a test-case with overlays and a backend |
 
-* `k8s-eks` -
-* `k8s-gke` -
-* `k8s-local-kind` - used for run k8s functional test locally
-* `k8s-local-kind-gce` - used for run k8s functional test locally on GCE
-* `k8s-local-kind-aws` - used for run k8s functional test locally on AWS
+To start a new test, copy `test-cases/PR-provision-test.yaml` and edit it. Some tests hardcode
+their operations and ignore parts of the YAML.
 
-## Configuring test run configuration YAML
+- [SCT configuration guide](docs/sct-configuration.md): how the config system works and how to add options
+- [Configuration options reference](docs/configuration_options.md): every option, grouped by backend, test type, and concern
+- [Cross-cloud instance sizing](docs/cross-cloud-sizing.md): pick instances by constraints instead of names
+- [Loaders and stress commands](docs/loader_usage.md) · [Docker-based loaders](docs/docker-loaders.md)
+- [Full scan and full partition scan in longevity](docs/using-full-scan-and-full-partition-scan-in-longevity.md)
+- [Kafka support](docs/kafka.md)
+- [HTTP retry & timeout conventions](docs/http-retry-conventions.md)
 
-Take a look at the `test-cases/PR-provision-test.yaml` file. It contains a number of
-configurable test parameters, such as DB cluster instance types and AMI IDs.
-In this example, we're assuming that you have copied `test-cases/PR-provision-test.yaml`
-to `test-cases/your_config.yaml`.
+## 6. Types of tests
 
-All the test run configurations are stored in `test-cases` directory.
+| Type | Docs |
+|---|---|
+| Artifact tests | [artifacts_test.md](docs/artifacts_test.md) |
+| Longevity | [longevity.md](docs/longevity.md) |
+| Upgrade | [rolling-upgrade.md](docs/rolling-upgrade.md) |
+| Performance | [Performance testing in SCT](docs/performance/README.md) · [HDR investigate utility](docs/performance-tests.md) · [region scheduling](docs/perf-tests-region-scheduling.md) |
+| Microbenchmarking | [microbenchmarking.md](docs/microbenchmarking.md) · [node benchmarks](docs/node_benchmarks.md) |
+| K8S functional | [k8s-functional-test.md](docs/k8s-functional-test.md) |
+| Cassandra → Scylla migration | [cs-to-scylla-migration.md](docs/cs-to-scylla-migration.md) |
+| Features, Manager | *not documented yet*; see `test-cases/features/` and `test-cases/manager/` |
 
-Important: Some tests use custom hardcoded operations due to their nature,
-so those tests won't honor what is set in `test-cases/your_config.yaml`.
+## 7. Diagnostics and results
 
-### Configuration Documentation
+- [Collected log files](docs/collected-logs.md): what each log archive contains
+- [SCT events](docs/sct-events.md): how failures and warnings are raised and reported
+- [Kernel panic detection](docs/kernel-panic-detection.md): serial-console panic detection and false positives
+- [Diagnostic collector](docs/diagnostic_collector.md)
+- [FAQ](docs/faq.md): coredumps, uploading missed logs to Argus, exposing nemesis metrics, ...
 
-- **[SCT Configuration Guide](./docs/sct-configuration.md)** - Comprehensive guide on how the configuration system works and how to add new options
-- **[Configuration Options Reference](./docs/configuration_options.md)** - Auto-generated index of all configuration options, grouped by backend, test type and concern
-- **[Cross-Cloud Instance Sizing](./docs/cross-cloud-sizing.md)** - Constraint-based instance selection across AWS, GCE, Azure, and OCI
-- **[Running against minicloud](./docs/minicloud.md)** - Local QEMU/KVM cloud emulation: run SCT tests without real cloud credentials or cost
+## 8. CI and Jenkins
 
-### Diagnostics Documentation
+- [SCT pipelines](docs/sct-pipelines.md): how a Jenkins run is staged
+- [Jenkins job definitions](docs/job_defines_format.md)
+- [Billing project parameter](docs/jenkins-billing-project-parameter.md)
+- [Trigger matrix manual testing](docs/testing/trigger-matrix.md)
 
-- **[Kernel Panic Detection](./docs/kernel-panic-detection.md)** - How SCT detects kernel panics from cloud serial consoles, and how to troubleshoot false positives
-- **[Collected Log Files](./docs/collected-logs.md)** - What each log archive contains after a test run
+## 9. Contributing
 
+- [Contribution instructions](docs/contrib.md): pre-commit hooks, formatting commits
+- [Contribution handbook](docs/contribution-handbook.md): roles, review, branches and backports, CI
+- [Local development environment](docs/install-local-env.md)
+- Run unit tests with `uv run sct.py unit-tests` and checks with `uv run sct.py pre-commit`
+- [Profiling SCT code](docs/profiling.md) · [Cyclic import detection](docs/cyclic-import-detection.md)
 
-## Development Plans
+**AI code review:** comment `@claude please review this PR` on a pull request to get an
+on-demand Claude review (scylladb org members and collaborators).
+[How it works](docs/faq.md#how-does-the-claude-ai-code-review-work).
+
+**Development plans:** active implementation plans are tracked in [docs/plans/MASTER.md](docs/plans/MASTER.md).
+To write a new one, see [docs/plans/INSTRUCTIONS.md](docs/plans/INSTRUCTIONS.md).
 
 ![Progress Roadmap](docs/plans/assets/progress-roadmap.svg)
 
-Active implementation plans for SCT are tracked in [docs/plans/MASTER.md](docs/plans/MASTER.md).
-For guidelines on creating new plans, see [docs/plans/INSTRUCTIONS.md](docs/plans/INSTRUCTIONS.md).
+## 10. Maintainer reference
 
-## Types of Tests
-### [Artifact tests](./docs/artifacts_test.md)
-### [Longevity Tests](./docs/longevity.md) (TODO: write explanation for them)
-### Upgrade Tests (TODO: write explanation for them)
-### Performance Tests (TODO: write explanation for them)
-### Features Tests (TODO: write explanation for them)
-### Manager Tests (TODO: write explanation for them)
-### [K8S Functional Tests](./docs/k8s-functional-test.md)
-### [Microbenchmarking Tests](./docs/microbenchmarking.md)
-### [Performance Tests](./docs/performance-tests.md)
-### [Cassandra -> Scylla Migration Tests](./docs/cs-to-scylla-migration.md)
+- [KeyStore credential management](docs/keystore-secrets-manager.md) · [credential rotation](docs/keystore-credential-rotation.md) · [SSH key rotation](docs/ssh-key-rotation.md)
+- [Updating monitoring images](docs/monitoring-images.md)
+- [Building a new loader AMI](docs/new_loader_ami.md)
+- [Creating an ES index](docs/hydra-create-es-index.md)
