@@ -34,6 +34,7 @@ class SctEventProtocol(Protocol):
     subtype: Optional[str]
     event_timestamp: Optional[float]
     severity: Severity
+    event_id: str
 
     def __init__(self, *args, **kwargs): ...
 

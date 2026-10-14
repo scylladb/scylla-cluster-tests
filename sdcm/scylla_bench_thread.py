@@ -25,8 +25,7 @@ from sdcm.loader import ScyllaBenchStressExporter, ScyllaBenchHDRExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
 from sdcm.reporting.tooling_reporter import ScyllaBenchVersionReporter
-from sdcm.sct_events import Severity
-from sdcm.sct_events.base import find_log_event
+from sdcm.sct_events.base import publish_log_line_event
 from sdcm.sct_events.loaders import (
     ScyllaBenchEvent,
     SCYLLA_BENCH_ERROR_EVENTS_PATTERNS,
@@ -77,18 +76,14 @@ class ScyllaBenchStressEventsPublisher(FileFollowerThread):
                 if self.stopped():
                     break
 
-                event = find_log_event(
-                    chain(SCYLLA_BENCH_ERROR_EVENTS_PATTERNS, SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS), line
+                publish_log_line_event(
+                    chain(SCYLLA_BENCH_ERROR_EVENTS_PATTERNS, SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS),
+                    line,
+                    self.node,
+                    line_number,
+                    event_id=self.event_id,
+                    stop_test_on_failure=self.stop_test_on_failure,
                 )
-                if event is None:
-                    continue
-                if self.event_id:
-                    # Connect the event to the stress load
-                    event.event_id = self.event_id
-                if event.severity == Severity.CRITICAL and not self.stop_test_on_failure:
-                    event = event.clone()  # so we don't change the severity to other stress threads
-                    event.severity = Severity.ERROR
-                event.add_info(node=self.node, line=line, line_number=line_number).publish()
 
 
 class ScyllaBenchThread(DockerBasedStressThread):

@@ -554,6 +554,31 @@ def find_log_event(patterns: Iterable[Tuple[re.Pattern, LogEventProtocol]], line
     return next((event for pattern, event in patterns if pattern.search(line)), None)
 
 
+def publish_log_line_event(
+    patterns: Iterable[Tuple[re.Pattern, LogEventProtocol]],
+    line: str,
+    node,
+    line_number: int,
+    event_id: Optional[str] = None,
+    stop_test_on_failure: bool = True,
+) -> bool:
+    """Publish a private copy of the first event matching the log line; return whether one was published.
+
+    The copy carries `event_id` (when given) to connect it to the stress load, and its CRITICAL severity is lowered
+    to ERROR when `stop_test_on_failure` is False. Safe to call from several threads sharing the same `patterns`.
+    """
+    prototype = find_log_event(patterns, line)
+    if prototype is None:
+        return False
+    event = prototype.clone()
+    if event_id:
+        event.event_id = event_id
+    if event.severity == Severity.CRITICAL and not stop_test_on_failure:
+        event.severity = Severity.ERROR
+    event.add_info(node=node, line=line, line_number=line_number).publish()
+    return True
+
+
 __all__ = (
     "SctEvent",
     "SctEventProtocol",
@@ -562,6 +587,7 @@ __all__ = (
     "LogEvent",
     "LogEventProtocol",
     "find_log_event",
+    "publish_log_line_event",
     "T_log_event",
     "add_severity_limit_rules",
     "max_severity",
