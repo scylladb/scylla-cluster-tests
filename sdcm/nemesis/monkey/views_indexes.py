@@ -85,7 +85,12 @@ class CreateIndexNemesis(NemesisBaseClass):
                 raise UnsupportedNemesis("No table found to create index on")
             ks, cf = self.runner.random.choice(ks_cf_list).split(".")
             column = get_random_column_name(
-                session, ks, cf, filter_out_static_columns=True, filter_out_column_types=["counter"]
+                session,
+                ks,
+                cf,
+                filter_out_static_columns=True,
+                filter_out_column_types=["counter"],
+                random_generator=self.runner.random,
             )
             if not column:
                 raise UnsupportedNemesis("No column found to create index on")
@@ -171,7 +176,9 @@ class AddRemoveMvNemesis(NemesisBaseClass):
                     collect_diagnostics(MVDiagnosticCollector(session, exception_handler=EventExceptionHandler())),
                 ):
                     try:
-                        create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
+                        create_materialized_view_for_random_column(
+                            session, ks_name, base_table_name, view_name, random_generator=self.runner.random
+                        )
                     except Exception as error:
                         self.runner.log.warning("Failed creating a materialized view: %s", error)
                         raise
@@ -254,7 +261,8 @@ class KillMVBuildingCoordinator(NemesisBaseClass):
 
         with (
             self.runner.node_allocator.run_nemesis(
-                node_list=self.runner.cluster.nodes, nemesis_label="Verification node for MV"
+                node_list=self.runner.cluster.nodes,
+                nemesis_label="Verification node for MV",
             ) as working_node,
             self.runner.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session,
             collect_diagnostics(MVDiagnosticCollector(session, exception_handler=EventExceptionHandler())),
@@ -262,7 +270,9 @@ class KillMVBuildingCoordinator(NemesisBaseClass):
             ks_name, base_table_name = self.runner.random.choice(ks_cfs).split(".")
             view_name = f"{base_table_name}_view_{str(uuid4())[:8]}"
             try:
-                column = create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
+                column = create_materialized_view_for_random_column(
+                    session, ks_name, base_table_name, view_name, random_generator=self.runner.random
+                )
                 wait_materialized_view_building_tasks_started(session, ks_name, view_name)
             except ViewFinishedBuildingException:
                 drop_materialized_view(session, ks_name, view_name)
