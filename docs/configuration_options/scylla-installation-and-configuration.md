@@ -5,7 +5,7 @@
 Which Scylla to install and how it is configured: repos, versions, distro,
 `scylla.yaml`/command-line options, experimental features, authentication and encryption.
 
-**44 options.**
+**45 options.**
 
 
 <a id="append_scylla_args"></a>
@@ -381,6 +381,17 @@ Url to the repo of scylla version to install scylla. Can provide specific versio
 **default:** N/A
 
 **type:** str (appendable)
+
+
+<a id="scylla_setup_no_raid"></a>
+
+## **scylla_setup_no_raid** / SCT_SCYLLA_SETUP_NO_RAID
+
+Run scylla_setup with --no-raid-setup: no data disk is detected or formatted, and<br>/var/lib/scylla stays a directory on the root filesystem, which must be XFS.<br>For hosts without a free disk, e.g. a bare-metal host whose only disk holds the OS.
+
+**default:** False
+
+**type:** bool
 
 
 <a id="scylla_version"></a>
