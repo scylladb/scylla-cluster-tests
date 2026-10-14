@@ -1,0 +1,23 @@
+#!groovy
+
+// The regular Azure image artifacts test, run against minicloud instead of real Azure.
+//
+// It runs on the lab KVM agent, not on an sct-runner: the Azure runner has no nested-virtualization
+// sizing. The image is a pinned marketplace URN, because minicloud cannot use the community-gallery
+// image that scylla_version resolves to. SCT takes scylla_version from the URN.
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    backend: 'azure',
+    azure_region_name: 'eastus',
+    test_config: '''["test-cases/artifacts/azure-image.yaml", "configurations/minicloud.yaml", "configurations/minicloud/azure.yaml"]''',
+    minicloud: true,
+    local_agent: true,
+
+    azure_image_db: 'scylladb1631195365807:scylladb-enterprise-vm:scylla-enterprise-vm:2026.3.3',
+
+    provision_type: 'on_demand',
+    timeout: [time: 90, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+)

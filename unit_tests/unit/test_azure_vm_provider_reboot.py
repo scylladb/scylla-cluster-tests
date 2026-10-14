@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
+from sdcm.provision.provisioner import PricingModel
 
 
 @pytest.fixture
@@ -47,3 +48,12 @@ def test_reboot_no_wait(mock_run_command, provider):
     provider.reboot("vm1", wait=False, hard=False)
     mock_run_command.assert_called_once_with("vm1", "reboot -f")
     provider._azure_service.compute.virtual_machines.begin_restart.assert_not_called()
+
+
+def test_starting_vm_is_not_provisioned_under_minicloud(provider, monkeypatch):
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    provider._azure_service.compute.virtual_machines.get.return_value = MagicMock(
+        provisioning_state="Succeeded",
+        instance_view=MagicMock(statuses=[MagicMock(code="PowerState/starting")]),
+    )
+    assert provider._poll_provisioned_vm("vm1", PricingModel.ON_DEMAND) is None

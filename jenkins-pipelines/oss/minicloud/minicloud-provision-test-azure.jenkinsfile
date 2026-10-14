@@ -1,0 +1,20 @@
+#!groovy
+
+// minicloud-provision-test on the Azure backend. The lab agent and the pinned URN have the same
+// reasons as in minicloud-artifact-azure-image.jenkinsfile.
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'azure',
+    azure_region_name: 'eastus',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: '''["test-cases/minicloud-provision-test.yaml", "configurations/minicloud.yaml", "configurations/minicloud/azure.yaml"]''',
+    minicloud: true,
+    local_agent: true,
+
+    azure_image_db: 'scylladb1631195365807:scylladb-enterprise-vm:scylla-enterprise-vm:2026.3.3',
+
+    provision_type: 'on_demand',
+    post_behavior_db_nodes: 'destroy',
+)

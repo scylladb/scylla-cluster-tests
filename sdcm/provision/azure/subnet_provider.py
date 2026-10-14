@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
+import ipaddress
 import logging
 from dataclasses import dataclass, field
 
@@ -43,13 +44,13 @@ class SubnetProvider:
             pass
 
     @staticmethod
-    def address_prefix(index: int) -> str:
+    def address_prefix(index: int, address_space: str = "10.0.0.0/16") -> str:
         """IPv4 prefix of the subnet holding the NIC of the given device index.
 
-        Carved out of the VNet's 10.0.0.0/16 so that every NIC index gets a distinct /24 and the
-        primary NIC keeps the 10.0.0.0/24 it has always used.
+        Carved out of the VNet's address space so that every NIC index gets a distinct /24 and the
+        primary NIC keeps the first /24 (10.0.0.0/24 on real Azure) it has always used.
         """
-        return f"10.0.{index}.0/24"
+        return str(list(ipaddress.ip_network(address_space).subnets(new_prefix=24))[index])
 
     def get_or_create(
         self,
@@ -58,6 +59,7 @@ class SubnetProvider:
         subnet_name: str = "default",
         index: int = 0,
         ipv6: bool = False,
+        address_space: str = "10.0.0.0/16",
     ) -> Subnet:
         cache_name = f"{vnet_name}-{subnet_name}"
         if cache_name in self._cache:
@@ -68,12 +70,12 @@ class SubnetProvider:
             # single-family form and Azure rejects both being set
             address = {
                 "address_prefixes": [
-                    self.address_prefix(index),
+                    self.address_prefix(index, address_space),
                     AZURE_IPV6_SUBNET_PREFIX_TMPL.format(index=index),
                 ]
             }
         else:
-            address = {"address_prefix": self.address_prefix(index)}
+            address = {"address_prefix": self.address_prefix(index, address_space)}
         self._azure_service.network.subnets.begin_create_or_update(
             resource_group_name=self._resource_group_name,
             virtual_network_name=vnet_name,

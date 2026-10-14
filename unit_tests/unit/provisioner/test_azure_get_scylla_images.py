@@ -19,6 +19,7 @@ import pytest
 
 from sdcm.provision.azure.utils import (
     get_arch_from_azure_instance_type,
+    get_image_tags,
     get_scylla_images,
     get_scylla_images_private_galleries,
 )
@@ -123,3 +124,8 @@ def generate_gallery_images_json_file(test_data_dir, gallery_name="scylladb_dev"
     ) as images_file:
         serialized_images = [image.to_dict() | {"name": image.name} for image in images]
         images_file.write(json.dumps(serialized_images, indent=2))
+
+
+def test_get_image_tags_from_marketplace_urn():
+    tags = get_image_tags("scylladb1631195365807:scylladb-enterprise-vm:scylla-enterprise-vm:2026.2.5")
+    assert tags == {"scylla_version": "2026.2.5", "user_data_format_version": "3"}
