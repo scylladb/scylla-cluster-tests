@@ -140,3 +140,24 @@ class TestReplicationStrategySetter:
         with pytest.raises(StopIteration):
             # shouldn't do anything else
             next(out)
+
+
+RACK_LIST_DESCRIBE = (
+    "CREATE KEYSPACE ks WITH replication = {'class': 'org.apache.cassandra.locator.NetworkTopologyStrategy', "
+    "'DC1': ['RACK1', 'RACK2'], 'DC2': '3'} AND durable_writes = true AND tablets = {'enabled': true};"
+)
+
+
+def test_network_topology_strategy_with_rack_lists():
+    strategy = ReplicationStrategy.from_string(RACK_LIST_DESCRIBE)
+    expected = "{'class': 'NetworkTopologyStrategy', 'DC1': ['RACK1', 'RACK2'], 'DC2': 3}"
+    assert str(strategy) == expected
+    assert strategy.replication_factors == [2, 3]
+    assert str(ReplicationStrategy.from_string(f"replication = {strategy}")) == expected
+
+
+def test_network_topology_strategy_drop_dc_with_rack_lists():
+    strategy = ReplicationStrategy.from_string(RACK_LIST_DESCRIBE)
+    rollback = NetworkTopologyReplicationStrategy(**{**strategy.replication_factors_per_dc, "DC2": 0})
+    assert str(rollback) == "{'class': 'NetworkTopologyStrategy', 'DC1': ['RACK1', 'RACK2'], 'DC2': 0}"
+    assert rollback.replication_factors == [2, 0]
