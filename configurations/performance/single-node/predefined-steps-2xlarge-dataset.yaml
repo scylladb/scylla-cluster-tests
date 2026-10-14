@@ -1,0 +1,31 @@
+# 2xlarge datasets for test-cases/performance/perf-regression-predefined-throughput-steps-1-node.yaml (SCT-1214).
+#
+# A 2xlarge host has half the disk, memory and vCPUs of a 4xlarge, so every dataset is halved: 325M rows on disk
+# (the same ~17% fill of a 1.875 TB disk), a 10M-row cache dataset, and half the rows for the write load. The
+# preload rate is halved too (75k writes/s), so the preload takes as long as on a 4xlarge.
+#
+# Layer it after the test-case and before configurations/performance/single-node/<instance type>.yaml.
+
+prepare_write_cmd: [
+  "cassandra-stress write  cl=ONE n=325000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode connectionsPerHost=8 cql3 native -rate threads=200 throttle=75000/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..325000000"
+]
+
+stress_cmd_w: [
+  "cassandra-stress write no-warmup cl=ONE n=805306368 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..805306368"
+]
+
+stress_cmd_r: [
+  "cassandra-stress read no-warmup  cl=ONE duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000"
+]
+
+stress_cmd_cache_warmup: [
+  "cassandra-stress read  cl=ONE n=10000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000"
+]
+
+stress_cmd_m: [
+  "cassandra-stress mixed no-warmup  cl=ONE duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000"
+]
+
+stress_cmd_read_disk: [
+  "cassandra-stress read no-warmup  cl=ONE duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..325000000"
+]
