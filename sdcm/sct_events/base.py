@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import re
 import json
 import time
 import uuid
@@ -20,6 +21,7 @@ import pickle
 import fnmatch
 import logging
 from enum import Enum
+from collections.abc import Iterable
 from json import JSONEncoder
 from types import new_class
 from typing import Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable
@@ -538,6 +540,14 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
         return fmt
 
 
+def find_log_event(patterns: Iterable[Tuple[re.Pattern, LogEventProtocol]], line: str) -> Optional[LogEventProtocol]:
+    """Return the event of the first pattern that matches the log line, or None.
+
+    The returned event is the shared prototype from `patterns`; clone it to keep per-line state off it.
+    """
+    return next((event for pattern, event in patterns if pattern.search(line)), None)
+
+
 __all__ = (
     "SctEvent",
     "SctEventProtocol",
@@ -545,6 +555,7 @@ __all__ = (
     "BaseFilter",
     "LogEvent",
     "LogEventProtocol",
+    "find_log_event",
     "T_log_event",
     "add_severity_limit_rules",
     "max_severity",

@@ -19,6 +19,7 @@ import uuid
 from typing import Any
 
 from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.sct_events.base import find_log_event
 from sdcm.sct_events.loaders import NdBenchStressEvent, NDBENCH_ERROR_EVENTS_PATTERNS
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.docker_remote import RemoteDocker
@@ -46,14 +47,11 @@ class NdBenchStressEventsPublisher(FileFollowerThread):
                 if self.stopped():
                     break
 
-                for pattern, event in NDBENCH_ERROR_EVENTS_PATTERNS:
+                if event := find_log_event(NDBENCH_ERROR_EVENTS_PATTERNS, line):
                     if self.event_id:
                         # Connect the event to the stress load
                         event.event_id = self.event_id
-
-                    if pattern.search(line):
-                        event.add_info(node=self.node, line=line, line_number=line_number).publish()
-                        break  # Stop iterating patterns to avoid creating two events for one line of the log
+                    event.add_info(node=self.node, line=line, line_number=line_number).publish()
 
 
 class NdBenchStatsPublisher(FileFollowerThread):
