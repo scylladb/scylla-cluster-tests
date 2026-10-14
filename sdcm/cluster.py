@@ -7098,10 +7098,15 @@ class BaseScyllaCluster:
         if check_node_health:
             node_list[0].check_node_health()
 
-    def restart_scylla(self, nodes=None, random_order=False):
+    def restart_scylla(self, nodes=None, random_order=False, *, random_generator: random.Random | None = None):
+        """Restart Scylla on ``nodes`` (all by default) one after another.
+
+        :param random_generator: shuffles the nodes when ``random_order`` is set. Nemesis code passes
+            ``NemesisRunner.random`` so the order replays from nemesis_seed; other callers leave it unset.
+        """
         nodes_to_restart = (nodes or self.nodes)[:]  # create local copy of nodes list
         if random_order:
-            random.shuffle(nodes_to_restart)
+            (random_generator or random.Random()).shuffle(nodes_to_restart)
         self.log.info("Going to restart Scylla on %s", [n.name for n in nodes_to_restart])
         for node in nodes_to_restart:
             node.stop_scylla(verify_down=True)

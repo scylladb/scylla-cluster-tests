@@ -97,7 +97,7 @@ Nemesis behavior is controlled through test YAML configs or environment variable
 | `nemesis_class_name` | `str` | `'NoOpMonkey'` | Runner class to use. Accepts a YAML list; repeat a class to run parallel threads, e.g. `["SisyphusMonkey", "SisyphusMonkey"]` |
 | `nemesis_selector` | `str` | `None` | Boolean flag expression to filter nemesis (e.g. `"not disruptive"`). For `FixedOrderMonkey`: ordered, comma-separated nemesis class names |
 | `nemesis_interval` | `int` | `5` | Sleep interval between operations, in **minutes** |
-| `nemesis_seed` | `int` | random | Seed for reproducible nemesis sequences |
+| `nemesis_seed` | `int` | random | Seed of the per-runner generator (`self.random`) behind every random nemesis decision; set it to replay a run |
 | `nemesis_filter_seeds` | `bool` | `false` | If true, target only non-seed nodes |
 | `nemesis_multiply_factor` | `int` | `2` | Multiply the disruption list before shuffling |
 | `nemesis_during_prepare` | `bool` | `true` | Run nemesis during test prepare stage |
