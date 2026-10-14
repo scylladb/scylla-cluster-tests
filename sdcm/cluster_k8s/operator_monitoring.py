@@ -17,7 +17,7 @@ from typing import Iterable
 
 from sdcm.utils.file import File
 from sdcm.utils.decorators import timeout
-from sdcm.sct_events.base import find_log_event
+from sdcm.sct_events.base import publish_log_line_event
 from sdcm.sct_events.operator import (
     SCYLLA_OPERATOR_EVENT_PATTERNS,
 )
@@ -53,8 +53,7 @@ class ScyllaOperatorLogMonitoring(threading.Thread):
     @staticmethod
     def check_logs(file_follower: Iterable[str]):
         for log_record in file_follower:
-            if event := find_log_event(SCYLLA_OPERATOR_EVENT_PATTERNS, log_record):
-                event.clone().add_info(node="N/A", line=log_record, line_number=0).publish()
+            publish_log_line_event(SCYLLA_OPERATOR_EVENT_PATTERNS, log_record, node="N/A", line_number=0)
 
     def stop(self):
         self.termination_event.set()

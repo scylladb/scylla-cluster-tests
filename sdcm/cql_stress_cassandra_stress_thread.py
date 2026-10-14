@@ -22,7 +22,7 @@ from sdcm.loader import CqlStressCassandraStressExporter, CqlStressHDRExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, cql_stress_transport_str
 from sdcm.reporting.tooling_reporter import CqlStressCassandraStressVersionReporter
-from sdcm.sct_events.base import find_log_event
+from sdcm.sct_events.base import publish_log_line_event
 from sdcm.sct_events.loaders import CQL_STRESS_CS_ERROR_EVENTS_PATTERNS, CqlStressCassandraStressEvent
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.argus import report_stress_command
@@ -51,10 +51,9 @@ class CqlStressCassandraStressEventsPublisher(FileFollowerThread):
                 if self.stopped():
                     break
 
-                if event := find_log_event(CQL_STRESS_CS_ERROR_EVENTS_PATTERNS, line):
-                    if self.event_id:
-                        event.event_id = self.event_id
-                    event.add_info(node=self.node, line=line, line_number=line_number).publish()
+                publish_log_line_event(
+                    CQL_STRESS_CS_ERROR_EVENTS_PATTERNS, line, self.node, line_number, event_id=self.event_id
+                )
 
 
 class CqlStressCassandraStressThread(CassandraStressThread):
