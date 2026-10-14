@@ -85,7 +85,7 @@ from sdcm.nemesis.utils.common import (
 from sdcm.nemesis.utils.indexes import (
     is_cf_a_view,
 )
-from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
+from sdcm.nemesis.utils.node_allocator import RunnerNodeAllocator
 from sdcm.nemesis.utils.topology_ops import grow_cluster, shrink_cluster
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import TLSAssets, update_certificate
@@ -302,21 +302,28 @@ class NemesisRunner:
         self.log = SDCMAdapter(logger, extra={"prefix": str(self)})
         self.task_used_streaming = None
         self.filter_seed = self.cluster.params.get("nemesis_filter_seeds")
-        self.nemesis_seed = nemesis_seed or random.randint(0, 1000)
+        self.nemesis_seed = nemesis_seed if nemesis_seed is not None else random.randint(0, 1000)
         self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
         self.hdr_tags = []
 
         if not hasattr(self.tester, "nemesis_allocator"):
             raise RuntimeError("NemesisNodeAllocator was not initialized on the tester object.")
-        self.node_allocator: NemesisNodeAllocator = self.tester.nemesis_allocator
+        # Per-runner frontend: forwards node picks to the shared allocator with this runner's
+        # seeded generator, so disruptions never pass it themselves.
+        self.node_allocator = RunnerNodeAllocator(self.tester.nemesis_allocator, self.random)
 
         self.log.debug("Instantiated %s nemesis with %d seed", self.__class__.__name__, self.nemesis_seed)
 
     @cached_property
     def random(self) -> random.Random:
-        if self.nemesis_seed:
-            return random.Random(self.nemesis_seed)
-        return random.Random()
+        """Per-runner random generator seeded with nemesis_seed.
+
+        Every random decision a nemesis makes (disruption order, target node,
+        tables, parameters) should go through this instance so that a run can
+        be replayed with the same seed. Never use the global ``random`` module
+        in nemesis code.
+        """
+        return random.Random(self.nemesis_seed)
 
     def update_stats(self, disrupt, status=True, data=None):
         if not data:
@@ -530,7 +537,7 @@ class NemesisRunner:
         if ks_cf_list := self.cluster.get_non_system_ks_cf_list(
             db_node=self.target_node, filter_empty_tables=filter_empty_tables
         ):
-            return random.choice(ks_cf_list).split(".")
+            return self.random.choice(ks_cf_list).split(".")
         else:
             return None, None
 
@@ -778,7 +785,7 @@ class NemesisRunner:
             "CDC description table successfully updated with generation",
         ]
 
-        num_of_reboots = random.randint(2, 10)
+        num_of_reboots = self.random.randint(2, 10)
         InfoEvent(message=f"MultipleHardRebootNode {self.target_node}").publish()
         self.actions_log.info(f"Rebooting node {self.target_node.name} {num_of_reboots} times")
         for i in range(num_of_reboots):
@@ -787,7 +794,7 @@ class NemesisRunner:
             cdc_success_msg = self.target_node.follow_system_log(patterns=cdc_success_msg_patterns)
             with suppress_expected_unavailability_errors():
                 self.reboot_node(target_node=self.target_node, hard=True)
-            if random.choice([True, False]):
+            if self.random.choice([True, False]):
                 self.log.info("Waiting scylla services to start after node reboot")
                 self.target_node.wait_db_up()
             else:
@@ -802,7 +809,7 @@ class NemesisRunner:
                 # found in logs, raise the exception to fail the nemesis.
                 self._check_for_cdc_success_messages(found_cdc_error, cdc_success_msg)
 
-            sleep_time = random.randint(0, 100)
+            sleep_time = self.random.randint(0, 100)
             self.log.info("Sleep %s seconds after hard reboot and service-up for node %s", sleep_time, self.target_node)
             time.sleep(sleep_time)
 
@@ -824,7 +831,7 @@ class NemesisRunner:
     @decorate_with_context(suppress_expected_unavailability_errors)
     def disrupt_rolling_restart_cluster(self, random_order=False):
         with self.action_log_scope(f"Rolling restart cluster. random order: {random_order}"):
-            self.cluster.restart_scylla(random_order=random_order)
+            self.cluster.restart_scylla(random_order=random_order, random_generator=self.random)
 
     def disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back(self):
         """
@@ -872,7 +879,7 @@ class NemesisRunner:
             self.log.debug(f"Current compression is {current_compression}")
             values = ["dc", "all", "rack", None]
             values_to_toggle = list(filter(lambda value: value != current_compression, values))
-            return random.choice(values_to_toggle)
+            return self.random.choice(values_to_toggle)
 
         with self.target_node.remote_scylla_yaml() as scylla_yaml:
             current = scylla_yaml.internode_compression
@@ -942,7 +949,7 @@ class NemesisRunner:
         file_for_destroy = ""
         all_files = []
 
-        ks_cf_for_destroy = random.choice(ks_cfs)  # expected value as: 'keyspace1.standard1'
+        ks_cf_for_destroy = self.random.choice(ks_cfs)  # expected value as: 'keyspace1.standard1'
 
         ks_cf_for_destroy = ks_cf_for_destroy.replace(".", "/")
         files = self.target_node.remoter.sudo(
@@ -1133,7 +1140,7 @@ class NemesisRunner:
         # since we need this logic before starting a node, and in `use_preinstalled_scylla: false` case
         # scylla is not yet installed or target node was terminated, we should use an alive node without nemesis for version,
         # it should be up and with scylla executable available
-        verification_node = random.choice(
+        verification_node = self.random.choice(
             [
                 node
                 for node in self.cluster.nodes
@@ -1468,7 +1475,7 @@ class NemesisRunner:
             # NOTE: pick up a new target node only in the same region to reduce possible confusion
             #       during the debug process in case of a failure.
             dc_idx=self.target_node.dc_idx,
-            rack=random.choice(list(self.cluster.racks)),
+            rack=self.random.choice(list(self.cluster.racks)),
             allow_only_last_node_in_rack=True,
         )
         node = self.target_node
@@ -1598,7 +1605,7 @@ class NemesisRunner:
             try:
                 # drop test tables one by one during repair
                 for i in range(10):
-                    time.sleep(random.randint(0, 300))
+                    time.sleep(self.random.randint(0, 300))
                     with self.cluster.cql_connection_patient(self.target_node, connect_timeout=600) as session:
                         self.actions_log.info(f"Dropping table drop_table_during_repair_ks_{i}.standard1")
                         session.execute(
@@ -2238,7 +2245,7 @@ class NemesisRunner:
                 "Any table with RF != 1 is not found. disrupt_toggle_table_gc_mode nemesis can't run"
             )
 
-        keyspace_table = random.choice(all_ks_cfs)
+        keyspace_table = self.random.choice(all_ks_cfs)
         keyspace, table = keyspace_table.split(".")
         current_gc_mode = get_gc_mode(node=self.target_node, keyspace=keyspace, table=table)
         if current_gc_mode != GcMode.REPAIR:
@@ -2269,19 +2276,19 @@ class NemesisRunner:
         if not all_ks_cfs:
             raise UnsupportedNemesis("Non-system keyspace and table are not found. toggle_tables_ics nemesis can't run")
 
-        keyspace_table = random.choice(all_ks_cfs)
+        keyspace_table = self.random.choice(all_ks_cfs)
         keyspace, table = keyspace_table.split(".")
         cur_compaction_strategy = get_compaction_strategy(node=self.target_node, keyspace=keyspace, table=table)
         if cur_compaction_strategy != CompactionStrategy.INCREMENTAL:
             new_compaction_strategy = CompactionStrategy.INCREMENTAL
         else:
-            new_compaction_strategy = random.choice(
+            new_compaction_strategy = self.random.choice(
                 [strategy for strategy in list(CompactionStrategy) if strategy != CompactionStrategy.INCREMENTAL]
             )
         new_compaction_strategy_as_dict = {"class": new_compaction_strategy.value}
 
         if new_compaction_strategy in [CompactionStrategy.INCREMENTAL, CompactionStrategy.SIZE_TIERED]:
-            for param in get_compaction_random_additional_params(new_compaction_strategy):
+            for param in get_compaction_random_additional_params(new_compaction_strategy, random_generator=self.random):
                 new_compaction_strategy_as_dict.update(param)
         alter_command_prefix = (
             "ALTER TABLE "
@@ -2553,14 +2560,14 @@ class NemesisRunner:
                 ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node)
 
             if one_ks:
-                keyspace_table = random.choice(ks_cf)
+                keyspace_table = self.random.choice(ks_cf)
                 keyspace, _ = keyspace_table.split(".")
             else:
                 keyspaces = {ks.split(".")[0] for ks in ks_cf}
                 if len(keyspaces) == 1:
                     ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node)
                     keyspaces = {ks.split(".")[0] for ks in ks_cf}
-                keyspace = ",".join(random.sample(sorted(keyspaces), k=min(len(keyspaces), MAX_NAMES_IN_CMD)))
+                keyspace = ",".join(self.random.sample(sorted(keyspaces), k=min(len(keyspaces), MAX_NAMES_IN_CMD)))
 
             if not keyspace:
                 # it's unexpected situation. We have system keyspaces, so the keyspace(s) should be found always.
@@ -2593,9 +2600,9 @@ class NemesisRunner:
                 self.log.warning("Keyspace with few tables has not been found")
                 return _full_snapshot()
 
-            selected_keyspace = random.choice(ks_with_few_tables)
+            selected_keyspace = self.random.choice(ks_with_few_tables)
             ks_tables = [k_c.split(".")[1] for k_c in ks_cf if k_c.startswith(f"{selected_keyspace}.")]
-            tables = ",".join(random.sample(ks_tables, k=min(len(ks_tables), MAX_NAMES_IN_CMD)))
+            tables = ",".join(self.random.sample(ks_tables, k=min(len(ks_tables), MAX_NAMES_IN_CMD)))
 
             if not tables:
                 # it's unexpected situation. We have system keyspaces with few tables, so the keyspaces should be found.
@@ -2608,7 +2615,7 @@ class NemesisRunner:
             return f"snapshot {selected_keyspace} -cf {tables}"
 
         functions_map = [(_few_tables,), (_full_snapshot,), (_ks_snapshot, True), (_ks_snapshot, False)]
-        snapshot_option = random.choice(functions_map)
+        snapshot_option = self.random.choice(functions_map)
 
         try:
             nodetool_cmd = snapshot_option[0]() if len(snapshot_option) == 1 else snapshot_option[0](snapshot_option[1])
@@ -2661,7 +2668,7 @@ class NemesisRunner:
         if allow_new_api:
             top_partition_api_cmds.append(NewApiTopPartitionCmd)
         for top_partition_api_cmd in top_partition_api_cmds:
-            top_partition_api = top_partition_api_cmd(ks_cf_list)
+            top_partition_api = top_partition_api_cmd(ks_cf_list, random_generator=self.random)
             # workaround for issue #4519
             self.target_node.run_nodetool("cfstats")
             top_partition_api.generate_cmd_arg_values()
@@ -2875,7 +2882,7 @@ class NemesisRunner:
             return new_node
 
         terminate_pattern = self.target_node.raft.get_random_log_message(
-            operation=TopologyOperations.DECOMMISSION, seed=self.nemesis_seed
+            operation=TopologyOperations.DECOMMISSION, random_generator=self.random
         )
         self.log.debug("Reboot node after log message: '%s'", terminate_pattern.log_message)
 
@@ -3522,7 +3529,7 @@ class NemesisRunner:
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.actions_log.info(f"Added new node : {new_node.name}")
         terminate_pattern = self.target_node.raft.get_random_log_message(
-            operation=TopologyOperations.BOOTSTRAP, seed=self.nemesis_seed
+            operation=TopologyOperations.BOOTSTRAP, random_generator=self.random
         )
         bootstrapabortmanager = NodeBootstrapAbortManager(
             bootstrap_node=new_node, verification_node=self.target_node, actions_log=self.actions_log
