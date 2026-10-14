@@ -1120,6 +1120,7 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         )
 
         size_on_bucket = self.get_snapshot_size_on_bucket(cluster_id=mgr_cluster.id, locations=location_list)
+        ks_size = self.get_keyspaces_disk_size_gb([ks_name])
 
         if is_cloud_manager:
             self.log.info("Copy bucket with snapshot since the original bucket is deleted together with cluster")
@@ -1142,7 +1143,7 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         self.log.info("Send snapshot details to Argus")
         snapshot_details = {
             "tag": backup_task.get_snapshot_tag(),
-            "size": backup_size,
+            "duration": int(backup_task.duration.total_seconds()),
             "locations": ",".join(location_list),
             "ks_name": ks_name,
             "scylla_version": self.params.get_version_based_on_conf()[0],
@@ -1152,6 +1153,8 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         }
         if size_on_bucket is not None:
             snapshot_details["size_on_bucket"] = size_on_bucket
+        if ks_size is not None:
+            snapshot_details["size"] = ks_size
         self.log.debug(f"Snapshot details: {snapshot_details}")
         send_manager_snapshot_details_to_argus(
             argus_client=self.test_config.argus_client(),
