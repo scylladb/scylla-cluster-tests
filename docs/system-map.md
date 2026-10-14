@@ -1,370 +1,185 @@
-# SCT system map
+# SCT system map: test types
 
-What a test run is made of on each backend, drawn for the Longevity shape. Expand a backend to see its diagram and the test types it supports.
+Every SCT run has the same skeleton: the SCT runner provisions a DB cluster, loaders and a
+monitor on the chosen backend, runs stress and nemesis against the cluster, and reports to
+Argus. The backend only changes *where* those machines come from. Each section below shows
+what one **test type** adds or drops on top of that skeleton, drawn on AWS (or the type's own
+backend), with every connection shown.
 
-<details><summary><b>AWS</b> · AWS account</summary>
+## Test types
 
-```mermaid
-flowchart LR
-  dev[Developer / Jenkins] --> runner
-  subgraph runner["SCT runner"]
-    test[SCT test - Python]
-  end
-  subgraph env["AWS account"]
-    db[("6 × EC2 · Scylla AMI")]
-    ld["2 × EC2 · Ubuntu"]
-    mon["EC2 · monitor AMI"]
-  end
-  runner -->|"EC2 API"| env
-  test -->|stress commands| ld
-  ld -->|CQL| db
-  test -.->|nemesis| db
-  mon -.->|scrape| db
-  env --- s0["Amazon EC2 AMIs"]
-  env --- s1["EC2 Spot Instances"]
-  test -->|results · errors| argus[(Argus)]
-```
+**[Longevity](#longevity)** · [Performance](#performance-throughput-steps) · [Rolling upgrade](#rolling-upgrade) · [Artifacts](#artifacts) · [Multi-DC](#multi-dc) · [Gemini](#gemini) · [Alternator](#alternator) · [Cassandra → Scylla](#cassandra--scylla-sparkemr) · [Vector search](#vector-search) · [Kafka](#kafka-connectors) · [Security](#security-ear--ldap)
 
-| Test type | What it does |
-|---|---|
-| [Longevity](../docs/longevity.md) | Long-running mixed load with chaos. The default shape most tests share. |
-| [Performance regression](../docs/performance/README.md) | Steady stress against a fixed cluster. HDR latency and throughput go to Argus, which compares with past runs and fails on regression. |
-| [Rolling upgrade](../docs/rolling-upgrade.md) | Starts on a base version and upgrades one node at a time under load, optionally rolling some back. |
-| [Artifacts](../docs/artifacts_test.md) | Checks a package, image or AMI on one node. No loaders, no monitor. |
-| [Scylla Manager](../docs/configuration_options/scylla-manager.md) | Backup, restore, repair and health checks driven by sctool. Backups go to the backend's object storage. |
-| [Multi-DC longevity](../docs/longevity.md) | One cluster across regions. List values give per-DC counts; rack_aware_loader keeps load local. |
-| [Gemini](https://github.com/scylladb/gemini#readme) | Gemini sends the same random operations to the test cluster and an oracle cluster and fails on any difference. Nemesis hits the test cluster only. |
-| [Alternator](../docs/configuration_options/alternator-dynamodb-api.md) | Same topology as longevity; the load uses the DynamoDB-compatible API instead of CQL. |
-| [Cassandra → Scylla (Spark/EMR)](../docs/cs-to-scylla-migration.md) | An EMR Spark job runs scylla-migrator from a Cassandra source cluster into Scylla, then a validator job. |
-| [Vector search](../docs/configuration_options/vector-store.md) | Vector-store nodes attached to the Scylla cluster, serving ANN queries over HTTP. |
-| [Kafka connectors](../docs/kafka.md) | Kafka runs as a docker-compose stack on the SCT runner. CDC source and sink connectors move data between Scylla and Kafka. |
-| [Security: EaR + LDAP](../test-cases/longevity) | Encryption at rest with the cloud KMS (key rotation threads), and LDAP auth against an OpenLDAP container on the runner. |
+The images are generated from the interactive map in [system-map/index.html](system-map/index.html)
+(open it locally to switch backends and hover components). After changing the map, re-render
+with the command at the top of [system-map/render.js](system-map/render.js).
 
-</details>
+| Test type | One line | Runs on |
+|---|---|---|
+| [Longevity](#longevity) | Mixed load + nemesis + Scylla Manager backups for hours | every backend |
+| [Performance (throughput steps)](#performance-throughput-steps) | Preload, warm up, then a fixed staircase of throttled steps, one Argus cycle per step | aws, gce, azure, oci, xcloud |
+| [Rolling upgrade](#rolling-upgrade) | Upgrade node by node under load | VM backends, docker |
+| [Artifacts](#artifacts) | One node, install and smoke-check a package or image | VM backends, docker |
+| [Multi-DC](#multi-dc) | One cluster across regions, per-DC counts | aws, gce, azure, oci |
+| [Gemini](#gemini) | Same random ops to the test cluster and an oracle, compare | aws, gce, azure, oci |
+| [Alternator](#alternator) | Longevity over the DynamoDB API | VM backends, docker |
+| [Cassandra → Scylla (Spark/EMR)](#cassandra--scylla-sparkemr) | EMR Spark migrates a Cassandra cluster into Scylla | aws |
+| [Vector search](#vector-search) | Vector-store nodes attached to the cluster | aws, docker, xcloud |
+| [Kafka connectors](#kafka-connectors) | Kafka on the runner, CDC source and sink connectors | VM backends, docker |
+| [Security: EaR + LDAP](#security-ear--ldap) | Cloud KMS encryption at rest, LDAP auth | aws, gce, azure, oci |
 
-<details><summary><b>GCE</b> · GCP project</summary>
+## Longevity
 
-```mermaid
-flowchart LR
-  dev[Developer / Jenkins] --> runner
-  subgraph runner["SCT runner"]
-    test[SCT test - Python]
-  end
-  subgraph env["GCP project"]
-    db[("6 × GCE VM · Scylla image")]
-    ld["2 × GCE VM · Ubuntu"]
-    mon["GCE VM · monitor image"]
-  end
-  runner -->|"Compute Engine API"| env
-  test -->|stress commands| ld
-  ld -->|CQL| db
-  test -.->|nemesis| db
-  mon -.->|scrape| db
-  env --- s0["GCE images"]
-  env --- s1["Spot VMs"]
-  test -->|results · errors| argus[(Argus)]
-```
+The baseline. Typically 6 DB nodes, 2 loaders, 1 monitor.
 
-| Test type | What it does |
-|---|---|
-| [Longevity](../docs/longevity.md) | Long-running mixed load with chaos. The default shape most tests share. |
-| [Performance regression](../docs/performance/README.md) | Steady stress against a fixed cluster. HDR latency and throughput go to Argus, which compares with past runs and fails on regression. |
-| [Rolling upgrade](../docs/rolling-upgrade.md) | Starts on a base version and upgrades one node at a time under load, optionally rolling some back. |
-| [Artifacts](../docs/artifacts_test.md) | Checks a package, image or AMI on one node. No loaders, no monitor. |
-| [Scylla Manager](../docs/configuration_options/scylla-manager.md) | Backup, restore, repair and health checks driven by sctool. Backups go to the backend's object storage. |
-| [Multi-DC longevity](../docs/longevity.md) | One cluster across regions. List values give per-DC counts; rack_aware_loader keeps load local. |
-| [Gemini](https://github.com/scylladb/gemini#readme) | Gemini sends the same random operations to the test cluster and an oracle cluster and fails on any difference. Nemesis hits the test cluster only. |
-| [Alternator](../docs/configuration_options/alternator-dynamodb-api.md) | Same topology as longevity; the load uses the DynamoDB-compatible API instead of CQL. |
-| [Jepsen](../docs/configuration_options/jepsen-tests.md) | Jepsen consistency tests. The control node drives the DB nodes over SSH and injects its own faults. |
-| [Kafka connectors](../docs/kafka.md) | Kafka runs as a docker-compose stack on the SCT runner. CDC source and sink connectors move data between Scylla and Kafka. |
-| [Security: EaR + LDAP](../test-cases/longevity) | Encryption at rest with the cloud KMS (key rotation threads), and LDAP auth against an OpenLDAP container on the runner. |
+![Longevity on AWS](system-map/longevity.png)
 
-</details>
+- Scylla Manager is on by default (`use_mgmt: true`): server on the monitor, agent on every DB
+  node. The manager nemeses (`MgmtBackup`, `MgmtRestore`, `MgmtRepair`, ...) back up to and
+  restore from the backend's object storage.
+- Keys: `n_db_nodes`, `n_loaders`, `stress_cmd`, `prepare_write_cmd`, `nemesis_class_name`,
+  `nemesis_selector`, `use_mgmt`, `backup_bucket_location`.
+- Code: `longevity_test.py` `LongevityTest.test_custom_time`. Manager CLI tests that drive
+  sctool directly: `mgmt_cli_test.py`.
+- Example: `test-cases/longevity/longevity-100gb-4h.yaml`. Docs: [longevity](longevity.md),
+  [nemesis](nemesis.md).
 
-<details><summary><b>Azure</b> · Azure subscription</summary>
+<sub>[↑ test types](#test-types)</sub>
 
-```mermaid
-flowchart LR
-  dev[Developer / Jenkins] --> runner
-  subgraph runner["SCT runner"]
-    test[SCT test - Python]
-  end
-  subgraph env["Azure subscription"]
-    db[("6 × Azure VM · Scylla image")]
-    ld["2 × Azure VM · Ubuntu"]
-    mon["Azure VM · Ubuntu"]
-  end
-  runner -->|"Azure Resource Manager"| env
-  test -->|stress commands| ld
-  ld -->|CQL| db
-  test -.->|nemesis| db
-  mon -.->|scrape| db
-  env --- s0["Shared Image Gallery"]
-  env --- s1["Azure Spot Virtual Machines"]
-  test -->|results · errors| argus[(Argus)]
-```
+## Performance (throughput steps)
 
-| Test type | What it does |
-|---|---|
-| [Longevity](../docs/longevity.md) | Long-running mixed load with chaos. The default shape most tests share. |
-| [Performance regression](../docs/performance/README.md) | Steady stress against a fixed cluster. HDR latency and throughput go to Argus, which compares with past runs and fails on regression. |
-| [Rolling upgrade](../docs/rolling-upgrade.md) | Starts on a base version and upgrades one node at a time under load, optionally rolling some back. |
-| [Artifacts](../docs/artifacts_test.md) | Checks a package, image or AMI on one node. No loaders, no monitor. |
-| [Scylla Manager](../docs/configuration_options/scylla-manager.md) | Backup, restore, repair and health checks driven by sctool. Backups go to the backend's object storage. |
-| [Multi-DC longevity](../docs/longevity.md) | One cluster across regions. List values give per-DC counts; rack_aware_loader keeps load local. |
-| [Gemini](https://github.com/scylladb/gemini#readme) | Gemini sends the same random operations to the test cluster and an oracle cluster and fails on any difference. Nemesis hits the test cluster only. |
-| [Alternator](../docs/configuration_options/alternator-dynamodb-api.md) | Same topology as longevity; the load uses the DynamoDB-compatible API instead of CQL. |
-| [Kafka connectors](../docs/kafka.md) | Kafka runs as a docker-compose stack on the SCT runner. CDC source and sink connectors move data between Scylla and Kafka. |
-| [Security: EaR + LDAP](../test-cases/longevity) | Encryption at rest with the cloud KMS (key rotation threads), and LDAP auth against an OpenLDAP container on the runner. |
+No nemesis. Typically 3 DB nodes and 4 loaders. What is unique is how the run measures:
 
-</details>
+![Performance (throughput steps) on AWS](system-map/performance.png)
 
-<details><summary><b>OCI</b> · OCI tenancy</summary>
+- Each workload (read, write, mixed) climbs its own staircase from
+  `perf_gradual_throttle_steps`. The rate in the YAML is for the whole cluster and is divided
+  across loaders and stress processes; steps last `perf_gradual_step_duration` with at least
+  3 minutes between them.
+- Every step is one measured cycle reported to Argus, which applies
+  `latency_decorator_error_thresholds` and compares with previous runs.
+- Code: `performance_regression_gradual_grow_throughput.py`
+  `PerformanceRegressionPredefinedStepsTest`.
+- Example: `test-cases/performance/perf-regression-predefined-throughput-steps.yaml` with
+  `configurations/performance/cassandra_stress_gradual_load_steps.yaml`.
+- Docs: [performance testing](performance/README.md), especially
+  [anatomy of a perf run](performance/anatomy.md).
 
-```mermaid
-flowchart LR
-  dev[Developer / Jenkins] --> runner
-  subgraph runner["SCT runner"]
-    test[SCT test - Python]
-  end
-  subgraph env["OCI tenancy"]
-    db[("6 × OCI instance · DenseIO")]
-    ld["2 × OCI instance · Ubuntu"]
-    mon["OCI instance · Ubuntu"]
-  end
-  runner -->|"OCI Core API"| env
-  test -->|stress commands| ld
-  ld -->|CQL| db
-  test -.->|nemesis| db
-  mon -.->|scrape| db
-  env --- s0["Images · Object Storage"]
-  env --- s1["On-demand instances"]
-  test -->|results · errors| argus[(Argus)]
-```
+<sub>[↑ test types](#test-types)</sub>
 
-| Test type | What it does |
-|---|---|
-| [Longevity](../docs/longevity.md) | Long-running mixed load with chaos. The default shape most tests share. |
-| [Performance regression](../docs/performance/README.md) | Steady stress against a fixed cluster. HDR latency and throughput go to Argus, which compares with past runs and fails on regression. |
-| [Rolling upgrade](../docs/rolling-upgrade.md) | Starts on a base version and upgrades one node at a time under load, optionally rolling some back. |
-| [Artifacts](../docs/artifacts_test.md) | Checks a package, image or AMI on one node. No loaders, no monitor. |
-| [Scylla Manager](../docs/configuration_options/scylla-manager.md) | Backup, restore, repair and health checks driven by sctool. Backups go to the backend's object storage. |
-| [Multi-DC longevity](../docs/longevity.md) | One cluster across regions. List values give per-DC counts; rack_aware_loader keeps load local. |
-| [Gemini](https://github.com/scylladb/gemini#readme) | Gemini sends the same random operations to the test cluster and an oracle cluster and fails on any difference. Nemesis hits the test cluster only. |
-| [Alternator](../docs/configuration_options/alternator-dynamodb-api.md) | Same topology as longevity; the load uses the DynamoDB-compatible API instead of CQL. |
-| [Kafka connectors](../docs/kafka.md) | Kafka runs as a docker-compose stack on the SCT runner. CDC source and sink connectors move data between Scylla and Kafka. |
-| [Security: EaR + LDAP](../test-cases/longevity) | Encryption at rest with the cloud KMS (key rotation threads), and LDAP auth against an OpenLDAP container on the runner. |
+## Rolling upgrade
 
-</details>
+No nemesis and no Scylla Manager. The test is the disruption:
 
-<details><summary><b>Docker</b> · Docker host</summary>
+![Rolling upgrade on AWS](system-map/upgrade.png)
 
-```mermaid
-flowchart LR
-  dev[Developer / Jenkins] --> runner
-  subgraph runner["Hydra on the host"]
-    test[SCT test - Python]
-  end
-  subgraph env["Docker host"]
-    db[("6 × container · scylladb/scylla")]
-    ld["2 × stress containers"]
-    mon["monitoring containers"]
-  end
-  runner -->|"docker daemon"| env
-  test -->|stress commands| ld
-  ld -->|CQL| db
-  test -.->|nemesis| db
-  mon -.->|scrape| db
-  test -->|results · errors| argus[(Argus)]
-```
+- The base version comes from `get-scylla-base-versions`; Jenkins runs one branch per base
+  version (see [SCT pipelines](sct-pipelines.md)).
+- Keys: `new_scylla_repo`, `upgrade_node_packages`, `upgrade_node_system`.
+- Code: `upgrade_test.py` `UpgradeTest.test_rolling_upgrade`.
+- Example: `test-cases/upgrades/rolling-upgrade.yaml`. Docs: [rolling upgrade](rolling-upgrade.md).
 
-| Test type | What it does |
-|---|---|
-| [Longevity](../docs/longevity.md) | Long-running mixed load with chaos. The default shape most tests share. |
-| [Rolling upgrade](../docs/rolling-upgrade.md) | Starts on a base version and upgrades one node at a time under load, optionally rolling some back. |
-| [Artifacts](../docs/artifacts_test.md) | Checks a package, image or AMI on one node. No loaders, no monitor. |
-| [Alternator](../docs/configuration_options/alternator-dynamodb-api.md) | Same topology as longevity; the load uses the DynamoDB-compatible API instead of CQL. |
-| [Vector search](../docs/configuration_options/vector-store.md) | Vector-store nodes attached to the Scylla cluster, serving ANN queries over HTTP. |
-| [Kafka connectors](../docs/kafka.md) | Kafka runs as a docker-compose stack on the SCT runner. CDC source and sink connectors move data between Scylla and Kafka. |
+<sub>[↑ test types](#test-types)</sub>
 
-</details>
+## Artifacts
 
-<details><summary><b>EKS</b> · AWS account</summary>
+One DB node; no loaders (`n_loaders: 0`), no monitor (`n_monitor_nodes: 0`), no nemesis.
 
-```mermaid
-flowchart LR
-  dev[Developer / Jenkins] --> runner
-  subgraph runner["SCT runner"]
-    test[SCT test - Python]
-  end
-  subgraph env["AWS account"]
-    cp["EKS control plane"]
-    db[("6 × Scylla pods")]
-    ld["2 × loader pods"]
-    mon["EC2 monitor"]
-  end
-  runner -->|"eksctl / EKS API"| env
-  test -->|stress commands| ld
-  ld -->|CQL| db
-  test -.->|nemesis| db
-  mon -.->|scrape| db
-  test -->|results · errors| argus[(Argus)]
-```
+![Artifacts on AWS](system-map/artifacts.png)
 
-| Test type | What it does |
-|---|---|
-| [Longevity](../docs/longevity.md) | Long-running mixed load with chaos. The default shape most tests share. |
-| [Scylla Manager](../docs/configuration_options/scylla-manager.md) | Backup, restore, repair and health checks driven by sctool. Backups go to the backend's object storage. |
-| [Scylla Operator (k8s)](../docs/k8s-functional-test.md) | Functional tests of Scylla Operator. Scylla, loaders and supporting services all run as pods. |
+- Code: `artifacts_test.py` `ArtifactsTest.test_scylla_service`.
+- Example: `test-cases/artifacts/debian12.yaml`. Docs: [artifact tests](artifacts_test.md).
 
-</details>
+<sub>[↑ test types](#test-types)</sub>
 
-<details><summary><b>GKE</b> · GCP project</summary>
+## Multi-DC
 
-```mermaid
-flowchart LR
-  dev[Developer / Jenkins] --> runner
-  subgraph runner["SCT runner"]
-    test[SCT test - Python]
-  end
-  subgraph env["GCP project"]
-    cp["GKE control plane"]
-    db[("6 × Scylla pods")]
-    ld["2 × loader pods"]
-    mon["GCE monitor VM"]
-  end
-  runner -->|"gcloud container"| env
-  test -->|stress commands| ld
-  ld -->|CQL| db
-  test -.->|nemesis| db
-  mon -.->|scrape| db
-  test -->|results · errors| argus[(Argus)]
-```
+Same as longevity, with one DC per region. List values give per-DC counts.
 
-| Test type | What it does |
-|---|---|
-| [Longevity](../docs/longevity.md) | Long-running mixed load with chaos. The default shape most tests share. |
-| [Scylla Manager](../docs/configuration_options/scylla-manager.md) | Backup, restore, repair and health checks driven by sctool. Backups go to the backend's object storage. |
-| [Scylla Operator (k8s)](../docs/k8s-functional-test.md) | Functional tests of Scylla Operator. Scylla, loaders and supporting services all run as pods. |
+![Multi-DC on AWS](system-map/multidc.png)
 
-</details>
+- Keys: `n_db_nodes: [3, 3]`, `n_loaders: [1, 1]`, one `region_name` entry per DC,
+  `simulated_racks`, `rack_aware_loader`.
+- Example: `test-cases/longevity/longevity-multi-dc-rack-aware.yaml`. Layout details:
+  [writing a test](writing-a-test.md#3-from-configuration-to-cluster-layout).
 
-<details><summary><b>kind</b> · kind cluster (docker)</summary>
+<sub>[↑ test types](#test-types)</sub>
 
-```mermaid
-flowchart LR
-  dev[Developer / Jenkins] --> runner
-  subgraph runner["Hydra on the host"]
-    test[SCT test - Python]
-  end
-  subgraph env["kind cluster (docker)"]
-    cp["kind control plane"]
-    db[("6 × Scylla pods")]
-    ld["2 × loader pods"]
-    mon["monitoring containers"]
-  end
-  runner -->|"kind CLI"| env
-  test -->|stress commands| ld
-  ld -->|CQL| db
-  test -.->|nemesis| db
-  mon -.->|scrape| db
-  test -->|results · errors| argus[(Argus)]
-```
+## Gemini
 
-| Test type | What it does |
-|---|---|
-| [Longevity](../docs/longevity.md) | Long-running mixed load with chaos. The default shape most tests share. |
-| [Scylla Manager](../docs/configuration_options/scylla-manager.md) | Backup, restore, repair and health checks driven by sctool. Backups go to the backend's object storage. |
-| [Scylla Operator (k8s)](../docs/k8s-functional-test.md) | Functional tests of Scylla Operator. Scylla, loaders and supporting services all run as pods. |
+Adds an **oracle cluster** (`db_type: mixed_scylla`). The gemini binary on the loader sends
+the same random operations to both clusters and fails on any difference.
 
-</details>
+![Gemini on AWS](system-map/gemini.png)
 
-<details><summary><b>ScyllaDB Cloud</b> · Your AWS account (xcloud_provider: aws)</summary>
+- Keys: `db_type: mixed_scylla`, `n_test_oracle_db_nodes`, `instance_type_db_oracle`, `gemini_cmd`.
+- Code: `gemini_test.py` `GeminiTest`.
+- Example: `test-cases/gemini/gemini-3h-with-nondisruptive-nemesis.yaml`.
+  Docs: [gemini](https://github.com/scylladb/gemini#readme).
 
-```mermaid
-flowchart LR
-  dev[Developer / Jenkins] --> runner
-  subgraph runner["SCT runner"]
-    test[SCT test - Python]
-  end
-  subgraph env["Your AWS account (xcloud_provider: aws)"]
-    db[("6 × managed ScyllaDB Cloud cluster")]
-    ld["2 × EC2 loaders"]
-    mon["EC2 monitor"]
-  end
-  runner -->|"Scylla Cloud REST API + EC2 API"| env
-  test -->|stress commands| ld
-  ld -->|CQL| db
-  test -.->|nemesis| db
-  mon -.->|scrape| db
-  test -->|results · errors| argus[(Argus)]
-```
+<sub>[↑ test types](#test-types)</sub>
 
-| Test type | What it does |
-|---|---|
-| [Longevity](../docs/longevity.md) | Long-running mixed load with chaos. The default shape most tests share. |
-| [Performance regression](../docs/performance/README.md) | Steady stress against a fixed cluster. HDR latency and throughput go to Argus, which compares with past runs and fails on regression. |
-| [Vector search](../docs/configuration_options/vector-store.md) | Vector-store nodes attached to the Scylla cluster, serving ANN queries over HTTP. |
+## Alternator
 
-</details>
+Longevity shape; the load goes through the DynamoDB-compatible API instead of CQL.
 
-<details><summary><b>Bare metal</b> · Pre-provisioned hosts</summary>
+![Alternator on AWS](system-map/alternator.png)
 
-```mermaid
-flowchart LR
-  dev[Developer / Jenkins] --> runner
-  subgraph runner["SCT runner"]
-    test[SCT test - Python]
-  end
-  subgraph env["Pre-provisioned hosts"]
-    db[("6 × physical DB hosts")]
-    ld["2 × physical loader hosts"]
-    mon["physical monitor host"]
-  end
-  runner -->|"SSH only (no provisioning)"| env
-  test -->|stress commands| ld
-  ld -->|CQL| db
-  test -.->|nemesis| db
-  mon -.->|scrape| db
-  test -->|results · errors| argus[(Argus)]
-```
+- Keys: `alternator_port`, `dynamodb_primarykey_type`, YCSB `stress_cmd`.
+- Code: `longevity_test.py`, `longevity_alternator_ttl_test.py`, `performance_regression_alternator_test.py`.
+- Example: `test-cases/longevity/longevity-alternator-3h.yaml`.
+  Docs: [Alternator options](configuration_options/alternator-dynamodb-api.md).
 
-| Test type | What it does |
-|---|---|
-| [Longevity](../docs/longevity.md) | Long-running mixed load with chaos. The default shape most tests share. |
+<sub>[↑ test types](#test-types)</sub>
 
-</details>
+## Cassandra → Scylla (Spark/EMR)
 
-<details><summary><b>minicloud</b> · minicloud container (QEMU/KVM)</summary>
+Adds a **Cassandra source cluster** (`db_type: mixed_cassandra`) and an **EMR cluster**; no
+nemesis. AWS only.
 
-```mermaid
-flowchart LR
-  dev[Developer / Jenkins] --> runner
-  subgraph runner["KVM host"]
-    test[SCT test - Python]
-  end
-  subgraph env["minicloud container (QEMU/KVM)"]
-    db[("6 × QEMU guest · AMI copy")]
-    ld["2 × QEMU guest"]
-    mon["QEMU guest"]
-  end
-  runner -->|"emulated EC2 API (localhost:5000)"| env
-  test -->|stress commands| ld
-  ld -->|CQL| db
-  test -.->|nemesis| db
-  mon -.->|scrape| db
-  env --- s0["Amazon S3 (real)"]
-  test -->|results · errors| argus[(Argus)]
-```
+![Cassandra → Scylla (Spark/EMR) on AWS](system-map/migration.png)
 
-| Test type | What it does |
-|---|---|
-| [Longevity](../docs/longevity.md) | Long-running mixed load with chaos. The default shape most tests share. |
-| [Performance regression](../docs/performance/README.md) | Steady stress against a fixed cluster. HDR latency and throughput go to Argus, which compares with past runs and fails on regression. |
-| [Rolling upgrade](../docs/rolling-upgrade.md) | Starts on a base version and upgrades one node at a time under load, optionally rolling some back. |
-| [Artifacts](../docs/artifacts_test.md) | Checks a package, image or AMI on one node. No loaders, no monitor. |
-| [Multi-DC longevity](../docs/longevity.md) | One cluster across regions. List values give per-DC counts; rack_aware_loader keeps load local. |
-| [Alternator](../docs/configuration_options/alternator-dynamodb-api.md) | Same topology as longevity; the load uses the DynamoDB-compatible API instead of CQL. |
-| [Kafka connectors](../docs/kafka.md) | Kafka runs as a docker-compose stack on the SCT runner. CDC source and sink connectors move data between Scylla and Kafka. |
+- Keys: `db_type: mixed_cassandra`, `n_test_oracle_db_nodes`, `emr_release_label`, `post_behavior_emr_cluster`.
+- Code: `spark_migrator_test.py` `SparkMigratorTest`.
+- Example: `test-cases/spark-migrator/cs-to-scylla-small.yaml`.
+  Docs: [Cassandra to Scylla migration](cs-to-scylla-migration.md), [EMR permissions](aws-emr-permissions.md).
 
-</details>
+<sub>[↑ test types](#test-types)</sub>
+
+## Vector search
+
+Adds **vector-store nodes**, attached to the DB cluster (`db_cluster.vector_store_cluster`).
+
+![Vector search on AWS](system-map/vector.png)
+
+- Keys: `n_vector_store_nodes`, `instance_type_vector_store`, `vector_store_docker_image`, `vector_store_port`.
+- Code: `longevity_test.py`, `scylla_cloud_e2e_test.py` `XCloudVectorSearchTest`.
+- Example: `test-cases/vector-search/vector-search-sanity.yaml`.
+  Docs: [vector store options](configuration_options/vector-store.md).
+
+<sub>[↑ test types](#test-types)</sub>
+
+## Kafka connectors
+
+Kafka is not a provisioned machine: it runs as a docker-compose stack **on the SCT runner**.
+No nemesis, no Scylla Manager.
+
+![Kafka connectors on AWS](system-map/kafka.png)
+
+- Keys: `kafka_backend: localstack`, `kafka_connectors`.
+- Code: `sdcm/kafka/kafka_cluster.py` `LocalKafkaCluster`.
+- Example: `test-cases/kafka/longevity-kafka-cdc.yaml`. Docs: [Kafka](kafka.md).
+
+<sub>[↑ test types](#test-types)</sub>
+
+## Security: EaR + LDAP
+
+Longevity shape plus the backend's **KMS** for encryption at rest and an **OpenLDAP**
+container on the runner.
+
+![Security: EaR + LDAP on AWS](system-map/security.png)
+
+- Keys: `scylla_encryption_options`, `use_ldap`, `ldap_server_type`, `append_scylla_yaml.kms_hosts`.
+- Example: `test-cases/longevity/longevity-encryption-at-rest-200GB-6h.yaml`.
+
+<sub>[↑ test types](#test-types)</sub>
