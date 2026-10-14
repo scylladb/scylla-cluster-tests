@@ -1,0 +1,17 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// Artifacts test on a shared bare-metal host without a free data disk (SCT-899).
+// post_behavior destroy runs `clean-resources`, which restores the host's packages and services.
+artifactsPipeline(
+    test_config: 'test-cases/artifacts/baremetal-no-raid.yaml',
+    backend: 'baremetal',
+    region: 'eu-west-1',
+    scylla_repo: 'https://downloads.scylladb.com/rpm/centos/scylla-2025.3.repo',
+    jenkins_label: 'minicloud-kvm-builders-artifacts',
+
+    timeout: [time: 90, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy'
+)
