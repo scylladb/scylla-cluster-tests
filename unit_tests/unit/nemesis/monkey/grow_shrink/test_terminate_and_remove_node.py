@@ -18,7 +18,7 @@ def test_removes_target_and_adds_replacement(runner, make_data_node):
 
     runner.cluster.get_nodes_up_and_normal.assert_called_once_with(verification_node=target_node)
     runner.node_allocator.run_nemesis.assert_called_once_with(
-        nemesis_label="RemoveNodeAddNode", node_list=up_normal_nodes
+        nemesis_label="RemoveNodeAddNode", node_list=up_normal_nodes, random_generator=runner.random
     )
     runner._remove_node_add_node.assert_called_once_with(
         verification_node=verification_node, node_to_remove=target_node

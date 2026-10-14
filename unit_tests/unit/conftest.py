@@ -25,6 +25,8 @@ import json
 import os
 from unittest.mock import patch, MagicMock, PropertyMock
 
+import random
+
 import pytest
 
 from sdcm.keystore import KeyStore, SSHKey
@@ -136,3 +138,15 @@ def mock_cloud_services(tmp_path_factory):
         os.environ["HOME"] = orig_home
     else:
         os.environ.pop("HOME", None)
+
+
+@pytest.fixture
+def global_random_state():
+    """Snapshot of the global ``random`` state, restored after the test.
+
+    Tests of seeded helpers assert the state is untouched, and any seeding they do must not
+    leak into the next test on the worker.
+    """
+    state = random.getstate()
+    yield state
+    random.setstate(state)
