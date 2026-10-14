@@ -1,0 +1,9 @@
+# i8g.2xlarge (8 vCPU, 64 GiB, 1.875 TB, arm64): the AWS pair of the minipc (8C/16T, 59 GB) lab host (SCT-1214).
+# The DB instance type and the throughput steps of the 1-node throughput-steps job for it.
+
+instance_type_db: 'i8g.2xlarge'
+
+# CALIBRATION NEEDED (SCT-1214): unthrottled only until the calibration run on i8g.2xlarge.
+# Then set ~25/50/75/90% of each load's max plus 'unthrottled'.
+perf_gradual_throttle_steps: {"read": ['unthrottled'], "mixed": ['unthrottled'], "write": ['unthrottled'], "read_disk_only": ['unthrottled']}
+perf_gradual_step_duration: {"read": '20m', "write": None, "mixed": '20m', "read_disk_only": '20m'}
