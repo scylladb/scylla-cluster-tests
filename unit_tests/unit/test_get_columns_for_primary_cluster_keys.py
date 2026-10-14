@@ -1,8 +1,9 @@
+import random
 from unittest.mock import MagicMock
 
 import pytest
 
-from sdcm.nemesis.utils.indexes import get_column_names
+from sdcm.nemesis.utils.indexes import get_column_names, get_random_column_name
 
 
 @pytest.fixture
@@ -50,3 +51,16 @@ def test_get_column_names_combined_filters(mocked_session):
     )
     expected = {"id", "username"}
     assert result == expected
+
+
+def test_get_random_column_name_with_random_generator_is_reproducible(mocked_session):
+    """Two generators with the same seed pick the same columns in the same order, so an index or
+    view nemesis replays from nemesis_seed; the picks stay within the table's columns.
+    """
+    generator_a, generator_b = random.Random(9), random.Random(9)
+
+    picks_a = [get_random_column_name(mocked_session, "ks", "cf", random_generator=generator_a) for _ in range(10)]
+    picks_b = [get_random_column_name(mocked_session, "ks", "cf", random_generator=generator_b) for _ in range(10)]
+
+    assert picks_a == picks_b
+    assert set(picks_a) <= {"id", "username", "tags", "scores", "metadata", "counter_col", "duration_col"}
