@@ -45,7 +45,7 @@ The SD options are defined in `sdcm/sct_config/mixins/scylla_doctor.py` and desc
 | Path | Edition | What it validates | Triggered by |
 |------|---------|-------------------|--------------|
 | Regular artifact tests (`jenkins-pipelines/oss/artifacts/`, release branch folders) | basic | A ScyllaDB build, with the pinned SD version | ScyllaDB package/image builds |
-| [SD release gating pipeline](#release-gating-pipeline) (`scylla-doctor/sd-release-gating`) | full | A new SD build, on all supported ScyllaDB versions and OS variants | The SD team, by hand |
+| [SD release gating pipeline](#release-gating-pipeline) (`scylla-doctor/sd-release-gating`) | full | A new SD build, on all supported ScyllaDB versions and OS variants | The SD team, manually, before each SD release ([When to run it](#when-to-run-it)) |
 | `scylla-doctor-gating` trigger matrix (`configurations/triggers/scylla-doctor-gating.yaml`) | full | A ScyllaDB version, with the pinned full SD version, on AMI, AMI ARM and Docker | `scylla-master/sct_triggers/scylla-doctor-gating-trigger` |
 
 ## SD test flow
@@ -202,7 +202,21 @@ so one failing cell does not stop the others. Results are collected and reported
 
 ### Running the gate
 
-Jenkins job: `scylla-doctor/sd-release-gating`.
+Jenkins job: [`scylla-doctor/sd-release-gating`](https://jenkins.scylladb.com/job/scylla-doctor/job/sd-release-gating/).
+
+#### When to run it
+
+- **It is a step of the SD release process, and the SD team runs it.** Nothing runs it automatically:
+  it has no schedule, nothing in SCT triggers it, and `releng/update-scylla-doctor` does not call it
+  (that job only publishes the packages).
+- **Run it on the candidate tarball before `update-scylla-doctor`.** Start a build with
+  `sd_tarball_url` set to the candidate tarball in the staging bucket. The other parameters can stay
+  at their defaults: all supported ScyllaDB versions, all OS variants, and the report emailed to
+  `scylla-doctor-rel-qa-automated-testing@scylladb.com`.
+- **QA does not run it.** It is not part of ScyllaDB release testing. ScyllaDB builds are covered by
+  the regular [artifact tests](./artifacts_test.md), which run the basic edition with the pinned
+  `scylla_doctor_version`.
+- **The candidate is approved** when one gating build with the full matrix is green.
 
 The first build of a new or regenerated job only loads its parameters and aborts itself.
 Run it again with parameters.
@@ -216,7 +230,7 @@ Run it again with parameters.
 | `os_filter` | No | empty | **Comma**-separated OS labels from the [OS matrix](#os-matrix), e.g. `centos9,ubuntu2204`. Empty means all. An unknown label is ignored without a warning. |
 | `post_behavior_db_nodes` | No | `destroy` | `keep`, `keep-on-failure` or `destroy`. Passed to every artifact job. |
 | `provision_type` | No | `spot` | `on_demand`, `spot` or `spot_fleet`. Passed to every artifact job. |
-| `email_recipients` | No | `qa@scylladb.com` | Who gets the gating report. Empty skips the email. |
+| `email_recipients` | No | `scylla-doctor-rel-qa-automated-testing@scylladb.com` | Who gets the gating report. Empty skips the email. |
 | `requested_by_user` | No | `scylla-doctor` | Passed through to every artifact job. |
 
 To re-run only the failed cells, set `os_filter` and `scylla_versions` to just those values.
