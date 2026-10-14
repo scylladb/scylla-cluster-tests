@@ -77,7 +77,7 @@ def test_get_branched_repo(scylla_version, distro, expected_repo):
     [
         pytest.param(
             "2025.1.10 with build-id 6facdbdabc830d767b848ff2f47b418350f96a72",
-            "https://downloads.scylladb.com/unstable/scylla/branch-2025.1/relocatable/2025-11-21T14:15:54Z/scylla-unified-2025.1.10-0.20251121.cb1f72dc8134.aarch64.tar.gz",
+            "https://downloads.scylladb.com/downloads/scylla/relocatable/scylladb-2025.1/scylla-unified-2025.1.10-0.20251121.cb1f72dc8134.aarch64.tar.gz",
             id="valid build-id for 2025.1.10",
         ),
         pytest.param("6.2.0", None, id="version without build-id"),
