@@ -66,7 +66,9 @@ def refuse_connection_from_banned_node(runner, use_iptables: bool = False) -> No
         node_operations.block_scylla_ports if use_iptables else node_operations.pause_scylla_with_sigstop
     )
     with (
-        runner.node_allocator.run_nemesis(nemesis_label=f"{simulate_node_unavailability.__name__}") as working_node,
+        runner.node_allocator.run_nemesis(
+            nemesis_label=f"{simulate_node_unavailability.__name__}", random_generator=runner.random
+        ) as working_node,
         ExitStack() as stack,
     ):
         stack.enter_context(

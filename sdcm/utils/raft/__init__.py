@@ -156,10 +156,15 @@ class RaftFeatureOperations(ABC):
             backend = "aws"
         return MessageTimeout(message_position.log_message, BACKEND_TIMEOUTS[backend][message_position.position])
 
-    def get_random_log_message(self, operation: TopologyOperations, seed: int | None = None):
-        random.seed(seed)
+    def get_random_log_message(self, operation: TopologyOperations, random_generator: random.Random):
+        """Pick one of the log patterns of ``operation`` to abort it at.
+
+        :param random_generator: random generator that picks the pattern; nemesis code passes
+            ``NemesisRunner.random`` so the pick replays from nemesis_seed. The global ``random``
+            module is never touched here.
+        """
         log_patterns = self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation)
-        log_pattern = random.choice(log_patterns)
+        log_pattern = random_generator.choice(log_patterns)
         return self.get_message_waiting_timeout(log_pattern)
 
     def get_all_messages_timeouts(self, operation: TopologyOperations):

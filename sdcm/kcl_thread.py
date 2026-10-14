@@ -139,10 +139,13 @@ class CompareTablesSizesThread(DockerBasedStressThread):
 
             cluster = self.node_list[0].parent_cluster
             nemesis_node_allocator = cluster.test_config.tester_obj().nemesis_allocator
+            random_generator = random.Random()
 
             while not self._stop_event.is_set():
                 with nemesis_node_allocator.run_nemesis(
-                    nemesis_label="Compare tables size by cf-stats", node_list=self.node_list
+                    nemesis_label="Compare tables size by cf-stats",
+                    node_list=self.node_list,
+                    random_generator=random_generator,
                 ) as node:
                     node.run_nodetool("flush")
 

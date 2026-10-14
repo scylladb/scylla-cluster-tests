@@ -84,7 +84,10 @@ def test_select_and_release_target_node(allocator_with_nodes):
 
     # select a node
     selected_node = allocator.select_target_node(
-        nemesis_name="TestNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False
+        nemesis_name="TestNemesis",
+        pool_type=NEMESIS_TARGET_POOLS.data_nodes,
+        filter_seed=False,
+        random_generator=random.Random(),
     )
     assert selected_node is not None
     assert selected_node in allocator.active_nemesis_on_nodes
@@ -92,7 +95,10 @@ def test_select_and_release_target_node(allocator_with_nodes):
 
     # select another node
     second_node = allocator.select_target_node(
-        nemesis_name="SecondNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False
+        nemesis_name="SecondNemesis",
+        pool_type=NEMESIS_TARGET_POOLS.data_nodes,
+        filter_seed=False,
+        random_generator=random.Random(),
     )
     assert second_node is not None
     assert second_node != selected_node
@@ -111,7 +117,10 @@ def test_no_available_nodes(allocator_with_nodes):
 
     with pytest.raises(AllNodesRunNemesisError):
         allocator.select_target_node(
-            nemesis_name="ExtraNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False
+            nemesis_name="ExtraNemesis",
+            pool_type=NEMESIS_TARGET_POOLS.data_nodes,
+            filter_seed=False,
+            random_generator=random.Random(),
         )
 
 
@@ -120,16 +129,24 @@ def test_nodes_filtering(allocator_with_nodes):
 
     # filter seed node
     seed_node = allocator.select_target_node(
-        "SeedNemesis", NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False, is_seed=True
+        "SeedNemesis",
+        NEMESIS_TARGET_POOLS.data_nodes,
+        filter_seed=False,
+        is_seed=True,
+        random_generator=random.Random(),
     )
     assert seed_node.is_seed
 
     # filter a rack
-    rack1_node = allocator.select_target_node("RackNemesis", NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False, rack=1)
+    rack1_node = allocator.select_target_node(
+        "RackNemesis", NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False, rack=1, random_generator=random.Random()
+    )
     assert rack1_node.rack == 1
 
     # filter a pool type
-    znode = allocator.select_target_node("ZNodeNemesis", NEMESIS_TARGET_POOLS.zero_nodes, filter_seed=False)
+    znode = allocator.select_target_node(
+        "ZNodeNemesis", NEMESIS_TARGET_POOLS.zero_nodes, filter_seed=False, random_generator=random.Random()
+    )
     assert znode.node_type == "zero_nodes"
 
 
@@ -170,7 +187,9 @@ def test_thread_safety():
         try:
             for _ in range(10):
                 nemesis_name = f"Nemesis-{worker_id}"
-                node = allocator.select_target_node(nemesis_name, NEMESIS_TARGET_POOLS.data_nodes, False)
+                node = allocator.select_target_node(
+                    nemesis_name, NEMESIS_TARGET_POOLS.data_nodes, False, random_generator=random.Random()
+                )
                 if node:
                     time.sleep(random.uniform(0.05, 0.1))
                     results.append(node)
@@ -207,3 +226,49 @@ def test_context_manager_sets_and_releases_multiple_nodes(allocator_with_nodes):
         assert all(node in allocator.active_nemesis_on_nodes for node in nodes_to_mark)
 
     assert all(node not in allocator.active_nemesis_on_nodes for node in nodes_to_mark)
+
+
+# -- seeded node selection ---------------------------------------------------
+
+
+def allocate_sequence(allocator, random_generator, draws=10):
+    """Allocate and release ``draws`` data nodes in a row with ``random_generator``, returning the picked nodes."""
+    picks = []
+    for _ in range(draws):
+        node = allocator.select_target_node(
+            nemesis_name="SeededNemesis",
+            pool_type=NEMESIS_TARGET_POOLS.data_nodes,
+            filter_seed=False,
+            random_generator=random_generator,
+        )
+        allocator.unset_running_nemesis(node, "SeededNemesis")
+        picks.append(node)
+    return picks
+
+
+@pytest.mark.parametrize("seed", [pytest.param(0, id="seed-zero"), pytest.param(42, id="seed-42")])
+def test_select_target_node_with_random_generator_replays_the_same_nodes(allocator_with_nodes, seed):
+    """Two generators with the same seed pick the same node sequence, so a nemesis run can be
+    replayed from nemesis_seed, and the global random module is not consumed along the way."""
+    allocator, _, _ = allocator_with_nodes
+    global_state = random.getstate()
+
+    picks_a = allocate_sequence(allocator, random.Random(seed))
+    picks_b = allocate_sequence(allocator, random.Random(seed))
+
+    assert picks_a == picks_b
+    assert random.getstate() == global_state
+
+
+def test_run_nemesis_forwards_random_generator_to_node_selection(allocator_with_nodes):
+    """The context manager hands its random_generator to select_target_node, so both entry points pick the same
+    nodes for the same seed."""
+    allocator, _, _ = allocator_with_nodes
+    random_generator = random.Random(7)
+
+    picks = []
+    for _ in range(10):
+        with allocator.run_nemesis(nemesis_label="SeededNemesis", random_generator=random_generator) as node:
+            picks.append(node)
+
+    assert picks == allocate_sequence(allocator, random.Random(7))

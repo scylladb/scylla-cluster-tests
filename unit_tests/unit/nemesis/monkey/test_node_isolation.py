@@ -288,7 +288,9 @@ def test_iptables_path_blocks_and_unblocks_every_scylla_port(runner):
     then remove all the rules once the node is confirmed banned."""
     IsolateNodeWithIptableRuleNemesis(runner).disrupt()
 
-    runner.node_allocator.run_nemesis.assert_called_once_with(nemesis_label="block_scylla_ports")
+    runner.node_allocator.run_nemesis.assert_called_once_with(
+        nemesis_label="block_scylla_ports", random_generator=runner.random
+    )
 
     commands = sudo_commands(runner.target_node.remoter)
     for port in (7000, 7001, 9042, 9142, 19042, 19142):
@@ -346,7 +348,9 @@ def test_sigstop_path_pauses_scylla_and_only_blocks_gossip_ports_during_removal(
     socket of the paused process."""
     IsolateNodeWithProcessSignalNemesis(runner).disrupt()
 
-    runner.node_allocator.run_nemesis.assert_called_once_with(nemesis_label="pause_scylla_with_sigstop")
+    runner.node_allocator.run_nemesis.assert_called_once_with(
+        nemesis_label="pause_scylla_with_sigstop", random_generator=runner.random
+    )
 
     commands = sudo_commands(runner.target_node.remoter)
     assert commands.count("pkill --signal SIGSTOP -e scylla") == 1

@@ -5,7 +5,6 @@ These are stateless functions that accept explicit parameters instead of relying
 """
 
 import logging
-import random
 
 from sdcm.exceptions import FilesNotCorrupted, NemesisStressFailure, UnsupportedNemesis
 from sdcm.sct_events.group_common_events import (
@@ -116,7 +115,7 @@ def destroy_data_and_restart_scylla(
 
         destroyed_files = 0
         while sstables_amount_to_destroy > 0:
-            file_for_destroy = random.choice(all_files_to_destroy)
+            file_for_destroy = runner.random.choice(all_files_to_destroy)
             if not (
                 file_group_for_destroy := runner.replace_full_file_name_to_prefix(
                     one_file=file_for_destroy, ks_cf_for_destroy=tables

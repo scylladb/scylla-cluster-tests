@@ -85,6 +85,7 @@ class NemesisNodeAllocator(metaclass=Singleton):
     def run_nemesis(
         self,
         nemesis_label: str,
+        random_generator: random.Random,
         node_list: list["BaseNode"] | None = None,
         pool_type: NEMESIS_TARGET_POOLS = NEMESIS_TARGET_POOLS.data_nodes,
         filter_seed: bool = False,
@@ -93,6 +94,8 @@ class NemesisNodeAllocator(metaclass=Singleton):
         Select a node from node_list and mark it as running nemesis for the duration of the context.
 
         :param nemesis_label: nemesis operation
+        :param random_generator: random generator that picks the node; nemesis code passes
+            ``NemesisRunner.random`` so the pick replays from nemesis_seed
         :param node_list: list of candidate nodes (if None, uses all nodes from pool_type)
         :param pool_type: Type of node pool to select from
         :param filter_seed: Whether to filter out seed nodes
@@ -101,7 +104,11 @@ class NemesisNodeAllocator(metaclass=Singleton):
         unique_nemesis_label = unique_disruption_name(nemesis_label)
         try:
             reserved_node = self.select_target_node(
-                nemesis_name=unique_nemesis_label, pool_type=pool_type, filter_seed=filter_seed, node_list=node_list
+                nemesis_name=unique_nemesis_label,
+                pool_type=pool_type,
+                filter_seed=filter_seed,
+                node_list=node_list,
+                random_generator=random_generator,
             )
             yield reserved_node
         finally:
@@ -113,6 +120,7 @@ class NemesisNodeAllocator(metaclass=Singleton):
         nemesis_name: str,
         pool_type: Enum,
         filter_seed: bool,
+        random_generator: random.Random,
         is_seed: bool | DefaultValue | None = DefaultValue,
         dc_idx: int | None = None,
         rack: int | None = None,
@@ -123,6 +131,9 @@ class NemesisNodeAllocator(metaclass=Singleton):
         Selects a not allocated node as a target for the nemesis.
 
         Raises instance of NemesisNodeAllocationError if no nodes are available or match the criteria.
+
+        :param random_generator: random generator that picks among the candidates; nemesis code passes
+            ``NemesisRunner.random`` so the choice replays from nemesis_seed.
         """
         with self.lock:
             nodes = self._get_pool_type_nodes(pool_type)
@@ -155,7 +166,7 @@ class NemesisNodeAllocator(metaclass=Singleton):
             if allow_only_last_node_in_rack and rack is not None:
                 selected_node = candidate_nodes[-1]
             else:
-                selected_node = random.choice(candidate_nodes)
+                selected_node = random_generator.choice(candidate_nodes)
 
             self.active_nemesis_on_nodes[selected_node] = nemesis_name
             selected_node.running_nemesis = nemesis_name
