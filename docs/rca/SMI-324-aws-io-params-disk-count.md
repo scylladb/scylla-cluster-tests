@@ -56,13 +56,13 @@ The 2025.1 i7ie.2xlarge Argus runs confirm this: the installed value is 3.5 time
 | 2024-12-09 | [#562](https://github.com/scylladb/scylla-machine-image/pull/562) (`828c2a2`) moves the presets to `aws_io_params.yaml` and multiplies every entry by `nr_disks`. The yaml has no comment about the unit. |
 | 2024-12 to 2025-07 | [#561](https://github.com/scylladb/scylla-machine-image/pull/561) (i7ie), [#676](https://github.com/scylladb/scylla-machine-image/pull/676) (i8g, closed) and [#709](https://github.com/scylladb/scylla-machine-image/pull/709) (i7i) use single-disk measurements. The review asks for RAID0 measurement. [#709](https://github.com/scylladb/scylla-machine-image/pull/709) merges on 2025-07-01 with per-disk values. See [The i7i review discussion](#the-i7i-review-discussion). |
 | 2025-01-27 | scylla-pkg `a5872a75` adds i7ie.large to i7ie.3xlarge to the release AMI test list. |
-| 2025-08-03 | Staging runs `scylla-staging/roy/artifacts-ami-test-i7i` on all i7i sizes show a bandwidth ratio of 1.0 between installed and measured values. The per-disk entries are correct. |
+| 2025-08-03 | Staging runs `scylla-staging/roy/artifacts-ami-test-i7i` on all i7i sizes show a bandwidth ratio of 1.0 between installed and measured values: [8xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/1f64eb95-31bf-4ebc-bb46-3cb23cec4816), [12xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/a9178d17-8689-4451-9d23-9243d9418a39), [16xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/21e86125-af99-45b2-aa8c-a8f061c61146), [24xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/ca035f96-36cf-4571-8f0d-762c3794aac4). The per-disk entries are correct. |
 | 2025-10-21 | [#776](https://github.com/scylladb/scylla-machine-image/pull/776) (`4007fac` i7i, `82cc0b7` i7ie) merges whole-instance entries. |
 | 2025-10-22 | `b8ef6fa` (i8g, i8ge, content of [#796](https://github.com/scylladb/scylla-machine-image/pull/796), SMI-223) is pushed to `next` directly ([comment](https://github.com/scylladb/scylla-machine-image/pull/796#issuecomment-3430430881)). GitHub shows [#796](https://github.com/scylladb/scylla-machine-image/pull/796) as merged with a different commit. Backports to 2025.4 ([#811](https://github.com/scylladb/scylla-machine-image/pull/811), [#813](https://github.com/scylladb/scylla-machine-image/pull/813)) and 2025.3 ([#814](https://github.com/scylladb/scylla-machine-image/pull/814), [#815](https://github.com/scylladb/scylla-machine-image/pull/815), [#819](https://github.com/scylladb/scylla-machine-image/pull/819)) follow. |
 | 2025-10-23 | First `WARNING` on an affected size: 2025.4.0~rc3, i7ie.2xlarge, deviation 50% ([run](https://argus.scylladb.com/tests/scylla-cluster-tests/40aa8381-7ed5-4e67-9e06-733823971583)). |
 | 2025-10-27, 2025-10-29 | scylla-pkg `040c33d4`, `ac1d2c38` add i8g and i8ge sizes up to 16xlarge and 18xlarge to the release ARM list. |
-| 2026-01-25 | 2026.1.0~rc0 ARM runs report `WARNING` on i8g.8xlarge (50%), i8g.16xlarge (75%) and i8ge.2xlarge (50%). |
-| 2026-01-28 | QAINFRA-51 runs i8g.48xlarge and i8g.metal-24xl. Both sizes have no preset, and both pass with 0% to 5% deviation. |
+| 2026-01-25 | 2026.1.0~rc0 ARM runs report `WARNING` on [i8g.8xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/2bbb17a5-2dc6-42da-be08-3224e4d142e8) (50%), [i8g.16xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/4087d5ec-1990-4efc-a6fd-1317d52fcae0) (75%) and [i8ge.2xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/5a85dd4b-0685-46c1-8486-41a9b2b2d1ac) (50%). |
+| 2026-01-28 | QAINFRA-51 runs [i8g.48xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/1a937989-2f6e-4ff8-94fb-3c247bc51bf4) and [i8g.metal-24xl](https://argus.scylladb.com/tests/scylla-cluster-tests/792ab23c-ea2e-4abd-a8eb-98ca689e73eb). Both sizes have no preset, and both pass with 0% to 5% deviation. |
 | 2026-03-09 | 2026.1.0 run on i8ge.12xlarge shows the production values: installed 48,761,999,360, measured 12,151,646,208, deviation 75% ([run](https://argus.scylladb.com/tests/scylla-cluster-tests/a2e427d2-e3c5-49e0-892c-b3d2ebfdad78)). |
 | 2026-03-30 | First 2025.1.12 run on i7ie.2xlarge: ratio 3.5, deviation 71% ([run](https://argus.scylladb.com/tests/scylla-cluster-tests/ae3efa7d-c4db-4bbd-a420-e4243405d2af)). |
 | 2026-05-21 | Staging run on i8g.24xlarge: ratio 6.1, deviation 84% ([run](https://argus.scylladb.com/tests/scylla-cluster-tests/5a8ec1c6-9aba-4b8d-9514-4a83890d9fdd)). |
@@ -177,28 +177,25 @@ Release runs with a `WARNING` on an affected size, before 2026-10-08:
 The pattern is clear in the same jobs:
 
 - Every run on an affected size after the entries shipped is `WARNING`.
-- The single-disk sizes of the same families are `PASS` in 623 of 650 runs. 23 of the other 27 are i7ie.3xlarge `write_iops` warnings on older AMIs.
-- Before the new entries shipped, i7ie.2xlarge was `PASS` with a ratio of 1.0 in all releases.
+- The single-disk sizes of the same families are `PASS` in 623 of 650 runs, for example [i8ge.3xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/26bd92ec-5815-44b0-af33-2eafc05f4f56) and [i8g.4xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/8a07faba-43e9-47f4-bed6-11f0d6ed44a3) in 2026.1.0~rc0.
+  23 of the other 27 are i7ie.3xlarge `write_iops` warnings on older AMIs ([example](https://argus.scylladb.com/tests/scylla-cluster-tests/b607dc13-dcf4-437b-a636-9e0f7c2af2f6)).
+- Before the new entries shipped, i7ie.2xlarge was `PASS` with a ratio of 1.0 in all releases. Last `PASS` runs: [2025.1.11](https://argus.scylladb.com/tests/scylla-cluster-tests/e1a02dc9-6a22-401f-a84d-69764fc6c740), [2025.2.5](https://argus.scylladb.com/tests/scylla-cluster-tests/03de4f26-a627-4252-aa58-13d5580f47d4), [2025.3.2](https://argus.scylladb.com/tests/scylla-cluster-tests/c046ffb4-2fe2-4de7-9f43-c6546e57c866), [2025.4.0~rc2](https://argus.scylladb.com/tests/scylla-cluster-tests/6e5d517b-0325-4b2d-a4a7-dfc61804dbc2).
 
 Nearly all of these runs have status `passed`. The runs checked have investigation status `not_investigated`.
 
-First runs per size, 2026.1 ARM:
-[i8g.8xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/2bbb17a5-2dc6-42da-be08-3224e4d142e8),
-[i8g.16xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/4087d5ec-1990-4efc-a6fd-1317d52fcae0),
-[i8ge.2xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/5a85dd4b-0685-46c1-8486-41a9b2b2d1ac),
-[i8ge.6xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/15f51722-e5ba-4ea0-82e1-1b716f76a279),
-[i8ge.12xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/a2e427d2-e3c5-49e0-892c-b3d2ebfdad78),
-[i8ge.18xlarge](https://argus.scylladb.com/tests/scylla-cluster-tests/0415696a-47af-4074-a2a8-2610480b4a7f).
+First `WARNING` run per branch and size. The deviation column shows the read bandwidth deviation.
 
-First runs on i7ie.2xlarge per branch:
-[2025.4](https://argus.scylladb.com/tests/scylla-cluster-tests/40aa8381-7ed5-4e67-9e06-733823971583),
-[2025.3](https://argus.scylladb.com/tests/scylla-cluster-tests/24800240-2e67-49f2-b8a2-114f68f0fa7d),
-[2026.1](https://argus.scylladb.com/tests/scylla-cluster-tests/3edf954a-46d7-4535-9f56-a16479863784),
-[2026.2](https://argus.scylladb.com/tests/scylla-cluster-tests/18b5394e-d8c6-4b11-870d-2c84e98beb36),
-[2026.3](https://argus.scylladb.com/tests/scylla-cluster-tests/328fe743-8350-4e0e-909b-ae7530c79cdb),
-[2025.1](https://argus.scylladb.com/tests/scylla-cluster-tests/ae3efa7d-c4db-4bbd-a420-e4243405d2af).
+| Size | Deviation | 2025.1 | 2025.3 | 2025.4 | 2026.1 | 2026.2 | 2026.3 |
+|---|---|---|---|---|---|---|---|
+| i7ie.2xlarge | 50% (2025.1: 71%) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/ae3efa7d-c4db-4bbd-a420-e4243405d2af) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/24800240-2e67-49f2-b8a2-114f68f0fa7d) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/40aa8381-7ed5-4e67-9e06-733823971583) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/3edf954a-46d7-4535-9f56-a16479863784) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/18b5394e-d8c6-4b11-870d-2c84e98beb36) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/328fe743-8350-4e0e-909b-ae7530c79cdb) |
+| i8g.8xlarge | 50% | no run | no run | no run | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/2bbb17a5-2dc6-42da-be08-3224e4d142e8) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/9eace7c3-b8aa-4fc9-80c5-5494b2dfc22c) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/fe166b6f-fe21-4cca-bf0b-e194622c5363) |
+| i8g.16xlarge | 75% | no run | no run | no run | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/4087d5ec-1990-4efc-a6fd-1317d52fcae0) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/d821bba9-c562-436a-ae36-c543863d9b4a) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/dac750d1-4ebe-42d5-bb0e-a4c670696832) |
+| i8ge.2xlarge | 50% | no run | no run | no run | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/5a85dd4b-0685-46c1-8486-41a9b2b2d1ac) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/2da74d41-f2ba-4182-99d6-cfdf80b827f5) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/d7ed4a85-12a8-4c6c-a8b8-60ff41bd93e5) |
+| i8ge.6xlarge | 50% | no run | no run | no run | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/15f51722-e5ba-4ea0-82e1-1b716f76a279) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/ab135566-7083-4a6c-b151-7428fc9770c4) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/4a5f4a7b-0387-4e08-96c7-024442e94206) |
+| i8ge.12xlarge | 75% | no run | no run | no run | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/a2e427d2-e3c5-49e0-892c-b3d2ebfdad78) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/668cd168-0f30-48c1-9710-839e78b374c9) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/a9ee5820-9ef4-44f8-bd94-bc90b0166d05) |
+| i8ge.18xlarge | 83% | no run | no run | no run | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/0415696a-47af-4074-a2a8-2610480b4a7f) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/926779d6-2f58-4c51-966d-4b4a303f901d) | [run](https://argus.scylladb.com/tests/scylla-cluster-tests/779b1ce4-b434-4673-b9bd-a33d39b81a34) |
 
-Example, 2026.1.0 on i8ge.12xlarge:
+Example, 2026.1.0 on i8ge.12xlarge ([run](https://argus.scylladb.com/tests/scylla-cluster-tests/a2e427d2-e3c5-49e0-892c-b3d2ebfdad78)):
 
 | Value | Installed | Measured | Deviation |
 |---|---|---|---|
