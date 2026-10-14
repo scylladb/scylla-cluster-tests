@@ -44,6 +44,13 @@ def test__find_hdr_tags_in_tuple_of_lists():
     assert res == HDR_TAGS1
 
 
+@pytest.mark.parametrize("empty_hdr_tags", [None, []])
+def test__find_hdr_tags_empty_kwarg_falls_through_to_stress_queue(empty_hdr_tags):
+    stress_queue = type("FakeStressQueue", (), {"hdr_tags": HDR_TAGS1})
+    res = _find_hdr_tags({"hdr_tags": empty_hdr_tags}, ([{"op rate": 1}], [stress_queue]))
+    assert res == HDR_TAGS1
+
+
 def test__find_hdr_tags_error():
     try:
         _find_hdr_tags({"no_hdr_tags": ["foo"]})

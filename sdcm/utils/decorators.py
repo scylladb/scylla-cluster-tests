@@ -166,8 +166,8 @@ def measure_time(func):
 
 def _find_hdr_tags(*args):
     for input_arg in args:
-        if isinstance(input_arg, dict) and "hdr_tags" in input_arg:
-            # NOTE: case when some method has 'hdr_tags' kwarg
+        if isinstance(input_arg, dict) and input_arg.get("hdr_tags"):
+            # NOTE: case when some method has 'hdr_tags' kwarg; None/empty falls through to the stress queue
             return input_arg["hdr_tags"]
         elif hasattr(input_arg, "hdr_tags"):
             # NOTE: case of 'stress_queue.hdr_tags' and 'nemesis.hdr_tags'
