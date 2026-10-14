@@ -20,12 +20,18 @@ keyspace with RF > 1 as not RF-rack-valid.
 """
 
 import re
+from fnmatch import fnmatch
 from unittest.mock import MagicMock
 
 import pytest
 
 from sdcm import cluster as sdcm_cluster
 from sdcm.cluster_baremetal import (
+    LIST_PACKAGES,
+    LIST_RUNNING_SERVICES,
+    PACKAGE_BASELINE,
+    SCYLLA_COREDUMP_MOUNT_UNIT,
+    SERVICE_BASELINE,
     NodeIpsNotConfiguredError,
     PhysicalMachineCluster,
     PhysicalHost,
@@ -232,6 +238,7 @@ def _node_with_disk_state(
     fails_after_stop: bool = False,
     unit_present: bool = True,
     coredump_bind: bool = False,
+    coredump_bound_by_unit: bool = True,
 ):
     """A node whose remoter answers the reset's probes from the given host state.
 
@@ -241,12 +248,19 @@ def _node_with_disk_state(
     `fails_after_stop`: remoter.run() raises, unless told to ignore the exit status. `unit_present` tells whether
     scylla_setup's var-lib-scylla.mount exists; a device is a partition when its name ends in p<N>. With
     `coredump_bind`, scylla_setup's var-lib-systemd-coredump.mount binds /var/lib/scylla/coredump, on the same disk,
-    to /var/lib/systemd/coredump, as on a real host, until that unit is stopped.
+    to /var/lib/systemd/coredump, as on a real host, until that unit is stopped, or, unless
+    `coredump_bound_by_unit`, until it is unmounted.
     """
     state = {"source": mount_source, "stopped": False, "coredump": coredump_bind and bool(mount_source)}
 
     def sudo(cmd, **_):
+        if cmd in (f"test -s {PACKAGE_BASELINE}", f"test -s {SERVICE_BASELINE}"):
+            return MagicMock(stdout="", ok=False)
         if cmd == "systemctl stop var-lib-systemd-coredump.mount":
+            if coredump_bound_by_unit:
+                state["coredump"] = False
+        elif cmd == "umount /var/lib/systemd/coredump":
+            assert state["coredump"], "umount: /var/lib/systemd/coredump: not mounted."
             state["coredump"] = False
         elif cmd == "systemctl stop var-lib-scylla.mount":
             state["stopped"] = True
@@ -274,6 +288,9 @@ def _node_with_disk_state(
             if state["coredump"]:
                 mounts.append((f"{mount_source}[/coredump]", "/var/lib/systemd/coredump"))
             stdout = "".join(f"{source} {target}\n" for source, target in mounts + (other_mounts or []))
+        elif cmd == "findmnt -rn -o SOURCE --mountpoint /var/lib/systemd/coredump":
+            binds = [source for source, target in other_mounts or [] if target == "/var/lib/systemd/coredump"]
+            stdout = "".join(f"{source}\n" for source in [f"{mount_source}[/coredump]"] * state["coredump"] + binds)
         elif cmd == "if [ -e /proc/mdstat ]; then cat /proc/mdstat; fi":
             stdout = mdstat
         elif cmd.startswith("lsblk -nrp -o NAME "):
@@ -290,8 +307,22 @@ def _node_with_disk_state(
     return node
 
 
+# Every host cleanup removes the scripts of the log followers a run left, see test_*log_followers*
+REMOVE_LOG_FOLLOWER_SCRIPTS = "rm -f /tmp/logger_*.pid /tmp/logger_cmd_*.sh"
+
+
+# The cleanup steps read their baselines with sudo, which changes nothing on the host
+BASELINE_READS = tuple(
+    f"{cmd} {baseline}" for cmd in ("test -s", "cat") for baseline in (PACKAGE_BASELINE, SERVICE_BASELINE)
+)
+
+
 def _sudo_cmds(node) -> list[str]:
-    return [call.args[0] for call in node.remoter.sudo.call_args_list]
+    return [
+        call.args[0]
+        for call in node.remoter.sudo.call_args_list
+        if call.args[0] != REMOVE_LOG_FOLLOWER_SCRIPTS and call.args[0] not in BASELINE_READS
+    ]
 
 
 def test_reset_on_a_clean_host_only_wipes_the_setup_disks():
@@ -478,6 +509,98 @@ def test_scylla_setup_without_disks_refuses_a_scylla_dir_left_on_a_disk(monkeypa
     setup.assert_not_called()
 
 
+def _node_with_leftovers(existing: list[str], mounts: str = ""):
+    """A node whose host holds `existing` paths, and the given `findmnt -rn -o SOURCE,TARGET` mounts."""
+
+    def run(cmd, **_):
+        if cmd.startswith("ls -d "):
+            patterns = cmd.removeprefix("ls -d ").removesuffix(" 2>/dev/null").split()
+            found = [path for path in existing if any(fnmatch(path, pattern) for pattern in patterns)]
+            return MagicMock(stdout="".join(f"{path}\n" for path in found))
+        if cmd == "findmnt -rn -o SOURCE,TARGET":
+            return MagicMock(stdout=mounts)
+        if cmd == "findmnt -rn -o SOURCE --mountpoint /var/lib/systemd/coredump":
+            binds = [line.split()[0] for line in mounts.splitlines() if line.endswith(" /var/lib/systemd/coredump")]
+            return MagicMock(stdout="".join(f"{source}\n" for source in binds))
+        return MagicMock(stdout="")
+
+    node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.log = MagicMock()
+    node.remoter = MagicMock()
+    node.remoter.run.side_effect = run
+    return node
+
+
+def test_a_clean_host_has_no_leftovers_to_remove():
+    node = _node_with_leftovers(existing=[])
+
+    node.remove_scylla_leftovers()
+
+    node.remoter.sudo.assert_not_called()
+
+
+def test_leftovers_of_an_earlier_install_are_removed():
+    """A shared host, after removing the Scylla 2025.3 packages of the artifact test."""
+    node = _node_with_leftovers(
+        existing=[
+            "/etc/yum.repos.d/scylla.repo",
+            "/etc/scylla",
+            "/etc/scylla.d",
+            "/etc/systemd/system/scylla-server.service.d",
+            "/etc/systemd/system/scylla-node-exporter.service.d",
+            "/opt/scylladb",
+            "/var/lib/scylla-housekeeping",
+            "/var/lib/scylla",
+        ]
+    )
+
+    node.remove_scylla_leftovers()
+
+    assert _sudo_cmds(node) == [
+        "systemctl stop var-lib-systemd-coredump.mount",
+        f"rm -f {SCYLLA_COREDUMP_MOUNT_UNIT} /etc/systemd/system/*.wants/var-lib-systemd-coredump.mount",
+        "rm -rf /etc/yum.repos.d/scylla.repo /etc/scylla /etc/scylla.d /etc/systemd/system/scylla-server.service.d "
+        "/etc/systemd/system/scylla-node-exporter.service.d /opt/scylladb /var/lib/scylla-housekeeping "
+        "/var/lib/scylla",
+        "systemctl daemon-reload",
+        "systemctl reset-failed 'scylla-*'",
+    ]
+
+
+def test_the_coredump_bind_is_unmounted_before_the_scylla_dir_is_removed():
+    """scylla_setup binds /var/lib/scylla/coredump on the root filesystem too, which keeps the directory busy."""
+    node = _node_with_leftovers(
+        existing=["/var/lib/scylla", "/etc/systemd/system/var-lib-systemd-coredump.mount"],
+        mounts="/dev/nvme0n1p4 /\n/dev/nvme0n1p4[/var/lib/scylla/coredump] /var/lib/systemd/coredump\n",
+    )
+
+    node.remove_scylla_leftovers()
+
+    cmds = _sudo_cmds(node)
+    assert cmds.index("umount /var/lib/systemd/coredump") < cmds.index(
+        "rm -rf /var/lib/scylla /etc/systemd/system/var-lib-systemd-coredump.mount"
+    )
+
+
+def test_a_scylla_dir_on_a_setup_disk_is_left_to_the_disk_reset():
+    node = _node_with_leftovers(existing=["/etc/scylla", "/var/lib/scylla"], mounts="/dev/nvme1n1 /var/lib/scylla\n")
+
+    node.remove_scylla_leftovers()
+
+    assert _sudo_cmds(node) == ["rm -rf /etc/scylla", "systemctl daemon-reload", "systemctl reset-failed 'scylla-*'"]
+
+
+def test_clean_scylla_removes_the_leftovers_after_the_packages(monkeypatch):
+    node = _node_with_leftovers(existing=[])
+    calls = []
+    monkeypatch.setattr(sdcm_cluster.BaseNode, "clean_scylla", lambda self: calls.append("uninstall"))
+    monkeypatch.setattr(node, "remove_scylla_leftovers", lambda: calls.append("leftovers"))
+
+    node.clean_scylla()
+
+    assert calls == ["uninstall", "leftovers"]
+
+
 def _host_with_disk_state(**state) -> PhysicalHost:
     """A bare-metal host as the cleanup phase sees it, whose remoter answers from the given host state."""
     host = PhysicalHost(name="scylla-db 1.2.3.4", remoter=_node_with_disk_state(**state).remoter)
@@ -521,7 +644,7 @@ def test_cleanup_leaves_disks_scylla_setup_did_not_set_up_alone(state):
 
     host.clean_up_host(tunnel_ports=False, scylla_disk_setup=True)
 
-    assert _sudo_cmds(host) == []
+    assert _sudo_cmds(host) == ["systemctl stop scylla-server.service"]
 
 
 def test_cleanup_skips_the_disk_reset_when_not_asked():
@@ -641,6 +764,25 @@ def test_reset_undoes_the_coredump_bind_scylla_setup_made():
     assert cmds.index("systemctl stop var-lib-scylla.mount") < cmds.index("wipefs -a /dev/nvme1n1")
 
 
+def test_reset_unmounts_a_coredump_bind_its_unit_did_not():
+    """A bind made some other way (fstab, by hand) is still there once scylla_setup's unit is stopped."""
+    node = _node_with_disk_state(mount_source="/dev/nvme1n1", coredump_bind=True, coredump_bound_by_unit=False)
+
+    node._reset_scylla_disk_setup(["/dev/nvme1n1"])
+
+    cmds = _sudo_cmds(node)
+    assert cmds.index("systemctl stop var-lib-systemd-coredump.mount") < cmds.index("umount /var/lib/systemd/coredump")
+    assert cmds.index("umount /var/lib/systemd/coredump") < cmds.index("wipefs -a /dev/nvme1n1")
+
+
+def test_reset_leaves_the_coredump_dir_alone_once_its_unit_unmounted_it():
+    node = _node_with_disk_state(mount_source="/dev/nvme1n1", coredump_bind=True)
+
+    node._reset_scylla_disk_setup(["/dev/nvme1n1"])
+
+    assert "umount /var/lib/systemd/coredump" not in _sudo_cmds(node)
+
+
 def test_the_coredump_target_is_no_loophole_without_scylla_coredump_unit():
     """Without scylla_setup's unit, a mount of the disk at /var/lib/systemd/coredump is someone else's."""
     node = _node_with_disk_state(
@@ -742,3 +884,315 @@ def test_the_run_is_marked_before_the_log_followers_start(monkeypatch):
     node.start_task_threads()
 
     assert seen_by_task_threads == ["@1791382530"]
+
+
+def _host_with_packages(
+    installed: set[str],
+    baseline: set[str] | None,
+    debian: bool = False,
+    stuck: set[str] = (),
+    pulled_in: set[str] = (),
+    service_baseline: bool | None = None,
+):
+    """A host whose package manager installs and removes for real, except the `stuck` packages it fails on.
+
+    Reinstalling adds the `pulled_in` packages too, as a newer version of a baseline package may need. The host has a
+    service baseline when it has a package one, unless `service_baseline` says otherwise.
+    """
+    state = {"installed": set(installed)}
+    has_service_baseline = baseline is not None if service_baseline is None else service_baseline
+
+    def run(cmd, ignore_status=False, **_):
+        if cmd == LIST_PACKAGES:
+            return MagicMock(stdout="".join(f"{package}\n" for package in sorted(state["installed"])))
+        if cmd == "test -e /etc/debian_version":
+            return MagicMock(stdout="", ok=debian)
+        return MagicMock(stdout="", ok=True)
+
+    def sudo(cmd, **_):
+        if cmd == f"test -s {PACKAGE_BASELINE}":
+            return MagicMock(stdout="", ok=baseline is not None)
+        if cmd == f"test -s {SERVICE_BASELINE}":
+            return MagicMock(stdout="", ok=has_service_baseline)
+        if cmd == f"cat {PACKAGE_BASELINE}":
+            return MagicMock(stdout="".join(f"{package}\n" for package in sorted(baseline)))
+        packages = set(cmd.removesuffix("'").split()) - set(stuck)
+        if " remove -y " in cmd or " purge -y " in cmd:
+            state["installed"] -= packages
+        elif " install -y " in cmd:
+            state["installed"] |= (packages & (baseline or set())) | set(pulled_in)
+        return MagicMock(stdout="", ok=True)
+
+    host = PhysicalHost(name="scylla-db 1.2.3.4", remoter=MagicMock())
+    host.remoter.run.side_effect = run
+    host.remoter.sudo.side_effect = sudo
+    host.log = MagicMock()
+    return host, state
+
+
+def test_the_baseline_is_recorded_aside_then_moved_in_place():
+    host, _ = _host_with_packages(installed={"bash.x86_64"}, baseline=None)
+
+    host.record_host_baseline()
+
+    cmds = _sudo_cmds(host)
+    assert cmds[0] == "mkdir -p /var/lib/scylla-cluster-tests"
+    assert cmds[1].startswith("sh -c ") and cmds[1].endswith(f" > {SERVICE_BASELINE}.new'")
+    assert cmds[2] == f"mv {SERVICE_BASELINE}.new {SERVICE_BASELINE}"
+    assert cmds[3].startswith("sh -c ") and cmds[3].endswith(f" > {PACKAGE_BASELINE}.new'")
+    assert cmds[4] == f"mv {PACKAGE_BASELINE}.new {PACKAGE_BASELINE}"
+
+
+def test_a_baseline_left_by_a_run_without_cleanup_is_kept():
+    """It holds the packages from before that run, which this run's cleanup restores."""
+    host, _ = _host_with_packages(installed={"bash.x86_64", "scylla.x86_64"}, baseline={"bash.x86_64"})
+
+    host.record_host_baseline()
+
+    assert _sudo_cmds(host) == []
+
+
+@pytest.mark.parametrize(
+    "package_baseline, service_baseline, recorded",
+    [
+        pytest.param(None, True, PACKAGE_BASELINE, id="services-not-restored"),
+        pytest.param({"bash.x86_64"}, False, SERVICE_BASELINE, id="packages-not-restored"),
+    ],
+)
+def test_a_baseline_left_alone_is_kept_and_the_other_recorded(package_baseline, service_baseline, recorded):
+    """The cleanup of an earlier run restored one baseline and not the other: the one it kept holds the host from
+    before that run, and this run still needs the other, for its own cleanup to restore."""
+    host, _ = _host_with_packages(
+        installed={"bash.x86_64"}, baseline=package_baseline, service_baseline=service_baseline
+    )
+
+    host.record_host_baseline()
+
+    cmds = _sudo_cmds(host)
+    assert len(cmds) == 3
+    assert cmds[1].endswith(f" > {recorded}.new'")
+    assert cmds[2] == f"mv {recorded}.new {recorded}"
+
+
+def test_no_baseline_leaves_the_packages_alone():
+    host, state = _host_with_packages(installed={"bash.x86_64", "scylla.x86_64"}, baseline=None)
+
+    host.restore_packages()
+
+    assert _sudo_cmds(host) == []
+    assert state["installed"] == {"bash.x86_64", "scylla.x86_64"}
+
+
+def test_the_packages_of_the_baseline_are_restored():
+    """A shared host: the run installed Scylla and hwloc, and removed abrt; openssh upgrades keep their name."""
+    host, state = _host_with_packages(
+        installed={"bash.x86_64", "openssh.x86_64", "scylla.x86_64", "hwloc.x86_64"},
+        baseline={"bash.x86_64", "openssh.x86_64", "abrt.x86_64"},
+    )
+
+    host.restore_packages()
+
+    assert state["installed"] == {"bash.x86_64", "openssh.x86_64", "abrt.x86_64"}
+    cmds = _sudo_cmds(host)
+    assert "yum remove -y --setopt=clean_requirements_on_remove=False hwloc.x86_64 scylla.x86_64'" in cmds[0]
+    assert "yum install -y --setopt=install_weak_deps=False abrt.x86_64'" in cmds[1]
+    assert cmds[2] == f"rm -f {PACKAGE_BASELINE}"
+
+
+def test_the_baseline_is_kept_while_the_packages_differ():
+    host, state = _host_with_packages(
+        installed={"bash.x86_64"}, baseline={"bash.x86_64", "abrt.x86_64"}, stuck={"abrt.x86_64"}
+    )
+
+    host.restore_packages()
+
+    assert f"rm -f {PACKAGE_BASELINE}" not in _sudo_cmds(host)
+    assert "abrt.x86_64" in host.log.warning.call_args.args[1]
+
+
+def test_debian_packages_are_purged_non_interactively():
+    host, state = _host_with_packages(
+        installed={"bash:amd64", "scylla-server:amd64"}, baseline={"bash:amd64"}, debian=True
+    )
+
+    host.restore_packages()
+
+    assert state["installed"] == {"bash:amd64"}
+    cmd = _sudo_cmds(host)[0]
+    assert cmd.startswith("DEBIAN_FRONTEND=noninteractive bash -c ")
+    assert "-o Acquire::http::Timeout=60" in cmd and "purge -y scylla-server:amd64" in cmd
+
+
+def test_debian_packages_are_reinstalled_without_their_recommends():
+    host, state = _host_with_packages(installed={"bash:amd64"}, baseline={"bash:amd64", "apport:amd64"}, debian=True)
+
+    host.restore_packages()
+
+    assert state["installed"] == {"bash:amd64", "apport:amd64"}
+    assert "install -y --no-install-recommends apport:amd64" in _sudo_cmds(host)[0]
+
+
+def test_what_a_reinstalled_package_needs_is_kept():
+    """A shared host: the abrt and kexec-tools reinstalled are newer, and need kdump-utils, which the host did not have."""
+    host, state = _host_with_packages(
+        installed={"bash.x86_64", "scylla.x86_64"},
+        baseline={"bash.x86_64", "kexec-tools.x86_64"},
+        pulled_in={"kdump-utils.x86_64"},
+    )
+
+    host.restore_packages()
+
+    assert state["installed"] == {"bash.x86_64", "kexec-tools.x86_64", "kdump-utils.x86_64"}
+    assert _sudo_cmds(host)[-1] == f"rm -f {PACKAGE_BASELINE}"
+    assert "kdump-utils.x86_64" in host.log.info.call_args_list[-2].args[1]
+
+
+def test_a_package_the_removal_left_keeps_the_baseline():
+    host, _ = _host_with_packages(
+        installed={"bash.x86_64", "scylla.x86_64"}, baseline={"bash.x86_64"}, stuck={"scylla.x86_64"}
+    )
+
+    host.restore_packages()
+
+    assert f"rm -f {PACKAGE_BASELINE}" not in _sudo_cmds(host)
+    assert "scylla.x86_64" in host.log.warning.call_args.args[1]
+
+
+def _host_with_services(running: set[str], baseline: set[str] | None, failing: set[str] = ()):
+    """A host whose services start for real, except the `failing` ones."""
+    state = {"running": set(running)}
+
+    def run(cmd, **_):
+        if cmd == LIST_RUNNING_SERVICES:
+            return MagicMock(stdout="".join(f"{service}\n" for service in sorted(state["running"])))
+        return MagicMock(stdout="", ok=True)
+
+    def sudo(cmd, **_):
+        if cmd == f"test -s {SERVICE_BASELINE}":
+            return MagicMock(stdout="", ok=baseline is not None)
+        if cmd == f"cat {SERVICE_BASELINE}":
+            return MagicMock(stdout="".join(f"{service}\n" for service in sorted(baseline)))
+        if cmd.startswith("systemctl start "):
+            state["running"] |= set(cmd.split()[2:]) - set(failing)
+        return MagicMock(stdout="", ok=True)
+
+    host = PhysicalHost(name="scylla-db 1.2.3.4", remoter=MagicMock())
+    host.remoter.run.side_effect = run
+    host.remoter.sudo.side_effect = sudo
+    host.log = MagicMock()
+    return host, state
+
+
+def test_a_service_a_package_replaced_is_started_again():
+    """A shared host: scylla-kernel-conf replaced tuned, which stopped it; reinstalling tuned does not start it."""
+    host, state = _host_with_services(
+        running={"sshd.service", "docker.service"}, baseline={"sshd.service", "tuned.service"}
+    )
+
+    host.restore_services()
+
+    assert state["running"] == {"sshd.service", "docker.service", "tuned.service"}
+    assert _sudo_cmds(host) == [
+        "systemctl start tuned.service",
+        f"rm -f {SERVICE_BASELINE}",
+        "rmdir --ignore-fail-on-non-empty /var/lib/scylla-cluster-tests",
+    ]
+
+
+def test_a_service_that_does_not_start_keeps_the_baseline():
+    host, _ = _host_with_services(running=set(), baseline={"tuned.service"}, failing={"tuned.service"})
+
+    host.restore_services()
+
+    assert f"rm -f {SERVICE_BASELINE}" not in _sudo_cmds(host)
+    assert "tuned.service" in host.log.warning.call_args.args[1]
+
+
+def test_no_service_baseline_leaves_the_services_alone():
+    host, _ = _host_with_services(running={"sshd.service"}, baseline=None)
+
+    host.restore_services()
+
+    assert _sudo_cmds(host) == []
+
+
+def test_the_db_host_cleanup_stops_scylla_restores_packages_then_removes_leftovers(monkeypatch):
+    host = _host_with_disk_state()
+    calls = []
+    monkeypatch.setattr(host, "_stop_stale_log_followers", lambda: calls.append("log followers"))
+    monkeypatch.setattr(host, "restore_packages", lambda: calls.append("packages"))
+    monkeypatch.setattr(host, "restore_services", lambda: calls.append("services"))
+    monkeypatch.setattr(host, "remove_scylla_leftovers", lambda: calls.append("leftovers"))
+    host.remoter.sudo.side_effect = lambda cmd, **_: calls.append(cmd)
+
+    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=True)
+
+    assert calls == ["log followers", "systemctl stop scylla-server.service", "packages", "services", "leftovers"]
+
+
+def test_a_loader_host_cleanup_skips_the_scylla_steps(monkeypatch):
+    host = _host_with_disk_state()
+    calls = []
+    monkeypatch.setattr(host, "_stop_stale_log_followers", lambda: calls.append("log followers"))
+    monkeypatch.setattr(host, "restore_packages", lambda: calls.append("packages"))
+    monkeypatch.setattr(host, "restore_services", lambda: calls.append("services"))
+    monkeypatch.setattr(host, "remove_scylla_leftovers", lambda: calls.append("leftovers"))
+
+    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=False)
+
+    assert calls == ["log followers", "packages", "services"]
+    host.remoter.sudo.assert_not_called()
+
+
+def test_a_failed_package_restore_does_not_skip_the_leftovers(monkeypatch):
+    host = _host_with_disk_state()
+    calls = []
+    monkeypatch.setattr(host, "restore_packages", MagicMock(side_effect=RuntimeError("yum: exited with 1")))
+    monkeypatch.setattr(host, "restore_services", lambda: calls.append("services"))
+    monkeypatch.setattr(host, "remove_scylla_leftovers", lambda: calls.append("leftovers"))
+
+    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=True)
+
+    assert calls == ["services", "leftovers"]
+    assert "the packages of the host, the next cleanup will" in host.log.warning.call_args.args[0]
+
+
+def test_the_node_records_the_baseline_when_it_starts(monkeypatch):
+    monkeypatch.setattr(sdcm_cluster.BaseNode, "init", lambda self: None)
+    node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.log = MagicMock()
+    node.record_host_baseline = MagicMock(side_effect=RuntimeError("rpm: exited with 1"))
+
+    node.init()
+
+    node.record_host_baseline.assert_called_once()
+    assert "leaves them as they are" in node.log.warning.call_args.args[0]
+
+
+def _host_with_log_followers(leaders: str) -> PhysicalHost:
+    host = PhysicalHost(name="scylla-db 1.2.3.4", remoter=MagicMock())
+    host.remoter.run.return_value = MagicMock(stdout=leaders)
+    host.log = MagicMock()
+    return host
+
+
+def test_log_followers_a_run_left_are_stopped_with_their_process_group():
+    """A run on a shared host left `setsid bash /tmp/logger_cmd_93752.sh` and its sudo journalctl -f, in one process group."""
+    host = _host_with_log_followers("1296707\n1306292\n")
+
+    host._stop_stale_log_followers()
+
+    assert host.remoter.run.call_args.args[0] == r"pgrep -f '^bash /tmp/logger_cmd_[0-9]+\.sh$'"
+    assert [call.args[0] for call in host.remoter.sudo.call_args_list] == [
+        "kill -9 -1296707 -1306292",
+        REMOVE_LOG_FOLLOWER_SCRIPTS,
+    ]
+
+
+def test_without_log_followers_only_their_scripts_are_removed():
+    """The PIDs in /tmp/logger_<pid>.pid are not used: one the follower had may belong to another process now."""
+    host = _host_with_log_followers("")
+
+    host._stop_stale_log_followers()
+
+    assert [call.args[0] for call in host.remoter.sudo.call_args_list] == [REMOVE_LOG_FOLLOWER_SCRIPTS]
