@@ -432,6 +432,7 @@ class TestCassandraStressLogEvent:
     @staticmethod
     def get_event(line, expected_type, expected_severity):
         if event := find_log_event(chain(CS_NORMAL_EVENTS_PATTERNS, CS_ERROR_EVENTS_PATTERNS), line):
+            event = event.clone()
             event.add_info(node="self.node", line=line, line_number=1).dont_publish()
             assert event.type == expected_type, f'Unexpected event.type {event.type}. Expected "{expected_type}"'
             assert event.severity == expected_severity, (
@@ -518,6 +519,7 @@ class TestScyllaBenchLogEvent:
         if event := find_log_event(
             chain(SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS), line
         ):
+            event = event.clone()
             event.add_info(node="self.node", line=line, line_number=1).dont_publish()
             assert event.type == expected_type, f'Unexpected event.type {event.type}. Expected "{expected_type}"'
             assert event.severity == expected_severity, (
