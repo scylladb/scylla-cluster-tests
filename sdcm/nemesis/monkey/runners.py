@@ -21,11 +21,17 @@ class SisyphusMonkey(NemesisRunner):
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
 
-class FixedOrderMonkey(NemesisRunner):
-    """Runs nemesis in the exact order given by `nemesis_selector`, repeating it.
+class FixedOrderMonkeyConfig(NemesisRunnerConfig):
+    nemesis_class_names: list[str] = Field(
+        min_length=1, description="Nemesis class names to run in this order, e.g. [DecommissionMonkey, RepairMonkey]"
+    )
 
-    The selector of a FixedOrderMonkey thread is a comma-separated ordered list of nemesis
-    class names, e.g. "DecommissionMonkey, RepairMonkey, DecommissionMonkey". A name may
+
+class FixedOrderMonkey(NemesisRunner):
+    """Runs nemesis in the exact order given by `nemesis_class_names`, repeating it.
+
+    The `nemesis_class_names` of a FixedOrderMonkey entry in `nemesis.runners` is an ordered list of
+    nemesis class names, e.g. [DecommissionMonkey, RepairMonkey, DecommissionMonkey]. A name may
     repeat to run that nemesis more than once per cycle.
 
     Each name is looked up in the nemesis registry and instantiated once; repeated names share
@@ -33,12 +39,11 @@ class FixedOrderMonkey(NemesisRunner):
     run()) prunes entries the current backend cannot run and reports them as SKIPPED.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        names = [name.strip() for name in (self.nemesis_selector or "").split(",") if name.strip()]
-        if not names:
-            raise ValueError("FixedOrderMonkey requires 'nemesis_selector' to list nemesis class names, e.g. 'A, B'")
-        self.disruptions_list = self.resolve_fixed_order(names)
+    config_model = FixedOrderMonkeyConfig
+
+    def __init__(self, tester_obj, termination_event, config: FixedOrderMonkeyConfig):
+        super().__init__(tester_obj, termination_event, config=config)
+        self.disruptions_list = self.resolve_fixed_order([name.strip() for name in self.config.nemesis_class_names])
         self.log.info(
             "FixedOrderMonkey resolved order: %s", [nemesis.__class__.__name__ for nemesis in self.disruptions_list]
         )
@@ -49,7 +54,7 @@ class FixedOrderMonkey(NemesisRunner):
         resolved = []
         for name in names:
             if name not in classes_by_name:
-                raise ValueError(f"Unknown nemesis class name in 'nemesis_selector': {name!r}")
+                raise ValueError(f"Unknown nemesis class name in 'nemesis_class_names': {name!r}")
             if name not in instances_by_name:
                 instances_by_name[name] = classes_by_name[name](runner=self)
             resolved.append(instances_by_name[name])

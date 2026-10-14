@@ -95,7 +95,7 @@ Nemesis behavior is controlled through test YAML configs or environment variable
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `nemesis_class_name` | `str` | `'NoOpMonkey'` | Runner class to use. Accepts a YAML list; repeat a class to run parallel threads, e.g. `["SisyphusMonkey", "SisyphusMonkey"]` |
-| `nemesis_selector` | `str` | `None` | Boolean flag expression to filter nemesis (e.g. `"not disruptive"`). For `FixedOrderMonkey`: ordered, comma-separated nemesis class names |
+| `nemesis_selector` | `str` | `None` | Boolean flag expression to filter nemesis (e.g. `"not disruptive"`). |
 | `nemesis_interval` | `int` | `5` | Sleep interval between operations, in **minutes** |
 | `nemesis_seed` | `int` | random | Seed for reproducible nemesis sequences |
 | `nemesis_filter_seeds` | `bool` | `false` | If true, target only non-seed nodes |
@@ -191,20 +191,26 @@ nemesis_class_name: ["SisyphusMonkey", "SisyphusMonkey"]
 nemesis_selector: ["not disruptive", ""]
 ```
 
-### `nemesis_selector` with `FixedOrderMonkey`
+### `FixedOrderMonkey` class names
 
-`FixedOrderMonkey` reads `nemesis_selector` as a comma-separated, ordered list of nemesis class names instead of a flag expression. It runs them in that order and repeats the sequence once exhausted. A name may repeat to run that nemesis more than once per cycle. An unknown class name raises `ValueError`; entries the backend cannot run are reported as SKIPPED.
+`FixedOrderMonkey` takes `nemesis_class_names`, an ordered list of nemesis class names in its `nemesis.runners` entry. It runs them in that order and repeats the sequence once exhausted. A name may repeat to run that nemesis more than once per cycle. An unknown class name raises `ValueError`; entries the backend cannot run are reported as SKIPPED.
 
 ```yaml
-nemesis_class_name: "FixedOrderMonkey"
-nemesis_selector: "DecommissionMonkey, RepairMonkey, DecommissionMonkey"
+nemesis:
+  runners:
+    - FixedOrderMonkey:
+        nemesis_class_names: [DecommissionMonkey, RepairMonkey, DecommissionMonkey]
 ```
 
-Each thread takes its own selector, so list syntax gives parallel threads different sequences:
+Each entry takes its own list, so several entries give parallel threads different sequences:
 
 ```yaml
-nemesis_class_name: ["FixedOrderMonkey", "FixedOrderMonkey"]
-nemesis_selector: ["DecommissionMonkey, RepairMonkey", "TruncateMonkey"]
+nemesis:
+  runners:
+    - FixedOrderMonkey:
+        nemesis_class_names: [DecommissionMonkey, RepairMonkey]
+    - FixedOrderMonkey:
+        nemesis_class_names: [TruncateMonkey]
 ```
 
 ### Running with Docker Backend
@@ -456,7 +462,7 @@ See `CategoricalMonkey` in `monkey/runners.py` for a complete example of weighte
 | Runner | Description |
 |--------|-------------|
 | `SisyphusMonkey` | Standard runner — filters by `nemesis_selector`, shuffles, cycles through all |
-| `FixedOrderMonkey` | Runs the nemesis named in `nemesis_selector` in exact order, repeating the sequence |
+| `FixedOrderMonkey` | Runs the nemesis named in `nemesis_class_names` in exact order, repeating the sequence |
 | `CategoricalMonkey` | Weighted random selection from a distribution |
 | `NoOpMonkey` | Does nothing (sleeps) — useful for control experiments |
 | `ScyllaCloudLimitedChaosMonkey` | Limited set for Scylla Cloud (no AWS API access) |

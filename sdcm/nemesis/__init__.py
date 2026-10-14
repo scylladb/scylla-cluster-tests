@@ -30,7 +30,6 @@ import traceback
 import json
 import itertools
 from abc import ABC, abstractmethod
-from datetime import timedelta
 from typing import ClassVar, List, Optional, Callable, Union, Iterable, TYPE_CHECKING
 from functools import partial, cached_property
 from collections import Counter, namedtuple
