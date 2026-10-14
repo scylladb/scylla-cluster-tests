@@ -88,12 +88,18 @@ class NetworkTopologyReplicationStrategy(ReplicationStrategy):
             raise ValueError("At least one replication factor should be provided or default_rf should be set")
 
     def __str__(self):
-        factors = ", ".join([f"'{key}': {value}" for key, value in self.replication_factors_per_dc.items()])
+        # rack lists render as CQL lists via repr
+        factors = ", ".join(
+            [
+                f"'{key}': {value!r}" if isinstance(value, list) else f"'{key}': {value}"
+                for key, value in self.replication_factors_per_dc.items()
+            ]
+        )
         return f"{{'class': '{self.class_}', {factors}}}"
 
     @property
     def replication_factors(self) -> list:
-        return [int(rf) for rf in self.replication_factors_per_dc.values()]
+        return [len(rf) if isinstance(rf, list) else int(rf) for rf in self.replication_factors_per_dc.values()]
 
 
 class LocalReplicationStrategy(ReplicationStrategy):
