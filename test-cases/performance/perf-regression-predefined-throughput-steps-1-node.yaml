@@ -1,0 +1,114 @@
+# Single-DB-node version of perf-regression-predefined-throughput-steps.yaml (SCT-1214).
+#
+# One RF=1 node does about the storage work of one node in the 3-node RF=3 test: there every node stores all the
+# data and applies every write. So the datasets keep their production size (sized for a 4xlarge host: 650M rows
+# x 1 KiB, ~17% of a 3.75 TB disk) and only the replication and consistency change: RF=1, cl=ONE everywhere.
+#
+# Layer after it:
+#   configurations/performance/single-node/predefined-steps-2xlarge-dataset.yaml  (2xlarge hosts only: half datasets)
+#   configurations/performance/single-node/<instance type>.yaml                     (the DB instance type and its steps)
+#
+# One loader runs one cassandra-stress command per stress type: round_robin hands each command of a list to the
+# next loader, and current_throttle() divides a step's rate by the number of loaders, so a second command in a list
+# would run on the same loader at the full step rate and double the load.
+
+test_metadata:
+  description: >-
+    Single-DB-node version of the predefined-throughput-steps test: preloads
+    one RF=1 node with the production-size dataset (halved on 2xlarge hosts),
+    then measures cassandra-stress latency at fixed throughput steps for write,
+    read, disk-only read and mixed sub-tests from one loader. One staging job
+    per i7i/i8g 2xlarge and 4xlarge instance type, paired with the lab hosts.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+    - baremetal
+  stress_tools:
+    - cassandra-stress
+  features:
+    - tablets
+  team_ownership: core-test-infra
+
+test_duration: 500
+
+perf_stress_keyspace: keyspace1
+perf_stress_table: standard1
+
+prepare_stress_cmd: "cassandra-stress write cl=ONE n=1 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode connectionsPerHost=8 cql3 native -rate 'threads=1' -col 'size=FIXED(1024) n=FIXED(1)'"
+
+# 650M rows at 150k writes/s (production: 4 commands x 37.5k/s, 50 threads each), the write rate one node gets in
+# the 3-node preload.
+prepare_write_cmd: [
+  "cassandra-stress write  cl=ONE n=650000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode connectionsPerHost=8 cql3 native -rate threads=200 throttle=150000/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..650000000"
+]
+
+stress_cmd_w: [
+  "cassandra-stress write no-warmup cl=ONE n=1610612736 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1610612736"
+]
+
+# Cache dataset: 20M rows.
+stress_cmd_r: [
+  "cassandra-stress read no-warmup  cl=ONE duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..20000000"
+]
+
+stress_cmd_cache_warmup: [
+  "cassandra-stress read  cl=ONE n=20000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..20000000"
+]
+
+stress_cmd_m: [
+  "cassandra-stress mixed no-warmup  cl=ONE duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..20000000"
+]
+
+# Read the entire data set to ensure disk only reads
+stress_cmd_read_disk: [
+  "cassandra-stress read no-warmup  cl=ONE duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..650000000"
+]
+
+round_robin: true
+
+# The steps and the DB instance type come from configurations/performance/single-node/<instance type>.yaml.
+# CALIBRATION NEEDED (SCT-1214): threads copied from the 3-node test, where 4 loaders share the load.
+# Check the loader CPU stays under 70% at unthrottled, and adjust per load.
+perf_gradual_threads: {"read": 620, "write": 400, "mixed": 1900, "read_disk_only": 620}
+
+n_db_nodes: 1
+n_loaders: 1
+# One node is one rack. 0 states it outright, which the baremetal backend also needs to keep RF=1 rack-valid.
+simulated_racks: 0
+
+instance_type_db: 'i7i.4xlarge'
+instance_type_loader: 'c7i.8xlarge'
+instance_type_monitor: 't3.small'
+use_capacity_reservation: true
+nemesis_add_node_cnt: 0
+
+use_preinstalled_scylla: true
+
+user_prefix: 'perf-1-node-predefined-steps'
+argus_email_report_template: email_report_performance.yaml
+
+backtrace_decoding: true
+backtrace_stall_decoding: false
+
+use_mgmt: false
+
+use_hdrhistogram: true
+
+cs_extra_jvm_opts: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch'
+
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+append_scylla_yaml:
+  auto_snapshot: false
+
+use_placement_group: true
+use_prepared_loaders: false
+
+adaptive_timeout_store_metrics: false
+
+collect_nvme_diagnostics: true
+
+teardown_validators:
+  nvme:
+    enabled: true
