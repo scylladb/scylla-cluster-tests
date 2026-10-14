@@ -68,6 +68,9 @@ class PhysicalHostCleanup:
             except Exception as exc:  # noqa: BLE001
                 self.log.warning("Could not reset the scylla disk setup, the next setup will: %s", exc)
 
+    def _scylla_dir_mounted(self) -> bool:
+        return any("/var/lib/scylla" in targets for targets in self._mounts().values())
+
     def _release_stale_tunnel_ports(self):
         """Kill the sshd sessions still holding the reverse-tunnel ports of an earlier run.
 
@@ -143,7 +146,7 @@ class PhysicalHostCleanup:
             )
         self.remoter.sudo("systemctl stop var-lib-scylla.mount", ignore_status=True)
         # Stopping the unit unmounts it; only a mount made some other way (fstab, by hand) is still there
-        if any("/var/lib/scylla" in targets for targets in self._mounts().values()):
+        if self._scylla_dir_mounted():
             self.remoter.sudo("umount /var/lib/scylla")
         self.remoter.sudo(
             "rm -f /etc/systemd/system/var-lib-scylla.mount /etc/systemd/system/*.wants/var-lib-scylla.mount"
@@ -304,7 +307,14 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
         # io.conf the reinstall left behind. `hydra clean-resources` resets that after a run, but a host can still
         # arrive dirty: kept after a failure, or from a run whose cleanup did not run. So undo whatever is left first,
         # and let a failure of this setup fail.
-        self._reset_scylla_disk_setup(disks)
+        if disks:
+            self._reset_scylla_disk_setup(disks)
+        elif self._scylla_dir_mounted():
+            raise cluster.NodeSetupFailed(
+                node=self,
+                error_msg="/var/lib/scylla is still on a disk an earlier run set up, and scylla_setup_no_raid keeps it "
+                "on the root filesystem: reset the host with `hydra clean-resources` first",
+            )
         super().scylla_setup(disks, devname)
 
     def _get_private_ip_address(self) -> Optional[str]:

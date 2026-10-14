@@ -3457,7 +3457,7 @@ class BaseNode(AutoSshContainerMixin):
     def scylla_setup(self, disks, devname: str):
         """
         TestConfig scylla
-        :param disks: list of disk names
+        :param disks: list of disk names, empty to leave /var/lib/scylla on the root filesystem (--no-raid-setup)
         """
         extra_setup_args = self.parent_cluster.params.get("append_scylla_setup_args")
         remoter = self.remoter
@@ -3468,16 +3468,17 @@ class BaseNode(AutoSshContainerMixin):
             extra_setup_args += " --swap-directory / "
         if self.parent_cluster.params.get("unified_package"):
             extra_setup_args += " --no-verify-package "
-        setup_cmd = "sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --setup-nic-and-disks {}".format(
-            devname, ",".join(disks), extra_setup_args
-        )
+        # scylla_setup_no_raid: without disks, /var/lib/scylla stays a directory on the root filesystem
+        disk_args = f"--disks {','.join(disks)} --setup-nic-and-disks" if disks else "--no-raid-setup"
+        setup_cmd = f"sudo /usr/lib/scylla/scylla_setup --nic {devname} {disk_args} {extra_setup_args}"
         try:
             self._run_scylla_setup_with_dns_retry(setup_cmd)
         except (_ScyllaSetupDnsRetryError, _ScyllaSetupNonRetryableError) as exc:
             raise exc.original_exception from exc
 
-        result = remoter.run("cat /proc/mounts")
-        assert " /var/lib/scylla " in result.stdout, "RAID setup failed, scylla directory isn't mounted correctly"
+        if disks:
+            result = remoter.run("cat /proc/mounts")
+            assert " /var/lib/scylla " in result.stdout, "RAID setup failed, scylla directory isn't mounted correctly"
         remoter.run("sudo sync")
         self.log.info("io.conf right after setup")
         remoter.run("sudo cat /etc/scylla.d/io.conf")
@@ -6930,10 +6931,13 @@ class BaseScyllaCluster:
                     "Check network connectivity and DNS configuration. "
                     "Diagnostics have been captured in the node log.",
                 )
-            try:
-                disks = node.detect_disks(nvme=True)
-            except AssertionError:
-                disks = node.detect_disks(nvme=False)
+            if node.parent_cluster.params.get("scylla_setup_no_raid"):
+                disks = []
+            else:
+                try:
+                    disks = node.detect_disks(nvme=True)
+                except AssertionError:
+                    disks = node.detect_disks(nvme=False)
             node.scylla_setup(disks, devname)
 
     def _reuse_cluster_setup(self, node):

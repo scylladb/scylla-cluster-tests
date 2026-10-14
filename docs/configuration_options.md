@@ -28,12 +28,12 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-522 options across 29 groups.
+523 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 74 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
-| [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 43 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
+| [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 72 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 16 | The monitoring stack, event severities, Argus reporting and email reports. |
@@ -460,6 +460,7 @@ concerns first, then one page per backend, then one per test type.
 | [`scylla_repo`](configuration_options/scylla-installation-and-configuration.md#scylla_repo) | `SCT_SCYLLA_REPO` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`scylla_repo_m`](configuration_options/scylla-manager.md#scylla_repo_m) | `SCT_SCYLLA_REPO_M` | [Scylla Manager](configuration_options/scylla-manager.md) |
 | [`scylla_rsyslog_setup`](configuration_options/monitoring-events-and-reporting.md#scylla_rsyslog_setup) | `SCT_SCYLLA_RSYSLOG_SETUP` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
+| [`scylla_setup_no_raid`](configuration_options/scylla-installation-and-configuration.md#scylla_setup_no_raid) | `SCT_SCYLLA_SETUP_NO_RAID` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`scylla_version`](configuration_options/scylla-installation-and-configuration.md#scylla_version) | `SCT_SCYLLA_VERSION` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`search_test_config`](configuration_options/performance-regression-tests.md#search_test_config) | `SCT_SEARCH_TEST_CONFIG` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`seeds_num`](configuration_options/general-and-provisioning.md#seeds_num) | `SCT_SEEDS_NUM` | [General and provisioning](configuration_options/general-and-provisioning.md) |
