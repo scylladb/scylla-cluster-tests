@@ -51,7 +51,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('availability_zone', '')}",
                description: 'Availability zone',
                name: 'availability_zone')
-            string(defaultValue: '',
+            string(defaultValue: "${pipelineParams.get('scylla_repo', '')}",
                    description: 'a Scylla repo to run against (for .rpm/.deb tests, should be blank otherwise)',
                    name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('unified_package', '')}",
@@ -129,7 +129,7 @@ def call(Map pipelineParams) {
                                 'minicloud label (or set jenkins_label). ' +
                                 'Ignored unless the jenkinsfile sets `minicloud: true`',
                    name: 'local_agent')
-            string(defaultValue: '',
+            string(defaultValue: "${pipelineParams.get('jenkins_label', '')}",
                    description: 'Pin this build to a specific Jenkins agent label, e.g. a lab ' +
                                 'machine. Empty picks the usual builder for the backend/region, ' +
                                 'or the minicloud label when local_agent is set. A single label, ' +
