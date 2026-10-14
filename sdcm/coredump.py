@@ -307,8 +307,19 @@ class CoredumpThreadBase(Thread):
     def update_coredump_info_with_more_information(self, core_info: CoreDumpInfo):
         pass
 
+    @property
+    def _coredumpctl_since(self) -> str:
+        """The coredumpctl option that skips the cores dumped before this run started on the host.
+
+        A host that outlives the run (bare metal) keeps the cores of everything that ran on it before, which are not
+        this run's to report, and whose PIDs a core of this run may reuse.
+        """
+        return f" --since={self.node.journal_since}" if self.node.journal_since else ""
+
     def _get_core_by_pid(self, pid: str) -> Optional[dict]:
-        result = self.node.remoter.sudo(f"coredumpctl list {pid} -q --json=short", verbose=False, ignore_status=True)
+        result = self.node.remoter.sudo(
+            f"coredumpctl list{self._coredumpctl_since} {pid} -q --json=short", verbose=False, ignore_status=True
+        )
         if not result.ok:
             self.log.warning(
                 f"""Failed to get coredump info for pid {pid}:
@@ -383,7 +394,9 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         self.node.remoter.sudo(f"rm -f {link_path}", ignore_status=True)
 
     def get_list_of_cores_json(self) -> Optional[List[CoreDumpInfo]]:
-        result = self.node.remoter.run("sudo coredumpctl -q --json=short", verbose=False, ignore_status=True)
+        result = self.node.remoter.run(
+            f"sudo coredumpctl{self._coredumpctl_since} -q --json=short", verbose=False, ignore_status=True
+        )
         if not result.ok:
             return []
 
@@ -431,7 +444,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
             return self.get_list_of_cores_json()
 
         result = self.node.remoter.run(
-            "sudo coredumpctl --no-pager --no-legend 2>&1", verbose=False, ignore_status=True
+            f"sudo coredumpctl{self._coredumpctl_since} --no-pager --no-legend 2>&1", verbose=False, ignore_status=True
         )
         if "No coredumps found" in result.stdout or not result.ok:
             return []
@@ -568,7 +581,9 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         :return: list[str]
         """
         output = self.node.remoter.run(
-            f"sudo coredumpctl info --no-pager --no-legend {core_info.pid}", verbose=False, ignore_status=False
+            f"sudo coredumpctl info{self._coredumpctl_since} --no-pager --no-legend {core_info.pid}",
+            verbose=False,
+            ignore_status=False,
         )
         return self._filter_out_modules_info(output.stdout + output.stderr)
 
