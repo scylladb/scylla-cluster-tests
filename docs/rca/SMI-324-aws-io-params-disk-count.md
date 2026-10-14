@@ -54,11 +54,11 @@ The 2025.1 i7ie.2xlarge Argus runs confirm this: the installed value is 3.5 time
 | 2022-01-20 | [#289](https://github.com/scylladb/scylla-machine-image/pull/289) (`4bc0664`) moves the AWS preset code from the scylla repository. Multi-disk presets use `value * nr_disks`. Entries are per disk. |
 | 2022 | In [#349](https://github.com/scylladb/scylla-machine-image/pull/349) (i4i), Avi Kivity finds the same double count in review: "you doubled both the constant and nr_disks" ([comment](https://github.com/scylladb/scylla-machine-image/pull/349#discussion_r867455896)). |
 | 2024-12-09 | [#562](https://github.com/scylladb/scylla-machine-image/pull/562) (`828c2a2`) moves the presets to `aws_io_params.yaml` and multiplies every entry by `nr_disks`. The yaml has no comment about the unit. |
-| 2024-12 to 2025-07 | [#561](https://github.com/scylladb/scylla-machine-image/pull/561) (i7ie), [#676](https://github.com/scylladb/scylla-machine-image/pull/676) (i8g, closed) and [#709](https://github.com/scylladb/scylla-machine-image/pull/709) (i7i) use single-disk measurements. The review asks for RAID0 measurement. #709 merges on 2025-07-01 with per-disk values. See [The i7i review discussion](#the-i7i-review-discussion). |
+| 2024-12 to 2025-07 | [#561](https://github.com/scylladb/scylla-machine-image/pull/561) (i7ie), [#676](https://github.com/scylladb/scylla-machine-image/pull/676) (i8g, closed) and [#709](https://github.com/scylladb/scylla-machine-image/pull/709) (i7i) use single-disk measurements. The review asks for RAID0 measurement. [#709](https://github.com/scylladb/scylla-machine-image/pull/709) merges on 2025-07-01 with per-disk values. See [The i7i review discussion](#the-i7i-review-discussion). |
 | 2025-01-27 | scylla-pkg `a5872a75` adds i7ie.large to i7ie.3xlarge to the release AMI test list. |
 | 2025-08-03 | Staging runs `scylla-staging/roy/artifacts-ami-test-i7i` on all i7i sizes show a bandwidth ratio of 1.0 between installed and measured values. The per-disk entries are correct. |
 | 2025-10-21 | [#776](https://github.com/scylladb/scylla-machine-image/pull/776) (`4007fac` i7i, `82cc0b7` i7ie) merges whole-instance entries. |
-| 2025-10-22 | `b8ef6fa` (i8g, i8ge, content of [#796](https://github.com/scylladb/scylla-machine-image/pull/796), SMI-223) is pushed to `next` directly ([comment](https://github.com/scylladb/scylla-machine-image/pull/796#issuecomment-3430430881)). GitHub shows #796 as merged with a different commit. Backports to 2025.4 ([#811](https://github.com/scylladb/scylla-machine-image/pull/811), [#813](https://github.com/scylladb/scylla-machine-image/pull/813)) and 2025.3 ([#814](https://github.com/scylladb/scylla-machine-image/pull/814), [#815](https://github.com/scylladb/scylla-machine-image/pull/815), [#819](https://github.com/scylladb/scylla-machine-image/pull/819)) follow. |
+| 2025-10-22 | `b8ef6fa` (i8g, i8ge, content of [#796](https://github.com/scylladb/scylla-machine-image/pull/796), SMI-223) is pushed to `next` directly ([comment](https://github.com/scylladb/scylla-machine-image/pull/796#issuecomment-3430430881)). GitHub shows [#796](https://github.com/scylladb/scylla-machine-image/pull/796) as merged with a different commit. Backports to 2025.4 ([#811](https://github.com/scylladb/scylla-machine-image/pull/811), [#813](https://github.com/scylladb/scylla-machine-image/pull/813)) and 2025.3 ([#814](https://github.com/scylladb/scylla-machine-image/pull/814), [#815](https://github.com/scylladb/scylla-machine-image/pull/815), [#819](https://github.com/scylladb/scylla-machine-image/pull/819)) follow. |
 | 2025-10-23 | First `WARNING` on an affected size: 2025.4.0~rc3, i7ie.2xlarge, deviation 50% ([run](https://argus.scylladb.com/tests/scylla-cluster-tests/40aa8381-7ed5-4e67-9e06-733823971583)). |
 | 2025-10-27, 2025-10-29 | scylla-pkg `040c33d4`, `ac1d2c38` add i8g and i8ge sizes up to 16xlarge and 18xlarge to the release ARM list. |
 | 2026-01-25 | 2026.1.0~rc0 ARM runs report `WARNING` on i8g.8xlarge (50%), i8g.16xlarge (75%) and i8ge.2xlarge (50%). |
@@ -68,7 +68,7 @@ The 2025.1 i7ie.2xlarge Argus runs confirm this: the installed value is 3.5 time
 | 2026-05-21 | Staging run on i8g.24xlarge: ratio 6.1, deviation 84% ([run](https://argus.scylladb.com/tests/scylla-cluster-tests/5a8ec1c6-9aba-4b8d-9514-4a83890d9fdd)). |
 | 2026-06-16 to 2026-09-28 | [SMI-297](https://scylladb.atlassian.net/browse/SMI-297) compares the yaml entries to the AWS whole-instance IOPS and reads them as whole-instance values. See [Near miss: SMI-297](#near-miss-smi-297). |
 | 2026-10-08 | SMI-324 is filed from CUSTOMER-776. |
-| 2026-10-12 | #1033 merges to `next`. |
+| 2026-10-12 | [#1033](https://github.com/scylladb/scylla-machine-image/pull/1033) merges to `next`. |
 
 ## Root cause
 
@@ -80,7 +80,7 @@ The code assumes per-disk entries. Nothing in the yaml or the code states this.
 
 ### How whole-instance entries got into the yaml
 
-#776 and #796 took their values from `/etc/scylla.d/io_properties.yaml` read back from running Scylla AMIs.
+[#776](https://github.com/scylladb/scylla-machine-image/pull/776) and [#796](https://github.com/scylladb/scylla-machine-image/pull/796) took their values from `/etc/scylla.d/io_properties.yaml` read back from running Scylla AMIs.
 That file describes the whole RAID0 array, so the values are whole-instance totals.
 In 2025-10 the measuring tool `tools/io_properties_measurements/get_scylla_io_properties.py` ([#812](https://github.com/scylladb/scylla-machine-image/pull/812)) automated this read-back.
 It stores `disks[0]` and does not divide by the disk count.
@@ -89,10 +89,10 @@ Intermediate revisions of both PRs show the double count in the data:
 
 | PR revision | Content |
 |---|---|
-| #776 `072a1e4` (2025-08-18) | Each multi-disk i7ie value is `i7ie.ALL * disks` exactly. These are presets read back, not iotune results. |
-| #776 `b970f98` (2025-10-17) | `072a1e4 * disks` exactly for 60 of 64 values. |
-| #796 `536be8d` (2025-09-15) | Whole-array RAID0 values. |
-| #796 `7bcde6a` (2025-10-16) | `536be8d * disks` exactly for all 64 values. This is the "Measured" table in the `b8ef6fa` commit message. |
+| [#776](https://github.com/scylladb/scylla-machine-image/pull/776) `072a1e4` (2025-08-18) | Each multi-disk i7ie value is `i7ie.ALL * disks` exactly. These are presets read back, not iotune results. |
+| [#776](https://github.com/scylladb/scylla-machine-image/pull/776) `b970f98` (2025-10-17) | `072a1e4 * disks` exactly for 60 of 64 values. |
+| [#796](https://github.com/scylladb/scylla-machine-image/pull/796) `536be8d` (2025-09-15) | Whole-array RAID0 values. |
+| [#796](https://github.com/scylladb/scylla-machine-image/pull/796) `7bcde6a` (2025-10-16) | `536be8d * disks` exactly for all 64 values. This is the "Measured" table in the `b8ef6fa` commit message. |
 | Final, both PRs (2025-10-21) | Whole-array values. |
 
 The `7bcde6a` values grow with the square of the disk count.
@@ -104,24 +104,24 @@ The final revisions removed one factor of the disk count. The second factor stay
 
 This section answers the review question about the earlier i7i discussion.
 
-In #561, #676 and #709 the authors measured one SSD without RAID0.
-The author of #561 wrote: "Measured single local SSD w/o RAID0, since we simulate RAID0 performance on scylla_cloud_io_setup script from single drive performance" ([comment](https://github.com/scylladb/scylla-machine-image/pull/561#issuecomment-2532682535)).
+In [#561](https://github.com/scylladb/scylla-machine-image/pull/561), [#676](https://github.com/scylladb/scylla-machine-image/pull/676) and [#709](https://github.com/scylladb/scylla-machine-image/pull/709) the authors measured one SSD without RAID0.
+The author of [#561](https://github.com/scylladb/scylla-machine-image/pull/561) wrote: "Measured single local SSD w/o RAID0, since we simulate RAID0 performance on scylla_cloud_io_setup script from single drive performance" ([comment](https://github.com/scylladb/scylla-machine-image/pull/561#issuecomment-2532682535)).
 The review asked for RAID0 measurement:
 
-- #709, on `i7i.ALL`: "This is incorrect since it's not measuring all disks (raid0) but single disk." ([comment](https://github.com/scylladb/scylla-machine-image/pull/709#discussion_r2123448207))
-- #561: "Are these single disk numbers and we multiply it somewhere by the number of disks?" ([comment](https://github.com/scylladb/scylla-machine-image/pull/561#discussion_r2123496724)). This question has no reply.
-- #676: "it makes sense to me to measure the raid0 drive or to measure a single disk and multiply by number of disks but the former should be more accurate" ([comment](https://github.com/scylladb/scylla-machine-image/pull/676#issuecomment-2918851725)).
+- [#709](https://github.com/scylladb/scylla-machine-image/pull/709), on `i7i.ALL`: "This is incorrect since it's not measuring all disks (raid0) but single disk." ([comment](https://github.com/scylladb/scylla-machine-image/pull/709#discussion_r2123448207))
+- [#561](https://github.com/scylladb/scylla-machine-image/pull/561): "Are these single disk numbers and we multiply it somewhere by the number of disks?" ([comment](https://github.com/scylladb/scylla-machine-image/pull/561#discussion_r2123496724)). This question has no reply.
+- [#676](https://github.com/scylladb/scylla-machine-image/pull/676): "it makes sense to me to measure the raid0 drive or to measure a single disk and multiply by number of disks but the former should be more accurate" ([comment](https://github.com/scylladb/scylla-machine-image/pull/676#issuecomment-2918851725)).
 
-#709 merged on 2025-07-01 with per-disk values "as a workaround" ([comment](https://github.com/scylladb/scylla-machine-image/pull/709#issuecomment-3018878165)), with a follow-up to fix the values.
-The follow-ups #776 and #796 measured the RAID0 array.
+[#709](https://github.com/scylladb/scylla-machine-image/pull/709) merged on 2025-07-01 with per-disk values "as a workaround" ([comment](https://github.com/scylladb/scylla-machine-image/pull/709#issuecomment-3018878165)), with a follow-up to fix the values.
+The follow-ups [#776](https://github.com/scylladb/scylla-machine-image/pull/776) and [#796](https://github.com/scylladb/scylla-machine-image/pull/796) measured the RAID0 array.
 
 What changed: the source of the values changed from one disk to the whole array.
-The multiplication in `generate()` stayed. No comment in #776 or #796 mentions the disk count or the multiplication.
+The multiplication in `generate()` stayed. No comment in [#776](https://github.com/scylladb/scylla-machine-image/pull/776) or [#796](https://github.com/scylladb/scylla-machine-image/pull/796) mentions the disk count or the multiplication.
 
 The review saw the symptom.
-On #776: "in i7i, the 8xlarge is 4 times better than the 4x" ([comment](https://github.com/scylladb/scylla-machine-image/pull/776#issuecomment-3419680224)) and "around 2x more for some reason" ([comment](https://github.com/scylladb/scylla-machine-image/pull/776#issuecomment-3424715277)).
+On [#776](https://github.com/scylladb/scylla-machine-image/pull/776): "in i7i, the 8xlarge is 4 times better than the 4x" ([comment](https://github.com/scylladb/scylla-machine-image/pull/776#issuecomment-3419680224)) and "around 2x more for some reason" ([comment](https://github.com/scylladb/scylla-machine-image/pull/776#issuecomment-3424715277)).
 The author fixed the measuring script, which removed one factor ([comment](https://github.com/scylladb/scylla-machine-image/pull/776#issuecomment-3425932014)).
-The final check of #776 compared the entries to the AWS whole-instance figures ([comment](https://github.com/scylladb/scylla-machine-image/pull/776#issuecomment-3427367058)). The #796 review asked for the same comparison ([comment](https://github.com/scylladb/scylla-machine-image/pull/796#issuecomment-3394151978)).
+The final check of [#776](https://github.com/scylladb/scylla-machine-image/pull/776) compared the entries to the AWS whole-instance figures ([comment](https://github.com/scylladb/scylla-machine-image/pull/776#issuecomment-3427367058)). The [#796](https://github.com/scylladb/scylla-machine-image/pull/796) review asked for the same comparison ([comment](https://github.com/scylladb/scylla-machine-image/pull/796#issuecomment-3394151978)).
 This check passes only when the entries are whole-instance values, so it confirmed the defect.
 
 ## Release AMI test coverage
@@ -220,7 +220,7 @@ Three months of investigation stayed one step from the defect.
 ## Why detection failed
 
 1. **A warning does not fail the run.** The deviation goes to an Argus table cell. The run passes, and release triage focuses on failed runs. 350 warnings stayed unread.
-2. **The review used the wrong reference.** #776 and #796 compared the entries to the AWS whole-instance figures. The values matched, so the review accepted them.
+2. **The review used the wrong reference.** [#776](https://github.com/scylladb/scylla-machine-image/pull/776) and [#796](https://github.com/scylladb/scylla-machine-image/pull/796) compared the entries to the AWS whole-instance figures. The values matched, so the review accepted them.
 3. **The symptom got a partial fix.** The review saw 4 times steps between sizes. The measuring script fix removed one factor of the disk count.
 4. **The yaml unit is implicit.** No comment and no test stated that entries are per disk. The unit tests checked only that a mock i3 value is multiplied by the disk count.
 5. **The measuring tool reads back the installed file.** On an AMI with a preset it returns `entry * disks`, not a measurement.
@@ -233,7 +233,7 @@ Three months of investigation stayed one step from the defect.
 | # | Action | Repository | Owner | Status |
 |---|---|---|---|---|
 | 1 | Use per-disk entries for i7i, i7ie, i8g, i8ge. Divide by the disk count in the measuring tool. Add a per-drive test. Add a unit header to the yaml. | scylla-machine-image | Valerii Ponomarov | Merged to `next` ([#1033](https://github.com/scylladb/scylla-machine-image/pull/1033)) |
-| 2 | Backport #1033 to 2026.3, 2026.2, 2026.1, 2025.4 and 2025.3. | scylla-machine-image | | 2026.3 open ([#1034](https://github.com/scylladb/scylla-machine-image/pull/1034)), waits for performance tests |
+| 2 | Backport [#1033](https://github.com/scylladb/scylla-machine-image/pull/1033) to 2026.3, 2026.2, 2026.1, 2025.4 and 2025.3. | scylla-machine-image | | 2026.3 open ([#1034](https://github.com/scylladb/scylla-machine-image/pull/1034)), waits for performance tests |
 | 3 | Fix the squared entries on `branch-2025.1`. | scylla-machine-image | | Needs a ticket |
 | 4 | Raise an `ERROR` event in the artifacts test when the installed value is more than 15% above the measured value. Keep `WARNING` for values below the measurement. | scylla-cluster-tests | | Proposed |
 | 5 | Show result-table warnings on the run status or the release dashboard in Argus, so passed runs with warnings get triage. | argus | | Proposed |
@@ -246,7 +246,7 @@ Three months of investigation stayed one step from the defect.
 
 ## Open items
 
-- Find the AMI that the #796 `7bcde6a` measurement used.
+- Find the AMI that the [#796](https://github.com/scylladb/scylla-machine-image/pull/796) `7bcde6a` measurement used.
 - Find why the 2025.1 backport stored entries times the disk count.
 - Find why 23 release runs on i7ie.3xlarge show `write_iops` warnings on older AMIs.
 - Confirm that no Argus view or notification shows result-table warnings for passed runs.
