@@ -308,6 +308,8 @@ class ArtifactsTest(ClusterTester):
             backend != "docker"
             and not self.params.get("nonroot_offline_install")
             and self.node.db_node_instance_type != "t3.micro"
+            # scylla_setup mounts no data disk: /var/lib/scylla is on the root filesystem, mounted without discard
+            and not self.params.get("scylla_setup_no_raid")
         ):
             with self.logged_subtest("verify XFS online discard enabled"):
                 self.verify_xfs_online_discard_enabled()
@@ -401,7 +403,8 @@ class ArtifactsTest(ClusterTester):
             self.node.restart_scylla(verify_up_after=True)
             self.check_scylla()
 
-        if backend != "docker":
+        # scylla_setup writes perftune.yaml only with --setup-nic-and-disks, which needs the data disks
+        if backend != "docker" and not self.params.get("scylla_setup_no_raid"):
             with self.logged_subtest("Check the output of perftune.py"):
                 perftune_checker = PerftuneOutputChecker(self.node)
                 perftune_checker.compare_perftune_results()

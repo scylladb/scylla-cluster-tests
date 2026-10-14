@@ -452,6 +452,32 @@ def test_scylla_setup_resets_first_and_no_longer_swallows_failures(monkeypatch):
     assert calls == [("reset", ["/dev/nvme1n1"]), ("setup", ["/dev/nvme1n1"])]
 
 
+def test_scylla_setup_without_disks_resets_nothing(monkeypatch):
+    """scylla_setup_no_raid: /var/lib/scylla is a directory on the root filesystem, there is no disk to reset."""
+    node = _node_with_disk_state()
+    calls = []
+    monkeypatch.setattr(node, "_reset_scylla_disk_setup", lambda disks: calls.append(("reset", disks)))
+    monkeypatch.setattr(
+        sdcm_cluster.BaseNode, "scylla_setup", lambda self, disks, devname: calls.append(("setup", disks))
+    )
+
+    node.scylla_setup([], "eth0")
+
+    assert calls == [("setup", [])]
+
+
+def test_scylla_setup_without_disks_refuses_a_scylla_dir_left_on_a_disk(monkeypatch):
+    node = _node_with_disk_state(mount_source="/dev/nvme1n1")
+    setup = MagicMock()
+    monkeypatch.setattr(sdcm_cluster.BaseNode, "scylla_setup", setup)
+
+    with pytest.raises(sdcm_cluster.NodeSetupFailed) as failure:
+        node.scylla_setup([], "eth0")
+
+    assert "hydra clean-resources" in failure.value.error_msg
+    setup.assert_not_called()
+
+
 def _host_with_disk_state(**state) -> PhysicalHost:
     """A bare-metal host as the cleanup phase sees it, whose remoter answers from the given host state."""
     host = PhysicalHost(name="scylla-db 1.2.3.4", remoter=_node_with_disk_state(**state).remoter)
