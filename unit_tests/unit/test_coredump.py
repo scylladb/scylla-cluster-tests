@@ -205,3 +205,43 @@ def test_is_pigz_installed_command(distro, expected_cmd, expected_kwargs):
     node.remoter.run.assert_called_once()
     assert node.remoter.run.call_args.args == (expected_cmd,)
     assert node.remoter.run.call_args.kwargs == expected_kwargs
+
+
+def _systemd_thread(journal_since: str | None, coredumpctl_output: str = "") -> CoredumpExportSystemdThread:
+    node = MagicMock(journal_since=journal_since)
+    node.remoter.run.return_value = MagicMock(ok=True, stdout=coredumpctl_output, stderr="")
+    node.remoter.sudo.return_value = MagicMock(ok=True, stdout='[{"pid": 1234, "exe": "/usr/bin/scylla"}]', stderr="")
+    thread = CoredumpExportSystemdThread(node=node, max_core_upload_limit=1)
+    thread.__dict__["systemd_version"] = 258
+    return thread
+
+
+@pytest.mark.parametrize(
+    "journal_since, expected_option",
+    [
+        pytest.param("@1791969271", " --since=@1791969271", id="host-that-outlives-the-run"),
+        pytest.param(None, "", id="node-created-for-the-run"),
+    ],
+)
+def test_cores_are_looked_up_since_the_run_started(journal_since, expected_option):
+    """A bare-metal host keeps the cores of earlier runs and other jobs: only this run's are reported."""
+    thread = _systemd_thread(journal_since)
+
+    thread.get_list_of_cores_json()
+    thread._get_core_by_pid("1234")
+    thread._get_coredumpctl_info(CoreDumpInfo(pid="1234"))
+
+    assert [call.args[0] for call in thread.node.remoter.run.call_args_list] == [
+        f"sudo coredumpctl{expected_option} -q --json=short",
+        f"sudo coredumpctl info{expected_option} --no-pager --no-legend 1234",
+    ]
+    thread.node.remoter.sudo.assert_called_once()
+    assert thread.node.remoter.sudo.call_args.args == (f"coredumpctl list{expected_option} 1234 -q --json=short",)
+
+
+def test_no_core_since_the_run_started_is_no_core():
+    """coredumpctl exits 1, with no JSON, when no core matches --since."""
+    thread = _systemd_thread("@1791969271")
+    thread.node.remoter.run.return_value = MagicMock(ok=False, stdout="", stderr="No coredumps found.")
+
+    assert thread.get_list_of_cores_json() == []
