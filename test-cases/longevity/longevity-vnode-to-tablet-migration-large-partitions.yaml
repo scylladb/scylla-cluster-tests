@@ -1,0 +1,71 @@
+test_metadata:
+  description: >-
+    Vnode-to-tablet migration of a 600 GiB dataset of 1 GiB partitions (600 partitions x
+    100,000 rows x 10 KiB, data_dir/latte/large_partitions.rn) on a 6-node cluster with
+    SisyphusMonkey nemesis. A 50:50 read/write latte stress runs for 60m before the
+    migration, 240m during it and 60m after it, and the latencies of the three phases
+    are compared.
+  test_type: longevity
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: mixed
+  features:
+    - tablets
+    - large-partitions
+  team_ownership: storage-qa
+
+# Headroom for resharding 1 GiB partitions on every node restart; tune after the first run
+test_duration: 720
+
+# 6 DB nodes across 3 simulated racks (2 nodes per rack). With migration running
+# concurrently with disruptive nemesis, at least 2 nodes per rack are required to
+# keep quorum (RF=3) available while one node per rack is unavailable.
+n_db_nodes: 6
+n_loaders: 1
+seeds_num: 3
+
+round_robin: true
+
+instance_type_db: 'i8g.xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+# disk utilization depends on IncrementalCompactionStrategy; keep it for the whole run
+nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
+nemesis_interval: 15
+
+user_prefix: 'longevity-vnode-to-tablet-migration-large-partitions'
+
+server_encrypt: true
+client_encrypt: true
+
+nemesis_during_prepare: false
+
+# Major-compact and wait for compactions to settle before the pre-migration benchmark.
+# Right after the bulk load the many uncompacted sstables make reads too slow for the
+# stress rate and the backlog skews the benchmark latencies.
+prepare_wait_no_compactions_timeout: 120  # (minutes)
+
+prepare_write_cmd:
+  # 60,000,000 rows in single-partition logged batches of 10 rows (100 KiB).
+  # A failed batch is retried after 10s rather than latte's default 100ms backoff.
+  - >-
+    latte run -f write_batch --consistency=QUORUM --tag write
+    --threads=4 --concurrency=64 --retry-interval=10s --duration=6000000
+    -P row_count=60000000 -P rows_per_partition=100000 -P row_size=10240 -P batch_size=10
+    data_dir/latte/large_partitions.rn
+
+stress_cmd:
+  # A read that returns a wrong row count or value is retried (10 times, 10s apart)
+  # before latte reports a data validation failure.
+  - >-
+    latte run -f write_random:1 -f read_row:1 --consistency=QUORUM --tag mixed
+    --validation-strategy=retry --retry-interval=10s
+    --threads=4 --concurrency=64 --rate=10000 --duration=240m
+    -P row_count=60000000 -P rows_per_partition=100000 -P row_size=10240
+    data_dir/latte/large_partitions.rn
+
+use_hdrhistogram: true
