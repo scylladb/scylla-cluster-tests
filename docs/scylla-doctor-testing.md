@@ -303,6 +303,10 @@ that is 42 artifact jobs.
 
 #### Where the triggered jobs live
 
+The artifact test jobs that the gate triggers are in the Jenkins folder
+[`scylla-doctor/oss/artifacts`](https://jenkins.scylladb.com/job/scylla-doctor/job/oss/job/artifacts/).
+Each one runs the regular artifact jenkinsfile, `jenkins-pipelines/oss/artifacts/artifacts-<os>.jenkinsfile`.
+
 `job_path` is relative to the gating job's folder. For example,
 `oss/artifacts/artifacts-centos9-test` resolves to
 `scylla-doctor/oss/artifacts/artifacts-centos9-test`.
