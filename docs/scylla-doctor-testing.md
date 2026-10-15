@@ -24,7 +24,7 @@ in whether the analysis phase runs.
 | Extra SD config | Disabled collectors on nonroot installs | Same, plus `SCYLLA_DOCTOR_ANALYZER_CONFIG` (analyzers turned off or tuned for test clusters) |
 | Used by | Regular artifact tests | SD release gating; `scylla-doctor-gating` trigger matrix |
 
-`scylla_doctor_version` is pinned in `defaults/test_default.yaml` (currently `1.14.1`) so that a new
+`scylla_doctor_version` is pinned in `defaults/test_default.yaml` (currently `1.14.2`) so that a new
 SD release cannot break artifact tests unannounced. See
 [Scylla Doctor Version Management](./artifacts_test.md#scylla-doctor-version-management).
 
@@ -35,7 +35,7 @@ The SD options are defined in `sdcm/sct_config/mixins/scylla_doctor.py` and desc
 |--------|---------|---------|
 | `run_scylla_doctor` | `true` | Run the SD subtest in the artifact test |
 | `scylla_doctor_edition` | `basic` | `basic` or `full` |
-| `scylla_doctor_version` | `1.14.1` | SD version to look up in the bucket |
+| `scylla_doctor_version` | `1.14.2` | SD version to look up in the bucket |
 | `scylla_doctor_full_tarball_url` | empty | Full edition only: exact tarball to download |
 | `run_scylla_doctor_only` | `false` | Skip every artifact check except node health and SD |
 | `use_scylla_doctor_on_failure` | `true` | Not part of artifact testing; see [SD on test failure](#sd-on-test-failure) |
@@ -47,6 +47,11 @@ The SD options are defined in `sdcm/sct_config/mixins/scylla_doctor.py` and desc
 | Regular artifact tests (`jenkins-pipelines/oss/artifacts/`, release branch folders) | basic | A ScyllaDB build, with the pinned SD version | ScyllaDB package/image builds |
 | [SD release gating pipeline](#release-gating-pipeline) (`scylla-doctor/sd-release-gating`) | full | A new SD build, on all supported ScyllaDB versions and OS variants | The SD team, manually, before each SD release ([When to run it](#when-to-run-it)) |
 | `scylla-doctor-gating` trigger matrix (`configurations/triggers/scylla-doctor-gating.yaml`) | full | A ScyllaDB version, with the pinned full SD version, on AMI, AMI ARM and Docker | `scylla-master/sct_triggers/scylla-doctor-gating-trigger` |
+
+Analyzers are not run on new ScyllaDB builds: regular artifact tests run the basic edition (collectors
+only), so an analyzer failure does not block a ScyllaDB release. Analyzers first run against a new
+ScyllaDB version at the next SD release, when the gate tests all supported versions. The
+`scylla-doctor-gating` trigger can run the full edition on a ScyllaDB version, but it is not scheduled.
 
 ## SD test flow
 
