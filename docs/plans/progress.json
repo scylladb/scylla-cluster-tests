@@ -284,12 +284,12 @@
       "phases_done": 0
     },
     {
-      "id": "sct-config-followup-refactoring",
-      "title": "SCT Config Follow-up Refactoring",
+      "id": "sct-config-nested-sections",
+      "title": "SCT Config Nested Sections",
       "domain": "config",
-      "status": "pending_pr",
-      "pr": 13845,
-      "phases_total": null,
+      "status": "draft",
+      "pr": null,
+      "phases_total": 2,
       "phases_done": 0
     },
     {
