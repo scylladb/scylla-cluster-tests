@@ -229,7 +229,7 @@ const BACKENDS = {
       { id: "kms", icon: "kms", title: "AWS KMS", sub: "per-run alias", tags: ["ear"] },
       { id: "backup", icon: "s3", title: "Amazon S3", sub: "backups via IAM service account", tags: ["manager", "operator"] },
     ],
-    docs: "docs/kubernetes_backend.md",
+    docs: "docs/k8s-functional-test.md",
   },
   "k8s-gke": {
     name: "GKE", kind: "k8s", logo: "gcp", provision: "gcloud container",
@@ -241,7 +241,7 @@ const BACKENDS = {
     monitor: { icon: "gce", title: "GCE monitor VM", sub: "outside k8s", cls: "MonitorSetGKE" },
     incluster: ["cert-manager", "scylla-operator (helm)", "scylla-manager", "MinIO (backup bucket)", "Chaos Mesh"],
     services: [{ id: "kms", icon: "gkms", title: "Cloud KMS", sub: "", tags: ["ear"] }],
-    docs: "docs/kubernetes_backend.md",
+    docs: "docs/k8s-functional-test.md",
   },
   "k8s-local-kind": {
     name: "kind", kind: "k8s", logo: "k8s", provision: "kind CLI",
@@ -253,7 +253,7 @@ const BACKENDS = {
     monitor: { icon: "docker", title: "monitoring containers", sub: "on the host", cls: "MonitorSetDocker" },
     incluster: ["cert-manager", "scylla-operator", "scylla-manager (optional)", "MinIO minio-bucket", "Chaos Mesh"],
     services: [],
-    docs: "docs/kubernetes_backend.md",
+    docs: "docs/k8s-functional-test.md",
   },
   xcloud: {
     name: "ScyllaDB Cloud", kind: "xcloud", logo: "aws", provision: "Scylla Cloud REST API + EC2 API",
@@ -515,7 +515,7 @@ function render() {
     }
     if (i === 0 && B.kind === "k8s") {
       const ic = group("In-cluster services (helm)", "role-extra");
-      ic.append(card("incluster", { icon: "helm", title: "Operator stack", sub: B.incluster.join(" · "), role: "extra", docs: "docs/kubernetes_backend.md", info: "Deployed by SCT before the Scylla cluster. On GKE and kind, MinIO stands in for the backup bucket." }));
+      ic.append(card("incluster", { icon: "helm", title: "Operator stack", sub: B.incluster.join(" · "), role: "extra", docs: "docs/k8s-functional-test.md", info: "Deployed by SCT before the Scylla cluster. On GKE and kind, MinIO stands in for the backup bucket." }));
       inner.append(ic);
     }
     if (i === 0) {

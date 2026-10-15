@@ -15,7 +15,7 @@ Tests run inside **Hydra**, a container image with all SCT dependencies preinsta
 <sub>A longevity run on AWS. The [SCT system map](docs/system-map.md) shows what every other test type adds or drops; the images are generated from [an interactive version](docs/system-map/index.html) you can open locally to switch backends.</sub>
 
 - [1. Set up](#1-set-up)
-- [2. Run your first test (Docker backend)](#2-run-your-first-test-docker-backend)
+- [2. Run your first test locally](#2-run-your-first-test-locally)
 - [3. Run on a cloud backend](#3-run-on-a-cloud-backend)
 - [4. Everyday tasks](#4-everyday-tasks)
 - [5. Writing and configuring tests](#5-writing-and-configuring-tests)
@@ -60,10 +60,31 @@ Other cloud accounts: [AWS environment](docs/aws_configuration.md) ·
 To develop SCT itself (IDE, unit tests, pre-commit), also set up the
 [local development environment](docs/install-local-env.md).
 
-## 2. Run your first test (Docker backend)
+## 2. Run your first test locally
 
-The Docker backend runs the whole cluster as containers on your machine. It is the fastest
-way to check that your setup works and to debug test or nemesis logic.
+### minicloud (recommended)
+
+[minicloud](docs/minicloud.md) emulates the EC2 and GCE APIs on your machine and runs every
+node as a QEMU/KVM VM, so the real `aws`/`gce` provisioning code runs without paying for cloud
+instances. S3 (keystore, artifacts) is still real, so the AWS setup above is needed.
+
+1. Host prerequisites: `/dev/kvm` writable by your user, docker, and about 80 GiB free in
+   `$HOME`. On firewalld hosts (Fedora), `minicloud0` must be in the `trusted` zone; the script
+   below handles that. For the AWS image path your IAM identity also needs
+   `ebs:ListSnapshotBlocks` and `ebs:GetSnapshotBlock`.
+2. Run the provisioning smoke test (3 DB nodes, 1 loader, 1 monitor, non-disruptive nemesis):
+   ```bash
+   SCT_SCYLLA_VERSION=2026.1 scripts/run-minicloud-test.sh -f provision -b aws -m hydra
+   ```
+3. Results land in `~/sct-results/latest/`, like any other run.
+
+To fit a bigger test-case on one machine, see the
+[downscaling-for-minicloud](skills/downscaling-for-minicloud/SKILL.md) skill.
+
+### Docker
+
+The Docker backend runs the whole cluster as containers on your machine. It is the quickest way
+to debug test or nemesis logic.
 
 1. Your user needs [passwordless sudo](https://unix.stackexchange.com/a/468417).
 2. Raise the async I/O limit (once per machine):
@@ -73,7 +94,7 @@ way to check that your setup works and to debug test or nemesis logic.
    ```
 3. Run a short longevity test:
    ```bash
-   export SCT_SCYLLA_VERSION=2025.1
+   export SCT_SCYLLA_VERSION=2026.1
    export SCT_ENABLE_ARGUS=false   # don't report local runs to Argus
    hydra run-test longevity_test.LongevityTest.test_custom_time \
        --backend docker --config test-cases/PR-provision-test-docker.yaml
@@ -91,7 +112,7 @@ Docker-specific notes: [overview](docs/docker-backend-overview.md) ·
 All backends use the same command. Only `--backend` and a few settings change:
 
 ```bash
-export SCT_SCYLLA_VERSION=2025.1
+export SCT_SCYLLA_VERSION=2026.1
 export SCT_ENABLE_ARGUS=false
 hydra run-test longevity_test.LongevityTest.test_custom_time --backend <backend> --config test-cases/PR-provision-test.yaml [extra --config ...]
 ```
@@ -107,8 +128,7 @@ hydra run-test longevity_test.LongevityTest.test_custom_time --backend <backend>
 | `k8s-eks`, `k8s-gke` | | Scylla Operator on managed Kubernetes. [K8S functional tests](docs/k8s-functional-test.md) |
 | `k8s-local-kind`, `k8s-local-kind-aws`, `k8s-local-kind-gce` | | Kubernetes functional tests on a local or single-VM kind cluster. |
 
-**Without cloud compute:** [minicloud](docs/minicloud.md) emulates the EC2 and GCE APIs with local
-QEMU/KVM VMs, so `aws`/`gce` test-cases run on one machine without paying for instances.
+To try a test before spending cloud time, run it on [minicloud](#minicloud-recommended) first.
 
 **Close to the cluster:** run Hydra on an [SCT Runner](docs/sct-runners.md), a cloud VM in the
 same network as the cluster, as Jenkins does:
@@ -126,7 +146,7 @@ Copy the network config from the test's Jenkins pipeline. The predefined configs
 ### Choose a ScyllaDB version
 
 ```bash
-export SCT_SCYLLA_VERSION=2025.1                               # release
+export SCT_SCYLLA_VERSION=2026.1                               # release
 export SCT_SCYLLA_VERSION=master:latest                        # nightly of a branch
 export SCT_SCYLLA_VERSION=2024.2.5-0.20250221.cb9e2a54ae6d-1   # exact build
 ```
@@ -140,6 +160,9 @@ Every run writes to `~/sct-results/<timestamp>/`, and `~/sct-results/latest` poi
 [What each log archive contains](docs/collected-logs.md).
 
 ### Debug a nemesis
+
+Multi-node Docker runs need Scylla 2026.1+ (racks are on by default), or set
+`simulated_racks: 1`. See [docker backend specifics](docs/docker-backend-overview.md).
 
 Run the default nemesis setup on Docker. These configs are the ones the
 [AbortRepairMonkey docker pipeline](jenkins-pipelines/oss/nemesis/longevity-5gb-1h-AbortRepairMonkey-docker.jenkinsfile) uses:

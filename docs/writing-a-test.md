@@ -160,7 +160,7 @@ on a single loader, rotating through them.
 
 ## 4. Running it
 
-Locally, see the README for [the first run](../README.md#2-run-your-first-test-docker-backend):
+Locally, see the README for [the first run](../README.md#2-run-your-first-test-locally):
 
 ```bash
 hydra run-test my_feature_test.MyFeatureTest.test_my_feature --backend docker \
