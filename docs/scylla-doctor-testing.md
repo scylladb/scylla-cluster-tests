@@ -71,10 +71,14 @@ The SD options are defined in `sdcm/sct_config/mixins/scylla_doctor.py` and desc
 Steps 6 and 7 run only when the edition is `full` **and** the full package was downloaded
 (`ScyllaDoctor.is_full_edition`).
 
-`run_scylla_doctor()` returns without running SD, and the subtest passes, in two cases:
+`run_scylla_doctor()` returns without running SD, and the subtest passes, on the **Docker backend**:
+SD is not run on Docker yet.
 
-- **Docker backend.** SD is not run on Docker yet.
-- **`client_encrypt` enabled**, while [field-engineering#2280](https://github.com/scylladb/field-engineering/issues/2280) is open.
+SD supports client SSL. The `client_encrypt` skip in `run_scylla_doctor()`
+([field-engineering#2280](https://github.com/scylladb/field-engineering/issues/2280)) has been inactive
+since that issue was closed. No gate cell sets `client_encrypt`, so the gate does not test SD over
+client SSL yet: [SCT-1276](https://scylladb.atlassian.net/browse/SCT-1276) adds that cell and removes
+the skip.
 
 ### Where the subtest runs in the artifact test
 
