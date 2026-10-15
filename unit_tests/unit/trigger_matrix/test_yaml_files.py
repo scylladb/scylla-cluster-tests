@@ -65,7 +65,7 @@ def test_new_yaml_loads_successfully(filename):
     assert len(config.jobs) > 0
 
 
-def test_scylla_doctor_gating_has_wait_true():
+def test_scylla_doctor_gating_defaults():
     path = PROJECT_ROOT / "configurations/triggers/scylla-doctor-gating.yaml"
     if not path.exists():
         pytest.skip("scylla-doctor-gating.yaml not found")
@@ -73,6 +73,7 @@ def test_scylla_doctor_gating_has_wait_true():
     assert all(job.wait is True for job in config.jobs)
     assert all(job.fail_on_error is True for job in config.jobs)
     assert all(len(job.collect_results) > 0 for job in config.jobs)
+    assert config.defaults["run_scylla_doctor_only"] == "true"
 
 
 def test_pgo_has_wait_false():
