@@ -69,7 +69,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Resilient Test Config Dependencies | `pending_pr` | [#13982](https://github.com/scylladb/scylla-cluster-tests/pull/13982) |
 | Typed Config Access Migration | `pending_pr` | [#13878](https://github.com/scylladb/scylla-cluster-tests/pull/13878) |
 | SCT Config Validation and Lazy Images | `draft` | [sct-config-validation-and-lazy-images.md](sct-config-validation-and-lazy-images.md) |
-| SCT Config Follow-up Refactoring | `pending_pr` | [#13845](https://github.com/scylladb/scylla-cluster-tests/pull/13845) |
+| SCT Config Nested Sections | `draft` | [sct-config-nested-sections.md](config/sct-config-nested-sections.md) |
 | Config Type Normalization | `complete` | [config-type-normalization.md](config/config-type-normalization.md), [#14805](https://github.com/scylladb/scylla-cluster-tests/pull/14805) |
 | Constraint-Based Instance Sizing | `complete` | [constraint-based-sizing.md](config/constraint-based-sizing.md), [#14576](https://github.com/scylladb/scylla-cluster-tests/pull/14576) |
 
@@ -110,8 +110,8 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Nemesis Extraction Phase 3 | Nemesis Rework | Phase 3 continues the extraction started in Nemesis 2.0 |
 | Health Check Node Sampling | Health Check Optimization | Sampling is gated on the optimization plan's measured baseline; its go/no-go depends on how much time is left to win |
 | Pipeline Labeling and Documentation | Jenkins Pipeline Config Linter | Labeling complements structural config linting; may reuse Jenkinsfile parser |
-| SCT Config Follow-up Refactoring | SCT Config Validation and Lazy Images | Follow-up work after initial config validation |
-| Typed Config Access Migration | SCT Config Follow-up Refactoring | Type safety layer on top of refactored config |
+| SCT Config Nested Sections | SCT Config Validation and Lazy Images | Sections own their validation; image resolution stays on the root until lazy images lands |
+| Typed Config Access Migration | SCT Config Nested Sections | Converted groups must migrate to nested paths (`params.<section>.<field>`), not flat attributes |
 
 ## Domain Coverage Gaps
 
