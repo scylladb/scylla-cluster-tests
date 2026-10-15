@@ -777,3 +777,93 @@ def test_reliable_replication_factor(tablets_enabled, append_scylla_yaml, n_db_n
         tablets_enabled=tablets_enabled,
     )
     assert rf == expected_rf
+
+
+# run_latte_thread: an explicit 'duration' overrides the time-based '--duration' of the latte command
+
+
+@pytest.mark.parametrize(
+    "stress_cmd, expected_cmd",
+    [
+        pytest.param(
+            "latte run -f write --duration=240m data_dir/latte/x.rn",
+            "latte run -f write --duration 60m data_dir/latte/x.rn",
+            id="long-option",
+        ),
+        pytest.param(
+            "latte run -f write -d 240m data_dir/latte/x.rn",
+            "latte run -f write --duration 60m data_dir/latte/x.rn",
+            id="short-option",
+        ),
+        pytest.param(
+            "latte run -f write data_dir/latte/x.rn --duration=240m",
+            "latte run -f write data_dir/latte/x.rn --duration 60m",
+            id="duration-last",
+        ),
+        pytest.param(
+            "latte run -f write --duration=1h30m data_dir/latte/x.rn",
+            "latte run -f write --duration 60m data_dir/latte/x.rn",
+            id="compound-long-option",
+        ),
+        pytest.param(
+            "latte run -f write -d 1h30m data_dir/latte/x.rn",
+            "latte run -f write --duration 60m data_dir/latte/x.rn",
+            id="compound-short-option",
+        ),
+        pytest.param(
+            "latte run -f write --duration=1000000 data_dir/latte/x.rn",
+            "latte run -f write --duration=1000000 data_dir/latte/x.rn",
+            id="cycle-count-kept",
+        ),
+    ],
+)
+def test_run_latte_thread_duration_overrides_time_based_duration(stress_cmd, expected_cmd):
+    tester = ClusterTesterForTests()
+    tester.params = FakeSCTConfiguration()
+    tester.loaders = MagicMock()
+    tester.db_cluster = MagicMock()
+
+    with patch("sdcm.tester.LatteStressThread") as latte_thread_mock:
+        tester.run_latte_thread(stress_cmd=stress_cmd, duration=60)
+
+    assert latte_thread_mock.call_args.kwargs["stress_cmd"] == expected_cmd
+    assert latte_thread_mock.call_args.kwargs["timeout"] == 60 * 60 + 600
+
+
+@pytest.mark.parametrize(
+    "stress_cmd, expected_cmd",
+    [
+        pytest.param(
+            "latte run -f write --duration=240m data_dir/latte/x.rn",
+            "latte run -f write --duration 30m data_dir/latte/x.rn",
+            id="long-option",
+        ),
+        pytest.param(
+            "latte run -f write -d 1h30m data_dir/latte/x.rn",
+            "latte run -f write --duration 30m data_dir/latte/x.rn",
+            id="compound-short-option",
+        ),
+        pytest.param(
+            "latte run -f write data_dir/latte/x.rn --duration=240m",
+            "latte run -f write data_dir/latte/x.rn --duration 30m",
+            id="duration-last",
+        ),
+        pytest.param(
+            "latte run -f write --duration=1000000 data_dir/latte/x.rn",
+            "latte run -f write --duration=1000000 data_dir/latte/x.rn",
+            id="cycle-count-kept",
+        ),
+    ],
+)
+def test_run_latte_thread_stress_duration_overrides_time_based_duration(stress_cmd, expected_cmd):
+    tester = ClusterTesterForTests()
+    tester.params = FakeSCTConfiguration()
+    tester.loaders = MagicMock()
+    tester.db_cluster = MagicMock()
+    tester._stress_duration = 30
+
+    with patch("sdcm.tester.LatteStressThread") as latte_thread_mock:
+        tester.run_latte_thread(stress_cmd=stress_cmd)
+
+    assert latte_thread_mock.call_args.kwargs["stress_cmd"] == expected_cmd
+    assert latte_thread_mock.call_args.kwargs["timeout"] == 30 * 60 + 600
