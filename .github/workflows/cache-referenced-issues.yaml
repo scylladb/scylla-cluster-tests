@@ -31,6 +31,10 @@ on:
         type: choice
         options: [dry-run, on, off]
         default: dry-run
+      accept_shrink:
+        description: 'Accept a ref union that shrank by more than 50% (expected drop)'
+        type: boolean
+        default: false
 
 env:
   CACHE_PREFIX: issues-v2
@@ -49,7 +53,6 @@ jobs:
       AWS_REGION: us-east-1
       BUCKET: ${{ secrets.AWS_S3_BUCKET }}
       GRANT_FULL: full=id=${{ secrets.CLOUDIUS_SYSTEMS_CANONICAL_ID }}
-      GRANT_READ: read=id=${{ secrets.DBAAS_DATA_QA_CANONICAL_ID }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -66,7 +69,7 @@ jobs:
         if: github.event.schedule == '30 4 * * 1' || github.event.inputs.scan == 'true'
         run: |
           python .github/scripts/issues_cache.py scan --repo-dir . --out manifest.json
-          aws s3 cp manifest.json "s3://$BUCKET/issues/refs/scylla-cluster-tests.json" --grants "$GRANT_FULL" "$GRANT_READ"
+          aws s3 cp manifest.json "s3://$BUCKET/issues/refs/scylla-cluster-tests.json" --grants "$GRANT_FULL"
 
       - name: Refresh GitHub issue states and in-use markers
         env:
@@ -76,11 +79,12 @@ jobs:
           aws s3 cp "s3://$BUCKET/issues/refs/" refs/ --recursive
           aws s3 cp "s3://$BUCKET/$CACHE_PREFIX/cache-state-github.json" state/ || echo "no previous state (first run)"
           python .github/scripts/issues_cache.py refresh-github \
-            --refs-dir refs --out-dir out --state state/cache-state-github.json --labels "$LABELS"
+            --refs-dir refs --out-dir out --state state/cache-state-github.json --labels "$LABELS" \
+            ${{ github.event.inputs.accept_shrink == 'true' && '--accept-shrink' || '' }}
           # --delete is scoped to the GitHub CSVs; dtest owns jira_*.csv under the same prefix
           aws s3 sync out/ "s3://$BUCKET/$CACHE_PREFIX/" --delete \
-            --exclude '*' --include '*.csv' --exclude 'jira_*' --grants "$GRANT_FULL" "$GRANT_READ"
-          aws s3 cp state/cache-state-github.json "s3://$BUCKET/$CACHE_PREFIX/cache-state-github.json" --grants "$GRANT_FULL" "$GRANT_READ"
+            --exclude '*' --include '*.csv' --exclude 'jira_*' --grants "$GRANT_FULL"
+          aws s3 cp state/cache-state-github.json "s3://$BUCKET/$CACHE_PREFIX/cache-state-github.json" --grants "$GRANT_FULL"
 
       - name: Shadow check against the full cache
         if: env.CACHE_PREFIX != 'issues'

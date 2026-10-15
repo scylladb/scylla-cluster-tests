@@ -44,6 +44,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+import warnings
 from pathlib import Path
 
 LOGGER = logging.getLogger("issues_cache")
@@ -103,7 +104,9 @@ def extract_python(source: str, calls: set[str]) -> set[str]:
     inside the given calls, where a bare number means an issue.
     """
     try:
-        tree = ast.parse(source)
+        with warnings.catch_warnings():  # old branches have invalid escapes in non-raw strings
+            warnings.simplefilter("ignore", SyntaxWarning)
+            tree = ast.parse(source)
     except SyntaxError:
         return set()
     refs = set()
@@ -250,7 +253,6 @@ def fetch_states(gh: GitHub, refs: list[str]) -> tuple[dict[str, dict], list[str
             "state": "merged" if merged else data["state"],
             "labels": [label["name"] for label in data["labels"]],
             "title": data["title"],
-            "is_pr": "pull_request" in data,
         }
     return states, failed
 
@@ -273,9 +275,12 @@ def write_csvs(out_dir: Path, states: dict[str, dict]) -> list[Path]:
     return written
 
 
-def check_guards(union_size: int, previous_size: int, failed: int) -> None:
-    if previous_size and union_size < previous_size * (1 - SHRINK_LIMIT):
-        raise SystemExit(f"ref union shrank from {previous_size} to {union_size}: refusing to update")
+def check_guards(union_size: int, previous_size: int, failed: int, accept_shrink: bool = False) -> None:
+    if not accept_shrink and previous_size and union_size < previous_size * (1 - SHRINK_LIMIT):
+        raise SystemExit(
+            f"ref union shrank from {previous_size} to {union_size}: refusing to update "
+            "(rerun with --accept-shrink if the shrink is expected)"
+        )
     if union_size and failed / union_size > FAILURE_LIMIT:
         raise SystemExit(f"{failed}/{union_size} fetches failed: refusing to update")
 
@@ -300,8 +305,12 @@ def comment_body(wanted: dict[str, list[str]], repo_of_label: dict[str, str]) ->
 class Reconciler:
     """Mark each referenced item as in use: a label where allowed, otherwise one comment."""
 
-    def __init__(self, gh: GitHub, mode: str, label_meta: dict[str, dict], state: dict):
+    def __init__(
+        self, gh: GitHub, mode: str, label_meta: dict[str, dict], state: dict, managed: set[str] = frozenset()
+    ):
         self.gh, self.mode, self.label_meta = gh, mode, label_meta
+        # labels this cache owns: today's manifests, plus labels of manifests that disappeared
+        self.managed = set(label_meta) | set(managed)
         self.state = state  # {ref: {"comment_id": int, "body": str}}, persisted between runs
         self.plan: list[str] = []
         self._can_label: dict[str, bool] = {}
@@ -329,7 +338,7 @@ class Reconciler:
     def reconcile(self, ref: str, wanted: dict[str, list[str]], current_labels: list[str]) -> None:
         owner, repo, number = split_ref(ref)
         if self.can_label(owner, repo):
-            self._labels(ref, owner, repo, number, set(wanted), set(current_labels) & set(self.label_meta))
+            self._labels(ref, owner, repo, number, set(wanted), set(current_labels) & self.managed)
         else:
             self._comment(ref, owner, repo, number, wanted)
 
@@ -337,30 +346,46 @@ class Reconciler:
         for label in sorted(wanted - current):
             self.plan.append(f"{ref}: add label {label}")
             if not self.dry:
-                self.gh.request("POST", f"/repos/{owner}/{repo}/issues/{number}/labels", {"labels": [label]})
-                self._describe(owner, repo, label)
+                if self._write("POST", f"/repos/{owner}/{repo}/issues/{number}/labels", {"labels": [label]}):
+                    self._describe(owner, repo, label)
         for label in sorted(current - wanted):
             self.plan.append(f"{ref}: remove label {label}")
             if not self.dry:
-                self.gh.request("DELETE", f"/repos/{owner}/{repo}/issues/{number}/labels/{label}")
+                self._write("DELETE", f"/repos/{owner}/{repo}/issues/{number}/labels/{label}")
+
+    def _write(self, method: str, path: str, body: dict | None = None) -> dict | bool:
+        """Send a write; on failure log it and return False, so the next run retries."""
+        status, data = self.gh.request(method, path, body)
+        if not 200 <= status < 300:
+            LOGGER.warning("%s %s failed: HTTP %s", method, path, status)
+            return False
+        return data or True
 
     def _describe(self, owner: str, repo: str, label: str) -> None:
         if (owner, repo, label) in self._described:
             return
         self._described.add((owner, repo, label))
         meta = self.label_meta[label]
-        self.gh.request(
+        self._write(
             "PATCH",
             f"/repos/{owner}/{repo}/labels/{label}",
             {"color": LABEL_COLOR, "description": meta["label_description"][:100]},
         )
 
     def _find_comment(self, owner: str, repo: str, number: int) -> int | None:
-        status, comments = self.gh.request("GET", f"/repos/{owner}/{repo}/issues/{number}/comments?per_page=100")
-        for c in comments if status == 200 and comments else []:
-            if MARKER in (c.get("body") or "") and c["user"]["login"] == self.login():
-                return c["id"]
-        return None
+        page = 1
+        while True:
+            status, comments = self.gh.request(
+                "GET", f"/repos/{owner}/{repo}/issues/{number}/comments?per_page=100&page={page}"
+            )
+            if status != 200 or not comments:
+                return None
+            for c in comments:
+                if MARKER in (c.get("body") or "") and c["user"]["login"] == self.login():
+                    return c["id"]
+            if len(comments) < 100:
+                return None
+            page += 1
 
     def _comment(self, ref, owner, repo, number, wanted: dict[str, list[str]]) -> None:
         body = comment_body(wanted, {label: m["repo"] for label, m in self.label_meta.items()})
@@ -370,17 +395,22 @@ class Reconciler:
         comment_id = known.get("comment_id") or self._find_comment(owner, repo, number)
         if comment_id:
             self.plan.append(f"{ref}: edit marker comment {comment_id}")
-            if not self.dry:
-                self.gh.request("PATCH", f"/repos/{owner}/{repo}/issues/comments/{comment_id}", {"body": body})
+            if self.dry:
+                return
+            if not self._write("PATCH", f"/repos/{owner}/{repo}/issues/comments/{comment_id}", {"body": body}):
+                self.state.pop(ref, None)  # e.g. the comment was deleted: look it up again next run
+                return
         elif wanted:
             self.plan.append(f"{ref}: add marker comment")
-            if not self.dry:
-                _, data = self.gh.request("POST", f"/repos/{owner}/{repo}/issues/{number}/comments", {"body": body})
-                comment_id = (data or {}).get("id")
+            if self.dry or not (
+                data := self._write("POST", f"/repos/{owner}/{repo}/issues/{number}/comments", {"body": body})
+            ):
+                return
+            comment_id = data["id"]
         else:
             return
-        if not self.dry:
-            self.state[ref] = {"comment_id": comment_id, "body": body}
+        # recorded only after a successful write, so a failed one is retried next run
+        self.state[ref] = {"comment_id": comment_id, "body": body}
 
 
 def cmd_scan(args) -> None:
@@ -403,14 +433,20 @@ def cmd_refresh_github(args) -> None:
     previous = state.get("refs", {})
 
     states, failed = fetch_states(GitHub(os.environ["GH_TOKEN"]), sorted(union))
-    check_guards(len(union), len(previous), len(failed))
+    check_guards(len(union), len(previous), len(failed), args.accept_shrink)
     written = write_csvs(Path(args.out_dir), states)
     LOGGER.info("%d refs cached in %d files, %d failed", len(states), len(written) // 2, len(failed))
 
     plan = []
     if args.labels != "off":
         label_meta = {m["label"]: m for m in manifests}
-        reconciler = Reconciler(GitHub(os.environ["GH_TOKEN"]), args.labels, label_meta, state.get("comments", {}))
+        reconciler = Reconciler(
+            GitHub(os.environ["GH_TOKEN"]),
+            args.labels,
+            label_meta,
+            state.get("comments", {}),
+            managed={label for labels in previous.values() for label in labels},
+        )
         # refs that dropped out since last run still need their marker removed
         for ref in sorted(set(union) | set(previous)):
             if ref in states or ref in union:
@@ -490,6 +526,9 @@ def main(argv: list[str] | None = None) -> None:
     refresh.add_argument("--out-dir", required=True)
     refresh.add_argument("--state", help="JSON state kept between runs (previous union, marker comments)")
     refresh.add_argument("--labels", choices=("off", "dry-run", "on"), default="dry-run")
+    refresh.add_argument(
+        "--accept-shrink", action="store_true", help="skip the shrink guard once, for an expected drop"
+    )
     refresh.set_defaults(func=cmd_refresh_github)
 
     compare = sub.add_parser("compare", help="shadow check of a new cache dir against the old full cache")
