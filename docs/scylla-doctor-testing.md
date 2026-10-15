@@ -166,6 +166,10 @@ The SD release gating pipeline validates a new SD build before it is released. I
 edition in [SD-only mode](#where-the-subtest-runs-in-the-artifact-test) for every combination of
 supported ScyllaDB version and operating system, in parallel, and sends a single pass/fail report.
 
+The gate is not part of the SD publish workflow: `releng/update-scylla-doctor` only publishes the
+packages and runs no tests. The SD team starts the gate manually on the candidate tarball, before
+`update-scylla-doctor`. See [When to run it](#when-to-run-it).
+
 An SD build is approved only when **every** cell of the OS × ScyllaDB version matrix is `SUCCESS`.
 `FAILURE`, `UNSTABLE`, `ABORTED` and a job that could not be triggered all fail the gate.
 
