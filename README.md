@@ -244,6 +244,7 @@ For guidelines on creating new plans, see [docs/plans/INSTRUCTIONS.md](docs/plan
 
 ## Types of Tests
 ### [Artifact tests](./docs/artifacts_test.md)
+- [Scylla Doctor testing and release gating](./docs/scylla-doctor-testing.md)
 ### [Longevity Tests](./docs/longevity.md) (TODO: write explanation for them)
 ### Upgrade Tests (TODO: write explanation for them)
 ### Performance Tests (TODO: write explanation for them)
