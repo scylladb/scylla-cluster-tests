@@ -72,7 +72,9 @@ Steps 6 and 7 run only when the edition is `full` **and** the full package was d
 (`ScyllaDoctor.is_full_edition`).
 
 `run_scylla_doctor()` returns without running SD, and the subtest passes, on the **Docker backend**:
-SD is not run on Docker yet.
+SD is not run on Docker yet. [SCT-1277](https://scylladb.atlassian.net/browse/SCT-1277) removes the
+skip once SD skips the collectors that cannot run in a container
+([DOCTOR-139](https://scylladb.atlassian.net/browse/DOCTOR-139)).
 
 SD supports client SSL. The `client_encrypt` skip in `run_scylla_doctor()`
 ([field-engineering#2280](https://github.com/scylladb/field-engineering/issues/2280)) has been inactive
