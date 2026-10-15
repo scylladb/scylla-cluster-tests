@@ -75,8 +75,6 @@ def check_cluster_layout(db_cluster: BaseCluster) -> bool:  # noqa: F821
         )
 
 
-# TODO: For the following functions, consider adding a "num_workers=len(cluster.data_nodes)" parameter to ParallelObject
-# to align the number of concurrent operations to cluster nodes number, since it can be higher that default workers number.
 def flush_nodes(cluster, keyspace: str):
     LOGGER.debug("Run a flush on cluster data nodes")
     triggers = [
@@ -86,7 +84,7 @@ def flush_nodes(cluster, keyspace: str):
         )
         for node in cluster.data_nodes
     ]
-    ParallelObject(objects=triggers, timeout=1200).call_objects()
+    ParallelObject(objects=triggers, timeout=1200, num_workers=len(triggers)).call_objects()
 
 
 def major_compaction_nodes(cluster, keyspace: str, table: str):
@@ -99,7 +97,7 @@ def major_compaction_nodes(cluster, keyspace: str, table: str):
         )
         for node in cluster.data_nodes
     ]
-    ParallelObject(objects=triggers, timeout=10000).call_objects()
+    ParallelObject(objects=triggers, timeout=10000, num_workers=len(triggers)).call_objects()
 
 
 def clear_snapshot_nodes(cluster):
@@ -111,4 +109,4 @@ def clear_snapshot_nodes(cluster):
         )
         for node in cluster.data_nodes
     ]
-    ParallelObject(objects=triggers, timeout=1200).call_objects()
+    ParallelObject(objects=triggers, timeout=1200, num_workers=len(triggers)).call_objects()
