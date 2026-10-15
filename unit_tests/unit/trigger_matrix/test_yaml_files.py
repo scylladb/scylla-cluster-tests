@@ -73,6 +73,7 @@ def test_scylla_doctor_gating_has_wait_true():
     assert all(job.wait is True for job in config.jobs)
     assert all(job.fail_on_error is True for job in config.jobs)
     assert all(len(job.collect_results) > 0 for job in config.jobs)
+    assert config.defaults["run_scylla_doctor_only"] == "true"
 
 
 def test_pgo_has_wait_false():

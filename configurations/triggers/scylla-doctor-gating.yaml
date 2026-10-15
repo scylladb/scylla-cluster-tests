@@ -16,6 +16,7 @@ defaults:
   post_behavior_loader_nodes: "destroy"
   post_behavior_monitor_nodes: "destroy"
   scylla_doctor_edition: "full"
+  run_scylla_doctor_only: "true"
 
 jobs:
   - job_name: "/scylla-doctor/oss/artifacts/artifacts-ami-test"
