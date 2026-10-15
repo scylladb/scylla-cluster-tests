@@ -1,0 +1,82 @@
+test_metadata:
+  description: >-
+    Vnode-to-tablet migration of a 100 GiB dataset of 1 GiB partitions (100 partitions x
+    100,000 rows x 10 KiB, data_dir/latte/large_partitions.rn) on a 6-node cluster with
+    SisyphusMonkey nemesis. A 50:50 read/write latte stress of 20k ops/s from two
+    loaders runs for 60m before the migration, 240m during it and 60m after it, and the
+    latencies of the three phases are compared.
+  test_type: longevity
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  workload: mixed
+  features:
+    - tablets
+    - large-partitions
+  team_ownership: storage-qa
+
+# Headroom for resharding 1 GiB partitions on every node restart; tune after the first run
+test_duration: 720
+
+# 6 DB nodes across 3 simulated racks (2 nodes per rack). With migration running
+# concurrently with disruptive nemesis, at least 2 nodes per rack are required to
+# keep quorum (RF=3) available while one node per rack is unavailable.
+n_db_nodes: 6
+n_loaders: 2
+seeds_num: 3
+
+round_robin: true
+
+instance_type_db: 'i8g.xlarge'
+
+sizing_loader:
+  vcpu: 16
+  memory: '>=32'
+
+nemesis_class_name: 'SisyphusMonkey'
+# disk utilization depends on IncrementalCompactionStrategy; keep it for the whole run
+nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
+nemesis_interval: 15
+
+user_prefix: 'longevity-vnode-to-tablet-migration-large-partitions'
+
+server_encrypt: true
+client_encrypt: true
+
+nemesis_during_prepare: false
+
+# Major-compact and wait for compactions to settle before the pre-migration benchmark.
+# Right after the bulk load the many uncompacted sstables make reads too slow for the
+# stress rate and the backlog skews the benchmark latencies.
+prepare_wait_no_compactions_timeout: 120  # (minutes)
+
+prepare_write_cmd:
+  - >-
+    latte run -f write_batch --consistency=QUORUM --tag write-1
+    --threads=16 --concurrency=16 --retry-interval=10s --duration=500000 --start-cycle=0
+    -P row_count=10000000 -P rows_per_partition=100000 -P row_size=10240 -P batch_size=10
+    data_dir/latte/large_partitions.rn
+  - >-
+    latte run -f write_batch --consistency=QUORUM --tag write-2
+    --threads=16 --concurrency=16 --retry-interval=10s --duration=500000 --start-cycle=500000
+    -P row_count=10000000 -P rows_per_partition=100000 -P row_size=10240 -P batch_size=10
+    data_dir/latte/large_partitions.rn
+
+stress_cmd:
+  - >-
+    latte run -f write_random:1 -f read_row:1 --consistency=QUORUM --tag mixed-1
+    --validation-strategy=retry --retry-interval=10s
+    --threads=16 --concurrency=64 --rate=10000 --duration=240m --start-cycle=0
+    -P row_count=10000000 -P rows_per_partition=100000 -P row_size=10240
+    data_dir/latte/large_partitions.rn
+  - >-
+    latte run -f write_random:1 -f read_row:1 --consistency=QUORUM --tag mixed-2
+    --validation-strategy=retry --retry-interval=10s
+    --threads=16 --concurrency=64 --rate=10000 --duration=240m --start-cycle=5000000
+    -P row_count=10000000 -P rows_per_partition=100000 -P row_size=10240
+    data_dir/latte/large_partitions.rn
+
+use_hdrhistogram: true
