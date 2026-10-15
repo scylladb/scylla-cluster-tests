@@ -9,6 +9,18 @@ jenkinsfiles:
 #
 # Jobs use absolute paths (scylla-doctor/oss/artifacts/...) since they live
 # under the scylla-doctor top-level folder, not under scylla-{branch}/.
+#
+# All jobs run in doctor-only mode (run_scylla_doctor_only), with the full edition.
+#
+# Optional trigger parameter: scylla_doctor_full_tarball_url
+#   Tests an unreleased Scylla Doctor build. It is passed to every job. Set it in
+#   Jenkins "Build with Parameters", or with `sct.py trigger-matrix
+#   --scylla-doctor-full-tarball-url <url>`. Accepts any S3 URL form that
+#   utils/scylla_doctor.py:_parse_s3_url understands, for example:
+#     https://s3.amazonaws.com/<bucket>/<key>/scylla-doctor-1.11.4.tar.gz
+#     https://<bucket>.s3.<region>.amazonaws.com/<key>/scylla-doctor-1.11.4.tar.gz
+#   It has no default on purpose. When empty, the job finds the latest released
+#   full edition by itself, and a fixed URL here would pin one build.
 
 defaults:
   provision_type: "on_demand"
@@ -16,6 +28,7 @@ defaults:
   post_behavior_loader_nodes: "destroy"
   post_behavior_monitor_nodes: "destroy"
   scylla_doctor_edition: "full"
+  run_scylla_doctor_only: "true"
 
 jobs:
   - job_name: "/scylla-doctor/oss/artifacts/artifacts-ami-test"
