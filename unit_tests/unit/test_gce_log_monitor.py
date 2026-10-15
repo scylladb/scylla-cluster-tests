@@ -1,8 +1,25 @@
 import copy
+import logging
+import threading
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
-from sdcm.cluster_gce import GCENode
+import pytest
+
+from sdcm.cluster_gce import SPOT_TERMINATION_CHECK_DELAY, GCENode
 from sdcm.utils.gce_utils import GceLoggingClient
 from unit_tests.lib.fake_events import FakeEventsMixin
+
+MINICLOUD_ENV_VARS = ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL")
+MINICLOUD_PARAMS = {"minicloud_endpoint_url": "http://localhost:5000"}
+QUERY_FAILURE_WARNING = "Failed to query GCE maintenance/preemption events from Cloud Logging"
+MINICLOUD_SKIP_INFO = "Minicloud does not serve Cloud Logging"
+
+
+@pytest.fixture(name="no_minicloud_env")
+def no_minicloud_env_fixture(monkeypatch):
+    for var in MINICLOUD_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
 
 
 class FakeGceLogClient(GceLoggingClient):
@@ -55,9 +72,13 @@ class FakeGceLogClient(GceLoggingClient):
 
 
 class FakeGceNode(GCENode):
-    def __init__(self, logging_client: GceLoggingClient):
+    def __init__(self, logging_client: GceLoggingClient, params: dict | None = None):
         self._gce_logging_client = logging_client
         self._last_logs_fetch_time = 1656590843.0
+        self.parent_cluster = SimpleNamespace(params=params or {})
+        self.termination_event = threading.Event()
+        self._spot_monitoring_thread = None
+        self.log = logging.getLogger("FakeGceNode")
 
 
 class TestGceErrorLog(FakeEventsMixin):
@@ -98,3 +119,48 @@ class TestGceErrorLog(FakeEventsMixin):
             "compute.instances.terminateOnHostMaintenance on node "
             "longevity-10gb-3h-master-db-node-fac7b27a-0-6 at 2022-06-30" in critical_events
         )
+
+
+def test_minicloud_skips_polling(caplog):
+    client = MagicMock(spec=GceLoggingClient)
+    node = FakeGceNode(logging_client=client, params=MINICLOUD_PARAMS)
+
+    with caplog.at_level(logging.INFO, logger="FakeGceNode"):
+        node.start_spot_monitoring_thread()
+
+    assert node._spot_monitoring_thread is None
+    client.get_system_events.assert_not_called()
+    skip_records = [record for record in caplog.records if MINICLOUD_SKIP_INFO in record.getMessage()]
+    assert [record.levelno for record in skip_records] == [logging.INFO]
+    assert not [record for record in caplog.records if record.levelno >= logging.WARNING]
+
+
+def test_real_gce_starts_spot_monitoring_thread(no_minicloud_env):
+    client = MagicMock(spec=GceLoggingClient)
+    client.get_system_events.return_value = []
+    node = FakeGceNode(logging_client=client)
+    node.termination_event.set()
+
+    node.start_spot_monitoring_thread()
+
+    assert node._spot_monitoring_thread is not None
+    node._spot_monitoring_thread.join(timeout=5)
+    assert not node._spot_monitoring_thread.is_alive()
+    client.get_system_events.assert_called()
+
+
+def test_cloud_logging_query_failure_logs_warning_and_keeps_fetch_time(caplog):
+    client = MagicMock(spec=GceLoggingClient)
+    client.get_system_events.side_effect = RuntimeError("404 entries.list not found")
+    node = FakeGceNode(logging_client=client)
+    last_fetch_time = node._last_logs_fetch_time
+
+    with caplog.at_level(logging.WARNING, logger="FakeGceNode"):
+        delay = node.check_spot_termination()
+
+    assert delay == SPOT_TERMINATION_CHECK_DELAY
+    assert node._last_logs_fetch_time == last_fetch_time
+    warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert QUERY_FAILURE_WARNING in warnings[0].getMessage()
+    assert "404 entries.list not found" in warnings[0].getMessage()
