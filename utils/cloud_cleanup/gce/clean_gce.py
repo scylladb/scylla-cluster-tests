@@ -41,7 +41,13 @@ def clean_gce_instances(instances_client, project_id, dry_run):
                         )
                         res.done()
                         LOGGER.info("%s terminated", instance.name)
-                        update_argus_resource_status(instance_metadata.get("TestId", ""), instance.name, "terminate")
+                        update_argus_resource_status(
+                            instance_metadata.get("TestId", ""),
+                            instance.name,
+                            "terminate",
+                            instance_metadata,
+                            vm_creation_time,
+                        )
                     except Exception as exc:  # noqa: BLE001
                         LOGGER.error("error while terminating instance %s: %s", instance.name, exc)
                 else:
@@ -58,7 +64,13 @@ def clean_gce_instances(instances_client, project_id, dry_run):
                         )
                         res.done()
                         LOGGER.info("%s stopped", instance.name)
-                        update_argus_resource_status(instance_metadata.get("TestId", ""), instance.name, "stop")
+                        update_argus_resource_status(
+                            instance_metadata.get("TestId", ""),
+                            instance.name,
+                            "stop",
+                            instance_metadata,
+                            vm_creation_time,
+                        )
                     except Exception as exc:  # noqa: BLE001
                         LOGGER.error("error while stopping instance %s: %s", instance.name, exc)
                 else:

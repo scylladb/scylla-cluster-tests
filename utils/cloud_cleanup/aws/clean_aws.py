@@ -95,6 +95,10 @@ def keep_alive_instance_launch_time(instance):
     return keep_alive_instance_duration(instance, keep)
 
 
+def _tags(instance) -> dict:
+    return {tag["Key"]: tag["Value"] for tag in instance.tags or []}
+
+
 def stop_instance(instance):
     try:
         test_id = get_tag_value(instance, "TestId")
@@ -102,7 +106,7 @@ def stop_instance(instance):
         if not DRY_RUN:
             instance.create_tags(Tags=[{"Key": "keep_alive_action", "Value": "stop"}])
             instance.stop()
-            update_argus_resource_status(test_id, name, "terminate")
+            update_argus_resource_status(test_id, name, "terminate", _tags(instance), instance.launch_time)
     except Exception as exc:  # noqa: BLE001
         eprint("stop instance %s error: %s" % (instance.id, str(exc)))
 
@@ -123,7 +127,7 @@ def terminate_instance(instance):
         if not DRY_RUN:
             instance.create_tags(Tags=[{"Key": "keep_alive_action", "Value": "terminate"}])
             instance.terminate()
-            update_argus_resource_status(test_id, name, "terminate")
+            update_argus_resource_status(test_id, name, "terminate", _tags(instance), instance.launch_time)
     except Exception as exc:  # noqa: BLE001
         eprint("terminate instance %s error: %s" % (instance.id, str(exc)))
 

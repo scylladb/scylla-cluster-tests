@@ -180,7 +180,7 @@ _AMD64_ONLY_STRESS_TOOLS: dict[str, tuple[str, ...]] = {
 
 _YCSB_COMMAND_MARKER = "bin/ycsb"
 
-_SIZING_ROLE_PARAMS: dict[str, dict[str, str]] = {
+SIZING_ROLE_PARAMS: dict[str, dict[str, str]] = {
     "aws": {
         "db": "instance_type_db",
         "db_oracle": "instance_type_db_oracle",
@@ -207,6 +207,16 @@ _SIZING_ROLE_PARAMS: dict[str, dict[str, str]] = {
         "monitor": "oci_instance_type_monitor",
     },
 }
+
+
+def oracle_cluster_in_use(db_type: str | None) -> bool:
+    """Whether a run has an oracle cluster at all.
+
+    The oracle node-count parameter defaults to 1 even when no oracle cluster exists, so the
+    db_type is what actually decides. Shared so the rule has one definition rather than being
+    restated wherever roles are walked.
+    """
+    return str(db_type or "") in ("mixed_scylla", "mixed_cassandra")
 
 
 def backend_to_cloud(backend: str | None, xcloud_provider: str | None = None) -> str | None:
@@ -1143,6 +1153,22 @@ class SCTConfiguration(*CONFIG_GROUPS):
             }
         return {}
 
+    def effective_test_duration(self) -> int:
+        """Minutes the test is actually expected to run.
+
+        Mirrors `ClusterTester._init_test_duration` (and `vars/getJobTimeouts.groovy`): when `stress_duration`
+        is set it, not `test_duration`, drives the real runtime. Reading `test_duration` alone badly
+        underestimates such runs - `prepare_stress_duration` defaults to 300, so a job passing only
+        `stress_duration` can run for days while `test_duration` still reads 60.
+        """
+        # `abs()` mirrors the normalization in __init__: a negative `stress_duration` is treated there as a
+        # typo and made positive, so reading the raw value here would estimate a duration the run never has.
+        stress_duration = self.get("stress_duration")
+        if stress_duration:
+            prepare = abs(int(self.get("prepare_stress_duration") or 0))
+            return prepare + abs(int(stress_duration)) + TestConfig.TEST_WARMUP_TEARDOWN
+        return abs(int(self.get("test_duration") or 0))
+
     @cached_property
     def cloud_env_credentials(self) -> dict:
         if creds_file := self.get("xcloud_credentials_path"):
@@ -1331,9 +1357,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
         }
 
         db_type = (env.get("db_type") if env else None) or self.get("db_type") or ""
-        role_params = _SIZING_ROLE_PARAMS.get(cloud, {})
+        role_params = SIZING_ROLE_PARAMS.get(cloud, {})
         for role, param_name in role_params.items():
-            if role == "db_oracle" and db_type not in ("mixed_scylla", "mixed_cassandra"):
+            if role == "db_oracle" and not oracle_cluster_in_use(db_type):
                 continue
             is_fallback = False
             if env is not None and param_name in env:
@@ -1717,7 +1743,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         cloud = backend_to_cloud(self.get("cluster_backend"), self.get("xcloud_provider"))
         if not cloud:
             return
-        instance_param = _SIZING_ROLE_PARAMS.get(cloud, {}).get("loader")
+        instance_param = SIZING_ROLE_PARAMS.get(cloud, {}).get("loader")
         instance_type = (self.get(instance_param) or "") if instance_param else ""
         if instance_type and is_arm_instance_type(cloud, instance_type):
             raise ValueError(

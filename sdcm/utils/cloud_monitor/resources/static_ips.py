@@ -2,8 +2,7 @@ from logging import getLogger
 from google.cloud import compute_v1
 
 from sdcm.utils.azure_utils import AzureService
-from sdcm.utils.cloud_monitor.common import NA
-from sdcm.utils.cloud_monitor.resources import CloudResources
+from sdcm.utils.cloud_monitor.resources import NA, CloudResources
 from sdcm.utils.common import list_elastic_ips_aws, aws_tags_to_dict, list_static_ips_gce
 
 

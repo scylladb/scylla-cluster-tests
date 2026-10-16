@@ -111,6 +111,20 @@ class InstanceTypeInfo:
     price_per_hour: float | dict[str, float] | None = None
     min_memory_gb: float | None = None
     max_memory_gb: float | None = None
+    spot_price_per_hour: float | dict[str, float] | None = None
+
+    @staticmethod
+    def _price_for_region(price: float | dict[str, float] | None, region: str | None) -> float | None:
+        if price is None:
+            return None
+        if isinstance(price, (int, float)):
+            return float(price)
+        if region and region in price:
+            return price[region]
+        # Fallback: return first available region price
+        if price:
+            return next(iter(price.values()))
+        return None
 
     def get_price(self, region: str | None = None) -> float | None:
         """Get the on-demand price for a specific region.
@@ -121,16 +135,22 @@ class InstanceTypeInfo:
         Returns:
             Price in USD/hr, or None if unknown.
         """
-        if self.price_per_hour is None:
-            return None
-        if isinstance(self.price_per_hour, (int, float)):
-            return float(self.price_per_hour)
-        if region and region in self.price_per_hour:
-            return self.price_per_hour[region]
-        # Fallback: return first available region price
-        if self.price_per_hour:
-            return next(iter(self.price_per_hour.values()))
-        return None
+        return self._price_for_region(self.price_per_hour, region)
+
+    def get_spot_price(self, region: str | None = None) -> float | None:
+        """Get the spot/preemptible price for a specific region.
+
+        Absent rather than zero when unknown: a missing spot price must never be
+        mistaken for a free instance, and must never silently fall back to the
+        on-demand rate — the caller decides what to do with "unknown".
+
+        Args:
+            region: Cloud region name. If None, returns the first available price.
+
+        Returns:
+            Price in USD/hr, or None if unknown.
+        """
+        return self._price_for_region(self.spot_price_per_hour, region)
 
 
 class InstanceCatalog:
@@ -175,14 +195,16 @@ class InstanceCatalog:
 
         cloud = data.get("cloud", "")
 
+        def _parse_price(raw: object) -> float | dict[str, float] | None:
+            if isinstance(raw, dict):
+                return {k: float(v) for k, v in raw.items()}
+            if raw is not None:
+                return float(raw)
+            return None
+
         for item in data.get("instances") or []:
-            raw_price = item.get("price_per_hour")
-            if isinstance(raw_price, dict):
-                price_per_hour = {k: float(v) for k, v in raw_price.items()}
-            elif raw_price is not None:
-                price_per_hour = float(raw_price)
-            else:
-                price_per_hour = None
+            price_per_hour = _parse_price(item.get("price_per_hour"))
+            spot_price_per_hour = _parse_price(item.get("spot_price_per_hour"))
 
             info = InstanceTypeInfo(
                 instance_type=item["instance_type"],
@@ -196,6 +218,7 @@ class InstanceCatalog:
                 price_per_hour=price_per_hour,
                 min_memory_gb=float(item["min_memory_gb"]) if "min_memory_gb" in item else None,
                 max_memory_gb=float(item["max_memory_gb"]) if "max_memory_gb" in item else None,
+                spot_price_per_hour=spot_price_per_hour,
             )
             catalog.instances.append(info)
 
