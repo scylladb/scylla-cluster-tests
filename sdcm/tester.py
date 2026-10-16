@@ -3263,10 +3263,13 @@ class ClusterTester(unittest.TestCase):
     ):
         if duration:
             timeout = self.get_duration(duration)
+            stress_cmd = re.sub(
+                r"\s(?:--duration|-d)[ =](?:\d+[smhd])+(?=\s|$)", f" --duration {duration}m", stress_cmd
+            )
         elif self._stress_duration and (" --duration" in stress_cmd or " -d" in stress_cmd):
             timeout = self.get_duration(self._stress_duration)
             stress_cmd = re.sub(
-                r"\s(?:--duration|-d)[ =]\d+[smhd]\s", f" --duration {self._stress_duration}m ", stress_cmd
+                r"\s(?:--duration|-d)[ =](?:\d+[smhd])+\s", f" --duration {self._stress_duration}m ", stress_cmd
             )
         else:
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)

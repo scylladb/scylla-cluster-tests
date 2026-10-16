@@ -1,0 +1,153 @@
+// Large-partition workload.
+//
+// One table with 'row_count' rows of 'row_size' bytes spread over partitions of
+// 'rows_per_partition' rows (times the multipliers of 'partition_sizes', see latte's
+// PARTITION_PRESETS.md). A row index maps to its partition through the latte partition row
+// distribution preset, which spreads consecutive indexes over different partitions, and the
+// row value is derived from (pk, ck): rewriting a row stores the same value and reads
+// validate what they get back (see "Validating data taken from SELECT queries" in latte's
+// README and workloads/data_validation.rn).
+//
+// 'write_batch' writes batch 'i' of 'batch_size' rows of one partition in a LOGGED batch, so a
+// run with '-d <row_count / batch_size>' (the 'total_batches' printed by latte at start)
+// writes every row once. Split the fill between loaders with '--start-cycle'. All runs on
+// the same dataset must use the same 'row_count', 'rows_per_partition' and 'partition_sizes'.
+//
+// PARAMETERS (-P):
+//   keyspace, table, replication_factor
+//   row_count, rows_per_partition, partition_sizes, row_size
+//   batch_size        rows per 'write_batch' batch; keep batch_size * row_size below Scylla's
+//                     batch_size_warn_threshold_in_kb (128 KiB by default)
+//
+// FUNCTIONS (-f):
+//   write_batch       fill of the whole dataset in single-partition batches
+//   write             fill of the whole dataset row by row
+//   write_random      overwrite a random existing row with the same value
+//   read_row          read a random row and validate its value
+//
+// USAGE (600 partitions x 100,000 rows x 10 KiB = 1 GiB partitions, 600 GiB in total;
+//        100,000 rows is Scylla's compaction_rows_count_warning_threshold and 1 GiB is above
+//        compaction_large_partition_warning_threshold_mb):
+//
+// 1) Create schema:
+//    $ latte schema data_dir/latte/large_partitions.rn -- 172.17.0.2
+// 2) Populate in batches of 10 rows, one half of the batches per loader:
+//    $ latte run data_dir/latte/large_partitions.rn -q -f write_batch -d 3000000 --start-cycle=0 \
+//        -P row_count=60000000 -P rows_per_partition=100000 -P row_size=10240 -P batch_size=10 -- 172.17.0.2
+//    $ latte run data_dir/latte/large_partitions.rn -q -f write_batch -d 3000000 --start-cycle=3000000 \
+//        -P row_count=60000000 -P rows_per_partition=100000 -P row_size=10240 -P batch_size=10 -- 172.17.0.2
+// 3) Random writes and random reads over the whole dataset:
+//    $ latte run data_dir/latte/large_partitions.rn -q -f write_random --rate 5000 -d 10m \
+//        -P row_count=60000000 -P rows_per_partition=100000 -P row_size=10240 -- 172.17.0.2
+//    $ latte run data_dir/latte/large_partitions.rn -q -f read_row --rate 5000 -d 10m \
+//        -P row_count=60000000 -P rows_per_partition=100000 -P row_size=10240 -- 172.17.0.2
+
+use latte::*;
+
+const KEYSPACE = latte::param!("keyspace", "large_partitions");
+const TABLE = latte::param!("table", "lp");
+const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
+
+const ROW_COUNT = latte::param!("row_count", 10000000);
+const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 100000);
+// 'percent:multiplier' pairs, e.g. "90:1,10:10" for 10% of the partitions being 10x bigger
+const PARTITION_SIZES = latte::param!("partition_sizes", "100:1");
+const ROW_SIZE = latte::param!("row_size", 1024);
+const BATCH_SIZE = latte::param!("batch_size", 10);
+
+const P_STMT_WRITE = "p_stmt_large_partitions__write";
+const P_STMT_READ_ROW = "p_stmt_large_partitions__read_row";
+
+pub async fn schema(db) {
+    db.execute(`CREATE KEYSPACE IF NOT EXISTS ${KEYSPACE} WITH REPLICATION = {
+        'class': 'NetworkTopologyStrategy', 'replication_factor': ${REPLICATION_FACTOR} }`).await?;
+
+    db.execute(`CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE} (
+        pk bigint,
+        ck bigint,
+        v blob,
+        PRIMARY KEY (pk, ck)
+    ) WITH CLUSTERING ORDER BY (ck ASC)
+      AND comment = 'Created by latte'`).await?;
+}
+
+pub async fn prepare(db) {
+    // NOTE: Print the 'keyspace' name for the SCT stats exporter
+    println!("debug: Keyspace: {keyspace}", keyspace=KEYSPACE);
+    db.init_partition_row_distribution_preset("main", ROW_COUNT, ROWS_PER_PARTITION, PARTITION_SIZES).await?;
+    db.set_partition_batch_size("main", BATCH_SIZE).await?;
+    db.prepare(P_STMT_WRITE, `INSERT INTO ${KEYSPACE}.${TABLE} (pk, ck, v) VALUES (:pk, :ck, :v)`).await?;
+    db.prepare(P_STMT_READ_ROW, `SELECT v FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk AND ck = :ck`).await?;
+}
+
+// Utility functions
+
+/// Partition key of row 'idx'. Looked up once per request: 'write_batch' derives it from the
+/// batch it writes, the other functions call it for the one row they touch.
+async fn partition_key(db, idx) {
+    let partition = db.get_partition_info("main", idx).await;
+    hash(partition.idx)
+}
+
+async fn generate_row_data(pk, idx) { // may be equally used for 'write' and 'read' operations
+    let ck = hash(idx);
+    let v = blob(hash2(pk, ck), ROW_SIZE);
+
+    let ret = #{ // Object with attrs as a return value
+        "pk": pk,
+        "ck": ck,
+        "v": v,
+        "col_names": ["v"], // utility attr to be used by further data verification
+    };
+    ret
+}
+
+// User functions
+
+/// Write batch 'i' of up to BATCH_SIZE rows of one partition in a LOGGED batch.
+pub async fn write_batch(db, i) {
+    let batch = db.get_partition_batch("main", i).await?;
+    let pk = hash(batch.idx);
+    let stmt_names = [];
+    let stmt_params = [];
+    for idx in batch.rows {
+        let d = generate_row_data(pk, idx).await;
+        stmt_names.push(P_STMT_WRITE);
+        stmt_params.push([d.pk, d.ck, d.v]);
+    }
+    db.batch_prepared(stmt_names, stmt_params).await?
+}
+
+/// Write row 'i % ROW_COUNT'. Rewriting a row stores the same value.
+pub async fn write(db, i) {
+    let idx = i % ROW_COUNT;
+    let d = generate_row_data(partition_key(db, idx).await, idx).await;
+    db.execute_prepared(P_STMT_WRITE, [d.pk, d.ck, d.v]).await?
+}
+
+/// Overwrite a random existing row with the same value.
+pub async fn write_random(db, i) {
+    let idx = hash_range(i, ROW_COUNT);
+    let d = generate_row_data(partition_key(db, idx).await, idx).await;
+    db.execute_prepared(P_STMT_WRITE, [d.pk, d.ck, d.v]).await?
+}
+
+/// Read a random row and validate its value.
+pub async fn read_row(db, i) {
+    let idx = hash_range(i, ROW_COUNT);
+    let d = generate_row_data(partition_key(db, idx).await, idx).await;
+    let rows = db.execute_prepared_with_result(P_STMT_READ_ROW, [d.pk, d.ck]).await?;
+    let rows_len = rows.len();
+    if rows_len != 1 {
+        db.signal_failure(`Expected exactly 1 row for pk=${d.pk} ck=${d.ck}. But got '${rows_len}'`).await?;
+    }
+    for col_name in d.col_names {
+        let actual = rows.0.get(col_name)?;
+        let expected = d.get(col_name)?;
+        if actual != expected {
+            db.signal_failure(
+                `Column '${col_name}' of pk=${d.pk} ck=${d.ck}. Actual value differs from expected`
+            ).await?;
+        }
+    }
+}
