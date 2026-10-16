@@ -389,10 +389,10 @@ def _resolve_version_from_gce_image(image_name: str) -> str:
 
         labels = get_gce_image_tags(image_name)
         if version_label := _extract_version_from_tags(labels, tag_keys=("scylla_version",)):
-            # GCE labels have dashes instead of dots
-            version = version_label.replace("-", ".")
-            logger.info("Resolved GCE image %s → scylla_version=%s", image_name, version)
-            return version
+            if version := _gce_label_to_version(version_label):
+                logger.info("Resolved GCE image %s → scylla_version=%s", image_name, version)
+                return version
+            return ""
         logger.warning("GCE image %s has no 'scylla_version' label", image_name)
     except Exception as exc:  # noqa: BLE001 - best-effort cloud lookup
         logger.warning("Failed to resolve version from GCE image %s: %s", image_name, exc)
