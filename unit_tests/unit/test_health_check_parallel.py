@@ -21,6 +21,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.cluster import BaseScyllaCluster, ClusterHealthCheckError
+from sdcm.utils.health_checker import NodeHealthCheckStats
 
 
 @pytest.fixture
@@ -31,7 +32,8 @@ def mock_node():
         node = MagicMock()
         node.name = name
         node.running_nemesis = running_nemesis
-        node.check_node_health = MagicMock()
+        # check_node_health returns its timing breakdown, as the real one does
+        node.check_node_health = MagicMock(return_value=NodeHealthCheckStats(node_name=name))
         return node
 
     return _make
@@ -209,3 +211,32 @@ def test_parallel_workers_bounds_checking(mock_event_cls, mock_timeout, cluster_
     # All nodes should be checked regardless of worker count
     for node in cluster_instance.nodes:
         node.check_node_health.assert_called_once_with()
+
+
+@patch("sdcm.cluster.adaptive_timeout")
+@patch("sdcm.cluster.ClusterHealthValidatorEvent")
+def test_failed_node_still_counted_in_timing_summary(mock_event_cls, mock_timeout, cluster_instance, setup_params):
+    """A node whose check raises must not vanish from the gate's timing summary.
+
+    future.result() re-raises, so the node never returns its stats. Without reading them back
+    off the node, the gate under-reports by a whole node in exactly the case worth measuring.
+    """
+    mock_timeout.return_value.__enter__ = MagicMock()
+    mock_timeout.return_value.__exit__ = MagicMock(return_value=False)
+    setup_params(parallel_workers=5)
+
+    failing = cluster_instance.nodes[0]
+    failing.check_node_health = MagicMock(side_effect=RuntimeError("ssh died"))
+    failing.last_health_check_stats = NodeHealthCheckStats(
+        node_name=failing.name, attempts=3, operation_time={"gossip": 2.0}, waiting_time=30.0
+    )
+
+    recorded = []
+    cluster_instance._log_health_check_timing = lambda stats, elapsed: recorded.append(stats)
+
+    with pytest.raises(ClusterHealthCheckError):
+        cluster_instance.check_cluster_health()
+
+    reported = [s.node_name for s in recorded[0] if s is not None]
+    assert failing.name in reported, "the node that raised was dropped from the timing summary"
+    assert len(reported) == len(cluster_instance.nodes)
