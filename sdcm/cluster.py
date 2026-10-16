@@ -6475,7 +6475,9 @@ class BaseScyllaCluster:
                         continue
                     nemesis_node_allocator = self.test_config.tester_obj().nemesis_allocator
                     with nemesis_node_allocator.run_nemesis(
-                        nemesis_label="KMS encryption check", node_list=ready_nodes
+                        nemesis_label="KMS encryption check",
+                        node_list=ready_nodes,
+                        random_generator=random.Random(),
                     ) as target_node:
                         self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
 
@@ -7097,7 +7099,9 @@ class BaseScyllaCluster:
         node_allocator = self.test_config.tester_obj().nemesis_allocator
         verification_candidates = [n for n in self.data_nodes if n != node]
         with node_allocator.run_nemesis(
-            nemesis_label="verify decommission", node_list=verification_candidates
+            nemesis_label="verify decommission",
+            node_list=verification_candidates,
+            random_generator=random.Random(),
         ) as verification_node:
             node_ip_list = get_node_ip_list(verification_node)
             missing_host_ids = verification_node.raft.search_inconsistent_host_ids()

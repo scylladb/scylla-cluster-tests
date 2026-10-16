@@ -132,6 +132,6 @@ class TerminateAndRemoveNodeMonkey(NemesisBaseClass):
         up_normal_nodes = self.runner.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
 
         with self.runner.node_allocator.run_nemesis(
-            nemesis_label="RemoveNodeAddNode", node_list=up_normal_nodes
+            nemesis_label="RemoveNodeAddNode", node_list=up_normal_nodes, random_generator=self.runner.random
         ) as verification_node:
             self.runner._remove_node_add_node(verification_node=verification_node, node_to_remove=node_to_remove)
