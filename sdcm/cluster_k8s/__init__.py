@@ -68,6 +68,7 @@ import sdcm.utils.sstable.load_inventory as datasets
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.common import download_from_github, shorten_cluster_name, walk_thru_data
+from sdcm.utils.credentials import aws_credentials_available, backend_needs_aws
 from sdcm.utils.docker_utils import get_docker_hub_credentials
 from sdcm.utils.grafana_api import (
     convert_dashboard_payload_to_new_api,
@@ -508,6 +509,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             self.log.warning("The '%s' namespace already exists.")
 
     def create_docker_hub_auth_secret(self, namespace: str) -> None:
+        if not backend_needs_aws(self.cluster_backend) and not aws_credentials_available():
+            # Helm charts still reference the secret; kubelet ignores a missing pull secret and pulls anonymously.
+            self.log.warning("No AWS credentials to read Docker Hub ones, '%s' pulls images anonymously", namespace)
+            return
         self.log.info("Create docker hub auth secret in '%s'", namespace)
         docker_hub_url = "https://index.docker.io/v1/"
         docker_hub_creds = get_docker_hub_credentials()

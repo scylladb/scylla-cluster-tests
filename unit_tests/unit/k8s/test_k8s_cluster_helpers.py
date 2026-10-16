@@ -73,3 +73,24 @@ def test_get_grafana_ip_takes_first(backend, stdout):
     cluster = _cluster(cluster_backend=backend)
     cluster.kubectl.return_value = mock.Mock(stdout=stdout)
     assert KubernetesCluster.get_grafana_ip(cluster, "sct-cluster", "scylla") == "10.4.0.1"
+
+
+@pytest.mark.parametrize(
+    "backend,has_aws_credentials,secret_created",
+    [
+        pytest.param("k8s-local-kind", False, False, id="kind-without-credentials"),
+        pytest.param("k8s-local-kind", True, True, id="kind-with-credentials"),
+        pytest.param("k8s-eks", False, True, id="eks-always"),
+        pytest.param("k8s-gke", False, True, id="gke-always"),
+    ],
+)
+def test_docker_hub_auth_secret_needs_credentials_only_on_cloud(backend, has_aws_credentials, secret_created):
+    cluster = _cluster(cluster_backend=backend, docker_hub_auth_secret="docker-auth")
+    creds = {"username": "user", "password": "pass", "email": "user@example.com"}
+    with (
+        mock.patch("sdcm.cluster_k8s.aws_credentials_available", return_value=has_aws_credentials),
+        mock.patch("sdcm.cluster_k8s.get_docker_hub_credentials", return_value=creds) as get_creds,
+    ):
+        KubernetesCluster.create_docker_hub_auth_secret(cluster, "scylla")
+    assert get_creds.called is secret_created
+    assert cluster.kubectl.called is secret_created
