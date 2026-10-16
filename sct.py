@@ -3760,6 +3760,12 @@ def hdr_investigate(
     help="Scylla repo URL for rolling-upgrade jobs (RPM .repo or DEB .list). Overrides per-job template values.",
 )
 @click.option(
+    "--scylla-doctor-full-tarball-url",
+    default=None,
+    type=str,
+    help="Scylla Doctor full-edition tarball URL, passed to all triggered jobs (for scylla-doctor gating)",
+)
+@click.option(
     "--base-versions",
     default=None,
     type=str,
@@ -3804,6 +3810,7 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     oci_image_db,
     unified_package,
     new_scylla_repo,
+    scylla_doctor_full_tarball_url,
     base_versions,
     version_resolution,
     dry_run,
@@ -3899,6 +3906,8 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
         overrides["unified_package"] = unified_package
     if new_scylla_repo:
         overrides["new_scylla_repo"] = new_scylla_repo
+    if scylla_doctor_full_tarball_url:
+        overrides["scylla_doctor_full_tarball_url"] = scylla_doctor_full_tarball_url
     if base_versions:
         overrides["base_versions"] = base_versions
     if use_job_throttling is not None:

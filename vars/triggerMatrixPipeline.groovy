@@ -71,6 +71,8 @@ def call(Map pipelineParams = [:]) {
                    description: 'URL to unified (relocatable) Scylla package — for PGO offline installer triggers')
             string(name: 'new_scylla_repo', defaultValue: '',
                    description: 'Scylla repo URL for rolling-upgrade jobs (RPM .repo or DEB .list). Overrides per-job template values when set.')
+            string(name: 'scylla_doctor_full_tarball_url', defaultValue: '',
+                   description: 'Scylla Doctor full-edition tarball URL — passed to all triggered jobs. Used by the scylla-doctor gating trigger.')
             string(name: 'base_versions', defaultValue: '',
                    description: 'Passed from scylla-pkg release triggers. Only relevant for rolling upgrade tests. Comma-separated base versions to upgrade FROM (e.g., "2025.1,2025.2"). When empty, the downstream job auto-selects base versions.')
             string(name: 'requested_by_user', defaultValue: '',
@@ -138,6 +140,7 @@ def call(Map pipelineParams = [:]) {
                             'azure_image_db': params.azure_image_db,
                             'oci_image_db': params.oci_image_db,
                             'unified_package': params.unified_package,
+                            'scylla_doctor_full_tarball_url': params.scylla_doctor_full_tarball_url,
                             'requested_by_user': params.requested_by_user,
                             'billing_project': params.billing_project,
                             'email_recipients': params.email_recipients,
@@ -199,6 +202,9 @@ def call(Map pipelineParams = [:]) {
                         }
                         if (params.new_scylla_repo?.trim()) {
                             cmd += " --new-scylla-repo '${params.new_scylla_repo}'"
+                        }
+                        if (params.scylla_doctor_full_tarball_url?.trim()) {
+                            cmd += " --scylla-doctor-full-tarball-url '${params.scylla_doctor_full_tarball_url.trim()}'"
                         }
                         if (params.base_versions?.trim()) {
                             cmd += " --base-versions '${params.base_versions}'"
