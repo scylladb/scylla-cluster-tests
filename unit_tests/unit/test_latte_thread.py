@@ -12,6 +12,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 import re
+import types
 
 import pytest
 import yaml
@@ -198,3 +199,68 @@ def test_complex_schema_cmds_cover_every_row(config_file, param_name):
     row_count = re.search(r"-P row_count=(\d+)", cmd)
     assert cycles and row_count, f"missing -d or -P row_count in: {cmd}"
     assert cycles.group(1) == row_count.group(1)
+
+
+class _ContainerRunner:
+    """Stands in for the 'RemoteDocker' runner of one latte call, recording what is copied in.
+
+    'test -f' answers "already there", so the rune script directory is skipped and only the
+    per-invocation files show up.
+    """
+
+    def __init__(self, copy_ok=True):
+        self.copied = []
+        self.copy_ok = copy_ok
+
+    def run(self, *_, **__):
+        return types.SimpleNamespace(ok=True, stdout="", stderr="")
+
+    def send_files(self, src, dst, **_):
+        self.copied.append((src, dst))
+        return self.copy_ok
+
+
+def _staging_thread(files):
+    loader_set = types.SimpleNamespace(
+        get_db_auth=lambda: None,
+        test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
+    )
+    return LatteStressThread(
+        loader_set=loader_set,
+        stress_cmd="latte run -f load data_dir/latte/fts_search/fts.rn -d 100",
+        timeout=60,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": "docker", "client_encrypt": False, "latte_schema_parameters": {}},
+        extra_files_to_stage=files,
+    )
+
+
+SHARD = ("/local/ds/shards/documents_000.tsv", "/tmp/fts/ds/shards/documents_000.tsv")
+
+
+def test_a_staged_file_is_copied_into_the_loader_container():
+    runner = _ContainerRunner()
+
+    _staging_thread([SHARD]).build_stress_cmd(runner, loader=None, hosts="10.0.0.1")
+
+    assert runner.copied == [SHARD]
+
+
+def test_a_failed_copy_fails_the_command():
+    """Rather than a latte run that reads nothing."""
+    with pytest.raises(RuntimeError, match="Failed to copy /local/ds/shards/documents_000.tsv"):
+        _staging_thread([SHARD]).build_stress_cmd(_ContainerRunner(copy_ok=False), loader=None, hosts="10.0.0.1")
+
+
+def test_nothing_is_staged_by_default():
+    """The default has to stay empty: every existing caller stages nothing, and pays nothing for it."""
+    runner = _ContainerRunner()
+
+    _staging_thread(None).build_stress_cmd(runner, loader=None, hosts="10.0.0.1")
+
+    assert runner.copied == []
+
+
+def test_a_staged_file_needs_an_absolute_container_path():
+    with pytest.raises(ValueError, match="not absolute"):
+        _staging_thread([("/local/documents.tsv", "documents.tsv")])

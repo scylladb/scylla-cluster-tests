@@ -1,0 +1,226 @@
+// IR accuracy metrics for full-text search (BM25) workloads.
+//
+// Origin: scylladb/vector-store, latte/full-text-search/metrics.rn. This copy is the one test
+// runs use (see the header of fts.rn for why). Mirror any change back to vector-store.
+//
+// All metrics range from 0.0 (worst) to 1.0 (perfect). They compare what the
+// search returned against the ground-truth qrels (graded relevance judgments).
+//
+// Example from testdata/:
+//   Query "where is the great barrier reef located" (q_008)
+//   qrels: doc_008 (grade 3), doc_001 (grade 1)
+//   BM25 returns: [doc_008, doc_001, ...] at k=100
+
+// recall@k — "what fraction of the truly relevant docs did I find?"
+//   = |returned ∩ relevant| / |relevant|
+//
+// Counts how many of ALL relevant documents (not just the first k of the
+// qrels) appear in the top-k search results. The denominator is the total
+// number of known relevant docs, so recall is meaningful for queries with
+// few or many relevant documents.  Unlike the earlier version this does not
+// build an expected set from the first min(k, |relevant|) qrels, so recall
+// no longer depends on qrels file ordering.
+//
+// Example: k=5, relevant=[doc_001, doc_008, doc_015], returned=[doc_008,
+//          doc_003] → 1/3 ≈ 0.33
+pub fn recall_at_k(returned_ids, relevant_ids, k) {
+    if relevant_ids.len() == 0 {
+        return 1.0;
+    }
+    let actual_k = if returned_ids.len() < k { returned_ids.len() } else { k };
+    let hits = 0;
+    for i in 0..actual_k {
+        if relevant_ids.iter().any(|r| r == returned_ids[i]) {
+            hits = hits + 1;
+        }
+    }
+    hits as f64 / relevant_ids.len() as f64
+}
+
+// precision@k — "of the k results I returned, how many are relevant?"
+//   = |returned ∩ relevant| / k
+//
+// Unlike recall, the denominator is always exactly k. If k=10 and only 2 of
+// the 10 returned docs are relevant, precision = 0.2.
+//
+// Example: k=100, returned has doc_008 and doc_001 among the results
+//          but 0 other relevant docs → 2/100 = 0.02
+pub fn precision_at_k(returned_ids, relevant_ids, k) {
+    if k == 0 {
+        return 0.0;
+    }
+    if relevant_ids.len() == 0 {
+        return 0.0;
+    }
+    let actual_k = if returned_ids.len() < k { returned_ids.len() } else { k };
+    let hits = 0;
+    for i in 0..actual_k {
+        if relevant_ids.iter().any(|r| r == returned_ids[i]) {
+            hits = hits + 1;
+        }
+    }
+    hits as f64 / k as f64
+}
+
+// reciprocal rank (MRR per query) — "how early did the first relevant doc
+// appear?"
+//   = 1 / rank_of_first_relevant
+//
+// If the first relevant doc is at position 1, RR=1.0; at position 3, RR=0.33;
+// if none are found, RR=0.0.
+//
+// Example: returned=[doc_003, doc_008, doc_001] for q_008
+//          first relevant is doc_008 at rank 2 → 1/2 = 0.5
+pub fn reciprocal_rank(returned_ids, relevant_ids) {
+    if relevant_ids.len() == 0 {
+        return 0.0;
+    }
+    let rank = 0;
+    for i in 0..returned_ids.len() {
+        if relevant_ids.iter().any(|r| r == returned_ids[i]) {
+            rank = i + 1;
+            break;
+        }
+    }
+    if rank == 0 {
+        return 0.0;
+    }
+    1.0 / rank as f64
+}
+
+// Look up the relevance grade of a returned doc from the qrels.
+// Returns 0.0 if the doc has no judgment for the current query.
+fn relevance_for_id(relevances, doc_id) {
+    for rel in relevances {
+        if rel.doc_id == doc_id {
+            return rel.grade as f64;
+        }
+    }
+    0.0
+}
+
+// Precomputed 1/log2(i+2) discount factors for nDCG positions 0..199.
+// (Rune has powf but no log2, so these are computed offline in Python.)
+fn ndcg_discount(i) {
+    let table = [
+        1.00000000_f64, 0.63092975_f64, 0.50000000_f64, 0.43067656_f64,
+        0.38685281_f64, 0.35620719_f64, 0.33333333_f64, 0.31546488_f64,
+        0.30103000_f64, 0.28906483_f64, 0.27894295_f64, 0.27023815_f64,
+        0.26264954_f64, 0.25595802_f64, 0.25000000_f64, 0.24465054_f64,
+        0.23981247_f64, 0.23540891_f64, 0.23137821_f64, 0.22767025_f64,
+        0.22424382_f64, 0.22106473_f64, 0.21810429_f64, 0.21533828_f64,
+        0.21274605_f64, 0.21030992_f64, 0.20801460_f64, 0.20584683_f64,
+        0.20379505_f64, 0.20184909_f64, 0.20000000_f64, 0.19823986_f64,
+        0.19656163_f64, 0.19495902_f64, 0.19342640_f64, 0.19195872_f64,
+        0.19055141_f64, 0.18920036_f64, 0.18790182_f64, 0.18665241_f64,
+        0.18544902_f64, 0.18428883_f64, 0.18316925_f64, 0.18208790_f64,
+        0.18104260_f64, 0.18003133_f64, 0.17905223_f64, 0.17810359_f64,
+        0.17718382_f64, 0.17629143_f64, 0.17542506_f64, 0.17458343_f64,
+        0.17376534_f64, 0.17296969_f64, 0.17219543_f64, 0.17144160_f64,
+        0.17070728_f64, 0.16999162_f64, 0.16929381_f64, 0.16861310_f64,
+        0.16794878_f64, 0.16730018_f64, 0.16666667_f64, 0.16604765_f64,
+        0.16544255_f64, 0.16485086_f64, 0.16427205_f64, 0.16370566_f64,
+        0.16315122_f64, 0.16260831_f64, 0.16207652_f64, 0.16155547_f64,
+        0.16104477_f64, 0.16054409_f64, 0.16005307_f64, 0.15957142_f64,
+        0.15909881_f64, 0.15863496_f64, 0.15817959_f64, 0.15773244_f64,
+        0.15729325_f64, 0.15686177_f64, 0.15643779_f64, 0.15602107_f64,
+        0.15561139_f64, 0.15520856_f64, 0.15481238_f64, 0.15442266_f64,
+        0.15403922_f64, 0.15366189_f64, 0.15329049_f64, 0.15292487_f64,
+        0.15256487_f64, 0.15221035_f64, 0.15186115_f64, 0.15151715_f64,
+        0.15117821_f64, 0.15084420_f64, 0.15051500_f64, 0.15019048_f64,
+        0.14987054_f64, 0.14955506_f64, 0.14924394_f64, 0.14893706_f64,
+        0.14863434_f64, 0.14833567_f64, 0.14804096_f64, 0.14775011_f64,
+        0.14746305_f64, 0.14717969_f64, 0.14689994_f64, 0.14662372_f64,
+        0.14635096_f64, 0.14608158_f64, 0.14581551_f64, 0.14555268_f64,
+        0.14529302_f64, 0.14503647_f64, 0.14478295_f64, 0.14453241_f64,
+        0.14428479_f64, 0.14404003_f64, 0.14379807_f64, 0.14355885_f64,
+        0.14332233_f64, 0.14308844_f64, 0.14285714_f64, 0.14262838_f64,
+        0.14240211_f64, 0.14217828_f64, 0.14195685_f64, 0.14173777_f64,
+        0.14152100_f64, 0.14130649_f64, 0.14109421_f64, 0.14088412_f64,
+        0.14067617_f64, 0.14047033_f64, 0.14026656_f64, 0.14006482_f64,
+        0.13986509_f64, 0.13966731_f64, 0.13947147_f64, 0.13927753_f64,
+        0.13908545_f64, 0.13889521_f64, 0.13870677_f64, 0.13852011_f64,
+        0.13833519_f64, 0.13815199_f64, 0.13797047_f64, 0.13779062_f64,
+        0.13761241_f64, 0.13743580_f64, 0.13726078_f64, 0.13708732_f64,
+        0.13691539_f64, 0.13674498_f64, 0.13657605_f64, 0.13640859_f64,
+        0.13624257_f64, 0.13607797_f64, 0.13591477_f64, 0.13575295_f64,
+        0.13559250_f64, 0.13543338_f64, 0.13527558_f64, 0.13511908_f64,
+        0.13496386_f64, 0.13480991_f64, 0.13465720_f64, 0.13450572_f64,
+        0.13435545_f64, 0.13420637_f64, 0.13405847_f64, 0.13391173_f64,
+        0.13376614_f64, 0.13362168_f64, 0.13347832_f64, 0.13333607_f64,
+        0.13319491_f64, 0.13305481_f64, 0.13291577_f64, 0.13277777_f64,
+        0.13264079_f64, 0.13250483_f64, 0.13236988_f64, 0.13223591_f64,
+        0.13210292_f64, 0.13197089_f64, 0.13183981_f64, 0.13170967_f64,
+        0.13158046_f64, 0.13145216_f64, 0.13132477_f64, 0.13119827_f64,
+        0.13107265_f64, 0.13094791_f64, 0.13082402_f64, 0.13070099_f64,
+    ];
+    if i < table.len() { table[i] } else { 1.0 / (i + 2) as f64 }
+}
+
+// nDCG@k (normalized Discounted Cumulative Gain) — "how good is the ranking
+// compared to the ideal ranking?"
+//
+// Uses graded relevance (not just binary relevant/not). A high-grade doc
+// (grade=3) contributes more gain than a low-grade doc (grade=1). Documents
+// ranked lower are discounted by 1/log2(rank+1).
+//
+// DCG@k = sum_{i=1}^{k} (2^{rel_i} - 1) / log2(i + 1)
+// IDCG@k = same with relevance grades sorted descending (ideal order)
+// nDCG@k = DCG / IDCG
+//
+// nDCG=1.0 means perfect ranking. nDCG=0.0 means no relevant docs found.
+//
+// Example: q_008, relevances=[(doc_008, grade 3), (doc_001, grade 1)]
+//          Returned: [doc_008, doc_001]
+//          DCG = (2^3-1)/1 + (2^1-1)/1.585 = 7 + 0.63 = 7.63
+//          IDCG = (2^3-1)/1 + (2^1-1)/1.585 = 7 + 0.63 = 7.63
+//          nDCG = 7.63/7.63 = 1.0 (perfect, doc_008 was ranked first)
+//
+//          If returned: [doc_001, doc_008] (wrong order)
+//          DCG = (2^1-1)/1 + (2^3-1)/1.585 = 1 + 4.42 = 5.42
+//          nDCG = 5.42/7.63 = 0.71
+pub fn ndcg_at_k(returned_ids, relevances, k) {
+    let actual_k = if returned_ids.len() < k { returned_ids.len() } else { k };
+    if actual_k == 0 {
+        return 0.0;
+    }
+
+    let dcg = 0.0;
+    for i in 0..actual_k {
+        let rel = relevance_for_id(relevances, returned_ids[i]);
+        dcg = dcg + ((2.0_f64).powf(rel) - 1.0) * ndcg_discount(i);
+    }
+
+    let grades = [];
+    for rel in relevances {
+        if rel.grade > 0 {
+            grades.push(rel.grade as f64);
+        }
+    }
+
+    if grades.len() == 0 {
+        return 0.0;
+    }
+
+    let n = grades.len();
+    for i in 0..n {
+        for j in (i + 1)..n {
+            if grades[j] > grades[i] {
+                let tmp = grades[i];
+                grades[i] = grades[j];
+                grades[j] = tmp;
+            }
+        }
+    }
+
+    let ideal_len = if grades.len() < k { grades.len() } else { k };
+    let idcg = 0.0;
+    for i in 0..ideal_len {
+        idcg = idcg + ((2.0_f64).powf(grades[i]) - 1.0) * ndcg_discount(i);
+    }
+
+    if idcg == 0.0 {
+        return 0.0;
+    }
+    dcg / idcg
+}
