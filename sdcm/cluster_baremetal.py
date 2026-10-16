@@ -211,6 +211,8 @@ class PhysicalHostCleanup:
 class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
     log = LOGGER
     journal_outlives_run = True
+    # Hosts this run already freed the SSH tunnel ports on, see _init_port_mapping
+    _tunnel_ports_released_on: set[str] = set()
 
     def __init__(
         self,
@@ -279,7 +281,10 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
         )
 
     def _init_port_mapping(self):
-        if self.test_config.IP_SSH_CONNECTIONS == "public":
+        # Nodes sharing a host (a loader and a monitor on one machine) share its tunnel ports, and the tunnel of the
+        # first one serves both: releasing the ports again would kill that live tunnel, not a stale one.
+        if self.test_config.IP_SSH_CONNECTIONS == "public" and self._public_ip not in self._tunnel_ports_released_on:
+            self._tunnel_ports_released_on.add(self._public_ip)
             self._release_stale_tunnel_ports()
         super()._init_port_mapping()
 
