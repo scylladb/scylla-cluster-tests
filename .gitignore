@@ -75,3 +75,6 @@ scylla-qa-internal/
 # AI agent working directory
 .sisyphus/
 sct_runner_ip
+
+# SCT-901 bare-metal simulation: generated per-run node config (live host IPs)
+baremetal_sct901.json
