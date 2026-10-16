@@ -21,6 +21,10 @@
 # (50000 / 4 = 12500), read and mixed from the rates of the cassandra-stress baseline job.
 # These are starting points, to be calibrated from the first run (SCYLLADB-4417).
 
+# NemesisSequence starts with a Scylla Manager repair; repairing SC tablets fails every request to
+# them and kills the load (SCYLLADB-4854). Skip it until that is fixed.
+use_mgmt: false
+
 prepare_stress_cmd: []
 pre_create_keyspace: ["CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} and consistency = 'global' and tablets = {'enabled': true};"]
 
