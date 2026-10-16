@@ -154,6 +154,11 @@ class ScyllaConfigMixin(BaseModel):
         description="Url to the repo of scylla version to install scylla. Can provide specific version after a colon "
         "e.g: `https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list:2021.1.18`",
     )
+    scylla_setup_no_raid: Boolean = SctField(
+        description="""Run scylla_setup with --no-raid-setup: no data disk is detected or formatted, and
+                       /var/lib/scylla stays a directory on the root filesystem, which must be XFS.
+                       For hosts without a free disk, e.g. a bare-metal host whose only disk holds the OS.""",
+    )
     scylla_version: String = SctField(
         description="""Version of scylla to install, ex. '2.3.1'
                        Automatically lookup AMIs and repo links for formal versions.

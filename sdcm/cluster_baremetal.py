@@ -6,18 +6,62 @@ This backend is experimental and not regularly tested in CI.
 
 import logging
 import re
+import shlex
 from typing import Optional, TypedDict
 
 from sdcm import cluster
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.test_config import TestConfig
+from sdcm.utils.apt import apt_cmd
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT
 from sdcm.utils.remote_logger import journal_time
+from sdcm.utils.rpm import rpm_cmd
 
 LOGGER = logging.getLogger(__name__)
 
 # scylla_setup binds /var/lib/scylla/coredump here, so a host's coredumps land on the scylla data disk
 SCYLLA_COREDUMP_MOUNT_UNIT = "/etc/systemd/system/var-lib-systemd-coredump.mount"
+# What an earlier Scylla install leaves on a host once its packages are removed: the repo SCT added, the config files
+# it changed (kept by the package manager, e.g. as .rpmsave), what scylla_setup and SCT wrote next to them (unit
+# drop-ins), and the files Scylla's python and scylla-housekeeping wrote at run time (bytecode caches, its uuid)
+SCYLLA_CONFIG_LEFTOVERS = (
+    "/etc/yum.repos.d/scylla*.repo",
+    "/etc/zypp/repos.d/scylla*.repo",
+    "/etc/apt/sources.list.d/scylla*.list",
+    "/etc/scylla",
+    "/etc/scylla.d",
+    "/etc/sysconfig/scylla-server*",
+    "/etc/default/scylla-server*",
+    "/etc/systemd/system/scylla-*.service.d",
+    "/opt/scylladb",
+    "/var/lib/scylla-housekeeping",
+)
+# The data directory and the mount units scylla_setup made for it, unless it is still on a disk scylla_setup set up
+SCYLLA_DATA_LEFTOVERS = (
+    "/var/lib/scylla",
+    "/etc/systemd/system/var-lib-scylla.mount",
+    "/etc/systemd/system/*.wants/var-lib-scylla.mount",
+    SCYLLA_COREDUMP_MOUNT_UNIT,
+    "/etc/systemd/system/*.wants/var-lib-systemd-coredump.mount",
+)
+
+# The packages a host had, and the services it ran, before SCT first installed anything on it, which the cleanup after
+# the run restores. They outlive a run whose cleanup did not run, so the next run keeps them, and its cleanup still
+# restores the original state.
+BASELINE_DIR = "/var/lib/scylla-cluster-tests"
+PACKAGE_BASELINE = f"{BASELINE_DIR}/packages.baseline"
+SERVICE_BASELINE = f"{BASELINE_DIR}/services.baseline"
+# The installed packages, one per line as the package manager takes them: name.arch (rpm), name:arch (dpkg). The repo
+# keys rpm lists as gpg-pubkey packages are not packages to restore.
+LIST_PACKAGES = (
+    "if [ -e /etc/debian_version ]; then "
+    "dpkg-query -W -f '${db:Status-Abbrev} ${Package}:${Architecture}\\n' | awk '/^ii/ {print $2}'; "
+    "else rpm -qa --qf '%{NAME}.%{ARCH}\\n' | grep -v '^gpg-pubkey[.]'; fi"
+)
+# The running services. Template instances (user@1001.service) belong to sessions and jobs, not to the host's setup.
+LIST_RUNNING_SERVICES = (
+    "systemctl list-units --type=service --state=running --no-legend --plain | awk '{print $1}' | grep -v @"
+)
 
 BASE_NAME = "db-node"
 LOADER_NAME = "loader-node"
@@ -54,7 +98,16 @@ class PhysicalHostCleanup:
     """
 
     def clean_up_host(self, tunnel_ports: bool, scylla_disk_setup: bool) -> None:
-        """Run the cleanup steps asked for. A failing step is logged and does not skip the other."""
+        """Run the cleanup steps asked for, and restore the host's packages. A failing step is logged and does not
+        skip the others.
+
+        `scylla_disk_setup` is for a DB host the run installed Scylla on: its disk setup is reset, and once its
+        packages are restored, the files the Scylla install left are removed.
+        """
+        try:
+            self._stop_stale_log_followers()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Could not stop the log followers the run left, the next cleanup will: %s", exc)
         if tunnel_ports:
             try:
                 self._release_stale_tunnel_ports()
@@ -67,6 +120,172 @@ class PhysicalHostCleanup:
                     self._reset_scylla_disk_setup(disks)
             except Exception as exc:  # noqa: BLE001
                 self.log.warning("Could not reset the scylla disk setup, the next setup will: %s", exc)
+        try:
+            if scylla_disk_setup:
+                self.remoter.sudo("systemctl stop scylla-server.service", ignore_status=True)
+            self.restore_packages()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Could not restore the packages of the host, the next cleanup will: %s", exc)
+        try:
+            self.restore_services()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Could not restore the services of the host, the next cleanup will: %s", exc)
+        if scylla_disk_setup:
+            try:
+                self.remove_scylla_leftovers()
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Could not remove the leftovers of the Scylla install, the next install will: %s", exc)
+
+    def record_host_baseline(self) -> None:
+        """Record the packages the host has and the services it runs, for the cleanup after the run to restore.
+
+        A baseline already on the host is kept: it was recorded by an earlier run whose cleanup did not run, and it
+        holds the host from before that run.
+        """
+        if self.remoter.run(f"test -s {PACKAGE_BASELINE}", ignore_status=True).ok:
+            self.log.info("Keeping the baseline an earlier run left on the host, its cleanup restores it")
+            return
+        self.remoter.sudo(f"mkdir -p {BASELINE_DIR}")
+        # Each written aside first: a baseline cut short by a failure would remove every package it misses. The
+        # package baseline goes in place last, so that it is there means the services one is too.
+        for baseline, list_cmd in ((SERVICE_BASELINE, LIST_RUNNING_SERVICES), (PACKAGE_BASELINE, LIST_PACKAGES)):
+            self.remoter.sudo(f"sh -c {shlex.quote(f'{list_cmd} > {baseline}.new')}")
+            self.remoter.sudo(f"mv {baseline}.new {baseline}")
+        self.log.info("Recorded the packages and services of the host, the cleanup after the run restores them")
+
+    def restore_packages(self) -> None:
+        """Restore the packages of the baseline: remove what was installed since, reinstall what was removed.
+
+        Packages are compared by name, so an upgrade is kept: SCT upgrades openssh and openssl to fix sshd, and
+        downgrading them could cut the host off. A reinstalled package can need a package the baseline does not
+        have, as its newer version may: that one is kept. The baseline is removed once every package of it is
+        installed and every package installed since is removed, and kept otherwise, for the next cleanup to retry.
+
+        NOTE: a package something else installed on the host while the run was on it is removed too.
+        """
+        if not self.remoter.run(f"test -s {PACKAGE_BASELINE}", ignore_status=True).ok:
+            self.log.info("No package baseline on the host, its packages are left as they are")
+            return
+        baseline = set(self.remoter.run(f"cat {PACKAGE_BASELINE}").stdout.split())
+        added = set(self.remoter.run(LIST_PACKAGES).stdout.split()) - baseline
+        debian = self.remoter.run("test -e /etc/debian_version", ignore_status=True).ok
+        if added:
+            self.log.info("Removing the packages installed since the baseline: %s", " ".join(sorted(added)))
+            self.remoter.sudo(self._package_cmd(debian, "remove", added), ignore_status=True, retry=3, timeout=900)
+        before_reinstall = set(self.remoter.run(LIST_PACKAGES).stdout.split())
+        if removed := baseline - before_reinstall:
+            self.log.info("Reinstalling the packages removed since the baseline: %s", " ".join(sorted(removed)))
+            self.remoter.sudo(self._package_cmd(debian, "install", removed), ignore_status=True, retry=3, timeout=900)
+        installed = set(self.remoter.run(LIST_PACKAGES).stdout.split())
+        if differ := sorted((baseline - installed) | (added & installed)):
+            self.log.warning(
+                "The packages still differ from the baseline, kept for the next cleanup: %s", " ".join(differ)
+            )
+            return
+        if pulled_in := sorted(installed - before_reinstall - baseline):
+            self.log.info("Keeping the packages the reinstalled ones need: %s", " ".join(pulled_in))
+        self.remoter.sudo(f"rm -f {PACKAGE_BASELINE}")
+        self.log.info("The packages of the host match the baseline again")
+
+    def restore_services(self) -> None:
+        """Start the services of the baseline that are stopped, e.g. one a package SCT installed replaced.
+
+        Only starts: a service the baseline does not have may be another job's. The baseline is removed once each of
+        its services runs, and kept otherwise, for the next cleanup to retry.
+        """
+        if not self.remoter.run(f"test -s {SERVICE_BASELINE}", ignore_status=True).ok:
+            self.log.info("No service baseline on the host, its services are left as they are")
+            return
+        baseline = set(self.remoter.run(f"cat {SERVICE_BASELINE}").stdout.split())
+        if stopped := sorted(baseline - set(self.remoter.run(LIST_RUNNING_SERVICES).stdout.split())):
+            self.log.info("Starting the services stopped since the baseline: %s", " ".join(stopped))
+            self.remoter.sudo(f"systemctl start {' '.join(stopped)}", ignore_status=True)
+        if stopped := sorted(baseline - set(self.remoter.run(LIST_RUNNING_SERVICES).stdout.split())):
+            self.log.warning(
+                "The services still differ from the baseline, kept for the next cleanup: %s", " ".join(stopped)
+            )
+            return
+        self.remoter.sudo(f"rm -f {SERVICE_BASELINE}")
+        # Gone once both baselines are: the package one may still be kept for the next cleanup
+        self.remoter.sudo(f"rmdir --ignore-fail-on-non-empty {BASELINE_DIR}", ignore_status=True)
+        self.log.info("The services of the host run as in the baseline again")
+
+    @staticmethod
+    def _package_cmd(debian: bool, action: str, packages: set[str]) -> str:
+        names = " ".join(sorted(packages))
+        # Removing a package removes no dependency it was installed with, which the baseline may have, and reinstalling
+        # one installs no package it only recommends, which the baseline did not have
+        if debian:
+            subcommand = "purge -y" if action == "remove" else "install -y --no-install-recommends"
+            return f"DEBIAN_FRONTEND=noninteractive {apt_cmd(f'{subcommand} {names}', lock_wait=True)}"
+        setopt = "clean_requirements_on_remove" if action == "remove" else "install_weak_deps"
+        return rpm_cmd("yum", f"{action} -y --setopt={setopt}=False {names}")
+
+    def remove_scylla_leftovers(self):
+        """Remove what an earlier Scylla install left on the host, so this install starts from a clean host.
+
+        Removing the packages keeps the config files a run changed, and everything scylla_setup and SCT added. Without a
+        data disk (scylla_setup_no_raid) the data directory survives too: clean_scylla_data() leaves its schema,
+        system tables and caches. /var/lib/scylla still on a disk an earlier scylla_setup set up is left to the reset
+        of that disk.
+        """
+        paths = list(SCYLLA_CONFIG_LEFTOVERS)
+        if self._scylla_dir_mounted():
+            self.log.info("/var/lib/scylla is on a disk an earlier scylla_setup set up, the disk reset resets it")
+        else:
+            paths += SCYLLA_DATA_LEFTOVERS
+        # ls -d lists what exists, and drops the patterns that match nothing
+        found = self.remoter.run(f"ls -d {' '.join(paths)}", ignore_status=True).stdout.split()
+        if not found:
+            self.log.info("No leftovers of an earlier Scylla install on the host")
+            return
+        self.log.info("Removing leftovers of an earlier Scylla install: %s", ", ".join(found))
+        if "/var/lib/scylla" in found:
+            self._undo_coredump_bind()
+        self.remoter.sudo(f"rm -rf {' '.join(found)}")
+        self.remoter.sudo("systemctl daemon-reload")
+        # A Scylla unit that failed stays listed as failed once its package is gone, e.g. scylla-node-exporter
+        self.remoter.sudo("systemctl reset-failed 'scylla-*'", ignore_status=True)
+
+    def _undo_coredump_bind(self, data_sources: frozenset[str] = frozenset()) -> None:
+        """Undo scylla_setup's bind of /var/lib/scylla/coredump to /var/lib/systemd/coredump, which keeps the data
+        directory, and the disk under it, busy. The next scylla_setup recreates it.
+
+        Stopping its unit unmounts it. A mount still there is unmounted only when it is that bind: of
+        /var/lib/scylla/coredump, or from `data_sources`, the devices /var/lib/scylla is mounted from.
+        """
+        self.remoter.sudo("systemctl stop var-lib-systemd-coredump.mount", ignore_status=True)
+        sources = self.remoter.run(
+            "findmnt -rn -o SOURCE --mountpoint /var/lib/systemd/coredump", ignore_status=True
+        ).stdout.split()
+        # A bind of a directory has a source like /dev/nvme0n1p4[/var/lib/scylla/coredump]
+        if any(
+            source.endswith("[/var/lib/scylla/coredump]") or source.split("[", 1)[0] in data_sources
+            for source in sources
+        ):
+            self.remoter.sudo("umount /var/lib/systemd/coredump")
+        self.remoter.sudo(
+            f"rm -f {SCYLLA_COREDUMP_MOUNT_UNIT} /etc/systemd/system/*.wants/var-lib-systemd-coredump.mount"
+        )
+
+    def _scylla_dir_mounted(self) -> bool:
+        return any("/var/lib/scylla" in targets for targets in self._mounts().values())
+
+    def _stop_stale_log_followers(self) -> None:
+        """Stop the log followers a run left on the host, and remove their scripts.
+
+        RemoteLogger starts each as `setsid bash /tmp/logger_cmd_<pid>.sh`, the leader of a process group with the
+        `journalctl -f` it runs, and kills that group when the run stops it. A run that did not stop it leaves it
+        following the journal of a host that outlives the run. The leaders are found by their command line, not by
+        /tmp/logger_<pid>.pid: the PID in a file a run left may belong to another process by now.
+        """
+        leaders = self.remoter.run(
+            r"pgrep -f '^bash /tmp/logger_cmd_[0-9]+\.sh$'", ignore_status=True, verbose=False
+        ).stdout.split()
+        if leaders := sorted(pid for pid in leaders if pid.isdigit()):
+            self.log.warning("Stopping the log followers a run left on the host: process groups %s", ", ".join(leaders))
+            self.remoter.sudo(f"kill -9 {' '.join(f'-{pid}' for pid in leaders)}", ignore_status=True)
+        self.remoter.sudo("rm -f /tmp/logger_*.pid /tmp/logger_cmd_*.sh", ignore_status=True)
 
     def _release_stale_tunnel_ports(self):
         """Kill the sshd sessions still holding the reverse-tunnel ports of an earlier run.
@@ -133,17 +352,11 @@ class PhysicalHostCleanup:
                 )
         self.log.info("Resetting the scylla disk setup of an earlier run on %s", ", ".join(disks))
         if coredump_bind:
-            # The bind still holds the disk once /var/lib/scylla is unmounted, so it goes first. The next
-            # scylla_setup recreates it.
-            self.remoter.sudo("systemctl stop var-lib-systemd-coredump.mount", ignore_status=True)
-            if any("/var/lib/systemd/coredump" in self._mounts().get(device, set()) for device in allowed_sources):
-                self.remoter.sudo("umount /var/lib/systemd/coredump")
-            self.remoter.sudo(
-                f"rm -f {SCYLLA_COREDUMP_MOUNT_UNIT} /etc/systemd/system/*.wants/var-lib-systemd-coredump.mount"
-            )
+            # The bind still holds the disk once /var/lib/scylla is unmounted, so it goes first
+            self._undo_coredump_bind(frozenset(allowed_sources))
         self.remoter.sudo("systemctl stop var-lib-scylla.mount", ignore_status=True)
         # Stopping the unit unmounts it; only a mount made some other way (fstab, by hand) is still there
-        if any("/var/lib/scylla" in targets for targets in self._mounts().values()):
+        if self._scylla_dir_mounted():
             self.remoter.sudo("umount /var/lib/scylla")
         self.remoter.sudo(
             "rm -f /etc/systemd/system/var-lib-scylla.mount /etc/systemd/system/*.wants/var-lib-scylla.mount"
@@ -248,6 +461,12 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
     def init(self):
         super().init()
         self.set_hostname()
+        try:
+            self.record_host_baseline()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning(
+                "Could not record the packages and services of the host, the cleanup leaves them as they are: %s", exc
+            )
 
     def start_task_threads(self):
         self.mark_run_start_in_journal()
@@ -304,8 +523,19 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
         # io.conf the reinstall left behind. `hydra clean-resources` resets that after a run, but a host can still
         # arrive dirty: kept after a failure, or from a run whose cleanup did not run. So undo whatever is left first,
         # and let a failure of this setup fail.
-        self._reset_scylla_disk_setup(disks)
+        if disks:
+            self._reset_scylla_disk_setup(disks)
+        elif self._scylla_dir_mounted():
+            raise cluster.NodeSetupFailed(
+                node=self,
+                error_msg="/var/lib/scylla is still on a disk an earlier run set up, and scylla_setup_no_raid keeps it "
+                "on the root filesystem: reset the host with `hydra clean-resources` first",
+            )
         super().scylla_setup(disks, devname)
+
+    def clean_scylla(self):
+        super().clean_scylla()
+        self.remove_scylla_leftovers()
 
     def _get_private_ip_address(self) -> Optional[str]:
         return self._private_ip
