@@ -1,0 +1,10 @@
+# i7i.4xlarge (16 vCPU, 128 GiB, 3.75 TB, x86_64): the AWS pair of the spider (16C/32T, 124 GB) lab host (SCT-1214).
+# The DB instance type and the throughput steps of the 1-node throughput-steps job for it.
+
+instance_type_db: 'i7i.4xlarge'
+
+# Until the calibration run on i7i.4xlarge measures the unthrottled max of every load, each load runs unthrottled only.
+# Then set ~25/50/75/90% of that max plus 'unthrottled', 20m per step. Every step reports its HDR latencies to
+# Argus, so the throttled steps are also the job's fixed-rate latency results.
+perf_gradual_throttle_steps: {"read": ['unthrottled'], "mixed": ['unthrottled'], "write": ['unthrottled'], "read_disk_only": ['unthrottled']}
+perf_gradual_step_duration: {"read": '20m', "write": None, "mixed": '20m', "read_disk_only": '20m'}
