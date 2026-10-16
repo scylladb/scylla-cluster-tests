@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-535 options across 29 groups.
+536 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -36,7 +36,7 @@ concerns first, then one page per backend, then one per test type.
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 74 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
-| [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 18 | The monitoring stack, event severities, Argus reporting and email reports. |
+| [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 19 | The monitoring stack, event severities, Argus reporting and email reports. |
 | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) | 13 | How logs and diagnostics are collected, and what happens to the resources when the test ends. |
 | [Scylla Doctor](configuration_options/scylla-doctor.md) | 6 | The scylla-doctor diagnostic tool. It is both a subject under test (the artifact tests run it and assert on its findings) and... |
 | [Scylla Manager](configuration_options/scylla-manager.md) | 26 | Scylla Manager server and agent: versions, repos and backup/restore settings. |
@@ -553,6 +553,7 @@ concerns first, then one page per backend, then one per test type.
 | [`test_id`](configuration_options/general-and-provisioning.md#test_id) | `SCT_TEST_ID` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`test_metadata`](configuration_options/general-and-provisioning.md#test_metadata) | `SCT_TEST_METADATA` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`test_method`](configuration_options/general-and-provisioning.md#test_method) | `SCT_TEST_METHOD` | [General and provisioning](configuration_options/general-and-provisioning.md) |
+| [`topology_barrier_stall_events`](configuration_options/monitoring-events-and-reporting.md#topology_barrier_stall_events) | `SCT_TOPOLOGY_BARRIER_STALL_EVENTS` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
 | [`unified_package`](configuration_options/scylla-installation-and-configuration.md#unified_package) | `SCT_UNIFIED_PACKAGE` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`update_db_packages`](configuration_options/scylla-installation-and-configuration.md#update_db_packages) | `SCT_UPDATE_DB_PACKAGES` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`upgrade_node_packages`](configuration_options/upgrade-tests.md#upgrade_node_packages) | `SCT_UPGRADE_NODE_PACKAGES` | [Upgrade tests](configuration_options/upgrade-tests.md) |

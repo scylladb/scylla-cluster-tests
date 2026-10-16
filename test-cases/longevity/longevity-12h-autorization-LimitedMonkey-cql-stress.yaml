@@ -54,3 +54,5 @@ server_encrypt: true
 client_encrypt: true
 
 use_preinstalled_scylla: true
+
+topology_barrier_stall_events: true

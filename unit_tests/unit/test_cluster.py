@@ -204,6 +204,33 @@ class TestBaseNode:
 
         print(events[-1])
 
+    @pytest.mark.parametrize(
+        "line_number,expected_severity,last_address",
+        [
+            pytest.param(0, "WARNING", "libc.so.6+0xf55eb", id="short_stall_ends_with_libc_frame"),
+            pytest.param(2, "ERROR", "0x1234567", id="long_stall_with_trailing_address_and_build_id"),
+        ],
+    )
+    def test_search_topology_barrier_stall_publishes_event_with_inline_backtrace(
+        self, line_number, expected_severity, last_address
+    ):
+        """Each stall line must publish its own event, not be dropped by the WARNING suppress rule,
+        with the inline backtrace collected and the BuildId suffix stripped."""
+        self.node.system_log = str(self.test_data_dir / "system_topology_barrier_stall.log")
+
+        self._read_and_publish_events()
+
+        stalls = {
+            event["line_number"]: event
+            for event in self._events.published_events
+            if event["type"] == "TOPOLOGY_BARRIER_STALL"
+        }
+        assert sorted(stalls) == [0, 2]
+        stall = stalls[line_number]
+        assert stall["severity"] == expected_severity
+        assert last_address in stall["raw_backtrace"]
+        assert "BuildId" not in stall["raw_backtrace"]
+
     def test_gate_closed_ignored_exception_is_catched(self):
         self.node.system_log = str(self.test_data_dir / "gate_closed_ignored_exception.log")
 

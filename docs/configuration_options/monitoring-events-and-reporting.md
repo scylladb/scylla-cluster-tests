@@ -4,7 +4,7 @@
 
 The monitoring stack, event severities, Argus reporting and email reports.
 
-**18 options.**
+**19 options.**
 
 
 <a id="argus_email_report_template"></a>
@@ -58,9 +58,20 @@ Regex pattern to disable backtrace decoding for specific event types. If an even
 
 ## **backtrace_stall_decoding** / SCT_BACKTRACE_STALL_DECODING
 
-If True, reactor stall backtraces will be decoded. If False, reactor stalls are skipped during<br>backtrace decoding to reduce overhead in performance tests. Only applies when [`backtrace_decoding`](#backtrace_decoding) is True.
+If True, reactor stall and topology barrier stall backtraces will be decoded. If False, these stalls are skipped during<br>backtrace decoding to reduce overhead in performance tests. Only applies when [`backtrace_decoding`](#backtrace_decoding) is True.
 
 **default:** True
+
+**type:** bool
+
+
+<a id="topology_barrier_stall_events"></a>
+
+## **topology_barrier_stall_events** / SCT_TOPOLOGY_BARRIER_STALL_EVENTS
+
+If True, Scylla topology barrier stall log lines are published as TOPOLOGY_BARRIER_STALL events<br>(ERROR when held for at least 10 seconds). If False, they are dropped as generic warnings.
+
+**default:** False
 
 **type:** bool
 

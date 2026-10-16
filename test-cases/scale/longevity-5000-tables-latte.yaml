@@ -95,3 +95,5 @@ stress_cmd:
     -P table_shift_interval_s=5
     -P data_validation=true
     data_dir/latte/schema_scale.rn
+
+topology_barrier_stall_events: true

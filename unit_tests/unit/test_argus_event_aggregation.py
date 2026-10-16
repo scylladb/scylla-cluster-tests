@@ -56,9 +56,15 @@ def test_argus_aggregation_id_defaults_to_event_id():
     assert event.argus_aggregation_id() == event.event_id
 
 
-def test_argus_aggregation_id_equal_backtraces_share_id_distinct_differ(make_log_event):
+@pytest.mark.parametrize(
+    "event_type",
+    [
+        DatabaseLogEvent.OVERSIZED_ALLOCATION,
+        DatabaseLogEvent.TOPOLOGY_BARRIER_STALL,
+    ],
+)
+def test_argus_aggregation_id_equal_backtraces_share_id_distinct_differ(event_type, make_log_event):
     """Events with the same backtrace must dedup in Argus, whichever node or line they came from."""
-    event_type = DatabaseLogEvent.OVERSIZED_ALLOCATION
     first = make_log_event(event_type, "0x1\n0x2")
     same_trace = make_log_event(event_type, "0x1\n0x2", line_number=9)
     other_trace = make_log_event(event_type, "0x1\n0x4")
@@ -83,14 +89,20 @@ def test_argus_aggregation_id_without_backtrace_falls_back_to_event_id(make_log_
     assert event.argus_aggregation_id() == event.event_id
 
 
+@pytest.mark.parametrize(
+    "event_type",
+    [
+        DatabaseLogEvent.OVERSIZED_ALLOCATION,
+        DatabaseLogEvent.TOPOLOGY_BARRIER_STALL,
+    ],
+)
 def test_argus_pipeline_posts_distinct_backtraces_and_collapses_identical_ones(
-    events_function_scope, monkeypatch, make_log_event
+    event_type, events_function_scope, monkeypatch, make_log_event
 ):
     """Events of one type share an `event_id`; the pipeline must still post each distinct backtrace once.
 
     node-A and node-B hit the same backtrace, so only node-A is posted; node-C hits another one and is posted too.
     """
-    event_type = DatabaseLogEvent.OVERSIZED_ALLOCATION
     monkeypatch.setattr(Argus, "INSTANCE", None)
     registry = SctEvent._events_processes_registry
     events = [
