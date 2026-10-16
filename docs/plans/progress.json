@@ -329,6 +329,16 @@
       "created": "2026-09-04",
       "phases_total": 9,
       "phases_done": 9
+    },
+    {
+      "id": "credential-free-local-testing",
+      "title": "Credential-Free Local Testing",
+      "file": "testing/credential-free-local-testing.md",
+      "domain": "testing",
+      "status": "draft",
+      "created": "2026-10-12",
+      "phases_total": 9,
+      "phases_done": 0
     }
   ]
 }
