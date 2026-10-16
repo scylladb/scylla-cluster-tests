@@ -34,8 +34,30 @@ from sdcm.mgmt.common import (
     get_backup_size,
     ObjectStorageUploadMode,
 )
+<<<<<<< HEAD
 from sdcm.provision.helpers.certificate import TLSAssets
 from sdcm.nemesis.monkey import MgmtRepair
+||||||| parent of f5dcdf986 (refactor(nemesis): extract Scylla Manager nemesis into monkey/manager.py)
+from sdcm.provision.helpers.certificate import (
+    create_ca,
+    TLSAssets,
+    CA_CERT_FILE,
+    JKS_TRUSTSTORE_FILE,
+    SCYLLA_SSL_CONF_DIR,
+)
+from sdcm.provision.scylla_yaml.auxiliaries import ClientEncryptionOptions
+from sdcm.nemesis.monkey import MgmtRepair
+=======
+from sdcm.provision.helpers.certificate import (
+    create_ca,
+    TLSAssets,
+    CA_CERT_FILE,
+    JKS_TRUSTSTORE_FILE,
+    SCYLLA_SSL_CONF_DIR,
+)
+from sdcm.provision.scylla_yaml.auxiliaries import ClientEncryptionOptions
+from sdcm.nemesis.monkey.manager import MgmtRepair
+>>>>>>> f5dcdf986 (refactor(nemesis): extract Scylla Manager nemesis into monkey/manager.py)
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.alternator.table_setup import alternator_backuped_tables
 from sdcm.utils.aws_utils import AwsIAM
