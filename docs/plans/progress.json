@@ -266,6 +266,16 @@
       "phases_done": 0
     },
     {
+      "id": "lab-builders-baremetal",
+      "title": "Lab Builders as Baremetal Test Nodes",
+      "file": "jenkins/lab-builders-baremetal.md",
+      "domain": "ci-cd",
+      "status": "draft",
+      "created": "2026-10-06",
+      "phases_total": 8,
+      "phases_done": 0
+    },
+    {
       "id": "typed-config-access-migration",
       "title": "Typed Config Access Migration",
       "domain": "config",
