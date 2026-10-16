@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 import random
 from typing import NamedTuple, TYPE_CHECKING
@@ -37,6 +38,15 @@ from azure.core.exceptions import HttpResponseError
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.metaclasses import Singleton
+from sdcm.utils.minicloud.endpoint import (
+    AZURE_BACKENDS,
+    MINICLOUD_AZURE_CLIENT_ID,
+    MINICLOUD_AZURE_CLIENT_SECRET,
+    MINICLOUD_AZURE_SUBSCRIPTION,
+    MINICLOUD_AZURE_TENANT,
+    MinicloudActivationError,
+    get_minicloud_azure_endpoint,
+)
 
 if TYPE_CHECKING:
     from typing import Optional, Callable, Iterator
@@ -84,7 +94,31 @@ class AzureService(metaclass=Singleton):
         return f"https://{self.blob_credentials['account']}.blob.core.windows.net/"
 
     @cached_property
+    def minicloud_endpoint(self) -> str | None:
+        """The minicloud endpoint for ARM clients, or None for real Azure.
+
+        Raises if minicloud is active but AZURE_ENDPOINT_URL is not set yet, so no client
+        reaches real Azure by mistake. The raise is not cached.
+        """
+        if endpoint := get_minicloud_azure_endpoint():
+            return endpoint
+
+        if os.environ.get("SCT_MINICLOUD_ENDPOINT_URL") and os.environ.get("SCT_CLUSTER_BACKEND") in AZURE_BACKENDS:
+            raise MinicloudActivationError(
+                "minicloud is active for the azure backend but AZURE_ENDPOINT_URL is not exported: refusing to build "
+                "a real Azure client (start-minicloud or ensure_minicloud_ready must run first)"
+            )
+        return None
+
+    def _arm_client_kwargs(self) -> dict:
+        if endpoint := self.minicloud_endpoint:
+            return {"base_url": endpoint, "credential_scopes": [f"{endpoint}/.default"]}
+        return {}
+
+    @cached_property
     def subscription_id(self) -> str:
+        if self.minicloud_endpoint:
+            return MINICLOUD_AZURE_SUBSCRIPTION
         return self.azure_credentials["subscription_id"]
 
     @cached_property
@@ -94,10 +128,20 @@ class AzureService(metaclass=Singleton):
         tenants = list(self.subscription.tenants.list())
         if tenants:
             return tenants[0].tenant_id
+        if self.minicloud_endpoint:
+            return MINICLOUD_AZURE_TENANT
         return self.azure_credentials["tenant_id"]
 
     @cached_property
     def credential(self) -> TokenCredential:
+        if endpoint := self.minicloud_endpoint:
+            return ClientSecretCredential(
+                tenant_id=MINICLOUD_AZURE_TENANT,
+                client_id=MINICLOUD_AZURE_CLIENT_ID,
+                client_secret=MINICLOUD_AZURE_CLIENT_SECRET,
+                authority=endpoint,
+                disable_instance_discovery=True,
+            )
         return ClientSecretCredential(
             tenant_id=self.azure_credentials["tenant_id"],
             client_id=self.azure_credentials["client_id"],
@@ -106,15 +150,21 @@ class AzureService(metaclass=Singleton):
 
     @cached_property
     def compute(self) -> ComputeManagementClient:
-        return ComputeManagementClient(credential=self.credential, subscription_id=self.subscription_id)
+        return ComputeManagementClient(
+            credential=self.credential, subscription_id=self.subscription_id, **self._arm_client_kwargs()
+        )
 
     @cached_property
     def network(self) -> NetworkManagementClient:
-        return NetworkManagementClient(credential=self.credential, subscription_id=self.subscription_id)
+        return NetworkManagementClient(
+            credential=self.credential, subscription_id=self.subscription_id, **self._arm_client_kwargs()
+        )
 
     @cached_property
     def resource(self) -> ResourceManagementClient:
-        return ResourceManagementClient(credential=self.credential, subscription_id=self.subscription_id)
+        return ResourceManagementClient(
+            credential=self.credential, subscription_id=self.subscription_id, **self._arm_client_kwargs()
+        )
 
     @cached_property
     def blob(self) -> BlobServiceClient:
@@ -125,11 +175,11 @@ class AzureService(metaclass=Singleton):
 
     @cached_property
     def subscription(self) -> SubscriptionClient:
-        return SubscriptionClient(credential=self.credential)
+        return SubscriptionClient(credential=self.credential, **self._arm_client_kwargs())
 
     @cached_property
     def resource_graph(self) -> ResourceGraphClient:
-        return ResourceGraphClient(credential=self.credential)
+        return ResourceGraphClient(credential=self.credential, **self._arm_client_kwargs())
 
     @cached_property
     def all_regions(self) -> list[str]:
@@ -142,7 +192,9 @@ class AzureService(metaclass=Singleton):
 
     @cached_property
     def keyvault(self) -> KeyVaultManagementClient:
-        return KeyVaultManagementClient(credential=self.credential, subscription_id=self.subscription_id)
+        return KeyVaultManagementClient(
+            credential=self.credential, subscription_id=self.subscription_id, **self._arm_client_kwargs()
+        )
 
     def create_vault_key(self, vault_uri: str, key_name: str, key_size: int = 2048) -> str:
         key_client = KeyClient(vault_url=vault_uri, credential=self.credential)

@@ -112,6 +112,7 @@ from sdcm.utils.oci_utils import (
     import_image_from_object_storage,
 )
 from sdcm.utils.context_managers import environment
+from sdcm.utils.minicloud.endpoint import is_minicloud_active
 from sdcm.utils.curl import curl_with_retry
 from sdcm.test_config import TestConfig
 from sdcm.node_exporter_setup import NodeExporterSetup
@@ -1408,6 +1409,9 @@ class AzureSctRunner(SctRunner):
 
     @classmethod
     def list_sct_runners(cls, verbose: bool = True) -> list[SctRunnerInfo]:
+        if is_minicloud_active():
+            LOGGER.info("minicloud is active: no Azure sct-runner exists in this topology, skipping runner listing")
+            return []
         azure_service = AzureService()
         sct_runners = []
         for instance in list_instances_azure(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=verbose):
@@ -2085,8 +2089,15 @@ def _real_cloud_api():
     Used as a decorator on the entry points; everything else in the process keeps talking to
     the emulator. contextlib's ContextDecorator recreates the manager per call, so nesting
     (clean_sct_runners -> list_sct_runners) is safe.
+
+    Limitation: AzureService is a singleton, so once it holds minicloud clients this scope cannot
+    reach real Azure. The lab-agent setup does not need it.
     """
-    saved = {var: os.environ.pop(var) for var in ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL") if var in os.environ}
+    saved = {
+        var: os.environ.pop(var)
+        for var in ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "AZURE_ENDPOINT_URL")
+        if var in os.environ
+    }
     try:
         yield
     finally:

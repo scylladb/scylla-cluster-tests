@@ -48,6 +48,7 @@ def azure_provisioner_config(params) -> dict:
         "azure_provision_stuck_vm_recreate_attempts": params.get("azure_provision_stuck_vm_recreate_attempts"),
         "azure_provision_stuck_vm_total_timeout": params.get("azure_provision_stuck_vm_total_timeout"),
         "azure_network_interfaces": azure_network_interfaces(params),
+        "enterprise_disable_kms": bool(params.get("enterprise_disable_kms")),
     }
 
 
@@ -266,6 +267,11 @@ PRIVATE_GALLERY_IMAGE_URL_REGEX = re.compile(
 )
 
 
+MARKETPLACE_URN_REGEX = re.compile(
+    r"^(?P<publisher>[^:/\s]+):(?P<offer>[^:/\s]+):(?P<sku>[^:/\s]+):(?P<version>[^:/\s]+)$"
+)
+
+
 def get_image_tags(link: str) -> dict:
     if match := IMAGE_URL_REGEX.search(link):
         params = match.groupdict()
@@ -278,4 +284,9 @@ def get_image_tags(link: str) -> dict:
     elif match := COMMUNITY_IMAGE_URL_REGEX.search(link):
         params = match.groupdict()
         return dict(scylla_version=params.get("version"), user_data_format_version="3")
+    elif match := MARKETPLACE_URN_REGEX.match(link):
+        version = match.group("version")
+        if version == "latest":
+            return dict(user_data_format_version="3")
+        return dict(scylla_version=version, user_data_format_version="3")
     return {}

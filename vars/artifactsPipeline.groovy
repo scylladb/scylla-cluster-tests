@@ -77,7 +77,7 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'a GCE Image to run against',
                    name: 'gce_image_db')
-            string(defaultValue: '',
+            string(defaultValue: "${pipelineParams.get('azure_image_db', '')}",
                    description: 'a Azure Image to run against',
                    name: 'azure_image_db')
             string(defaultValue: '',

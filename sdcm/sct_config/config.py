@@ -94,6 +94,7 @@ from sdcm.test_config import TestConfig
 from sdcm.utils.version_utils import parse_scylla_version_tag
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
 from sdcm.utils.cloud_catalog.instance_matcher import ARCH_ALIASES, NoMatchingInstanceError, select_instance
+from sdcm.utils.minicloud.endpoint import MinicloudActivationError
 from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS
 from sdcm.sct_config.defaults import (
     AMI_ID_PARAMS,
@@ -790,6 +791,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
                             azure_image = azure_utils.get_released_scylla_images(
                                 scylla_version=scylla_version, region_name=region, arch=azure_arch
                             )[0]
+                    except MinicloudActivationError:
+                        raise
                     except Exception as ex:  # noqa: BLE001
                         raise ValueError(
                             f"Azure Image for scylla_version='{scylla_version}' not found in {region}"

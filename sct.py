@@ -140,17 +140,13 @@ from sdcm.utils.resources_cleanup import (
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login, running_in_podman
-from sdcm.utils.minicloud import (
-    MinicloudConfig,
-    MinicloudManager,
-    check_minicloud_reachability,
-    collect_minicloud_guest_serial_logs,
-    collect_minicloud_logs,
-    ensure_minicloud_ready,
-    get_minicloud_endpoint,
-    is_minicloud_active,
-    set_minicloud_endpoint_env,
-)
+from sdcm.utils.minicloud.activation import check_minicloud_reachability, set_minicloud_endpoint_env
+from sdcm.utils.minicloud.tls import ca_bundle_for
+from sdcm.utils.minicloud.bootstrap import ensure_minicloud_ready
+from sdcm.utils.minicloud.config import MinicloudConfig
+from sdcm.utils.minicloud.endpoint import AZURE_BACKENDS, get_minicloud_endpoint, is_minicloud_active
+from sdcm.utils.minicloud.log_collection import collect_minicloud_guest_serial_logs, collect_minicloud_logs
+from sdcm.utils.minicloud.manager import MinicloudManager
 from sdcm.monitorstack.restore import (
     restore_monitoring_stack,
     get_monitoring_stack_services,
@@ -380,8 +376,12 @@ def start_minicloud(backend, config):
     elif backend in ("gce", "gce-siren"):
         # Guests must get IPs inside the routed guest range - see prepare_gce_network.
         manager.prepare_gce_network()
+    elif backend in AZURE_BACKENDS:
+        pass
 
     click.echo(f"Minicloud started (endpoint: http://localhost:{cfg.port}, region: {cfg.region})")
+    if backend in AZURE_BACKENDS:
+        click.echo(f"Azure TLS endpoint: {cfg.tls_endpoint}")
     click.echo(f"Logs: {cfg.log_file}")
 
 
@@ -742,7 +742,10 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
         except RuntimeError as exc:
             click.echo(f"ERROR: minicloud is not reachable — refusing to clean against a fresh/empty emulator: {exc}")
             sys.exit(1)
-        set_minicloud_endpoint_env(endpoint, os.environ["SCT_CLUSTER_BACKEND"])
+        cluster_backend = os.environ["SCT_CLUSTER_BACKEND"]
+        set_minicloud_endpoint_env(
+            endpoint, cluster_backend, ca_bundle=ca_bundle_for(MinicloudConfig.from_env(params=config), cluster_backend)
+        )
 
     if post_behavior:
         click.echo(f"Use {logdir} as a logdir")
@@ -2749,8 +2752,12 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
         # is exported before Collector runs — in a fresh collect-logs process
         # SCT_MINICLOUD_ENDPOINT_URL alone is invisible to the AWS/GCE SDKs, so
         # collection would otherwise query the real cloud.
-        set_minicloud_endpoint_env(get_minicloud_endpoint(config), _minicloud_backend(backend))
         minicloud_config = MinicloudConfig.from_env(params=config)
+        set_minicloud_endpoint_env(
+            get_minicloud_endpoint(config),
+            _minicloud_backend(backend),
+            ca_bundle=ca_bundle_for(minicloud_config, _minicloud_backend(backend)),
+        )
         # Write into the run's own logdir — the one Collector globs — not
         # get_test_config().logdir(), which in this fresh process is a brand-new
         # timestamped dir that Collector never looks at, so everything landed there was

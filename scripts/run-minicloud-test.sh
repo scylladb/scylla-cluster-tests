@@ -2,10 +2,10 @@
 # One entry point for every local minicloud test flow.
 #
 # Usage:
-#   scripts/run-minicloud-test.sh [-b aws|gce] [-f ami|repo|provision|upgrade|scale] [-m direct|hydra]
+#   scripts/run-minicloud-test.sh [-b aws|gce|azure] [-f ami|repo|provision|upgrade|scale] [-m direct|hydra]
 #
-#   -b  backend to emulate                          (default: aws)
-#   -f  flavor: ami       - image-based artifacts test (AMI / GCE image)
+#   -b  backend to emulate: aws, gce or azure       (default: aws)
+#   -f  flavor: ami       - image-based artifacts test (AMI / GCE image / Azure image)
 #               repo      - deb/rpm repo-install artifacts test
 #               provision - provisioning smoke test (longevity + nemesis)
 #               upgrade   - rolling upgrade, 3 nodes, shrunk workloads
@@ -15,13 +15,16 @@
 #                                                   (default: direct)
 #
 # Required env (per flavor):
-#   SCT_SCYLLA_VERSION      - e.g. 2026.2  (or SCT_AMI_ID_DB_SCYLLA / SCT_GCE_IMAGE_DB for ami)
+#   SCT_SCYLLA_VERSION      - e.g. 2026.2  (or SCT_AMI_ID_DB_SCYLLA / SCT_GCE_IMAGE_DB / SCT_AZURE_IMAGE_DB for ami)
 #   GCS_KEY_FILE / GOOGLE_APPLICATION_CREDENTIALS - GCE backend only (image export)
+#   SCT_AZURE_IMAGE_DB      - Azure backend, every flavor: a marketplace URN publisher:offer:sku:version,
+#                             e.g. scylladb1631195365807:scylladb-enterprise-vm:scylla-enterprise-vm:2026.3.3
+#                             (a 'latest' version is rejected: the Scylla version is read from the URN)
 #
 #   upgrade flavor also needs the target to upgrade *to*, one of:
 #     SCT_NEW_SCYLLA_REPO   - repo URL of the target build (works on every backend)
 #     SCT_NEW_VERSION       - target version; GCE only, unsupported for AWS AMIs
-#   with SCT_SCYLLA_VERSION (or SCT_AMI_ID_DB_SCYLLA / SCT_GCE_IMAGE_DB) as the base to
+#   with SCT_SCYLLA_VERSION (or SCT_AMI_ID_DB_SCYLLA / SCT_GCE_IMAGE_DB / SCT_AZURE_IMAGE_DB) as the base to
 #   start from. e.g.
 #     SCT_SCYLLA_VERSION=2026.1 SCT_NEW_SCYLLA_REPO=<url> scripts/run-minicloud-test.sh -f upgrade
 #
@@ -57,8 +60,11 @@ EXTRA_CONFIGS=()
 case "$FLAVOR" in
     ami)
         TEST="artifacts_test.ArtifactsTest.test_scylla_service"
-        [[ "$BACKEND" == "gce" ]] && DEFAULT_CASE="test-cases/artifacts/gce-image.yaml" \
-                                  || DEFAULT_CASE="test-cases/artifacts/ami.yaml"
+        case "$BACKEND" in
+            gce)   DEFAULT_CASE="test-cases/artifacts/gce-image.yaml" ;;
+            azure) DEFAULT_CASE="test-cases/artifacts/azure-image.yaml" ;;
+            *)     DEFAULT_CASE="test-cases/artifacts/ami.yaml" ;;
+        esac
         ;;
     repo)
         TEST="artifacts_test.ArtifactsTest.test_scylla_service"
@@ -94,12 +100,21 @@ esac
 TEST_CASE="${SCT_TEST_CASE:-$DEFAULT_CASE}"
 # A --config given by the caller replaces the overlay's base, so do not shrink someone else's yaml.
 [[ -n "${SCT_TEST_CASE:-}" ]] && EXTRA_CONFIGS=()
+# The backend overlay carries values the backend cannot run without, so it survives a custom test-case.
+BACKEND_CONFIGS=()
+[[ "$BACKEND" == "azure" ]] && BACKEND_CONFIGS=(configurations/minicloud/azure.yaml)
 # SCT_TEST_CASE is this script's option, not an SCT config option: sct.py rejects unknown SCT_* env vars.
 unset SCT_TEST_CASE
 
 if [[ "$FLAVOR" != "provision" && -z "${SCT_SCYLLA_VERSION:-}" &&
-      -z "${SCT_AMI_ID_DB_SCYLLA:-}" && -z "${SCT_GCE_IMAGE_DB:-}" ]]; then
-    echo "ERROR: set SCT_SCYLLA_VERSION=x.y.z (or SCT_AMI_ID_DB_SCYLLA / SCT_GCE_IMAGE_DB)" >&2
+      -z "${SCT_AMI_ID_DB_SCYLLA:-}" && -z "${SCT_GCE_IMAGE_DB:-}" && -z "${SCT_AZURE_IMAGE_DB:-}" ]]; then
+    echo "ERROR: set SCT_SCYLLA_VERSION=x.y.z (or SCT_AMI_ID_DB_SCYLLA / SCT_GCE_IMAGE_DB / SCT_AZURE_IMAGE_DB)" >&2
+    exit 5
+fi
+
+# minicloud cannot resolve an Azure image from a Scylla version, so every flavor needs a URN
+if [[ "$BACKEND" == "azure" && -z "${SCT_AZURE_IMAGE_DB:-}" ]]; then
+    echo "ERROR: the azure backend needs SCT_AZURE_IMAGE_DB=<publisher:offer:sku:version> for every flavor" >&2
     exit 5
 fi
 
@@ -122,6 +137,7 @@ fi
 export SCT_MINICLOUD_ENDPOINT_URL="${SCT_MINICLOUD_ENDPOINT_URL:-http://localhost:5000}"
 # AMIs live in eu-west-1 (minicloud validates uncached AMIs against its own region)
 [[ "$BACKEND" == "aws" ]] && export SCT_REGION_NAME="${SCT_REGION_NAME:-eu-west-1}"
+[[ "$BACKEND" == "azure" ]] && export SCT_AZURE_REGION_NAME="${SCT_AZURE_REGION_NAME:-eastus}"
 # local-dev conveniences — CI sets its own
 export SCT_USE_MGMT="${SCT_USE_MGMT:-false}"
 export SCT_ENABLE_ARGUS="${SCT_ENABLE_ARGUS:-false}"
@@ -132,10 +148,9 @@ else
     RUNNER=(uv run sct.py)
 fi
 
-# configurations/minicloud.yaml goes last so its mandatory values win. Both commands get the same
-# list: start-minicloud sizes the container from the node counts the test will provision, so a
-# mismatch would mean the preflight memory gate checked a different test than the one that runs.
-CONFIGS=("$TEST_CASE" "${EXTRA_CONFIGS[@]}" configurations/minicloud.yaml)
+# minicloud.yaml goes after the test-case so its values win, then the backend overlay.
+# start-minicloud gets the same list, so the memory preflight sizes the test that actually runs.
+CONFIGS=("$TEST_CASE" "${EXTRA_CONFIGS[@]}" configurations/minicloud.yaml "${BACKEND_CONFIGS[@]}")
 CONFIG_ARGS=()
 for config in "${CONFIGS[@]}"; do
     CONFIG_ARGS+=(-c "$config")

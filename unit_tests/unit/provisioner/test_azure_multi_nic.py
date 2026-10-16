@@ -379,3 +379,12 @@ class TestMonitoringConnectivity:
             return nic.ip_configurations[0].subnet.id.split("/subnets/")[0]
 
         assert vnet_of(db_node.name) == vnet_of(monitor.name)
+
+
+def test_minicloud_vnet_subnets_are_carved_from_the_emulated_range(make_provisioner, azure_service, monkeypatch):
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    provisioner = make_provisioner(1)
+    provisioner.get_or_create_instances([definition("node-1")])
+    vnet_name = provisioner._vnet_provider.get_or_create().name  # noqa: SLF001
+    subnet = azure_service.network.subnets.get(provisioner._resource_group_name, vnet_name, "default")  # noqa: SLF001
+    assert subnet.address_prefix == "10.180.0.0/24"

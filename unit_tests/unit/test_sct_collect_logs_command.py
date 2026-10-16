@@ -26,7 +26,7 @@ TEST_ID = "a6e16e4b-ebdc-4d08-8fb9-7c58f9b78f5b"
 # minishell or a run-minicloud-test.sh run would send collect_logs down the minicloud branch,
 # which shells out to `docker logs` / `docker inspect` on the host. A unit test must not
 # depend on what the developer happened to export.
-MINICLOUD_ENV_VARS = ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL")
+MINICLOUD_ENV_VARS = ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "AZURE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL")
 
 
 @pytest.fixture(autouse=True)
