@@ -25,6 +25,7 @@ import os
 import stat
 import time
 from concurrent.futures.thread import ThreadPoolExecutor
+from pathlib import Path
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import boto3
@@ -1181,3 +1182,48 @@ class TestPubKeyFromPrivateKeyFile:
         base64_pub, key_type = pub_key_from_private_key_file(str(path))
         assert key_type == "ssh-ed25519"
         assert len(base64_pub) > 0
+
+
+# ---------------------------------------------------------------------------
+# Local backend (SCT_KEYSTORE_BACKEND=local)
+# ---------------------------------------------------------------------------
+
+
+class TestLocalBackend:
+    @pytest.fixture
+    def local_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SCT_KEYSTORE_BACKEND", "local")
+        monkeypatch.setenv("SCT_KEYSTORE_LOCAL_DIR", str(tmp_path / "keystore"))
+        (tmp_path / "keystore").mkdir()
+        (tmp_path / "keystore" / "docker.json").write_text(json.dumps(FAKE_DOCKER_HUB))
+        return tmp_path / "keystore"
+
+    def test_reads_own_secret_without_aws(self, local_dir):
+        with patch.object(boto3, "client", side_effect=AssertionError("no AWS call expected")):
+            assert KeyStore().get_docker_hub_credentials() == FAKE_DOCKER_HUB
+
+    def test_default_dir(self, monkeypatch):
+        monkeypatch.delenv("SCT_KEYSTORE_LOCAL_DIR", raising=False)
+        assert KeyStore(backend="local")._local_dir == Path("~/.sct/keystore").expanduser()
+
+    def test_missing_secret_is_a_not_found_error_naming_the_path(self, local_dir):
+        with pytest.raises(ClientError) as exc_info:
+            KeyStore().get_json("azure.json")
+        assert is_not_found_error(exc_info.value)
+        assert str(local_dir / "azure.json") in str(exc_info.value)
+
+    def test_cache_isolated_from_secrets_manager(self, local_dir):
+        with patch.object(KeyStore, "_fetch_from_secrets_manager", return_value=b'{"username": "sm"}'):
+            assert KeyStore(backend="secretsmanager").get_json("docker.json") == {"username": "sm"}
+        assert KeyStore().get_json("docker.json") == FAKE_DOCKER_HUB
+
+    def test_sync_copies_and_refreshes(self, local_dir, tmp_path):
+        dest = tmp_path / "dest"
+        KeyStore().sync(keys=["docker.json"], local_path=dest, permissions=0o600)
+        assert json.loads((dest / "docker.json").read_text()) == FAKE_DOCKER_HUB
+        assert stat.S_IMODE((dest / "docker.json").stat().st_mode) == 0o600
+        assert not (dest / "docker.json.version").exists()
+
+        (local_dir / "docker.json").write_text('{"username": "rotated"}')
+        KeyStore().sync(keys=["docker.json"], local_path=dest, permissions=0o600)
+        assert json.loads((dest / "docker.json").read_text()) == {"username": "rotated"}
