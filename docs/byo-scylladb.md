@@ -90,7 +90,8 @@ timeout, and it runs before any test resources are created.
 
 1. **Checks.** The stage skips itself if repo or branch is missing. It fails if a
    conflicting image or repo parameter is set, or if the backend is `docker` or `k8s-*`.
-2. **Architecture detection.** It runs `hydra get-db-arch <test_config> -b <backend>`
+2. **Architecture detection.** It exports `SCT_CONFIG_FILES=<test_config>` and runs
+   `hydra get-db-arch -b <backend>`
    ([`sct.py`](../sct.py), `get_db_arch`), which looks at the configured DB instance
    type:
    - AWS: asks the EC2 API whether the instance type is `arm64` or `x86_64`.
