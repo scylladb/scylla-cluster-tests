@@ -2,7 +2,7 @@
 status: draft
 domain: testing
 created: 2026-10-12
-last_updated: 2026-10-13
+last_updated: 2026-10-18
 owner: fruch
 ---
 
@@ -263,22 +263,37 @@ pulls anonymously.
 ### Phase 7: KeyStore `local` backend + minicloud offline mode
 
 **Importance**: Important
+**PR**: [#16541](https://github.com/scylladb/scylla-cluster-tests/pull/16541) (KeyStore `local` backend)
 **Description**: Add `SCT_KEYSTORE_BACKEND=local`: secrets are files under a directory
 (`~/.sct/keystore/` by default, overridable), same names as the Secrets Manager keys. A missing
 file raises an error naming the secret and the feature that asked for it. This lets outsiders
 supply *their own* values for the few secrets a local run might touch (e.g. their own Docker Hub
 token) and lets minicloud stop passing `scylla-qa-keystore` through.
 
-For minicloud, define an **offline mode** used when the AMI/image is already in
-`~/.cache/minicloud`: no S3 passthrough buckets, `collect_logs` off, KeyStore `local`, and no
-`DescribeImages`/SSM/STS calls to real AWS for cached images.
+For minicloud, define an **offline mode** used when every image a test asks for is already in
+`~/.cache/minicloud`. What a run on minicloud reaches today (investigated 2026-10-18):
 
-**Needs Investigation** (likely a separate plan in the minicloud repo per one-concern-per-plan):
-- Which passthrough calls minicloud makes on a cache hit, and whether `RunInstances` AMI validation
-  can be skipped when the disk is cached.
-- How an outsider *obtains* a warm cache without AWS: export/import a cache bundle, build from a
-  public Scylla image (GCE public images, Docker image → qcow2), or a published cache artifact.
-  Until answered, Goal 5 is limited to hosts whose cache was warmed once with credentials.
+- **Already offline on a cache hit:** `RunInstances` with a cached AMI or GCE image validates and
+  downloads nothing; S3 traffic stops when the passthrough bucket list is empty; `collect_logs`
+  is off by default and Argus is skipped for local runs.
+- **Still real AWS/GCE on a cache hit:** minicloud forwards every `DescribeImages`, SSM parameter,
+  STS and Secrets Manager call. SCT makes them: the start-up Okta/STS check and shared-key sync,
+  the minicloud preflight credential check, KeyStore reads (SSH key pair, GCP JSON, LDAP),
+  AMI resolution from names, `resolve:ssm:` and `scylla_version`, and the root-device lookup per
+  cluster. GCE auth also fetches a real OAuth token.
+- **No way to get a cache without credentials:** images are keyed by the literal AMI id or GCE
+  image name, and are only produced by downloading from the cloud. A qcow2 named after the id
+  works, but nothing exports, imports or builds one from a public source.
+
+So offline mode splits into:
+
+- **SCT side (this plan):** the KeyStore `local` backend; an offline overlay (empty S3
+  passthrough, literal image ids, no version lookups); and skipping the preflight credential
+  check when the cache covers the run.
+- **minicloud side (separate plan in the minicloud repo):** an `--offline` switch that disables
+  passthrough; answering image metadata (`DescribeImages`, GCE `images.get`) from a sidecar stored
+  next to each cached image; local SSM and GCE OAuth stubs; and cache export/import. Until that
+  lands, Goal 5 is limited to hosts whose cache was warmed once with credentials.
 
 **Definition of Done**:
 - [ ] `local` backend with unit tests (hit, miss → actionable error, cache key isolation from
