@@ -107,7 +107,12 @@ from sdcm.provision.gce.provisioner import GceProvisioner
 from sdcm.provision.gce import region_fallback as gce_region_fallback
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.oci.provisioner import OciProvisioner
-from sdcm.provision.provisioner import ProvisionError, ProvisionUnrecoverableError, provisioner_factory
+from sdcm.provision.provisioner import (
+    OperationPreemptedError,
+    ProvisionError,
+    ProvisionUnrecoverableError,
+    provisioner_factory,
+)
 from sdcm.provision.helpers.certificate import (
     create_ca,
     update_certificate,
@@ -181,7 +186,13 @@ from sdcm.sct_events.setup import (
     stop_events_device,
     enable_default_filters,
 )
-from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent, TestTimeoutEvent
+from sdcm.sct_events.system import (
+    InfoEvent,
+    SpotTerminationEvent,
+    TestFrameworkEvent,
+    TestResultEvent,
+    TestTimeoutEvent,
+)
 from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
 from sdcm.sct_events.events_analyzer import stop_events_analyzer
 from sdcm.sct_events.grafana import start_posting_grafana_annotations
@@ -272,6 +283,15 @@ PERF_COLLECTOR_SERVICE = "scylla-perf-collector"
 PYTHON_THREAD_LIST = (KafkaCDCReaderThread, KafkaProducerThread, KafkaValidatorThread)
 
 
+def _chained_preemption(exc: BaseException | None) -> OperationPreemptedError | None:
+    """The OperationPreemptedError in *exc*'s cause/context chain, if any."""
+    while exc is not None:
+        if isinstance(exc, OperationPreemptedError):
+            return exc
+        exc = exc.__cause__ or exc.__context__
+    return None
+
+
 def teardown_on_exception(method):
     """
     Ensure that resources used in test are cleaned upon unhandled exceptions. and every process are stopped, and logs
@@ -300,6 +320,10 @@ def teardown_on_exception(method):
                 exception=exc,
                 severity=severity,
             ).publish_or_dump()
+            # A spot preemption that reached setUp is final - the on-demand fallback already had its chance - so
+            # report it as one: `spot-retry-decision` only reads SpotTerminationEvent (SCT-707).
+            if preemption := _chained_preemption(exc):
+                SpotTerminationEvent(node="provisioning", message=str(preemption)).publish_or_dump()
             TEST_LOG.exception("Exception in %s. Will call tearDown", method.__name__)
             # Try to initialize Argus if it hasn't been done yet, so the failure
             # is reported with proper TEST_ERROR status.
