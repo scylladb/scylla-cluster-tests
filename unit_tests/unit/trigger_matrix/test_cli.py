@@ -58,3 +58,10 @@ def test_post_behavior_db_nodes_overrides_the_matrix(matrix, triggered):
 def test_post_behavior_db_nodes_defaults_to_the_matrix(matrix, triggered):
     run(matrix)
     assert triggered["gating/job-1"]["post_behavior_db_nodes"] == "destroy"
+
+
+def test_report_dir_saves_the_wait_mode_report(tmp_path, triggered):
+    path = tmp_path / "wait.yaml"
+    path.write_text(yaml.dump({"jobs": [{"job_name": "/gating/job-1", "backend": "docker", "wait": True}]}))
+    run(str(path), "--dry-run", "--report-dir", str(tmp_path / "report"))
+    assert (tmp_path / "report" / "trigger-matrix-summary.txt").read_text() == "PASSED | 1/1 passed | 2025.4.3\n"

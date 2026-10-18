@@ -16,6 +16,7 @@
 import html
 import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from sdcm.utils.cloud_monitor.cloud_monitor import Email
@@ -25,38 +26,51 @@ from sdcm.utils.trigger_matrix.models import BuildResult
 
 logger = logging.getLogger(__name__)
 
+REPORT_FILE = "trigger-matrix-report.html"
+SUMMARY_FILE = "trigger-matrix-summary.txt"
 
-def send_trigger_matrix_email(
+
+@dataclass
+class TriggerMatrixReport:
+    """The report of a wait-mode run: email subject, HTML body and a one-line summary."""
+
+    subject: str
+    body: str
+    summary: str
+
+
+def build_trigger_matrix_report(
     build_results: list[BuildResult],
     scylla_version: str,
     matrix_file: str,
-    email_recipients: list[str] | None = None,
     trigger_job_url: str | None = None,
     run_params: dict | None = None,
     subject_params: list[str] = (),
-) -> None:
-    """Send an email report summarizing wait-mode build results.
+) -> TriggerMatrixReport:
+    """Build the report of wait-mode build results.
 
     Args:
         build_results: List of BuildResult from JenkinsClient.wait_for_builds.
         scylla_version: Version that was tested.
         matrix_file: Path to the matrix YAML that was used.
-        email_recipients: List of email addresses. Falls back to DEFAULT_EMAIL_RECIPIENTS.
+        trigger_job_url: URL of the trigger's own Jenkins build.
         run_params: Parameters the run passed to every job, listed in the report.
         subject_params: Names of `run_params` whose value names what was tested; the last path
             segment of each value goes into the subject, e.g. the file name of a tarball URL.
     """
-    recipients = email_recipients or DEFAULT_EMAIL_RECIPIENTS
-    if not recipients:
-        logger.warning("No email recipients configured — skipping email report")
-        return
-
     all_passed = all(r.success for r in build_results)
     status = "PASSED" if all_passed else "FAILED"
 
     run_params = {k: v for k, v in (run_params or {}).items() if v is not None and v != ""}
-    tested = [str(run_params[name]).rstrip("/").rsplit("/", 1)[-1] for name in subject_params if name in run_params]
-    subject = f"[Trigger Matrix] {status} — {Path(matrix_file).stem}: {', '.join([*tested, scylla_version])}"
+    tested = ", ".join(
+        [
+            *(str(run_params[name]).rstrip("/").rsplit("/", 1)[-1] for name in subject_params if name in run_params),
+            scylla_version,
+        ]
+    )
+    subject = f"[Trigger Matrix] {status} — {Path(matrix_file).stem}: {tested}"
+    passed = sum(r.success for r in build_results)
+    summary = f"{status} | {passed}/{len(build_results)} passed | {tested}"
 
     trigger_line = (
         f'<b>Trigger job:</b> <a href="{trigger_job_url}">View trigger run</a><br/>' if trigger_job_url else ""
@@ -74,13 +88,59 @@ def send_trigger_matrix_email(
 {_results_table(build_results)}
 {_failures_section(build_results)}
 </body></html>"""
+    return TriggerMatrixReport(subject=subject, body=body, summary=summary)
+
+
+def send_trigger_matrix_email(
+    build_results: list[BuildResult],
+    scylla_version: str,
+    matrix_file: str,
+    email_recipients: list[str] | None = None,
+    trigger_job_url: str | None = None,
+    run_params: dict | None = None,
+    subject_params: list[str] = (),
+) -> TriggerMatrixReport:
+    """Build the report of wait-mode build results and email it.
+
+    Args:
+        email_recipients: List of email addresses. Falls back to DEFAULT_EMAIL_RECIPIENTS.
+        The other arguments are those of `build_trigger_matrix_report`.
+
+    Returns:
+        The report, sent or not.
+    """
+    report = build_trigger_matrix_report(
+        build_results=build_results,
+        scylla_version=scylla_version,
+        matrix_file=matrix_file,
+        trigger_job_url=trigger_job_url,
+        run_params=run_params,
+        subject_params=subject_params,
+    )
+    recipients = email_recipients or DEFAULT_EMAIL_RECIPIENTS
+    if not recipients:
+        logger.warning("No email recipients configured — skipping email report")
+        return report
 
     try:
         email_client = Email()
-        email_client.send(subject=subject, content=body, recipients=recipients, html=True)
+        email_client.send(subject=report.subject, content=report.body, recipients=recipients, html=True)
         logger.info("Email report sent to %s", recipients)
     except Exception as exc:  # noqa: BLE001 - email failure is non-fatal
         logger.warning("Failed to send email report: %s", exc)
+    return report
+
+
+def write_trigger_matrix_report(report: TriggerMatrixReport, report_dir: str) -> None:
+    """Save the report for the Jenkins pipeline to archive and use as the build description.
+
+    Writes trigger-matrix-report.html and trigger-matrix-summary.txt into `report_dir`.
+    """
+    directory = Path(report_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / REPORT_FILE).write_text(report.body, encoding="utf-8")
+    (directory / SUMMARY_FILE).write_text(report.summary + "\n", encoding="utf-8")
+    logger.info("Report saved to %s", directory / REPORT_FILE)
 
 
 def _result_cell(result: BuildResult | None) -> str:

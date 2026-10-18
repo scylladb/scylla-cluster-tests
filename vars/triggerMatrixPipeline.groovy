@@ -238,6 +238,7 @@ def call(Map pipelineParams = [:]) {
                         if (params.dry_run) {
                             cmd += " --dry-run"
                         }
+                        cmd += " --report-dir ."
 
                         sh(cmd)
                     }
@@ -247,6 +248,16 @@ def call(Map pipelineParams = [:]) {
 
         post {
             always {
+                script {
+                    // Written by wait-mode runs only, also when one of the builds failed; other
+                    // runs have no report, and archiving a missing file logs a "Configuration error?"
+                    if (fileExists('trigger-matrix-summary.txt')) {
+                        currentBuild.description = readFile('trigger-matrix-summary.txt').trim()
+                    }
+                    if (fileExists('trigger-matrix-report.html')) {
+                        archiveArtifacts artifacts: 'trigger-matrix-report.html'
+                    }
+                }
                 cleanWs()
             }
         }
