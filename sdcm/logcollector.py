@@ -2284,7 +2284,7 @@ class Collector:
             return
 
         user_credentials_path = self.params.get("user_credentials_path")
-        ip_type = ssh_connection_ip_type(self.params)
+        run_ip_type = ssh_connection_ip_type(self.params)
 
         node_types = {
             "db_nodes": ("db_cluster", "scylla-db"),
@@ -2296,6 +2296,7 @@ class Collector:
             node_config = baremetal_info.get(config_key, {})
             ssh_username = node_config.get("username", "root")
             node_list = node_config.get("node_list", [])
+            ip_type = node_config.get("ip_ssh_connections") or run_ip_type
 
             for idx, node_info in enumerate(node_list):
                 public_ip = node_info.get("public_ip")

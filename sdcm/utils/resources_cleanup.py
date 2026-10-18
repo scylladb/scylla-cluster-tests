@@ -238,9 +238,9 @@ def clean_resources_baremetal(tags_dict: dict, config, dry_run: bool = False) ->
     """Leave the hosts of a bare-metal run clean for the next run.
 
     SCT neither creates nor destroys physical hosts, so cleaning them up means undoing what the run left on them that
-    breaks the next one: the SSH tunnel ports it bound, with `ip_ssh_connections: public`, and the Scylla install of a
-    DB host (its disk setup and the files it left), unless Scylla came preinstalled. Every host also gets back the
-    packages it had before the run. Runs in the cleanup phase, after the logs were collected, for the node types the
+    breaks the next one: the SSH tunnel ports it bound on the roles with `ip_ssh_connections: public` (the role's own
+    setting in the hosts config, else the run's), and the Scylla install of a DB host (its disk setup and the files it
+    left), unless Scylla came preinstalled. Every host also gets back the packages it had before the run. Runs in the cleanup phase, after the logs were collected, for the node types the
     post behavior asks to clean (`NodeType`, all of them when not given).
     """
     node_types = tags_dict.get("NodeType")
@@ -248,14 +248,20 @@ def clean_resources_baremetal(tags_dict: dict, config, dry_run: bool = False) ->
     if not (node_types := [node_type for node_type in node_types if node_type in BAREMETAL_HOSTS_SECTIONS]):
         LOGGER.info("No bare-metal hosts to clean up")
         return
-    tunnel_ports = config.get("ip_ssh_connections") == "public"
-    if tunnel_ports:
+    hosts_config = KeyStore().get_baremetal_config(config.get("s3_baremetal_config"))
+    sections = {node_type: hosts_config[BAREMETAL_HOSTS_SECTIONS[node_type]] for node_type in node_types}
+    # Each role's own `ip_ssh_connections`, else the run's: only `public` roles have tunnel ports to free
+    public_roles = {
+        node_type
+        for node_type, section in sections.items()
+        if (section.get("ip_ssh_connections") or config.get("ip_ssh_connections")) == "public"
+    }
+    if public_roles:
         # The run's tunnel containers go first: one left running would reconnect and bind its port on the host again
         clean_resources_docker(tags_dict, dry_run=dry_run)
 
-    hosts_config = KeyStore().get_baremetal_config(config.get("s3_baremetal_config"))
-    for node_type in node_types:
-        section = hosts_config[BAREMETAL_HOSTS_SECTIONS[node_type]]
+    for node_type, section in sections.items():
+        tunnel_ports = node_type in public_roles
         scylla_disk_setup = node_type == "scylla-db" and not config.get("use_preinstalled_scylla")
         for host_ips in section["node_list"]:
             address = host_ips["public_ip"] if tunnel_ports else host_ips["private_ip"]

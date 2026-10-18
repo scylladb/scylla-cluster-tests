@@ -180,6 +180,29 @@ def test_scylla_yaml_cluster_attr_builder_gce_single_openldap(scylla_yaml_test_c
     )
 
 
+@pytest.mark.parametrize(
+    "run_setting,db_setting,expected",
+    [
+        ("private", None, "1.1.1.1:389"),
+        ("public", None, "127.0.0.1:5001"),
+        ("public", "private", "1.1.1.1:389"),
+        ("private", "public", "127.0.0.1:5001"),
+    ],
+)
+def test_openldap_address_follows_the_db_clusters_ip_ssh_connections(
+    scylla_yaml_test_context, run_setting, db_setting, expected
+):
+    """DB nodes reach OpenLDAP through their own tunnel only when the runner reaches them over `public`."""
+    builder = ScyllaYamlClusterAttrBuilder(
+        test_config=scylla_yaml_test_context(ldap_address=("1.1.1.1", "389"), ip_ssh_connections=run_setting),
+        cluster_name="test-cluster",
+        params={"cluster_backend": "baremetal"},
+        ip_ssh_connections=db_setting,
+    )
+
+    assert builder._open_ldap_server_address_port == expected
+
+
 def test_scylla_yaml_cluster_attr_builder_gce_multi_msldap(scylla_yaml_test_context):
     assert_builder_output(
         ScyllaYamlClusterAttrBuilder,
