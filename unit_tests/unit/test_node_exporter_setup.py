@@ -15,12 +15,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from sdcm.cluster import BaseMonitorSet
 from sdcm.node_exporter_setup import NODE_EXPORTER_VERSION, NodeExporterSetup
 
 
-def _remoter(machine):
+def _remoter(machine, probe="free 9100\n"):
+    """A remoter whose port probe prints `probe` and whose `uname -m` prints `machine`."""
     remoter = MagicMock()
-    remoter.run.return_value = MagicMock(stdout=f"{machine}\n")
+    remoter.run.side_effect = lambda cmd, **_: MagicMock(stdout=f"{machine}\n" if cmd == "uname -m" else probe)
     return remoter
 
 
@@ -33,7 +35,7 @@ def test_install_downloads_the_release_for_the_loader_machine(machine, expected)
 
     NodeExporterSetup.install(remoter=remoter)
 
-    remoter.run.assert_called_once_with("uname -m", verbose=False)
+    remoter.run.assert_any_call("uname -m", verbose=False)
     script = remoter.sudo.call_args.args[0]
     release = f"node_exporter-{NODE_EXPORTER_VERSION}.linux-{expected}"
     assert f"{release}.tar.gz" in script
@@ -54,3 +56,50 @@ def test_install_rejects_a_machine_with_no_node_exporter_release():
 def test_install_requires_a_node_or_a_remoter():
     with pytest.raises(AssertionError):
         NodeExporterSetup.install()
+
+
+def test_running_node_exporter_is_reused():
+    """A distro node_exporter, or the one set up for another node on the same host, is scraped as is."""
+    remoter = _remoter("x86_64", probe="running 9100\n")
+
+    assert NodeExporterSetup.install(remoter=remoter) == 9100
+    remoter.sudo.assert_not_called()
+
+
+def test_install_listens_on_the_free_port_the_probe_found():
+    remoter = _remoter("x86_64", probe="free 9101\n")
+
+    assert NodeExporterSetup.install(remoter=remoter) == 9101
+    assert "--web.listen-address=:9101 " in remoter.sudo.call_args.args[0]
+
+
+def test_install_fails_when_every_port_is_taken():
+    remoter = _remoter("x86_64", probe="free \n")
+
+    with pytest.raises(RuntimeError, match="No free port"):
+        NodeExporterSetup.install(remoter=remoter)
+    remoter.sudo.assert_not_called()
+
+
+def test_probe_asks_the_address_prometheus_scrapes():
+    """An exporter bound to loopback doesn't answer there, so it isn't reused and Prometheus isn't left blind."""
+    remoter = _remoter("x86_64")
+
+    NodeExporterSetup.install(remoter=remoter, scrape_host="10.0.0.7")
+
+    probe = remoter.run.call_args_list[0].args[0]
+    assert "host=10.0.0.7" in probe
+    assert "http://$host:$port/metrics" in probe
+
+
+def test_monitor_target_uses_the_port_its_exporter_serves_on(monkeypatch):
+    monkeypatch.setattr("sdcm.cluster.get_my_ip", lambda: "10.0.0.1")
+    exporter_targets = []
+    monitor = MagicMock(private_ip_address="10.0.0.7", node_exporter_port=9101)
+    monitor._remote_yaml.return_value.__enter__.return_value = exporter_targets
+    monitor_set = MagicMock(nodes=[monitor], targets={})
+    monitor_set.params.get.return_value = None
+
+    BaseMonitorSet.reconfigure_scylla_monitoring(monitor_set)
+
+    assert {"labels": {"dc": "monitor"}, "targets": ["10.0.0.7:9101"]} in exporter_targets
