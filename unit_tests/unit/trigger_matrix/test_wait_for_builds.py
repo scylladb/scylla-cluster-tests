@@ -116,6 +116,91 @@ def test_build_start_times_out(client, clock):
         jenkins._wait_for_build_start(f"{URL}/queue/item/1/", timeout=20)
 
 
+def test_a_build_queued_longer_than_ten_minutes_is_still_waited_for(client, clock):
+    jenkins, api = client
+    queued = [{}] * 25  # 25 polls, 30s apart: 750s in the queue, within the job's wait_timeout
+    api.jenkins_open.side_effect = _responses(
+        *queued, {"executable": {"number": 6}}, {"building": False, "result": "SUCCESS"}
+    )
+    (result,) = jenkins.wait_for_builds([pending(timeout=3600)])
+    assert result.result == "SUCCESS"
+    assert result.build_number == 6
+
+
+def test_a_build_queued_past_its_wait_timeout_is_not_started(client, clock, caplog):
+    jenkins, api = client
+    api.jenkins_open.return_value = json.dumps({})  # never gets an executable
+    with caplog.at_level(logging.ERROR):
+        (result,) = jenkins.wait_for_builds([pending(timeout=100)])
+    assert result.result == "NOT_STARTED"
+    assert not result.success
+    assert result.build_url == f"{URL}/job/tier1/job/longevity"
+    assert "did not start within 100s" in caplog.text
+
+
+def test_a_build_stuck_in_the_queue_does_not_hold_back_the_others(client, clock, caplog):
+    """The second build finishes while the first is still queued, and is reported then."""
+    jenkins, api = client
+
+    def respond(request):
+        if "queue/item/1/" in request.url:
+            return json.dumps({})  # stuck: never gets an executable
+        if "queue/item/2/" in request.url:
+            return json.dumps({"executable": {"number": 7}})
+        return json.dumps({"building": False, "result": "FAILURE"})
+
+    api.jenkins_open.side_effect = respond
+    with caplog.at_level(logging.INFO):
+        results = jenkins.wait_for_builds(
+            [
+                pending(name="stuck", queue_url=f"{URL}/queue/item/1/", timeout=3600),
+                pending(name="quick", queue_url=f"{URL}/queue/item/2/", timeout=3600),
+            ]
+        )
+    assert [(r.job_name, r.result) for r in results] == [("stuck", "NOT_STARTED"), ("quick", "FAILURE")]
+    messages = [record.getMessage() for record in caplog.records]
+    quick_failed = next(i for i, m in enumerate(messages) if m.startswith("FAILED: quick #7"))
+    stuck_given_up = next(i for i, m in enumerate(messages) if m.startswith("FAILED: stuck"))
+    assert quick_failed < stuck_given_up
+
+
+def test_build_start_finds_the_build_by_queue_id_once_the_queue_item_is_gone(client, clock):
+    jenkins, api = client
+    api.jenkins_open.side_effect = [
+        jenkins_lib.NotFoundException("queue item expired"),
+        json.dumps({"builds": [{"number": 12, "queueId": 41}, {"number": 11, "queueId": 40}]}),
+    ]
+    assert jenkins._wait_for_build_start(f"{URL}/queue/item/40/", job_name="folder/job") == 11
+    assert api.jenkins_open.call_args[0][0].url == f"{URL}/job/folder/job/job/api/json?tree=builds[number,queueId]"
+
+
+def test_build_start_polls_only_the_builds_once_the_queue_item_is_gone(client, clock):
+    jenkins, api = client
+    api.jenkins_open.side_effect = [
+        jenkins_lib.NotFoundException("queue item expired"),
+        json.dumps({"builds": [{"number": 12, "queueId": 41}]}),
+        json.dumps({"builds": [{"number": 12, "queueId": 41}]}),
+        json.dumps({"builds": [{"number": 13, "queueId": 40}, {"number": 12, "queueId": 41}]}),
+    ]
+    assert jenkins._wait_for_build_start(f"{URL}/queue/item/40/", job_name="folder/job") == 13
+    urls = [call[0][0].url for call in api.jenkins_open.call_args_list]
+    assert urls.count(f"{URL}/queue/item/40/api/json") == 1
+    assert clock.slept == [5, 5]
+
+
+def test_build_start_fails_when_the_queue_item_is_gone_and_the_job_is_unknown(client, clock):
+    jenkins, api = client
+    api.jenkins_open.side_effect = [jenkins_lib.NotFoundException("queue item expired")]
+    with pytest.raises(JenkinsTriggerError, match="Queue item 40 is gone"):
+        jenkins._wait_for_build_start(f"{URL}/queue/item/40/")
+
+
+def test_build_start_rejects_a_url_that_is_not_a_queue_item(client, clock):
+    jenkins, _ = client
+    with pytest.raises(JenkinsTriggerError, match="Not a queue item URL"):
+        jenkins._wait_for_build_start(f"{URL}/job/folder/job/job/")
+
+
 def test_build_start_survives_a_transient_jenkins_error(client, clock):
     jenkins, api = client
     api.jenkins_open.side_effect = [
@@ -260,9 +345,9 @@ def test_build_that_never_finishes_is_reported_as_timeout(client, clock):
     assert result.build_url == f"{URL}/job/tier1/job/longevity/8"
 
 
-def test_job_that_never_leaves_the_queue_is_reported_as_failure(client, clock):
+def test_job_cancelled_in_the_queue_is_reported_as_failure(client, clock):
     jenkins, api = client
-    api.jenkins_open.return_value = json.dumps({})  # never gets an executable
+    api.jenkins_open.return_value = json.dumps({"cancelled": True})  # never gets an executable
     (result,) = jenkins.wait_for_builds([pending(timeout=20)])
     assert result.result == "FAILURE"
     assert result.build_number == 0
@@ -270,21 +355,21 @@ def test_job_that_never_leaves_the_queue_is_reported_as_failure(client, clock):
 
 
 def test_one_queue_failure_does_not_abandon_the_other_jobs(client, clock):
-    """A job stuck in the queue must not stop the rest of the matrix being waited on."""
+    """A job cancelled in the queue must not stop the rest of the matrix being waited on."""
     jenkins, api = client
 
     def respond(request):
-        if "queue/item/bad" in request.url:
-            return json.dumps({})  # never starts -> times out
-        if "queue/item/good" in request.url:
+        if "queue/item/1/" in request.url:
+            return json.dumps({"cancelled": True})  # never starts
+        if "queue/item/2/" in request.url:
             return json.dumps({"executable": {"number": 2}})
         return json.dumps({"building": False, "result": "SUCCESS"})
 
     api.jenkins_open.side_effect = respond
     results = jenkins.wait_for_builds(
         [
-            pending(name="bad", queue_url=f"{URL}/queue/item/bad/", timeout=20),
-            pending(name="good", queue_url=f"{URL}/queue/item/good/"),
+            pending(name="bad", queue_url=f"{URL}/queue/item/1/", timeout=20),
+            pending(name="good", queue_url=f"{URL}/queue/item/2/"),
         ]
     )
     by_name = {r.job_name: r.result for r in results}

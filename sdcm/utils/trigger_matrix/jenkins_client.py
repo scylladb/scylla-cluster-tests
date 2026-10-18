@@ -26,6 +26,7 @@ import fnmatch
 import json
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass
 
@@ -46,6 +47,18 @@ def _in_trigger_order(results: list[BuildResult], pending_jobs: list[_PendingWai
     """Sort build results in the order their jobs were triggered, not the order they finished in."""
     order = {(p.job_name, p.scylla_version): index for index, p in enumerate(pending_jobs)}
     return sorted(results, key=lambda r: order.get((r.job_name, r.scylla_version), len(order)))
+
+
+@dataclass
+class _QueuedBuild:
+    """Internal: a triggered build that has not left the Jenkins queue yet.
+
+    `queued_since` is passed in by the caller, for the reason given on `_ActiveBuild`.
+    """
+
+    pending: _PendingWaitJob
+    queued_since: float
+    queue_item_gone: bool = False
 
 
 @dataclass
@@ -210,7 +223,10 @@ class JenkinsClient:
     ) -> list[BuildResult]:
         """Wait for multiple triggered Jenkins builds to complete concurrently.
 
-        Polls all pending builds in a single loop, completing them as they finish.
+        Every poll cycle looks once at each build still in the queue and at each running one,
+        so a build waiting for an agent never holds back the others. A build still queued after
+        its job's wait_timeout is reported as NOT_STARTED; a running one gets the same timeout
+        again, counted from its start.
 
         Args:
             pending_jobs: List of pending jobs with queue URLs from trigger_jenkins_job_with_queue.
@@ -218,7 +234,7 @@ class JenkinsClient:
             poll_interval: Seconds between poll cycles.
 
         Returns:
-            List of BuildResult for all jobs.
+            List of BuildResult for all jobs, in the order the jobs were triggered.
         """
         if dry_run or not pending_jobs:
             return [
@@ -227,131 +243,202 @@ class JenkinsClient:
             ]
 
         client, jenkins_url = self._connect()
-
-        # Phase 1: Wait for all builds to leave the queue and get build numbers
+        queued = [_QueuedBuild(pending=p, queued_since=time.time()) for p in pending_jobs]
         active_builds: list[_ActiveBuild] = []
         results: list[BuildResult] = []
+        logger.info("Waiting for %d builds to start and complete...", len(queued))
 
-        for pending in pending_jobs:
-            try:
-                build_number = self._wait_for_build_start(pending.queue_url, timeout=min(pending.timeout, 600))
-                job_url_path = pending.job_name.replace("/", "/job/")
-                active_builds.append(
-                    _ActiveBuild(
-                        job_name=pending.job_name,
-                        build_number=build_number,
-                        job_url_path=job_url_path,
-                        collect_results=pending.collect_results,
-                        timeout=pending.timeout,
-                        fail_on_error=pending.fail_on_error,
-                        start_time=time.time(),
-                        scylla_version=pending.scylla_version,
-                    )
-                )
-            except JenkinsTriggerError as exc:
-                logger.error("Failed to get build number for %s: %s", pending.job_name, exc)
-                job_url = f"{jenkins_url}/job/{pending.job_name.replace('/', '/job/')}"
-                results.append(
-                    BuildResult(
-                        job_name=pending.job_name,
-                        build_number=0,
-                        result="FAILURE",
-                        build_url=job_url,
-                        scylla_version=pending.scylla_version,
-                    )
-                )
+        while queued or active_builds:
+            still_queued = []
+            for item in queued:
+                if started := self._poll_queued_build(item, jenkins_url, results):
+                    active_builds.append(started)
+                elif started is None:
+                    still_queued.append(item)
+            queued = still_queued
 
-        logger.info("Waiting for %d builds to complete...", len(active_builds))
-
-        # Phase 2: Poll all active builds until they all complete
-        while active_builds:
             still_running = []
             for build in active_builds:
-                elapsed = time.time() - build.start_time
-                if elapsed > build.timeout:
-                    logger.error(
-                        "Timeout waiting for %s #%d after %ds", build.job_name, build.build_number, build.timeout
-                    )
-                    build_url = f"{jenkins_url}/job/{build.job_url_path}/{build.build_number}"
-                    results.append(
-                        BuildResult(
-                            job_name=build.job_name,
-                            build_number=build.build_number,
-                            result="TIMEOUT",
-                            build_url=build_url,
-                            scylla_version=build.scylla_version,
-                        )
-                    )
-                    continue
-
-                build_api_url = f"{jenkins_url}/job/{build.job_url_path}/{build.build_number}/api/json"
-                try:
-                    resp = client.jenkins_open(requests.Request("GET", build_api_url))
-                    if resp:
-                        build_data = json.loads(resp)
-                        if not build_data.get("building", True):
-                            result = build_data.get("result", "UNKNOWN")
-                            build_url = f"{jenkins_url}/job/{build.job_url_path}/{build.build_number}"
-                            logger.info(
-                                "Build %s #%d completed: %s", str(build.job_name), build.build_number, str(result)
-                            )
-                            if result != "SUCCESS":
-                                logger.error(
-                                    "FAILED: %s #%d (%s) — %s — %s",
-                                    build.job_name,
-                                    build.build_number,
-                                    build.scylla_version,
-                                    result,
-                                    build_url,
-                                )
-                            artifacts = self._collect_artifacts(
-                                build.job_url_path, build.build_number, build.collect_results
-                            )
-                            results.append(
-                                BuildResult(
-                                    job_name=build.job_name,
-                                    build_number=build.build_number,
-                                    result=result,
-                                    artifacts=artifacts,
-                                    build_url=build_url,
-                                    scylla_version=build.scylla_version,
-                                    description=build_data.get("description") or "",
-                                )
-                            )
-                            continue
-                except jenkins_lib.JenkinsException as exc:
-                    logger.warning("Error polling %s #%d: %s", build.job_name, build.build_number, exc)
-
-                still_running.append(build)
-
+                if result := self._poll_active_build(client, jenkins_url, build):
+                    results.append(result)
+                else:
+                    still_running.append(build)
             active_builds = still_running
-            if active_builds:
+
+            if queued or active_builds:
                 time.sleep(poll_interval)
 
         return _in_trigger_order(results, pending_jobs)
 
-    def _wait_for_build_start(self, queue_url: str, timeout: int = 600) -> int:
-        """Poll Jenkins queue item until a build number is assigned."""
-        client, _ = self._connect()
-        api_url = f"{queue_url.rstrip('/')}/api/json"
-        start_time = time.time()
-        while time.time() - start_time < timeout:
+    def _poll_queued_build(
+        self, item: "_QueuedBuild", jenkins_url: str, results: list[BuildResult]
+    ) -> "_ActiveBuild | None | bool":
+        """One look at a queued build.
+
+        Returns the started build, None while it is still queued, or False once it is done
+        with: cancelled, lost, or queued for longer than its wait_timeout. A build it is done
+        with has its result appended to `results`.
+        """
+        pending = item.pending
+        job_url_path = pending.job_name.replace("/", "/job/")
+        job_url = f"{jenkins_url}/job/{job_url_path}"
+        if time.time() - item.queued_since > pending.timeout:
+            logger.error(
+                "FAILED: %s (%s) did not start within %ds", pending.job_name, pending.scylla_version, pending.timeout
+            )
+            result = "NOT_STARTED"
+        else:
             try:
-                resp = client.jenkins_open(requests.Request("GET", api_url))
-                if resp:
-                    data = json.loads(resp)
-                    if executable := data.get("executable"):
-                        build_number = executable.get("number")
-                        if build_number:
-                            logger.info("Build started: #%d", build_number)
-                            return int(build_number)
-                    if data.get("cancelled"):
-                        raise JenkinsTriggerError("Queued build was cancelled")
-            except jenkins_lib.JenkinsException as exc:
-                logger.warning("Error polling queue: %s", exc)
+                build_number, item.queue_item_gone = self._check_build_start(
+                    pending.queue_url, pending.job_name, item.queue_item_gone
+                )
+            except JenkinsTriggerError as exc:
+                logger.error("Failed to get build number for %s: %s", pending.job_name, exc)
+                result = "FAILURE"
+            else:
+                if not build_number:
+                    return None
+                logger.info("Build started: %s #%d", pending.job_name, build_number)
+                return _ActiveBuild(
+                    job_name=pending.job_name,
+                    build_number=build_number,
+                    job_url_path=job_url_path,
+                    collect_results=pending.collect_results,
+                    timeout=pending.timeout,
+                    fail_on_error=pending.fail_on_error,
+                    start_time=time.time(),
+                    scylla_version=pending.scylla_version,
+                )
+        results.append(
+            BuildResult(
+                job_name=pending.job_name,
+                build_number=0,
+                result=result,
+                build_url=job_url,
+                scylla_version=pending.scylla_version,
+            )
+        )
+        return False
+
+    def _poll_active_build(self, client, jenkins_url: str, build: "_ActiveBuild") -> BuildResult | None:
+        """One look at a running build: its result once it finished or timed out, else None."""
+        build_url = f"{jenkins_url}/job/{build.job_url_path}/{build.build_number}"
+        if time.time() - build.start_time > build.timeout:
+            logger.error("Timeout waiting for %s #%d after %ds", build.job_name, build.build_number, build.timeout)
+            return BuildResult(
+                job_name=build.job_name,
+                build_number=build.build_number,
+                result="TIMEOUT",
+                build_url=build_url,
+                scylla_version=build.scylla_version,
+            )
+
+        try:
+            resp = client.jenkins_open(requests.Request("GET", f"{build_url}/api/json"))
+        except jenkins_lib.JenkinsException as exc:
+            logger.warning("Error polling %s #%d: %s", build.job_name, build.build_number, exc)
+            return None
+        if not resp:
+            return None
+        build_data = json.loads(resp)
+        if build_data.get("building", True):
+            return None
+
+        result = build_data.get("result", "UNKNOWN")
+        logger.info("Build %s #%d completed: %s", str(build.job_name), build.build_number, str(result))
+        if result != "SUCCESS":
+            logger.error(
+                "FAILED: %s #%d (%s) — %s — %s",
+                build.job_name,
+                build.build_number,
+                build.scylla_version,
+                result,
+                build_url,
+            )
+        return BuildResult(
+            job_name=build.job_name,
+            build_number=build.build_number,
+            result=result,
+            artifacts=self._collect_artifacts(build.job_url_path, build.build_number, build.collect_results),
+            build_url=build_url,
+            scylla_version=build.scylla_version,
+            description=build_data.get("description") or "",
+        )
+
+    def _check_build_start(
+        self, queue_url: str, job_name: str | None = None, queue_item_gone: bool = False
+    ) -> tuple[int | None, bool]:
+        """One look at whether a queued build has started.
+
+        Jenkins forgets a queue item a few minutes after its build starts. Once the item is
+        gone, only the builds of `job_name` are looked at, for the one with its queue id.
+
+        Returns:
+            The build number, or None while the build is still queued; and whether the queue
+            item is gone, to pass back on the next call.
+
+        Raises:
+            JenkinsTriggerError: If the URL is not a queue item, the queued build was cancelled,
+                or the queue item is gone and there is no job name to look the build up by.
+        """
+        if not (match := re.search(r"/queue/item/(\d+)/?$", queue_url)):
+            raise JenkinsTriggerError(f"Not a queue item URL: {queue_url}")
+        queue_id = int(match.group(1))
+        if queue_item_gone:
+            # The queue item will not come back: only the job's builds can tell
+            return self._find_build_by_queue_id(job_name, queue_id), True
+
+        client, _ = self._connect()
+        try:
+            resp = client.jenkins_open(requests.Request("GET", f"{queue_url.rstrip('/')}/api/json"))
+            if resp:
+                data = json.loads(resp)
+                if (executable := data.get("executable")) and (build_number := executable.get("number")):
+                    return int(build_number), False
+                if data.get("cancelled"):
+                    raise JenkinsTriggerError("Queued build was cancelled")
+        except jenkins_lib.NotFoundException:
+            if not job_name:
+                raise JenkinsTriggerError(f"Queue item {queue_id} is gone") from None
+            logger.info("Queue item %d is gone; looking for its build among the builds of %s", queue_id, job_name)
+            # Look right away: Jenkins forgets a queue item minutes after its build started,
+            # so the build is almost always in the job's build list already
+            return self._find_build_by_queue_id(job_name, queue_id), True
+        except jenkins_lib.JenkinsException as exc:
+            logger.warning("Error polling queue: %s", exc)
+        return None, False
+
+    def _wait_for_build_start(self, queue_url: str, job_name: str | None = None, timeout: int | None = None) -> int:
+        """Poll a Jenkins queue item until a build number is assigned (see `_check_build_start`).
+
+        Waits for as long as the build stays queued when `timeout` is None, and stops only
+        when the queue item is cancelled.
+        """
+        queue_item_gone = False
+        start_time = time.time()
+        while timeout is None or time.time() - start_time < timeout:
+            build_number, queue_item_gone = self._check_build_start(queue_url, job_name, queue_item_gone)
+            if build_number:
+                logger.info("Build started: #%d", build_number)
+                return build_number
             time.sleep(5)
 
         raise JenkinsTriggerError(f"Build did not start within {timeout}s")
+
+    def _find_build_by_queue_id(self, job_name: str, queue_id: int) -> int | None:
+        """The number of the build of `job_name` that was queued as `queue_id`, if there is one."""
+        client, jenkins_url = self._connect()
+        job_url_path = job_name.replace("/", "/job/")
+        api_url = f"{jenkins_url}/job/{job_url_path}/api/json?tree=builds[number,queueId]"
+        try:
+            resp = client.jenkins_open(requests.Request("GET", api_url))
+        except jenkins_lib.JenkinsException as exc:
+            logger.warning("Error listing the builds of %s: %s", job_name, exc)
+            return None
+        for build in json.loads(resp or "{}").get("builds", []):
+            if build.get("queueId") == queue_id:
+                return int(build["number"])
+        return None
 
     def _collect_artifacts(self, job_url_path: str, build_number: int, patterns: list[str]) -> list[str]:
         """Return URLs for the build's artifacts whose *filename* matches one of `patterns`.
