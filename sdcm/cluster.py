@@ -268,6 +268,15 @@ FIREWALL_RULE_DUMP_COMMANDS = ("iptables-save", "ip6tables-save", "nft list rule
 # how `ss` prints a listener bound to every address of the node, per address family
 CQL_WILDCARD_ADDRESSES = frozenset({"0.0.0.0", "*", "::"})
 
+# start-all.sh / kill-all.sh flag of each monitoring stack port BaseMonitorSet can move off a taken default
+MONITORING_PORT_FLAGS = {
+    "grafana_port": "-g",
+    "prometheus_port": "-p",
+    "alertmanager_port": "-m",
+    "loki_port": "--loki-port",
+    "promtail_port": "--promtail-port",
+}
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -7486,6 +7495,11 @@ class BaseMonitorSet:
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
         self.prometheus_port = 9090
+        self.alertmanager_port = 9093
+        self.loki_port = 3100
+        self.promtail_port = 9080
+        # start-all.sh flags of the ports moved off a taken default, None until picked at the first start
+        self.monitoring_port_flags: str | None = None
         self.prometheus_retention = "365d"
         self.monitor_branch = self.params.get("monitor_branch")
         self.grafana_start_time = 0
@@ -8207,7 +8221,9 @@ class BaseMonitorSet:
     def _create_manager_prometheus_yaml(self, node):
         manager_prometheus_port = self.params.get("manager_prometheus_port")
         # Manager server prometheus:
-        manager_prometheus_target_list = [f"127.0.0.1:{manager_prometheus_port}"]
+        # The Manager server runs on the monitor host: off the host network Prometheus reaches it at the host address
+        manager_host = normalize_ipv6_url(node.private_ip_address) if self.monitoring_port_flags else "127.0.0.1"
+        manager_prometheus_target_list = [f"{manager_host}:{manager_prometheus_port}"]
         full_yaml_string = "- targets:\n"
         for prometheus_target in manager_prometheus_target_list:
             full_yaml_string += f"  - {prometheus_target}\n"
@@ -8221,7 +8237,34 @@ class BaseMonitorSet:
             f"{self.monitoring_conf_dir}/scylla_manager_servers.yml"
         )
 
+    def pick_monitoring_ports(self, node) -> None:
+        """Move each monitoring port whose default is taken on the monitor host to the next free one.
+
+        Runs once: a restart keeps the ports, as kill-all.sh needs the same flags to find the containers. On cloud VMs
+        the defaults are free and the stack keeps starting with `-l` (host network). start-all.sh can't combine `-l`
+        with port flags, so once a port moves the stack runs on its own Docker network.
+        """
+        if self.monitoring_port_flags is not None:
+            return
+        listening = {
+            int(line.split()[3].rsplit(":", 1)[1])
+            for line in node.remoter.run("ss -Hltn", verbose=False).stdout.splitlines()
+            if line.strip()
+        }
+        taken = listening | {getattr(self, attr) for attr in MONITORING_PORT_FLAGS}
+        flags = []
+        for attr, flag in MONITORING_PORT_FLAGS.items():
+            if (default := getattr(self, attr)) not in listening:
+                continue
+            port = next(port for port in itertools.count(default + 1) if port not in taken)
+            taken.add(port)
+            node.log.warning("Port %s for %s is taken on the monitor host, using %s", default, attr, port)
+            setattr(self, attr, port)
+            flags.append(f"{flag} {port}")
+        self.monitoring_port_flags = " ".join(flags)
+
     def start_scylla_monitoring(self, node):
+        self.pick_monitoring_ports(node)
         self._create_manager_prometheus_yaml(node=node)
         # Write labels to a file on the remote node so Docker can read them via
         # --label-file, avoiding shell word-splitting issues with values that
@@ -8255,7 +8298,7 @@ class BaseMonitorSet:
             -s `realpath "{self.monitoring_conf_dir}/scylla_servers.yml"` \
             -n `realpath "{self.monitoring_conf_dir}/node_exporter_servers.yml"` \
             {scylla_manager_servers_arg} \
-            -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} \
+            -d `realpath "{self.monitoring_data_dir}"` {self.monitoring_port_flags or "-l"} -v master,{self.monitoring_version} \
             -b "--web.enable-admin-api --storage.tsdb.retention.time={self.prometheus_retention}" \
             -c 'GF_USERS_DEFAULT_THEME=dark'
         """)
@@ -8387,7 +8430,7 @@ class BaseMonitorSet:
     def stop_scylla_monitoring(self, node):
         kill_script = dedent(f"""
             cd {self.monitor_install_path}
-            ./kill-all.sh
+            ./kill-all.sh {self.monitoring_port_flags or ""}
         """)
         node.remoter.run("bash -ce '%s'" % kill_script)
 
