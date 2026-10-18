@@ -414,7 +414,7 @@ def test_sla_monkey_delegates_to_correct_sla_test_method(runner, monkey_cls, sla
 
     getattr(mock_sla_instance, sla_method).assert_called_once_with(
         tester=runner.tester,
-        prometheus_stats=mock_prom_cls.return_value,
+        prometheus_stats=mock_prom_cls.for_monitor.return_value,
         num_of_partitions=_EXPECTED_DATASET,
         cassandra_stress_column_definition=_EXPECTED_COL_DEF,
     )
@@ -445,7 +445,7 @@ def test_sla_monkey_raises_on_error_events(runner, monkey_cls, sla_method):
 
 
 def test_sla_monkey_passes_prometheus_host(runner):
-    """PrometheusDBStats is constructed with the monitoring node's external address."""
+    """PrometheusDBStats is built for the monitoring node, at its address and its monitor set's port."""
     with (
         patch(_PROMETHEUS_PATCH) as mock_prom_cls,
         patch(_SLA_TESTS_PATCH) as mock_sla_cls,
@@ -454,7 +454,7 @@ def test_sla_monkey_passes_prometheus_host(runner):
 
         SlaIncreaseSharesDuringLoad(runner).disrupt()
 
-    mock_prom_cls.assert_called_once_with(host="10.0.0.1")
+    mock_prom_cls.for_monitor.assert_called_once_with(runner.monitoring_set.nodes[0])
 
 
 # ---------------------------------------------------------------------------
@@ -480,7 +480,7 @@ def test_maximum_sls_queries_existing_service_levels(runner):
     # MAX_ALLOWED_SERVICE_LEVELS(10) - (existing_sl_count(3) + 1) = 6
     mock_sla_cls.return_value.test_maximum_allowed_sls_with_max_shares_during_load.assert_called_once_with(
         tester=runner.tester,
-        prometheus_stats=mock_prom_cls.return_value,
+        prometheus_stats=mock_prom_cls.for_monitor.return_value,
         num_of_partitions=_EXPECTED_DATASET,
         cassandra_stress_column_definition=_EXPECTED_COL_DEF,
         service_levels_amount=6,

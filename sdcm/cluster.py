@@ -1712,7 +1712,9 @@ class BaseNode(AutoSshContainerMixin):
         self._db_log_reader_thread.start()
 
     def start_alert_manager_thread(self):
-        self._alert_manager = PrometheusAlertManagerListener(self.external_address, stop_flag=self.termination_event)
+        self._alert_manager = PrometheusAlertManagerListener(
+            self.external_address, port=self.parent_cluster.alertmanager_port, stop_flag=self.termination_event
+        )
         self._alert_manager.start()
 
     def silence_alert(self, alert_name, duration=None, start=None, end=None):

@@ -1486,7 +1486,7 @@ class ClusterTester(unittest.TestCase):
         # cancel reuse cluster - for new nodes added during the test
         self.test_config.reuse_cluster(False)
         if self.monitors and self.monitors.nodes:
-            self.prometheus_db = PrometheusDBStats(host=self.monitors.nodes[0].external_address)
+            self.prometheus_db = PrometheusDBStats.for_monitor(self.monitors.nodes[0])
         else:
             self.prometheus_db = None
 

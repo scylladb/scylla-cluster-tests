@@ -233,7 +233,9 @@ def test_rate_limit_returns_string_with_suffix(mock_prom_class, runner):
     """Verify rate limit queries Prometheus and returns a value with mbps or kbps suffix."""
     runner.random.randrange.side_effect = lambda a, b: 42
     runner.monitoring_set.nodes = [MagicMock()]
-    mock_prom_class.return_value.query.return_value = [{"values": [(0, "0"), (600, str(100 * 1024 * 1024 * 600))]}]
+    mock_prom_class.for_monitor.return_value.query.return_value = [
+        {"values": [(0, "0"), (600, str(100 * 1024 * 1024 * 600))]}
+    ]
     result = get_rate_limit_for_network_disruption(runner.monitoring_set, runner.target_node, runner.random)
     assert result is not None
     assert result.endswith(("mbps", "kbps"))

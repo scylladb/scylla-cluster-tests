@@ -195,6 +195,14 @@ def get_cdcreader_cmd_params(cmd):
 
 
 class PrometheusDBStats:
+    @classmethod
+    def for_monitor(cls, monitor_node, **kwargs) -> "PrometheusDBStats":
+        """Client of the Prometheus on a monitor node, at the port its monitor set started it on.
+
+        The one place a monitor node turns into a Prometheus address: the default port can be taken on a shared host.
+        """
+        return cls(host=monitor_node.external_address, port=monitor_node.parent_cluster.prometheus_port, **kwargs)
+
     def __init__(self, host, port=9090, protocol="http", alternator=None):
         self.host = host
         self.port = port

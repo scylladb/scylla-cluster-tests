@@ -39,8 +39,9 @@ class ClusterConfigurationTests(ClusterTester):
         for node in self.monitors.nodes:
             self.log.info(node.remoter.ssh_debug_cmd())
         if self.monitors.nodes:
-            self.log.info("Prometheus Web UI: http://%s:9090", self.monitors.nodes[0].public_ip_address)
-            self.log.info("Grafana Web UI: http://%s:3000", self.monitors.nodes[0].public_ip_address)
+            monitor = self.monitors.nodes[0]
+            self.log.info("Prometheus Web UI: http://%s:%s", monitor.public_ip_address, self.monitors.prometheus_port)
+            self.log.info("Grafana Web UI: http://%s:%s", monitor.public_ip_address, self.monitors.grafana_port)
 
     def test_change_seed_address_to_hostname(self):
         """

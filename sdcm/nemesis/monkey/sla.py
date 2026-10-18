@@ -129,7 +129,7 @@ class SlaIncreaseSharesDuringLoad(SlaMonkeyBase):
     def disrupt(self):
         column_definition, dataset_size = self.get_stress_params()
 
-        prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
+        prometheus_stats = PrometheusDBStats.for_monitor(self.runner.monitoring_set.nodes[0])
         error_events = SlaTests().test_increase_shares_during_load(
             tester=self.runner.tester,
             prometheus_stats=prometheus_stats,
@@ -147,7 +147,7 @@ class SlaDecreaseSharesDuringLoad(SlaMonkeyBase):
     def disrupt(self):
         column_definition, dataset_size = self.get_stress_params()
 
-        prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
+        prometheus_stats = PrometheusDBStats.for_monitor(self.runner.monitoring_set.nodes[0])
         error_events = SlaTests().test_decrease_shares_during_load(
             tester=self.runner.tester,
             prometheus_stats=prometheus_stats,
@@ -166,7 +166,7 @@ class SlaReplaceUsingDetachDuringLoad(SlaMonkeyBase):
     def disrupt(self):
         column_definition, dataset_size = self.get_stress_params()
 
-        prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
+        prometheus_stats = PrometheusDBStats.for_monitor(self.runner.monitoring_set.nodes[0])
         error_events = SlaTests().test_replace_service_level_using_detach_during_load(
             tester=self.runner.tester,
             prometheus_stats=prometheus_stats,
@@ -185,7 +185,7 @@ class SlaReplaceUsingDropDuringLoad(SlaMonkeyBase):
     def disrupt(self):
         column_definition, dataset_size = self.get_stress_params()
 
-        prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
+        prometheus_stats = PrometheusDBStats.for_monitor(self.runner.monitoring_set.nodes[0])
         error_events = SlaTests().test_replace_service_level_using_drop_during_load(
             tester=self.runner.tester,
             prometheus_stats=prometheus_stats,
@@ -204,7 +204,7 @@ class SlaIncreaseSharesByAttachAnotherSlDuringLoad(SlaMonkeyBase):
     def disrupt(self):
         column_definition, dataset_size = self.get_stress_params()
 
-        prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
+        prometheus_stats = PrometheusDBStats.for_monitor(self.runner.monitoring_set.nodes[0])
         error_events = SlaTests().test_increase_shares_by_attach_another_sl_during_load(
             tester=self.runner.tester,
             prometheus_stats=prometheus_stats,
@@ -222,7 +222,7 @@ class SlaMaximumAllowedSlsWithMaxSharesDuringLoad(SlaMonkeyBase):
     def disrupt(self):
         column_definition, dataset_size = self.get_stress_params()
 
-        prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
+        prometheus_stats = PrometheusDBStats.for_monitor(self.runner.monitoring_set.nodes[0])
         with self.runner.cluster.cql_connection_patient(
             node=self.runner.target_node, user=DEFAULT_USER, password=DEFAULT_USER_PASSWORD
         ) as session:

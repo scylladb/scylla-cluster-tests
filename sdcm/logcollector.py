@@ -95,6 +95,24 @@ def _create_retry_session(retries: int = 3) -> requests.Session:
     return session
 
 
+# Default host port of each scylla-monitoring container. start-all.sh names a container it started on another port
+# `<name>-<port>`, which BaseMonitorSet does when the default is taken on a shared host.
+MONITORING_CONTAINER_PORTS = {"aprom": 9090, "agraf": 3000, "aalert": 9093}
+
+
+def find_monitoring_container(node, name: str) -> tuple[str, int]:
+    """The name a scylla-monitoring container runs under on the monitor host, and the host port it serves."""
+    names = node.remoter.run("docker ps -a --format '{{.Names}}'", ignore_status=True, verbose=False).stdout.split()
+    for found in names:
+        if match := re.fullmatch(rf"{name}(?:-(\d+))?", found):
+            return found, int(match.group(1)) if match.group(1) else MONITORING_CONTAINER_PORTS[name]
+    return name, MONITORING_CONTAINER_PORTS[name]
+
+
+def monitoring_container_logs_cmd(name: str) -> str:
+    return f"docker logs --details -t $(docker ps -a --format '{{{{.Names}}}}' | grep -xE '{name}(-[0-9]+)?' | head -1 | grep . || echo {name})"
+
+
 class CollectingNode:
     logdir = None
 
@@ -469,7 +487,8 @@ class PrometheusSnapshots(BaseMonitoringEntity):
         message="Create prometheus snapshot",
     )
     def create_prometheus_snapshot(self, node):
-        prometheus_client = PrometheusDBStats(host=node.external_address)
+        _, prometheus_port = find_monitoring_container(node, "aprom")
+        prometheus_client = PrometheusDBStats(host=node.external_address, port=prometheus_port)
         result = prometheus_client.create_snapshot()
         if result and "success" in result["status"]:
             snapshot_dir = os.path.join(self.monitoring_data_dir, "snapshots", result["data"]["name"])
@@ -478,16 +497,17 @@ class PrometheusSnapshots(BaseMonitoringEntity):
             raise PrometheusSnapshotErrorException(result)
 
     def get_prometheus_snapshot_remote(self, node) -> Optional[str]:
+        prometheus_container, _ = find_monitoring_container(node, "aprom")
         try:
             snapshot_dir = self.create_prometheus_snapshot(node)
         except (PrometheusSnapshotErrorException, Exception) as details:  # noqa: BLE001
             LOGGER.warning("Create prometheus snapshot failed %s.\nUse prometheus data directory", details)
-            node.remoter.run("docker stop aprom", ignore_status=True)
+            node.remoter.run(f"docker stop {prometheus_container}", ignore_status=True)
             snapshot_dir = self.monitoring_data_dir
 
         LOGGER.info(snapshot_dir)
         archive_logfile = LogCollector.archive_log_remotely(node, snapshot_dir, f"{self.name}_{self.current_datetime}")
-        node.remoter.run("docker start aprom", ignore_status=True)
+        node.remoter.run(f"docker start {prometheus_container}", ignore_status=True)
 
         if not archive_logfile:
             return None
@@ -524,10 +544,10 @@ class MonitoringStack(BaseMonitoringEntity):
         BaseLogEntity
 
     Variables:
-        grafana_port {number} -- Grafana server port
+        grafana_port {number} -- Grafana server port, found on the monitor host when None
     """
 
-    grafana_port = 3000
+    grafana_port = None
     collect_timeout = 1800
 
     def get_monitoring_data_stack(self, node, local_dist) -> str:
@@ -540,7 +560,8 @@ class MonitoringStack(BaseMonitoringEntity):
             return ""
 
         with open(os.path.join(tempfile.mkdtemp(), "annotations.json"), "w", encoding="utf-8") as annotations_file:
-            annotations_file.write(self.get_grafana_annotations(node.grafana_address))
+            grafana_port = self.grafana_port or find_monitoring_container(node, "agraf")[1]
+            annotations_file.write(self.get_grafana_annotations(node.grafana_address, grafana_port))
         node.remoter.send_files(
             src=annotations_file.name,
             dst=os.path.join(monitor_base_dir, monitor_install_dir_name, "sct_monitoring_addons"),
@@ -561,10 +582,10 @@ class MonitoringStack(BaseMonitoringEntity):
 
         return os.path.join(local_dist, os.path.basename(archive_name))
 
-    def get_grafana_annotations(self, grafana_ip: str) -> str:
+    def get_grafana_annotations(self, grafana_ip: str, grafana_port: int) -> str:
         try:
             session = _create_retry_session()
-            res = session.get(f"http://{grafana_ip}:{self.grafana_port}" + GRAFANA_ANNOTATIONS_API_PATH)
+            res = session.get(f"http://{grafana_ip}:{grafana_port}" + GRAFANA_ANNOTATIONS_API_PATH)
             if res.ok:
                 return res.text
         except Exception as details:  # noqa: BLE001
@@ -639,7 +660,7 @@ class GrafanaEntity(BaseMonitoringEntity):
 
     Variables:
         grafana_entity_names {list} -- list of links to collect
-        grafana_port {number} -- Grafana server port
+        grafana_port {number} -- Grafana server port, found on the monitor host when None
         grafana_entity_url_tmpl {str} -- template of grafana url to collect
         phantomjs_base {str} -- name and version of phantomjs package
     """
@@ -649,7 +670,7 @@ class GrafanaEntity(BaseMonitoringEntity):
         monitoring_ui.ServerMetricsNemesisDashboard(),
     ]
 
-    grafana_port = 3000
+    grafana_port = None
     grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}/render{path}?from={st}&to=now&refresh=1d"
     sct_base_path = get_sct_root_path()
 
@@ -694,12 +715,13 @@ class GrafanaScreenShot(GrafanaEntity):
             return screenshots
 
         grafana_ip = normalize_ipv6_url(node.grafana_address)
+        grafana_port = self.grafana_port or find_monitoring_container(node, "agraf")[1]
         try:
             for dashboard in self.dashboards:
                 try:
                     dashboard_metadata = MonitoringStack.get_dashboard_by_title(
                         grafana_ip=grafana_ip,
-                        port=self.grafana_port,
+                        port=grafana_port,
                         title=dashboard.title,
                     )
                     if not dashboard_metadata:
@@ -714,7 +736,7 @@ class GrafanaScreenShot(GrafanaEntity):
 
                     grafana_url = self.grafana_entity_url_tmpl.format(
                         node_ip=grafana_ip,
-                        grafana_port=self.grafana_port,
+                        grafana_port=grafana_port,
                         path=path,
                         st=self.start_time,
                     )
@@ -726,7 +748,7 @@ class GrafanaScreenShot(GrafanaEntity):
                     if dashboard.panel_title:
                         panel_id = MonitoringStack.get_panel_by_title(
                             grafana_ip=grafana_ip,
-                            port=self.grafana_port,
+                            port=grafana_port,
                             dashboard_uid=dashboard_metadata["uid"],
                             panel_title=dashboard.panel_title,
                         )
@@ -1370,9 +1392,9 @@ class MonitorLogCollector(LogCollector):
 
     log_entities = [
         FileLog(name="system.log", command="sudo journalctl --no-tail --no-pager", search_locally=True),
-        CommandLog(name="aprom.log", command="docker logs --details -t aprom"),
-        CommandLog(name="agraf.log", command="docker logs --details -t agraf"),
-        CommandLog(name="aalert.log", command="docker logs --details -t aalert"),
+        CommandLog(name="aprom.log", command=monitoring_container_logs_cmd("aprom")),
+        CommandLog(name="agraf.log", command=monitoring_container_logs_cmd("agraf")),
+        CommandLog(name="aalert.log", command=monitoring_container_logs_cmd("aalert")),
         CommandLog(name="scylla-manager.yaml", command=f"cat {SCYLLA_MANAGER_YAML_PATH}"),
         FileLog(
             name="scylla_manager.log",

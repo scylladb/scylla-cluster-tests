@@ -551,7 +551,7 @@ class FullScanAggregatesOperation(FullscanOperationBase):
 
     @retrying(n=6, sleep_time=10, allowed_exceptions=(Retry,))
     def validate_mapreduce_service_requests_dispatched_to_other_nodes(self, start_time):
-        prometheus = PrometheusDBStats(TestConfig().tester_obj().monitors.nodes[0].external_address)
+        prometheus = PrometheusDBStats.for_monitor(TestConfig().tester_obj().monitors.nodes[0])
         prometheus_mapreduce_service_requests = prometheus.query(
             "scylla_mapreduce_service_requests_dispatched_to_other_nodes", start_time, time.time()
         )

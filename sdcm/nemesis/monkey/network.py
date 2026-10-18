@@ -170,7 +170,7 @@ def get_rate_limit_for_network_disruption(monitoring_set, target_node, rnd) -> O
         return None
 
     # get the last 10min avg network bandwidth used, and limit  30% to 70% of it
-    prometheus_stats = PrometheusDBStats(host=monitoring_set.nodes[0].external_address)
+    prometheus_stats = PrometheusDBStats.for_monitor(monitoring_set.nodes[0])
     # If test runs with 2 network interfaces configuration, "node_network_receive_bytes_total" will be reported on device that
     # broadcast_address is configured on it
     query = 'avg(node_network_receive_bytes_total{instance=~".*?%s.*?", device="%s"})' % (

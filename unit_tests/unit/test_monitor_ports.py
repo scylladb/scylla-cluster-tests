@@ -3,11 +3,13 @@
 A lab host can run its own services on the stack's defaults, e.g. Fedora's Cockpit on 9090.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from sdcm.cluster import BaseMonitorSet
+from sdcm.db_stats import PrometheusDBStats
+from sdcm.logcollector import find_monitoring_container
 
 
 def ss_listening(*ports: int) -> str:
@@ -67,3 +69,31 @@ def test_ports_are_picked_once():
     BaseMonitorSet.pick_monitoring_ports(monitor_set, node)
 
     node.remoter.run.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "containers, name, expected",
+    [
+        ("aprom\nagraf\nagrafrender\naalert\n", "aprom", ("aprom", 9090)),
+        ("aprom-9091\nagraf\nagrafrender\n", "aprom", ("aprom-9091", 9091)),
+        ("agrafrender\nagraf-3001\n", "agraf", ("agraf-3001", 3001)),
+        ("", "aalert", ("aalert", 9093)),
+    ],
+    ids=["defaults", "moved-prometheus", "renderer-is-not-grafana", "nothing-running"],
+)
+def test_log_collector_finds_the_container_and_its_port(containers, name, expected):
+    """Log collection runs in its own process after the test, so it reads the ports off the container names."""
+    node = MagicMock()
+    node.remoter.run.return_value.stdout = containers
+
+    assert find_monitoring_container(node, name) == expected
+
+
+def test_prometheus_client_uses_the_port_the_monitor_set_picked():
+    monitor_node = MagicMock(external_address="10.0.0.60")
+    monitor_node.parent_cluster.prometheus_port = 9091
+
+    with patch.object(PrometheusDBStats, "get_configuration", return_value={}):
+        client = PrometheusDBStats.for_monitor(monitor_node)
+
+    assert (client.host, client.port) == ("10.0.0.60", 9091)
