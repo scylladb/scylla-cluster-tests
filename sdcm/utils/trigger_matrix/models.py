@@ -183,6 +183,8 @@ class BuildResult:
     build_url: str = ""
     # The Scylla version the build ran; tells apart the builds of one job in a multi-version run
     scylla_version: str = ""
+    # The build's Jenkins description; SCT jobs set it to a link to their Argus run
+    description: str = ""
 
     @property
     def success(self) -> bool:

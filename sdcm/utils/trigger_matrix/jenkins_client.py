@@ -295,6 +295,15 @@ class JenkinsClient:
                             logger.info(
                                 "Build %s #%d completed: %s", str(build.job_name), build.build_number, str(result)
                             )
+                            if result != "SUCCESS":
+                                logger.error(
+                                    "FAILED: %s #%d (%s) — %s — %s",
+                                    build.job_name,
+                                    build.build_number,
+                                    build.scylla_version,
+                                    result,
+                                    build_url,
+                                )
                             artifacts = self._collect_artifacts(
                                 build.job_url_path, build.build_number, build.collect_results
                             )
@@ -306,6 +315,7 @@ class JenkinsClient:
                                     artifacts=artifacts,
                                     build_url=build_url,
                                     scylla_version=build.scylla_version,
+                                    description=build_data.get("description") or "",
                                 )
                             )
                             continue
