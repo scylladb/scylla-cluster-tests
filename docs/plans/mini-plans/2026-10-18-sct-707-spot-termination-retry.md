@@ -87,8 +87,9 @@ The parts are independent. Part A pays off on its own and should land regardless
   | `m6i.large` (builder B) | spot, reclaimed | spot, same type, passed | — | passed |
   | `i4i.large` (builder C) | spot, reclaimed | spot, same type, reclaimed | on-demand, same type, passed | passed; builder C held for 3 runs |
 
-  The build passes with 6 Argus runs (1 + 2 + 3). A reclaimed attempt keeps its `test_error`, so
-  preemptions stay countable. The result email covers the last attempt.
+  The build passes with 6 Argus runs (1 + 2 + 3). A reclaimed attempt keeps its own Argus run, with its
+  `SpotTerminationEvent` and its own status (ABORTED when it timed out), so preemptions stay
+  countable. The result email covers the last attempt.
 
 ### Part C: rank spot candidates by interruption rate
 
