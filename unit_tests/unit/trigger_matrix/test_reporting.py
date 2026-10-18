@@ -13,7 +13,11 @@
 
 from sdcm.utils.trigger_matrix import reporting
 from sdcm.utils.trigger_matrix.models import BuildResult
-from sdcm.utils.trigger_matrix.reporting import send_trigger_matrix_email
+from sdcm.utils.trigger_matrix.reporting import (
+    build_trigger_matrix_report,
+    send_trigger_matrix_email,
+    write_trigger_matrix_report,
+)
 
 TARBALL = "https://s3.amazonaws.com/bucket/sd/scylla-doctor-1.15.0.tar.gz"
 
@@ -104,6 +108,21 @@ def test_all_passed_banner():
     )
     assert "✅ All builds PASSED." in sent()["content"]
     assert "Failures" not in sent()["content"]
+
+
+def test_report_is_saved_with_a_summary(tmp_path):
+    report = build_trigger_matrix_report(
+        build_results=[BuildResult("gating/a", 7, "SUCCESS"), BuildResult("gating/b", 8, "FAILURE")],
+        scylla_version="2025.4.3",
+        matrix_file="scylla-doctor-gating.yaml",
+        run_params={"scylla_doctor_full_tarball_url": TARBALL},
+        subject_params=["scylla_doctor_full_tarball_url"],
+    )
+    write_trigger_matrix_report(report, str(tmp_path / "out"))
+    assert (tmp_path / "out" / "trigger-matrix-summary.txt").read_text() == (
+        "FAILED | 1/2 passed | scylla-doctor-1.15.0.tar.gz, 2025.4.3\n"
+    )
+    assert (tmp_path / "out" / "trigger-matrix-report.html").read_text() == report.body
 
 
 def test_failure_shows_the_links_of_an_html_description():

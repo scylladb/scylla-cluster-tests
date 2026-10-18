@@ -3803,6 +3803,13 @@ def hdr_investigate(
     help="Comma-separated email recipients for wait-mode results report. "
     "Default: the matrix email_recipients, or qa@scylladb.com when the matrix sets none",
 )
+@click.option(
+    "--report-dir",
+    default=None,
+    type=str,
+    help="Save the wait-mode report (trigger-matrix-report.html) and its one-line summary "
+    "(trigger-matrix-summary.txt) into this directory",
+)
 def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     matrix,
     scylla_version,
@@ -3829,6 +3836,7 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     requested_by_user,
     billing_project,
     email_recipients,
+    report_dir,
 ):
     add_file_logger()
 
@@ -3941,6 +3949,7 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
             email_recipients=email_recipients.split(",") if email_recipients else None,
             image_arch=image_arch,
             version_resolution=version_resolution,
+            report_dir=report_dir,
             **overrides,
         )
     except Exception as exc:  # noqa: BLE001
