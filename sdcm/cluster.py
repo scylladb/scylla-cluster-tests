@@ -86,7 +86,7 @@ from sdcm.logcollector import (
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo, get_manager_scylla_backend
 from sdcm.monitorstack.ui import AlternatorDashboard, GeminiDashboard
-from sdcm.node_exporter_setup import NodeExporterSetup
+from sdcm.node_exporter_setup import NODE_EXPORTER_DEFAULT_PORT, NodeExporterSetup
 from sdcm.paths import (
     SCYLLA_MANAGER_AGENT_YAML_PATH,
     SCYLLA_MANAGER_TLS_CERT_FILE,
@@ -457,6 +457,8 @@ class BaseNode(AutoSshContainerMixin):
     journal_since: str | None = None
     # A host that outlives the run (bare metal) keeps one journal for every run on it
     journal_outlives_run: bool = False
+    # Where the host's node_exporter serves, set by NodeExporterSetup.install on loaders and monitors
+    node_exporter_port: int = NODE_EXPORTER_DEFAULT_PORT
 
     GOSSIP_STATUSES_FILTER_OUT = [
         "LEFT",  # in case the node was decommissioned
@@ -7399,8 +7401,8 @@ class BaseLoaderSet:
                 install_client_certificate(node.remoter, node.ip_address, force=True)
             return
 
-        node_exporter_setup = NodeExporterSetup()
-        node_exporter_setup.install(node)
+        # The address the monitor scrapes the loader at
+        node.node_exporter_port = NodeExporterSetup().install(node, scrape_host=normalize_ipv6_url(node.ip_address))
 
         if self.params.get("bare_loaders"):
             node.log.info("Don't install anything because bare loaders requested")
@@ -7680,6 +7682,8 @@ class BaseMonitorSet:
 
         if self.test_config.REUSE_CLUSTER:
             reconfigure_vector_on_node(node, self.params, self.test_config)
+            # Finds the exporter setup started: reconfigure_scylla_monitoring rewrites the monitor's target with its port
+            node.node_exporter_port = self.install_node_exporter(node)
             self.configure_scylla_monitoring(node)
             self.restart_scylla_monitoring(sct_metrics=True)
             set_grafana_url(f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}")
@@ -7902,8 +7906,7 @@ class BaseMonitorSet:
             fi
         """)
 
-        node_exporter_setup = NodeExporterSetup()
-        node_exporter_setup.install(node)
+        node.node_exporter_port = self.install_node_exporter(node)
 
         node.remoter.run(cmd="sudo bash -ce '%s'" % prereqs_script)
         node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
@@ -7911,6 +7914,11 @@ class BaseMonitorSet:
         node.remoter.run(cmd="sudo systemctl restart docker", timeout=60)
 
         docker_hub_login(remoter=node.remoter)
+
+    @staticmethod
+    def install_node_exporter(node) -> int:
+        # The monitor's own target is its private address
+        return NodeExporterSetup().install(node, scrape_host=normalize_ipv6_url(node.private_ip_address))
 
     def download_scylla_monitoring(self, node):
         install_script = dedent(
@@ -8029,7 +8037,9 @@ class BaseMonitorSet:
                     loader_targets_per_dc[loader.region] = {"targets": [], "labels": {"dc": loader.region}}
                 loader_ip_addr = getattr(loader, self.DB_NODES_IP_ADDRESS) or ""
                 if loader_ip_addr:
-                    loader_targets_per_dc[loader.region]["targets"].append(f"{normalize_ipv6_url(loader_ip_addr)}:9100")
+                    loader_targets_per_dc[loader.region]["targets"].append(
+                        f"{normalize_ipv6_url(loader_ip_addr)}:{loader.node_exporter_port}"
+                    )
 
             def update_scrape_configs(base_scrape_configs, static_config_list, job_name="node_exporter"):
                 for i, scrape_config in enumerate(base_scrape_configs):
@@ -8234,7 +8244,7 @@ class BaseMonitorSet:
                 if "monitor" not in node_export_targets_per_dc:
                     node_export_targets_per_dc["monitor"] = {"labels": {"dc": "monitor"}, "targets": []}
                 node_export_targets_per_dc["monitor"]["targets"].append(
-                    f"{normalize_ipv6_url(node.private_ip_address)}:9100"
+                    f"{normalize_ipv6_url(node.private_ip_address)}:{node.node_exporter_port}"
                 )
 
             for node in self.nodes:
