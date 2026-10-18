@@ -268,6 +268,56 @@ FIREWALL_RULE_DUMP_COMMANDS = ("iptables-save", "ip6tables-save", "nft list rule
 # how `ss` prints a listener bound to every address of the node, per address family
 CQL_WILDCARD_ADDRESSES = frozenset({"0.0.0.0", "*", "::"})
 
+# Tools the monitoring stack's scripts need on the monitor host, installed only when missing
+MONITOR_PREREQ_PACKAGES = ("curl", "unzip", "python3", "python3-pip")
+
+# Prints what the monitor host lacks: package names from MONITOR_PREREQ_PACKAGES, `python-libs` when the
+# scylla-monitoring scripts can't import their modules, `docker-group` when only root can use Docker and
+# `docker` when Docker doesn't work at all
+MONITOR_PREREQS_PROBE = """
+    for tool in curl unzip python3; do command -v $tool > /dev/null || echo $tool; done
+    if ! python3 -c "import yaml, psutil" 2> /dev/null; then
+        echo python-libs
+        command -v pip3 > /dev/null || echo python3-pip
+    fi
+    if ! docker info > /dev/null 2>&1; then
+        if sudo -n docker info > /dev/null 2>&1; then echo docker-group; else echo docker; fi
+    fi
+"""
+
+MONITOR_PYTHON_LIBS_INSTALL_SCRIPT = """
+    # PEP 668 distros refuse system-wide pip installs unless asked to
+    if pip3 install --help | grep -q break-system-packages; then
+        PIP_ARGS=--break-system-packages
+    fi
+    pip3 install $PIP_ARGS pyyaml psutil
+"""
+
+DOCKER_INSTALL_SCRIPT = f"""
+    install_docker() {{
+        local max_retries=3
+        local attempt=0
+        while [ $attempt -lt $max_retries ]; do
+            echo "Installing Docker (attempt $((attempt+1))/$max_retries)..."
+            {curl_with_retry("https://get.docker.com", follow_redirects=True, fail_early=True, output="get-docker.sh")} && bash get-docker.sh && return 0
+            attempt=$((attempt+1))
+            echo "Docker installation failed, retrying in 10 seconds..."
+            sleep 10
+        done
+        # Fallback for Rocky Linux: use CentOS repo (Rocky repo has no packages)
+        # See: https://github.com/docker/docker-install/pull/557
+        if . /etc/os-release && [ "$ID" = "rocky" ]; then
+            echo "Falling back to CentOS Docker repo for Rocky Linux..."
+            {curl_with_retry("https://download.docker.com/linux/centos/docker-ce.repo", follow_redirects=True, fail_early=True, output="/etc/yum.repos.d/docker-ce.repo")}
+            dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin && return 0
+        fi
+        echo "Docker installation failed after $max_retries attempts."
+        exit 1
+    }}
+    install_docker
+    systemctl start docker
+"""
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -7720,125 +7770,25 @@ class BaseMonitorSet:
                 docker_hub_login(remoter=node.remoter)
             return
 
-        node.update_repo_cache()
+        missing = node.remoter.run(shell_script_cmd(MONITOR_PREREQS_PROBE, quote="'"), verbose=False).stdout.split()
+        node.log.info("Missing monitor prerequisites: %s", missing or "none")
 
-        prereqs_script = dedent("""
-            # Function to wait for apt locks to be released
-            wait_for_apt_lock() {
-                echo "Waiting for apt locks to be released..."
-                local max_attempts=60
-                local attempt=0
-                while fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock >/dev/null 2>&1; do
-                    if [ $attempt -ge $max_attempts ]; then
-                        echo "Timeout waiting for apt lock after $max_attempts attempts"
-                        exit 1
-                    fi
-                    echo "Apt is locked by another process, waiting... (attempt $((attempt+1))/$max_attempts)"
-                    sleep 10
-                    attempt=$((attempt+1))
-                done
-                echo "Apt locks are free, proceeding..."
-            }
+        if packages := [item for item in missing if item in MONITOR_PREREQ_PACKAGES]:
+            node.update_repo_cache()
+            node.install_package(" ".join(packages))
 
-            # Function to install Docker and Python basics on Debian/Ubuntu
-            install_debian_pkgs() {
-                echo "Detected Debian/Ubuntu system..."
+        if "python-libs" in missing:
+            node.remoter.sudo(shell_script_cmd(MONITOR_PYTHON_LIBS_INSTALL_SCRIPT, quote="'"))
 
-                # 1. Wait for apt lock and update existing list of packages
-                wait_for_apt_lock
-                apt-get update
-
-                # 2. Install Docker prerequisites and basic Python
-                apt-get install -y \\
-                    curl \\
-                    unzip \\
-                    python3 \\
-                    python3-pip
-            }
-
-            # Function to install Docker and Python basics on CentOS/RHEL/Fedora
-            install_centos_pkgs() {
-                echo "Detected CentOS/RHEL system..."
-
-                # 1. Install basic python
-                yum install -y python3 python3-pip curl unzip wget
-            }
-
-            # Function to manage Pip and install libraries
-            install_python_libs() {
-                echo "Configuring Python environment..."
-
-                # Base pip command
-                PIP_CMD="pip3 install"
-                PIP_ARGS=""
-
-                # Check if current pip supports/requires --break-system-packages
-                if pip3 install --help | grep -q "break-system-packages"; then
-                    echo "PEP 668 detected: Enabling --break-system-packages flag."
-                    PIP_ARGS="--break-system-packages"
-                fi
-
-                # Install libraries (skip pip upgrade to avoid conflicts with system pip)
-                echo "Installing pyyaml and psutil..."
-                $PIP_CMD $PIP_ARGS pyyaml psutil
-
-                if [ $? -eq 0 ]; then
-                    echo "Python libraries installed successfully."
-                else
-                    echo "Failed to install Python libraries."
-                    exit 1
-                fi
-            }
-            install_docker() {
-                local max_retries=3
-                local attempt=0
-                while [ $attempt -lt $max_retries ]; do
-                    echo "Installing Docker (attempt $((attempt+1))/$max_retries)..."
-                    curl -fsSL https://get.docker.com --retry 5 --retry-max-time 300 $(curl --retry-all-errors --version >/dev/null 2>&1 && echo --retry-all-errors) -o get-docker.sh && \
-                        bash get-docker.sh && return 0
-                    attempt=$((attempt+1))
-                    echo "Docker installation failed, retrying in 10 seconds..."
-                    sleep 10
-                done
-                # Fallback for Rocky Linux: use CentOS repo (Rocky repo has no packages)
-                # See: https://github.com/docker/docker-install/pull/557
-                if . /etc/os-release && [ "$ID" = "rocky" ]; then
-                    echo "Falling back to CentOS Docker repo for Rocky Linux..."
-                    curl -fsSL https://download.docker.com/linux/centos/docker-ce.repo --retry 5 --retry-max-time 300 $(curl --retry-all-errors --version >/dev/null 2>&1 && echo --retry-all-errors) -o /etc/yum.repos.d/docker-ce.repo
-                    dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin && return 0
-                fi
-                echo "Docker installation failed after $max_retries attempts."
-                exit 1
-            }
-
-            start_docker() {
-                systemctl start docker
-            }
-
-            # Main execution logic
-            if [ -f /etc/debian_version ]; then
-                install_debian_pkgs
-                install_docker
-                install_python_libs
-                start_docker
-            elif [ -f /etc/redhat-release ]; then
-                install_centos_pkgs
-                install_docker
-                install_python_libs
-                start_docker
-            else
-                echo "Unsupported Operating System. This script supports Debian/Ubuntu or CentOS/RHEL."
-                exit 1
-            fi
-        """)
+        if "docker" in missing:
+            node.remoter.sudo(shell_script_cmd(DOCKER_INSTALL_SCRIPT, quote="'"))
+        if "docker" in missing or "docker-group" in missing:
+            node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
+        if "docker" in missing:
+            node.remoter.run(cmd="sudo systemctl restart docker", timeout=60)
 
         node_exporter_setup = NodeExporterSetup()
         node_exporter_setup.install(node)
-
-        node.remoter.run(cmd="sudo bash -ce '%s'" % prereqs_script)
-        node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
-
-        node.remoter.run(cmd="sudo systemctl restart docker", timeout=60)
 
         docker_hub_login(remoter=node.remoter)
 
@@ -7848,7 +7798,7 @@ class BaseMonitorSet:
             rm -rf {self.monitor_install_path_base}
             mkdir -p {self.monitor_install_path_base}
             cd {self.monitor_install_path_base}
-            wget https://github.com/scylladb/scylla-monitoring/archive/{self.monitor_branch}.zip
+            {curl_with_retry(f"https://github.com/scylladb/scylla-monitoring/archive/{self.monitor_branch}.zip", follow_redirects=True, fail_early=True, output=f"{self.monitor_branch}.zip")}
             rm -rf ./tmp {self.monitor_install_path} 2>/dev/null
             unzip {self.monitor_branch}.zip -d ./tmp
             mv ./tmp/scylla-monitoring-{self.monitor_branch}/ {self.monitor_install_path}
