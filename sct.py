@@ -80,7 +80,7 @@ from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
 from sdcm.utils.trigger_matrix.audit import audit_matrices
 from sdcm.utils.trigger_matrix.constants import VERSION_RESOLUTION_STRATEGIES
 from sdcm.utils.trigger_matrix.images import resolve_image_architecture, resolve_scylla_version_from_image
-from sdcm.utils.trigger_matrix.matrix import trigger_matrix as run_trigger_matrix
+from sdcm.utils.trigger_matrix.matrix import trigger_matrix_versions as run_trigger_matrix
 from sdcm.utils.trigger_matrix.reporting import send_arch_audit_email
 from sdcm.utils.trigger_matrix.resolution import resolve_to_full_version
 from sdcm.utils.cloud_catalog.cost import RunCostEstimate, estimate_run_cost
@@ -3685,7 +3685,8 @@ def hdr_investigate(
     default=None,
     type=str,
     help="Scylla version (e.g., master:latest, 2024.2.5-0.20250221.xxx-1). "
-    "If not provided, resolved automatically from image params",
+    "Several versions, separated by commas or spaces, trigger the matrix once per version "
+    "and wait for all of them together. If not provided, resolved automatically from image params",
 )
 @click.option("--job-folder", default=None, type=str, help="Override auto-detected Jenkins job folder")
 @click.option("--labels-selector", default=None, type=str, help="Comma-separated labels to filter jobs (AND logic)")
@@ -3852,17 +3853,20 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     # aws-strict stamps on every job. Each backend still resolves its own build later on,
     # according to the matrix' version_resolution strategy.
     # Skip if version was already resolved from image tags — that's already the real version.
-    original_version = scylla_version
-    if scylla_version and not version_from_image:
-        try:
-            scylla_version = resolve_to_full_version(scylla_version, region=region)
-            click.echo(f"Using full version: {scylla_version}")
-        except Exception as exc:  # noqa: BLE001
-            if version_resolution == "aws-strict":
-                click.echo(f"Error resolving full version: {exc}", err=True)
-                sys.exit(1)
-            click.echo(f"Warning: {exc}")
-            click.echo(f"Leaving '{original_version}' unresolved — each backend resolves its own build")
+    versions = []
+    for original_version in re.split(r"[,\s]+", scylla_version.strip()) if scylla_version else [""]:
+        full_version = original_version
+        if original_version and not version_from_image:
+            try:
+                full_version = resolve_to_full_version(original_version, region=region)
+                click.echo(f"Using full version: {full_version}")
+            except Exception as exc:  # noqa: BLE001
+                if version_resolution == "aws-strict":
+                    click.echo(f"Error resolving full version: {exc}", err=True)
+                    sys.exit(1)
+                click.echo(f"Warning: {exc}")
+                click.echo(f"Leaving '{original_version}' unresolved — each backend resolves its own build")
+        versions.append((full_version, original_version))
 
     # Detect image architecture for arch-aware job filtering
     image_arch = None
@@ -3909,8 +3913,7 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     try:
         results = run_trigger_matrix(
             matrix_file=matrix,
-            scylla_version=scylla_version or "",
-            filter_version=original_version,
+            versions=versions,
             job_folder=job_folder,
             labels_selector=labels_selector,
             backend=backend,

@@ -42,7 +42,7 @@ def call(Map pipelineParams = [:]) {
             string(name: 'matrix_file', defaultValue: matrixFile,
                    description: 'Path to trigger matrix YAML file')
             string(name: 'scylla_version', defaultValue: '',
-                   description: 'Scylla version (e.g., master:latest, 2024.2.5-0.20250221.xxx-1). If not provided, resolved from image params.')
+                   description: 'Scylla version (e.g., master:latest, 2024.2.5-0.20250221.xxx-1). Several versions, separated by commas or spaces, run the matrix once per version and are reported together. If not provided, resolved from image params.')
             string(name: 'labels_selector', defaultValue: defaultLabelsSelector,
                    description: 'Comma-separated labels to filter jobs (AND logic)')
             string(name: 'backend', defaultValue: '',
@@ -123,6 +123,9 @@ def call(Map pipelineParams = [:]) {
                                 println("Resolved {branch} placeholder: scylla_version='${scyllaVersion}'")
                             }
                         }
+                        // hydra.sh runs the command through eval, which drops the quotes: a
+                        // space-separated version list would split into separate arguments
+                        scyllaVersion = scyllaVersion.trim().split(/[\s,]+/).findAll { it }.join(',')
 
                         def paramChecks = [
                             'matrix_file': params.matrix_file,

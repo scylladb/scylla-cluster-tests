@@ -15,10 +15,11 @@ import logging
 
 import yaml
 
+from sdcm.utils.trigger_matrix import reporting
 from sdcm.utils.trigger_matrix.config import load_matrix_config
 from sdcm.utils.trigger_matrix.errors import JenkinsTriggerError
 from sdcm.utils.trigger_matrix.jenkins_client import JenkinsClient
-from sdcm.utils.trigger_matrix.matrix import trigger_matrix
+from sdcm.utils.trigger_matrix.matrix import trigger_matrix, trigger_matrix_versions
 from sdcm.utils.trigger_matrix.models import JobConfig
 
 
@@ -106,3 +107,35 @@ def test_fail_on_error_aborts_remaining(tmp_path, monkeypatch):
     )
     assert "gating/job-1" in results["failed"]
     assert "gating/job-2" in results["triggered"]
+
+
+def test_several_versions_are_waited_for_together(tmp_path, monkeypatch):
+    data = {
+        "jobs": [
+            {"job_name": "/gating/job-1", "backend": "docker", "wait": True},
+            {"job_name": "/gating/job-2", "backend": "docker"},
+        ],
+    }
+    path = tmp_path / "gating-matrix.yaml"
+    path.write_text(yaml.dump(data))
+    waits = []
+    real_wait = JenkinsClient.wait_for_builds
+
+    def record_wait(self, pending_jobs, **kwargs):
+        waits.append([(p.job_name, p.scylla_version) for p in pending_jobs])
+        return real_wait(self, pending_jobs, **kwargs)
+
+    monkeypatch.setattr(JenkinsClient, "wait_for_builds", record_wait)
+
+    results = trigger_matrix_versions(
+        matrix_file=str(path),
+        versions=[("2025.4.3", "2025.4.3"), ("2026.1.1", "2026.1.1")],
+        dry_run=True,
+    )
+
+    assert waits == [[("gating/job-1", "2025.4.3"), ("gating/job-1", "2026.1.1")]]
+    assert [entry["build"].scylla_version for entry in results["waited"]] == ["2025.4.3", "2026.1.1"]
+    assert results["triggered"] == ["gating/job-1", "gating/job-2", "gating/job-1", "gating/job-2"]
+    assert results["versions"] == {"gating/job-1": "2025.4.3, 2026.1.1", "gating/job-2": "2025.4.3, 2026.1.1"}
+    assert results["skipped"] == []
+    reporting.Email.return_value.send.assert_called_once()
