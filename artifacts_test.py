@@ -24,12 +24,14 @@ import requests
 
 from sdcm.argus_results import send_iotune_results_to_argus
 from sdcm.sct_events import Severity
+from sdcm.provision.gce.constants import BUNDLED_LOCAL_SSD_FAMILIES
 from sdcm.provision.helpers.certificate import c_s_transport_str
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.tester import ClusterTester
 from sdcm.utils.adaptive_timeouts import NodeLoadInfoServices
 from sdcm.utils.common import get_latest_scylla_release
 from sdcm.utils.issues import SkipPerIssues
+from sdcm.utils.minicloud.endpoint import is_minicloud_active
 from sdcm.utils.perftune_validator import PerftuneOutputChecker
 from sdcm.utils.validators.iotune import IOTuneValidator
 from utils.scylla_doctor import ScyllaDoctor
@@ -275,7 +277,15 @@ class ArtifactsTest(ClusterTester):
                         self.skipTest(
                             f"{self.node.db_node_instance_type} is not a supported instance - skipping this test."
                         )
-                    validator = IOTuneValidator(self.node)
+                    if is_minicloud_active(self.params):
+                        self.skipTest("minicloud guests have a virtual data disk - skipping this test.")
+                    if (
+                        backend == "gce"
+                        and not self.params.get("gce_n_local_ssd_disk_db")
+                        and self.node.db_node_instance_type.split("-", maxsplit=1)[0] not in BUNDLED_LOCAL_SSD_FAMILIES
+                    ):
+                        self.skipTest("the data disk is a persistent disk - skipping this test.")
+                    validator = IOTuneValidator(self.node, backend)
                     validator.validate()
                     send_iotune_results_to_argus(
                         self.test_config.argus_client(), validator.results, self.node, self.params
