@@ -24,20 +24,27 @@ def get_email_user(email_addr: str) -> str:
     return email_addr.strip().split("@")[0]
 
 
+# Service accounts that trigger jobs on behalf of a real user (e.g. Argus); never report them as the user
+SERVICE_USERS = ("scylladb-promoter", "github-promoter")
+
+
+def is_service_user(user: str | None) -> bool:
+    return bool(user) and get_email_user(user) in SERVICE_USERS
+
+
 def get_username() -> str:  # noqa: PLR0911
     # First we check if user is being impersonated by an api call
     actual_user_from_request = os.environ.get("BUILD_USER_REQUESTED_BY")
-    if actual_user_from_request:
+    if actual_user_from_request and not is_service_user(actual_user_from_request):
         return actual_user_from_request
 
     # Then check that we running on Jenkins try to get user email
     email = os.environ.get("BUILD_USER_EMAIL")
-    if is_email_in_scylladb_domain(email):
+    if is_email_in_scylladb_domain(email) and not is_service_user(email):
         return get_email_user(email)
 
-    user_id = os.environ.get("BUILD_USER_ID")
-    if user_id:
-        user_id = user_id.replace("[", "").replace("]", "")
+    user_id = os.environ.get("BUILD_USER_ID", "").replace("[", "").replace("]", "")
+    if user_id and not is_service_user(user_id):
         return user_id
 
     current_linux_user = getpass.getuser()
