@@ -2,7 +2,7 @@
 status: draft
 domain: cluster
 created: 2026-10-13
-last_updated: 2026-10-13
+last_updated: 2026-10-18
 owner: fruch
 ---
 
@@ -84,6 +84,10 @@ knows the list.
 - *Docker Cleanup for All Backends* (`docker-cleanup-all-backends.md`) cleans the runner's
   containers. It does not limit image disk use on test hosts.
 - The shared-host SSH tunnel clash found in the same run is fixed in PR #16445.
+- *SCT-1275* reaches lab hosts through StrongDM (SDM) instead of direct public SSH. SDM blocks SSH
+  port forwarding, so the runner reaches lab ports through nested SSH over the SDM session or
+  through SDM TCP resources. That changes how the runner reaches the monitor's ports, which this
+  plan makes dynamic (phase 4a). Phase 8 joins the two.
 
 ## 3. Goals
 
@@ -98,10 +102,14 @@ knows the list.
    how much is free and how much is needed.
 6. After a baremetal run, the images SCT left behind stay within a configured disk budget.
 7. Cloud backends behave as today: default ports, same install path.
+8. Every host check this plan adds runs over the node's SSH session, and the runner reaches the
+   monitor's ports through one lookup, so the setup works unchanged when SCT-1275 moves lab hosts
+   behind SDM.
 
 ## 4. Implementation Phases
 
 Phases 1 to 4 are independent of each other. Phase 5 builds on phase 1. Phase 7 comes last.
+Phase 8 waits for SCT-1275's connectivity choice and can land after phase 7.
 
 ```mermaid
 graph LR
@@ -111,6 +119,8 @@ graph LR
     P4a["4a Monitor picks free ports"] --> P4b["4b Port users read the chosen ports"]
     P5 --> P6["6 Image cache budget at cleanup"]
     P1 & P2 & P3 & P4b & P6 --> P7["7 Docs"]
+    P4b --> P8["8 Monitor access through SDM"]
+    SCT1275["SCT-1275 SDM connectivity"] -.-> P8
 ```
 
 ### Phase 1: Install only what is missing
@@ -229,6 +239,9 @@ graph LR
   - the Alertmanager listener;
   - Grafana annotations, screenshots and dashboard upload;
   - the Grafana link sent to Argus.
+- They get the address from one place on the monitor node (host and port together), not by
+  joining the node's IP with a port. Phase 8 changes only that place when the runner has to go
+  through SDM.
 - Defaults stay in the constructors only for callers outside a test run.
 
 **Definition of Done**:
@@ -305,6 +318,34 @@ graph LR
 
 **Dependencies**: Phases 1, 2, 3, 4b and 6.
 
+### Phase 8: Monitor access through SDM
+
+**Importance**: Important
+
+**Description**:
+
+- When a lab host is reached through SDM (SCT-1275), the runner cannot open the monitor's ports
+  directly. The monitor address lookup from phase 4b then returns a local address on the runner
+  that leads to the chosen port on the monitor host.
+- How that local address is made depends on SCT-1275's outcome:
+  - nested SSH: a `-L` forward per monitoring port over the node's SSH session, made after
+    phase 4a picked the ports;
+  - SDM TCP resources: one resource per monitoring port. Resource ports are fixed when the resource
+    is created, so the monitor has to use the ports the resources point at instead of picking free
+    ones.
+- Loader and monitor traffic to the DB nodes and Prometheus scraping stay on the lab network and
+  do not go through SDM.
+- **Needs Investigation:** which of the two SCT-1275 settles on; with SDM TCP resources, how the
+  run learns the resource ports and what happens when one of them is taken on the host.
+
+**Definition of Done**:
+
+- [ ] The SCT-1215 job, run from an AWS runner with the lab hosts behind SDM only, collects the
+      Prometheus snapshot and Grafana screenshots.
+- [ ] A run that does not use SDM gets the same addresses as after phase 4b.
+
+**Dependencies**: Phase 4b and SCT-1275.
+
 ## 5. Testing Requirements
 
 **Unit tests** (`unit_tests/unit/`), per phase:
@@ -316,6 +357,7 @@ graph LR
 - Phase 3: node_exporter detection for distro exporter, other service and free port.
 - Phase 4a: port picking from a fake listening-port list (all free, one taken, all defaults taken).
 - Phase 4b: each port user reads the node's ports.
+- Phase 8: the monitor address lookup with and without SDM, using a fake forward.
 - Phases 5 and 6: free-space parsing, storage-location detection, and the budget selection order
   (oldest first, in-use images kept).
 
@@ -334,6 +376,7 @@ graph LR
 
   The run must reach the stress commands and finish with logs collected.
 - A provision test on AWS (`provision-aws` label) to confirm cloud behaviour is unchanged.
+- Phase 8: the same `monster` job from an AWS runner once SCT-1275 lands.
 
 ## 6. Success Criteria
 
@@ -350,6 +393,7 @@ graph LR
 | The distro node_exporter lacks a collector a dashboard panel uses | Low | Empty panel | Acceptable on lab hosts; list the known gaps in the phase 7 doc |
 | Image removal races another job that is about to start a container from that image | Low | The other job re-pulls the image | Only unused images are removed, and pulls are idempotent |
 | The minimum Docker version is set too high and rejects working lab hosts | Medium | Runs fail on hosts that would work | Phase 2 sizes it from real needs; the failure message names both versions so the host owner can act |
+| SDM TCP resources have fixed ports, while phase 4a picks ports per run | Medium | The runner reaches a port the stack is not on | Phase 8 makes the monitor use the resource ports when SDM TCP resources are used; nested SSH forwards follow the chosen ports with no change |
 | Free-space minimum is too low for a run with many stress tool images | Medium | Pull fails mid-run as before | Size it from measured image totals (phase 5 investigation) and revisit when new stress tools are added |
 
 **Rollback:** each phase is its own PR and can be reverted alone. Phases 5 and 6 add config
