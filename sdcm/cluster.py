@@ -37,7 +37,7 @@ from collections import defaultdict
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import ExitStack, contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import ROUND_UP, Decimal
 from functools import cached_property, lru_cache, partial, wraps
@@ -324,6 +324,16 @@ DOCKER_INSTALL_SCRIPT = f"""
     }}
     install_docker
     systemctl start docker
+"""
+
+# Prints where Docker keeps image layers. With the containerd image store (the default since Docker 29, and Fedora's
+# moby-engine) that is containerd's root, not DockerRootDir.
+DOCKER_IMAGE_STORE_PROBE = """
+    if docker info --format "{{json .DriverStatus}}" | grep -q io.containerd.snapshotter; then
+        echo /var/lib/containerd
+    else
+        docker info --format "{{.DockerRootDir}}"
+    fi
 """
 
 LOGGER = logging.getLogger(__name__)
@@ -5812,6 +5822,61 @@ def ensure_docker_version(node: BaseNode) -> None:
     raise NodeSetupFailed(node=node, error_msg=f"Docker {found} is older than {needed}, upgrade it on the host")
 
 
+def ensure_docker_free_space(node: BaseNode, min_free_gb: int, prune: bool = True) -> bool:
+    """Fail before the first image pull when the node's Docker image store can't take the run's images.
+
+    Images no container uses are removed first, unless `prune` is off. Setup fails only if the space is still short,
+    naming the store and both sizes, instead of a pull failing mid-test with "no space left on device".
+    Returns whether it removed images.
+    """
+    if not min_free_gb:
+        return False
+    # ponytail: assumes containerd's default root; a host with a custom `root` in containerd's config is measured wrong
+    store = node.remoter.sudo(shell_script_cmd(DOCKER_IMAGE_STORE_PROBE, quote="'"), verbose=False).stdout.split()[-1]
+
+    def free_gb() -> int:
+        # No pipe: a df failure (e.g. a missing store) fails the run with df's own error
+        return int(node.remoter.run(f"df --output=avail -BG {store}", verbose=False).stdout.split()[-1].rstrip("G"))
+
+    if (free := free_gb()) >= min_free_gb:
+        return False
+    if prune:
+        node.log.warning("Only %sGB free in %s, removing images no container uses", free, store)
+        node.remoter.sudo("docker image prune --all --force", ignore_status=True)
+        free = free_gb()
+    if free < min_free_gb:
+        raise NodeSetupFailed(
+            node=node,
+            error_msg=f"Docker image store {store} has {free}GB free, the run needs {min_free_gb}GB "
+            "(docker_min_free_space_gb_loader/_monitor)",
+        )
+    return True
+
+
+@dataclass
+class _DockerHostCheck:
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    version_checked: bool = False
+    min_free_gb: int = 0
+    pruned: bool = False
+
+
+# Hosts checked in this run, by private address. A host with several roles (a lab host that is both loader and
+# monitor) gets its Docker version checked and its unused images removed once, and needs the sum of the roles' space.
+_DOCKER_HOST_CHECKS: dict[str, _DockerHostCheck] = {}
+
+
+def docker_host_preflight(node: BaseNode, min_free_gb: int) -> None:
+    """Preflight of the Docker a loader or monitor runs on: version, then free space for this role's images."""
+    host = _DOCKER_HOST_CHECKS.setdefault(node.private_ip_address, _DockerHostCheck())
+    with host.lock:
+        if not host.version_checked:
+            ensure_docker_version(node)
+            host.version_checked = True
+        host.min_free_gb += min_free_gb or 0
+        host.pruned |= ensure_docker_free_space(node, host.min_free_gb, prune=not host.pruned)
+
+
 class NodeSetupTimeout(Exception):
     pass
 
@@ -7517,8 +7582,7 @@ class BaseLoaderSet:
             if node.distro.is_fedora:
                 self._install_docker_on_fedora(node)
             node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
-        ensure_docker_version(node)
-
+        docker_host_preflight(node, self.params.get("docker_min_free_space_gb_loader"))
         # Login to Docker Hub.
         docker_hub_login(remoter=node.remoter)
 
@@ -7912,10 +7976,9 @@ class BaseMonitorSet:
 
         docker_hub_login(remoter=node.remoter)
 
-    @staticmethod
-    def preflight_check(node):
+    def preflight_check(self, node):
         """Fail before any image pull or container start if the host can't run the monitoring stack."""
-        ensure_docker_version(node)
+        docker_host_preflight(node, self.params.get("docker_min_free_space_gb_monitor"))
 
     def download_scylla_monitoring(self, node):
         install_script = dedent(
