@@ -61,21 +61,25 @@ def get_nodetool_migrate_to_tablets_status(node, keyspace: str) -> dict[str, Nod
         Status: migrating_to_tablets
 
         Nodes:
-        Host ID                              Status
-        dc1c5a03-8878-49da-a6f3-bd27d6a2d85d uses vnodes
-        b1428349-2154-41c9-a5c1-dd33c71bd571 migrating to tablets
-        017dd39a-3d06-4c8a-8ac4-379f9e595607 uses vnodes
+        Host ID                              Address    Status
+        dc1c5a03-8878-49da-a6f3-bd27d6a2d85d 10.0.0.1   uses vnodes
+        b1428349-2154-41c9-a5c1-dd33c71bd571 10.0.0.2   migrating to tablets
+        017dd39a-3d06-4c8a-8ac4-379f9e595607 10.0.0.3   uses vnodes
 
     Returns: dict of host_id -> NodeMigrationStatus.
     """
     res = node.run_nodetool(f"migrate-to-tablets status {keyspace}")
-    status: dict[str, NodeMigrationStatus] = {}
-    pattern = re.compile(r"(?P<host_id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\s+(?P<status>.+)")
+    nodes: dict[str, NodeMigrationStatus] = {}
+    statuses = "|".join(status.value for status in NodeMigrationStatus)
+    pattern = re.compile(
+        r"(?P<host_id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+        rf"(?:\s+\S+)?\s+(?P<status>{statuses})$"
+    )
     for line in res.stdout.splitlines():
         match = pattern.match(line.strip())
         if match:
-            status[match.group("host_id")] = NodeMigrationStatus(match.group("status").strip())
-    return status
+            nodes[match.group("host_id")] = NodeMigrationStatus(match.group("status"))
+    return nodes
 
 
 def is_keyspace_pow2_converged(node, keyspace: str) -> bool:
