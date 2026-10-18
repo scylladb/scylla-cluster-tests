@@ -59,6 +59,8 @@ def call(Map pipelineParams = [:]) {
                    description: 'Availability zone for jobs that do not set one in the matrix. Jobs with their own "availability_zone" param keep it.')
             string(name: 'provision_type', defaultValue: '',
                    description: 'spot | on_demand | spot_fleet|auto (auto: resolved by test duration, threshold spot_max_test_duration)')
+            choice(name: 'post_behavior_db_nodes', choices: ['', 'destroy', 'keep', 'keep-on-failure'],
+                   description: 'What the triggered jobs do with their DB nodes at the end. Empty keeps the matrix value.')
             string(name: 'scylla_ami_id', defaultValue: '',
                    description: 'Scylla AMI ID — passed to AWS jobs. Use with backend=aws to run only AWS jobs.')
             string(name: 'gce_image_db', defaultValue: '',
@@ -138,6 +140,7 @@ def call(Map pipelineParams = [:]) {
                             'region': params.region,
                             'availability_zone': params.availability_zone,
                             'provision_type': params.provision_type,
+                            'post_behavior_db_nodes': params.post_behavior_db_nodes,
                             'scylla_ami_id': params.scylla_ami_id,
                             'gce_image_db': params.gce_image_db,
                             'azure_image_db': params.azure_image_db,
@@ -187,6 +190,9 @@ def call(Map pipelineParams = [:]) {
                         }
                         if (params.provision_type?.trim()) {
                             cmd += " --provision-type '${params.provision_type}'"
+                        }
+                        if (params.post_behavior_db_nodes?.trim()) {
+                            cmd += " --post-behavior-db-nodes '${params.post_behavior_db_nodes}'"
                         }
                         if (params.scylla_ami_id?.trim()) {
                             cmd += " --scylla-ami-id '${params.scylla_ami_id}'"

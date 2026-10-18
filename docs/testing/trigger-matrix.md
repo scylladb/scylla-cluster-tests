@@ -230,7 +230,7 @@ uv run sct.py trigger-matrix \
 
 **Expected**: Each `[DRY-RUN]` log line shows the overridden parameters in the parameter output.
 
-Note: **`--region` and `--availability-zone` do not override jobs that pin their own value.** They are location parameters — a job that declares `region:` under its `params:` owns it, and the CLI value only fills in for jobs that don't. Everything else (`--provision-type`, `--stress-duration`, `--new-scylla-repo`, ...) overrides per-job values as usual.
+Note: **`--region` and `--availability-zone` do not override jobs that pin their own value.** They are location parameters — a job that declares `region:` under its `params:` owns it, and the CLI value only fills in for jobs that don't. Everything else (`--provision-type`, `--post-behavior-db-nodes`, `--stress-duration`, `--new-scylla-repo`, ...) overrides per-job values as usual. `--post-behavior-db-nodes keep-on-failure` keeps the DB nodes of the failed jobs for debugging.
 
 Precedence, highest first:
 
