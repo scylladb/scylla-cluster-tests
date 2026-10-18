@@ -25,7 +25,7 @@ from sdcm.utils.trigger_matrix.filters import filter_jobs
 from sdcm.utils.trigger_matrix.jenkins_client import JenkinsClient
 from sdcm.utils.trigger_matrix.models import BackendTarget, JobConfig, MatrixConfig, _PendingWaitJob
 from sdcm.utils.trigger_matrix.parameters import build_job_parameters, resolve_job_path
-from sdcm.utils.trigger_matrix.reporting import send_trigger_matrix_email
+from sdcm.utils.trigger_matrix.reporting import send_trigger_matrix_email, write_trigger_matrix_report
 from sdcm.utils.trigger_matrix.resolution import (
     job_uses_scylla_version,
     resolve_versions_for_targets,
@@ -48,6 +48,7 @@ def trigger_matrix(
     email_recipients: list[str] | None = None,
     image_arch: str | None = None,
     version_resolution: str | None = None,
+    report_dir: str | None = None,
     **overrides,
 ) -> dict:
     """Main entry point: load matrix, filter, build params, trigger jobs.
@@ -66,6 +67,8 @@ def trigger_matrix(
         dry_run: If True, print what would be triggered.
         version_resolution: Override the matrix' version_resolution strategy
             (per-backend | common | aws-strict).
+        report_dir: Where to save the wait-mode report and its one-line summary
+            (see `write_trigger_matrix_report`). Not saved when None.
         **overrides: Additional parameter overrides (e.g., stress_duration, region).
 
     Returns:
@@ -89,6 +92,7 @@ def trigger_matrix(
         email_recipients=email_recipients,
         image_arch=image_arch,
         version_resolution=version_resolution,
+        report_dir=report_dir,
         **overrides,
     )
 
@@ -104,6 +108,7 @@ def trigger_matrix_versions(
     email_recipients: list[str] | None = None,
     image_arch: str | None = None,
     version_resolution: str | None = None,
+    report_dir: str | None = None,
     **overrides,
 ) -> dict:
     """Trigger the matrix once per Scylla version, then wait for all wait-mode builds together.
@@ -178,7 +183,7 @@ def trigger_matrix_versions(
                         build_result.build_url,
                     )
 
-        send_trigger_matrix_email(
+        report = send_trigger_matrix_email(
             build_results=build_results,
             scylla_version=", ".join(tested_versions),
             matrix_file=matrix_file,
@@ -187,6 +192,8 @@ def trigger_matrix_versions(
             run_params=overrides,
             subject_params=config.required_params,
         )
+        if report_dir:
+            write_trigger_matrix_report(report, report_dir)
 
     logger.info(
         "Summary: %d triggered, %d skipped, %d failed",
