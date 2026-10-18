@@ -77,7 +77,7 @@ def test_node_setup_failure_repr_names_the_node_and_the_error():
 
 @pytest.mark.parametrize("owns_host", [True, False], ids=["vm-the-run-created", "shared-lab-host"])
 def test_loader_installs_docker_only_on_a_host_it_owns(monkeypatch, owns_host):
-    for name in ("TestConfig", "NodeExporterSetup", "docker_hub_login", "ensure_docker_version"):
+    for name in ("TestConfig", "NodeExporterSetup", "docker_hub_login", "docker_host_preflight"):
         monkeypatch.setattr(f"sdcm.cluster.{name}", MagicMock())
     monkeypatch.setattr("sdcm.cluster.TestConfig.return_value.REUSE_CLUSTER", False)
     loader_set = MagicMock(owns_host=owns_host)
@@ -93,7 +93,7 @@ def test_loader_installs_docker_only_on_a_host_it_owns(monkeypatch, owns_host):
 
 
 def test_prepared_loader_image_skips_the_docker_preflight(monkeypatch):
-    for name in ("TestConfig", "NodeExporterSetup", "docker_hub_login", "ensure_docker_version"):
+    for name in ("TestConfig", "NodeExporterSetup", "docker_hub_login", "docker_host_preflight"):
         monkeypatch.setattr(f"sdcm.cluster.{name}", MagicMock())
     monkeypatch.setattr("sdcm.cluster.TestConfig.return_value.REUSE_CLUSTER", False)
     loader_set = MagicMock(owns_host=True)
@@ -103,5 +103,5 @@ def test_prepared_loader_image_skips_the_docker_preflight(monkeypatch):
 
     BaseLoaderSet.node_setup(loader_set, node)
 
-    # The image comes with its Docker, which SCT built
-    sdcm_cluster.ensure_docker_version.assert_not_called()
+    # A prune for space would remove the image's pre-pulled stress tool images
+    sdcm_cluster.docker_host_preflight.assert_not_called()
