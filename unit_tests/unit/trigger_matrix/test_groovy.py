@@ -164,8 +164,8 @@ def test_escape_groovy_string(raw, expected):
             {},
             {},
             {"return_queue_url": True},
-            ["Jenkins.instance.queue.getItems().find", 'println "TRIGGERED:${rootUrl}queue/item/${queueItem.id}/"'],
-            [],
+            ["Jenkins.instance.queue.schedule2(targetJob", 'println "TRIGGERED:${rootUrl}queue/item/${queueItem.id}/"'],
+            ["queue.getItems()", "getAbsoluteUrl"],
             id="queue-url-mode",
         ),
         pytest.param(
@@ -186,7 +186,7 @@ def test_escape_groovy_string(raw, expected):
                 {"return_queue_url": return_queue_url},
                 [
                     'println "ERROR: Job not found: folder/job"',
-                    'println "ERROR: scheduleBuild2 returned null for folder/job"',
+                    'println "ERROR: build was not queued for folder/job"',
                     "TRIGGERED:",
                 ],
                 [],
