@@ -107,6 +107,25 @@ def test_dry_run_touches_no_host(cleaned, monkeypatch):
     assert [call for call in cleaned if call[0] != "containers"] == []
 
 
+def test_each_role_is_cleaned_up_by_its_own_ip_ssh_connections(cleaned, monkeypatch):
+    """A `public` cloud DB node gets its tunnel ports freed; `private` lab hosts are reached at their private address."""
+    hosts = {
+        "db_nodes": HOSTS["db_nodes"] | {"ip_ssh_connections": "public"},
+        "loader_nodes": HOSTS["loader_nodes"] | {"ip_ssh_connections": "private"},
+        "monitor_nodes": HOSTS["monitor_nodes"],
+    }
+    monkeypatch.setattr(keystore.KeyStore, "get_baremetal_config", lambda self, name: hosts)
+
+    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config(ip_ssh_connections="private"))
+
+    assert cleaned == [
+        ("containers", {"TestId": TEST_ID}),
+        ("scylla-db 1.0.0.1", True, True),
+        ("loader 10.0.0.2", False, False),
+        ("monitor 10.0.0.3", False, False),
+    ]
+
+
 def test_clean_cloud_resources_cleans_up_baremetal_hosts(monkeypatch):
     clean_baremetal = MagicMock()
     monkeypatch.setattr(resources_cleanup, "clean_resources_baremetal", clean_baremetal)
