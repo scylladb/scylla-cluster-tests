@@ -27,6 +27,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
+from sdcm.cluster import _DOCKER_HOST_CHECKS
 from sdcm.keystore import KeyStore, SSHKey
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.test_config import TestConfig
@@ -46,6 +47,17 @@ def drain_spot_provision_outcomes():
     TestConfig.SPOT_PROVISION_OUTCOMES.clear()
     yield
     TestConfig.SPOT_PROVISION_OUTCOMES.clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_docker_host_checks():
+    """Clear the module-level Docker preflight state of `sdcm.cluster` around every unit test.
+
+    A host left in it is treated as already checked, so a later test with the same address skips its checks.
+    """
+    _DOCKER_HOST_CHECKS.clear()
+    yield
+    _DOCKER_HOST_CHECKS.clear()
 
 
 @pytest.fixture(autouse=True)
