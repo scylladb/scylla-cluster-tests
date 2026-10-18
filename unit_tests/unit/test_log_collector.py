@@ -297,6 +297,28 @@ def test_get_baremetal_instances_uses_private_ip(test_id, tmp_path_factory, bare
         assert node.ssh_login_info["hostname"] == f"192.168.1.{idx + 1}"
 
 
+def test_get_baremetal_instances_use_each_roles_ip_ssh_connections(test_id, tmp_path_factory, baremetal_config):
+    """A role's own `ip_ssh_connections` in the hosts config wins over the run's."""
+    test_dir = tmp_path_factory.mktemp("log-collector-baremetal-per-role")
+    baremetal_config["db_nodes"]["ip_ssh_connections"] = "public"
+    mock_keystore = MagicMock()
+    mock_keystore.get_baremetal_config.return_value = baremetal_config
+    params = {
+        "cluster_backend": "baremetal",
+        "use_cloud_manager": False,
+        "s3_baremetal_config": "test_baremetal_config",
+        "user_credentials_path": "~/.ssh/test_key",
+        "ip_ssh_connections": "private",
+    }
+
+    with patch("sdcm.logcollector.KeyStore", return_value=mock_keystore):
+        collector = Collector(test_id=test_id, test_dir=test_dir, params=params)
+        collector.get_baremetal_instances_by_testid()
+
+    assert [node.ssh_login_info["hostname"] for node in collector.db_cluster] == ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+    assert [node.ssh_login_info["hostname"] for node in collector.loader_set] == ["192.168.2.1", "192.168.2.2"]
+
+
 def test_get_baremetal_instances_no_config(test_id, tmp_path_factory):
     """Test graceful handling when s3_baremetal_config is not set."""
     test_dir = tmp_path_factory.mktemp("log-collector-baremetal-noconfig")

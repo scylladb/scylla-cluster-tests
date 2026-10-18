@@ -258,8 +258,7 @@ def test_gce_cql_address_public_uses_test_communication():
     node.scylla_network_configuration = MagicMock()
     node.scylla_network_configuration.broadcast_rpc_address = "node-1.c.my-project.internal"
     node.scylla_network_configuration.test_communication = "34.1.2.3"
-    node.test_config = MagicMock()
-    node.test_config.IP_SSH_CONNECTIONS = "public"
+    node.ip_ssh_connections = "public"
     node.log = MagicMock()
 
     result = GCENode.cql_address.func(node)
