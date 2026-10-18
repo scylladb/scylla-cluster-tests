@@ -60,6 +60,7 @@ class _ActiveBuild:
     timeout: int
     fail_on_error: bool
     start_time: float
+    scylla_version: str = ""
 
 
 def _get_jenkins_client() -> tuple[jenkins_lib.Jenkins, str]:
@@ -214,7 +215,10 @@ class JenkinsClient:
             List of BuildResult for all jobs.
         """
         if dry_run or not pending_jobs:
-            return [BuildResult(job_name=p.job_name, build_number=0, result="SUCCESS") for p in pending_jobs]
+            return [
+                BuildResult(job_name=p.job_name, build_number=0, result="SUCCESS", scylla_version=p.scylla_version)
+                for p in pending_jobs
+            ]
 
         client, jenkins_url = self._connect()
 
@@ -235,13 +239,20 @@ class JenkinsClient:
                         timeout=pending.timeout,
                         fail_on_error=pending.fail_on_error,
                         start_time=time.time(),
+                        scylla_version=pending.scylla_version,
                     )
                 )
             except JenkinsTriggerError as exc:
                 logger.error("Failed to get build number for %s: %s", pending.job_name, exc)
                 job_url = f"{jenkins_url}/job/{pending.job_name.replace('/', '/job/')}"
                 results.append(
-                    BuildResult(job_name=pending.job_name, build_number=0, result="FAILURE", build_url=job_url)
+                    BuildResult(
+                        job_name=pending.job_name,
+                        build_number=0,
+                        result="FAILURE",
+                        build_url=job_url,
+                        scylla_version=pending.scylla_version,
+                    )
                 )
 
         logger.info("Waiting for %d builds to complete...", len(active_builds))
@@ -262,6 +273,7 @@ class JenkinsClient:
                             build_number=build.build_number,
                             result="TIMEOUT",
                             build_url=build_url,
+                            scylla_version=build.scylla_version,
                         )
                     )
                     continue
@@ -287,6 +299,7 @@ class JenkinsClient:
                                     result=result,
                                     artifacts=artifacts,
                                     build_url=build_url,
+                                    scylla_version=build.scylla_version,
                                 )
                             )
                             continue
