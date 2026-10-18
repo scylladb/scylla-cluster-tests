@@ -6,7 +6,7 @@ This backend is experimental and not regularly tested in CI.
 
 import logging
 import re
-from typing import Optional, TypedDict
+from typing import Literal, NotRequired, Optional, TypedDict
 
 from sdcm import cluster
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
@@ -32,6 +32,9 @@ class NodeInfo(TypedDict):
 class NodeCredentialInformation(TypedDict):
     username: str
     node_list: list[NodeInfo]
+    # Overrides the run's `ip_ssh_connections` for these nodes, e.g. `private` for lab hosts next to a runner in the
+    # lab while the DB nodes in a cloud stay `public`
+    ip_ssh_connections: NotRequired[Literal["public", "private"]]
 
 
 class BareMetalCredentials(TypedDict):
@@ -283,7 +286,7 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
     def _init_port_mapping(self):
         # Nodes sharing a host (a loader and a monitor on one machine) share its tunnel ports, and the tunnel of the
         # first one serves both: releasing the ports again would kill that live tunnel, not a stale one.
-        if self.test_config.IP_SSH_CONNECTIONS == "public" and self._public_ip not in self._tunnel_ports_released_on:
+        if self.ip_ssh_connections == "public" and self._public_ip not in self._tunnel_ports_released_on:
             self._tunnel_ports_released_on.add(self._public_ip)
             self._release_stale_tunnel_ports()
         super()._init_port_mapping()
@@ -369,6 +372,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):
     def __init__(self, **kwargs):
         self.nodes = []
         self.credentials = kwargs.pop("credentials")
+        self.ip_ssh_connections = kwargs.pop("ip_ssh_connections", None)
         n_nodes = kwargs.get("n_nodes")
         self._node_public_ips = kwargs.pop("public_ips", None) or []
         self._node_private_ips = kwargs.pop("private_ips", None) or []
