@@ -15,6 +15,12 @@ One exception: `job_throttle_category` is *also* forwarded to Jenkins as a build
 name (via `setdefault`, so a `params:` entry of the same name wins). Every other job-level key stops at
 the trigger.
 
+A `wait: true` job is waited for by the trigger, which reports its result. Its `wait_timeout` (seconds)
+applies twice: to the time the build may spend in the Jenkins queue, and then to its run. A build still
+queued after it is reported as `NOT_STARTED`, one still running after it as `TIMEOUT`; both fail the run.
+Queued and running builds are polled together, so a build waiting for an agent never holds back the
+results of the others.
+
 **Everything else is a Jenkins job parameter and belongs under `params:`** — including `region` and
 `availability_zone`, which used to sit at job level.
 
