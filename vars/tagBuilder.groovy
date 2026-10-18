@@ -31,7 +31,15 @@ private String deriveJenkinsJob(String buildTag) {
 }
 
 private String GetBillingProjectTag() {
-    // First, try to derive from the JOB_NAME
+    // An explicitly chosen billing project wins, same as in SCT itself
+    try {
+        if (params.billing_project) {
+            return params.billing_project
+        }
+    } catch (ignored) {
+    }
+
+    // Then, try to derive from the JOB_NAME
     def jobName = env.JOB_NAME
     if (jobName) {
         def releaseFolder = jobName.split('/')[0]
@@ -51,7 +59,7 @@ private String GetBillingProjectTag() {
     if (gitBranch) {
         // The GIT_BRANCH might be prefixed with 'origin/', remove it
         def branchName = gitBranch.split('/').last()
-        if (branchName == ~/"branch-\d*\.\d*/) {
+        if (branchName ==~ /branch-\d*\.\d*/) {
             echo "Project tag '${branchName}' derived from GIT_BRANCH."
             return branchName - ~/^branch-/
         }
@@ -327,7 +335,8 @@ def applyTagsWithCreds(Map cloudInfo, Map tags) {
             secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
         ]]) {
             def maxTagLength = 256
-            def tagsArg = tags.collect { k, v -> "Key=${k},Value=${normalizeValueLength(v, maxTagLength)}" }.join(' ')
+            // quoted: values such as billing_project may contain spaces
+            def tagsArg = tags.collect { k, v -> "'Key=${k},Value=${normalizeValueLength(v, maxTagLength)}'" }.join(' ')
             sh "aws ec2 create-tags --resources ${cloudInfo.instanceId} --tags ${tagsArg} --region ${cloudInfo.region}"
         }
     }
