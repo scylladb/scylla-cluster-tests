@@ -42,6 +42,12 @@ from sdcm.utils.trigger_matrix.models import BuildResult, _PendingWaitJob
 logger = logging.getLogger(__name__)
 
 
+def _in_trigger_order(results: list[BuildResult], pending_jobs: list[_PendingWaitJob]) -> list[BuildResult]:
+    """Sort build results in the order their jobs were triggered, not the order they finished in."""
+    order = {(p.job_name, p.scylla_version): index for index, p in enumerate(pending_jobs)}
+    return sorted(results, key=lambda r: order.get((r.job_name, r.scylla_version), len(order)))
+
+
 @dataclass
 class _ActiveBuild:
     """Internal: a build that has left the queue and is being polled to completion.
@@ -312,7 +318,7 @@ class JenkinsClient:
             if active_builds:
                 time.sleep(poll_interval)
 
-        return results
+        return _in_trigger_order(results, pending_jobs)
 
     def _wait_for_build_start(self, queue_url: str, timeout: int = 600) -> int:
         """Poll Jenkins queue item until a build number is assigned."""

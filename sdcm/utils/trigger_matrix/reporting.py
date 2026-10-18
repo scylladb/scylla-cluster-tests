@@ -61,24 +61,6 @@ def send_trigger_matrix_email(
         f'<b>Trigger job:</b> <a href="{trigger_job_url}">View trigger run</a><br/>' if trigger_job_url else ""
     )
 
-    rows = []
-    for result in build_results:
-        emoji = "✅" if result.success else "❌"
-        artifacts_str = ", ".join(result.artifacts) if result.artifacts else "—"
-        job_cell = (
-            f'<a href="{result.build_url}">{emoji} {result.job_name}</a>'
-            if result.build_url
-            else f"{emoji} {result.job_name}"
-        )
-        build_cell = (
-            f'<a href="{result.build_url}">#{result.build_number}</a>'
-            if result.build_url
-            else f"#{result.build_number}"
-        )
-        rows.append(
-            f"<tr><td>{job_cell}</td><td>{build_cell}</td><td><b>{result.result}</b></td><td>{artifacts_str}</td></tr>"
-        )
-
     params_lines = "".join(
         f"<b>{html.escape(name)}:</b> {html.escape(str(value))}<br/>" for name, value in run_params.items()
     )
@@ -88,10 +70,7 @@ def send_trigger_matrix_email(
 <p><b>Version:</b> {scylla_version}<br/>
 <b>Matrix:</b> {matrix_file}<br/>
 {params_lines}{trigger_line}<b>Overall:</b> {status}</p>
-<table border="1" cellpadding="5" cellspacing="0">
-<tr><th>Job</th><th>Build</th><th>Result</th><th>Artifacts</th></tr>
-{"".join(rows)}
-</table>
+{_results_table(build_results)}
 </body></html>"""
 
     try:
@@ -100,6 +79,34 @@ def send_trigger_matrix_email(
         logger.info("Email report sent to %s", recipients)
     except Exception as exc:  # noqa: BLE001 - email failure is non-fatal
         logger.warning("Failed to send email report: %s", exc)
+
+
+def _result_cell(result: BuildResult | None) -> str:
+    """One build of the results table: its result linked to the build, then its artifacts."""
+    if result is None:
+        return "—"
+    label = f"{'✅' if result.success else '❌'} {result.result}"
+    cell = f'<a href="{result.build_url}">{label}</a> #{result.build_number}' if result.build_url else label
+    for url in result.artifacts:
+        cell += f'<br/><small><a href="{url}">{html.escape(url.rsplit("/", 1)[-1])}</a></small>'
+    return cell
+
+
+def _results_table(build_results: list[BuildResult]) -> str:
+    """The builds as a grid: a row per job, a column per Scylla version."""
+    versions = list(dict.fromkeys(result.scylla_version for result in build_results))
+    jobs = list(dict.fromkeys(result.job_name for result in build_results))
+    by_cell = {(result.job_name, result.scylla_version): result for result in build_results}
+    header = "".join(f"<th>{html.escape(version or 'Result')}</th>" for version in versions)
+    rows = "".join(
+        f"<tr><td>{html.escape(job)}</td>"
+        + "".join(f"<td>{_result_cell(by_cell.get((job, version)))}</td>" for version in versions)
+        + "</tr>\n"
+        for job in jobs
+    )
+    return f"""<table border="1" cellpadding="5" cellspacing="0">
+<tr><th>Job</th>{header}</tr>
+{rows}</table>"""
 
 
 def send_arch_audit_email(report: AuditReport, recipients: list[str], job_url: str | None = None) -> None:
