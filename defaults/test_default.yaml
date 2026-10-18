@@ -254,6 +254,7 @@ gce_spot_obtainability_min: 0.0
 
 # 12h. Tests longer than this default to on_demand: spot interruption exposure grows with runtime.
 spot_max_test_duration: 720
+spot_termination_retry: []
 
 enable_argus: true
 argus_use_ssh_tunnel: true

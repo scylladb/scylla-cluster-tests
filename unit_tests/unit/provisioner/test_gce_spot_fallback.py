@@ -26,6 +26,7 @@ import pytest
 from sdcm.keystore import SSHKey
 from sdcm.provision.gce.instance_provider import VirtualMachineProvider, build_scheduling
 from sdcm.provision.provisioner import (
+    InstanceConfigurationError,
     InstanceDefinition,
     OperationPreemptedError,
     PricingModel,
@@ -147,6 +148,24 @@ def test_preempted_spot_is_reprovisioned_on_demand():
     # for spot again, or a definition missing from the provisioner cache is re-created at the very
     # pricing that just failed.
     assert calls == [PricingModel.SPOT, PricingModel.ON_DEMAND, PricingModel.ON_DEMAND]
+
+
+def test_failed_on_demand_fallback_does_not_chain_the_preemption():
+    """`spot-retry-decision` reads `OperationPreemptedError` in the failure text as a spot reclaim."""
+
+    def create(**kwargs):
+        if kwargs.get("pricing_model") is PricingModel.SPOT:
+            raise OperationPreemptedError("Instance failed to start due to preemption.")
+        raise InstanceConfigurationError("quota exceeded")
+
+    with pytest.raises(InstanceConfigurationError) as error:
+        provision_instances_with_fallback(
+            _provisioner(create_side_effect=create),
+            definitions=[MagicMock(use_public_ip=True)],
+            pricing_model=PricingModel.SPOT,
+            fallback_on_demand=True,
+        )
+    assert error.value.__context__ is None
 
 
 def test_preemption_is_raised_when_fallback_is_disabled():

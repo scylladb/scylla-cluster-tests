@@ -89,19 +89,23 @@ def provision_instances_with_fallback(
     requested = pricing_model.value
     realized = requested
     try:
+        preempted = False
         try:
             provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
         except OperationPreemptedError:
-            if pricing_model.is_spot() and fallback_on_demand:
-                LOGGER.warning("Spot instances were preempted during provisioning, falling back to on-demand")
-                # Rebinding matters beyond this retry: the `get_or_create_instances` call below is handed
-                # this same variable, and it defaults to spot, so leaving it unchanged would re-create any
-                # uncached definition at exactly the pricing that just failed.
-                pricing_model = PricingModel.ON_DEMAND
-                realized = pricing_model.value
-                provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
-            else:
+            if not (pricing_model.is_spot() and fallback_on_demand):
                 raise
+            preempted = True
+        # Outside the `except`: a failed on-demand retry must not chain the preemption into its traceback,
+        # or `spot-retry-decision` reads the failure as a spot reclaim (SCT-707).
+        if preempted:
+            LOGGER.warning("Spot instances were preempted during provisioning, falling back to on-demand")
+            # Rebinding matters beyond this retry: the `get_or_create_instances` call below is handed
+            # this same variable, and it defaults to spot, so leaving it unchanged would re-create any
+            # uncached definition at exactly the pricing that just failed.
+            pricing_model = PricingModel.ON_DEMAND
+            realized = pricing_model.value
+            provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
     except Exception:
         # Report before re-raising: this path raises rather than returning empty, so recording afterwards
         # would mean the total-failure case - the one worth alerting on - is the one never recorded.

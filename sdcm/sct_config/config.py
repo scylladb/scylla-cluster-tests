@@ -63,7 +63,7 @@ from sdcm.utils.common import (
     get_sct_root_path,
     get_vector_store_ami_versions,
 )
-from sdcm.utils import oci_utils
+from sdcm.utils import oci_utils, spot_retry
 from sdcm.utils.operations_thread import ConfigParams
 from sdcm.utils.version_utils import (
     ARGUS_VERSION_RE,
@@ -1864,6 +1864,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
         if (nvme_test_type := self.get("nvme_self_test_type")) not in (1, 2):
             raise ValueError(f"nvme_self_test_type must be 1 (short) or 2 (extended), got {nvme_test_type!r}")
+
+        spot_retry.validate_policy(self.get("spot_termination_retry") or [])
 
     def _get_normalized_arch(self, instance_type: str, region_name: str, default: str = "x86_64") -> str:
         """Detect architecture from AWS instance type and normalize to Scylla package naming.
