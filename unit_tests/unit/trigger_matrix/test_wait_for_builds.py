@@ -23,6 +23,7 @@ which makes the timeout branches deterministic rather than slow.
 """
 
 import json
+import logging
 from unittest.mock import MagicMock, patch
 
 import jenkins as jenkins_lib
@@ -224,6 +225,17 @@ def test_non_success_verdicts_are_passed_through(client, clock, verdict):
     (result,) = jenkins.wait_for_builds([pending()])
     assert result.result == verdict
     assert not result.success
+
+
+def test_failed_build_keeps_its_description_and_is_logged(client, clock, caplog):
+    jenkins, api = client
+    api.jenkins_open.side_effect = _responses(
+        {"executable": {"number": 1}}, {"building": False, "result": "FAILURE", "description": "SD analyzer failed"}
+    )
+    with caplog.at_level(logging.ERROR):
+        (result,) = jenkins.wait_for_builds([pending()])
+    assert result.description == "SD analyzer failed"
+    assert "FAILED: tier1/longevity #1" in caplog.text
 
 
 def test_a_still_building_job_is_polled_again(client, clock):

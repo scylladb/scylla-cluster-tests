@@ -15,6 +15,7 @@
 
 import html
 import logging
+import re
 from pathlib import Path
 
 from sdcm.utils.cloud_monitor.cloud_monitor import Email
@@ -71,6 +72,7 @@ def send_trigger_matrix_email(
 <b>Matrix:</b> {matrix_file}<br/>
 {params_lines}{trigger_line}<b>Overall:</b> {status}</p>
 {_results_table(build_results)}
+{_failures_section(build_results)}
 </body></html>"""
 
     try:
@@ -107,6 +109,38 @@ def _results_table(build_results: list[BuildResult]) -> str:
     return f"""<table border="1" cellpadding="5" cellspacing="0">
 <tr><th>Job</th>{header}</tr>
 {rows}</table>"""
+
+
+def _description_html(description: str) -> str:
+    """A build's Jenkins description, made safe for the report.
+
+    SCT jobs set it to an HTML block linking to their Argus run. Its links are kept as links,
+    with their text alone; a description without links is shown as plain text.
+    """
+
+    def text(markup: str) -> str:
+        return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", markup)).split())
+
+    links = re.findall(
+        r"<a\b[^>]*\bhref=['\"]([^'\"]+)['\"][^>]*>(.*?)</a>", description, flags=re.DOTALL | re.IGNORECASE
+    )
+    if links:
+        return " ".join(f'<a href="{html.escape(url)}">{html.escape(text(label) or url)}</a>' for url, label in links)
+    return html.escape(text(description))
+
+
+def _failures_section(build_results: list[BuildResult]) -> str:
+    """What went wrong in each failed build, or a banner saying all builds passed."""
+    failed = [result for result in build_results if not result.success]
+    if not failed:
+        return "<p><b>✅ All builds PASSED.</b></p>"
+    items = []
+    for result in failed:
+        version = f" ({html.escape(result.scylla_version)})" if result.scylla_version else ""
+        link = f' — <a href="{result.build_url}">View build</a>' if result.build_url else ""
+        reason = f"<br/><small>{_description_html(result.description)}</small>" if result.description else ""
+        items.append(f"<li><b>{html.escape(result.job_name)}</b>{version} — {result.result}{link}{reason}</li>")
+    return f"<h3>Failures</h3>\n<ul>{''.join(items)}</ul>"
 
 
 def send_arch_audit_email(report: AuditReport, recipients: list[str], job_url: str | None = None) -> None:

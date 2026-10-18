@@ -73,3 +73,56 @@ def test_results_are_a_grid_of_jobs_by_version():
         "<td>❌ UNSTABLE</td></tr>"
     ) in content
     assert "<tr><td>gating/b</td><td>❌ FAILURE</td><td>—</td></tr>" in content
+
+
+def test_failures_section_says_why_each_build_failed():
+    send_trigger_matrix_email(
+        build_results=[
+            BuildResult("gating/a", 7, "SUCCESS", scylla_version="2025.4.3"),
+            BuildResult(
+                "gating/b",
+                8,
+                "FAILURE",
+                build_url="https://j/b/8",
+                scylla_version="2025.4.3",
+                description="analyzer &lt;X&gt; failed",
+            ),
+        ],
+        scylla_version="2025.4.3",
+        matrix_file="m.yaml",
+    )
+    assert (
+        '<h3>Failures</h3>\n<ul><li><b>gating/b</b> (2025.4.3) — FAILURE — <a href="https://j/b/8">View build</a>'
+        "<br/><small>analyzer &lt;X&gt; failed</small></li></ul>"
+    ) in sent()["content"]
+    assert "All builds PASSED" not in sent()["content"]
+
+
+def test_all_passed_banner():
+    send_trigger_matrix_email(
+        build_results=[BuildResult("gating/a", 7, "SUCCESS")], scylla_version="2025.4.3", matrix_file="m.yaml"
+    )
+    assert "✅ All builds PASSED." in sent()["content"]
+    assert "Failures" not in sent()["content"]
+
+
+def test_failure_shows_the_links_of_an_html_description():
+    description = """
+        <div style="margin: 12px 4px;">
+            <a
+                href='https://argus.scylladb.com/tests/scylla-cluster-tests/1888'
+            >
+                Argus: <span style='font-weight: 500'>1888</span>
+            </a>
+        </div>
+    """
+    send_trigger_matrix_email(
+        build_results=[BuildResult("gating/b", 8, "FAILURE", description=description)],
+        scylla_version="2025.4.3",
+        matrix_file="m.yaml",
+    )
+    assert (
+        '<br/><small><a href="https://argus.scylladb.com/tests/scylla-cluster-tests/1888">Argus: 1888</a></small>'
+        in sent()["content"]
+    )
+    assert "&lt;div" not in sent()["content"]
