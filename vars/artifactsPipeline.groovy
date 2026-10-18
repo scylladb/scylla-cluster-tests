@@ -302,187 +302,216 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
-                                        stage('Create Argus Test Run') {
-                                            catchError(stageResult: 'FAILURE') {
-                                                script {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            timeout(time: 5, unit: 'MINUTES') {
-                                                                createArgusTestRun(params)
+                                        // Re-run the test in this build if a spot reclaim takes it down (spot_termination_retry).
+                                        def finalTestId = runWithSpotRetry(params, instance_type) { provisionType ->
+                                            def testError = null
+                                            stage('Create Argus Test Run') {
+                                                catchError(stageResult: 'FAILURE') {
+                                                    script {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                timeout(time: 5, unit: 'MINUTES') {
+                                                                    createArgusTestRun(params)
+                                                                }
                                                             }
                                                         }
                                                     }
                                                 }
                                             }
-                                        }
-                                        stage("Run SCT Test (${instance_type})") {
-                                            // Timeout for the test itself
-                                            timeout(time: pipelineParams.timeout.time, unit: 'MINUTES') {
-                                                def cloud_provider = getCloudProviderFromBackend(params.backend)
-                                                sctScript """
-                                                    rm -fv ./latest
+                                            stage("Run SCT Test (${instance_type})") {
+                                                // Elapsed time tells a fired timeout from an abort: the exception's causes are not
+                                                // readable from the sandbox (FlowInterruptedException.getCauses is not whitelisted).
+                                                def testStartedMs = currentBuild.duration
+                                                // Timeout for the test itself
+                                                timeout(time: pipelineParams.timeout.time, unit: 'MINUTES') {
+                                                    def cloud_provider = getCloudProviderFromBackend(params.backend)
+                                                    try {
+                                                        sctScript("""
+                                                            rm -fv ./latest
 
-                                                    # In runner topology ./sct_runner_ip was just written by
-                                                    # create-runner-instance and is what selects --execute-on-runner
-                                                    # below - only a builder-local run may sweep a stale one.
-                                                    if [[ "${useRunner}" != "true" ]] ; then
-                                                        rm -fv ./sct_runner_ip
-                                                    fi
+                                                            # In runner topology ./sct_runner_ip was just written by
+                                                            # create-runner-instance and is what selects --execute-on-runner
+                                                            # below - only a builder-local run may sweep a stale one.
+                                                            if [[ "${useRunner}" != "true" ]] ; then
+                                                                rm -fv ./sct_runner_ip
+                                                            fi
 
-                                                    if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
-                                                        export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
-                                                    fi
-                                                    export SCT_COLLECT_LOGS=false
-                                                    export SCT_CONFIG_FILES=${test_config}
-                                                    if [[ -n "${params.region ? params.region : ''}" ]] ; then
-                                                        export SCT_REGION_NAME='${params.region}'
-                                                    fi
-                                                    if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-                                                        export SCT_GCE_DATACENTER='${params.gce_datacenter}'
-                                                    fi
-                                                    if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
-                                                        export SCT_AZURE_REGION_NAME=${params.azure_region_name}
-                                                    fi
-                                                    if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
-                                                        export SCT_OCI_REGION_NAME=${params.oci_region_name}
-                                                    fi
-                                                    if [[ ! -z "${params.scylla_ami_id}" ]]; then
-                                                        export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
-                                                    elif [[ ! -z "${params.gce_image_db}" ]]; then
-                                                        export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
-                                                    elif [[ ! -z "${params.azure_image_db}" ]]; then
-                                                        export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
-                                                    elif [[ ! -z "${params.oci_image_db}" ]]; then
-                                                        export SCT_OCI_IMAGE_DB="${params.oci_image_db}"
-                                                    elif [[ ! -z "${params.scylla_version}" ]]; then
-                                                        export SCT_SCYLLA_VERSION="${params.scylla_version}"
-                                                    elif [[ ! -z "${params.scylla_repo}" ]]; then
-                                                        export SCT_SCYLLA_REPO="${params.scylla_repo}"
-                                                    elif [[ ! -z "${params.unified_package}" ]]; then
-                                                        export SCT_UNIFIED_PACKAGE="${params.unified_package}"
-                                                        export SCT_NONROOT_OFFLINE_INSTALL=${params.nonroot_offline_install}
-                                                        export SCT_USE_MGMT=false
-                                                    else
-                                                        echo "need to choose one of SCT_AZURE_IMAGE_DB | SCT_GCE_IMAGE_DB | SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_UNIFIED_PACKAGE"
-                                                        exit 1
-                                                    fi
+                                                            if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
+                                                                export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
+                                                            fi
+                                                            export SCT_COLLECT_LOGS=false
+                                                            export SCT_CONFIG_FILES=${test_config}
+                                                            if [[ -n "${params.region ? params.region : ''}" ]] ; then
+                                                                export SCT_REGION_NAME='${params.region}'
+                                                            fi
+                                                            if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
+                                                                export SCT_GCE_DATACENTER='${params.gce_datacenter}'
+                                                            fi
+                                                            if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
+                                                                export SCT_AZURE_REGION_NAME=${params.azure_region_name}
+                                                            fi
+                                                            if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
+                                                                export SCT_OCI_REGION_NAME=${params.oci_region_name}
+                                                            fi
+                                                            if [[ ! -z "${params.scylla_ami_id}" ]]; then
+                                                                export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
+                                                            elif [[ ! -z "${params.gce_image_db}" ]]; then
+                                                                export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
+                                                            elif [[ ! -z "${params.azure_image_db}" ]]; then
+                                                                export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
+                                                            elif [[ ! -z "${params.oci_image_db}" ]]; then
+                                                                export SCT_OCI_IMAGE_DB="${params.oci_image_db}"
+                                                            elif [[ ! -z "${params.scylla_version}" ]]; then
+                                                                export SCT_SCYLLA_VERSION="${params.scylla_version}"
+                                                            elif [[ ! -z "${params.scylla_repo}" ]]; then
+                                                                export SCT_SCYLLA_REPO="${params.scylla_repo}"
+                                                            elif [[ ! -z "${params.unified_package}" ]]; then
+                                                                export SCT_UNIFIED_PACKAGE="${params.unified_package}"
+                                                                export SCT_NONROOT_OFFLINE_INSTALL=${params.nonroot_offline_install}
+                                                                export SCT_USE_MGMT=false
+                                                            else
+                                                                echo "need to choose one of SCT_AZURE_IMAGE_DB | SCT_GCE_IMAGE_DB | SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_UNIFIED_PACKAGE"
+                                                                exit 1
+                                                            fi
 
-                                                    if [[ ! -z "${params.scylla_mgmt_address}" && -z "${params.unified_package}" ]]; then
-                                                        export SCT_USE_MGMT=true
-                                                        export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
-                                                        export SCT_SCYLLA_MGMT_ADDRESS="${params.scylla_mgmt_address}"
-                                                    fi
+                                                            if [[ ! -z "${params.scylla_mgmt_address}" && -z "${params.unified_package}" ]]; then
+                                                                export SCT_USE_MGMT=true
+                                                                export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
+                                                                export SCT_SCYLLA_MGMT_ADDRESS="${params.scylla_mgmt_address}"
+                                                            fi
 
-                                                    if [[ ! -z "${params.manager_version}" && -z "${params.unified_package}" ]]; then
-                                                        export SCT_USE_MGMT=true
-                                                        export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
-                                                        export SCT_MANAGER_VERSION="${params.manager_version}"
-                                                    fi
+                                                            if [[ ! -z "${params.manager_version}" && -z "${params.unified_package}" ]]; then
+                                                                export SCT_USE_MGMT=true
+                                                                export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
+                                                                export SCT_MANAGER_VERSION="${params.manager_version}"
+                                                            fi
 
-                                                    if [[ ! -z "${params.scylla_mgmt_agent_address}" ]] ; then
-                                                        export SCT_SCYLLA_MGMT_AGENT_ADDRESS="${params.scylla_mgmt_agent_address}"
-                                                    fi
+                                                            if [[ ! -z "${params.scylla_mgmt_agent_address}" ]] ; then
+                                                                export SCT_SCYLLA_MGMT_AGENT_ADDRESS="${params.scylla_mgmt_agent_address}"
+                                                            fi
 
-                                                    if [[ ! -z "${params.scylla_docker_image}" ]]; then
-                                                        export SCT_DOCKER_IMAGE="${params.scylla_docker_image}"
-                                                        if [[ -z "${params.scylla_version}" ]]; then
-                                                            echo "need to provide SCT_SCYLLA_VERSION for Docker backend"
-                                                            exit 1
-                                                        fi
-                                                    fi
+                                                            if [[ ! -z "${params.scylla_docker_image}" ]]; then
+                                                                export SCT_DOCKER_IMAGE="${params.scylla_docker_image}"
+                                                                if [[ -z "${params.scylla_version}" ]]; then
+                                                                    echo "need to provide SCT_SCYLLA_VERSION for Docker backend"
+                                                                    exit 1
+                                                                fi
+                                                            fi
 
-                                                    if [[ ! -z "${instance_type}" ]]; then
-                                                        case "${params.backend}" in
-                                                            "aws")
-                                                                export SCT_INSTANCE_TYPE_DB="${instance_type}"
-                                                                ;;
-                                                            "gce")
-                                                                export SCT_GCE_INSTANCE_TYPE_DB="${instance_type}"
-                                                                ;;
-                                                            "azure")
-                                                                export SCT_AZURE_INSTANCE_TYPE_DB="${instance_type}"
-                                                                ;;
-                                                            "oci")
-                                                                export SCT_OCI_INSTANCE_TYPE_DB="${instance_type}"
-                                                                ;;
-                                                        esac
-                                                    fi
+                                                            if [[ ! -z "${instance_type}" ]]; then
+                                                                case "${params.backend}" in
+                                                                    "aws")
+                                                                        export SCT_INSTANCE_TYPE_DB="${instance_type}"
+                                                                        ;;
+                                                                    "gce")
+                                                                        export SCT_GCE_INSTANCE_TYPE_DB="${instance_type}"
+                                                                        ;;
+                                                                    "azure")
+                                                                        export SCT_AZURE_INSTANCE_TYPE_DB="${instance_type}"
+                                                                        ;;
+                                                                    "oci")
+                                                                        export SCT_OCI_INSTANCE_TYPE_DB="${instance_type}"
+                                                                        ;;
+                                                                esac
+                                                            fi
 
-                                                    if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
-                                                        export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                                                    fi
-                                                    if [[ -n "${params.ip_ssh_connections ? params.ip_ssh_connections : ''}" ]] ; then
-                                                        export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
-                                                    fi
-                                                    if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
-                                                        export SCT_INSTANCE_PROVISION="${params.provision_type}"
-                                                    fi
-                                                    if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
-                                                        export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
-                                                    fi
+                                                            if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
+                                                                export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                                            fi
+                                                            if [[ -n "${params.ip_ssh_connections ? params.ip_ssh_connections : ''}" ]] ; then
+                                                                export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
+                                                            fi
+                                                            if [[ -n "${provisionType ?: ''}" ]] ; then
+                                                                export SCT_INSTANCE_PROVISION="${provisionType}"
+                                                            fi
+                                                            if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
+                                                                export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                                            fi
 
-                                                    if [[ ! -z "${params.scylla_doctor_full_tarball_url}" ]]; then
-                                                        export SCT_SCYLLA_DOCTOR_FULL_TARBALL_URL="${params.scylla_doctor_full_tarball_url}"
-                                                    fi
-                                                    if [[ "${params.run_scylla_doctor_only}" == "true" ]]; then
-                                                        export SCT_RUN_SCYLLA_DOCTOR_ONLY=true
-                                                    fi
-                                                    if [[ ! -z "${params.scylla_doctor_edition}" ]]; then
-                                                        export SCT_SCYLLA_DOCTOR_EDITION="${params.scylla_doctor_edition}"
-                                                    fi
+                                                            if [[ ! -z "${params.scylla_doctor_full_tarball_url}" ]]; then
+                                                                export SCT_SCYLLA_DOCTOR_FULL_TARBALL_URL="${params.scylla_doctor_full_tarball_url}"
+                                                            fi
+                                                            if [[ "${params.run_scylla_doctor_only}" == "true" ]]; then
+                                                                export SCT_RUN_SCYLLA_DOCTOR_ONLY=true
+                                                            fi
+                                                            if [[ ! -z "${params.scylla_doctor_edition}" ]]; then
+                                                                export SCT_SCYLLA_DOCTOR_EDITION="${params.scylla_doctor_edition}"
+                                                            fi
 
-                                                    echo "start test ......."
-                                                    RUNNER_IP=\$(cat sct_runner_ip||echo "")
-                                                    if [[ -n "\${RUNNER_IP}" ]] ; then
-                                                        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} run-test artifacts_test --backend ${params.backend}
-                                                    else
-                                                        ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
-                                                    fi
-                                                    echo "end test ....."
-                                                """
-                                            }
-                                        }
-                                        stage("Collect log data (${instance_type})") {
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
-                                                        timeout(time: 30, unit: 'MINUTES') {
-                                                            runCollectLogs(params, builder.region)
+                                                            echo "start test ......."
+                                                            RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                                            if [[ -n "\${RUNNER_IP}" ]] ; then
+                                                                ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} run-test artifacts_test --backend ${params.backend}
+                                                            else
+                                                                ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
+                                                            fi
+                                                            echo "end test ....."
+                                                        """, false)
+                                                    } catch (failure) {
+                                                        def timedOut = currentBuild.duration - testStartedMs >= pipelineParams.timeout.time * 60000
+                                                        // A fired timeout is a failure like any other, so it can be retried: a reclaimed GCE
+                                                        // node can leave the test retrying SSH until the timeout fires.
+                                                        testError = timedOut ? new Exception("Run SCT Test timed out after ${pipelineParams.timeout.time} minutes") : failure
+                                                        if (runWithSpotRetry.isAbort(testError)) {
+                                                            // Never retried, so record it now: 'Finish Argus Test Run' reads currentResult.
+                                                            catchError(buildResult: 'ABORTED', stageResult: 'ABORTED') { throw failure }
+                                                        } else {
+                                                            // Mark only this stage: the build result waits for runWithSpotRetry to decide. A plain
+                                                            // error() rather than a rethrow, so a timeout's interruption cannot set the build result.
+                                                            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') { error("Run SCT Test failed: ${failure}") }
                                                         }
                                                     }
                                                 }
                                             }
-                                        }
-                                        stage("Clean resources (${instance_type})") {
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
-                                                        timeout(time: 10, unit: 'MINUTES') {
-                                                            runCleanupResource(params, builder.region)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        stage('Finish Argus Test Run') {
-                                            catchError(stageResult: 'FAILURE') {
-                                                script {
+                                            // After a failed test (a reclaimed node is usually gone), a failing cleanup stage only marks itself:
+                                            // the test error decides the build result, and a retry that passes must leave the build green.
+                                            def cleanupBuildResult = testError == null ? 'FAILURE' : 'SUCCESS'
+                                            stage("Collect log data (${instance_type})") {
+                                                catchError(buildResult: cleanupBuildResult, stageResult: 'FAILURE') {
                                                     wrap([$class: 'BuildUser']) {
                                                         dir('scylla-cluster-tests') {
-                                                            timeout(time: 5, unit: 'MINUTES') {
-                                                                finishArgusTestRun(params, currentBuild)
+                                                            timeout(time: 30, unit: 'MINUTES') {
+                                                                runCollectLogs(params, builder.region)
                                                             }
                                                         }
                                                     }
                                                 }
                                             }
+                                            stage("Clean resources (${instance_type})") {
+                                                catchError(buildResult: cleanupBuildResult, stageResult: 'FAILURE') {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        dir('scylla-cluster-tests') {
+                                                            timeout(time: 10, unit: 'MINUTES') {
+                                                                runCleanupResource(params, builder.region)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            stage('Finish Argus Test Run') {
+                                                catchError(buildResult: cleanupBuildResult, stageResult: 'FAILURE') {
+                                                    script {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                timeout(time: 5, unit: 'MINUTES') {
+                                                                    finishArgusTestRun(params, currentBuild)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            return testError
                                         }
                                         stage("Send email with result ${instance_type}") {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
                                                         timeout(time: 10, unit: 'MINUTES') {
-                                                            runSendEmail(params, currentBuild)
+                                                            // Report on the last attempt, which carries the result.
+                                                            withEnv(["SCT_TEST_ID=${finalTestId}"]) {
+                                                                runSendEmail(params, currentBuild)
+                                                            }
                                                         }
                                                     }
                                                 }
