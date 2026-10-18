@@ -1137,6 +1137,10 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
     def install_scylla_monitoring_prereqs(node):
         pass  # since running local, don't install anything, just the monitor
 
+    @staticmethod
+    def preflight_check(node):
+        pass  # the stack runs on the runner, which isn't SCT's to check or prune
+
     def install_scylla_manager(self, node):
         """Start manager server + manager-db as Docker containers."""
         docker_client = _default_docker_client()

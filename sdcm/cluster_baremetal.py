@@ -820,6 +820,9 @@ class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
 
 
 class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):
+    # A shared lab host: installing Docker or changing its group would hit the other jobs on it
+    owns_host = False
+
     def __init__(self, **kwargs):
         user_prefix = kwargs.pop("user_prefix")
         if username := kwargs.pop("ssh_username", None):
