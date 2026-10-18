@@ -285,6 +285,10 @@ MONITOR_PREREQS_PROBE = """
     fi
 """
 
+# Oldest Docker Engine SCT accepts on loaders and monitors, whatever its packaging (docker-ce, moby-engine,
+# docker.io). 20.10 is the oldest line still shipped by the supported distros.
+DOCKER_MIN_VERSION = (20, 10)
+
 MONITOR_PYTHON_LIBS_INSTALL_SCRIPT = """
     # PEP 668 distros refuse system-wide pip installs unless asked to
     if pip3 install --help | grep -q break-system-packages; then
@@ -5733,6 +5737,24 @@ class NodeSetupFailed(Exception):
         return self.__str__()
 
 
+def ensure_docker_version(node: BaseNode) -> None:
+    """Preflight: the node runs Docker Engine at DOCKER_MIN_VERSION or newer.
+
+    SCT never upgrades Docker: on a shared host that restarts the daemon under other jobs' containers. A too old one
+    fails the setup, naming both versions, so the host owner can act.
+    """
+    client = node.remoter.run("docker --version", ignore_status=True)
+    if client.failed:
+        raise NodeSetupFailed(node=node, error_msg="Docker is not installed")
+    if "podman" in client.stdout.lower():
+        raise NodeSetupFailed(node=node, error_msg="`docker` is the Podman shim, SCT needs Docker Engine")
+    found = node.remoter.sudo("docker version --format '{{.Server.Version}}'").stdout.strip()
+    if tuple(int(part) for part in re.findall(r"\d+", found)[:2]) >= DOCKER_MIN_VERSION:
+        return
+    needed = ".".join(map(str, DOCKER_MIN_VERSION))
+    raise NodeSetupFailed(node=node, error_msg=f"Docker {found} is older than {needed}, upgrade it on the host")
+
+
 class NodeSetupTimeout(Exception):
     pass
 
@@ -7405,6 +7427,7 @@ class BaseLoaderSet:
         else:
             if node.distro.is_fedora:
                 self._install_docker_on_fedora(node)
+            ensure_docker_version(node)
             node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
 
         # Login to Docker Hub.
@@ -7782,6 +7805,8 @@ class BaseMonitorSet:
 
         if "docker" in missing:
             node.remoter.sudo(shell_script_cmd(DOCKER_INSTALL_SCRIPT, quote="'"))
+        else:
+            ensure_docker_version(node)
         if "docker" in missing or "docker-group" in missing:
             node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
         if "docker" in missing:

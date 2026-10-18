@@ -26,9 +26,10 @@ def run_prereqs(missing: str) -> MagicMock:
 
 
 @pytest.fixture(autouse=True)
-def no_node_exporter_or_hub_login(monkeypatch):
+def no_node_exporter_hub_login_or_version_check(monkeypatch):
     monkeypatch.setattr("sdcm.cluster.NodeExporterSetup", MagicMock())
     monkeypatch.setattr("sdcm.cluster.docker_hub_login", MagicMock())
+    monkeypatch.setattr("sdcm.cluster.ensure_docker_version", MagicMock())
 
 
 def commands(node: MagicMock) -> list[str]:
@@ -71,3 +72,12 @@ def test_missing_docker_is_installed_and_restarted():
 
     assert "get.docker.com" in node.remoter.sudo.call_args.args[0]
     assert commands(node) == ["sudo usermod -aG docker $USER", "sudo systemctl restart docker"]
+
+
+def test_working_docker_goes_through_the_version_check(monkeypatch):
+    ensure = MagicMock()
+    monkeypatch.setattr("sdcm.cluster.ensure_docker_version", ensure)
+
+    node = run_prereqs("")
+
+    ensure.assert_called_once_with(node)
