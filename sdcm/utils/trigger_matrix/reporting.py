@@ -15,6 +15,7 @@
 
 import html
 import logging
+from pathlib import Path
 
 from sdcm.utils.cloud_monitor.cloud_monitor import Email
 from sdcm.utils.trigger_matrix.audit import AuditReport
@@ -30,6 +31,8 @@ def send_trigger_matrix_email(
     matrix_file: str,
     email_recipients: list[str] | None = None,
     trigger_job_url: str | None = None,
+    run_params: dict | None = None,
+    subject_params: list[str] = (),
 ) -> None:
     """Send an email report summarizing wait-mode build results.
 
@@ -38,6 +41,9 @@ def send_trigger_matrix_email(
         scylla_version: Version that was tested.
         matrix_file: Path to the matrix YAML that was used.
         email_recipients: List of email addresses. Falls back to DEFAULT_EMAIL_RECIPIENTS.
+        run_params: Parameters the run passed to every job, listed in the report.
+        subject_params: Names of `run_params` whose value names what was tested; the last path
+            segment of each value goes into the subject, e.g. the file name of a tarball URL.
     """
     recipients = email_recipients or DEFAULT_EMAIL_RECIPIENTS
     if not recipients:
@@ -47,7 +53,9 @@ def send_trigger_matrix_email(
     all_passed = all(r.success for r in build_results)
     status = "PASSED" if all_passed else "FAILED"
 
-    subject = f"[Trigger Matrix] {status} — scylla-doctor gating ({scylla_version})"
+    run_params = {k: v for k, v in (run_params or {}).items() if v is not None and v != ""}
+    tested = [str(run_params[name]).rstrip("/").rsplit("/", 1)[-1] for name in subject_params if name in run_params]
+    subject = f"[Trigger Matrix] {status} — {Path(matrix_file).stem}: {', '.join([*tested, scylla_version])}"
 
     trigger_line = (
         f'<b>Trigger job:</b> <a href="{trigger_job_url}">View trigger run</a><br/>' if trigger_job_url else ""
@@ -71,11 +79,15 @@ def send_trigger_matrix_email(
             f"<tr><td>{job_cell}</td><td>{build_cell}</td><td><b>{result.result}</b></td><td>{artifacts_str}</td></tr>"
         )
 
+    params_lines = "".join(
+        f"<b>{html.escape(name)}:</b> {html.escape(str(value))}<br/>" for name, value in run_params.items()
+    )
+
     body = f"""<html><body>
 <h2>Trigger Matrix Results — {status}</h2>
 <p><b>Version:</b> {scylla_version}<br/>
 <b>Matrix:</b> {matrix_file}<br/>
-{trigger_line}<b>Overall:</b> {status}</p>
+{params_lines}{trigger_line}<b>Overall:</b> {status}</p>
 <table border="1" cellpadding="5" cellspacing="0">
 <tr><th>Job</th><th>Build</th><th>Result</th><th>Artifacts</th></tr>
 {"".join(rows)}
