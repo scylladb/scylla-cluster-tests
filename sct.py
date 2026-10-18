@@ -3724,6 +3724,12 @@ def hdr_investigate(
     help="Override provision type",
 )
 @click.option(
+    "--post-behavior-db-nodes",
+    default=None,
+    type=click.Choice(["destroy", "keep", "keep-on-failure"]),
+    help="Override what the triggered jobs do with their DB nodes at the end",
+)
+@click.option(
     "--scylla-ami-id",
     default=None,
     type=str,
@@ -3808,6 +3814,7 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     region,
     availability_zone,
     provision_type,
+    post_behavior_db_nodes,
     scylla_ami_id,
     gce_image_db,
     azure_image_db,
@@ -3905,6 +3912,8 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
         overrides["availability_zone"] = availability_zone
     if provision_type:
         overrides["provision_type"] = provision_type
+    if post_behavior_db_nodes:
+        overrides["post_behavior_db_nodes"] = post_behavior_db_nodes
     if requested_by_user:
         overrides["requested_by_user"] = requested_by_user
     if billing_project:
