@@ -320,3 +320,24 @@ def test_slash_in_job_name_becomes_a_jenkins_job_path(client, clock):
     api.jenkins_open.side_effect = _responses({"executable": {"number": 3}}, {"building": False, "result": "SUCCESS"})
     (result,) = jenkins.wait_for_builds([pending(name="scylla-2025.4/tier1/longevity")])
     assert result.build_url == f"{URL}/job/scylla-2025.4/job/tier1/job/longevity/3"
+
+
+def test_results_are_in_trigger_order_not_completion_order(client, clock):
+    jenkins, api = client
+
+    def respond(request):
+        if "queue/item/1/" in request.url:
+            return json.dumps({"executable": {"number": 1}})
+        if "queue/item/2/" in request.url:
+            return json.dumps({"executable": {"number": 2}})
+        polls[request.url] = polls.get(request.url, 0) + 1
+        # Build 1 (triggered first) finishes on its second poll, build 2 on its first
+        done = "/1/" in request.url and polls[request.url] > 1 or "/2/" in request.url
+        return json.dumps({"building": not done, "result": "SUCCESS" if done else None})
+
+    polls = {}
+    api.jenkins_open.side_effect = respond
+    first = _PendingWaitJob("job", f"{URL}/queue/item/1/", [], 3600, False, scylla_version="2026.3.3")
+    second = _PendingWaitJob("job", f"{URL}/queue/item/2/", [], 3600, False, scylla_version="2025.1.16")
+    results = jenkins.wait_for_builds([first, second])
+    assert [r.scylla_version for r in results] == ["2026.3.3", "2025.1.16"]

@@ -45,3 +45,31 @@ def test_subject_without_run_params():
         matrix_file="configurations/triggers/tier1.yaml",
     )
     assert sent()["subject"] == "[Trigger Matrix] FAILED — tier1: 2025.4.3"
+
+
+def test_results_are_a_grid_of_jobs_by_version():
+    url = "https://jenkins/job/a/7"
+    send_trigger_matrix_email(
+        build_results=[
+            BuildResult(
+                "gating/a",
+                7,
+                "SUCCESS",
+                artifacts=[f"{url}/artifact/x/sd_analysis.json"],
+                build_url=url,
+                scylla_version="2025.4.3",
+            ),
+            BuildResult("gating/b", 8, "FAILURE", scylla_version="2025.4.3"),
+            BuildResult("gating/a", 9, "UNSTABLE", scylla_version="2026.1.1"),
+        ],
+        scylla_version="2025.4.3, 2026.1.1",
+        matrix_file="m.yaml",
+    )
+    content = sent()["content"]
+    assert "<tr><th>Job</th><th>2025.4.3</th><th>2026.1.1</th></tr>" in content
+    assert (
+        f'<tr><td>gating/a</td><td><a href="{url}">✅ SUCCESS</a> #7'
+        f'<br/><small><a href="{url}/artifact/x/sd_analysis.json">sd_analysis.json</a></small></td>'
+        "<td>❌ UNSTABLE</td></tr>"
+    ) in content
+    assert "<tr><td>gating/b</td><td>❌ FAILURE</td><td>—</td></tr>" in content
