@@ -270,6 +270,18 @@ uv run sct.py trigger-matrix --matrix configurations/triggers/sanity.yaml --scyl
 # Expected folder: scylla-master
 ```
 
+### Several Versions in One Run
+
+`--scylla-version` takes several versions, separated by commas or spaces. The matrix is filtered,
+resolved and triggered once per version, and the jobs of every version are triggered before the
+run starts waiting. Wait-mode jobs of all versions are waited for together and reported in a
+single email, so one run can gate a build against all supported releases:
+
+```bash
+uv run sct.py trigger-matrix --matrix configurations/triggers/scylla-doctor-gating.yaml \
+    --scylla-version "2025.4 2026.1" --dry-run
+```
+
 ## Error Handling Verification
 
 ### Invalid Matrix File

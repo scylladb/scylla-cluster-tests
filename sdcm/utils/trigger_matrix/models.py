@@ -178,6 +178,8 @@ class BuildResult:
     result: str  # SUCCESS, FAILURE, ABORTED, UNSTABLE
     artifacts: list[str] = field(default_factory=list)
     build_url: str = ""
+    # The Scylla version the build ran; tells apart the builds of one job in a multi-version run
+    scylla_version: str = ""
 
     @property
     def success(self) -> bool:
@@ -193,6 +195,7 @@ class _PendingWaitJob:
     collect_results: list[str]
     timeout: int
     fail_on_error: bool
+    scylla_version: str = ""
 
 
 @dataclass(frozen=True, order=True)
