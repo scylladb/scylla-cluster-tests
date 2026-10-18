@@ -800,6 +800,9 @@ class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):
 
 
 class MonitorSetPhysical(cluster.BaseMonitorSet, PhysicalMachineCluster):
+    # A shared lab host: a Docker install or restart would hit other jobs' containers
+    owns_host = False
+
     def __init__(self, **kwargs):
         user_prefix = kwargs.pop("user_prefix")
         if username := kwargs.pop("ssh_username", None):
