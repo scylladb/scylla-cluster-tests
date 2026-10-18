@@ -268,6 +268,16 @@ FIREWALL_RULE_DUMP_COMMANDS = ("iptables-save", "ip6tables-save", "nft list rule
 # how `ss` prints a listener bound to every address of the node, per address family
 CQL_WILDCARD_ADDRESSES = frozenset({"0.0.0.0", "*", "::"})
 
+# Prints where Docker keeps image layers. With the containerd image store (the default since Docker 29, and Fedora's
+# moby-engine) that is containerd's root, not DockerRootDir.
+DOCKER_IMAGE_STORE_PROBE = """
+    if docker info --format "{{json .DriverStatus}}" | grep -q io.containerd.snapshotter; then
+        echo /var/lib/containerd
+    else
+        docker info --format "{{.DockerRootDir}}"
+    fi
+"""
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -5683,6 +5693,34 @@ class NodeSetupFailed(Exception):
         return self.__str__()
 
 
+def ensure_docker_free_space(node: BaseNode, min_free_gb: int) -> None:
+    """Fail before the first image pull when the node's Docker image store can't take the run's images.
+
+    Images no container uses are removed first. Setup fails only if the space is still short, naming the store and
+    both sizes, instead of a pull failing mid-test with "no space left on device".
+    """
+    if not min_free_gb:
+        return
+    # ponytail: assumes containerd's default root; a host with a custom `root` in containerd's config is measured wrong
+    store = node.remoter.sudo(shell_script_cmd(DOCKER_IMAGE_STORE_PROBE, quote="'"), verbose=False).stdout.split()[-1]
+
+    def free_gb() -> int:
+        return int(
+            node.remoter.run(f"df --output=avail -BG {store} | tail -1", verbose=False).stdout.strip().rstrip("G")
+        )
+
+    if (free := free_gb()) >= min_free_gb:
+        return
+    node.log.warning("Only %sGB free in %s, removing images no container uses", free, store)
+    node.remoter.sudo("docker image prune --all --force", ignore_status=True)
+    if (free := free_gb()) < min_free_gb:
+        raise NodeSetupFailed(
+            node=node,
+            error_msg=f"Docker image store {store} has {free}GB free, the run needs {min_free_gb}GB "
+            "(docker_min_free_space_gb_loader/_monitor)",
+        )
+
+
 class NodeSetupTimeout(Exception):
     pass
 
@@ -7357,6 +7395,7 @@ class BaseLoaderSet:
                 self._install_docker_on_fedora(node)
             node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
 
+        ensure_docker_free_space(node, self.params.get("docker_min_free_space_gb_loader"))
         # Login to Docker Hub.
         docker_hub_login(remoter=node.remoter)
 
@@ -8358,6 +8397,7 @@ class BaseMonitorSet:
     @log_run_info
     def install_scylla_monitoring(self, node):
         self.install_scylla_monitoring_prereqs(node)
+        ensure_docker_free_space(node, self.params.get("docker_min_free_space_gb_monitor"))
         if not self.is_formal_monitor_image:
             self.download_scylla_monitoring(node)
 

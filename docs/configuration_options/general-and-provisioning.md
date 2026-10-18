@@ -5,7 +5,7 @@
 Cluster topology, region/AZ placement, instance provisioning, credentials and test-level
 plumbing. Options here apply to every backend and every test type.
 
-**74 options.**
+**76 options.**
 
 
 <a id="adaptive_timeout_multipliers"></a>
@@ -219,6 +219,28 @@ How to select number of shards of Scylla. Expected values: default/random.<br>De
 **default:** default
 
 **type:** Literal['default', 'random']
+
+
+<a id="docker_min_free_space_gb_loader"></a>
+
+## **docker_min_free_space_gb_loader** / SCT_DOCKER_MIN_FREE_SPACE_GB_LOADER
+
+Free space, in GB, the Docker image store of a loader host needs before the run pulls the stress<br>tool images. Setup first removes images no container uses, then fails if the space is still short.<br>0 turns the check off.
+
+**default:** 3
+
+**type:** int
+
+
+<a id="docker_min_free_space_gb_monitor"></a>
+
+## **docker_min_free_space_gb_monitor** / SCT_DOCKER_MIN_FREE_SPACE_GB_MONITOR
+
+Free space, in GB, the Docker image store of a monitor host needs before the run pulls the<br>monitoring stack images. Setup first removes images no container uses, then fails if the space is still short.<br>0 turns the check off.
+
+**default:** 10
+
+**type:** int
 
 
 <a id="fallback_to_next_availability_zone"></a>
