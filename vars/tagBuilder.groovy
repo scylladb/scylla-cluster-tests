@@ -82,6 +82,11 @@ def getRunningUserId () {
     if (runningUserID?.contains('@')) {
         runningUserID = runningUserID.split('@')[0]
     }
+    // Service accounts trigger jobs on behalf of real users (e.g. Argus); never tag with them
+    // keep in sync with SERVICE_USERS in sdcm/utils/get_username.py
+    if (runningUserID in ['scylladb-promoter', 'github-promoter']) {
+        runningUserID = "jenkins"
+    }
     return runningUserID
 }
 

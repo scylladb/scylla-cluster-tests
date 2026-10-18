@@ -106,6 +106,9 @@ def call() {
             string(defaultValue: "qa@scylladb.com",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
+            string(defaultValue: '',
+                   description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
+                   name: 'requested_by_user')
             text(defaultValue: "",
                  description: (
                      'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +

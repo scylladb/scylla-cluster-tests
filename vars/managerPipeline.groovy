@@ -357,6 +357,9 @@ def call(Map pipelineParams) {
                                             export SCT_OCI_REGION_NAME=${oci_region}
                                         fi
                                         export SCT_CONFIG_FILES=${test_config}
+                                        if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
+                                            export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
+                                        fi
                                         export SCT_COLLECT_LOGS=false
 
                                         if [[ -n "${params.backup_bucket_backend}" ]] ; then
