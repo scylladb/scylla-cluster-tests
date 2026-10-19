@@ -182,7 +182,7 @@ def trigger_matrix_versions(
             build_results=build_results,
             scylla_version=", ".join(tested_versions),
             matrix_file=matrix_file,
-            email_recipients=email_recipients,
+            email_recipients=email_recipients or config.email_recipients,
             trigger_job_url=os.environ.get("BUILD_URL", "").rstrip("/") or None,
         )
 

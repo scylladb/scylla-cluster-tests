@@ -79,8 +79,8 @@ def call(Map pipelineParams = [:]) {
                    description: 'User requesting the run')
             string(name: 'billing_project', defaultValue: '',
                    description: 'Billing project for resource tagging')
-            string(name: 'email_recipients', defaultValue: 'qa@scylladb.com',
-                   description: 'Comma-separated email recipients for wait-mode results report')
+            string(name: 'email_recipients', defaultValue: '',
+                   description: 'Comma-separated email recipients for wait-mode results report. Empty: the matrix email_recipients, or qa@scylladb.com when the matrix sets none')
             choice(name: 'version_resolution', choices: ['', 'per-backend', 'common', 'aws-strict'],
                    description: '''Overrides the matrix YAML. How the version passed to the jobs is picked:
                                    per-backend - every backend runs its own latest build;

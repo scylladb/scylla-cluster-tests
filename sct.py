@@ -3791,7 +3791,11 @@ def hdr_investigate(
 @click.option("--requested-by-user", default=None, type=str, help="User requesting the run")
 @click.option("--billing-project", default=None, type=str, help="Billing project for resource tagging")
 @click.option(
-    "--email-recipients", default=None, type=str, help="Comma-separated email recipients for wait-mode results report"
+    "--email-recipients",
+    default=None,
+    type=str,
+    help="Comma-separated email recipients for wait-mode results report. "
+    "Default: the matrix email_recipients, or qa@scylladb.com when the matrix sets none",
 )
 def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     matrix,
