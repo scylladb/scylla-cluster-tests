@@ -11,3 +11,7 @@ symlinks:
     target: "jenkins-pipelines/oss/artifacts/artifacts-ami-arm.jenkinsfile"
   - name: "artifacts-docker"
     target: "jenkins-pipelines/oss/artifacts/artifacts-docker.jenkinsfile"
+  - name: "artifacts-ubuntu2404"
+    target: "jenkins-pipelines/oss/artifacts/artifacts-ubuntu2404.jenkinsfile"
+  - name: "artifacts-rhel10"
+    target: "jenkins-pipelines/oss/artifacts/artifacts-rhel10.jenkinsfile"
