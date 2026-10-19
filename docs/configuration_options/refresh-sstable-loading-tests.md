@@ -4,40 +4,7 @@
 
 Loading pre-built SSTables into a running cluster via nodetool refresh.
 
-**6 options.**
-
-
-<a id="flush_period"></a>
-
-## **flush_period** / SCT_FLUSH_PERIOD
-
-Seconds to wait between the flushes controlled by [`flush_times`](#flush_times).
-
-**default:** N/A
-
-**type:** int
-
-
-<a id="flush_times"></a>
-
-## **flush_times** / SCT_FLUSH_TIMES
-
-How many times to flush the memtable to disk during the refresh test.
-
-**default:** N/A
-
-**type:** int
-
-
-<a id="skip_download"></a>
-
-## **skip_download** / SCT_SKIP_DOWNLOAD
-
-Skip downloading the SSTable archive and reuse a copy already on the node.
-
-**default:** False
-
-**type:** bool
+**3 options.**
 
 
 <a id="sstable_file"></a>

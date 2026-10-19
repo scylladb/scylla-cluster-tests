@@ -63,9 +63,6 @@ class MonitoringConfigMixin(BaseModel):
         description="Enable kernel panic detection by monitoring cloud instance console output for panic indicators. "
         "When enabled, a background thread monitors each node's console output for kernel panic patterns.",
     )
-    events_limit_in_email: int = SctField(
-        description="Maximum number of events of each severity to include in the email report.",
-    )
     grafana_screenshot_panels: list[GrafanaPanelScreenshot] = SctField(
         default=[],
         description="Extra single-panel Grafana screenshots to capture at log-collection time, "
@@ -85,9 +82,6 @@ class MonitoringConfigMixin(BaseModel):
     )
     monitor_branch: String = SctField(
         description="The port of scylla management",
-    )
-    monitor_swap_size: int = SctField(
-        description="The size of the swap file for the monitors. Its size in bytes calculated by x * 1MB",
     )
     print_kernel_callstack: Boolean = SctField(
         description="""Scylla will print kernel callstack to logs if True, otherwise, it will try and may print a message

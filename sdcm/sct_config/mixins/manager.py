@@ -40,9 +40,6 @@ class ManagerConfigMixin(BaseModel):
     backup_bucket_location: StringOrList = SctField(
         description="the bucket name to be used for backup (e.g., 'manager-backup-tests')",
     )
-    backup_bucket_region: String = SctField(
-        description="the AWS region of a bucket to be used for backup (e.g., 'eu-west-1')",
-    )
     manager_backup_restore_method: String = SctField(
         description="The object storage transfer method to use by Scylla Manager in backup or restore. Supported methods: native, rclone, auto.",
     )

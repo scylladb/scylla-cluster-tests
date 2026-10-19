@@ -54,7 +54,7 @@ class StressConfigMixin(BaseModel):
     | cdc log reader | stress_cdclog_reader_cmd, stress_cdc_log_reader_batching_enable, store_cdclog_reader_stats_in_es |
 
     Everything else here is loader-side and applies whatever the tool: stress_image, bare_loaders,
-    use_prepared_loaders, loader_swap_size, round_robin, region_aware_loader, rack_aware_loader,
+    use_prepared_loaders, round_robin, region_aware_loader, rack_aware_loader,
     the stress_multiplier options, stress_duration, prepare_stress_duration and
     stop_test_on_stress_failure.
 
@@ -149,9 +149,6 @@ class StressConfigMixin(BaseModel):
         Also used as a fallback source for keyspace/table in gradual performance tests when
         perf_stress_keyspace/perf_stress_table are not set.
         For example, {'keyspace': 'test_keyspace', 'table': 'test_table'}""",
-    )
-    loader_swap_size: int = SctField(
-        description="The size of the swap file for the loaders. Its size in bytes calculated by x * 1MB",
     )
     prepare_cs_user_profiles: StringOrList = SctField(
         description="cassandra-stress user-profiles list. Executed in prepare step",
@@ -282,9 +279,6 @@ class StressConfigMixin(BaseModel):
     )
     stress_cmd_read_60m: StringOrList = SctField(
         description="Stress command to perform read operations for 60 minutes.",
-    )
-    stress_cmd_read_cl_one: StringOrList = SctField(
-        description="Stress command to perform read operations with consistency level ONE.",
     )
     stress_cmd_read_cl_quorum: StringOrList = SctField(
         description="Stress command to perform read operations with consistency level QUORUM.",

@@ -32,9 +32,6 @@ class AwsConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "AWS backend"
 
-    ami_db_cassandra_user: String = SctField(
-        description="SSH login user baked into the Cassandra AMI, for the auxiliary cluster.",
-    )
     ami_db_scylla_user: String = SctField(
         description="SSH login user baked into the DB node AMI (e.g. 'centos', 'ubuntu').",
     )
@@ -85,9 +82,6 @@ class AwsConfigMixin(BaseModel):
     )
     sct_aws_account_id: String = SctField(
         description="AWS account id on behalf of which the test is run",
-    )
-    spot_max_price: float = SctField(
-        description="The max percentage of the on demand price we set for spot/fleet instances",
     )
     spot_placement_score_min: int = SctField(
         description="Drop availability zones scoring below this value (1-10) from spot placement candidates. Default 0 "

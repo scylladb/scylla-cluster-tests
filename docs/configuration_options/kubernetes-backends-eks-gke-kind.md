@@ -4,7 +4,7 @@
 
 Scylla Operator deployments: EKS, GKE and local kind clusters.
 
-**44 options.**
+**43 options.**
 
 
 <a id="eks_admin_arn"></a>
@@ -131,17 +131,6 @@ Specifies the version of the cert-manager to be used in K8S.
 
 **backend overrides:**
 - `1.19.1`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke, k8s-eks
-
-
-<a id="k8s_connection_bundle_file"></a>
-
-## **k8s_connection_bundle_file** / SCT_K8S_CONNECTION_BUNDLE_FILE
-
-Serverless configuration bundle file.
-
-**default:** N/A
-
-**type:** str (appendable)
 
 
 <a id="k8s_db_node_service_type"></a>

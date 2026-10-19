@@ -31,7 +31,6 @@ db_nodes_shards_selection: 'default'
 
 # for for version selection
 scylla_linux_distro: 'ubuntu-focal'
-scylla_linux_distro_loader: 'ubuntu-jammy'
 ssh_transport: 'libssh2'
 
 monitor_branch: 'branch-4.16'
@@ -125,7 +124,6 @@ grafana_screenshot_panels: []
 manager_prometheus_port: 5090
 scylla_mgmt_pkg: ''
 
-skip_download: false
 
 authenticator_user: ''
 authenticator_password: ''
@@ -207,7 +205,6 @@ k8s_scylla_utils_docker_image: ''
 
 scylla_rsyslog_setup: false
 
-events_limit_in_email: 10
 
 data_volume_disk_num: 0
 data_volume_disk_type: ''

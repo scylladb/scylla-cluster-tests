@@ -191,28 +191,6 @@ def test_12_scylla_version_repo_ubuntu(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     _set_gce_instance_types(monkeypatch)
     monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO", "ubuntu-xenial")
-    monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO_LOADER", "ubuntu-xenial")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "3.0.3")
-    monkeypatch.setenv(
-        "SCT_GCE_IMAGE_DB",
-        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
-    )
-    expected_repo = "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list"
-    with (
-        unittest.mock.patch.object(sct_config, "get_branch_version", return_value="4.7.dev", clear=True),
-        unittest.mock.patch.object(sct_config, "find_scylla_repo", return_value=expected_repo, clear=True),
-    ):
-        conf = sct_config.SCTConfiguration()
-        conf.verify_configuration()
-    assert "scylla_repo" in conf.dump_config()
-    assert conf.scylla_repo == expected_repo
-
-
-def test_12_scylla_version_repo_ubuntu_loader_centos(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
-    _set_gce_instance_types(monkeypatch)
-    monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO", "ubuntu-xenial")
-    monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO_LOADER", "centos")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "3.0.3")
     monkeypatch.setenv(
         "SCT_GCE_IMAGE_DB",
@@ -232,7 +210,6 @@ def test_12_scylla_version_repo_ubuntu_loader_centos(monkeypatch):
 def test_12_k8s_scylla_version_ubuntu_loader_centos(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "k8s-local-kind")
     monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO", "ubuntu-xenial")
-    monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO_LOADER", "centos")
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     assert "scylla_repo" in conf.dump_config()

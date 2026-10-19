@@ -4,7 +4,7 @@
 
 Scylla Manager server and agent: versions, repos and backup/restore settings.
 
-**26 options.**
+**25 options.**
 
 
 <a id="backup_bucket_backend"></a>
@@ -38,17 +38,6 @@ the bucket name to be used for backup (e.g., 'manager-backup-tests')
 - `manager-backup-tests-sct-project-1-us-east1`: gce, gce-siren
 - `manager-backup-tests-us-east-1`: azure
 - `minio-bucket`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke
-
-
-<a id="backup_bucket_region"></a>
-
-## **backup_bucket_region** / SCT_BACKUP_BUCKET_REGION
-
-the AWS region of a bucket to be used for backup (e.g., 'eu-west-1')
-
-**default:** N/A
-
-**type:** str (appendable)
 
 
 <a id="manager_backup_restore_method"></a>

@@ -5,18 +5,7 @@
 AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity
 reservations and dedicated hosts.
 
-**24 options.**
-
-
-<a id="ami_db_cassandra_user"></a>
-
-## **ami_db_cassandra_user** / SCT_AMI_DB_CASSANDRA_USER
-
-SSH login user baked into the Cassandra AMI, for the auxiliary cluster.
-
-**default:** N/A
-
-**type:** str (appendable)
+**22 options.**
 
 
 <a id="ami_db_scylla_user"></a>
@@ -228,17 +217,6 @@ AWS account id on behalf of which the test is run
 **default:** N/A
 
 **type:** str (appendable)
-
-
-<a id="spot_max_price"></a>
-
-## **spot_max_price** / SCT_SPOT_MAX_PRICE
-
-The max percentage of the on demand price we set for spot/fleet instances
-
-**default:** N/A
-
-**type:** float
 
 
 <a id="spot_placement_score_min"></a>

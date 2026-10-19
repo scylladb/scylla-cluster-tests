@@ -4,7 +4,7 @@
 
 Options specific to long-running longevity test scenarios.
 
-**13 options.**
+**12 options.**
 
 
 <a id="cluster_target_size"></a>
@@ -85,17 +85,6 @@ Flag to run a thread that checks commit logs
 
 **backend overrides:**
 - `False`: xcloud
-
-
-<a id="run_full_partition_scan"></a>
-
-## **run_full_partition_scan** / SCT_RUN_FULL_PARTITION_SCAN
-
-Enable or disable running full partition scans during tests
-
-**default:** N/A
-
-**type:** str (appendable)
 
 
 <a id="run_fullscan"></a>
