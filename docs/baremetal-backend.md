@@ -27,12 +27,12 @@ directory when it exists, otherwise `<name>.json` from the KeyStore (Secrets Man
   "loader_nodes": {
     "username": "jenkins",
     "ip_ssh_connections": "private",
-    "node_list": [{"public_ip": "10.0.0.60", "private_ip": "10.0.0.60", "sdm_resource": "lab-monster"}]
+    "node_list": [{"private_ip": "10.0.0.60", "access": "monster"}]
   },
   "monitor_nodes": {
     "username": "jenkins",
     "ip_ssh_connections": "private",
-    "node_list": [{"public_ip": "10.0.0.60", "private_ip": "10.0.0.60", "sdm_resource": "lab-monster"}]
+    "node_list": [{"private_ip": "10.0.0.60", "access": "monster"}]
   }
 }
 ```
@@ -43,9 +43,9 @@ directory when it exists, otherwise `<name>.json` from the KeyStore (Secrets Man
   - `private`: direct connections, and logs go straight to the runner. Use it for hosts on the runner's network.
   - `public`: the hosts' public address, with reverse SSH tunnels carrying the logs back. Use it for hosts the runner
     reaches but which can't reach the runner, such as a cloud VM when SCT runs in the lab.
-- `sdm_resource` (optional): the host's StrongDM SSH resource. SCT then opens SSH through a StrongDM client container
-  next to it, instead of to the host's address, and the host needs no SCT key. This needs the lab SDM lookup from
-  scylla-qa-internal and the `sdm_lab.json` KeyStore secret with the service account (SCT-1275).
+- `public_ip` (optional): defaults to `private_ip`, since lab hosts often have no other address.
+- `access` (optional): the host's name in the lab access service. SCT then opens SSH where that service says instead
+  of to the host's address, and the host needs no SCT key. The lookup lives in scylla-qa-internal (SCT-1275).
 
 ## Configuration
 
@@ -66,7 +66,7 @@ ip_ssh_connections: public  # default for the roles that don't set their own
 
 ## What a host must provide
 
-- SSH as `username`, with the key in `user_credentials_path`, or an `sdm_resource`.
+- SSH as `username`, with the key in `user_credentials_path`, or an `access` name.
 - Passwordless sudo for that user.
 - Loader and monitor hosts:
   - Docker Engine 20.10 or newer, any packaging (`docker-ce`, `moby-engine`, distro `docker.io`). The Podman `docker`
