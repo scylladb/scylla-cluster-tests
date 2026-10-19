@@ -113,6 +113,12 @@ def build_network_interfaces(
     return interfaces
 
 
+def bundles_local_ssds(instance_type: str) -> bool:
+    """Local SSD machine types (z3-*, z4d-*-highlssd, c4-*-lssd, c4d-*-lssd-metal, ...) come with their SSDs,
+    GCE rejects explicitly requested ones on top."""
+    return "lssd" in instance_type or instance_type.split("-", maxsplit=1)[0] in BUNDLED_LOCAL_SSD_FAMILIES
+
+
 def resolve_root_disk_type(instance_type: str, configured: str | None) -> str:
     if instance_type.split("-", maxsplit=1)[0] in HYPERDISK_ONLY_FAMILIES:
         return DISK_TYPE_HYPERDISK_BALANCED
@@ -442,12 +448,11 @@ class VirtualMachineProvider:
     ):
         """Build instance configuration and initiate creation (non-blocking)."""
         # Disk configuration based on machine type
-        family = definition.type.split("-", maxsplit=1)[0]
-        has_bundled_local_ssds = family in BUNDLED_LOCAL_SSD_FAMILIES
+        bundled_local_ssds = bundles_local_ssds(definition.type)
         root_disk_type = resolve_root_disk_type(definition.type, definition.root_disk_type)
         data_disks = (
             [d for d in (definition.data_disks or []) if d.type != DISK_TYPE_LOCAL_SSD]
-            if has_bundled_local_ssds
+            if bundled_local_ssds
             else definition.data_disks
         )
 
@@ -483,9 +488,12 @@ class VirtualMachineProvider:
 
         # Scheduling
         instance.scheduling = compute_v1.Scheduling()
-        if has_bundled_local_ssds:
-            instance.scheduling.on_host_maintenance = "MIGRATE"
+        if bundled_local_ssds:
+            # The local SSDs come with the machine type, so the explicitly requested ones are dropped.
             instance.disks = [d for d in disks if "-data-local-ssd-" not in d.device_name]
+        if definition.type.split("-", maxsplit=1)[0] in BUNDLED_LOCAL_SSD_FAMILIES:
+            # z3 requires MIGRATE, so never spot
+            instance.scheduling.on_host_maintenance = "MIGRATE"
         elif pricing_model.is_spot():
             instance.scheduling.on_host_maintenance = "TERMINATE"
             instance.scheduling.provisioning_model = compute_v1.Scheduling.ProvisioningModel.SPOT.name
