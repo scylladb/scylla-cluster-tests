@@ -463,7 +463,6 @@ def test_count_with_several_count_managers(real_events):
 
 def test_count_with_several_nested_count_managers(real_events):
     """A nested counter counts only events published while it is active; the outer one counts all."""
-    time.sleep(5)
     count_condition_name1 = "test_method6"
     count_condition_name2 = "test_method7"
     statistics1 = {}
