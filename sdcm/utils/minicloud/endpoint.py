@@ -8,6 +8,7 @@ module must not import anything from the package.
 import os
 
 MINICLOUD_PORT = 5000
+MINICLOUD_GUEST_CA_URL = "http://169.254.169.254/minicloud/ca.pem"
 
 
 def is_minicloud_active(params=None) -> bool:
