@@ -29,6 +29,16 @@ jobs:
       - "weekly"
 ```
 
+A matrix can list `required_params`: Jenkins parameters every job must get a non-empty value for,
+from `defaults`, the job's `params` or the trigger's overrides. When one is missing, the run fails
+before triggering any job, and names the parameter and the jobs it is missing for. The
+scylla-doctor gating trigger uses it so that it never runs without the doctor build under test:
+
+```yaml
+required_params:
+  - "scylla_doctor_full_tarball_url"
+```
+
 ### Migrating an existing matrix
 
 `region` and `availability_zone` used to be job-level keys. Moving them under `params:` is a breaking
