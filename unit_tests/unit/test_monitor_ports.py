@@ -89,9 +89,27 @@ def test_log_collector_finds_the_container_and_its_port(containers, name, expect
     assert find_monitoring_container(node, name) == expected
 
 
-def test_prometheus_client_uses_the_port_the_monitor_set_picked():
+def monitor_set_with_ports(**ports) -> MagicMock:
+    monitor_set = MagicMock(grafana_port=3000, prometheus_port=9090, alertmanager_port=9093)
+    monitor_set.configure_mock(**ports)
+    monitor_set.monitoring_address = lambda node, service: BaseMonitorSet.monitoring_address(monitor_set, node, service)
+    return monitor_set
+
+
+@pytest.mark.parametrize(
+    "service, expected",
+    [("prometheus", ("10.0.0.60", 9091)), ("alertmanager", ("10.0.0.60", 9093)), ("grafana", ("172.17.0.1", 3000))],
+)
+def test_monitoring_address_is_the_node_and_the_picked_port(service, expected):
+    """Grafana keeps its own address, which differs on the docker backend (the bridge gateway)."""
+    node = MagicMock(external_address="10.0.0.60", grafana_address="172.17.0.1")
+
+    assert monitor_set_with_ports(prometheus_port=9091).monitoring_address(node, service) == expected
+
+
+def test_prometheus_client_uses_the_monitoring_address():
     monitor_node = MagicMock(external_address="10.0.0.60")
-    monitor_node.parent_cluster.prometheus_port = 9091
+    monitor_node.parent_cluster = monitor_set_with_ports(prometheus_port=9091)
 
     with patch.object(PrometheusDBStats, "get_configuration", return_value={}):
         client = PrometheusDBStats.for_monitor(monitor_node)

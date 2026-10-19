@@ -1712,9 +1712,8 @@ class BaseNode(AutoSshContainerMixin):
         self._db_log_reader_thread.start()
 
     def start_alert_manager_thread(self):
-        self._alert_manager = PrometheusAlertManagerListener(
-            self.external_address, port=self.parent_cluster.alertmanager_port, stop_flag=self.termination_event
-        )
+        host, port = self.parent_cluster.monitoring_address(self, "alertmanager")
+        self._alert_manager = PrometheusAlertManagerListener(host, port=port, stop_flag=self.termination_event)
         self._alert_manager.start()
 
     def silence_alert(self, alert_name, duration=None, start=None, end=None):
@@ -7628,7 +7627,7 @@ class BaseMonitorSet:
             reconfigure_vector_on_node(node, self.params, self.test_config)
             self.configure_scylla_monitoring(node)
             self.restart_scylla_monitoring(sct_metrics=True)
-            set_grafana_url(f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}")
+            set_grafana_url(self.grafana_url(node))
             return
 
         self.install_scylla_monitoring(node)
@@ -7642,7 +7641,7 @@ class BaseMonitorSet:
         # the data from this point to the end of test will
         # be captured.
         self.grafana_start_time = time.time()
-        set_grafana_url(f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}")
+        set_grafana_url(self.grafana_url(node))
         # since monitoring node is started last (after db nodes and loader) we can't actually set the timeout
         # for starting the alert manager thread (since it depends on DB cluster size and num of loaders)
         node.start_alert_manager_thread()  # remove when start task threads will be started after node setup
@@ -8239,6 +8238,19 @@ class BaseMonitorSet:
             f"{self.monitoring_conf_dir}/scylla_manager_servers.yml"
         )
 
+    def monitoring_address(self, node, service: str) -> tuple[str, int]:
+        """Host and port where SCT reaches a service of the monitoring stack (grafana, prometheus, alertmanager).
+
+        The one place a monitor node turns into an address of its stack: when SCT can't open the monitor's ports
+        directly (lab hosts behind StrongDM, SCT-1275), only this changes.
+        """
+        host = node.grafana_address if service == "grafana" else node.external_address
+        return host, getattr(self, f"{service}_port")
+
+    def grafana_url(self, node) -> str:
+        host, port = self.monitoring_address(node, "grafana")
+        return f"http://{normalize_ipv6_url(host)}:{port}"
+
     def pick_monitoring_ports(self, node) -> None:
         """Move each monitoring port whose default is taken on the monitor host to the next free one.
 
@@ -8321,7 +8333,7 @@ class BaseMonitorSet:
 
     def add_sct_dashboards_to_grafana(self, node):
         def _register_grafana_json(json_filename):
-            base_url = f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}"
+            base_url = self.grafana_url(node)
             with open(json_filename, encoding="utf-8") as f:
                 legacy_payload = json.load(f)
             try:
@@ -8407,7 +8419,7 @@ class BaseMonitorSet:
             self.download_scylla_monitoring(node)
 
     def _grafana_annotations_url(self, node):
-        return f"http://{normalize_ipv6_url(node.grafana_address)}:{self.grafana_port}{GRAFANA_ANNOTATIONS_API_PATH}"
+        return f"{self.grafana_url(node)}{GRAFANA_ANNOTATIONS_API_PATH}"
 
     def get_grafana_annotations(self, node):
         try:

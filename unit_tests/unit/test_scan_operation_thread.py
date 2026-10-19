@@ -98,6 +98,8 @@ def new_cluster(node):
             def __getattribute__(self, item):
                 if item == "params":
                     return MagicMock(scylla_version=None)
+                if item == "monitoring_address":
+                    return lambda node, service: ("test", 9090)
                 if item not in "external_address":
                     return self
                 else:
