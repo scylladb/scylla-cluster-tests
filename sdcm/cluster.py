@@ -5898,6 +5898,8 @@ class BaseScyllaCluster:
     name: str
     nodes: List[BaseNode]
     log: logging.Logger
+    # Set by RaftFeature once the feature reads True; feature flags never turn off
+    group0_limited_voters_enabled: bool = False
 
     def __init__(self, *args, **kwargs):
         self.nemesis_termination_event = threading.Event()

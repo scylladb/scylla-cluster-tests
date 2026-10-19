@@ -13,8 +13,10 @@
 
 
 import unittest.mock
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from uuid import UUID
+
+import pytest
 
 from sdcm.cluster import TokenRingMember
 from sdcm.sct_events import Severity
@@ -26,6 +28,29 @@ from sdcm.utils.health_checker import (
     check_schema_version,
 )
 from sdcm.utils.raft import Group0Member, RaftFeature
+
+
+@pytest.fixture
+def raft_node():
+    """Node whose CQL and SSH boundaries are mocks, so tests can assert they were (not) touched."""
+    node = MagicMock()
+    node.name = "node-1"
+    node.host_id = "host-1"
+    node.parent_cluster.group0_limited_voters_enabled = False
+    return node
+
+
+@pytest.fixture
+def non_voter_group0():
+    return [Group0Member(host_id="host-1", voter=True), Group0Member(host_id="host-2", voter=False)]
+
+
+@pytest.fixture
+def non_voter_token_ring():
+    return [
+        TokenRingMember(host_id="host-1", ip_address="127.0.0.1"),
+        TokenRingMember(host_id="host-2", ip_address="127.0.0.2"),
+    ]
 
 
 class Node:
@@ -269,8 +294,9 @@ class TestHealthChecker:
         # Make search_inconsistent_host_ids raise an exception
         raft.search_inconsistent_host_ids = MagicMock(side_effect=Exception("Test exception"))
 
-        # Create test data
-        group0_members = [Group0Member(host_id="host-1", voter=True)]
+        # Create test data; a member missing from the token ring makes the check take the
+        # search_inconsistent_host_ids path
+        group0_members = [Group0Member(host_id="host-2", voter=True)]
         tokenring_members = [TokenRingMember(host_id="host-1", ip_address="127.0.0.1")]
 
         # Run the check - should not raise exceptions
@@ -351,3 +377,88 @@ def test_check_schema_agreement_in_gossip_and_peers_tolerates_peers_lag():
 
     assert mocked_sleep.call_count == 0, "peers lag under gossip agreement must not consume retries"
     assert err == "", "peers lag under gossip agreement must not be reported as an error"
+
+
+def test_check_group0_tokenring_consistency_consistent_membership_skips_cql_and_ssh(raft_node):
+    """Healthy membership (all voters, all in token ring) must cost no CQL connection and no SSH call."""
+    raft = RaftFeature(raft_node)
+    group0_members = [Group0Member(host_id="host-1", voter=True), Group0Member(host_id="host-2", voter=True)]
+    tokenring_members = [
+        TokenRingMember(host_id="host-1", ip_address="127.0.0.1"),
+        TokenRingMember(host_id="host-2", ip_address="127.0.0.2"),
+    ]
+
+    with patch.object(RaftFeature, "search_inconsistent_host_ids") as search:
+        events = list(raft.check_group0_tokenring_consistency(group0_members, tokenring_members))
+
+    assert events == []
+    search.assert_not_called()
+    raft_node.parent_cluster.cql_connection_patient_exclusive.assert_not_called()
+    raft_node.get_token_ring_members.assert_not_called()
+
+
+def test_check_group0_tokenring_consistency_member_missing_from_token_ring_reports_error(raft_node):
+    """A group0 member absent from the token ring runs the full search and reports the same error as before,
+    even with limited voters cached as on."""
+    raft_node.parent_cluster.group0_limited_voters_enabled = True
+    raft = RaftFeature(raft_node)
+    group0_members = [Group0Member(host_id="host-1", voter=True), Group0Member(host_id="host-2", voter=True)]
+    tokenring_members = [TokenRingMember(host_id="host-1", ip_address="127.0.0.1")]
+    raft_node.get_token_ring_members.return_value = tokenring_members
+
+    with (
+        patch("sdcm.utils.raft.is_group0_limited_voters_enabled", return_value=True),
+        patch.object(RaftFeature, "get_group0_members", return_value=group0_members),
+    ):
+        events = list(raft.check_group0_tokenring_consistency(group0_members, tokenring_members))
+
+    raft_node.get_token_ring_members.assert_called_once()
+    assert len(events) == 1
+    assert events[0].severity == Severity.ERROR
+    assert events[0].error == (
+        f"Node node-1 has group0 member with host_id host-2 with can_vote True and "
+        f"present in token ring False. Inconsistency between group0: {group0_members} "
+        f"and tokenring: {tokenring_members}"
+    )
+
+
+def test_check_group0_tokenring_consistency_limited_voters_flag_read_once_per_cluster(
+    raft_node, non_voter_group0, non_voter_token_ring
+):
+    """The limited-voters flag is read once per cluster, not once per node per gate; once cached, a non-voter
+    in the token ring is legitimate and costs no CQL or SSH."""
+    other_node = MagicMock()
+    other_node.parent_cluster = raft_node.parent_cluster
+
+    with (
+        patch("sdcm.utils.raft.is_group0_limited_voters_enabled", return_value=True) as flag_read,
+        patch.object(RaftFeature, "search_inconsistent_host_ids") as search,
+    ):
+        for node in (raft_node, other_node, raft_node):
+            events = list(RaftFeature(node).check_group0_tokenring_consistency(non_voter_group0, non_voter_token_ring))
+            assert events == []
+
+    flag_read.assert_called_once()
+    raft_node.parent_cluster.cql_connection_patient_exclusive.assert_called_once()
+    search.assert_not_called()
+    raft_node.get_token_ring_members.assert_not_called()
+
+
+def test_check_group0_tokenring_consistency_no_limited_voters_non_voter_reports_error(
+    raft_node, non_voter_group0, non_voter_token_ring
+):
+    """Without limited voters a non-voter is broken: the full search runs and reports it."""
+    raft_node.get_token_ring_members.return_value = non_voter_token_ring
+    raft = RaftFeature(raft_node)
+
+    with (
+        patch("sdcm.utils.raft.is_group0_limited_voters_enabled", return_value=False),
+        patch.object(RaftFeature, "get_group0_members", return_value=non_voter_group0),
+    ):
+        events = list(raft.check_group0_tokenring_consistency(non_voter_group0, non_voter_token_ring))
+
+    raft_node.get_token_ring_members.assert_called_once()
+    assert raft_node.parent_cluster.group0_limited_voters_enabled is False
+    assert len(events) == 1
+    assert events[0].severity == Severity.ERROR
+    assert "host_id host-2 with can_vote False" in events[0].error
