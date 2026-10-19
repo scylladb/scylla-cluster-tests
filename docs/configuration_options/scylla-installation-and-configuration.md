@@ -5,7 +5,7 @@
 Which Scylla to install and how it is configured: repos, versions, distro,
 `scylla.yaml`/command-line options, experimental features, authentication and encryption.
 
-**44 options.**
+**43 options.**
 
 
 <a id="append_scylla_args"></a>
@@ -345,17 +345,6 @@ Distro and family for the DB node image, e.g. 'ubuntu-jammy' or 'debian-bookworm
 
 **backend overrides:**
 - `centos`: docker
-
-
-<a id="scylla_linux_distro_loader"></a>
-
-## **scylla_linux_distro_loader** / SCT_SCYLLA_LINUX_DISTRO_LOADER
-
-Distro and family for the loader node image. Independent of the DB nodes, so loaders can run a different distro.
-
-**default:** ubuntu-jammy
-
-**type:** str
 
 
 <a id="scylla_network_config"></a>

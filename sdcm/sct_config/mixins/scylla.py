@@ -137,10 +137,6 @@ class ScyllaConfigMixin(BaseModel):
         description="Distro and family for the DB node image, e.g. 'ubuntu-jammy' or 'debian-bookworm'.",
         appendable=False,
     )
-    scylla_linux_distro_loader: String = SctField(
-        description="Distro and family for the loader node image. Independent of the DB nodes, so loaders can run a different distro.",
-        appendable=False,
-    )
     scylla_network_config: list = SctField(
         description="""Configure Scylla networking with single or multiple NIC/IP combinations.
               It must be defined for listen_address and rpc_address. For each address mandatory parameters are:

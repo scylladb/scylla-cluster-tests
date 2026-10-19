@@ -4,7 +4,7 @@
 
 The monitoring stack, event severities, Argus reporting and email reports.
 
-**18 options.**
+**16 options.**
 
 
 <a id="argus_email_report_template"></a>
@@ -120,17 +120,6 @@ Enable kernel panic detection by monitoring cloud instance console output for pa
 **type:** bool
 
 
-<a id="events_limit_in_email"></a>
-
-## **events_limit_in_email** / SCT_EVENTS_LIMIT_IN_EMAIL
-
-Maximum number of events of each severity to include in the email report.
-
-**default:** 10
-
-**type:** int
-
-
 <a id="grafana_screenshot_panels"></a>
 
 ## **grafana_screenshot_panels** / SCT_GRAFANA_SCREENSHOT_PANELS
@@ -165,17 +154,6 @@ The port of scylla management
 
 **backend overrides:**
 - `N/A`: aws, gce, aws-siren, gce-siren, k8s-local-kind-aws, k8s-gke, k8s-eks
-
-
-<a id="monitor_swap_size"></a>
-
-## **monitor_swap_size** / SCT_MONITOR_SWAP_SIZE
-
-The size of the swap file for the monitors. Its size in bytes calculated by x * 1MB
-
-**default:** N/A
-
-**type:** int
 
 
 <a id="print_kernel_callstack"></a>

@@ -4,7 +4,7 @@
 
 Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade.
 
-**20 options.**
+**19 options.**
 
 
 <a id="disable_raft"></a>
@@ -181,17 +181,6 @@ Whether to upgrade sstables as part of upgrade_node or not
 **default:** N/A
 
 **type:** bool
-
-
-<a id="verify_data_after_entire_test"></a>
-
-## **verify_data_after_entire_test** / SCT_VERIFY_DATA_AFTER_ENTIRE_TEST
-
-Stress command to verify data integrity after the entire test.
-
-**default:** N/A
-
-**type:** str | list[str] → list[str] (appendable)
 
 
 <a id="verify_stress_after_cluster_upgrade"></a>

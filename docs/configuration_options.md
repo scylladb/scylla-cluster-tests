@@ -28,36 +28,36 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-536 options across 29 groups.
+522 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 74 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
-| [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
+| [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 43 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
-| [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 74 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
-| [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 18 | The monitoring stack, event severities, Argus reporting and email reports. |
+| [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 72 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
+| [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 16 | The monitoring stack, event severities, Argus reporting and email reports. |
 | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) | 13 | How logs and diagnostics are collected, and what happens to the resources when the test ends. |
 | [Scylla Doctor](configuration_options/scylla-doctor.md) | 6 | The scylla-doctor diagnostic tool. It is both a subject under test (the artifact tests run it and assert on its findings) and... |
-| [Scylla Manager](configuration_options/scylla-manager.md) | 26 | Scylla Manager server and agent: versions, repos and backup/restore settings. |
+| [Scylla Manager](configuration_options/scylla-manager.md) | 25 | Scylla Manager server and agent: versions, repos and backup/restore settings. |
 | [Auxiliary DB cluster (oracle / Cassandra)](configuration_options/auxiliary-db-cluster-oracle-cassandra.md) | 10 | A second database cluster used for comparison or migration testing -- the 'oracle' cluster in Gemini runs, or a Cassandra... |
 | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) | 10 | Scylla's DynamoDB-compatible API: the endpoint, write isolation, load-balancing and the credentials the tests use against it. |
 | [Vector Store](configuration_options/vector-store.md) | 9 | The Vector Store service under test alongside Scylla. |
 | [Kafka / CDC connectors](configuration_options/kafka-cdc-connectors.md) | 2 | Kafka deployment and connector configuration for CDC testing. |
-| [AWS backend](configuration_options/aws-backend.md) | 24 | AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity reservations and dedicated hosts. |
+| [AWS backend](configuration_options/aws-backend.md) | 22 | AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity reservations and dedicated hosts. |
 | [GCE backend](configuration_options/gce-backend.md) | 24 | Google Compute Engine provisioning. |
 | [Azure backend](configuration_options/azure-backend.md) | 13 | Microsoft Azure provisioning. |
 | [OCI backend](configuration_options/oci-backend.md) | 10 | Oracle Cloud Infrastructure provisioning. |
-| [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) | 44 | Scylla Operator deployments: EKS, GKE and local kind clusters. |
+| [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) | 43 | Scylla Operator deployments: EKS, GKE and local kind clusters. |
 | [Docker backend](configuration_options/docker-backend.md) | 2 | Running the cluster as local Docker containers. |
 | [Baremetal backend](configuration_options/baremetal-backend.md) | 7 | Running against pre-existing hosts that SCT does not provision. |
 | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) | 12 | Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options. |
 | [Minicloud](configuration_options/minicloud.md) | 16 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with `cluster_backend: aws` and an... |
-| [Longevity tests](configuration_options/longevity-tests.md) | 13 | Options specific to long-running longevity test scenarios. |
+| [Longevity tests](configuration_options/longevity-tests.md) | 12 | Options specific to long-running longevity test scenarios. |
 | [Performance regression tests](configuration_options/performance-regression-tests.md) | 19 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
-| [Upgrade tests](configuration_options/upgrade-tests.md) | 20 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
+| [Upgrade tests](configuration_options/upgrade-tests.md) | 19 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
 | [Grow cluster tests](configuration_options/grow-cluster-tests.md) | 2 | Scaling the cluster up and down during a test. |
-| [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) | 6 | Loading pre-built SSTables into a running cluster via nodetool refresh. |
+| [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) | 3 | Loading pre-built SSTables into a running cluster via nodetool refresh. |
 | [Jepsen tests](configuration_options/jepsen-tests.md) | 4 | Jepsen consistency test runs. |
 | [Amazon EMR (spark-migrator)](configuration_options/amazon-emr-spark-migrator.md) | 13 | The EMR cluster that runs the Spark migrator job. |
 | [Spark migrator (Cassandra to Scylla)](configuration_options/spark-migrator-cassandra-to-scylla.md) | 9 | The migration job itself: source and target keyspaces/tables and validation. |
@@ -82,7 +82,6 @@ concerns first, then one page per backend, then one per test type.
 | [`alternator_use_dns_routing`](configuration_options/alternator-dynamodb-api.md#alternator_use_dns_routing) | `SCT_ALTERNATOR_USE_DNS_ROUTING` | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) |
 | [`alternator_write_always_lwt_stress_rate`](configuration_options/stress-commands-and-load-generation.md#alternator_write_always_lwt_stress_rate) | `SCT_ALTERNATOR_WRITE_ALWAYS_LWT_STRESS_RATE` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`alternator_write_isolation`](configuration_options/alternator-dynamodb-api.md#alternator_write_isolation) | `SCT_ALTERNATOR_WRITE_ISOLATION` | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) |
-| [`ami_db_cassandra_user`](configuration_options/aws-backend.md#ami_db_cassandra_user) | `SCT_AMI_DB_CASSANDRA_USER` | [AWS backend](configuration_options/aws-backend.md) |
 | [`ami_db_scylla_user`](configuration_options/aws-backend.md#ami_db_scylla_user) | `SCT_AMI_DB_SCYLLA_USER` | [AWS backend](configuration_options/aws-backend.md) |
 | [`ami_id_db_cassandra`](configuration_options/aws-backend.md#ami_id_db_cassandra) | `SCT_AMI_ID_DB_CASSANDRA` | [AWS backend](configuration_options/aws-backend.md) |
 | [`ami_id_db_oracle`](configuration_options/aws-backend.md#ami_id_db_oracle) | `SCT_AMI_ID_DB_ORACLE` | [AWS backend](configuration_options/aws-backend.md) |
@@ -129,7 +128,6 @@ concerns first, then one page per backend, then one per test type.
 | [`backtrace_stall_decoding`](configuration_options/monitoring-events-and-reporting.md#backtrace_stall_decoding) | `SCT_BACKTRACE_STALL_DECODING` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
 | [`backup_bucket_backend`](configuration_options/scylla-manager.md#backup_bucket_backend) | `SCT_BACKUP_BUCKET_BACKEND` | [Scylla Manager](configuration_options/scylla-manager.md) |
 | [`backup_bucket_location`](configuration_options/scylla-manager.md#backup_bucket_location) | `SCT_BACKUP_BUCKET_LOCATION` | [Scylla Manager](configuration_options/scylla-manager.md) |
-| [`backup_bucket_region`](configuration_options/scylla-manager.md#backup_bucket_region) | `SCT_BACKUP_BUCKET_REGION` | [Scylla Manager](configuration_options/scylla-manager.md) |
 | [`bare_loaders`](configuration_options/stress-commands-and-load-generation.md#bare_loaders) | `SCT_BARE_LOADERS` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`batch_size`](configuration_options/stress-commands-and-load-generation.md#batch_size) | `SCT_BATCH_SIZE` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`billing_project`](configuration_options/general-and-provisioning.md#billing_project) | `SCT_BILLING_PROJECT` | [General and provisioning](configuration_options/general-and-provisioning.md) |
@@ -209,14 +207,11 @@ concerns first, then one page per backend, then one per test type.
 | [`enable_views_with_tablets_on_upgrade`](configuration_options/upgrade-tests.md#enable_views_with_tablets_on_upgrade) | `SCT_ENABLE_VIEWS_WITH_TABLETS_ON_UPGRADE` | [Upgrade tests](configuration_options/upgrade-tests.md) |
 | [`endpoint_snitch`](configuration_options/scylla-installation-and-configuration.md#endpoint_snitch) | `SCT_ENDPOINT_SNITCH` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`enterprise_disable_kms`](configuration_options/scylla-installation-and-configuration.md#enterprise_disable_kms) | `SCT_ENTERPRISE_DISABLE_KMS` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
-| [`events_limit_in_email`](configuration_options/monitoring-events-and-reporting.md#events_limit_in_email) | `SCT_EVENTS_LIMIT_IN_EMAIL` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
 | [`execute_post_behavior`](configuration_options/logs-diagnostics-and-teardown.md#execute_post_behavior) | `SCT_EXECUTE_POST_BEHAVIOR` | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) |
 | [`experimental_features`](configuration_options/scylla-installation-and-configuration.md#experimental_features) | `SCT_EXPERIMENTAL_FEATURES` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`extra_network_interface`](configuration_options/aws-backend.md#extra_network_interface) | `SCT_EXTRA_NETWORK_INTERFACE` | [AWS backend](configuration_options/aws-backend.md) |
 | [`fallback_to_next_availability_zone`](configuration_options/general-and-provisioning.md#fallback_to_next_availability_zone) | `SCT_FALLBACK_TO_NEXT_AVAILABILITY_ZONE` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`fallback_to_next_region`](configuration_options/general-and-provisioning.md#fallback_to_next_region) | `SCT_FALLBACK_TO_NEXT_REGION` | [General and provisioning](configuration_options/general-and-provisioning.md) |
-| [`flush_period`](configuration_options/refresh-sstable-loading-tests.md#flush_period) | `SCT_FLUSH_PERIOD` | [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) |
-| [`flush_times`](configuration_options/refresh-sstable-loading-tests.md#flush_times) | `SCT_FLUSH_TIMES` | [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) |
 | [`force_run_iotune`](configuration_options/general-and-provisioning.md#force_run_iotune) | `SCT_FORCE_RUN_IOTUNE` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`gce_datacenter`](configuration_options/gce-backend.md#gce_datacenter) | `SCT_GCE_DATACENTER` | [GCE backend](configuration_options/gce-backend.md) |
 | [`gce_image_db`](configuration_options/gce-backend.md#gce_image_db) | `SCT_GCE_IMAGE_DB` | [GCE backend](configuration_options/gce-backend.md) |
@@ -272,7 +267,6 @@ concerns first, then one page per backend, then one per test type.
 | [`jepsen_test_run_policy`](configuration_options/jepsen-tests.md#jepsen_test_run_policy) | `SCT_JEPSEN_TEST_RUN_POLICY` | [Jepsen tests](configuration_options/jepsen-tests.md) |
 | [`jmx_heap_memory`](configuration_options/scylla-installation-and-configuration.md#jmx_heap_memory) | `SCT_JMX_HEAP_MEMORY` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`k8s_cert_manager_version`](configuration_options/kubernetes-backends-eks-gke-kind.md#k8s_cert_manager_version) | `SCT_K8S_CERT_MANAGER_VERSION` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
-| [`k8s_connection_bundle_file`](configuration_options/kubernetes-backends-eks-gke-kind.md#k8s_connection_bundle_file) | `SCT_K8S_CONNECTION_BUNDLE_FILE` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
 | [`k8s_db_node_service_type`](configuration_options/kubernetes-backends-eks-gke-kind.md#k8s_db_node_service_type) | `SCT_K8S_DB_NODE_SERVICE_TYPE` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
 | [`k8s_db_node_to_client_broadcast_ip_type`](configuration_options/kubernetes-backends-eks-gke-kind.md#k8s_db_node_to_client_broadcast_ip_type) | `SCT_K8S_DB_NODE_TO_CLIENT_BROADCAST_IP_TYPE` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
 | [`k8s_db_node_to_node_broadcast_ip_type`](configuration_options/kubernetes-backends-eks-gke-kind.md#k8s_db_node_to_node_broadcast_ip_type) | `SCT_K8S_DB_NODE_TO_NODE_BROADCAST_IP_TYPE` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
@@ -317,7 +311,6 @@ concerns first, then one page per backend, then one per test type.
 | [`latency_decorator_error_thresholds`](configuration_options/general-and-provisioning.md#latency_decorator_error_thresholds) | `SCT_LATENCY_DECORATOR_ERROR_THRESHOLDS` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`latte_schema_parameters`](configuration_options/stress-commands-and-load-generation.md#latte_schema_parameters) | `SCT_LATTE_SCHEMA_PARAMETERS` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`ldap_server_type`](configuration_options/scylla-installation-and-configuration.md#ldap_server_type) | `SCT_LDAP_SERVER_TYPE` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
-| [`loader_swap_size`](configuration_options/stress-commands-and-load-generation.md#loader_swap_size) | `SCT_LOADER_SWAP_SIZE` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`loaders_private_ip`](configuration_options/baremetal-backend.md#loaders_private_ip) | `SCT_LOADERS_PRIVATE_IP` | [Baremetal backend](configuration_options/baremetal-backend.md) |
 | [`loaders_public_ip`](configuration_options/baremetal-backend.md#loaders_public_ip) | `SCT_LOADERS_PUBLIC_IP` | [Baremetal backend](configuration_options/baremetal-backend.md) |
 | [`logs_transport`](configuration_options/logs-diagnostics-and-teardown.md#logs_transport) | `SCT_LOGS_TRANSPORT` | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) |
@@ -363,7 +356,6 @@ concerns first, then one page per backend, then one per test type.
 | [`monitor_branch`](configuration_options/monitoring-events-and-reporting.md#monitor_branch) | `SCT_MONITOR_BRANCH` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
 | [`monitor_nodes_private_ip`](configuration_options/baremetal-backend.md#monitor_nodes_private_ip) | `SCT_MONITOR_NODES_PRIVATE_IP` | [Baremetal backend](configuration_options/baremetal-backend.md) |
 | [`monitor_nodes_public_ip`](configuration_options/baremetal-backend.md#monitor_nodes_public_ip) | `SCT_MONITOR_NODES_PUBLIC_IP` | [Baremetal backend](configuration_options/baremetal-backend.md) |
-| [`monitor_swap_size`](configuration_options/monitoring-events-and-reporting.md#monitor_swap_size) | `SCT_MONITOR_SWAP_SIZE` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
 | [`n_db_nodes`](configuration_options/general-and-provisioning.md#n_db_nodes) | `SCT_N_DB_NODES` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`n_db_zero_token_nodes`](configuration_options/general-and-provisioning.md#n_db_zero_token_nodes) | `SCT_N_DB_ZERO_TOKEN_NODES` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`n_loaders`](configuration_options/general-and-provisioning.md#n_loaders) | `SCT_N_LOADERS` | [General and provisioning](configuration_options/general-and-provisioning.md) |
@@ -443,7 +435,6 @@ concerns first, then one page per backend, then one per test type.
 | [`round_robin`](configuration_options/stress-commands-and-load-generation.md#round_robin) | `SCT_ROUND_ROBIN` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`run_commit_log_check_thread`](configuration_options/longevity-tests.md#run_commit_log_check_thread) | `SCT_RUN_COMMIT_LOG_CHECK_THREAD` | [Longevity tests](configuration_options/longevity-tests.md) |
 | [`run_db_node_benchmarks`](configuration_options/performance-regression-tests.md#run_db_node_benchmarks) | `SCT_RUN_DB_NODE_BENCHMARKS` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
-| [`run_full_partition_scan`](configuration_options/longevity-tests.md#run_full_partition_scan) | `SCT_RUN_FULL_PARTITION_SCAN` | [Longevity tests](configuration_options/longevity-tests.md) |
 | [`run_fullscan`](configuration_options/longevity-tests.md#run_fullscan) | `SCT_RUN_FULLSCAN` | [Longevity tests](configuration_options/longevity-tests.md) |
 | [`run_gemini_in_rolling_upgrade`](configuration_options/upgrade-tests.md#run_gemini_in_rolling_upgrade) | `SCT_RUN_GEMINI_IN_ROLLING_UPGRADE` | [Upgrade tests](configuration_options/upgrade-tests.md) |
 | [`run_scylla_doctor`](configuration_options/scylla-doctor.md#run_scylla_doctor) | `SCT_RUN_SCYLLA_DOCTOR` | [Scylla Doctor](configuration_options/scylla-doctor.md) |
@@ -460,7 +451,6 @@ concerns first, then one page per backend, then one per test type.
 | [`scylla_doctor_version`](configuration_options/scylla-doctor.md#scylla_doctor_version) | `SCT_SCYLLA_DOCTOR_VERSION` | [Scylla Doctor](configuration_options/scylla-doctor.md) |
 | [`scylla_encryption_options`](configuration_options/scylla-installation-and-configuration.md#scylla_encryption_options) | `SCT_SCYLLA_ENCRYPTION_OPTIONS` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`scylla_linux_distro`](configuration_options/scylla-installation-and-configuration.md#scylla_linux_distro) | `SCT_SCYLLA_LINUX_DISTRO` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
-| [`scylla_linux_distro_loader`](configuration_options/scylla-installation-and-configuration.md#scylla_linux_distro_loader) | `SCT_SCYLLA_LINUX_DISTRO_LOADER` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`scylla_mgmt_address`](configuration_options/scylla-manager.md#scylla_mgmt_address) | `SCT_SCYLLA_MGMT_ADDRESS` | [Scylla Manager](configuration_options/scylla-manager.md) |
 | [`scylla_mgmt_agent_address`](configuration_options/scylla-manager.md#scylla_mgmt_agent_address) | `SCT_SCYLLA_MGMT_AGENT_ADDRESS` | [Scylla Manager](configuration_options/scylla-manager.md) |
 | [`scylla_mgmt_agent_version`](configuration_options/scylla-manager.md#scylla_mgmt_agent_version) | `SCT_SCYLLA_MGMT_AGENT_VERSION` | [Scylla Manager](configuration_options/scylla-manager.md) |
@@ -483,11 +473,9 @@ concerns first, then one page per backend, then one per test type.
 | [`sizing_db_oracle`](configuration_options/general-and-provisioning.md#sizing_db_oracle) | `SCT_SIZING_DB_ORACLE` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`sizing_loader`](configuration_options/general-and-provisioning.md#sizing_loader) | `SCT_SIZING_LOADER` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`sizing_monitor`](configuration_options/general-and-provisioning.md#sizing_monitor) | `SCT_SIZING_MONITOR` | [General and provisioning](configuration_options/general-and-provisioning.md) |
-| [`skip_download`](configuration_options/refresh-sstable-loading-tests.md#skip_download) | `SCT_SKIP_DOWNLOAD` | [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) |
 | [`skip_test_stages`](configuration_options/general-and-provisioning.md#skip_test_stages) | `SCT_SKIP_TEST_STAGES` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`sla`](configuration_options/nemesis-chaos-testing.md#sla) | `SCT_SLA` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
 | [`space_node_threshold`](configuration_options/longevity-tests.md#space_node_threshold) | `SCT_SPACE_NODE_THRESHOLD` | [Longevity tests](configuration_options/longevity-tests.md) |
-| [`spot_max_price`](configuration_options/aws-backend.md#spot_max_price) | `SCT_SPOT_MAX_PRICE` | [AWS backend](configuration_options/aws-backend.md) |
 | [`spot_max_test_duration`](configuration_options/general-and-provisioning.md#spot_max_test_duration) | `SCT_SPOT_MAX_TEST_DURATION` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`spot_placement_score_min`](configuration_options/aws-backend.md#spot_placement_score_min) | `SCT_SPOT_PLACEMENT_SCORE_MIN` | [AWS backend](configuration_options/aws-backend.md) |
 | [`spot_score_overrides_configured_az`](configuration_options/general-and-provisioning.md#spot_score_overrides_configured_az) | `SCT_SPOT_SCORE_OVERRIDES_CONFIGURED_AZ` | [General and provisioning](configuration_options/general-and-provisioning.md) |
@@ -529,7 +517,6 @@ concerns first, then one page per backend, then one per test type.
 | [`stress_cmd_r`](configuration_options/stress-commands-and-load-generation.md#stress_cmd_r) | `SCT_STRESS_CMD_R` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`stress_cmd_read_10m`](configuration_options/stress-commands-and-load-generation.md#stress_cmd_read_10m) | `SCT_STRESS_CMD_READ_10M` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`stress_cmd_read_60m`](configuration_options/stress-commands-and-load-generation.md#stress_cmd_read_60m) | `SCT_STRESS_CMD_READ_60M` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
-| [`stress_cmd_read_cl_one`](configuration_options/stress-commands-and-load-generation.md#stress_cmd_read_cl_one) | `SCT_STRESS_CMD_READ_CL_ONE` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`stress_cmd_read_cl_quorum`](configuration_options/stress-commands-and-load-generation.md#stress_cmd_read_cl_quorum) | `SCT_STRESS_CMD_READ_CL_QUORUM` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`stress_cmd_read_disk`](configuration_options/stress-commands-and-load-generation.md#stress_cmd_read_disk) | `SCT_STRESS_CMD_READ_DISK` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`stress_cmd_w`](configuration_options/stress-commands-and-load-generation.md#stress_cmd_w) | `SCT_STRESS_CMD_W` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
@@ -589,7 +576,6 @@ concerns first, then one page per backend, then one per test type.
 | [`vector_store_service_level_shares`](configuration_options/vector-store.md#vector_store_service_level_shares) | `SCT_VECTOR_STORE_SERVICE_LEVEL_SHARES` | [Vector Store](configuration_options/vector-store.md) |
 | [`vector_store_threads`](configuration_options/vector-store.md#vector_store_threads) | `SCT_VECTOR_STORE_THREADS` | [Vector Store](configuration_options/vector-store.md) |
 | [`vector_store_version`](configuration_options/vector-store.md#vector_store_version) | `SCT_VECTOR_STORE_VERSION` | [Vector Store](configuration_options/vector-store.md) |
-| [`verify_data_after_entire_test`](configuration_options/upgrade-tests.md#verify_data_after_entire_test) | `SCT_VERIFY_DATA_AFTER_ENTIRE_TEST` | [Upgrade tests](configuration_options/upgrade-tests.md) |
 | [`verify_stress_after_cluster_upgrade`](configuration_options/upgrade-tests.md#verify_stress_after_cluster_upgrade) | `SCT_VERIFY_STRESS_AFTER_CLUSTER_UPGRADE` | [Upgrade tests](configuration_options/upgrade-tests.md) |
 | [`verify_stress_after_migration`](configuration_options/upgrade-tests.md#verify_stress_after_migration) | `SCT_VERIFY_STRESS_AFTER_MIGRATION` | [Upgrade tests](configuration_options/upgrade-tests.md) |
 | [`workload_name`](configuration_options/performance-regression-tests.md#workload_name) | `SCT_WORKLOAD_NAME` | [Performance regression tests](configuration_options/performance-regression-tests.md) |

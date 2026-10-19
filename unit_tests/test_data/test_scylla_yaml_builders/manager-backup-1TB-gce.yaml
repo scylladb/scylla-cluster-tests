@@ -30,7 +30,6 @@ nemesis_interval: 30
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1804-lts'
 scylla_linux_distro: 'ubuntu-bionic'
 
-scylla_linux_distro_loader: 'centos'
 
 space_node_threshold: 644245094
 

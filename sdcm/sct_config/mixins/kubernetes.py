@@ -59,9 +59,6 @@ class KubernetesConfigMixin(BaseModel):
     k8s_cert_manager_version: String = SctField(
         description="Specifies the version of the cert-manager to be used in K8S.",
     )
-    k8s_connection_bundle_file: String = SctField(
-        description="Serverless configuration bundle file.",
-    )
     k8s_db_node_service_type: String = SctField(
         description="Defines the type of the K8S 'Service' objects type used for ScyllaDB pods. Empty value means 'do not set and allow scylla-operator to choose'.",
     )

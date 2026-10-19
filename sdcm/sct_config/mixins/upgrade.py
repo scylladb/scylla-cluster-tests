@@ -79,9 +79,6 @@ class UpgradeConfigMixin(BaseModel):
     upgrade_sstables: Boolean = SctField(
         description="Whether to upgrade sstables as part of upgrade_node or not",
     )
-    verify_data_after_entire_test: StringOrList = SctField(
-        description="Stress command to verify data integrity after the entire test.",
-    )
     verify_stress_after_cluster_upgrade: StringOrList = SctField(
         description="Stress command(s) run after every node has been upgraded, to verify the upgraded cluster. See 'stress_cmd' for the format.",
     )

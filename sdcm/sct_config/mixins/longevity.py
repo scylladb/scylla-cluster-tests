@@ -52,9 +52,6 @@ class LongevityConfigMixin(BaseModel):
     run_commit_log_check_thread: Boolean = SctField(
         description="Flag to run a thread that checks commit logs",
     )
-    run_full_partition_scan: String = SctField(
-        description="Enable or disable running full partition scans during tests",
-    )
     run_fullscan: list = SctField(
         description="Enable or disable running full scans during tests",
     )
