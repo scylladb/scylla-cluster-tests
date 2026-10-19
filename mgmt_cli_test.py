@@ -44,7 +44,7 @@ from sdcm.provision.helpers.certificate import (
     SCYLLA_SSL_CONF_DIR,
 )
 from sdcm.provision.scylla_yaml.auxiliaries import ClientEncryptionOptions
-from sdcm.nemesis.monkey import MgmtRepair
+from sdcm.nemesis.monkey.manager import MgmtRepair
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.alternator.table_setup import alternator_backuped_tables
 from sdcm.utils.aws_utils import AwsIAM
