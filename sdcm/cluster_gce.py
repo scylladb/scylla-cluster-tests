@@ -327,6 +327,16 @@ class GCENode(cluster.BaseNode):
         scheduling = self._instance.scheduling
         return scheduling.provisioning_model == "SPOT" or bool(scheduling.preemptible)
 
+    def start_spot_monitoring_thread(self):
+        # Minicloud has no Cloud Logging entries.list (404 on every poll). QEMU guests have no
+        # host maintenance or preemption events.
+        if is_minicloud_active(self.parent_cluster.params):
+            self.log.info(
+                "Minicloud does not serve Cloud Logging, skip polling for GCE maintenance and preemption events"
+            )
+            return
+        super().start_spot_monitoring_thread()
+
     def check_spot_termination(self):
         """Check if a spot instance termination was initiated by the cloud.
 
@@ -352,7 +362,7 @@ class GCENode(cluster.BaseNode):
                     case _:
                         GceInstanceEvent(entry, severity=Severity.WARNING).publish()
         except Exception as details:  # noqa: BLE001
-            self.log.warning("Error during getting spot termination notification %s", details)
+            self.log.warning("Failed to query GCE maintenance/preemption events from Cloud Logging: %s", details)
             self._last_logs_fetch_time = since
         return SPOT_TERMINATION_CHECK_DELAY
 
