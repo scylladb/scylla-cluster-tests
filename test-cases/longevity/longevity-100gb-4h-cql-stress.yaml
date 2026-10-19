@@ -6,7 +6,7 @@ test_metadata:
     read/write workloads at QUORUM consistency on a 6-node encrypted cluster with
     SisyphusMonkey nemesis. Validates stability under sustained heavy I/O.
   test_type: longevity
-  tier: tier1
+  tier: release
   duration_class: short
   supported_backends:
     - aws

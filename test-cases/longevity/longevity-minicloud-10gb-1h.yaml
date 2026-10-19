@@ -7,7 +7,7 @@ test_metadata:
     longevity-10gb-3h, scaled to fit on a single KVM-capable sct-runner, and used to
     validate that the regular longevity flow works end-to-end against minicloud.
   test_type: longevity
-  tier: tier1
+  tier: release
   duration_class: short
   # AWS only for now: instance_type_runner below is an AWS nested-virtualization type, and the
   # job layers no GCE runner override, so a gce run would hand GceSctRunner an invalid machine

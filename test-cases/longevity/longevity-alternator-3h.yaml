@@ -4,7 +4,7 @@ test_metadata:
     YCSB runs 50/50 read and update on an LWT table and a non-LWT table, while cassandra-stress
     runs CQL write and read workloads at QUORUM on the same cluster.
   test_type: longevity
-  tier: tier1
+  tier: release
   duration_class: medium
   supported_backends:
     - aws
