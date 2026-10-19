@@ -4,15 +4,16 @@ from enum import Enum
 from collections import defaultdict, Counter
 
 import json
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
+from sdcm.argus_results import LATENCY_ERROR_THRESHOLDS, send_best_throughput_result_to_argus
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import latency_calculator_decorator
-from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
+from sdcm.utils.latency import BestThroughputStep, analyze_hdr_percentiles, calculate_latency, find_best_throughput
 
 
 class CSPopulateDistribution(Enum):
@@ -653,7 +654,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
             summary_result = self.check_latency_during_steps(step=current_throttle_step)
             summary_result[current_throttle_step].update(
-                {"ops_rate": self._aggregate_ops_rate(results, num_loaders, len(workload.cs_cmd_tmpl))}
+                {
+                    "ops_rate": self._aggregate_ops_rate(results, num_loaders, len(workload.cs_cmd_tmpl)),
+                    "threads": step_params["threads"],
+                }
             )
             total_summary.update(summary_result)
             if workload.drop_keyspace:
@@ -674,9 +678,38 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 # continuous period of three minutes.
                 self.wait_for_no_tablets_splits()
 
-        self.save_total_summary_in_file(total_summary)
+        best_step = self.report_best_throughput(workload=workload, total_summary=total_summary)
+        self.save_total_summary_in_file(total_summary, best_step=best_step)
 
-    def save_total_summary_in_file(self, total_summary):
+    def report_best_throughput(self, workload: Workload, total_summary: dict) -> BestThroughputStep | None:
+        """Find the step with the highest throughput within the P99 limit and send it to Argus."""
+        latency_limit = self.params.get("perf_gradual_latency_limit") or {}
+        p99_limit_ms = latency_limit.get(
+            workload.workload_type, latency_limit.get("default", LATENCY_ERROR_THRESHOLDS["default"])
+        )["percentile_99"]
+        best_step = find_best_throughput(total_summary=total_summary, p99_limit_ms=p99_limit_ms)
+        if best_step:
+            self.log.info(
+                "Best throughput for '%s' with P99 within %s ms: %s op/s at step %s (threads: %s, P99: %s)",
+                workload.workload_type,
+                p99_limit_ms,
+                best_step.throughput,
+                best_step.name,
+                best_step.threads,
+                best_step.p99,
+            )
+        else:
+            self.log.warning("No '%s' step kept P99 within %s ms", workload.workload_type, p99_limit_ms)
+        send_best_throughput_result_to_argus(
+            argus_client=self.test_config.argus_client(),
+            workload=workload.workload_type,
+            best_step=best_step,
+            p99_limit_ms=p99_limit_ms,
+        )
+        return best_step
+
+    def save_total_summary_in_file(self, total_summary, best_step: BestThroughputStep | None = None):
+        total_summary = total_summary | {"best_throughput": asdict(best_step) if best_step else None}
         total_summary_json = json.dumps(total_summary, indent=4, separators=(", ", ": "))
         self.log.debug("---------------------------------")
         self.log.debug("Final table with results: \n %s", total_summary_json)
