@@ -32,7 +32,7 @@ in the cluster, and every node then pays the full retry budget waiting for it to
 clear. The cost of one disagreement scales with cluster size even though there
 is only one thing wrong.
 
-**A healthy gate was never the problem.** Across 453 measured gates the retry
+**A healthy gate was never the problem.** Across 683 measured gates the retry
 path did not fire once, and the gate cost seconds: eight on six nodes, twenty-five
 on thirty, an extrapolated fifty on sixty. By the same arithmetic, parallel node
 checks (Phase 2) already cut the failing case from just under three hours to roughly thirty-five minutes.
@@ -153,8 +153,8 @@ questions were blocking review of the rest.
 
 ## Implementation Phases
 
-Phases 1, 2 and 3 are complete. Phases 4 onward are the remaining work, ordered
-by dependency: measure, then fix what measurement confirms, then add
+Phases 1, 2, 3 and 8 are complete; Phase 8's fix is tracked separately. Phases
+4 to 7 are the remaining work, ordered by dependency: measure, then fix what measurement confirms, then add
 configurability.
 
 ---
@@ -234,12 +234,15 @@ samples. The last three vary only node count, holding workers at five.
 | 30    | 32    | 961     | 25.05 s         | 4.112 s  | 2.244 s    | 1.868 s   |
 
 Gathering, per node per gate: nodetool status 0.697 s, token ring 0.503 s, Raft
-group0 0.231 s, gossip 0.206 s, peers 0.206 s.
+group0 0.231 s, gossip 0.206 s, peers 0.206 s. A seventh run at six nodes,
+adding a per-validator breakdown, reproduced the same 8.00 s gate and the same
+2.3 s validation, so the instrumentation does not change what it measures.
 
-**Waiting was 0.0 s in every gate, and all 5,298 samples passed on their first
-attempt.** The retry path did not fire once, including in a run configured to
-force it: no settle time between a disruption and the next gate, and a
-disruption pool restricted to node-down nemeses. The gate opened a median 1.5 s
+**Waiting was 0.0 s in every gate, and every sample passed on its first
+attempt** — 5,298 in the six runs above and 1,381 in the seventh, so 683 gates
+and 6,679 samples across all seven. The retry path did not fire once, including
+in a run configured to force it: no settle time between a disruption and the
+next gate, and a disruption pool restricted to node-down nemeses. The gate opened a median 1.5 s
 after each disruption ended and still found every node up, because each nemesis
 already waits for the node it disturbed before returning.
 
@@ -256,11 +259,12 @@ the one condition under which the retry path might plausibly fire.
 
 ---
 
-### Phase 8: Name the fixed cost inside validation
+### Phase 8: Name the fixed cost inside validation — COMPLETE
 
 **Importance**: Important
 **Dependencies**: Phase 3
-**Tracked as**: [SCT-1002](https://scylladb.atlassian.net/browse/SCT-1002)
+**Tracked as**: [SCT-1002](https://scylladb.atlassian.net/browse/SCT-1002); fix
+follow-up [SCT-1314](https://scylladb.atlassian.net/browse/SCT-1314)
 
 Validation is the larger half of the gate: 2.3 s of the 4.2 s each node spends,
 against 1.9 s for all five gathering operations together. Until it was timed,
@@ -272,22 +276,48 @@ of cluster size and resist parallelism. Measurement refutes that: per-node
 validation is 2.328 s at six nodes and 2.244 s at thirty. It does not grow with
 node count at all.
 
-That flatness is now the finding. Comparing a few dozen dictionary entries
-should cost microseconds, and a cost that ignores cluster size is fixed overhead
-rather than real per-node work. Something inside the validators spends roughly
-two seconds per node per gate regardless of what it is checking, and nothing
-currently names it. Until it is named, no estimate of what the gate could cost
-is worth anything.
+That flatness pointed at fixed overhead rather than per-node work, and a
+per-validator breakdown (230 gates, 1,381 samples, six nodes) found it in one
+place.
+
+**The group0/token-ring check is 99.9% of validation** — 2.298 s of 2.300 s. The
+other four validators cost 0.000 s each, which is what comparing a few dozen
+dictionary entries should cost, and nothing is unaccounted for between them.
+
+That check is not a comparison. It is handed the group0 and token-ring
+membership gathered moments earlier, but uses it only to choose which nodes to
+report on. To find the difference it asks the node's Raft helper, which, per
+node and per gate:
+
+- opens a **fresh exclusive CQL connection** to read whether the limited-voters
+  feature is enabled, a cluster-wide constant;
+- **gathers both sets again**: group0 over a second exclusive connection, and
+  the token ring over SSH;
+- when the feature is off and no difference was found, opens a third
+  connection to list group0 non-voters.
+
+Across the run it did this 1,381 times and the difference was empty every time.
+So the larger half of the gate is a flag lookup plus a second gather of state
+the gate already holds.
 
 **Definition of Done**:
 - [x] Per-operation timings are logged with enough resolution to be averaged
 - [x] Validation time is measured per node and reported alongside gathering
 - [x] Measurement across node counts shows how validation scales — it does not
-- [ ] Validation is broken down per validator, naming where the fixed cost sits
-- [ ] The gate accounts for its wall-clock: gathering, validation and overhead
-      sum to the measured total, with any remainder named
-- [ ] If the cost proves removable, a follow-up is opened for the fix — this
-      phase measures, it does not optimise
+- [x] Validation is broken down per validator, naming where the fixed cost sits
+- [x] The gate accounts for its wall-clock: gathering, validation and overhead
+      sum to the measured total, with no unattributed remainder
+- [x] A follow-up is opened for the fix,
+      [SCT-1314](https://scylladb.atlassian.net/browse/SCT-1314) — this phase
+      measures, it does not optimise
+
+**Chosen fix: compare the membership already passed in**, and take the
+expensive path only when it actually differs. That removes both the flag lookup
+and the second gather; on the measured model a healthy 60-node gate falls from
+about 50 seconds to about 22. The cheaper options fall short. Caching the flag
+removes one connection but leaves the second gather, about 0.7 s per node
+(group0 0.231 s plus token ring 0.503 s), so the same gate only reaches about
+30 seconds. A pooled session saves connection setup but not the SSH call.
 
 ---
 
@@ -297,7 +327,7 @@ is worth anything.
 **Dependencies**: Phase 3
 **Tracked as**: [SCT-1310](https://scylladb.atlassian.net/browse/SCT-1310)
 
-Measurement changed the ordering here. The retry path never fired in 5,298
+Measurement changed the ordering here. The retry path never fired in 6,679
 samples, so nothing in this phase affects a healthy run at all. It governs only
 what a failing gate costs — and there the budget is large. A node that never
 agrees spends ten attempts and nine fifteen-second sleeps, about 177 s. Because
