@@ -118,12 +118,45 @@ def test_each_role_is_cleaned_up_by_its_own_ip_ssh_connections(cleaned, monkeypa
 
     resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config(ip_ssh_connections="private"))
 
-    assert cleaned == [
-        ("containers", {"TestId": TEST_ID}),
+    # each host's cleanup: host, tunnel ports, scylla install
+    assert [call[:3] for call in cleaned[1:4]] == [
         ("scylla-db 1.0.0.1", True, True),
         ("loader 10.0.0.2", False, False),
         ("monitor 10.0.0.3", False, False),
     ]
+    assert cleaned[0] == ("containers", {"TestId": TEST_ID})
+
+
+def test_lab_hosts_are_cleaned_up_through_the_lab_access_service(cleaned, monkeypatch):
+    """A host with `access` is reached where the access service says, one with no public address at its private one."""
+    hosts = {
+        "db_nodes": {"username": "fedora", "node_list": [{"private_ip": "10.0.0.1"}]},
+        "loader_nodes": {"username": "fedora", "node_list": [{"private_ip": "10.0.0.60", "access": "monster"}]},
+        "monitor_nodes": {"username": "fedora", "node_list": []},
+    }
+    monkeypatch.setattr(keystore.KeyStore, "get_baremetal_config", lambda self, name: hosts)
+    localhost = MagicMock()
+    localhost.lab_access_ssh_address.return_value = {"hostname": "172.17.0.5", "port": 10027}
+    monkeypatch.setattr(resources_cleanup, "LocalHost", lambda **kwargs: localhost)
+    logins = []
+    monkeypatch.setattr(
+        remote.RemoteCmdRunnerBase,
+        "create_remoter",
+        lambda **kwargs: logins.append(kwargs) or MagicMock(login=(kwargs["hostname"], kwargs)),
+    )
+
+    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config())
+
+    assert [(login["hostname"], login.get("port")) for login in logins] == [("10.0.0.1", None), ("172.17.0.5", 10027)]
+    assert [call[:3] for call in cleaned[1:]] == [("scylla-db 10.0.0.1", True, True), ("loader monster", True, False)]
+    localhost.lab_access_ssh_address.assert_called_once_with("monster")
+    localhost.destroy.assert_called_once()
+
+
+def test_cleanup_without_lab_hosts_starts_no_access_container(cleaned, monkeypatch):
+    monkeypatch.setattr(resources_cleanup, "LocalHost", MagicMock(side_effect=AssertionError("access container")))
+
+    resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config())
 
 
 def test_clean_cloud_resources_cleans_up_baremetal_hosts(monkeypatch):
