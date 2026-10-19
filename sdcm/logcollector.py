@@ -54,6 +54,7 @@ from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2_Failure
 from sdcm.sct_events.events_device import EVENTS_LOG_DIR, RAW_EVENTS_LOG
 from sdcm.test_config import TestConfig
 from sdcm.utils.aws_ssm_runner import SSMCommandRunner
+from sdcm.utils.baremetal_hosts import host_ssh_address
 from sdcm.utils.common import (
     S3Storage,
     create_remote_storage_dir,
@@ -2299,20 +2300,15 @@ class Collector:
             ip_type = node_config.get("ip_ssh_connections") or run_ip_type
 
             for idx, node_info in enumerate(node_list):
-                public_ip = node_info.get("public_ip")
                 private_ip = node_info.get("private_ip")
-                hostname = public_ip if ip_type == "public" else private_ip
-
-                if not hostname:
-                    LOGGER.warning("No %s IP found for baremetal node %s-%d, skipping", ip_type, config_key, idx)
+                public_ip = node_info.get("public_ip", private_ip)
+                if not private_ip and not node_info.get("access"):
+                    LOGGER.warning("No address found for baremetal node %s-%d, skipping", config_key, idx)
                     continue
 
                 node_name = f"{node_tag}-node-{self.test_id[:8]}-{idx}"
-                ssh_login_info = {
-                    "hostname": hostname,
-                    "user": ssh_username,
-                    "key_file": user_credentials_path,
-                }
+                ssh_login_info = {"user": ssh_username, "key_file": user_credentials_path}
+                ssh_login_info |= host_ssh_address(node_info, ip_type, self.localhost)
 
                 collecting_node = CollectingNode(
                     name=node_name,

@@ -351,13 +351,13 @@ class CloudNode(cluster.BaseNode):
         localhost = TestConfig().tester_obj().localhost
         return localhost.xcloud_connect_supported(self.parent_cluster.params)
 
-    def _get_ssh_address(self, localhost) -> dict:
-        return localhost.xcloud_connect_get_ssh_address(node=self)
+    def _ssh_address(self) -> dict:
+        return TestConfig().tester_obj().localhost.xcloud_connect_get_ssh_address(node=self)
 
     def _init_remoter(self, ssh_login_info=None):
         localhost = TestConfig().tester_obj().localhost
         if localhost.xcloud_connect_supported(self.parent_cluster.params):
-            ssh_login_info = self._get_ssh_address(localhost)
+            ssh_login_info = self._ssh_address()
             self.remoter = RemoteLibSSH2CmdRunner(**ssh_login_info)
             self.log.debug(self.remoter.ssh_debug_cmd())
         else:
@@ -526,8 +526,8 @@ class CloudVSNode(VectorStoreNodeMixin, CloudNode):
             after_config=after_config,
         )
 
-    def _get_ssh_address(self, localhost) -> dict:
-        return localhost.xcloud_connect_get_vs_ssh_address(node=self)
+    def _ssh_address(self) -> dict:
+        return TestConfig().tester_obj().localhost.xcloud_connect_get_vs_ssh_address(node=self)
 
     @property
     def node_type(self) -> str:
@@ -567,8 +567,8 @@ class CloudManagerNode(CloudNode):
             after_config=after_config,
         )
 
-    def _get_ssh_address(self, localhost) -> dict:
-        return localhost.xcloud_connect_get_manager_ssh_address(node=self)
+    def _ssh_address(self) -> dict:
+        return TestConfig().tester_obj().localhost.xcloud_connect_get_manager_ssh_address(node=self)
 
     @property
     def node_type(self) -> str:
