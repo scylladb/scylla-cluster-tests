@@ -2,7 +2,7 @@ test_metadata:
   description: >-
     12-hour longevity test running two SisyphusMonkey nemesis threads in parallel,
     one limited to topology changes and one to non-disruptive schema changes, on a
-    6-node, 3-rack cluster. Preloads ~40% of the node disk with cql-stress, then runs
+    6-node, 3-rack cluster. Preloads ~30% of the node disk with cql-stress, then runs
     cql-stress mixed read/write and scylla-bench read/write at QUORUM for 12 hours.
     Validates schema propagation and cluster stability while nodes are added, removed,
     replaced and decommissioned under load.
@@ -21,13 +21,13 @@ test_metadata:
 test_duration: 800
 
 prepare_write_cmd:  [
-                     "cql-stress-cassandra-stress write cl=QUORUM n=293601280 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=80  -pop seq=1..293601280 -col 'n=FIXED(10) size=FIXED(256)' -log interval=10",
+                     "cql-stress-cassandra-stress write cl=QUORUM n=220200960 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=80  -pop seq=1..220200960 -col 'n=FIXED(10) size=FIXED(256)' -log interval=10",
                      "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=250 -clustering-row-count=1000 -clustering-row-size=uniform:1024..4096 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=5 -timeout=60s -retry-number=30 -retry-interval=500ms,1s",
                     ]
 
 stress_cmd: [
-             "cql-stress-cassandra-stress write cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=40 throttle=20000/s' -pop 'dist=uniform(1..293601280)' -col 'n=FIXED(10) size=FIXED(256)' -log interval=10",
-             "cql-stress-cassandra-stress read  cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=40 throttle=20000/s' -pop 'dist=uniform(1..293601280)' -col 'n=FIXED(10) size=FIXED(256)' -log interval=10",
+             "cql-stress-cassandra-stress write cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=40 throttle=20000/s' -pop 'dist=uniform(1..220200960)' -col 'n=FIXED(10) size=FIXED(256)' -log interval=10",
+             "cql-stress-cassandra-stress read  cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=40 throttle=20000/s' -pop 'dist=uniform(1..220200960)' -col 'n=FIXED(10) size=FIXED(256)' -log interval=10",
              "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=50 -clustering-row-count=1000 -partition-offset=11 -clustering-row-size=uniform:1024..4096  -concurrency=20  -connection-count=20  -consistency-level=quorum -rows-per-request=50 -timeout=60s -retry-number=30 -retry-interval=500ms,1s -iterations 0 -duration=700m -max-rate 1000",
              "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=50 -clustering-row-count=1000 -partition-offset=41 -clustering-row-size=uniform:1024..4096   -concurrency=20 -connection-count=20  -consistency-level=quorum -rows-per-request=50 -timeout=60s -retry-number=30 -retry-interval=500ms,1s -iterations 0 -duration=700m -max-rate 1000"
              ]
