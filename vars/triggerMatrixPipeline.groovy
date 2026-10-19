@@ -44,7 +44,7 @@ def call(Map pipelineParams = [:]) {
             string(name: 'scylla_version', defaultValue: '',
                    description: 'Scylla version (e.g., master:latest, 2024.2.5-0.20250221.xxx-1). Several versions, separated by commas or spaces, run the matrix once per version and are reported together. If not provided, resolved from image params.')
             string(name: 'labels_selector', defaultValue: defaultLabelsSelector,
-                   description: 'Comma-separated labels to filter jobs (AND logic)')
+                   description: 'Comma-separated labels to filter jobs (AND logic). An item may list alternatives separated by "/", of which a job needs any, e.g. "os-centos9/os-docker"')
             string(name: 'backend', defaultValue: '',
                    description: 'Filter jobs by backend (aws/gce/azure/oci). When image params are set, use this to run only matching backend jobs.')
             string(name: 'skip_jobs', defaultValue: '',
