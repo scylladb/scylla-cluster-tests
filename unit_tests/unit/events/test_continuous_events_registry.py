@@ -1,5 +1,4 @@
 import uuid
-from typing import Generator
 
 import pytest
 
@@ -18,49 +17,16 @@ from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.system import InfoEvent
 
 
-@pytest.fixture(scope="function")
-def continuous_registry():
+@pytest.fixture
+def continuous_registry() -> ContinuousEventsRegistry:
     """A ContinuousEventsRegistry that collects the continuous events begun by the test."""
-    yield ContinuousEventsRegistry()
-
-
-@pytest.fixture(scope="function")
-def info_event() -> Generator[InfoEvent, None, None]:
-    """A non-continuous InfoEvent, for checking the registry accepts only continuous events."""
-    yield InfoEvent(message="This is a mock InfoEvent")
-
-
-@pytest.fixture(scope="function")
-def populated_registry(
-    continuous_registry: ContinuousEventsRegistry,
-) -> Generator[ContinuousEventsRegistry, None, None]:
-    """A registry already holding 100 NodetoolEvents, so lookups must pick the right event among many."""
-    for _ in range(100):
-        NodetoolEvent(nodetool_command="mock cmd", publish_event=False).begin_event(publish=False)
-
-    yield continuous_registry
+    return ContinuousEventsRegistry()
 
 
 @pytest.fixture
-def read_events_from_file(test_data_dir):
-    """Feed every line of a test-data log through the DB log event patterns, as the DB log reader does."""
-
-    def read_events(file_name: str):
-        with (test_data_dir / file_name).open(encoding="utf-8") as sct_log:
-            for line in sct_log.readlines():
-                db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(node="node1")
-                for item in db_event_pattern_func_map:
-                    event_match = item.pattern.search(line)
-                    if not event_match:
-                        continue
-                    try:
-                        item.period_func(match=event_match)
-                    except RuntimeError as rex:
-                        # Ignore the fact that the event is not published. It still will be created
-                        if "You should create default EventsProcessRegistry first" not in str(rex):
-                            raise
-
-    return read_events
+def info_event() -> InfoEvent:
+    """A non-continuous InfoEvent, for checking the registry accepts only continuous events."""
+    return InfoEvent(message="This is a mock InfoEvent")
 
 
 def test_add_event(continuous_registry: ContinuousEventsRegistry):
@@ -167,6 +133,39 @@ def test_adding_a_non_continuous_event_raises_error(continuous_registry: Continu
     """The registry rejects a non-continuous event, since it could never be ended and removed."""
     with pytest.raises(ContinuousEventRegistryException):
         continuous_registry.add_event(info_event)
+
+
+@pytest.fixture
+def populated_registry(
+    continuous_registry: ContinuousEventsRegistry,
+) -> ContinuousEventsRegistry:
+    """A registry already holding 100 NodetoolEvents, so lookups must pick the right event among many."""
+    for _ in range(100):
+        NodetoolEvent(nodetool_command="mock cmd", publish_event=False).begin_event(publish=False)
+
+    return continuous_registry
+
+
+@pytest.fixture
+def read_events_from_file(test_data_dir):
+    """Feed every line of a test-data log through the DB log event patterns, as the DB log reader does."""
+
+    def read_events(file_name: str):
+        with (test_data_dir / file_name).open(encoding="utf-8") as sct_log:
+            for line in sct_log.readlines():
+                db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(node="node1")
+                for item in db_event_pattern_func_map:
+                    event_match = item.pattern.search(line)
+                    if not event_match:
+                        continue
+                    try:
+                        item.period_func(match=event_match)
+                    except RuntimeError as rex:
+                        # Ignore the fact that the event is not published. It still will be created
+                        if "You should create default EventsProcessRegistry first" not in str(rex):
+                            raise
+
+    return read_events
 
 
 @pytest.mark.skip(reason="https://trello.com/c/Mu3lGc7C/4828-disable-compaction-and-repair-continuous-events")
