@@ -105,6 +105,8 @@ LOGGER = logging.getLogger("utils")
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
 SCYLLA_AMI_OWNER_ID_LIST = ["797456418907", "158855661827"]
 SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
+# arm64 images are published to their own family (scylla-machine-image#862)
+SCYLLA_GCE_ARM64_IMAGE_FAMILY = "scylla-arm64"
 CREATE_TABLE_REGEX = re.compile(
     r"CREATE\s+TABLE\s+(?P<keyspace>[^\s.]+)\.(?P<table>[^\s(]+)\s*\([^)]+\)(?P<options>[^;]*)"
 )
@@ -1180,7 +1182,10 @@ def build_gce_image_filter(version: str = None, arch: VmArch = None) -> str:
     or you can see brief explanation here:
       https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
     """
-    filters = "(family eq 'scylla(-enterprise)?')(labels.environment eq 'production')"
+    filters = (
+        f"(family eq '{SCYLLA_GCE_ARM64_IMAGE_FAMILY}')" if arch is VmArch.ARM else "(family eq 'scylla(-enterprise)?')"
+    )
+    filters += "(labels.environment eq 'production')"
     if version and version != "all":
         # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
         if parse_scylla_version_tag(version):
@@ -1197,9 +1202,6 @@ def build_gce_image_filter(version: str = None, arch: VmArch = None) -> str:
                 filters += "')"
 
     if arch:
-        if arch != VmArch.X86:
-            #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
-            LOGGER.warning("--arch option not implemented currently for GCE machine images.")
         filters += f" (architecture eq {vmarch_to_gcp(arch)})"
 
     return filters
@@ -1789,7 +1791,8 @@ def get_branched_gce_images(
     #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
     # or you can see brief explanation here:
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
-    filters = f"(family eq scylla)(labels.branch eq {branch})(name ne debug-.*)"
+    family = SCYLLA_GCE_ARM64_IMAGE_FAMILY if arch is VmArch.ARM else "scylla"
+    filters = f"(family eq {family})(labels.branch eq {branch})(name ne debug-.*)"
 
     if build_id not in (
         "latest",
