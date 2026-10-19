@@ -1102,6 +1102,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 )
 
         self._validate_perf_gradual_throttle_steps()
+        self._validate_perf_gradual_latency_limit()
 
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
@@ -1858,6 +1859,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
             re.compile(backtrace_decoding_disable_regex)
 
         self._validate_perf_gradual_throttle_steps()
+        self._validate_perf_gradual_latency_limit()
 
         self._verify_migrator_source_params()
         self._verify_emr_spark_mode()
@@ -2152,6 +2154,24 @@ class SCTConfiguration(*CONFIG_GROUPS):
                         f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
                         f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
                     )
+
+    def _validate_perf_gradual_latency_limit(self):
+        """Validate perf_gradual_latency_limit: {<sub-test or 'default'>: {'percentile_99': <ms>}}."""
+        if not (latency_limit := self.get("perf_gradual_latency_limit")):
+            return
+
+        for workload, limits in latency_limit.items():
+            if not isinstance(limits, dict) or set(limits) != {"percentile_99"}:
+                raise ValueError(
+                    f"perf_gradual_latency_limit for {workload} should be a dict with a single "
+                    f"'percentile_99' key, got {limits!r}"
+                )
+            p99_limit = limits["percentile_99"]
+            if isinstance(p99_limit, bool) or not isinstance(p99_limit, int | float) or p99_limit <= 0:
+                raise ValueError(
+                    f"perf_gradual_latency_limit for {workload}: 'percentile_99' should be a positive number "
+                    f"of ms, got {p99_limit!r}"
+                )
 
     def _validate_docker_simulated_racks(self) -> None:
         """Reject `simulated_racks` on Docker images that predate the --dc/--rack entrypoint arguments.
