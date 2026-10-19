@@ -14,10 +14,10 @@ import unittest.mock
 
 import pytest
 
+from sdcm.sct_events import event_handler
 from sdcm.sct_events.event_handler import start_events_handler
 from sdcm.sct_events.events_processes import EVENTS_HANDLER_ID
 from sdcm.sct_events.loaders import CassandraStressLogEvent
-from sdcm.test_config import TestConfig
 
 
 @pytest.fixture
@@ -26,9 +26,10 @@ def tester_obj():
 
     TestConfig keeps the tester object on a class attribute and set_tester_obj() assigns it only once,
     so a test that sets it can never unset it and leaks into every test that runs afterwards.
-    Patching the accessor gives the same value without touching the singleton state.
+    Patching the accessor on the TestConfig class the events handler module resolves gives the same value
+    without touching the singleton state, whichever TestConfig class object other tests left importable.
     """
-    with unittest.mock.patch.object(TestConfig, "tester_obj", return_value="abc") as mock:
+    with unittest.mock.patch.object(event_handler.TestConfig, "tester_obj", return_value="abc") as mock:
         yield mock
 
 
