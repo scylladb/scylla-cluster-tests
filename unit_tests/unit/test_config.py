@@ -207,7 +207,7 @@ def test_12_scylla_version_repo_ubuntu(monkeypatch):
     assert conf.scylla_repo == expected_repo
 
 
-def test_12_k8s_scylla_version_ubuntu_loader_centos(monkeypatch):
+def test_12_k8s_scylla_version_no_repo(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "k8s-local-kind")
     monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO", "ubuntu-xenial")
     conf = sct_config.SCTConfiguration()
