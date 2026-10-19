@@ -2,7 +2,7 @@
 status: draft
 domain: testing
 created: 2026-10-12
-last_updated: 2026-10-18
+last_updated: 2026-10-19
 owner: fruch
 ---
 
@@ -64,8 +64,8 @@ backend-specific (GCE, Azure, OCI, LDAP, KMS, Argus-in-Jenkins, email, cloud RES
 ### Backend-agnostic credential consumers
 
 - `defaults/*.yaml` set `user_credentials_path: ~/.ssh/scylla_test_id_ed25519` for every backend;
-  `sdcm/sct_config` `check_required_files` asserts it exists. The Docker backend never uses it for
-  SSH (`DockerCmdRunner`), it only has to exist.
+  `sdcm/sct_config` `check_required_files` asserts it exists. Local backends never SSH with it:
+  Docker nodes are reached with `docker exec` (`DockerCmdRunner`), kind pods with `kubectl`.
 - `sdcm/cluster_k8s/__init__.py:KubernetesCluster.create_namespace` always calls
   `create_docker_hub_auth_secret`, which reads `docker.json` from KeyStore - including on
   `k8s-local-kind`.
@@ -183,8 +183,9 @@ run Okta auth and the shared-key sync **only when the profile says AWS is needed
 credentials are present (keeps today's behaviour for staff). Otherwise:
 
 - skip Okta entirely;
-- if `~/.ssh/scylla_test_id_ed25519` is missing, generate a local ed25519 key pair at that path
-  (it is only used to satisfy `check_required_files` on local backends) and log that it did so.
+- don't require `user_credentials_path` to exist, since local backends never SSH with it. SCT
+  writes nothing to `~/.ssh` for them. Where SCT keeps keys for cloud backends is tracked
+  separately in SCT-1292.
 
 The Okta error message stops pointing at an internal page and states what to do for both staff
 and outsiders.
@@ -193,7 +194,8 @@ and outsiders.
 - [ ] `sct.py conf -b docker test-cases/PR-provision-test-docker.yaml` succeeds with creds hidden
 - [ ] Same command with creds present behaves exactly as today (Okta + key sync run)
 - [ ] `sct.py conf -b aws ...` with creds hidden fails fast with an actionable message
-- [ ] An existing `~/.ssh/scylla_test_id_ed25519` is never overwritten
+- [ ] `sct.py run-test` with `test-cases/PR-provision-test-docker.yaml` passes with creds hidden
+      and no `~/.ssh` at all
 
 ### Phase 4: Integration-test credential marker
 
@@ -338,8 +340,8 @@ replace ad-hoc env-var skips), and `AGENTS.md` testing section.
 ### Unit
 
 - Phase 2 helper: matrix of backends × credential states, with boto3 credential resolution mocked.
-- Phase 3: click `CliRunner` tests for `conf`/`run-test` with and without creds; key generation
-  creates a valid key and never overwrites an existing one.
+- Phase 3: click `CliRunner` tests for `conf`/`run-test` with and without creds; the SSH key is
+  required only on backends that SSH.
 - Phase 7: `local` KeyStore hit/miss/error message; cache isolation between backends.
 
 ### Integration
@@ -371,7 +373,7 @@ Completing all Definition of Done items constitutes success. Plan-level:
 |------|-----------|--------|------------|
 | Lazy gate lets a cloud run start, then fail late on an expired token | Medium | Medium | Phase 2 marks every real cloud backend "needed" → gate still runs up front for them; only local backends skip it |
 | Marker skip hides a real regression in Jenkins (creds misconfigured → whole class silently skipped) | Medium | High | In Jenkins (`JOB_NAME` set) a `requires_*` skip becomes a failure, not a skip |
-| Generated local SSH key confused with the shared key | Low | Medium | Generated only when the file is absent and the profile says AWS not needed; logged loudly; never overwrites |
+| A local-backend code path does SSH with the key after all (e.g. a new feature) | Low | Medium | It fails with a missing-file error naming the path; the docker provision test runs without a key |
 | Unsigned S3 reads hit throttling that signed reads did not | Low | Low | Same public bucket other helpers already read unsigned; retry policy unchanged |
 | GitHub-hosted runners too small for Docker Scylla fixtures | Medium | Medium | Start with unit + a curated Docker subset; grow as runtime allows |
 | `pull_request` workflow abused by fork PRs | Low | Medium | No secrets, read-only token, no `pull_request_target` (see existing CodeQL rule) |
