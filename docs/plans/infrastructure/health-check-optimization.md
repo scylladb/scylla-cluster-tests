@@ -2,7 +2,7 @@
 status: in_progress
 domain: framework
 created: 2026-01-11
-last_updated: 2026-09-08
+last_updated: 2026-10-19
 owner: fruch
 ---
 
@@ -19,16 +19,25 @@ decide whether the cluster is still fit to continue the test. On a 60-node,
 operations it was guarding — making it the dominant cost of the test rather
 than a cheap safety check.
 
-Two of the original causes have since been fixed (see Current State). What
-remains is a different and larger problem than the plan originally assumed.
+Two of the original causes have since been fixed (see Current State), and
+arithmetic on the measured retry budget shows that most of that two hours went
+with them.
 
-**The remaining cost is waiting, not working.** A node that disagrees with the
-cluster is re-checked up to ten times with a fixed delay between attempts, and
-the checked state is *cluster-wide*: every node reports on every other node.
-So a single condition — one node held down by a nemesis, one node lagging in
-gossip — is detected independently by every node in the cluster, and every node
-then pays the full retry budget waiting for it to clear. The cost of one
-disagreement scales with cluster size even though there is only one thing wrong.
+**The remaining cost is waiting, not working — but only when the gate fails.**
+A node that disagrees with the cluster is re-checked up to ten times with a
+fixed delay between attempts, and the checked state is *cluster-wide*: every
+node reports on every other node. So a single condition — one node held down by
+a nemesis, one node lagging in gossip — is detected independently by every node
+in the cluster, and every node then pays the full retry budget waiting for it to
+clear. The cost of one disagreement scales with cluster size even though there
+is only one thing wrong.
+
+**A healthy gate was never the problem.** Across 453 measured gates the retry
+path did not fire once, and the gate cost seconds: eight on six nodes, twenty-five
+on thirty, an extrapolated fifty on sixty. By the same arithmetic, parallel node
+checks (Phase 2) already cut the failing case from just under three hours to roughly thirty-five minutes.
+What is left to win is the remaining thirty-five minutes, and it is won by
+shrinking the retry budget rather than by making any check faster.
 
 This produces three distinct pain points:
 
@@ -93,7 +102,7 @@ It is the path SCT-808 measured.
 Parallelism reduced wall-clock by roughly the worker count but did not remove
 the underlying waiting — the sleeps are now paid five at a time instead of one
 at a time. The original 120-minute figure is therefore no longer a valid
-baseline, and no measurement has been taken since.
+baseline; Phase 3 replaces it.
 
 ### Configuration that exists today
 
@@ -144,15 +153,16 @@ questions were blocking review of the rest.
 
 ## Implementation Phases
 
-Phases 1 and 2 are complete and retained for history. Phases 3 onward are the
-remaining work, ordered by dependency: measure, then fix what measurement
-confirms, then add configurability.
+Phases 1, 2 and 3 are complete. Phases 4 onward are the remaining work, ordered
+by dependency: measure, then fix what measurement confirms, then add
+configurability.
 
 ---
 
 ### Phase 1: Skip the gate after a skipped nemesis — COMPLETE
 
 **Importance**: Critical
+**Tracked as**: [SCT-1307](https://scylladb.atlassian.net/browse/SCT-1307)
 
 Suppress the gate when the previous disruption was skipped, since no cluster
 state changed. Shipped in
@@ -169,6 +179,7 @@ state changed. Shipped in
 ### Phase 2: Parallel node checks — COMPLETE
 
 **Importance**: Critical
+**Tracked as**: [SCT-1308](https://scylladb.atlassian.net/browse/SCT-1308)
 
 Check nodes concurrently instead of one at a time, collecting per-node failures
 rather than aborting on the first. Shipped in
@@ -183,10 +194,11 @@ rather than aborting on the first. Shipped in
 
 ---
 
-### Phase 3: Instrumentation and baseline
+### Phase 3: Instrumentation and baseline — COMPLETE
 
 **Importance**: Critical
 **Dependencies**: none
+**Tracked as**: [SCT-1309](https://scylladb.atlassian.net/browse/SCT-1309)
 
 Make the gate's cost observable before changing it. Record, per gate
 invocation: elapsed time for each of the five state-gathering operations, the
@@ -206,76 +218,76 @@ timing breakdown they are recorded into); a measured baseline table added to
 this plan.
 
 **Definition of Done**:
-- [ ] Each state-gathering operation logs its own elapsed time
-- [ ] Each node logs its retry count and the validator that caused each retry
-- [ ] The gate logs total wall-clock and the waiting-versus-working split
-- [ ] No change to which checks run or when the gate passes or fails
-- [ ] Baseline measured on a multi-node cluster and recorded in this plan
+- [x] Each state-gathering operation logs its own elapsed time
+- [x] Each node logs its retry count and the validator that caused each retry
+- [x] The gate logs total wall-clock and the waiting-versus-working split
+- [x] No change to which checks run or when the gate passes or fails
+- [x] Baseline measured on a multi-node cluster and recorded in this plan
 
-**First measurement (2026-09-14)**: two runs, 6 nodes each, 43 gates and 260
-per-node samples between them. Gate wall-clock 6.6-7.7 s on 2-vCPU instances and
-7.4-8.8 s on i7i.2xlarge. **Waiting was 0.0 s in every gate and every sample
-completed on its first attempt** — across both runs the retry path did not fire
-once.
+**Measured (2026-09-14 to 2026-09-24)**: six runs, 453 gates and 5,298 per-node
+samples. The last three vary only node count, holding workers at five.
 
-Ranking the gathering operations, from most to least expensive: nodetool
-status, token ring, gossip, then peers and Raft group0 roughly together. Exact
-per-operation figures are **not yet trustworthy**: the instrument rounds each
-operation to a tenth of a second, and three of the five sit at or next to that
-floor — token ring logged the identical value in all 97 samples, and peers and
-Raft group0 each collapse onto three values, many of them "0.0 s". Averaging
-already-rounded values produces false precision, so the numbers are recorded
-here only as an ordering until the instrument's resolution is raised.
+| nodes | gates | samples | gate wall-clock | per node | validation | gathering |
+|-------|-------|---------|-----------------|----------|------------|-----------|
+| 6     | 226   | 1,357   | 8.00 s          | 4.171 s  | 2.328 s    | 1.843 s   |
+| 20    | 129   | 2,581   | 16.90 s         | 4.221 s  | 2.312 s    | 1.908 s   |
+| 30    | 32    | 961     | 25.05 s         | 4.112 s  | 2.244 s    | 1.868 s   |
 
-This measures the healthy-cluster floor only; the slow case this plan exists to
-fix is still unmeasured. Two runs without a single retry says the retry path is
-rare, not that it is cheap when it fires. It does establish that a healthy gate
-costs seconds rather than minutes, consistent with the two hours coming from
-retries rather than per-operation cost. It also surfaced the gap in Phase 8.
+Gathering, per node per gate: nodetool status 0.697 s, token ring 0.503 s, Raft
+group0 0.231 s, gossip 0.206 s, peers 0.206 s.
+
+**Waiting was 0.0 s in every gate, and all 5,298 samples passed on their first
+attempt.** The retry path did not fire once, including in a run configured to
+force it: no settle time between a disruption and the next gate, and a
+disruption pool restricted to node-down nemeses. The gate opened a median 1.5 s
+after each disruption ended and still found every node up, because each nemesis
+already waits for the node it disturbed before returning.
+
+**Per-node cost does not vary with cluster size**, and neither does validation.
+Gate wall-clock is `ceil(nodes / workers) x per-node cost`, which fits all three
+points to within a few percent: the gate simply runs waves of roughly four
+seconds, five nodes at a time. A 60-node healthy gate extrapolates to about
+50 seconds.
+
+**Scope.** Every run was single-datacentre with a single nemesis, so the gate
+always opened in a quiet window. The reported two-hour case was 60 nodes across
+five datacentres; cross-datacentre gossip latency remains untested, and it is
+the one condition under which the retry path might plausibly fire.
 
 ---
 
-### Phase 8: Account for validation cost, not just gathering
+### Phase 8: Name the fixed cost inside validation
 
 **Importance**: Important
 **Dependencies**: Phase 3
 **Tracked as**: [SCT-1002](https://scylladb.atlassian.net/browse/SCT-1002)
 
-The Phase 3 measurement leaves most of the gate unexplained. Gathering summed to
-about 10.7 s across six nodes and ran five-at-a-time, so it should have finished
-in roughly 3.6 s of wall-clock; the gate took 8.0 s. That is 2.2x worse than
-ideal, and only 1.34x better than doing the work fully serially. Well over half
-the gate is outside everything Phase 3 measures.
+Validation is the larger half of the gate: 2.3 s of the 4.2 s each node spends,
+against 1.9 s for all five gathering operations together. Until it was timed,
+the gate reported well under half of its own cost.
 
-The ratio is not a fluke of one machine: two 6-node clusters four-fold apart in
-vCPU produced 1.32 and 1.34. Whatever serialises the parallel path is therefore
-not CPU starvation on the runner.
+**The premise this phase started from was wrong.** It assumed each node's
+validators walk every other node's entry, so the work would grow with the square
+of cluster size and resist parallelism. Measurement refutes that: per-node
+validation is 2.328 s at six nodes and 2.244 s at thirty. It does not grow with
+node count at all.
 
-The likely reason is that Phase 3 times only the gathering. The five validators
-that compare that state run outside any timing block, and they are the part that
-does not parallelise: each node's validators walk every other node's entry, so
-the work is quadratic in cluster size, and being pure Python it is serialised by
-the interpreter however many workers the gate is given.
-
-**This is a hypothesis with arithmetic behind it, not a diagnosis.** The first
-deliverable is to measure validation separately and confirm or kill it. Both
-runs so far are 6-node, so nothing is yet known about how the effect scales —
-which is the more interesting question, because validation grows with the square
-of node count while gathering grows linearly. If that holds, a 60-node gate would
-be dominated by validation and extra workers would not help.
+That flatness is now the finding. Comparing a few dozen dictionary entries
+should cost microseconds, and a cost that ignores cluster size is fixed overhead
+rather than real per-node work. Something inside the validators spends roughly
+two seconds per node per gate regardless of what it is checking, and nothing
+currently names it. Until it is named, no estimate of what the gate could cost
+is worth anything.
 
 **Definition of Done**:
-- [ ] Per-operation timings are logged with enough resolution to be averaged
-      (the current tenth-of-a-second rounding pins three of the five operations
-      to the floor and makes their means meaningless)
-- [ ] Validation time is measured per node and reported alongside gathering
+- [x] Per-operation timings are logged with enough resolution to be averaged
+- [x] Validation time is measured per node and reported alongside gathering
+- [x] Measurement across node counts shows how validation scales — it does not
+- [ ] Validation is broken down per validator, naming where the fixed cost sits
 - [ ] The gate accounts for its wall-clock: gathering, validation and overhead
       sum to the measured total, with any remainder named
-- [ ] Measurement on clusters of different **node counts** shows how validation
-      scales, confirming or refuting the quadratic expectation (the two runs so
-      far differ in instance size, not in node count, so they do not answer this)
-- [ ] If confirmed, a follow-up is opened for the fix — this phase measures, it
-      does not optimise
+- [ ] If the cost proves removable, a follow-up is opened for the fix — this
+      phase measures, it does not optimise
 
 ---
 
@@ -283,35 +295,56 @@ be dominated by validation and extra workers would not help.
 
 **Importance**: Critical
 **Dependencies**: Phase 3
+**Tracked as**: [SCT-1310](https://scylladb.atlassian.net/browse/SCT-1310)
 
-Address the two causes measurement is expected to confirm.
+Measurement changed the ordering here. The retry path never fired in 5,298
+samples, so nothing in this phase affects a healthy run at all. It governs only
+what a failing gate costs — and there the budget is large. A node that never
+agrees spends ten attempts and nine fifteen-second sleeps, about 177 s. Because
+the checked state is cluster-wide, every node pays it for the same condition, so
+a 60-node gate costs roughly 35 minutes before it gives up. Sequentially, as the
+gate ran before Phase 2, the same arithmetic gives just under three hours, which
+is where the original report came from.
 
-**Backoff.** Replace the flat retry delay with a short first delay that grows,
-keeping a comparable worst-case ceiling. A disagreement that resolves
-immediately — the overwhelmingly common case — then costs about a second
-instead of the full delay. This applies to both retrying call paths, which
-share the same constants, and closes
-[SCT-808](https://scylladb.atlassian.net/browse/SCT-808).
+**Budget.** Reduce the number of attempts. This is the largest single
+improvement available, needs no further measurement to justify, and is simpler
+than either change below. Five attempts with one-, two-, four- and eight-second
+delays leaves a fifteen-second tolerance for transient lag and cuts the worst
+case roughly fivefold. The trade-off is
+deliberate: a disagreement taking longer than the new ceiling fails the gate
+where today it would pass, which is the intended behaviour for a run that is
+already in trouble.
+
+**Backoff.** Make the delay start short and grow rather than staying flat, so a
+disagreement that resolves immediately — every occurrence SCT-808 observed —
+costs about a second instead of the full delay. This applies to both retrying
+call paths, which share the same constants. Together with the smaller budget it
+delivers the fix [SCT-808](https://scylladb.atlassian.net/browse/SCT-808) asked
+for: that ticket is closed, but the flat ten-by-fifteen-second constants it
+reported are still in place.
 
 **Short-circuit.** Stop every node independently paying the retry budget for
 the same cluster-wide condition. When the disagreement is about a node's
 membership state rather than about the reporting node, the gate should reach
-that conclusion once for the cluster instead of once per node.
+that conclusion once for the cluster instead of once per node. This is the
+largest change of the three and the least urgent once the budget shrinks.
 
 **Definition of Done**:
+- [ ] Attempt count reduced; the new worst-case gate cost is documented per
+      node count alongside the old one
 - [ ] Retry delay starts short and grows; worst-case ceiling is documented
 - [ ] Both retrying call paths use the shared backoff
 - [ ] A cluster-wide condition costs one retry budget, not one per node
 - [ ] Gate still fails for conditions that do not clear, with the same events
-- [ ] Unit tests cover backoff timing and the short-circuit
-- [ ] Measured improvement recorded against the Phase 3 baseline
-- [ ] SCT-808 closed
+- [ ] Unit tests cover the attempt count, backoff timing and the short-circuit
+- [ ] The flat ten-by-fifteen-second retry constants are gone from both paths
 
 ---
 
 ### Phase 5: Exclude nodes under nemesis; restore the gate under parallel nemesis
 
 **Importance**: Critical
+**Tracked as**: [SCT-1311](https://scylladb.atlassian.net/browse/SCT-1311)
 **Dependencies**: Phase 4 — not a technical dependency. Restoring the gate for
 parallel-nemesis tests adds gate invocations to exactly the tests that have none
 today, so the retries those gates perform should be cheap before that happens.
@@ -354,6 +387,7 @@ cluster_health_check_exclude_running_nemesis: true  # default: true
 
 **Importance**: Important
 **Dependencies**: Phase 5
+**Tracked as**: [SCT-1312](https://scylladb.atlassian.net/browse/SCT-1312)
 
 Let operators trade validation depth for speed. `full` keeps today's behaviour
 and remains the default; `basic` keeps membership and Raft consistency;
@@ -386,6 +420,7 @@ cluster_health_check_operations: ['status', 'raft']
 
 **Importance**: Important
 **Dependencies**: Phase 6
+**Tracked as**: [SCT-1313](https://scylladb.atlassian.net/browse/SCT-1313)
 
 **Definition of Done**:
 - [ ] `docs/configuration_options.md` regenerated
@@ -410,10 +445,11 @@ on real elapsed time.
 the gate executing and excluding only the disrupted nodes. For Phase 6, a run
 per mode must show that unselected operations are never issued.
 
-**Performance.** Phase 3 establishes the baseline; Phases 4 and 5 each report
-their measured improvement against it on the same cluster shape. Measure at
-least: total gate wall-clock, per-operation time, retry counts, and the
-waiting-versus-working split.
+**Performance.** Phase 3 establishes the baseline. A healthy run never retries,
+so Phase 4 documents its new worst-case cost per node count from the retry
+budget, next to today's. Phase 5 reports its measured cost against the baseline
+on the same cluster shape. Measure at least: total gate wall-clock,
+per-operation time, retry counts, and the waiting-versus-working split.
 
 **Correctness.** A node made genuinely unavailable outside of a nemesis must
 still fail the gate at every phase. A simulated disagreement about cluster
@@ -421,8 +457,9 @@ membership must still be detected in `full` and `basic` modes.
 
 ## Success Criteria
 
-1. A measured baseline exists in this document, and every subsequent phase
-   reports its improvement against it.
+1. A measured baseline exists in this document. Phase 4 documents its
+   worst-case cost next to today's; Phase 5 reports its measured cost against
+   the baseline.
 2. A disagreement that clears immediately costs roughly a second rather than a
    full retry delay.
 3. One node being down costs one retry budget for the cluster, not one per node.
@@ -441,7 +478,7 @@ membership must still be detected in `full` and `basic` modes.
 
 | Risk | Impact | Probability | Mitigation |
 |------|--------|-------------|------------|
-| Shorter retries turn transient lag into false failures | High | Medium | Keep the worst-case ceiling comparable to today's; Phase 3 measurement shows how many attempts real conditions need |
+| Shorter retries turn transient lag into false failures | High | Medium | The ~5x cut is deliberate. A fifteen-second tolerance covers every lag measured so far, all single-DC; the multi-DC case is untested, so the attempt count stays one constant that is easy to raise if multi-DC runs fail on it |
 | Short-circuiting hides a genuine per-node problem | High | Low | Short-circuit only where the disagreement is about another node's membership, never where it is about the reporting node |
 | Excluding nemesis nodes masks damage the nemesis caused | Medium | Medium | Exclusion is scoped to the disruption's duration; the node is checked on the next gate, once released |
 | Restoring the gate under parallel nemesis destabilises those tests | Medium | Medium | Parameter defaults preserve exclusion; roll out on a limited set of parallel-nemesis jobs first |
