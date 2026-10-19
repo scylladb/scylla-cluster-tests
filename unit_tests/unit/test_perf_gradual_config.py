@@ -179,3 +179,41 @@ def test_rate_unthrottled_string():
         }
     )
     config.verify_configuration()
+
+
+def test_latency_limit_default():
+    """Test that the default latency limit is P99 of 10 ms for every sub-test."""
+    config = SCTConfiguration()
+    config.verify_configuration()
+    assert config.get("perf_gradual_latency_limit") == {"default": {"percentile_99": 10}}
+
+
+def test_latency_limit_per_workload_override():
+    """Test that a sub-test can have its own latency limit next to the default."""
+    config = SCTConfiguration()
+    config.update(
+        {"perf_gradual_latency_limit": {"default": {"percentile_99": 10}, "read_disk_only": {"percentile_99": 15.5}}}
+    )
+    config.verify_configuration()
+
+
+@pytest.mark.parametrize(
+    "latency_limit, match",
+    [
+        pytest.param({"default": 10}, "single 'percentile_99' key", id="not_a_dict"),
+        pytest.param({"default": {"percentile_90": 5}}, "single 'percentile_99' key", id="wrong_percentile"),
+        pytest.param(
+            {"default": {"percentile_99": 10, "percentile_90": 5}}, "single 'percentile_99' key", id="extra_key"
+        ),
+        pytest.param({"default": {"percentile_99": 0}}, "positive number", id="zero"),
+        pytest.param({"default": {"percentile_99": -1}}, "positive number", id="negative"),
+        pytest.param({"default": {"percentile_99": "10"}}, "positive number", id="string"),
+        pytest.param({"default": {"percentile_99": True}}, "positive number", id="bool"),
+    ],
+)
+def test_invalid_latency_limit(latency_limit, match):
+    """Test that malformed latency limits are rejected with clear error messages."""
+    config = SCTConfiguration()
+    config.update({"perf_gradual_latency_limit": latency_limit})
+    with pytest.raises(ValueError, match=match):
+        config.verify_configuration()
