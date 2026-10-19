@@ -80,9 +80,14 @@ from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
 from sdcm.utils.trigger_matrix.audit import audit_matrices
 from sdcm.utils.trigger_matrix.constants import VERSION_RESOLUTION_STRATEGIES
 from sdcm.utils.trigger_matrix.images import resolve_image_architecture, resolve_scylla_version_from_image
+from sdcm.utils.trigger_matrix.config import load_matrix_config
 from sdcm.utils.trigger_matrix.matrix import trigger_matrix_versions as run_trigger_matrix
 from sdcm.utils.trigger_matrix.reporting import send_arch_audit_email
-from sdcm.utils.trigger_matrix.resolution import resolve_to_full_version
+from sdcm.utils.trigger_matrix.resolution import (
+    check_only_supported_versions,
+    resolve_to_full_version,
+    supported_only_versions,
+)
 from sdcm.utils.cloud_catalog.cost import RunCostEstimate, estimate_run_cost
 from sdcm.utils.cost_reporting import report_estimated_cost
 from sdcm.utils.argus import (
@@ -3686,7 +3691,8 @@ def hdr_investigate(
     type=str,
     help="Scylla version (e.g., master:latest, 2024.2.5-0.20250221.xxx-1). "
     "Several versions, separated by commas or spaces, trigger the matrix once per version "
-    "and wait for all of them together. If not provided, resolved automatically from image params",
+    "and wait for all of them together. If not provided, resolved automatically from image params; "
+    "a matrix with supported_versions_only runs the latest release of every supported version",
 )
 @click.option("--job-folder", default=None, type=str, help="Override auto-detected Jenkins job folder")
 @click.option(
@@ -3840,6 +3846,21 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
 ):
     add_file_logger()
 
+    try:
+        supported_versions_only = load_matrix_config(matrix).supported_versions_only
+        has_build_source = any(
+            [scylla_ami_id, gce_image_db, azure_image_db, oci_image_db, unified_package, new_scylla_repo]
+        )
+        if supported_versions_only and not has_build_source:
+            if not scylla_version:
+                click.echo("No --scylla-version given: running every supported version")
+            # Bare lines ("2026.3") become their latest release, not the branch's nightly build
+            scylla_version = ",".join(supported_only_versions(scylla_version or "", region=region))
+            click.echo(f"Supported versions to run: {scylla_version}")
+    except Exception as exc:  # noqa: BLE001
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+
     # Resolve scylla_version: from image tags, or from partial version via AMI lookup
     version_from_image = False
     if not scylla_version:
@@ -3879,7 +3900,14 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     # according to the matrix' version_resolution strategy.
     # Skip if version was already resolved from image tags — that's already the real version.
     versions = []
-    for original_version in re.split(r"[,\s]+", scylla_version.strip()) if scylla_version else [""]:
+    requested_versions = re.split(r"[,\s]+", scylla_version.strip()) if scylla_version else [""]
+    try:
+        if supported_versions_only and version_from_image:
+            check_only_supported_versions(requested_versions)
+    except Exception as exc:  # noqa: BLE001
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+    for original_version in requested_versions:
         full_version = original_version
         if original_version and not version_from_image:
             try:

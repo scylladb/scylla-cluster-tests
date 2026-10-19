@@ -8,10 +8,11 @@
 // sandbox blocks direct file I/O. utils/build_system/generate_trigger_jenkinsfiles.py
 // (run by pre-commit) writes the spec from the matrix YAML into each generated Jenkinsfile.
 //
-// NOTE: Either scylla_version or an image param is required. When an image is
-//       provided without scylla_version, the Python code resolves the version from
-//       the image's tags/labels. The resolved version is used for job folder
-//       detection and passed to all triggered jobs.
+// NOTE: Either scylla_version or an image param is required, except for a matrix with
+//       supported_versions_only, which then runs the latest release of every supported
+//       version. When an image is provided without scylla_version, the Python code resolves
+//       the version from the image's tags/labels. The resolved version is used for job
+//       folder detection and passed to all triggered jobs.
 
 def call(Map pipelineParams = [:]) {
     def matrixFile = pipelineParams.get('matrix_file', '')
@@ -42,7 +43,7 @@ def call(Map pipelineParams = [:]) {
             string(name: 'matrix_file', defaultValue: matrixFile,
                    description: 'Path to trigger matrix YAML file')
             string(name: 'scylla_version', defaultValue: '',
-                   description: 'Scylla version (e.g., master:latest, 2024.2.5-0.20250221.xxx-1). Several versions, separated by commas or spaces, run the matrix once per version and are reported together. If not provided, resolved from image params.')
+                   description: 'Scylla version (e.g., master:latest, 2024.2.5-0.20250221.xxx-1). Several versions, separated by commas or spaces, run the matrix once per version and are reported together. If not provided, resolved from image params; a matrix with supported_versions_only (scylla-doctor gating) runs the latest release of every supported version.')
             string(name: 'labels_selector', defaultValue: defaultLabelsSelector,
                    description: 'Comma-separated labels to filter jobs (AND logic). An item may list alternatives separated by "/", of which a job needs any, e.g. "os-centos9/os-docker"')
             string(name: 'backend', defaultValue: '',
@@ -156,10 +157,8 @@ def call(Map pipelineParams = [:]) {
                         if (!params.matrix_file?.trim()) {
                             error("'matrix_file' parameter is required")
                         }
-                        def hasImageParam = params.scylla_ami_id?.trim() || params.gce_image_db?.trim() || params.azure_image_db?.trim() || params.oci_image_db?.trim() || params.unified_package?.trim() || params.new_scylla_repo?.trim()
-                        if (!scyllaVersion?.trim() && !hasImageParam) {
-                            error("Either 'scylla_version' or an image/package param (scylla_ami_id, gce_image_db, azure_image_db, oci_image_db, unified_package, new_scylla_repo) is required")
-                        }
+                        // A missing scylla_version is checked by the CLI, which knows whether the
+                        // matrix runs the supported versions by itself (supported_versions_only)
 
                         // Build CLI command
                         def cmd = "./docker/env/hydra.sh trigger-matrix"

@@ -18,11 +18,13 @@ the per-backend, common and aws-strict strategies live. Cloud lookups are reache
 `images` module object so a single patch of that module covers every call site here."""
 
 import logging
+import re
 
 from sdcm.utils.trigger_matrix import images
 from sdcm.utils.trigger_matrix.backends import _backend_region, split_regions
 from sdcm.utils.trigger_matrix.constants import (
     DEFAULT_ARCH,
+    DEFAULT_AWS_REGION,
     DEFAULT_VERSION_RESOLUTION,
     VALID_IMAGE_BACKENDS,
     VERSION_RESOLUTION_STRATEGIES,
@@ -38,6 +40,90 @@ from sdcm.utils.trigger_matrix.versions import (
 )
 
 logger = logging.getLogger(__name__)
+
+# A release line rather than a build: "2026.3"
+RELEASE_LINE_RE = re.compile(r"^\d+\.\d+$")
+
+
+def supported_releases(region: str | None = None) -> list[str]:
+    """The latest released patch of every officially supported release line.
+
+    The supported lines come from the ScyllaDB documentation (`fetch_official_supported_versions`).
+    Each one is turned into its newest release, e.g. "2025.4" -> "2025.4.3", so the jobs test
+    what customers run rather than the branch's newest nightly build.
+
+    Raises:
+        TriggerMatrixError: If no supported line is found, or one has no released AMI.
+    """
+    from utils.get_supported_scylla_base_versions import fetch_official_supported_versions  # noqa: PLC0415
+
+    lines = fetch_official_supported_versions()
+    if not lines:
+        raise TriggerMatrixError("No officially supported Scylla versions were found")
+    return [_latest_release(line, region) for line in lines]
+
+
+def supported_only_versions(scylla_version: str, region: str | None = None) -> list[str]:
+    """The versions a matrix with supported_versions_only runs, for the requested `scylla_version`.
+
+    Empty, it is the latest release of every supported line, as the sd-release-gating pipeline
+    ran. Otherwise every version given must belong to a supported line, and a bare line becomes
+    its latest release.
+
+    Raises:
+        TriggerMatrixError: If a version is not supported, or a line has no released AMI.
+    """
+    versions = [version for version in re.split(r"[,\s]+", scylla_version.strip()) if version]
+    if not versions:
+        return supported_releases(region=region)
+    check_only_supported_versions(versions)
+    return releases_of_lines(versions, region=region)
+
+
+def releases_of_lines(versions: list[str], region: str | None = None) -> list[str]:
+    """Turn each bare release line ("2026.3") into its latest released patch ("2026.3.3").
+
+    Left to `resolve_to_full_version`, "2026.3" would become the branch's newest nightly build;
+    a matrix that runs supported versions only must test the release customers run, whether the
+    version was typed in or found by `supported_releases`. Other versions are kept as they are.
+
+    Raises:
+        TriggerMatrixError: If a line has no released AMI.
+    """
+    return [_latest_release(version, region) if RELEASE_LINE_RE.match(version) else version for version in versions]
+
+
+def _latest_release(line: str, region: str | None) -> str:
+    lookup_region = split_regions(region)[0] if region else DEFAULT_AWS_REGION
+    if not (release := images.latest_release_of_line(line, region=lookup_region)):
+        raise TriggerMatrixError(f"Supported version {line} has no released AMI in {lookup_region}")
+    logger.info("Supported version %s → latest release %s", line, release)
+    return release
+
+
+def check_only_supported_versions(versions: list[str]) -> None:
+    """Fail unless every version belongs to an officially supported release line.
+
+    A version belongs to a line when it starts with it: "2026.3", "2026.3.3", a full
+    "2026.3.3-0.20260901.abc-1" tag or "branch-2026.3:latest" all belong to 2026.3. Versions
+    that name no release line, such as "master:latest", are rejected too.
+
+    Raises:
+        TriggerMatrixError: Naming the versions that are not supported.
+    """
+    from utils.get_supported_scylla_base_versions import fetch_official_supported_versions  # noqa: PLC0415
+
+    lines = set(fetch_official_supported_versions())
+    unsupported = []
+    for version in versions:
+        match = re.match(r"^(?:branch-)?(\d+\.\d+)(?:[.:~-]|$)", version)
+        if not match or match.group(1) not in lines:
+            unsupported.append(version or "<none>")
+    if unsupported:
+        raise TriggerMatrixError(
+            f"This matrix runs supported Scylla versions only ({', '.join(sorted(lines))}); "
+            f"not supported: {', '.join(unsupported)}"
+        )
 
 
 def resolve_to_full_version(
