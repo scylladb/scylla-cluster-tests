@@ -432,7 +432,15 @@ class RaftFeature(RaftFeatureOperations):
                 )
 
             token_ring_node_ids = [member.host_id for member in valid_tokenring_members]
-            broken_hosts = self.search_inconsistent_host_ids()
+            # Healthy path: every group0 member is in the token ring and is a voter (or non-voters are
+            # legitimate under limited voters), so search_inconsistent_host_ids() (3 CQL connections
+            # + SSH) would find nothing.
+            if all(member.host_id in token_ring_node_ids for member in group0_members) and (
+                all(member.voter for member in group0_members) or self.is_limited_voters_enabled_cached()
+            ):
+                broken_hosts = []
+            else:
+                broken_hosts = self.search_inconsistent_host_ids()
 
             for member in group0_members:
                 if member.host_id in token_ring_node_ids and member.host_id not in broken_hosts:
@@ -489,6 +497,19 @@ class RaftFeature(RaftFeatureOperations):
             LOGGER.debug("Api response %s", result)
         except Exception as exc:  # noqa: BLE001
             LOGGER.error("Trigger read-barrier via rest api failed %s", exc)
+
+    def is_limited_voters_enabled_cached(self) -> bool:
+        """Check the group0 limited voters feature, caching a True result on the cluster.
+
+        Feature flags never turn off, so once True the cluster never reads it again.
+        """
+        cluster = self._node.parent_cluster
+        if not cluster.group0_limited_voters_enabled:
+            with cluster.cql_connection_patient_exclusive(node=self._node) as session:
+                if not is_group0_limited_voters_enabled(session):
+                    return False
+            cluster.group0_limited_voters_enabled = True
+        return True
 
     def search_inconsistent_host_ids(self) -> list[str]:
         """Search inconsistent hosts in group zero and token ring
