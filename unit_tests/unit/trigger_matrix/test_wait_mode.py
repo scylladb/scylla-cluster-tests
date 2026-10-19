@@ -13,6 +13,7 @@
 
 import logging
 
+import pytest
 import yaml
 
 from sdcm.utils.trigger_matrix import reporting
@@ -139,3 +140,23 @@ def test_several_versions_are_waited_for_together(tmp_path, monkeypatch):
     assert results["versions"] == {"gating/job-1": "2025.4.3, 2026.1.1", "gating/job-2": "2025.4.3, 2026.1.1"}
     assert results["skipped"] == []
     reporting.Email.return_value.send.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "cli_recipients,expected",
+    [
+        pytest.param(None, ["matrix@example.com"], id="matrix"),
+        pytest.param(["cli@example.com"], ["cli@example.com"], id="cli-wins"),
+    ],
+)
+def test_report_recipients(tmp_path, cli_recipients, expected):
+    data = {
+        "email_recipients": "matrix@example.com",
+        "jobs": [{"job_name": "/gating/job-1", "backend": "docker", "wait": True}],
+    }
+    path = tmp_path / "gating-matrix.yaml"
+    path.write_text(yaml.dump(data))
+
+    trigger_matrix(matrix_file=str(path), scylla_version="2025.4.3", dry_run=True, email_recipients=cli_recipients)
+
+    assert reporting.Email.return_value.send.call_args.kwargs["recipients"] == expected
