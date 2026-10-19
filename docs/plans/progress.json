@@ -329,6 +329,16 @@
       "created": "2026-09-04",
       "phases_total": 9,
       "phases_done": 9
+    },
+    {
+      "id": "best-throughput-under-latency-limit",
+      "title": "Best Throughput Under a Latency Limit (SCT-580)",
+      "file": "best-throughput-under-latency-limit.md",
+      "domain": "stress-tools",
+      "status": "draft",
+      "created": "2026-10-19",
+      "phases_total": 5,
+      "phases_done": 0
     }
   ]
 }
