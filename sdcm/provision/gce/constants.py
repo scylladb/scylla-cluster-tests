@@ -26,8 +26,11 @@ DISK_TYPE_HYPERDISK_BALANCED = "hyperdisk-balanced"
 
 # Machine families whose boot disk must be Hyperdisk. GCE rejects every pd-* type
 # on these, so the configured root disk type cannot apply.
-HYPERDISK_ONLY_FAMILIES = frozenset({"n4", "n4a", "c4", "c4a", "z3"})
+HYPERDISK_ONLY_FAMILIES = frozenset({"n4", "n4a", "c4", "c4a", "c4d", "z3"})
 
+# Families where every machine type bundles local SSD, including the original z3-highmem-88/176
+# names that carry no "lssd" suffix. They also require on_host_maintenance=MIGRATE, so never spot.
+# c4/c4d "-lssd" machine types bundle SSD too but support spot; see has_bundled_local_ssds().
 BUNDLED_LOCAL_SSD_FAMILIES = frozenset({"z3"})
 
 # Disk interfaces
