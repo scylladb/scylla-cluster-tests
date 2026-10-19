@@ -4,7 +4,7 @@ test_metadata:
     then runs write, read and mixed workloads in unthrottled and throttled phases. Checks latency
     against fixed P90 and P99 limits.
   test_type: performance
-  tier: tier1
+  tier: release
   duration_class: medium
   supported_backends:
     - aws

@@ -5,7 +5,7 @@ test_metadata:
     a SisyphusMonkey limited to the non-destructive set. Reused broadly - the ICS, LDAP, operator/EKS,
     ARM, Azure, GCE, RF=1 and asymmetric-cluster pipelines all build on it.
   test_type: longevity
-  tier: tier1
+  tier: release
   duration_class: long
   supported_backends:
     - aws

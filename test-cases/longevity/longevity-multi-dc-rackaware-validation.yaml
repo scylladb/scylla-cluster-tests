@@ -5,7 +5,7 @@ test_metadata:
     asserting that client connections actually stayed within their own rack. The functional check
     behind the longer rack-aware soaks.
   test_type: longevity
-  tier: tier1
+  tier: release
   duration_class: short
   supported_backends:
     - aws
