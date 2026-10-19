@@ -1,0 +1,32 @@
+test_metadata:
+  description: >-
+    Artifacts validation test for the official ScyllaDB GCE arm64 image: provisions one
+    c4a-highmem-4-lssd node (the smallest c4a shape with a bundled Titanium local SSD) from the
+    published image in the scylla-arm64 family and runs the artifact smoke checks, so the local-SSD
+    and io-tuning path is covered on arm64 too.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - gce
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
+cluster_backend: 'gce'
+backtrace_decoding: false
+gce_instance_type_db: 'c4a-highmem-4-lssd'
+gce_n_local_ssd_disk_db: 0  # the -lssd machine type brings its own local SSD
+gce_root_disk_type_db: 'hyperdisk-balanced'  # c4a rejects pd-* disks
+root_disk_size_db: 50
+instance_provision: "spot"
+instance_provision_fallback_on_demand: true
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 0
+nemesis_class_name: 'NoOpMonkey'
+scylla_linux_distro: 'centos'
+test_duration: 60
+user_prefix: 'artifacts-gce-image-arm'
+fallback_to_next_availability_zone: true

@@ -50,6 +50,7 @@ from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.common.oracle import ORACLE_IMAGE_PARAMS, ORACLE_USER_PREFIX_SUFFIX
 from sdcm.provision.network_configuration import azure_network_interfaces, ssh_connection_ip_type
+from sdcm.provision.provisioner import VmArch
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
 from sdcm.utils.common import (
     ami_built_by_scylla,
@@ -749,17 +750,19 @@ class SCTConfiguration(*CONFIG_GROUPS):
                     ami_list.append(ami)
                 self["ami_id_db_scylla"] = " ".join(ami.image_id for ami in ami_list)
             elif not self.get("gce_image_db") and self.get("cluster_backend") == "gce":
+                # x86 keeps arch=None, so images without an architecture set still match
+                gce_arch = VmArch.ARM if is_arm_instance_type("gce", self.get("gce_instance_type_db") or "") else None
                 try:
                     if parse_scylla_version_tag(scylla_version):
                         # For full version tags, use regular GCE image lookup (will match exact tag)
-                        gce_image = get_scylla_gce_images_versions(version=scylla_version)[0]
+                        gce_image = get_scylla_gce_images_versions(version=scylla_version, arch=gce_arch)[0]
                     elif ":" in scylla_version:
                         # For branch versions like "master:latest"
-                        gce_image = get_branched_gce_images(scylla_version=scylla_version)[0]
+                        gce_image = get_branched_gce_images(scylla_version=scylla_version, arch=gce_arch)[0]
                     else:
                         # For simple versions like "5.2.1"
                         # gce_image.name format examples: scylla-4-3-6 or scylla-enterprise-2021-1-2
-                        gce_image = get_scylla_gce_images_versions(version=scylla_version)[0]
+                        gce_image = get_scylla_gce_images_versions(version=scylla_version, arch=gce_arch)[0]
                 except (IndexError, AssertionError) as ex:
                     raise ValueError(f"GCE image for scylla_version='{scylla_version}' was not found") from ex
 
