@@ -107,6 +107,8 @@ LOGGER = logging.getLogger("utils")
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
 SCYLLA_AMI_OWNER_ID_LIST = ["797456418907", "158855661827"]
 SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
+# arm64 images are published to their own family (scylla-machine-image#862)
+SCYLLA_GCE_ARM64_IMAGE_FAMILY = "scylla-arm64"
 CREATE_TABLE_REGEX = re.compile(
     r"CREATE\s+TABLE\s+(?P<keyspace>[^\s.]+)\.(?P<table>[^\s(]+)\s*\([^)]+\)(?P<options>[^;]*)"
 )
@@ -1264,7 +1266,9 @@ def build_gce_image_filter(version: str = None, arch: VmArch = None) -> str:
     # 2026.4.0~dev-0.20260804.9a3aba9e452a or 2026.3.0.rc1.0.20260730.726f67a532e2)
     exact_build_label = gce_image_version_label(version) if version and version != "all" else ""
 
-    filters = "(family eq 'scylla(-enterprise)?')"
+    filters = (
+        f"(family eq '{SCYLLA_GCE_ARM64_IMAGE_FAMILY}')" if arch is VmArch.ARM else "(family eq 'scylla(-enterprise)?')"
+    )
     if not exact_build_label:
         # Released images only. Nightly/dev builds are labeled `environment=daily` and freshly
         # built release candidates `environment=candidate`, so this filter must not be applied
@@ -1283,9 +1287,6 @@ def build_gce_image_filter(version: str = None, arch: VmArch = None) -> str:
                 filters += "')"
 
     if arch:
-        if arch != VmArch.X86:
-            #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
-            LOGGER.warning("--arch option not implemented currently for GCE machine images.")
         filters += f" (architecture eq {vmarch_to_gcp(arch)})"
 
     return filters
@@ -1852,7 +1853,8 @@ def get_branched_gce_images(
     #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
     # or you can see brief explanation here:
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
-    filters = f"(family eq scylla)(labels.branch eq {branch})(name ne debug-.*)"
+    family = SCYLLA_GCE_ARM64_IMAGE_FAMILY if arch is VmArch.ARM else "scylla"
+    filters = f"(family eq {family})(labels.branch eq {branch})(name ne debug-.*)"
 
     if arch:
         filters += f" (architecture eq {vmarch_to_gcp(arch)})"

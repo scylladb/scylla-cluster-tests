@@ -23,6 +23,7 @@ import yaml
 from sdcm.sct_config import config as sct_config
 from sdcm.keystore import KeyStore
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
+from sdcm.provision.provisioner import VmArch
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_latest_scylla_release
 
@@ -444,6 +445,25 @@ def test_15b_image_id_by_scylla_version(monkeypatch):
         conf._get_target_upgrade_version()
 
     assert conf.gce_image_db == resolved_image_link
+
+
+def test_15b_arm_image_id_by_scylla_version_branched_gce(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    _set_gce_instance_types(monkeypatch)
+    monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_DB", "c4a-highmem-4-lssd")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "master:latest")
+    monkeypatch.setenv("SCT_USER_PREFIX", "testing")
+    monkeypatch.setenv("SCT_GCE_IMAGE_DB", "")
+    monkeypatch.setenv("SCT_USE_PREINSTALLED_SCYLLA", "true")
+
+    image = namedtuple("Image", "name self_link")(name="scylla-arm", self_link="link-to-scylla-arm")
+    with unittest.mock.patch.object(
+        sct_config, "get_branched_gce_images", return_value=[image], clear=True
+    ) as get_images:
+        conf = sct_config.SCTConfiguration()
+
+    get_images.assert_called_once_with(scylla_version="master:latest", arch=VmArch.ARM)
+    assert conf.gce_image_db == "link-to-scylla-arm"
 
 
 def test_15c_image_id_by_scylla_version_branched_not_found_raises_value_error(monkeypatch):
