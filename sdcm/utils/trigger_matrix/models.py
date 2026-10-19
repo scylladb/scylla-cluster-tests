@@ -117,6 +117,9 @@ class MatrixConfig(BaseModel):
     cron_triggers: list[CronTriggerConfig] = Field(default_factory=list)
     email_recipients: list[str] = Field(default_factory=list)
     jenkinsfiles: list[JenkinsfileEntry] = Field(default_factory=list)
+    # Jenkins parameters every job must get a non-empty value for, from the defaults, the job's
+    # params or the trigger's overrides; the run fails before triggering anything otherwise
+    required_params: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def reject_cross_arch_twins(self) -> "MatrixConfig":

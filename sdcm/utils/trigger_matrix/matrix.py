@@ -20,7 +20,7 @@ import logging
 import os
 
 from sdcm.utils.trigger_matrix.config import load_matrix_config
-from sdcm.utils.trigger_matrix.errors import JenkinsTriggerError
+from sdcm.utils.trigger_matrix.errors import JenkinsTriggerError, TriggerMatrixError
 from sdcm.utils.trigger_matrix.filters import filter_jobs
 from sdcm.utils.trigger_matrix.jenkins_client import JenkinsClient
 from sdcm.utils.trigger_matrix.models import BackendTarget, JobConfig, MatrixConfig, _PendingWaitJob
@@ -116,11 +116,15 @@ def trigger_matrix_versions(
         versions: (scylla_version, filter_version) pairs, as `trigger_matrix` takes them.
         The other arguments are those of `trigger_matrix`.
 
+    Raises:
+        TriggerMatrixError: If a job gets no value for one of the matrix' required_params.
+
     Returns:
         The `trigger_matrix` dict, over all versions. A job triggered for several versions is
         listed once per version, and its 'versions' entry joins those versions with ", ".
     """
     config = load_matrix_config(matrix_file)
+    _check_required_params(config, overrides)
     skip_list = [s.strip() for s in skip_jobs.split(",") if s.strip()] if skip_jobs else []
     if skip_list:
         all_job_names = {j.job_name for j in config.jobs}
@@ -190,6 +194,28 @@ def trigger_matrix_versions(
     )
 
     return results
+
+
+def _check_required_params(config: MatrixConfig, overrides: dict) -> None:
+    """Fail when a job would get no value for one of the matrix' required_params.
+
+    Raises:
+        TriggerMatrixError: Naming each missing parameter and the jobs it is missing for.
+    """
+    given = {k: v for k, v in overrides.items() if v is not None}
+    missing: dict[str, list[str]] = {}
+    for job in config.jobs:
+        if job.disabled:
+            continue
+        params = {**config.defaults, **job.params, **given}
+        for name in config.required_params:
+            if not str(params.get(name, "")).strip():
+                missing.setdefault(name, []).append(job.job_name)
+    if missing:
+        raise TriggerMatrixError(
+            "Required parameters have no value: "
+            + "; ".join(f"{name} (jobs: {', '.join(jobs)})" for name, jobs in missing.items())
+        )
 
 
 def _trigger_version(  # noqa: PLR0913, PLR0914
