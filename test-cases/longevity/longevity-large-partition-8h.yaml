@@ -5,7 +5,7 @@ test_metadata:
     validation and tombstone-GC verification on a materialized view whose tombstone_gc mode is set to
     'repair'. Runs on AWS, GCE and Azure.
   test_type: longevity
-  tier: tier1
+  tier: release
   duration_class: medium
   supported_backends:
     - aws

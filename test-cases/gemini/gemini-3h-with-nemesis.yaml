@@ -6,7 +6,7 @@ test_metadata:
     set (excluding ENOSPC and node-isolation disruptions) to validate consistency
     under chaos.
   test_type: gemini
-  tier: tier1
+  tier: release
   duration_class: short
   supported_backends:
     - aws

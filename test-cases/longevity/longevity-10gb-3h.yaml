@@ -5,7 +5,7 @@ test_metadata:
     for ~4 hours on a 6-node single-DC cluster with SisyphusMonkey nemesis. Validates
     cluster stability under moderate write load with continuous chaos operations.
   test_type: longevity
-  tier: tier1
+  tier: release
   duration_class: short
   supported_backends:
     - aws
