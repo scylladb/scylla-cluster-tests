@@ -777,3 +777,23 @@ def test_logs_go_to_the_tunnel_or_straight_to_the_runner_per_node(node_setting, 
     monkeypatch.setattr(TestConfig, "VECTOR_SSH_TUNNEL_LOCAL_PORT", 5001)
 
     assert TestConfig.get_logging_service_host_port(node_setting) == expected
+
+
+def test_access_name_routes_ssh_where_the_lab_access_service_says(monkeypatch):
+    """A lab host with an access name is reached at the address the lab access service gives, not its own."""
+    node = _node_with_listeners("")
+    node._access_name = "monster"
+    localhost = MagicMock()
+    localhost.lab_access_ssh_address.return_value = {"hostname": "172.17.0.5", "port": 10027}
+    monkeypatch.setattr(TestConfig, "tester_obj", lambda self: MagicMock(localhost=localhost))
+
+    assert node._ssh_address() == {"hostname": "172.17.0.5", "port": 10027}
+    localhost.lab_access_ssh_address.assert_called_once_with("monster")
+
+
+def test_host_without_access_name_is_reached_at_its_address(monkeypatch):
+    node = _node_with_listeners("")
+    node._access_name = None
+    monkeypatch.setattr(PhysicalMachineNode, "external_address", "10.0.0.60")
+
+    assert node._ssh_address() == {"hostname": "10.0.0.60"}

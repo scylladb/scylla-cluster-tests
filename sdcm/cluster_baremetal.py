@@ -25,8 +25,11 @@ MONITOR_NAME = "monitor-node"
 
 
 class NodeInfo(TypedDict):
-    public_ip: str
+    # defaults to private_ip: a lab host often has no other address
+    public_ip: NotRequired[str]
     private_ip: str
+    # the host's name in the lab's access service: SCT then opens SSH where that service says, not to the address
+    access: NotRequired[str]
 
 
 class NodeCredentialInformation(TypedDict):
@@ -225,6 +228,7 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
         private_ip,
         credentials,
         base_logdir=None,
+        access_name=None,
         node_prefix=None,
         after_config=None,
         dc_idx=0,
@@ -239,6 +243,7 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
         }
         self._public_ip = public_ip
         self._private_ip = private_ip
+        self._access_name = access_name
         super().__init__(
             name=name,
             parent_cluster=parent_cluster,
@@ -282,6 +287,12 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
             test_id,
             journal_time(self.journal_since),
         )
+
+    def _ssh_address(self) -> dict:
+        if not self._access_name:
+            return super()._ssh_address()
+        localhost = TestConfig().tester_obj().localhost
+        return localhost.lab_access_ssh_address(self._access_name)
 
     def _init_port_mapping(self):
         # Nodes sharing a host (a loader and a monitor on one machine) share its tunnel ports, and the tunnel of the
@@ -376,6 +387,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):
         n_nodes = kwargs.get("n_nodes")
         self._node_public_ips = kwargs.pop("public_ips", None) or []
         self._node_private_ips = kwargs.pop("private_ips", None) or []
+        self._node_access_names = kwargs.pop("access_names", None) or []
         node_cnt = n_nodes[0] if isinstance(n_nodes, list) else n_nodes
         if len(self._node_public_ips) < node_cnt or len(self._node_private_ips) < node_cnt:
             raise NodeIpsNotConfiguredError("Physical hosts IPs are not configured!")
@@ -393,6 +405,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):
             private_ip=private_ip,
             credentials=self.credentials[0],
             base_logdir=self.logdir,
+            access_name=self._node_access_names[node_index] if node_index < len(self._node_access_names) else None,
             node_prefix=self.node_prefix,
             dc_idx=dc_idx,
             rack=rack,
