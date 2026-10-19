@@ -15,6 +15,7 @@
 
 import pytest
 
+from sdcm.provision.provisioner import VmArch
 from sdcm.utils.common import build_gce_image_filter
 
 
@@ -89,3 +90,10 @@ class TestGceImageFilterConstruction:
             assert filters.startswith("(family eq 'scylla(-enterprise)?')(labels.environment eq 'production')"), (
                 f"Filter for version={version} should start with family+production filter: {filters}"
             )
+
+    def test_arm_uses_arm64_family(self):
+        """arm64 images live in the scylla-arm64 family, so x86 lookups never return them."""
+        assert build_gce_image_filter(None, arch=VmArch.ARM) == (
+            "(family eq 'scylla-arm64')(labels.environment eq 'production') (architecture eq ARM64)"
+        )
+        assert build_gce_image_filter(None, arch=VmArch.X86).startswith("(family eq 'scylla(-enterprise)?')")
