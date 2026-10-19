@@ -37,8 +37,9 @@ def filter_jobs(
         scylla_version: Original version string (e.g., master:latest) for include/exclude filtering.
         resolved_version: Full resolved version (e.g., 2025.1.3-rc1-...) for pre_release matching.
             Falls back to scylla_version when not provided.
-        labels_selector: Comma-separated labels — job must have ALL listed labels.
-            When None, no label filtering is applied.
+        labels_selector: Comma-separated labels — job must have ALL listed labels. An item may
+            list alternatives separated by "/", of which the job needs ANY: "gating,os-a/os-b"
+            selects the gating jobs labelled os-a or os-b. When None, no label filtering is applied.
         backend: Filter by backend (e.g., 'aws', 'gce', 'azure').
         skip_jobs: List of job names to skip.
         image_arch: Normalized CPU architecture from the provided image ('x86_64' or 'aarch64').
@@ -50,9 +51,12 @@ def filter_jobs(
     """
     skip_set = set(skip_jobs or [])
     pre_release_version = resolved_version or scylla_version
-    required_labels = set()
+    # Every group must be matched; a group is matched by any one of its labels
+    required_groups = []
     if labels_selector:
-        required_labels = {label.strip() for label in labels_selector.split(",") if label.strip()}
+        for item in labels_selector.split(","):
+            if group := {label.strip() for label in item.split("/") if label.strip()}:
+                required_groups.append(group)
 
     result = []
     for job in jobs:
@@ -100,10 +104,10 @@ def filter_jobs(
             )
             continue
 
-        # Skip by labels (AND logic: job must have ALL required labels)
-        if required_labels and not required_labels.issubset(set(job.labels)):
+        # Skip by labels (AND between the groups, OR within a group)
+        if not all(group & set(job.labels) for group in required_groups):
             logger.debug(
-                "Skipping job '%s': labels %s don't match selector %s", job.job_name, job.labels, required_labels
+                "Skipping job '%s': labels %s don't match selector %s", job.job_name, job.labels, labels_selector
             )
             continue
 

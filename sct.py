@@ -3689,7 +3689,13 @@ def hdr_investigate(
     "and wait for all of them together. If not provided, resolved automatically from image params",
 )
 @click.option("--job-folder", default=None, type=str, help="Override auto-detected Jenkins job folder")
-@click.option("--labels-selector", default=None, type=str, help="Comma-separated labels to filter jobs (AND logic)")
+@click.option(
+    "--labels-selector",
+    default=None,
+    type=str,
+    help="Comma-separated labels to filter jobs (AND logic). "
+    "An item may list alternatives separated by '/', of which a job needs any",
+)
 @click.option(
     "--backend",
     default=None,

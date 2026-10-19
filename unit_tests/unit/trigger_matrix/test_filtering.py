@@ -39,6 +39,16 @@ def test_filter_by_labels_multiple_and_logic(sample_jobs):
     assert result[0].job_name == "job-b"
 
 
+def test_filter_by_labels_alternatives_or_logic(sample_jobs):
+    result = filter_jobs(sample_jobs, scylla_version="2025.4", labels_selector="additional/master-weekly")
+    assert {j.job_name for j in result} == {"job-b", "job-d"}
+
+
+def test_filter_by_labels_alternatives_combined_with_and(sample_jobs):
+    result = filter_jobs(sample_jobs, scylla_version="2025.4", labels_selector="weekly,additional/master-weekly")
+    assert [j.job_name for j in result] == ["job-b"]
+
+
 def test_filter_by_backend(sample_jobs):
     result = filter_jobs(sample_jobs, scylla_version="2025.4", backend="aws")
     assert len(result) == 2

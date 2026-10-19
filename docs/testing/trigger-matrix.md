@@ -119,6 +119,11 @@ uv run sct.py trigger-matrix \
 **Expected**: Only jobs with `labels: ["weekly", ...]` are triggered. Jobs without the `weekly` label appear in the "Skipped" list.
 
 Labels use AND logic: `--labels-selector "weekly,additional"` requires jobs to have **both** labels.
+An item can list alternatives separated by `/`, of which a job needs **any**:
+`--labels-selector "os-centos9/os-docker"` selects the jobs labelled `os-centos9` or `os-docker`, and
+`--labels-selector "gating,os-centos9/os-docker"` the `gating` ones among them. The separator is
+`/` rather than `|` because the Jenkins pipeline passes the selector through `hydra.sh`, whose
+`eval` would turn a `|` into a shell pipe.
 
 ### Biweekly alternation: `week-a` / `week-b`
 
