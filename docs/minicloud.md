@@ -65,6 +65,9 @@ S3 passthrough buckets (keystore, job artifacts, `downloads.scylladb.com`, test 
 `qa-aws-secret-*` credentials. Every knob is a documented `minicloud_*` config option with its
 automatic `SCT_*` env form - the code reads no bare `MINICLOUD_*` environment variables.
 
+minicloud signs its HTTPS endpoints with its own CA, so `node_setup()` installs that CA on
+every node. Temporary until minicloud injects it itself.
+
 GCE runs on qcow2-backed disks with no NVMe passthrough - cap local SSDs in the run's config
 (e.g. `gce_n_local_ssd_disk_db: 1`) when the test-case yaml asks for more.
 

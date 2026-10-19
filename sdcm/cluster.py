@@ -211,7 +211,7 @@ from sdcm.utils.ldap import (
     DEFAULT_PWD_SUFFIX,
 )
 from sdcm.utils.remote_logger import get_system_logging_thread
-from sdcm.utils.minicloud.endpoint import is_minicloud_active
+from sdcm.utils.minicloud.endpoint import MINICLOUD_GUEST_CA_URL, is_minicloud_active
 from sdcm.utils.minicloud.preflight import scylla_reserve_memory
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
@@ -2982,6 +2982,21 @@ class BaseNode(AutoSshContainerMixin):
             manager_agent_yaml["tls_cert_file"] = tls_cert_file
             manager_agent_yaml["tls_key_file"] = tls_key_file
             manager_agent_yaml["prometheus"] = f":{self.parent_cluster.params.get('manager_prometheus_port')}"
+
+    def install_minicloud_ca(self) -> None:
+        """Trust the minicloud CA, which signs its HTTPS endpoints (S3 etc.).
+
+        Temporary until minicloud injects the CA itself.
+        """
+        if not is_minicloud_active(self.parent_cluster.params):
+            return
+
+        if self.distro.is_rhel_like:
+            ca_file, update_cmd = "/etc/pki/ca-trust/source/anchors/minicloud.crt", "update-ca-trust"
+        else:
+            ca_file, update_cmd = "/usr/local/share/ca-certificates/minicloud.crt", "update-ca-certificates"
+        self.remoter.sudo(f"curl -fsS -o {ca_file} {MINICLOUD_GUEST_CA_URL}")
+        self.remoter.sudo(update_cmd)
 
     def update_manager_agent_backup_config(
         self, region: Optional[str] = None, general_config: Optional[dict[str, str]] = None
@@ -6604,6 +6619,7 @@ class BaseScyllaCluster:
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # noqa: PLR0912, PLR0914, PLR0915
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
+        node.install_minicloud_ca()
 
         if node.distro.is_rhel_like or self.params.get("cluster_backend") == "oci":
             node.disable_firewall()
@@ -7313,6 +7329,7 @@ class BaseLoaderSet:
     def node_setup(self, node, verbose=False, **kwargs):
         node.log.info("Setup in BaseLoaderSet")
         node.wait_ssh_up(verbose=verbose)
+        node.install_minicloud_ca()
 
         if self.params.get("cluster_backend") == "oci":
             node.disable_firewall()
@@ -7598,6 +7615,7 @@ class BaseMonitorSet:
     def node_setup(self, node, **kwargs):
         node.log.info("TestConfig in BaseMonitorSet")
         node.wait_ssh_up()
+        node.install_minicloud_ca()
 
         if node.distro.is_rhel_like or self.params.get("cluster_backend") == "oci":
             node.disable_firewall()
