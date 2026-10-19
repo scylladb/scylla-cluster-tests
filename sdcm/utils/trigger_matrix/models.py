@@ -120,6 +120,10 @@ class MatrixConfig(BaseModel):
     # Jenkins parameters every job must get a non-empty value for, from the defaults, the job's
     # params or the trigger's overrides; the run fails before triggering anything otherwise
     required_params: list[str] = Field(default_factory=list)
+    # Run officially supported Scylla versions only: with no scylla_version given, the latest
+    # release of each of them; any other requested version fails the run before anything is
+    # triggered
+    supported_versions_only: bool = False
 
     @model_validator(mode="after")
     def reject_cross_arch_twins(self) -> "MatrixConfig":

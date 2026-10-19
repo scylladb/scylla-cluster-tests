@@ -45,6 +45,19 @@ required_params:
   - "scylla_doctor_full_tarball_url"
 ```
 
+A matrix with `supported_versions_only: true` runs only Scylla versions of officially supported
+release lines (the ones `sct.py get-official-supported-versions` prints), as the old
+sd-release-gating pipeline did:
+
+- With `scylla_version` empty, it runs the latest release of every supported version. Each
+  supported version becomes its newest released patch, read from the production AMIs, so `2025.4`
+  becomes e.g. `2025.4.10` and not the branch's newest nightly build.
+- Any version given must belong to a supported release line. Another one, such as `master:latest`
+  or a release of an unsupported line, fails the run before any job is triggered. A bare line given,
+  such as `2026.3`, also runs its latest release, as with `scylla_version` empty.
+
+The scylla-doctor gating trigger sets it.
+
 ### Migrating an existing matrix
 
 `region` and `availability_zone` used to be job-level keys. Moving them under `params:` is a breaking
@@ -300,8 +313,11 @@ single email, so one run can gate a build against all supported releases:
 
 ```bash
 uv run sct.py trigger-matrix --matrix configurations/triggers/scylla-doctor-gating.yaml \
-    --scylla-version "2025.4 2026.1" --dry-run
+    --scylla-version "2026.1,2025.1" --dry-run
 ```
+
+Without `--scylla-version`, the scylla-doctor gating matrix runs every supported version (see
+`supported_versions_only` above).
 
 ## Error Handling Verification
 
