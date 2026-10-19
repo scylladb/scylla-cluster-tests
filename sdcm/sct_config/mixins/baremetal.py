@@ -31,6 +31,11 @@ class BaremetalConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Baremetal backend"
 
+    baremetal_docker_image_budget_gb: int = SctField(
+        description="""Total size, in GB, of the Docker images no container uses that a loader or monitor host keeps
+         after the run's cleanup. Cleanup removes the least recently pulled images above it, never an image a container
+         uses. 0 keeps every image.""",
+    )
     db_nodes_private_ip: StringOrList = SctField(
         description="Private IP addresses of DB nodes. Can be a single IP, a list of IPs, or an expression that evaluates to a list.",
     )

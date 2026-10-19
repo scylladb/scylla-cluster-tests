@@ -44,8 +44,8 @@ def fixture_cleaned(monkeypatch):
         remote.RemoteCmdRunnerBase, "create_remoter", lambda **kwargs: MagicMock(login=(kwargs["hostname"], kwargs))
     )
 
-    def clean_up_host(host, tunnel_ports, scylla_disk_setup):
-        calls.append((str(host), tunnel_ports, scylla_disk_setup))
+    def clean_up_host(host, tunnel_ports, scylla_disk_setup, image_budget_gb):
+        calls.append((str(host), tunnel_ports, scylla_disk_setup, image_budget_gb))
         assert host.remoter.login[1]["user"] == "fedora"
         assert host.remoter.login[1]["key_file"] == "~/.ssh/key"
 
@@ -59,6 +59,7 @@ def _config(**params):
         "s3_baremetal_config": "hosts",
         "user_credentials_path": "~/.ssh/key",
         "ip_ssh_connections": "public",
+        "baremetal_docker_image_budget_gb": 20,
     }
     return Config(defaults | params)
 
@@ -70,8 +71,8 @@ def test_post_behavior_selects_the_hosts_to_clean(cleaned):
 
     assert cleaned == [
         ("containers", tags),
-        ("scylla-db 1.0.0.1", True, True),
-        ("loader 1.0.0.2", True, False),
+        ("scylla-db 1.0.0.1", True, True, 0),
+        ("loader 1.0.0.2", True, False, 20),
     ]
 
 
@@ -79,9 +80,9 @@ def test_all_hosts_are_cleaned_without_post_behavior(cleaned):
     resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config(ip_ssh_connections="private"))
 
     assert cleaned == [
-        ("scylla-db 10.0.0.1", False, True),
-        ("loader 10.0.0.2", False, False),
-        ("monitor 10.0.0.3", False, False),
+        ("scylla-db 10.0.0.1", False, True, 0),
+        ("loader 10.0.0.2", False, False, 20),
+        ("monitor 10.0.0.3", False, False, 20),
     ]
 
 
@@ -96,7 +97,7 @@ def test_a_preinstalled_scylla_keeps_its_disk_setup(cleaned):
         {"TestId": TEST_ID, "NodeType": ["scylla-db"]}, config=_config(use_preinstalled_scylla=True)
     )
 
-    assert cleaned[1:] == [("scylla-db 1.0.0.1", True, False)]
+    assert cleaned[1:] == [("scylla-db 1.0.0.1", True, False, 0)]
 
 
 def test_dry_run_touches_no_host(cleaned, monkeypatch):

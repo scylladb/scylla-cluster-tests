@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-535 options across 29 groups.
+536 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -50,7 +50,7 @@ concerns first, then one page per backend, then one per test type.
 | [OCI backend](configuration_options/oci-backend.md) | 10 | Oracle Cloud Infrastructure provisioning. |
 | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) | 44 | Scylla Operator deployments: EKS, GKE and local kind clusters. |
 | [Docker backend](configuration_options/docker-backend.md) | 2 | Running the cluster as local Docker containers. |
-| [Baremetal backend](configuration_options/baremetal-backend.md) | 7 | Running against pre-existing hosts that SCT does not provision. |
+| [Baremetal backend](configuration_options/baremetal-backend.md) | 8 | Running against pre-existing hosts that SCT does not provision. |
 | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) | 12 | Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options. |
 | [Minicloud](configuration_options/minicloud.md) | 16 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with `cluster_backend: aws` and an... |
 | [Longevity tests](configuration_options/longevity-tests.md) | 13 | Options specific to long-running longevity test scenarios. |
@@ -131,6 +131,7 @@ concerns first, then one page per backend, then one per test type.
 | [`backup_bucket_location`](configuration_options/scylla-manager.md#backup_bucket_location) | `SCT_BACKUP_BUCKET_LOCATION` | [Scylla Manager](configuration_options/scylla-manager.md) |
 | [`backup_bucket_region`](configuration_options/scylla-manager.md#backup_bucket_region) | `SCT_BACKUP_BUCKET_REGION` | [Scylla Manager](configuration_options/scylla-manager.md) |
 | [`bare_loaders`](configuration_options/stress-commands-and-load-generation.md#bare_loaders) | `SCT_BARE_LOADERS` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
+| [`baremetal_docker_image_budget_gb`](configuration_options/baremetal-backend.md#baremetal_docker_image_budget_gb) | `SCT_BAREMETAL_DOCKER_IMAGE_BUDGET_GB` | [Baremetal backend](configuration_options/baremetal-backend.md) |
 | [`batch_size`](configuration_options/stress-commands-and-load-generation.md#batch_size) | `SCT_BATCH_SIZE` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`billing_project`](configuration_options/general-and-provisioning.md#billing_project) | `SCT_BILLING_PROJECT` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`bisect_end_date`](configuration_options/general-and-provisioning.md#bisect_end_date) | `SCT_BISECT_END_DATE` | [General and provisioning](configuration_options/general-and-provisioning.md) |

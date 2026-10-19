@@ -1,1 +1,3 @@
 user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
+# a monitoring stack (~5GB) and the stress tool images (~1.5GB) twice over, so the next runs start warm
+baremetal_docker_image_budget_gb: 20

@@ -10,6 +10,7 @@ from typing import Optional, TypedDict
 
 from sdcm import cluster
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
+from sdcm.remote import shell_script_cmd
 from sdcm.test_config import TestConfig
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT
 from sdcm.utils.remote_logger import journal_time
@@ -40,6 +41,15 @@ class BareMetalCredentials(TypedDict):
     monitor_nodes: NodeCredentialInformation
 
 
+# Units of the image sizes `docker images` prints (decimal, as Docker's go-units HumanSize)
+DOCKER_SIZE_UNITS = {"B": 1, "kB": 10**3, "MB": 10**6, "GB": 10**9, "TB": 10**12}
+
+
+def docker_size_bytes(size: str) -> int:
+    number, unit = re.fullmatch(r"([\d.]+)\s*([kMGT]?B)", size).groups()
+    return int(float(number) * DOCKER_SIZE_UNITS[unit])
+
+
 class NodeIpsNotConfiguredError(Exception):
     pass
 
@@ -53,8 +63,8 @@ class PhysicalHostCleanup:
     `test_config`.
     """
 
-    def clean_up_host(self, tunnel_ports: bool, scylla_disk_setup: bool) -> None:
-        """Run the cleanup steps asked for. A failing step is logged and does not skip the other."""
+    def clean_up_host(self, tunnel_ports: bool, scylla_disk_setup: bool, image_budget_gb: int = 0) -> None:
+        """Run the cleanup steps asked for. A failing step is logged and does not skip the others."""
         if tunnel_ports:
             try:
                 self._release_stale_tunnel_ports()
@@ -67,6 +77,48 @@ class PhysicalHostCleanup:
                     self._reset_scylla_disk_setup(disks)
             except Exception as exc:  # noqa: BLE001
                 self.log.warning("Could not reset the scylla disk setup, the next setup will: %s", exc)
+        if image_budget_gb:
+            try:
+                self._trim_docker_images(image_budget_gb)
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Could not trim the Docker images: %s", exc)
+
+    def _trim_docker_images(self, budget_gb: int) -> None:
+        """Remove the least recently pulled images no container uses, until those take at most `budget_gb`.
+
+        Docker has no size limit for its images, and a host that outlives the run keeps every image any run pulled.
+        Images a container uses, other jobs' included, are kept; `docker rmi` without force also keeps an image that
+        a container started meanwhile.
+        """
+
+        def lines(cmd: str) -> list[str]:
+            return self.remoter.sudo(shell_script_cmd(cmd), verbose=False).stdout.splitlines()
+
+        in_use = set(lines("docker ps -aq | xargs -r docker inspect --format '{{.Image}}'"))
+        # ponytail: the time an image was last pulled or tagged here, the closest thing to "last used" Docker keeps
+        pulled = dict(
+            line.split(maxsplit=1)
+            for line in lines(
+                "docker images -q --no-trunc | sort -u"
+                " | xargs -r docker image inspect --format '{{.Id}} {{.Metadata.LastTagTime}}'"
+            )
+        )
+        unused = {}
+        for line in lines("docker images --no-trunc --format '{{.ID}} {{.Size}} {{.Repository}}:{{.Tag}}'"):
+            image_id, size, name = line.split(maxsplit=2)
+            if image_id not in in_use:
+                unused.setdefault(image_id, [docker_size_bytes(size), []])[1].append(name)
+        total = sum(size for size, _ in unused.values())
+        for image_id in sorted(unused, key=lambda image: pulled.get(image, "")):
+            if total <= budget_gb * 10**9:
+                break
+            size, names = unused[image_id]
+            names = [name for name in names if name != "<none>:<none>"] or [image_id]
+            self.log.info(
+                "Removing Docker image %s (%.1fGB) to keep unused images within %sGB", names, size / 10**9, budget_gb
+            )
+            if self.remoter.sudo(f"docker rmi {' '.join(names)}", ignore_status=True).ok:
+                total -= size
 
     def _release_stale_tunnel_ports(self):
         """Kill the sshd sessions still holding the reverse-tunnel ports of an earlier run.

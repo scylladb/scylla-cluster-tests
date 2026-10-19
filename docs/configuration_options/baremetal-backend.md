@@ -4,7 +4,21 @@
 
 Running against pre-existing hosts that SCT does not provision.
 
-**7 options.**
+**8 options.**
+
+
+<a id="baremetal_docker_image_budget_gb"></a>
+
+## **baremetal_docker_image_budget_gb** / SCT_BAREMETAL_DOCKER_IMAGE_BUDGET_GB
+
+Total size, in GB, of the Docker images no container uses that a loader or monitor host keeps<br>after the run's cleanup. Cleanup removes the least recently pulled images above it, never an image a container<br>uses. 0 keeps every image.
+
+**default:** N/A
+
+**type:** int
+
+**backend overrides:**
+- `20`: baremetal
 
 
 <a id="db_nodes_private_ip"></a>

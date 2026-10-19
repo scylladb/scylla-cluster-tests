@@ -27,6 +27,7 @@ import pytest
 from sdcm import cluster as sdcm_cluster
 from sdcm.cluster_baremetal import (
     NodeIpsNotConfiguredError,
+    docker_size_bytes,
     PhysicalMachineCluster,
     PhysicalHost,
     PhysicalMachineNode,
@@ -716,3 +717,86 @@ def test_the_run_is_marked_before_the_log_followers_start(monkeypatch):
     node.start_task_threads()
 
     assert seen_by_task_threads == ["@1791382530"]
+
+
+IMAGES_IN_USE = "sha256:hydra\n"
+IMAGES_PULLED = """\
+sha256:hydra 2026-10-18T12:28:36Z
+sha256:grafana 2026-10-13T13:53:22Z
+sha256:renderer 2026-10-11T13:28:08Z
+sha256:ycsb 2026-10-18T10:37:01Z
+sha256:dangling 2026-10-01T00:00:00Z
+"""
+IMAGES = """\
+sha256:hydra 2.87GB scylladb/hydra:v1.148
+sha256:grafana 1.93GB grafana/grafana:13.2.3
+sha256:renderer 2.03GB grafana/grafana-image-renderer:v5.12.6
+sha256:ycsb 414MB scylladb/ycsb:1.3.2
+sha256:ycsb 414MB scylladb/ycsb:latest
+sha256:dangling 950kB <none>:<none>
+"""
+
+
+def _host_with_images(failing_rmi: str = "") -> PhysicalHost:
+    def sudo(cmd, **_):
+        if cmd.startswith("docker rmi"):
+            return MagicMock(ok=failing_rmi not in cmd if failing_rmi else True)
+        if "docker ps" in cmd:
+            return MagicMock(stdout=IMAGES_IN_USE)
+        if "LastTagTime" in cmd:
+            return MagicMock(stdout=IMAGES_PULLED)
+        return MagicMock(stdout=IMAGES)
+
+    remoter = MagicMock()
+    remoter.sudo.side_effect = sudo
+    return PhysicalHost(name="monitor 10.0.0.60", remoter=remoter)
+
+
+def _removed(host: PhysicalHost) -> list[str]:
+    return [call.args[0] for call in host.remoter.sudo.call_args_list if call.args[0].startswith("docker rmi")]
+
+
+def test_least_recently_pulled_unused_images_go_first_until_within_budget():
+    """4.4GB unused; a 2GB budget removes the dangling layer, the renderer and Grafana, and keeps ycsb."""
+    host = _host_with_images()
+
+    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=False, image_budget_gb=2)
+
+    assert _removed(host) == [
+        "docker rmi sha256:dangling",
+        "docker rmi grafana/grafana-image-renderer:v5.12.6",
+        "docker rmi grafana/grafana:13.2.3",
+    ]
+
+
+def test_an_image_a_container_uses_is_never_removed():
+    host = _host_with_images()
+
+    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=False, image_budget_gb=0.001)
+
+    assert not any("hydra" in cmd for cmd in _removed(host))
+    assert "docker rmi scylladb/ycsb:1.3.2 scylladb/ycsb:latest" in _removed(host)
+
+
+def test_an_image_docker_refuses_to_remove_does_not_count_as_freed():
+    """`docker rmi` without force fails for an image a container started meanwhile; the next one goes instead."""
+    host = _host_with_images(failing_rmi="renderer")
+
+    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=False, image_budget_gb=2)
+
+    assert "docker rmi scylladb/ycsb:1.3.2 scylladb/ycsb:latest" in _removed(host)
+
+
+def test_no_budget_leaves_the_images_alone():
+    host = _host_with_images()
+
+    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=False)
+
+    host.remoter.sudo.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "size, expected", [("2.87GB", 2_870_000_000), ("414MB", 414_000_000), ("950kB", 950_000), ("18B", 18)]
+)
+def test_docker_size_bytes(size, expected):
+    assert docker_size_bytes(size) == expected
