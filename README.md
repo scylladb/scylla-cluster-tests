@@ -117,6 +117,8 @@ hydra run-test longevity_test.LongevityTest.test_custom_time --backend xcloud --
 ```
 For more details on xcloud backend, see [xcloud backend documentation](./docs/xcloud-backend.md)
 
+For running on hosts SCT doesn't create (lab machines, shared hosts), see [baremetal backend documentation](./docs/baremetal-backend.md)
+
 You can specify a specific scylla version by:
 ```bash
 # Simple version (release)
