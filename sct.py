@@ -41,7 +41,7 @@ import pytest
 import click
 import yaml
 from rich.table import Table
-from argus.client.sct.types import EventsInfo, LogLink
+from argus.client.sct.types import LogLink
 from argus.client.base import ArgusClientError
 from argus.common.enums import TestStatus
 from argus.common.sct_types import RawEventPayload
@@ -467,14 +467,6 @@ def _report_provision_error_to_argus(
         LOGGER.info("Error event submitted to Argus successfully")
     except Exception as argus_exc:  # noqa: BLE001
         LOGGER.warning("Failed to submit error event to Argus: %s", argus_exc)
-
-    # Submit events summary so the error appears in the Argus events tab
-    try:
-        events_summary = [EventsInfo(severity="CRITICAL", total_events=1, messages=[error_message])]
-        argus_client.submit_events(events_summary)
-        LOGGER.info("Events summary submitted to Argus successfully")
-    except Exception as summary_exc:  # noqa: BLE001
-        LOGGER.warning("Failed to submit events summary to Argus: %s", summary_exc)
 
     try:
         argus_client.set_sct_run_status(TestStatus.TEST_ERROR)
