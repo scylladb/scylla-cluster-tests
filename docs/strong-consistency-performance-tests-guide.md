@@ -123,8 +123,11 @@ That disruption (`Nemesis.disrupt_run_unique_sequence`) is a fixed sequence of t
 1. Scylla Manager repair (skipped when `use_mgmt` is false)
 2. grow the cluster (`_grow_cluster`)
 3. terminate and replace a node (`_terminate_and_replace_node`, skipped when
-   `nemesis_sequence_skip_terminate_and_replace` is true - the SC jobs set it until SCYLLADB-4753 is fixed)
+   `nemesis_sequence_skip_terminate_and_replace` is true)
 4. shrink the cluster back (`_shrink_cluster`)
+
+Both the SC and EC jobs skip steps 1 and 3 (`nemesis_650gb_cql_stress_base.yaml`): SC cannot run
+them yet (SCYLLADB-4854, SCYLLADB-4753), and EC skips them too so both run the same sequence.
 
 with `nemesis_sequence_sleep_between_ops` (10 min) between steps. The latency decorator records
 P90/P99 per disruption and reports them to Argus; the duration limits live in
@@ -157,7 +160,8 @@ options (`append_scylla_args`, `instance_type_*`) are replaced by the last fragm
 3. `configurations/disable_speculative_retry.yaml`
 4. `configurations/performance/latency-decorator-error-thresholds-nemesis-sc-tablets.yaml`
 5. `configurations/aws/i4i_4xlarge.yaml` **or** `configurations/arm_instance_types/i8g_4xlarge.yaml`
-6. `configurations/strong_consistency/nemesis_650gb_cql_stress_base.yaml` - loader shape
+6. `configurations/strong_consistency/nemesis_650gb_cql_stress_base.yaml` - loader shape and the
+   skipped `NemesisSequence` steps
 7. *(SC)* `configurations/strong_consistency/enable_experimental_sc.yaml`
    **or** *(EC)* `configurations/strong_consistency/ec_baseline_align_with_sc.yaml`
 8. `configurations/strong_consistency/enable_commitlog_sync_batch.yaml`
@@ -203,7 +207,7 @@ starting points to be calibrated from the first run.
 | `configurations/stress_images/cql-stress-strong-consistency.yaml` | Custom cql-stress image with leader-aware load balancing |
 | `configurations/performance/cassandra_stress_gradual_load_steps_strong_consistency.yaml` | SC-specific throttle steps, thread counts, step durations |
 | `configurations/stress_images/cql-stress-strong-consistency-leader-awarness.yaml` | cql-stress image with Raft-leader-aware load balancing (topology-operations jobs) |
-| `configurations/strong_consistency/nemesis_650gb_cql_stress_base.yaml` | Loader shape for the topology-operations jobs |
+| `configurations/strong_consistency/nemesis_650gb_cql_stress_base.yaml` | Loader shape and skipped `NemesisSequence` steps for the topology-operations jobs |
 | `configurations/strong_consistency/prepare_cql_stress_nemesis_ks_with_sc_1kpershard.yaml` | SC keyspace + cql-stress write/read/mixed load for topology-operations jobs |
 | `configurations/strong_consistency/prepare_cql_stress_nemesis_ks_with_ec_1kpershard.yaml` | EC twin of the above |
 | `configurations/strong_consistency/ec_baseline_align_with_sc.yaml` | Restores the non-SC settings of `enable_experimental_sc.yaml` for EC baselines |

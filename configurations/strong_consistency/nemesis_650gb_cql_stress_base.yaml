@@ -3,7 +3,7 @@
 #
 # Stacked on top of test-cases/performance/perf-regression-latency-650gb-with-nemesis.yaml, which it
 # overrides, and kept free of anything SC/EC- or architecture-specific so that all four jobs
-# (i4i/i8g x SC/EC) share exactly the same loader shape.
+# (i4i/i8g x SC/EC) share exactly the same loader shape and NemesisSequence steps.
 #
 # Loader sizing: the workload fragments ask for 250 connections per shard per loader, so with
 # 4 loaders every db shard accepts 1000 connections in aggregate. Against a 4xlarge db node
@@ -28,3 +28,13 @@ email_subject_postfix: 'latency during topology operations'
 # as-is, so narrow the list to the only table these jobs create - otherwise the run dies with
 # "Keyspace scylla_bench does not exist" right after the population phase.
 post_prepare_cql_cmds: ["ALTER TABLE keyspace1.standard1 WITH speculative_retry = 'NONE'"]
+
+# NemesisSequence steps skipped by all four jobs. SC cannot run them yet, and EC skips them too so both
+# run the same sequence (steady state, grow, shrink) and stay comparable step for step:
+# - Scylla Manager repair: repairing SC tablets fails every request to them and kills the load
+#   (SCYLLADB-4854).
+# - terminate and replace: the replacing node needs a new replica of every SC tablet it held, which
+#   never catches up while transfer_snapshot() is not implemented (SCYLLADB-4753); the node never
+#   comes up and the run hangs for 8h.
+use_mgmt: false
+nemesis_sequence_skip_terminate_and_replace: true
