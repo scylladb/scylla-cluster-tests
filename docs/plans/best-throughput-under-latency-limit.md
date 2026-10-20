@@ -2,13 +2,14 @@
 status: draft
 domain: stress-tools
 created: 2026-10-19
-last_updated: 2026-10-19
+last_updated: 2026-10-20
 owner: juliayakovlev
 ---
 
 # Best Throughput Under a Latency Limit for Gradual-Steps Performance Tests
 
 Jira: [SCT-580](https://scylladb.atlassian.net/browse/SCT-580)
+Related: [SCYLLADB-3267](https://scylladb.atlassian.net/browse/SCYLLADB-3267) (goodput under overload)
 
 ## Problem Statement
 
@@ -79,6 +80,26 @@ Today nobody computes that number:
 5. Optionally (off by default), narrow the result by running extra steps at thread counts between the last
    passing and the first failing step, adding at most `N x step_duration` per workload.
 6. Existing predefined-steps (throttled) jobs, their step names and Argus history are unchanged.
+7. Optionally, run the overload steps of SCYLLADB-3267 on top of the measured best throughput: goodput at
+   1.3x and 2x the best throughput, reported as a ratio to it (expected >= 0.9).
+
+## Relation to SCYLLADB-3267
+
+SCYLLADB-3267 asks for an SCT-level goodput suite: measure the maximum throughput under 10 ms, then the
+goodput at 1.3x and 2x that throughput, with goodput >= 0.9 x maximum expected. It also asks to cover CQL
+and Alternator, INSERT/UPDATE/DELETE/SELECT and LWT variants, and to count thrown exceptions per failed op.
+
+| SCYLLADB-3267 part | Where |
+|---|---|
+| Max throughput under 10 ms | This plan, Phases 1-5 |
+| Goodput at 1.3x and 2x of it, ratio >= 0.9 | This plan, Phase 6 |
+| Bounded timeouts and concurrency under overload | This plan, Phase 6 |
+| Exceptions per failed op | This plan, Phase 6 (**Needs Investigation** per stress tool) |
+| CQL INSERT/SELECT (cassandra-stress write/read/mixed) | Covered by the existing workloads |
+| CQL UPDATE/DELETE and LWT variants | Follow-up: new workloads on the same mechanism; the LWT predefined-steps test-cases are the starting point |
+| Alternator | Follow-up: needs an Alternator stress tool wired into the gradual test |
+
+The follow-ups reuse Phases 1-6 unchanged; they only add workloads, so they belong in their own plan.
 
 ## Implementation Phases
 
@@ -193,10 +214,38 @@ Today nobody computes that number:
 - [ ] Refinement and early stop run only when enabled
 - [ ] Bisection loop covered by unit tests against a fake latency curve
 
-### Phase 6: Documentation
+### Phase 6: Goodput under overload (SCYLLADB-3267)
+
+**Importance:** Medium
+**Dependencies:** Phase 3; Phase 5 makes the best throughput, and so the overload rates, more precise
+
+- New config, off by default, listing the overload factors per workload, e.g. `[1.3, 2]`.
+- After the best throughput is found, run one step per factor at a **rate derived from the measured best
+  throughput** (factor x best), throttled through the existing rate path. This is not a fixed throttle
+  grid: the rates follow the run's own best throughput, so nothing is recalibrated per instance type.
+- Thread count for overload steps: enough to offer the target rate, but bounded, so concurrency does not
+  explode while the cluster sheds load. **Needs Investigation:** start from the best step's thread count
+  scaled by the factor, capped by a configured maximum.
+- Client request timeouts are bounded and the stress tool keeps running on timeouts and errors instead of
+  aborting the step. **Needs Investigation** per tool (cassandra-stress `-errors`, latte `--request-timeout`
+  and retry options).
+- Goodput is the throughput of successful operations. Report per factor: offered rate, goodput, goodput as
+  a ratio of the best throughput, P99, and failed operations. Exceptions per failed op where the stress
+  tool exposes them (**Needs Investigation**).
+- Results go into a separate Argus table, one row per factor, with a validation rule of ratio >= 0.9.
+- Overload steps are named `overload_<factor>x` and run after all other steps, so they don't affect the
+  best-throughput search. For write and mixed, the dataset grows further; keep the compaction and
+  tablet-split waits between steps.
+
+**Definition of Done:**
+- [ ] With the config set, each workload reports goodput at 1.3x and 2x of its best throughput
+- [ ] The stress tools keep running through timeouts, and failed operations are counted
+- [ ] The ratio >= 0.9 rule fails the run in Argus when goodput drops below it
+
+### Phase 7: Documentation
 
 **Importance:** High
-**Dependencies:** delivered with Phases 2-5
+**Dependencies:** delivered with Phases 2-6
 
 - `docs/performance/results-and-regression.md`: `BestThroughputResult` and the pass rules.
 - `docs/performance/runbook-recalibrate-steps.md`: choosing thread grids for a new instance type.
@@ -214,6 +263,8 @@ Today nobody computes that number:
 - Config: `perf_gradual_latency_limit` default, per-workload override, invalid values rejected (extend
   `test_perf_gradual_config.py`).
 - Dataset sizing: derived ranges for i4i/i8g equal today's; scaling for other RAM/disk values.
+- Overload: rates derived from the best throughput per factor; thread count bounded by the cap; goodput
+  ratio computed from successful operations only; no overload steps when nothing passed.
 - Bisection: against a fake latency curve it converges, stops after N steps, stops early at the 5% gap,
   handles "nothing passed" and "everything passed", names steps `refine_<threads>_threads`.
 
@@ -239,7 +290,9 @@ Today nobody computes that number:
 | Loaders saturate before the cluster, so the best value measures loaders | Medium | High | Check loader CPU at the highest thread step during Phase 3; add loaders if they are the limit |
 | Mixed probes run on a growing dataset, so later steps see more data | Medium | Medium | Keep compaction and tablet-split waits; mark refined mixed results in the report |
 | Derived dataset changes results of existing jobs | Low | High | Phase 4 defaults reproduce today's ranges on i4i/i8g; unit-tested |
+| Under 2x overload the stress tool aborts on timeouts or its concurrency grows without bound | High | High | Phase 6 bounds timeouts and threads and requires the tool to continue on errors; checked per tool before enabling |
 | Extra jobs and refinement extend run time on baremetal, where sub-tests run one at a time | Medium | Medium | Refinement off by default and bounded by N and the 5% stop |
 
 Rollback: reporting only adds a table; the new jobs and configs are separate files; refinement is behind
-`perf_gradual_refine_steps` (default 0) and dataset sizing defaults to today's ranges.
+`perf_gradual_refine_steps` (default 0), overload steps are off by default, and dataset sizing defaults to
+today's ranges.
