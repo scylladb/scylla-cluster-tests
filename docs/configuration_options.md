@@ -28,11 +28,11 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-535 options across 29 groups.
+537 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
-| [General and provisioning](configuration_options/general-and-provisioning.md) | 74 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
+| [General and provisioning](configuration_options/general-and-provisioning.md) | 76 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 74 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
@@ -176,6 +176,8 @@ concerns first, then one page per backend, then one per test type.
 | [`disable_raft`](configuration_options/upgrade-tests.md#disable_raft) | `SCT_DISABLE_RAFT` | [Upgrade tests](configuration_options/upgrade-tests.md) |
 | [`docker_image`](configuration_options/docker-backend.md#docker_image) | `SCT_DOCKER_IMAGE` | [Docker backend](configuration_options/docker-backend.md) |
 | [`docker_image_cassandra`](configuration_options/auxiliary-db-cluster-oracle-cassandra.md#docker_image_cassandra) | `SCT_DOCKER_IMAGE_CASSANDRA` | [Auxiliary DB cluster (oracle / Cassandra)](configuration_options/auxiliary-db-cluster-oracle-cassandra.md) |
+| [`docker_min_free_space_gb_loader`](configuration_options/general-and-provisioning.md#docker_min_free_space_gb_loader) | `SCT_DOCKER_MIN_FREE_SPACE_GB_LOADER` | [General and provisioning](configuration_options/general-and-provisioning.md) |
+| [`docker_min_free_space_gb_monitor`](configuration_options/general-and-provisioning.md#docker_min_free_space_gb_monitor) | `SCT_DOCKER_MIN_FREE_SPACE_GB_MONITOR` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`docker_network`](configuration_options/docker-backend.md#docker_network) | `SCT_DOCKER_NETWORK` | [Docker backend](configuration_options/docker-backend.md) |
 | [`download_from_s3`](configuration_options/monitoring-events-and-reporting.md#download_from_s3) | `SCT_DOWNLOAD_FROM_S3` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
 | [`dynamodb_primarykey_type`](configuration_options/alternator-dynamodb-api.md#dynamodb_primarykey_type) | `SCT_DYNAMODB_PRIMARYKEY_TYPE` | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) |

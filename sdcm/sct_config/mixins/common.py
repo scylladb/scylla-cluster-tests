@@ -142,6 +142,16 @@ class CommonConfigMixin(BaseModel):
          In case of random option - Scylla will start with different (random) shards on every node of the cluster
          """,
     )
+    docker_min_free_space_gb_loader: int = SctField(
+        description="""Free space, in GB, the Docker image store of a loader host needs before the run pulls the stress
+         tool images. Setup first removes images no container uses, then fails if the space is still short.
+         0 turns the check off.""",
+    )
+    docker_min_free_space_gb_monitor: int = SctField(
+        description="""Free space, in GB, the Docker image store of a monitor host needs before the run pulls the
+         monitoring stack images. Setup first removes images no container uses, then fails if the space is still short.
+         0 turns the check off.""",
+    )
     fallback_to_next_availability_zone: Boolean = SctField(
         description="On capacity errors, automatically retry provisioning in the next available AZ in the same region. "
         "Backend-agnostic parameter; supersedes `aws_fallback_to_next_availability_zone`.",

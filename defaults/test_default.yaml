@@ -213,6 +213,10 @@ data_volume_disk_num: 0
 data_volume_disk_type: ''
 data_volume_disk_size: 0
 data_volume_disk_iops: 0 # depend on type iops could be 100-16000 for io2|io3 and 3000-16000 for gp3
+
+# measured on a lab host: the stress tool images take ~1.5GB and the monitoring stack ~5GB, unpacked about twice that
+docker_min_free_space_gb_loader: 3
+docker_min_free_space_gb_monitor: 10
 gce_pd_standard_disk_size_db: 0
 
 install_mode: 'repo'  # install from scylla_repo
