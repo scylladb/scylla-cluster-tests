@@ -25,6 +25,8 @@ from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
 from sdcm.utils.decorators import retrying
 from sdcm.utils.aws_utils import tags_as_ec2_tags
+from sdcm.utils.minicloud.addressing import MINICLOUD_REGION_INDEX_OFFSET
+from sdcm.utils.minicloud.endpoint import is_minicloud_active
 
 LOGGER = logging.getLogger(__name__)
 
@@ -47,11 +49,8 @@ class AwsRegion:
         self.client: EC2Client = boto3.client("ec2", region_name=region_name)
         self.resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
 
-        # cause import straight from common create cyclic dependency; same for the
-        # minicloud package, whose config imports sct_config which imports this module
+        # cause import straight from common create cyclic dependency
         from sdcm.utils.common import all_aws_regions  # noqa: PLC0415
-        from sdcm.utils.minicloud.config import MINICLOUD_REGION_INDEX_OFFSET  # noqa: PLC0415
-        from sdcm.utils.minicloud.endpoint import is_minicloud_active  # noqa: PLC0415
 
         self._is_minicloud = is_minicloud_active()
         region_index = all_aws_regions(cached=True).index(self.region_name)

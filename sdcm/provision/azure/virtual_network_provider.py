@@ -21,6 +21,7 @@ from azure.mgmt.network.models import VirtualNetwork
 
 from sdcm.provision.network_configuration import AZURE_IPV6_ADDRESS_SPACE
 from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.minicloud.addressing import azure_vnet_address_space
 from sdcm.utils.minicloud.endpoint import is_minicloud_active
 
 LOGGER = logging.getLogger(__name__)
@@ -51,9 +52,6 @@ class VirtualNetworkProvider:
         # subnets dual-stack, and an IPv6 address on Azure is never free
         address_space = "10.0.0.0/16"
         if is_minicloud_active():
-            # local import breaks the cycle minicloud.azure -> minicloud.config -> sct_config -> this module
-            from sdcm.utils.minicloud.azure import azure_vnet_address_space  # noqa: PLC0415
-
             address_space = azure_vnet_address_space(self._region)
         address_prefixes = [address_space] + ([AZURE_IPV6_ADDRESS_SPACE] if ipv6 else [])
         LOGGER.info("Creating vnet in resource group %s...", self._resource_group_name)

@@ -6,12 +6,8 @@ import re
 import shutil
 import subprocess
 
-from sdcm.utils.minicloud.config import (
-    MINICLOUD_HOST_VPC_ROUTES,
-    MINICLOUD_TUN_ADDR,
-    MinicloudConfig,
-    MinicloudError,
-)
+from sdcm.utils.minicloud.addressing import MINICLOUD_HOST_VPC_ROUTES, MINICLOUD_TUN_ADDR
+from sdcm.utils.minicloud.config import MinicloudConfig, MinicloudError
 
 LOGGER = logging.getLogger(__name__)
 

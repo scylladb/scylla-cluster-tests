@@ -16,15 +16,14 @@ from google.api_core import exceptions as google_exceptions
 from sdcm.keystore import KeyStore
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS
 from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.minicloud.config import (
+from sdcm.utils.minicloud.addressing import (
     MINICLOUD_GCE_REGION_INDEX_OFFSET,
     MINICLOUD_GCE_REGIONS,
     MINICLOUD_GCE_SUBNET_CIDR_TMPL,
     MINICLOUD_HOST_VPC_ROUTES,
     MINICLOUD_TUN_ADDR,
-    MinicloudConfig,
-    MinicloudError,
 )
+from sdcm.utils.minicloud.config import MinicloudConfig, MinicloudError
 from sdcm.utils.minicloud.gcp import prepare_gce_network
 from sdcm.utils.minicloud.networking import (
     FIREWALLD_TRUSTED_ZONE,

@@ -11,15 +11,14 @@ from google.cloud import compute_v1, storage
 from google.oauth2 import service_account
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.minicloud.config import (
+from sdcm.utils.minicloud.addressing import (
     MINICLOUD_GCE_NETWORK,
     MINICLOUD_GCE_REGION_INDEX_OFFSET,
     MINICLOUD_GCE_REGIONS,
     MINICLOUD_GCE_SUBNET_CIDR_TMPL,
     MINICLOUD_HOST_VPC_ROUTES,
-    MinicloudConfig,
-    MinicloudError,
 )
+from sdcm.utils.minicloud.config import MinicloudConfig, MinicloudError
 from sdcm.utils.session import create_retry_session
 
 LOGGER = logging.getLogger(__name__)

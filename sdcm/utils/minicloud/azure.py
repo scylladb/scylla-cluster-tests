@@ -9,8 +9,6 @@ from azure.mgmt.resource import ResourceManagementClient
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.minicloud.config import (
-    MINICLOUD_AZURE_REGION_INDEX_OFFSET,
-    MINICLOUD_AZURE_REGIONS,
     MINICLOUD_AZURE_SCRATCH_RG_LOCATION,
     MINICLOUD_HEALTH_INTERVAL,
     MINICLOUD_HEALTH_TIMEOUT,
@@ -34,22 +32,6 @@ def write_azure_env_file(path: str, creds: dict) -> None:
         fh.write(f"AZURE_TENANT_ID={creds['tenant_id']}\n")
         fh.write(f"AZURE_CLIENT_ID={creds['client_id']}\n")
         fh.write(f"AZURE_CLIENT_SECRET={creds['client_secret']}\n")
-
-
-def azure_vnet_address_space(region: str) -> str:
-    """Return the minicloud VNet address space for the region.
-
-    Each region gets its own /16, so guest addresses do not overlap.
-    """
-    try:
-        index = MINICLOUD_AZURE_REGIONS.index(region)
-    except ValueError:
-        raise MinicloudError(
-            f"region '{region}' is not supported by the minicloud azure backend, "
-            f"supported regions: {MINICLOUD_AZURE_REGIONS}"
-        ) from None
-
-    return f"10.{MINICLOUD_AZURE_REGION_INDEX_OFFSET + index}.0.0/16"
 
 
 def check_azure_credentials(creds: dict) -> None:

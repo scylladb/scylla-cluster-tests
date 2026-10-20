@@ -196,8 +196,8 @@ always does - where an equal emulated CIDR sends guest traffic out `eth0` instea
 and a `10/8` route black-holes the QA infra (Argus, argus-proxy). A host still carrying the
 old blanket route is reconfigured on the next start; an image whose setup script predates the
 override fails the start with an upgrade message rather than 20 minutes later as Argus
-connect-timeouts. Constants: `MINICLOUD_REGION_INDEX_OFFSET`, `MINICLOUD_GCE_*`,
-`MINICLOUD_HOST_VPC_ROUTES` in `sdcm/utils/minicloud/config.py`.
+connect-timeouts. Constants: `MINICLOUD_REGION_INDEX_OFFSET`, `MINICLOUD_GCE_*`, `MINICLOUD_AZURE_*`,
+`MINICLOUD_HOST_VPC_ROUTES` in `sdcm/utils/minicloud/addressing.py`.
 
 ```bash
 # start the container and prepare regions (keep_alive - survives across hydra invocations)
