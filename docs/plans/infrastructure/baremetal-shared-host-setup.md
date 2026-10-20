@@ -257,10 +257,11 @@ graph LR
 - **Monitor access from outside the lab.** When SCT runs off the lab network, it cannot reach the
   monitor's ports. Reaching them through the lab access service waits on SCT-1275's choice between
   nested SSH forwards and TCP resources. Not needed while SCT runs on the lab host's agent.
+  POC: #16555 (one address lookup for the monitoring stack).
 - **Moving monitoring ports instead of failing.** If keeping the ports free proves too strict for
   some hosts, the stack could start on free ports. That means leaving the host network
   (`start-all.sh` refuses `-l` with port options), renamed containers, and every port user,
-  log collection included, reading the real ports. A POC exists from SCT-1215.
+  log collection included, reading the real ports. POC from SCT-1215: #16547 and #16548.
 
 ## 5. Testing Requirements
 
