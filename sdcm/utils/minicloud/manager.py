@@ -18,12 +18,14 @@ from sdcm.utils.minicloud.activation import (
     set_minicloud_endpoint_env,
     validate_minicloud_params,
 )
+from sdcm.utils.minicloud.azure import setup_azure_credentials, wait_for_tls
 from sdcm.utils.minicloud.config import (
     MINICLOUD_HEALTH_INTERVAL,
     MINICLOUD_HEALTH_TIMEOUT,
     MinicloudConfig,
     MinicloudError,
 )
+from sdcm.utils.minicloud.endpoint import AZURE_BACKENDS
 from sdcm.utils.minicloud.gcp import prepare_gce_network, setup_gcp_credentials
 from sdcm.utils.minicloud.log_collection import _decode_exit, redact_docker_inspect
 from sdcm.utils.minicloud.networking import setup_host_networking
@@ -65,6 +67,9 @@ class MinicloudManager:
         self._stopping = False
         self._state_snapshotted = False
         self._death_watcher: threading.Thread | None = None
+        # minicloud CA bundle, and the old REQUESTS_CA_BUNDLE that stop() restores
+        self._ca_bundle: str | None = None
+        self._previous_requests_ca_bundle: str | None = None
 
     def preflight_check(self, skip_aws_creds: bool = False, params=None, enforce_overlay: bool = True) -> None:
         """Verify prerequisites before starting minicloud container.
@@ -257,6 +262,22 @@ class MinicloudManager:
             gaps.append("no --gcs-bucket")
         return gaps
 
+    def _container_azure_gaps(self) -> list[str]:
+        """Return the reasons a running container cannot serve the azure backend.
+
+        AZURE_CLIENT_ID and --azure-subscription are set only at docker run, and minicloud needs
+        both to download guest images from real Azure. A container without them still passes
+        health probes.
+        """
+        gaps = []
+        env = self._inspect_container("{{json .Config.Env}}")
+        if not any(str(entry).startswith("AZURE_CLIENT_ID=") for entry in env or []):
+            gaps.append("no AZURE_CLIENT_ID")
+        cmd = self._inspect_container("{{json .Config.Cmd}}")
+        if "--azure-subscription" not in [str(arg) for arg in cmd or []]:
+            gaps.append("no --azure-subscription")
+        return gaps
+
     def _container_sizing_gaps(self) -> list[str]:
         """Return the ways a running container's sizing differs from what this run asked for.
 
@@ -349,6 +370,15 @@ class MinicloudManager:
     def _setup_gcp_credentials(self) -> None:
         setup_gcp_credentials(self.config, self.backend)
 
+    def _setup_azure_credentials(self) -> None:
+        setup_azure_credentials(self.config, self.backend)
+
+    def _wait_for_azure_tls(self) -> None:
+        """Wait for minicloud's Azure API over TLS and keep the CA bundle that verified it."""
+        if self.backend not in AZURE_BACKENDS:
+            return
+        self._ca_bundle = wait_for_tls(self.config)
+
     def prepare_gce_network(self) -> None:
         prepare_gce_network(self.config)
 
@@ -373,6 +403,8 @@ class MinicloudManager:
                 restart_reason = f"running image '{running_image}' != expected '{expected_image}'"
             elif self.backend in ("gce", "gce-siren") and (gaps := self._container_gce_gaps()):
                 restart_reason = f"running container is not usable for the '{self.backend}' backend: {', '.join(gaps)}"
+            elif self.backend in AZURE_BACKENDS and (gaps := self._container_azure_gaps()):
+                restart_reason = f"running container is not usable for the '{self.backend}' backend: {', '.join(gaps)}"
             elif sizing_gaps := self._container_sizing_gaps():
                 restart_reason = f"running container was started with different sizing: {', '.join(sizing_gaps)}"
             if restart_reason:
@@ -382,6 +414,7 @@ class MinicloudManager:
                 endpoint = f"http://localhost:{self.config.port}"
                 LOGGER.info("minicloud already running at %s (image: %s), reusing", endpoint, running_image)
                 self._container_id = self._resolve_container_id()
+                self._wait_for_azure_tls()
                 self.set_env_overrides()
                 self._start_log_streaming()
                 return
@@ -390,6 +423,7 @@ class MinicloudManager:
         image = self.config.docker_image
 
         self._force_stop_container()
+        self._setup_azure_credentials()
 
         docker_cmd = [
             "docker",
@@ -455,6 +489,9 @@ class MinicloudManager:
                 f"GOOGLE_CLOUD_PROJECT={self.config.gcp_project}",
             ]
 
+        if self.backend in AZURE_BACKENDS:
+            docker_cmd += ["--env-file", self.config.azure_env_file]
+
         docker_cmd.append(image)
 
         minicloud_args = [
@@ -471,6 +508,15 @@ class MinicloudManager:
         if self.config.gcs_bucket:
             minicloud_args += ["--gcs-bucket", self.config.gcs_bucket]
         minicloud_args += ["--gcp-project", self.config.gcp_project]
+        if self.backend in AZURE_BACKENDS:
+            minicloud_args += [
+                "--tls-port",
+                str(self.config.tls_port),
+                "--azure-subscription",
+                self.config.azure_subscription_id,
+                "--azure-scratch-resource-group",
+                self.config.azure_scratch_resource_group,
+            ]
         if self.config.lock_guest_memory:
             minicloud_args.append("--lock-guest-memory")
         # guest S3 names resolve to minicloud, so Manager backups reach the local store
@@ -485,7 +531,7 @@ class MinicloudManager:
             ]
 
         full_cmd = docker_cmd + minicloud_args
-        # Safe to log verbatim: credentials are passed as name-only --env flags above.
+        # safe to log: the command holds credential names and the --env-file path, not secret values
         LOGGER.info("Starting minicloud container: %s", " ".join(full_cmd))
         # `docker run -d` prints the container ID - keep it, it is what we inspect and
         # remove later, and it stays valid even if the name gets taken over.
@@ -500,9 +546,9 @@ class MinicloudManager:
         endpoint = f"http://localhost:{self.config.port}"
         try:
             self._wait_for_health(endpoint)
+            self._wait_for_azure_tls()
         except Exception:
-            # health never arrived and the atexit handler is not registered yet — clean up
-            # the container we just started instead of leaking it (snapshot state first)
+            # atexit is not registered yet, so remove the container here to avoid leaking it
             self._snapshot_container_state(reason="failed to become healthy during start")
             self._force_stop_container()
             raise
@@ -537,7 +583,13 @@ class MinicloudManager:
         self._force_stop_container()
         os.environ.pop("AWS_ENDPOINT_URL", None)
         os.environ.pop("GCE_ENDPOINT_URL", None)
+        os.environ.pop("AZURE_ENDPOINT_URL", None)
         os.environ.pop("SCT_MINICLOUD_ENDPOINT_URL", None)
+        if self._ca_bundle:
+            if self._previous_requests_ca_bundle is None:
+                os.environ.pop("REQUESTS_CA_BUNDLE", None)
+            else:
+                os.environ["REQUESTS_CA_BUNDLE"] = self._previous_requests_ca_bundle
         self._stopped = True
         LOGGER.info("minicloud stopped")
 
@@ -615,8 +667,13 @@ class MinicloudManager:
         is delivered by the configurations/minicloud.yaml overlay: SCT_* param exports
         made here run after SCTConfiguration is already built, so they never reach
         params — validate_minicloud_params() enforces that the overlay was applied.
+
+        Azure backends also get REQUESTS_CA_BUNDLE once the TLS wait has built the bundle;
+        the value it replaces is recorded so that stop() can restore it.
         """
-        set_minicloud_endpoint_env(f"http://localhost:{self.config.port}", self.backend)
+        if self._ca_bundle and os.environ.get("REQUESTS_CA_BUNDLE") != self._ca_bundle:
+            self._previous_requests_ca_bundle = os.environ.get("REQUESTS_CA_BUNDLE")
+        set_minicloud_endpoint_env(f"http://localhost:{self.config.port}", self.backend, ca_bundle=self._ca_bundle)
         LOGGER.info("minicloud endpoint env vars applied")
 
     def _wait_for_health(self, endpoint: str) -> None:

@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
+from sdcm.provision.provisioner import PricingModel, ProvisionError
 
 
 @pytest.fixture
@@ -47,3 +48,21 @@ def test_reboot_no_wait(mock_run_command, provider):
     provider.reboot("vm1", wait=False, hard=False)
     mock_run_command.assert_called_once_with("vm1", "reboot -f")
     provider._azure_service.compute.virtual_machines.begin_restart.assert_not_called()
+
+
+@pytest.mark.parametrize("power_state, provisioned", [("PowerState/starting", False), ("PowerState/running", True)])
+def test_minicloud_vm_is_provisioned_once_running(provider, monkeypatch, power_state, provisioned):
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    vm = MagicMock(provisioning_state="Succeeded", instance_view=MagicMock(statuses=[MagicMock(code=power_state)]))
+    provider._azure_service.compute.virtual_machines.get.return_value = vm
+    assert provider._poll_provisioned_vm("vm1", PricingModel.ON_DEMAND) is (vm if provisioned else None)
+
+
+def test_minicloud_vm_that_failed_to_launch_raises(provider, monkeypatch):
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    provider._azure_service.compute.virtual_machines.get.return_value = MagicMock(
+        provisioning_state="Succeeded",
+        instance_view=MagicMock(statuses=[MagicMock(code="PowerState/deallocated")]),
+    )
+    with pytest.raises(ProvisionError, match="deallocated"):
+        provider._poll_provisioned_vm("vm1", PricingModel.ON_DEMAND)

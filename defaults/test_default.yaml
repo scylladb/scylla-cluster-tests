@@ -446,6 +446,8 @@ minicloud_s3_passthrough_buckets: 'scylla-qa-keystore,cloudius-jenkins-test,down
 minicloud_regions: ''
 # Empty = derive <project>-minicloud-staging and create on demand
 minicloud_gcs_bucket: ''
+# Resource group for minicloud temporary image-export disk; SCT ensures it exists at start, never deletes it
+minicloud_azure_scratch_resource_group: 'sct-minicloud-scratch'
 
 # SCT agent defaults
 agent:

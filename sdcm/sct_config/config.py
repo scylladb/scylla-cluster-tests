@@ -95,6 +95,7 @@ from sdcm.test_config import TestConfig
 from sdcm.utils.version_utils import parse_scylla_version_tag
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
 from sdcm.utils.cloud_catalog.instance_matcher import ARCH_ALIASES, NoMatchingInstanceError, select_instance
+from sdcm.utils.minicloud.endpoint import AZURE_BACKENDS, MinicloudActivationError, get_minicloud_azure_endpoint
 from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS
 from sdcm.sct_config.defaults import (
     AMI_ID_PARAMS,
@@ -622,6 +623,17 @@ class SCTConfiguration(*CONFIG_GROUPS):
         self._resolve_instance_sizes(env)
         merge_dicts_append_strings(self, env, SCTConfiguration)
 
+        if (
+            self.get("cluster_backend") in AZURE_BACKENDS
+            and self.get("minicloud_endpoint_url")
+            and not os.environ.get("SCT_MINICLOUD_ENDPOINT_URL")
+            and not get_minicloud_azure_endpoint()
+        ):
+            raise MinicloudActivationError(
+                "minicloud for the azure backend is activated by exporting SCT_MINICLOUD_ENDPOINT_URL, "
+                "minicloud_endpoint_url in a yaml alone is not supported"
+            )
+
         # All keystore sources are now merged, so export them before any of the
         # resolution below can construct a KeyStore (xcloud's release tag lookup does).
         self._propagate_keystore_env()
@@ -793,6 +805,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
                             azure_image = azure_utils.get_released_scylla_images(
                                 scylla_version=scylla_version, region_name=region, arch=azure_arch
                             )[0]
+                    except MinicloudActivationError:
+                        raise
                     except Exception as ex:  # noqa: BLE001
                         raise ValueError(
                             f"Azure Image for scylla_version='{scylla_version}' not found in {region}"

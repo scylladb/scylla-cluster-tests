@@ -3,10 +3,21 @@
 [← All configuration options](../configuration_options.md)
 
 Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with
-`cluster_backend: aws` and an endpoint override, and these options control the local minicloud
-service.
+the `aws`, `gce` or `azure` cluster backend and an endpoint override, and these options control
+the local minicloud service.
 
-**16 options.**
+**17 options.**
+
+
+<a id="minicloud_azure_scratch_resource_group"></a>
+
+## **minicloud_azure_scratch_resource_group** / SCT_MINICLOUD_AZURE_SCRATCH_RESOURCE_GROUP
+
+Azure resource group that minicloud uses for the temporary managed disk of an image export. SCT ensures it exists, with the real Azure credential, before the container starts and never deletes it; minicloud only creates and deletes disks inside it
+
+**default:** sct-minicloud-scratch
+
+**type:** str (appendable)
 
 
 <a id="minicloud_container_cpus"></a>

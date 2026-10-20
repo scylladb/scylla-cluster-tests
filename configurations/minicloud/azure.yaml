@@ -1,0 +1,19 @@
+# Azure-backend overlay for minicloud runs. Layer it after configurations/minicloud.yaml.
+# No instance_type_runner: Azure runs start from a local host with KVM.
+
+# minicloud Azure emulation is built around eastus.
+azure_region_name: 'eastus'
+
+# Lightweight mode caps guest CPU and memory, so these types only have to exist in the catalog.
+azure_instance_type_db: 'Standard_L8s_v3'
+azure_instance_type_loader: 'Standard_D4s_v5'
+azure_instance_type_monitor: 'Standard_D4s_v5'
+
+# Guests are reachable on their private address only.
+intra_node_comm_public: false
+
+# A cold start downloads and converts the image before boot, which takes long.
+azure_provision_stuck_vm_timeout: 2700
+
+# Recreating a stuck VM only restarts the same download.
+azure_provision_stuck_vm_recreate_attempts: 0

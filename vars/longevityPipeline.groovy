@@ -92,7 +92,7 @@ def call(Map pipelineParams) {
 	    separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 7 options)')
 	    string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
 	    string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
-	    string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
+	    string(defaultValue: "${pipelineParams.get('azure_image_db', '')}", description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
 	    string(defaultValue: '', description: 'Oracle image for ScyllaDB ', name: 'oci_image_db')
 	    string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs:// ', name: 'update_db_packages')
             string(defaultValue: "${pipelineParams.get('scylla_version', '')}",

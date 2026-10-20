@@ -1,11 +1,17 @@
 """Activating a run against minicloud: reachability probe, env wiring, param validation."""
 
 import os
+from urllib.parse import urlparse
 
 import requests
 
 from sdcm.utils.minicloud.config import MINICLOUD_HEALTH_ACTION, MinicloudError
-from sdcm.utils.minicloud.endpoint import MINICLOUD_PORT, get_minicloud_endpoint
+from sdcm.utils.minicloud.endpoint import (
+    AZURE_BACKENDS,
+    MINICLOUD_PORT,
+    get_minicloud_endpoint,
+    get_minicloud_tls_endpoint,
+)
 from sdcm.utils.session import create_retry_session
 
 
@@ -51,18 +57,28 @@ def check_minicloud_reachability(endpoint: str | None = None, timeout: int = 5) 
         raise RuntimeError(f"minicloud probe against {endpoint} failed: {exc}") from exc
 
 
-def set_minicloud_endpoint_env(endpoint: str, backend: str) -> None:
+def set_minicloud_endpoint_env(endpoint: str, backend: str, ca_bundle: str | None = None) -> None:
     """Point the cloud SDKs at the minicloud endpoint for this process.
 
     Overwrites (never setdefault): a stale AWS_ENDPOINT_URL from an earlier container on
     a different port must not survive, and on GCE backends GCE_ENDPOINT_URL has to be set
     here too — env changes made by an earlier ``start-minicloud`` process never propagate
-    to the next hydra invocation.
+    to the next hydra invocation. Azure backends get the TLS endpoint, plus the CA bundle
+    (when given) so the Azure SDK trusts minicloud certificate.
     """
+    if backend in AZURE_BACKENDS and urlparse(get_minicloud_tls_endpoint(endpoint)).hostname != "localhost":
+        raise MinicloudError(
+            f"the azure backend needs a localhost minicloud endpoint, got {endpoint}: "
+            "minicloud's TLS certificate is issued for localhost only"
+        )
     os.environ["AWS_ENDPOINT_URL"] = endpoint
     os.environ["SCT_MINICLOUD_ENDPOINT_URL"] = endpoint
     if backend in ("gce", "gce-siren"):
         os.environ["GCE_ENDPOINT_URL"] = endpoint
+    if backend in AZURE_BACKENDS:
+        os.environ["AZURE_ENDPOINT_URL"] = get_minicloud_tls_endpoint(endpoint)
+        if ca_bundle:
+            os.environ["REQUESTS_CA_BUNDLE"] = ca_bundle
 
 
 def validate_minicloud_params(params) -> None:

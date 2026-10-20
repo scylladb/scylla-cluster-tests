@@ -2,7 +2,7 @@
 
 import subprocess
 
-from sdcm.utils.minicloud import (
+from sdcm.utils.minicloud.log_collection import (
     collect_minicloud_guest_serial_logs,
     collect_minicloud_logs,
     redact_docker_inspect,

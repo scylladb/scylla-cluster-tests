@@ -1,12 +1,14 @@
 # Minicloud Provision Test Configuration
 #
 # Backend-agnostic test config for local provision testing via minicloud.
-# Used with both AWS and GCE backends — minicloud emulates the cloud APIs locally
+# Used with the AWS, GCE and Azure backends — minicloud emulates the cloud APIs locally
 # using QEMU/KVM VMs, so tests run without real cloud credentials or costs.
 #
 # Usage:
 #   scripts/run-minicloud-test.sh -f provision           (AWS backend)
 #   scripts/run-minicloud-test.sh -f provision -b gce    (GCE backend)
+#   SCT_AZURE_IMAGE_DB=<publisher:offer:sku:version> \
+#     scripts/run-minicloud-test.sh -f provision -b azure (Azure backend)
 #
 # Always layer configurations/minicloud.yaml after this file — it carries the
 # parameters every minicloud run requires (on_demand, private SSH, KMS off, ...).
@@ -25,6 +27,7 @@ test_metadata:
   supported_backends:
     - aws
     - gce
+    - azure
   stress_tools:
     - cassandra-stress
     - scylla-bench

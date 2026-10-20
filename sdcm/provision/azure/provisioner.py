@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
+import ipaddress
 import logging
 import string
 import time
@@ -55,7 +56,7 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_STUCK_VM_RECREATE_ATTEMPTS = 3
 DEFAULT_STUCK_VM_TOTAL_TIMEOUT = 4500
 
-# SCT carves one 10.0.<index>.0/24 out of the test VNet's 10.0.0.0/16 per network interface, and
+# SCT carves one /24 per network interface out of the test VNet's first address prefix, and
 # Azure itself caps a VM at 8 NICs, so anything above that cannot be provisioned in any case.
 AZURE_SUPPORTED_NETWORK_INTERFACES = 8
 
@@ -274,7 +275,11 @@ class AzureProvisioner(Provisioner):
 
         self._rg_provider.get_or_create()
         sec_group_id = self._network_sec_group_provider.get_or_create(security_rules=ScyllaOpenPorts).id
-        vnet_name = self._vnet_provider.get_or_create(ipv6=self._ipv6_enabled).name
+        vnet = self._vnet_provider.get_or_create(ipv6=self._ipv6_enabled)
+        vnet_name = vnet.name
+        address_space = next(
+            prefix for prefix in vnet.address_space.address_prefixes if ipaddress.ip_network(prefix).version == 4
+        )
 
         subnet_ids = [
             self._subnet_provider.get_or_create(
@@ -283,6 +288,7 @@ class AzureProvisioner(Provisioner):
                 subnet_name=interface["subnet"],
                 index=index,
                 ipv6=interface["ipv6"],
+                address_space=address_space,
             ).id
             for index, interface in enumerate(self._network_interfaces)
         ]

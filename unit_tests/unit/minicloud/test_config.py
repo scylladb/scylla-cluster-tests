@@ -5,7 +5,7 @@ import os
 import pytest
 
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS
-from sdcm.utils.minicloud import (
+from sdcm.utils.minicloud.config import (
     MINICLOUD_CONTAINER_NAME,
     MINICLOUD_DEFAULT_REGION,
     MINICLOUD_GCP_PROJECT_DEFAULT,

@@ -25,7 +25,10 @@ from sdcm.keystore import KeyStore
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.provisioner import VmArch
 from sdcm.test_config import TestConfig
+from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.common import get_latest_scylla_release
+from sdcm.utils.metaclasses import Singleton
+from sdcm.utils.minicloud.endpoint import MinicloudActivationError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -2022,4 +2025,59 @@ def test_vector_store_scylla_username_on_xcloud_raises(monkeypatch):
         monkeypatch.setenv(key, value)
 
     with pytest.raises(ValueError, match="not supported with cluster_backend=xcloud"):
+        sct_config.SCTConfiguration()
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        pytest.param("test-cases/artifacts/azure-image.yaml", id="artifacts"),
+        pytest.param("test-cases/minicloud-provision-test.yaml", id="provision"),
+    ],
+)
+def test_azure_minicloud_config_resolves_without_azure_calls(monkeypatch, test_case):
+    """A pinned marketplace URN plus the minicloud azure overlay must resolve the config and the
+    scylla version before the endpoint is activated, so no ARM client may be built on the way"""
+    config_files = [test_case, "configurations/minicloud.yaml", "configurations/minicloud/azure.yaml"]
+    env = {
+        "SCT_CLUSTER_BACKEND": "azure",
+        "SCT_MINICLOUD_ENDPOINT_URL": "http://localhost:5000",
+        "SCT_AZURE_IMAGE_DB": "scylladb1631195365807:scylladb-enterprise-vm:scylla-enterprise-vm:2026.2.5",
+        "SCT_AZURE_REGION_NAME": "eastus",
+        "SCT_CONFIG_FILES": str(config_files).replace("'", '"'),
+    }
+
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.delenv("SCT_SCYLLA_VERSION")
+    monkeypatch.delenv("AZURE_ENDPOINT_URL", raising=False)
+    Singleton._instances.pop(AzureService, None)
+    try:
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.verify_configuration_urls_validity()
+        scylla_version, _ = conf.get_version_based_on_conf()
+        conf.update_config_based_on_version()
+        azure_service_built = AzureService in Singleton._instances
+    finally:
+        Singleton._instances.pop(AzureService, None)
+
+    assert conf.get("azure_instance_type_db") == "Standard_L8s_v3"
+    assert not conf.get("intra_node_comm_public")
+    assert scylla_version == "2026.2.5"
+    assert not azure_service_built
+
+
+def test_azure_minicloud_yaml_only_activation_is_refused(monkeypatch, tmp_path):
+    """The AzureService guard reads only the env, so minicloud turned on by a yaml alone must fail
+    before the config can build a real Azure client"""
+    activation_yaml = tmp_path / "minicloud-endpoint.yaml"
+    activation_yaml.write_text("minicloud_endpoint_url: http://localhost:5000\n")
+    config_files = ["test-cases/artifacts/azure-image.yaml", str(activation_yaml)]
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
+    monkeypatch.setenv("SCT_CONFIG_FILES", str(config_files).replace("'", '"'))
+    monkeypatch.delenv("SCT_MINICLOUD_ENDPOINT_URL", raising=False)
+    monkeypatch.delenv("AZURE_ENDPOINT_URL", raising=False)
+
+    with pytest.raises(MinicloudActivationError, match="SCT_MINICLOUD_ENDPOINT_URL"):
         sct_config.SCTConfiguration()

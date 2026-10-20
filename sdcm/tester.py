@@ -139,7 +139,9 @@ from sdcm.utils.aws_utils import (
     ec2_ami_get_root_device_name,
 )
 from sdcm.utils.ci_tools import get_job_name, get_job_url
-from sdcm.utils.minicloud import MinicloudConfig, MinicloudManager, is_minicloud_active
+from sdcm.utils.minicloud.config import MinicloudConfig
+from sdcm.utils.minicloud.endpoint import is_minicloud_active
+from sdcm.utils.minicloud.manager import MinicloudManager
 from sdcm.utils.common import (
     wait_ami_available,
     download_dir_from_cloud,

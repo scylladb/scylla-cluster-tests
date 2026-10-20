@@ -1,12 +1,17 @@
 """Tests for MinicloudManager lifecycle: start/stop/reuse, env overrides, region prep,
-gce-gap detection and the container death watch."""
+gce/azure gap detection and the container death watch."""
 
 import os
+import stat
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sdcm.utils.minicloud import MinicloudConfig, MinicloudManager
+from sdcm.utils.minicloud.azure import write_azure_env_file
+from sdcm.utils.minicloud.tls import build_ca_bundle, system_ca_bundle
+from sdcm.utils.minicloud.config import MinicloudConfig
+from sdcm.utils.minicloud.manager import MinicloudManager
 
 
 def test_start_runs_docker_container(tmp_path, monkeypatch):
@@ -160,6 +165,20 @@ def test_start_uses_configured_container_name(tmp_path):
     assert cmd[cmd.index("--name") + 1] == "minicloud-second"
 
 
+def test_start_passes_azure_credentials_by_env_file(tmp_path):
+    cfg = MinicloudConfig(state_dir=str(tmp_path), backend="azure", azure_subscription_id="real-sub")
+    with (
+        patch("sdcm.utils.minicloud.manager.setup_azure_credentials"),
+        patch("sdcm.utils.minicloud.manager.MinicloudManager._wait_for_azure_tls"),
+    ):
+        cmd = _started_docker_cmd(cfg)
+    assert cmd[cmd.index("--env-file") + 1] == str(tmp_path / "azure-credentials.env")
+    assert not any(arg.startswith("AZURE_") for arg in cmd)
+    assert cmd[cmd.index("--azure-subscription") + 1] == "real-sub"
+    assert cmd[cmd.index("--azure-scratch-resource-group") + 1] == "sct-minicloud-scratch"
+    assert cmd[cmd.index("--tls-port") + 1] == "5443"
+
+
 def test_start_reuses_healthy_endpoint(tmp_path):
     config = MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log"))
     manager = MinicloudManager(config=config)
@@ -204,6 +223,20 @@ def test_container_gce_gaps_none_when_fully_configured(tmp_path):
         ],
     ):
         assert manager._container_gce_gaps() == []
+
+
+@pytest.mark.parametrize(
+    "env, cmd, gaps",
+    [
+        (["AWS_REGION=eu-west-1"], ["--port", "5000"], ["no AZURE_CLIENT_ID", "no --azure-subscription"]),
+        (["AZURE_CLIENT_ID=client"], ["--port", "5000", "--azure-subscription", "sub"], []),
+    ],
+)
+def test_container_azure_gaps(tmp_path, env, cmd, gaps):
+    """A healthy container started without the Azure identity cannot download Azure guest images."""
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
+    with patch.object(MinicloudManager, "_inspect_container", side_effect=[env, cmd]):
+        assert manager._container_azure_gaps() == gaps
 
 
 def test_start_restarts_gce_container_with_gaps(tmp_path, monkeypatch):
@@ -667,3 +700,39 @@ def test_death_watch_silent_when_we_stopped_it(tmp_path):
     with patch("sdcm.utils.minicloud.manager.TestFrameworkEvent") as mock_event:
         manager._watch_container_death(log_process)
     mock_event.assert_not_called()
+
+
+def test_build_ca_bundle_concatenates_system_store_and_minicloud_cert(tmp_path, monkeypatch):
+    system = tmp_path / "system.pem"
+    system.write_text("SYSTEM\n")
+    monkeypatch.setenv("SSL_CERT_FILE", str(system))
+    cfg = MinicloudConfig(state_dir=str(tmp_path))
+    (tmp_path / "tls").mkdir()
+    (tmp_path / "tls" / "cert.pem").write_text("MINICLOUD\n")
+
+    path = build_ca_bundle(cfg)
+    assert path == str(tmp_path / "sct-ca-bundle.pem")
+    assert Path(path).read_text() == "SYSTEM\n\nMINICLOUD\n"
+    assert stat.S_IMODE(Path(path).stat().st_mode) == 0o644
+    assert sorted(os.listdir(tmp_path)) == ["sct-ca-bundle.pem", "system.pem", "tls"]
+
+
+def test_system_ca_bundle_skips_the_minicloud_bundle(tmp_path, monkeypatch):
+    """A REQUESTS_CA_BUNDLE left pointing at our bundle must not be nested into the next one."""
+    own_bundle = tmp_path / "sct-ca-bundle.pem"
+    own_bundle.write_text("OWN\n")
+    corp_bundle = tmp_path / "corp-ca.pem"
+    corp_bundle.write_text("CORP\n")
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+
+    monkeypatch.setenv("REQUESTS_CA_BUNDLE", str(own_bundle))
+    assert system_ca_bundle() != str(own_bundle)
+    monkeypatch.setenv("REQUESTS_CA_BUNDLE", str(corp_bundle))
+    assert system_ca_bundle() == str(corp_bundle)
+
+
+def test_write_azure_env_file_is_private_and_complete(tmp_path):
+    path = tmp_path / "azure-credentials.env"
+    write_azure_env_file(str(path), {"tenant_id": "t", "client_id": "c", "client_secret": "s", "subscription_id": "x"})
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert path.read_text() == "AZURE_TENANT_ID=t\nAZURE_CLIENT_ID=c\nAZURE_CLIENT_SECRET=s\n"
