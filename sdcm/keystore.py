@@ -47,6 +47,9 @@ KEYSTORE_SM_REGION = "us-east-1"
 # keystore file `foo.json` maps to the secret `sct/foo.json`.
 KEYSTORE_SM_PREFIX = "sct/"
 
+# Directory the `local` backend reads from; each keystore entry is a file named like the S3 key.
+KEYSTORE_LOCAL_DIR = "~/.sct/keystore"
+
 SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
 
 BOTO3_CLIENT_CREATION_LOCK = threading.Lock()
@@ -102,7 +105,9 @@ class KeyStore:
 
     Backend selection is controlled by the ``SCT_KEYSTORE_BACKEND``
     environment variable (``secretsmanager`` by default, ``s3`` for the
-    legacy scylla-qa-keystore bucket).  ``SCT_KEYSTORE_SM_REGION``
+    legacy scylla-qa-keystore bucket, ``local`` for files under
+    ``SCT_KEYSTORE_LOCAL_DIR``, ``~/.sct/keystore`` by default, for people
+    without access to the SCT AWS account).  ``SCT_KEYSTORE_SM_REGION``
     overrides the region the secrets are read from.
 
     Args:
@@ -116,13 +121,14 @@ class KeyStore:
     # `KeyStore(backend="s3")` exists alongside the Secrets Manager default (see the `issues/` bulk
     # cache in `sdcm.utils.issues`), and the prefix/region are env-tunable, so keying on the file
     # name alone would let one backend serve another's bytes.
-    _cache: dict[tuple[str, str, str, str, str], bytes] = {}
+    _cache: dict[tuple[str, str, str, str, str, str], bytes] = {}
     _cache_lock = threading.Lock()
 
     def __init__(self, backend: str | None = None):
         self._backend = backend or os.environ.get("SCT_KEYSTORE_BACKEND") or "secretsmanager"
         self._sm_prefix = os.environ.get("SCT_KEYSTORE_SM_PREFIX") or KEYSTORE_SM_PREFIX
         self._sm_region = os.environ.get("SCT_KEYSTORE_SM_REGION") or KEYSTORE_SM_REGION
+        self._local_dir = Path(os.environ.get("SCT_KEYSTORE_LOCAL_DIR") or KEYSTORE_LOCAL_DIR).expanduser()
 
     @property
     def s3(self) -> S3ServiceResource:
@@ -164,10 +170,32 @@ class KeyStore:
             return resp["SecretBinary"]
         return resp["SecretString"].encode("utf-8")
 
+    def _fetch_from_local_dir(self, file_name):
+        """Read a file from the local keystore directory.
+
+        A missing file raises the same not-found ``ClientError`` the AWS backends do, so callers that
+        fall back on a miss (see :func:`is_not_found_error`) behave the same with every backend.
+        """
+        path = self._local_dir / file_name
+        try:
+            return path.read_bytes()
+        except FileNotFoundError:
+            raise ClientError(
+                {
+                    "Error": {
+                        "Code": "NoSuchKey",
+                        "Message": f"'{file_name}' isn't in the local keystore; to use this feature, put it at {path}",
+                    }
+                },
+                "ReadLocalKeystore",
+            ) from None
+
     def _fetch_content(self, file_name):
         """Fetch content from the configured backend."""
         if self._backend == "secretsmanager":
             return self._fetch_from_secrets_manager(file_name)
+        if self._backend == "local":
+            return self._fetch_from_local_dir(file_name)
         return self._fetch_from_s3(file_name)
 
     def get_file_contents(self, file_name, *, bypass_cache=False):
@@ -203,14 +231,21 @@ class KeyStore:
 
         return result
 
-    def _cache_key(self, file_name: str) -> tuple[str, str, str, str, str]:
+    def _cache_key(self, file_name: str) -> tuple[str, str, str, str, str, str]:
         """Identify content by everything that decides which bytes a name resolves to.
 
         That includes ``AWS_ENDPOINT_URL``: boto3 honours it at client creation, so the same name
         read with it set (a moto server, the minicloud emulator) comes from a different store than
         without it, and bytes cached from one must never be served for the other.
         """
-        return self._backend, self._sm_prefix, self._sm_region, os.environ.get("AWS_ENDPOINT_URL", ""), file_name
+        return (
+            self._backend,
+            self._sm_prefix,
+            self._sm_region,
+            os.environ.get("AWS_ENDPOINT_URL", ""),
+            str(self._local_dir),
+            file_name,
+        )
 
     def clear_cache(self):
         """Drop every cached credential, for all backends and all instances in this process."""
@@ -429,13 +464,20 @@ class KeyStore:
         For the S3 backend, staleness is detected via ETag.  For the Secrets
         Manager backend, a sidecar ``<file>.version`` file stores the remote
         VersionId so repeated ``sct.py`` / ``hydra`` invocations can skip
-        the download when the secret has not been rotated.
+        the download when the secret has not been rotated.  For the local
+        backend, the copy is refreshed when its bytes differ.
         """
         path = os.path.join(local_path, key)
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         dl_flag = True
-        if self._backend == "s3":
+        if self._backend == "local":
+            try:
+                with open(path, "rb") as file_obj:
+                    dl_flag = file_obj.read() != self._fetch_from_local_dir(key)
+            except FileNotFoundError:
+                pass
+        elif self._backend == "s3":
             tag = self.get_object_etag(key)
             try:
                 with open(path, "rb") as file_obj:
