@@ -50,6 +50,7 @@ from collections import OrderedDict
 
 import requests
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
@@ -105,6 +106,8 @@ SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
 CREATE_TABLE_REGEX = re.compile(
     r"CREATE\s+TABLE\s+(?P<keyspace>[^\s.]+)\.(?P<table>[^\s(]+)\s*\([^)]+\)(?P<options>[^;]*)"
 )
+
+AWS_SCAN_FAIL_FAST_CONFIG = Config(connect_timeout=10, read_timeout=30, retries={"total_max_attempts": 1})
 
 
 def deprecation(message):
@@ -610,6 +613,11 @@ def aws_tags_to_dict(tags_list):
     return tags_dict
 
 
+# How long list_instances_aws waits for all regions. A region call that runs longer keeps its
+# worker thread alive, and the interpreter waits for that thread at exit.
+AWS_LIST_INSTANCES_TIMEOUT = 100
+
+
 def list_instances_aws(
     tags_dict=None, region_name=None, running=False, group_as_region=False, verbose=False, availability_zone=None
 ):
@@ -632,7 +640,7 @@ def list_instances_aws(
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
-        client: EC2Client = boto3.client("ec2", region_name=region)
+        client: EC2Client = boto3.client("ec2", region_name=region, config=AWS_SCAN_FAIL_FAST_CONFIG)
         custom_filter = []
         if tags_dict:
             custom_filter = [
@@ -647,7 +655,9 @@ def list_instances_aws(
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(instances.keys())), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(get_instances, ignore_exceptions=True)
+    ParallelObject(aws_regions, timeout=AWS_LIST_INSTANCES_TIMEOUT, num_workers=len(aws_regions)).run(
+        get_instances, ignore_exceptions=True
+    )
 
     for curr_region_name, per_region_instances in instances.items():
         if running:
