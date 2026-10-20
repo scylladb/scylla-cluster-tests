@@ -336,6 +336,19 @@ DOCKER_IMAGE_STORE_PROBE = """
     fi
 """
 
+# Ports the monitoring stack takes on the monitor host: SCT starts it on the host network (start-all.sh -l)
+MONITORING_STACK_PORTS = {
+    3000: "Grafana",
+    8081: "Grafana renderer",
+    9090: "Prometheus",
+    9093: "Alertmanager",
+    9094: "Alertmanager gossip",
+    3100: "Loki",
+    9095: "Loki gRPC",
+    9080: "Promtail",
+    1514: "Promtail syslog",
+}
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -5877,6 +5890,22 @@ def docker_host_preflight(node: BaseNode, min_free_gb: int) -> None:
         host.pruned |= ensure_docker_free_space(node, host.min_free_gb, prune=not host.pruned)
 
 
+def ensure_monitoring_ports_free(node: BaseNode) -> None:
+    """Preflight: the monitoring stack's ports are free on the monitor host.
+
+    A taken port fails the setup naming the port and what holds it, before any container starts. Lab host owners keep
+    these ports free (e.g. Fedora's Cockpit, on 9090, is disabled on lab hosts).
+    """
+    taken = {}
+    for line in node.remoter.sudo("ss -Hltnp", verbose=False).stdout.splitlines():
+        fields = line.split()
+        port = int(fields[3].rsplit(":", 1)[1])
+        if service := MONITORING_STACK_PORTS.get(port):
+            taken.setdefault(port, f"{port} ({service}) is held by {fields[5] if len(fields) > 5 else 'a process'}")
+    if taken:
+        raise NodeSetupFailed(node=node, error_msg=f"Monitoring stack ports are taken: {'; '.join(taken.values())}")
+
+
 class NodeSetupTimeout(Exception):
     pass
 
@@ -7979,6 +8008,7 @@ class BaseMonitorSet:
     def preflight_check(self, node):
         """Fail before any image pull or container start if the host can't run the monitoring stack."""
         docker_host_preflight(node, self.params.get("docker_min_free_space_gb_monitor"))
+        ensure_monitoring_ports_free(node)
 
     def download_scylla_monitoring(self, node):
         install_script = dedent(
