@@ -60,9 +60,8 @@ ip_ssh_connections: public  # default for the roles that don't set their own
 |--------|---------|---------|
 | `docker_min_free_space_gb_loader` | 3 | Free GB a loader's Docker image store needs before the run pulls images |
 | `docker_min_free_space_gb_monitor` | 10 | The same for a monitor host |
-| `baremetal_docker_image_budget_gb` | 20 | GB of unused Docker images a loader or monitor host keeps after cleanup |
 
-`0` turns each of them off.
+`0` turns the check off.
 
 ## What a host must provide
 
@@ -73,10 +72,14 @@ ip_ssh_connections: public  # default for the roles that don't set their own
     shim is rejected.
   - Free space where Docker keeps images, at least the minimum above. With the containerd image store (the default
     since Docker 29, and Fedora's `moby-engine`) that is `/var/lib/containerd`, not `/var/lib/docker`.
+- Monitor hosts: the monitoring stack's ports free, since SCT starts it on the host network: Grafana 3000,
+  Prometheus 9090, Alertmanager 9093, Loki 3100, Promtail 9080. Fedora's Cockpit holds 9090 by default, so it is
+  disabled on lab hosts.
 - DB hosts: the disks for Scylla, unless `use_preinstalled_scylla` is set.
 
-SCT does not upgrade Docker on these hosts: an upgrade restarts the daemon under other jobs' containers. A too old
-Docker fails the setup with the version found and the version needed, so the host owner can upgrade it.
+Setup checks the loader and monitor requirements before the first image pull (the preflight check), and fails right
+away naming what is wrong and what is needed. SCT does not upgrade Docker on these hosts: an upgrade restarts the
+daemon under other jobs' containers.
 
 ## What SCT changes on a host
 
@@ -86,18 +89,10 @@ Docker fails the setup with the version found and the version needed, so the hos
   `psutil` Python modules. With everything present it runs no package manager or pip command.
 - Adds the SSH user to the `docker` group when only root can use Docker. Docker itself is not restarted.
 - Removes Docker images no container uses when the free space is below the minimum, and fails before any pull if that
-  is not enough.
+  is not enough. Images a container uses, other jobs' included, are never removed.
 - node_exporter: a node_exporter already serving one of ports 9100-9119 is reused, whatever its version and collectors
   (for example Fedora's `prometheus-node-exporter`). Otherwise SCT installs its own on the first free port there.
   Loader and monitor scrape targets use that port.
-
-**Monitor hosts**
-
-- Each of Grafana (3000), Prometheus (9090), Alertmanager (9093), Loki (3100) and Promtail (9080) whose default port
-  is taken moves to the next free port, and the run logs the move. For example, Fedora's Cockpit holds 9090, so
-  Prometheus starts on 9091.
-- Once a port moves, the stack runs on its own Docker network instead of the host network, and the moved containers
-  are named `<name>-<port>` (`aprom-9091`). SCT reads the ports from there, including log collection after the test.
 
 **DB hosts**
 
@@ -109,8 +104,6 @@ Docker fails the setup with the version found and the version needed, so the hos
 
 - Frees the reverse SSH tunnel ports the run bound, for `public` hosts.
 - Undoes the Scylla disk setup of DB hosts.
-- Keeps the unused Docker images on loader and monitor hosts within `baremetal_docker_image_budget_gb`, removing the
-  least recently pulled first. Images a container uses, other jobs' included, are never removed.
 
 A run repeats the tunnel and disk steps at its start, for a host whose cleanup did not run.
 
