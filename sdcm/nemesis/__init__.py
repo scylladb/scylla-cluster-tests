@@ -4216,10 +4216,13 @@ class NemesisRunner:
         self._grow_cluster(rack=None)
         InfoEvent(message="Finished grow disruption").publish()
         time.sleep(sleep_time_between_ops)
-        InfoEvent(message="Starting terminate_and_replace disruption").publish()
-        self._terminate_and_replace_node()
-        InfoEvent(message="Finished terminate_and_replace disruption").publish()
-        time.sleep(sleep_time_between_ops)
+        if self.cluster.params.get("nemesis_sequence_skip_terminate_and_replace"):
+            InfoEvent(message="terminate_and_replace disruption was Skipped").publish()
+        else:
+            InfoEvent(message="Starting terminate_and_replace disruption").publish()
+            self._terminate_and_replace_node()
+            InfoEvent(message="Finished terminate_and_replace disruption").publish()
+            time.sleep(sleep_time_between_ops)
         InfoEvent(message="Starting shrink disruption").publish()
         self._shrink_cluster(rack=None)
         InfoEvent(message="Finished shrink disruption").publish()

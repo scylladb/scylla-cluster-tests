@@ -28,13 +28,13 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-523 options across 29 groups.
+524 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 71 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
-| [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
+| [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 13 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 74 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 17 | The monitoring stack, event severities, Argus reporting and email reports. |
 | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) | 13 | How logs and diagnostics are collected, and what happens to the resources when the test ends. |
@@ -377,6 +377,7 @@ concerns first, then one page per backend, then one per test type.
 | [`nemesis_multiply_factor`](configuration_options/nemesis-chaos-testing.md#nemesis_multiply_factor) | `SCT_NEMESIS_MULTIPLY_FACTOR` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
 | [`nemesis_seed`](configuration_options/nemesis-chaos-testing.md#nemesis_seed) | `SCT_NEMESIS_SEED` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
 | [`nemesis_selector`](configuration_options/nemesis-chaos-testing.md#nemesis_selector) | `SCT_NEMESIS_SELECTOR` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis_sequence_skip_terminate_and_replace`](configuration_options/nemesis-chaos-testing.md#nemesis_sequence_skip_terminate_and_replace) | `SCT_NEMESIS_SEQUENCE_SKIP_TERMINATE_AND_REPLACE` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
 | [`nemesis_sequence_sleep_between_ops`](configuration_options/nemesis-chaos-testing.md#nemesis_sequence_sleep_between_ops) | `SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
 | [`new_scylla_repo`](configuration_options/upgrade-tests.md#new_scylla_repo) | `SCT_NEW_SCYLLA_REPO` | [Upgrade tests](configuration_options/upgrade-tests.md) |
 | [`new_version`](configuration_options/upgrade-tests.md#new_version) | `SCT_NEW_VERSION` | [Upgrade tests](configuration_options/upgrade-tests.md) |

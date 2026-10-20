@@ -79,6 +79,9 @@ class NemesisConfigMixin(BaseModel):
     nemesis_sequence_sleep_between_ops: int = SctField(
         description="""Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests""",
     )
+    nemesis_sequence_skip_terminate_and_replace: Boolean = SctField(
+        description="""Skip the terminate and replace node step of the unique_sequence nemesis (NemesisSequence)""",
+    )
     # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
     sla: Boolean = SctField(
         description="run SLA nemeses if the test is SLA only",

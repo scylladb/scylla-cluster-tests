@@ -122,7 +122,8 @@ That disruption (`Nemesis.disrupt_run_unique_sequence`) is a fixed sequence of t
 
 1. Scylla Manager repair (skipped when `use_mgmt` is false)
 2. grow the cluster (`_grow_cluster`)
-3. terminate and replace a node (`_terminate_and_replace_node`)
+3. terminate and replace a node (`_terminate_and_replace_node`, skipped when
+   `nemesis_sequence_skip_terminate_and_replace` is true - the SC jobs set it until SCYLLADB-4753 is fixed)
 4. shrink the cluster back (`_shrink_cluster`)
 
 with `nemesis_sequence_sleep_between_ops` (10 min) between steps. The latency decorator records

@@ -4,7 +4,7 @@
 
 Which disruptions run, how often, and how targets are selected.
 
-**12 options.**
+**13 options.**
 
 
 <a id="nemesis_add_node_cnt"></a>
@@ -126,6 +126,17 @@ Sleep interval between nemesis operations for use in unique_sequence nemesis kin
 **default:** N/A
 
 **type:** int
+
+
+<a id="nemesis_sequence_skip_terminate_and_replace"></a>
+
+## **nemesis_sequence_skip_terminate_and_replace** / SCT_NEMESIS_SEQUENCE_SKIP_TERMINATE_AND_REPLACE
+
+Skip the terminate and replace node step of the unique_sequence nemesis (NemesisSequence)
+
+**default:** N/A
+
+**type:** bool
 
 
 <a id="sla"></a>
