@@ -1782,6 +1782,7 @@ class ClusterTester(unittest.TestCase):
                         "azure_provision_stuck_vm_recreate_attempts"
                     ),
                     azure_provision_stuck_vm_total_timeout=self.params.get("azure_provision_stuck_vm_total_timeout"),
+                    enterprise_disable_kms=bool(self.params.get("enterprise_disable_kms")),
                 )
             )
         if db_info["n_nodes"] is None:
