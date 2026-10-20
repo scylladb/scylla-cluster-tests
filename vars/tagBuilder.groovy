@@ -16,6 +16,10 @@ def call() {
                 NodeType: "builder",
                 keep_action: "terminate",
                 billing_project:"${GetBillingProjectTag()}"]
+    // Builders launch with a one-week keep; a test that runs longer raises it here
+    if (params.builder_keep) {
+        tags.keep = params.builder_keep
+    }
     applyTagsWithCreds(cloudInfo, tags)
 }
 
