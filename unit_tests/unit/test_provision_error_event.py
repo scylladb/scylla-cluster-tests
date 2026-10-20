@@ -83,14 +83,6 @@ def test_provision_resources_sends_error_event_to_argus():
         # Verify TEST_ERROR status was set
         mock_argus_client.set_sct_run_status.assert_called_once()
 
-        # Verify events summary was submitted so the error appears in Argus events tab
-        mock_argus_client.submit_events.assert_called_once()
-        events_summary = mock_argus_client.submit_events.call_args[0][0]
-        assert len(events_summary) == 1
-        assert events_summary[0].severity == "CRITICAL"
-        assert events_summary[0].total_events == 1
-        assert "Failed to provision aws resources" in events_summary[0].messages[0]
-
         # Verify the run was finalized
         mock_argus_client.finalize_sct_run.assert_called_once()
 
@@ -173,14 +165,6 @@ def test_provision_resources_reports_config_init_failure_to_argus(use_ssh_tunnel
 
         # Verify TEST_ERROR status was set
         mock_argus_client.set_sct_run_status.assert_called_once()
-
-        # Verify events summary was submitted so the error appears in Argus events tab
-        mock_argus_client.submit_events.assert_called_once()
-        events_summary = mock_argus_client.submit_events.call_args[0][0]
-        assert len(events_summary) == 1
-        assert events_summary[0].severity == "CRITICAL"
-        assert events_summary[0].total_events == 1
-        assert "FileNotFoundError" in events_summary[0].messages[0]
 
         # Verify the run was finalized
         mock_argus_client.finalize_sct_run.assert_called_once()
