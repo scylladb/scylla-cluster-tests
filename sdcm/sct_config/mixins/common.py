@@ -330,6 +330,14 @@ class CommonConfigMixin(BaseModel):
         "since interruption exposure grows with runtime. Only applies when `instance_provision` was not set "
         "explicitly by a test case, env var or CLI - an explicit value always wins.",
     )
+    spot_termination_retry: StringOrList = SctField(
+        description="Re-run the test inside the same Jenkins build when an attempt is lost to a spot reclaim. "
+        "One `instance_provision` value per retry, e.g. `[spot, on_demand]`: at most 2 entries, and the last "
+        "must be `on_demand`, so a retrying test always ends on an attempt that cannot be reclaimed. Empty "
+        "(the default) means no retry. Read by `sct.py spot-retry-decision`; only pipelines that call "
+        "`runWithSpotRetry` act on it.",
+        appendable=False,
+    )
     ssh_transport: Literal["libssh2", "fabric"] = SctField(
         description="""Set type of ssh library to use. Could be 'libssh2' (default) or 'fabric'""",
         default="libssh2",
