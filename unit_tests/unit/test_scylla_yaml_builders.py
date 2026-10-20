@@ -684,3 +684,37 @@ def test_scylla_yaml_generated_from_multi_interface_config_fixture(
         expected_node_config=expected_node_config,
         region_names='["eu-west-1"]',
     )
+
+
+@pytest.mark.parametrize(
+    "ldap_params,reads_keystore",
+    [
+        pytest.param({"use_ldap_authorization": None}, False, id="no-ldap"),
+        pytest.param({"use_ldap_authorization": True, "ldap_server_type": "openldap"}, False, id="openldap"),
+        pytest.param({"use_ldap_authorization": True, "ldap_server_type": "ms_ad"}, True, id="ms-ad"),
+    ],
+)
+def test_cluster_scylla_yaml_reads_ms_ad_credentials_only_when_used(
+    scylla_yaml_test_context, ldap_params, reads_keystore
+):
+    params = {
+        "cluster_backend": "docker",
+        "intra_node_comm_public": False,
+        "authenticator": None,
+        "authorizer": None,
+        "alternator_port": None,
+        "internode_encryption": False,
+        "client_encrypt": False,
+        "hinted_handoff": None,
+    } | ldap_params
+    cluster = SimpleNamespace(
+        name="test-cluster", params=params, test_config=scylla_yaml_test_context(ldap_address=("1.1.1.1", "389"))
+    )
+    with patch("sdcm.cluster.KeyStore") as keystore:
+        keystore.return_value.get_ldap_ms_ad_credentials.return_value = {
+            "ldap_bind_dn": "SOMEDN",
+            "admin_password": "PASSWORD",
+            "server_address": "3.3.3.3",
+        }
+        BaseScyllaCluster.proposed_scylla_yaml.func(cluster)
+    assert keystore.return_value.get_ldap_ms_ad_credentials.called is reads_keystore
