@@ -44,6 +44,12 @@ class PerformanceConfigMixin(BaseModel):
     num_threads_step: int = SctField(
         description="Number of threads which should be added on per step",
     )
+    perf_gradual_latency_limit: DictOrStr = SctField(
+        description="Latency limit, in ms, that a gradual performance test step must stay within to count as "
+        "passing when looking for the best throughput. Keyed by sub-test, with 'default' used for sub-tests "
+        "not listed. Only 'percentile_99' is supported. "
+        "Example: {'default': {'percentile_99': 10}, 'read_disk_only': {'percentile_99': 15}}",
+    )
     perf_gradual_step_duration: DictOrStr = SctField(
         description="Step duration of c-s load for gradual performance test per sub-test. "
         "Example: {'read': '30m', 'write': None, 'mixed': '30m'}",
