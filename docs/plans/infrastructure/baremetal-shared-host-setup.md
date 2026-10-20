@@ -2,7 +2,7 @@
 status: draft
 domain: cluster
 created: 2026-10-13
-last_updated: 2026-10-18
+last_updated: 2026-10-20
 owner: fruch
 ---
 
@@ -34,6 +34,10 @@ with one DB node in AWS. Every failure came from the monitor and loader setup, n
   dashboard upload before it was aborted.
 - **The setup restarts Docker.** On a shared host this kills other jobs' containers. It did not
   happen in SCT-1215 only because the Docker install failed first.
+- **Connectivity is all or nothing.** `ip_ssh_connections` is global, so the one DB node in AWS,
+  reached over its public address, forced reverse SSH tunnels on the lab hosts next to the runner
+  too. The loader and the monitor shared one host, and the second node killed the tunnel the first
+  had just opened. SSH to the lab host needed an SCT key added by hand.
 
 The workaround was manual host prep: a `~/PREPARED-MONITOR` marker file, installing `wget`,
 disabling Cockpit, removing images by hand. Each new lab host needs the same prep, and nobody
@@ -86,7 +90,8 @@ knows the list.
   SCT's own setup safe on those hosts.
 - *Docker Cleanup for All Backends* (`docker-cleanup-all-backends.md`) cleans the runner's
   containers. It does not limit image disk use on test hosts.
-- The shared-host SSH tunnel clash found in the same run is fixed in PR #16445.
+- *Baremetal jobs on the local agent* (PR #16445) runs the test on the lab host's Jenkins agent,
+  next to the lab hosts. It also carries the SCT-1215 job used for the manual tests below.
 - *SCT-1275* reaches lab hosts through the lab access service instead of direct public SSH. It blocks SSH
   port forwarding, so the runner reaches lab ports through nested SSH over its session or
   through TCP resources of that service. That changes how the runner reaches the monitor's ports, which this
@@ -108,11 +113,14 @@ knows the list.
 8. Every host check this plan adds runs over the node's SSH session, and the runner reaches the
    monitor's ports through one lookup, so the setup works unchanged when SCT-1275 moves lab hosts
    behind the lab access service.
+9. A run can mix hosts next to the runner with hosts it reaches over public addresses: only the
+   latter get reverse SSH tunnels, and lab hosts are reached without an SCT key on them.
 
 ## 4. Implementation Phases
 
 Phases 1 to 4 are independent of each other. Phase 5 builds on phase 1. Phase 7 comes last.
-Phase 8 waits for SCT-1275's connectivity choice and can land after phase 7.
+Phase 8 waits for SCT-1275's connectivity choice and can land after phase 7. Phase 9 is
+independent; its lab-access part needs the SCT-1275 lookup.
 
 ```mermaid
 graph LR
@@ -124,6 +132,8 @@ graph LR
     P1 & P2 & P3 & P4b & P6 --> P7["7 Docs"]
     P4b --> P8["8 Monitor access through the lab access service"]
     SCT1275["SCT-1275 lab access"] -.-> P8
+    P9["9 Connectivity per role and lab access by name"]
+    SCT1275 -.-> P9
 ```
 
 ### Phase 1: Install only what is missing
@@ -137,9 +147,9 @@ graph LR
   scripts import.
 - Docker is left alone when it runs and the SSH user can use it. Its installation moves to
   phase 2.
-- `systemctl restart docker` runs only when setup changed something that needs it, such as the
-  daemon config or the user's group. A restart on a baremetal host logs a warning naming the
-  containers it affects.
+- `systemctl restart docker` runs only when setup installed Docker, so it never runs on a
+  baremetal host (phase 2 never installs or upgrades Docker there). Adding the user to the
+  `docker` group needs a new SSH session, not a restart.
 - The scylla-monitoring download uses curl with retries, like the node_exporter download already
   does, so `wget` is no longer needed.
 - `~/PREPARED-MONITOR` is no longer needed. It stays honoured so existing images and hosts behave
@@ -173,8 +183,8 @@ graph LR
 
 - Upgrading Docker on a shared host restarts the daemon under other jobs, so SCT never does it
   there.
-- **Needs Investigation:** the minimum version. Take it from what the monitoring stack and the
-  stress tool images need, not from today's newest release.
+- The minimum is Docker 20.10, the oldest release line the supported distros still ship. Neither
+  SCT nor scylla-monitoring's `start-all.sh` needs anything newer.
 
 **Definition of Done**:
 
@@ -218,15 +228,21 @@ graph LR
   Prometheus, Alertmanager, Loki and Promtail it keeps the default port when free, and otherwise
   takes the next free one.
 - The chosen ports are passed to `start-all.sh` and stored on the monitor node.
-- On cloud backends the defaults are always free, so nothing changes there, including security
-  groups.
-- `sdcm/monitorstack/restore.py:pick_monitoring_stack_ports` already does this on the local
-  machine for monitor restore. Reuse its slot logic with the remote host's listening ports.
+- A moved port never lands on another service's default, and the ports stay for restarts, since
+  `kill-all.sh` finds the containers by them.
+- `start-all.sh` refuses port options together with `-l` (host network), which SCT uses today. So
+  once any port moves, the stack runs on its own Docker network instead:
+  - containers started on a moved port are named `<name>-<port>` (`aprom-9091`);
+  - the Manager scrape target uses the host's address instead of `127.0.0.1`, which on that
+    network is the container itself.
+- On cloud backends the defaults are always free, so nothing changes there: same `-l` start,
+  same ports, same security groups.
 
 **Definition of Done**:
 
 - [ ] With Cockpit on 9090, Prometheus starts on another port and the run logs which one.
-- [ ] With all defaults free, `start-all.sh` gets the same ports as today.
+- [ ] With all defaults free, `start-all.sh` gets the same arguments as today, `-l` included.
+- [ ] With a port moved, Prometheus still scrapes the Manager on the monitor host.
 
 **Dependencies**: none.
 
@@ -236,12 +252,16 @@ graph LR
 
 **Description**:
 
-- Every component that talks to the monitoring stack takes its port from the monitor node
-  instead of a default or constant:
-  - Prometheus stats and snapshots;
+- Every component that talks to the monitoring stack during the run takes its port from the
+  monitor node instead of a default or constant:
+  - Prometheus stats;
   - the Alertmanager listener;
-  - Grafana annotations, screenshots and dashboard upload;
+  - Grafana annotations and dashboard upload;
   - the Grafana link sent to Argus.
+- Log collection runs in its own process after the test and has no monitor node to ask. It reads
+  the ports from the container names on the monitor host (`aprom-9091` means 9091, a plain `aprom`
+  the default). That covers the Prometheus snapshot and its container stop and start, Grafana
+  annotations and screenshots, and the containers' logs.
 - They get the address from one place on the monitor node (host and port together), not by
   joining the node's IP with a port. Phase 8 changes only that place when the runner has to go
   through the lab access service.
@@ -266,9 +286,11 @@ graph LR
 - If free space there is below a configured minimum, setup removes images no container uses and
   checks again.
 - If space is still short, setup fails with the free and needed sizes and the path.
-- New config option for the minimum free space, with a default in `defaults/test_default.yaml`.
-  Its value is sized from the monitoring stack plus the stress tool images. **Needs
-  Investigation:** measure that total.
+- One minimum per role, as config options with defaults in `defaults/test_default.yaml`:
+  - monitor hosts: 10 GB. The monitoring stack images measured on `monster` take about 5 GB, and
+    unpacked about twice that;
+  - loader hosts: 3 GB. The stress tool images take about 1.5 GB. Loaders on AWS and OCI have a
+    20 GB root disk, so the monitor's minimum would fail healthy loaders.
 - The check runs on loader and monitor hosts on all backends. On cloud VMs it is cheap and should
   never fire.
 
@@ -288,17 +310,19 @@ graph LR
 
 - `clean_resources_baremetal` gets one more step for loader and monitor hosts: limit the images
   no container uses to a configured total size.
-  - It removes the oldest images first until the total fits.
+  - It removes the least recently pulled images first until the total fits. Docker keeps no
+    last-used time; the last pull or tag is the closest it has.
   - Images in use by any container, including other jobs' containers, are never removed.
 - Docker has no size limit for images, so SCT applies the limit itself.
-- New config option for the budget (default to be agreed; 20 GB is a starting point).
+- New config option for the budget, 20 GB by default for the baremetal backend: a monitoring
+  stack and the stress tool images, with room to spare. 0 keeps every image.
 - Pre-pulling images is not part of this plan. The cache keeps recently used images warm.
 
 **Definition of Done**:
 
 - [ ] After cleanup, the total size of unused images on each host is at or under the budget.
 - [ ] Cleanup logs each removed image with its size.
-- [ ] Dry-run cleanup lists what it would remove and removes nothing.
+- [ ] Dry-run cleanup still connects to no host, and logs the budget it would apply.
 
 **Dependencies**: Phase 5, which provides the same storage-location detection.
 
@@ -349,6 +373,33 @@ graph LR
 
 **Dependencies**: Phase 4b and SCT-1275.
 
+### Phase 9: Connectivity per role, and lab hosts by name
+
+**Importance**: Important
+
+**Description**:
+
+- Each role in the baremetal hosts config (`db_nodes`, `loader_nodes`, `monitor_nodes`) can set
+  its own `ip_ssh_connections`, falling back to the run's. A node's SSH address, reverse tunnels,
+  log destination and LDAP address follow its own value, so lab hosts next to the runner are
+  `private` (no tunnels, logs straight to the runner) while a cloud DB node stays `public`.
+- Hosts shared by several nodes free stale reverse-tunnel ports once per run, so the second node
+  does not kill the tunnel the first one just opened.
+- A node can name its host in the lab access service (`access`). SCT then opens SSH where the
+  internal lab access module says, and the host needs no SCT key. `public_ip` becomes optional for
+  lab hosts, defaulting to `private_ip`.
+- **Needs Investigation:** the lab access service lets clients in with SSH's `none` method only,
+  so the lookup has to return no key for those hosts (as the xcloud lookup already does). Confirm
+  that with the owners of SCT's SSH client.
+
+**Definition of Done**:
+
+- [ ] A run with a `public` DB node and `private` lab hosts opens tunnels for the DB node only.
+- [ ] A loader and a monitor sharing a host both ship logs for the whole run.
+- [ ] A lab host with `access` set is reached through the lab access service, with no SCT key on it.
+
+**Dependencies**: none; the `access` part needs the SCT-1275 lookup.
+
 ## 5. Testing Requirements
 
 **Unit tests** (`unit_tests/unit/`), per phase:
@@ -361,8 +412,10 @@ graph LR
 - Phase 4a: port picking from a fake listening-port list (all free, one taken, all defaults taken).
 - Phase 4b: each port user reads the node's ports.
 - Phase 8: the monitor address lookup with and without the access service, using a fake forward.
+- Phase 9: per-role settings over the run's, tunnels only for `public` nodes, tunnel ports freed
+  once per shared host, and the SSH address taken from the lab access lookup.
 - Phases 5 and 6: free-space parsing, storage-location detection, and the budget selection order
-  (oldest first, in-use images kept).
+  (least recently pulled first, in-use images kept).
 
 **Integration tests:**
 
@@ -384,7 +437,9 @@ graph LR
 ## 6. Success Criteria
 
 - All phase DoD items are met.
-- The SCT-1215 job passes on `monster` with no manual host prep.
+- The SCT-1215 job passes on `monster` with no manual host prep. Prep means anything SCT should do
+  itself; the host still has to meet the requirements phase 7 documents (SSH access, sudo,
+  Docker 20.10 or newer, free disk for Docker's images).
 - The hosts list no failed SCT units, and after cleanup no image beyond the budget.
 
 ## 7. Risk Mitigation
@@ -397,7 +452,8 @@ graph LR
 | Image removal races another job that is about to start a container from that image | Low | The other job re-pulls the image | Only unused images are removed, and pulls are idempotent |
 | The minimum Docker version is set too high and rejects working lab hosts | Medium | Runs fail on hosts that would work | Phase 2 sizes it from real needs; the failure message names both versions so the host owner can act |
 | TCP resources of the access service have fixed ports, while phase 4a picks ports per run | Medium | The runner reaches a port the stack is not on | Phase 8 makes the monitor use the resource ports when TCP resources of the access service are used; nested SSH forwards follow the chosen ports with no change |
-| Free-space minimum is too low for a run with many stress tool images | Medium | Pull fails mid-run as before | Size it from measured image totals (phase 5 investigation) and revisit when new stress tools are added |
+| Free-space minimum is too low for a run with many stress tool images | Medium | Pull fails mid-run as before | The minimums come from measured image sizes; revisit when stress tools are added |
+| A tool outside SCT expects the default container names (`aprom`) | Low | It misses a stack that moved ports | Only hosts with a taken default get renamed containers; phase 7 documents the naming |
 
 **Rollback:** each phase is its own PR and can be reverted alone. Phases 5 and 6 add config
 options whose defaults can be set to disable them (minimum 0, no budget) without a code change.
