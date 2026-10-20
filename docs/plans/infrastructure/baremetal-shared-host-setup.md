@@ -8,6 +8,9 @@ owner: fruch
 
 # Baremetal Setup on Shared, Pre-configured Hosts
 
+Overview of the findings, PRs, merge order and test runs: [Baremetal Shared Hosts](https://claude.ai/artifact/14QF6zQCQJRDJfrocfaexs)
+(ScyllaDB organization only).
+
 ## 1. Problem Statement
 
 The baremetal backend assumes the hosts are fresh machines SCT can configure however it likes.
