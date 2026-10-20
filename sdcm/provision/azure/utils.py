@@ -48,6 +48,7 @@ def azure_provisioner_config(params) -> dict:
         "azure_provision_stuck_vm_recreate_attempts": params.get("azure_provision_stuck_vm_recreate_attempts"),
         "azure_provision_stuck_vm_total_timeout": params.get("azure_provision_stuck_vm_total_timeout"),
         "azure_network_interfaces": azure_network_interfaces(params),
+        "enterprise_disable_kms": bool(params.get("enterprise_disable_kms")),
     }
 
 
