@@ -226,6 +226,12 @@ def gce_local_ssd_disk_count(vcpus: int) -> int:
 
 _GCE_SUBFAMILY_FAMILIES = {"n4a"}
 
+# c4, c4a and c4d `-lssd` machine types bundle Titanium SSD partitions like z3 does, but
+# of the regular 375 GiB size, except on the bare-metal shape which has 3000 GiB ones.
+# These families are catalogued for their -lssd shapes only.
+_GCE_LSSD_ONLY_FAMILIES = {"c4-highmem", "c4a-highmem", "c4d-highmem"}
+_GCE_LSSD_METAL_DISK_SIZE_GIB = 3000.0
+
 _Z3_DISK_SIZE_GIB = 3000.0
 _Z3_METAL_DISK_SIZE_GIB = 6000.0
 
@@ -506,14 +512,20 @@ def _extract_section_on_demand_prices(  # noqa: PLR0914
 
 
 _GCE_BILLING_SKUS_URL = "https://cloudbilling.googleapis.com/v1/services/6F81-5844-456A/skus"
+GceRates = dict[str, dict[str, dict[str, float]]]
+
 #: SKU descriptions that price something other than a plain predefined machine type.
 _GCE_SKU_EXCLUDED = ("Custom", "Extended", "Sole Tenancy", "Commitment", "Reserved")
 
 
-def _fetch_gce_spot_rates() -> dict[str, dict[str, dict[str, float]]]:
-    """Per-region Spot vCPU and RAM rates, keyed by family.
+def _fetch_gce_resource_rates() -> tuple[GceRates, GceRates]:  # noqa: PLR0914, PLR0912
+    """Per-region (spot, on-demand) vCPU, RAM and bundled local SSD rates, keyed by family.
 
-    Returns `{family: {region: {"core": usd_per_vcpu_hour, "ram": usd_per_gib_hour}}}`.
+    Each is `{family: {region: {"core": usd_per_vcpu_hour, "ram": usd_per_gib_hour}}}`, plus
+    `"ssd": usd_per_gib_hour` for families that bundle local SSD.
+
+    On-demand rates price the -lssd machine types: the pricing page's per-region tables for them
+    cannot be told apart reliably, while the vCPU + RAM + SSD sum is exactly Google's price.
 
     GCE prices machine types from resource rates rather than per type, so this is both the
     natural shape and a compact one. Source is the Cloud Billing Catalog API, which has no
@@ -531,7 +543,7 @@ def _fetch_gce_spot_rates() -> dict[str, dict[str, dict[str, float]]]:
         session = google_requests.AuthorizedSession(credentials)
     except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         LOG.warning("GCE spot pricing: no usable credentials (%s)", exc)
-        return {}
+        return {}, {}
 
     skus: list[dict] = []
     page_token = None
@@ -550,14 +562,22 @@ def _fetch_gce_spot_rates() -> dict[str, dict[str, dict[str, float]]]:
     except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         # The Cloud Billing API must be enabled on the project; a 403 here says it is not.
         LOG.warning("GCE spot pricing: Cloud Billing Catalog API unavailable (%s)", exc)
-        return {}
+        return {}, {}
 
-    rates: dict[str, dict[str, dict[str, float]]] = {}
+    spot_rates: GceRates = {}
+    on_demand_rates: GceRates = {}
     for sku in skus:
-        if sku.get("category", {}).get("usageType") != "Preemptible":
-            continue
+        usage_type = sku.get("category", {}).get("usageType")
         description = sku.get("description", "")
-        if not description.startswith("Spot Preemptible ") or any(w in description for w in _GCE_SKU_EXCLUDED):
+        if any(w in description for w in _GCE_SKU_EXCLUDED):
+            continue
+        if usage_type == "Preemptible" and description.startswith("Spot Preemptible "):
+            rates, family_idx = spot_rates, 2
+        elif usage_type == "OnDemand":
+            # Loose on purpose: any "<X> ... Instance" SKU (licenses, "Memory-optimized", ...) lands
+            # under some key, last write wins. Only the -lssd shapes read on_demand_rates, by family.
+            rates, family_idx = on_demand_rates, 0
+        else:
             continue
         # "Spot Preemptible N2 Instance Core running in Frankfurt", but AMD families read
         # "Spot Preemptible N2D AMD Instance Core" — so find "Instance" rather than assuming
@@ -566,31 +586,52 @@ def _fetch_gce_spot_rates() -> dict[str, dict[str, dict[str, float]]]:
         if "Instance" not in parts:
             continue
         marker = parts.index("Instance")
-        if marker < 3 or marker + 1 >= len(parts):
+        if marker <= family_idx or marker + 1 >= len(parts):
             continue
-        family, resource = parts[2].lower(), parts[marker + 1].lower()
-        if resource not in ("core", "ram"):
+        family, resource = parts[family_idx].lower(), parts[marker + 1].lower()
+        # "Spot Preemptible C4 Instance Local SSD" prices the SSD bundled with -lssd shapes.
+        if parts[marker + 1 : marker + 3] == ["Local", "SSD"]:
+            resource = "ssd"
+        if resource not in ("core", "ram", "ssd"):
             continue
         try:
-            tier = sku["pricingInfo"][0]["pricingExpression"]["tieredRates"][-1]["unitPrice"]
+            expression = sku["pricingInfo"][0]["pricingExpression"]
+            tier = expression["tieredRates"][-1]["unitPrice"]
             price = int(tier.get("units", 0)) + tier.get("nanos", 0) / 1e9
         except KeyError, IndexError, TypeError:
             continue
+        if expression.get("usageUnit") == "GBy.h":
+            # Most families bill RAM per GiB, but some (C4D) per GB; memory_gb is GiB.
+            price *= 2**30 / 1e9
+        if resource == "ssd":
+            if expression.get("usageUnit") != "GiBy.mo":
+                LOG.warning("GCE pricing: unexpected Local SSD unit in %r, skipping", description)
+                continue
+            # Billed per GiB-month; Google's month is 730 hours.
+            price /= 730
         if price <= 0:
             continue
         for region in sku.get("serviceRegions", []):
             rates.setdefault(family, {}).setdefault(region, {})[resource] = price
 
-    LOG.info("GCE spot pricing: %d families from %d SKUs", len(rates), len(skus))
-    return rates
+    LOG.info(
+        "GCE pricing: %d spot and %d on-demand families from %d SKUs", len(spot_rates), len(on_demand_rates), len(skus)
+    )
+    return spot_rates, on_demand_rates
 
 
-def _gce_spot_price_for(
-    rates: dict[str, dict[str, dict[str, float]]], family: str, vcpus: int, memory_gb: float
+def _gce_price_for(
+    rates: GceRates,
+    family: str,
+    vcpus: int,
+    memory_gb: float,
+    bundled_ssd_gib: float = 0.0,
 ) -> dict[str, float]:
-    """Per-region spot price for one machine type, from its family's resource rates.
+    """Per-region price for one machine type, from its family's (spot or on-demand) resource rates.
 
     Only regions that priced both vCPU and RAM are included — half a price is not a price.
+    A machine type that bundles local SSD (`bundled_ssd_gib`) also needs the SSD rate, the same
+    vCPU + RAM + SSD sum Google prices -lssd machine types with.
     """
     # Sub-families are catalogued as e.g. "n4a-standard"; the SKUs name only the family.
     family_key = family.split("-", maxsplit=1)[0].lower()
@@ -600,7 +641,12 @@ def _gce_spot_price_for(
         core, ram = resources.get("core"), resources.get("ram")
         if core is None or ram is None:
             continue
-        priced[region] = round(vcpus * core + memory_gb * ram, 6)
+        price = vcpus * core + memory_gb * ram
+        if bundled_ssd_gib:
+            if (ssd := resources.get("ssd")) is None:
+                continue
+            price += bundled_ssd_gib * ssd
+        priced[region] = round(price, 6)
     return priced
 
 
@@ -630,7 +676,7 @@ def generate_gce_catalog(  # noqa: PLR0914
     results: list[InstanceTypeInfo] = []
     z3_prices = _scrape_gce_z3_prices() if any(f.startswith("z3") for f in families) else {}
     general_prices = _scrape_gce_general_prices(families)
-    spot_rates = _fetch_gce_spot_rates()
+    spot_rates, on_demand_rates = _fetch_gce_resource_rates()
 
     try:
         info = KeyStore().get_gcp_credentials()
@@ -667,18 +713,26 @@ def generate_gce_catalog(  # noqa: PLR0914
                     arch,
                 )
 
-            if name.startswith("z3"):
+            bundled_ssd = name.startswith("z3") or "lssd" in name
+            if bundled_ssd:
                 bundled = getattr(machine_type, "bundled_local_ssds", None)
                 partition_count = bundled.partition_count if bundled else _Z3_PARTITION_COUNTS.get(name, 0)
-                disk_size = _Z3_METAL_DISK_SIZE_GIB if "metal" in name else _Z3_DISK_SIZE_GIB
+                if name.startswith("z3"):
+                    disk_size = _Z3_METAL_DISK_SIZE_GIB if "metal" in name else _Z3_DISK_SIZE_GIB
+                else:
+                    disk_size = _GCE_LSSD_METAL_DISK_SIZE_GIB if "metal" in name else _GCE_LOCAL_SSD_DISK_GB
                 local_disk_count = partition_count
                 local_disk_gb = partition_count * disk_size
                 if "highlssd" in name:
                     family = "z3-highmem-highlssd"
                 elif "standardlssd" in name:
                     family = "z3-highmem-standardlssd"
+                elif not name.startswith("z3"):
+                    family = f"{family}-lssd"
                 else:
                     continue
+            elif family in _GCE_LSSD_ONLY_FAMILIES:
+                continue
             else:
                 if family in _GCE_LOCAL_SSD_FAMILIES:
                     local_disk_count = gce_local_ssd_disk_count(vcpus)
@@ -690,10 +744,19 @@ def generate_gce_catalog(  # noqa: PLR0914
                 if family in _GCE_SUBFAMILY_FAMILIES:
                     family = "-".join(name.split("-")[:2])
 
+            ssd_gib = local_disk_gb if bundled_ssd else 0.0
             price: float | dict[str, float] | None = z3_prices.get(name) or general_prices.get(name)
+            if price is None and bundled_ssd and not name.startswith("z3"):
+                # c4/c4a/c4d -lssd: priced from their vCPU + RAM + SSD SKUs, see _fetch_gce_resource_rates
+                price = _gce_price_for(on_demand_rates, family, vcpus, memory_gb, bundled_ssd_gib=ssd_gib) or None
             # z3 bundles local SSD, which needs live migration that spot cannot have, so SCT never
             # runs it as spot and a vCPU+RAM spot price would only be a wrong number on file.
-            spot_price = {} if name.startswith("z3") else _gce_spot_price_for(spot_rates, family, vcpus, memory_gb)
+            # c4/c4a/c4d -lssd can run as spot; their spot price must include the bundled SSD.
+            spot_price = (
+                {}
+                if name.startswith("z3")
+                else _gce_price_for(spot_rates, family, vcpus, memory_gb, bundled_ssd_gib=ssd_gib)
+            )
 
             results.append(
                 InstanceTypeInfo(
