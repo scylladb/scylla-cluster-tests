@@ -12,11 +12,15 @@
 # Copyright (c) 2026 ScyllaDB
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from sdcm.utils.cloud_catalog import catalog_generator
 from sdcm.utils.cloud_catalog.catalog_generator import (
-    _gce_spot_price_for,
+    _fetch_gce_resource_rates,
+    _gce_price_for,
+    generate_gce_catalog,
     generate_oci_catalog,
     write_catalog_file,
 )
@@ -165,4 +169,95 @@ def test_generate_oci_catalog_unknown_family_returns_empty():
 
 def test_gce_spot_price_is_vcpu_plus_ram_per_region():
     rates = {"n2": {"us-central1": {"core": 0.01, "ram": 0.002}, "us-east1": {"core": 0.01}}}
-    assert _gce_spot_price_for(rates, "n2-highmem", 8, 64.0) == {"us-central1": pytest.approx(8 * 0.01 + 64 * 0.002)}
+    assert _gce_price_for(rates, "n2-highmem", 8, 64.0) == {"us-central1": pytest.approx(8 * 0.01 + 64 * 0.002)}
+
+
+def _sku(description: str, unit: str, nanos: int) -> dict:
+    return {
+        "description": description,
+        "category": {"usageType": "Preemptible" if description.startswith("Spot ") else "OnDemand"},
+        "serviceRegions": ["us-central1"],
+        "pricingInfo": [
+            {"pricingExpression": {"usageUnit": unit, "tieredRates": [{"unitPrice": {"units": "0", "nanos": nanos}}]}}
+        ],
+    }
+
+
+# Recorded from the Cloud Billing Catalog API (2026-10-19).
+_SKUS = [
+    _sku("Spot Preemptible C4 Instance Core running in Americas", "h", 20740000),
+    _sku("Spot Preemptible C4 Instance Ram running in Americas", "GiBy.h", 2357000),
+    _sku("Spot Preemptible C4 Instance Local SSD running in Americas", "GiBy.mo", 95800000),
+    _sku("Spot Preemptible C4D Instance Ram running in Americas", "GBy.h", 1480000),
+    _sku("C4 Instance Core running in Americas", "h", 34650000),
+]
+
+
+def test_gce_resource_rates_parse_local_ssd_and_per_gb_ram(monkeypatch):
+    session = SimpleNamespace(
+        get=lambda *_, **__: SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"skus": _SKUS})
+    )
+    monkeypatch.setattr(catalog_generator, "KeyStore", lambda: SimpleNamespace(get_gcp_credentials=dict))
+    monkeypatch.setattr(catalog_generator.sa_module.Credentials, "from_service_account_info", lambda *_, **__: None)
+    monkeypatch.setattr(catalog_generator.google_requests, "AuthorizedSession", lambda _: session)
+
+    rates, on_demand_rates = _fetch_gce_resource_rates()
+
+    assert on_demand_rates["c4"]["us-central1"] == {"core": pytest.approx(0.03465)}
+    assert rates["c4"]["us-central1"] == {
+        "core": pytest.approx(0.02074),
+        "ram": pytest.approx(0.002357),
+        "ssd": pytest.approx(0.0958 / 730),
+    }
+    assert rates["c4d"]["us-central1"]["ram"] == pytest.approx(0.00148 * 2**30 / 1e9)
+
+
+def test_gce_catalog_lssd_machine_types(monkeypatch):
+    def machine_type(name, vcpus, memory_gb, partitions=0):
+        return SimpleNamespace(
+            name=name,
+            guest_cpus=vcpus,
+            memory_mb=memory_gb * 1024,
+            architecture="X86_64",
+            bundled_local_ssds=SimpleNamespace(partition_count=partitions),
+        )
+
+    machine_types = [
+        machine_type("c4-highmem-4-lssd", 4, 31, 1),
+        machine_type("c4-highmem-288-lssd-metal", 288, 2232, 6),
+        machine_type("c4-highmem-4", 4, 31),
+        machine_type("z3-highmem-8-highlssd", 8, 64, 1),
+    ]
+    spot_rates = {
+        "c4": {
+            "us-central1": {"core": 0.02, "ram": 0.002, "ssd": 0.0001},
+            "us-east1": {"core": 0.02, "ram": 0.002},
+        },
+        "z3": {"us-central1": {"core": 0.02, "ram": 0.002, "ssd": 0.0001}},
+    }
+    monkeypatch.setattr(catalog_generator, "_scrape_gce_z3_prices", lambda: {"z3-highmem-8-highlssd": {"r": 1.0}})
+    on_demand_rates = {"c4": {"us-central1": {"core": 0.03, "ram": 0.004, "ssd": 0.0002}}}
+    monkeypatch.setattr(catalog_generator, "_scrape_gce_general_prices", lambda _: {})
+    monkeypatch.setattr(catalog_generator, "_fetch_gce_resource_rates", lambda: (spot_rates, on_demand_rates))
+    monkeypatch.setattr(catalog_generator, "KeyStore", lambda: SimpleNamespace(get_gcp_credentials=dict))
+    monkeypatch.setattr(catalog_generator.sa_module.Credentials, "from_service_account_info", lambda _: None)
+    monkeypatch.setattr(
+        catalog_generator.compute_v1,
+        "MachineTypesClient",
+        lambda **_: SimpleNamespace(list=lambda request: machine_types),
+    )
+
+    result = {i.instance_type: i for i in generate_gce_catalog(["z3", "c4-highmem"], project="p")}
+
+    assert set(result) == {"c4-highmem-4-lssd", "c4-highmem-288-lssd-metal", "z3-highmem-8-highlssd"}
+    lssd = result["c4-highmem-4-lssd"]
+    assert (lssd.family, lssd.local_disk_count, lssd.local_disk_gb) == ("c4-highmem-lssd", 1, 375.0)
+    assert lssd.price_per_hour == {"us-central1": pytest.approx(4 * 0.03 + 31 * 0.004 + 375 * 0.0002)}
+    # us-east1 has no spot SSD rate, and a spot price without the bundled SSD would be too low.
+    assert lssd.spot_price_per_hour == {"us-central1": pytest.approx(4 * 0.02 + 31 * 0.002 + 375 * 0.0001)}
+    metal = result["c4-highmem-288-lssd-metal"]
+    assert (metal.family, metal.local_disk_count, metal.local_disk_gb) == ("c4-highmem-lssd", 6, 18000.0)
+    z3 = result["z3-highmem-8-highlssd"]
+    assert (z3.family, z3.local_disk_count, z3.local_disk_gb) == ("z3-highmem-highlssd", 1, 3000.0)
+    assert z3.price_per_hour == {"r": 1.0}
+    assert z3.spot_price_per_hour is None
