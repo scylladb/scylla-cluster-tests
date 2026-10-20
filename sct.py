@@ -73,7 +73,6 @@ from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import (
     ReplayOnlyArgusSCTClient,
-    argus_offline_collect_events,
     create_proxy_argus_s3_url,
     get_argus_client,
     get_argus_use_tunnel_from_env,
@@ -2124,9 +2123,6 @@ def store_logs_in_argus(
                 else:
                     LOGGER.info("Skipping %s because it has been already sent to argus.", file_name)
         argus_client.submit_sct_logs(log_links)
-
-        if not argus_client.get_run().get("events"):
-            argus_offline_collect_events(client=argus_client)
     except Exception:
         LOGGER.error("Error saving logs to argus", exc_info=True)
 
