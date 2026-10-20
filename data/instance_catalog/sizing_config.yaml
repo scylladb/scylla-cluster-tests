@@ -120,6 +120,8 @@ clouds:
       - n2
       - e2
       - n4a
+      - c4-highmem
+      - c4d-highmem
     cloud_defaults:
       arch: x86_64
     preferred_families:
