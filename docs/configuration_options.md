@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-522 options across 29 groups.
+523 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -52,7 +52,7 @@ concerns first, then one page per backend, then one per test type.
 | [Docker backend](configuration_options/docker-backend.md) | 2 | Running the cluster as local Docker containers. |
 | [Baremetal backend](configuration_options/baremetal-backend.md) | 7 | Running against pre-existing hosts that SCT does not provision. |
 | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) | 12 | Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options. |
-| [Minicloud](configuration_options/minicloud.md) | 16 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with `cluster_backend: aws` and an... |
+| [Minicloud](configuration_options/minicloud.md) | 17 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with the `aws`, `gce` or `azure`... |
 | [Longevity tests](configuration_options/longevity-tests.md) | 12 | Options specific to long-running longevity test scenarios. |
 | [Performance regression tests](configuration_options/performance-regression-tests.md) | 19 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
 | [Upgrade tests](configuration_options/upgrade-tests.md) | 19 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
@@ -337,6 +337,7 @@ concerns first, then one page per backend, then one per test type.
 | [`migrator_target_keyspace`](configuration_options/spark-migrator-cassandra-to-scylla.md#migrator_target_keyspace) | `SCT_MIGRATOR_TARGET_KEYSPACE` | [Spark migrator (Cassandra to Scylla)](configuration_options/spark-migrator-cassandra-to-scylla.md) |
 | [`migrator_target_table`](configuration_options/spark-migrator-cassandra-to-scylla.md#migrator_target_table) | `SCT_MIGRATOR_TARGET_TABLE` | [Spark migrator (Cassandra to Scylla)](configuration_options/spark-migrator-cassandra-to-scylla.md) |
 | [`mini_k8s_version`](configuration_options/kubernetes-backends-eks-gke-kind.md#mini_k8s_version) | `SCT_MINI_K8S_VERSION` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
+| [`minicloud_azure_scratch_resource_group`](configuration_options/minicloud.md#minicloud_azure_scratch_resource_group) | `SCT_MINICLOUD_AZURE_SCRATCH_RESOURCE_GROUP` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_container_cpus`](configuration_options/minicloud.md#minicloud_container_cpus) | `SCT_MINICLOUD_CONTAINER_CPUS` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_container_memory`](configuration_options/minicloud.md#minicloud_container_memory) | `SCT_MINICLOUD_CONTAINER_MEMORY` | [Minicloud](configuration_options/minicloud.md) |
 | [`minicloud_container_name`](configuration_options/minicloud.md#minicloud_container_name) | `SCT_MINICLOUD_CONTAINER_NAME` | [Minicloud](configuration_options/minicloud.md) |

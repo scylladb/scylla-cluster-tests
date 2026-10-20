@@ -210,7 +210,7 @@ export SCT_MINICLOUD_ENDPOINT_URL=http://localhost:5000
 
 `scripts/run-minicloud-test.sh` is the single local entry point - it starts the container via
 `sct.py start-minicloud` and runs the chosen flavor (`-f ami|repo|provision|upgrade`) on the chosen
-backend (`-b aws|gce`), directly or through hydra (`-m direct|hydra`), layering
+backend (`-b aws|gce|azure`), directly or through hydra (`-m direct|hydra`), layering
 `configurations/minicloud.yaml` for you.
 
 The `upgrade` flavor runs `upgrade_test.UpgradeTest.test_rolling_upgrade` - the same test the
@@ -266,6 +266,78 @@ budgeting the initial cluster would pass and then let the run die at the exact m
 node nobody accounted for.
 `scripts/run-minicloud-clean-resources.sh` is a local-dev convenience only - the pipelines use
 the regular `clean-resources` path.
+
+### The Azure backend
+
+Prerequisites:
+
+- KeyStore `azure.json` holds a service principal that can create resource groups and accept
+  marketplace terms.
+- The marketplace terms for the pinned Scylla offer are accepted. If SCT cannot accept them, an
+  admin does it once.
+- The host prerequisites in [Running locally](#running-locally).
+
+Run:
+
+```bash
+SCT_AZURE_IMAGE_DB=scylladb1631195365807:scylladb-enterprise-vm:scylla-enterprise-vm:2026.3.3 \
+  scripts/run-minicloud-test.sh -f ami -b azure
+```
+
+`./docker/env/hydra.sh start-minicloud -b azure` only starts the container. The script and the
+Azure jobs layer `configurations/minicloud.yaml` and then `configurations/minicloud/azure.yaml`
+after the test-case.
+
+Credentials:
+
+- The real service principal is used only to check the token against Entra ID at start, to create
+  the scratch resource group `sct-minicloud-scratch` in eastus, and to download images inside the
+  container.
+- It reaches the container through the 0600 file `<state_dir>/azure-credentials.env`
+  (`--env-file`), never through SCT's environment or argv.
+- SCT talks to the emulator with a dummy identity: `minicloud` as client id and secret, the
+  all-zero UUID as tenant and subscription.
+- `AZURE_ENDPOINT_URL=https://localhost:5443` redirects every ARM client. If
+  `SCT_MINICLOUD_ENDPOINT_URL` is set but `AZURE_ENDPOINT_URL` is not, SCT refuses to build an ARM
+  client, so nothing is provisioned on real Azure by mistake.
+
+TLS:
+
+- The emulator serves HTTPS on port 5443 with a self-signed cert. Verification stays on.
+- SCT writes `<state_dir>/sct-ca-bundle.pem` (system roots plus `<state_dir>/tls/cert.pem`) and
+  exports it as `REQUESTS_CA_BUNDLE`. boto3 also uses it when `AWS_CA_BUNDLE` is not set, which is
+  harmless.
+- The bundle is not written to `tls/`, because under rootful docker that directory belongs to root.
+
+Guest network: VNets start at `10.180.0.0/16` (`MINICLOUD_AZURE_REGION_INDEX_OFFSET`), inside
+`10.160.0.0/11`, so no new host route is needed. Supported regions: eastus, eastus2, westus2,
+northeurope.
+
+Image:
+
+- Pin `azure_image_db` to a marketplace URN, `publisher:offer:sku:version`, and do not set
+  `scylla_version`. SCT takes it from the URN version. A `latest` version fails config validation.
+- Loader and monitor use the Canonical images from `defaults/azure_config.yaml`.
+- The guest boots in about 90 seconds. The first run is slower because it downloads the image
+  through a scratch managed disk; later runs use the cache.
+
+Provisioning: minicloud reports `provisioningState: Succeeded` at once, so SCT also waits for
+`PowerState/running`. `PowerState/deallocated` means the launch failed; check `minicloud.log`.
+
+Unsupported APIs:
+
+| API | effect | handling |
+|---|---|---|
+| `Microsoft.KeyVault`, `Microsoft.ManagedIdentity` | VM create fails in the KMS provider | `enterprise_disable_kms: true` in `configurations/minicloud.yaml` |
+| `purchasePlan` set for every URN | loader and monitor image download may be rejected | unverified |
+| community gallery and gallery listing | `scylla_version` cannot be resolved | pin a URN |
+| `virtualMachines/{vm}/restart`, `runCommand` | reboot nemeses fail (405) | QATOOLS-468; the provision test uses `not disruptive` |
+| Resource Graph | sct-runner listing | SCT returns no runners under minicloud |
+| `locations`, `vmSizes`, `resource_skus` | synthetic answer or multi-NIC validation only | not on the tested paths |
+
+CI runs both Azure jobs on the lab KVM agent (`local_agent: true`), not on an sct-runner: the Azure
+runner has no nested-virtualization sizing, and an AWS runner would need the runner cloud
+decoupled from the backend. The agent uses the Azure credential only for the image download.
 
 ## Troubleshooting
 
@@ -338,11 +410,15 @@ on firewalld hosts, `minicloud0` in the `trusted` zone (done on the agent by
 `scripts/minicloud-firewalld-zone.sh` given passwordless sudo, or by the boot-time unit - see
 [Running locally](#running-locally));
 `USER`/`HOME` set and `$HOME` writable with >=80 GiB free; `numExecutors=1` + exclusive mode,
-which is what serialises the host singletons (port 5000, the container name, `minicloud0`);
+which is what serialises the host singletons (port 5000, the Azure TLS port 5443, the container
+name, `minicloud0`);
 egress to docker.io, ghcr.io, github.com, amazonaws.com, argus.scylladb.com,
-downloads.scylladb.com. The *Minicloud Preflight* stage verifies what a shell on the agent can
+downloads.scylladb.com, and for the Azure jobs also login.microsoftonline.com (Entra ID),
+management.azure.com (ARM) and the blob host of the image export's SAS URL
+(`*.blob.storage.azure.net`). The *Minicloud Preflight* stage verifies what a shell on the agent can
 see - /dev/kvm writability, the docker daemon, `minicloud0` and its routes, the firewalld zone,
-port 5000 ownership, `USER`/`HOME`, disk headroom - and reports every problem in one pass. `numExecutors=1`, exclusive
+port 5000 ownership, `USER`/`HOME`, disk headroom - and reports every problem in one pass. It does
+not check port 5443. `numExecutors=1`, exclusive
 mode and the egress list stay manual agent configuration: nothing in the build can check them.
 
 ### The jobs
@@ -355,7 +431,9 @@ Under `jenkins-pipelines/oss/minicloud/`:
 | `minicloud-artifact-gce-image` | GCE image boot, preinstalled Scylla |
 | `minicloud-artifact-deb-aws` | `.deb` install onto stock Ubuntu, AWS backend |
 | `minicloud-artifact-rpm-gce` | `.rpm` install onto stock Rocky, GCE backend |
+| `minicloud-artifact-azure-image` | Azure image boot, preinstalled Scylla, pinned URN, lab agent |
 | `minicloud-provision-test` | 3-node provision + write smoke + non-disruptive nemesis |
+| `minicloud-provision-test-azure` | the same provision test on the Azure backend, pinned URN, lab agent |
 | `longevity-minicloud-10gb-1h` | a regular longevity test-case end to end |
 
 Job knobs: `minicloud_docker` selects the image for one run

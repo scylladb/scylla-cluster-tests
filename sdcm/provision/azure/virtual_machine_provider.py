@@ -35,6 +35,7 @@ from sdcm.provision.provisioner import (
 from sdcm.provision.user_data import UserDataBuilder
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.minicloud.endpoint import is_minicloud_active
 
 LOGGER = logging.getLogger(__name__)
 
@@ -268,7 +269,27 @@ class VirtualMachineProvider:
             )
             LOGGER.debug("VM %s instance state: %s", name, status_summary)
         if vm.provisioning_state == "Succeeded":
+            if is_minicloud_active():
+                return self._minicloud_power_state_gate(vm, name)
             return vm
+        return None
+
+    @staticmethod
+    def _minicloud_power_state_gate(vm: VirtualMachine, name: str) -> Optional[VirtualMachine]:
+        """Wait for the guest power state: minicloud reports 'Succeeded' before the guest runs.
+
+        Returns the VM once it is 'PowerState/running', None while it is still starting (or the
+        power state is not reported yet) and raises ProvisionError if the background launch failed.
+        """
+        statuses = (vm.instance_view.statuses if vm.instance_view else None) or []
+        power_state = next((status.code for status in statuses if (status.code or "").startswith("PowerState/")), None)
+        if power_state == "PowerState/running":
+            return vm
+        if power_state == "PowerState/deallocated":
+            raise ProvisionError(
+                f"minicloud could not launch VM {name} (PowerState/deallocated): "
+                "the background image download or QEMU launch failed, see minicloud.log"
+            )
         return None
 
     def list(self):

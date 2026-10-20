@@ -24,8 +24,8 @@ class MinicloudConfigMixin(BaseModel):
     """Minicloud.
 
     Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with
-    `cluster_backend: aws` and an endpoint override, and these options control the local minicloud
-    service.
+    the `aws`, `gce` or `azure` cluster backend and an endpoint override, and these options control
+    the local minicloud service.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
@@ -33,6 +33,11 @@ class MinicloudConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Minicloud"
 
+    minicloud_azure_scratch_resource_group: String = SctField(
+        description="Azure resource group that minicloud uses for the temporary managed disk of an image "
+        "export. SCT ensures it exists, with the real Azure credential, before the container starts and never "
+        "deletes it; minicloud only creates and deletes disks inside it",
+    )
     minicloud_container_cpus: String = SctField(
         description="Cap the minicloud container's CPU allowance, in docker --cpus form "
         "(e.g. '8' or '7.5'). Empty means no limit",

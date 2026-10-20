@@ -5,7 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sdcm.utils.minicloud import MinicloudConfig, MinicloudError, MinicloudManager
+from sdcm.utils.minicloud.config import MinicloudConfig, MinicloudError
+from sdcm.utils.minicloud.manager import MinicloudManager
 from sdcm.utils.minicloud.preflight import (
     check_scylla_memory_budget,
     container_mem_in_use_gib,

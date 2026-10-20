@@ -10,7 +10,7 @@ import yaml
 
 from sdcm import sct_abs_path
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS
-from sdcm.utils.minicloud.endpoint import MINICLOUD_PORT, get_minicloud_endpoint
+from sdcm.utils.minicloud.endpoint import MINICLOUD_PORT, MINICLOUD_TLS_PORT, get_minicloud_endpoint
 
 
 @functools.lru_cache(maxsize=1)
@@ -85,6 +85,8 @@ MINICLOUD_GCP_PROJECT_DEFAULT = "sct-project-1"
 #     per supported region in 10.176.0.0/16 .. 10.179.0.0/16. Without it, minicloud
 #     emulates GCE auto-mode and allocates /20s from 10.128.0.0/9 - unroutable from the
 #     host and inside the real GCE VPC space a runner lives in.
+#   * Azure: the emulated VNets take the next block, 10.180.0.0/16 .. 10.183.0.0/16, one per
+#     entry of MINICLOUD_AZURE_REGIONS, still inside the routed 10.160.0.0/11 (up to 10.191).
 #
 # The TUN address stays outside every routed range.
 MINICLOUD_REGION_INDEX_OFFSET = 160
@@ -96,6 +98,14 @@ MINICLOUD_GCE_REGION_INDEX_OFFSET = 176
 # index, so only append.
 MINICLOUD_GCE_REGIONS = ("us-east1", "us-east4", "us-west1", "us-central1")
 MINICLOUD_GCE_SUBNET_CIDR_TMPL = "10.{}.0.0/16"
+MINICLOUD_AZURE_REGION_INDEX_OFFSET = 180
+# The order defines each region VNet index, so only append.
+MINICLOUD_AZURE_REGIONS = ("eastus", "eastus2", "westus2", "northeurope")
+# Real Azure resource group for minicloud image-export disks. SCT creates it and never deletes it.
+MINICLOUD_AZURE_SCRATCH_RG_DEFAULT = "sct-minicloud-scratch"
+MINICLOUD_AZURE_SCRATCH_RG_LOCATION = "eastus"
+MINICLOUD_CA_BUNDLE_NAME = "sct-ca-bundle.pem"
+MINICLOUD_AZURE_ENV_FILE_NAME = "azure-credentials.env"
 
 
 class MinicloudError(Exception):
@@ -186,6 +196,26 @@ class MinicloudConfig:
     # minicloud_lock_guest_memory: lock guest RAM in the host instead of dropping Scylla's own
     # --lock-memory in the guests. See MinicloudManager.start() for what each side changes.
     lock_guest_memory: bool = True
+    tls_port: int = MINICLOUD_TLS_PORT
+    # set at runtime once the Azure credentials have been read
+    azure_subscription_id: str = ""
+    azure_scratch_resource_group: str = MINICLOUD_AZURE_SCRATCH_RG_DEFAULT
+
+    @property
+    def tls_endpoint(self) -> str:
+        return f"https://localhost:{self.tls_port}"
+
+    @property
+    def minicloud_cert_path(self) -> str:
+        return os.path.join(self.state_dir, "tls", "cert.pem")
+
+    @property
+    def ca_bundle_path(self) -> str:
+        return os.path.join(self.state_dir, MINICLOUD_CA_BUNDLE_NAME)
+
+    @property
+    def azure_env_file(self) -> str:
+        return os.path.join(self.state_dir, MINICLOUD_AZURE_ENV_FILE_NAME)
 
     @property
     def region(self) -> str:
@@ -224,6 +254,7 @@ class MinicloudConfig:
         lock_guest_memory = True
         gcs_bucket = ""
         gcp_project = ""
+        azure_scratch_resource_group = MINICLOUD_AZURE_SCRATCH_RG_DEFAULT
         if params:
             backend = params.get("cluster_backend") or ""
             # minicloud_docker_image is the explicit override; the renovate-managed
@@ -245,6 +276,9 @@ class MinicloudConfig:
             if (explicit_lock := params.get("minicloud_lock_guest_memory")) is not None:
                 lock_guest_memory = bool(explicit_lock)
             gcs_bucket = params.get("minicloud_gcs_bucket") or ""
+            azure_scratch_resource_group = (
+                params.get("minicloud_azure_scratch_resource_group") or MINICLOUD_AZURE_SCRATCH_RG_DEFAULT
+            )
             # the SCT param wins over the environment: gce_project can be set from a
             # test-case yaml or defaults without ever reaching os.environ, and this project
             # is where ensure_gcs_bucket() creates the real staging bucket - it has to be
@@ -283,6 +317,7 @@ class MinicloudConfig:
             backend=backend,
             skip_memory_check=skip_memory_check,
             lock_guest_memory=lock_guest_memory,
+            azure_scratch_resource_group=azure_scratch_resource_group,
         )
 
     @staticmethod

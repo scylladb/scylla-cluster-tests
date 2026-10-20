@@ -1,17 +1,20 @@
 """Tests for minicloud activation predicates, endpoint resolution and the health probe."""
 
-from unittest.mock import MagicMock
+import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
-from sdcm.utils.minicloud import (
-    MinicloudError,
+from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.metaclasses import Singleton
+from sdcm.utils.minicloud.activation import (
     check_minicloud_reachability,
-    get_minicloud_endpoint,
-    is_minicloud_active,
+    set_minicloud_endpoint_env,
     validate_minicloud_params,
 )
+from sdcm.utils.minicloud.config import MinicloudError
+from sdcm.utils.minicloud.endpoint import MinicloudActivationError, get_minicloud_endpoint, is_minicloud_active
 from unit_tests.unit.minicloud.conftest import _patch_probe_session
 
 
@@ -148,3 +151,63 @@ def test_validate_minicloud_params_rejects_missing_overlay():
                 "enterprise_disable_kms": False,
             }
         )
+
+
+def test_set_endpoint_env_exports_azure_vars_for_azure_backend():
+    set_minicloud_endpoint_env("http://localhost:5000", "azure", ca_bundle="/tmp/bundle.pem")
+    assert os.environ["AZURE_ENDPOINT_URL"] == "https://localhost:5443"
+    assert os.environ["REQUESTS_CA_BUNDLE"] == "/tmp/bundle.pem"
+    assert os.environ["AWS_ENDPOINT_URL"] == "http://localhost:5000"
+
+
+@pytest.fixture
+def fresh_azure_service(monkeypatch):
+    """AzureService is a process-wide singleton: start each test from a new one"""
+    Singleton._instances.pop(AzureService, None)
+    monkeypatch.delenv("SCT_CLUSTER_BACKEND", raising=False)
+    yield
+    Singleton._instances.pop(AzureService, None)
+
+
+@pytest.mark.parametrize(
+    "client_property, client_class",
+    [
+        ("compute", "ComputeManagementClient"),
+        ("network", "NetworkManagementClient"),
+        ("resource", "ResourceManagementClient"),
+        ("keyvault", "KeyVaultManagementClient"),
+        ("subscription", "SubscriptionClient"),
+        ("resource_graph", "ResourceGraphClient"),
+    ],
+)
+def test_every_arm_client_is_redirected(fresh_azure_service, monkeypatch, client_property, client_class):
+    monkeypatch.setenv("AZURE_ENDPOINT_URL", "https://localhost:5443")
+    with (
+        patch("sdcm.utils.azure_utils.KeyStore") as keystore,
+        patch("sdcm.utils.azure_utils.ClientSecretCredential") as credential,
+        patch(f"sdcm.utils.azure_utils.{client_class}") as client,
+    ):
+        _ = getattr(AzureService(), client_property)
+    keystore.assert_not_called()
+    credential.assert_called_once_with(
+        tenant_id="00000000-0000-0000-0000-000000000000",
+        client_id="minicloud",
+        client_secret="minicloud",
+        authority="https://localhost:5443",
+        disable_instance_discovery=True,
+    )
+    client.assert_called_once()
+    assert client.call_args.kwargs["credential"] is credential.return_value
+    assert client.call_args.kwargs["base_url"] == "https://localhost:5443"
+    assert client.call_args.kwargs["credential_scopes"] == ["https://localhost:5443/.default"]
+
+
+def test_guard_refuses_arm_clients_before_activation(fresh_azure_service, monkeypatch):
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
+    with (
+        patch("sdcm.utils.azure_utils.KeyStore") as keystore,
+        pytest.raises(MinicloudActivationError, match="AZURE_ENDPOINT_URL"),
+    ):
+        _ = AzureService().compute
+    keystore.assert_not_called()

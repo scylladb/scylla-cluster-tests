@@ -11,6 +11,7 @@ from sdcm.utils.minicloud.activation import (
 from sdcm.utils.minicloud.config import MinicloudConfig
 from sdcm.utils.minicloud.endpoint import get_minicloud_endpoint
 from sdcm.utils.minicloud.manager import MinicloudManager
+from sdcm.utils.minicloud.tls import ca_bundle_for
 
 LOGGER = logging.getLogger(__name__)
 
@@ -29,11 +30,16 @@ def ensure_minicloud_ready(backend: str = "aws", params=None) -> None:
     ``check_minicloud_reachability`` and fail closed instead.
     """
     endpoint = get_minicloud_endpoint(params)
+    cfg = MinicloudConfig.from_env(params=params)
+    if not cfg.backend:
+        cfg.backend = backend
+
     max_retries = 4
     for attempt in range(max_retries):
         try:
             check_minicloud_reachability(endpoint, timeout=5)
-            set_minicloud_endpoint_env(endpoint, backend)
+            # rebuild the CA bundle here: the env of the process that started minicloud is not inherited
+            set_minicloud_endpoint_env(endpoint, backend, ca_bundle=ca_bundle_for(cfg, backend))
             # Adopting a running container skips manager.preflight_check() below, and with it
             # the overlay validation. A standalone provision-resources against an already-healthy
             # emulator would then proceed with spot, public-IP SSH or KMS still enabled, and fail
@@ -56,9 +62,6 @@ def ensure_minicloud_ready(backend: str = "aws", params=None) -> None:
                 time.sleep(wait)
 
     LOGGER.info("Minicloud not reachable after %d attempts — auto-starting", max_retries)
-    cfg = MinicloudConfig.from_env(params=params)
-    if not cfg.backend:
-        cfg.backend = backend
     manager = MinicloudManager(cfg)
     manager.keep_alive = True
     # Full preflight: this path is also the FIRST start for standalone run-test /

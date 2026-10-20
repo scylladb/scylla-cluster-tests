@@ -25,6 +25,8 @@ def clean_env(monkeypatch):
     monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False)
     monkeypatch.delenv("GCE_ENDPOINT_URL", raising=False)
     monkeypatch.delenv("SCT_MINICLOUD_ENDPOINT_URL", raising=False)
+    monkeypatch.delenv("AZURE_ENDPOINT_URL", raising=False)
+    monkeypatch.delenv("REQUESTS_CA_BUNDLE", raising=False)
     # region resolution reads this; a developer's exported value must not decide what
     # these tests assert
     monkeypatch.delenv("SCT_REGION_NAME", raising=False)

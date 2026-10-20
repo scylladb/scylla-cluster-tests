@@ -3,7 +3,7 @@
 import os
 from unittest.mock import MagicMock, patch
 
-from sdcm.utils.minicloud import ensure_minicloud_ready
+from sdcm.utils.minicloud.bootstrap import ensure_minicloud_ready
 
 
 def test_ensure_minicloud_ready_retries_then_succeeds(monkeypatch):
