@@ -41,13 +41,15 @@ Optionally, you can override default cloud instance type by providing `instance_
 
 # How to run artifacts tests using `hydra`
 
-If you want to run it locally you should use `ip_ssh_connections: 'public'`:
+If you run it from a laptop on `aws` or `gce`, SCT must reach the nodes over public IPs. Both
+backends set `scylla_network_config` by default, so `SCT_IP_SSH_CONNECTIONS` has no effect there;
+add the public network overlay to the commands below instead:
 
 ```sh
-export SCT_IP_SSH_CONNECTIONS=public
+--config configurations/network_config/test_communication_public.yaml
 ```
 
-and run one of the following commands:
+The `docker` commands need nothing extra. Run one of the following commands:
 
 
 ## CentOS 8
