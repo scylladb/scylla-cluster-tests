@@ -89,7 +89,12 @@ from sdcm.provision.common.oracle import (
     ORACLE_INSTANCE_TYPE_PARAMS,
     ORACLE_USER_PREFIX_SUFFIX,
 )
-from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, RegionAMINotFoundError, is_capacity_error
+from sdcm.provision.aws.capacity_errors import (
+    InstanceTerminatedAtLaunchError,
+    ProvisioningCapacityExhausted,
+    RegionAMINotFoundError,
+    is_capacity_error,
+)
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.region_fallback import (
     cleanup_region,
@@ -2164,7 +2169,11 @@ class ClusterTester(unittest.TestCase):
             try:
                 self._provision_legacy_aws_clusters(loader_info, db_info, monitor_info)
                 return False, last_error
-            except (botocore.exceptions.ClientError, ProvisioningCapacityExhausted) as exc:
+            except (
+                botocore.exceptions.ClientError,
+                ProvisioningCapacityExhausted,
+                InstanceTerminatedAtLaunchError,
+            ) as exc:
                 if isinstance(exc, botocore.exceptions.ClientError) and not is_capacity_error(exc):
                     raise
                 last_error = exc
