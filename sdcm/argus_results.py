@@ -35,6 +35,7 @@ from sdcm.sct_events.system import FailedResultEvent
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode, BaseScyllaCluster
+    from sdcm.utils.latency import BestThroughputStep
 
 
 LOGGER = logging.getLogger(__name__)
@@ -109,6 +110,20 @@ class LatencyCalculatorReadDiskOnlyResult(StaticGenericResultTable):
             ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
+        ]
+
+
+class BestThroughputResult(StaticGenericResultTable):
+    class Meta:
+        name = ""  # set per workload by send_best_throughput_result_to_argus
+        description = ""
+        Columns = [
+            ColumnMetadata(name="Throughput", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="Threads", unit="", type=ResultType.INTEGER),
+            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 limit", unit="ms", type=ResultType.FLOAT),
+            ColumnMetadata(name="Step", unit="", type=ResultType.TEXT),
         ]
 
 
@@ -429,6 +444,43 @@ def send_result_to_argus(  # noqa: PLR0914
         for interval, value in stall_stats["ms"].items():
             result_table.add_result(column=f"{interval}ms", row=cycle, value=value, status=Status.UNSET)
         submit_results_to_argus(argus_client, result_table)
+
+
+def send_best_throughput_result_to_argus(
+    argus_client: ArgusClient, workload: str, best_step: "BestThroughputStep | None", p99_limit_ms: float
+) -> None:
+    """Send the best gradual step of a workload as a single row, so Argus tracks it across versions.
+
+    When no step passed, the row still goes out with a throughput of 0: a drop to "nothing passed" must show
+    up in the history, not as a missing datapoint.
+    """
+    result_table = BestThroughputResult()
+    result_table.name = f"{workload} - best throughput under P99 limit"
+    result_table.description = (
+        f"{workload} workload - highest throughput of a gradual step with P99 of every operation within the limit"
+    )
+    row = "best"
+    result_table.add_result(column="P99 limit", row=row, value=p99_limit_ms, status=Status.UNSET)
+    if best_step is None:
+        result_table.add_result(column="Throughput", row=row, value=0, status=Status.UNSET)
+        result_table.add_result(column="Step", row=row, value="none passed", status=Status.UNSET)
+        submit_results_to_argus(argus_client, result_table)
+        return
+
+    result_table.add_result(column="Throughput", row=row, value=best_step.throughput, status=Status.UNSET)
+    result_table.add_result(column="Step", row=row, value=best_step.name, status=Status.UNSET)
+    if best_step.threads is not None:
+        result_table.add_result(column="Threads", row=row, value=best_step.threads, status=Status.UNSET)
+    # P99 is keyed by '<operation>--<HDR tag>'; a step running several commands of one operation reports
+    # the worst of them.
+    worst_p99 = {}
+    for operation_and_hdr_tag, p99 in best_step.p99.items():
+        operation = operation_and_hdr_tag.split("--", maxsplit=1)[0].lower()
+        worst_p99[operation] = max(worst_p99.get(operation, 0.0), p99)
+    for operation, p99 in worst_p99.items():
+        if (column := f"P99 {operation}") in result_table.column_types:
+            result_table.add_result(column=column, row=row, value=p99, status=Status.UNSET)
+    submit_results_to_argus(argus_client, result_table)
 
 
 def send_microbenchmark_result_to_argus(

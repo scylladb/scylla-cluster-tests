@@ -52,6 +52,17 @@ Number of threads which should be added on per step
 **type:** int
 
 
+<a id="perf_gradual_latency_limit"></a>
+
+## **perf_gradual_latency_limit** / SCT_PERF_GRADUAL_LATENCY_LIMIT
+
+Latency limit, in ms, that a gradual performance test step must stay within to count as passing when looking for the best throughput. Keyed by sub-test, with 'default' used for sub-tests not listed. Only 'percentile_99' is supported. Example: {'default': {'percentile_99': 10}, 'read_disk_only': {'percentile_99': 15}}
+
+**default:** {'default': {'percentile_99': 10}}
+
+**type:** dict | YAML/JSON string → dict
+
+
 <a id="perf_gradual_step_duration"></a>
 
 ## **perf_gradual_step_duration** / SCT_PERF_GRADUAL_STEP_DURATION
