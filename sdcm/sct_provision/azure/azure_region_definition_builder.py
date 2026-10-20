@@ -59,4 +59,5 @@ class AzureDefinitionBuilder(DefinitionBuilder):
             "azure_provision_stuck_vm_timeout": self.params.get("azure_provision_stuck_vm_timeout"),
             "azure_provision_stuck_vm_recreate_attempts": self.params.get("azure_provision_stuck_vm_recreate_attempts"),
             "azure_provision_stuck_vm_total_timeout": self.params.get("azure_provision_stuck_vm_total_timeout"),
+            "enterprise_disable_kms": bool(self.params.get("enterprise_disable_kms")),
         }
