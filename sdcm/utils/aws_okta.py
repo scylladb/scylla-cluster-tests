@@ -65,8 +65,11 @@ def try_auth_with_okta():
     if not can_get_to_aws_account():
         if not pathlib.Path("~/.okta_aws_login_config").expanduser().exists():
             raise ValueError(
-                "OKTA isn't configured, use this guide to configure it:\n"
-                "https://www.notion.so/How-to-login-on-AWS-CLI-and-assume-a-role-bcc4e36042ea4ae9a76ea65e7aafe283?pvs=4"
+                f"No usable AWS credentials for the SCT AWS account ({account_id}) and OKTA isn't configured.\n"
+                "- ScyllaDB QA: configure OKTA with this guide:\n"
+                "  https://www.notion.so/How-to-login-on-AWS-CLI-and-assume-a-role-bcc4e36042ea4ae9a76ea65e7aafe283?pvs=4\n"
+                "- No access to that account: use a local backend (--backend docker or k8s-local-kind),\n"
+                "  which runs without AWS credentials."
             )
         if profile := check_current_token_expiration():
             pass
