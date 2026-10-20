@@ -104,6 +104,9 @@ DEFAULT_AWS_REGION = "eu-west-1"
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
 SCYLLA_AMI_OWNER_ID_LIST = ["797456418907", "158855661827"]
 SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
+# The account keeps these regions enabled, but their endpoints do not answer. AWS cannot restore
+# me-south-1 after physical damage to its facilities in 2026.
+AWS_UNAVAILABLE_REGIONS = ("me-south-1",)
 
 
 class KeyBasedLock:
@@ -541,7 +544,11 @@ def all_aws_regions(cached=False):
         ]
     else:
         client: EC2Client = boto3.client("ec2", region_name=DEFAULT_AWS_REGION)
-        return [region["RegionName"] for region in client.describe_regions()["Regions"]]
+        return [
+            region["RegionName"]
+            for region in client.describe_regions()["Regions"]
+            if region["RegionName"] not in AWS_UNAVAILABLE_REGIONS
+        ]
 
 
 class ParallelObject:
