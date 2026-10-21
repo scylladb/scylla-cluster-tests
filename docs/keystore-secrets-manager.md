@@ -86,6 +86,12 @@ deliberately **not** mirrored:
 - they are rewritten every 6 hours by `.github/workflows/cache-issues.yaml` and
   `cache-jira-issues.yaml`, which upload to S3 only.
 
+`.github/workflows/cache-referenced-issues.yaml` is replacing the full GitHub crawl
+with a cache of only the issues test code references (QAINFRA-104). It keeps the
+same file names and CSV format. While it runs in shadow mode it writes
+`issues-v2/`. Each consumer repo publishes the refs it uses to
+`issues/refs/<repo>.json`, and the GitHub refresh reads the union of those files.
+
 `CachedJiraIssues` and `CachedGitHubIssues` therefore construct
 `KeyStore(backend="s3")` explicitly and ignore `keystore_backend`. Without that
 pin, every issue lookup misses the cache and falls back to the live API — the
