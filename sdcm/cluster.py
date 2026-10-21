@@ -824,7 +824,7 @@ class BaseNode(AutoSshContainerMixin):
         if agent_enabled and agent_api_key:
             agent_hostname = (
                 self.public_ip_address or self.external_address
-                if self.test_config.IP_SSH_CONNECTIONS == "public"
+                if self.ip_ssh_connections == "public"
                 else self.private_ip_address
             )
             agent_tls = agent_config.get("tls")
@@ -851,7 +851,7 @@ class BaseNode(AutoSshContainerMixin):
         self.log.debug(self.remoter.ssh_debug_cmd())
 
     def _init_port_mapping(self):
-        if self.test_config.IP_SSH_CONNECTIONS == "public":
+        if self.ip_ssh_connections == "public":
             tunnels = []  # (container name, runner port, node port)
             if self.test_config.SYSLOGNG_ADDRESS:
                 tunnels.append(
@@ -1571,12 +1571,12 @@ class BaseNode(AutoSshContainerMixin):
         if self.scylla_network_configuration:
             address = (
                 self.scylla_network_configuration.test_communication
-                if self.test_config.IP_SSH_CONNECTIONS == "public"
+                if self.ip_ssh_connections == "public"
                 else self.scylla_network_configuration.broadcast_rpc_address
             )
             self.log.debug("cql_address is: %s", address)
             return address
-        if self.test_config.IP_SSH_CONNECTIONS == "public":
+        if self.ip_ssh_connections == "public":
             return self.external_address
         with self.remote_scylla_yaml() as scylla_yaml:
             cql_address = scylla_yaml.broadcast_rpc_address if scylla_yaml.broadcast_rpc_address else self.ip_address
@@ -1595,6 +1595,15 @@ class BaseNode(AutoSshContainerMixin):
             return self.private_ip_address
 
     @property
+    def ip_ssh_connections(self) -> str:
+        """How the runner reaches this node: its cluster's own setting, else the run's `ip_ssh_connections`.
+
+        A run can mix nodes the runner reaches directly (lab hosts next to a runner in the lab) with nodes it reaches
+        over public addresses and reverse SSH tunnels (a DB node in a cloud).
+        """
+        return getattr(self.parent_cluster, "ip_ssh_connections", None) or self.test_config.IP_SSH_CONNECTIONS
+
+    @property
     def external_address(self):
         """
         the communication address for usage between the test and the nodes
@@ -1605,7 +1614,7 @@ class BaseNode(AutoSshContainerMixin):
             return self.scylla_network_configuration.test_communication
         if self.test_config.IP_SSH_CONNECTIONS == "ipv6":
             return self.ipv6_ip_address
-        elif self.test_config.IP_SSH_CONNECTIONS == "public" or self.test_config.INTRA_NODE_COMM_PUBLIC:
+        elif self.ip_ssh_connections == "public" or self.test_config.INTRA_NODE_COMM_PUBLIC:
             return self.public_ip_address
         else:
             return self.private_ip_address
@@ -2615,13 +2624,9 @@ class BaseNode(AutoSshContainerMixin):
     def get_saslauthd_config(self):
         if self.test_config.LDAP_ADDRESS is None:
             return {}
-        ldap_server_ip = (
-            "127.0.0.1" if self.test_config.IP_SSH_CONNECTIONS == "public" else self.test_config.LDAP_ADDRESS[0]
-        )
+        ldap_server_ip = "127.0.0.1" if self.ip_ssh_connections == "public" else self.test_config.LDAP_ADDRESS[0]
         ldap_port = (
-            LDAP_SSH_TUNNEL_LOCAL_PORT
-            if self.test_config.IP_SSH_CONNECTIONS == "public"
-            else self.test_config.LDAP_ADDRESS[1]
+            LDAP_SSH_TUNNEL_LOCAL_PORT if self.ip_ssh_connections == "public" else self.test_config.LDAP_ADDRESS[1]
         )
         return {
             "ldap_servers": f"ldap://{ldap_server_ip}:{ldap_port}/",
@@ -4185,7 +4190,7 @@ class BaseNode(AutoSshContainerMixin):
         if "db-node" in self.name and self.is_nonroot_install and not self.is_scylla_logging_to_journal:
             log_file = str(self.offline_install_dir / "scylla-server.log")
         script = ConfigurationScriptBuilder(
-            syslog_host_port=self.test_config.get_logging_service_host_port(),
+            syslog_host_port=self.test_config.get_logging_service_host_port(self.ip_ssh_connections),
             logs_transport=self.parent_cluster.params.get("logs_transport"),
             hostname=self.name,
             log_file=log_file,
@@ -6912,7 +6917,7 @@ class BaseScyllaCluster:
             # NOTE: vector runs unconfined, and relabelling its port would take it away from its reverse SSH tunnel
             return
         node.install_package("policycoreutils-python-utils")
-        _, syslogng_port = self.test_config.get_logging_service_host_port()
+        _, syslogng_port = self.test_config.get_logging_service_host_port(node.ip_ssh_connections)
         node.remoter.sudo(f"semanage port -a -t syslogd_port_t -p tcp {syslogng_port}")
 
     @staticmethod

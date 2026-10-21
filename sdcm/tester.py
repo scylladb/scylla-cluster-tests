@@ -2367,6 +2367,7 @@ class ClusterTester(unittest.TestCase):
             user_prefix=self.params.get("user_prefix"),
             credentials=self.credentials,
             ssh_username=baremetal_info["db_nodes"]["username"],
+            ip_ssh_connections=baremetal_info["db_nodes"].get("ip_ssh_connections"),
             params=self.params,
             region_names=["dummy_region"],
         )
@@ -2376,12 +2377,14 @@ class ClusterTester(unittest.TestCase):
         params["public_ips"] = [n["public_ip"] for n in baremetal_info["loader_nodes"]["node_list"]]
         params["private_ips"] = [n["private_ip"] for n in baremetal_info["loader_nodes"]["node_list"]]
         params["ssh_username"] = baremetal_info["loader_nodes"]["username"]
+        params["ip_ssh_connections"] = baremetal_info["loader_nodes"].get("ip_ssh_connections")
         self.loaders = cluster_baremetal.LoaderSetPhysical(**params)
 
         params["n_nodes"] = len(baremetal_info["monitor_nodes"]["node_list"])
         params["public_ips"] = [n["public_ip"] for n in baremetal_info["monitor_nodes"]["node_list"]]
         params["private_ips"] = [n["private_ip"] for n in baremetal_info["monitor_nodes"]["node_list"]]
         params["ssh_username"] = baremetal_info["monitor_nodes"]["username"]
+        params["ip_ssh_connections"] = baremetal_info["monitor_nodes"].get("ip_ssh_connections")
         self.monitors = cluster_baremetal.MonitorSetPhysical(
             **params,
             targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
