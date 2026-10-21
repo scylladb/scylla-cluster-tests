@@ -799,6 +799,49 @@ def test_prepare_cluster_config_expands_knob_to_node_count(mock_test_name, mock_
     assert config["availability_zone_ids"] == az_ids * 2
 
 
+@pytest.mark.parametrize(
+    "instance_types,expected_ids",
+    [
+        (["i8g.large"], [1]),
+        (["i8g.large", "i8g.xlarge"], [1, 2]),
+        ([], []),
+    ],
+)
+def test_resolve_scaling_config_replaces_instance_types_with_ids(instance_types, expected_ids):
+    cluster = _mock_cluster_for_prepare_config()
+    ids = {"i8g.large": 1, "i8g.xlarge": 2}
+    cluster._api_client.get_instance_id_by_name = MagicMock(side_effect=lambda **kw: ids[kw["instance_type_name"]])
+    cluster.xcloud_scaling_config = {"Mode": "xcloud", "InstanceTypes": instance_types}
+
+    scaling_config = ScyllaCloudCluster._resolve_scaling_config(cluster)
+
+    assert scaling_config == {"Mode": "xcloud", "InstanceTypeIDs": expected_ids}
+    assert cluster.xcloud_scaling_config == {"Mode": "xcloud", "InstanceTypes": instance_types}, (
+        "original config must not be mutated"
+    )
+
+
+def test_resolve_scaling_config_without_instance_types():
+    cluster = _mock_cluster_for_prepare_config()
+    cluster.xcloud_scaling_config = {"Mode": "xcloud", "InstanceFamilies": ["i8g"]}
+
+    assert ScyllaCloudCluster._resolve_scaling_config(cluster) == cluster.xcloud_scaling_config
+    cluster._api_client.get_instance_id_by_name.assert_not_called()
+
+
+@patch("sdcm.cluster_cloud.get_username", return_value="user")
+@patch("sdcm.cluster_cloud.get_test_name", return_value="test")
+def test_prepare_cluster_config_sends_resolved_scaling_config(mock_test_name, mock_username):
+    cluster = _mock_cluster_for_prepare_config()
+    cluster.xcloud_scaling_config = {"Mode": "xcloud", "InstanceTypes": ["i8g.large"]}
+    cluster._resolve_scaling_config = MagicMock(return_value={"Mode": "xcloud", "InstanceTypeIDs": [1]})
+
+    config = ScyllaCloudCluster._prepare_cluster_config(cluster, node_count=3, instance_type=None)
+
+    assert config["scaling"] == {"Mode": "xcloud", "InstanceTypeIDs": [1]}
+    assert config["number_of_nodes"] == 0
+
+
 def test_cloud_node_accepts_every_wait_db_up_argument_of_its_base():
     """`CloudNode.wait_db_up()` forwards to `BaseNode.wait_db_up()` through a decorator.
 
