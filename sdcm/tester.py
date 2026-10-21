@@ -46,7 +46,7 @@ from cassandra.cluster import Session
 
 from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
-from argus.client.sct.types import Package, EventsInfo, LogLink
+from argus.client.sct.types import Package, LogLink
 from argus.common.enums import TestStatus
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
@@ -653,19 +653,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         try:
             stat_map = {"SUCCESS": TestStatus.PASSED, "FAILED": TestStatus.FAILED}
 
-            last_events_limit = 100
-            last_events = get_events_grouped_by_category(
-                limit=last_events_limit, _registry=self.events_processes_registry
-            )
-            events_sorted = []
-            events_summary = get_logger_event_summary()
-            for severity, messages in last_events.items():
-                event_category = EventsInfo(
-                    severity=severity, total_events=events_summary.get(severity, 0), messages=messages
-                )
-                events_sorted.append(event_category)
-            self.test_config.argus_client().submit_events(events_sorted)
-
+            last_events = get_events_grouped_by_category(limit=100, _registry=self.events_processes_registry)
             test_status = stat_map.get(self.get_test_status(), TestStatus.FAILED)
             if test_status == TestStatus.FAILED and self._is_test_error(last_events):
                 test_status = TestStatus.TEST_ERROR
@@ -673,7 +661,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
             self.test_config.argus_client().finalize_sct_run()
         except Exception:
-            self.log.error("Error committing test events to Argus", exc_info=True)
+            self.log.error("Error finalizing test run in Argus", exc_info=True)
 
     def argus_collect_logs(self, log_links: dict[str, list[str] | str]):
         try:
