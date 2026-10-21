@@ -1,0 +1,15 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'xcloud',
+    xcloud_provider: 'aws',
+    xcloud_env: 'staging',
+    region: 'us-east-1',
+    scylla_version: 'release:latest',
+    provision_type: 'on_demand',
+    test_name: 'scylla_cloud_e2e_test.XCloudScalingTest.test_xcloud_cluster_scaling_upsize_under_load',
+    test_config: '''["test-cases/xcloud/xcloud-scaling-upsize.yaml", "configurations/xcloud_scaling/i8g-family-storage-target-80.yaml"]'''
+)
