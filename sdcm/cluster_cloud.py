@@ -24,7 +24,7 @@ from pathlib import Path
 import requests
 
 from sdcm import cluster, wait
-from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
+from sdcm.xcloud.api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.exceptions import WaitForTimeoutError
 from sdcm.reporting.tooling_reporter import VectorStoreVersionReporter
 from sdcm.utils.aws_region import AwsRegion

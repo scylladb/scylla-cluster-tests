@@ -73,7 +73,7 @@ from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
 from sdcm.localhost import LocalHost
-from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.xcloud.api_client import ScyllaCloudAPIClient
 from sdcm.utils.aws_ssm_runner import SSMCommandRunner
 from sdcm.keystore import KeyStore
 from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2_Failure

@@ -46,7 +46,7 @@ from argus.client.base import ArgusClientError
 from argus.client.sct.types import Package, LogLink
 from argus.common.enums import TestStatus
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, wait
-from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.xcloud.api_client import ScyllaCloudAPIClient
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from sdcm.provision.azure.utils import azure_provisioner_config
 from sdcm.provision.gce.kms_provider import GcpKmsProvider

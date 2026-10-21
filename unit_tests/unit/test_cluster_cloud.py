@@ -5,7 +5,7 @@ import inspect
 import pytest
 from unittest.mock import MagicMock, patch
 
-from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.xcloud.api_client import ScyllaCloudAPIClient
 from sdcm.cluster import BaseNode
 from sdcm.cluster_cloud import (
     xcloud_super_if_supported,

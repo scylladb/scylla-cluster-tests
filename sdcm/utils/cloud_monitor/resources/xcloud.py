@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 import pytz
 
-from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.xcloud.api_client import ScyllaCloudAPIClient
 from sdcm.keystore import KeyStore
 
 

@@ -27,7 +27,7 @@ import oci
 from google.cloud.compute_v1.types import Instance as GceInstance
 from mypy_boto3_ec2 import EC2Client
 
-from sdcm.cloud_api_client import ScyllaCloudAPIClient, ScyllaCloudAPIError
+from sdcm.xcloud.api_client import ScyllaCloudAPIClient, ScyllaCloudAPIError
 from sdcm.cluster_baremetal import PhysicalHost
 from sdcm.keystore import KeyStore
 from sdcm.provision.oci.constants import TAG_NAMESPACE

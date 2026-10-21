@@ -38,7 +38,7 @@ from typing_extensions import Annotated
 from pydantic.functional_validators import BeforeValidator
 from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
-from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
+from sdcm.xcloud.api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.keystore import KeyStore
 from sdcm.utils.cloud_api_utils import (
     get_cloud_rest_credentials_from_file,

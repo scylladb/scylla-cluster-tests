@@ -50,7 +50,7 @@ import sct_sizing
 import sct_ssh
 import sct_scan_issues
 from sdcm import sct_abs_path
-from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
+from sdcm.xcloud.api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.cluster_cloud import extract_short_test_id_from_name
 from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
