@@ -350,6 +350,17 @@ def test_14_check_rackaware_config_multi_az_and_region(monkeypatch):
     conf.verify_configuration()
 
 
+@pytest.mark.parametrize("backend,key_required", [("docker", False), ("k8s-local-kind", False), ("aws", True)])
+def test_ssh_key_required_only_on_backends_that_ssh(tmp_path, backend, key_required):
+    params = {"cluster_backend": backend, "user_credentials_path": str(tmp_path / "missing_key")}
+    conf = MagicMock(get=params.get, stress_cmd_params=[])
+    if key_required:
+        with pytest.raises(ValueError, match="missing_key"):
+            sct_config.SCTConfiguration.check_required_files(conf)
+    else:
+        sct_config.SCTConfiguration.check_required_files(conf)
+
+
 def test_conf_check_required_files_negative(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/stress_cmd_with_bad_profile.yaml")
