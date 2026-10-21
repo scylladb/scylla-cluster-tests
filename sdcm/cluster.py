@@ -61,7 +61,7 @@ from cassandra.policies import WhiteListRoundRobinPolicy, RackAwareRoundRobinPol
 from cassandra.query import SimpleStatement
 from argus.common.enums import ResourceState
 from argus.client.sct.types import LogLink
-from sdcm.node_exporter_setup import NodeExporterSetup
+from sdcm.node_exporter_setup import NODE_EXPORTER_DEFAULT_PORT, NodeExporterSetup
 from sdcm.db_log_reader import DbLogReader
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo, get_manager_scylla_backend
@@ -457,6 +457,8 @@ class BaseNode(AutoSshContainerMixin):
     journal_since: str | None = None
     # A host that outlives the run (bare metal) keeps one journal for every run on it
     journal_outlives_run: bool = False
+    # Where the host's node_exporter serves, set by NodeExporterSetup.install on loaders and monitors
+    node_exporter_port: int = NODE_EXPORTER_DEFAULT_PORT
 
     GOSSIP_STATUSES_FILTER_OUT = [
         "LEFT",  # in case the node was decommissioned
@@ -7350,7 +7352,7 @@ class BaseLoaderSet:
             return
 
         node_exporter_setup = NodeExporterSetup()
-        node_exporter_setup.install(node)
+        node.node_exporter_port = node_exporter_setup.install(node)
 
         if self.params.get("bare_loaders"):
             node.log.info("Don't install anything because bare loaders requested")
@@ -7851,7 +7853,7 @@ class BaseMonitorSet:
         """)
 
         node_exporter_setup = NodeExporterSetup()
-        node_exporter_setup.install(node)
+        node.node_exporter_port = node_exporter_setup.install(node)
 
         node.remoter.run(cmd="sudo bash -ce '%s'" % prereqs_script)
         node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
@@ -7977,7 +7979,9 @@ class BaseMonitorSet:
                     loader_targets_per_dc[loader.region] = {"targets": [], "labels": {"dc": loader.region}}
                 loader_ip_addr = getattr(loader, self.DB_NODES_IP_ADDRESS) or ""
                 if loader_ip_addr:
-                    loader_targets_per_dc[loader.region]["targets"].append(f"{normalize_ipv6_url(loader_ip_addr)}:9100")
+                    loader_targets_per_dc[loader.region]["targets"].append(
+                        f"{normalize_ipv6_url(loader_ip_addr)}:{loader.node_exporter_port}"
+                    )
 
             def update_scrape_configs(base_scrape_configs, static_config_list, job_name="node_exporter"):
                 for i, scrape_config in enumerate(base_scrape_configs):
@@ -8181,7 +8185,7 @@ class BaseMonitorSet:
             if "monitor" not in node_export_targets_per_dc:
                 node_export_targets_per_dc["monitor"] = {"labels": {"dc": "monitor"}, "targets": []}
             node_export_targets_per_dc["monitor"]["targets"].append(
-                f"{normalize_ipv6_url(node.private_ip_address)}:9100"
+                f"{normalize_ipv6_url(node.private_ip_address)}:{node.node_exporter_port}"
             )
 
         for node in self.nodes:
