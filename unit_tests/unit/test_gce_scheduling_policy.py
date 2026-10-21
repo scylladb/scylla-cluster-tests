@@ -27,7 +27,8 @@ def _assert_terminate_no_restart(instance: compute_v1.Instance) -> None:
 
 
 @patch("sdcm.provision.gce.instance_provider.get_gce_service_accounts", return_value=None)
-def test_instance_provider_default_branch_sets_terminate_and_no_auto_restart(_mock_sa) -> None:
+def _provider_insert_request(_mock_sa, tags: dict[str, str]) -> compute_v1.Instance:
+    """Build one VirtualMachineProvider insert and return the instance it sends."""
     disk_provider = MagicMock()
     disk_provider.create_disks_config.return_value = [
         {
@@ -57,7 +58,7 @@ def test_instance_provider_default_branch_sets_terminate_and_no_auto_restart(_mo
         type="n2-standard-4",
         user_name="scyllaadm",
         ssh_key=SimpleNamespace(name="test-key", public_key=b"ssh-rsa AAA test@example.com"),
-        tags={"env": "test"},
+        tags=tags,
     )
     provider._build_and_insert_instance(
         definition=definition,
@@ -67,8 +68,16 @@ def test_instance_provider_default_branch_sets_terminate_and_no_auto_restart(_mo
         normalized_name="test-node-1",
     )
 
-    instance = provider._instances_client.insert.call_args.kwargs["request"].instance_resource
-    _assert_terminate_no_restart(instance)
+    return provider._instances_client.insert.call_args.kwargs["request"].instance_resource
+
+
+def test_instance_provider_default_branch_sets_terminate_and_no_auto_restart() -> None:
+    _assert_terminate_no_restart(_provider_insert_request(tags={"env": "test"}))
+
+
+def test_instance_provider_insert_carries_normalized_labels() -> None:
+    instance = _provider_insert_request(tags={"NodeType": "scylla-db", "TestId": "Abc-1"})
+    assert dict(instance.labels) == {"nodetype": "scylla-db", "testid": "abc-1"}
 
 
 def test_create_instance_default_branch_sets_terminate_and_no_auto_restart() -> None:

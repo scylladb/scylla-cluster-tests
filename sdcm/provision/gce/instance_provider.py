@@ -325,7 +325,6 @@ class VirtualMachineProvider:
                     operation, f"instance creation for {normalized_name}", timeout=INSTANCE_CREATION_TIMEOUT
                 )
                 instance = self._wait_until_running(normalized_name, pricing_model)
-                self._set_instance_labels(instance, definition.tags, normalized_name)
                 self._cache[normalized_name] = instance
                 LOGGER.info("Instance %s finished creating after the abort; keeping it for the retry", normalized_name)
             except (ProvisionError, OperationPreemptedError) as error:
@@ -397,7 +396,7 @@ class VirtualMachineProvider:
         """Wait for instance creation operation to complete and finalize setup.
 
         Handles waiting for the GCE operation, retrieves the instance,
-        sets labels, and caches the result. If the operation fails,
+        and caches the result. If the operation fails,
         attempts cleanup and retries using _create_instance_with_retry.
         """
         try:
@@ -405,7 +404,6 @@ class VirtualMachineProvider:
                 operation, f"instance creation for {normalized_name}", timeout=INSTANCE_CREATION_TIMEOUT
             )
             instance = self._wait_until_running(normalized_name, pricing_model)
-            self._set_instance_labels(instance, definition.tags, normalized_name)
             LOGGER.info("Instance %s created successfully", normalized_name)
             self._cache[normalized_name] = instance
             return instance
@@ -508,7 +506,6 @@ class VirtualMachineProvider:
                 operation, f"instance creation for {normalized_name}", timeout=INSTANCE_CREATION_TIMEOUT
             )
             instance = self._wait_until_running(normalized_name, pricing_model)
-            self._set_instance_labels(instance, definition.tags, normalized_name)
             LOGGER.info("Instance %s created successfully on retry", normalized_name)
             self._cache[normalized_name] = instance
             return instance
@@ -575,6 +572,7 @@ class VirtualMachineProvider:
             machine_type=f"zones/{self.zone}/machineTypes/{definition.type}",
             disks=disks,
             network_interfaces=self._build_network_interfaces(definition),
+            labels=tags_to_gce_labels(definition.tags),
         )
         instance.metadata = compute_v1.Metadata()
         for k, v in metadata.items():
@@ -658,21 +656,6 @@ class VirtualMachineProvider:
                 f"{allowed} network interfaces, but {count} were requested. Reduce the number of distinct "
                 f"'nic' values in 'scylla_network_config' or pick a machine type with more vCPUs."
             )
-
-    def _set_instance_labels(self, instance: compute_v1.Instance, tags: Dict[str, str], name: str) -> None:
-        """Set labels on instance."""
-        labels = tags_to_gce_labels(tags)
-        if labels:
-            try:
-                gce_set_labels(
-                    instances_client=self._instances_client,
-                    instance=instance,
-                    new_labels=labels,
-                    project=self.project_id,
-                    zone=self.zone,
-                )
-            except Exception as exc:  # noqa: BLE001
-                LOGGER.warning("Failed to set labels on instance %s: %s", name, exc)
 
     def _cleanup_failed_instance(self, name: str, error: BaseException) -> None:
         """Cleanup instance that failed due to preemption or quota.
