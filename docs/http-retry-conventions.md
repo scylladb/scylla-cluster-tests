@@ -58,7 +58,7 @@ class RestClient:
 
 `sdcm/rest/rest_client.py` is the reference implementation.
 `sdcm/db_stats.py`, `sdcm/prometheus.py`, `sdcm/kafka/kafka_cluster.py` and
-`sdcm/cloud_api_client.py` follow the same shape. (`sdcm/logcollector.py` still
+`sdcm/xcloud/api_client.py` follow the same shape. (`sdcm/logcollector.py` still
 carries a private `_create_retry_session()` copy of the same logic — it should
 delegate to the factory like the rest; don't copy it.)
 
