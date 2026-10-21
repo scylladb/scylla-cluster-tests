@@ -12,15 +12,15 @@ uv sync --group profiling
 
 Or install individual tools as needed with `uv pip install <tool>`.
 
-### Python 3.14 compatibility
+### Python 3.15 compatibility
 
-| Tool | Python 3.14 | Notes |
+| Tool | Python 3.15 | Notes |
 |------|:-----------:|-------|
 | cProfile (stdlib) | ✅ | Part of Python, always compatible |
-| scalene | ✅ | Officially supports 3.14 |
-| memray | ✅ | Officially supports 3.14 (Linux and macOS only) |
-| py-spy | ❌ | Not yet — tracking [issue #750](https://github.com/benfred/py-spy/issues/750) |
-| snakeviz | ⚠️ | Pure-Python viewer, likely works but no explicit 3.14 classifiers |
+| scalene | ✅ | 2.3.0 has no cp315 wheels; builds from sdist (needs a C/C++ compiler and `curl`) |
+| memray | ✅ | cp315 wheels (1.20.0, Linux and macOS only) |
+| py-spy | ❌ | 0.4.2 installs but exits with `Unsupported version of Python: 3.15.0` |
+| snakeviz | ⚠️ | Pure-Python viewer, imports fine but no explicit 3.15 classifiers |
 | gprof2dot | ⚠️ | Pure-Python, likely works but minimally maintained |
 
 ## cProfile + snakeviz (stdlib deterministic profiler)
@@ -132,7 +132,7 @@ open ./memray.html
 
 [py-spy](https://github.com/benfred/py-spy) is a sampling profiler that periodically snapshots the call stack of a running Python process. It requires no code changes, adds near-zero overhead, and can attach to already-running processes. It is best for profiling long-running or production-like tests without slowing them down.
 
-> **⚠️ Python 3.14 not yet supported** — see [benfred/py-spy#750](https://github.com/benfred/py-spy/issues/750). Works with Python ≤ 3.13.
+> **⚠️ Python 3.15 not yet supported**: py-spy 0.4.2 supports Python ≤ 3.14 and exits with `Unsupported version of Python: 3.15.0`. To use it, profile from a local venv on Python 3.14.
 
 **Workflow:** Record a flame graph → open the SVG in a browser → the widest bars at the bottom are where the most time is spent → trace upward to see which callers are responsible.
 
@@ -188,6 +188,6 @@ py-spy record -s -o ./profile.speedscope.json --format speedscope -- python3 sct
 - Use **cProfile** when you need deterministic call counts — it works on every Python version.
 - Use **scalene** for combined CPU + memory profiling in a single run.
 - Use **memray** specifically for memory leak investigations.
-- Use **py-spy** for zero-overhead sampling on Python ≤ 3.13; once [#750](https://github.com/benfred/py-spy/issues/750) is resolved it will be the best general-purpose choice again.
+- Use **py-spy** for zero-overhead sampling on Python ≤ 3.14; once a py-spy release supports 3.15 it will be the best general-purpose choice again.
 - For long-running SCT tests, prefer attaching to a running process (`py-spy --pid`) rather than wrapping the launch command.
 - When profiling unit tests, always use `-xvs` with pytest to stop on first failure and see output immediately.
