@@ -262,7 +262,7 @@ class XCloudScalingTest(ClusterTester, LoaderUtilsMixin):
     C-S mixed load errors are caught as they happen, via CassandraStressEvent raised by the stress events publisher.
     """
 
-    def test_xcloud_cluster_scaling_under_load(self) -> None:
+    def test_xcloud_cluster_scaling_upsize_under_load(self) -> None:
         """Test cluster scaling triggered by storage utilization succeeds without disrupting C-S mixed load."""
         node_ids_before_scaling = self.db_cluster.api_client.get_active_cluster_node_ids(
             account_id=self.db_cluster.account_id, cluster_id=self.db_cluster.cluster_id
