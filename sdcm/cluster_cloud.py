@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
+import copy
 import os
 import ipaddress
 import logging
@@ -1099,11 +1100,30 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         )
         self.log.info("%s installation completed (request %s)", request_type, request_id)
 
-    def _prepare_cluster_config(self, node_count: int, instance_type: str) -> dict[str, Any]:
+    def _resolve_scaling_config(self) -> dict[str, Any]:
+        """Return a copy of xcloud_scaling_config with InstanceTypes names replaced by Cloud InstanceTypeIDs"""
+        scaling_config = copy.deepcopy(self.xcloud_scaling_config)
+        if "InstanceTypes" in scaling_config:
+            instance_types = scaling_config.pop("InstanceTypes")
+            scaling_config["InstanceTypeIDs"] = [
+                self._api_client.get_instance_id_by_name(
+                    cloud_provider_id=self.provider_id, region_id=self.region_id, instance_type_name=instance_type
+                )
+                for instance_type in instance_types
+            ]
+            self.log.debug(
+                "Resolved scaling InstanceTypes %s -> InstanceTypeIDs %s",
+                instance_types,
+                scaling_config["InstanceTypeIDs"],
+            )
+        return scaling_config
+
+    def _prepare_cluster_config(self, node_count: int, instance_type: str) -> dict[str, Any]:  # noqa: PLR0914
         if self.xcloud_scaling_config:
             node_count = 0
             instance_id = 0
             tablets_mode = "enforced"
+            scaling_config = self._resolve_scaling_config()
         else:
             instance_id = self._api_client.get_instance_id_by_name(
                 cloud_provider_id=self.provider_id,
@@ -1111,6 +1131,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
                 instance_type_name=instance_type or self.params.cloud_provider_params.get("instance_type_db"),
             )
             tablets_mode = None
+            scaling_config = {}
 
         allowed_ips = [format_ip_with_cidr(self._api_client.client_ip)]
         allowed_ips.extend(format_ip_with_cidr(ip) for ip in self._allowed_ips)
@@ -1191,7 +1212,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             "encryption_at_rest": None,
             "maintenance_windows": [],
             "prom_proxy": True,
-            "scaling": self.xcloud_scaling_config,
+            "scaling": scaling_config,
             "vector_search": vs_config,
             "tablets": tablets_mode,
             "availability_zone_ids": availability_zone_ids,

@@ -81,6 +81,8 @@ class XcloudConfigMixin(BaseModel):
         }
 
         - InstanceFamilies(list): instance families to use for scaling (e.g., ["i4i", "i8g"])
+        - InstanceTypes(list): specific instance types to use for scaling (e.g., ["i8g.large"]).
+          SCT-specific key: SCT resolves the names into `InstanceTypeIDs` expected by Cloud API
         - Mode(str): scaling mode, always "xcloud"
         - Policies(dict): scaling policies with the following keys:
             - Storage(dict):
