@@ -727,3 +727,25 @@ def test_no_file_derived_paths_in_the_sct_config_package():
         f"paths derived from __file__ inside sdcm/sct_config/: {offenders}. "
         f"Use sct_abs_path() -- it is anchored at the repo root, not at the module's location."
     )
+
+
+@pytest.mark.parametrize(
+    "provision, expected_spot_region",
+    [("spot", "eu-west-2"), ("on_demand", None)],
+)
+def test_spot_runs_rank_by_interruption_in_the_first_region(monkeypatch, provision, expected_spot_region):
+    """SCT-707: only a spot run asks the matcher to rank by interruption, and it uses the first region."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB.vcpu", "8")
+    monkeypatch.setenv("SCT_INSTANCE_PROVISION", provision)
+    monkeypatch.setenv("SCT_REGION_NAME", "eu-west-2 eu-west-1")
+
+    with (
+        patch("sdcm.sct_config.config.InstanceCatalog.from_directory", return_value=_make_catalog(_AWS_INSTANCE)),
+        patch("sdcm.sct_config.config.select_instance", wraps=sct_config.select_instance) as select,
+    ):
+        sct_config.SCTConfiguration()
+
+    assert select.call_args.kwargs["spot_region"] == expected_spot_region
