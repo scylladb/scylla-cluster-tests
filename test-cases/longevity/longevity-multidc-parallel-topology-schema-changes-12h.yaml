@@ -4,6 +4,9 @@ test_metadata:
     on a multi-DC cluster (2x6 nodes) for 12 hours, while parallel topology-change and schema-
     change SisyphusMonkey nemeses run per DC to validate cluster stability under concurrent
     structural changes.
+    fill_percent is the share of the usable /var/lib/scylla disk (per node, after RF) the prepare
+    phase writes; 12% writes ~197M rows on an 872 GiB disk and leaves ~13% of the disk used after
+    the cassandra-stress prepare, ~19% once the 10M-row user-profile prepare is added (measured in Argus).
   test_type: longevity
   tier: tier1
   duration_class: medium
@@ -18,6 +21,14 @@ test_metadata:
   team_ownership: storage-qa
 
 test_duration: 1200
+
+stress_template_context:
+  fill_percent: 12
+  replication_factor: 3
+  col_count: 8
+  col_size_bytes: 128
+  row_size_bytes: "{{ col_count * col_size_bytes + 10 }}"  # + key
+  total_rows: "{{ ((effective_disk_size_bytes * db_node_count_per_dc * fill_percent) // 100 // replication_factor // row_size_bytes) | int }}"
 
 # `connectionsPerHost` - target a specific number of TCP connections per shard.
 # For a single DC:
@@ -60,19 +71,19 @@ pre_create_keyspace: [
 ]
 
 prepare_write_cmd:  [
-    "cassandra-stress write cl=LOCAL_QUORUM n=200M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native connectionsPerHost=1000 -rate threads=30 -pop seq=1..200M -col 'n=FIXED(8) size=FIXED(128)' -log interval=5",
+    "cassandra-stress write cl=LOCAL_QUORUM n={{ total_rows }} -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native connectionsPerHost=1000 -rate threads=30 -pop seq=1..{{ total_rows }} -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})' -log interval=5",
     "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1)' cl=LOCAL_QUORUM n=10M -mode cql3 native connectionsPerHost=1000 -rate threads=5 -log interval=5"
 ]
 
 stress_cmd: [
-    "cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  user=stress_user1 password=stress_user1  connectionsPerHost=200 -rate threads=4 -pop 'dist=uniform(1..200M)' -col 'n=FIXED(8) size=FIXED(128)' -log interval=5",
-    "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  user=stress_user1 password=stress_user1  connectionsPerHost=200 -rate threads=4 -pop 'dist=uniform(1..200M)' -col 'n=FIXED(8) size=FIXED(128)' -log interval=5",
+    "cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native  user=stress_user1 password=stress_user1  connectionsPerHost=200 -rate threads=4 -pop 'dist=uniform(1..{{ total_rows }})' -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})' -log interval=5",
+    "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native  user=stress_user1 password=stress_user1  connectionsPerHost=200 -rate threads=4 -pop 'dist=uniform(1..{{ total_rows }})' -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})' -log interval=5",
     "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1,read=1,si_read1=1,si_read2=1)' cl=LOCAL_QUORUM duration=700m -mode cql3 native  user=stress_user1 password=stress_user1  connectionsPerHost=200 -rate threads=4 -log interval=5",
-    "cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  user=stress_user2 password=stress_user2  connectionsPerHost=200 -rate threads=4 -pop 'dist=uniform(1..200M)' -col 'n=FIXED(8) size=FIXED(128)' -log interval=5",
-    "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  user=stress_user2 password=stress_user2  connectionsPerHost=200 -rate threads=4 -pop 'dist=uniform(1..200M)' -col 'n=FIXED(8) size=FIXED(128)' -log interval=5",
+    "cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native  user=stress_user2 password=stress_user2  connectionsPerHost=200 -rate threads=4 -pop 'dist=uniform(1..{{ total_rows }})' -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})' -log interval=5",
+    "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native  user=stress_user2 password=stress_user2  connectionsPerHost=200 -rate threads=4 -pop 'dist=uniform(1..{{ total_rows }})' -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})' -log interval=5",
     "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1,read=1,si_read1=1,si_read2=1)' cl=LOCAL_QUORUM duration=700m -mode cql3 native  user=stress_user2 password=stress_user2  connectionsPerHost=200 -rate threads=4 -log interval=5",
-    "cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  user=stress_user3 password=stress_user3  connectionsPerHost=200 -rate threads=4 -pop 'dist=uniform(1..200M)' -col 'n=FIXED(8) size=FIXED(128)' -log interval=5",
-    "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  user=stress_user3 password=stress_user3  connectionsPerHost=200 -rate threads=4 -pop 'dist=uniform(1..200M)' -col 'n=FIXED(8) size=FIXED(128)' -log interval=5",
+    "cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native  user=stress_user3 password=stress_user3  connectionsPerHost=200 -rate threads=4 -pop 'dist=uniform(1..{{ total_rows }})' -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})' -log interval=5",
+    "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native  user=stress_user3 password=stress_user3  connectionsPerHost=200 -rate threads=4 -pop 'dist=uniform(1..{{ total_rows }})' -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})' -log interval=5",
     "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1,read=1,si_read1=1,si_read2=1)' cl=LOCAL_QUORUM duration=700m -mode cql3 native  user=stress_user3 password=stress_user3  connectionsPerHost=200 -rate threads=4 -log interval=5",
 ]
 

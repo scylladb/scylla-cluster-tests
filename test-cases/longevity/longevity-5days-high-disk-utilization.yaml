@@ -1,0 +1,83 @@
+test_metadata:
+  description: >-
+    Five-day longevity test on a 6-node AWS cluster (i8g.2xlarge) with a dataset
+    sized to fill ~55% of the node disk (~1.8 TB logical, 1.84B rows on i8g.2xlarge)
+    loaded by cassandra-stress. Runs mixed, read and
+    materialized-view user-profile load at ~50% CPU with SisyphusMonkey restricted
+    to high-disk-utilization nemeses, driving disk usage to ~60-85% with
+    client and server TLS enabled.
+  test_type: longevity
+  tier: tier1
+  duration_class: long
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  features:
+    - tls-ssl
+  team_ownership: storage-qa
+
+test_duration: 7200
+
+# Cluster
+user_prefix: 'longevity-high-disk-utilization'
+n_db_nodes: 6
+seeds_num: 2
+# fill_percent was calibrated on i8g.2xlarge: 8 vCPU, 64 GB RAM, 1x1,875 GB NVMe SSD (~1,750 GiB formatted)
+sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
+  vcpu: 8
+  memory: '>=64'
+
+# Loaders / runner
+n_loaders: 4
+sizing_loader:
+  vcpu: 4
+  memory: '>=8'
+root_disk_size_runner: 120
+
+# Encryption
+server_encrypt: true
+client_encrypt: true
+
+# Load
+# Target: ~50% CPU load during stress phase, ~55% disk fill on i8g.2xlarge
+#
+# Dataset is sized from the available disk.
+# fill_percent is the share of the usable /var/lib/scylla disk (per node, after RF) the prepare phase writes.
+# 55% writes ~1.85B rows on a 1.7 TiB disk (i8g.2xlarge) and leaves ~56% of the disk used after prepare (measured in Argus).
+stress_template_context:
+  fill_percent: 55
+  replication_factor: 3
+  col_count: 5
+  col_size_bytes: 200
+  row_size_bytes: "{{ col_count * col_size_bytes + 10 }}"  # + key
+  total_rows: "{{ ((effective_disk_size_bytes * db_node_count_per_dc * fill_percent) // 100 // replication_factor // row_size_bytes) | int }}"
+  rows_per_cmd: "{{ total_rows // 4 }}"
+  populated_rows: "{{ rows_per_cmd * 4 }}"
+
+# Prepare phase: 4 commands x threads=140 rate-capped at 30K/s each
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n={{ rows_per_cmd }} -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native -rate 'threads=140 fixed=30000/s' -col 'size=FIXED({{ col_size_bytes }}) n=FIXED({{ col_count }})' -pop seq=1..{{ rows_per_cmd }}",
+                    "cassandra-stress write cl=QUORUM n={{ rows_per_cmd }} -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native -rate 'threads=140 fixed=30000/s' -col 'size=FIXED({{ col_size_bytes }}) n=FIXED({{ col_count }})' -pop seq={{ rows_per_cmd + 1 }}..{{ rows_per_cmd * 2 }}",
+                    "cassandra-stress write cl=QUORUM n={{ rows_per_cmd }} -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native -rate 'threads=140 fixed=30000/s' -col 'size=FIXED({{ col_size_bytes }}) n=FIXED({{ col_count }})' -pop seq={{ rows_per_cmd * 2 + 1 }}..{{ rows_per_cmd * 3 }}",
+                    "cassandra-stress write cl=QUORUM n={{ rows_per_cmd }} -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native -rate 'threads=140 fixed=30000/s' -col 'size=FIXED({{ col_size_bytes }}) n=FIXED({{ col_count }})' -pop seq={{ rows_per_cmd * 3 + 1 }}..{{ populated_rows }}"]
+
+# Stress phase: target ~50% CPU load on i8g.2xlarge (8 vCPU)
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=6800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native -rate threads=50 -pop seq=1..{{ rows_per_cmd * 2 }}  -log interval=5 -col 'size=FIXED({{ col_size_bytes }}) n=FIXED({{ col_count }})'",
+             "cassandra-stress mixed cl=QUORUM duration=6800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }})' -mode cql3 native -rate threads=50 -pop seq={{ rows_per_cmd * 2 + 1 }}..{{ populated_rows }}  -log interval=5 -col 'size=FIXED({{ col_size_bytes }}) n=FIXED({{ col_count }})'",
+             "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=6800m -mode cql3 native -rate threads=10",
+             "cassandra-stress read cl=QUORUM duration=6800m -mode cql3 native  -rate threads=10 -pop seq=1..{{ populated_rows }}  -log interval=5 -col 'size=FIXED({{ col_size_bytes }}) n=FIXED({{ col_count }})'" ]
+
+# The stress phase overwrites the prepared data. A space amplification goal makes ICS
+# reclaim overwritten data more strictly, keeping disk usage below ~85% (SCYLLADB-2801).
+post_prepare_cql_cmds: "ALTER TABLE keyspace1.standard1 WITH compaction = {'class': 'IncrementalCompactionStrategy', 'space_amplification_goal': '1.2'}"
+
+run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "random", "interval": 120}']
+
+# Nemesis
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_interval: 30
+nemesis_selector: 'supports_high_disk_utilization'
+nemesis_during_prepare: false
+space_node_threshold: 644245094
+round_robin: true
