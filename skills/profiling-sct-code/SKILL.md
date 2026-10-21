@@ -23,12 +23,12 @@ This skill guides you through profiling SCT code to find performance bottlenecks
 
 ## Tools Overview
 
-| Tool | Best For | Python 3.14 |
+| Tool | Best For | Python 3.15 |
 |------|----------|:-----------:|
 | **cProfile + snakeviz** | Exact call counts, cumulative time, call trees | ✅ |
 | **scalene** | Line-level CPU + memory profiling in one run | ✅ |
 | **memray** | Memory allocations, leak detection | ✅ |
-| **py-spy** | Zero-overhead sampling, attach to running processes | ❌ ([#750](https://github.com/benfred/py-spy/issues/750)) |
+| **py-spy** | Zero-overhead sampling, attach to running processes | ❌ (0.4.2: unsupported version) |
 
 ## Choosing the Right Tool
 
