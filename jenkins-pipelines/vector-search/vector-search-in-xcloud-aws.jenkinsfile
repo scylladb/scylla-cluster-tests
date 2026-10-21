@@ -10,5 +10,5 @@ longevityPipeline(
     region: 'us-east-1',
     scylla_version: 'release:latest',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/vector-search/vector-search-sanity.yaml", "configurations/xcloud_scaling/i8g-storage-target-80.yaml"]'''
+    test_config: '''["test-cases/vector-search/vector-search-sanity.yaml", "configurations/xcloud_scaling/i8g-family-storage-target-80.yaml"]'''
 )

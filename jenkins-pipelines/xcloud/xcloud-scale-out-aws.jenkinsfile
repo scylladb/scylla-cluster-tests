@@ -11,5 +11,5 @@ longevityPipeline(
     scylla_version: 'release:latest',
     provision_type: 'on_demand',
     test_name: 'scylla_cloud_e2e_test.XCloudScalingTest.test_xcloud_cluster_scaling_under_load',
-    test_config: '''["test-cases/xcloud/xcloud-scale-out.yaml", "configurations/xcloud_scaling/i8g-storage-target-80.yaml"]'''
+    test_config: '''["test-cases/xcloud/xcloud-scale-out.yaml", "configurations/xcloud_scaling/i8g-family-storage-target-80.yaml"]'''
 )
