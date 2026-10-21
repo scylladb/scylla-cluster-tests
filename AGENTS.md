@@ -355,6 +355,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | labeling-pipelines | Guides bulk-labeling and linting test-case YAML files with test_metadata. Use when finding coverage gaps, auto-fixing mismatches, or auditing label accuracy across a directory. | `skills/labeling-pipelines/SKILL.md` |
 | stack-sync | Manage stacked PRs via the gh-stack CLI extension (native GitHub stacked PR support). Use when splitting a large change into a chain of small reviewable PRs, checking stack status, or syncing/rebasing/merging stack layers. | `skills/stack-sync/SKILL.md` |
 | downscaling-for-minicloud | Guides shrinking an SCT test-case so it runs against minicloud, the local QEMU/KVM cloud emulator, on a single host. Use when validating a change locally before spending cloud time, fitting a test-case into host RAM, writing a configurations/minicloud overlay, or triaging a local run. | `skills/downscaling-for-minicloud/SKILL.md` |
+| perf-version-comparison | Generate a standalone HTML report with per-metric tables and bar charts comparing predefined-throughput-steps or simple-query microbenchmark results across ScyllaDB versions. Use when comparing the same test between versions (release vs RC vs master) from Argus run IDs. | `skills/perf-version-comparison/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 
