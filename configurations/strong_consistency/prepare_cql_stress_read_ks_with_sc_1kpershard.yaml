@@ -1,23 +1,34 @@
 prepare_stress_cmd: []
 pre_create_keyspace: ["CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} and consistency = 'global' and tablets = {'enabled': true};"]
 
+# round_robin runs one command per loader: every command list below has exactly n_loaders entries.
+# Same 650M-key dataset and 20M-key read set as with 4 loaders, re-split into 6 ranges.
+n_loaders: 6
+perf_gradual_throttle_steps: {"read": ['unthrottled']}
+
 prepare_write_cmd: [
-    "cql-stress-cassandra-stress write  cl=QUORUM n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerShard=250 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..162500001",
-    "cql-stress-cassandra-stress write  cl=QUORUM n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerShard=250 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=162500002..325000002",
-    "cql-stress-cassandra-stress write  cl=QUORUM n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerShard=250 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=325000003..487500003",
-    "cql-stress-cassandra-stress write  cl=QUORUM n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerShard=250 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=487500004..650000004"
+    "cql-stress-cassandra-stress write  cl=QUORUM n=108333334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerShard=250 cql3 native -rate threads=50 throttle=25000/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..108333334",
+    "cql-stress-cassandra-stress write  cl=QUORUM n=108333334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerShard=250 cql3 native -rate threads=50 throttle=25000/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=108333335..216666668",
+    "cql-stress-cassandra-stress write  cl=QUORUM n=108333334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerShard=250 cql3 native -rate threads=50 throttle=25000/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=216666669..325000002",
+    "cql-stress-cassandra-stress write  cl=QUORUM n=108333334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerShard=250 cql3 native -rate threads=50 throttle=25000/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=325000003..433333336",
+    "cql-stress-cassandra-stress write  cl=QUORUM n=108333334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerShard=250 cql3 native -rate threads=50 throttle=25000/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=433333337..541666670",
+    "cql-stress-cassandra-stress write  cl=QUORUM n=108333334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerShard=250 cql3 native -rate threads=50 throttle=25000/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=541666671..650000004"
 ]
 
 stress_cmd_r: [
-  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",
-  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..10000000",
-  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..15000000",
-  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
+  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..3333334",
+  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=3333335..6666668",
+  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=6666669..10000001",
+  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000002..13333334",
+  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=13333335..16666667",
+  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=16666668..20000000"
 ]
 
 stress_cmd_cache_warmup: [
-  "cql-stress-cassandra-stress read  cl=QUORUM n=5000000 -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",
-  "cql-stress-cassandra-stress read  cl=QUORUM n=5000000 -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..10000000",
-  "cql-stress-cassandra-stress read  cl=QUORUM n=5000000 -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..15000000",
-  "cql-stress-cassandra-stress read  cl=QUORUM n=5000000 -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
+  "cql-stress-cassandra-stress read  cl=QUORUM n=3333334 -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..3333334",
+  "cql-stress-cassandra-stress read  cl=QUORUM n=3333334 -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=3333335..6666668",
+  "cql-stress-cassandra-stress read  cl=QUORUM n=3333333 -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=6666669..10000001",
+  "cql-stress-cassandra-stress read  cl=QUORUM n=3333333 -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000002..13333334",
+  "cql-stress-cassandra-stress read  cl=QUORUM n=3333333 -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=13333335..16666667",
+  "cql-stress-cassandra-stress read  cl=QUORUM n=3333333 -mode connectionsPerShard=250 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=16666668..20000000"
 ]
