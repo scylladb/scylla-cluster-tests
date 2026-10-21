@@ -465,11 +465,16 @@ def _apply_implicit_constraints_fallback(parsed: list[Constraint], role: str) ->
         parsed.append(Constraint("local_disk_count", "eq", 0))
 
 
+#: Sorts after every real interruption bucket (0-4).
+_UNKNOWN_BUCKET = 5
+
+
 def _build_sort_key(
     sort_order: list[str] | None,
     family_rank: dict[str, int],
     num_preferred: int,
     region: str | None = None,
+    spot_region: str | None = None,
 ):
     _NO_PRICE = float("inf")
     order = sort_order or ["preferred_family_rank", "price_per_hour", "vcpus"]
@@ -481,6 +486,14 @@ def _build_sort_key(
         "local_disk_gb": lambda inst: inst.local_disk_gb,
     }
     active = [field_getters[f] for f in order if f in field_getters]
+    if spot_region:
+        # Closest size first, then the less-interrupted candidate of that size, then the configured order.
+        # Size must stay first: a bucket-0 24xlarge must never win over a bucket-4 xlarge. An unknown bucket
+        # sorts after every known one, so clouds with no interruption data (GCE, OCI) keep their order.
+        active[:0] = [
+            field_getters["vcpus"],
+            lambda inst: _UNKNOWN_BUCKET if (b := inst.get_interruption_bucket(spot_region)) is None else b,
+        ]
     return lambda inst: tuple(g(inst) for g in active)
 
 
@@ -491,6 +504,7 @@ def select_instance(
     constraints: dict,
     arch: str | None = None,
     region: str | None = None,
+    spot_region: str | None = None,
 ) -> InstanceTypeInfo:
     """Select the best cloud instance matching the given constraints.
 
@@ -507,7 +521,8 @@ def select_instance(
        ``local_disk_gb`` or ``local_disk_count``.
     5. Filter all cloud instances by the full constraint set.
     6. Narrow to preferred-family candidates when available.
-    7. Sort: preferred family order → price ascending → vcpus ascending.
+    7. Sort: preferred family order → price ascending → vcpus ascending. For spot, fewest vcpus and
+       then lowest interruption bucket come first.
     8. Return the first (best) match.
 
     Args:
@@ -518,6 +533,9 @@ def select_instance(
         arch: Optional architecture override ("x86_64", "arm64", or aliases).
             When provided, overrides any "arch" key in *constraints* and the
             catalog default.
+        region: Region for prices.
+        spot_region: For a spot run, rank candidates of the closest size by their interruption bucket in
+            this region, ahead of the family order. Prices are unaffected.
 
     Returns:
         The best-matching InstanceTypeInfo.
@@ -579,6 +597,7 @@ def select_instance(
             family_rank=family_rank,
             num_preferred=len(preferred_families),
             region=region,
+            spot_region=spot_region,
         )
     )
     best = candidates[0]
