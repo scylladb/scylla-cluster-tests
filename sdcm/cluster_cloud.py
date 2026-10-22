@@ -772,6 +772,20 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             account_id=self._account_id, cluster_id=self._cluster_id, enriched=True
         )["dc"]["id"]
 
+    @property
+    def api_client(self) -> ScyllaCloudAPIClient:
+        return self._api_client
+
+    @property
+    def account_id(self) -> int:
+        return self._account_id
+
+    @property
+    def cluster_id(self) -> int:
+        if not self._cluster_id:
+            raise ScyllaCloudError("Cluster ID is not set, the cluster is not created yet")
+        return self._cluster_id
+
     def _resolve_cluster_id(self) -> int:
         """Resolve cluster ID from test_id for cluster reuse"""
         search_pattern = str(self.uuid)[:8]
