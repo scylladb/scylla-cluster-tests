@@ -15,11 +15,16 @@ import re
 import pickle
 import unittest.mock
 
+import pytest
+
 import upgrade_test
 from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.database import DatabaseLogEvent
-from sdcm.sct_events.group_common_events import ignore_drop_table_during_repair_errors
+from sdcm.sct_events.group_common_events import (
+    ignore_drop_table_during_repair_errors,
+    oversized_allocation_filter,
+)
 
 
 def test_db_events_filter_just_type():
@@ -192,7 +197,24 @@ def test_ignore_drop_table_during_repair_errors(events_function_scope):  # noqa:
     assert not db_events_filter.eval_filter(other_event_class_with_same_line)
 
 
-def _make_symbolized_oversized_allocation_event(node: str, symbol: str) -> DatabaseLogEvent:
+# Decoded backtrace of a real SCYLLADB-3114 event (rolling-upgrade-oci-image-test #5), trimmed: the symbol the
+# filters look for sits many lines below the first line of the event.
+ACK2_OVERSIZED_ALLOCATION_BACKTRACE = """\
+[Backtrace #0]
+void seastar::backtrace<seastar::current_backtrace_tasklocal()::$_0>(seastar::current_backtrace_tasklocal()::$_0&&, bool) at ./build/release/seastar/./seastar/include/seastar/util/backtrace.hh:85
+seastar::memory::cpu_pages::warn_large_allocation(unsigned long) at ./build/release/seastar/./seastar/src/core/memory.cc:865
+(inlined by) __libc_malloc at ./build/release/seastar/./seastar/src/core/memory.cc:2282
+?? at ??:0
+fmt::v11::detail::vformat_to(fmt::v11::detail::buffer<char>&, fmt::v11::basic_string_view<char>, fmt::v11::basic_format_args<fmt::v11::context>, fmt::v11::detail::locale_ref) at ??:0
+(inlined by) fmt::v11::formatter<gms::endpoint_state, char, void>::format(gms::endpoint_state const&, fmt::v11::context&) const at ./gms/endpoint_state.cc:110
+(inlined by) fmt::v11::formatter<gms::gossip_digest_ack2, char, void>::format(gms::gossip_digest_ack2 const&, fmt::v11::context&) const at ./gms/gossip_digest_ack2.cc:18
+std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>> fmt::v11::format<gms::gossip_digest_ack2&>(fmt::v11::fstring<gms::gossip_digest_ack2&>::t, gms::gossip_digest_ack2&) at /usr/include/fmt/format.h:4200
+(inlined by) gms::gossiper::do_send_ack2_msg(utils::tagged_uuid<locator::host_id_tag>, utils::chunked_vector<gms::gossip_digest, 131072ul>) at ./gms/gossiper.cc:389
+gms::gossiper::handle_ack_msg(utils::tagged_uuid<locator::host_id_tag>, gms::gossip_digest_ack) at ./gms/gossiper.cc:334
+"""
+
+
+def make_oversized_allocation_event(node: str, backtrace: str) -> DatabaseLogEvent:
     """Build an event like the real one: the raw log line has only addresses, the decoder fills `backtrace`."""
     event = DatabaseLogEvent.OVERSIZED_ALLOCATION().add_info(
         node=node,
@@ -201,64 +223,123 @@ def _make_symbolized_oversized_allocation_event(node: str, symbol: str) -> Datab
         "oversized allocation: 1048576 bytes. This is non-fatal, but could lead to latency and/or fragmentation "
         "issues. Please report: at 0x5f1a2b3 0x5f1a7c4 0x5f1ad05 0x5f1b296",
     )
-    event.backtrace = (
-        "void seastar::backtrace<seastar::current_backtrace_tasklocal()::$_0>(...)\n"
-        f"{symbol}(seastar::rpc::wait_type, std::chrono::time_point<seastar::lowres_clock>)"
-    )
+    event.backtrace = backtrace
     return event
 
 
-def test_oversized_whole_run_filter(events_function_scope):  # noqa: ARG001
+def make_rpc_oversized_allocation_event(node: str, symbol: str = "seastar::rpc::client::wait_for_reply"):
+    return make_oversized_allocation_event(
+        node,
+        "void seastar::backtrace<seastar::current_backtrace_tasklocal()::$_0>(...)\n"
+        f"{symbol}(seastar::rpc::wait_type, std::chrono::time_point<seastar::lowres_clock>)",
+    )
+
+
+def is_downgraded(events_filter: EventsSeverityChangerFilter, event: DatabaseLogEvent) -> bool:
+    """A severity changer never drops the event, it only lowers its severity when it matches."""
+    assert event.severity == Severity.ERROR
+    assert not events_filter.eval_filter(event)
+    return event.severity == Severity.WARNING
+
+
+def published_filters(publishing_call) -> list:
+    published = []
+    with unittest.mock.patch.object(EventsFilter, "publish", autospec=True, side_effect=published.append):
+        publishing_call()
+    # `publish` is mocked, so the filters are still flagged ready-to-publish: without this their
+    # `__del__` logs "[SCT internal warning] ... has not been published" into whichever test
+    # happens to garbage-collect them on the same worker
+    for events_filter in published:
+        events_filter.dont_publish()
+    return published
+
+
+def make_other_type_event() -> DatabaseLogEvent:
+    # `event_class` matches every `DatabaseLogEvent` subtype: only the regex tells the types apart,
+    # even when another event quotes the type name in its own text.
+    event = DatabaseLogEvent.BAD_ALLOC().add_info(
+        node="node-2", line_number=1, line="bad_alloc, see type=OVERSIZED_ALLOCATION"
+    )
+    event.backtrace = ACK2_OVERSIZED_ALLOCATION_BACKTRACE
+    return event
+
+
+@pytest.mark.parametrize(
+    "symbol,make_event,expected",
+    [
+        pytest.param(
+            "gms::gossiper::do_send_ack2_msg",
+            lambda: make_oversized_allocation_event("node-2", ACK2_OVERSIZED_ALLOCATION_BACKTRACE),
+            True,
+            id="symbol-deep-in-backtrace",
+        ),
+        pytest.param(
+            "gms::gossiper::do_send_ack_msg",
+            lambda: make_oversized_allocation_event("node-2", ACK2_OVERSIZED_ALLOCATION_BACKTRACE),
+            False,
+            id="sibling-symbol",
+        ),
+        pytest.param("gms::gossiper::do_send_ack2_msg", make_other_type_event, False, id="other-event-type"),
+    ],
+)
+def test_oversized_allocation_filter_matches_symbol_in_multiline_backtrace(symbol, make_event, expected):
+    events_filter = oversized_allocation_filter(symbol)
+    events_filter.dont_publish()
+
+    assert is_downgraded(events_filter, make_event()) is expected
+
+
+@pytest.mark.parametrize(
+    "node,symbol,expected",
+    [
+        pytest.param("node-1", "seastar::rpc::client::wait_for_reply", True, id="same-node"),
+        pytest.param("Node node-1 [10.0.0.1 | 10.0.0.1]", "seastar::rpc::client::wait_for_reply", True, id="node-repr"),
+        pytest.param("node-10", "seastar::rpc::client::wait_for_reply", False, id="node-name-prefix"),
+        pytest.param("node-2", "seastar::rpc::client::wait_for_reply", False, id="other-node"),
+        pytest.param("node-1-extra", "seastar::rpc::client::wait_for_reply", False, id="node-name-suffix"),
+        pytest.param("node-1", "seastar::rpc::client::send", False, id="other-symbol"),
+    ],
+)
+def test_oversized_allocation_filter_for_one_node(node, symbol, expected):
+    events_filter = oversized_allocation_filter("seastar::rpc::client::wait_for_reply", node_name="node-1")
+    events_filter.dont_publish()
+
+    assert is_downgraded(events_filter, make_rpc_oversized_allocation_event(node, symbol)) is expected
+
+
+def test_upgrade_oversized_rpc_whole_run_filter(events_function_scope):  # noqa: ARG001
     """SCT-1048: the decoder writes the symbol into `event.backtrace` and leaves `event.line`
     as the raw log line, so a filter on `event.line` never matches the symbol."""
-    published_filters = []
     upgrade_test_stub = unittest.mock.MagicMock()
     upgrade_test_stub.params.scylla_version_upgrade_target = "2026.2.0"
 
-    with unittest.mock.patch.object(EventsFilter, "publish", autospec=True, side_effect=published_filters.append):
-        upgrade_test.UpgradeTest.filter_oversized_allocation_for_whole_run(upgrade_test_stub)
-
-    assert len(published_filters) == 1
-    events_filter = published_filters[0]
-    # `publish` is mocked, so the filter is still flagged ready-to-publish: without this its
-    # `__del__` logs "[SCT internal warning] ... has not been published" into whichever test
-    # happens to garbage-collect it on the same worker
-    events_filter.dont_publish()
-
-    matching_event = _make_symbolized_oversized_allocation_event("node1", "seastar::rpc::client::wait_for_reply")
-    other_symbol_event = _make_symbolized_oversized_allocation_event("node1", "seastar::rpc::client::send")
-    # `event_class` matches every `DatabaseLogEvent` subtype: only the regex tells the types apart,
-    # even when another event quotes the type name in its own text.
-    other_type_event = DatabaseLogEvent.BAD_ALLOC().add_info(
-        node="node1", line_number=1, line="bad_alloc, see type=OVERSIZED_ALLOCATION"
+    (events_filter,) = published_filters(
+        lambda: upgrade_test.UpgradeTest.filter_oversized_allocation_for_whole_run(upgrade_test_stub)
     )
-    other_type_event.backtrace = matching_event.backtrace
 
-    assert events_filter.eval_filter(matching_event)
-    assert not events_filter.eval_filter(other_symbol_event)
-    assert not events_filter.eval_filter(other_type_event)
+    assert is_downgraded(events_filter, make_rpc_oversized_allocation_event("node1"))
+    assert not is_downgraded(events_filter, make_rpc_oversized_allocation_event("node1", "seastar::rpc::client::send"))
 
 
-def test_upgrade_per_node_oversized_allocation_filter_matches_only_its_node(events_function_scope):  # noqa: ARG001
+def test_upgrade_oversized_ack2_filter_downgrades_the_real_event(events_function_scope):  # noqa: ARG001
+    """SCYLLADB-3114: downgraded for the whole run, whatever the upgrade target is."""
+    (events_filter,) = published_filters(
+        lambda: upgrade_test.UpgradeTest.filter_oversized_ack2_allocation(unittest.mock.MagicMock())
+    )
+
+    assert is_downgraded(events_filter, make_oversized_allocation_event("node-2", ACK2_OVERSIZED_ALLOCATION_BACKTRACE))
+
+
+def test_upgrade_per_node_oversized_rpc_filter_matches_only_its_node(events_function_scope):  # noqa: ARG001
     upgrade_test_stub = unittest.mock.MagicMock()
     node = unittest.mock.MagicMock()
     node.name = "node-1"
 
     with unittest.mock.patch.object(EventsFilter, "publish", autospec=True):
         upgrade_test.UpgradeTest.configure_event_filtering(upgrade_test_stub, node)
-
     (events_filter,) = upgrade_test_stub.stacks[node].enter_context.call_args.args
-    # `publish` is mocked here too - see test_oversized_whole_run_filter
+    # `publish` is mocked here too - see published_filters
     events_filter.dont_publish()
 
-    symbol = "seastar::rpc::client::wait_for_reply"
-    assert events_filter.eval_filter(_make_symbolized_oversized_allocation_event("node-1", symbol))
-    assert events_filter.eval_filter(
-        _make_symbolized_oversized_allocation_event("Node node-1 [10.0.0.1 | 10.0.0.1]", symbol)
-    )
-    assert not events_filter.eval_filter(_make_symbolized_oversized_allocation_event("node-10", symbol))
-    assert not events_filter.eval_filter(_make_symbolized_oversized_allocation_event("node-2", symbol))
-    assert not events_filter.eval_filter(_make_symbolized_oversized_allocation_event("node-1-extra", symbol))
-    assert not events_filter.eval_filter(
-        _make_symbolized_oversized_allocation_event("node-1", "seastar::rpc::client::send")
-    )
+    assert is_downgraded(events_filter, make_rpc_oversized_allocation_event("node-1"))
+    assert not is_downgraded(events_filter, make_rpc_oversized_allocation_event("node-1-2"))

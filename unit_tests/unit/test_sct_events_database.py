@@ -13,6 +13,8 @@
 
 import re
 
+import pytest
+
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
@@ -82,6 +84,29 @@ def test_find_issue_by_reactor_stall(test_data_dir):
     issue_url = find_issue_obj.find_issue(backtrace_type=event.type, decoded_backtrace="\n".join(backtrace))
     event.known_issue = issue_url
     assert event.known_issue == "https://github.com/scylladb/scylladb/issues/8828"
+
+
+@pytest.mark.parametrize(
+    "symbol,expected",
+    [
+        ("gms::gossiper::do_send_ack2_msg", "https://scylladb.atlassian.net/browse/SCYLLADB-3114"),
+        # the sibling SYN path (jira:SCYLLADB-4852) is a different issue
+        ("gms::gossiper::do_send_ack_msg", None),
+    ],
+)
+def test_find_issue_by_oversized_allocation(symbol, expected):
+    backtrace = (
+        "seastar::memory::cpu_pages::warn_large_allocation(unsigned long) at ./seastar/src/core/memory.cc:865\n"
+        f"(inlined by) {symbol}(utils::tagged_uuid<locator::host_id_tag>, "
+        "utils::chunked_vector<gms::gossip_digest, 131072ul>) at ./gms/gossiper.cc:389\n"
+        "gms::gossiper::handle_ack_msg(utils::tagged_uuid<locator::host_id_tag>, gms::gossip_digest_ack) "
+        "at ./gms/gossiper.cc:334\n"
+    )
+
+    assert (
+        FindIssuePerBacktrace().find_issue(backtrace_type="OVERSIZED_ALLOCATION", decoded_backtrace=backtrace)
+        == expected
+    )
 
 
 def test_kernel_callstack_severity():
