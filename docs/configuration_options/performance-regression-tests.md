@@ -5,7 +5,7 @@
 Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram
 settings.
 
-**19 options.**
+**20 options.**
 
 
 <a id="max_deviation"></a>
@@ -50,6 +50,17 @@ Number of threads which should be added on per step
 **default:** N/A
 
 **type:** int
+
+
+<a id="perf_gradual_disable_tablets_balancing"></a>
+
+## **perf_gradual_disable_tablets_balancing** / SCT_PERF_GRADUAL_DISABLE_TABLETS_BALANCING
+
+Disable the tablet load balancer after the data preparation and before the first throttle step, so that no tablet migration runs during the measurement
+
+**default:** N/A
+
+**type:** bool
 
 
 <a id="perf_gradual_step_duration"></a>

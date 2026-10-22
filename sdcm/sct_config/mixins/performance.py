@@ -44,6 +44,10 @@ class PerformanceConfigMixin(BaseModel):
     num_threads_step: int = SctField(
         description="Number of threads which should be added on per step",
     )
+    perf_gradual_disable_tablets_balancing: Boolean = SctField(
+        description="Disable the tablet load balancer after the data preparation and before the first throttle step, "
+        "so that no tablet migration runs during the measurement",
+    )
     perf_gradual_step_duration: DictOrStr = SctField(
         description="Step duration of c-s load for gradual performance test per sub-test. "
         "Example: {'read': '30m', 'write': None, 'mixed': '30m'}",

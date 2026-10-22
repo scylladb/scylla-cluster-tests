@@ -1,0 +1,13 @@
+# Throttle steps for the read and write workloads on an object-storage keyspace (test_read_gradual_increase_load,
+# test_write_gradual_increase_load).
+# Use with test-cases/performance/perf-regression-predefined-throughput-steps-object-storage.yaml.
+# Threads per step follow Little's law (rate per loader x latency): at ~250 ms worst-case S3 read latency,
+# 20k op/s over 2 loaders needs 10,000 x 0.25 = 2,500 threads per loader.
+# Write steps are a starting point: writes land in the local commitlog and only the flushed sstables go to S3, so the
+# rates are above the read steps but well below the local-disk config (r8gd.2xlarge has half the vCPUs of i4i.4xlarge).
+# Write threads assume ~40 ms worst-case latency (memtable flush to S3 can stall writes far longer than a local flush):
+# 50k op/s over 2 loaders needs 25,000 x 0.04 = 1,000 threads per loader. The unthrottled step reuses the first step's count.
+# Every step, read and write, runs for 30 minutes.
+perf_gradual_threads: {"read": [900, 1300, 1900, 2500, 900], "write": 500}
+perf_gradual_throttle_steps: {"read": ['5000', '10000', '15000', '20000', 'unthrottled'], "write": ['25000', '50000', 'unthrottled']}
+perf_gradual_step_duration: {"read": '30m', "write": '30m'}

@@ -13,6 +13,7 @@ from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
+from sdcm.utils.tablets.common import set_tablets_balancing
 
 
 class CSPopulateDistribution(Enum):
@@ -290,6 +291,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         stress_num = 1  # TODO: fix it to support multiple stress cmds per loader node (useful for latte)
         num_loaders = len(self.loaders.nodes)
         self.run_fstrim_on_all_db_nodes()
+        if self.params.get("pre_create_keyspace"):
+            self._pre_create_keyspace()
         # run a write workload as a preparation
         if workload.preload_data and not skip_optional_stage("perf_preload_data"):
             self.preload_data()
@@ -303,6 +306,12 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             # continuous period of three minutes.
             self.wait_for_no_tablets_splits()
             self.run_fstrim_on_all_db_nodes()
+
+        if self.params.get("perf_gradual_disable_tablets_balancing"):
+            # Tablet migrations during the steps would distort latencies; on object-storage keyspaces the cleanup
+            # after a migration also creates a gossip-group S3 client on the shard, which permanently takes
+            # connections away from user reads (utils/s3/client.cc rebalance_connections()).
+            set_tablets_balancing(self.db_cluster.nodes[0], enabled=False)
 
         self.run_gradual_increase_load(
             workload=workload, stress_num=stress_num, num_loaders=num_loaders, test_name=test_name
@@ -358,6 +367,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
     def prepare_schema(self, workload: Workload):
         if workload.prepare_schema and (prepare_stress_cmds := self.params.get("prepare_stress_cmd")):
+            if self.params.get("pre_create_keyspace"):
+                # The write workload drops the keyspace after every step. Recreate it with the configured options
+                # (e.g. S3 storage) before cassandra-stress gets a chance to recreate it with the defaults.
+                self._pre_create_keyspace()
             stress_queue = []
             for stress_cmd in prepare_stress_cmds:
                 self.log.info("Preparing schema using command: %s", stress_cmd)

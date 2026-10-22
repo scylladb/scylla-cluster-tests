@@ -1,0 +1,14 @@
+# GCE + GCS for test-cases/performance/perf-regression-predefined-throughput-steps-object-storage.yaml.
+# Use with configurations/object_storage_gcs.yaml; the endpoint below must match its object_storage_endpoints name
+# character for character. The bucket is the GCE default backup bucket (backup_bucket_location in defaults/gce_config.yaml).
+pre_create_keyspace: [
+  "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND storage = {'type': 'GS', 'bucket': 'manager-backup-tests-sct-project-1-us-east1', 'endpoint': 'https://storage.googleapis.com'};",
+]
+
+# n2-highmem-8 (8 vCPU, 64 GB) matches r8gd.2xlarge; c3-highcpu-8 (8 vCPU, 16 GB) matches c7i.2xlarge. The GCE default
+# loader (e2-standard-2, 8 GB) cannot hold the 8 GB cassandra-stress heap pre-touched by cs_extra_jvm_opts.
+gce_instance_type_db: 'n2-highmem-8'
+gce_root_disk_type_db: 'pd-ssd'
+gce_n_local_ssd_disk_db: 4
+gce_instance_type_loader: 'c3-highcpu-8'
+gce_root_disk_type_loader: 'pd-ssd'

@@ -5,3 +5,8 @@ append_scylla_yaml:
       port: 443
       https: true
       aws_region: us-east-1
+  # Per-shard S3 connection budget, split between scheduling groups by shares (utils/s3/client.cc
+  # rebalance_connections()). With the default 128, sl:default gets ~79 connections, or ~50 once another
+  # group (e.g. gossip, after a tablet cleanup) has created an S3 client on the shard. At ~70 ms per GET
+  # that caps a shard at ~700-1,100 GET/s and starves QUORUM reads (build .../tablets/42, node-3 shard 4).
+  object_storage_connections_per_shard: 512

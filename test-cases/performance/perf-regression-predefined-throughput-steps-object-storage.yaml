@@ -1,0 +1,65 @@
+# Predefined throughput steps on an object-storage keyspace: test_read_gradual_increase_load and
+# test_write_gradual_increase_load. Use with configurations/performance/cassandra_stress_gradual_load_steps_object_storage.yaml
+# and one backend pair, which sets the instance types and puts keyspace1 on the bucket (pre_create_keyspace):
+#   AWS + S3:  configurations/object_storage_s3.yaml  + configurations/aws/perf-regression-predefined-throughput-steps-s3.yaml
+#   GCE + GCS: configurations/object_storage_gcs.yaml + configurations/gce/perf-regression-predefined-throughput-steps-gcs.yaml
+# Reads use a gaussian key distribution and a cache warm-up over the same distribution, so every step runs at the
+# same cache hit rate. Writes insert a fresh sequential dataset per step (the keyspace is dropped after each step).
+# Each command is listed once per loader (commands are distributed round-robin).
+test_duration: 500
+
+perf_stress_keyspace: keyspace1
+perf_stress_table: standard1
+
+# Creates the table before a write step so the two loaders don't race on the schema. The keyspace itself is
+# recreated from pre_create_keyspace first (test_write_gradual_increase_load drops it after every step), so
+# cassandra-stress never creates it with the default (local) storage.
+prepare_stress_cmd: "cassandra-stress write no-warmup cl=ALL n=1 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=1' -col 'size=FIXED(1024) n=FIXED(1)'"
+
+prepare_write_cmd: [
+    "cassandra-stress write  cl=ALL n=95000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=100 throttle=75000/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..95000000",
+    "cassandra-stress write  cl=ALL n=95000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=100 throttle=75000/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=95000001..190000000",
+]
+
+# Each write step runs for perf_gradual_step_duration; once a loader reaches the end of its sequence it overwrites it
+# from the start, so the dataset stays at 200M rows (~200 GB before replication) even in the unthrottled step.
+stress_cmd_w: [
+  "cassandra-stress write no-warmup cl=QUORUM duration=$duration -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..100000000",
+  "cassandra-stress write no-warmup cl=QUORUM duration=$duration -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=100000001..200000000",
+]
+
+stress_cmd_r: [
+  "cassandra-stress read no-warmup cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..190000000,95000000,20000000)'",
+  "cassandra-stress read no-warmup cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..190000000,95000000,20000000)'",
+]
+
+stress_cmd_cache_warmup: [
+  "cassandra-stress read no-warmup cl=ALL n=60000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..190000000,95000000,20000000)'",
+  "cassandra-stress read no-warmup cl=ALL n=60000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..190000000,95000000,20000000)'",
+]
+
+round_robin: true
+
+n_db_nodes: 3
+n_loaders: 2
+
+use_preinstalled_scylla: true
+use_prepared_loaders: false
+use_mgmt: false
+
+user_prefix: 'perf-predefined-steps-objstore'
+argus_email_report_template: email_report_performance.yaml
+email_recipients: ['scylla-perf-results@scylladb.com']
+
+use_hdrhistogram: true
+cs_extra_jvm_opts: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch'
+
+backtrace_decoding: true
+backtrace_stall_decoding: false
+adaptive_timeout_store_metrics: false
+
+# No tablet migrations during the steps; on S3 the post-migration cleanup also shrinks the shard's S3 read connection pool.
+perf_gradual_disable_tablets_balancing: true
+
+# s3=debug logs the S3 client connection rebalancing between scheduling groups.
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --logger-log-level s3=debug'
