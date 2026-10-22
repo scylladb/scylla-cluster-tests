@@ -64,7 +64,7 @@ from sdcm.sct_runner import (
 )
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
-from sdcm.utils.argus import argus_offline_collect_events, get_argus_client, get_argus_use_tunnel_from_env
+from sdcm.utils.argus import get_argus_client, get_argus_use_tunnel_from_env
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
@@ -1577,9 +1577,6 @@ def store_logs_in_argus(
                 else:
                     LOGGER.info("Skipping %s because it has been already sent to argus.", file_name)
         argus_client.submit_sct_logs(log_links)
-
-        if not argus_client.get_run().get("events"):
-            argus_offline_collect_events(client=argus_client)
     except Exception:
         LOGGER.error("Error saving logs to argus", exc_info=True)
 
