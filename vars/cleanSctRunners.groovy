@@ -15,34 +15,37 @@ def call(Map params, RunWrapper currentBuild){
         params."post_behavior_${it}" == 'keep'
     }
 
-    sh """#!/bin/bash
+    // Tears the SCT runner down through hydra; it must not hold the builder if it hangs
+    timeout(time: 30, unit: 'MINUTES') {
+        sh """#!/bin/bash
 
-    set -xe
-    env
+        set -xe
+        env
 
-    echo "Test status on runCleanupResource is: " + "$test_status"
+        echo "Test status on runCleanupResource is: " + "$test_status"
 
-    echo "Starting to clean runner instances"
-    if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" || "$cloud_provider" == "azure" || "$cloud_provider" == "oci" ]]; then
-        export RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        if [[ "${shouldKeepRunner}" == "true" && -n "\${RUNNER_IP}" ]]; then
-            echo "All post_behavior_* settings are 'keep'. Preserving SCT runner for cluster reuse."
-            # keep=120 (5 days from launch) acts as a safety ceiling;
-            # the existing cleanup logic terminates runners once elapsed hours exceed the keep value
-            ./docker/env/hydra.sh set-runner-tags \${RUNNER_IP} --backend "$cloud_provider" \
-                --tags keep 120 --tags keep_action terminate
-        else
-            RUNNER_IP_ARG=()
-            if [[ -n "\${RUNNER_IP}" ]] ; then
-                RUNNER_IP_ARG=(--runner-ip "\${RUNNER_IP}")
+        echo "Starting to clean runner instances"
+        if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" || "$cloud_provider" == "azure" || "$cloud_provider" == "oci" ]]; then
+            export RUNNER_IP=\$(cat sct_runner_ip||echo "")
+            if [[ "${shouldKeepRunner}" == "true" && -n "\${RUNNER_IP}" ]]; then
+                echo "All post_behavior_* settings are 'keep'. Preserving SCT runner for cluster reuse."
+                # keep=120 (5 days from launch) acts as a safety ceiling;
+                # the existing cleanup logic terminates runners once elapsed hours exceed the keep value
+                ./docker/env/hydra.sh set-runner-tags \${RUNNER_IP} --backend "$cloud_provider" \
+                    --tags keep 120 --tags keep_action terminate
+            else
+                RUNNER_IP_ARG=()
+                if [[ -n "\${RUNNER_IP}" ]] ; then
+                    RUNNER_IP_ARG=(--runner-ip "\${RUNNER_IP}")
+                fi
+                ./docker/env/hydra.sh clean-runner-instances \
+                    --test-status "$test_status" "\${RUNNER_IP_ARG[@]}" --backend "$cloud_provider"
             fi
-            ./docker/env/hydra.sh clean-runner-instances \
-                --test-status "$test_status" "\${RUNNER_IP_ARG[@]}" --backend "$cloud_provider"
+        else
+            echo "Not running on AWS, GCP nor Azure. Skipping cleaning runner instances."
         fi
-    else
-        echo "Not running on AWS, GCP nor Azure. Skipping cleaning runner instances."
-    fi
 
-    echo "Finished cleaning runner instances."
-    """
+        echo "Finished cleaning runner instances."
+        """
+    }
 }
