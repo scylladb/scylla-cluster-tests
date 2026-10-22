@@ -1,7 +1,9 @@
 #!groovy
 import groovy.json.JsonSlurperClassic
 
-def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+// keep these in the script binding (no `def`) so call() and post{} can read them; log collection
+// and cleanup default to 30 minutes so they still run when 'Get test duration' fails
+(testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,30,30]
 def base_versions_list = []
 
 def call(Map pipelineParams) {
@@ -302,12 +304,12 @@ def call(Map pipelineParams) {
                 post{
                     failure {
                         script{
-                            sh "exit 1"
+                            error("BYO Scylladb failed")
                         }
                     }
                     unstable {
                         script{
-                            sh "exit 1"
+                            error("BYO Scylladb failed")
                         }
                     }
                 }
@@ -512,14 +514,12 @@ def call(Map pipelineParams) {
                                                 def clean_resources = completed_stages[sub_test]['clean_resources']
                                                 def send_email = completed_stages[sub_test]['send_email']
                                                 def clean_sct_runner = completed_stages[sub_test]['clean_sct_runner']
-                                                sh """
-                                                    echo "'provision_resources' stage is completed: $provision_resources"
-                                                    echo "'run_tests' stage is completed: $run_tests"
-                                                    echo "'collect_logs' stage is completed: $collect_logs"
-                                                    echo "'clean_resources' stage is completed: $clean_resources"
-                                                    echo "'send_email' stage is completed: $send_email"
-                                                    echo "'clean_sct_runner' stage is completed: $clean_sct_runner"
-                                                """
+                                                echo "'provision_resources' stage is completed: $provision_resources"
+                                                echo "'run_tests' stage is completed: $run_tests"
+                                                echo "'collect_logs' stage is completed: $collect_logs"
+                                                echo "'clean_resources' stage is completed: $clean_resources"
+                                                echo "'send_email' stage is completed: $send_email"
+                                                echo "'clean_sct_runner' stage is completed: $clean_sct_runner"
                                                 if (!completed_stages[sub_test]['collect_logs']) {
                                                     catchError {
                                                         script {

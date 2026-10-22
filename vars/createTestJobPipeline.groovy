@@ -27,6 +27,7 @@ def call() {
         }
         options {
             timestamps()
+            timeout(time: 390, unit: 'MINUTES')
             disableConcurrentBuilds()
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
