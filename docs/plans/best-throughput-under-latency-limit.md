@@ -243,6 +243,19 @@ Required for on-demand runs: the instance type is not known when the test-case i
 **Importance:** Critical
 **Dependencies:** Phases 3 and 4
 
+- **Location:** a new `jenkins-pipelines/performance/branch-perf-v17/best-throughput/` directory holds two
+  jenkinsfiles, the launcher and the generic job. `sct.py create-performance-jobs` already maps directories
+  under `branch-perf-v17` to Jenkins folders, so it creates both in a `best-throughput/` Jenkins folder, and
+  the generated jobs are created in that folder too. All of them run from the `branch-perf-v17` branch.
+
+  ```
+  best-throughput/                               (Jenkins folder)
+    best-throughput-request                      launcher, created by create-performance-jobs
+    best-throughput-generic                      generic job, created by create-performance-jobs
+    aws-i8g.4xlarge-3n-tablets                   generated on the first request for this configuration
+    aws-i4i.4xlarge-3n-tablets                   ...
+  ```
+
 - **Launcher job** `best-throughput-request`: a pipeline job whose parameters are the request. Proposed
   parameters (**to be decided**):
 
@@ -263,20 +276,26 @@ Required for on-demand runs: the instance type is not known when the test-case i
   - validates the request (required fields, instance type known in the region, architecture);
   - derives the job name from the hardware parameters, e.g.
     `best-throughput/aws-i8g.4xlarge-3n-tablets`;
-  - creates the job if it does not exist, through `JenkinsPipelines`. All generated jobs point at one
-    generic jenkinsfile; the request is stored as the job's parameter defaults, so a plain rebuild repeats
-    the same configuration.
+  - creates the job in the `best-throughput/` folder if it does not exist, through `JenkinsPipelines` with
+    `branch-perf-v17` as the SCT branch. Every generated job points at the generic job's jenkinsfile; the
+    request is stored as the job's parameter defaults, so a plain rebuild repeats the same configuration.
 - The launcher then starts the generated job with the request's parameters and does not wait for it. The
   instance types reach SCT through `extra_environment_variables` (`SCT_INSTANCE_TYPE_DB`, ...), which the
   perf pipeline already supports, so `perfRegressionParallelPipeline` is unchanged.
 - The generic jenkinsfile runs the predefined-steps test with a best-throughput overlay: the search (Phase 3),
   sized dataset (Phase 4), time-bound steps, and no per-step P99 validation.
-- **Needs Investigation:** the folder for launcher and generated jobs (on `branch-perf-v17` with the other
-  perf jobs, or master), and the Jenkins credentials the launcher uses to create jobs there.
+- The generic job can also be run directly with the same parameters, for a one-off run that should not get
+  its own job and history.
+- Since the jobs run from `branch-perf-v17`, every PR of Phases 1-5 is backported there
+  (`backport/perf-v17`) before the launcher is usable.
+- **Needs Investigation:** the Jenkins credentials the launcher uses to create jobs, limited to the
+  `best-throughput/` folder.
 - Backends: AWS first. GCE and Azure need their instance-type variables and default regions and loaders.
 
 **Definition of Done:**
-- [ ] A request for a new instance type creates its job and starts it; a second request reuses the job
+- [ ] `create-performance-jobs` creates the `best-throughput/` folder with the launcher and the generic job
+- [ ] A request for a new instance type creates its job in that folder and starts it; a second request
+      reuses the job
 - [ ] Generated jobs for i4i.4xlarge and i8g.4xlarge report `BestThroughputResult` for all four workloads
 - [ ] An invalid request fails in the launcher, before anything is provisioned
 
@@ -361,7 +380,7 @@ Required for on-demand runs: the instance type is not known when the test-case i
 | Mixed probes run on a growing dataset, so later steps see more data | Medium | Medium | Keep compaction and tablet-split waits; note it in the report |
 | Derived dataset changes results of existing jobs | Low | High | Phase 4 defaults reproduce today's ranges on i4i/i8g; unit-tested |
 | Generated jobs pile up in Jenkins | Medium | Low | One job per hardware configuration, reused across versions; Scylla version is not in the name |
-| The launcher's job-creation credentials are too broad | Low | Medium | Restrict them to the best-throughput folder (Phase 5 Needs Investigation) |
+| The launcher's job-creation credentials are too broad | Low | Medium | Restrict them to the `best-throughput/` folder (Phase 5 Needs Investigation) |
 | Under 2x overload the stress tool aborts on timeouts or its concurrency grows without bound | High | High | Phase 6 bounds timeouts and threads and requires the tool to continue on errors; checked per tool before enabling |
 
 Rollback: reporting only adds a table; the search, the sized dataset and the overload steps run only when
