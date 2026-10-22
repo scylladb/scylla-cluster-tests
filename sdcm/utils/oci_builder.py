@@ -22,7 +22,7 @@ import click
 import requests
 
 from sdcm.keystore import KeyStore
-from sdcm.sct_runner import OciSctRunner
+from sdcm.sct_runner import OciSctRunner, BUILDER_KEEP_HOURS
 from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.sct_cmd_helpers import get_all_regions
 
@@ -44,7 +44,7 @@ class OciBuilder:
     NUM_OCPUS = 2
     MEMORY_GB = 16
     NUM_EXECUTORS = 1
-    VERSION = "v2"
+    VERSION = "v3"
 
     def __init__(
         self,
@@ -265,6 +265,7 @@ class OciBuilder:
             memory_gb=self.params.get("oci_memory_gb", self.MEMORY_GB),
             jenkins_labels=self.jenkins_labels,
             credentials_id=credentials_id,
+            keep_hours=BUILDER_KEEP_HOURS,
         )
 
         try:
