@@ -432,7 +432,7 @@ Version of Scylla Manager server and agent to upgrade to
 
 Version of ScyllaDB to install as Manager backend
 
-**default:** 2025.4
+**default:** 2026.1
 
 **type:** str
 

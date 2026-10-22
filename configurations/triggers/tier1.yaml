@@ -117,7 +117,7 @@ jobs:
     labels:
       - "weekly"
       - "week-a"
-    include_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
+    include_versions: ["2024.1", "2025.1", "2026.1"]
 
   - job_name: "tier1/longevity-150gb-asymmetric-cluster-12h-test"
     backend: "aws"
@@ -198,4 +198,4 @@ jobs:
     labels:
       - "weekly"
       - "week-b"
-    include_versions: ["2024.1", "2025.1", "2025.4", "2026.1", "2026.2"]
+    include_versions: ["2024.1", "2025.1", "2026.1", "2026.2"]
