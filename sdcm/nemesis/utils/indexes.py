@@ -75,10 +75,17 @@ def get_random_column_name(
     session,
     ks,
     cf,
+    *,
+    random_generator: random.Random,
     filter_out_collections: bool = False,
     filter_out_static_columns: bool = False,
     filter_out_column_types: list[str] | None = None,
 ) -> str | None:
+    """Return a random column name of ``ks.cf`` or None if no column matches the filters.
+
+    :param random_generator: random generator that picks the column; nemesis code passes
+        ``NemesisRunner.random`` so the pick replays from nemesis_seed.
+    """
     if column_names := get_column_names(
         session=session,
         ks=ks,
@@ -87,7 +94,7 @@ def get_random_column_name(
         filter_out_static_columns=filter_out_static_columns,
         filter_out_column_types=filter_out_column_types,
     ):
-        return random.choice(column_names)
+        return random_generator.choice(column_names)
     return None
 
 
@@ -218,7 +225,9 @@ def create_materialized_view(
     session.execute(query, timeout=600)
 
 
-def create_materialized_view_for_random_column(session, keyspace_name, base_table_name, view_name):
+def create_materialized_view_for_random_column(
+    session, keyspace_name, base_table_name, view_name, *, random_generator: random.Random
+):
     """
     Creates a materialized view for a randomly selected column in the specified base table.
 
@@ -232,6 +241,8 @@ def create_materialized_view_for_random_column(session, keyspace_name, base_tabl
         keyspace_name (str): The name of the keyspace containing the base table.
         base_table_name (str): The name of the base table for which the materialized view is created.
         view_name (str): The name of the materialized view to be created.
+        random_generator (random.Random): picks the view column; nemesis code passes
+            ``NemesisRunner.random`` so the pick replays from nemesis_seed.
 
     Raises:
         UnsupportedNemesis: If no suitable column is found for creating the materialized view.
@@ -259,6 +270,7 @@ def create_materialized_view_for_random_column(session, keyspace_name, base_tabl
         filter_out_collections=True,
         filter_out_static_columns=True,
         filter_out_column_types=unsupported_primary_key_columns,
+        random_generator=random_generator,
     )
     if not column:
         raise UnsupportedNemesis("A supported column for creating MV is not found. nemesis can't run")

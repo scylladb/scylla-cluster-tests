@@ -64,10 +64,10 @@ def set_params(runner):
 
 @pytest.fixture(autouse=True)
 def stub_common_helpers():
-    """Stub the ``utils.common`` internals: DbNodeLogger opens SSH sessions to every
-    node, and the SStable pick has to be deterministic."""
-    with patch(f"{COMMON_MODULE}.DbNodeLogger"), patch(f"{COMMON_MODULE}.random") as mock_random:
-        mock_random.choice.side_effect = lambda seq: seq[0]
+    """Stub the ``utils.common`` internals: DbNodeLogger opens SSH sessions to every node.
+    The SStable pick goes through ``runner.random``, which the shared ``runner`` fixture
+    already makes deterministic."""
+    with patch(f"{COMMON_MODULE}.DbNodeLogger"):
         yield
 
 

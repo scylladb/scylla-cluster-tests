@@ -99,7 +99,7 @@ Multiply the list of nemesis to execute by the specified factor
 
 ## **nemesis_seed** / SCT_NEMESIS_SEED
 
-A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
+Seed for the per-runner random generator (NemesisRunner.random) that drives the<br>disruption order, target node choice and every other random decision a nemesis makes, so a run<br>can be replayed. A single value is broadcast to all nemesis threads, a list maps one seed per<br>entry of [`nemesis_class_name`](#nemesis_class_name). 0 is a valid seed. Unset: a seed is picked per thread and logged.
 
 **default:** N/A
 
