@@ -116,6 +116,11 @@ class TestBaseClass(ABC):
     def disrupt(self):
         """Disrupt method"""
 
+    @classmethod
+    def description(cls) -> str:
+        """Stub matching NemesisBaseClass.description(); reports the class docstring."""
+        return cls.__doc__ or ""
+
 
 class CustomNemesisA(TestBaseClass):
     flag_a = True

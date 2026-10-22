@@ -25,6 +25,11 @@ class TestExecuteBaseClass(ABC):
     def disrupt(self):
         """Disrupt method"""
 
+    @classmethod
+    def description(cls) -> str:
+        """Stub matching NemesisBaseClass.description(); reports the class docstring."""
+        return cls.__doc__ or ""
+
 
 class CustomTestNemesis(TestExecuteBaseClass):
     """A simple nemesis for testing."""

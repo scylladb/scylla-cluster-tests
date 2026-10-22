@@ -53,6 +53,11 @@ LOGGER = logging.getLogger(__name__)
 
 @target_data_nodes
 class CreateIndexNemesis(NemesisBaseClass):
+    """
+    Create index on a random column (regular or static) of a table with the most number of partitions and wait until it gets build.
+    Then verify it can be used in a query. Finally, drop the index.
+    """
+
     disruptive = False
     schema_changes = True
     free_tier_set = True
@@ -72,10 +77,6 @@ class CreateIndexNemesis(NemesisBaseClass):
         return None
 
     def disrupt(self):
-        """
-        Create index on a random column (regular or static) of a table with the most number of partitions and wait until it gets build.
-        Then verify it can be used in a query. Finally, drop the index.
-        """
         with (
             self.runner.cluster.cql_connection_patient(self.runner.target_node, connect_timeout=300) as session,
             collect_diagnostics(MVDiagnosticCollector(session, exception_handler=EventExceptionHandler())),
@@ -126,6 +127,13 @@ class CreateIndexNemesis(NemesisBaseClass):
 
 @target_data_nodes
 class AddRemoveMvNemesis(NemesisBaseClass):
+    """
+    Create a Materialized view on an existing table while a node is down.
+    Take node up and run a repair.
+    Verify the MV can be used in a query.
+    Finally, drop the MV.
+    """
+
     disruptive = True
     schema_changes = True
     free_tier_set = True
@@ -140,12 +148,6 @@ class AddRemoveMvNemesis(NemesisBaseClass):
         return None
 
     def disrupt(self):
-        """
-        Create a Materialized view on an existing table while a node is down.
-        Take node up and run a repair.
-        Verify the MV can be used in a query.
-        Finally, drop the MV.
-        """
         free_nodes = [node for node in self.runner.cluster.data_nodes if not node.running_nemesis]
         if not free_nodes:
             raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
@@ -208,6 +210,16 @@ class AddRemoveMvNemesis(NemesisBaseClass):
 
 @target_all_nodes
 class KillMVBuildingCoordinator(NemesisBaseClass):
+    """
+    MV building coordinator is responsible for building MV from base table in
+    keyspaces with tablets enabled and located on the same node as raft topology coordinator.
+    If mv building coordinator is died during the mv building process, new mv building coordinator
+    as (group0 leader and raft topology coordinator) should be elected and mv building process continue.
+
+    Nemesis kill mv building coordinator several times while materialized view is being built,
+    and validate that after the node is restarted, the view is successfully built.
+    """
+
     disruptive = True
     schema_changes = True
     topology_changes = True
@@ -228,15 +240,6 @@ class KillMVBuildingCoordinator(NemesisBaseClass):
 
     @decorate_with_context(suppress_expected_unavailability_errors)
     def disrupt(self):
-        """
-        MV building coordinator is responsible for building MV from base table in
-        keyspaces with tablets enabled and located on the same node as raft topology coordinator.
-        If mv building coordinator is died during the mv building process, new mv building coordinator
-        as (group0 leader and raft topology coordinator) should be elected and mv building process continue.
-
-        Nemesis kill mv building coordinator several times while materialized view is being built,
-        and validate that after the node is restarted, the view is successfully built.
-        """
         ks_cfs = self.runner.cluster.get_non_system_ks_cf_with_tablets_list(
             db_node=self.runner.target_node,
             filter_empty_tables=True,
