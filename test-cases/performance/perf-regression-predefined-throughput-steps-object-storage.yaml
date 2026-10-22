@@ -3,6 +3,7 @@
 # and one backend pair, which sets the instance types and puts keyspace1 on the bucket (pre_create_keyspace):
 #   AWS + S3:  configurations/object_storage_s3.yaml  + configurations/aws/perf-regression-predefined-throughput-steps-s3.yaml
 #   GCE + GCS: configurations/object_storage_gcs.yaml + configurations/gce/perf-regression-predefined-throughput-steps-gcs.yaml
+#   OCI + OCI: configurations/object_storage_oci.yaml + configurations/oci/perf-regression-predefined-throughput-steps-oci.yaml
 # Reads use a gaussian key distribution and a cache warm-up over the same distribution, so every step runs at the
 # same cache hit rate. Writes insert a fresh sequential dataset per step (the keyspace is dropped after each step).
 # Each command is listed once per loader (commands are distributed round-robin).
