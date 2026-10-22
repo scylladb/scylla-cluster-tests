@@ -87,7 +87,6 @@ class GrowShrinkZeroTokenNode(NemesisBaseClass):
         return None
 
     def disrupt(self):
-        """Add/remove znodes to same dc where target node. The target node could be any node"""
         duration_with_znode = 300
         new_znode = self.runner._add_and_init_new_cluster_nodes(count=1, is_zero_node=True)[0]
         self.runner.log.debug("Run with zero-token node %s for %ds", new_znode.name, duration_with_znode)
@@ -100,7 +99,7 @@ class GrowShrinkZeroTokenNode(NemesisBaseClass):
 
 @target_all_nodes
 class TerminateAndRemoveNodeMonkey(NemesisBaseClass):
-    """Remove a Node from a Scylla Cluster (Down Scale)"""
+    """Terminate the target node, run a full repair, remove it with nodetool removenode, add a new node and run cleanup."""
 
     disruptive = True
     # It should not be run on kubernetes, since it is a manual procedure
@@ -118,16 +117,6 @@ class TerminateAndRemoveNodeMonkey(NemesisBaseClass):
         return None
 
     def disrupt(self):
-        """
-        https://docs.scylladb.com/operating-scylla/procedures/cluster-management/remove_node/
-
-        1. Terminate node
-        2. Run full repair
-        3. Nodetool removenode, if removenode rejected, because removing node is UN in gossiper,
-           repeat operation in 5 second
-        4. Add new node
-        5. Run nodetool cleanup (on each node) for each keyspace
-        """
         node_to_remove = self.runner.target_node
         up_normal_nodes = self.runner.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
 
