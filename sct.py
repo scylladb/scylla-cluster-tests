@@ -80,9 +80,14 @@ from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
 from sdcm.utils.trigger_matrix.audit import audit_matrices
 from sdcm.utils.trigger_matrix.constants import VERSION_RESOLUTION_STRATEGIES
 from sdcm.utils.trigger_matrix.images import resolve_image_architecture, resolve_scylla_version_from_image
-from sdcm.utils.trigger_matrix.matrix import trigger_matrix as run_trigger_matrix
+from sdcm.utils.trigger_matrix.config import load_matrix_config
+from sdcm.utils.trigger_matrix.matrix import trigger_matrix_versions as run_trigger_matrix
 from sdcm.utils.trigger_matrix.reporting import send_arch_audit_email
-from sdcm.utils.trigger_matrix.resolution import resolve_to_full_version
+from sdcm.utils.trigger_matrix.resolution import (
+    check_only_supported_versions,
+    resolve_to_full_version,
+    supported_only_versions,
+)
 from sdcm.utils.cloud_catalog.cost import RunCostEstimate, estimate_run_cost
 from sdcm.utils.cost_reporting import report_estimated_cost
 from sdcm.utils.argus import (
@@ -3685,10 +3690,18 @@ def hdr_investigate(
     default=None,
     type=str,
     help="Scylla version (e.g., master:latest, 2024.2.5-0.20250221.xxx-1). "
-    "If not provided, resolved automatically from image params",
+    "Several versions, separated by commas or spaces, trigger the matrix once per version "
+    "and wait for all of them together. If not provided, resolved automatically from image params; "
+    "a matrix with supported_versions_only runs the latest release of every supported version",
 )
 @click.option("--job-folder", default=None, type=str, help="Override auto-detected Jenkins job folder")
-@click.option("--labels-selector", default=None, type=str, help="Comma-separated labels to filter jobs (AND logic)")
+@click.option(
+    "--labels-selector",
+    default=None,
+    type=str,
+    help="Comma-separated labels to filter jobs (AND logic). "
+    "An item may list alternatives separated by '/', of which a job needs any",
+)
 @click.option(
     "--backend",
     default=None,
@@ -3715,6 +3728,12 @@ def hdr_investigate(
     default=None,
     type=click.Choice(["spot", "on_demand", "spot_fleet"]),
     help="Override provision type",
+)
+@click.option(
+    "--post-behavior-db-nodes",
+    default=None,
+    type=click.Choice(["destroy", "keep", "keep-on-failure"]),
+    help="Override what the triggered jobs do with their DB nodes at the end",
 )
 @click.option(
     "--scylla-ami-id",
@@ -3784,7 +3803,18 @@ def hdr_investigate(
 @click.option("--requested-by-user", default=None, type=str, help="User requesting the run")
 @click.option("--billing-project", default=None, type=str, help="Billing project for resource tagging")
 @click.option(
-    "--email-recipients", default=None, type=str, help="Comma-separated email recipients for wait-mode results report"
+    "--email-recipients",
+    default=None,
+    type=str,
+    help="Comma-separated email recipients for wait-mode results report. "
+    "Default: the matrix email_recipients, or qa@scylladb.com when the matrix sets none",
+)
+@click.option(
+    "--report-dir",
+    default=None,
+    type=str,
+    help="Save the wait-mode report (trigger-matrix-report.html) and its one-line summary "
+    "(trigger-matrix-summary.txt) into this directory",
 )
 def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     matrix,
@@ -3797,6 +3827,7 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     region,
     availability_zone,
     provision_type,
+    post_behavior_db_nodes,
     scylla_ami_id,
     gce_image_db,
     azure_image_db,
@@ -3811,8 +3842,24 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     requested_by_user,
     billing_project,
     email_recipients,
+    report_dir,
 ):
     add_file_logger()
+
+    try:
+        supported_versions_only = load_matrix_config(matrix).supported_versions_only
+        has_build_source = any(
+            [scylla_ami_id, gce_image_db, azure_image_db, oci_image_db, unified_package, new_scylla_repo]
+        )
+        if supported_versions_only and not has_build_source:
+            if not scylla_version:
+                click.echo("No --scylla-version given: running every supported version")
+            # Bare lines ("2026.3") become their latest release, not the branch's nightly build
+            scylla_version = ",".join(supported_only_versions(scylla_version or "", region=region))
+            click.echo(f"Supported versions to run: {scylla_version}")
+    except Exception as exc:  # noqa: BLE001
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
 
     # Resolve scylla_version: from image tags, or from partial version via AMI lookup
     version_from_image = False
@@ -3852,17 +3899,27 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     # aws-strict stamps on every job. Each backend still resolves its own build later on,
     # according to the matrix' version_resolution strategy.
     # Skip if version was already resolved from image tags — that's already the real version.
-    original_version = scylla_version
-    if scylla_version and not version_from_image:
-        try:
-            scylla_version = resolve_to_full_version(scylla_version, region=region)
-            click.echo(f"Using full version: {scylla_version}")
-        except Exception as exc:  # noqa: BLE001
-            if version_resolution == "aws-strict":
-                click.echo(f"Error resolving full version: {exc}", err=True)
-                sys.exit(1)
-            click.echo(f"Warning: {exc}")
-            click.echo(f"Leaving '{original_version}' unresolved — each backend resolves its own build")
+    versions = []
+    requested_versions = re.split(r"[,\s]+", scylla_version.strip()) if scylla_version else [""]
+    try:
+        if supported_versions_only and version_from_image:
+            check_only_supported_versions(requested_versions)
+    except Exception as exc:  # noqa: BLE001
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+    for original_version in requested_versions:
+        full_version = original_version
+        if original_version and not version_from_image:
+            try:
+                full_version = resolve_to_full_version(original_version, region=region)
+                click.echo(f"Using full version: {full_version}")
+            except Exception as exc:  # noqa: BLE001
+                if version_resolution == "aws-strict":
+                    click.echo(f"Error resolving full version: {exc}", err=True)
+                    sys.exit(1)
+                click.echo(f"Warning: {exc}")
+                click.echo(f"Leaving '{original_version}' unresolved — each backend resolves its own build")
+        versions.append((full_version, original_version))
 
     # Detect image architecture for arch-aware job filtering
     image_arch = None
@@ -3891,6 +3948,8 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
         overrides["availability_zone"] = availability_zone
     if provision_type:
         overrides["provision_type"] = provision_type
+    if post_behavior_db_nodes:
+        overrides["post_behavior_db_nodes"] = post_behavior_db_nodes
     if requested_by_user:
         overrides["requested_by_user"] = requested_by_user
     if billing_project:
@@ -3909,8 +3968,7 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     try:
         results = run_trigger_matrix(
             matrix_file=matrix,
-            scylla_version=scylla_version or "",
-            filter_version=original_version,
+            versions=versions,
             job_folder=job_folder,
             labels_selector=labels_selector,
             backend=backend,
@@ -3919,6 +3977,7 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
             email_recipients=email_recipients.split(",") if email_recipients else None,
             image_arch=image_arch,
             version_resolution=version_resolution,
+            report_dir=report_dir,
             **overrides,
         )
     except Exception as exc:  # noqa: BLE001

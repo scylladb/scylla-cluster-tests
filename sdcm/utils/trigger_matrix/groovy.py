@@ -75,15 +75,12 @@ def cause = new hudson.model.Cause.RemoteCause('trigger-matrix', 'Triggered via 
 """
 
     if return_queue_url:
-        # Return the queue item URL for wait-mode polling via _wait_for_build_start()
+        # Return the queue item URL for wait-mode polling via _wait_for_build_start(). The item
+        # is the one this script queued: searching the queue for the job could find another
+        # build of the same job, or nothing once the build has started.
         output_section = """
 def rootUrl = Jenkins.instance.rootUrl ?: ''
-def queueItem = Jenkins.instance.queue.getItems().find { it.task == targetJob }
-if (queueItem) {
-    println "TRIGGERED:${rootUrl}queue/item/${queueItem.id}/"
-} else {
-    println "TRIGGERED:${targetJob.getAbsoluteUrl()}"
-}
+println "TRIGGERED:${rootUrl}queue/item/${queueItem.id}/"
 """
     else:
         output_section = """
@@ -107,10 +104,10 @@ if (params) {{
 }}
 actions.add(new CauseAction(cause))
 
-def future = targetJob.scheduleBuild2(0, actions.toArray(new Action[0]))
-if (future != null) {{
+def queueItem = targetJob.isBuildable() ? Jenkins.instance.queue.schedule2(targetJob, 0, actions).item : null
+if (queueItem != null) {{
 {output_section}
 }} else {{
-    println "ERROR: scheduleBuild2 returned null for {escaped_job_name}"
+    println "ERROR: build was not queued for {escaped_job_name}"
 }}
 """

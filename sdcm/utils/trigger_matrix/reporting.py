@@ -15,6 +15,9 @@
 
 import html
 import logging
+import re
+from dataclasses import dataclass
+from pathlib import Path
 
 from sdcm.utils.cloud_monitor.cloud_monitor import Email
 from sdcm.utils.trigger_matrix.audit import AuditReport
@@ -23,6 +26,70 @@ from sdcm.utils.trigger_matrix.models import BuildResult
 
 logger = logging.getLogger(__name__)
 
+REPORT_FILE = "trigger-matrix-report.html"
+SUMMARY_FILE = "trigger-matrix-summary.txt"
+
+
+@dataclass
+class TriggerMatrixReport:
+    """The report of a wait-mode run: email subject, HTML body and a one-line summary."""
+
+    subject: str
+    body: str
+    summary: str
+
+
+def build_trigger_matrix_report(
+    build_results: list[BuildResult],
+    scylla_version: str,
+    matrix_file: str,
+    trigger_job_url: str | None = None,
+    run_params: dict | None = None,
+    subject_params: list[str] = (),
+) -> TriggerMatrixReport:
+    """Build the report of wait-mode build results.
+
+    Args:
+        build_results: List of BuildResult from JenkinsClient.wait_for_builds.
+        scylla_version: Version that was tested.
+        matrix_file: Path to the matrix YAML that was used.
+        trigger_job_url: URL of the trigger's own Jenkins build.
+        run_params: Parameters the run passed to every job, listed in the report.
+        subject_params: Names of `run_params` whose value names what was tested; the last path
+            segment of each value goes into the subject, e.g. the file name of a tarball URL.
+    """
+    all_passed = all(r.success for r in build_results)
+    status = "PASSED" if all_passed else "FAILED"
+
+    run_params = {k: v for k, v in (run_params or {}).items() if v is not None and v != ""}
+    tested = ", ".join(
+        [
+            *(str(run_params[name]).rstrip("/").rsplit("/", 1)[-1] for name in subject_params if name in run_params),
+            scylla_version,
+        ]
+    )
+    subject = f"[Trigger Matrix] {status} — {Path(matrix_file).stem}: {tested}"
+    passed = sum(r.success for r in build_results)
+    summary = f"{status} | {passed}/{len(build_results)} passed | {tested}"
+
+    trigger_line = (
+        f'<b>Trigger job:</b> <a href="{trigger_job_url}">View trigger run</a><br/>' if trigger_job_url else ""
+    )
+
+    params_lines = "".join(
+        f"<b>{html.escape(name)}:</b> {html.escape(str(value))}<br/>" for name, value in run_params.items()
+    )
+
+    body = f"""<html><body>
+<h2>Trigger Matrix Results — {status}</h2>
+<p><b>Version:</b> {scylla_version}<br/>
+<b>Matrix:</b> {matrix_file}<br/>
+{params_lines}{trigger_line}<b>Overall:</b> {status}</p>
+{_results_table(build_results)}
+{_failures_section(build_results)}
+</body></html>"""
+    return TriggerMatrixReport(subject=subject, body=body, summary=summary)
+
 
 def send_trigger_matrix_email(
     build_results: list[BuildResult],
@@ -30,64 +97,110 @@ def send_trigger_matrix_email(
     matrix_file: str,
     email_recipients: list[str] | None = None,
     trigger_job_url: str | None = None,
-) -> None:
-    """Send an email report summarizing wait-mode build results.
+    run_params: dict | None = None,
+    subject_params: list[str] = (),
+) -> TriggerMatrixReport:
+    """Build the report of wait-mode build results and email it.
 
     Args:
-        build_results: List of BuildResult from JenkinsClient.wait_for_builds.
-        scylla_version: Version that was tested.
-        matrix_file: Path to the matrix YAML that was used.
         email_recipients: List of email addresses. Falls back to DEFAULT_EMAIL_RECIPIENTS.
+        The other arguments are those of `build_trigger_matrix_report`.
+
+    Returns:
+        The report, sent or not.
     """
+    report = build_trigger_matrix_report(
+        build_results=build_results,
+        scylla_version=scylla_version,
+        matrix_file=matrix_file,
+        trigger_job_url=trigger_job_url,
+        run_params=run_params,
+        subject_params=subject_params,
+    )
     recipients = email_recipients or DEFAULT_EMAIL_RECIPIENTS
     if not recipients:
         logger.warning("No email recipients configured — skipping email report")
-        return
-
-    all_passed = all(r.success for r in build_results)
-    status = "PASSED" if all_passed else "FAILED"
-
-    subject = f"[Trigger Matrix] {status} — scylla-doctor gating ({scylla_version})"
-
-    trigger_line = (
-        f'<b>Trigger job:</b> <a href="{trigger_job_url}">View trigger run</a><br/>' if trigger_job_url else ""
-    )
-
-    rows = []
-    for result in build_results:
-        emoji = "✅" if result.success else "❌"
-        artifacts_str = ", ".join(result.artifacts) if result.artifacts else "—"
-        job_cell = (
-            f'<a href="{result.build_url}">{emoji} {result.job_name}</a>'
-            if result.build_url
-            else f"{emoji} {result.job_name}"
-        )
-        build_cell = (
-            f'<a href="{result.build_url}">#{result.build_number}</a>'
-            if result.build_url
-            else f"#{result.build_number}"
-        )
-        rows.append(
-            f"<tr><td>{job_cell}</td><td>{build_cell}</td><td><b>{result.result}</b></td><td>{artifacts_str}</td></tr>"
-        )
-
-    body = f"""<html><body>
-<h2>Trigger Matrix Results — {status}</h2>
-<p><b>Version:</b> {scylla_version}<br/>
-<b>Matrix:</b> {matrix_file}<br/>
-{trigger_line}<b>Overall:</b> {status}</p>
-<table border="1" cellpadding="5" cellspacing="0">
-<tr><th>Job</th><th>Build</th><th>Result</th><th>Artifacts</th></tr>
-{"".join(rows)}
-</table>
-</body></html>"""
+        return report
 
     try:
         email_client = Email()
-        email_client.send(subject=subject, content=body, recipients=recipients, html=True)
+        email_client.send(subject=report.subject, content=report.body, recipients=recipients, html=True)
         logger.info("Email report sent to %s", recipients)
     except Exception as exc:  # noqa: BLE001 - email failure is non-fatal
         logger.warning("Failed to send email report: %s", exc)
+    return report
+
+
+def write_trigger_matrix_report(report: TriggerMatrixReport, report_dir: str) -> None:
+    """Save the report for the Jenkins pipeline to archive and use as the build description.
+
+    Writes trigger-matrix-report.html and trigger-matrix-summary.txt into `report_dir`.
+    """
+    directory = Path(report_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / REPORT_FILE).write_text(report.body, encoding="utf-8")
+    (directory / SUMMARY_FILE).write_text(report.summary + "\n", encoding="utf-8")
+    logger.info("Report saved to %s", directory / REPORT_FILE)
+
+
+def _result_cell(result: BuildResult | None) -> str:
+    """One build of the results table: its result linked to the build, then its artifacts."""
+    if result is None:
+        return "—"
+    label = f"{'✅' if result.success else '❌'} {result.result}"
+    cell = f'<a href="{result.build_url}">{label}</a> #{result.build_number}' if result.build_url else label
+    for url in result.artifacts:
+        cell += f'<br/><small><a href="{url}">{html.escape(url.rsplit("/", 1)[-1])}</a></small>'
+    return cell
+
+
+def _results_table(build_results: list[BuildResult]) -> str:
+    """The builds as a grid: a row per job, a column per Scylla version."""
+    versions = list(dict.fromkeys(result.scylla_version for result in build_results))
+    jobs = list(dict.fromkeys(result.job_name for result in build_results))
+    by_cell = {(result.job_name, result.scylla_version): result for result in build_results}
+    header = "".join(f"<th>{html.escape(version or 'Result')}</th>" for version in versions)
+    rows = "".join(
+        f"<tr><td>{html.escape(job)}</td>"
+        + "".join(f"<td>{_result_cell(by_cell.get((job, version)))}</td>" for version in versions)
+        + "</tr>\n"
+        for job in jobs
+    )
+    return f"""<table border="1" cellpadding="5" cellspacing="0">
+<tr><th>Job</th>{header}</tr>
+{rows}</table>"""
+
+
+def _description_html(description: str) -> str:
+    """A build's Jenkins description, made safe for the report.
+
+    SCT jobs set it to an HTML block linking to their Argus run. Its links are kept as links,
+    with their text alone; a description without links is shown as plain text.
+    """
+
+    def text(markup: str) -> str:
+        return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", markup)).split())
+
+    links = re.findall(
+        r"<a\b[^>]*\bhref=['\"]([^'\"]+)['\"][^>]*>(.*?)</a>", description, flags=re.DOTALL | re.IGNORECASE
+    )
+    if links:
+        return " ".join(f'<a href="{html.escape(url)}">{html.escape(text(label) or url)}</a>' for url, label in links)
+    return html.escape(text(description))
+
+
+def _failures_section(build_results: list[BuildResult]) -> str:
+    """What went wrong in each failed build, or a banner saying all builds passed."""
+    failed = [result for result in build_results if not result.success]
+    if not failed:
+        return "<p><b>✅ All builds PASSED.</b></p>"
+    items = []
+    for result in failed:
+        version = f" ({html.escape(result.scylla_version)})" if result.scylla_version else ""
+        link = f' — <a href="{result.build_url}">View build</a>' if result.build_url else ""
+        reason = f"<br/><small>{_description_html(result.description)}</small>" if result.description else ""
+        items.append(f"<li><b>{html.escape(result.job_name)}</b>{version} — {result.result}{link}{reason}</li>")
+    return f"<h3>Failures</h3>\n<ul>{''.join(items)}</ul>"
 
 
 def send_arch_audit_email(report: AuditReport, recipients: list[str], job_url: str | None = None) -> None:

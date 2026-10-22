@@ -19,7 +19,7 @@ import pytest
 import yaml
 from botocore.exceptions import NoCredentialsError
 
-from sdcm.utils.trigger_matrix.errors import JenkinsTriggerError
+from sdcm.utils.trigger_matrix.errors import JenkinsTriggerError, TriggerMatrixError
 from sdcm.utils.trigger_matrix.jenkins_client import JenkinsClient
 from sdcm.utils.trigger_matrix.matrix import trigger_matrix
 from sdcm.utils.trigger_matrix.jenkins_client import _get_jenkins_client
@@ -344,3 +344,39 @@ def test_error_reply_fails_fast_without_retrying(_mock_sleep):
         with pytest.raises(JenkinsTriggerError, match="Job not found"):
             JenkinsClient().trigger_with_queue("nope", {}, dry_run=False)
     assert mock_client.run_script.call_count == 1
+
+
+@pytest.fixture()
+def required_param_matrix(tmp_path):
+    data = {
+        "required_params": ["sd_tarball"],
+        "jobs": [
+            {"job_name": "/gating/job-1", "backend": "docker"},
+            {"job_name": "/gating/job-2", "backend": "docker", "params": {"sd_tarball": "s3://own"}},
+            {"job_name": "/gating/job-3", "backend": "docker", "disabled": True},
+        ],
+    }
+    path = tmp_path / "required.yaml"
+    path.write_text(yaml.dump(data))
+    return path
+
+
+def test_missing_required_param_fails_before_triggering(required_param_matrix, monkeypatch):
+    monkeypatch.setattr(JenkinsClient, "trigger", lambda *a, **kw: pytest.fail("a job was triggered"))
+    with pytest.raises(TriggerMatrixError, match=r"sd_tarball \(jobs: /gating/job-1\)"):
+        trigger_matrix(matrix_file=str(required_param_matrix), scylla_version="2025.4.3", dry_run=True)
+
+
+@pytest.mark.parametrize("value", ["", "  "])
+def test_empty_required_param_override_fails(required_param_matrix, value):
+    with pytest.raises(TriggerMatrixError, match="sd_tarball"):
+        trigger_matrix(
+            matrix_file=str(required_param_matrix), scylla_version="2025.4.3", dry_run=True, sd_tarball=value
+        )
+
+
+def test_required_param_given_as_override(required_param_matrix):
+    results = trigger_matrix(
+        matrix_file=str(required_param_matrix), scylla_version="2025.4.3", dry_run=True, sd_tarball="s3://x"
+    )
+    assert results["triggered"] == ["gating/job-1", "gating/job-2"]

@@ -27,6 +27,7 @@ TRIGGERS_DIR = PROJECT_ROOT / "configurations" / "triggers"
         pytest.param("tier1.yaml", 10, id="tier1"),
         pytest.param("sanity.yaml", 9, id="sanity"),
         pytest.param("perf-regression.yaml", 20, id="perf-regression"),
+        pytest.param("scylla-doctor-gating.yaml", 4, id="scylla-doctor-gating"),
     ],
 )
 def test_yaml_loads_and_has_expected_job_count(filename, min_jobs):
@@ -74,6 +75,24 @@ def test_scylla_doctor_gating_defaults():
     assert all(job.fail_on_error is True for job in config.jobs)
     assert all(len(job.collect_results) > 0 for job in config.jobs)
     assert config.defaults["run_scylla_doctor_only"] == "true"
+    assert config.defaults["email_recipients"] == ""
+    assert config.defaults["requested_by_user"] == "scylla-doctor"
+    assert config.supported_versions_only is True
+
+
+def test_scylla_doctor_gating_runs_one_os_per_category_and_not_docker():
+    config = load_matrix_config(PROJECT_ROOT / "configurations/triggers/scylla-doctor-gating.yaml")
+    enabled = {job.job_name.rsplit("/", 1)[-1] for job in config.jobs if not job.disabled}
+    disabled = {job.job_name.rsplit("/", 1)[-1] for job in config.jobs if job.disabled}
+    assert enabled == {"artifacts-ubuntu2404-test", "artifacts-rhel10-test", "artifacts-ami-arm-test"}
+    assert disabled == {"artifacts-docker-test"}
+
+
+def test_scylla_doctor_gating_jobs_have_their_os_label():
+    config = load_matrix_config(PROJECT_ROOT / "configurations/triggers/scylla-doctor-gating.yaml")
+    for job in config.jobs:
+        os_name = job.job_name.removeprefix("/scylla-doctor/oss/artifacts/artifacts-").removesuffix("-test")
+        assert [label for label in job.labels if label.startswith("os-")] == [f"os-{os_name}"], job.job_name
 
 
 def test_pgo_has_wait_false():

@@ -15,6 +15,12 @@ One exception: `job_throttle_category` is *also* forwarded to Jenkins as a build
 name (via `setdefault`, so a `params:` entry of the same name wins). Every other job-level key stops at
 the trigger.
 
+A `wait: true` job is waited for by the trigger, which reports its result. Its `wait_timeout` (seconds)
+applies twice: to the time the build may spend in the Jenkins queue, and then to its run. A build still
+queued after it is reported as `NOT_STARTED`, one still running after it as `TIMEOUT`; both fail the run.
+Queued and running builds are polled together, so a build waiting for an agent never holds back the
+results of the others.
+
 **Everything else is a Jenkins job parameter and belongs under `params:`** — including `region` and
 `availability_zone`, which used to sit at job level.
 
@@ -28,6 +34,29 @@ jobs:
     labels:
       - "weekly"
 ```
+
+A matrix can list `required_params`: Jenkins parameters every job must get a non-empty value for,
+from `defaults`, the job's `params` or the trigger's overrides. When one is missing, the run fails
+before triggering any job, and names the parameter and the jobs it is missing for. The
+scylla-doctor gating trigger uses it so that it never runs without the doctor build under test:
+
+```yaml
+required_params:
+  - "scylla_doctor_full_tarball_url"
+```
+
+A matrix with `supported_versions_only: true` runs only Scylla versions of officially supported
+release lines (the ones `sct.py get-official-supported-versions` prints), as the old
+sd-release-gating pipeline did:
+
+- With `scylla_version` empty, it runs the latest release of every supported version. Each
+  supported version becomes its newest released patch, read from the production AMIs, so `2025.4`
+  becomes e.g. `2025.4.10` and not the branch's newest nightly build.
+- Any version given must belong to a supported release line. Another one, such as `master:latest`
+  or a release of an unsupported line, fails the run before any job is triggered. A bare line given,
+  such as `2026.3`, also runs its latest release, as with `scylla_version` empty.
+
+The scylla-doctor gating trigger sets it.
 
 ### Migrating an existing matrix
 
@@ -119,6 +148,11 @@ uv run sct.py trigger-matrix \
 **Expected**: Only jobs with `labels: ["weekly", ...]` are triggered. Jobs without the `weekly` label appear in the "Skipped" list.
 
 Labels use AND logic: `--labels-selector "weekly,additional"` requires jobs to have **both** labels.
+An item can list alternatives separated by `/`, of which a job needs **any**:
+`--labels-selector "os-centos9/os-docker"` selects the jobs labelled `os-centos9` or `os-docker`, and
+`--labels-selector "gating,os-centos9/os-docker"` the `gating` ones among them. The separator is
+`/` rather than `|` because the Jenkins pipeline passes the selector through `hydra.sh`, whose
+`eval` would turn a `|` into a shell pipe.
 
 ### Biweekly alternation: `week-a` / `week-b`
 
@@ -215,7 +249,7 @@ uv run sct.py trigger-matrix \
 
 **Expected**: Each `[DRY-RUN]` log line shows the overridden parameters in the parameter output.
 
-Note: **`--region` and `--availability-zone` do not override jobs that pin their own value.** They are location parameters — a job that declares `region:` under its `params:` owns it, and the CLI value only fills in for jobs that don't. Everything else (`--provision-type`, `--stress-duration`, `--new-scylla-repo`, ...) overrides per-job values as usual.
+Note: **`--region` and `--availability-zone` do not override jobs that pin their own value.** They are location parameters — a job that declares `region:` under its `params:` owns it, and the CLI value only fills in for jobs that don't. Everything else (`--provision-type`, `--post-behavior-db-nodes`, `--stress-duration`, `--new-scylla-repo`, ...) overrides per-job values as usual. `--post-behavior-db-nodes keep-on-failure` keeps the DB nodes of the failed jobs for debugging.
 
 Precedence, highest first:
 
@@ -269,6 +303,21 @@ uv run sct.py trigger-matrix --matrix configurations/triggers/sanity.yaml --scyl
 uv run sct.py trigger-matrix --matrix configurations/triggers/sanity.yaml --scylla-version "master" --dry-run
 # Expected folder: scylla-master
 ```
+
+### Several Versions in One Run
+
+`--scylla-version` takes several versions, separated by commas or spaces. The matrix is filtered,
+resolved and triggered once per version, and the jobs of every version are triggered before the
+run starts waiting. Wait-mode jobs of all versions are waited for together and reported in a
+single email, so one run can gate a build against all supported releases:
+
+```bash
+uv run sct.py trigger-matrix --matrix configurations/triggers/scylla-doctor-gating.yaml \
+    --scylla-version "2026.1,2025.1" --dry-run
+```
+
+Without `--scylla-version`, the scylla-doctor gating matrix runs every supported version (see
+`supported_versions_only` above).
 
 ## Error Handling Verification
 

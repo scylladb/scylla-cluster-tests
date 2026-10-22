@@ -12,15 +12,27 @@ jenkinsfiles:
 #
 # All jobs run in doctor-only mode (run_scylla_doctor_only), with the full edition.
 #
-# Optional trigger parameter: scylla_doctor_full_tarball_url
-#   Tests an unreleased Scylla Doctor build. It is passed to every job. Set it in
+# Every job carries an "os-<os>" label, the name of its artifact job. To run some of them
+# only, set labels_selector to alternatives separated by "/", e.g. "os-ubuntu2404/os-rhel10".
+#
+# Required trigger parameter: scylla_doctor_full_tarball_url
+#   The Scylla Doctor build under test. It is passed to every job. Set it in
 #   Jenkins "Build with Parameters", or with `sct.py trigger-matrix
 #   --scylla-doctor-full-tarball-url <url>`. Accepts any S3 URL form that
 #   utils/scylla_doctor.py:_parse_s3_url understands, for example:
 #     https://s3.amazonaws.com/<bucket>/<key>/scylla-doctor-1.11.4.tar.gz
 #     https://<bucket>.s3.<region>.amazonaws.com/<key>/scylla-doctor-1.11.4.tar.gz
-#   It has no default on purpose. When empty, the job finds the latest released
-#   full edition by itself, and a fixed URL here would pin one build.
+#   The trigger fails without it: a gate run must test the candidate build,
+#   never fall back to the latest released one.
+
+required_params:
+  - "scylla_doctor_full_tarball_url"
+
+# Like the old sd-release-gating pipeline, test supported Scylla versions only:
+# with scylla_version empty, the latest release of every supported version runs;
+# any other version given must belong to a supported release line, or the
+# trigger fails
+supported_versions_only: true
 
 defaults:
   provision_type: "on_demand"
@@ -29,9 +41,31 @@ defaults:
   post_behavior_monitor_nodes: "destroy"
   scylla_doctor_edition: "full"
   run_scylla_doctor_only: "true"
+  # No per-job emails: the trigger mails one report for all jobs
+  email_recipients: ""
+  # Owner the jobs and their cloud resources are tagged with, unless the run names a user
+  requested_by_user: "scylla-doctor"
 
+# Operating systems: one per category, as Vincent Reniers (Scylla Doctor) requested
+# on 2026-10-20:
+#   "We don't need every OS. For example one per category would be fine.
+#    Ubuntu 24, a RHEL distribution (rhel10). Perhaps an ARM AMI could be useful
+#    to test as well since we don't have this in our testing."
+# Docker is disabled for now: Scylla Doctor is being changed to skip by default
+# the collectors that cannot run in a container.
 jobs:
-  - job_name: "/scylla-doctor/oss/artifacts/artifacts-ami-test"
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-ubuntu2404-test"
+    backend: "gce"
+    wait: true
+    wait_timeout: 3600
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+      - "os-ubuntu2404"
+
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-rhel10-test"
     backend: "aws"
     wait: true
     wait_timeout: 7200
@@ -40,9 +74,9 @@ jobs:
       - "scylla_doctor_*_analysis.json"
     labels:
       - "gating"
+      - "os-rhel10"
     params:
       region: "eu-west-1"
-      scylla_doctor_edition: "full"
 
   - job_name: "/scylla-doctor/oss/artifacts/artifacts-ami-arm-test"
     backend: "aws"
@@ -54,12 +88,13 @@ jobs:
       - "scylla_doctor_*_analysis.json"
     labels:
       - "gating"
+      - "os-ami-arm"
     params:
       region: "eu-west-1"
-      scylla_doctor_edition: "full"
 
   - job_name: "/scylla-doctor/oss/artifacts/artifacts-docker-test"
     backend: "aws"
+    disabled: true
     wait: true
     wait_timeout: 3600
     fail_on_error: true
@@ -67,8 +102,8 @@ jobs:
       - "scylla_doctor_*_analysis.json"
     labels:
       - "gating"
+      - "os-docker"
     params:
       region: "eu-west-1"
-      scylla_doctor_edition: "full"
 
-email_recipients: "qa@scylladb.com"
+email_recipients: "scylla-doctor-rel-qa-automated-testing@scylladb.com"

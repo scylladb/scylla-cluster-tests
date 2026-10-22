@@ -117,6 +117,13 @@ class MatrixConfig(BaseModel):
     cron_triggers: list[CronTriggerConfig] = Field(default_factory=list)
     email_recipients: list[str] = Field(default_factory=list)
     jenkinsfiles: list[JenkinsfileEntry] = Field(default_factory=list)
+    # Jenkins parameters every job must get a non-empty value for, from the defaults, the job's
+    # params or the trigger's overrides; the run fails before triggering anything otherwise
+    required_params: list[str] = Field(default_factory=list)
+    # Run officially supported Scylla versions only: with no scylla_version given, the latest
+    # release of each of them; any other requested version fails the run before anything is
+    # triggered
+    supported_versions_only: bool = False
 
     @model_validator(mode="after")
     def reject_cross_arch_twins(self) -> "MatrixConfig":
@@ -178,6 +185,10 @@ class BuildResult:
     result: str  # SUCCESS, FAILURE, ABORTED, UNSTABLE
     artifacts: list[str] = field(default_factory=list)
     build_url: str = ""
+    # The Scylla version the build ran; tells apart the builds of one job in a multi-version run
+    scylla_version: str = ""
+    # The build's Jenkins description; SCT jobs set it to a link to their Argus run
+    description: str = ""
 
     @property
     def success(self) -> bool:
@@ -193,6 +204,7 @@ class _PendingWaitJob:
     collect_results: list[str]
     timeout: int
     fail_on_error: bool
+    scylla_version: str = ""
 
 
 @dataclass(frozen=True, order=True)

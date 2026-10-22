@@ -8,10 +8,11 @@
 // sandbox blocks direct file I/O. utils/build_system/generate_trigger_jenkinsfiles.py
 // (run by pre-commit) writes the spec from the matrix YAML into each generated Jenkinsfile.
 //
-// NOTE: Either scylla_version or an image param is required. When an image is
-//       provided without scylla_version, the Python code resolves the version from
-//       the image's tags/labels. The resolved version is used for job folder
-//       detection and passed to all triggered jobs.
+// NOTE: Either scylla_version or an image param is required, except for a matrix with
+//       supported_versions_only, which then runs the latest release of every supported
+//       version. When an image is provided without scylla_version, the Python code resolves
+//       the version from the image's tags/labels. The resolved version is used for job
+//       folder detection and passed to all triggered jobs.
 
 def call(Map pipelineParams = [:]) {
     def matrixFile = pipelineParams.get('matrix_file', '')
@@ -42,9 +43,9 @@ def call(Map pipelineParams = [:]) {
             string(name: 'matrix_file', defaultValue: matrixFile,
                    description: 'Path to trigger matrix YAML file')
             string(name: 'scylla_version', defaultValue: '',
-                   description: 'Scylla version (e.g., master:latest, 2024.2.5-0.20250221.xxx-1). If not provided, resolved from image params.')
+                   description: 'Scylla version (e.g., master:latest, 2024.2.5-0.20250221.xxx-1). Several versions, separated by commas or spaces, run the matrix once per version and are reported together. If not provided, resolved from image params; a matrix with supported_versions_only (scylla-doctor gating) runs the latest release of every supported version.')
             string(name: 'labels_selector', defaultValue: defaultLabelsSelector,
-                   description: 'Comma-separated labels to filter jobs (AND logic)')
+                   description: 'Comma-separated labels to filter jobs (AND logic). An item may list alternatives separated by "/", of which a job needs any, e.g. "os-centos9/os-docker"')
             string(name: 'backend', defaultValue: '',
                    description: 'Filter jobs by backend (aws/gce/azure/oci). When image params are set, use this to run only matching backend jobs.')
             string(name: 'skip_jobs', defaultValue: '',
@@ -59,6 +60,8 @@ def call(Map pipelineParams = [:]) {
                    description: 'Availability zone for jobs that do not set one in the matrix. Jobs with their own "availability_zone" param keep it.')
             string(name: 'provision_type', defaultValue: '',
                    description: 'spot | on_demand | spot_fleet|auto (auto: resolved by test duration, threshold spot_max_test_duration)')
+            choice(name: 'post_behavior_db_nodes', choices: ['', 'destroy', 'keep', 'keep-on-failure'],
+                   description: 'What the triggered jobs do with their DB nodes at the end. Empty keeps the matrix value.')
             string(name: 'scylla_ami_id', defaultValue: '',
                    description: 'Scylla AMI ID — passed to AWS jobs. Use with backend=aws to run only AWS jobs.')
             string(name: 'gce_image_db', defaultValue: '',
@@ -79,8 +82,8 @@ def call(Map pipelineParams = [:]) {
                    description: 'User requesting the run')
             string(name: 'billing_project', defaultValue: '',
                    description: 'Billing project for resource tagging')
-            string(name: 'email_recipients', defaultValue: 'qa@scylladb.com',
-                   description: 'Comma-separated email recipients for wait-mode results report')
+            string(name: 'email_recipients', defaultValue: '',
+                   description: 'Comma-separated email recipients for wait-mode results report. Empty: the matrix email_recipients, or qa@scylladb.com when the matrix sets none')
             choice(name: 'version_resolution', choices: ['', 'per-backend', 'common', 'aws-strict'],
                    description: '''Overrides the matrix YAML. How the version passed to the jobs is picked:
                                    per-backend - every backend runs its own latest build;
@@ -123,6 +126,9 @@ def call(Map pipelineParams = [:]) {
                                 println("Resolved {branch} placeholder: scylla_version='${scyllaVersion}'")
                             }
                         }
+                        // hydra.sh runs the command through eval, which drops the quotes: a
+                        // space-separated version list would split into separate arguments
+                        scyllaVersion = scyllaVersion.trim().split(/[\s,]+/).findAll { it }.join(',')
 
                         def paramChecks = [
                             'matrix_file': params.matrix_file,
@@ -135,6 +141,7 @@ def call(Map pipelineParams = [:]) {
                             'region': params.region,
                             'availability_zone': params.availability_zone,
                             'provision_type': params.provision_type,
+                            'post_behavior_db_nodes': params.post_behavior_db_nodes,
                             'scylla_ami_id': params.scylla_ami_id,
                             'gce_image_db': params.gce_image_db,
                             'azure_image_db': params.azure_image_db,
@@ -150,10 +157,8 @@ def call(Map pipelineParams = [:]) {
                         if (!params.matrix_file?.trim()) {
                             error("'matrix_file' parameter is required")
                         }
-                        def hasImageParam = params.scylla_ami_id?.trim() || params.gce_image_db?.trim() || params.azure_image_db?.trim() || params.oci_image_db?.trim() || params.unified_package?.trim() || params.new_scylla_repo?.trim()
-                        if (!scyllaVersion?.trim() && !hasImageParam) {
-                            error("Either 'scylla_version' or an image/package param (scylla_ami_id, gce_image_db, azure_image_db, oci_image_db, unified_package, new_scylla_repo) is required")
-                        }
+                        // A missing scylla_version is checked by the CLI, which knows whether the
+                        // matrix runs the supported versions by itself (supported_versions_only)
 
                         // Build CLI command
                         def cmd = "./docker/env/hydra.sh trigger-matrix"
@@ -184,6 +189,9 @@ def call(Map pipelineParams = [:]) {
                         }
                         if (params.provision_type?.trim()) {
                             cmd += " --provision-type '${params.provision_type}'"
+                        }
+                        if (params.post_behavior_db_nodes?.trim()) {
+                            cmd += " --post-behavior-db-nodes '${params.post_behavior_db_nodes}'"
                         }
                         if (params.scylla_ami_id?.trim()) {
                             cmd += " --scylla-ami-id '${params.scylla_ami_id}'"
@@ -229,6 +237,7 @@ def call(Map pipelineParams = [:]) {
                         if (params.dry_run) {
                             cmd += " --dry-run"
                         }
+                        cmd += " --report-dir ."
 
                         sh(cmd)
                     }
@@ -238,6 +247,16 @@ def call(Map pipelineParams = [:]) {
 
         post {
             always {
+                script {
+                    // Written by wait-mode runs only, also when one of the builds failed; other
+                    // runs have no report, and archiving a missing file logs a "Configuration error?"
+                    if (fileExists('trigger-matrix-summary.txt')) {
+                        currentBuild.description = readFile('trigger-matrix-summary.txt').trim()
+                    }
+                    if (fileExists('trigger-matrix-report.html')) {
+                        archiveArtifacts artifacts: 'trigger-matrix-report.html'
+                    }
+                }
                 cleanWs()
             }
         }

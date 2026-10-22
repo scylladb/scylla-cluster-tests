@@ -22,6 +22,7 @@ For the same reason, other submodules must call into this one through the module
 would bind a copy per caller, so a test patching this module would silently miss them."""
 
 import logging
+import re
 
 from sdcm.utils.trigger_matrix.backends import _aws_arch, _backend_region, _vm_arch, split_regions
 from sdcm.utils.trigger_matrix.constants import DEFAULT_ARCH, DEFAULT_AWS_REGION
@@ -110,6 +111,32 @@ def resolve_scylla_version_from_image(
         if v
     }
     raise TriggerMatrixError(f"Cannot resolve scylla_version from images: {provided}")
+
+
+def latest_release_of_line(line: str, region: str = DEFAULT_AWS_REGION) -> str:
+    """The newest released patch of a release line, e.g. "2025.4" -> "2025.4.3".
+
+    Read from the production AMIs, the images SCT itself picks for a bare "2025.4" on AWS.
+    Only that production filter (the `environment=production` tag `get_scylla_ami_versions`
+    selects on) keeps release-branch builds out: their version tags have the same
+    "2025.4.3-0.<date>.<sha>-1" form as releases. The tag pattern below only drops release
+    candidates ("~rc") and other lines sharing the prefix.
+
+    Unlike the other lookups here, this one is not best-effort: a failed AWS call raises, so
+    that the trigger fails with its cause rather than with "no released AMI".
+
+    Returns an empty string when the line has no released AMI in `region`.
+    """
+    from sdcm.utils.common import get_scylla_ami_versions  # noqa: PLC0415 - circular import avoidance
+
+    amis = get_scylla_ami_versions(region_name=region, version=line)
+    releases = []
+    for ami in amis:
+        tags = {t["Key"]: t["Value"] for t in (ami.tags or [])}
+        match = re.match(r"^(\d+)\.(\d+)\.(\d+)-", tags.get("scylla_version", ""))
+        if match and f"{match[1]}.{match[2]}" == line:
+            releases.append(tuple(int(part) for part in match.groups()))
+    return ".".join(str(part) for part in max(releases)) if releases else ""
 
 
 def _resolve_version_via_branched_ami(scylla_version: str, region: str, arch: str = DEFAULT_ARCH) -> str:
