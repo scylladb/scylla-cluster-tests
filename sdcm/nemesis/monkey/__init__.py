@@ -252,73 +252,6 @@ class NodeToolCleanupMonkey(NemesisBaseClass):
         self.runner.disrupt_nodetool_cleanup()
 
 
-class TruncateMonkey(NemesisBaseClass):
-    disruptive = False
-    kubernetes = True
-    xcloud = True
-    limited = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.runner.disrupt_truncate()
-
-
-class TruncateLargeParititionMonkey(NemesisBaseClass):
-    disruptive = False
-    kubernetes = True
-    xcloud = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.runner.disrupt_truncate_large_partition()
-
-
-class DeleteByPartitionsMonkey(NemesisBaseClass):
-    disruptive = False
-    kubernetes = True
-    xcloud = True
-    free_tier_set = True
-    delete_rows = True
-
-    def disrupt(self):
-        self.runner.disrupt_delete_10_full_partitions()
-
-
-class DeleteByRowsRangeMonkey(NemesisBaseClass):
-    disruptive = False
-    kubernetes = True
-    xcloud = True
-    free_tier_set = True
-    delete_rows = True
-
-    def disrupt(self):
-        self.runner.disrupt_delete_by_rows_range()
-
-
-class DeleteOverlappingRowRangesMonkey(NemesisBaseClass):
-    disruptive = False
-    kubernetes = True
-    xcloud = True
-    free_tier_set = True
-    delete_rows = True
-
-    def disrupt(self):
-        self.runner.disrupt_delete_overlapping_row_ranges()
-
-
-class AddDropColumnMonkey(NemesisBaseClass):
-    disruptive = False
-    networking = False
-    kubernetes = True
-    xcloud = True
-    limited = True
-    schema_changes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.runner.disrupt_add_drop_column()
-
-
 class ToggleTableIcsMonkey(NemesisBaseClass):
     kubernetes = True
     xcloud = True
@@ -338,65 +271,6 @@ class ToggleGcModeMonkey(NemesisBaseClass):
 
     def disrupt(self):
         self.runner.disrupt_toggle_table_gc_mode()
-
-
-@target_data_nodes
-class MgmtBackup(NemesisBaseClass):
-    manager_operation = True
-    disruptive = False
-    limited = True
-    supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
-
-    def disrupt(self):
-        self.runner.disrupt_mgmt_backup()
-
-
-@target_data_nodes
-class MgmtBackupSpecificKeyspaces(NemesisBaseClass):
-    manager_operation = True
-    disruptive = False
-    limited = True
-    supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
-
-    def disrupt(self):
-        self.runner.disrupt_mgmt_backup_specific_keyspaces()
-
-
-@target_data_nodes
-class MgmtRestore(NemesisBaseClass):
-    manager_operation = True
-    disruptive = True
-    kubernetes = True
-    xcloud = True
-    limited = True
-    supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
-
-    def disrupt(self):
-        self.runner.disrupt_mgmt_restore()
-
-
-@target_data_nodes
-class MgmtRepair(NemesisBaseClass):
-    manager_operation = True
-    disruptive = False
-    kubernetes = True
-    limited = True
-
-    def disrupt(self):
-        self.runner.log.info("disrupt_mgmt_repair_cli Nemesis begin")
-        self.runner.disrupt_mgmt_repair_cli()
-        self.runner.log.info("disrupt_mgmt_repair_cli Nemesis end")
-        # For Manager APIs test, use: self.runner.disrupt_mgmt_repair_api()
-
-
-@target_data_nodes
-class MgmtCorruptThenRepair(NemesisBaseClass):
-    manager_operation = True
-    disruptive = True
-    kubernetes = True
-
-    def disrupt(self):
-        self.runner.disrupt_mgmt_corrupt_then_repair()
 
 
 class AbortRepairMonkey(NemesisBaseClass):

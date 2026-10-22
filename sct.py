@@ -39,7 +39,7 @@ import pytest
 import click
 import yaml
 from prettytable import PrettyTable
-from argus.client.sct.types import EventsInfo, LogLink
+from argus.client.sct.types import LogLink
 from argus.client.base import ArgusClientError
 from argus.common.enums import TestStatus
 from argus.common.sct_types import RawEventPayload
@@ -73,7 +73,6 @@ from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import (
     ReplayOnlyArgusSCTClient,
-    argus_offline_collect_events,
     create_proxy_argus_s3_url,
     get_argus_client,
     get_argus_use_tunnel_from_env,
@@ -410,14 +409,6 @@ def _report_provision_error_to_argus(
         LOGGER.info("Error event submitted to Argus successfully")
     except Exception as argus_exc:  # noqa: BLE001
         LOGGER.warning("Failed to submit error event to Argus: %s", argus_exc)
-
-    # Submit events summary so the error appears in the Argus events tab
-    try:
-        events_summary = [EventsInfo(severity="CRITICAL", total_events=1, messages=[error_message])]
-        argus_client.submit_events(events_summary)
-        LOGGER.info("Events summary submitted to Argus successfully")
-    except Exception as summary_exc:  # noqa: BLE001
-        LOGGER.warning("Failed to submit events summary to Argus: %s", summary_exc)
 
     try:
         argus_client.set_sct_run_status(TestStatus.TEST_ERROR)
@@ -2124,9 +2115,6 @@ def store_logs_in_argus(
                 else:
                     LOGGER.info("Skipping %s because it has been already sent to argus.", file_name)
         argus_client.submit_sct_logs(log_links)
-
-        if not argus_client.get_run().get("events"):
-            argus_offline_collect_events(client=argus_client)
     except Exception:
         LOGGER.error("Error saving logs to argus", exc_info=True)
 

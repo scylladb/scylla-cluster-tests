@@ -14,14 +14,17 @@
 """VM instance management provider for GCE provisioning."""
 
 import logging
+import time
 from datetime import datetime, timezone
-from typing import List, Dict, Optional
+from typing import List, Dict, NoReturn, Optional
 
 import google.api_core.exceptions
+from google.api_core.extended_operation import ExtendedOperation
 from google.cloud import compute_v1
 
 from sdcm.provision.provisioner import (
     InstanceDefinition,
+    OperationPreemptedError,
     PricingModel,
     ProvisionError,
     ZoneResourcesExhaustedError,
@@ -41,6 +44,24 @@ from sdcm.utils.decorators import retrying
 LOGGER = logging.getLogger(__name__)
 
 ZONE_EXHAUSTED_MARKER = "ZONE_RESOURCE_POOL_EXHAUSTED"
+# An insert normally completes in well under a minute, but under capacity pressure GCE has been seen to
+# run past the generic 5 minute operation timeout - and the insert keeps running after its waiter gives up.
+INSTANCE_CREATION_TIMEOUT = 900
+# How often, and for how long (~5 minutes), to keep trying to delete the VM of an insert that timed out:
+# while the insert is still running, GCE refuses the delete or has no instance to delete yet.
+ABANDONED_INSTANCE_DELETE_ATTEMPTS = 20
+ABANDONED_INSTANCE_DELETE_INTERVAL = 15
+
+# A completed insert operation does not mean the VM has started: it can still be PROVISIONING or
+# STAGING. Real GCE leaves those within seconds, but minicloud reports STAGING for as long as it
+# takes to download and convert an image it has not cached yet - over 10 minutes for the ~9 GB
+# monitor image. Nothing may SSH to the VM before it is RUNNING (the cloud-init wait budgets only
+# ~6 minutes for that), so the provider waits for it here, the one place every caller goes through.
+INSTANCE_STARTING_STATUSES = frozenset({"PROVISIONING", "STAGING"})
+INSTANCE_RUNNING_TIMEOUT = 20 * 60
+INSTANCE_RUNNING_POLL_INTERVAL = 10
+# What a spot VM preempted while booting shows instead of RUNNING.
+SPOT_PREEMPTED_STATUSES = frozenset({"STOPPING", "TERMINATED"})
 
 
 def _is_zone_exhausted(error: BaseException) -> bool:
@@ -136,13 +157,19 @@ class VirtualMachineProvider:
                 LOGGER.error("Error when sending create vm request for instance %s: %s", normalized_name, str(err))
                 error_to_raise = err
 
-        # Second loop: Wait for all operations to complete and collect instances
-        for definition, operation, normalized_name, user_data, startup_script in pending_instance_creations:
+        # Second loop: Wait for all operations to complete and collect instances. Entries are popped
+        # as they are taken, so on an abort the list holds exactly the operations still in flight.
+        while pending_instance_creations:
+            definition, operation, normalized_name, user_data, startup_script = pending_instance_creations.pop(0)
             try:
                 instance = self._wait_for_instance_creation(
                     definition, operation, normalized_name, pricing_model, user_data, startup_script
                 )
                 instances.append(instance)
+            except OperationPreemptedError, ProvisionError:
+                # ProvisionError: the insert timed out, or the VM it created never reached RUNNING.
+                self._drain_pending_creations(pending_instance_creations, pricing_model)
+                raise
             except ZoneResourcesExhaustedError:
                 # Zone exhaustion is unrecoverable; let it propagate immediately.
                 # Successfully-created instances remain in self._cache so callers
@@ -160,6 +187,82 @@ class VirtualMachineProvider:
             raise ProvisionError(f"Failed to create instances: {error_to_raise}") from error_to_raise
         return instances
 
+    def _drain_pending_creations(self, pending_instance_creations: list, pricing_model: PricingModel) -> None:
+        """Resolve the insert operations still in flight when a batch is abandoned mid-way.
+
+        GCE's `insert` is not idempotent, so a name whose operation was never awaited is neither in
+        the cache nor free: the caller's on-demand retry would get `AlreadyExists` for it instead of
+        a VM. Each remaining operation is waited out - a VM that came up and reached RUNNING is cached
+        and reused by the retry, one that failed is deleted so its name is free again. Any error is
+        only logged: the abort that triggered the drain is the error the caller has to see.
+        """
+        while pending_instance_creations:
+            definition, operation, normalized_name, _, _ = pending_instance_creations.pop(0)
+            try:
+                wait_for_extended_operation(
+                    operation, f"instance creation for {normalized_name}", timeout=INSTANCE_CREATION_TIMEOUT
+                )
+                instance = self._wait_until_running(normalized_name, pricing_model)
+                self._set_instance_labels(instance, definition.tags, normalized_name)
+                self._cache[normalized_name] = instance
+                LOGGER.info("Instance %s finished creating after the abort; keeping it for the retry", normalized_name)
+            except (ProvisionError, OperationPreemptedError) as error:
+                # _wait_until_running already deleted the VM before raising.
+                LOGGER.warning("Instance %s did not start after the abort: %s", normalized_name, error)
+            except Exception as error:  # noqa: BLE001 - the wait also raises TimeoutError/RuntimeError
+                LOGGER.warning("Instance %s did not finish creating after the abort: %s", normalized_name, error)
+                self._release_instance_name(normalized_name, operation)
+
+    def _abandon_timed_out_creation(
+        self, name: str, insert_operation: ExtendedOperation, error: TimeoutError
+    ) -> NoReturn:
+        """Give up on an insert that outlived its waiter, and free the name it holds.
+
+        The timeout only stops the waiting: GCE carries on with the insert, and the VM it produces is
+        then neither cached nor deletable by anyone, while every later insert of the same name fails
+        with `AlreadyExists`. Raises ProvisionError, which `provision_with_retry` retries.
+        """
+        LOGGER.error(
+            "Instance %s was not created within %ss; deleting it so its name can be reused",
+            name,
+            INSTANCE_CREATION_TIMEOUT,
+        )
+        self._release_instance_name(name, insert_operation)
+        raise ProvisionError(f"Instance {name} was not created within {INSTANCE_CREATION_TIMEOUT}s: {error}") from error
+
+    def _release_instance_name(self, name: str, insert_operation: ExtendedOperation) -> None:
+        """Delete an instance whose creation was abandoned, so a later insert of its name can succeed.
+
+        Never raises: it runs while another error is on its way to the caller.
+        """
+        try:
+            self._delete_abandoned_instance(name, insert_operation)
+        except Exception as error:  # noqa: BLE001
+            LOGGER.error("Failed to delete instance %s, its name stays taken: %s", name, error)
+
+    @retrying(
+        n=ABANDONED_INSTANCE_DELETE_ATTEMPTS,
+        sleep_time=ABANDONED_INSTANCE_DELETE_INTERVAL,
+        # Not TimeoutError: a delete that GCE accepted but did not finish in time is not sped up by another one.
+        allowed_exceptions=(google.api_core.exceptions.GoogleAPIError,),
+        message="Retrying to delete an abandoned GCE instance...",
+    )
+    def _delete_abandoned_instance(self, name: str, insert_operation: ExtendedOperation) -> None:
+        # Unlike `delete`, this retries: the insert may still be in progress, and GCE can refuse to
+        # delete an instance until the operation already running on it is over.
+        try:
+            operation = self._instances_client.delete(project=self.project_id, zone=self.zone, instance=name)
+        except google.api_core.exceptions.NotFound:
+            # A pending insert has not created the instance resource yet, but it still can.
+            if not insert_operation.done():
+                LOGGER.info("Instance %s does not exist yet, but its insert is still running", name)
+                raise
+            LOGGER.info("Instance %s does not exist, its name is free", name)
+            return
+        wait_for_extended_operation(operation, f"deletion of abandoned instance {name}")
+        self._cache.pop(name, None)
+        LOGGER.info("Abandoned instance %s deleted", name)
+
     def _wait_for_instance_creation(
         self,
         definition: InstanceDefinition,
@@ -176,12 +279,16 @@ class VirtualMachineProvider:
         attempts cleanup and retries using _create_instance_with_retry.
         """
         try:
-            wait_for_extended_operation(operation, f"instance creation for {normalized_name}")
-            instance = self._instances_client.get(project=self.project_id, zone=self.zone, instance=normalized_name)
+            wait_for_extended_operation(
+                operation, f"instance creation for {normalized_name}", timeout=INSTANCE_CREATION_TIMEOUT
+            )
+            instance = self._wait_until_running(normalized_name, pricing_model)
             self._set_instance_labels(instance, definition.tags, normalized_name)
             LOGGER.info("Instance %s created successfully", normalized_name)
             self._cache[normalized_name] = instance
             return instance
+        except TimeoutError as timeout_error:
+            self._abandon_timed_out_creation(normalized_name, operation, timeout_error)
         except google.api_core.exceptions.GoogleAPIError as gce_error:
             if _is_zone_exhausted(gce_error):
                 LOGGER.error(
@@ -197,6 +304,39 @@ class VirtualMachineProvider:
             self._cleanup_failed_instance(normalized_name, str(gce_error))
             # Retry the entire creation process with retry decorator
             return self._create_instance_with_retry(definition, pricing_model, user_data, startup_script)
+
+    def _wait_until_running(self, normalized_name: str, pricing_model: PricingModel) -> compute_v1.Instance:
+        """Poll a just-created instance until it is RUNNING, and return it.
+
+        See the comment above INSTANCE_STARTING_STATUSES for why a completed insert operation is not
+        enough. A status that is neither RUNNING nor still starting (e.g. TERMINATED) will not become
+        RUNNING by waiting, so it fails right away instead of after the full timeout.
+
+        An instance that fails either way is deleted before raising: the ProvisionError sends
+        provision_with_retry round again, and GCE's `insert` is not idempotent - a leftover VM
+        would turn that retry into AlreadyExists instead of a fresh instance. A spot VM that is
+        STOPPING or TERMINATED was preempted while booting, so it raises OperationPreemptedError
+        instead, which is what the on-demand fallback reacts to.
+        """
+        deadline = time.monotonic() + INSTANCE_RUNNING_TIMEOUT
+        while True:
+            instance = self._instances_client.get(project=self.project_id, zone=self.zone, instance=normalized_name)
+            if instance.status == "RUNNING":
+                return instance
+            if instance.status not in INSTANCE_STARTING_STATUSES:
+                reason = f"its status is {instance.status}"
+                break
+            if time.monotonic() >= deadline:
+                reason = f"still {instance.status} after {INSTANCE_RUNNING_TIMEOUT}s"
+                break
+            LOGGER.info("Instance %s is %s, waiting for it to be RUNNING...", normalized_name, instance.status)
+            time.sleep(INSTANCE_RUNNING_POLL_INTERVAL)
+
+        LOGGER.error("Instance %s did not start (%s), deleting it", normalized_name, reason)
+        self.delete(normalized_name, wait=True)
+        if pricing_model.is_spot() and instance.status in SPOT_PREEMPTED_STATUSES:
+            raise OperationPreemptedError(f"Spot instance {normalized_name} preempted before it started: {reason}")
+        raise ProvisionError(f"Instance {normalized_name} did not start: {reason}")
 
     @retrying(
         n=3,
@@ -218,12 +358,16 @@ class VirtualMachineProvider:
             operation = self._build_and_insert_instance(
                 definition, pricing_model, user_data, startup_script, normalized_name
             )
-            wait_for_extended_operation(operation, f"instance creation for {normalized_name}")
-            instance = self._instances_client.get(project=self.project_id, zone=self.zone, instance=normalized_name)
+            wait_for_extended_operation(
+                operation, f"instance creation for {normalized_name}", timeout=INSTANCE_CREATION_TIMEOUT
+            )
+            instance = self._wait_until_running(normalized_name, pricing_model)
             self._set_instance_labels(instance, definition.tags, normalized_name)
             LOGGER.info("Instance %s created successfully on retry", normalized_name)
             self._cache[normalized_name] = instance
             return instance
+        except TimeoutError as timeout_error:
+            self._abandon_timed_out_creation(normalized_name, operation, timeout_error)
         except google.api_core.exceptions.GoogleAPIError as gce_error:
             LOGGER.warning("Instance %s creation failed: %s", normalized_name, gce_error)
             self._cleanup_failed_instance(normalized_name, str(gce_error))

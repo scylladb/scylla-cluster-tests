@@ -21,7 +21,6 @@ import datetime
 import importlib
 import inspect
 import logging
-import math
 import os
 import pkgutil
 import random
@@ -32,14 +31,12 @@ import json
 import itertools
 from abc import ABC, abstractmethod
 from contextlib import ExitStack
-from datetime import timedelta
 from typing import List, Optional, Callable, Union, Iterable, TYPE_CHECKING
 from functools import partial, cached_property
-from collections import defaultdict, Counter, namedtuple
+from collections import Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
-from cassandra import ConsistencyLevel, InvalidRequest
 from cassandra.query import SimpleStatement
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
@@ -47,8 +44,7 @@ from argus.common.enums import NemesisStatus
 from sdcm.nemesis.registry import NemesisRegistry
 from sdcm.utils.action_logger import get_action_logger
 
-from sdcm.utils.cql_utils import cql_unquote_if_needed
-from sdcm import wait, mgmt
+from sdcm import wait
 from sdcm.audit import Audit, AuditConfiguration
 from sdcm.cluster import (
     BaseCluster,
@@ -70,16 +66,7 @@ from sdcm.cluster_k8s import (
 )
 from sdcm.log import SDCMAdapter
 from sdcm.logcollector import save_kallsyms_map
-from sdcm.mgmt.common import (
-    TaskStatus,
-    TERMINAL_TASK_STATUSES,
-    ScyllaManagerError,
-    get_persistent_snapshots,
-    ObjectStorageUploadMode,
-)
-from sdcm.mgmt.backup import run_manager_backup
-from sdcm.mgmt.argus_report import report_manager_backup_results_to_argus
-from sdcm.mgmt.helpers import get_dc_name_from_ks_statement, get_schema_create_statements_from_snapshot
+from sdcm.mgmt.common import TaskStatus, ScyllaManagerError
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
@@ -96,7 +83,6 @@ from sdcm.sct_events.group_common_events import (
     ignore_reactor_stall_errors,
     ignore_disk_quota_exceeded_errors,
     decorate_with_context_if_issues_open,
-    ignore_take_snapshot_failing,
     ignore_ipv6_failure_to_assign,
     suppress_expected_unavailability_errors,
     ignore_raft_topology_cmd_failing,
@@ -111,8 +97,6 @@ from sdcm.snitch_configuration import SnitchConfig
 from sdcm.utils import cdc
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import (
-    get_db_tables,
-    generate_random_string,
     reach_enospc_on_node,
     clean_enospc_on_node,
     parse_nodetool_listsnapshots,
@@ -147,6 +131,11 @@ from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 
 
 from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS, DefaultValue, node_operations, unique_disruption_name
+from sdcm.nemesis.utils.common import (
+    destroy_data_and_restart_scylla,
+    nemesis_stress_failure_handler,
+    prepare_test_table,
+)
 from sdcm.nemesis.utils.indexes import (
     is_cf_a_view,
 )
@@ -172,19 +161,14 @@ from sdcm.exceptions import (
     KillNemesis,
     NoFilesFoundToDestroy,
     NoKeyspaceFound,
-    FilesNotCorrupted,
     LogContentNotFound,
     LdapNotRunning,
-    TimestampNotFound,
-    PartitionNotFound,
     WatcherCallableException,
     UnsupportedNemesis,
     CdcStreamsWasNotUpdated,
     AuditLogTestFailure,
     BootstrapStreamErrorFailure,
     QuotaConfigurationFailure,
-    NemesisStressFailure,
-    WaitForTimeoutError,
 )
 from test_lib.compaction import (
     CompactionStrategy,
@@ -193,12 +177,10 @@ from test_lib.compaction import (
     get_gc_mode,
     GcMode,
 )
-from test_lib.cql_types import CQLTypeBuilder
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
 
 if TYPE_CHECKING:
     from sdcm.audit import AuditStore
-    from sdcm.mgmt.cli import BackupTask
     from sdcm.tester import ClusterTester
 
 LOGGER = logging.getLogger(__name__)
@@ -325,21 +307,7 @@ class NemesisRunner:
         self.task_used_streaming = None
         self.filter_seed = self.cluster.params.get("nemesis_filter_seeds")
         self.nemesis_seed = nemesis_seed or random.randint(0, 1000)
-        self._add_drop_column_max_per_drop = 5
-        self._add_drop_column_max_per_add = 5
-        self._add_drop_column_max_column_name_size = 10
-        self._add_drop_column_max_columns = 200
-        self._add_drop_column_columns_info = {}
-        self._add_drop_column_target_table = []
-        self._add_drop_column_tables_to_ignore = {
-            "alternator_usertable": "*",  # Ignore alternator tables
-            "ks_truncate": "counter1",  # Ignore counter table
-            "keyspace1": "counter1",  # Ignore counter table
-            # TODO: issue https://github.com/scylladb/scylla/issues/6074. Waiting for dev conclusions
-            "cqlstress_lwt_example": "*",  # Ignore LWT user-profile tables
-        }
         self.es_publisher = NemesisElasticSearchPublisher(self.tester)
-        self._init_num_deletions_factor()
         self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
         self.hdr_tags = []
 
@@ -348,25 +316,6 @@ class NemesisRunner:
         self.node_allocator: NemesisNodeAllocator = self.tester.nemesis_allocator
 
         self.log.debug("Instantiated %s nemesis with %d seed", self.__class__.__name__, self.nemesis_seed)
-
-    def _init_num_deletions_factor(self):
-        # num_deletions_factor is a numeric divisor. It's a factor by which the available-partitions-for-deletion
-        # is divided. This is in order to specify choose_partitions_for_delete(partitions_amount) a reasonable number
-        # of partitions to delete. We prefer not to delete "too many" partitions at once in a single nemesis.
-        # In case 'stress_cmd' has a write-mode and partitions are rewritten, then it is OK to delete all,
-        # (so this factor is set to - 1)
-        # Example usage: partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.num_deletions_factor
-        self.num_deletions_factor = 5
-        if stress_cmds := self.cluster.params.get("stress_cmd"):
-            if not isinstance(stress_cmds, list):
-                stress_cmds = [stress_cmds]
-            for stress_cmd in stress_cmds:
-                stress_cmd_splitted = stress_cmd.split()
-                # In case background load has writes, we can delete all available partitions,
-                # since they are rewritten. Otherwise, we can only delete some of them.
-                if "scylla-bench" in stress_cmd_splitted and "-mode=write" in stress_cmd_splitted:
-                    self.num_deletions_factor = 1
-                    break
 
     @cached_property
     def random(self) -> random.Random:
@@ -1075,84 +1024,6 @@ class NemesisRunner:
 
         return sstables
 
-    @decorate_with_context(suppress_expected_unavailability_errors)
-    def _destroy_data_and_restart_scylla(
-        self,
-        keyspaces_for_destroy: list = None,
-        sstables_to_destroy_perc: int = 50,
-        skip_sstables_with_tombstones: bool = False,
-    ):
-        tables = self.cluster.get_non_system_ks_cf_list(
-            db_node=self.target_node, filter_empty_tables=False, filter_by_keyspace=keyspaces_for_destroy
-        )
-        if not tables:
-            raise UnsupportedNemesis("Non-system keyspace and table are not found. The nemesis can't be run")
-
-        self.log.debug("Chosen tables: %s", tables)
-
-        # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
-        with self.action_log_scope(f"Stop Scylla on {self.target_node.name}"):
-            self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
-
-        try:
-            # Remove data files - deleting a tombstone-bearing sstable can resurrect the data it
-            # shadows, and a following repair then propagates it to the other replicas. So with
-            # skip_sstables_with_tombstones=True only tombstone-free sstables are destroy candidates,
-            # and the target percentage is applied to that filtered pool.
-            # Scylla is already stopped above, so the sstable set is frozen while it is inspected.
-            # Ref: https://scylladb.atlassian.net/browse/SCT-750
-            if not (
-                all_files_to_destroy := self.get_all_sstables(
-                    tables=tables, node=self.target_node, skip_sstables_with_tombstones=skip_sstables_with_tombstones
-                )
-            ):
-                msg = (
-                    "All sstables contain tombstones - none is safe to destroy. The nemesis can't be run"
-                    if skip_sstables_with_tombstones
-                    else "SStables for destroy are not found. The nemesis can't be run"
-                )
-                raise UnsupportedNemesis(msg)
-
-            sstables_amount_to_destroy = int(len(all_files_to_destroy) * sstables_to_destroy_perc / 100)
-
-            self.log.debug(
-                "SStables amount to destroy (%s percent of %s SStables): %s",
-                sstables_to_destroy_perc,
-                "tombstone-free" if skip_sstables_with_tombstones else "all",
-                sstables_amount_to_destroy,
-            )
-
-            destroyed_files = 0
-            while sstables_amount_to_destroy > 0:
-                file_for_destroy = random.choice(all_files_to_destroy)
-                if not (
-                    file_group_for_destroy := self.replace_full_file_name_to_prefix(
-                        one_file=file_for_destroy, ks_cf_for_destroy=tables
-                    )
-                ):
-                    continue
-
-                with DbNodeLogger(
-                    self.cluster.nodes,
-                    "remove data",
-                    target_node=self.target_node,
-                    additional_info=file_group_for_destroy,
-                ):
-                    result = self.target_node.remoter.sudo("rm -f %s" % file_group_for_destroy)
-                if result.stderr:
-                    raise FilesNotCorrupted(
-                        "Files were not removed. The nemesis can't be run. Error: {}".format(result)
-                    )
-                all_files_to_destroy.remove(file_for_destroy)
-                sstables_amount_to_destroy -= 1
-                destroyed_files += 1
-                self.log.debug("Files {} were destroyed".format(file_for_destroy))
-            self.actions_log.info(f"removed {destroyed_files} files in tables: {tables} on {self.target_node.name}")
-
-        finally:
-            with self.action_log_scope(f"Start Scylla on {self.target_node.name} node"):
-                self.target_node.start_scylla_server(verify_up=True, verify_down=False)
-
     def disrupt(self):
         raise NotImplementedError("Derived classes must implement disrupt()")
 
@@ -1168,7 +1039,7 @@ class NemesisRunner:
         self.run_repair()
         # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
         # following repair would then propagate the resurrected data to the other replicas.
-        self._destroy_data_and_restart_scylla(skip_sstables_with_tombstones=True)
+        destroy_data_and_restart_scylla(self, skip_sstables_with_tombstones=True)
         # try to save the node
         self.run_repair()
 
@@ -1178,7 +1049,7 @@ class NemesisRunner:
                 "Rebuild is not supported with tablets. Skipping nemesis (scylladb/scylladb#17575)"
             )
 
-        self._destroy_data_and_restart_scylla()
+        destroy_data_and_restart_scylla(self)
         # try to save the node
         with self.action_log_scope(f"Rebuild after destroy data on {self.target_node.name} node"):
             self.repair_nodetool_rebuild()
@@ -1870,8 +1741,8 @@ class NemesisRunner:
     def _k8s_fake_enospc_error(self, node):
         """Fakes ENOSPC error for scylla container (for /var/lib/scylla dir) using chaos-mesh without filling up disk."""
 
-        if SkipPerIssues("https://github.com/scylladb/scylla-cluster-tests/issues/6327", params=self.tester.params):
-            raise UnsupportedNemesis("https://github.com/scylladb/scylla-cluster-tests/issues/6327")
+        if SkipPerIssues("https://scylladb.atlassian.net/browse/SCT-1265", params=self.tester.params):
+            raise UnsupportedNemesis("Fake ENOSPC on K8S is broken, see https://scylladb.atlassian.net/browse/SCT-1265")
 
         if not node.k8s_cluster.chaos_mesh.initialized:
             raise UnsupportedNemesis("Chaos Mesh is not installed. Set 'k8s_use_chaos_mesh' config option to 'true'")
@@ -1897,10 +1768,12 @@ class NemesisRunner:
             assert no_space_errors, "There are no 'No space left on device' errors in db log during enospc disruption."
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
-        if ComparableScyllaVersion(self.target_node.scylla_version) > "2025.3.99":
+        if ComparableScyllaVersion(self.target_node.scylla_version) > "2025.3.99" and SkipPerIssues(
+            "https://scylladb.atlassian.net/browse/SCYLLADB-481", params=self.tester.params
+        ):
             raise UnsupportedNemesis(
-                "Applicalbe only for 2025.3 and lower."
-                " See https://github.com/scylladb/scylla-cluster-tests/issues/12989"
+                "Skipped on 2025.4+ while https://scylladb.atlassian.net/browse/SCYLLADB-481 is open."
+                " See https://scylladb.atlassian.net/browse/SCT-1261"
             )
         if all_nodes:
             nodes = self.cluster.data_nodes
@@ -2356,569 +2229,15 @@ class NemesisRunner:
         self.nodetool_cleanup_on_all_nodes_parallel()
 
     def _prepare_test_table(self, ks="keyspace1"):
-        """Populate ``ks.standard1`` with 400 K rows via cassandra-stress."""
-        stress_cmd = (
-            "cassandra-stress write n=400000 cl=QUORUM -mode native cql3 "
-            f"-schema 'keyspace={ks} replication(strategy=NetworkTopologyStrategy,"
-            f"replication_factor={self.tester.reliable_replication_factor})' -log interval=5"
-        )
-        cs_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd, stop_test_on_failure=False, round_robin=True)
-        self.tester.verify_stress_thread(cs_thread, error_handler=self._nemesis_stress_failure_handler)
+        """Populate ``<ks>.standard1``. Delegates to nemesis.utils.common.prepare_test_table."""
+        prepare_test_table(self.tester, ks=ks, stress_failure_handler=self._nemesis_stress_failure_handler)
 
     def _nemesis_stress_failure_handler(self, stress_pool, errors):
         """
-        Error handler for nemesis thread - aborts the nemesis if a stress command failed on all loaders
-
-        :param stress_pool: list, pool of stress threads that were executing the stress command
-        :param errors: dict, errors occurred on each loader
+        Error handler for nemesis thread - aborts the nemesis if a stress command failed on all loaders.
+        Redirects to the nemesis.util.common.nemesis_stress_failure_handler for the actual error handling.
         """
-        if len(errors) == len(stress_pool.get_results()):
-            errors_str = "".join(f" on node '{node_name}': {errors}\n" for node_name, errors in errors.items())
-            raise NemesisStressFailure(
-                f"Aborting '{self.__class__.__name__}' nemesis as stress command failed "
-                f"with the following errors:\n{errors_str}"
-            )
-
-    @scylla_versions(("5.2.rc0", None), ("2023.1.rc0", None))
-    def _truncate_cmd_timeout_suffix(self, truncate_timeout):
-        # NOTE: 'self' is used by the 'scylla_versions' decorator
-        return f" USING TIMEOUT {int(truncate_timeout)}s"
-
-    @scylla_versions((None, "5.1"), (None, "2022.2"))
-    def _truncate_cmd_timeout_suffix(self, truncate_timeout):
-        # NOTE: 'self' is used by the 'scylla_versions' decorator
-        return ""
-
-    def disrupt_truncate(self):
-        keyspace_truncate = "ks_truncate"
-        table = "standard1"
-
-        ks_cf = f"{keyspace_truncate}.{table}"
-        self.actions_log.info(f"Preparing test table for truncate nemesis: {ks_cf}")
-        self._prepare_test_table(ks=keyspace_truncate)
-
-        # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
-        with adaptive_timeout(Operations.FLUSH, self.target_node, timeout=HOUR_IN_SEC * 2):
-            self.target_node.run_nodetool("flush")
-        # do the actual truncation
-        truncate_timeout = 600
-        truncate_cmd_timeout_suffix = self._truncate_cmd_timeout_suffix(truncate_timeout)
-        with self.action_log_scope(f"Truncate {ks_cf} table using cqlsh"):
-            self.target_node.run_cqlsh(
-                cmd=f"TRUNCATE {keyspace_truncate}.{table}{truncate_cmd_timeout_suffix}", timeout=truncate_timeout
-            )
-
-    def disrupt_truncate_large_partition(self):
-        """
-        Introduced a new truncate nemesis, it truncates a large-partition table,
-        it's used to cover one improvement of compaction.
-        The increase frequency of checking abortion is very useful for truncate.
-        """
-        if SkipPerIssues(
-            issues="https://github.com/scylladb/scylladb/issues/20356", params=self.tester.params
-        ) and self.tester.params.get("use_zero_nodes"):
-            raise UnsupportedNemesis("Unsupported nemesis due to scylladb/scylladb#20356")
-        ks_name = "ks_truncate_large_partition"
-        table = "test_table"
-        ks_cf = f"{ks_name}.{table}"
-        stress_cmd = (
-            "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=10 "
-            + "-clustering-row-count=5555 -clustering-row-size=uniform:10..20 -concurrency=10 "
-            + "-connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=60s "
-            + f"-keyspace {ks_name} -table {table}"
-        )
-        self.actions_log.info(f"Preparing test table for truncate with scylla-bench: {ks_cf}")
-        bench_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd, stop_test_on_failure=False)
-        self.tester.verify_stress_thread(bench_thread, error_handler=self._nemesis_stress_failure_handler)
-
-        # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
-        with adaptive_timeout(Operations.FLUSH, self.target_node, timeout=HOUR_IN_SEC * 2):
-            self.target_node.run_nodetool("flush")
-        # do the actual truncation
-        truncate_timeout = 600
-        truncate_cmd_timeout_suffix = self._truncate_cmd_timeout_suffix(truncate_timeout)
-        with self.action_log_scope(f"Truncate {ks_cf} table using cqlsh"):
-            self.target_node.run_cqlsh(
-                cmd=f"TRUNCATE {ks_name}.{table}{truncate_cmd_timeout_suffix}", timeout=truncate_timeout
-            )
-
-    def _get_all_tables_with_no_compact_storage(self, tables_to_skip=None):
-        """
-        Return all tables with no "COMPACT STORAGE" in table code
-        :param tables_to_skip: Dict of keyspaces/tables to be excluded from results.
-            Examples:
-                {'ks': 'table'} - will skip ks.table
-                {'ks': '*'} - will skip any tables from keyspace "ks"
-                {'*': 'table1,table2'} - will skip table1 and table2 from any keyspace
-        :return: Dict of with keyspaces as key and list of table names as value
-        """
-        keyspaces = []
-        output = {}
-        if tables_to_skip is None:
-            tables_to_skip = {}
-        to_be_skipped_default = tables_to_skip.get("*", "").split(",")
-        with self.cluster.cql_connection_patient(self.target_node) as session:
-            query_result = session.execute("SELECT keyspace_name FROM system_schema.keyspaces;")
-            for result_rows in query_result:
-                keyspaces.extend(
-                    [row.lower() for row in result_rows if not row.lower().startswith(("system", "audit"))]
-                )
-            for ks in keyspaces:
-                to_be_skipped = tables_to_skip.get(ks, None)
-                if to_be_skipped is None:
-                    to_be_skipped = to_be_skipped_default
-                elif to_be_skipped == "*":
-                    continue
-                elif to_be_skipped == "":
-                    to_be_skipped = []
-                else:
-                    to_be_skipped = to_be_skipped.split(",") + to_be_skipped_default
-                tables = get_db_tables(keyspace_name=ks, node=self.target_node, with_compact_storage=False)
-                if to_be_skipped:
-                    tables = [table for table in tables if table not in to_be_skipped]
-                if not tables:
-                    continue
-                output[ks] = tables
-        return output
-
-    def _add_drop_column_get_target_table(self, stored_target_table: list):
-        current_tables = self._get_all_tables_with_no_compact_storage(self._add_drop_column_tables_to_ignore)
-        if stored_target_table:
-            if stored_target_table[1] in current_tables.get(stored_target_table[0], []):
-                return stored_target_table
-        if not current_tables:
-            return None
-        ks_name = next(iter(current_tables.keys()))
-        table_name = current_tables[ks_name][0]
-        return [ks_name, table_name]
-
-    @staticmethod
-    def _add_drop_column_get_added_columns_info(target_table: list, added_fields):
-        ks = added_fields.get(target_table[0], None)
-        if ks is None:
-            output = {"column_names": {}, "column_types": {}}
-            added_fields[target_table[0]] = {target_table[1]: output}
-            return output
-        table = ks.get(target_table[1], None)
-        if table is not None:
-            return table
-        ks[target_table[1]] = output = {"column_names": {}, "column_types": {}}
-        return output
-
-    @staticmethod
-    def _random_column_name(avoid_names=None, max_name_size=5):
-        if avoid_names is None:
-            avoid_names = []
-        while True:
-            column_name = generate_random_string(max_name_size)
-            if column_name not in avoid_names:
-                break
-        return column_name
-
-    def _add_drop_column_generate_columns_to_drop(self, added_columns_info):
-        drop = []
-        columns_to_drop = min(len(added_columns_info["column_names"]) + 1, self._add_drop_column_max_per_drop + 1)
-        if columns_to_drop > 1:
-            columns_to_drop = random.randrange(1, columns_to_drop)
-        for _ in range(columns_to_drop):
-            choice = [n for n in added_columns_info["column_names"] if n not in drop]
-            if choice:
-                column_name = random.choice(choice)
-                drop.append(column_name)
-        return drop
-
-    def _add_drop_column_run_cql_query(self, cmd, ks, consistency_level=ConsistencyLevel.ALL):
-        try:
-            with self.cluster.cql_connection_patient(self.target_node, keyspace=ks) as session:
-                session.default_consistency_level = consistency_level
-                session.execute(cmd)
-        except Exception as exc:  # noqa: BLE001
-            self.log.debug(f"Add/Remove Column Nemesis: CQL query '{cmd}' execution has failed with error '{str(exc)}'")
-            self.actions_log.info(f"Failed to add/drop column: {str(exc)}")
-            return False
-        return True
-
-    def _add_drop_column_generate_columns_to_add(self, added_columns_info):
-        add = []
-        columns_to_add = min(
-            self._add_drop_column_max_columns - len(added_columns_info["column_names"]),
-            self._add_drop_column_max_per_add,
-        )
-        if columns_to_add > 1:
-            columns_to_add = random.randrange(1, columns_to_add)
-        for _ in range(columns_to_add):
-            new_column_name = self._random_column_name(
-                added_columns_info["column_names"].keys(), self._add_drop_column_max_column_name_size
-            )
-            new_column_type = CQLTypeBuilder.get_random(
-                added_columns_info["column_types"], allow_levels=10, avoid_types=["counter"], forget_on_exhaust=True
-            )
-            if new_column_type is None:
-                continue
-            add.append([new_column_name, new_column_type])
-        return add
-
-    def _add_drop_column(self, drop=True, add=True):
-        self._add_drop_column_target_table = self._add_drop_column_get_target_table(self._add_drop_column_target_table)
-        if self._add_drop_column_target_table is None:
-            return
-        added_columns_info = self._add_drop_column_get_added_columns_info(
-            self._add_drop_column_target_table, self._add_drop_column_columns_info
-        )
-        added_columns_info.get("column_names", None)
-        if not added_columns_info["column_names"]:
-            drop = False
-        if drop:
-            drop = self._add_drop_column_generate_columns_to_drop(added_columns_info)
-        if add:
-            add = self._add_drop_column_generate_columns_to_add(added_columns_info)
-        if not add and not drop:
-            return
-        # TBD: Scylla does not support DROP and ADD in the same statement
-        ks_cf = f"{self._add_drop_column_target_table[0]}.{self._add_drop_column_target_table[1]}"
-        if drop:
-            self.actions_log.info(f"Dropping {len(drop)} columns from {ks_cf} table")
-            cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} DROP ( {', '.join(drop)} );"
-            if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
-                for column_name in drop:
-                    column_type = added_columns_info["column_names"][column_name]
-                    del added_columns_info["column_names"][column_name]
-        if add:
-            self.actions_log.info(f"Adding {len(add)} columns to {ks_cf} table")
-            cmd = (
-                f"ALTER TABLE {self._add_drop_column_target_table[1]} "
-                f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
-            )
-            if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
-                for column_name, column_type in add:
-                    added_columns_info["column_names"][column_name] = column_type
-                    column_type.remember_variant(added_columns_info["column_types"])
-
-    def _add_drop_column_run_in_cycle(self):
-        start_time = time.time()
-        end_time = start_time + 600
-        while time.time() < end_time:
-            self._add_drop_column()
-
-    def verify_initial_inputs_for_delete_nemesis(self):
-        test_keyspaces = self.cluster.get_test_keyspaces()
-
-        if "scylla_bench" not in test_keyspaces:
-            raise UnsupportedNemesis("This nemesis can run on scylla_bench test only")
-
-        if not (self.tester.partitions_attrs and self.tester.partitions_attrs.max_partitions_in_test_table):
-            raise UnsupportedNemesis(
-                'This nemesis expects "max_partitions_in_test_table" sub-parameter of data_validation to be set'
-            )
-
-    def choose_partitions_for_delete(
-        self, partitions_amount, ks_cf, with_clustering_key_data=False, exclude_partitions=None
-    ):
-        """
-        :type partitions_amount: int
-        :type ks_cf: str
-        :type with_clustering_key_data: bool
-        :type exclude_partitions: list
-        :return: defaultdict
-        """
-        if not exclude_partitions:
-            exclude_partitions = []
-
-        # In the large partition tests part of partitions are used for data validation. We do not want to delete a data in those partitions
-        # to prevent scylla-bench command failure
-        partitions_attrs = self.tester.partitions_attrs
-        if partitions_attrs.partition_range_with_data_validation:
-            partitions_amount = min(partitions_amount, partitions_attrs.non_validated_partitions)
-            available_partitions_for_deletion = list(
-                range(partitions_attrs.partition_end_range + 1, partitions_attrs.max_partitions_in_test_table)
-            )
-        else:
-            available_partitions_for_deletion = list(range(partitions_attrs.max_partitions_in_test_table))
-        self.log.debug(f"Partitions amount for delete : {partitions_amount}")
-
-        partitions_for_delete = defaultdict(list)
-        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
-            session.default_consistency_level = ConsistencyLevel.ONE
-
-            while available_partitions_for_deletion and len(partitions_for_delete) < partitions_amount:
-                random_index = random.randint(0, len(available_partitions_for_deletion) - 1)
-                partition_key = available_partitions_for_deletion.pop(random_index)
-
-                if exclude_partitions and partition_key in exclude_partitions:
-                    continue
-
-                # Get the max cl value in the partition.
-                cmd = f"select ck from {ks_cf} where pk={partition_key} order by ck desc limit 1"
-                try:
-                    result = session.execute(SimpleStatement(cmd, fetch_size=1), timeout=300)
-                except Exception as exc:  # noqa: BLE001
-                    self.log.error(str(exc))
-                    continue
-
-                if not result:
-                    continue
-
-                first_row = result.one()
-                if not first_row or first_row.ck is None:
-                    continue
-
-                if not with_clustering_key_data:
-                    partitions_for_delete[partition_key] = []
-                    continue
-
-                # Suppose that min ck value is 0 in the partition
-                partitions_for_delete[partition_key].extend([0, first_row.ck])
-
-                if None in partitions_for_delete[partition_key]:
-                    partitions_for_delete.pop(partition_key)
-
-        self.log.debug(f"Partitions for delete: {partitions_for_delete}")
-        return partitions_for_delete
-
-    def get_random_timestamp_from_partition(self, ks_cf, pkey, partition_percentage=0.25) -> tuple[int, int]:
-        """
-        Get a write timestamp from a "pivot" row inside a single partition.
-        partition_percentage controls where the "pivot" is, default is 25% of the partition size (total number of rows)
-        Returns timestamp and the clustering key value as tuple
-        """
-        with self.cluster.cql_connection_patient(node=self.target_node) as session:
-            count_result = session.execute(SimpleStatement(f"select count(ck) from {ks_cf} where pk = {pkey}")).one()
-            if not count_result or count_result.system_count_ck is None:
-                message = f"Unable to count rows in partition (pk = {pkey})"
-                self.log.error(message)
-                raise PartitionNotFound(message)
-            number_of_rows = count_result.system_count_ck
-            if number_of_rows == 0:
-                message = f"Partition (pk = {pkey}) is empty"
-                self.log.error(message)
-                raise PartitionNotFound(message)
-            fetch_limit = max(math.ceil(number_of_rows * partition_percentage), 11)
-            self.log.debug(
-                "[%s_using_timestamp] Partition size: %s, fetching up to %s",
-                self.base_disruption_name,
-                number_of_rows,
-                fetch_limit,
-            )
-            partition = session.execute(
-                SimpleStatement(f"select pk, ck from {ks_cf} where pk = {pkey} limit {fetch_limit}")
-            ).all()
-            if not partition:
-                message = (
-                    f"No rows found in partition (pk = {pkey}) after counting {number_of_rows} rows. "
-                    "The partition may have been deleted."
-                )
-                self.log.error(message)
-                raise PartitionNotFound(message)
-            delete_mark = partition[-1].ck
-            timestamp_result = session.execute(
-                SimpleStatement(f"select writetime(v) from {ks_cf} where pk = {pkey} and ck = {delete_mark}")
-            ).one()
-            if not timestamp_result or timestamp_result.writetime_v is None:
-                message = f"Unable to get writetime for row (pk = {pkey}, ck = {delete_mark})"
-                self.log.error(message)
-                raise TimestampNotFound(message)
-            timestamp = timestamp_result.writetime_v
-
-            return timestamp, delete_mark
-
-    def run_deletions(self, queries, ks_cf):
-        for cmd in queries:
-            self.log.debug(f"delete query: {cmd}")
-            with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
-                session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM), timeout=3600)
-
-        self.target_node.run_nodetool("flush", args=ks_cf.replace(".", " "))
-
-    def _verify_using_timestamp_deletions(self, ks_cf: str, verification_queries: list[tuple[int, int, int]]):
-        mv_not_configured = False
-        mv_table_name = ".".join([ks_cf.split(sep=".")[0], "view_test"])
-        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
-            for pk, ck, ts in verification_queries:
-                result = session.execute(
-                    SimpleStatement(f"SELECT pk, ck, writetime(v) FROM {ks_cf} WHERE pk = {pk} AND ck = {ck}")
-                ).one()
-                assert not result or result.writetime_v != ts, (
-                    f"USING TIMESTAMP: deletion failed for ({pk}, {ck}), row still exists, timestamp used: {ts}"
-                )
-                if not mv_not_configured:
-                    try:
-                        result = session.execute(
-                            SimpleStatement(
-                                f"SELECT pk, ck, writetime(v) FROM {mv_table_name} WHERE pk = {pk} AND ck = {ck}"
-                            )
-                        ).one()
-                        assert not result or result.writetime_v != ts, (
-                            f"USING TIMESTAMP: deletion failed for ({pk}, {ck}), "
-                            f"row still exists in MV (!!!), timestamp used: {ts}"
-                        )
-                    except InvalidRequest:
-                        mv_not_configured = True
-
-    def delete_half_partition(self, ks_cf):
-        self.log.debug("Delete by range - half of partition")
-
-        # Select half of partitions because we need available partitions in the next step: delete_range_in_few_partitions module
-        partitions_amount = self.tester.partitions_attrs.non_validated_partitions / 2
-        self.log.debug("delete_half_partition.partitions_amount: %s", partitions_amount)
-        partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=partitions_amount, ks_cf=ks_cf, with_clustering_key_data=True
-        )
-        if not partitions_for_delete:
-            raise UnsupportedNemesis("Not found partitions for delete. Nemesis can not be run")
-
-        self.actions_log.info(f"Deleting half ({len(partitions_for_delete)}) of partitions on {ks_cf} table")
-        queries = []
-        for pkey, ckey in partitions_for_delete.items():
-            queries.append(f"delete from {ks_cf} where pk = {pkey} and ck > {int(ckey[1] / 2)}")
-        self.run_deletions(queries=queries, ks_cf=ks_cf)
-        return partitions_for_delete
-
-    def delete_by_range_using_timestamp(self, ks_cf: str):
-        self.log.debug("Delete by range - using timestamp")
-
-        partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.num_deletions_factor,
-            ks_cf=ks_cf,
-            with_clustering_key_data=False,
-        )
-        if not partitions_for_delete:
-            message = "Unable to find partitions to delete"
-            self.log.error(message)
-            raise PartitionNotFound(message)
-
-        queries = []
-        verification_queries = []
-        partition_percentage = random.randint(25, 75) / 100
-        self.actions_log.info(
-            f"Deleting partitions using timestamp in {ks_cf} table."
-            f" Partitions count: {len(partitions_for_delete)}, "
-            f"partitions percentage: {partition_percentage}"
-        )
-        for pkey, _ in partitions_for_delete.items():
-            self.log.debug("Using USING TIMESTAMP clause in the deletion for this partition: %s", pkey)
-            timestamp, clustering_key = self.get_random_timestamp_from_partition(
-                ks_cf=ks_cf, pkey=pkey, partition_percentage=partition_percentage
-            )
-            queries.append(f"delete from {ks_cf} using timestamp {timestamp} where pk = {pkey}")
-            verification_queries.append([pkey, clustering_key, timestamp])
-
-        self.run_deletions(queries=queries, ks_cf=ks_cf)
-        self._verify_using_timestamp_deletions(ks_cf=ks_cf, verification_queries=verification_queries)
-
-        return partitions_for_delete
-
-    def delete_range_in_few_partitions(self, ks_cf, partitions_for_exclude_dict):
-        self.log.debug("Delete same range in the few partitions")
-
-        partitions_for_exclude = list(partitions_for_exclude_dict.keys())
-        partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.num_deletions_factor,
-            ks_cf=ks_cf,
-            with_clustering_key_data=True,
-            exclude_partitions=partitions_for_exclude,
-        )
-        if not partitions_for_delete:
-            raise Exception("No partitions for deletion found. Cannot execute a range deletion.")
-
-        # Choose same "ck" values that exists for all partitions
-        # min_clustering_key - the biggest from min(ck) value for all selected partitions
-        # max_clustering_key - the smallest from max(ck) value for all selected partitions
-        min_clustering_key = max([v[0] for v in partitions_for_delete.values()])
-        max_clustering_key = min([v[1] for v in partitions_for_delete.values()])
-        clustering_keys = []
-        if max_clustering_key > min_clustering_key:
-            third_ck = int((max_clustering_key - min_clustering_key) / 3)
-            clustering_keys = range(min_clustering_key + third_ck, max_clustering_key - third_ck)
-
-        if not clustering_keys:
-            clustering_keys = range(min_clustering_key, max_clustering_key)
-
-        self.actions_log.info(
-            f"Delete same range in the few partitions in {ks_cf} table. Partitions count: {len(partitions_for_delete)}"
-        )
-        queries = []
-        for pkey in partitions_for_delete.keys():
-            queries.append(
-                f"delete from {ks_cf} where pk = {pkey} and ck >= {clustering_keys[0]} and ck <= {clustering_keys[-1]}"
-            )
-
-        self.run_deletions(queries=queries, ks_cf=ks_cf)
-
-        return list(partitions_for_delete.keys()) + partitions_for_exclude
-
-    def disrupt_delete_10_full_partitions(self):
-        """
-        Delete few partitions in the table with large partitions
-        """
-        self.verify_initial_inputs_for_delete_nemesis()
-
-        ks_cf = "scylla_bench.test"
-        partitions_for_delete = self.choose_partitions_for_delete(10, ks_cf)
-
-        if not partitions_for_delete:
-            raise UnsupportedNemesis("Not found partitions for delete. Nemesis can not be run")
-
-        self.actions_log.info(f"Delete partitions in {ks_cf} table. Partitions count: {len(partitions_for_delete)}")
-        queries = []
-        for partition_key in partitions_for_delete.keys():
-            queries.append(f"delete from {ks_cf} where pk = {partition_key}")
-
-        self.run_deletions(queries=queries, ks_cf=ks_cf)
-
-    def disrupt_delete_overlapping_row_ranges(self):
-        """
-        Delete several overlapping row ranges in the table with large partitions.
-        """
-        self.verify_initial_inputs_for_delete_nemesis()
-        ks_cf = "scylla_bench.test"
-        partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.num_deletions_factor,
-            ks_cf=ks_cf,
-            with_clustering_key_data=True,
-        )
-        if not partitions_for_delete:
-            self.log.error("No partitions for delete found!")
-            raise UnsupportedNemesis("DeleteOverlappingRowRangesMonkey: No partitions for delete found!")
-
-        self.actions_log.info(
-            f"Delete random row ranges in few partitions in {ks_cf} table. "
-            f"Partitions count: {len(partitions_for_delete)}"
-        )
-        queries = []
-        for pkey, ckey in partitions_for_delete.items():
-            for _ in range(random.randint(3, 20)):  # Get a random number of ranges to delete.
-                min_ck = random.randint(0, ckey[1])  # Generate a random range of rows to delete in a single partition.
-                max_ck = random.randint(min_ck, ckey[1])
-                queries.append(f"delete from {ks_cf} where pk = {pkey} and ck > {min_ck} and ck < {max_ck}")
-        self.run_deletions(queries=queries, ks_cf=ks_cf)
-
-    def disrupt_delete_by_rows_range(self):
-        """
-        Delete few partitions in the table with large partitions
-        """
-        self.verify_initial_inputs_for_delete_nemesis()
-
-        ks_cf = "scylla_bench.test"
-        # Step-1: delete_half_partition or delete_by_range_using_timestamp
-        if random.random() > 0.5:
-            partitions_for_exclude = self.delete_half_partition(ks_cf)
-        else:
-            partitions_for_exclude = self.delete_by_range_using_timestamp(ks_cf)
-        # Step-2: delete_range_in_few_partitions
-        self.delete_range_in_few_partitions(ks_cf, partitions_for_exclude)
-
-    def disrupt_add_drop_column(self):
-        """
-        It searches for a table that allow add/drop columns (non compact storage table)
-        If there is no such table it draw an error and quit
-        It keeps tracking what columns where added and never drops column that were added by someone else.
-        """
-        self.log.debug("AddDropColumnMonkey: Started")
-        self._add_drop_column_target_table = self._add_drop_column_get_target_table(self._add_drop_column_target_table)
-        if self._add_drop_column_target_table is None:
-            raise UnsupportedNemesis("AddDropColumnMonkey: can't find table to run on")
-        InfoEvent(f"AddDropColumnMonkey table {'.'.join(self._add_drop_column_target_table)}").publish()
-        self._add_drop_column_run_in_cycle()
+        return nemesis_stress_failure_handler(self.__class__.__name__, stress_pool, errors)
 
     def toggle_table_gc_mode(self):
         """
@@ -3018,333 +2337,6 @@ class NemesisRunner:
 
     def disrupt_toggle_table_gc_mode(self):
         self.toggle_table_gc_mode()
-
-    def _run_manager_backup(
-        self, mgr_cluster, object_storage_upload_mode: ObjectStorageUploadMode, timeout: int
-    ) -> "BackupTask":
-        with self.action_log_scope("Scylla Manager backup"):
-            task = run_manager_backup(mgr_cluster, self.tester.locations, object_storage_upload_mode, timeout)
-        return task
-
-    def _manager_backup_and_report(self, method: ObjectStorageUploadMode, label) -> "BackupTask":
-        """
-        Run a backup using Scylla Manager and report the result to Argus.
-
-        :param method: The transfer mode for object storage (e.g., RCLONE or NATIVE).
-        :param label: A label for reporting.
-        :return: BackupTask object representing the backup operation.
-        """
-        timeout = int(timedelta(hours=14).total_seconds())
-        manager_tool = self.get_manager_tool()
-        mgr_cluster = self.tester.ensure_and_get_cluster(manager_tool)
-        decorated = latency_calculator_decorator(legend="Scylla-Manager Backup", cycle_name=label)(
-            self._run_manager_backup
-        )
-        task = decorated(mgr_cluster, method, timeout)
-        report_manager_backup_results_to_argus(self.tester.monitors, self.tester.test_config, label, task, mgr_cluster)
-        return task
-
-    def disrupt_manager_backup(self, object_storage_upload_mode: ObjectStorageUploadMode, label):
-        """
-        Perform a Manager backup as a nemesis.
-        Deletes created snapshot at end.
-        Args:
-            object_storage_upload_mode: The upload mode (e.g., RCLONE or NATIVE).
-            label: Label for reporting to Argus.
-        """
-
-        time_postfix = datetime.datetime.now().strftime("_%m%d_%H%M")
-        label_with_time = f"{label}{time_postfix}"
-        task = self._manager_backup_and_report(object_storage_upload_mode, label_with_time)
-        with self.action_log_scope("Delete Manager backup snapshot"):
-            task.delete_backup_snapshot()
-
-    def get_manager_tool(self):
-        return mgmt.get_scylla_manager_tool(manager_node=self.tester.monitors.nodes[0])
-
-    def disrupt_mgmt_backup_specific_keyspaces(self):
-        self._mgmt_backup(backup_specific_tables=True)
-
-    def disrupt_mgmt_backup(self):
-        self._mgmt_backup(backup_specific_tables=False)
-
-    def disrupt_mgmt_restore(self):  # noqa: PLR0914
-        def get_total_scylla_partition_size():
-            result = self.cluster.data_nodes[0].remoter.run("df -k | grep /var/lib/scylla")  # Size in KB
-            free_space_size = int(result.stdout.split()[1]) / 1024**2  # Converting to GB
-            return free_space_size
-
-        def choose_snapshot(snapshots_dict, region: str):
-            snapshot_groups_by_size = snapshots_dict["snapshots_sizes"]
-            total_partition_size = get_total_scylla_partition_size()
-            all_snapshot_sizes = sorted(list(snapshot_groups_by_size.keys()), reverse=True)
-            fitting_snapshot_sizes = [size for size in all_snapshot_sizes if total_partition_size / size >= 20]
-            if self.tester.test_duration < 1000:
-                # Since verifying the restored data takes a long time, the nemesis limits the size of the restored
-                # backup based on the test duration
-                fitting_snapshot_sizes = [size for size in fitting_snapshot_sizes if size < 50]
-            # The restore should not take more than 5% of the space total space in /var/lib/scylla
-            assert fitting_snapshot_sizes, "There's not enough space for any snapshot restoration"
-
-            chosen_snapshot_size = self.random.choice(fitting_snapshot_sizes)
-            all_snapshots_per_region = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"][region]
-
-            snapshot_tag = self.random.choice(list(all_snapshots_per_region.keys()))
-
-            snapshot_info = all_snapshots_per_region[snapshot_tag]
-            snapshot_info.update(
-                {
-                    "expected_timeout": snapshot_groups_by_size[chosen_snapshot_size]["expected_timeout"],
-                    "number_of_rows": snapshot_groups_by_size[chosen_snapshot_size]["number_of_rows"],
-                }
-            )
-            return snapshot_tag, snapshot_info
-
-        def execute_data_validation_thread(command_template, keyspace_name, number_of_rows):
-            stress_queue = []
-            number_of_loaders = self.tester.params.get("n_loaders")
-            rows_per_loader = int(number_of_rows / number_of_loaders)
-            for loader_index in range(number_of_loaders):
-                stress_command = command_template.format(
-                    num_of_rows=rows_per_loader,
-                    keyspace_name=keyspace_name,
-                    sequence_start=rows_per_loader * loader_index + 1,
-                    sequence_end=rows_per_loader * (loader_index + 1),
-                )
-                read_thread = self.tester.run_stress_thread(
-                    stress_cmd=stress_command, round_robin=True, stop_test_on_failure=False
-                )
-                stress_queue.append(read_thread)
-            return stress_queue
-
-        def _restore_schema(locations: list, cluster_id: str, tag: str) -> None:
-            """Introduced to cover two flows:
-
-            - When a backup snapshot has different DC name than the current cluster's DC name -
-            restore schema out of the Manager applying CQL statements saved in schema.json file
-
-            - When backup snapshot has the same DC name as the current cluster's DC name -
-            restore schema using the Manager (sctool restore --restore-schema ...)
-            """
-            ks_statements, other_statements = get_schema_create_statements_from_snapshot(
-                bucket=locations[0].split(":")[-1],
-                mgr_cluster_id=cluster_id,
-                snapshot_tag=tag,
-            )
-
-            dc_under_test_name = next(iter(self.cluster.get_nodetool_status()))
-            # Test is supposed to work with single DC setups only, so we can take the first DC name
-            dc_from_backup_name = get_dc_name_from_ks_statement(ks_statements[0])[0]
-            self.log.debug("DC name from backup: %s, DC name under test: %s", dc_from_backup_name, dc_under_test_name)
-
-            if dc_under_test_name != dc_from_backup_name:
-                self.log.info(
-                    "DC names mismatch - restoring the schema manually altering cql statements and "
-                    "applying them one by one"
-                )
-                # Alter the dc_name in keyspace cql statements to match the current cluster's dc_name
-                old_dc_block = f"'{dc_from_backup_name}':"  # Include quotes and colon to avoid unintended replacements
-                new_dc_block = f"'{dc_under_test_name}':"
-                ks_statements = [stmt.replace(old_dc_block, new_dc_block) for stmt in ks_statements]
-                # Apply cql statements one by one to restore schema
-                for cql_stmt in ks_statements + other_statements:
-                    self.target_node.run_cqlsh(cql_stmt)
-            else:
-                self.log.info("Restoring the schema using the Scylla Manager")
-                task = mgr_cluster.create_restore_task(restore_schema=True, location_list=locations, snapshot_tag=tag)
-                task.wait_and_get_final_status(step=10, timeout=6 * 60)  # 6 giving minutes to restore the schema
-                assert task.status == TaskStatus.DONE, f"Schema restoration failed: snapshot tag - {tag}"
-
-        skip_issues = [
-            "https://github.com/scylladb/scylla-manager/issues/3829",
-            "https://github.com/scylladb/scylla-manager/issues/4049",
-        ]
-        is_multi_dc = (
-            len(self.cluster.params.region_names) > 1 or (self.cluster.params.get("simulated_regions") or 0) > 1
-        )
-        if SkipPerIssues(skip_issues, params=self.tester.params) and is_multi_dc:
-            raise UnsupportedNemesis("MultiDC cluster configuration is not supported by this nemesis")
-
-        if not (self.cluster.params.get("use_mgmt") or self.cluster.params.get("use_cloud_manager")):
-            raise UnsupportedNemesis("Scylla-manager configuration is not defined!")
-        if self.cluster.params.get("cluster_backend") not in ("aws", "k8s-eks"):
-            raise UnsupportedNemesis("The restore test only supports 'AWS' and 'K8S-EKS' backends.")
-
-        mgr_cluster = self.cluster.get_cluster_manager()
-        cluster_backend = self.cluster.params.get("cluster_backend")
-        if cluster_backend == "k8s-eks":
-            cluster_backend = "aws"
-
-        persistent_manager_snapshots_dict = get_persistent_snapshots()
-        region = next(iter(self.cluster.params.region_names), "")
-        target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"].format(region=region)
-        chosen_snapshot_tag, chosen_snapshot_info = choose_snapshot(
-            snapshots_dict=persistent_manager_snapshots_dict[cluster_backend], region=region
-        )
-
-        self.log.info("Restoring the keyspace %s", chosen_snapshot_info["keyspace_name"])
-        location_list = [f"{self.cluster.params.get('backup_bucket_backend')}:{target_bucket}"]
-        test_keyspaces = [cql_unquote_if_needed(keyspace) for keyspace in self.cluster.get_test_keyspaces()]
-        # Keyspace names that start with a digit are surrounded by quotation marks in the output of a describe query
-        if chosen_snapshot_info["keyspace_name"] not in test_keyspaces:
-            self.log.info("Restoring the schema of the keyspace '%s'", chosen_snapshot_info["keyspace_name"])
-            _restore_schema(
-                locations=location_list,
-                cluster_id=chosen_snapshot_info["cluster_id"],
-                tag=chosen_snapshot_tag,
-            )
-            with suppress_expected_unavailability_errors():
-                self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
-
-            # TODO: Bring it back after the implementation of https://github.com/scylladb/scylla-manager/issues/4049
-            # which will unblock schema restore into a different DC. For now, we can restore schema only within one DC.
-            # According to https://github.com/scylladb/scylla-manager/issues/4041#issuecomment-2565489699, the step
-            # below is not needed if restoring the schema within one DC.
-            #
-            # self.tester.set_ks_strategy_to_network_and_rf_according_to_cluster(
-            #    keyspace=chosen_snapshot_info["keyspace_name"], repair_after_alter=False)
-        restore_task = None
-        try:
-            restore_task = mgr_cluster.create_restore_task(
-                restore_data=True, location_list=location_list, snapshot_tag=chosen_snapshot_tag
-            )
-            restore_task.wait_and_get_final_status(step=30, timeout=chosen_snapshot_info["expected_timeout"])
-            assert restore_task.status == TaskStatus.DONE, f"Data restoration of {chosen_snapshot_tag} has failed!"
-
-            confirmation_stress_template = (persistent_manager_snapshots_dict)[cluster_backend][
-                "confirmation_stress_template"
-            ]
-            stress_queue = execute_data_validation_thread(
-                command_template=confirmation_stress_template,
-                keyspace_name=chosen_snapshot_info["keyspace_name"],
-                number_of_rows=chosen_snapshot_info["number_of_rows"],
-            )
-
-            for stress in stress_queue:
-                is_passed = self.tester.verify_stress_thread(stress)
-                assert is_passed, (
-                    "Data verification stress command, triggered by the 'mgmt_restore' nemesis, has failed"
-                )
-        finally:
-            self._stop_unfinished_restore_task(restore_task)
-            keyspace_name = chosen_snapshot_info["keyspace_name"]
-            self.log.info("Cleaning up restored keyspace '%s'", keyspace_name)
-            drop_ks_stmt = f'DROP KEYSPACE IF EXISTS "{keyspace_name}";'
-            try:
-                self.target_node.run_cqlsh(drop_ks_stmt)
-            except Exception as drop_err:  # noqa: BLE001
-                self.log.warning("Failed to drop restored keyspace: %s", drop_err)
-
-    def _stop_unfinished_restore_task(self, restore_task) -> None:
-        """Stop a Manager restore task that hasn't reached a final status yet.
-
-        A WaitForTimeoutError from wait_and_get_final_status only means SCT gave up waiting; the
-        task may still be RUNNING. This method issues an sctool stop and waits for a terminal
-        status so the task is no longer touching the keyspace before the caller cleans it up.
-
-        Best effort only: every failure here is logged and swallowed rather than masking the
-        original error that brought us into the finally block.
-        """
-        if restore_task is None:
-            return
-        try:
-            status = restore_task.status
-            if status in TERMINAL_TASK_STATUSES:
-                return
-            self.log.warning(
-                "Restore task %s is still in %s state - stopping it",
-                restore_task.id,
-                status,
-            )
-            try:
-                restore_task.stop()
-            except WaitForTimeoutError:
-                pass
-            restore_task.wait_for_status(list_status=TERMINAL_TASK_STATUSES, timeout=600, step=30)
-        except Exception as stop_err:  # noqa: BLE001
-            self.log.warning(
-                "Failed to stop the restore task %s: %s",
-                restore_task.id,
-                stop_err,
-            )
-
-    def _delete_existing_backups(self, mgr_cluster):
-        deleted_tasks = []
-        existing_backup_tasks = mgr_cluster.backup_task_list
-        for backup_task in existing_backup_tasks:
-            if backup_task.status in [TaskStatus.NEW, TaskStatus.RUNNING, TaskStatus.STARTING, TaskStatus.ERROR]:
-                deleted_tasks.append(backup_task.id)
-                mgr_cluster.delete_task(backup_task)
-        if deleted_tasks:
-            self.log.warning(
-                "Deleted the following backup tasks before the nemesis starts: %s", ", ".join(deleted_tasks)
-            )
-
-    @decorate_with_context_if_issues_open(
-        ignore_take_snapshot_failing, issue_refs=["https://github.com/scylladb/scylla-manager/issues/3389"]
-    )
-    def _mgmt_backup(self, backup_specific_tables):
-        if not self.cluster.params.get("use_mgmt") and not self.cluster.params.get("use_cloud_manager"):
-            raise UnsupportedNemesis("Scylla-manager configuration is not defined!")
-        mgr_cluster = self.cluster.get_cluster_manager()
-        if self.cluster.params.get("use_cloud_manager"):
-            auto_backup_task = mgr_cluster.backup_task_list[0]
-            #  An example of the auto generated backup task of cloud manager is:
-            #  │ backup/8e40b8b4-5394-42d3-9884-a4ce8ab69687
-            #  │ --dc 'AWS_US_EAST_1' -L AWS_US_EAST_1:s3:scylla-cloud-backup-9952-10120-4q4w4d --retention 14
-            #  --rate-limit AWS_US_EAST_1:100 --snapshot-parallel '<nil>' --upload-parallel '<nil>'
-            #  │ 06 Jun 21 18:10:05 UTC (+1d)  │ NEW
-            location = auto_backup_task.get_task_info_dict()["location"]
-        else:
-            if not self.cluster.params.get("backup_bucket_location"):
-                raise UnsupportedNemesis("backup bucket location configuration is not defined!")
-
-            backup_bucket_backend = self.cluster.params.get("backup_bucket_backend")
-            region = next(iter(self.cluster.params.region_names), "")
-            backup_bucket_location = self.cluster.params.get("backup_bucket_location").format(region=region)
-            location = f"{backup_bucket_backend}:{backup_bucket_location.split()[0]}"
-        self._delete_existing_backups(mgr_cluster)
-        if backup_specific_tables:
-            non_test_keyspaces = [cql_unquote_if_needed(ks) for ks in self.cluster.get_test_keyspaces()]
-            self.actions_log.info(f"Starting Scylla Manager backup task for keyspaces: {non_test_keyspaces}")
-            mgr_task = mgr_cluster.create_backup_task(
-                location_list=[
-                    location,
-                ],
-                keyspace_list=non_test_keyspaces,
-            )
-        else:
-            self.actions_log.info("Starting Scylla Manager backup task for all keyspaces")
-            mgr_task = mgr_cluster.create_backup_task(
-                location_list=[
-                    location,
-                ]
-            )
-
-        assert mgr_task is not None, "Backup task wasn't created"
-
-        status = mgr_task.wait_and_get_final_status(timeout=54000, step=5, only_final=True)
-        self.actions_log.info(f"Scylla Manager backup task finished with status: {status}")
-        if status == TaskStatus.DONE:
-            self.log.info("Task: %s is done.", mgr_task.id)
-        elif status in (TaskStatus.ERROR, TaskStatus.ERROR_FINAL):
-            assert False, f"Backup task {mgr_task.id} failed"
-        else:
-            mgr_task.stop()
-            assert False, f"Backup task {mgr_task.id} timed out - while on status {status}"
-
-    def disrupt_mgmt_repair_cli(self):
-        if not self.cluster.params.get("use_mgmt") and not self.cluster.params.get("use_cloud_manager"):
-            raise UnsupportedNemesis("Scylla-manager configuration is not defined!")
-        self.run_repair_manager()
-
-    def disrupt_mgmt_corrupt_then_repair(self):
-        if not self.cluster.params.get("use_mgmt") and not self.cluster.params.get("use_cloud_manager"):
-            raise UnsupportedNemesis("Scylla-manager configuration is not defined!")
-        # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
-        # following manager repair would then propagate the resurrected data to the other replicas.
-        self._destroy_data_and_restart_scylla(skip_sstables_with_tombstones=True)
-        self.run_repair_manager()
 
     def disrupt_abort_repair(self):
         """
@@ -3933,7 +2925,7 @@ class NemesisRunner:
         """
         # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
         # following repair would then propagate the resurrected data to the other replicas.
-        self._destroy_data_and_restart_scylla(skip_sstables_with_tombstones=True)
+        destroy_data_and_restart_scylla(self, skip_sstables_with_tombstones=True)
         trigger = partial(
             self.target_node.run_nodetool,
             sub_cmd="repair",
@@ -3967,7 +2959,7 @@ class NemesisRunner:
         3. Stop it with a hard reboot once the rebuild starts.
         4. Trigger another rebuild after the hard reboot on the target node.
         """
-        self._destroy_data_and_restart_scylla()
+        destroy_data_and_restart_scylla(self)
 
         timeout = 1800
         if self.cluster.params.get("cluster_backend") == "azure":

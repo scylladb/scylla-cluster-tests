@@ -50,6 +50,7 @@ from collections import OrderedDict
 
 import requests
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
@@ -105,6 +106,11 @@ SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
 CREATE_TABLE_REGEX = re.compile(
     r"CREATE\s+TABLE\s+(?P<keyspace>[^\s.]+)\.(?P<table>[^\s(]+)\s*\([^)]+\)(?P<options>[^;]*)"
 )
+
+AWS_SCAN_FAIL_FAST_CONFIG = Config(connect_timeout=10, read_timeout=30, retries={"total_max_attempts": 1})
+# The account keeps these regions enabled, but their endpoints do not answer. AWS cannot restore
+# me-south-1 after physical damage to its facilities in 2026.
+AWS_UNAVAILABLE_REGIONS = ("me-south-1",)
 
 
 def deprecation(message):
@@ -532,7 +538,11 @@ def all_aws_regions(cached=False):
         ]
     else:
         client: EC2Client = boto3.client("ec2", region_name=DEFAULT_AWS_REGION)
-        return [region["RegionName"] for region in client.describe_regions()["Regions"]]
+        return [
+            region["RegionName"]
+            for region in client.describe_regions()["Regions"]
+            if region["RegionName"] not in AWS_UNAVAILABLE_REGIONS
+        ]
 
 
 def docker_current_container_id() -> Optional[str]:
@@ -610,6 +620,11 @@ def aws_tags_to_dict(tags_list):
     return tags_dict
 
 
+# How long list_instances_aws waits for all regions. A region call that runs longer keeps its
+# worker thread alive, and the interpreter waits for that thread at exit.
+AWS_LIST_INSTANCES_TIMEOUT = 100
+
+
 def list_instances_aws(
     tags_dict=None, region_name=None, running=False, group_as_region=False, verbose=False, availability_zone=None
 ):
@@ -632,7 +647,7 @@ def list_instances_aws(
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
-        client: EC2Client = boto3.client("ec2", region_name=region)
+        client: EC2Client = boto3.client("ec2", region_name=region, config=AWS_SCAN_FAIL_FAST_CONFIG)
         custom_filter = []
         if tags_dict:
             custom_filter = [
@@ -647,7 +662,9 @@ def list_instances_aws(
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(instances.keys())), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(get_instances, ignore_exceptions=True)
+    ParallelObject(aws_regions, timeout=AWS_LIST_INSTANCES_TIMEOUT, num_workers=len(aws_regions)).run(
+        get_instances, ignore_exceptions=True
+    )
 
     for curr_region_name, per_region_instances in instances.items():
         if running:
@@ -1574,6 +1591,11 @@ def find_equivalent_ami(
         try:
             ami = ec2_resource.Image(ami_id)
             ami.load()
+            # DescribeImages returns an empty list (not an error) for an AMI that is deregistered
+            # or not visible to this account, and boto3 leaves meta.data as None in that case
+            if ami.meta.data is None:
+                LOGGER.debug("AMI %s not found in region %s with current credentials", ami_id, source_region)
+                continue
             # First successful load sets the source_ami and architecture
             if source_ami is None:
                 source_ami = ami
@@ -1603,8 +1625,11 @@ def find_equivalent_ami(
     else:
         search_regions = target_regions
 
-    # Use all tags from the source AMI for matching, except "Name" and "arch"
-    matching_tags = [(key, value) for key, value in source_tags.items() if key not in ("Name", "arch")]
+    # Use all tags from the source AMI for matching, except the ones that differ between the per-arch
+    # images of the same build: "Name", "arch" and "creation_timestamp" (stamped per image, often 1s apart)
+    matching_tags = [
+        (key, value) for key, value in source_tags.items() if key not in ("Name", "arch", "creation_timestamp")
+    ]
 
     if not matching_tags:
         LOGGER.warning("Source AMI %s has no tags to match after filtering", ami_id)
