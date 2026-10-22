@@ -30,7 +30,7 @@ from sdcm.utils.decorators import retrying, Retry
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.xcloud.cluster_runtime_utils import (
     wait_for_cluster_disk_utilization,
-    wait_for_cluster_scale_out,
+    wait_for_cluster_resize,
     wait_for_resize_request,
 )
 
@@ -245,11 +245,11 @@ class XCloudVectorSearchTest(ClusterTester, LoaderUtilsMixin):
         self.vector_thread = VectorSearchThread(self)
         self.vector_thread.start()
 
-        self.log.info("Wait for cluster to scale out")
+        self.log.info("Wait for cluster scaling to complete")
         request_id = wait_for_resize_request(self.db_cluster)
-        wait_for_cluster_scale_out(self.db_cluster, request_id=request_id)
+        wait_for_cluster_resize(self.db_cluster, request_id=request_id)
 
-        self.log.info("Verify if any VS request failed during cluster scale out")
+        self.log.info("Verify if any VS request failed during cluster scaling")
         if self.vector_thread.validation_failures:
             raise AssertionError(
                 f"Vector search validation failed {self.vector_thread.validation_failures} times during cluster scaling"
@@ -285,7 +285,7 @@ class XCloudScalingTest(ClusterTester, LoaderUtilsMixin):
 
         self.log.info("Wait for cluster scaling to complete")
         request_id = wait_for_resize_request(self.db_cluster)
-        wait_for_cluster_scale_out(self.db_cluster, request_id=request_id)
+        wait_for_cluster_resize(self.db_cluster, request_id=request_id)
 
         self.log.info("Cluster scaling completed, stop C-S mixed load")
         # Mixed load errors during scaling are already reported as CassandraStressEvent,

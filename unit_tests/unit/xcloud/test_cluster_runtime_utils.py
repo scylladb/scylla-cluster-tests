@@ -8,9 +8,9 @@ import pytest
 from sdcm.cluster_cloud import ScyllaCloudCluster
 from sdcm.xcloud.api_client import ScyllaCloudAPIClient
 from sdcm.xcloud.cluster_runtime_utils import (
-    ScaleOutFailedException,
+    ClusterResizeFailedException,
     wait_for_cluster_disk_utilization,
-    wait_for_cluster_scale_out,
+    wait_for_cluster_resize,
     wait_for_resize_request,
 )
 
@@ -89,7 +89,7 @@ def test_wait_for_resize_request_returns_in_progress_resize_id(cluster, api_clie
     api_client.get_cluster_requests.assert_called_with(account_id=ACCOUNT_ID, cluster_id=CLUSTER_ID)
 
 
-def test_wait_for_cluster_scale_out_retries_until_completed(cluster, api_client, no_sleep):
+def test_wait_for_cluster_resize_retries_until_completed(cluster, api_client, no_sleep):
     """The wait must keep polling the resize request until it is COMPLETED."""
     api_client.get_cluster_request_details.side_effect = [
         {"status": "IN_PROGRESS"},
@@ -97,18 +97,18 @@ def test_wait_for_cluster_scale_out_retries_until_completed(cluster, api_client,
         {"status": "COMPLETED"},
     ]
 
-    wait_for_cluster_scale_out(cluster, request_id=7)
+    wait_for_cluster_resize(cluster, request_id=7)
 
     assert api_client.get_cluster_request_details.call_count == 3
     api_client.get_cluster_request_details.assert_called_with(account_id=ACCOUNT_ID, request_id=7)
 
 
 @pytest.mark.parametrize("status", [pytest.param("FAILED", id="failed"), pytest.param("CANCELLED", id="cancelled")])
-def test_wait_for_cluster_scale_out_failed_request_raises_immediately(cluster, api_client, no_sleep, status):
+def test_wait_for_cluster_resize_failed_request_raises_immediately(cluster, api_client, no_sleep, status):
     """A failed or cancelled resize must fail the wait at once instead of polling until the retry limit."""
     api_client.get_cluster_request_details.return_value = {"status": status}
 
-    with pytest.raises(ScaleOutFailedException):
-        wait_for_cluster_scale_out(cluster, request_id=7)
+    with pytest.raises(ClusterResizeFailedException):
+        wait_for_cluster_resize(cluster, request_id=7)
 
     assert api_client.get_cluster_request_details.call_count == 1
