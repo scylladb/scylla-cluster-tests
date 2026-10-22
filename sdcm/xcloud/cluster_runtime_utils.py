@@ -52,8 +52,10 @@ def wait_for_cluster_disk_utilization(
 @retrying(n=20, sleep_time=60, allowed_exceptions=(Retry,))
 def wait_for_resize_request(cluster: ScyllaCloudCluster) -> int:
     requests = cluster.api_client.get_cluster_requests(account_id=cluster.account_id, cluster_id=cluster.cluster_id)
-    resize_request = next((r for r in requests if r["requestType"] == "RESIZE_CLUSTER_V3"), None)
-    if resize_request and resize_request["status"] == "IN_PROGRESS":
+    resize_request = next(
+        (r for r in requests if r["requestType"] == "RESIZE_CLUSTER_V3" and r["status"] == "IN_PROGRESS"), None
+    )
+    if resize_request:
         return resize_request["id"]
     raise Retry("Resize request not found")
 
