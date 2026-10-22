@@ -30,7 +30,7 @@ from sdcm.reporting.tooling_reporter import VectorStoreVersionReporter
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
-from sdcm.utils.cloud_api_utils import (
+from sdcm.xcloud.cluster_config_utils import (
     compute_cluster_exp_hours,
     build_cloud_cluster_name,
     apply_keep_tag_to_name,

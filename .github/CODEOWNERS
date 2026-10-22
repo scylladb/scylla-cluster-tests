@@ -30,7 +30,6 @@
 
 /sdcm/cluster_cloud.py      @dimakr
 /sdcm/xcloud/               @dimakr
-/sdcm/cloud_api_utils.py    @dimakr
 
 # k8s
 /sdcm/cluster_k8s/          @abramche

@@ -40,7 +40,7 @@ from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
 from sdcm.xcloud.api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.keystore import KeyStore
-from sdcm.utils.cloud_api_utils import (
+from sdcm.xcloud.cluster_config_utils import (
     get_cloud_rest_credentials_from_file,
     expand_availability_zones,
     parse_availability_zones,
@@ -88,7 +88,7 @@ from sdcm.utils.gce_utils import (
 from sdcm.utils.azure_utils import (
     azure_check_instance_type_available,
 )
-from sdcm.utils.cloud_api_utils import MIN_SCYLLA_VERSION_FOR_VS
+from sdcm.xcloud.cluster_config_utils import MIN_SCYLLA_VERSION_FOR_VS
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.utils.curl import curl_with_retry
 from sdcm.test_config import TestConfig
