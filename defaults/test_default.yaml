@@ -33,7 +33,7 @@ db_nodes_shards_selection: 'default'
 scylla_linux_distro: 'ubuntu-focal'
 ssh_transport: 'libssh2'
 
-monitor_branch: 'branch-4.16'
+monitor_branch: 'branch-4.17'
 
 space_node_threshold: 0
 
