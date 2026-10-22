@@ -1721,3 +1721,27 @@ def test_wait_db_up_says_nothing_about_a_wait_stopped_on_purpose(firewall_node):
         BaseNode.wait_db_up(node, timeout=60)
 
     node.log_cql_unreachable_diagnostics.assert_not_called()
+
+
+def test_proposed_scylla_yaml_object_storage_endpoint_region(tmp_path):
+    node = DummyNode(
+        name="test_node",
+        parent_cluster=None,
+        base_logdir=str(tmp_path),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
+    )
+    node.parent_cluster = DummyDbCluster(nodes=[node])
+    node.parent_cluster.params["region_name"] = "eu-west-1 us-east-1"
+    node.parent_cluster.params["append_scylla_yaml"] = {
+        "object_storage_endpoints": [
+            {"name": "s3.{region}.amazonaws.com", "port": 443, "https": True, "aws_region": "{region}"},
+        ],
+    }
+    with unittest.mock.patch.object(
+        BaseNode, "_proposed_scylla_yaml_properties", new_callable=unittest.mock.PropertyMock, return_value={}
+    ):
+        scylla_yaml = node.proposed_scylla_yaml
+
+    assert scylla_yaml.object_storage_endpoints == [
+        {"name": "s3.eu-west-1.amazonaws.com", "port": 443, "https": True, "aws_region": "eu-west-1"},
+    ]
