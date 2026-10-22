@@ -1,0 +1,40 @@
+# Common overlay for the best-throughput jobs (SCT-580), used on top of
+# test-cases/performance/perf-regression-predefined-throughput-steps.yaml and a
+# cassandra_stress_best_throughput_steps_<instance>.yaml thread grid.
+#
+# Every step is unthrottled and steps differ only by thread count. The run reports the step with the highest
+# measured throughput whose P99 is within perf_gradual_latency_limit (BestThroughputResult in Argus).
+
+# Steps over the latency limit are expected here: they bound the search. Drop the per-step P99 limits of
+# test_default.yaml so they don't fail the run.
+latency_decorator_error_thresholds:
+  write:
+    default:
+      P99 write:
+        fixed_limit: null
+  read:
+    default:
+      P99 read:
+        fixed_limit: null
+  read_disk_only:
+    default:
+      P99 read:
+        fixed_limit: null
+  mixed:
+    default:
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+
+perf_gradual_step_duration: {"read": '30m', "write": '30m', "mixed": '30m', "read_disk_only": '30m'}
+
+# Same commands and key ranges as the test-case, but time-bound instead of n-bound: an n-bound write step at a
+# low thread count would take hours to write its 1.6B rows. 30 minutes covers ~320M of the 402M keys per loader
+# at the highest write rate seen on i8g.4xlarge (~710k op/s over 4 loaders).
+stress_cmd_w:  [
+  "cassandra-stress write no-warmup cl=QUORUM duration=$duration -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..402653184",
+  "cassandra-stress write no-warmup cl=QUORUM duration=$duration -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=402653185..805306368",
+  "cassandra-stress write no-warmup cl=QUORUM duration=$duration -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=805306369..1207959552",
+  "cassandra-stress write no-warmup cl=QUORUM duration=$duration -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1207959553..1610612736"
+]

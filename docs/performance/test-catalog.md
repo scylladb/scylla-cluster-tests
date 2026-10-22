@@ -84,6 +84,22 @@ threshold YAML must use:
 - Thread counts vary per step -> step name is `<rate>_<threads>_threads`.
 - A name repeats -> suffixed with an occurrence counter (`unthrottled_1`, `unthrottled_2`).
 
+**Best-throughput jobs** (SCT-580) reuse the same class and test-case with every step unthrottled and
+only the thread count varying, so the step names are `unthrottled_<threads>_threads`. After the steps,
+the run reports the step with the highest measured throughput whose P99 is within
+`perf_gradual_latency_limit` (default 10 ms) as the `BestThroughputResult` Argus table.
+
+| Job (`branch-perf-v17/scylla-enterprise/perf-regression/`) | Instance | Thread grid |
+|---|---|---|
+| `scylla-enterprise-perf-regression-best-throughput-tablets` | i4i.4xlarge | `cassandra_stress_best_throughput_steps_i4i.yaml` |
+| `scylla-enterprise-perf-regression-best-throughput-i8g-tablets` | i8g.4xlarge | `cassandra_stress_best_throughput_steps_i8g.yaml` |
+
+Both add `best_throughput_unthrottled_steps.yaml`, which makes every step 30 minutes long (the write
+step too, instead of running to completion) and drops the per-step P99 limits: steps over the limit
+are expected and must not fail the run. Each grid should hold at least one step under the limit and
+one over it; recalibrate the grid from the run's per-step tables when it doesn't. The jobs are not in
+the trigger matrix yet.
+
 ### `performance_regression_alternator_test.py`
 
 `PerformanceRegressionAlternatorTest(PerformanceRegressionTest)` — DynamoDB API via YCSB. All

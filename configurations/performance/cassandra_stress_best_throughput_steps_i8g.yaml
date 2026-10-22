@@ -1,0 +1,21 @@
+# Thread grid for the best-throughput job on i8g.4xlarge (SCT-580). Every step is unthrottled; threads are per
+# loader (4 loaders). Each grid is meant to straddle the P99 limit (10 ms), checked against the predefined-steps
+# job (median of 3 runs, 2026-10, today's threads):
+#   read            620 threads: 1.67M op/s, P99 5.4 ms  -> passes, so the grid goes above 620
+#   read_disk_only  620 threads:  574k op/s, P99 49 ms   -> fails, so the grid goes below 620
+#   write           400 threads:  708k op/s, P99 6.5 ms  -> passes, so the grid goes above 400
+#   mixed          1900 threads:  875k op/s, P99 read 200 ms -> fails, so the grid goes below 1900
+# Lower thread counts are estimated from the measured throughput and latency (Little's law); calibrate them
+# from the first runs.
+perf_gradual_threads: {
+  "read": [300, 450, 620, 800, 1000, 1300],
+  "read_disk_only": [100, 160, 250, 350, 450, 620],
+  "write": [200, 300, 400, 550, 700, 900],
+  "mixed": [300, 450, 600, 800, 1000, 1300, 1900],
+}
+perf_gradual_throttle_steps: {
+  "read": ['unthrottled', 'unthrottled', 'unthrottled', 'unthrottled', 'unthrottled', 'unthrottled'],
+  "read_disk_only": ['unthrottled', 'unthrottled', 'unthrottled', 'unthrottled', 'unthrottled', 'unthrottled'],
+  "write": ['unthrottled', 'unthrottled', 'unthrottled', 'unthrottled', 'unthrottled', 'unthrottled'],
+  "mixed": ['unthrottled', 'unthrottled', 'unthrottled', 'unthrottled', 'unthrottled', 'unthrottled', 'unthrottled'],
+}
