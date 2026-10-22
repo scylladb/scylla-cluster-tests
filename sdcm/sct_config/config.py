@@ -2328,9 +2328,13 @@ class SCTConfiguration(*CONFIG_GROUPS):
             )
 
     def _validate_placement_group_required_values(self):
+        backend = self.get("cluster_backend")
+        # Hosts that SCT does not provision have no region or placement group, so the flag a test-case sets
+        # for its cloud runs does not apply to them.
+        if backend in ("baremetal", "docker"):
+            return
         if self.get("use_placement_group"):
             az_count = len(self.get("availability_zone").split(",")) if self.get("availability_zone") else 1
-            backend = self.get("cluster_backend")
             if backend == "azure":
                 azure_regions = self.get("azure_region_name")
                 regions_count = len(azure_regions) if isinstance(azure_regions, list) else 1
