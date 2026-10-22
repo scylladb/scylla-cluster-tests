@@ -69,7 +69,7 @@ jobs:
     region: "eu-west-1"
     labels:
       - "weekly"
-    include_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
+    include_versions: ["2024.1", "2025.1", "2026.1"]
 
   - job_name: "tier1/elasticity-90-percent-with-nemesis-test"
     backend: "aws"
@@ -139,4 +139,4 @@ jobs:
       availability_zone: ""
     labels:
       - "weekly"
-    include_versions: ["2024.1", "2025.1", "2025.4", "2026.1", "2026.2"]
+    include_versions: ["2024.1", "2025.1", "2026.1", "2026.2"]

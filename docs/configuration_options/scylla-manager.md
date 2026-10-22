@@ -79,7 +79,7 @@ Port to be used by the manager to contact Prometheus
 
 Version of ScyllaDB to install as Manager backend
 
-**default:** 2025.4
+**default:** 2026.1
 
 **type:** str
 
