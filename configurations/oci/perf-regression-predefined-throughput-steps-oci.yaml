@@ -1,0 +1,39 @@
+# OCI + OCI Object Storage for test-cases/performance/perf-regression-predefined-throughput-steps-object-storage.yaml.
+# Use with configurations/object_storage_oci.yaml; the endpoint below must match its object_storage_endpoints name
+# character for character. The bucket is the OCI default backup bucket (backup_bucket_location in defaults/oci_config.yaml).
+pre_create_keyspace: [
+  "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND storage = {'type': 'S3', 'bucket': 'manager-backup-tests-us-phoenix-1', 'endpoint': 'https://idedxcgnkfkt.compat.objectstorage.us-phoenix-1.oci.customer-oci.com'};",
+]
+
+append_scylla_yaml:
+  # Same per-shard connection budget as configurations/object_storage_s3.yaml
+  object_storage_connections_per_shard: 512
+
+simulated_racks: 0
+availability_zone: "a,b,c"  # use real AZs to balance limited DenseIO shapes usage
+
+# NOTE: the smallest DenseIO shape (16 vCPU) is twice the size of r8gd.2xlarge / n2-highmem-8 used on AWS / GCE
+oci_instance_type_db: "VM.DenseIO.E5.Flex:8"  # <shape-name>:<ocpus>:<ram>:<nvmes>
+instance_provision: 'on_demand'  # DenseIO shapes cannot be 'spot'
+
+# Same size as c7i.2xlarge / c3-highcpu-8; it has to hold the 8 GB cassandra-stress heap pre-touched by cs_extra_jvm_opts
+sizing_loader:
+  vcpu: 8
+  memory: '>=16'
+  arch: x86_64
+
+# OCI rate-limits object storage reads (TooManyRequests): the CL=ALL cache warm-up saturated at ~5k op/s over 2 loaders
+# (2,500 threads per loader, ~1.2 s mean latency). The read steps below stay under that limit and the unthrottled step
+# measures it, so they override configurations/performance/cassandra_stress_gradual_load_steps_object_storage.yaml.
+# Read threads follow Little's law at ~500 ms worst-case latency: 4k op/s over 2 loaders needs 2,000 x 0.5 = 1,000 threads
+# per loader. The unthrottled step keeps the 2,500 threads that saturated OCI; the warm-up uses the largest count too.
+# Writes were not throttled by OCI, so the write steps are unchanged.
+perf_gradual_threads: {"read": [250, 2500], "write": 500}
+perf_gradual_throttle_steps: {"read": ['1000', 'unthrottled'], "write": ['25000', '50000', 'unthrottled']}
+perf_gradual_step_duration: {"read": '30m', "write": '30m'}
+
+# 10M rows per loader instead of 60M: at the OCI limit (~2.5k op/s per loader) this takes ~70 minutes, 60M took >7 hours
+stress_cmd_cache_warmup: [
+  "cassandra-stress read no-warmup cl=ALL n=10000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..190000000,95000000,20000000)'",
+  "cassandra-stress read no-warmup cl=ALL n=10000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..190000000,95000000,20000000)'",
+]

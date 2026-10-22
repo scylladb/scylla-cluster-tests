@@ -1,0 +1,16 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+perfRegressionParallelPipeline(
+    backend: "oci",
+    oci_region_name: "us-phoenix-1",
+    availability_zone: "a,b,c",
+    provision_type: 'on_demand',
+    test_name: "performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest",
+    test_config: '''["test-cases/performance/perf-regression-predefined-throughput-steps-object-storage.yaml", "configurations/performance/cassandra_stress_gradual_load_steps_object_storage.yaml", "configurations/disable_kms.yaml", "configurations/disable_speculative_retry.yaml", "configurations/performance/latency-decorator-error-thresholds-steps-ent-tablets.yaml", "configurations/object_storage_oci.yaml", "configurations/oci/perf-regression-predefined-throughput-steps-oci.yaml"]''',
+    sub_tests: ["test_read_gradual_increase_load", "test_write_gradual_increase_load"],
+    // backup_oci.json is only in the legacy S3 keystore
+    extra_environment_variables: 'SCT_KEYSTORE_BACKEND=s3',
+)
