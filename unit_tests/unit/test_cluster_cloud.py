@@ -559,6 +559,24 @@ def test_cloud_cluster_datacenter_is_list():
     assert cluster_obj.datacenter == ["us-east-1"]
 
 
+def test_cloud_cluster_id_before_cluster_created_raises():
+    """Reading cluster_id before the cluster is created must fail at once, not send cluster_id=None to the API."""
+    cluster_obj = _build_real_cloud_cluster()
+
+    with pytest.raises(ScyllaCloudError, match="Cluster ID is not set"):
+        _ = cluster_obj.cluster_id
+
+
+def test_cloud_cluster_exposes_api_client_and_ids_once_created():
+    """Helpers outside the cluster rely on its public API client, account ID and cluster ID."""
+    cluster_obj = _build_real_cloud_cluster()
+    cluster_obj._cluster_id = 456
+
+    assert cluster_obj.cluster_id == 456
+    assert cluster_obj.account_id == 123
+    assert cluster_obj.api_client.get_current_account_id() == 123
+
+
 def test_update_racks_count_from_nodes():
     cluster_obj = _build_real_cloud_cluster()
     cluster_obj.nodes = [MagicMock(rack=0), MagicMock(rack=1), MagicMock(rack=2)]

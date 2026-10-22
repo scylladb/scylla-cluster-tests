@@ -391,6 +391,24 @@ class ScyllaCloudAPIClient:
             params["enriched"] = "true"
         return self.request("GET", f"/account/{account_id}/cluster/{cluster_id}/nodes", params=params)["nodes"]
 
+    def get_active_cluster_node_ids(self, *, account_id: int, cluster_id: int) -> set[int]:
+        """Return IDs of active DB nodes."""
+        nodes = self.get_cluster_nodes(account_id=account_id, cluster_id=cluster_id)
+        return {node["id"] for node in nodes if node["status"].upper() not in ("DELETED", "PENDING_DELETE")}
+
+    def get_cluster_total_storage(self, *, account_id: int, cluster_id: int) -> float:
+        """Return total storage (GB) of the cluster DB nodes."""
+        cluster_info = self.get_cluster_details(account_id=account_id, cluster_id=cluster_id, enriched=True)
+        # DB nodes are missing nodeType field, thus, can be filtered out this way
+        cluster_nodes = [node for node in cluster_info["nodes"] if not node.get("nodeType")]
+        return cluster_info["instance"]["totalStorage"] * len(cluster_nodes)
+
+    def get_cluster_used_storage(self, *, account_id: int, cluster_id: int) -> float:
+        """Return used storage (GB) of the cluster."""
+        clusters = self.get_clusters(account_id=account_id, metrics="STORAGE_USED")
+        cluster = next(cluster for cluster in clusters if cluster["id"] == cluster_id)
+        return cluster["metrics"]["STORAGE_USED"] / (1024**3)  # Convert bytes to GB
+
     def get_cluster_dcs(self, *, account_id: int, cluster_id: int, enriched: bool = False) -> list[dict[str, Any]]:
         """Get the list of data centers used by a cluster"""
         params = {}
