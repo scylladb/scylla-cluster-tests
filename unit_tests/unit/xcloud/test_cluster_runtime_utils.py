@@ -69,6 +69,15 @@ def test_wait_for_cluster_disk_utilization_polls_until_target_reached(cluster, a
             ],
             id="found-after-retries",
         ),
+        pytest.param(
+            [
+                [
+                    {"id": 5, "requestType": "RESIZE_CLUSTER_V3", "status": "COMPLETED"},
+                    {"id": 7, "requestType": "RESIZE_CLUSTER_V3", "status": "IN_PROGRESS"},
+                ]
+            ],
+            id="older-completed-resize-listed-first",
+        ),
     ],
 )
 def test_wait_for_resize_request_returns_in_progress_resize_id(cluster, api_client, no_sleep, requests_sequence):
