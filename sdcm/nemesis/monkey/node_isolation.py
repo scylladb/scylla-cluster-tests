@@ -150,6 +150,8 @@ def refuse_connection_from_banned_node(runner, use_iptables: bool = False) -> No
 
 @target_all_nodes
 class IsolateNodeWithProcessSignalNemesis(NemesisBaseClass):
+    """Pause Scylla with SIGSTOP on the target node, remove it from the cluster, verify the resumed node is refused."""
+
     disruptive = True
     topology_changes = True
     supports_high_disk_utilization = False  # Runs nodetool removenode
@@ -167,5 +169,7 @@ class IsolateNodeWithProcessSignalNemesis(NemesisBaseClass):
 
 @target_all_nodes
 class IsolateNodeWithIptableRuleNemesis(IsolateNodeWithProcessSignalNemesis):
+    """Block Scylla ports with iptables on the target node, remove it from the cluster, verify the node is refused."""
+
     def disrupt(self):
         refuse_connection_from_banned_node(self.runner, use_iptables=True)
