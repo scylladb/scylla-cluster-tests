@@ -15,7 +15,7 @@ from sdcm.cluster_cloud import (
     VectorStoreSetCloud,
 )
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.cloud_api_utils import (
+from sdcm.xcloud.cluster_config_utils import (
     build_cloud_cluster_name,
     apply_keep_tag_to_name,
     CLOUD_KEEP_ALIVE_HOURS,
