@@ -1,0 +1,39 @@
+test_metadata:
+  description: >-
+    Artifacts validation test running against pre-provisioned hosts through the baremetal
+    backend. Used by the SCT-901 bare-metal simulation, where the "physical" hosts are plain
+    EC2 Fedora instances provisioned outside SCT by scripts/baremetal-simulation/.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - baremetal
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
+cluster_backend: 'baremetal'
+s3_baremetal_config: 'baremetal_sct901'
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
+
+use_preinstalled_scylla: false
+scylla_repo: 'https://downloads.scylladb.com/rpm/centos/scylla-2025.3.repo'
+scylla_linux_distro: 'centos'
+
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 0
+nemesis_class_name: 'NoOpMonkey'
+
+ip_ssh_connections: 'public'
+ssh_transport: 'fabric'
+logs_transport: 'ssh'
+
+use_mgmt: false
+run_scylla_doctor: false
+backtrace_decoding: false
+run_db_node_benchmarks: false
+
+test_duration: 90
+user_prefix: 'sct901-baremetal-sim'
