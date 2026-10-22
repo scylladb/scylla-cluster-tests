@@ -186,8 +186,8 @@ def find_best_throughput(total_summary: dict[str, Any], p99_limit_ms: float) -> 
 
     `total_summary` is the per-step summary of the gradual test, keyed by step name. The best-throughput
     search runs unthrottled steps that differ by thread count, so a step passes on latency alone: the HDR
-    P99 of every operation must be within `p99_limit_ms` (for mixed, both read and write). Steps without
-    HDR results are skipped.
+    P99 of every operation, in every cycle that reported it, must be within `p99_limit_ms` (for mixed, both
+    read and write). Steps without HDR results are skipped.
 
     Passing steps are ranked by HDR-measured throughput, not by thread count: past saturation, more threads
     add latency without adding throughput. The step's 'threads' entry, when present, is reported as is.
@@ -199,16 +199,23 @@ def find_best_throughput(total_summary: dict[str, Any], p99_limit_ms: float) -> 
             LOGGER.debug("Step %s: no HDR results, not a best-throughput candidate", name)
             continue
         try:
+            # Keys are '<operation>--<HDR tag>'. Check every key any cycle reported, so an operation that
+            # shows up only in a later cycle is not let through unchecked.
+            hdr_keys = dict.fromkeys(hdr_key for cycle in cycles for hdr_key in cycle["hdr_summary"])
             p99 = {
-                operation: max(cycle["hdr_summary"][operation]["percentile_99"] for cycle in cycles)
-                for operation in cycles[0]["hdr_summary"]
+                hdr_key: max(
+                    cycle["hdr_summary"][hdr_key]["percentile_99"]
+                    for cycle in cycles
+                    if hdr_key in cycle["hdr_summary"]
+                )
+                for hdr_key in hdr_keys
             }
             throughput = round(avg([cycle["cycle_hdr_throughput"] for cycle in cycles]))
         except (KeyError, TypeError) as exc:
             LOGGER.debug("Step %s: incomplete HDR results (%r), not a best-throughput candidate", name, exc)
             continue
 
-        if over_limit := {operation: value for operation, value in p99.items() if value > p99_limit_ms}:
+        if over_limit := {hdr_key: value for hdr_key, value in p99.items() if value > p99_limit_ms}:
             LOGGER.debug("Step %s: P99 over the %s ms limit: %s", name, p99_limit_ms, over_limit)
             continue
         passed.append(BestThroughputStep(name=name, throughput=throughput, p99=p99, threads=step.get("threads")))

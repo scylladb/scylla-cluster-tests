@@ -105,3 +105,12 @@ def test_nothing_passed():
 
 def test_empty_summary():
     assert find_best_throughput({}, P99_LIMIT_MS) is None
+
+
+def test_operation_reported_only_by_a_later_cycle_is_checked():
+    step = _step(100, 300000, READ=3.0)
+    step["cycles"].append(_step(100, 300000, READ=3.0, WRITE=12.0)["cycles"][0])
+    assert find_best_throughput({"unthrottled_100_threads": step}, P99_LIMIT_MS) is None
+
+    step["cycles"][1]["hdr_summary"]["WRITE"]["percentile_99"] = 5.0
+    assert find_best_throughput({"unthrottled_100_threads": step}, P99_LIMIT_MS).p99 == {"READ": 3.0, "WRITE": 5.0}
