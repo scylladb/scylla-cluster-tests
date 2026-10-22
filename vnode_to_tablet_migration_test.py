@@ -34,11 +34,18 @@ from sdcm.wait import wait_for, wait_for_log_lines
 LOGGER = logging.getLogger(__name__)
 
 
-class NodeMigrationStatus(StrEnum):
-    USES_VNODES = "uses vnodes"
-    MIGRATING = "migrating to tablets"
-    MIGRATING_TO_VNODES = "migrating to vnodes"
-    USES_TABLETS = "uses tablets"
+class NodeRestartStatus(StrEnum):
+    """Per-node column of 'migrate-to-tablets status'.
+
+    The column used to name the storage a node was running ("uses vnodes",
+    "migrating to tablets", ...).  It now answers a different question: whether
+    the node still owes a restart to run what it was asked to run.  Which
+    storage a given table uses is per-table, reported by 'Migrating Tables'
+    and 'Direction' above the node list.
+    """
+
+    RESTARTED = "Restarted"
+    NEEDS_RESTART = "Needs restart"
 
 
 class TableConvergenceStatus(StrEnum):
@@ -51,13 +58,18 @@ class MigrateToTabletsStatus:
     """Parsed 'nodetool migrate-to-tablets status <keyspace>' output.
 
     status is the keyspace-level migration status ("vnodes", "migrating_to_tablets"
-    or "tablets").  nodes maps host_id -> NodeMigrationStatus and is empty when no
+    or "tablets").  nodes maps host_id -> NodeRestartStatus and is empty when no
     migration is in flight: 'finalize' clears the migration state and the per-node
     table disappears from the output, leaving only the keyspace-level status.
+
+    direction is "tablets", "vnodes" or "" and says which way the migration is
+    going; it is printed only while tables are being migrated and at least one
+    node has been marked.
     """
 
     status: str
-    nodes: dict[str, NodeMigrationStatus]
+    nodes: dict[str, NodeRestartStatus]
+    direction: str = ""
 
 
 def get_nodetool_migrate_to_tablets_status(node, keyspace: str) -> MigrateToTabletsStatus:
@@ -68,12 +80,14 @@ def get_nodetool_migrate_to_tablets_status(node, keyspace: str) -> MigrateToTabl
     Example output while a migration is in flight:
         Keyspace: ks
         Status: migrating_to_tablets
+        Migrating Tables: All
+        Direction: tablets
 
         Nodes:
-        Host ID                              Status
-        dc1c5a03-8878-49da-a6f3-bd27d6a2d85d uses vnodes
-        b1428349-2154-41c9-a5c1-dd33c71bd571 migrating to tablets
-        017dd39a-3d06-4c8a-8ac4-379f9e595607 uses vnodes
+        Host ID                              Address    Status
+        dc1c5a03-8878-49da-a6f3-bd27d6a2d85d 10.0.0.1   Restarted
+        b1428349-2154-41c9-a5c1-dd33c71bd571 10.0.0.2   Needs restart
+        017dd39a-3d06-4c8a-8ac4-379f9e595607 10.0.0.3   Restarted
 
     Example output when no migration is in flight (e.g. after a rollback finalize):
         Keyspace: ks
@@ -82,13 +96,24 @@ def get_nodetool_migrate_to_tablets_status(node, keyspace: str) -> MigrateToTabl
     res = node.run_nodetool(f"migrate-to-tablets status {keyspace}")
     status_match = re.search(r"^Status:\s*(?P<status>\S+)", res.stdout, re.MULTILINE)
 
-    nodes: dict[str, NodeMigrationStatus] = {}
-    pattern = re.compile(r"(?P<host_id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\s+(?P<status>.+)")
+    direction_match = re.search(r"^Direction:\s*(?P<direction>\S+)", res.stdout, re.MULTILINE)
+
+    nodes: dict[str, NodeRestartStatus] = {}
+    # Host ID, then the address column ("?" when the server does not know it),
+    # then the status, which contains a space in "Needs restart".
+    pattern = re.compile(
+        r"(?P<host_id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+        r"\s+(?P<address>\S+)\s+(?P<status>.+?)\s*$"
+    )
     for line in res.stdout.splitlines():
         match = pattern.match(line.strip())
         if match:
-            nodes[match.group("host_id")] = NodeMigrationStatus(match.group("status").strip())
-    return MigrateToTabletsStatus(status=status_match.group("status"), nodes=nodes)
+            nodes[match.group("host_id")] = NodeRestartStatus(match.group("status"))
+    return MigrateToTabletsStatus(
+        status=status_match.group("status"),
+        nodes=nodes,
+        direction=direction_match.group("direction") if direction_match else "",
+    )
 
 
 def is_keyspace_pow2_converged(node, keyspace: str) -> bool:
@@ -182,11 +207,12 @@ class VnodeToTabletMigrationTest(LongevityTest):
             node.wait_node_fully_start(timeout=reshard_timeout)
 
     def _start_migration(self, keyspaces: list[str]) -> None:
-        """Start tablet migration for all given keyspaces and verify all nodes use vnodes.
+        """Start tablet migration for all given keyspaces and verify no node owes a restart.
 
         Runs 'migrate-to-tablets start <ks>' for each keyspace from the coordinator
-        (data_nodes[0]) and asserts that every node reports USES_VNODES immediately
-        after, confirming the migration is in the preparation phase.
+        (data_nodes[0]) and asserts that the keyspace entered
+        'migrating_to_tablets' and that no node owes a restart yet, confirming the
+        migration is in the preparation phase.
 
         Args:
             keyspaces: User keyspaces to migrate.
@@ -200,19 +226,21 @@ class VnodeToTabletMigrationTest(LongevityTest):
         for ks in keyspaces:
             coordinator_node.run_nodetool(f"migrate-to-tablets start {ks}")
             migration_status = get_nodetool_migrate_to_tablets_status(coordinator_node, ks)
+            assert migration_status.status == "migrating_to_tablets", (
+                f"[ks={ks}] Expected 'migrating_to_tablets' after start, got {migration_status.status!r}"
+            )
             for node in self.db_cluster.data_nodes:
-                assert migration_status.nodes[node.host_id] == NodeMigrationStatus.USES_VNODES, (
-                    f"[ks={ks}] Expected {NodeMigrationStatus.USES_VNODES!r} for {node.host_id}, "
-                    f"got {migration_status.nodes[node.host_id]!r}"
+                assert migration_status.nodes[node.host_id] == NodeRestartStatus.RESTARTED, (
+                    f"[ks={ks}] Expected {NodeRestartStatus.RESTARTED!r} for {node.host_id} "
+                    f"before any node is marked, got {migration_status.nodes[node.host_id]!r}"
                 )
 
     def _upgrade_node_to_tablets(self, node, keyspaces: list[str]) -> None:
         """Upgrade a single node from vnodes to tablets storage.
 
         Waits for any running nemesis to complete, marks the node for upgrade,
-        verifies it enters the 'migrating to tablets' state, drains and restarts
-        for resharding, then waits for the node to report 'uses tablets' for all
-        keyspaces.  Sleeps 300 s afterward to let the cluster stabilize.
+        verifies it then owes a restart, drains and restarts for resharding, then
+        waits for the node to report that it no longer owes one for all keyspaces.  Sleeps 300 s afterward to let the cluster stabilize.
 
         Args:
             node: The DB node to upgrade.
@@ -227,25 +255,25 @@ class VnodeToTabletMigrationTest(LongevityTest):
         with self.nemesis_allocator.nodes_running_nemesis(node, "vnode_to_tablet_migration"):
             self.log.info("Upgrading node %s (ip=%s) to tablets", node.name, node.ip_address)
             node.run_nodetool("migrate-to-tablets upgrade")
-            self.log.info("Verifying node %s status changed to 'migrating to tablets'", node.name)
+            self.log.info("Verifying node %s status changed to 'Needs restart'", node.name)
             for ks in keyspaces:
                 migration_status = get_nodetool_migrate_to_tablets_status(node, ks)
-                assert migration_status.nodes[node.host_id] == NodeMigrationStatus.MIGRATING, (
-                    f"[ks={ks}] Expected {NodeMigrationStatus.MIGRATING!r} for {node.host_id}, "
+                assert migration_status.nodes[node.host_id] == NodeRestartStatus.NEEDS_RESTART, (
+                    f"[ks={ks}] Expected {NodeRestartStatus.NEEDS_RESTART!r} for {node.host_id}, "
                     f"got {migration_status.nodes[node.host_id]!r}"
                 )
             self.restart_node_after_migration(node)
             self.log.info("Node %s is back up and normal after restart", node.name)
 
-        self.log.info("Waiting for node %s status to reach 'uses tablets' for all keyspaces", node.name)
+        self.log.info("Waiting for node %s to report 'Restarted' for all keyspaces", node.name)
         for ks in keyspaces:
             wait_for(
                 func=lambda n=node, k=ks: (
-                    get_nodetool_migrate_to_tablets_status(n, k).nodes[n.host_id] == NodeMigrationStatus.USES_TABLETS
+                    get_nodetool_migrate_to_tablets_status(n, k).nodes[n.host_id] == NodeRestartStatus.RESTARTED
                 ),
                 step=60,
                 timeout=3600,
-                text=f"Waiting for {node.name} to reach {NodeMigrationStatus.USES_TABLETS!r} for ks={ks}",
+                text=f"Waiting for {node.name} to reach {NodeRestartStatus.RESTARTED!r} for ks={ks}",
                 throw_exc=True,
             )
         self.log.info("Waiting 10 minutes for cluster to stabilize after upgrading node %s", node.name)
@@ -254,11 +282,10 @@ class VnodeToTabletMigrationTest(LongevityTest):
     def _rollback_node_to_vnodes(self, node, keyspaces: list[str]) -> None:
         """Roll back a single node from tablets back to vnodes storage.
 
-        Sends the downgrade command.  If any keyspace puts the node in
-        'migrating to vnodes' state, drains and restarts to complete the reverse
-        resharding (the same log patterns fire as for the forward direction).
-        Verifies the node reports 'uses vnodes' for all keyspaces and passes a
-        health check before returning.
+        Sends the downgrade command.  If any keyspace leaves the node owing a
+        restart, drains and restarts to complete the reverse resharding (the same
+        log patterns fire as for the forward direction).  Verifies the node owes no
+        restart for any keyspace and passes a health check before returning.
 
         Args:
             node: The DB node to roll back.
@@ -267,26 +294,26 @@ class VnodeToTabletMigrationTest(LongevityTest):
         self.log.info("Rolling back node %s (ip=%s) to vnodes", node.name, node.ip_address)
         node.run_nodetool("migrate-to-tablets downgrade")
 
-        # A node fully on tablets enters 'migrating to vnodes' and needs a restart.
-        # A node mid-upgrade may skip directly to 'uses vnodes' (no restart needed).
+        # A node that already restarted into tablets owes a restart to come back.
+        # A node marked but never restarted owes nothing: it never resharded.
         needs_restart = any(
             get_nodetool_migrate_to_tablets_status(node, ks).nodes.get(node.host_id)
-            == NodeMigrationStatus.MIGRATING_TO_VNODES
+            == NodeRestartStatus.NEEDS_RESTART
             for ks in keyspaces
         )
         if needs_restart:
-            self.log.info("Node %s is 'migrating to vnodes' — restarting for reverse resharding", node.name)
+            self.log.info("Node %s owes a restart - restarting for reverse resharding", node.name)
             self.restart_node_after_migration(node)
 
-        self.log.info("Waiting for node %s status to reach 'uses vnodes' for all keyspaces", node.name)
+        self.log.info("Waiting for node %s to report 'Restarted' after rollback", node.name)
         for ks in keyspaces:
             wait_for(
                 func=lambda n=node, k=ks: (
-                    get_nodetool_migrate_to_tablets_status(n, k).nodes[n.host_id] == NodeMigrationStatus.USES_VNODES
+                    get_nodetool_migrate_to_tablets_status(n, k).nodes[n.host_id] == NodeRestartStatus.RESTARTED
                 ),
                 step=60,
                 timeout=3600,
-                text=f"Waiting for {node.name} to reach {NodeMigrationStatus.USES_VNODES!r} for ks={ks}",
+                text=f"Waiting for {node.name} to reach {NodeRestartStatus.RESTARTED!r} for ks={ks}",
                 throw_exc=True,
             )
         node.check_node_health()
