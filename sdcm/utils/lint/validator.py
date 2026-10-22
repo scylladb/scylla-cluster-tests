@@ -15,9 +15,20 @@ from unittest.mock import patch
 
 logger = logging.getLogger(__name__)
 
-# Lightweight stub for AMI/GCE image objects returned by cloud lookup functions
-_FakeImage = namedtuple("_FakeImage", ["image_id", "name", "self_link"])
-_FAKE_IMAGE = _FakeImage(image_id="ami-lint-placeholder", name="lint-placeholder", self_link="lint-placeholder")
+# Lightweight stub for the image objects returned by cloud lookup functions.
+# The fields cover every attribute the image resolvers in sdcm.sct_config.config read:
+# `image_id` (AWS), `self_link` (GCE), `id`/`unique_id` (Azure) and `name` (logging).
+_FakeImage = namedtuple("_FakeImage", ["image_id", "name", "self_link", "id", "unique_id"])
+_FAKE_IMAGE = _FakeImage(
+    image_id="ami-lint-placeholder",
+    name="lint-placeholder",
+    self_link="lint-placeholder",
+    id="lint-placeholder",
+    unique_id="lint-placeholder",
+)
+
+# OCI image lookups return positional lists shaped ["OCI", <name>, <ocid>, ...]
+_FAKE_OCI_IMAGE = ["OCI", "lint-placeholder", "ocid1.image.oc1..lint-placeholder"]
 
 
 def _check_file_exists_skip_credentials(value: str) -> None:
@@ -61,12 +72,25 @@ _CLOUD_API_PATCHES = {
     "sdcm.sct_config.config.get_arch_from_instance_type": lambda *a, **kw: "x86_64",
     # EC2 instance type validation
     "sdcm.sct_config.config.aws_check_instance_type_supported": lambda *a, **kw: True,
-    # Azure image lookup
+    # Azure branched image lookup (private/community galleries)
     "sdcm.provision.azure.utils.get_scylla_images": lambda **kw: [_FAKE_IMAGE],
+    # Azure released image lookup (community gallery)
+    "sdcm.provision.azure.utils.get_released_scylla_images": lambda **kw: [_FAKE_IMAGE],
     # Azure instance type validation
     "sdcm.sct_config.config.azure_check_instance_type_available": lambda *a, **kw: True,
     # KeyStore reads credentials from S3 — not needed for config structure validation
     "sdcm.sct_config.config.KeyStore": _FakeKeyStore,
+    # AWS capacity reservation lookup (EC2 DescribeCapacityReservations).
+    # Called straight from SCTConfiguration.__init__ for every pipeline that enables it.
+    "sdcm.provision.aws.capacity_reservation.SCTCapacityReservation.get_cr_from_aws": lambda *a, **kw: None,
+    # AWS dedicated host reservation (EC2 DescribeHosts/AllocateHosts)
+    "sdcm.provision.aws.dedicated_host.SCTDedicatedHosts.reserve": lambda *a, **kw: None,
+    # OCI branched image lookup
+    "sdcm.utils.oci_utils.get_scylla_images_by_branch": lambda *a, **kw: [_FAKE_OCI_IMAGE],
+    # OCI released image lookup
+    "sdcm.utils.oci_utils.get_scylla_images_by_version": lambda *a, **kw: [_FAKE_OCI_IMAGE],
+    # OCI shape validation
+    "sdcm.utils.oci_utils.is_shape_available": lambda *a, **kw: True,
     # OCI image tag lookup (verify_configuration_urls_validity)
     "sdcm.utils.oci_utils.get_image_tags": lambda *a, **kw: {
         "user_data_format_version": "3",
