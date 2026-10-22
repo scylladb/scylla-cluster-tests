@@ -1,7 +1,7 @@
 append_scylla_yaml:
   auto_snapshot: false
   object_storage_endpoints:
-    - name: s3.us-east-1.amazonaws.com
+    - name: s3.{region}.amazonaws.com  # {region} is replaced with the backup bucket region
       port: 443
       https: true
-      aws_region: us-east-1
+      aws_region: "{region}"

@@ -972,6 +972,12 @@ class BaseNode(AutoSshContainerMixin):
             for kms_host_name, kms_host_data in append_scylla_yaml.get("kms_hosts", {}).items():
                 if kms_host_data["aws_region"] == "auto":
                     append_scylla_yaml["kms_hosts"][kms_host_name]["aws_region"] = self.vm_region
+            # Backup bucket lives in the first region, see `backup_bucket_location`
+            bucket_region = next(iter(self.parent_cluster.params.region_names), "")
+            for endpoint in append_scylla_yaml.get("object_storage_endpoints") or []:
+                for key in ("name", "aws_region"):
+                    if key in endpoint:
+                        endpoint[key] = endpoint[key].format(region=bucket_region)
             scylla_yml.update(append_scylla_yaml)
         if self.parent_cluster.node_type == "oracle-db":
             scylla_yml.experimental_features = []  # Oracle Scylla does not use experimental features
