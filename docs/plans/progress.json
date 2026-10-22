@@ -332,7 +332,7 @@
     },
     {
       "id": "best-throughput-under-latency-limit",
-      "title": "Best Throughput Under a Latency Limit (SCT-580)",
+      "title": "Best Throughput Under a Latency Limit, On Demand (SCT-580)",
       "file": "best-throughput-under-latency-limit.md",
       "domain": "stress-tools",
       "status": "draft",
