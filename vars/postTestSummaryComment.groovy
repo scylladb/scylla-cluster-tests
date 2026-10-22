@@ -16,6 +16,13 @@
  *   - stageName:      Human-readable name for the comment heading
  */
 def call(Map args) {
+    // RELENG-1014: this step hung for 12 days in a pipeline-level post block, holding its builder
+    timeout(time: 15, unit: 'MINUTES') {
+        postSummary(args)
+    }
+}
+
+private def postSummary(Map args) {
     if (!env.CHANGE_ID) {
         echo "postTestSummaryComment: not a PR build, skipping"
         return

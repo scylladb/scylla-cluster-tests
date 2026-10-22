@@ -1,7 +1,9 @@
 #!groovy
 import groovy.json.JsonSlurperClassic
 
-def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+// keep these in the script binding (no `def`) so call() and post{} can read them; log collection
+// and cleanup default to 30 minutes so they still run when 'Get test duration' fails
+(testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,30,30]
 
 def call(Map pipelineParams) {
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, null /* azure placeholder */, params.oci_region_name)

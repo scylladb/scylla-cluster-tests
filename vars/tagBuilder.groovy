@@ -6,17 +6,20 @@ import com.google.jenkins.plugins.credentials.oauth.GoogleRobotPrivateKeyCredent
 import com.google.jenkins.plugins.credentials.oauth.GoogleOAuth2ScopeRequirement
 
 def call() {
-    def cloudInfo = identifyCloud()
-    def buildTag = env.BUILD_TAG
-    def jenkinsJobTag = buildTag ?: ""
-    def jenkinsJob = deriveJenkinsJob(jenkinsJobTag)
-    def tags = [RunByUser: "${getRunningUserId()}",
-                JenkinsJobTag: jenkinsJobTag,
-                JenkinsJob: jenkinsJob,
-                NodeType: "builder",
-                keep_action: "terminate",
-                billing_project:"${GetBillingProjectTag()}"]
-    applyTagsWithCreds(cloudInfo, tags)
+    // IMDS and cloud CLI calls; a hung one must not hold the builder (RELENG-1014)
+    timeout(time: 10, unit: 'MINUTES') {
+        def cloudInfo = identifyCloud()
+        def buildTag = env.BUILD_TAG
+        def jenkinsJobTag = buildTag ?: ""
+        def jenkinsJob = deriveJenkinsJob(jenkinsJobTag)
+        def tags = [RunByUser: "${getRunningUserId()}",
+                    JenkinsJobTag: jenkinsJobTag,
+                    JenkinsJob: jenkinsJob,
+                    NodeType: "builder",
+                    keep_action: "terminate",
+                    billing_project:"${GetBillingProjectTag()}"]
+        applyTagsWithCreds(cloudInfo, tags)
+    }
 }
 
 private String deriveJenkinsJob(String buildTag) {
@@ -138,14 +141,14 @@ def identifyCloud() {
             // --- AWS IMDSv2 FIX ---
             // 1. Try to get a Session Token (TTL 6 hours)
             // We do not use -f here so we can see if it works, but suppress errors with 2>/dev/null
-            def token = sh(script: "curl -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' -s 2>/dev/null", returnStdout: true).trim()
+            def token = sh(script: "curl --max-time 10 -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' -s 2>/dev/null", returnStdout: true).trim()
 
             // 2. Prepare Header (Use token if we got one)
             def tokenHeader = token ? "-H 'X-aws-ec2-metadata-token: ${token}'" : ""
 
             // 3. Fetch Data (Using Token)
-            info.instanceId = sh(script: "curl -fs ${tokenHeader} http://169.254.169.254/latest/meta-data/instance-id", returnStdout: true).trim()
-            def az = sh(script: "curl -fs ${tokenHeader} http://169.254.169.254/latest/meta-data/placement/availability-zone", returnStdout: true).trim()
+            info.instanceId = sh(script: "curl -fs --max-time 10 ${tokenHeader} http://169.254.169.254/latest/meta-data/instance-id", returnStdout: true).trim()
+            def az = sh(script: "curl -fs --max-time 10 ${tokenHeader} http://169.254.169.254/latest/meta-data/placement/availability-zone", returnStdout: true).trim()
 
             if (az) {
                 info.region = az.substring(0, az.length() - 1)
@@ -157,8 +160,8 @@ def identifyCloud() {
         if (chassisAsset == "OracleCloud.com" || sysVendor == "OracleCloud") {
             info.provider = 'OCI'
             info.method = 'DMI_Check'
-            info.instanceId = sh(script: "curl -fs -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/id", returnStdout: true).trim()
-            info.region = sh(script: "curl -fs -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/canonicalRegionName", returnStdout: true).trim()
+            info.instanceId = sh(script: "curl -fs --max-time 10 -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/id", returnStdout: true).trim()
+            info.region = sh(script: "curl -fs --max-time 10 -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/canonicalRegionName", returnStdout: true).trim()
             return info
         }
 
@@ -166,8 +169,8 @@ def identifyCloud() {
         if (prodName.contains("Google")) {
             info.provider = 'GCE'
             info.method = 'DMI_Check'
-            info.instanceId = sh(script: "curl -fs -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/name", returnStdout: true).trim()
-            def zonePath = sh(script: "curl -fs -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/zone", returnStdout: true).trim()
+            info.instanceId = sh(script: "curl -fs --max-time 10 -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/name", returnStdout: true).trim()
+            def zonePath = sh(script: "curl -fs --max-time 10 -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/zone", returnStdout: true).trim()
             info.region = zonePath.split('/').last()
             return info
         }
@@ -181,13 +184,13 @@ def identifyCloud() {
     // AWS Network Check (IMDSv2 Aware)
     // Try to fetch token first
     // with `|| true` curl failures are non-fatal on hosts without IMDS (e.g. bare-metal agents)
-    def awsToken = sh(script: "curl -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' --connect-timeout 1 -s 2>/dev/null || true", returnStdout: true).trim()
+    def awsToken = sh(script: "curl --max-time 10 -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' --connect-timeout 1 -s 2>/dev/null || true", returnStdout: true).trim()
     def awsHeader = awsToken ? "-H 'X-aws-ec2-metadata-token: ${awsToken}'" : ""
 
-    if (sh(script: "curl -fs --connect-timeout 2 ${awsHeader} http://169.254.169.254/latest/meta-data/instance-id", returnStatus: true) == 0) {
+    if (sh(script: "curl -fs --max-time 10 --connect-timeout 2 ${awsHeader} http://169.254.169.254/latest/meta-data/instance-id", returnStatus: true) == 0) {
         info.provider = 'AWS'
-        info.instanceId = sh(script: "curl -fs ${awsHeader} http://169.254.169.254/latest/meta-data/instance-id", returnStdout: true).trim()
-        def az = sh(script: "curl -fs ${awsHeader} http://169.254.169.254/latest/meta-data/placement/availability-zone", returnStdout: true).trim()
+        info.instanceId = sh(script: "curl -fs --max-time 10 ${awsHeader} http://169.254.169.254/latest/meta-data/instance-id", returnStdout: true).trim()
+        def az = sh(script: "curl -fs --max-time 10 ${awsHeader} http://169.254.169.254/latest/meta-data/placement/availability-zone", returnStdout: true).trim()
         if (az && az.length() > 1) {
             info.region = az.substring(0, az.length() - 1)
         } else {
@@ -198,18 +201,18 @@ def identifyCloud() {
     }
 
     // OCI Network Check
-    if (sh(script: "curl -fs --connect-timeout 2 -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/", returnStatus: true) == 0) {
+    if (sh(script: "curl -fs --max-time 10 --connect-timeout 2 -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/", returnStatus: true) == 0) {
         info.provider = 'OCI'
-        info.instanceId = sh(script: "curl -fs -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/id", returnStdout: true).trim()
-        info.region = sh(script: "curl -fs -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/canonicalRegionName", returnStdout: true).trim()
+        info.instanceId = sh(script: "curl -fs --max-time 10 -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/id", returnStdout: true).trim()
+        info.region = sh(script: "curl -fs --max-time 10 -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/canonicalRegionName", returnStdout: true).trim()
         return info
     }
 
     // GCE Network Check
-    if (sh(script: "curl -fs --connect-timeout 2 -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/id", returnStatus: true) == 0) {
+    if (sh(script: "curl -fs --max-time 10 --connect-timeout 2 -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/id", returnStatus: true) == 0) {
         info.provider = 'GCE'
-        info.instanceId = sh(script: "curl -fs -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/name", returnStdout: true).trim()
-        def zonePath = sh(script: "curl -fs -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/zone", returnStdout: true).trim()
+        info.instanceId = sh(script: "curl -fs --max-time 10 -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/name", returnStdout: true).trim()
+        def zonePath = sh(script: "curl -fs --max-time 10 -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/zone", returnStdout: true).trim()
         info.region = zonePath.split('/').last()
         return info
     }
