@@ -262,7 +262,7 @@ What each type adds to a run, with a diagram per type: [SCT system map](docs/sys
 
 | Type | Docs |
 |---|---|
-| Artifact tests | [artifacts_test.md](docs/artifacts_test.md) |
+| Artifact tests | [artifacts_test.md](docs/artifacts_test.md) · [Scylla Doctor testing and release gating](docs/scylla-doctor-testing.md) |
 | Longevity | [longevity.md](docs/longevity.md) |
 | Upgrade | [rolling-upgrade.md](docs/rolling-upgrade.md) |
 | Performance | [Performance testing in SCT](docs/performance/README.md) · [HDR investigate utility](docs/performance-tests.md) · [region scheduling](docs/perf-tests-region-scheduling.md) |
