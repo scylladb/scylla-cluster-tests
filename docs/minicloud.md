@@ -302,7 +302,8 @@ Credentials:
   all-zero UUID as tenant and subscription.
 - `AZURE_ENDPOINT_URL=https://localhost:5443` redirects every ARM client. If
   `SCT_MINICLOUD_ENDPOINT_URL` is set but `AZURE_ENDPOINT_URL` is not, SCT refuses to build an ARM
-  client, so nothing is provisioned on real Azure by mistake.
+  client, so nothing is provisioned on real Azure by mistake. The one exception is
+  `AzureService.real_cloud()`, which sct-runner management uses on purpose.
 
 TLS:
 
@@ -335,12 +336,15 @@ Unsupported APIs:
 | `purchasePlan` set for every URN | loader and monitor image download may be rejected | unverified |
 | community gallery and gallery listing | `scylla_version` cannot be resolved | pin a URN |
 | `virtualMachines/{vm}/restart`, `runCommand` | reboot nemeses fail (405) | QATOOLS-468; the provision test uses `not disruptive` |
-| Resource Graph | sct-runner listing | SCT returns no runners under minicloud |
+| Resource Graph | sct-runner listing | served by real Azure: the runner code uses `AzureService.real_cloud()`, not the redirected singleton |
 | `locations`, `vmSizes`, `resource_skus` | synthetic answer or multi-NIC validation only | not on the tested paths |
 
-CI runs both Azure jobs on the lab KVM agent (`local_agent: true`), not on an sct-runner: the Azure
-runner has no nested-virtualization sizing, and an AWS runner would need the runner cloud
-decoupled from the backend. The agent uses the Azure credential only for the image download.
+The two standalone Azure jobs run on the lab KVM agent (`local_agent: true`). The PR label
+`test-provision-minicloud-azure` runs the same artifacts test on an Azure sct-runner,
+`Standard_D4s_v5` as sized in `configurations/minicloud/azure.yaml`: nested virtualization on
+Azure comes with the size family, and the runner code reaches real Azure through
+`AzureService.real_cloud()` while every other ARM call stays redirected. minicloud uses the Azure
+credential only for the image download, SCT only for the runner itself.
 
 ## Troubleshooting
 

@@ -2,9 +2,10 @@
 
 // The regular Azure image artifacts test, run against minicloud instead of real Azure.
 //
-// It runs on the lab KVM agent, not on an sct-runner: the Azure runner has no nested-virtualization
-// sizing. The image is a pinned marketplace URN, because minicloud cannot use the community-gallery
-// image that scylla_version resolves to. SCT takes scylla_version from the URN.
+// It runs on the lab KVM agent. The PR label test-provision-minicloud-azure runs the same test on an
+// Azure sct-runner; moving this job there too is a follow-up. The image is a pinned marketplace URN,
+// because minicloud cannot use the community-gallery image that scylla_version resolves to. SCT
+// takes scylla_version from the URN.
 
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
