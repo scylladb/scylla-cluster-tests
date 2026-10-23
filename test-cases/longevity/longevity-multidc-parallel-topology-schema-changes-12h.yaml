@@ -114,3 +114,5 @@ server_encrypt: true
 internode_encryption: 'dc'
 
 user_prefix: 'parallel-topology-schema-changes-multidc-12h'
+
+topology_barrier_stall_events: true

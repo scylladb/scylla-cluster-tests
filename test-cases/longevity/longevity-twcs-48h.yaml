@@ -77,3 +77,5 @@ post_prepare_cql_cmds: >-
     AND compression = {'sstable_compression': 'ZstdWithDictsCompressor'}
 
 round_robin: true
+
+topology_barrier_stall_events: true

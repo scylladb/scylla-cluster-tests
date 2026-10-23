@@ -46,8 +46,12 @@ class MonitoringConfigMixin(BaseModel):
          by skipping backtrace decoding for certain types of events. Only applies when backtrace_decoding is True.""",
     )
     backtrace_stall_decoding: Boolean = SctField(
-        description="""If True, reactor stall backtraces will be decoded. If False, reactor stalls are skipped during
+        description="""If True, reactor stall and topology barrier stall backtraces will be decoded. If False, these stalls are skipped during
          backtrace decoding to reduce overhead in performance tests. Only applies when backtrace_decoding is True.""",
+    )
+    topology_barrier_stall_events: Boolean = SctField(
+        description="""If True, Scylla topology barrier stall log lines are published as TOPOLOGY_BARRIER_STALL events
+         (ERROR when held for at least 10 seconds). If False, they are dropped as generic warnings.""",
     )
     download_from_s3: list = SctField(
         description="Destination-source map of dirs/buckets to download from S3 before starting the test",

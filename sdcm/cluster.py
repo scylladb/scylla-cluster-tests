@@ -185,6 +185,7 @@ from sdcm.sct_events.system import TestFrameworkEvent, INSTANCE_STATUS_EVENTS_PA
 from sdcm.sct_events.grafana import set_grafana_url
 from sdcm.sct_events.database import (
     SYSTEM_ERROR_EVENTS_PATTERNS,
+    get_system_error_events_patterns,
     ScyllaHelpErrorEvent,
     ScyllaYamlUpdateEvent,
     SYSTEM_ERROR_EVENTS,
@@ -1694,7 +1695,9 @@ class BaseNode(AutoSshContainerMixin):
             system_log=self.system_log,
             remoter=self.remoter,
             node_name=str(self.name),
-            system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+            system_event_patterns=get_system_error_events_patterns(
+                self.parent_cluster.params.get("topology_barrier_stall_events")
+            ),
             decoding_queue=self.test_config.DECODING_QUEUE,
             log_lines=self.parent_cluster.params.get("logs_transport") in ["syslog-ng", "vector"],
             backtrace_stall_decoding=self.parent_cluster.params.get("backtrace_stall_decoding"),
