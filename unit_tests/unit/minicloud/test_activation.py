@@ -164,6 +164,7 @@ def test_set_endpoint_env_exports_azure_vars_for_azure_backend():
 def fresh_azure_service(monkeypatch):
     """AzureService is a process-wide singleton: start each test from a new one"""
     Singleton._instances.pop(AzureService, None)
+    monkeypatch.setattr(AzureService, "_real_cloud_instance", None, raising=False)
     monkeypatch.delenv("SCT_CLUSTER_BACKEND", raising=False)
     yield
     Singleton._instances.pop(AzureService, None)
@@ -211,3 +212,17 @@ def test_guard_refuses_arm_clients_before_activation(fresh_azure_service, monkey
     ):
         _ = AzureService().compute
     keystore.assert_not_called()
+
+
+def test_real_cloud_service_ignores_minicloud(fresh_azure_service, monkeypatch):
+    """Runner management from a redirected process needs real Azure: a separate, cached instance
+    that neither the guard nor the endpoint redirect applies to."""
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
+    real = AzureService.real_cloud()
+    assert real is AzureService.real_cloud()
+    assert real is not AzureService()
+    assert real.minicloud_endpoint is None  # the singleton would raise MinicloudActivationError here
+    monkeypatch.setenv("AZURE_ENDPOINT_URL", "https://localhost:5443")
+    assert AzureService.real_cloud()._arm_client_kwargs() == {}
+    assert AzureService().minicloud_endpoint == "https://localhost:5443"

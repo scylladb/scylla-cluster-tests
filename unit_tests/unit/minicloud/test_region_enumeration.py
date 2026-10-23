@@ -1,9 +1,11 @@
 """Region and runner enumeration under minicloud: no call the emulator cannot serve."""
 
 import os
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from sdcm.sct_runner import AwsSctRunner, list_sct_runners
+from sdcm.sct_runner import AwsSctRunner, AzureSctRunner, list_sct_runners
+from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.common import all_aws_regions
 
 
@@ -42,3 +44,28 @@ def test_runner_lookup_bypasses_the_minicloud_endpoint(monkeypatch):
 
     assert seen["aws_endpoint_url"] is None, "runner lookup ran against the emulated endpoint"
     assert os.environ["AWS_ENDPOINT_URL"] == "http://localhost:5000", "endpoint not restored"
+
+
+def test_azure_runner_lookup_uses_the_real_cloud_service(monkeypatch):
+    """Under minicloud the runner lookup must query real Azure, not return nothing:
+    collect-logs tags the runner through it."""
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    monkeypatch.setenv("AZURE_ENDPOINT_URL", "https://localhost:5443")
+    with patch("sdcm.sct_runner.list_instances_azure", return_value=[]) as listing:
+        assert AzureSctRunner.list_sct_runners(verbose=False) == []
+    listing.assert_called_once()
+    assert listing.call_args.kwargs["azure_service"] is AzureService.real_cloud()
+
+
+def test_azure_runner_is_built_on_the_real_cloud_service(monkeypatch):
+    """create-runner-instance runs on the builder with SCT_MINICLOUD_ENDPOINT_URL exported and
+    no AZURE_ENDPOINT_URL: the guard must not fire for the runner's own clients."""
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
+    monkeypatch.delenv("AZURE_ENDPOINT_URL", raising=False)
+
+    runner = AzureSctRunner(region_name="eastus", availability_zone="", params=SimpleNamespace(get=lambda *_: None))
+    assert runner.azure_service is AzureService.real_cloud()
+    assert runner.azure_region.azure_service is runner.azure_service
+    assert runner.azure_region_source.azure_service is runner.azure_service
+    assert runner.azure_service.minicloud_endpoint is None

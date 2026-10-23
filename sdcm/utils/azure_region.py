@@ -89,12 +89,13 @@ class AzureRegion:
     NETWORK_INTERFACE_NAME_SUFFIX = "nic"
     IP_CONFIGURATION_NAME_SUFFIX = "ip-config"
 
-    def __init__(self, region_name: str) -> None:
+    def __init__(self, region_name: str, azure_service: AzureService | None = None) -> None:
         self.region_name = region_name
+        self._azure_service = azure_service
 
     @cached_property
     def azure_service(self) -> AzureService:
-        return AzureService()
+        return self._azure_service or AzureService()
 
     @cached_property
     def location(self) -> str:
