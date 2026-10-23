@@ -382,9 +382,20 @@ class TestMonitoringConnectivity:
 
 
 def test_minicloud_vnet_subnets_are_carved_from_the_emulated_range(make_provisioner, azure_service, monkeypatch):
-    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    monkeypatch.setattr(azure_service, "minicloud_endpoint", "https://localhost:5443")
     provisioner = make_provisioner(1)
     provisioner.get_or_create_instances([definition("node-1")])
     vnet_name = provisioner._vnet_provider.get_or_create().name  # noqa: SLF001
     subnet = azure_service.network.subnets.get(provisioner._resource_group_name, vnet_name, "default")  # noqa: SLF001
     assert subnet.address_prefix == "10.180.0.0/24"
+
+
+def test_real_cloud_vnet_keeps_the_real_range_under_minicloud(make_provisioner, azure_service, monkeypatch):
+    """The sct-runner is created on real Azure by a process that has SCT_MINICLOUD_ENDPOINT_URL set:
+    an emulated range there would shadow the guests' TUN route on the runner."""
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    provisioner = make_provisioner(1)
+    provisioner.get_or_create_instances([definition("node-1")])
+    vnet_name = provisioner._vnet_provider.get_or_create().name  # noqa: SLF001
+    subnet = azure_service.network.subnets.get(provisioner._resource_group_name, vnet_name, "default")  # noqa: SLF001
+    assert subnet.address_prefix == "10.0.0.0/24"
