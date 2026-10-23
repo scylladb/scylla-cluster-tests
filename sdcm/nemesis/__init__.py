@@ -1003,8 +1003,8 @@ class NemesisRunner:
         # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
         # following repair would then propagate the resurrected data to the other replicas.
         destroy_data_and_restart_scylla(self, skip_sstables_with_tombstones=True)
-        # try to save the node
-        self.run_repair()
+        # try to save the node; full mode, since incremental repair skips the destroyed repaired sstables
+        self.run_repair(incremental_mode="full")
 
     def disrupt_destroy_data_then_rebuild(self):
         if is_tablets_feature_enabled(self.target_node):
@@ -2061,13 +2061,17 @@ class NemesisRunner:
 
     # End of Nemesis running code
     @latency_calculator_decorator(legend="Run repair process with nodetool repair", cycle_name="repair_nodetool_repair")
-    def run_repair_nodetool(self, nodes: list, publish_event=True, timeout=HOUR_IN_SEC * 3):
+    def run_repair_nodetool(
+        self, nodes: list, publish_event=True, timeout=HOUR_IN_SEC * 3, incremental_mode: str | None = None
+    ):
         """
         Execute a repair using Nodetool, which runs both vnode repair (repair) and tablet repairs (cluster repair)
 
         The command timeout is the repair adaptive timeout: the given `timeout` scaled by the
         `adaptive_timeout_multipliers` config param (`{repair: N}`), so tests with longer repairs
         tune it per-test yaml. On expiry the command fails and a SoftTimeoutEvent is emitted.
+
+        `incremental_mode` (incremental/full/disabled) applies to tablet repair only.
         """
         for node in nodes:
             with (
@@ -2084,6 +2088,7 @@ class NemesisRunner:
 
         target_node = nodes[0]
         if is_tablets_feature_enabled(target_node):
+            args = f"--incremental-mode {incremental_mode}" if incremental_mode else ""
             with (
                 temporarily_disable_auto_repair(self.cluster),
                 adaptive_timeout(Operations.REPAIR, target_node, timeout=timeout) as repair_timeout,
@@ -2091,6 +2096,7 @@ class NemesisRunner:
             ):
                 target_node.run_nodetool(
                     sub_cmd="cluster repair",
+                    args=args,
                     publish_event=publish_event,
                     timeout=repair_timeout,
                     long_running=True,
@@ -2098,14 +2104,18 @@ class NemesisRunner:
                 )
 
     @latency_calculator_decorator(legend="Run repair process through Scylla manager", cycle_name="_mgmt_repair_cli")
-    def run_repair_manager(self, ignore_down_hosts: bool = False, timeout=HOUR_IN_SEC * 3):
+    def run_repair_manager(
+        self, ignore_down_hosts: bool = False, timeout=HOUR_IN_SEC * 3, incremental_mode: str | None = None
+    ):
         """
         Execute a repair using Scylla Manager, which repairs entire cluster.
         ignore_down_hosts: If True, consider only nodes that are up and normal.
         """
         mgr_cluster = self.cluster.get_cluster_manager()
         with temporarily_disable_auto_repair(self.cluster), self.action_log_scope("Scylla Manager repair task"):
-            mgr_task = mgr_cluster.create_repair_task(ignore_down_hosts=ignore_down_hosts)
+            mgr_task = mgr_cluster.create_repair_task(
+                ignore_down_hosts=ignore_down_hosts, incremental_mode=incremental_mode
+            )
             task_final_status = mgr_task.wait_and_get_final_status(timeout=timeout)  # timeout is 24 hours
             if task_final_status != TaskStatus.DONE:
                 progress_full_string = mgr_task.progress_string(
@@ -2121,7 +2131,7 @@ class NemesisRunner:
                 f"Scylla Manager repair task finished with status: {task_final_status}, task id: {mgr_task.id}"
             )
 
-    def run_repair(self, ignore_down_hosts=False):
+    def run_repair(self, ignore_down_hosts=False, incremental_mode: str | None = None):
         """
         Execute a repair on the specified nodes, disregarding errors that may
         arise from failed or unavailable nodes during the process.
@@ -2134,22 +2144,24 @@ class NemesisRunner:
             else:
                 nodes = self.cluster.data_nodes
 
-            self.run_repair_nodetool(nodes=nodes, timeout=timeout)
+            self.run_repair_nodetool(nodes=nodes, timeout=timeout, incremental_mode=incremental_mode)
         else:
-            self.run_repair_manager(ignore_down_hosts=ignore_down_hosts, timeout=timeout)
+            self.run_repair_manager(
+                ignore_down_hosts=ignore_down_hosts, timeout=timeout, incremental_mode=incremental_mode
+            )
 
     def repair_nodetool_rebuild(self):
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC):
             self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
 
-    def rebuild_or_repair(self, target_node, reason=""):
+    def rebuild_or_repair(self, target_node, reason="", incremental_mode: str | None = None):
         """
         Runs rebuild on Vnodes and repair on tablets, as rebuild is not supported for tablets
         https://github.com/scylladb/scylladb/issues/17575
         """
         if is_tablets_feature_enabled(target_node):
             with self.action_log_scope(f"Run repair (instead of rebuild) on {self.target_node.name}, reason: {reason}"):
-                self.run_repair()
+                self.run_repair(incremental_mode=incremental_mode)
         else:
             with self.action_log_scope(f"Run rebuild on {self.target_node.name}, reason: {reason}"):
                 self.repair_nodetool_rebuild()
@@ -2912,7 +2924,7 @@ class NemesisRunner:
 
             self.target_node.wait_node_fully_start()
 
-            self.rebuild_or_repair(self.target_node, reason="After destroy")
+            self.rebuild_or_repair(self.target_node, reason="After destroy", incremental_mode="full")
 
     def start_and_interrupt_rebuild_streaming(self):
         """

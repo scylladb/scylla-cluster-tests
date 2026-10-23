@@ -262,7 +262,7 @@ def test_mgmt_corrupt_then_repair_calls_destroy_and_repair(mock_destroy, runner)
     MgmtCorruptThenRepair(runner).disrupt()
 
     mock_destroy.assert_called_once_with(runner, skip_sstables_with_tombstones=True)
-    runner.run_repair_manager.assert_called_once()
+    runner.run_repair_manager.assert_called_once_with(incremental_mode="full")
 
 
 # ---------------------------------------------------------------------------
