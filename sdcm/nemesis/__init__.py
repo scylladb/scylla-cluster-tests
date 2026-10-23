@@ -95,6 +95,7 @@ from sdcm.utils.common import (
     reach_enospc_on_node,
     clean_enospc_on_node,
     parse_nodetool_listsnapshots,
+    clear_snapshots_by_tag_prefix,
     update_authenticator,
     get_views_of_base_table,
 )
@@ -593,10 +594,9 @@ class NemesisRunner:
 
         self._handle_start_stop_compaction_results(trigger_and_watcher_futures=results, allow_trigger_exceptions=True)
 
-    def clear_snapshots(self) -> None:
-        with self.action_log_scope(f"Clear snapshots  on {self.target_node.name}"):
-            result = self.target_node.run_nodetool("clearsnapshot")
-        self.log.debug(result)
+    def clear_snapshots(self, tag_prefix: str, keyspace: str, table: str | None = None) -> None:
+        with self.action_log_scope(f"Clear {tag_prefix}* snapshots of {keyspace} on {self.target_node.name}"):
+            clear_snapshots_by_tag_prefix(self.target_node, tag_prefix, keyspace, table)
 
     def disrupt_start_stop_scrub_compaction(self):
         """
@@ -640,7 +640,7 @@ class NemesisRunner:
 
         self._handle_start_stop_compaction_results(trigger_and_watcher_futures=results, allow_trigger_exceptions=True)
 
-        self.clear_snapshots()
+        self.clear_snapshots("pre-scrub-", compaction_args.keyspace, compaction_args.columnfamily)
 
     def disrupt_start_stop_cleanup_compaction(self):
         """
@@ -2593,7 +2593,9 @@ class NemesisRunner:
         else:
             raise Exception(f"Snapshot {snapshot_name} wasn't found in: \n{result.stdout}")
 
-        self.clear_snapshots()
+        with self.action_log_scope(f"Clear {snapshot_name} snapshot on {self.target_node.name}"):
+            self.target_node.run_nodetool("clearsnapshot", args=f"-t {snapshot_name}")
+            self.target_node.run_nodetool("listsnapshots")  # output is logged, showing what is left
 
     # NOTE: '2023.1.rc0' is set in advance, not guaranteed to match when appears
     @scylla_versions(("4.6.rc0", None), ("2023.1.rc0", None))
@@ -3003,15 +3005,17 @@ class NemesisRunner:
         will be skipped.
         """
         self.log.debug("Rebuild sstables by scrub with `--skip-corrupted`, corrupted partitions will be skipped.")
+        test_keyspaces = self.cluster.get_test_keyspaces()
         with (
             ignore_scrub_invalid_errors(),
             adaptive_timeout(Operations.SCRUB, self.target_node, timeout=HOUR_IN_SEC * 48),
         ):
-            for ks in self.cluster.get_test_keyspaces():
+            for ks in test_keyspaces:
                 with self.action_log_scope(f"Scrub {ks} keyspace on {self.target_node.name} node"):
                     self.target_node.run_nodetool("scrub", args=f"--skip-corrupted {ks}")
 
-        self.clear_snapshots()
+        for ks in test_keyspaces:
+            self.clear_snapshots("pre-scrub-", ks)
 
     @latency_calculator_decorator(legend="Adding new nodes")
     def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:

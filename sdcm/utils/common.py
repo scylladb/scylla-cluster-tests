@@ -2650,6 +2650,33 @@ def parse_nodetool_listsnapshots(listsnapshots_output: str) -> defaultdict:
     return snapshots_content
 
 
+def clear_snapshots_by_tag_prefix(node: "BaseNode", tag_prefix: str, keyspace: str, table: str | None = None) -> None:
+    """Clear `keyspace` snapshots whose tag starts with `tag_prefix`; if `table` is given, only those holding it."""
+    snapshots = parse_nodetool_listsnapshots(node.run_nodetool("listsnapshots").stdout)
+    cleared = False
+    for tag, tables in snapshots.items():
+        if tag.startswith(tag_prefix) and any(
+            t.keyspace_name == keyspace and (table is None or t.table_name == table) for t in tables
+        ):
+            node.run_nodetool("clearsnapshot", args=f"-t {tag} {keyspace}")
+            cleared = True
+    if cleared:
+        node.run_nodetool("listsnapshots")  # output is logged, showing what is left
+
+
+def clear_drop_snapshots(cluster, keyspace: str, table: str) -> None:
+    """
+    Clear the snapshot Scylla takes of a dropped table (auto_snapshot), which otherwise keeps its disk space.
+
+    Each node takes it with its own `pre-drop-<ms>` tag while applying the drop,
+    hence waiting for schema agreement first.
+    """
+    cluster.wait_for_schema_agreement()
+    ParallelObject(objects=cluster.data_nodes, timeout=1200).run(
+        lambda node: clear_snapshots_by_tag_prefix(node, "pre-drop-", keyspace, table)
+    )
+
+
 def convert_metric_to_ms(metric: str) -> float:
     """
     Convert metric value to ms and float.

@@ -102,12 +102,13 @@ def major_compaction_nodes(cluster, keyspace: str, table: str):
     ParallelObject(objects=triggers, timeout=10000).call_objects()
 
 
-def clear_snapshot_nodes(cluster):
+def clear_snapshot_nodes(cluster, keyspace: str):
     LOGGER.debug("Run a clear-snapshot command on cluster data nodes")
     triggers = [
         partial(
             node.run_nodetool,
             sub_cmd="clearsnapshot",
+            args=keyspace,
         )
         for node in cluster.data_nodes
     ]

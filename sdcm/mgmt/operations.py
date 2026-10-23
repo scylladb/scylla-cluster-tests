@@ -112,7 +112,7 @@ class ClusterOperations(ClusterTester):
 
     def align_cluster_data_state(self, keyspace: str, table: str, clear_snapshots: bool = True):
         if clear_snapshots:
-            clear_snapshot_nodes(cluster=self.db_cluster)
+            clear_snapshot_nodes(cluster=self.db_cluster, keyspace=keyspace)
         self._cluster_flush_and_major_compaction(keyspace, table)
         self.run_fstrim_on_all_db_nodes()
 
