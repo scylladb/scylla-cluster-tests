@@ -121,6 +121,8 @@ from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
 from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
 from sdcm.utils.argus import ReplayOnlyArgusSCTClient, report_scylla_yaml_to_argus
+from sdcm.utils.cloud_catalog.cost import estimate_run_cost
+from sdcm.utils.cost_reporting import report_estimated_cost
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import (
@@ -480,6 +482,10 @@ class ClusterTester(unittest.TestCase):
             self.log.info("sct_runner info in Argus TestRun is updated")
             self.test_config.argus_client().sct_submit_config(name="sct_config", content=self.params.model_dump_json())
             self.log.info("Submitted SCTConfiguration to Argus.")
+            # Also sent by the pipeline's estimate stage, before anything is provisioned. Repeated
+            # here because some pipelines create the Argus run only after that stage, and local
+            # runs have no such stage at all; a repeat replaces the stored estimate.
+            report_estimated_cost(self.test_config.argus_client(), estimate_run_cost(self.params))
         except ArgusClientError:
             self.log.error("Failed to submit data to Argus", exc_info=True)
         except Exception:  # noqa: BLE001
