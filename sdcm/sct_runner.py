@@ -112,7 +112,6 @@ from sdcm.utils.oci_utils import (
     import_image_from_object_storage,
 )
 from sdcm.utils.context_managers import environment
-from sdcm.utils.minicloud.endpoint import is_minicloud_active
 from sdcm.utils.curl import curl_with_retry
 from sdcm.test_config import TestConfig
 from sdcm.node_exporter_setup import NodeExporterSetup
@@ -1255,9 +1254,9 @@ class AzureSctRunner(SctRunner):
 
     def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration):
         super().__init__(region_name=region_name, availability_zone=availability_zone, params=params)
-        self.azure_region = AzureRegion(region_name=region_name)
-        self.azure_region_source = AzureRegion(region_name=self.SOURCE_IMAGE_REGION)
-        self.azure_service = self.azure_region.azure_service
+        self.azure_service = AzureService.real_cloud()
+        self.azure_region = AzureRegion(region_name=region_name, azure_service=self.azure_service)
+        self.azure_region_source = AzureRegion(region_name=self.SOURCE_IMAGE_REGION, azure_service=self.azure_service)
         self._instance = None
 
     def region_az(self, region_name: str, availability_zone: str) -> str:
@@ -1334,6 +1333,7 @@ class AzureSctRunner(SctRunner):
                 region=self.azure_region.location,
                 availability_zone=self.availability_zone,
                 azure_network_interfaces=self._network_interfaces(),
+                azure_service=self.azure_service,
             )
             vm_params = InstanceDefinition(
                 name=instance_name,
@@ -1409,12 +1409,11 @@ class AzureSctRunner(SctRunner):
 
     @classmethod
     def list_sct_runners(cls, verbose: bool = True) -> list[SctRunnerInfo]:
-        if is_minicloud_active():
-            LOGGER.info("minicloud is active: no Azure sct-runner exists in this topology, skipping runner listing")
-            return []
-        azure_service = AzureService()
+        azure_service = AzureService.real_cloud()
         sct_runners = []
-        for instance in list_instances_azure(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=verbose):
+        for instance in list_instances_azure(
+            tags_dict={"NodeType": cls.NODE_TYPE}, verbose=verbose, azure_service=azure_service
+        ):
             if launch_time := instance.tags.get("launch_time") or None:
                 try:
                     launch_time = datetime_from_formatted(date_string=launch_time)
@@ -2090,8 +2089,8 @@ def _real_cloud_api():
     the emulator. contextlib's ContextDecorator recreates the manager per call, so nesting
     (clean_sct_runners -> list_sct_runners) is safe.
 
-    Limitation: AzureService is a singleton, so once it holds minicloud clients this scope cannot
-    reach real Azure. The lab-agent setup does not need it.
+    Azure runner code does not rely on this scope: AzureService is a singleton that may already
+    hold minicloud clients, so AzureSctRunner uses AzureService.real_cloud() explicitly.
     """
     saved = {
         var: os.environ.pop(var)
@@ -2173,10 +2172,16 @@ def update_sct_runner_tags(backend: str = None, test_runner_ip: str = None, test
 
     runner_to_update = None
 
-    if test_runner_ip:
-        runner_to_update = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip)
-    elif test_id:
-        runner_to_update = list_sct_runners(backend=backend, test_id=test_id, verbose=False)
+    try:
+        if test_runner_ip:
+            runner_to_update = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip)
+        elif test_id:
+            runner_to_update = list_sct_runners(backend=backend, test_id=test_id, verbose=False)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning(
+            "Could not look up the SCT runner (IP: %s, test_id: %s) to update tags: %s", test_runner_ip, test_id, exc
+        )
+        return
 
     if not runner_to_update:
         LOGGER.warning(

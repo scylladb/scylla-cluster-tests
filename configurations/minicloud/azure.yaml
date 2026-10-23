@@ -1,8 +1,14 @@
 # Azure-backend overlay for minicloud runs. Layer it after configurations/minicloud.yaml.
-# No instance_type_runner: Azure runs start from a local host with KVM.
 
 # minicloud Azure emulation is built around eastus.
 azure_region_name: 'eastus'
+
+# The sct-runner hosts minicloud QEMU guests and needs nested virtualization (Dv3/Ev3 and later
+# on Azure). 4 vCPUs, like the AWS and GCE runners.
+instance_type_runner: 'Standard_D4s_v5'
+
+# The default 80 GB root disk is too small for the minicloud image cache.
+root_disk_size_runner: 160
 
 # Lightweight mode caps guest CPU and memory, so these types only have to exist in the catalog.
 azure_instance_type_db: 'Standard_L8s_v3'
