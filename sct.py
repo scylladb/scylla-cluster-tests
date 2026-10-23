@@ -3409,7 +3409,7 @@ def get_nemesis_list(backend, config):
     tester.params = SCTConfiguration()
     sisyphus_nemesis = SisyphusMonkey(tester, None)
 
-    collected_disrupt_methods_names = [disrupt.__name__ for disrupt in sisyphus_nemesis.disruptions_list]
+    collected_disrupt_methods_names = [disrupt.__class__.__name__ for disrupt in sisyphus_nemesis.disruptions_list]
 
     click.secho(f"config files used: {pprint.pformat(tester.params.get('config_files'))}\n\n", fg="green")
     click.secho(pprint.pformat(collected_disrupt_methods_names), fg="green")
