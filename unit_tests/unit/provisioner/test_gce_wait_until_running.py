@@ -86,7 +86,6 @@ def fixture_vm_provider():
     with (
         patch.object(provider, "_build_and_insert_instance", return_value=MagicMock()),
         patch("sdcm.provision.gce.instance_provider.wait_for_extended_operation"),
-        patch.object(provider, "_set_instance_labels"),
     ):
         yield provider
 
