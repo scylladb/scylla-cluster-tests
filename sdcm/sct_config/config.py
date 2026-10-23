@@ -97,6 +97,7 @@ from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
 from sdcm.utils.cloud_catalog.instance_matcher import ARCH_ALIASES, NoMatchingInstanceError, select_instance
 from sdcm.utils.minicloud.endpoint import AZURE_BACKENDS, MinicloudActivationError, get_minicloud_azure_endpoint
 from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS
+from sdcm.sct_config.cache import CACHE_FILE_ENV, config_cache_path, read_config_cache, restore_config_from_cache
 from sdcm.sct_config.defaults import (
     AMI_ID_PARAMS,
     AWS_SUPPORTED_REGIONS,
@@ -552,7 +553,18 @@ class SCTConfiguration(*CONFIG_GROUPS):
         Loads configuration in priority order: defaults → backend configs → user config files →
         environment variables → region-specific data. Validates and resolves cloud images (AMI/GCE)
         based on scylla_version when not explicitly provided.
+
+        When ``SCT_CONFIG_CACHE_FILE`` names a file written by ``hydra load-config --export-cache``
+        and no field values are passed in, the model is rebuilt from that file instead: the sources,
+        the resolution and the checks above were all done by the invocation that wrote it, and only
+        the load's side effects are redone.
         """
+        if not data and (cache_path := config_cache_path()) and (cached := read_config_cache(cache_path)) is not None:
+            restore_config_from_cache(self, cached)
+            self._replay_load_side_effects()
+            self.log.info("Loaded the configuration from the cache file %s", cache_path)
+            return
+
         super().__init__(**data)
 
         env = self._load_environment_variables()
@@ -1123,6 +1135,22 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
             self.log.debug("Using random cassandra-stress driver version: %s", self["c_s_driver_version"])
+
+    def _replay_load_side_effects(self) -> None:
+        """Redo what a full load does beyond computing field values, for a model restored from the cache.
+
+        Exports the keystore settings to the environment, installs the event severity limits, applies
+        the resolved placement that provisioning may have written (re-resolving the AMIs of a relocated
+        region), and looks up the AWS capacity reservations and dedicated hosts.
+        """
+        self._propagate_keystore_env()
+        add_severity_limit_rules(self.get("max_events_severities"))
+        print_critical_events()
+        self._apply_resolved_placement()
+        if self._resolved_placement_source_region:
+            self.resolve_amis(self.region_names, source_region=self._resolved_placement_source_region)
+        SCTCapacityReservation.get_cr_from_aws(self)
+        SCTDedicatedHosts.reserve(self)
 
     def _validate_azure_network_interfaces(self) -> None:
         """Validate what SCT can build on Azure out of 'scylla_network_config'.
@@ -2251,6 +2279,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
             for field_name, field in self.__class__.model_fields.items()
             if not is_ignored_field(field)
         }
+        # the cache file location is read by the loader itself, so it is a known variable without a field
+        config_keys.add(CACHE_FILE_ENV)
         # Truncate at the first "." or "__" (whichever appears first) so nested
         # SCT_<FIELD>.sub / SCT_<FIELD>__sub forms resolve to their parent field.
         # No config field name contains "__", so a global split is safe here.

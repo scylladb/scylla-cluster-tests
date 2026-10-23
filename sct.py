@@ -61,6 +61,7 @@ from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis.monkey.runners import SisyphusMonkey
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS, SCTConfiguration, init_and_verify_sct_config, available_backends
+from sdcm.sct_config.cache import cold_load, write_config_cache
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import (
@@ -1722,6 +1723,33 @@ def output_conf(config_files, backend):
     if config_files:
         os.environ["SCT_CONFIG_FILES"] = config_files
     config = SCTConfiguration()
+    click.secho(config.dump_config(), fg="green")
+    sys.exit(0)
+
+
+@cli.command(
+    "load-config",
+    help="Load the test configuration in full, print it, and optionally export it as the cache file "
+    "later hydra commands of the same build read through SCT_CONFIG_CACHE_FILE",
+)
+@click.argument("config_files", type=str, default="")
+@click.option("-b", "--backend", type=click.Choice(available_backends))
+@click.option(
+    "--export-cache",
+    type=click.Path(dir_okay=False),
+    help="Write the loaded configuration to this file, relative to the SCT root or absolute",
+)
+def load_config(config_files, backend, export_cache):
+    add_file_logger()
+
+    if backend:
+        os.environ["SCT_CLUSTER_BACKEND"] = backend
+    if config_files:
+        os.environ["SCT_CONFIG_FILES"] = config_files
+    with cold_load():
+        config = SCTConfiguration()
+    if export_cache:
+        write_config_cache(config, export_cache)
     click.secho(config.dump_config(), fg="green")
     sys.exit(0)
 
