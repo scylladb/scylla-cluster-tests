@@ -449,4 +449,5 @@ class MgmtCorruptThenRepair(ManagerMonkeyBase):
         # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
         # following manager repair would then propagate the resurrected data to the other replicas.
         destroy_data_and_restart_scylla(self.runner, skip_sstables_with_tombstones=True)
-        self.runner.run_repair_manager()
+        # full mode, since incremental repair skips the destroyed repaired sstables
+        self.runner.run_repair_manager(incremental_mode="full")
