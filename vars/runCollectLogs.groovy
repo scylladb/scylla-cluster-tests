@@ -33,6 +33,9 @@ def call(Map params, String region){
     fi
 
     export SCT_CONFIG_FILES=${test_config}
+    if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
+        export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
+    fi
 
     if [[ -n "${params.reuse_cluster ?: ''}" ]] ; then
         export SCT_REUSE_CLUSTER="${params.reuse_cluster}"

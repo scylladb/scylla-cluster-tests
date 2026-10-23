@@ -256,6 +256,9 @@ def call(Map pipelineParams) {
                                                             export SCT_REGION_NAME=${pipelineParams.region}
                                                         fi
                                                         export SCT_CONFIG_FILES=${test_config}
+                                                        if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
+                                                            export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
+                                                        fi
 
 
                                                         if [[ ! -z "${params.instance_type_db}" ]] ; then

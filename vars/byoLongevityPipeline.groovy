@@ -17,6 +17,7 @@ def call() {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID = UUID.randomUUID().toString()
+            SCT_BILLING_PROJECT = "${params.billing_project}"
 		}
 
          parameters {
@@ -106,6 +107,12 @@ def call() {
             string(defaultValue: "qa@scylladb.com",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
+            string(defaultValue: '',
+                   description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
+                   name: 'requested_by_user')
+            choice(choices: getBillingProjectChoices(),
+                   description: 'Billing project for the test run (dynamically fetched from finops repository)',
+                   name: 'billing_project')
             text(defaultValue: "",
                  description: (
                      'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +

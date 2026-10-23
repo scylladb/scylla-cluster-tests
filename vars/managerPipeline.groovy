@@ -357,6 +357,9 @@ def call(Map pipelineParams) {
                                             export SCT_OCI_REGION_NAME=${oci_region}
                                         fi
                                         export SCT_CONFIG_FILES=${test_config}
+                                        if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
+                                            export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
+                                        fi
                                         export SCT_COLLECT_LOGS=false
 
                                         if [[ -n "${params.backup_bucket_backend}" ]] ; then
@@ -470,7 +473,8 @@ def call(Map pipelineParams) {
                                         [$class: 'StringParameterValue', name: 'target_scylla_mgmt_agent_address', value: params.scylla_mgmt_agent_address],
                                         [$class: 'StringParameterValue', name: 'TARGET_MANAGER_VERSION', value: params.manager_version],
                                         [$class: 'StringParameterValue', name: 'provision_type', value: params.provision_type],
-                                        [$class: 'StringParameterValue', name: 'requested_by_user', value: params.requested_by_user]
+                                        [$class: 'StringParameterValue', name: 'requested_by_user', value: params.requested_by_user],
+                                        [$class: 'StringParameterValue', name: 'billing_project', value: params.billing_project]
                                     ]
                                 } else {
                                     repoParams = [
@@ -478,7 +482,8 @@ def call(Map pipelineParams) {
                                         [$class: 'StringParameterValue', name: 'scylla_mgmt_agent_address', value: params.scylla_mgmt_agent_address],
                                         [$class: 'StringParameterValue', name: 'manager_version', value: params.manager_version],
                                         [$class: 'StringParameterValue', name: 'provision_type', value: params.provision_type],
-                                        [$class: 'StringParameterValue', name: 'requested_by_user', value: params.requested_by_user]
+                                        [$class: 'StringParameterValue', name: 'requested_by_user', value: params.requested_by_user],
+                                        [$class: 'StringParameterValue', name: 'billing_project', value: params.billing_project]
                                     ]
                                 }
                                 triggerJob(fullJobPath, repoParams)
