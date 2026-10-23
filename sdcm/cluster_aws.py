@@ -31,6 +31,7 @@ from mypy_boto3_ec2.service_resource import EC2ServiceResource
 from sdcm import ec2_client, cluster, wait
 from sdcm.cluster_cassandra import BaseCassandraCluster, CassandraNodeMixin
 from sdcm.ec2_client import CreateSpotInstancesError
+from sdcm.provision.aws.capacity_errors import INSTANCE_LAUNCH_FAILURE_REASON_CODES, InstanceTerminatedAtLaunchError
 from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
 from sdcm.provision.common.spot_outcome import record_spot_provision_outcome
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
@@ -68,6 +69,7 @@ INSTANCE_PROVISION_SPOT_FLEET = "spot_fleet"
 SPOT_CNT_LIMIT = 10
 SPOT_FLEET_LIMIT = 500
 SPOT_TERMINATION_CHECK_OVERHEAD = 15
+INSTANCE_TERMINAL_STATES = ("shutting-down", "terminated")
 EBS_VOLUME = "attached"
 INSTANCE_STORE = "instance_store"
 
@@ -923,6 +925,8 @@ class AWSNode(cluster.BaseNode):
         return self.scylla_network_configuration.interface_ipv6_address
 
     def _refresh_instance_state(self):
+        if self._instance.state["Name"] in INSTANCE_TERMINAL_STATES:
+            return [], []
         self._wait_public_ip()
         self.refresh_network_interfaces_info()
         public_ipv4_addresses = [
@@ -951,9 +955,36 @@ class AWSNode(cluster.BaseNode):
                 )
                 break
 
+    def _raise_if_instance_terminal(self, method_name: str) -> None:
+        """Raise when AWS already terminated the instance, because waiting more cannot help."""
+        self._instance.reload()
+        state_name = self._instance.state["Name"]
+        if state_name not in INSTANCE_TERMINAL_STATES:
+            return
+        state_reason = self._instance.state_reason or {}
+        reason_code = state_reason.get("Code")
+        message = (
+            f"AWS instance '{self._instance.id}' is in state '{state_name}' while running '{method_name}': "
+            f"{reason_code}: {state_reason.get('Message')}"
+        )
+        if reason_code in INSTANCE_LAUNCH_FAILURE_REASON_CODES:
+            raise InstanceTerminatedAtLaunchError(message)
+        raise cluster.NodeError(message)
+
     def _instance_wait_safe(self, instance_method: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
+        def run_instance_method() -> R:
+            try:
+                return instance_method(*args, **kwargs)
+            except botocore.exceptions.WaiterError:
+                self._raise_if_instance_terminal(instance_method.__name__)
+                raise
+
         try:
-            return exponential_retry(func=lambda: instance_method(*args, **kwargs), logger=None)
+            return exponential_retry(
+                func=run_instance_method,
+                exceptions=(botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError),
+                logger=None,
+            )
         except tenacity.RetryError:
             try:
                 self._instance.reload()
