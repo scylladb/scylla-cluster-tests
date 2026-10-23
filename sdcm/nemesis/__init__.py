@@ -114,6 +114,7 @@ from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import (
     clean_enospc_on_node,
+    clear_snapshots,
     get_views_of_base_table,
     parse_nodetool_listsnapshots,
     reach_enospc_on_node,
@@ -598,11 +599,6 @@ class NemesisRunner:
 
         self._handle_start_stop_compaction_results(trigger_and_watcher_futures=results, allow_trigger_exceptions=True)
 
-    def clear_snapshots(self) -> None:
-        with self.action_log_scope(f"Clear snapshots  on {self.target_node.name}"):
-            result = self.target_node.run_nodetool("clearsnapshot")
-        self.log.debug(result)
-
     def disrupt_start_stop_scrub_compaction(self):
         """
         Start and stop a scrub compaction on a non-system columnfamily.
@@ -623,7 +619,11 @@ class NemesisRunner:
         of the command in (4).
         """
         compaction_args = self._prepare_start_stop_compaction()
-        trigger_func = partial(compaction_args.compaction_ops.trigger_scrub_compaction)
+        trigger_func = partial(
+            compaction_args.compaction_ops.trigger_scrub_compaction,
+            keyspace=compaction_args.keyspace,
+            cf=compaction_args.columnfamily,
+        )
         watch_func = partial(
             compaction_args.compaction_ops.stop_on_user_compaction_logged,
             node=compaction_args.target_node,
@@ -645,7 +645,8 @@ class NemesisRunner:
 
         self._handle_start_stop_compaction_results(trigger_and_watcher_futures=results, allow_trigger_exceptions=True)
 
-        self.clear_snapshots()
+        with self.action_log_scope(f"Clear {ks_cf} pre-scrub snapshots on {self.target_node.name} node"):
+            clear_snapshots([self.target_node], "pre-scrub-", compaction_args.keyspace, compaction_args.columnfamily)
 
     def disrupt_start_stop_cleanup_compaction(self):
         """
@@ -713,7 +714,11 @@ class NemesisRunner:
         success of the command in (4).
         """
         compaction_args = self._prepare_start_stop_compaction()
-        trigger_func = partial(compaction_args.compaction_ops.trigger_validation_compaction)
+        trigger_func = partial(
+            compaction_args.compaction_ops.trigger_validation_compaction,
+            keyspace=compaction_args.keyspace,
+            cf=compaction_args.columnfamily,
+        )
         watch_func = partial(
             compaction_args.compaction_ops.stop_on_user_compaction_logged,
             node=compaction_args.target_node,
@@ -735,6 +740,9 @@ class NemesisRunner:
             )
 
         self._handle_start_stop_compaction_results(trigger_and_watcher_futures=results, allow_trigger_exceptions=True)
+
+        with self.action_log_scope(f"Clear {ks_cf} pre-scrub snapshots on {self.target_node.name} node"):
+            clear_snapshots([self.target_node], "pre-scrub-", compaction_args.keyspace, compaction_args.columnfamily)
 
     # This nemesis should be run with "private" ip_ssh_connections till the issue #665 is not fixed
 
@@ -2612,7 +2620,8 @@ class NemesisRunner:
         else:
             raise Exception(f"Snapshot {snapshot_name} wasn't found in: \n{result.stdout}")
 
-        self.clear_snapshots()
+        with self.action_log_scope(f"Clear {snapshot_name} snapshot on {self.target_node.name} node"):
+            clear_snapshots([self.target_node], snapshot_name)
 
     # NOTE: '2023.1.rc0' is set in advance, not guaranteed to match when appears
     @scylla_versions(("4.6.rc0", None), ("2023.1.rc0", None))
@@ -3021,15 +3030,18 @@ class NemesisRunner:
         will be skipped.
         """
         self.log.debug("Rebuild sstables by scrub with `--skip-corrupted`, corrupted partitions will be skipped.")
+        test_keyspaces = self.cluster.get_test_keyspaces()
         with (
             ignore_scrub_invalid_errors(),
             adaptive_timeout(Operations.SCRUB, self.target_node, timeout=HOUR_IN_SEC * 48),
         ):
-            for ks in self.cluster.get_test_keyspaces():
+            for ks in test_keyspaces:
                 with self.action_log_scope(f"Scrub {ks} keyspace on {self.target_node.name} node"):
                     self.target_node.run_nodetool("scrub", args=f"--skip-corrupted {ks}")
 
-        self.clear_snapshots()
+        for ks in test_keyspaces:
+            with self.action_log_scope(f"Clear {ks} pre-scrub snapshots on {self.target_node.name} node"):
+                clear_snapshots([self.target_node], "pre-scrub-", ks)
 
     @latency_calculator_decorator(legend="Adding new nodes")
     def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:
