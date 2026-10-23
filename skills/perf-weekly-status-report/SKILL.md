@@ -165,7 +165,7 @@ error_thresholds = error_thresholds[workload]["default"] | error_thresholds[work
 
 So resolve a limit in exactly this order:
 
-1. Read the run's `config_files` and `scm_revision_id` from `argus run details` -- the perf jobs run
+1. Read the run's `config_files` and `scm_revision_id` from `argus run get --full` -- the perf jobs run
    `branch-perf-v17`, so read the YAMLs **at that revision** (`git show <sha>:<path>`), never from
    the checked-out branch.
 2. Load `latency_decorator_error_thresholds` from `defaults/test_default.yaml` at that revision.
@@ -226,7 +226,7 @@ during an investigation -- often a burst of partial runs on the same job across 
 and they are not the scheduled weekly result. Counting them distorts both the totals and the
 failure picture.
 
-`started_by` comes from `argus run details`, not from `argus run list`. It has been wrong before, so
+`started_by` comes from `argus run get --full`, not from `argus run list`. It has been wrong before, so
 confirm the classification against the Jenkins build causes before relying on it:
 
 ```bash
