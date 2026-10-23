@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from contextlib import ExitStack, contextmanager
+from functools import cached_property
 
 from sdcm.cluster import BaseNode
 from sdcm.exceptions import KillNemesis, UnsupportedNemesis
@@ -41,9 +42,7 @@ class AddRemoveDcNemesis(NemesisBaseClass):
         """Initialize new-datacenter state and keyspace defaults."""
         super().__init__(*args, **kwargs)
         self.new_nodes: list[BaseNode] = []
-        self.initial_dc_name: str = self.datacenters[0]
         self.new_ks_name: str = "keyspace_new_dc"
-        self.new_ks_rf: int = len(self.runner.cluster.racks)
 
     def precheck(self, node) -> str | None:
         if self.runner.cluster.test_config.MULTI_REGION:
@@ -150,6 +149,16 @@ class AddRemoveDcNemesis(NemesisBaseClass):
     def datacenters(self) -> list[str]:
         """Return datacenter names currently reported by nodetool status."""
         return list(self.runner.tester.db_cluster.get_nodetool_status().keys())
+
+    @cached_property
+    def new_ks_rf(self) -> int:
+        """Return the replication factor of the new keyspace, looked up on first use."""
+        return len(self.runner.cluster.racks)
+
+    @cached_property
+    def initial_dc_name(self) -> str:
+        """Return the first datacenter that is not the temporary nemesis datacenter, looked up on first use."""
+        return next(dc for dc in self.datacenters if not dc.endswith("_nemesis_dc"))
 
     @property
     def new_dc_name(self) -> str | None:
