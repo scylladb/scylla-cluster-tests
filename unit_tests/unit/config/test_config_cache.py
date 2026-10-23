@@ -18,9 +18,11 @@ and a second ``SCTConfiguration()`` with ``SCT_CONFIG_CACHE_FILE`` pointing at i
 identical: every field, the fields excluded from ``model_dump``, the private loader attributes and
 the types of the nested models.  The constructor's side effects are redone on a hit, the placement
 written by provisioning still lands on top, and the variable is accepted by the unsupported-variables
-check.
+check.  A last test keeps the pipeline side honest: every stage wrapper's ``export SCT_*`` set must be
+a subset of what the producer stage exports, or the cache would lack a value some stage relies on.
 """
 
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -163,3 +165,26 @@ def test_cold_load_hides_the_cache_and_restores_the_variable(cache_file, monkeyp
 def test_verification_accepts_the_cache_variable(cold_config, monkeypatch):
     monkeypatch.setenv(CACHE_FILE_ENV, "sct_config_cache.json")
     cold_config.verify_configuration()
+
+
+def test_every_stage_wrapper_exports_a_subset_of_the_producer(subtests):
+    """A consumer that exports a variable the producer lacks would restore a cache without it.
+
+    Compares the variable names each wrapper exports; the value expressions are reviewed by hand.
+    """
+    vars_dir = Path(sct_abs_path("vars"))
+    producer = set(re.findall(r"export (SCT_[A-Z0-9_]+)", (vars_dir / "exportSctEnv.groovy").read_text()))
+    # Stage wrappers are the files outside the pipelines themselves. Three export SCT_* without
+    # reading the cache: the producer, the BYO build (runs the producer again itself) and the
+    # minicloud start (minicloud jobs load cold); the builder log upload reads no configuration.
+    excluded = {"exportSctEnv", "byoScylladb", "startMinicloud", "collectBuilderLogs"}
+    wrappers = sorted(
+        path.stem
+        for path in vars_dir.glob("*.groovy")
+        if "Pipeline" not in path.stem and path.stem not in excluded and "export SCT_" in path.read_text()
+    )
+    assert "runSctTest" in wrappers
+    for wrapper in wrappers:
+        with subtests.test(wrapper=wrapper):
+            exported = set(re.findall(r"export (SCT_[A-Z0-9_]+)", (vars_dir / f"{wrapper}.groovy").read_text()))
+            assert exported <= producer, f"{wrapper} exports {sorted(exported - producer)} that the producer lacks"
