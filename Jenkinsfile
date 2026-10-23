@@ -3,8 +3,8 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws', 'minicloud-aws', 'minicloud-gce', 'artifacts-ami', 'artifacts-centos9', 'artifacts-ubuntu2204']
-def sct_runner_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws', 'minicloud-aws', 'minicloud-gce', 'artifacts-ami', 'artifacts-centos9', 'artifacts-ubuntu2204']
+def target_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws', 'minicloud-aws', 'minicloud-gce', 'minicloud-azure', 'artifacts-ami', 'artifacts-centos9', 'artifacts-ubuntu2204']
+def sct_runner_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws', 'minicloud-aws', 'minicloud-gce', 'minicloud-azure', 'artifacts-ami', 'artifacts-centos9', 'artifacts-ubuntu2204']
 // Run only by the `test-artifacts` label, never by the `test-provision*` labels.
 def artifacts_backends = ['artifacts-ami', 'artifacts-centos9', 'artifacts-ubuntu2204']
 
@@ -62,12 +62,12 @@ def createRunConfiguration(String backend) {
         }
     }
 
-    if (backend in ['minicloud-aws', 'minicloud-gce']) {
+    if (backend in ['minicloud-aws', 'minicloud-gce', 'minicloud-azure']) {
         // The artifacts test against minicloud running on the sct-runner, the same tests as
-        // jenkins-pipelines/oss/minicloud/minicloud-artifact-{ami,gce-image}.jenkinsfile. The
-        // runner is a real nested-virtualization instance, sized by configurations/minicloud/*.yaml.
-        // The default scylla_version (latest release) matters: minicloud builds the guest disk
-        // from the published image, and dev images are not readable from the QA account.
+        // jenkins-pipelines/oss/minicloud/minicloud-artifact-{ami,gce-image,azure-image}.jenkinsfile.
+        // The runner is a real nested-virtualization instance, sized by configurations/minicloud/*.yaml.
+        // On AWS and GCE the default scylla_version (latest release) matters: minicloud builds the
+        // guest disk from the published image, and dev images are not readable from the QA account.
         // Not `minicloud`: curr_params is also getJenkinsLabels' overrides map, where that key
         // selects the local KVM agent instead of the sct-runner topology used here.
         configuration.with_minicloud = true
@@ -77,10 +77,19 @@ def createRunConfiguration(String backend) {
             configuration.backend = 'aws'
             configuration.availability_zone = 'a'
             configuration.test_config = '["test-cases/artifacts/ami.yaml", "configurations/minicloud.yaml", "configurations/minicloud/aws.yaml"]'
-        } else {
+        } else if (backend == 'minicloud-gce') {
             configuration.backend = 'gce'
             configuration.gce_datacenter = 'us-east1'
             configuration.test_config = '["test-cases/artifacts/gce-image.yaml", "configurations/minicloud.yaml", "configurations/minicloud/gce.yaml"]'
+        } else {
+            // Pinned marketplace URN, as in minicloud-artifact-azure-image.jenkinsfile: minicloud cannot use
+            // the community-gallery image that scylla_version resolves to. SCT reads the version from the URN,
+            // so remove scylla_version.
+            configuration.backend = 'azure'
+            configuration.azure_region_name = 'eastus'
+            configuration.azure_image_db = 'scylladb1631195365807:scylladb-enterprise-vm:scylla-enterprise-vm:2026.3.3'
+            configuration.remove('scylla_version')
+            configuration.test_config = '["test-cases/artifacts/azure-image.yaml", "configurations/minicloud.yaml", "configurations/minicloud/azure.yaml"]'
         }
     }
 
@@ -384,6 +393,7 @@ pipeline {
                         "test-provision-vs-aws", "test-provision-vs-aws-reuse",
                         "test-provision-minicloud-aws",
                         "test-provision-minicloud-gce",
+                        "test-provision-minicloud-azure",
                         "test-artifacts",
                     ].join(",")
                     return pullRequestContainsLabels(labels)
