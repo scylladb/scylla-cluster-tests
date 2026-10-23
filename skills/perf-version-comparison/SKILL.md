@@ -84,18 +84,13 @@ timeout 60 argus run list --test-id <test_id> --limit 50 --full --no-cache
 
 ## Phase 2: Fetch Run Metadata
 
-`argus run list --full` already returns the metadata. For a single run, use the REST API with KeyStore credentials:
+`argus run list --full` already returns the metadata. For a single run, fetch the whole run object with the CLI:
 
-```python
-from sdcm.keystore import KeyStore
-import requests
-
-creds = KeyStore().get_argus_rest_credentials_per_provider()
-headers = {'Authorization': f'token {creds["token"]}', 'Accept': 'application/json', 'Content-Type': 'application/json'}
-headers.update(creds.get('extra_headers', {}))
-url = f'{creds["baseUrl"]}/api/v1/client/testrun/scylla-cluster-tests/{run_id}/get'
-data = requests.get(url, headers=headers, timeout=30).json()['response']
+```bash
+timeout 60 argus run get --run-id <run_id> --full
 ```
+
+`--full` adds `packages`, `cloud_setup`, `region_name`, `branch_name` and the other fields the table below reads; plain `run get` prints only the Details-tab summary.
 
 Fields used by the report:
 

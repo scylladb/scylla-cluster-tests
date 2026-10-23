@@ -180,7 +180,7 @@ Also include runs with status `"running"`.
    This is more reliable than Jenkins console output, which often requires authentication (403).
 
 6. **Drop every manually triggered re-run.** Exclude runs whose `started_by` (from
-   `argus run details`, not `run list`) is `avi` -- ad-hoc re-runs kicked off during an
+   `argus run get --full`, not `run list`) is `avi` -- ad-hoc re-runs kicked off during an
    investigation, not the scheduled weekly result. Confirm the classification against Jenkins
    build causes before relying on it:
 
@@ -204,7 +204,7 @@ Also include runs with status `"running"`.
 
 8. **Resolve the error threshold for every failed metric.** See "Error Thresholds" in SKILL.md.
    For each run with a failed table, read `config_files` + `scm_revision_id` from
-   `argus run details`, then at that revision (`git show <sha>:<path>` -- the perf jobs run
+   `argus run get --full`, then at that revision (`git show <sha>:<path>` -- the perf jobs run
    `branch-perf-v17`, not the checked-out branch):
 
    - load `latency_decorator_error_thresholds` from `defaults/test_default.yaml` (this is where the
@@ -612,7 +612,7 @@ argus run events \
 #     `argus run results` errors out server-side for that test.
 
 # 4c. Resolve error thresholds at the run's own SCT revision (jobs run branch-perf-v17):
-argus run details --run-id <RUN_ID> --url https://argus.scylladb.com   # config_files + scm_revision_id
+argus run get --run-id <RUN_ID> --full --url https://argus.scylladb.com   # config_files + scm_revision_id
 git -C <sct-repo> show <scm_revision_id>:defaults/test_default.yaml    # per-workload `default` block (P99 = 10 ms)
 git -C <sct-repo> show <scm_revision_id>:configurations/performance/latency-decorator-error-thresholds-<...>.yaml
 #     Effective limit = merged[workload]["default"] | merged[workload].get(step, {})
