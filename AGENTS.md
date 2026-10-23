@@ -21,7 +21,7 @@ uv sync
 > controls the Python version used across CI and all developer environments. If you need a different
 > Python version locally to work around a dependency build failure, make the change temporarily in
 > your local workspace **without staging or committing it**. Instead, add a PR comment describing
-> the compatibility issue (e.g. "fastavro 1.11.1 fails to build on Python 3.14; tests were run
+> the compatibility issue (e.g. "fastavro 1.11.1 fails to build on Python 3.15; tests were run
 > locally with Python 3.12") so maintainers can decide whether to update the pinned version.
 
 ### Using Hydra (Docker/Podman container environment)
@@ -300,8 +300,8 @@ Critical environment variables:
 
 ### Python Version Compatibility
 
-`.python-version` is pinned to a specific version (currently `3.14`) and **must never be modified in a commit**.
-If a dependency fails to build with the pinned version (e.g. `fastavro` wheel not yet available for `3.14`):
+`.python-version` is pinned to a specific version (currently `3.15`) and **must never be modified in a commit**.
+If a dependency fails to build with the pinned version (e.g. `fastavro` wheel not yet available for `3.15`):
 
 1. Temporarily override it in your local workspace only: `echo "3.12" > .python-version` (do **not** stage this file)
 2. Create the venv and run tests: `uv sync && .venv/bin/python -m pytest …`
