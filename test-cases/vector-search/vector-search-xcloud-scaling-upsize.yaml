@@ -20,4 +20,4 @@ sizing_loader:
 n_loaders: 1
 n_vector_store_nodes: 2
 
-user_prefix: 'vector-search-xcloud-scale-out'
+user_prefix: 'vector-search-xcloud-scaling-upsize'

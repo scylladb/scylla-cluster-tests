@@ -16,7 +16,7 @@ test_metadata:
 
 test_duration: 300
 
-# Write load to push 3 x i8g.large cluster over the scaling threshold
+# Write load to push the cluster over the scaling threshold
 prepare_write_cmd:
   - >-
     cassandra-stress write n=41000000 cl=QUORUM -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
@@ -44,4 +44,4 @@ sizing_loader:
   memory: '>=16'
 n_loaders: 1
 
-user_prefix: 'xcloud-scale-out'
+user_prefix: 'xcloud-scaling-upsize'

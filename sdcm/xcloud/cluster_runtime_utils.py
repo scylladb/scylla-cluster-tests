@@ -20,7 +20,7 @@ from sdcm.utils.decorators import retrying, Retry
 LOGGER = logging.getLogger(__name__)
 
 
-class ScaleOutFailedException(ScyllaCloudError):
+class ClusterResizeFailedException(ScyllaCloudError):
     pass
 
 
@@ -61,9 +61,9 @@ def wait_for_resize_request(cluster: ScyllaCloudCluster) -> int:
 
 
 @retrying(n=180, sleep_time=60, allowed_exceptions=(AssertionError,))
-def wait_for_cluster_scale_out(cluster: ScyllaCloudCluster, request_id: int) -> None:
+def wait_for_cluster_resize(cluster: ScyllaCloudCluster, request_id: int) -> None:
     request = cluster.api_client.get_cluster_request_details(account_id=cluster.account_id, request_id=request_id)
     status = request["status"]
     if status in ("FAILED", "CANCELLED"):
-        raise ScaleOutFailedException("Cluster scale out failed")
+        raise ClusterResizeFailedException("Cluster resize failed")
     assert status == "COMPLETED", f"Cluster resize is not completed yet. Current status: {status}"

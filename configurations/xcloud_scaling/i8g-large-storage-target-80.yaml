@@ -1,0 +1,16 @@
+xcloud_scaling_config: {
+    "InstanceFamilies": [],
+    # Instance type names are resolved by SCT into Cloud InstanceTypeIDs at cluster creation,
+    # avoiding hardcoded IDs in the configuration file (type IDs may change over time).
+    "InstanceTypes": ["i8g.large"],
+    "Mode": "xcloud",
+    "Policies": {
+      "Storage": {
+        "Min": 0,
+        "TargetUtilization": 0.8
+      },
+      "VCPU": {
+        "Min": 0
+      }
+    }
+}
