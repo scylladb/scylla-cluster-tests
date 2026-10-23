@@ -24,6 +24,26 @@ _RECOVERY_TIMEOUT_S = 300
 
 @target_data_nodes
 class AbortDecommissionMonkey(NemesisBaseClass):
+    """
+    Start decommission on target node and abort it after streaming starts.
+
+    Outcome is determined by cluster.verify_decommission() which inspects
+    gossip and Raft group0:
+
+    - NodeStayInClusterAfterDecommission: abort worked, node is still in
+      the token ring (possibly in a transient UJ/DN state).  Wait up to
+      _RECOVERY_TIMEOUT_S seconds for the node to return to UN and exit
+      without adding a replacement.
+
+    - NodeCleanedAfterDecommissionAborted: decommission was partially
+      completed — the node was removed from the token ring but left a
+      group0 entry.  verify_decommission already terminated the node and
+      cleaned Raft group0.  Add a replacement node.
+
+    - Returns normally: full decommission succeeded despite the abort.
+      verify_decommission already terminated the node.  Add a replacement.
+    """
+
     disruptive = True
 
     def precheck(self, node) -> str | None:
@@ -78,25 +98,6 @@ class AbortDecommissionMonkey(NemesisBaseClass):
         self.runner.target_node.run_nodetool(f"tasks wait {task_id}")
 
     def disrupt(self):
-        """
-        Start decommission on target node and abort it after streaming starts.
-
-        Outcome is determined by cluster.verify_decommission() which inspects
-        gossip and Raft group0:
-
-        - NodeStayInClusterAfterDecommission: abort worked, node is still in
-          the token ring (possibly in a transient UJ/DN state).  Wait up to
-          _RECOVERY_TIMEOUT_S seconds for the node to return to UN and exit
-          without adding a replacement.
-
-        - NodeCleanedAfterDecommissionAborted: decommission was partially
-          completed — the node was removed from the token ring but left a
-          group0 entry.  verify_decommission already terminated the node and
-          cleaned Raft group0.  Add a replacement node.
-
-        - Returns normally: full decommission succeeded despite the abort.
-          verify_decommission already terminated the node.  Add a replacement.
-        """
         if len([n for n in self.runner.cluster.data_nodes if n.rack == self.runner.target_node.rack]) == 1:
             raise UnsupportedNemesis(
                 f"Target node {self.runner.target_node.name} is the only one in rack {self.runner.target_node.rack}, cannot decommission it."

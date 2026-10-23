@@ -323,7 +323,6 @@ class AddRemoveDcNemesis(NemesisBaseClass):
                 self.decommission_new_nodes()
 
     def disrupt(self) -> None:
-        """Execute the add/remove datacenter nemesis workflow."""
         if self.runner.tester.prepare_phase_active.is_set():
             raise UnsupportedNemesis(
                 "Skipped during prepare phase, due to stress commands potentially writing to the new DC."
