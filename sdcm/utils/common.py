@@ -2650,6 +2650,40 @@ def parse_nodetool_listsnapshots(listsnapshots_output: str) -> defaultdict:
     return snapshots_content
 
 
+def clear_snapshots(
+    nodes: list["BaseNode"], tag_prefix: str = "", keyspace: str | None = None, table: str | None = None
+) -> None:
+    """
+    Clear snapshots on `nodes` matching all given filters; with none, clear all.
+
+    - `tag_prefix`: start of the tag; a full tag clears just that snapshot
+    - `keyspace`: only snapshots of it, cleared only from it
+    - `table`: only tags holding it; the tag is cleared whole, not just from this table
+
+    Snapshots Scylla takes by itself are tagged by each node with its own `<ms>` timestamp, hence a prefix:
+        clear_snapshots(nodes)  # all
+        clear_snapshots(nodes, "1793005180517")  # one tag, e.g. from `nodetool snapshot`
+        clear_snapshots(nodes, "pre-drop-", "ks", "tbl_view")  # DROP TABLE / MATERIALIZED VIEW (auto_snapshot)
+        clear_snapshots(nodes, "pre-drop-", "ks", "idx_index")  # DROP INDEX idx (auto_snapshot)
+        clear_snapshots(nodes, "pre-scrub-", "ks", "tbl")  # scrub, any mode including validate
+        clear_snapshots(nodes, keyspace="ks", table="tbl")  # TRUNCATE (auto_snapshot), tag `<ms>-tbl`
+    """
+
+    def clear(node: "BaseNode") -> None:
+        snapshots = parse_nodetool_listsnapshots(node.run_nodetool("listsnapshots").stdout)
+        cleared = False
+        for tag, tables in snapshots.items():
+            if tag.startswith(tag_prefix) and any(
+                keyspace in (None, t.keyspace_name) and table in (None, t.table_name) for t in tables
+            ):
+                node.run_nodetool("clearsnapshot", args=f"-t {tag} {keyspace or ''}".rstrip())
+                cleared = True
+        if cleared:
+            node.run_nodetool("listsnapshots")  # output is logged, showing what is left
+
+    ParallelObject(objects=nodes, timeout=1200).run(clear)
+
+
 def convert_metric_to_ms(metric: str) -> float:
     """
     Convert metric value to ms and float.

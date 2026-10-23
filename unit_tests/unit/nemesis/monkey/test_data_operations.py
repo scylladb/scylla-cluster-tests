@@ -165,7 +165,8 @@ def test_prepare_test_table_runs_stress_on_requested_keyspace(common_prepare_tes
 def test_truncate_monkey_uses_timeout_suffix(truncate_runner):
     monkey = TruncateMonkey(truncate_runner)
 
-    monkey.disrupt()
+    with patch(f"{MODULE}.clear_snapshots") as mock_clear:
+        monkey.disrupt()
 
     target = truncate_runner.target_node
     target.run_nodetool.assert_called_once_with("flush")
@@ -173,6 +174,7 @@ def test_truncate_monkey_uses_timeout_suffix(truncate_runner):
     cmd = target.run_cqlsh.call_args.kwargs["cmd"]
     assert "TRUNCATE ks_truncate.standard1" in cmd
     assert "USING TIMEOUT 600s" in cmd
+    mock_clear.assert_called_once_with(truncate_runner.cluster.data_nodes, keyspace="ks_truncate", table="standard1")
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +183,8 @@ def test_truncate_monkey_uses_timeout_suffix(truncate_runner):
 
 
 def test_truncate_large_partition_runs_bench_and_truncates(truncate_large_monkey):
-    truncate_large_monkey.disrupt()
+    with patch(f"{MODULE}.clear_snapshots") as mock_clear:
+        truncate_large_monkey.disrupt()
 
     runner = truncate_large_monkey.runner
     runner.tester.run_stress_thread.assert_called_once()
@@ -190,6 +193,9 @@ def test_truncate_large_partition_runs_bench_and_truncates(truncate_large_monkey
     runner.target_node.run_nodetool.assert_called_once_with("flush")
     cmd = runner.target_node.run_cqlsh.call_args.kwargs["cmd"]
     assert "TRUNCATE ks_truncate_large_partition.test_table" in cmd
+    mock_clear.assert_called_once_with(
+        runner.cluster.data_nodes, keyspace="ks_truncate_large_partition", table="test_table"
+    )
 
 
 # ---------------------------------------------------------------------------

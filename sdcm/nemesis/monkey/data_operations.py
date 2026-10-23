@@ -35,7 +35,7 @@ from sdcm.nemesis import NemesisBaseClass
 from sdcm.nemesis.utils.common import nemesis_stress_failure_handler, prepare_test_table
 from sdcm.sct_events.system import InfoEvent
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
-from sdcm.utils.common import get_db_tables
+from sdcm.utils.common import clear_snapshots, get_db_tables
 from sdcm.utils.issues import SkipPerIssues
 from test_lib.cql_types import CQLTypeBuilder
 
@@ -193,6 +193,8 @@ class TruncateMonkey(NemesisBaseClass):
             self.runner.target_node.run_cqlsh(
                 cmd=f"TRUNCATE {keyspace_truncate}.{table}{truncate_cmd_timeout_suffix}", timeout=self.TRUNCATE_TIMEOUT
             )
+        with self.runner.action_log_scope(f"Clear {ks_cf} truncate snapshots on all data nodes"):
+            clear_snapshots(self.runner.cluster.data_nodes, keyspace=keyspace_truncate, table=table)
 
 
 class TruncateLargeParititionMonkey(TruncateMonkey):
@@ -238,6 +240,8 @@ class TruncateLargeParititionMonkey(TruncateMonkey):
             self.runner.target_node.run_cqlsh(
                 cmd=f"TRUNCATE {ks_name}.{table}{truncate_cmd_timeout_suffix}", timeout=self.TRUNCATE_TIMEOUT
             )
+        with self.runner.action_log_scope(f"Clear {ks_cf} truncate snapshots on all data nodes"):
+            clear_snapshots(self.runner.cluster.data_nodes, keyspace=ks_name, table=table)
 
 
 class DeleteMonkeyBase(NemesisBaseClass):
