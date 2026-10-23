@@ -20,7 +20,14 @@ from pathlib import Path
 
 import pytest
 
-from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud, get_testrun_dir, redact_cli_secrets
+from sdcm.utils.common import (
+    clear_drop_snapshots,
+    clear_snapshots_by_tag_prefix,
+    convert_metric_to_ms,
+    download_dir_from_cloud,
+    get_testrun_dir,
+    redact_cli_secrets,
+)
 from sdcm.utils.sstable import load_inventory
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 
@@ -312,3 +319,61 @@ def test_redact_cli_secrets_does_not_match_substring_of_unrelated_flag():
     # This test just pins current behaviour so regressions are visible.
     redacted = redact_cli_secrets(cmd)
     assert "--api-key" in redacted
+
+
+LISTSNAPSHOTS_OUTPUT = """Snapshot Details:
+Snapshot name Keyspace name Column family name True size Size on disk
+pre-drop-111 ks1 tbl_view 0 bytes 290 GiB
+pre-drop-222 ks1 other 0 bytes 1 GiB
+pre-drop-333 ks2 tbl_view 0 bytes 1 GiB
+pre-scrub-444 ks1 tbl 0 bytes 1 GiB
+pre-scrub-444 ks1 tbl_view 0 bytes 1 GiB
+sm_20261004UTC ks1 tbl_view 0 bytes 1 GiB
+
+Total TrueDiskSpaceUsed: 0 bytes
+"""
+
+
+def _snapshot_node(listsnapshots_output=LISTSNAPSHOTS_OUTPUT):
+    node = unittest.mock.MagicMock()
+    node.run_nodetool.side_effect = lambda sub_cmd, args="": unittest.mock.MagicMock(
+        stdout=listsnapshots_output if sub_cmd == "listsnapshots" else ""
+    )
+    return node
+
+
+def _cleared(node):
+    return [c.kwargs["args"] for c in node.run_nodetool.call_args_list if c.args[0] == "clearsnapshot"]
+
+
+def _listed(node):
+    return sum(c.args[0] == "listsnapshots" for c in node.run_nodetool.call_args_list)
+
+
+@pytest.mark.parametrize(
+    "tag_prefix, keyspace, table, expected",
+    [
+        pytest.param("pre-drop-", "ks1", "tbl_view", ["-t pre-drop-111 ks1"], id="table"),
+        pytest.param("pre-scrub-", "ks1", None, ["-t pre-scrub-444 ks1"], id="keyspace"),
+        pytest.param("pre-drop-", "ks3", None, [], id="no_match"),
+    ],
+)
+def test_clear_snapshots_by_tag_prefix(tag_prefix, keyspace, table, expected):
+    node = _snapshot_node()
+    clear_snapshots_by_tag_prefix(node, tag_prefix, keyspace, table)
+    assert _cleared(node) == expected
+    assert _listed(node) == (2 if expected else 1), "listsnapshots should be logged again only after a clear"
+
+
+def test_clear_snapshots_by_tag_prefix_without_snapshots():
+    node = _snapshot_node("There are no snapshots\n")
+    clear_snapshots_by_tag_prefix(node, "pre-drop-", "ks1")
+    assert _cleared(node) == []
+
+
+def test_clear_drop_snapshots_clears_on_all_data_nodes():
+    cluster = unittest.mock.MagicMock(data_nodes=[_snapshot_node(), _snapshot_node()])
+    clear_drop_snapshots(cluster, "ks1", "tbl_view")
+    cluster.wait_for_schema_agreement.assert_called_once()
+    for node in cluster.data_nodes:
+        assert _cleared(node) == ["-t pre-drop-111 ks1"]
