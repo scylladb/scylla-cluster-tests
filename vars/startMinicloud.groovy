@@ -19,10 +19,10 @@
 // endpoint yet, so the yamls switch it off; once minicloud does implement it, that becomes a
 // per-test choice and no pipeline has to be touched.
 //
-// Every job that reaches this helper runs on a nested-virtualization cloud sct-runner
-// (c8i/m8i/r8i on AWS, n1/n2/c2/c3 on GCE, sized by `instance_type_runner` in the test-case yaml
-// or by configurations/minicloud/{aws,gce}.yaml). Running the emulator on a long-lived KVM
-// Jenkins agent instead is a follow-up; this helper is written to work either way, selected as
+// A job that reaches this helper runs either on a nested-virtualization cloud sct-runner
+// (c8i/m8i/r8i on AWS, n1/n2/c2/c3 on GCE, Dv3/Ev3 and later sizes on Azure, sized by
+// `instance_type_runner` in the test-case yaml or by configurations/minicloud/{aws,gce,azure}.yaml)
+// or on the lab KVM agent (`local_agent: true`). The helper works either way, selected as
 // everywhere else by the presence of ./sct_runner_ip.
 
 // Whether this build runs against minicloud. Single definition of the default so the three
