@@ -1,5 +1,8 @@
 db_type: "scylla"
 
+effective_compression_ratio: 1.0
+stress_template_context: {}
+
 test_duration: 60
 prepare_stress_duration: 300 # 5 hours
 stress_duration: 0
