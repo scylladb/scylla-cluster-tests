@@ -69,4 +69,4 @@ Generate the tables and the chart data from one data structure, so they can't dr
 ## Notes
 
 - Runs may be in different AWS regions or on different AMIs: show it in the configuration tables.
-- If the `argus` CLI returns HTML or an auth error, its Cloudflare session expired: run it again without `--non-interactive`, or use the REST API with KeyStore credentials.
+- If the `argus` CLI returns HTML or an auth error, its Cloudflare session expired: run it again without `--non-interactive`.
