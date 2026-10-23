@@ -1,0 +1,46 @@
+test_metadata:
+  description: >-
+    Artifacts validation test on a pre-provisioned bare-metal host through the baremetal backend:
+    a shared host whose only disk holds the OS, so Scylla is set up without a data disk
+    (scylla_setup_no_raid), on 2 shards until scylladb/python-driver#1133 is fixed. The cleanup
+    restores the host's packages and services to their state before the run.
+  test_type: artifacts
+  tier: sanity
+  duration_class: short
+  supported_backends:
+    - baremetal
+  stress_tools: []
+  nemesis_labels:
+    - NoOpMonkey
+  team_ownership: core-test-infra
+
+cluster_backend: 'baremetal'
+# The hosts: sct/baremetal_artifacts.json in the KeyStore, or ./baremetal_artifacts.json for a local run
+s3_baremetal_config: 'baremetal_artifacts'
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
+
+use_preinstalled_scylla: false
+scylla_repo: 'https://downloads.scylladb.com/rpm/centos/scylla-2025.3.repo'
+scylla_linux_distro: 'centos'
+# The host's only disk holds the OS: /var/lib/scylla stays on the root XFS filesystem
+scylla_setup_no_raid: true
+# Two shards: with 32, cqlsh hangs at exit in 10-15% of calls (a deadlock in the bundled scylla-driver 3.28.2,
+# scylladb/python-driver#1133), failing "check cqlsh installation". Drop once that is fixed.
+append_scylla_args: '++ --smp 2'
+
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 0
+nemesis_class_name: 'NoOpMonkey'
+
+ip_ssh_connections: 'private'
+ssh_transport: 'fabric'
+logs_transport: 'ssh'
+
+use_mgmt: false
+run_scylla_doctor: false
+backtrace_decoding: false
+run_db_node_benchmarks: false
+
+test_duration: 90
+user_prefix: 'artifacts-baremetal-no-raid'

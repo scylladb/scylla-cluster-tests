@@ -160,6 +160,8 @@ NON_ENV_PARAMS = frozenset(
         # local_agent picks the topology (KVM Jenkins agent vs sct-runner), which decides which
         # stages run and which agent label is resolved - pipeline orchestration, not an SCT setting
         "local_agent",
+        # jenkins_label pins the build to a Jenkins agent (getJenkinsLabels.groovy) - not an SCT setting
+        "jenkins_label",
     }
 )
 
