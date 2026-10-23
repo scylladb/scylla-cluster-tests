@@ -33,6 +33,7 @@ from sdcm.mgmt.common import (
     HostRestStatus,
     HostSsl,
     HostStatus,
+    RepairIncrementalMode,
     ScyllaManagerError,
     TaskStatus,
     duration_to_timedelta,
@@ -919,6 +920,7 @@ class ManagerCluster(ScyllaManagerBase):
         cron=None,
         start_date=None,
         ignore_down_hosts=False,
+        incremental_mode: RepairIncrementalMode | None = None,
     ):
         # the interval string:
         # Amount of time after which a successfully completed task would be run again. Supported time units include:
@@ -947,6 +949,8 @@ class ManagerCluster(ScyllaManagerBase):
             cmd += " --cron '{}' ".format(" ".join(cron))
         if ignore_down_hosts:
             cmd += " --ignore-down-hosts"
+        if incremental_mode is not None:
+            cmd += f" --incremental-mode {incremental_mode}"
 
         with DbNodeLogger([self.manager_node], f"start scylla-manager task {cmd}", target_node=self.manager_node):
             res = self.sctool.run(cmd=cmd, parse_table_res=False)
