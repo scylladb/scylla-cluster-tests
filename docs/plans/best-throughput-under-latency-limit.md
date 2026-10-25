@@ -123,7 +123,7 @@ The follow-ups reuse Phases 1-6 unchanged; they only add workloads, so they belo
 best-throughput-request            launcher job; the user fills in the request parameters
   1. validate the request          instance type exists in the region, architecture, required fields
   2. derive the job name           from the hardware parameters, e.g. aws-i8g.4xlarge-3n-tablets
-  3. create the job if missing     generic jenkinsfile; request stored as the job's parameter defaults
+  3. create the job if missing     from the generic jenkinsfile; reused by later requests
   4. start it                      without waiting
         |
         v
@@ -311,7 +311,7 @@ Required for on-demand runs: the instance type is not known when the test-case i
   | `tablets` | no | true; name part `tablets` / `vnodes` | `configurations/tablets_disabled.yaml` when false |
   | `job_name_suffix` | no | empty; set it to give an experiment its own job and history | job name only |
 
-  **Setup**: stored in the generated job as its parameter defaults, so a rebuild repeats the setup.
+  **Setup**: passed to every build; rebuilding the job's last build repeats the setup.
 
   | Parameter | Required | Default | Passed as |
   |---|---|---|---|
@@ -323,7 +323,7 @@ Required for on-demand runs: the instance type is not known when the test-case i
   | `sub_tests` | no | all four workloads | pipeline `sub_tests` |
   | `provision_type` | no | on_demand | pipeline `provision_type` |
 
-  **Search and result**: also stored. Empty means the best-throughput overlay's default.
+  **Search and result**: passed the same way. Empty means the best-throughput overlay's default.
 
   | Parameter | Required | Default | Passed as |
   |---|---|---|---|
@@ -332,9 +332,9 @@ Required for on-demand runs: the instance type is not known when the test-case i
   | `start_threads_per_shard` | no | calibrated in Phase 3 | `SCT_PERF_BEST_THROUGHPUT_SEARCH` |
   | `max_search_steps` | no | 8 per workload | `SCT_PERF_BEST_THROUGHPUT_SEARCH` |
   | `search_precision_pct` | no | 5 | `SCT_PERF_BEST_THROUGHPUT_SEARCH` |
-  | `overload_factors` | no | empty: no overload steps; e.g. `1.3,2` (Phase 6) | the Phase 6 config variable |
+  | `overload_factors` | no | empty: no overload steps; e.g. `1.3,2`. Added with Phase 6 | the Phase 6 config variable |
 
-  **Per run only**: passed to the build, not stored, so one job's history spans Scylla versions.
+  **Per run only**: not part of the job name, so one job's history spans Scylla versions.
 
   | Parameter | Required | Default | Passed as |
   |---|---|---|---|
@@ -440,20 +440,22 @@ Required for on-demand runs: the instance type is not known when the test-case i
   - derives the job name from the identity parameters, e.g. `best-throughput/aws-i8g.4xlarge-3n-tablets`;
   - builds the final `test_config` and `extra_environment_variables`;
   - creates the job in the `best-throughput/` folder if it does not exist, through `JenkinsPipelines` with
-    `branch-perf-v17` as the SCT branch. Every generated job points at the generic job's jenkinsfile, with the
-    stored parameters as its defaults.
-- The launcher then starts the generated job with the stored and per-run parameters and does not wait for it.
+    `branch-perf-v17` as the SCT branch, pointing at the generic job's jenkinsfile, and waits for its build #1,
+    which only loads the job's parameters and aborts itself.
+- The launcher then starts the generated job with all of the request's parameters and does not wait for it.
   `perfRegressionParallelPipeline` already takes `test_config`, `sub_tests` and `extra_environment_variables`,
   so it is unchanged.
-- When the job already exists and the request's stored parameters differ from its defaults, the launcher
-  runs it with the request's values and updates the defaults. **Needs Investigation:** whether to warn in the
-  build description that the history mixes setups, or to require `job_name_suffix` instead.
+- Generated jobs keep no per-job parameter defaults: a pipeline's `parameters` block resets them on every
+  build. Every request passes its full setup instead, and repeating a run means rebuilding the job's last
+  build. A request with a different setup on the same hardware runs in the same job; `job_name_suffix`
+  separates it when it should get its own history.
 - The generic job can also be run directly with the same parameters, for a one-off run that should not get
   its own job and history.
 - Since the jobs run from `branch-perf-v17`, every PR of Phases 1-5 is backported there
   (`backport/perf-v17`) before the launcher is usable.
-- **Needs Investigation:** the Jenkins credentials the launcher uses to create jobs, limited to the
-  `best-throughput/` folder.
+- Jenkins credentials: the same as the trigger matrix, `JENKINS_*` variables or `jenkins.json` from the
+  KeyStore. The launcher's Groovy writes the request to a JSON file for the command, so user text never goes
+  through shell quoting.
 - Backends: AWS first. GCE and Azure need their instance-type variables and default regions and loaders.
 
 **Definition of Done:**
