@@ -1,0 +1,39 @@
+# Best-throughput run (SCT-580): every step is unthrottled and an adaptive search picks its thread count,
+# looking for the highest throughput with P99 within perf_gradual_latency_limit (default 10 ms). The result is
+# the BestThroughputResult Argus table. Used on top of a predefined-steps test-case; any
+# perf_gradual_throttle_steps/perf_gradual_threads in the other files are ignored while the search is set.
+
+# start_threads_per_shard is a first guess, to calibrate on i4i.4xlarge and i8g.4xlarge: on today's
+# predefined-steps jobs, i8g read passes at ~59 threads per shard, and read_disk_only and mixed fail at their
+# thread counts on both instance types. Doubling from 16 reaches 64 in three steps.
+perf_best_throughput_search:
+  default:
+    start_threads_per_shard: 16
+    max_steps: 10
+    precision_pct: 5
+    min_throughput_gain_pct: 5
+    max_threads_per_command: 4096
+
+perf_gradual_step_duration: {"read": '30m', "write": '30m', "mixed": '30m', "read_disk_only": '30m'}
+
+# Steps over the latency limit are expected here: they bound the search. Drop the per-step P99 limits of
+# test_default.yaml so they don't fail the run.
+latency_decorator_error_thresholds:
+  write:
+    default:
+      P99 write:
+        fixed_limit: null
+  read:
+    default:
+      P99 read:
+        fixed_limit: null
+  read_disk_only:
+    default:
+      P99 read:
+        fixed_limit: null
+  mixed:
+    default:
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null

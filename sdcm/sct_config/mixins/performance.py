@@ -44,6 +44,20 @@ class PerformanceConfigMixin(BaseModel):
     num_threads_step: int = SctField(
         description="Number of threads which should be added on per step",
     )
+    perf_best_throughput_search: DictOrStr = SctField(
+        description="Adaptive thread search of the gradual performance test, which looks for the best throughput "
+        "within perf_gradual_latency_limit. When set, the sub-test runs unthrottled steps whose thread count the "
+        "search picks, instead of perf_gradual_throttle_steps/perf_gradual_threads. Keyed by sub-test, with "
+        "'default' used for sub-tests not listed; a sub-test's entry overrides 'default' key by key. Keys: "
+        "start_threads_per_shard (threads of the first step per DB shard, over all stress commands), "
+        "max_steps (step budget per sub-test; it only limits the bisection once the latency limit is found), "
+        "precision_pct (stop when the passing and failing thread counts are this close), "
+        "min_throughput_gain_pct (stop doubling when throughput grows less than this), "
+        "max_threads_per_command (stop doubling at this many threads per stress command). "
+        "A step that collected no results is run once more before it counts as failed. "
+        "Example: {'default': {'start_threads_per_shard': 16, 'max_steps': 10, 'precision_pct': 5, "
+        "'min_throughput_gain_pct': 5, 'max_threads_per_command': 4096}}",
+    )
     perf_gradual_latency_limit: DictOrStr = SctField(
         description="Latency limit, in ms, that a gradual performance test step must stay within to count as "
         "passing when looking for the best throughput. Keyed by sub-test, with 'default' used for sub-tests "

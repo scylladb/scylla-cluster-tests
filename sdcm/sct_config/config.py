@@ -1120,6 +1120,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
         self._validate_perf_gradual_throttle_steps()
         self._validate_perf_gradual_latency_limit()
+        self._validate_perf_best_throughput_search()
 
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
@@ -1877,6 +1878,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
         self._validate_perf_gradual_throttle_steps()
         self._validate_perf_gradual_latency_limit()
+        self._validate_perf_best_throughput_search()
 
         self._verify_migrator_source_params()
         self._verify_emr_spark_mode()
@@ -2171,6 +2173,29 @@ class SCTConfiguration(*CONFIG_GROUPS):
                         f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
                         f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
                     )
+
+    def _validate_perf_best_throughput_search(self):
+        """Validate perf_best_throughput_search: {<sub-test or 'default'>: {<search setting>: <value>}}."""
+        if not (search := self.get("perf_best_throughput_search")):
+            return
+
+        positive_ints = {"start_threads_per_shard", "max_steps", "max_threads_per_command"}
+        positive_numbers = {"precision_pct", "min_throughput_gain_pct"}
+        for workload, settings in search.items():
+            if not isinstance(settings, dict) or set(settings) - positive_ints - positive_numbers:
+                raise ValueError(
+                    f"perf_best_throughput_search for {workload} should be a dict with keys from "
+                    f"{sorted(positive_ints | positive_numbers)}, got {settings!r}"
+                )
+            for key, value in settings.items():
+                allowed = int if key in positive_ints else int | float
+                if isinstance(value, bool) or not isinstance(value, allowed) or value <= 0:
+                    raise ValueError(
+                        f"perf_best_throughput_search for {workload}: '{key}' should be a positive "
+                        f"{'integer' if key in positive_ints else 'number'}, got {value!r}"
+                    )
+            if settings.get("max_steps", 2) < 2:
+                raise ValueError(f"perf_best_throughput_search for {workload}: 'max_steps' should be at least 2")
 
     def _validate_perf_gradual_latency_limit(self):
         """Validate perf_gradual_latency_limit: {<sub-test or 'default'>: {'percentile_99': <ms>}}."""

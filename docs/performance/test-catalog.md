@@ -84,6 +84,28 @@ threshold YAML must use:
 - Thread counts vary per step -> step name is `<rate>_<threads>_threads`.
 - A name repeats -> suffixed with an occurrence counter (`unthrottled_1`, `unthrottled_2`).
 
+**Best-throughput search** (SCT-580). When `perf_best_throughput_search` is set for a sub-test, the
+sub-test ignores `perf_gradual_throttle_steps`/`perf_gradual_threads` and runs unthrottled steps whose
+thread count an adaptive search picks (`sdcm/utils/thread_search.py`):
+
+1. Start at `start_threads_per_shard` x the DB nodes' shard count, over all stress commands.
+2. Double the threads until a step's P99 is over `perf_gradual_latency_limit` (default 10 ms), throughput
+   grows less than `min_throughput_gain_pct`, or the threads reach `max_threads_per_command` (default 4096).
+   When the first step already fails, halve instead.
+3. Bisect between the last passing and the first failing thread count until they are within
+   `precision_pct` or `max_steps` (default 10) is used up. The budget never stops steps 1-2, so the search
+   always finds the limit or saturation.
+
+A step that collected no results (e.g. a failed latency collection) runs once more at the same thread count,
+named `unthrottled_<threads>_threads_retry`, and counts as failed only if that has no results either; the
+rerun doesn't use the step budget.
+
+Steps are named `unthrottled_<threads>_threads`; the best one is reported as `BestThroughputResult`.
+`configurations/performance/best-throughput/best_throughput.yaml` turns the search on for every
+sub-test with 30-minute steps and no per-step P99 limits (steps over the limit are expected);
+`cassandra_stress_time_bound_write.yaml` next to it makes the predefined-steps write commands
+time-bound, since an n-bound write step at a low thread count would take hours.
+
 ### `performance_regression_alternator_test.py`
 
 `PerformanceRegressionAlternatorTest(PerformanceRegressionTest)` — DynamoDB API via YCSB. All
