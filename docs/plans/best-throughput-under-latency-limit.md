@@ -366,11 +366,15 @@ Required for on-demand runs: the instance type is not known when the test-case i
   precedence over config files.
 
 - **Best-throughput overlay**, appended by the launcher to every request:
-  `configurations/performance/best-throughput/best_throughput.yaml`. It holds the search config, the
-  latency limit, 30-minute steps for every workload (write included, with time-bound write commands) and
-  per-step P99 limits off. The sized dataset (Phase 4) comes as a separate overlay for the cassandra-stress
-  test-case, added only when the request uses the default test-case; other test-cases keep their own
-  datasets. Backend defaults beyond AWS get their own overlay when GCE and Azure are added.
+  `configurations/performance/best-throughput/best_throughput.yaml`. It holds the search config, 30-minute
+  steps for every workload and per-step P99 limits off. Overlays that rewrite stress commands fit only the
+  default cassandra-stress test-case, so the launcher adds them only when the request uses it; other
+  test-cases keep their own commands and datasets:
+  - `cassandra_stress_time_bound_write.yaml` (Phase 3): the write commands with `duration=$duration` instead of
+    `n=`, since an n-bound write step at a low thread count would take hours;
+  - the sized dataset (Phase 4).
+
+  Backend defaults beyond AWS get their own overlay when GCE and Azure are added.
 
 - **`test_config` description in the launcher**, listing the config files the predefined-steps jobs already
   use (all 30 jenkinsfiles under `jenkins-pipelines/`):
