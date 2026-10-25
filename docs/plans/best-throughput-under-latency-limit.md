@@ -389,22 +389,23 @@ Required for on-demand runs: the instance type is not known when the test-case i
   - Free-form text cannot name a job reliably, so a different `test_config` or extra variable on the same
     hardware lands in the same job. Use `job_name_suffix` when the change should get its own history.
 
-- **Default `test_config`**: the `test_config` of the i8g tablets predefined-steps job
-  (`scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets`):
+- **Default `test_config`**: based on the `test_config` of the i8g tablets predefined-steps job
+  (`scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets`), without its per-step
+  thresholds and instance-type files:
 
   ```
   ["test-cases/performance/perf-regression-predefined-throughput-steps.yaml",
    "configurations/performance/cassandra_stress_gradual_load_steps_i8g.yaml",
    "configurations/c-s-driver-version-4.yaml",
    "configurations/disable_kms.yaml",
-   "configurations/disable_speculative_retry.yaml",
-   "configurations/performance/latency-decorator-error-thresholds-steps-ent-i8g-tablets.yaml",
-   "configurations/arm_instance_types/i8g_4xlarge.yaml"]
+   "configurations/disable_speculative_retry.yaml"]
   ```
 
-  Its step grid and per-step thresholds are inert here: the search ignores the grid, and the search's step
-  names match no per-step threshold. The instance types in these files are only defaults: the launcher's
-  environment variables take precedence over config files.
+  Its step grid is inert here: the search ignores it. The instance types in these files are only defaults:
+  the launcher's environment variables take precedence over config files.
+
+- **Default `extra_environment_variables`**: `SCT_INSTANCE_TYPE_DB=`, a placeholder. Variables left empty are
+  ignored.
 
 - **Best-throughput overlay**, appended by the launcher to every request:
   `configurations/performance/best-throughput/best_throughput.yaml`. It holds the search config, 30-minute
