@@ -644,11 +644,6 @@ class ScyllaDoctor:
                 f"Scylla doctor version: {self.version}"
             )
 
-    def analyze_vitals(self):
-        LOGGER.info("Analyze vitals")
-        result = self.run(sd_command=f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file} --verbose")
-        LOGGER.debug(pprint.pformat(result))
-
     def run_analysis_phase(self):
         """Run the analysis phase of Scylla Doctor (full edition only).
 
