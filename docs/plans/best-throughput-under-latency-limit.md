@@ -133,6 +133,40 @@ best-throughput-request            launcher job; the user fills in the request p
 
 ## Implementation Phases
 
+### Overview
+
+1. **Latency limit and best-step selection**
+   - Add `perf_gradual_latency_limit`, set per workload, defaulting to P99 of 10 ms, and validate it.
+   - Add `find_best_throughput()`: a step passes when every operation's P99 is within the limit; it returns
+     the passing step with the highest measured throughput.
+2. **Report the best step**
+   - Record each step's thread count.
+   - After all steps, pick the best step and send it to the new `BestThroughputResult` Argus table. If
+     nothing passed, send throughput 0.
+   - Write the best step to `result_gradual_increase.log`.
+3. **Adaptive thread search**
+   - Add `perf_best_throughput_search`, with starting threads per shard, a step limit and a precision setting.
+   - Start from the DB nodes' shard count.
+   - Double the threads until P99 goes over the limit, throughput stops growing, or the step limit is reached.
+   - Bisect between the last pass and the first fail until within 5%.
+4. **Dataset sized from instance memory and disk**
+   - Read RAM and data-disk size from the DB nodes.
+   - Derive the key ranges from them: the hot range is a fraction of RAM, the disk-read dataset a multiple of
+     RAM, and the write dataset is capped by free disk.
+   - The defaults reproduce today's sizes on i4i and i8g.
+5. **On-demand launcher and generated jobs**
+   - Add a `best-throughput/` folder on `branch-perf-v17` with the launcher and the generic jenkinsfiles.
+   - Add `sct.py create-best-throughput-job`. It validates the request, builds the job name, assembles
+     `test_config` and the environment variables, and creates the job if it's missing.
+   - The launcher then starts the generated job.
+6. **Goodput under overload** (SCYLLADB-3267, optional)
+   - After the best throughput is found, run throttled steps at 1.3x and 2x of it, with timeouts and threads
+     capped.
+   - Report goodput (the rate of successful operations) as a ratio of the best throughput, plus failed
+     operations. Argus fails the run if the ratio drops below 0.9.
+7. **Documentation**
+   - Document the result table and pass rules, the launcher parameters, and how to request a run.
+
 ### Phase 1: Latency limit config and best-step selection
 
 **Importance:** Critical
