@@ -470,20 +470,22 @@ Required for on-demand runs: the instance type is not known when the test-case i
 **Importance:** Medium
 **Dependencies:** Phase 3
 
-- New config, off by default, listing the overload factors per workload, e.g. `[1.3, 2]`. The launcher's
-  `overload_factors` parameter sets it.
+- New config `perf_overload_steps`, off by default, per workload with a `default` entry: `factors`
+  (`[1.3, 2]`), `max_threads_multiplier` (4) and `min_goodput_ratio` (0.9). The launcher's `overload_factors`
+  parameter sets the factors.
 - After the best throughput is found, run one step per factor at a **rate derived from the measured best
   throughput** (factor x best), throttled through the existing rate path. The rates follow the run's own
   best throughput, so nothing is calibrated per instance type.
-- Thread count for overload steps: enough to offer the target rate, but bounded, so concurrency does not
-  explode while the cluster sheds load. **Needs Investigation:** start from the best step's thread count
-  scaled by the factor, capped by a configured maximum.
-- Client request timeouts are bounded and the stress tool keeps running on timeouts and errors instead of
-  aborting the step. **Needs Investigation** per tool (cassandra-stress `-errors`, latte `--request-timeout`
-  and retry options).
-- Goodput is the throughput of successful operations. Report per factor: offered rate, goodput, goodput as
-  a ratio of the best throughput, P99, and failed operations. Exceptions per failed op where the stress
-  tool exposes them (**Needs Investigation**).
+- Thread count for overload steps: the best step's thread count times the factor, capped at
+  `max_threads_multiplier` times it, so concurrency does not explode while the cluster sheds load.
+- The stress tool keeps running on timeouts and errors instead of aborting the step: cassandra-stress commands
+  get `-errors ignore` for overload steps. **Needs Investigation:** the same for latte, cql-stress and
+  scylla-bench (until then the run warns that they may stop on errors), and client-side request timeouts
+  (today requests are bounded by Scylla's server-side timeouts).
+- Goodput is the HDR-measured throughput of the step, which counts successful operations only. Report per
+  factor: offered rate, goodput, goodput as a ratio of the best throughput, P99, and failed operations (the
+  sum of cassandra-stress `Total errors`, recorded for every step). **Needs Investigation:** exceptions per
+  failed op, which cassandra-stress does not break down.
 - Results go into a separate Argus table, one row per factor, with a validation rule of ratio >= 0.9.
 - Overload steps are named `overload_<factor>x` and run after the search, so they don't affect the best
   throughput. For write and mixed, the dataset grows further; keep the compaction and tablet-split waits.
