@@ -177,6 +177,7 @@ def test_valid_request():
         pytest.param({"sub_tests": '["test_scan"]'}, "unknown sub_tests", id="unknown_sub_test"),
         pytest.param({"overload_factors": "1.3,x"}, "overload_factors should be", id="overload_not_numbers"),
         pytest.param({"overload_factors": "0.5"}, "overload_factors should be", id="overload_below_1"),
+        pytest.param({"overload_factors": ","}, "overload_factors should be", id="overload_empty_list"),
         pytest.param(
             {"sub_tests": '["test_read_gradual_increase_load", "test_read_gradual_increase_load"]'},
             "more than once",

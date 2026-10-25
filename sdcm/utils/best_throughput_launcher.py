@@ -199,7 +199,8 @@ class BestThroughputRequest:
         if len(self.sub_tests) != len(set(self.sub_tests)):
             errors.append(f"sub_tests lists a sub-test more than once: {self.sub_tests}")
         try:
-            if any(factor <= 1 for factor in self.parsed_overload_factors):
+            factors = self.parsed_overload_factors
+            if self.overload_factors and (not factors or any(factor <= 1 for factor in factors)):
                 raise ValueError
         except ValueError:
             errors.append(f"overload_factors should be comma-separated numbers above 1, got '{self.overload_factors}'")

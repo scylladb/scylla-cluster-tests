@@ -760,7 +760,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         stress_cmds = []
         for stress_cmd in workload.cs_cmd_tmpl:
             if stress_cmd.startswith("cassandra-stress"):
-                stress_cmd = CassandraStressThread._add_errors_option(stress_cmd, ["ignore"])  # noqa: PLW2901
+                stress_cmd = CassandraStressThread.add_errors_option(stress_cmd, ["ignore"])  # noqa: PLW2901
             else:
                 self.log.warning("Overload step: '%s' may stop on errors under overload", stress_cmd.split()[0])
             stress_cmds.append(stress_cmd)
