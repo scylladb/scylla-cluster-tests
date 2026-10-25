@@ -151,9 +151,9 @@ best-throughput-request            launcher job; the user fills in the request p
    - Bisect between the last pass and the first fail until within 5%.
 4. **Dataset sized from instance memory and disk**
    - Read RAM and data-disk size from the DB nodes.
-   - Derive the key ranges from them: the hot range is a fraction of RAM, the disk-read dataset a multiple of
-     RAM, and the write dataset is capped by free disk.
-   - The defaults reproduce today's sizes on i4i and i8g.
+   - Scale the test-case's key ranges by them relative to a 128 GiB / 3750 GB reference node: the hot range
+     by RAM, the preload and disk reads by the smaller of RAM and disk, the writes by disk.
+   - Rounding the scale to 0.25 keeps today's dataset exactly on i4i and i8g.
 5. **On-demand launcher and generated jobs**
    - Add a `best-throughput/` folder on `branch-perf-v17` with the launcher and the generic jenkinsfiles.
    - Add `sct.py create-best-throughput-job`. It validates the request, builds the job name, assembles
@@ -257,20 +257,26 @@ the search runs only when its config is set.
 
 Required for on-demand runs: the instance type is not known when the test-case is written.
 
-- Measure on the DB nodes after provisioning: RAM and Scylla data-disk size. This works on every backend,
-  including baremetal and minicloud.
-- Derive the key ranges per workload from those values instead of the fixed `-pop seq=` ranges:
-  - read and mixed (hot range): a fraction of RAM, today ~16%.
-  - preload and read_disk_only: a multiple of RAM, today ~5x, so reads miss the cache.
-  - write: capped by free disk, today ~43%, leaving room for compaction.
-- The ratios are configurable; their defaults reproduce today's ranges on i4i.4xlarge and i8g.4xlarge, so
-  results on those stay comparable.
-- **Needs Investigation:** how to substitute the derived ranges into the stress commands (template
-  placeholders vs generated commands).
+- Measure on the DB nodes after provisioning: RAM (`MemTotal`) and the Scylla data-disk size, and size from
+  the smallest node. This works on every backend, including baremetal and minicloud.
+- The test-case's stress commands are the dataset of a **reference node** (128 GiB RAM, 3750 GB disk:
+  i4i.4xlarge and i8g.4xlarge). Their `n=` row counts and `-pop seq=` ranges are scaled by the node's RAM and
+  disk relative to the reference:
+  - read and mixed hot range, cache warmup: by RAM, so the hot range keeps fitting in cache (~16% of RAM).
+  - preload and read_disk_only: by the smaller of RAM and disk, so reads miss the cache (~5x RAM) without the
+    dataset outgrowing the disk.
+  - write: by disk, leaving the same share of the disk free for compaction (~43% used).
+- Each scale is rounded to a step (0.25). The measured `MemTotal` of a 128 GiB node is ~125 GiB, so the
+  reference instance types round to 1 and keep exactly today's ranges. Ratios applied to measured values
+  could not reproduce today's numbers exactly, which is why the reference commands are scaled instead.
+- Scaled ranges stay contiguous across the per-loader commands; commands with neither a range nor a row
+  count (e.g. latte) are left as they are.
+- New config `perf_dataset_sizing` (`reference_ram_gib`, `reference_disk_gb`, `scale_step`); unset keeps
+  the commands as written. When the disk caps the preload below the RAM scale, the run logs a warning.
 
 **Definition of Done:**
-- [ ] On i4i.4xlarge and i8g.4xlarge the derived ranges equal today's ranges
-- [ ] On an instance with different RAM/disk, the dataset scales by the configured ratios
+- [ ] On i4i.4xlarge and i8g.4xlarge every sized command equals today's
+- [ ] On an instance with different RAM/disk, the dataset scales by RAM and disk as above
 
 ### Phase 5: On-demand launcher and generated jobs
 
