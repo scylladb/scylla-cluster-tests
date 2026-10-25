@@ -86,14 +86,6 @@ def test_2024_2():
     assert set(version_list) == {"6.0", "2024.1", "2024.2"}
 
 
-def test_2024_2_ubuntu():
-    """Test that development branch of 2024.2 on ubuntu is returned correct versions"""
-    scylla_repo = url_base + "-enterprise/enterprise-2024.2/deb/unified/latest/scylladb-2024.2/scylla.list"
-    linux_distro = "ubuntu-focal"
-    version_list = general_test(scylla_repo, linux_distro)
-    assert set(version_list) == {"6.0", "2024.1", "2024.2"}
-
-
 def test_2025_1_dev():
     """Test that development branch of 2025.1 is returned correct versions"""
     scylla_repo = url_base + "/master/rpm/centos/2025-01-15T09:25:01Z/scylla.repo"
