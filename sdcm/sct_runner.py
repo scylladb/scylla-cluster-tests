@@ -131,6 +131,12 @@ LAUNCH_TIME_FORMAT = "%B %d, %Y, %H:%M:%S"
 
 LOGGER = logging.getLogger(__name__)
 
+# Jenkins builders serve one build each, so this is the longest a build may run before cleanup
+# terminates a builder Jenkins lost track of. Longer tests raise it with the builder_keep parameter.
+# Changing builder launch settings means a new builder VERSION, so branches opt in through
+# getJenkinsLabels and the old clouds keep serving the rest.
+BUILDER_KEEP_HOURS = "168"
+
 
 class ImageType(Enum):
     SOURCE = "source"
