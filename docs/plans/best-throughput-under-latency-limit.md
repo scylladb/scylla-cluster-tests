@@ -2,7 +2,7 @@
 status: draft
 domain: stress-tools
 created: 2026-10-19
-last_updated: 2026-10-22
+last_updated: 2026-10-25
 owner: juliayakovlev
 ---
 
@@ -256,34 +256,71 @@ Required for on-demand runs: the instance type is not known when the test-case i
     aws-i4i.4xlarge-3n-tablets                   ...
   ```
 
-- **Launcher job** `best-throughput-request`: a pipeline job whose parameters are the request. Proposed
-  parameters (**to be decided**):
+- **Launcher job** `best-throughput-request`: a pipeline job whose parameters are the request. They fall
+  into three groups by what they do to the generated job:
 
-  | Parameter | Required | Default | Part of the job name |
+  | Group | Parameter | Required | Default |
   |---|---|---|---|
-  | `backend` | yes | aws | yes |
-  | `instance_type_db` | yes | | yes |
-  | `scylla_version` (or image / repo) | yes | | no: history spans versions |
-  | `n_db_nodes` | no | 3 | yes |
-  | `tablets` | no | true | yes (`tablets` / `vnodes`) |
-  | `region` | no | per backend | no |
-  | `instance_type_loader`, `n_loaders` | no | per backend, today c7i.8xlarge x 4 on AWS | no |
-  | `workloads` | no | all four | no |
-  | `p99_limit_ms` | no | 10 | no |
-  | `provision_type`, `email_recipients`, `requested_by_user` | no | as in perf jobs | no |
+  | **Job identity**: forms the job name, so it decides which runs share an Argus history | `backend` | yes | aws |
+  | | `instance_type_db` | yes | |
+  | | `n_db_nodes` | no | 3 |
+  | | `tablets` | no | true (name part `tablets` / `vnodes`) |
+  | | `job_name_suffix` | no | empty; set it to give an experiment its own job and history |
+  | **Stored in the generated job** as its parameter defaults, so a rebuild repeats the setup | `test_config` | no | the base config list (below) |
+  | | `extra_environment_variables` | no | empty |
+  | | `region` | no | per backend |
+  | | `instance_type_loader`, `n_loaders` | no | per backend, today c7i.8xlarge x 4 on AWS |
+  | | `sub_tests` (workloads) | no | all four |
+  | | `p99_limit_ms` | no | 10 |
+  | | `provision_type` | no | as in perf jobs |
+  | **Per run only**: passed to the build, not stored | `scylla_version` (or image / repo) | yes | |
+  | | `requested_by_user`, `email_recipients` | no | as in perf jobs |
+
+  The Scylla version is not part of the name, so one job's history spans versions.
+
+- **`test_config` and `extra_environment_variables`** carry everything the structured parameters don't, such
+  as `configurations/c-s-driver-version-4.yaml` or `SCT_C_S_DRIVER_VERSION=4`. The launcher builds the final
+  values from them:
+  - `test_config`: the request's list (the base list when empty), plus `configurations/tablets_disabled.yaml`
+    when `tablets` is false, plus the backend overlay. Overlays the request adds come after the base, so
+    they override it.
+  - `extra_environment_variables`: the request's text, plus the variables the structured parameters
+    translate to (`SCT_INSTANCE_TYPE_DB`, `SCT_N_DB_NODES`, `SCT_INSTANCE_TYPE_LOADER`, `SCT_N_LOADERS`,
+    `SCT_PERF_GRADUAL_LATENCY_LIMIT`).
+  - The job name has to describe what runs, so the launcher rejects a request whose
+    `extra_environment_variables` sets an identity variable (`SCT_INSTANCE_TYPE_DB`, `SCT_N_DB_NODES`) to a
+    different value than the structured parameter.
+  - Free-form text cannot name a job reliably, so a different `test_config` or extra variable on the same
+    hardware lands in the same job. Use `job_name_suffix` when the change should get its own history.
+
+- **Base config list** (the default `test_config`):
+
+  | File | Why |
+  |---|---|
+  | New `test-cases/performance/perf-best-throughput.yaml` | The test-case: cluster shape (3 DB nodes, 4 loaders), loader and monitor types, Scylla args, HDR and NVMe settings and the email template, as in the predefined-steps test-case; plus the search config, the latency limit, 30-minute steps for every workload, per-step P99 limits off, the sized dataset (Phase 4), `user_prefix: perf-best-throughput` and `test_metadata`. `instance_type_db` is left unset, so a request that doesn't pass it fails config validation before provisioning. A new test-case, rather than an overlay on the predefined-steps one, keeps the existing jobs untouched when its stress commands change for the sized dataset. |
+  | `configurations/disable_kms.yaml` | In every predefined-steps job |
+  | `configurations/disable_speculative_retry.yaml` | In every predefined-steps job |
+
+  Added by the launcher: `configurations/tablets_disabled.yaml` for `tablets=false`, and
+  `configurations/performance/best-throughput/<backend>.yaml` with the backend's default loader and monitor
+  types (AWS first). Not used: thread-grid and throttle-step files (the search replaces them), per-step
+  threshold files (steps over the limit are expected), and `configurations/arm_instance_types/*.yaml` (SCT
+  resolves the architecture from the instance type).
 
 - The launcher runs a new command, `sct.py create-best-throughput-job`, which:
-  - validates the request (required fields, instance type known in the region, architecture);
-  - derives the job name from the hardware parameters, e.g.
-    `best-throughput/aws-i8g.4xlarge-3n-tablets`;
+  - validates the request (required fields, instance type known in the region, architecture, conflicting
+    identity variables);
+  - derives the job name from the identity parameters, e.g. `best-throughput/aws-i8g.4xlarge-3n-tablets`;
+  - builds the final `test_config` and `extra_environment_variables`;
   - creates the job in the `best-throughput/` folder if it does not exist, through `JenkinsPipelines` with
-    `branch-perf-v17` as the SCT branch. Every generated job points at the generic job's jenkinsfile; the
-    request is stored as the job's parameter defaults, so a plain rebuild repeats the same configuration.
-- The launcher then starts the generated job with the request's parameters and does not wait for it. The
-  instance types reach SCT through `extra_environment_variables` (`SCT_INSTANCE_TYPE_DB`, ...), which the
-  perf pipeline already supports, so `perfRegressionParallelPipeline` is unchanged.
-- The generic jenkinsfile runs the predefined-steps test with a best-throughput overlay: the search (Phase 3),
-  sized dataset (Phase 4), time-bound steps, and no per-step P99 validation.
+    `branch-perf-v17` as the SCT branch. Every generated job points at the generic job's jenkinsfile, with the
+    stored parameters as its defaults.
+- The launcher then starts the generated job with the stored and per-run parameters and does not wait for it.
+  `perfRegressionParallelPipeline` already takes `test_config`, `sub_tests` and `extra_environment_variables`,
+  so it is unchanged.
+- When the job already exists and the request's stored parameters differ from its defaults, the launcher
+  runs it with the request's values and updates the defaults. **Needs Investigation:** whether to warn in the
+  build description that the history mixes setups, or to require `job_name_suffix` instead.
 - The generic job can also be run directly with the same parameters, for a one-off run that should not get
   its own job and history.
 - Since the jobs run from `branch-perf-v17`, every PR of Phases 1-5 is backported there
@@ -351,8 +388,10 @@ Required for on-demand runs: the instance type is not known when the test-case i
   saturation, or until the budget; halving when the first step fails; bisection stops at the precision or
   the budget; unique `unthrottled_<threads>_threads` names.
 - Dataset sizing: derived ranges for i4i/i8g equal today's; scaling for other RAM/disk values.
-- Launcher command: job name per request; same hardware with another Scylla version maps to the same job;
-  invalid requests rejected; existing job reused (Jenkins client mocked).
+- Launcher command: job name per request, with and without `job_name_suffix`; same hardware with another
+  Scylla version maps to the same job; final `test_config` (base list, tablets and backend overlays, request
+  overlays last) and `extra_environment_variables` (request text plus translated parameters); a conflicting
+  identity variable rejected; invalid requests rejected; existing job reused (Jenkins client mocked).
 - Overload: rates derived from the best throughput per factor; thread count bounded by the cap; goodput
   ratio computed from successful operations only; no overload steps when nothing passed.
 
