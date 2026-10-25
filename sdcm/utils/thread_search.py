@@ -82,6 +82,8 @@ class ThreadSearch:
                 self.highest_passing, self._highest_passing_throughput = threads, throughput
             if self.lowest_failing is None:
                 # Still expanding: past saturation more threads only queue, so stop before adding latency.
+                # No bisection follows: no thread count failed, and the passing steps already hold the best
+                # throughput the cluster gives, which find_best_throughput picks among them.
                 if (
                     previous_throughput
                     and throughput is not None

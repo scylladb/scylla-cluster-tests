@@ -18,7 +18,7 @@ from sdcm.utils.latency import (
     analyze_hdr_percentiles,
     calculate_latency,
     find_best_throughput,
-    p99_over_limit,
+    p99_violations,
     step_latency,
 )
 from sdcm.utils.thread_search import ThreadSearch, ThreadSearchConfig
@@ -685,7 +685,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 passed, throughput = False, None
             else:
                 p99, throughput = latency
-                passed = not p99_over_limit(step_name, p99, p99_limit_ms)
+                passed = not p99_violations(step_name, p99, p99_limit_ms)  # no HDR key over the limit
             self.log.info(
                 "Thread search step %s: %s op/s, P99 within %s ms: %s", step_name, throughput, p99_limit_ms, passed
             )

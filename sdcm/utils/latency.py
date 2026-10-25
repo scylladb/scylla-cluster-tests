@@ -206,7 +206,7 @@ def step_latency(name: str, step: dict[str, Any]) -> tuple[dict[str, float], int
     return p99, throughput
 
 
-def p99_over_limit(name: str, p99: dict[str, float], p99_limit_ms: float) -> dict[str, float]:
+def p99_violations(name: str, p99: dict[str, float], p99_limit_ms: float) -> dict[str, float]:
     """Return the HDR keys of a step whose P99 is over the limit; an empty dict means the step passed."""
     if over_limit := {hdr_key: value for hdr_key, value in p99.items() if value > p99_limit_ms}:
         LOGGER.debug("Step %s: P99 over the %s ms limit: %s", name, p99_limit_ms, over_limit)
@@ -230,7 +230,7 @@ def find_best_throughput(total_summary: dict[str, Any], p99_limit_ms: float) -> 
         if (latency := step_latency(name, step)) is None:
             continue
         p99, throughput = latency
-        if p99_over_limit(name, p99, p99_limit_ms):
+        if p99_violations(name, p99, p99_limit_ms):
             continue
         passed.append(BestThroughputStep(name=name, throughput=throughput, p99=p99, threads=step.get("threads")))
 
