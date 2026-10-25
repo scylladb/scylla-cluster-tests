@@ -1,0 +1,13 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// NOTE: i8ge instances are not available in all the availability zones, 'us-east-1a' doesn't have them
+longevityPipeline(
+    backend: 'aws',
+    region: 'us-east-1',
+    availability_zone: 'b',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: 'test-cases/longevity/longevity-aws-custom-s1-workload1.yaml',
+)
