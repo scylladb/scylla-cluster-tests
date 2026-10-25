@@ -209,6 +209,22 @@ rate. Steps without HDR results are skipped. The limit is `perf_gradual_latency_
 else its `default` entry (10 ms). The table carries no validation rules yet; it is there to build
 history across versions.
 
+### Goodput under overload table
+
+With `perf_overload_steps` set, after the best step is found the gradual test runs one throttled step per
+factor (`overload_<factor>x`), offering `factor x` the best throughput with the best step's thread count times
+the factor, capped at `max_threads_multiplier x` it. cassandra-stress commands get `-errors ignore` for these
+steps, so timeouts are counted instead of stopping the step; other tools run as they are. The results go to
+`<workload> - goodput under overload` (`GoodputUnderOverloadResult`), one row per factor (`1.3x`, `2x`):
+
+| Column | Contents |
+|---|---|
+| `Goodput ratio` | Goodput / best throughput (FLOAT, `higher_is_better=True`), with `ValidationRule(fixed_limit=min_goodput_ratio)`, default 0.9: a lower ratio fails the run |
+| `Goodput` | HDR-measured throughput of the step, i.e. successful operations (op/s) |
+| `Offered rate`, `Best throughput`, `Threads` | What the step offered, the best throughput it is a factor of, its thread count |
+| `Failed ops` | Sum of cassandra-stress `Total errors`; empty when the tool doesn't report it |
+| `P99 write`, `P99 read` | P99 under overload (ms) |
+
 ### Other perf tables
 
 | Class | Purpose | Validation |

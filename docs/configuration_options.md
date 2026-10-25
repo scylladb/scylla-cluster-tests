@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-526 options across 29 groups.
+527 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -54,7 +54,7 @@ concerns first, then one page per backend, then one per test type.
 | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) | 12 | Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options. |
 | [Minicloud](configuration_options/minicloud.md) | 17 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with the `aws`, `gce` or `azure`... |
 | [Longevity tests](configuration_options/longevity-tests.md) | 12 | Options specific to long-running longevity test scenarios. |
-| [Performance regression tests](configuration_options/performance-regression-tests.md) | 22 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
+| [Performance regression tests](configuration_options/performance-regression-tests.md) | 23 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
 | [Upgrade tests](configuration_options/upgrade-tests.md) | 19 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
 | [Grow cluster tests](configuration_options/grow-cluster-tests.md) | 2 | Scaling the cluster up and down during a test. |
 | [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) | 3 | Loading pre-built SSTables into a running cluster via nodetool refresh. |
@@ -403,6 +403,7 @@ concerns first, then one page per backend, then one per test type.
 | [`perf_gradual_threads`](configuration_options/performance-regression-tests.md#perf_gradual_threads) | `SCT_PERF_GRADUAL_THREADS` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_gradual_throttle_steps`](configuration_options/performance-regression-tests.md#perf_gradual_throttle_steps) | `SCT_PERF_GRADUAL_THROTTLE_STEPS` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_gradual_write_preload_data`](configuration_options/performance-regression-tests.md#perf_gradual_write_preload_data) | `SCT_PERF_GRADUAL_WRITE_PRELOAD_DATA` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
+| [`perf_overload_steps`](configuration_options/performance-regression-tests.md#perf_overload_steps) | `SCT_PERF_OVERLOAD_STEPS` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_simple_query_extra_command`](configuration_options/performance-regression-tests.md#perf_simple_query_extra_command) | `SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_stress_keyspace`](configuration_options/performance-regression-tests.md#perf_stress_keyspace) | `SCT_PERF_STRESS_KEYSPACE` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_stress_table`](configuration_options/performance-regression-tests.md#perf_stress_table) | `SCT_PERF_STRESS_TABLE` | [Performance regression tests](configuration_options/performance-regression-tests.md) |

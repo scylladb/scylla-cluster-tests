@@ -62,5 +62,6 @@ Each workload (read, write, mixed, read_disk_only) runs in parallel on its own c
 | Another stress tool, distribution, compaction or compression | Add its file to `test_config` |
 | A different limit | `p99_limit_ms` |
 | A finer or longer search | `search_precision_pct`, `max_search_steps`, `step_duration` |
+| Goodput under overload ([SCYLLADB-3267](https://scylladb.atlassian.net/browse/SCYLLADB-3267)) | `overload_factors`, e.g. `1.3,2`: after the search, offer that many times the best throughput; `<workload> - goodput under overload` in Argus, failing the run under 0.9 of the best |
 | A one-off run that shouldn't create a job | Run `best-throughput/best-throughput-generic` directly |
 | Repeat a run | Rebuild the generated job's last build |

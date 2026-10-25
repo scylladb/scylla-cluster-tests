@@ -129,6 +129,7 @@ class BestThroughputRequest:
     start_threads_per_shard: int | None = None
     max_search_steps: int | None = None
     search_precision_pct: float | None = None
+    overload_factors: str = ""
     # Per run only.
     scylla_version: str = ""
     scylla_ami_id: str = ""
@@ -201,6 +202,12 @@ class BestThroughputRequest:
             errors.append("sub_tests should hold at least one sub-test")
         if len(self.sub_tests) != len(set(self.sub_tests)):
             errors.append(f"sub_tests lists a sub-test more than once: {self.sub_tests}")
+        try:
+            factors = self.parsed_overload_factors
+            if self.overload_factors and (not factors or any(factor <= 1 for factor in factors)):
+                raise ValueError
+        except ValueError:
+            errors.append(f"overload_factors should be comma-separated numbers above 1, got '{self.overload_factors}'")
         sct_root = sct_root or get_sct_root_path()
         if missing := [config for config in self.final_test_config() if not (sct_root / config).is_file()]:
             errors.append(f"test_config files not found: {missing}")
@@ -226,6 +233,10 @@ class BestThroughputRequest:
         # Last, so no file in the request can turn the search or its validation settings off.
         test_config.append(BEST_THROUGHPUT_OVERLAY)
         return list(dict.fromkeys(test_config))
+
+    @property
+    def parsed_overload_factors(self) -> list[float]:
+        return [float(factor) for factor in self.overload_factors.split(",") if factor.strip()]
 
     def _identity_variables(self) -> dict[str, str]:
         return {
@@ -262,6 +273,8 @@ class BestThroughputRequest:
         }
         if search:
             variables["SCT_PERF_BEST_THROUGHPUT_SEARCH"] = json.dumps({"default": search})
+        if self.overload_factors:
+            variables["SCT_PERF_OVERLOAD_STEPS"] = json.dumps({"default": {"factors": self.parsed_overload_factors}})
         return variables
 
     def final_environment_variables(self) -> str:
