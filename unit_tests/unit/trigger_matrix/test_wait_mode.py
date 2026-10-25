@@ -18,7 +18,7 @@ import yaml
 
 from sdcm.utils.trigger_matrix import reporting
 from sdcm.utils.trigger_matrix.config import load_matrix_config
-from sdcm.utils.trigger_matrix.errors import JenkinsTriggerError
+from sdcm.utils.trigger_matrix.errors import JenkinsTriggerError, TriggerMatrixError
 from sdcm.utils.trigger_matrix.jenkins_client import JenkinsClient
 from sdcm.utils.trigger_matrix.matrix import trigger_matrix, trigger_matrix_versions
 from sdcm.utils.trigger_matrix.models import JobConfig
@@ -140,6 +140,40 @@ def test_several_versions_are_waited_for_together(tmp_path, monkeypatch):
     assert results["versions"] == {"gating/job-1": "2025.4.3, 2026.1.1", "gating/job-2": "2025.4.3, 2026.1.1"}
     assert results["skipped"] == []
     reporting.Email.return_value.send.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [
+        pytest.param({"labels_selector": "os-nonexistent"}, id="labels_match_nothing"),
+        pytest.param({"skip_jobs": "/gating/job-1"}, id="all_wait_jobs_skipped"),
+    ],
+)
+def test_no_wait_job_triggered_fails(tmp_path, filters):
+    data = {
+        "jobs": [
+            {"job_name": "/gating/job-1", "backend": "docker", "wait": True, "labels": ["os-a"]},
+            {"job_name": "/gating/job-2", "backend": "docker", "wait": True, "disabled": True},
+        ],
+    }
+    path = tmp_path / "gating-matrix.yaml"
+    path.write_text(yaml.dump(data))
+
+    with pytest.raises(TriggerMatrixError, match="No wait-mode job was triggered"):
+        trigger_matrix(matrix_file=str(path), scylla_version="2025.4.3", dry_run=True, **filters)
+
+    reporting.Email.return_value.send.assert_not_called()
+
+
+def test_no_job_triggered_without_wait_jobs_does_not_fail(tmp_path):
+    data = {"jobs": [{"job_name": "/sanity/job-1", "backend": "docker", "labels": ["weekly"]}]}
+    path = tmp_path / "matrix.yaml"
+    path.write_text(yaml.dump(data))
+
+    results = trigger_matrix(matrix_file=str(path), scylla_version="2025.4.3", labels_selector="monthly", dry_run=True)
+
+    assert results["triggered"] == []
+    assert results["failed"] == []
 
 
 @pytest.mark.parametrize(

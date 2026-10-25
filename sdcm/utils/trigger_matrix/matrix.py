@@ -122,7 +122,8 @@ def trigger_matrix_versions(
         The other arguments are those of `trigger_matrix`.
 
     Raises:
-        TriggerMatrixError: If a job gets no value for one of the matrix' required_params.
+        TriggerMatrixError: If a job gets no value for one of the matrix' required_params, or
+            if the matrix has wait-mode jobs and none of them was triggered.
 
     Returns:
         The `trigger_matrix` dict, over all versions. A job triggered for several versions is
@@ -166,6 +167,14 @@ def trigger_matrix_versions(
         for path, version in version_results["versions"].items():
             known = results["versions"].get(path)
             results["versions"][path] = f"{known}, {version}" if known else version
+
+    # A matrix with wait-mode jobs reports a pass/fail result; with no build to wait for, that
+    # result would be an empty report and a passing run. Fail instead.
+    if not pending_wait_jobs and not results["failed"] and any(j.wait and not j.disabled for j in config.jobs):
+        raise TriggerMatrixError(
+            "No wait-mode job was triggered, so there is no result to report. "
+            "Check the labels_selector, skip_jobs, backend and Scylla version filters."
+        )
 
     # Wait for all wait-mode jobs concurrently
     if pending_wait_jobs:
