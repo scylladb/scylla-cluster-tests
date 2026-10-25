@@ -133,8 +133,8 @@ best-throughput-request            launcher job; the user fills in the request p
 
 ## Running It
 
-**One-time setup, after the phase PRs merge:**
-1. Merge the phase PRs to master in stack order; the `backport/perf-v17` label backports them to `branch-perf-v17`.
+**One-time setup, after the implementation PR merges:**
+1. Merge the implementation PR (all phases in one PR) to master; the `backport/perf-v17` label backports them to `branch-perf-v17`.
 2. Run `create-performance-jobs` from `branch-perf-v17`. It creates the `best-throughput` folder with the
    `best-throughput-request` launcher and the `best-throughput-generic` jenkinsfile job.
 3. Calibrate: run the launcher once for i4i and once for i8g, and check how many search steps were spent only
