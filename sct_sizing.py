@@ -121,6 +121,28 @@ def sizing_update_catalog(ctx, cloud):
         ctx.exit(1)
 
 
+@sizing_group.command("update-interruption", help="Refresh spot interruption buckets (AWS Spot Instance Advisor)")
+@click.pass_context
+def sizing_update_interruption(ctx):
+    # lazy: same reason as update-catalog
+    from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog  # noqa: PLC0415
+    from sdcm.utils.cloud_catalog.interruption import (  # noqa: PLC0415
+        INTERRUPTION_FILE,
+        fetch_aws_buckets,
+        write_interruption_file,
+    )
+
+    catalog_dir = Path(__file__).parent / "data" / "instance_catalog"
+    aws_types = {inst.instance_type for inst in InstanceCatalog.from_directory(catalog_dir).get_instances("aws")}
+    try:
+        buckets = fetch_aws_buckets(aws_types)
+    except Exception as exc:  # noqa: BLE001
+        click.echo(f"Error fetching spot interruption data: {exc}", err=True)
+        ctx.exit(1)
+    write_interruption_file(catalog_dir / INTERRUPTION_FILE, {"aws": buckets})
+    click.echo(f"Wrote {sum(len(v) for v in buckets.values())} AWS entries to {catalog_dir / INTERRUPTION_FILE}")
+
+
 @sizing_group.command("resolve", help="Resolve hardware constraints to instance types across all clouds")
 @click.option("--vcpu", type=str, required=True, help="vCPU constraint (e.g. 8, 8-16, >=32, <64)")
 @click.option("--memory", type=str, default=None, help="Memory constraint (e.g. 32, >16gb)")

@@ -87,11 +87,24 @@ arch: x86            # force x86_64 (shorthand accepted)
 5. **Sort** — family rank → price (cheapest) → vCPU (smallest)
 6. **Pick first** — deterministic, same input always produces same output
 
+### Spot Runs Prefer Less-Interrupted Types
+
+When `instance_provision` is `spot` (or `spot_fleet`), candidates are sorted by vCPU count first, then by
+their spot interruption bucket in the test's first region, then by the order above. Size always wins, so
+a bucket-0 24xlarge never beats a bucket-4 xlarge; the bucket only chooses between candidates of the
+closest size, for example `i8ge.xlarge` over `i8g.xlarge`. On-demand runs are unaffected.
+
+Buckets follow the AWS Spot Instance Advisor ranges (0 = <5%, 1 = 5-10%, 2 = 10-15%, 3 = 15-20%,
+4 = >20% interrupted per month) and live in `data/instance_catalog/interruption.yaml`, so sizing makes no
+network calls. Refresh the file with `sct.py sizing update-interruption`. Only AWS has data: Azure's
+`SpotResources` eviction-rate table returns nothing to the SCT service principal, and GCE and OCI publish
+no per-type signal. Types without a bucket keep their normal order.
+
 ### Preferred Families
 
 | Role | AWS | GCE | Azure | OCI |
 |------|-----|-----|-------|-----|
-| db | i8g, i7i, i4i | z3-highmem | Standard_L*s_v4 | DenseIO.E5.Flex |
+| db | i8g, i7i, i4i | z3-highmem, n2, n2d | Standard_L*s_v4 | DenseIO.E5.Flex |
 | loader | c6i | e2-standard | Standard_F*s_v2 | VM.Standard3.Flex |
 | monitor | t3, m6i | n2-highmem | Standard_D*_v4 | VM.Standard.E4.Flex |
 
@@ -183,6 +196,7 @@ All commands are under `sct.py sizing`:
 | `sizing resolve --vcpu N [--memory M] [--role R]` | Resolve a single constraint set |
 | `sizing catalog --cloud C [--role R] [--family F]` | Browse instance catalog with prices |
 | `sizing update-catalog --cloud C` | Regenerate catalog from live cloud APIs |
+| `sizing update-interruption` | Refresh spot interruption buckets from the AWS Spot Instance Advisor |
 
 ### Examples
 

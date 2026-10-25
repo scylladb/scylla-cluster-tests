@@ -25,6 +25,8 @@ from pathlib import Path
 
 import yaml
 
+from sdcm.utils.cloud_catalog.interruption import INTERRUPTION_FILE, load_interruption_file
+
 
 @dataclass
 class RoleConfig:
@@ -112,6 +114,8 @@ class InstanceTypeInfo:
     min_memory_gb: float | None = None
     max_memory_gb: float | None = None
     spot_price_per_hour: float | dict[str, float] | None = None
+    #: Spot interruption bucket per region (0 = <5% ... 4 = >20%), from interruption.yaml.
+    interruption_bucket: dict[str, int] | None = None
 
     @staticmethod
     def _price_for_region(price: float | dict[str, float] | None, region: str | None) -> float | None:
@@ -151,6 +155,13 @@ class InstanceTypeInfo:
             Price in USD/hr, or None if unknown.
         """
         return self._price_for_region(self.spot_price_per_hour, region)
+
+    def get_interruption_bucket(self, region: str | None) -> int | None:
+        """Spot interruption bucket in *region*, or None when unknown.
+
+        No fallback to another region: interruption rates differ per region, so a guess would mislead.
+        """
+        return (self.interruption_bucket or {}).get(region) if region else None
 
 
 class InstanceCatalog:
@@ -244,10 +255,18 @@ class InstanceCatalog:
             merged.cloud_defaults = dict(merged.sizing_config.cloud_defaults)
             merged.preferred_families = dict(merged.sizing_config.preferred_families)
         for yaml_file in sorted(dir_path.glob("*.yaml")):
-            if yaml_file.name == "sizing_config.yaml":
+            if yaml_file.name in ("sizing_config.yaml", INTERRUPTION_FILE):
                 continue
             partial = cls.from_file(yaml_file)
             merged.instances.extend(partial.instances)
+        interruption = load_interruption_file(dir_path / INTERRUPTION_FILE)
+        for inst in merged.instances:
+            per_region = {
+                region: buckets[inst.instance_type]
+                for region, buckets in interruption.get(inst.cloud, {}).items()
+                if inst.instance_type in buckets
+            }
+            inst.interruption_bucket = per_region or None
         return merged
 
     def get_instances(self, cloud: str) -> list[InstanceTypeInfo]:
