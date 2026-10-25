@@ -554,7 +554,6 @@ class ArtifactsTest(ClusterTester):
                 scylla_doctor.install_scylla_doctor()
                 scylla_doctor.argus_collect_sd_package()
                 scylla_doctor.run_scylla_doctor_and_collect_results()
-                scylla_doctor.analyze_vitals()
                 scylla_doctor.analyze_and_verify_results()
 
     def get_email_data(self):
