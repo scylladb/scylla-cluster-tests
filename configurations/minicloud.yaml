@@ -9,8 +9,9 @@
 # configuration, so a single run can override any of it, and none of it needs a pipeline
 # change once minicloud grows the missing feature.
 
-# minicloud implements no KMS endpoint, and its QEMU guests hold no cloud IAM credentials to
-# reach a real one. Both lines go away once minicloud implements KMS.
+# KMS is off by default. minicloud emulates only AWS KMS for now, so an aws run can opt in
+# with SCT_ENTERPRISE_DISABLE_KMS=false (add SCT_ENABLE_KMS_KEY_ROTATION=true for rotation).
+# On GCE and Azure the preflight check rejects KMS.
 enterprise_disable_kms: true
 enable_kms_key_rotation: false
 
