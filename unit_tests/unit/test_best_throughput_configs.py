@@ -6,14 +6,11 @@ import re
 import pytest
 
 from sdcm.sct_config import SCTConfiguration
+from sdcm.utils.best_throughput_launcher import DEFAULT_TEST_CONFIG
 from sdcm.utils.dataset_sizing import DatasetSizingConfig
 from sdcm.utils.thread_search import ThreadSearchConfig
 
-PREDEFINED_STEPS_BASE = [
-    "test-cases/performance/perf-regression-predefined-throughput-steps.yaml",
-    "configurations/disable_kms.yaml",
-    "configurations/disable_speculative_retry.yaml",
-]
+PREDEFINED_STEPS_BASE = list(DEFAULT_TEST_CONFIG)
 BEST_THROUGHPUT_OVERLAYS = [
     "configurations/performance/best-throughput/cassandra_stress_time_bound_write.yaml",
     "configurations/performance/best-throughput/cassandra_stress_sized_dataset.yaml",
