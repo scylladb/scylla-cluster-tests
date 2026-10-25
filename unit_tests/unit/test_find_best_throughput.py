@@ -84,13 +84,18 @@ def test_step_with_failed_latency_results_is_skipped(broken_step):
     assert find_best_throughput(summary, P99_LIMIT_MS).name == "unthrottled_100_threads"
 
 
-def test_multiple_cycles_use_worst_p99_and_average_throughput():
+def _two_cycle_step(second_cycle_p99):
     step = _step(100, 300000, READ=3.0)
-    step["cycles"].append(_step(100, 290000, READ=11.0)["cycles"][0])
-    assert find_best_throughput({"unthrottled_100_threads": step}, P99_LIMIT_MS) is None
+    step["cycles"].append(_step(100, 290000, READ=second_cycle_p99)["cycles"][0])
+    return step
 
-    step["cycles"][1]["hdr_summary"]["READ"]["percentile_99"] = 4.0
-    assert find_best_throughput({"unthrottled_100_threads": step}, P99_LIMIT_MS) == BestThroughputStep(
+
+def test_multiple_cycles_fail_on_the_worst_p99():
+    assert find_best_throughput({"unthrottled_100_threads": _two_cycle_step(11.0)}, P99_LIMIT_MS) is None
+
+
+def test_multiple_cycles_use_worst_p99_and_average_throughput():
+    assert find_best_throughput({"unthrottled_100_threads": _two_cycle_step(4.0)}, P99_LIMIT_MS) == BestThroughputStep(
         name="unthrottled_100_threads", throughput=295000, p99={"READ": 4.0}, threads=100
     )
 
