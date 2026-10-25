@@ -275,6 +275,7 @@ def cli(ctx):
         "lint-pipelines",
         "trigger-matrix",
         "trigger-matrix-audit",
+        "create-best-throughput-job",
     ):
         try_auth_with_okta()
 
@@ -3680,6 +3681,45 @@ def hdr_investigate(
         f"\nFound P99 spikes higher than {error_threshold_ms} ms for tags {hdr_tags} with interval {hdr_summary_interval_sec} seconds\n"
     )
     click.echo(rich_table_to_string(hdr_table, title="HDR Latency Spikes"))
+
+
+@cli.command(
+    "create-best-throughput-job",
+    help="Create (if missing) and start the best-throughput job for the hardware configuration of a request",
+)
+@click.option(
+    "--request-file",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="JSON file with the best-throughput-request launcher's parameters",
+)
+@click.option("--sct-branch", default="branch-perf-v17", type=str, help="SCT branch the created job runs from")
+@click.option("--sct-repo", default="git@github.com:scylladb/scylla-cluster-tests.git", type=str)
+@click.option(
+    "--job-folder",
+    default="scylla-enterprise/perf-regression/best-throughput",
+    type=str,
+    help="Jenkins folder of the created job; the launcher passes its own folder",
+)
+@click.option("--dry-run", is_flag=True, default=False, help="Validate and print the job and its parameters only")
+def create_best_throughput_job(request_file, sct_branch, sct_repo, job_folder, dry_run):
+    add_file_logger()
+    from sdcm.utils.best_throughput_launcher import BestThroughputRequest, BestThroughputRequestError, launch  # noqa: PLC0415
+
+    with open(request_file, encoding="utf-8") as request_json:
+        raw_request = json.load(request_json)
+    try:
+        job_path = launch(
+            BestThroughputRequest.from_dict(raw_request),
+            sct_branch=sct_branch,
+            sct_repo=sct_repo,
+            dry_run=dry_run,
+            job_folder=job_folder,
+        )
+    except BestThroughputRequestError as exc:
+        click.secho(str(exc), fg="red")
+        sys.exit(1)
+    click.secho(f"{'Would start' if dry_run else 'Started'}: {job_path}", fg="green")
 
 
 @cli.command("trigger-matrix", help="Trigger Jenkins jobs from a YAML matrix configuration file")
