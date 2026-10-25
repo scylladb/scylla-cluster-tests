@@ -257,26 +257,53 @@ Required for on-demand runs: the instance type is not known when the test-case i
   ```
 
 - **Launcher job** `best-throughput-request`: a pipeline job whose parameters are the request. They fall
-  into three groups by what they do to the generated job:
+  into four groups by what they do to the generated job. "Passed as" is how the value reaches the run: a
+  perf-pipeline parameter, a config file, or an `SCT_*` variable the launcher adds to
+  `extra_environment_variables`.
 
-  | Group | Parameter | Required | Default |
+  **Job identity**: forms the job name, so it decides which runs share an Argus history.
+
+  | Parameter | Required | Default | Passed as |
   |---|---|---|---|
-  | **Job identity**: forms the job name, so it decides which runs share an Argus history | `backend` | yes | aws |
-  | | `instance_type_db` | yes | |
-  | | `n_db_nodes` | no | 3 |
-  | | `tablets` | no | true (name part `tablets` / `vnodes`) |
-  | | `job_name_suffix` | no | empty; set it to give an experiment its own job and history |
-  | **Stored in the generated job** as its parameter defaults, so a rebuild repeats the setup | `test_config` | no | the base config list (below) |
-  | | `extra_environment_variables` | no | empty |
-  | | `region` | no | per backend |
-  | | `instance_type_loader`, `n_loaders` | no | per backend, today c7i.8xlarge x 4 on AWS |
-  | | `sub_tests` (workloads) | no | all four |
-  | | `p99_limit_ms` | no | 10 |
-  | | `provision_type` | no | as in perf jobs |
-  | **Per run only**: passed to the build, not stored | `scylla_version` (or image / repo) | yes | |
-  | | `requested_by_user`, `email_recipients` | no | as in perf jobs |
+  | `backend` | yes | aws | pipeline `backend` |
+  | `instance_type_db` | yes | | `SCT_INSTANCE_TYPE_DB` (GCE: `SCT_GCE_INSTANCE_TYPE_DB`, Azure: `SCT_AZURE_INSTANCE_TYPE_DB`) |
+  | `n_db_nodes` | no | 3 | `SCT_N_DB_NODES` |
+  | `tablets` | no | true; name part `tablets` / `vnodes` | `configurations/tablets_disabled.yaml` when false |
+  | `job_name_suffix` | no | empty; set it to give an experiment its own job and history | job name only |
 
-  The Scylla version is not part of the name, so one job's history spans versions.
+  **Setup**: stored in the generated job as its parameter defaults, so a rebuild repeats the setup.
+
+  | Parameter | Required | Default | Passed as |
+  |---|---|---|---|
+  | `test_config` | no | the predefined-steps base (below) | pipeline `test_config`, with the launcher's overlays appended |
+  | `extra_environment_variables` | no | empty | pipeline `extra_environment_variables`, with the launcher's variables appended |
+  | `region` | no | per backend (us-east-1 on AWS) | pipeline `region` |
+  | `instance_type_loader` | no | empty: keep the test-case's (c7i.8xlarge) | `SCT_INSTANCE_TYPE_LOADER`, only when set |
+  | `n_loaders` | no | empty: keep the test-case's (4) | `SCT_N_LOADERS`, only when set |
+  | `sub_tests` | no | all four workloads | pipeline `sub_tests` |
+  | `provision_type` | no | on_demand | pipeline `provision_type` |
+
+  **Search and result**: also stored. Empty means the best-throughput overlay's default.
+
+  | Parameter | Required | Default | Passed as |
+  |---|---|---|---|
+  | `p99_limit_ms` | no | 10 | `SCT_PERF_GRADUAL_LATENCY_LIMIT` |
+  | `step_duration` | no | 30m, every workload | `SCT_PERF_GRADUAL_STEP_DURATION` |
+  | `start_threads_per_shard` | no | calibrated in Phase 3 | `SCT_PERF_BEST_THROUGHPUT_SEARCH` |
+  | `max_search_steps` | no | 8 per workload | `SCT_PERF_BEST_THROUGHPUT_SEARCH` |
+  | `search_precision_pct` | no | 5 | `SCT_PERF_BEST_THROUGHPUT_SEARCH` |
+  | `overload_factors` | no | empty: no overload steps; e.g. `1.3,2` (Phase 6) | the Phase 6 config variable |
+
+  **Per run only**: passed to the build, not stored, so one job's history spans Scylla versions.
+
+  | Parameter | Required | Default | Passed as |
+  |---|---|---|---|
+  | `scylla_version`, or `scylla_ami_id` / `gce_image_db` / `azure_image_db` / `scylla_repo` / `new_scylla_repo` / `update_db_packages` | one of them | | the pipeline parameter of the same name |
+  | `requested_by_user` | no | the user who started the launcher | pipeline `requested_by_user` |
+  | `email_recipients` | no | as in perf jobs | pipeline `email_recipients` |
+
+  Loader parameters are passed only when set, so a stress-tool file in `test_config` that picks its own
+  loader type (rust or gocql stress) keeps it.
 
 - **`test_config` and `extra_environment_variables`** carry everything the structured parameters don't, such
   as `configurations/c-s-driver-version-4.yaml` or `SCT_C_S_DRIVER_VERSION=4`. The launcher builds the final
@@ -284,9 +311,8 @@ Required for on-demand runs: the instance type is not known when the test-case i
   - `test_config`: the request's list, then `configurations/tablets_disabled.yaml` when `tablets` is false,
     then the best-throughput overlay (below). The overlay always comes last, so no file in the request can
     turn the search or its validation settings off.
-  - `extra_environment_variables`: the request's text, plus the variables the structured parameters
-    translate to (`SCT_INSTANCE_TYPE_DB`, `SCT_N_DB_NODES`, `SCT_INSTANCE_TYPE_LOADER`, `SCT_N_LOADERS`,
-    `SCT_PERF_GRADUAL_LATENCY_LIMIT`).
+  - `extra_environment_variables`: the request's text, then the `SCT_*` variables of the structured
+    parameters above. The structured parameter wins when both set the same variable.
   - The job name has to describe what runs, so the launcher rejects a request whose
     `extra_environment_variables` sets an identity variable (`SCT_INSTANCE_TYPE_DB`, `SCT_N_DB_NODES`) to a
     different value than the structured parameter.
@@ -398,8 +424,8 @@ Required for on-demand runs: the instance type is not known when the test-case i
 **Importance:** Medium
 **Dependencies:** Phase 3
 
-- New config, off by default, listing the overload factors per workload, e.g. `[1.3, 2]`, and a launcher
-  parameter to enable it.
+- New config, off by default, listing the overload factors per workload, e.g. `[1.3, 2]`. The launcher's
+  `overload_factors` parameter sets it.
 - After the best throughput is found, run one step per factor at a **rate derived from the measured best
   throughput** (factor x best), throttled through the existing rate path. The rates follow the run's own
   best throughput, so nothing is calibrated per instance type.
@@ -447,7 +473,8 @@ Required for on-demand runs: the instance type is not known when the test-case i
 - Dataset sizing: derived ranges for i4i/i8g equal today's; scaling for other RAM/disk values.
 - Launcher command: job name per request, with and without `job_name_suffix`; same hardware with another
   Scylla version maps to the same job; final `test_config` (base list, tablets and backend overlays, request
-  overlays last) and `extra_environment_variables` (request text plus translated parameters); a conflicting
+  overlays last) and `extra_environment_variables` (request text plus each structured parameter's `SCT_*`
+  variable, loader variables only when set, structured parameters winning); a conflicting
   identity variable rejected; invalid requests rejected; existing job reused (Jenkins client mocked); every
   config file listed in the `test_config` description exists.
 - Overload: rates derived from the best throughput per factor; thread count bounded by the cap; goodput
