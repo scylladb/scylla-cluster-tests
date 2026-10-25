@@ -2,6 +2,7 @@
 
 import json
 import logging
+from functools import partial
 from types import SimpleNamespace
 
 import pytest
@@ -89,6 +90,7 @@ def _report_best_throughput(latency_limit, workload_type, total_summary):
         log=logging.getLogger(__name__),
         test_config=SimpleNamespace(argus_client=lambda: client),
     )
+    instance.p99_limit_ms = partial(gradual_grow_module.PerformanceRegressionPredefinedStepsTest.p99_limit_ms, instance)
     best_step = gradual_grow_module.PerformanceRegressionPredefinedStepsTest.report_best_throughput(
         instance, workload=SimpleNamespace(workload_type=workload_type), total_summary=total_summary
     )
