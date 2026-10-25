@@ -1121,6 +1121,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         self._validate_perf_gradual_throttle_steps()
         self._validate_perf_gradual_latency_limit()
         self._validate_perf_best_throughput_search()
+        self._validate_perf_dataset_sizing()
 
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
@@ -1879,6 +1880,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         self._validate_perf_gradual_throttle_steps()
         self._validate_perf_gradual_latency_limit()
         self._validate_perf_best_throughput_search()
+        self._validate_perf_dataset_sizing()
 
         self._verify_migrator_source_params()
         self._verify_emr_spark_mode()
@@ -2173,6 +2175,18 @@ class SCTConfiguration(*CONFIG_GROUPS):
                         f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
                         f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
                     )
+
+    def _validate_perf_dataset_sizing(self):
+        """Validate perf_dataset_sizing: {'reference_ram_gib', 'reference_disk_gb', 'scale_step': <positive number>}."""
+        if (sizing := self.get("perf_dataset_sizing")) is None:
+            return
+
+        allowed = {"reference_ram_gib", "reference_disk_gb", "scale_step"}
+        if not isinstance(sizing, dict) or set(sizing) - allowed:
+            raise ValueError(f"perf_dataset_sizing should be a dict with keys from {sorted(allowed)}, got {sizing!r}")
+        for key, value in sizing.items():
+            if isinstance(value, bool) or not isinstance(value, int | float) or value <= 0:
+                raise ValueError(f"perf_dataset_sizing: '{key}' should be a positive number, got {value!r}")
 
     def _validate_perf_best_throughput_search(self):
         """Validate perf_best_throughput_search: {<sub-test or 'default'>: {<search setting>: <value>}}."""

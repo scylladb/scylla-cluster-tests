@@ -9,9 +9,18 @@ from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.argus_results import LATENCY_ERROR_THRESHOLDS, send_best_throughput_result_to_argus
+from sdcm.cluster import SCYLLA_DIR
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
+from sdcm.utils.dataset_sizing import (
+    GB,
+    GIB,
+    DatasetScale,
+    DatasetSizingConfig,
+    dataset_scale,
+    scale_dataset_params,
+)
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import (
     BestThroughputStep,
@@ -91,6 +100,45 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         super().setUp()
         self.CLUSTER_SIZE = sum(self.params.get("n_db_nodes"))
         self.REPLICATION_FACTOR = 3
+        if sizing := DatasetSizingConfig.from_params(self.params.get("perf_dataset_sizing")):
+            self.size_dataset(sizing)
+
+    def size_dataset(self, sizing: DatasetSizingConfig) -> DatasetScale:
+        """Scale the stress commands' datasets to the smallest DB node's RAM and data disk."""
+        nodes = self.db_cluster.data_nodes
+        ram_bytes = min(self._node_memory_bytes(node) for node in nodes)
+        disk_bytes = min(self._node_data_disk_bytes(node) for node in nodes)
+        scale = dataset_scale(ram_bytes=ram_bytes, disk_bytes=disk_bytes, config=sizing)
+        self.log.info(
+            "Dataset sized for %.1f GiB RAM and %.0f GB data disk (reference %s GiB, %s GB): scale x%s for RAM, "
+            "x%s for disk, x%s for the preload and disk reads",
+            ram_bytes / GIB,
+            disk_bytes / GB,
+            sizing.reference_ram_gib,
+            sizing.reference_disk_gb,
+            float(scale.ram),
+            float(scale.disk),
+            float(scale.preload),
+        )
+        if scale.preload < scale.ram:
+            self.log.warning(
+                "The data disk limits the preload to x%s while RAM is x%s: disk-only reads cover less data per GiB "
+                "of RAM than on the reference node, so more of them may hit the cache",
+                float(scale.preload),
+                float(scale.ram),
+            )
+        for param, commands in scale_dataset_params(self.params, scale).items():
+            self.log.debug("Sized %s: %s", param, commands)
+            self.params[param] = commands
+        return scale
+
+    @staticmethod
+    def _node_memory_bytes(node) -> int:
+        return int(node.remoter.run("awk '/^MemTotal:/ {print $2}' /proc/meminfo").stdout.strip()) * 1024
+
+    @staticmethod
+    def _node_data_disk_bytes(node) -> int:
+        return int(node.remoter.run(f"df -B1 --output=size {SCYLLA_DIR} | tail -1").stdout.strip())
 
     def throttle_steps(self, workload_type):
         if self.thread_search_config(workload_type):

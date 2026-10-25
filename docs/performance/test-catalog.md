@@ -106,6 +106,22 @@ sub-test with 30-minute steps and no per-step P99 limits (steps over the limit a
 `cassandra_stress_time_bound_write.yaml` next to it makes the predefined-steps write commands
 time-bound, since an n-bound write step at a low thread count would take hours.
 
+**Dataset sizing** (`perf_dataset_sizing`, `sdcm/utils/dataset_sizing.py`). The predefined-steps
+test-case's stress commands are the dataset of a reference node: 128 GiB RAM and a 3750 GB data disk
+(i4i.4xlarge, i8g.4xlarge). With `perf_dataset_sizing` set, `setUp` reads the smallest DB node's
+`MemTotal` and `/var/lib/scylla` size and scales each command's `n=` and `-pop seq=` range by them,
+rounded to `scale_step` (0.25), so the reference instance types keep today's dataset exactly:
+
+| Commands | Scale | Why |
+|---|---|---|
+| `stress_cmd_r`, `stress_cmd_m`, `stress_cmd_cache_warmup` | RAM | The hot range must keep fitting in cache |
+| `prepare_write_cmd`, `stress_cmd_read_disk` | smaller of RAM and disk | Several times RAM so disk reads miss the cache, but never outgrowing the disk |
+| `stress_cmd_w` | disk | Leaves the same share of the disk free for compaction |
+
+When the disk limits the preload below the RAM scale, the run logs a warning: disk-only reads then
+cover less data per GiB of RAM than on the reference node.
+`configurations/performance/best-throughput/cassandra_stress_sized_dataset.yaml` turns sizing on.
+
 ### `performance_regression_alternator_test.py`
 
 `PerformanceRegressionAlternatorTest(PerformanceRegressionTest)` — DynamoDB API via YCSB. All

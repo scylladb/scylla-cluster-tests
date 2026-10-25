@@ -261,3 +261,31 @@ def test_invalid_best_throughput_search(search, match):
     config.update({"perf_best_throughput_search": search})
     with pytest.raises(ValueError, match=match):
         config.verify_configuration()
+
+
+def test_dataset_sizing_is_off_by_default():
+    config = SCTConfiguration()
+    config.verify_configuration()
+    assert config.get("perf_dataset_sizing") is None
+
+
+def test_dataset_sizing_valid():
+    config = SCTConfiguration()
+    config.update({"perf_dataset_sizing": {"reference_ram_gib": 128, "reference_disk_gb": 3750, "scale_step": 0.25}})
+    config.verify_configuration()
+
+
+@pytest.mark.parametrize(
+    "sizing, match",
+    [
+        pytest.param({"ram_gib": 128}, "should be a dict with keys from", id="unknown_key"),
+        pytest.param({"scale_step": 0}, "positive number", id="zero_step"),
+        pytest.param({"reference_ram_gib": "128"}, "positive number", id="string"),
+        pytest.param({"reference_disk_gb": True}, "positive number", id="bool"),
+    ],
+)
+def test_invalid_dataset_sizing(sizing, match):
+    config = SCTConfiguration()
+    config.update({"perf_dataset_sizing": sizing})
+    with pytest.raises(ValueError, match=match):
+        config.verify_configuration()
