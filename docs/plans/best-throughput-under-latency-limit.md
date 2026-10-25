@@ -131,6 +131,36 @@ best-throughput-request            launcher job; the user fills in the request p
   size the dataset from node RAM/disk -> preload -> adaptive thread search -> BestThroughputResult
 ```
 
+## Running It
+
+**One-time setup, after the phase PRs merge:**
+1. Merge the phase PRs to master in stack order; the `backport/perf-v17` label backports them to `branch-perf-v17`.
+2. Run `create-performance-jobs` from `branch-perf-v17`. It creates the `best-throughput` folder with the
+   `best-throughput-request` launcher and the `best-throughput-generic` jenkinsfile job.
+3. Calibrate: run the launcher once for i4i and once for i8g, and check how many search steps were spent only
+   doubling. If most of the budget goes there, raise the default starting threads per shard.
+
+**Each request:**
+1. Open `best-throughput/best-throughput-request` and fill in at least `instance_type_db` and `scylla_version`
+   (or an image parameter). Everything else has a default.
+2. Run with `dry_run` ticked first: it validates the request and prints the job name and the final parameters
+   without starting anything.
+3. Run it for real. The launcher creates `best-throughput/<backend>-<instance>-<n>n-<tablets|vnodes>` on the
+   first request for that hardware, reuses it on later ones, and starts it.
+4. The generated job runs read, write, mixed and read_disk_only in parallel, each on its own cluster: it sizes
+   the dataset, searches the thread count, and, when `overload_factors` is set, runs the overload steps.
+
+The same request can be sent from the command line as a JSON file with
+`hydra.sh create-best-throughput-job --request-file <file> [--dry-run]`; the instance-type check needs AWS
+credentials.
+
+**Results in Argus:**
+- `<workload> - best throughput under P99 limit`: throughput, threads, P99 and the limit; `none passed` when no
+  thread count stayed within it.
+- `<workload> - unthrottled_<threads>_threads - latencies`: one table per step the search tried; the run log
+  says why the search stopped.
+- `<workload> - goodput under overload`: only with `overload_factors`; fails the run under 0.9 of the best.
+
 ## Implementation Phases
 
 ### Overview
