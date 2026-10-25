@@ -281,9 +281,9 @@ Required for on-demand runs: the instance type is not known when the test-case i
 - **`test_config` and `extra_environment_variables`** carry everything the structured parameters don't, such
   as `configurations/c-s-driver-version-4.yaml` or `SCT_C_S_DRIVER_VERSION=4`. The launcher builds the final
   values from them:
-  - `test_config`: the request's list (the base list when empty), plus `configurations/tablets_disabled.yaml`
-    when `tablets` is false, plus the backend overlay. Overlays the request adds come after the base, so
-    they override it.
+  - `test_config`: the request's list, then `configurations/tablets_disabled.yaml` when `tablets` is false,
+    then the best-throughput overlay (below). The overlay always comes last, so no file in the request can
+    turn the search or its validation settings off.
   - `extra_environment_variables`: the request's text, plus the variables the structured parameters
     translate to (`SCT_INSTANCE_TYPE_DB`, `SCT_N_DB_NODES`, `SCT_INSTANCE_TYPE_LOADER`, `SCT_N_LOADERS`,
     `SCT_PERF_GRADUAL_LATENCY_LIMIT`).
@@ -293,19 +293,76 @@ Required for on-demand runs: the instance type is not known when the test-case i
   - Free-form text cannot name a job reliably, so a different `test_config` or extra variable on the same
     hardware lands in the same job. Use `job_name_suffix` when the change should get its own history.
 
-- **Base config list** (the default `test_config`):
+- **Default `test_config`**: the same base the predefined-steps jobs use (the test-case is in 23 of their 30
+  jenkinsfiles, the two overlays in 27 and 24):
 
-  | File | Why |
-  |---|---|
-  | New `test-cases/performance/perf-best-throughput.yaml` | The test-case: cluster shape (3 DB nodes, 4 loaders), loader and monitor types, Scylla args, HDR and NVMe settings and the email template, as in the predefined-steps test-case; plus the search config, the latency limit, 30-minute steps for every workload, per-step P99 limits off, the sized dataset (Phase 4), `user_prefix: perf-best-throughput` and `test_metadata`. `instance_type_db` is left unset, so a request that doesn't pass it fails config validation before provisioning. A new test-case, rather than an overlay on the predefined-steps one, keeps the existing jobs untouched when its stress commands change for the sized dataset. |
-  | `configurations/disable_kms.yaml` | In every predefined-steps job |
-  | `configurations/disable_speculative_retry.yaml` | In every predefined-steps job |
+  ```
+  ["test-cases/performance/perf-regression-predefined-throughput-steps.yaml",
+   "configurations/disable_kms.yaml",
+   "configurations/disable_speculative_retry.yaml"]
+  ```
 
-  Added by the launcher: `configurations/tablets_disabled.yaml` for `tablets=false`, and
-  `configurations/performance/best-throughput/<backend>.yaml` with the backend's default loader and monitor
-  types (AWS first). Not used: thread-grid and throttle-step files (the search replaces them), per-step
-  threshold files (steps over the limit are expected), and `configurations/arm_instance_types/*.yaml` (SCT
-  resolves the architecture from the instance type).
+  The instance types in that test-case are only defaults: the launcher's environment variables take
+  precedence over config files.
+
+- **Best-throughput overlay**, appended by the launcher to every request:
+  `configurations/performance/best-throughput/best_throughput.yaml`. It holds the search config, the
+  latency limit, 30-minute steps for every workload (write included, with time-bound write commands) and
+  per-step P99 limits off. The sized dataset (Phase 4) comes as a separate overlay for the cassandra-stress
+  test-case, added only when the request uses the default test-case; other test-cases keep their own
+  datasets. Backend defaults beyond AWS get their own overlay when GCE and Azure are added.
+
+- **`test_config` description in the launcher**, listing the config files the predefined-steps jobs already
+  use (all 30 jenkinsfiles under `jenkins-pipelines/`):
+
+  ```
+  JSON list of SCT config files. The first entry is the test-case; overlays follow and override it.
+  Default: the predefined-steps test-case + disable_kms + disable_speculative_retry.
+  Always added by the launcher: tablets_disabled.yaml (when tablets=false) and the best-throughput overlay.
+
+  Test-cases (pick one, first in the list):
+    test-cases/performance/perf-regression-predefined-throughput-steps.yaml            cassandra-stress (default)
+    test-cases/performance/perf-regression-predefined-throughput-steps-lwt-light.yaml  LWT, light
+    test-cases/performance/perf-regression-predefined-throughput-steps-lwt-heavy.yaml  LWT, heavy
+    test-cases/performance/perf-regression-predefined-throughput-steps-custom-d3-w1.yaml   latte, custom d3/w1
+    test-cases/performance/latte-perf-regression-predefined-throughput-steps-tablets.yaml  latte, tablets
+    test-cases/performance/latte-perf-regression-predefined-throughput-steps-vnodes.yaml   latte, vnodes
+
+  General:
+    configurations/disable_kms.yaml                    (default)
+    configurations/disable_speculative_retry.yaml      (default)
+    configurations/c-s-driver-version-4.yaml           cassandra-stress Java driver 4
+
+  Stress tool (replaces the cassandra-stress commands):
+    configurations/performance/rust-predefined-throughput-steps-cql-stress.yaml    cql-stress (Rust)
+    configurations/performance/gocql-predefined-throughput-steps-stress.yaml       gocql stress
+
+  Data distribution, schema and storage:
+    configurations/cs-uniform-distribution.yaml        uniform key population
+    configurations/cs-gauss-distribution.yaml          gaussian key population
+    configurations/cs-compaction-strategy-lcs.yaml     LCS compaction
+    configurations/compression/zstd_dict_compression.yaml
+    configurations/compression/lz4_dict_compression.yaml
+    configurations/performance/enable_logstor.yaml     logstor; combine with one of:
+    configurations/performance/logstor_uniform_queries.yaml
+    configurations/performance/logstor_lsm_dual_60_40.yaml
+    configurations/performance/logstor_hotspot_queries.yaml
+
+  Cloud specifics:
+    configurations/gce/z4d-highmem-16-highlssd.yaml    z4d local-SSD layout (GCE)
+    configurations/gce/z4d-highmem-16-standardlssd.yaml
+    configurations/performance/xcloud/overrides.yaml   Scylla Cloud runs
+
+  Not for this job: step grids (cassandra_stress_gradual_load_steps*.yaml, *_reduced_steps_number.yaml,
+  latte_gradual_load_steps_enterprise.yaml, latte-perf-gradual-steps-custom-d3-w1.yaml) and per-step
+  thresholds (latency-decorator-error-thresholds-steps-*.yaml): the search replaces them.
+  Not needed: arm_instance_types/*.yaml (the architecture follows instance_type_db).
+  ```
+
+  Notes on the list: the logstor workload files also carry throttle steps, which the search ignores.
+  `enable_logstor.yaml`, the rust/gocql stress files and the z4d files set instance types; the launcher's
+  variables win over them, so the job name stays true. The list is kept in the launcher jenkinsfile and
+  checked by a unit test that every listed file exists.
 
 - The launcher runs a new command, `sct.py create-best-throughput-job`, which:
   - validates the request (required fields, instance type known in the region, architecture, conflicting
@@ -391,7 +448,8 @@ Required for on-demand runs: the instance type is not known when the test-case i
 - Launcher command: job name per request, with and without `job_name_suffix`; same hardware with another
   Scylla version maps to the same job; final `test_config` (base list, tablets and backend overlays, request
   overlays last) and `extra_environment_variables` (request text plus translated parameters); a conflicting
-  identity variable rejected; invalid requests rejected; existing job reused (Jenkins client mocked).
+  identity variable rejected; invalid requests rejected; existing job reused (Jenkins client mocked); every
+  config file listed in the `test_config` description exists.
 - Overload: rates derived from the best throughput per factor; thread count bounded by the cap; goodput
   ratio computed from successful operations only; no overload steps when nothing passed.
 
