@@ -481,11 +481,6 @@ class ScyllaDoctor:
                 f"Scylla doctor version: {self.version}"
             )
 
-    def analyze_vitals(self):
-        LOGGER.info("Analyze vitals")
-        result = self.run(sd_command=f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file} --verbose")
-        LOGGER.debug(pprint.pformat(result))
-
     def filter_out_failed_collectors(self, collector):
         # FirewallRulesCollector return empty result - https://github.com/scylladb/field-engineering/issues/2248
         if collector == "FirewallRulesCollector":
