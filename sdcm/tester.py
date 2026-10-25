@@ -1381,7 +1381,8 @@ class ClusterTester(unittest.TestCase):
             self.download_db_packages()
         if self.is_encrypt_keys_needed:
             self.download_encrypt_keys()
-        self.prepare_kms_host()
+        if not is_minicloud_active(self.params):
+            self.prepare_kms_host()
         self.prepare_azure_kms()
         self.prepare_gcp_kms()
 
@@ -2979,6 +2980,8 @@ class ClusterTester(unittest.TestCase):
                 manager.prepare_regions()
                 # read the capacity reservations again, now from minicloud
                 SCTCapacityReservation.get_cr_from_aws(self.params)
+                # the KMS setup calls AWS through boto3, so on minicloud it waits for the endpoint
+                self.prepare_kms_host()
             elif cluster_backend in ("gce", "gce-siren"):
                 manager.prepare_gce_network()
             self.minicloud = manager
