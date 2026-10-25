@@ -84,7 +84,6 @@ flowchart TB
     subgraph orch["Orchestrators: only start other jobs"]
         direction LR
         T["triggerMatrixPipeline"] -->|"configurations/triggers/*.yaml"| jobs["other SCT jobs"]
-        S["sdReleaseGatingPipeline"] -->|"OS × version"| jobs
     end
     single ~~~ fan ~~~ orch
 ```
@@ -100,8 +99,8 @@ flowchart TB
 | `rollingOperatorUpgradePipeline` | Scylla Operator upgrade | one runner, a phase per operator base version | operator upgrades are sequential phases on one k8s cluster |
 | `perfSearchBestConfigParallelPipeline` | perf best-config search | like perf regression | |
 | `byoLongevityPipeline` | longevity on a custom build | older minimal flow, no Argus or timeouts stage | |
-| `triggerMatrixPipeline` | scheduled runs | reads a trigger matrix and starts jobs | one place to define what runs on which branch and when; see [trigger matrix](testing/trigger-matrix.md) |
-| `sdReleaseGatingPipeline` | scylla-doctor release gating | starts artifact jobs per OS × version, then reports | |
+| `triggerMatrixPipeline` | scheduled runs; the scylla-doctor release gate | reads a trigger matrix and starts jobs; can wait for them and report | one place to define what runs on which branch and when; see [trigger matrix](testing/trigger-matrix.md) and [Scylla Doctor release gating](scylla-doctor-testing.md#release-gating-trigger) |
+| `sdReleaseGatingPipeline` | not used: replaced by the `scylla-doctor-gating` trigger matrix | started artifact jobs per OS × version, then reported | |
 | `createTestJobPipeline` | job creation | creates the Jenkins job tree for a branch from `jenkins-pipelines/` | jobs are generated, never hand-made |
 
 Kubernetes jobs do not have their own pipeline: they use `longevityPipeline` with the `k8s_*`
