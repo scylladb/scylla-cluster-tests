@@ -1,0 +1,16 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// Best throughput under a P99 limit (SCT-580). Every job the best-throughput-request launcher generates in this
+// folder runs this jenkinsfile, with the request's test_config and extra_environment_variables. Run directly, it
+// is a one-off best-throughput run with the defaults below.
+perfRegressionParallelPipeline(
+    backend: "aws",
+    region: "us-east-1",
+    provision_type: 'on_demand',
+    test_name: "performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest",
+    test_config: '''["test-cases/performance/perf-regression-predefined-throughput-steps.yaml", "configurations/disable_kms.yaml", "configurations/disable_speculative_retry.yaml", "configurations/performance/best-throughput/cassandra_stress_time_bound_write.yaml", "configurations/performance/best-throughput/cassandra_stress_sized_dataset.yaml", "configurations/performance/best-throughput/best_throughput.yaml"]''',
+    sub_tests: ["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_read_disk_only_gradual_increase_load", "test_write_gradual_increase_load"],
+)

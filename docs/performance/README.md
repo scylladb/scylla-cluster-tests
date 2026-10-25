@@ -21,6 +21,7 @@ and the procedures for changing it.
 | Add or switch a stress tool | [runbook-new-stress-tool.md](runbook-new-stress-tool.md) |
 | Add a brand-new performance test | [runbook-new-perf-test.md](runbook-new-perf-test.md) |
 | Re-derive throughput steps and latency thresholds | [runbook-recalibrate-steps.md](runbook-recalibrate-steps.md) |
+| Find the best throughput under a P99 limit for any instance type | [runbook-best-throughput.md](runbook-best-throughput.md) |
 | Investigate a latency spike in a finished run | [../performance-tests.md](../performance-tests.md) (`hydra hdr-investigate`) |
 | Understand where perf testing is heading | [../performance-testing-strategy.md](../performance-testing-strategy.md) |
 
