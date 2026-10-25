@@ -278,6 +278,83 @@ def test_download_full_raises_when_package_not_found(mock_keystore_cls, mock_bot
         doc.download_full_scylla_doctor()
 
 
+@pytest.mark.parametrize(
+    "tarball_url,expected_bucket,expected_key",
+    [
+        pytest.param(
+            "https://sd-staging-eu-west-1.s3.amazonaws.com/staging/scylla-doctor-1.15.tar.gz",
+            "sd-staging-eu-west-1",
+            "staging/scylla-doctor-1.15.tar.gz",
+            id="url_with_own_bucket",
+        ),
+        pytest.param(
+            "staging/scylla-doctor-1.15.tar.gz",
+            "private-sd-bucket-us-east-1",
+            "staging/scylla-doctor-1.15.tar.gz",
+            id="bare_key_uses_keystore_bucket",
+        ),
+    ],
+)
+@patch("utils.scylla_doctor.boto3.client")
+@patch("utils.scylla_doctor.KeyStore")
+def test_download_full_with_tarball_url_skips_version_lookup(
+    mock_keystore_cls, mock_boto_client, mock_node, mock_test_config, tarball_url, expected_bucket, expected_key
+):
+    """With a tarball URL, the package comes from the URL and the bucket is not searched for the pinned version."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "full"
+    # A pinned version that is not in the bucket must not matter when a URL is given.
+    params["scylla_doctor_version"] = "0.0-missing"
+    params["scylla_doctor_full_tarball_url"] = tarball_url
+
+    mock_ks = MagicMock()
+    mock_ks.get_scylla_doctor_full_bucket_config.return_value = {
+        "bucket": "private-sd-bucket-us-east-1",
+        "prefix": "releases/",
+    }
+    mock_keystore_cls.return_value = mock_ks
+
+    mock_s3 = MagicMock()
+    mock_s3.generate_presigned_url.return_value = "https://signed-url"
+    mock_boto_client.return_value = mock_s3
+
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
+    with patch.object(doc, "_download_and_extract_tarball") as mock_extract:
+        doc.download_full_scylla_doctor()
+
+    mock_s3.list_objects.assert_not_called()
+    mock_s3.generate_presigned_url.assert_called_once_with(
+        ClientMethod="get_object",
+        Params={"Bucket": expected_bucket, "Key": expected_key},
+        ExpiresIn=300,
+    )
+    mock_extract.assert_called_once_with(
+        "https://signed-url", description="full scylla-doctor (scylla-doctor-1.15.tar.gz)"
+    )
+
+
+# --- _parse_s3_url tests ---
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        pytest.param("https://s3.amazonaws.com/bkt/a/b.tar.gz", ("bkt", "a/b.tar.gz"), id="path_style"),
+        pytest.param(
+            "https://s3.eu-west-1.amazonaws.com/bkt/a/b.tar.gz", ("bkt", "a/b.tar.gz"), id="path_style_region"
+        ),
+        pytest.param("https://bkt.s3.amazonaws.com/a/b.tar.gz", ("bkt", "a/b.tar.gz"), id="virtual_hosted"),
+        pytest.param(
+            "https://bkt.s3.eu-west-1.amazonaws.com/a/b.tar.gz", ("bkt", "a/b.tar.gz"), id="virtual_hosted_region"
+        ),
+        pytest.param("https://bkt/a/b.tar.gz", ("bkt", "a/b.tar.gz"), id="host_is_bucket"),
+        pytest.param("a/b.tar.gz", ("default-bkt", "a/b.tar.gz"), id="bare_key"),
+    ],
+)
+def test_parse_s3_url(url, expected):
+    assert ScyllaDoctor._parse_s3_url(url, default_bucket="default-bkt") == expected
+
+
 # --- download_scylla_doctor dispatch tests ---
 
 

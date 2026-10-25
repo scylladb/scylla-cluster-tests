@@ -415,27 +415,25 @@ class ScyllaDoctor:
 
         full_tarball_url = self.test_config.tester_obj().params.get("scylla_doctor_full_tarball_url")
 
-        version = self.configured_version
-        if version:
-            LOGGER.info("Locating full scylla-doctor version: %s", version)
-            package, bucket_name = self.locate_full_scylla_doctor_package(version=version)
-        else:
-            LOGGER.info("Locating latest full scylla-doctor")
-            package, bucket_name = self.locate_full_scylla_doctor_package()
-
-        if not package:
-            version_msg = f"version {version}" if version else "latest version"
-            raise ScyllaDoctorException(f"Unable to find full scylla-doctor package for {version_msg}")
-
         if full_tarball_url:
-            custom_bucket, custom_key = self._parse_s3_url(full_tarball_url, default_bucket=bucket_name)
-            if custom_bucket != bucket_name:
-                bucket_name = custom_bucket
-                LOGGER.info("Overriding bucket from full_tarball_url")
-            package["Key"] = custom_key
+            # The URL names the package; the KeyStore bucket is only the default for a bare key.
+            default_bucket = KeyStore().get_scylla_doctor_full_bucket_config()["bucket"]
+            bucket_name, package_key = self._parse_s3_url(full_tarball_url, default_bucket=default_bucket)
             LOGGER.info("Using custom full SD tarball from configured URL")
+        else:
+            version = self.configured_version
+            if version:
+                LOGGER.info("Locating full scylla-doctor version: %s", version)
+                package, bucket_name = self.locate_full_scylla_doctor_package(version=version)
+            else:
+                LOGGER.info("Locating latest full scylla-doctor")
+                package, bucket_name = self.locate_full_scylla_doctor_package()
 
-        package_key = package["Key"]
+            if not package:
+                version_msg = f"version {version}" if version else "latest version"
+                raise ScyllaDoctorException(f"Unable to find full scylla-doctor package for {version_msg}")
+            package_key = package["Key"]
+
         package_filename = package_key.split("/")[-1]
         LOGGER.info("Downloading full scylla-doctor package...")
 
