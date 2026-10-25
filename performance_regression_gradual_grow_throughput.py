@@ -13,7 +13,15 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import latency_calculator_decorator
-from sdcm.utils.latency import BestThroughputStep, analyze_hdr_percentiles, calculate_latency, find_best_throughput
+from sdcm.utils.latency import (
+    BestThroughputStep,
+    analyze_hdr_percentiles,
+    calculate_latency,
+    find_best_throughput,
+    p99_over_limit,
+    step_latency,
+)
+from sdcm.utils.thread_search import ThreadSearch, ThreadSearchConfig
 
 
 class CSPopulateDistribution(Enum):
@@ -85,6 +93,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         self.REPLICATION_FACTOR = 3
 
     def throttle_steps(self, workload_type):
+        if self.thread_search_config(workload_type):
+            # The thread search picks every step at run time.
+            return []
         throttle_steps = self.params["perf_gradual_throttle_steps"]
         if workload_type not in throttle_steps:
             TestFrameworkEvent(
@@ -108,6 +119,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         Returns:
             List of thread counts or single thread count
         """
+        if self.thread_search_config(workload_type):
+            # The thread search picks every step's thread count at run time.
+            return []
         throttle_steps = self.throttle_steps(workload_type)
 
         # Check if any throttle step has threads defined (dict format)
@@ -596,13 +610,22 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         return current_throttle
 
     # pylint: disable=too-many-arguments,too-many-locals
-    def run_gradual_increase_load(self, workload: Workload, stress_num, num_loaders, test_name):  # noqa: PLR0914
+    def run_gradual_increase_load(self, workload: Workload, stress_num, num_loaders, test_name):
         workload = self.update_num_threads_for_steps(workload=workload)
+        search_config = self.thread_search_config(workload.workload_type)
+        search_start_threads = (
+            search_config.start_threads(
+                total_shards=sum(node.scylla_shards for node in self.db_cluster.data_nodes),
+                num_stress_commands=len(workload.cs_cmd_tmpl),
+            )
+            if search_config
+            else None
+        )
 
         if workload.cs_cmd_warm_up is not None:
             # Use the maximum thread count for warmup to ensure the cache is warmed up with the highest level of concurrency
             # Build warmup params dict
-            max_threads = max(workload.num_threads)
+            max_threads = search_start_threads or max(workload.num_threads)
             warmup_params = {"threads": max_threads}
             # If any throttle step has concurrency, use max for warmup
             concurrency_values = [step.get("concurrency") for step in workload.throttle_steps if "concurrency" in step]
@@ -613,80 +636,139 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             time.sleep(240)
 
         total_summary = {}
-
-        sequential_steps = self.get_sequential_throttle_steps(workload)
-        for throttle_step_dict, num_threads, current_throttle_step in zip(
-            workload.throttle_steps, workload.num_threads, sequential_steps
-        ):
-            self.prepare_schema(workload=workload)
-
-            # Build step_params dict from throttle_step_dict and num_threads
-            step_params = dict(throttle_step_dict)  # Copy the dict
-
-            # Add threads from num_threads if not already in step dict
-            if "threads" not in step_params:
-                step_params["threads"] = num_threads
-
-            # Generate throttle parameter from rate
-            step_params["throttle"] = self.current_throttle(
-                throttle_step_dict, num_loaders, stress_num, workload.cs_cmd_tmpl[0]
+        if search_config:
+            self.run_thread_search(
+                workload=workload,
+                search=ThreadSearch(start_threads=search_start_threads, config=search_config),
+                total_summary=total_summary,
+                stress_num=stress_num,
+                num_loaders=num_loaders,
             )
-            step_duration = throttle_step_dict.get("duration", workload.step_duration)
-
-            self.log.info(
-                "Run cs command with rate: %s Kops; threads: %s; step name: %s; duration: %s",
-                throttle_step_dict.get("rate", "unthrottled"),
-                step_params["threads"],
-                current_throttle_step,
-                step_duration,
-            )
-            run_step = (
-                latency_calculator_decorator(
-                    legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
+        else:
+            sequential_steps = self.get_sequential_throttle_steps(workload)
+            for throttle_step_dict, num_threads, current_throttle_step in zip(
+                workload.throttle_steps, workload.num_threads, sequential_steps
+            ):
+                total_summary.update(
+                    self.run_gradual_step(
+                        workload=workload,
+                        throttle_step_dict=throttle_step_dict,
+                        num_threads=num_threads,
+                        step_name=current_throttle_step,
+                        stress_num=stress_num,
+                        num_loaders=num_loaders,
+                    )
                 )
-            )(self.run_step)
-            results, _ = run_step(
-                stress_cmds=workload.cs_cmd_tmpl,
-                step_params=step_params,
-                step_duration=step_duration,
-            )
-            self.log.debug("All c-s commands results collected and saved in Argus")
-
-            summary_result = self.check_latency_during_steps(step=current_throttle_step)
-            summary_result[current_throttle_step].update(
-                {
-                    "ops_rate": self._aggregate_ops_rate(results, num_loaders, len(workload.cs_cmd_tmpl)),
-                    "threads": step_params["threads"],
-                }
-            )
-            total_summary.update(summary_result)
-            if workload.drop_keyspace:
-                self.drop_keyspace(keyspace_name=workload.test_keyspace)
-            # We want 3 minutes (180 sec) wait between steps.
-            # In case of "mixed" workflow - wait for compactions finished.
-            # In case of "read" workflow -  it just will wait for 3 minutes
-            if throttle_step_dict.get("wait_no_compactions", workload.wait_no_compactions):
-                if (wait_time := self.wait_no_compactions_running()[0]) < 180:
-                    time.sleep(180 - wait_time)
-                self.log.info("All compactions are finished")
-
-                # In the test_read performance test, we observed that even without any write operations, compactions were occurring.
-                # These compactions are a result of tablet splits and can happen several minutes after the wait_no_compactions function
-                # has finished.
-                # To address this, we will now verify that no tablet splits or merges are active by checking the system.tablets table.
-                # The new condition for system idleness requires the resize_type column to be 'none' for all relevant tablets for a
-                # continuous period of three minutes.
-                self.wait_for_no_tablets_splits()
 
         best_step = self.report_best_throughput(workload=workload, total_summary=total_summary)
         self.save_total_summary_in_file(total_summary, best_step=best_step)
 
-    def report_best_throughput(self, workload: Workload, total_summary: dict) -> BestThroughputStep | None:
-        """Find the step with the highest throughput within the P99 limit and send it to Argus."""
+    def thread_search_config(self, workload_type: str) -> ThreadSearchConfig | None:
+        """The workload's adaptive thread search settings, or None when it runs its fixed steps."""
+        return ThreadSearchConfig.from_params(self.params.get("perf_best_throughput_search"), workload_type)
+
+    def run_thread_search(self, workload: Workload, search: ThreadSearch, total_summary: dict, stress_num, num_loaders):
+        """Run unthrottled steps at the thread counts the search picks, until it stops."""
+        p99_limit_ms = self.p99_limit_ms(workload)
+        while (threads := search.next_threads()) is not None:
+            step_name = f"unthrottled_{threads}_threads"
+            step_summary = self.run_gradual_step(
+                workload=workload,
+                throttle_step_dict={"rate": "unthrottled"},
+                num_threads=threads,
+                step_name=step_name,
+                stress_num=stress_num,
+                num_loaders=num_loaders,
+            )
+            total_summary.update(step_summary)
+            if (latency := step_latency(step_name, step_summary[step_name])) is None:
+                passed, throughput = False, None
+            else:
+                p99, throughput = latency
+                passed = not p99_over_limit(step_name, p99, p99_limit_ms)
+            self.log.info(
+                "Thread search step %s: %s op/s, P99 within %s ms: %s", step_name, throughput, p99_limit_ms, passed
+            )
+            search.record(threads=threads, passed=passed, throughput=throughput)
+        self.log.info(
+            "Thread search for '%s' ran %s steps and stopped: %s",
+            workload.workload_type,
+            len(search.steps),
+            search.stop_reason,
+        )
+
+    def run_gradual_step(  # noqa: PLR0913
+        self, workload: Workload, throttle_step_dict: dict, num_threads, step_name: str, stress_num, num_loaders
+    ) -> dict:
+        """Run one step and return its summary, keyed by the step name."""
+        self.prepare_schema(workload=workload)
+
+        # Build step_params dict from throttle_step_dict and num_threads
+        step_params = dict(throttle_step_dict)  # Copy the dict
+
+        # Add threads from num_threads if not already in step dict
+        if "threads" not in step_params:
+            step_params["threads"] = num_threads
+
+        # Generate throttle parameter from rate
+        step_params["throttle"] = self.current_throttle(
+            throttle_step_dict, num_loaders, stress_num, workload.cs_cmd_tmpl[0]
+        )
+        step_duration = throttle_step_dict.get("duration", workload.step_duration)
+
+        self.log.info(
+            "Run cs command with rate: %s Kops; threads: %s; step name: %s; duration: %s",
+            throttle_step_dict.get("rate", "unthrottled"),
+            step_params["threads"],
+            step_name,
+            step_duration,
+        )
+        run_step = (latency_calculator_decorator(legend=f"Gradual test step {step_name} op/s", cycle_name=step_name))(
+            self.run_step
+        )
+        results, _ = run_step(
+            stress_cmds=workload.cs_cmd_tmpl,
+            step_params=step_params,
+            step_duration=step_duration,
+        )
+        self.log.debug("All c-s commands results collected and saved in Argus")
+
+        summary_result = self.check_latency_during_steps(step=step_name)
+        summary_result[step_name].update(
+            {
+                "ops_rate": self._aggregate_ops_rate(results, num_loaders, len(workload.cs_cmd_tmpl)),
+                "threads": step_params["threads"],
+            }
+        )
+        if workload.drop_keyspace:
+            self.drop_keyspace(keyspace_name=workload.test_keyspace)
+        # We want 3 minutes (180 sec) wait between steps.
+        # In case of "mixed" workflow - wait for compactions finished.
+        # In case of "read" workflow -  it just will wait for 3 minutes
+        if throttle_step_dict.get("wait_no_compactions", workload.wait_no_compactions):
+            if (wait_time := self.wait_no_compactions_running()[0]) < 180:
+                time.sleep(180 - wait_time)
+            self.log.info("All compactions are finished")
+
+            # In the test_read performance test, we observed that even without any write operations, compactions were occurring.
+            # These compactions are a result of tablet splits and can happen several minutes after the wait_no_compactions function
+            # has finished.
+            # To address this, we will now verify that no tablet splits or merges are active by checking the system.tablets table.
+            # The new condition for system idleness requires the resize_type column to be 'none' for all relevant tablets for a
+            # continuous period of three minutes.
+            self.wait_for_no_tablets_splits()
+        return summary_result
+
+    def p99_limit_ms(self, workload: Workload) -> float:
+        """The workload's P99 limit from perf_gradual_latency_limit, else its 'default' entry, else 10 ms."""
         latency_limit = self.params.get("perf_gradual_latency_limit") or {}
-        p99_limit_ms = latency_limit.get(
+        return latency_limit.get(
             workload.workload_type, latency_limit.get("default", LATENCY_ERROR_THRESHOLDS["default"])
         )["percentile_99"]
+
+    def report_best_throughput(self, workload: Workload, total_summary: dict) -> BestThroughputStep | None:
+        """Find the step with the highest throughput within the P99 limit and send it to Argus."""
+        p99_limit_ms = self.p99_limit_ms(workload)
         best_step = find_best_throughput(total_summary=total_summary, p99_limit_ms=p99_limit_ms)
         if best_step:
             self.log.info(
