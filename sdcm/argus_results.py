@@ -36,6 +36,7 @@ from sdcm.sct_events.system import FailedResultEvent
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode, BaseScyllaCluster
     from sdcm.utils.latency import BestThroughputStep
+    from sdcm.utils.overload import GoodputResult
 
 
 LOGGER = logging.getLogger(__name__)
@@ -124,6 +125,22 @@ class BestThroughputResult(StaticGenericResultTable):
             ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P99 limit", unit="ms", type=ResultType.FLOAT),
             ColumnMetadata(name="Step", unit="", type=ResultType.TEXT),
+        ]
+
+
+class GoodputUnderOverloadResult(StaticGenericResultTable):
+    class Meta:
+        name = ""  # set per workload by send_goodput_results_to_argus
+        description = ""
+        Columns = [
+            ColumnMetadata(name="Goodput ratio", unit="", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="Goodput", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="Offered rate", unit="op/s", type=ResultType.INTEGER),
+            ColumnMetadata(name="Best throughput", unit="op/s", type=ResultType.INTEGER),
+            ColumnMetadata(name="Failed ops", unit="", type=ResultType.INTEGER, higher_is_better=False),
+            ColumnMetadata(name="Threads", unit="", type=ResultType.INTEGER),
+            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
         ]
 
 
@@ -443,6 +460,18 @@ def send_result_to_argus(  # noqa: PLR0914
         submit_results_to_argus(argus_client, result_table)
 
 
+def worst_p99_per_operation(p99_per_hdr_key: dict[str, float]) -> dict[str, float]:
+    """Worst P99 per operation ('read', 'write', ...) of P99 keyed by '<operation>--<HDR tag>'.
+
+    A step running several commands of one operation reports the worst of them.
+    """
+    worst_p99 = {}
+    for operation_and_hdr_tag, p99 in p99_per_hdr_key.items():
+        operation = operation_and_hdr_tag.split("--", maxsplit=1)[0].lower()
+        worst_p99[operation] = max(worst_p99.get(operation, 0.0), p99)
+    return worst_p99
+
+
 def send_best_throughput_result_to_argus(
     argus_client: ArgusClient, workload: str, best_step: "BestThroughputStep | None", p99_limit_ms: float
 ) -> None:
@@ -468,15 +497,42 @@ def send_best_throughput_result_to_argus(
     result_table.add_result(column="Step", row=row, value=best_step.name, status=Status.UNSET)
     if best_step.threads is not None:
         result_table.add_result(column="Threads", row=row, value=best_step.threads, status=Status.UNSET)
-    # P99 is keyed by '<operation>--<HDR tag>'; a step running several commands of one operation reports
-    # the worst of them.
-    worst_p99 = {}
-    for operation_and_hdr_tag, p99 in best_step.p99.items():
-        operation = operation_and_hdr_tag.split("--", maxsplit=1)[0].lower()
-        worst_p99[operation] = max(worst_p99.get(operation, 0.0), p99)
-    for operation, p99 in worst_p99.items():
+    for operation, p99 in worst_p99_per_operation(best_step.p99).items():
         if (column := f"P99 {operation}") in result_table.column_types:
             result_table.add_result(column=column, row=row, value=p99, status=Status.UNSET)
+    submit_results_to_argus(argus_client, result_table)
+
+
+def send_goodput_results_to_argus(
+    argus_client: ArgusClient,
+    workload: str,
+    results: "list[GoodputResult]",
+    best_throughput: int,
+    min_goodput_ratio: float,
+) -> None:
+    """Send the goodput of every overload step as one row per factor; a ratio under the minimum fails the run."""
+    result_table = GoodputUnderOverloadResult()
+    result_table.name = f"{workload} - goodput under overload"
+    result_table.description = (
+        f"{workload} workload - throughput of successful operations when offered more than the best throughput "
+        f"under the P99 limit, as a ratio of that best throughput"
+    )
+    result_table.validation_rules = {"Goodput ratio": ValidationRule(fixed_limit=min_goodput_ratio)}
+    for result in results:
+        row = f"{result.factor:g}x"
+        for column, value in (
+            ("Goodput ratio", result.goodput_ratio),
+            ("Goodput", result.goodput),
+            ("Offered rate", result.offered_rate),
+            ("Best throughput", best_throughput),
+            ("Threads", result.threads),
+            ("Failed ops", result.failed_ops),
+        ):
+            if value is not None:
+                result_table.add_result(column=column, row=row, value=value, status=Status.UNSET)
+        for operation, p99 in worst_p99_per_operation(result.p99).items():
+            if (column := f"P99 {operation}") in result_table.column_types:
+                result_table.add_result(column=column, row=row, value=p99, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)
 
 

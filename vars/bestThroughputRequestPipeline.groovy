@@ -104,6 +104,8 @@ Setting SCT_INSTANCE_TYPE_DB or SCT_N_DB_NODES to a different value than above i
                    description: 'Step budget per workload. Empty: 8')
             string(name: 'search_precision_pct', defaultValue: '',
                    description: 'Stop when the passing and failing thread counts are this close, in %. Empty: 5')
+            string(name: 'overload_factors', defaultValue: '',
+                   description: 'Goodput under overload (SCYLLADB-3267): comma-separated factors of the best throughput to offer after the search, e.g. 1.3,2. Goodput under 0.9 of the best throughput fails the run. Empty: no overload steps')
 
             separator(name: 'PER_RUN', sectionHeader: 'Per run (not part of the job name; one job spans Scylla versions)')
             string(name: 'scylla_version', defaultValue: '',
@@ -138,7 +140,7 @@ Setting SCT_INSTANCE_TYPE_DB or SCT_N_DB_NODES to a different value than above i
                             'test_config', 'extra_environment_variables', 'region', 'instance_type_loader',
                             'n_loaders', 'sub_tests', 'provision_type',
                             'p99_limit_ms', 'step_duration', 'start_threads_per_shard', 'max_search_steps',
-                            'search_precision_pct',
+                            'search_precision_pct', 'overload_factors',
                             'scylla_version', 'scylla_ami_id', 'gce_image_db', 'azure_image_db', 'scylla_repo',
                             'new_scylla_repo', 'update_db_packages', 'requested_by_user', 'email_recipients',
                         ]

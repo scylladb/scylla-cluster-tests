@@ -175,6 +175,8 @@ def test_valid_request():
         pytest.param({"n_db_nodes": "0"}, "n_db_nodes should be positive", id="no_nodes"),
         pytest.param({"job_name_suffix": "my run"}, "job_name_suffix may hold only", id="bad_suffix"),
         pytest.param({"sub_tests": '["test_scan"]'}, "unknown sub_tests", id="unknown_sub_test"),
+        pytest.param({"overload_factors": "1.3,x"}, "overload_factors should be", id="overload_not_numbers"),
+        pytest.param({"overload_factors": "0.5"}, "overload_factors should be", id="overload_below_1"),
         pytest.param(
             {"sub_tests": '["test_read_gradual_increase_load", "test_read_gradual_increase_load"]'},
             "more than once",
@@ -323,3 +325,9 @@ def test_sct_accepts_what_the_launcher_builds(monkeypatch):
 def test_search_precision_reaches_sct_under_its_config_key():
     variables = parse_properties(_request(search_precision_pct="2.5").final_environment_variables())
     assert json.loads(variables["SCT_PERF_BEST_THROUGHPUT_SEARCH"]) == {"default": {"precision_pct": 2.5}}
+
+
+def test_overload_factors_reach_sct():
+    variables = parse_properties(_request(overload_factors="1.3, 2").final_environment_variables())
+    assert json.loads(variables["SCT_PERF_OVERLOAD_STEPS"]) == {"default": {"factors": [1.3, 2.0]}}
+    assert "SCT_PERF_OVERLOAD_STEPS" not in parse_properties(_request().final_environment_variables())
