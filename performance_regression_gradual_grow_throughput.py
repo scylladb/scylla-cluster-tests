@@ -9,9 +9,19 @@ from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.argus_results import LATENCY_ERROR_THRESHOLDS, send_best_throughput_result_to_argus
+from sdcm.cluster import SCYLLA_DIR
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
+from sdcm.utils.dataset_sizing import (
+    GB,
+    GIB,
+    DatasetScale,
+    DatasetSizingConfig,
+    dataset_scale,
+    scale_dataset_params,
+    split_stress_commands,
+)
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import (
     BestThroughputStep,
@@ -91,6 +101,45 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         super().setUp()
         self.CLUSTER_SIZE = sum(self.params.get("n_db_nodes"))
         self.REPLICATION_FACTOR = 3
+        if sizing := DatasetSizingConfig.from_params(self.params.get("perf_dataset_sizing")):
+            self.size_dataset(sizing)
+
+    def size_dataset(self, sizing: DatasetSizingConfig) -> DatasetScale:
+        """Scale the stress commands' datasets to the smallest DB node's RAM and data disk."""
+        nodes = self.db_cluster.data_nodes
+        ram_bytes = min(self._node_memory_bytes(node) for node in nodes)
+        disk_bytes = min(self._node_data_disk_bytes(node) for node in nodes)
+        scale = dataset_scale(ram_bytes=ram_bytes, disk_bytes=disk_bytes, config=sizing)
+        self.log.info(
+            "Dataset sized for %.1f GiB RAM and %.0f GB data disk (reference %s GiB, %s GB): scale x%s for RAM, "
+            "x%s for disk, x%s for the preload and disk reads",
+            ram_bytes / GIB,
+            disk_bytes / GB,
+            sizing.reference_ram_gib,
+            sizing.reference_disk_gb,
+            float(scale.ram),
+            float(scale.disk),
+            float(scale.preload),
+        )
+        if scale.preload < scale.ram:
+            self.log.warning(
+                "The data disk limits the preload to x%s while RAM is x%s: disk-only reads cover less data per GiB "
+                "of RAM than on the reference node, so more of them may hit the cache",
+                float(scale.preload),
+                float(scale.ram),
+            )
+        for param, commands in scale_dataset_params(self.params, scale).items():
+            self.log.debug("Sized %s: %s", param, commands)
+            self.params[param] = commands
+        return scale
+
+    @staticmethod
+    def _node_memory_bytes(node) -> int:
+        return int(node.remoter.run("awk '/^MemTotal:/ {print $2}' /proc/meminfo").stdout.strip()) * 1024
+
+    @staticmethod
+    def _node_data_disk_bytes(node) -> int:
+        return int(node.remoter.run(f"df -B1 --output=size {SCYLLA_DIR} | tail -1").stdout.strip())
 
     def throttle_steps(self, workload_type):
         if self.thread_search_config(workload_type):
@@ -304,6 +353,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
     def _base_test_workflow(self, workload: Workload, test_name):
         stress_num = 1  # TODO: fix it to support multiple stress cmds per loader node (useful for latte)
         num_loaders = len(self.loaders.nodes)
+        if self.thread_search_config(workload.workload_type):
+            workload = self.split_commands_per_loader(workload=workload, num_loaders=num_loaders)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
         if workload.preload_data and not skip_optional_stage("perf_preload_data"):
@@ -322,6 +373,36 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         self.run_gradual_increase_load(
             workload=workload, stress_num=stress_num, num_loaders=num_loaders, test_name=test_name
         )
+
+    def split_commands_per_loader(self, workload: Workload, num_loaders: int) -> Workload:
+        """Give the workload one stress command per loader, so every loader generates load whatever n_loaders is.
+
+        The test-case's commands split their key range for 4 loaders. Round-robin runs extra commands on the same
+        loaders and leaves extra loaders idle, and a throttled step divides its rate by the number of loaders, so on
+        another loader count the range is split into one command per loader.
+        """
+        split = {}
+        for field in ("cs_cmd_tmpl", "cs_cmd_warm_up"):
+            if not (stress_cmds := getattr(workload, field)) or len(stress_cmds) == num_loaders:
+                continue
+            if (split_cmds := split_stress_commands(stress_cmds, num_loaders)) is None:
+                self.log.warning(
+                    "Can't split the %s commands of '%s' into one per loader (%s loaders): they differ in more than "
+                    "their key range. Throttled steps assume one command per loader",
+                    len(stress_cmds),
+                    workload.workload_type,
+                    num_loaders,
+                )
+                continue
+            self.log.info(
+                "Split the %s commands of '%s' into %s, one per loader: %s",
+                len(stress_cmds),
+                workload.workload_type,
+                num_loaders,
+                split_cmds,
+            )
+            split[field] = split_cmds
+        return replace(workload, **split)
 
     def run_post_prepare_cql(self, workload):
         if post_prepare_cql_cmds := self.params.get("post_prepare_cql_cmds"):

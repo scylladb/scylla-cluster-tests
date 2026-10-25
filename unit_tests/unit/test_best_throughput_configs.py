@@ -6,6 +6,7 @@ import re
 import pytest
 
 from sdcm.sct_config import SCTConfiguration
+from sdcm.utils.dataset_sizing import DatasetSizingConfig
 from sdcm.utils.thread_search import ThreadSearchConfig
 
 PREDEFINED_STEPS_BASE = [
@@ -14,6 +15,7 @@ PREDEFINED_STEPS_BASE = [
     "configurations/disable_speculative_retry.yaml",
 ]
 BEST_THROUGHPUT_OVERLAYS = [
+    "configurations/performance/best-throughput/cassandra_stress_sized_dataset.yaml",
     "configurations/performance/best-throughput/best_throughput.yaml",
 ]
 WORKLOADS = ("read", "read_disk_only", "write", "mixed")
@@ -60,3 +62,7 @@ def test_steps_over_the_latency_limit_do_not_fail_the_run(best_throughput_config
 
 def test_latency_limit_defaults_to_10_ms(best_throughput_config):
     assert best_throughput_config.get("perf_gradual_latency_limit") == {"default": {"percentile_99": 10}}
+
+
+def test_dataset_is_sized_from_the_reference_node(best_throughput_config):
+    assert DatasetSizingConfig.from_params(best_throughput_config.get("perf_dataset_sizing")) == DatasetSizingConfig()
