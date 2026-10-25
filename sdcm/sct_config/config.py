@@ -1122,6 +1122,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         self._validate_perf_gradual_latency_limit()
         self._validate_perf_best_throughput_search()
         self._validate_perf_dataset_sizing()
+        self._validate_perf_overload_steps()
 
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
@@ -1881,6 +1882,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         self._validate_perf_gradual_latency_limit()
         self._validate_perf_best_throughput_search()
         self._validate_perf_dataset_sizing()
+        self._validate_perf_overload_steps()
 
         self._verify_migrator_source_params()
         self._verify_emr_spark_mode()
@@ -2175,6 +2177,42 @@ class SCTConfiguration(*CONFIG_GROUPS):
                         f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
                         f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
                     )
+
+    def _validate_perf_overload_steps(self):
+        """Validate perf_overload_steps: {<sub-test or 'default'>: {'factors', 'max_threads_multiplier', ...}}."""
+        if not (overload := self.get("perf_overload_steps")):
+            return
+
+        allowed = {"factors", "max_threads_multiplier", "min_goodput_ratio"}
+        for workload, settings in overload.items():
+            if not isinstance(settings, dict) or set(settings) - allowed:
+                raise ValueError(
+                    f"perf_overload_steps for {workload} should be a dict with keys from {sorted(allowed)}, "
+                    f"got {settings!r}"
+                )
+            factors = settings.get("factors", [1.3])
+            if (
+                not isinstance(factors, list)
+                or not factors
+                or any(
+                    isinstance(factor, bool) or not isinstance(factor, int | float) or factor <= 1 for factor in factors
+                )
+            ):
+                raise ValueError(
+                    f"perf_overload_steps for {workload}: 'factors' should be a non-empty list of numbers above 1, "
+                    f"got {factors!r}"
+                )
+            multiplier = settings.get("max_threads_multiplier", 1)
+            if isinstance(multiplier, bool) or not isinstance(multiplier, int | float) or multiplier < 1:
+                raise ValueError(
+                    f"perf_overload_steps for {workload}: 'max_threads_multiplier' should be a number of at least 1, "
+                    f"got {multiplier!r}"
+                )
+            ratio = settings.get("min_goodput_ratio", 0.9)
+            if isinstance(ratio, bool) or not isinstance(ratio, int | float) or not 0 < ratio <= 1:
+                raise ValueError(
+                    f"perf_overload_steps for {workload}: 'min_goodput_ratio' should be in (0, 1], got {ratio!r}"
+                )
 
     def _validate_perf_dataset_sizing(self):
         """Validate perf_dataset_sizing: {'reference_ram_gib', 'reference_disk_gb', 'scale_step': <positive number>}."""

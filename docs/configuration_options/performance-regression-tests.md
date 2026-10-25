@@ -5,7 +5,7 @@
 Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram
 settings.
 
-**22 options.**
+**23 options.**
 
 
 <a id="max_deviation"></a>
@@ -127,6 +127,17 @@ If true, preload data (via [`prepare_write_cmd`](stress-commands-and-load-genera
 **default:** False
 
 **type:** bool
+
+
+<a id="perf_overload_steps"></a>
+
+## **perf_overload_steps** / SCT_PERF_OVERLOAD_STEPS
+
+Goodput under overload, run after the gradual performance test found its best throughput within [`perf_gradual_latency_limit`](#perf_gradual_latency_limit). One throttled step per factor offers factor x the best throughput, with the best step's thread count times the factor, capped at max_threads_multiplier x it; the goodput (throughput of successful operations) is reported as a ratio of the best throughput, and a ratio under min_goodput_ratio fails the run. Keyed by sub-test, with 'default' used for sub-tests not listed; a sub-test's entry overrides 'default' key by key. Not set: no overload steps. Example: {'default': {'factors': [1.3, 2], 'max_threads_multiplier': 4, 'min_goodput_ratio': 0.9}}
+
+**default:** N/A
+
+**type:** dict | YAML/JSON string → dict
 
 
 <a id="perf_simple_query_extra_command"></a>

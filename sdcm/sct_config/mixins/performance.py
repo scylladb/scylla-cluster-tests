@@ -96,6 +96,15 @@ class PerformanceConfigMixin(BaseModel):
         "have a chance of applying; not needed for INSERT-based write "
         "workloads on a fresh table.",
     )
+    perf_overload_steps: DictOrStr = SctField(
+        description="Goodput under overload, run after the gradual performance test found its best throughput "
+        "within perf_gradual_latency_limit. One throttled step per factor offers factor x the best throughput, "
+        "with the best step's thread count times the factor, capped at max_threads_multiplier x it; the "
+        "goodput (throughput of successful operations) is reported as a ratio of the best throughput, and a "
+        "ratio under min_goodput_ratio fails the run. Keyed by sub-test, with 'default' used for sub-tests not "
+        "listed; a sub-test's entry overrides 'default' key by key. Not set: no overload steps. "
+        "Example: {'default': {'factors': [1.3, 2], 'max_threads_multiplier': 4, 'min_goodput_ratio': 0.9}}",
+    )
     perf_simple_query_extra_command: String = SctField(
         description="Extra command line options to pass to perf_simple_query",
     )
