@@ -209,6 +209,7 @@ from sdcm.utils.ldap import (
     LDAP_USERS,
     LDAP_PORT,
     DEFAULT_PWD_SUFFIX,
+    LdapServerType,
 )
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.minicloud.endpoint import MINICLOUD_GUEST_CA_URL, is_minicloud_active
@@ -5999,11 +6000,15 @@ class BaseScyllaCluster:
         A scylla yaml that cluster imposes on nodes, it is calculated of the SCTConfiguration,
         and TestConfig is providing LDAP-related information
         """
+        uses_ms_ad = (
+            self.params.get("use_ldap_authorization") and self.params.get("ldap_server_type") == LdapServerType.MS_AD
+        )
         cluster_params_builder = ScyllaYamlClusterAttrBuilder(
             cluster_name=self.name,
             params=self.params,
             test_config=self.test_config,
-            msldap_server_info=KeyStore().get_ldap_ms_ad_credentials(),
+            # Only read from the KeyStore when used, so runs without access to it (local backends) work.
+            msldap_server_info=KeyStore().get_ldap_ms_ad_credentials() if uses_ms_ad else {},
         )
         return ScyllaYaml(**cluster_params_builder.model_dump(exclude_unset=True, exclude_none=True))
 

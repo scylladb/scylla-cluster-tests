@@ -90,6 +90,7 @@ from sdcm.utils.azure_utils import (
 )
 from sdcm.xcloud.cluster_config_utils import MIN_SCYLLA_VERSION_FOR_VS
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
+from sdcm.utils.credentials import backend_needs_ssh_key
 from sdcm.utils.curl import curl_with_retry
 from sdcm.test_config import TestConfig
 from sdcm.utils.version_utils import parse_scylla_version_tag
@@ -1784,7 +1785,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         return stress_tools
 
     def check_required_files(self):
-        if user_creds := self.get("user_credentials_path"):
+        if (user_creds := self.get("user_credentials_path")) and backend_needs_ssh_key(self.get("cluster_backend")):
             _check_file_exists(user_creds)
 
         for param_name in self.stress_cmd_params:
