@@ -106,6 +106,13 @@ sub-test with no per-step P99 limits (steps over the limit are expected). Read, 
 steps last 15 minutes; a write step has no duration and writes its whole key range, as in the predefined-steps
 jobs, so every step inserts all the data.
 
+**Goodput under overload** (`perf_overload_steps`, `sdcm/utils/overload.py`, SCYLLADB-3267). After the
+best step, one throttled step per factor (`overload_1.3x`, `overload_2x`) offers that multiple of the best
+throughput; the goodput (successful operations) is reported as a ratio of the best throughput, and a ratio
+under `min_goodput_ratio` (0.9) fails the run. Each step also reports the rate it really attempted; a
+closed-loop tool can fall short of the target, and a step under 0.95 of it logs a warning. See
+[results-and-regression.md](results-and-regression.md#goodput-under-overload-table).
+
 **Dataset sizing** (`perf_dataset_sizing`, `sdcm/utils/dataset_sizing.py`). The predefined-steps
 test-case's stress commands are the dataset of a reference node: 128 GiB RAM and a 3750 GB data disk
 (i4i.4xlarge, i8g.4xlarge). With `perf_dataset_sizing` set, `setUp` reads the smallest DB node's

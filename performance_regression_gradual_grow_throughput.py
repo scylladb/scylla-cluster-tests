@@ -8,10 +8,15 @@ from dataclasses import asdict, dataclass, replace
 from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
-from sdcm.argus_results import LATENCY_ERROR_THRESHOLDS, send_best_throughput_result_to_argus
+from sdcm.argus_results import (
+    LATENCY_ERROR_THRESHOLDS,
+    send_best_throughput_result_to_argus,
+    send_goodput_results_to_argus,
+)
 from sdcm.cluster import SCYLLA_DIR
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.dataset_sizing import (
     GB,
@@ -31,6 +36,7 @@ from sdcm.utils.latency import (
     p99_violations,
     step_latency,
 )
+from sdcm.utils.overload import MIN_ATTEMPTED_RATIO, GoodputResult, OverloadConfig, goodput_result
 from sdcm.utils.thread_search import ThreadSearch, ThreadSearchConfig
 
 
@@ -481,6 +487,29 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         total = sum(_op_rate(r) for r in results)
         return total if num_commands == num_loaders else total * num_loaders
 
+    @staticmethod
+    def _failed_ops(results: list) -> int | None:
+        """Failed operations of a step, from the stress tools' 'total errors'; None when no tool reported it."""
+        errors = []
+        for result in results or []:
+            try:
+                errors.append(int(float(result["total errors"])))
+            except KeyError, TypeError, ValueError:
+                continue
+        return sum(errors) if errors else None
+
+    @staticmethod
+    def _operation_time_s(results: list) -> int | None:
+        """The longest 'total operation time' (HH:MM:SS) of a step's stress tools; None when no tool reported it."""
+        times = []
+        for result in results or []:
+            try:
+                hours, minutes, seconds = (int(part) for part in result["total operation time"].split(":"))
+            except KeyError, AttributeError, ValueError:
+                continue
+            times.append(hours * 3600 + minutes * 60 + seconds)
+        return max(times) if times else None
+
     def test_dual_engine_mixed_gradual_increase_load(self):
         """Run logstor (60%) and LSM (40%) Latte workloads together as one mixed workload.
 
@@ -742,7 +771,101 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 )
 
         best_step = self.report_best_throughput(workload=workload, total_summary=total_summary)
-        self.save_total_summary_in_file(total_summary, best_step=best_step)
+        overload_results = None
+        if overload_config := self.overload_config(workload.workload_type):
+            overload_results = self.run_overload_steps(
+                workload=workload,
+                overload_config=overload_config,
+                best_step=best_step,
+                stress_num=stress_num,
+                num_loaders=num_loaders,
+            )
+        self.save_total_summary_in_file(total_summary, best_step=best_step, overload_results=overload_results)
+
+    def overload_config(self, workload_type: str) -> OverloadConfig | None:
+        """The workload's goodput-under-overload settings, or None when it runs no overload steps."""
+        return OverloadConfig.from_params(self.params.get("perf_overload_steps"), workload_type)
+
+    def run_overload_steps(
+        self,
+        workload: Workload,
+        overload_config: OverloadConfig,
+        best_step: BestThroughputStep | None,
+        stress_num,
+        num_loaders,
+    ) -> list[GoodputResult] | None:
+        """Offer factor x the best throughput and send the goodput of each factor to Argus."""
+        if best_step is None or not best_step.threads:
+            self.log.warning(
+                "No overload steps for '%s': no best step with a known thread count to overload", workload.workload_type
+            )
+            return None
+
+        # Under overload requests time out; the stress tool has to keep going and count them, not stop the step.
+        stress_cmds = []
+        for stress_cmd in workload.cs_cmd_tmpl:
+            if stress_cmd.startswith("cassandra-stress"):
+                stress_cmd = CassandraStressThread.add_errors_option(stress_cmd, ["ignore"])  # noqa: PLW2901
+            else:
+                self.log.warning("Overload step: '%s' may stop on errors under overload", stress_cmd.split()[0])
+            stress_cmds.append(stress_cmd)
+        overload_workload = replace(workload, cs_cmd_tmpl=stress_cmds)
+
+        results = []
+        for step in overload_config.steps(best_threads=best_step.threads, best_throughput=best_step.throughput):
+            self.log.info(
+                "Overload step %s: offering %s op/s (%s x best %s op/s) with %s threads",
+                step.name,
+                step.rate,
+                step.factor,
+                best_step.throughput,
+                step.threads,
+            )
+            step_summary = self.run_gradual_step(
+                workload=overload_workload,
+                throttle_step_dict={"rate": str(step.rate)},
+                num_threads=step.threads,
+                step_name=step.name,
+                stress_num=stress_num,
+                num_loaders=num_loaders,
+            )[step.name]
+            result = goodput_result(
+                step,
+                step_summary,
+                best_throughput=best_step.throughput,
+                failed_ops=step_summary.get("failed_ops"),
+                operation_time_s=step_summary.get("operation_time_s"),
+            )
+            self.log.info(
+                "Overload step %s: goodput %s op/s, %s of the best throughput, %s failed operations, attempted %s op/s",
+                step.name,
+                result.goodput,
+                result.goodput_ratio,
+                result.failed_ops,
+                result.attempted_rate,
+            )
+            if not result.reached_target:
+                self.log.warning(
+                    "Overload step %s attempted only %s op/s, %s of its %s op/s target (under %s): the stress "
+                    "tool's threads cap what it sends, so the cluster wasn't loaded at %sx the best throughput and "
+                    "the goodput ratio doesn't show behaviour under overload",
+                    step.name,
+                    result.attempted_rate,
+                    result.attempted_ratio,
+                    step.rate,
+                    MIN_ATTEMPTED_RATIO,
+                    step.factor,
+                )
+            results.append(result)
+
+        send_goodput_results_to_argus(
+            argus_client=self.test_config.argus_client(),
+            workload=workload.workload_type,
+            results=results,
+            best_throughput=best_step.throughput,
+            min_goodput_ratio=overload_config.min_goodput_ratio,
+        )
+        return results
 
     def thread_search_config(self, workload_type: str) -> ThreadSearchConfig | None:
         """The workload's adaptive thread search settings, or None when it runs its fixed steps."""
@@ -820,6 +943,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             {
                 "ops_rate": self._aggregate_ops_rate(results, num_loaders, len(workload.cs_cmd_tmpl)),
                 "threads": step_params["threads"],
+                "failed_ops": self._failed_ops(results),
+                "operation_time_s": self._operation_time_s(results),
             }
         )
         if workload.drop_keyspace:
@@ -872,8 +997,15 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         )
         return best_step
 
-    def save_total_summary_in_file(self, total_summary, best_step: BestThroughputStep | None = None):
+    def save_total_summary_in_file(
+        self,
+        total_summary,
+        best_step: BestThroughputStep | None = None,
+        overload_results: list[GoodputResult] | None = None,
+    ):
         total_summary = total_summary | {"best_throughput": asdict(best_step) if best_step else None}
+        if overload_results:
+            total_summary["goodput_under_overload"] = [asdict(result) for result in overload_results]
         total_summary_json = json.dumps(total_summary, indent=4, separators=(", ", ": "))
         self.log.debug("---------------------------------")
         self.log.debug("Final table with results: \n %s", total_summary_json)
