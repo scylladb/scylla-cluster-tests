@@ -75,6 +75,7 @@ class DatasetScale:
 
 
 def _round_to_step(value: float, step: float) -> Fraction:
+    """Round to the nearest multiple of `step`, at least `step` itself: even a tiny node runs some dataset."""
     step = Fraction(str(step))
     return max(step, round(Fraction(value) / step) * step)
 

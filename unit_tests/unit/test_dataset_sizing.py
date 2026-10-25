@@ -141,10 +141,18 @@ def test_test_class_sizes_every_command_from_the_smallest_node():
         _node_memory_bytes=test_class._node_memory_bytes,
         _node_data_disk_bytes=test_class._node_data_disk_bytes,
     )
-    original = {param: list(params[param]) for param in ("prepare_write_cmd", "stress_cmd_w")}
+    sized_params = (
+        "stress_cmd_r",
+        "stress_cmd_m",
+        "stress_cmd_cache_warmup",
+        "prepare_write_cmd",
+        "stress_cmd_read_disk",
+        "stress_cmd_w",
+    )
+    original = {param: list(params[param]) for param in sized_params}
 
     scale = test_class.size_dataset(instance, DatasetSizingConfig())
 
     assert (scale.ram, scale.disk, scale.preload) == (2, 2, 2)
-    assert _ranges(params["prepare_write_cmd"])[-1][1] == 2 * _ranges(original["prepare_write_cmd"])[-1][1]
-    assert _ranges(params["stress_cmd_w"])[-1][1] == 2 * _ranges(original["stress_cmd_w"])[-1][1]
+    for param in sized_params:
+        assert _ranges(params[param])[-1][1] == 2 * _ranges(original[param])[-1][1], param
