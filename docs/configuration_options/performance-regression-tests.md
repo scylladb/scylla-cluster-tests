@@ -5,7 +5,7 @@
 Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram
 settings.
 
-**21 options.**
+**22 options.**
 
 
 <a id="max_deviation"></a>
@@ -57,6 +57,17 @@ Number of threads which should be added on per step
 ## **perf_best_throughput_search** / SCT_PERF_BEST_THROUGHPUT_SEARCH
 
 Adaptive thread search of the gradual performance test, which looks for the best throughput within [`perf_gradual_latency_limit`](#perf_gradual_latency_limit). When set, the sub-test runs unthrottled steps whose thread count the search picks, instead of perf_gradual_throttle_steps/perf_gradual_threads. Keyed by sub-test, with 'default' used for sub-tests not listed; a sub-test's entry overrides 'default' key by key. Keys: start_threads_per_shard (threads of the first step per DB shard, over all stress commands), max_steps (step budget per sub-test; it only limits the bisection once the latency limit is found), precision_pct (stop when the passing and failing thread counts are this close), min_throughput_gain_pct (stop doubling when throughput grows less than this). Example: {'default': {'start_threads_per_shard': 16, 'max_steps': 10, 'precision_pct': 5, 'min_throughput_gain_pct': 5}}
+
+**default:** N/A
+
+**type:** dict | YAML/JSON string → dict
+
+
+<a id="perf_dataset_sizing"></a>
+
+## **perf_dataset_sizing** / SCT_PERF_DATASET_SIZING
+
+Size the gradual performance test's dataset from the DB nodes' RAM and data disk. The test-case's stress commands define the dataset for a reference node; on other nodes their row counts (n=) and key ranges (-pop seq=) are scaled by the smallest node's RAM and disk relative to the reference, each rounded to scale_step: read/mixed hot ranges and cache warmup by RAM, the write dataset by disk, the preload and disk-only reads by the smaller of the two. Keys: reference_ram_gib, reference_disk_gb, scale_step. Not set: the commands run as written. Example: {'reference_ram_gib': 128, 'reference_disk_gb': 3750, 'scale_step': 0.25}
 
 **default:** N/A
 

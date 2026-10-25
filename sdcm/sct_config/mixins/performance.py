@@ -55,6 +55,15 @@ class PerformanceConfigMixin(BaseModel):
         "Example: {'default': {'start_threads_per_shard': 16, 'max_steps': 10, 'precision_pct': 5, "
         "'min_throughput_gain_pct': 5}}",
     )
+    perf_dataset_sizing: DictOrStr = SctField(
+        description="Size the gradual performance test's dataset from the DB nodes' RAM and data disk. The "
+        "test-case's stress commands define the dataset for a reference node; on other nodes their row counts "
+        "(n=) and key ranges (-pop seq=) are scaled by the smallest node's RAM and disk relative to the "
+        "reference, each rounded to scale_step: read/mixed hot ranges and cache warmup by RAM, the write "
+        "dataset by disk, the preload and disk-only reads by the smaller of the two. Keys: reference_ram_gib, "
+        "reference_disk_gb, scale_step. Not set: the commands run as written. "
+        "Example: {'reference_ram_gib': 128, 'reference_disk_gb': 3750, 'scale_step': 0.25}",
+    )
     perf_gradual_latency_limit: DictOrStr = SctField(
         description="Latency limit, in ms, that a gradual performance test step must stay within to count as "
         "passing when looking for the best throughput. Keyed by sub-test, with 'default' used for sub-tests "

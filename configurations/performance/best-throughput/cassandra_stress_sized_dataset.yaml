@@ -1,0 +1,10 @@
+# Size the dataset of test-cases/performance/perf-regression-predefined-throughput-steps.yaml from the DB nodes'
+# RAM and data disk, for the best-throughput run (SCT-580). The test-case's commands are the dataset of the
+# reference node below (i4i.4xlarge and i8g.4xlarge): a 20M-row hot range (~16% of RAM per node), a 650M-row
+# preload (~5x RAM, ~17% of the disk) and a 1.6B-row write range (~43% of the disk). On another node, the
+# commands' row counts and key ranges are scaled by the smallest node's RAM and disk relative to the reference,
+# rounded to scale_step, so the reference instance types keep exactly today's dataset.
+perf_dataset_sizing:
+  reference_ram_gib: 128
+  reference_disk_gb: 3750
+  scale_step: 0.25
