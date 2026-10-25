@@ -16,7 +16,8 @@ Jenkins job `best-throughput/best-throughput-request` (created from
 Everything else has a default; each parameter's description in Jenkins says what it does. Tick `dry_run` first
 to see the job name and the exact parameters it would run with.
 
-From the command line, the same request as a JSON file:
+From the command line, the same request as a JSON file (the dry run still checks the instance type with AWS, so
+it needs AWS credentials):
 
 ```bash
 ./docker/env/hydra.sh create-best-throughput-job --request-file request.json --dry-run

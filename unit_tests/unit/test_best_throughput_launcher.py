@@ -176,6 +176,11 @@ def test_valid_request():
         pytest.param({"job_name_suffix": "my run"}, "job_name_suffix may hold only", id="bad_suffix"),
         pytest.param({"sub_tests": '["test_scan"]'}, "unknown sub_tests", id="unknown_sub_test"),
         pytest.param(
+            {"sub_tests": '["test_read_gradual_increase_load", "test_read_gradual_increase_load"]'},
+            "more than once",
+            id="duplicate_sub_test",
+        ),
+        pytest.param(
             {"test_config": '["configurations/missing.yaml"]'}, "test_config files not found", id="missing_file"
         ),
         pytest.param(
@@ -251,10 +256,11 @@ def test_dry_run_does_not_touch_jenkins(jenkins):
     jenkins.client.trigger.assert_not_called()
 
 
-def test_instance_type_not_offered_in_the_region(jenkins, monkeypatch):
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_instance_type_not_offered_in_the_region(jenkins, monkeypatch, dry_run):
     monkeypatch.setattr(launcher, "aws_check_instance_type_supported", MagicMock(return_value=False))
     with pytest.raises(BestThroughputRequestError, match="not offered in us-east-1"):
-        launcher.launch(_request(), sct_branch="branch-perf-v17", sct_repo="repo")
+        launcher.launch(_request(), sct_branch="branch-perf-v17", sct_repo="repo", dry_run=dry_run)
     jenkins.client.trigger.assert_not_called()
 
 
@@ -312,3 +318,8 @@ def test_sct_accepts_what_the_launcher_builds(monkeypatch):
         ThreadSearchConfig.from_params(config.get("perf_best_throughput_search"), "read").start_threads_per_shard == 8
     )
     assert config.get("perf_dataset_sizing") is not None
+
+
+def test_search_precision_reaches_sct_under_its_config_key():
+    variables = parse_properties(_request(search_precision_pct="2.5").final_environment_variables())
+    assert json.loads(variables["SCT_PERF_BEST_THROUGHPUT_SEARCH"]) == {"default": {"precision_pct": 2.5}}

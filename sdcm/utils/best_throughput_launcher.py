@@ -195,6 +195,8 @@ class BestThroughputRequest:
             errors.append(f"unknown sub_tests {sorted(unknown)}; available: {list(ALL_SUB_TESTS)}")
         if not self.sub_tests:
             errors.append("sub_tests should hold at least one sub-test")
+        if len(self.sub_tests) != len(set(self.sub_tests)):
+            errors.append(f"sub_tests lists a sub-test more than once: {self.sub_tests}")
         sct_root = sct_root or get_sct_root_path()
         if missing := [config for config in self.final_test_config() if not (sct_root / config).is_file()]:
             errors.append(f"test_config files not found: {missing}")
@@ -305,14 +307,14 @@ def launch(request: BestThroughputRequest, sct_branch: str, sct_repo: str, dry_r
     parameters = request.build_parameters()
     LOGGER.info("Best-throughput job: %s", request.job_path)
     LOGGER.info("Build parameters:\n%s", json.dumps(parameters, indent=2))
-    if dry_run:
-        LOGGER.info("[DRY-RUN] Not creating or starting %s", request.job_path)
-        return request.job_path
-
+    # Before the dry-run exit: a dry run that passes should mean the real run gets this far.
     if request.backend == "aws":
         region = parameters["region"]
         if not aws_check_instance_type_supported(request.instance_type_db, region_name=region):
             raise BestThroughputRequestError(f"Instance type {request.instance_type_db} is not offered in {region}")
+    if dry_run:
+        LOGGER.info("[DRY-RUN] Not creating or starting %s", request.job_path)
+        return request.job_path
 
     pipelines = JenkinsPipelines(base_job_dir="", sct_branch_name=sct_branch, sct_repo=sct_repo)
     if pipelines.jenkins.job_exists(request.job_path):
