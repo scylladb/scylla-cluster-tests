@@ -17,7 +17,9 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.sct_events.file_logger import (
+    SEVERITY_LOG_FILES,
     EventsFileLogger,
+    get_events_by_category_from_dir,
     start_events_logger,
     get_events_logger,
     get_events_grouped_by_category,
@@ -109,3 +111,50 @@ class TestFileLogger(EventsUtilsMixin):
             assert len(group) == 5
             for num, event in enumerate(group, start=0 if severity == Severity.CRITICAL.name else 5):
                 assert f"m-{num}-{severity}" in event
+
+
+def _write_event_logs(events_log_dir, lines_by_file: dict[str, list[str]]) -> None:
+    for log_file_name in SEVERITY_LOG_FILES.values():
+        (events_log_dir / log_file_name).write_text("\n".join(lines_by_file.get(log_file_name, [])) + "\n")
+
+
+def test_get_events_by_category_from_dir_groups_multiline_events(tmp_path) -> None:
+    _write_event_logs(
+        tmp_path,
+        {
+            "error.log": [
+                "2026-01-01 10:00:00.000: (TestFrameworkEvent Severity.ERROR) source=Test.SetUp()",
+                "Traceback (most recent call last):",
+                "  InsufficientInstanceCapacity",
+                "",
+                "2026-01-01 10:00:01.000: (TestFrameworkEvent Severity.ERROR) source=Test.test_run()",
+            ],
+        },
+    )
+
+    grouped = get_events_by_category_from_dir(tmp_path)
+
+    assert grouped["ERROR"] == [
+        "2026-01-01 10:00:00.000: (TestFrameworkEvent Severity.ERROR) source=Test.SetUp()\n"
+        "Traceback (most recent call last):\n"
+        "  InsufficientInstanceCapacity",
+        "2026-01-01 10:00:01.000: (TestFrameworkEvent Severity.ERROR) source=Test.test_run()",
+    ]
+    assert set(grouped) == {severity.name for severity in SEVERITY_LOG_FILES}
+
+
+def test_get_events_by_category_from_dir_limit_keeps_first_critical_and_last_others(tmp_path) -> None:
+    lines = [f"2026-01-01 10:00:0{num}.000: event-{num}" for num in range(4)]
+    _write_event_logs(tmp_path, {"critical.log": lines, "error.log": lines})
+
+    grouped = get_events_by_category_from_dir(tmp_path, limit=2)
+
+    assert [event.rsplit(" ", 1)[-1] for event in grouped["CRITICAL"]] == ["event-0", "event-1"]
+    assert [event.rsplit(" ", 1)[-1] for event in grouped["ERROR"]] == ["event-2", "event-3"]
+
+
+def test_get_events_by_category_from_dir_missing_files_report_read_error(tmp_path) -> None:
+    grouped = get_events_by_category_from_dir(tmp_path)
+
+    assert len(grouped["ERROR"]) == 1
+    assert "failed to read" in grouped["ERROR"][0]

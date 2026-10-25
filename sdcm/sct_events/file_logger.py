@@ -44,6 +44,14 @@ WARNING_LOG: str = "warning.log"
 NORMAL_LOG: str = "normal.log"
 DEBUG_LOG: str = "debug.log"
 
+SEVERITY_LOG_FILES: Dict[Severity, str] = {
+    Severity.CRITICAL: CRITICAL_LOG,
+    Severity.ERROR: ERROR_LOG,
+    Severity.WARNING: WARNING_LOG,
+    Severity.NORMAL: NORMAL_LOG,
+    Severity.DEBUG: DEBUG_LOG,
+}
+
 LINE_START_RE = re.compile(r"^\d{4}-\d{2}-\d{2} ")  # date in YYYY-MM-DD format
 
 LOGGER = logging.getLogger(__name__)
@@ -67,11 +75,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
 
         self.events_log = base_dir / EVENTS_LOG
         self.events_logs_by_severity = {
-            Severity.CRITICAL: base_dir / CRITICAL_LOG,
-            Severity.ERROR: base_dir / ERROR_LOG,
-            Severity.WARNING: base_dir / WARNING_LOG,
-            Severity.NORMAL: base_dir / NORMAL_LOG,
-            Severity.DEBUG: base_dir / DEBUG_LOG,
+            severity: base_dir / log_file_name for severity, log_file_name in SEVERITY_LOG_FILES.items()
         }
 
         self.events_summary = collections.defaultdict(int)
@@ -125,29 +129,34 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
                 fobj.write(json.dumps(dict(self.events_summary), indent=4).encode("utf-8"))
 
     def get_events_by_category(self, limit: Optional[int] = None) -> Dict[str, List[str]]:
-        output = {}
-        for severity, log_file in self.events_logs_by_severity.items():
-            # Get first `limit' events with CRITICAL severity and last `limit' for other severities.
-            events_bucket = (head if severity is Severity.CRITICAL else tail)(maxlen=limit)
-            event = []
-            try:
-                with log_file.open() as fobj:
-                    for line in fobj:
-                        if line := line.rstrip():
-                            if LINE_START_RE.match(line):
-                                if event:
-                                    events_bucket.append("\n".join(event))
-                                event.clear()
-                            event.append(line)
-                if event:
-                    events_bucket.append("\n".join(event))
-            except Exception as exc:  # noqa: BLE001
-                error_msg = f"{self}: failed to read {log_file}: {exc}"
-                LOGGER.error(error_msg)
-                if not events_bucket:
-                    events_bucket.append(error_msg)
-            output[severity.name] = list(events_bucket)
-        return output
+        return get_events_by_category_from_dir(self.events_log.parent, limit=limit)
+
+
+def get_events_by_category_from_dir(events_log_dir: Path, limit: Optional[int] = None) -> Dict[str, List[str]]:
+    output = {}
+    for severity, log_file_name in SEVERITY_LOG_FILES.items():
+        log_file = events_log_dir / log_file_name
+        # Get first `limit' events with CRITICAL severity and last `limit' for other severities.
+        events_bucket = (head if severity is Severity.CRITICAL else tail)(maxlen=limit)
+        event = []
+        try:
+            with log_file.open() as fobj:
+                for line in fobj:
+                    if line := line.rstrip():
+                        if LINE_START_RE.match(line):
+                            if event:
+                                events_bucket.append("\n".join(event))
+                            event.clear()
+                        event.append(line)
+            if event:
+                events_bucket.append("\n".join(event))
+        except Exception as exc:  # noqa: BLE001
+            error_msg = f"failed to read {log_file}: {exc}"
+            LOGGER.error(error_msg)
+            if not events_bucket:
+                events_bucket.append(error_msg)
+        output[severity.name] = list(events_bucket)
+    return output
 
 
 start_events_logger = partial(start_events_process, EVENTS_FILE_LOGGER_ID, EventsFileLogger)
@@ -173,5 +182,6 @@ __all__ = (
     "start_events_logger",
     "get_events_logger",
     "get_events_grouped_by_category",
+    "get_events_by_category_from_dir",
     "get_logger_event_summary",
 )
