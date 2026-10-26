@@ -22,6 +22,7 @@ from typing import Any
 import functools
 from pathlib import Path
 
+import anyconfig
 import requests
 
 from sdcm import cluster, wait
@@ -39,6 +40,7 @@ from sdcm.xcloud.cluster_config_utils import (
     expand_availability_zones,
     CLOUD_KEEP_ALIVE_HOURS,
 )
+from sdcm.utils.common import pascal_to_camel_case
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.get_username import get_username
 from sdcm.utils.vector_store_utils import VectorStoreClusterMixin, VectorStoreNodeMixin
@@ -188,6 +190,17 @@ def map_azs_to_rack_indexes(nodes_data: list[dict[str, Any]]) -> dict[str, int]:
             unique_azs.add(az)
 
     return {az: index for index, az in enumerate(sorted(unique_azs))}
+
+
+def scaling_policies_to_update_request_format(policies: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Convert scaling policies returned by DC details API to the format accepted by the scaling update API.
+
+    e.g. {"Storage": {"TargetUtilization": 0.8}} -> {"storage": {"targetUtilization": 0.8}}
+    """
+    request_policies = {}
+    for policy_name, params in policies.items():
+        request_policies[policy_name.lower()] = {pascal_to_camel_case(key): value for key, value in params.items()}
+    return request_policies
 
 
 class ScyllaCloudError(Exception):
@@ -1100,23 +1113,52 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         )
         self.log.info("%s installation completed (request %s)", request_type, request_id)
 
+    def resolve_instance_type_ids(self, instance_types: list[str]) -> list[int]:
+        """Resolve instance type names into Cloud InstanceTypeIDs"""
+        return [
+            self._api_client.get_instance_id_by_name(
+                cloud_provider_id=self.provider_id, region_id=self.region_id, instance_type_name=instance_type
+            )
+            for instance_type in instance_types
+        ]
+
     def _resolve_scaling_config(self) -> dict[str, Any]:
         """Return a copy of xcloud_scaling_config with InstanceTypes names replaced by Cloud InstanceTypeIDs"""
         scaling_config = copy.deepcopy(self.xcloud_scaling_config)
         if "InstanceTypes" in scaling_config:
             instance_types = scaling_config.pop("InstanceTypes")
-            scaling_config["InstanceTypeIDs"] = [
-                self._api_client.get_instance_id_by_name(
-                    cloud_provider_id=self.provider_id, region_id=self.region_id, instance_type_name=instance_type
-                )
-                for instance_type in instance_types
-            ]
+            scaling_config["InstanceTypeIDs"] = self.resolve_instance_type_ids(instance_types)
             self.log.debug(
                 "Resolved scaling InstanceTypes %s -> InstanceTypeIDs %s",
                 instance_types,
                 scaling_config["InstanceTypeIDs"],
             )
         return scaling_config
+
+    def update_scaling_config(self, **overrides) -> None:
+        """Update cluster DC scaling config, using the current config as a base and replacing only requested parameters.
+
+        :param overrides: scaling config parameters in the Cloud UI format, nested dicts are merged, e.g.
+            instanceTypeIDs=[182], policies={"storage": {"targetUtilization": 0.5}}
+        """
+        current_config = self._api_client.get_cluster_dc(
+            account_id=self._account_id, cluster_id=self._cluster_id, dc_id=self.dc_id
+        )["Scaling"]
+        self.log.debug("Current scaling config: %s", current_config)
+        # DC details return the scaling config in a different format (PascalCase keys, no mode and instance families),
+        # while the update request (PUT) requires the whole body to be sent
+        new_config = {
+            "instanceTypeIDs": current_config.get("InstanceTypeIDs", []),
+            "instanceFamilies": current_config.get("InstanceFamilies", []),
+            "policies": scaling_policies_to_update_request_format(current_config.get("Policies", {})),
+            # Scaling mode is not returned by the API, keep the one the cluster was created with
+            "mode": self.xcloud_scaling_config.get("Mode", "xcloud"),
+        }
+        anyconfig.merge(new_config, overrides, ac_merge=anyconfig.MS_DICTS)
+        self.log.debug("Updating scaling config to: %s", new_config)
+        self._api_client.update_cluster_dc_scaling(
+            account_id=self._account_id, cluster_id=self._cluster_id, dc_id=self.dc_id, scaling_config=new_config
+        )
 
     def _prepare_cluster_config(self, node_count: int, instance_type: str) -> dict[str, Any]:  # noqa: PLR0914
         if self.xcloud_scaling_config:

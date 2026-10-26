@@ -416,6 +416,26 @@ class ScyllaCloudAPIClient:
             params["enriched"] = "true"
         return self.request("GET", f"/account/{account_id}/cluster/{cluster_id}/dcs", params=params)["dataCenters"]
 
+    def get_cluster_dc(self, *, account_id: int, cluster_id: int, dc_id: int) -> dict[str, Any]:
+        """Get details of a cluster datacenter, including its scaling configuration"""
+        return self.request("GET", f"/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}")
+
+    def update_cluster_dc_scaling(
+        self, *, account_id: int, cluster_id: int, dc_id: int, scaling_config: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Update the scaling configuration of a cluster datacenter.
+
+        The whole configuration is replaced, e.g.:
+            {
+                "instanceTypeIDs": [182],
+                "instanceFamilies": [],
+                "policies": {"storage": {"targetUtilization": 0.8}, "vcpu": {}},
+                "mode": "xcloud"
+            }
+        """
+        return self.request("PUT", f"/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/scaling", **scaling_config)
+
     def get_cluster_promproxy_config(self, *, account_id: int, cluster_id: int) -> str:
         """
         Get the Prometheus proxy configuration for a cluster.
