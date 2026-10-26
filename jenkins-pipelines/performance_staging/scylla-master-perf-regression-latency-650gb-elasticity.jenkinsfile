@@ -7,6 +7,6 @@ perfRegressionParallelPipeline(
     backend: "aws",
     availability_zone: 'a',
     test_name: "performance_regression_test.PerformanceRegressionTest",
-    test_config: """["test-cases/performance/perf-regression-latency-650gb-elasticity.yaml", "configurations/performance/cql-stress-650gb-8-col-i4i-80-percent-throughput-oss.yaml"]""",
+    test_config: """["test-cases/performance/perf-regression-latency-650gb-elasticity.yaml", "configurations/performance/disable_advanced_rpc_compression.yaml", "configurations/performance/cql-stress-650gb-8-col-i4i-80-percent-throughput-oss.yaml"]""",
     sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"]
 )
