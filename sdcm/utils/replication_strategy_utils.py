@@ -114,7 +114,8 @@ replication_strategies = [SimpleReplicationStrategy, NetworkTopologyReplicationS
 
 class temporary_replication_strategy_setter(ContextDecorator):
     """Context manager that allows to set replication strategy
-    and preserves all modified keyspaces for automatic rollback on exit."""
+    and preserves all modified keyspaces for automatic rollback on exit.
+    """
 
     def __init__(self, node: "BaseNode") -> None:
         self.node = node

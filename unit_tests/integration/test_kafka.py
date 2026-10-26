@@ -46,11 +46,10 @@ def fixture_kafka_cluster(tmp_path_factory, params, monkeypatch):
 @pytest.mark.skip("https://github.com/scylladb/scylla-cluster-tests/issues/11628")
 def test_01_kafka_cdc_source_connector(request, docker_scylla, kafka_cluster, params, events):
     """
-    setup kafka with scylla-cdc-source-connector with docker based scylla node
+    Setup kafka with scylla-cdc-source-connector with docker based scylla node
     - from confluent-hub
     - from GitHub release url
     """
-
     params["kafka_backend"] = "localstack"
 
     disable_tablets = ""
@@ -91,11 +90,10 @@ def test_01_kafka_cdc_source_connector(request, docker_scylla, kafka_cluster, pa
 @pytest.mark.sct_config(files="unit_tests/test_data/kafka_connectors/kafka-connect-scylladb.yaml")
 def test_02_kafka_scylla_sink_connector(docker_scylla, kafka_cluster, params):
     """
-    setup kafka with kafka-connect-scylladb with docker based scylla node
+    Setup kafka with kafka-connect-scylladb with docker based scylla node
     - from confluent-hub
     - from GitHub release url
     """
-
     # docker_scylla.run_cqlsh(
     #    "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 1 };")
     # docker_scylla.run_cqlsh(

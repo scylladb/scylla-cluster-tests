@@ -216,7 +216,8 @@ def test_raise_exception_in_func_before_set_event(event_stop_state, throw_exc):
 def test_set_event_timeout_at_same_time(event_stop_state):
     """If event was set at same time as timeout exceeds
     and throw_exc is true wait_for will raise Exception with
-    message wait_for stopped by event."""
+    message wait_for stopped by event.
+    """
     state = event_stop_state
     state.callback_return_true_after = 8
     th = threading.Thread(target=state.set_stop_in_timeout, kwargs={"ev": state.ev, "set_after": 4})

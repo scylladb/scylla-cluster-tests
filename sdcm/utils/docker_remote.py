@@ -116,7 +116,7 @@ class RemoteDocker(BaseNode):
 
     def get_port(self, internal_port):
         """
-        get specific port mapping
+        Get specific port mapping
 
         :param internal_port: port exposed by docker
         :return: the external port automatically open by docker

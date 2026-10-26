@@ -4,11 +4,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def create_scylla_bench_table_query(compaction_strategy=None):
-    """
-
-    :return: cql create table query for scylla-bench
-    """
-
+    """:return: cql create table query for scylla-bench"""
     compaction_strategy_option = (
         f"AND compaction = {{'class': '{compaction_strategy}'}};" if compaction_strategy else ""
     )

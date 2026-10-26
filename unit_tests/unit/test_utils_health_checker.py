@@ -399,7 +399,8 @@ def test_check_group0_tokenring_consistency_consistent_membership_skips_cql_and_
 
 def test_check_group0_tokenring_consistency_member_missing_from_token_ring_reports_error(raft_node):
     """A group0 member absent from the token ring runs the full search and reports the same error as before,
-    even with limited voters cached as on."""
+    even with limited voters cached as on.
+    """
     raft_node.parent_cluster.group0_limited_voters_enabled = True
     raft = RaftFeature(raft_node)
     group0_members = [Group0Member(host_id="host-1", voter=True), Group0Member(host_id="host-2", voter=True)]
@@ -426,7 +427,8 @@ def test_check_group0_tokenring_consistency_limited_voters_flag_read_once_per_cl
     raft_node, non_voter_group0, non_voter_token_ring
 ):
     """The limited-voters flag is read once per cluster, not once per node per gate; once cached, a non-voter
-    in the token ring is legitimate and costs no CQL or SSH."""
+    in the token ring is legitimate and costs no CQL or SSH.
+    """
     other_node = MagicMock()
     other_node.parent_cluster = raft_node.parent_cluster
 

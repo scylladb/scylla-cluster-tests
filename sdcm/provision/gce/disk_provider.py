@@ -11,9 +11,7 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""
-Disk configuration provider for GCE provisioning.
-"""
+"""Disk configuration provider for GCE provisioning."""
 
 import logging
 from typing import List, Dict, Any

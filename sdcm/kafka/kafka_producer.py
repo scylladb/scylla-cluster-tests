@@ -380,9 +380,7 @@ class KafkaProducerThread(KafkaThreadBase):
 
 
 class KafkaValidatorThread(KafkaThreadBase):
-    """
-    Thread to validate that records added to Kafka are correctly written to ScyllaDB.
-    """
+    """Thread to validate that records added to Kafka are correctly written to ScyllaDB."""
 
     MANDATORY_OPTIONS = ("keyspace", "table", "num-records", "batch-size", "value-schema")
 

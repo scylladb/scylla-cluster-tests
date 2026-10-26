@@ -115,9 +115,7 @@ class SlaUtils:
 
     @staticmethod
     def get_statistic_value_from_cassandra_stress_result(read_run, user_name, statistic_name, tester):
-        """
-        Get value of certain statistic reported by cassandra-stress in the log
-        """
+        """Get value of certain statistic reported by cassandra-stress in the log"""
         res = tester.get_stress_results(queue=read_run, store_results=False)
         stat_rate, username = None, None
         if res:
