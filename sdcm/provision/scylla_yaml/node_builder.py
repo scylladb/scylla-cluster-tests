@@ -23,9 +23,7 @@ from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, Se
 
 
 class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
-    """
-    Builds scylla yaml attributes that are needed to keep node connected to the other nodes in the cluster
-    """
+    """Builds scylla yaml attributes that are needed to keep node connected to the other nodes in the cluster"""
 
     node: Any = Field(exclude=True)
 

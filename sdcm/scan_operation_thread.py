@@ -105,9 +105,7 @@ class FullscanOperationBase:
         | Type[FullPartitionScanReversedOrderEvent]
         | Type[FullScanAggregateEvent],
     ):
-        """
-        Base class for performing fullscan operations.
-        """
+        """Base class for performing fullscan operations."""
         self.log = logging.getLogger(self.__class__.__name__)
         self.log.info("FullscanOperationBase starts")
         self.fullscan_params = thread_params

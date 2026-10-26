@@ -37,9 +37,7 @@ KB = 1024
 
 
 class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
-    """
-    Test Scylla performance regression with cassandra-stress.
-    """
+    """Test Scylla performance regression with cassandra-stress."""
 
     str_pattern = "%8s%16s%10s%14s%16s%12s%12s%14s%16s%16s"
     ops_threshold_prc = 200
@@ -552,7 +550,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         1. Run a write workload as a preparation
         2. Run a read workload
         """
-
         base_cmd_r = self.params.get("stress_cmd_r")
         stress_multiplier = self.params.get("stress_multiplier")
         if stress_multiplier_r := self.params.get("stress_multiplier_r"):
@@ -582,7 +579,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         1. Run a write workload as a preparation
         2. Run a mixed workload
         """
-
         base_cmd_m = self.params.get("stress_cmd_m")
         stress_multiplier = self.params.get("stress_multiplier")
         if stress_multiplier_m := self.params.get("stress_multiplier_m"):
@@ -818,9 +814,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     # Large Partition Tests
     def test_timeseries_bench(self):
-        """
-        Timeseries write/read workload
-        """
+        """Timeseries write/read workload"""
         cmd_w = (
             "scylla-bench -workload=timeseries -mode=write -replication-factor=3 "
             "-partition-count=5000 -clustering-row-count=1000000 -clustering-row-size=200 "

@@ -185,7 +185,6 @@ class DockerBasedStressThread:
 
 def format_stress_cmd_error(exc: Exception) -> str:
     """Format nicely the exception from a stress command failure."""
-
     if hasattr(exc, "result") and exc.result.failed:
         # Report only first two lines
         message = "\n".join(exc.result.stderr.splitlines()[:2])

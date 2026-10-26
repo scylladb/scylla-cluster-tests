@@ -93,7 +93,8 @@ def upload_sstables_to_s3(
 ):
     """Uploads given keyspace/tables sstables snapshot to s3.
 
-    Uploaded snapshots will be visible in show-logs command for given test_id."""
+    Uploaded snapshots will be visible in show-logs command for given test_id.
+    """
     LOGGER.info("Collecting sstables for node %s...", node.name)
     data_directory = "/var/lib/scylla/data"
     snapshot_date = datetime.now().strftime("%Y%m%d_%H%M%S")

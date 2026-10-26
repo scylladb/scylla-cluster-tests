@@ -312,46 +312,32 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def host_node(self) -> "BaseNode":  # noqa: F821
-        """
-        Host where kind/k3d/minikube is running
-        """
+        """Host where kind/k3d/minikube is running"""
 
     @property
     @abc.abstractmethod
     def is_k8s_software_installed(self) -> bool:
-        """
-        Is kind/k3d/minikube installed ?
-        """
+        """Is kind/k3d/minikube installed ?"""
 
     @property
     @abc.abstractmethod
     def is_k8s_software_running(self) -> bool:
-        """
-        Is kind/k3d/minikube running ?
-        """
+        """Is kind/k3d/minikube running ?"""
 
     @abc.abstractmethod
     def setup_k8s_software(self):
-        """
-        install kind/k3d/minikube
-        """
+        """Install kind/k3d/minikube"""
 
     @abc.abstractmethod
     def start_k8s_software(self):
-        """
-        Start kind/k3d/minikube
-        """
+        """Start kind/k3d/minikube"""
 
     @abc.abstractmethod
     def stop_k8s_software(self):
-        """
-        Stop kind/k3d/minikube
-        """
+        """Stop kind/k3d/minikube"""
 
     def on_deploy_completed(self):
-        """
-        Hook that is executed just before completing deployment
-        """
+        """Hook that is executed just before completing deployment"""
 
     @cached_property
     def minio_images(self):

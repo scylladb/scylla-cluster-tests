@@ -40,9 +40,7 @@ def get_stress_command_for_profile(params, stress_cmds_part, search_for_user_pro
 
 
 def get_view_cmd_from_profile(profile_content, name_substr, all_entries=False):
-    """
-    Extract materialized view creation command from user profile, 'extra_definitions' part
-    """
+    """Extract materialized view creation command from user profile, 'extra_definitions' part"""
     all_mvs = profile_content["extra_definitions"]
     mv_cmd = [cmd for cmd in all_mvs if name_substr in cmd]
 
@@ -53,6 +51,7 @@ def get_view_cmd_from_profile(profile_content, name_substr, all_entries=False):
 def get_view_name_from_stress_cmd(mv_create_cmd, name_substr):
     """
     Get materialized view name from creation command (how to get creation command see "get_view_cmd_from_profile" func)
+
     Example:
         extra_definitions:
           - create MATERIALIZED VIEW cf_update_2_columns_mv_pk as select * from blog_posts where domain is not null;
@@ -81,6 +80,7 @@ def get_view_name_from_user_profile(params, stress_cmds_part: str, search_for_us
 def get_keyspace_from_user_profile(params, stress_cmds_part: str, search_for_user_profile: str):
     """
     Get keyspace name from user profile defined in the test yaml.
+
     Example:
        # Keyspace Name
        keyspace: mv_synchronous_ks
@@ -98,6 +98,7 @@ def get_keyspace_from_user_profile(params, stress_cmds_part: str, search_for_use
 def get_table_from_user_profile(params, stress_cmds_part: str, search_for_user_profile: str):
     """
     Get table name from user profile defined in the test yaml.
+
     Example:
        # Table name
        table: blog_posts
