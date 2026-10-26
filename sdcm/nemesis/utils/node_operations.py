@@ -10,6 +10,7 @@ LOGGER = logging.getLogger(__name__)
 
 @contextlib.contextmanager
 def block_scylla_ports(target_node: BaseNode, ports: list[int] | None = None):
+    """Drop traffic on the Scylla ports of `target_node` with iptables and ip6tables rules."""
     ports = ports or [7001, 7000, 9042, 9142, 19042, 19142]
     target_node.install_package("iptables")
     target_node.start_service("iptables", ignore_status=True)
@@ -31,6 +32,7 @@ def block_scylla_ports(target_node: BaseNode, ports: list[int] | None = None):
 
 @contextlib.contextmanager
 def pause_scylla_with_sigstop(target_node: BaseNode):
+    """Pause the Scylla process with SIGSTOP for the duration of the context, then resume it with SIGCONT."""
     target_node.log.debug("Send signal SIGSTOP to scylla process on node %s", target_node.name)
     target_node.remoter.sudo("pkill --signal SIGSTOP -e scylla", timeout=60)
     yield
@@ -74,6 +76,7 @@ def block_loaders_payload_for_scylla_node(scylla_node: BaseNode, loader_nodes: l
 
 
 def is_node_removed_from_cluster(removed_node: BaseNode, verification_node: BaseNode) -> bool:
+    """Return whether `verification_node` sees `removed_node` as no longer part of the cluster."""
     LOGGER.debug("Verification node %s", verification_node.name)
     cluster_status: Optional[dict] = removed_node.parent_cluster.get_nodetool_status(
         verification_node=verification_node
@@ -87,6 +90,7 @@ def is_node_removed_from_cluster(removed_node: BaseNode, verification_node: Base
 
 
 def is_node_seen_as_down(down_node: BaseNode, verification_node: BaseNode) -> bool:
+    """Return whether `verification_node` reports `down_node` as down."""
     LOGGER.debug("Verification node %s", verification_node.name)
     nodes_status = verification_node.parent_cluster.get_nodetool_status(verification_node, dc_aware=False)
     down_node_status = nodes_status.get(down_node.ip_address)

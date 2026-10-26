@@ -12,6 +12,8 @@ from sdcm.nemesis.monkey.manager import manager_backup
 
 
 class SisyphusMonkey(NemesisRunner):
+    """Run a shuffled list of disruptions chosen by `nemesis_selector`."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.disruptions_list = self.build_disruptions_by_selector(self.nemesis_selector)
@@ -19,13 +21,18 @@ class SisyphusMonkey(NemesisRunner):
 
 
 class NoOpMonkey(NemesisRunner):
+    """Runner that sleeps instead of disrupting."""
+
     kubernetes = True
 
     def call_next_nemesis(self):
+        """Sleep for five minutes."""
         time.sleep(300)
 
 
 class ScyllaCloudLimitedChaosMonkey(NemesisRunner):
+    """Run a shuffled set of disruptions that need no cloud provider API access."""
+
     # Limit the nemesis scope to only one relevant to scylla cloud, where we defined we don't have AWS api access:
 
     def __init__(self, *args, **kwargs):
@@ -47,6 +54,8 @@ class ScyllaCloudLimitedChaosMonkey(NemesisRunner):
 
 
 class DisruptKubernetesNodeThenReplaceScyllaNode(NemesisRunner):
+    """Alternate Kubernetes node disruption followed by replacing the Scylla node."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.disruptions_list = self.build_disruptions_by_name(
@@ -59,6 +68,8 @@ class DisruptKubernetesNodeThenReplaceScyllaNode(NemesisRunner):
 
 
 class DisruptKubernetesNodeThenDecommissionAndAddScyllaNode(NemesisRunner):
+    """Alternate Kubernetes node disruption followed by decommissioning and re-adding a Scylla node."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.disruptions_list = self.build_disruptions_by_name(
@@ -71,6 +82,8 @@ class DisruptKubernetesNodeThenDecommissionAndAddScyllaNode(NemesisRunner):
 
 
 class K8sSetMonkey(NemesisRunner):
+    """Run the Kubernetes host disruption nemesis with Scylla node replace or decommission follow-ups."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.disruptions_list = self.build_disruptions_by_name(
@@ -115,24 +128,32 @@ class ScyllaOperatorBasicOperationsMonkey(NemesisRunner):
 
 
 class ManagerRcloneBackup(NemesisRunner):
+    """Run a Manager backup using rclone object storage uploads."""
+
     manager_operation = True
     disruptive = False
     supports_high_disk_utilization = False
 
     def call_next_nemesis(self):
+        """Run a Manager rclone backup."""
         manager_backup(self, object_storage_upload_mode=ObjectStorageUploadMode.RCLONE, label="rclone_backup")
 
 
 class ManagerNativeBackup(NemesisRunner):
+    """Run a Manager backup using native object storage uploads."""
+
     manager_operation = True
     disruptive = False
     supports_high_disk_utilization = False
 
     def call_next_nemesis(self):
+        """Run a Manager native backup."""
         manager_backup(self, object_storage_upload_mode=ObjectStorageUploadMode.NATIVE, label="native_backup")
 
 
 class EnableDisableTableEncryptionAwsKmsProviderMonkey(NemesisRunner):
+    """Run a shuffled choice of the AWS KMS table encryption nemesis with and without key rotation."""
+
     disruptive = True
     kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
 
@@ -163,6 +184,16 @@ class CategoricalMonkey(NemesisRunner):
     """
 
     def get_disruption_distribution(self, dist: dict, default_weight: float) -> Tuple[List[Callable], List[float]]:
+        """Build the weighted population of disruptions from the `dist` weights.
+
+        Args:
+            dist: Disruption class names mapped to weights.
+            default_weight: Weight of every disruption not listed in `dist`.
+
+        Returns:
+            Disruptions and their weights.
+        """
+
         def is_nonnegative_number(val):
             try:
                 val = float(val)
@@ -230,6 +261,7 @@ class CategoricalMonkey(NemesisRunner):
         return excluded
 
     def select_next_nemesis(self):
+        """Pick a random disruption according to the configured weights."""
         population, weights = self.disruption_distribution
         assert len(population) == len(weights) and population
 
@@ -241,6 +273,8 @@ class CategoricalMonkey(NemesisRunner):
 
 
 class MdcChaosMonkey(NemesisRunner):
+    """Run a shuffled set of corrupt, repair and decommission disruptions for multi-DC clusters."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.disruptions_list = self.build_disruptions_by_name(
