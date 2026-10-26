@@ -12,7 +12,7 @@ again to make sure sstables are rewritten unencrypted.
 import abc
 import time
 
-from sdcm.exceptions import UnsupportedNemesis
+from sdcm.exceptions import SstablesNotFound, UnsupportedNemesis
 from sdcm.nemesis import NemesisBaseClass, target_all_nodes
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
@@ -25,7 +25,7 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 
 
-@retrying(n=4, sleep_time=30, allowed_exceptions=(AssertionError,))
+@retrying(n=4, sleep_time=30, allowed_exceptions=(AssertionError, SstablesNotFound))
 def _check_encryption_fact(sstable_util_instance, expected_bool_value):
     sstable_util_instance.check_that_sstables_are_encrypted(expected_bool_value=expected_bool_value)
 
