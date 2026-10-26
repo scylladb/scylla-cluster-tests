@@ -262,8 +262,8 @@ class XCloudScalingTest(ClusterTester, LoaderUtilsMixin):
     C-S mixed load errors are caught as they happen, via CassandraStressEvent raised by the stress events publisher.
     """
 
-    def test_xcloud_cluster_scaling_upsize_under_load(self) -> None:
-        """Test cluster scaling triggered by storage utilization succeeds without disrupting C-S mixed load."""
+    def get_cluster_state_before_scaling(self) -> tuple[set[int], float]:
+        """Return active cluster node IDs and total storage (GB) to compare with after scaling."""
         node_ids_before_scaling = self.db_cluster.api_client.get_active_cluster_node_ids(
             account_id=self.db_cluster.account_id, cluster_id=self.db_cluster.cluster_id
         )
@@ -271,6 +271,48 @@ class XCloudScalingTest(ClusterTester, LoaderUtilsMixin):
             account_id=self.db_cluster.account_id, cluster_id=self.db_cluster.cluster_id
         )
         self.log.debug("Cluster total storage before scaling: %.2f GB", total_storage_before_scaling)
+        return node_ids_before_scaling, total_storage_before_scaling
+
+    def verify_cluster_after_scaling(
+        self, node_ids_before_scaling: set[int], total_storage_before_scaling: float, is_scaling_upsize: bool
+    ) -> None:
+        """Verify cluster storage changed in the expected direction, new nodes were added and data is readable."""
+        direction = "increased" if is_scaling_upsize else "decreased"
+        self.log.info("Verify cluster available storage %s after scaling", direction)
+        total_storage_after_scaling = self.db_cluster.api_client.get_cluster_total_storage(
+            account_id=self.db_cluster.account_id, cluster_id=self.db_cluster.cluster_id
+        )
+        self.log.debug("Cluster total storage after scaling: %.2f GB", total_storage_after_scaling)
+        storage_changed = (
+            total_storage_after_scaling > total_storage_before_scaling
+            if is_scaling_upsize
+            else total_storage_after_scaling < total_storage_before_scaling
+        )
+        assert storage_changed, (
+            f"Total storage wasn't {direction} after scaling "
+            f"({total_storage_before_scaling:.2f} -> {total_storage_after_scaling:.2f} GB)"
+        )
+
+        self.log.info("Verify new nodes were added to cluster")
+        node_ids_after_scaling = self.db_cluster.api_client.get_active_cluster_node_ids(
+            account_id=self.db_cluster.account_id, cluster_id=self.db_cluster.cluster_id
+        )
+        self.log.debug("Cluster nodes before scaling: %s, after: %s", node_ids_before_scaling, node_ids_after_scaling)
+        assert node_ids_after_scaling - node_ids_before_scaling, "No new nodes were added"
+
+        self.log.info("Verify all pre-populated data is readable after cluster scaling")
+        read_queue = []
+        self.assemble_and_run_all_stress_cmd(
+            stress_queue=read_queue,
+            stress_cmd=self.params.get("stress_read_cmd"),
+            keyspace_num=1,
+        )
+        for queue in read_queue:
+            assert self.verify_stress_thread(queue), "Pre-populated data verification failed after cluster scaling"
+
+    def test_xcloud_cluster_scaling_upsize_under_load(self) -> None:
+        """Test cluster scaling up/out triggered by storage utilization succeeds without disrupting C-S mixed load."""
+        node_ids_before_scaling, total_storage_before_scaling = self.get_cluster_state_before_scaling()
 
         self.log.info("Populate the cluster over the scaling threshold")
         self.run_prepare_write_cmd()
@@ -293,26 +335,8 @@ class XCloudScalingTest(ClusterTester, LoaderUtilsMixin):
         for queue in mixed_load_queues:
             queue.kill()
 
-        self.log.info("Verify cluster available storage increased after scaling")
-        total_storage_after_scaling = self.db_cluster.api_client.get_cluster_total_storage(
-            account_id=self.db_cluster.account_id, cluster_id=self.db_cluster.cluster_id
+        self.verify_cluster_after_scaling(
+            node_ids_before_scaling=node_ids_before_scaling,
+            total_storage_before_scaling=total_storage_before_scaling,
+            is_scaling_upsize=True,
         )
-        self.log.debug("Cluster total storage after scaling: %.2f GB", total_storage_after_scaling)
-        assert total_storage_after_scaling > total_storage_before_scaling, "Total storage didn't increase after scaling"
-
-        self.log.info("Verify new nodes were added to cluster")
-        node_ids_after_scaling = self.db_cluster.api_client.get_active_cluster_node_ids(
-            account_id=self.db_cluster.account_id, cluster_id=self.db_cluster.cluster_id
-        )
-        self.log.debug("Cluster nodes before scaling: %s, after: %s", node_ids_before_scaling, node_ids_after_scaling)
-        assert node_ids_after_scaling - node_ids_before_scaling, "No new nodes were added"
-
-        self.log.info("Verify all pre-populated data is readable after cluster scaling")
-        read_queue = []
-        self.assemble_and_run_all_stress_cmd(
-            stress_queue=read_queue,
-            stress_cmd=self.params.get("stress_read_cmd"),
-            keyspace_num=1,
-        )
-        for queue in read_queue:
-            assert self.verify_stress_thread(queue), "Pre-populated data verification failed after cluster scaling"
