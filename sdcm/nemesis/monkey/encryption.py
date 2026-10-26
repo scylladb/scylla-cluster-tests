@@ -209,6 +209,7 @@ class EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey(EnableDisable
     kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
 
     def disrupt(self):
+        """Toggle table encryption using the KMS key provider with key rotation enabled."""
         self._enable_disable_table_encryption(
             enable_kms_key_rotation=True, additional_scylla_encryption_options={"key_provider": "KmsKeyProviderFactory"}
         )
@@ -222,6 +223,7 @@ class EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(EnableDisa
     kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
 
     def disrupt(self):
+        """Toggle table encryption using the KMS key provider with key rotation disabled."""
         self._enable_disable_table_encryption(
             enable_kms_key_rotation=False,
             additional_scylla_encryption_options={"key_provider": "KmsKeyProviderFactory"},

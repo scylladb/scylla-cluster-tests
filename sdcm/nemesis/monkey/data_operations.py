@@ -101,7 +101,12 @@ def get_random_timestamp_from_partition(
     Get a write timestamp from a "pivot" row inside a single partition.
 
     Args:
+        cluster: Cluster used to open the CQL connection.
+        target_node: Node the CQL connection is opened to.
+        ks_cf: Table in `keyspace.table` form.
+        pkey: Partition key value to inspect.
         partition_percentage: controls where the "pivot" is (default 25% of partition size)
+        log_prefix: Prefix of the debug log messages.
 
     Returns:
         Tuple of (timestamp, clustering_key_value)
@@ -174,9 +179,11 @@ class TruncateMonkey(NemesisBaseClass):
     TRUNCATE_TIMEOUT = 600
 
     def truncate_cmd_timeout_suffix(self, truncate_timeout):
+        """Return the CQL clause setting the truncate timeout in seconds."""
         return f" USING TIMEOUT {int(truncate_timeout)}s"
 
     def disrupt(self):
+        """Fill a test table, flush it, then truncate it."""
         keyspace_truncate = "ks_truncate"
         table = "standard1"
         ks_cf = f"{keyspace_truncate}.{table}"
@@ -209,6 +216,7 @@ class TruncateLargeParititionMonkey(TruncateMonkey):
     limited = False
 
     def precheck(self, node) -> str | None:
+        """Skip when zero-token nodes are used (SCYLLADB-5041)."""
         if SkipPerIssues(
             issues="https://scylladb.atlassian.net/browse/SCYLLADB-5041", params=self.runner.tester.params
         ) and self.runner.tester.params.get("use_zero_nodes"):
@@ -216,6 +224,7 @@ class TruncateLargeParititionMonkey(TruncateMonkey):
         return None
 
     def disrupt(self):
+        """Write large partitions with scylla-bench, then truncate the table."""
         ks_name = "ks_truncate_large_partition"
         table = "test_table"
         ks_cf = f"{ks_name}.{table}"
@@ -295,6 +304,7 @@ class DeleteMonkeyBase(NemesisBaseClass):
         self.random = self.runner.random
 
     def precheck(self, node) -> str | None:
+        """Require `max_partitions_in_test_table` to be configured for data validation."""
         partitions_attrs = self.runner.tester.partitions_attrs
         if not (partitions_attrs and partitions_attrs.max_partitions_in_test_table):
             return 'This nemesis expects "max_partitions_in_test_table" sub-parameter of data_validation to be set'
@@ -402,6 +412,7 @@ class DeleteByPartitionsMonkey(DeleteMonkeyBase):
     """
 
     def disrupt(self):
+        """Delete whole partitions of the scylla-bench table."""
         verify_scylla_bench_keyspace_exists(self.runner.cluster)
 
         partitions_for_delete = self.choose_partitions_for_delete(partitions_amount=10, ks_cf=self.KS_CF)
@@ -431,6 +442,7 @@ class DeleteOverlappingRowRangesMonkey(DeleteMonkeyBase):
     """
 
     def disrupt(self):
+        """Delete overlapping clustering-key ranges from the chosen partitions."""
         verify_scylla_bench_keyspace_exists(self.runner.cluster)
 
         partitions_for_delete = self.choose_partitions_for_delete(
@@ -607,6 +619,7 @@ class DeleteByRowsRangeMonkey(DeleteMonkeyBase):
         run_deletions(self.runner.cluster, self.runner.target_node, queries=queries, ks_cf=ks_cf)
 
     def disrupt(self):
+        """Delete row ranges in two steps, then validate the remaining data."""
         verify_scylla_bench_keyspace_exists(self.runner.cluster)
 
         ks_cf = self.KS_CF
@@ -656,6 +669,7 @@ class AddDropColumnMonkey(NemesisBaseClass):
         self.columns_info = {}
 
     def disrupt(self):
+        """Run ADD/DROP column cycles on a suitable table."""
         LOGGER.debug("AddDropColumnMonkey: Started")
         self.target_table = self.get_target_table(self.target_table)
         if self.target_table is None:

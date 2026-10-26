@@ -42,6 +42,7 @@ class GrowShrinkClusterNemesis(NemesisBaseClass):
     topology_changes = True
 
     def disrupt(self):
+        """Add nodes, optionally double the load while they are present, then decommission them."""
         sleep_time_between_ops = self.runner.cluster.params.get("nemesis_sequence_sleep_between_ops")
         if not self.runner.has_steady_run and sleep_time_between_ops:
             self.runner.steady_state_latency()
@@ -64,11 +65,13 @@ class AddRemoveRackNemesis(NemesisBaseClass):
     config_changes = True
 
     def precheck(self, node) -> str | None:
+        """Require a Kubernetes cluster, the only setup supporting new racks."""
         if not self.runner._is_it_on_kubernetes():
             return "Adding new rack is not supported for non-k8s Scylla clusters"
         return None
 
     def disrupt(self):
+        """Add a node in a new rack, then shrink the new rack back."""
         rack = max(self.runner.cluster.racks) + 1
         grow_cluster(self.runner, rack)
         shrink_cluster(self.runner, rack)
@@ -82,11 +85,13 @@ class GrowShrinkZeroTokenNode(NemesisBaseClass):
     zero_node_changes = True
 
     def precheck(self, node) -> str | None:
+        """Require zero-token node support to be enabled."""
         if not self.runner.cluster.params.get("use_zero_nodes"):
             return "The zero tokens support is not enabled"
         return None
 
     def disrupt(self):
+        """Add a zero-token node, keep it for 5 minutes and decommission a zero-token node."""
         duration_with_znode = 300
         new_znode = self.runner._add_and_init_new_cluster_nodes(count=1, is_zero_node=True)[0]
         self.runner.log.debug("Run with zero-token node %s for %ds", new_znode.name, duration_with_znode)
@@ -109,6 +114,7 @@ class TerminateAndRemoveNodeMonkey(NemesisBaseClass):
     supports_high_disk_utilization = False  # Removing a node consumes disk space
 
     def precheck(self, node) -> str | None:
+        """Skip on Scylla Cloud, where node replacement is covered by CloudReplaceNonResponsiveNode."""
         if self.runner.cluster.params.get("db_type") == "cloud_scylla":
             return (
                 "Skipping this nemesis due the replace node option that supported by Cloud "
@@ -117,6 +123,7 @@ class TerminateAndRemoveNodeMonkey(NemesisBaseClass):
         return None
 
     def disrupt(self):
+        """Terminate the target node, remove it from the cluster and add a replacement node."""
         node_to_remove = self.runner.target_node
         up_normal_nodes = self.runner.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
 

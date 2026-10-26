@@ -217,11 +217,13 @@ class RandomInterruptionNetworkMonkey(NemesisBaseClass):
     additional_params = {"ip_ssh_connections": "public"}
 
     def precheck(self, node) -> str | None:
+        """Skip when no secondary network interface is available, except on Kubernetes."""
         if self.runner._is_it_on_kubernetes():  # k8s uses Chaos Mesh, no secondary interface needed
             return None
         return extra_network_interface_precheck(self.runner)
 
     def disrupt(self):
+        """Limit, delay or drop the target node's network traffic with traffic control for a random time."""
         list_of_timeout_options = [10, 60, 120, 300, 500]
         if self.runner._is_it_on_kubernetes():
             self._disrupt_k8s(list_of_timeout_options)
@@ -376,11 +378,13 @@ class BlockNetworkMonkey(NemesisBaseClass):
     additional_params = {"ip_ssh_connections": "public"}
 
     def precheck(self, node) -> str | None:
+        """Skip when no secondary network interface is available, except on Kubernetes."""
         if self.runner._is_it_on_kubernetes():  # k8s uses Chaos Mesh, no secondary interface needed
             return None
         return extra_network_interface_precheck(self.runner)
 
     def disrupt(self):
+        """Drop all network traffic of the target node for a random time, then restore it."""
         list_of_timeout_options = [10, 60, 120, 300, 500]
         if self.runner._is_it_on_kubernetes():
             with self.runner.action_log_scope(f"Block network on {self.runner.target_node.name} node"):
@@ -448,12 +452,14 @@ class RejectInterNodeNetworkMonkey(NemesisBaseClass):
     free_tier_set = True
 
     def precheck(self, node) -> str | None:
+        """Skip while scylladb/scylladb#6522 is open."""
         # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
         if SkipPerIssues("https://github.com/scylladb/scylladb/issues/6522", self.runner.tester.params):
             return "https://github.com/scylladb/scylladb/issues/6522"
         return None
 
     def disrupt(self):
+        """Drop or reject inter-node traffic (ports 7000 and 7001) with iptables for a random time."""
         install_iptables(self.runner.target_node)
 
         textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule(rnd=self.runner.random)
@@ -492,6 +498,7 @@ class RejectNodeExporterNetworkMonkey(NemesisBaseClass):
     networking = True
 
     def disrupt(self):
+        """Drop or reject node-exporter traffic (port 9100) with iptables for a random time."""
         install_iptables(self.runner.target_node)
 
         textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule(rnd=self.runner.random)
@@ -521,6 +528,7 @@ class RejectThriftNetworkMonkey(NemesisBaseClass):
     networking = True
 
     def disrupt(self):
+        """Drop or reject Thrift traffic (port 9160) with iptables for a random time."""
         install_iptables(self.runner.target_node)
 
         textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule(rnd=self.runner.random)
@@ -556,9 +564,11 @@ class StopStartInterfacesNetworkMonkey(NemesisBaseClass):
     additional_params = {"ip_ssh_connections": "public"}
 
     def precheck(self, node) -> str | None:
+        """Require a secondary network interface."""
         return extra_network_interface_precheck(self.runner)
 
     def disrupt(self):
+        """Take the secondary network interface of the target node down for a random time, then bring it back up."""
         list_of_timeout_options = [10, 60, 120, 300, 500]
         wait_time = self.runner.random.choice(list_of_timeout_options)
         self.runner.log.debug("Taking down eth1 for %dsec", wait_time)

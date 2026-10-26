@@ -35,12 +35,14 @@ class AbortDecommissionMonkey(NemesisBaseClass):
     disruptive = True
 
     def precheck(self, node) -> str | None:
+        """Require tablets, which abortable decommission depends on."""
         # Aborting decommission is only supported with tablets, https://github.com/scylladb/scylladb/pull/24129
         if not is_tablets_feature_enabled(node):
             return "Aborting decommission is only supported with tablets."
         return None
 
     def decommission_target_node(self):
+        """Run `nodetool decommission` on the target node, tolerating the abort failure."""
         try:
             with EventsSeverityChangerFilter(
                 new_severity=Severity.WARNING,
@@ -61,6 +63,7 @@ class AbortDecommissionMonkey(NemesisBaseClass):
                 raise
 
     def abort_decommission_task(self):
+        """Abort the running decommission task once SSTable streaming has started."""
         task_id = wait_for_tasks(
             self.runner.target_node,
             module="node_ops",
@@ -86,6 +89,7 @@ class AbortDecommissionMonkey(NemesisBaseClass):
         self.runner.target_node.run_nodetool(f"tasks wait {task_id}")
 
     def disrupt(self):
+        """Decommission the target node, abort it once streaming starts and restore the cluster to a healthy state."""
         if len([n for n in self.runner.cluster.data_nodes if n.rack == self.runner.target_node.rack]) == 1:
             raise UnsupportedNemesis(
                 f"Target node {self.runner.target_node.name} is the only one in rack {self.runner.target_node.rack}, cannot decommission it."

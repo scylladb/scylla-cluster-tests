@@ -74,36 +74,44 @@ class NemesisJobGenerator:
 
     @property
     def template_path(self) -> Path:
+        """Directory holding the Jinja templates."""
         return self.base_dir / "templates"
 
     @property
     def nemesis_test_config_dir(self):
+        """Directory receiving the generated nemesis test-case configs."""
         return self.base_dir / "configurations" / "nemesis"
 
     @property
     def nemesis_class_list_path(self) -> Path:
+        """Path to the YAML file listing the nemesis classes."""
         return self.base_dir / "data_dir" / "nemesis_classes.yml"
 
     @property
     def base_nemesis_job_dir(self) -> Path:
+        """Directory receiving the generated Jenkins nemesis pipelines."""
         return self.base_dir / "jenkins-pipelines" / "oss" / "nemesis"
 
     @cached_property
     def nemesis_base_config_file_template(self) -> str:
+        """Raw template of the base nemesis job config."""
         with (self.template_path / TEST_CASE_TEMPLATE_DIR / self.config_template_name).open() as file:
             return file.read()
 
     @cached_property
     def nemesis_job_template(self) -> str:
+        """Raw template of the nemesis job pipeline."""
         with (self.template_path / JOB_PIPELINE_TEMPLATE_DIR / self.job_template_name).open() as file:
             return file.read()
 
     @cached_property
     def nemesis_config_template_content(self) -> str:
+        """Raw template of the per-nemesis test-case config."""
         with (self.template_path / TEST_CASE_TEMPLATE_DIR / self.nemesis_config_template).open() as file:
             return file.read()
 
     def load_nemesis_class_list(self) -> list[str]:
+        """Load the nemesis class names from the class list file."""
         with self.nemesis_class_list_path.open() as file:
             data = yaml.safe_load(file)
 
@@ -113,6 +121,7 @@ class NemesisJobGenerator:
         return data
 
     def create_test_cases_from_template(self):
+        """Write one test-case config per nemesis class."""
         for cls in self.nemesis_class_list:
             new_config_name = f"{cls}.yaml"
             nemesis_config_body = Template(self.nemesis_config_template_content).render({"nemesis_class": cls})
@@ -122,6 +131,7 @@ class NemesisJobGenerator:
                 file.write("\n")
 
     def create_job_files_from_template(self):
+        """Write one Jenkins job file per nemesis class and backend."""
         for cls in self.nemesis_class_list:
             clazz = getattr(nemesis, cls)
             additional_configs = clazz.additional_configs or []
@@ -152,12 +162,14 @@ class NemesisJobGenerator:
                     file.write(nemesis_job_groovy_source + "\n")
 
     def render_base_job_config(self, params: dict | None = None):
+        """Write the base nemesis job config rendered with `params`."""
         params = params if params else {}
         base_config_body = Template(self.nemesis_base_config_file_template).render(params)
         with self.file_opener(self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml", "w") as file:
             file.write(base_config_body + "\n")
 
     def verify_env(self):
+        """Check the required template and class list exist and create the output directories."""
         assert self.template_path.exists(), "Nemesis template directory is missing, cannot continue"
         assert self.nemesis_class_list_path.exists(), "Nemesis class list is not generated, cannot continue"
 
