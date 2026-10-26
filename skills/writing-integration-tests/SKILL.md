@@ -27,7 +27,7 @@ SCT separates test execution: `sct.py unit-tests` runs with `-m "not integration
 
 Use one or more of these approaches:
 1. **Module docstring** listing service requirements
-2. **`pytest.mark.skipif`** with credential checks and clear `reason` messages
+2. **`@pytest.mark.requires_aws`** for anything that reaches real AWS, including KeyStore (which is where SCT gets its GCE, Azure and OCI credentials too); other clouds use `pytest.mark.skipif` with a clear `reason`
 3. **Comments** on individual test functions
 
 This enables developers to know which tests they can run locally and which require cloud credentials.
@@ -37,7 +37,7 @@ This enables developers to know which tests they can run locally and which requi
 | Label | Services | Credential Check |
 |-------|----------|-----------------|
 | **docker** | Scylla container, Vector Store, Kafka | Docker daemon running |
-| **aws** | EC2, S3, IAM, KMS, SSM, CloudFormation | `AWS_ACCESS_KEY_ID` or `AWS_PROFILE` |
+| **aws** | EC2, S3, IAM, KMS, SSM, Secrets Manager (KeyStore) | `@pytest.mark.requires_aws` |
 | **gce** | Compute Engine, GCS, KMS | `GOOGLE_APPLICATION_CREDENTIALS` |
 | **azure** | VMs, Storage, KMS, Resource Groups | `AZURE_SUBSCRIPTION_ID` |
 | **oci** | Compute, Identity, Network | `OCI_CONFIG_FILE` |
@@ -136,19 +136,17 @@ def test_s3_operations():
 
 > **Note:** `@mock_aws` intercepts all boto3 calls — no real AWS access occurs. These tests can run as unit tests. Only use `@pytest.mark.integration` for tests that need **real** AWS credentials.
 
-For tests that need real AWS:
+For tests that need real AWS, add the `requires_aws` marker (module-wide or per test).
+`unit_tests/integration/conftest.py` skips the test when no AWS credentials are found, so
+people without SCT AWS access can still run the rest of the suite. In CI (`JOB_NAME` set) a
+missing credential fails the test instead of skipping it:
 ```python
-import os
 import pytest
 
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(
-        not os.environ.get("AWS_ACCESS_KEY_ID"),
-        reason="AWS credentials not configured — set AWS_ACCESS_KEY_ID",
-    ),
-]
+pytestmark = [pytest.mark.integration, pytest.mark.requires_aws]
 ```
+Mark only the tests that need it: a module where most tests run on Docker should mark the few
+AWS ones individually (or the `pytest.param(..., marks=pytest.mark.requires_aws)` cases).
 
 ### OCI Tests (Service: oci)
 
@@ -206,7 +204,7 @@ def test_k8s_operator(k8s_cluster):
 
 ### Test Passes Locally but Fails in CI
 
-1. **Missing credentials.** CI may not have the same cloud credentials. Add `skipif` guards.
+1. **Missing credentials.** Mark AWS-dependent tests `requires_aws` (see above); a missing credential then skips locally but fails in CI. Use `skipif` guards for other clouds.
 2. **Docker version differences.** CI may use a different Docker version. Check `docker --version`.
 3. **Network restrictions.** CI may block outgoing connections. Use `moto` for AWS tests when possible.
 

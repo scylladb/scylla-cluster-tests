@@ -49,6 +49,7 @@ def fixture_env(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_04_check_env_parse(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_REGION_NAME", '["eu-west-1", "us-east-1"]')
@@ -65,6 +66,7 @@ def test_04_check_env_parse(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_10_longevity(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/complex_test_case_with_version.yaml")
@@ -75,6 +77,7 @@ def test_10_longevity(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_10_oci_user_prefix_fits_x509_cn_limit(monkeypatch):
     """OCI node names include region; user_prefix must be short enough for the full name to fit X.509 CN 64-char limit."""
     user_prefix = "longevity-5gb-1h-ToggleAuditRulesNemesisSyslog"
@@ -93,6 +96,7 @@ def test_10_oci_user_prefix_fits_x509_cn_limit(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_10_mananger_regression(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
@@ -102,6 +106,7 @@ def test_10_mananger_regression(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_12_scylla_version_ami(monkeypatch):
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -115,6 +120,7 @@ def test_12_scylla_version_ami(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_12_scylla_version_ami_case1(monkeypatch):
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -125,6 +131,7 @@ def test_12_scylla_version_ami_case1(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_12_scylla_version_ami_case2(monkeypatch):
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -136,6 +143,7 @@ def test_12_scylla_version_ami_case2(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_12_scylla_version_repo(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
@@ -144,6 +152,7 @@ def test_12_scylla_version_repo(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_12_scylla_version_repo_case1(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
@@ -152,6 +161,7 @@ def test_12_scylla_version_repo_case1(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_12_scylla_version_repo_case2(monkeypatch):
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -162,6 +172,7 @@ def test_12_scylla_version_repo_case2(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_13_scylla_version_ami_branch_latest(monkeypatch):
     latest_branch = ".".join(_get_latest_scylla_release().split(".")[0:2])
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
@@ -177,6 +188,7 @@ def test_13_scylla_version_ami_branch_latest(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_conf_check_required_files(monkeypatch):  # pylint: disable=no-self-use
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     ami_id = get_ssm_ami(
@@ -195,6 +207,7 @@ def test_conf_check_required_files(monkeypatch):  # pylint: disable=no-self-use
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_13_bool(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_USE_PREINSTALLED_SCYLLA", "False")
@@ -205,6 +218,7 @@ def test_13_bool(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_14_aws_siren_from_env(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_DB_TYPE", "cloud_scylla")
@@ -225,6 +239,7 @@ def test_14_aws_siren_from_env(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_16_default_oracle_scylla_version_eu_west_1(monkeypatch):
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -239,6 +254,7 @@ def test_16_default_oracle_scylla_version_eu_west_1(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_16_oracle_scylla_version_us_east_1(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", _get_latest_scylla_release())
@@ -254,6 +270,7 @@ def test_16_oracle_scylla_version_us_east_1(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_16_oracle_scylla_version_eu_west_1(monkeypatch):
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -269,6 +286,7 @@ def test_16_oracle_scylla_version_eu_west_1(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_16_oracle_scylla_version_and_oracle_ami_together(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
@@ -284,6 +302,7 @@ def test_16_oracle_scylla_version_and_oracle_ami_together(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_18_error_if_no_version_repo_ami_selected(monkeypatch):
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.delenv("SCT_SCYLLA_VERSION", raising=False)
@@ -318,6 +337,7 @@ def test_18_error_if_no_version_repo_ami_selected(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_20_user_data_format_version_aws(monkeypatch):
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -332,6 +352,7 @@ def test_20_user_data_format_version_aws(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_20_user_data_format_version_aws_2(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     ami_id = get_ssm_ami(
@@ -346,6 +367,7 @@ def test_20_user_data_format_version_aws_2(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_20_user_data_format_version_gce_1(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "master:latest")
@@ -356,6 +378,7 @@ def test_20_user_data_format_version_gce_1(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_20_user_data_format_version_gce_2(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
@@ -366,6 +389,7 @@ def test_20_user_data_format_version_gce_2(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_20_user_data_format_version_gce_3(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv(
@@ -379,6 +403,7 @@ def test_20_user_data_format_version_gce_3(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_20_user_data_format_version_azure(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
     monkeypatch.setenv("SCT_AZURE_REGION_NAME", "eastus")
