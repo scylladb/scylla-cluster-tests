@@ -106,4 +106,4 @@ jobs:
     params:
       region: "eu-west-1"
 
-email_recipients: "scylla-doctor-rel-qa-automated-testing@scylladb.com"
+email_recipients: "cx-customer-ops-eng@scylladb.com"
