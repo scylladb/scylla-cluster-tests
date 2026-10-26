@@ -45,6 +45,7 @@ class AddRemoveDcNemesis(NemesisBaseClass):
         self.new_ks_name: str = "keyspace_new_dc"
 
     def precheck(self, node) -> str | None:
+        """Skip multi-region setups."""
         if self.runner.cluster.test_config.MULTI_REGION:
             return "Skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)"
         return None
@@ -332,6 +333,7 @@ class AddRemoveDcNemesis(NemesisBaseClass):
                 self.decommission_new_nodes()
 
     def disrupt(self) -> None:
+        """Add a new datacenter, rebuild and repair it, verify multi-DC reads and writes, then decommission it."""
         if self.runner.tester.prepare_phase_active.is_set():
             raise UnsupportedNemesis(
                 "Skipped during prepare phase, due to stress commands potentially writing to the new DC."
