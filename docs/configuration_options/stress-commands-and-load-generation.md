@@ -36,7 +36,7 @@ Everything else here is loader-side and applies whatever the tool: [`stress_imag
 the [`stress_multiplier`](#stress_multiplier) options, [`stress_duration`](#stress_duration), [`prepare_stress_duration`](#prepare_stress_duration) and
 [`stop_test_on_stress_failure`](#stop_test_on_stress_failure).
 
-**71 options.**
+**73 options.**
 
 
 <a id="add_cs_user_profiles_extra_tables"></a>
@@ -158,6 +158,17 @@ cassandra-stress user-profiles list. Executed in test step
 **default:** []
 
 **type:** str | list[str] → list[str] (appendable)
+
+
+<a id="effective_compression_ratio"></a>
+
+## **effective_compression_ratio** / SCT_EFFECTIVE_COMPRESSION_RATIO
+
+Effective compression ratio used for Jinja stress command templating. Defined as on_disk_bytes / logical_uncompressed_bytes. This estimates how much disk space Scylla uses after compression relative to the logical uncompressed dataset size. For example, 1.0 means no effective compression and 0.68 means the data is expected to occupy about 68% of its logical uncompressed size on disk. Used together with the effective_disk_size_bytes template variable to calculate row counts that fill a target fraction of available disk capacity. You can estimate this ratio from Grafana in Keyspace -> Compression metrics; a compression value of 0% corresponds to [`effective_compression_ratio`](#effective_compression_ratio)=1.0. Must be in range (0, 1.0].
+
+**default:** 1.0
+
+**type:** float
 
 
 <a id="gemini_cmd"></a>
@@ -796,6 +807,17 @@ Read stress command(s) run in the verification phase. See [`stress_cmd`](#stress
 **default:** N/A
 
 **type:** str | list[str] → list[str] (appendable)
+
+
+<a id="stress_template_context"></a>
+
+## **stress_template_context** / SCT_STRESS_TEMPLATE_CONTEXT
+
+Shared runtime-only Jinja variables for stress command templating. Entries are resolved in declaration order and may reference earlier context entries as well as built-in stress template variables such as effective_disk_size_bytes and db_node_count_per_dc. These values are available to stress commands rendered by SCT, but are not evaluated during config load or validation.
+
+**default:** {}
+
+**type:** dict | YAML/JSON string → dict
 
 
 <a id="use_prepared_loaders"></a>
