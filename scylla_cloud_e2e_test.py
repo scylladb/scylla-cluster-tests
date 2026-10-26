@@ -340,3 +340,35 @@ class XCloudScalingTest(ClusterTester, LoaderUtilsMixin):
             total_storage_before_scaling=total_storage_before_scaling,
             is_scaling_upsize=True,
         )
+
+    def test_xcloud_cluster_scaling_downsize_under_load(self) -> None:
+        """Test cluster scaling down triggered by storage utilization succeeds without disrupting C-S mixed load."""
+        node_ids_before_scaling, total_storage_before_scaling = self.get_cluster_state_before_scaling()
+
+        self.log.info("Populate the cluster to around 35% of disk utilization")
+        self.run_prepare_write_cmd()
+
+        self.log.info("Start C-S mixed load against the populated data")
+        mixed_load_queues = []
+        self.assemble_and_run_all_stress_cmd(
+            stress_queue=mixed_load_queues,
+            stress_cmd=self.params.get("stress_cmd_m"),
+            keyspace_num=1,
+        )
+
+        self.log.info("Edit cluster scaling configuration")
+        self.db_cluster.update_scaling_config(instanceTypeIDs=self.db_cluster.resolve_instance_type_ids(["i8g.large"]))
+
+        self.log.info("Wait for cluster scaling to complete")
+        request_id = wait_for_resize_request(self.db_cluster)
+        wait_for_cluster_resize(self.db_cluster, request_id=request_id)
+
+        self.log.info("Cluster scaling completed, stop C-S mixed load")
+        for queue in mixed_load_queues:
+            queue.kill()
+
+        self.verify_cluster_after_scaling(
+            node_ids_before_scaling=node_ids_before_scaling,
+            total_storage_before_scaling=total_storage_before_scaling,
+            is_scaling_upsize=False,
+        )
