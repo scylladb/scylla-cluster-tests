@@ -1,0 +1,14 @@
+# LeaseGuard leader leases for strongly-consistent tables (scylladb/scylladb#30777), AWS ClockBound clock.
+# Same as enable_sc_leaseguard.yaml, but the lease clock bound comes from the ClockBound daemon.
+# SCT installs the daemon on the db nodes in place of chrony; its version has to match the clock-bound
+# submodule Scylla is built with (3.0.0-alpha.1 in #30777), and Scylla fails to start without it.
+# Check on each node: "LeaseGuard leader leases enabled; using 'clockbound'" in the Scylla log.
+clockbound_version: '3.0.0-alpha.1'
+
+append_scylla_yaml:
+  strongly_consistent_raft_leader_leases_enabled: true
+  strongly_consistent_raft_leader_lease_duration_in_ms: 1000
+  strongly_consistent_raft_leader_lease_clock_source: clockbound
+
+# There is no Raft leader balancer yet: keep tablets (and their leaders) where they were created.
+disable_tablet_balancing: true
