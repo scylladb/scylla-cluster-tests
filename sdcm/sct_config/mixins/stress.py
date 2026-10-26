@@ -16,6 +16,7 @@
 from typing import ClassVar, Literal
 
 from pydantic import BaseModel
+from pydantic.types import confloat
 
 from sdcm.sct_config.types import Boolean, DictOrStr, SctField, String, StringOrList
 
@@ -101,6 +102,19 @@ class StressConfigMixin(BaseModel):
     )
     cs_user_profiles: StringOrList = SctField(
         description="cassandra-stress user-profiles list. Executed in test step",
+    )
+    effective_compression_ratio: confloat(gt=0, le=1.0) = SctField(
+        description=(
+            "Effective compression ratio used for Jinja stress command templating. "
+            "Defined as on_disk_bytes / logical_uncompressed_bytes. "
+            "This estimates how much disk space Scylla uses after compression relative to the logical "
+            "uncompressed dataset size. For example, 1.0 means no effective compression and 0.68 means the "
+            "data is expected to occupy about 68% of its logical uncompressed size on disk. Used together "
+            "with the effective_disk_size_bytes template variable to calculate row counts that fill a target "
+            "fraction of available disk capacity. You can estimate this ratio from Grafana in Keyspace -> "
+            "Compression metrics; a compression value of 0% corresponds to effective_compression_ratio=1.0. "
+            "Must be in range (0, 1.0]."
+        ),
     )
     gemini_cmd: String = SctField(
         description="gemini command to run (for now used only in GeminiTest)",
@@ -297,6 +311,15 @@ class StressConfigMixin(BaseModel):
     )
     stress_read_cmd: StringOrList = SctField(
         description="Read stress command(s) run in the verification phase. See 'stress_cmd' for the format.",
+    )
+    stress_template_context: DictOrStr = SctField(
+        description=(
+            "Shared runtime-only Jinja variables for stress command templating. "
+            "Entries are resolved in declaration order and may reference earlier context entries as well as "
+            "built-in stress template variables such as effective_disk_size_bytes and db_node_count_per_dc. "
+            "These values are available to stress commands rendered by SCT, but are not evaluated during config "
+            "load or validation."
+        ),
     )
     use_prepared_loaders: Boolean = SctField(
         description="If True, we use prepared VMs for loader (instead of using docker images)",
