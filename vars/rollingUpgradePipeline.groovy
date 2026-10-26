@@ -3,7 +3,9 @@
 List supportedVersions = []
 def params_mapping = [:] // this would hold the params per split of this pipeline
 def completed_stages = [:]
-(testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+// keep these in the script binding (no `def`) so call() and post{} can read them; log collection
+// and cleanup default to 30 minutes so they still run when 'Get test duration' fails
+(testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,30,30]
 
 def call(Map pipelineParams) {
     // Captured locals - see the same block in longevityPipeline for why these come from
@@ -314,12 +316,12 @@ def call(Map pipelineParams) {
                 post{
                     failure {
                         script{
-                            sh "exit 1"
+                            error("BYO Scylladb failed")
                         }
                     }
                     unstable {
                         script{
-                            sh "exit 1"
+                            error("BYO Scylladb failed")
                         }
                     }
                 }
@@ -539,14 +541,12 @@ def call(Map pipelineParams) {
                                                 def clean_resources = completed_stages[base_version]['clean_resources']
                                                 def send_email = completed_stages[base_version]['send_email']
                                                 def clean_sct_runner = completed_stages[base_version]['clean_sct_runner']
-                                                sh """
-                                                    echo "'provision_resources' stage is completed: $provision_resources"
-                                                    echo "'run_tests' stage is completed: $run_tests"
-                                                    echo "'collect_logs' stage is completed: $collect_logs"
-                                                    echo "'clean_resources' stage is completed: $clean_resources"
-                                                    echo "'send_email' stage is completed: $send_email"
-                                                    echo "'clean_sct_runner' stage is completed: $clean_sct_runner"
-                                                """
+                                                echo "'provision_resources' stage is completed: $provision_resources"
+                                                echo "'run_tests' stage is completed: $run_tests"
+                                                echo "'collect_logs' stage is completed: $collect_logs"
+                                                echo "'clean_resources' stage is completed: $clean_resources"
+                                                echo "'send_email' stage is completed: $send_email"
+                                                echo "'clean_sct_runner' stage is completed: $clean_sct_runner"
                                                 if (!completed_stages[base_version]['collect_logs']) {
                                                     catchError {
                                                         script {
