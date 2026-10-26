@@ -1,6 +1,7 @@
 """Unit tests for cluster_cloud module."""
 
 import inspect
+from types import MethodType
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -768,6 +769,7 @@ def _mock_cluster_for_prepare_config(az_knob=""):
     mock_cluster.node_type = "scylla-db"
     mock_cluster.test_config = MagicMock(TEST_DURATION=60)
     mock_cluster._api_client = MagicMock(client_ip="1.2.3.4", get_instance_id_by_name=MagicMock(return_value=42))
+    mock_cluster.resolve_instance_type_ids = MethodType(ScyllaCloudCluster.resolve_instance_type_ids, mock_cluster)
     params = {
         "xcloud_availability_zones": az_knob,
         "xcloud_replication_factor": 3,
@@ -844,3 +846,52 @@ def test_cloud_node_accepts_every_wait_db_up_argument_of_its_base():
     assert set(base) <= set(override), f"missing in the CloudNode override: {set(base) - set(override)}"
     for name, parameter in base.items():
         assert override[name].default == parameter.default, f"'{name}' default differs from the base one"
+
+
+def _cluster_for_scaling_update(current_config):
+    cluster = _build_real_cloud_cluster()
+    cluster._cluster_id = 2
+    cluster.xcloud_scaling_config = {"Mode": "xcloud", "InstanceTypes": ["i8g.xlarge"]}
+    cluster.api_client.get_cluster_details.return_value = {"dc": {"id": 3}}
+    cluster.api_client.get_cluster_dc.return_value = {
+        "ID": 3,
+        "ClusterID": 2,
+        "InstanceTypeID": 182,
+        "Scaling": current_config,
+    }
+    return cluster
+
+
+def test_update_scaling_config_replaces_only_requested_parameters():
+    current_config = {
+        "InstanceTypeIDs": [182],
+        "Policies": {"Storage": {"TargetUtilization": 0.8, "Min": 0}, "VCPU": {"Min": 0}},
+    }
+    cluster = _cluster_for_scaling_update(current_config)
+
+    cluster.update_scaling_config(instanceTypeIDs=[42])
+
+    expected_config = {
+        "instanceTypeIDs": [42],
+        "instanceFamilies": [],
+        "policies": {"storage": {"targetUtilization": 0.8, "min": 0}, "vcpu": {"min": 0}},
+        "mode": "xcloud",
+    }
+    cluster.api_client.update_cluster_dc_scaling.assert_called_once_with(
+        account_id=123, cluster_id=2, dc_id=3, scaling_config=expected_config
+    )
+
+
+def test_update_scaling_config_merges_nested_overrides():
+    current_config = {
+        "InstanceTypeIDs": [182],
+        "Policies": {"Storage": {"TargetUtilization": 0.8, "Min": 0}, "VCPU": {"Min": 0}},
+    }
+    cluster = _cluster_for_scaling_update(current_config)
+
+    cluster.update_scaling_config(policies={"storage": {"targetUtilization": 0.5}})
+
+    new_config = cluster.api_client.update_cluster_dc_scaling.call_args.kwargs["scaling_config"]
+
+    assert new_config["policies"] == {"storage": {"targetUtilization": 0.5, "min": 0}, "vcpu": {"min": 0}}
+    assert new_config["instanceTypeIDs"] == [182]

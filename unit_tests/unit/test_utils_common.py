@@ -21,7 +21,13 @@ from pathlib import Path
 import pytest
 
 from sdcm.utils.adaptive_timeouts import Operations
-from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud, get_testrun_dir, redact_cli_secrets
+from sdcm.utils.common import (
+    convert_metric_to_ms,
+    download_dir_from_cloud,
+    get_testrun_dir,
+    pascal_to_camel_case,
+    redact_cli_secrets,
+)
 from sdcm.utils.sstable import load_inventory
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, FakeSstableRemoter
@@ -326,3 +332,16 @@ def test_redact_cli_secrets_does_not_match_substring_of_unrelated_flag():
     # This test just pins current behaviour so regressions are visible.
     redacted = redact_cli_secrets(cmd)
     assert "--api-key" in redacted
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        ("TargetUtilization", "targetUtilization"),
+        ("Min", "min"),
+        ("alreadyCamel", "alreadyCamel"),
+        ("", ""),
+    ],
+)
+def test_pascal_to_camel_case(name, expected):
+    assert pascal_to_camel_case(name) == expected
