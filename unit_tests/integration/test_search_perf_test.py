@@ -80,10 +80,11 @@ def test_a_staged_corpus_is_loaded_by_the_rune_script(request, docker_scylla, pa
     remote_dir = f"{workload.container_root}/integration"
     remote_path = f"{remote_dir}/{staged_corpus.name}"
     stress_cmd = (
-        f"latte run -f load {workload.script} "
+        f"latte run -f load "
         f"-d {len(DOCUMENTS)} "
         rf"-P {workload.params.dataset_dir}=\"{remote_dir}\" "
         rf"-P {workload.params.records_file}=\"{staged_corpus.name}\" "
+        f"{workload.script} "
     )
 
     latte_thread = LatteStressThread(
@@ -121,10 +122,11 @@ def test_an_unstaged_corpus_loads_nothing(request, docker_scylla, params, staged
 
     workload = FTS_WORKLOAD
     stress_cmd = (
-        f"latte run -f load {workload.script} "
+        f"latte run -f load "
         f"-d {len(DOCUMENTS)} "
         rf"-P {workload.params.dataset_dir}=\"{workload.container_root}/absent\" "
         rf"-P {workload.params.records_file}=\"{staged_corpus.name}\" "
+        f"{workload.script} "
     )
 
     latte_thread = LatteStressThread(
