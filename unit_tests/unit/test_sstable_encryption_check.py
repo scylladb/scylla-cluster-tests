@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 import pytest
 from invoke import Result
 
+from sdcm.exceptions import SstablesNotFound
 from sdcm.utils.sstable import sstable_utils
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 
@@ -35,6 +36,10 @@ DELETED_STDERR = (
     f"WARN  2026-10-12 01:04:19,852 [shard 0:main] scylla-sstable - Skipping SSTable {FAILED_SSTABLE},"
     " it was deleted while being loaded: std::filesystem::filesystem_error: filesystem error: open failed:"
     f" No such file or directory [{TABLE_DIR}/mt-3h4l_0218_208b42ahjsml3d91p3-big-Statistics.db]"
+)
+MISORDERED_STDERR = (
+    f"Could not load SSTable: {FAILED_SSTABLE}: sstables::malformed_sstable_exception ({FAILED_SSTABLE}:"
+    " first and last keys of summary are misordered)"
 )
 
 
@@ -79,4 +84,13 @@ def test_read_error_on_existing_sstable_fails_check(make_sstable_utils):
     )
 
     with pytest.raises(AssertionError, match=r"Results out of 2: True=1, False=0, None=1"):
+        utils.check_that_sstables_are_encrypted(sstables=[ENCRYPTED_SSTABLE, FAILED_SSTABLE])
+
+
+def test_no_sstables_left_raises_not_found(make_sstable_utils):
+    utils = make_sstable_utils(
+        {ENCRYPTED_SSTABLE: DELETED_STDERR, FAILED_SSTABLE: MISORDERED_STDERR}, existing={FAILED_SSTABLE}
+    )
+
+    with pytest.raises(SstablesNotFound, match="1 deleted and 1 misordered out of 2"):
         utils.check_that_sstables_are_encrypted(sstables=[ENCRYPTED_SSTABLE, FAILED_SSTABLE])
