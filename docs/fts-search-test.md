@@ -234,6 +234,7 @@ The load and index waits and the query settings are plan values, not SCT params.
 |---|---|---|
 | `max_index_wait_secs` | 1800 | the rune script's own budget for probing the index until it answers, the index-build phase timeout, and how long SCT waits for a dropped index to disappear |
 | `max_shard_load_secs` | 3600 | the load phase timeout, **per shard** — shards load one at a time |
+| `has_invalid_queries` | `false` | set it when the dataset's query sets include queries vector-store cannot parse, e.g. a third-party corpus in a performance run. ScyllaDB's error for such a query then no longer fails the test; latte still logs each one as a warning. Leave it off for regression runs, whose query sets have to be valid |
 
 ### Every query needs an expected latency
 
