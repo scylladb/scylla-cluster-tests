@@ -5,7 +5,7 @@
 Which Scylla to install and how it is configured: repos, versions, distro,
 `scylla.yaml`/command-line options, experimental features, authentication and encryption.
 
-**44 options.**
+**46 options.**
 
 
 <a id="append_scylla_args"></a>
@@ -132,6 +132,17 @@ when enabled scylla will enforce mutual authentication when client-to-node encry
 **type:** bool
 
 
+<a id="clockbound_version"></a>
+
+## **clockbound_version** / SCT_CLOCKBOUND_VERSION
+
+Install and run this version of the AWS ClockBound daemon on the db nodes, in place of chrony,<br>before Scylla starts (e.g. '3.0.0-alpha.1'). Needed when scylla.yaml sets<br>strongly_consistent_raft_leader_lease_clock_source: clockbound; the version must match the<br>clock-bound library Scylla is built with.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 <a id="db_type"></a>
 
 ## **db_type** / SCT_DB_TYPE
@@ -141,6 +152,17 @@ Db type to install into db nodes, scylla/cassandra
 **default:** scylla
 
 **type:** str (appendable)
+
+
+<a id="disable_tablet_balancing"></a>
+
+## **disable_tablet_balancing** / SCT_DISABLE_TABLET_BALANCING
+
+Disable tablet load balancing once the cluster is up, so tablets are not migrated during the test
+
+**default:** N/A
+
+**type:** bool
 
 
 <a id="enable_kms_key_rotation"></a>
