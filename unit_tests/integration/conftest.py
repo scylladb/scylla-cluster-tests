@@ -48,6 +48,7 @@ from sdcm.provision.helpers.certificate import (
 from sdcm.test_config import TestConfig
 from sdcm.utils.aws_utils import AwsArchType
 from sdcm.utils.common import get_data_dir_path, get_ec2_image_version_tag, get_scylla_ami_versions
+from sdcm.utils.credentials import aws_credentials_available
 from sdcm.utils.docker_remote import RemoteDocker
 
 from unit_tests.lib.dummy_remote import LocalNode, LocalScyllaClusterDummy
@@ -57,6 +58,18 @@ LOGGER = logging.getLogger(__name__)
 
 # Inherit UNIT_TESTS_DIR from the parent conftest so we don't use __file__ here.
 _REPO_ROOT: Path = Path(__file__).parent.parent.parent
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """Skip `requires_aws` tests when no AWS credentials are found, so they run anywhere.
+
+    In CI (JOB_NAME set) a missing credential is a broken job, not a reason to quietly skip.
+    """
+    if item.get_closest_marker("requires_aws") and not aws_credentials_available():
+        reason = "needs AWS credentials for the SCT AWS account"
+        if os.environ.get("JOB_NAME"):
+            pytest.fail(f"{reason}, but none were found in CI job {os.environ['JOB_NAME']}", pytrace=False)
+        pytest.skip(reason)
 
 
 @contextmanager
