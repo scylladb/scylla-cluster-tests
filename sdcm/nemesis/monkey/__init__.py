@@ -14,6 +14,7 @@ class SslHotReloadingNemesis(NemesisBaseClass):
     config_changes = True
 
     def disrupt(self):
+        """Hot-reload the internode certificate."""
         self.runner.disrupt_hot_reloading_internode_certificate()
 
 
@@ -27,6 +28,7 @@ class PauseLdapNemesis(NemesisBaseClass):
     additional_configs = ["configurations/ldap-authorization.yaml", "configurations/auth_cassandra.yaml"]
 
     def disrupt(self):
+        """Toggle the LDAP connection off and on."""
         self.runner.disrupt_ldap_connection_toggle()
 
 
@@ -40,6 +42,7 @@ class ToggleLdapConfiguration(NemesisBaseClass):
     additional_configs = ["configurations/ldap-authorization.yaml", "configurations/auth_cassandra.yaml"]
 
     def disrupt(self):
+        """Disable then re-enable LDAP authorization."""
         self.runner.disrupt_disable_enable_ldap_authorization()
 
 
@@ -84,6 +87,7 @@ class StopWaitStartMonkey(NemesisBaseClass):
     zero_node_changes = True
 
     def disrupt(self):
+        """Stop Scylla, wait 600 seconds, then start it."""
         self.runner.disrupt_stop_wait_start_scylla_server(600)
 
 
@@ -97,6 +101,7 @@ class StopStartMonkey(NemesisBaseClass):
     limited = True
 
     def disrupt(self):
+        """Stop and start the Scylla server."""
         self.runner.disrupt_stop_start_scylla_server()
 
 
@@ -108,6 +113,7 @@ class RestartThenRepairNodeMonkey(NemesisBaseClass):
     kubernetes = True
 
     def disrupt(self):
+        """Restart the node, then repair it."""
         self.runner.disrupt_restart_then_repair_node()
 
 
@@ -120,6 +126,7 @@ class MultipleHardRebootNodeMonkey(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Hard reboot the node multiple times."""
         self.runner.disrupt_multiple_hard_reboot_node()
 
 
@@ -133,6 +140,7 @@ class HardRebootNodeMonkey(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Hard reboot the node."""
         self.runner.disrupt_hard_reboot_node()
 
 
@@ -147,6 +155,7 @@ class SoftRebootNodeMonkey(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Soft reboot the node."""
         self.runner.disrupt_soft_reboot_node()
 
 
@@ -160,6 +169,7 @@ class DrainerMonkey(NemesisBaseClass):
     topology_changes = True
 
     def disrupt(self):
+        """Run nodetool drain on the node."""
         self.runner.disrupt_nodetool_drain()
 
 
@@ -170,6 +180,7 @@ class CorruptThenRepairMonkey(NemesisBaseClass):
     kubernetes = True
 
     def disrupt(self):
+        """Destroy node data, then repair."""
         self.runner.disrupt_destroy_data_then_repair()
 
 
@@ -181,6 +192,7 @@ class CorruptThenRebuildMonkey(NemesisBaseClass):
     xcloud = True
 
     def disrupt(self):
+        """Destroy node data, then rebuild."""
         self.runner.disrupt_destroy_data_then_rebuild()
 
 
@@ -196,6 +208,7 @@ class DecommissionMonkey(NemesisBaseClass):
     )
 
     def disrupt(self):
+        """Run nodetool decommission on the node."""
         self.runner.disrupt_nodetool_decommission()
 
 
@@ -210,6 +223,7 @@ class DecommissionSeedNode(NemesisBaseClass):
     )
 
     def disrupt(self):
+        """Run nodetool decommission on a seed node."""
         self.runner.disrupt_nodetool_seed_decommission()
 
 
@@ -222,6 +236,7 @@ class NoCorruptRepairMonkey(NemesisBaseClass):
     limited = True
 
     def disrupt(self):
+        """Run repair without corrupting data first."""
         self.runner.disrupt_no_corrupt_repair()
 
 
@@ -234,6 +249,7 @@ class MajorCompactionMonkey(NemesisBaseClass):
     limited = True
 
     def disrupt(self):
+        """Run major compaction."""
         self.runner.disrupt_major_compaction()
 
 
@@ -246,6 +262,7 @@ class RefreshMonkey(NemesisBaseClass):
     limited = True
 
     def disrupt(self):
+        """Run nodetool refresh with regular-size sstables."""
         self.runner.disrupt_nodetool_refresh(big_sstable=False)
 
 
@@ -258,6 +275,7 @@ class LoadAndStreamMonkey(NemesisBaseClass):
     limited = True
 
     def disrupt(self):
+        """Run load-and-stream refresh."""
         self.runner.disrupt_load_and_stream()
 
 
@@ -269,6 +287,7 @@ class RefreshBigMonkey(NemesisBaseClass):
     kubernetes = True
 
     def disrupt(self):
+        """Run nodetool refresh with a big sstable."""
         self.runner.disrupt_nodetool_refresh(big_sstable=True)
 
 
@@ -283,6 +302,7 @@ class EnospcMonkey(NemesisBaseClass):
     enospc = True
 
     def disrupt(self):
+        """Trigger ENOSPC on one node."""
         self.runner.disrupt_nodetool_enospc()
 
 
@@ -296,6 +316,7 @@ class EnospcAllNodesMonkey(NemesisBaseClass):
     enospc = True
 
     def disrupt(self):
+        """Trigger ENOSPC on all nodes."""
         self.runner.disrupt_nodetool_enospc(all_nodes=True)
 
 
@@ -309,6 +330,7 @@ class NodeToolCleanupMonkey(NemesisBaseClass):
     limited = True
 
     def disrupt(self):
+        """Run nodetool cleanup."""
         self.runner.disrupt_nodetool_cleanup()
 
 
@@ -321,6 +343,7 @@ class ToggleTableIcsMonkey(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Toggle the table compaction strategy to ICS and back."""
         self.runner.disrupt_toggle_table_ics()
 
 
@@ -334,6 +357,7 @@ class ToggleGcModeMonkey(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Toggle the table tombstone_gc mode."""
         self.runner.disrupt_toggle_table_gc_mode()
 
 
@@ -345,6 +369,7 @@ class AbortRepairMonkey(NemesisBaseClass):
     limited = True
 
     def disrupt(self):
+        """Run repair and abort it."""
         self.runner.disrupt_abort_repair()
 
 
@@ -360,6 +385,7 @@ class NodeTerminateAndReplace(NemesisBaseClass):
     zero_node_changes = True
 
     def disrupt(self):
+        """Terminate the node and replace it."""
         self.runner.disrupt_terminate_and_replace_node()
 
 
@@ -370,6 +396,7 @@ class DrainKubernetesNodeThenReplaceScyllaNode(NemesisBaseClass):
     kubernetes = True
 
     def disrupt(self):
+        """Drain the Kubernetes node, then replace the Scylla node."""
         self.runner.disrupt_drain_kubernetes_node_then_replace_scylla_node()
 
 
@@ -380,6 +407,7 @@ class TerminateKubernetesHostThenReplaceScyllaNode(NemesisBaseClass):
     kubernetes = True
 
     def disrupt(self):
+        """Terminate the Kubernetes host, then replace the Scylla node."""
         self.runner.disrupt_terminate_kubernetes_host_then_replace_scylla_node()
 
 
@@ -390,6 +418,7 @@ class DrainKubernetesNodeThenDecommissionAndAddScyllaNode(NemesisBaseClass):
     kubernetes = True
 
     def disrupt(self):
+        """Drain the Kubernetes node, then decommission and add a Scylla node."""
         self.runner.disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node()
 
 
@@ -400,6 +429,7 @@ class TerminateKubernetesHostThenDecommissionAndAddScyllaNode(NemesisBaseClass):
     kubernetes = True
 
     def disrupt(self):
+        """Terminate the Kubernetes host, then decommission and add a Scylla node."""
         self.runner.disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node()
 
 
@@ -411,6 +441,7 @@ class OperatorNodeReplace(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Replace the Scylla node on Kubernetes."""
         self.runner.disrupt_replace_scylla_node_on_kubernetes()
 
 
@@ -421,6 +452,7 @@ class OperatorNodetoolFlushAndReshard(NemesisBaseClass):
     kubernetes = True
 
     def disrupt(self):
+        """Run nodetool flush and reshard on Kubernetes."""
         self.runner.disrupt_nodetool_flush_and_reshard_on_kubernetes()
 
 
@@ -434,6 +466,7 @@ class ScyllaKillMonkey(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Kill Scylla."""
         self.runner.disrupt_kill_scylla()
 
 
@@ -447,6 +480,7 @@ class ValidateHintedHandoffShortDowntime(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Validate hinted handoff after a short downtime."""
         self.runner.disrupt_validate_hh_short_downtime()
 
 
@@ -460,6 +494,7 @@ class SnapshotOperations(NemesisBaseClass):
     limited = True
 
     def disrupt(self):
+        """Run snapshot operations."""
         self.runner.disrupt_snapshot_operations()
 
 
@@ -471,6 +506,7 @@ class NodeRestartWithResharding(NemesisBaseClass):
     config_changes = True
 
     def disrupt(self):
+        """Restart the node with resharding."""
         self.runner.disrupt_restart_with_resharding()
 
 
@@ -484,6 +520,7 @@ class ClusterRollingRestart(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Rolling restart the cluster in node order."""
         self.runner.disrupt_rolling_restart_cluster(random_order=False)
 
 
@@ -496,6 +533,7 @@ class RollingRestartConfigChangeInternodeCompression(NemesisBaseClass):
     config_changes = True
 
     def disrupt(self):
+        """Rolling restart with a changed internode compression config."""
         self.runner.disrupt_rolling_config_change_internode_compression()
 
 
@@ -509,6 +547,7 @@ class ClusterRollingRestartRandomOrder(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Rolling restart the cluster in random node order."""
         self.runner.disrupt_rolling_restart_cluster(random_order=True)
 
 
@@ -519,6 +558,7 @@ class SwitchBetweenPasswordAuthAndSaslauthdAuth(NemesisBaseClass):
     config_changes = True
 
     def disrupt(self):
+        """Switch authenticators and back."""
         self.runner.disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back()
 
 
@@ -532,6 +572,7 @@ class TopPartitions(NemesisBaseClass):
     limited = True
 
     def disrupt(self):
+        """Run nodetool toppartitions."""
         self.runner.disrupt_show_toppartitions()
 
 
@@ -542,6 +583,7 @@ class NemesisSequence(NemesisBaseClass):
     networking = False
 
     def disrupt(self):
+        """Run the unique nemesis sequence."""
         self.runner.disrupt_run_unique_sequence()
 
 
@@ -554,6 +596,7 @@ class ToggleCDCMonkey(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Toggle CDC feature properties on a table."""
         self.runner.disrupt_toggle_cdc_feature_properties_on_table()
 
 
@@ -564,6 +607,7 @@ class CDCStressorMonkey(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Run the cdcstressor tool."""
         self.runner.disrupt_run_cdcstressor_tool()
 
 
@@ -574,6 +618,7 @@ class DecommissionStreamingErrMonkey(NemesisBaseClass):
     topology_changes = True
 
     def disrupt(self):
+        """Decommission with a streaming error."""
         self.runner.disrupt_decommission_streaming_err()
 
 
@@ -583,6 +628,7 @@ class RebuildStreamingErrMonkey(NemesisBaseClass):
     disruptive = True
 
     def disrupt(self):
+        """Rebuild with a streaming error."""
         self.runner.disrupt_rebuild_streaming_err()
 
 
@@ -592,6 +638,7 @@ class RepairStreamingErrMonkey(NemesisBaseClass):
     disruptive = True
 
     def disrupt(self):
+        """Repair with a streaming error."""
         self.runner.disrupt_repair_streaming_err()
 
 
@@ -603,6 +650,7 @@ class CorruptThenScrubMonkey(NemesisBaseClass):
     supports_high_disk_utilization = False  # Failed for: https://github.com/scylladb/scylladb/issues/22088
 
     def disrupt(self):
+        """Corrupt data, then scrub."""
         self.runner.disrupt_corrupt_then_scrub()
 
 
@@ -614,6 +662,7 @@ class MemoryStressMonkey(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Run a memory stress on the node."""
         self.runner.disrupt_memory_stress()
 
 
@@ -633,6 +682,7 @@ class StartStopMajorCompaction(NemesisBaseClass):
     disruptive = False
 
     def disrupt(self):
+        """Start and stop a major compaction."""
         self.runner.disrupt_start_stop_major_compaction()
 
 
@@ -642,6 +692,7 @@ class StartStopScrubCompaction(NemesisBaseClass):
     disruptive = False
 
     def disrupt(self):
+        """Start and stop a scrub compaction."""
         self.runner.disrupt_start_stop_scrub_compaction()
 
 
@@ -651,6 +702,7 @@ class StartStopCleanupCompaction(NemesisBaseClass):
     disruptive = False
 
     def disrupt(self):
+        """Start and stop a cleanup compaction."""
         self.runner.disrupt_start_stop_cleanup_compaction()
 
 
@@ -661,6 +713,7 @@ class StartStopValidationCompaction(NemesisBaseClass):
     supports_high_disk_utilization = False  # Failed for: https://github.com/scylladb/scylladb/issues/22088
 
     def disrupt(self):
+        """Start and stop a validation compaction."""
         self.runner.disrupt_start_stop_validation_compaction()
 
 
@@ -673,6 +726,7 @@ class ToggleAuditNemesisSyslog(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
+        """Toggle syslog auditing."""
         self.runner.disrupt_toggle_audit_syslog()
 
 
@@ -684,6 +738,7 @@ class BootstrapStreamingErrorNemesis(NemesisBaseClass):
     topology_changes = True
 
     def disrupt(self):
+        """Bootstrap with a streaming error."""
         self.runner.disrupt_bootstrap_streaming_error()
 
 
@@ -695,6 +750,7 @@ class DisableBinaryGossipExecuteMajorCompaction(NemesisBaseClass):
     xcloud = True
 
     def disrupt(self):
+        """Disable binary and gossip, then run major compaction."""
         self.runner.disrupt_disable_binary_gossip_execute_major_compaction()
 
 
@@ -706,6 +762,7 @@ class EndOfQuotaNemesis(NemesisBaseClass):
     config_changes = True
 
     def disrupt(self):
+        """Run the end-of-quota disruption."""
         self.runner.disrupt_end_of_quota_nemesis()
 
 
@@ -717,6 +774,7 @@ class SerialRestartOfElectedTopologyCoordinatorNemesis(NemesisBaseClass):
     topology_changes = True
 
     def disrupt(self):
+        """Restart the elected topology coordinator serially."""
         self.runner.disrupt_serial_restart_elected_topology_coordinator()
 
 
@@ -727,4 +785,5 @@ class SplitMergeTabletsWithAlter(NemesisBaseClass):
     schema_changes = True
 
     def disrupt(self):
+        """Trigger tablet split and merge with ALTER."""
         self.runner.disrupt_trigger_split_merge_tablets_with_alter()
