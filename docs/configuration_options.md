@@ -28,12 +28,12 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-525 options across 29 groups.
+527 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 74 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
-| [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
+| [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 46 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 72 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 16 | The monitoring stack, event severities, Argus reporting and email reports. |
@@ -142,6 +142,7 @@ concerns first, then one page per backend, then one per test type.
 | [`cassandra_version`](configuration_options/auxiliary-db-cluster-oracle-cassandra.md#cassandra_version) | `SCT_CASSANDRA_VERSION` | [Auxiliary DB cluster (oracle / Cassandra)](configuration_options/auxiliary-db-cluster-oracle-cassandra.md) |
 | [`client_encrypt`](configuration_options/scylla-installation-and-configuration.md#client_encrypt) | `SCT_CLIENT_ENCRYPT` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`client_encrypt_mtls`](configuration_options/scylla-installation-and-configuration.md#client_encrypt_mtls) | `SCT_CLIENT_ENCRYPT_MTLS` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
+| [`clockbound_version`](configuration_options/scylla-installation-and-configuration.md#clockbound_version) | `SCT_CLOCKBOUND_VERSION` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`cloud_cluster_id`](configuration_options/scylla-cloud-xcloud-backend.md#cloud_cluster_id) | `SCT_CLOUD_CLUSTER_ID` | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) |
 | [`cloud_credentials_path`](configuration_options/scylla-cloud-xcloud-backend.md#cloud_credentials_path) | `SCT_CLOUD_CREDENTIALS_PATH` | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) |
 | [`cloud_prom_bearer_token`](configuration_options/scylla-cloud-xcloud-backend.md#cloud_prom_bearer_token) | `SCT_CLOUD_PROM_BEARER_TOKEN` | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) |
@@ -172,6 +173,7 @@ concerns first, then one page per backend, then one per test type.
 | [`db_nodes_shards_selection`](configuration_options/general-and-provisioning.md#db_nodes_shards_selection) | `SCT_DB_NODES_SHARDS_SELECTION` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`db_type`](configuration_options/scylla-installation-and-configuration.md#db_type) | `SCT_DB_TYPE` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`disable_raft`](configuration_options/upgrade-tests.md#disable_raft) | `SCT_DISABLE_RAFT` | [Upgrade tests](configuration_options/upgrade-tests.md) |
+| [`disable_tablet_balancing`](configuration_options/scylla-installation-and-configuration.md#disable_tablet_balancing) | `SCT_DISABLE_TABLET_BALANCING` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`docker_image`](configuration_options/docker-backend.md#docker_image) | `SCT_DOCKER_IMAGE` | [Docker backend](configuration_options/docker-backend.md) |
 | [`docker_image_cassandra`](configuration_options/auxiliary-db-cluster-oracle-cassandra.md#docker_image_cassandra) | `SCT_DOCKER_IMAGE_CASSANDRA` | [Auxiliary DB cluster (oracle / Cassandra)](configuration_options/auxiliary-db-cluster-oracle-cassandra.md) |
 | [`docker_network`](configuration_options/docker-backend.md#docker_network) | `SCT_DOCKER_NETWORK` | [Docker backend](configuration_options/docker-backend.md) |

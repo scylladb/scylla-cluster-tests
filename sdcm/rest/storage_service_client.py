@@ -50,6 +50,9 @@ class StorageServiceClient(RemoteCurlClient):
 
         return self.run_remoter_curl(method="GET", path=path, params=params)
 
+    def set_tablet_balancing(self, enabled: bool) -> Result:
+        return self.run_remoter_curl(method="POST", path="tablets/balancing", params={"enabled": str(enabled).lower()})
+
     def get_local_hostid(self):
         path = "hostid/local"
         return self.run_remoter_curl(method="GET", path=path, params=None, retry=3)
