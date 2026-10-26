@@ -3,6 +3,8 @@ from uuid import uuid4
 
 
 class NEMESIS_TARGET_POOLS(enum.Enum):
+    """Node pools a nemesis can pick its target from."""
+
     data_nodes = "data_nodes"
     zero_nodes = "zero_nodes"
     all_nodes = "nodes"

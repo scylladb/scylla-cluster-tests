@@ -200,12 +200,14 @@ def mgmt_backup(runner, backup_specific_tables):
 
 
 def get_total_scylla_partition_size(runner):
+    """Return the size in GB of the filesystem holding /var/lib/scylla."""
     result = runner.cluster.data_nodes[0].remoter.run("df -k | grep /var/lib/scylla")  # Size in KB
     free_space_size = int(result.stdout.split()[1]) / 1024**2  # Converting to GB
     return free_space_size
 
 
 def choose_snapshot(runner, snapshots_dict, region: str):
+    """Pick a snapshot from `snapshots_dict` that fits the free space and test duration in `region`."""
     snapshot_groups_by_size = snapshots_dict["snapshots_sizes"]
     total_partition_size = get_total_scylla_partition_size(runner)
     all_snapshot_sizes = sorted(list(snapshot_groups_by_size.keys()), reverse=True)
@@ -233,6 +235,7 @@ def choose_snapshot(runner, snapshots_dict, region: str):
 
 
 def execute_data_validation_thread(runner, command_template, keyspace_name, number_of_rows):
+    """Start data-validation stress commands that split `number_of_rows` evenly across the loaders."""
     stress_queue = []
     number_of_loaders = sum(runner.tester.params.get("n_loaders"))
     rows_per_loader = int(number_of_rows / number_of_loaders)
@@ -299,6 +302,7 @@ class ManagerMonkeyBase(NemesisBaseClass):
     manager_operation = True
 
     def precheck(self, node) -> str | None:
+        """Require Scylla Manager to be configured."""
         params = self.runner.cluster.params
         if not (params.get("use_mgmt") or params.get("use_cloud_manager")):
             return "Scylla-manager configuration is not defined!"
@@ -314,6 +318,7 @@ class MgmtBackup(ManagerMonkeyBase):
     supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
 
     def disrupt(self):
+        """Back up all keyspaces with Scylla Manager."""
         mgmt_backup(self.runner, backup_specific_tables=False)
 
 
@@ -326,6 +331,7 @@ class MgmtBackupSpecificKeyspaces(ManagerMonkeyBase):
     supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
 
     def disrupt(self):
+        """Back up only the test keyspaces with Scylla Manager."""
         mgmt_backup(self.runner, backup_specific_tables=True)
 
 
@@ -340,6 +346,7 @@ class MgmtRestore(ManagerMonkeyBase):
     supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
 
     def precheck(self, node) -> str | None:
+        """Skip multi-DC setups affected by known Scylla Manager issues."""
         if reason := super().precheck(node):
             return reason
         params = self.runner.cluster.params
@@ -355,6 +362,7 @@ class MgmtRestore(ManagerMonkeyBase):
         return None
 
     def disrupt(self):  # noqa: PLR0914
+        """Restore a persistent Manager snapshot into the cluster and validate the restored data."""
         runner = self.runner
         mgr_cluster = runner.cluster.get_cluster_manager(retry_listing=True)
         cluster_backend = runner.cluster.params.get("cluster_backend")
@@ -435,6 +443,7 @@ class MgmtRepair(ManagerMonkeyBase):
     limited = True
 
     def disrupt(self):
+        """Repair the cluster with Scylla Manager."""
         self.runner.run_repair_manager()
 
 
@@ -446,6 +455,7 @@ class MgmtCorruptThenRepair(ManagerMonkeyBase):
     kubernetes = True
 
     def disrupt(self):
+        """Destroy SSTables on the target node, then repair with Scylla Manager."""
         # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
         # following manager repair would then propagate the resurrected data to the other replicas.
         destroy_data_and_restart_scylla(self.runner, skip_sstables_with_tombstones=True)

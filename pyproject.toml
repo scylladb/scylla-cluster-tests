@@ -118,7 +118,12 @@ lint.select = [
     "I",  # isort: import groups and order
     "D200", "D202", "D209", "D300", "D402", "D403",  # docstring formatting
     "D405", "D410", "D411", "D412", "D416",  # docstring sections
+<<<<<<< HEAD
 >>>>>>> 702f7099d (improvement(ruff): enable selective pydocstyle rules)
+||||||| parent of c306515e5 (improvement(ruff): require docstrings in sdcm/nemesis)
+=======
+    "D101", "D102", "D103",  # missing docstrings, enforced only under sdcm/nemesis
+>>>>>>> c306515e5 (improvement(ruff): require docstrings in sdcm/nemesis)
 ]
 lint.ignore = ["E501", "PLR2004", "PLR0917"]
 
@@ -131,6 +136,9 @@ target-version = "py315"
 force-exclude = true
 line-length = 120
 respect-gitignore = true
+
+[tool.ruff.lint.per-file-ignores]
+"!sdcm/nemesis/**" = ["D101", "D102", "D103"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
