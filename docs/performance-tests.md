@@ -125,6 +125,16 @@ To attribute a latency-step ERROR that happened at, say, `2026-06-09 17:10:55 UT
 Because the stall is usually visible on all loaders at once, compare the loaders against each other: a
 synchronized pause across independent JVMs points away from the loaders and towards the cluster or the network.
 
+## Internode compression in performance jobs
+
+SCT enables advanced RPC compression by default (`internode_compression: 'rack'` plus
+`internode_compression_enable_advanced` / `rpc_dict_training_when` in `append_scylla_yaml`), matching ScyllaDB Cloud.
+Performance jobs add `configurations/performance/disable_advanced_rpc_compression.yaml` right after the test case,
+which restores Scylla's own defaults so results stay comparable with existing baselines. New performance jobs
+should include it too, unless they measure internode compression on purpose.
+Test cases that set `internode_compression` themselves (e.g. the rolling-upgrade latency-regression
+customer cases) list the overlay *before* the test case, so only the advanced compression keys get reverted.
+
 ## Small-dataset runs for cheap feature testing
 
 The predefined-throughput-steps pipelines populate ~650GB per node and run 30-minute throttle steps, so a
@@ -178,6 +188,7 @@ perfRegressionParallelPipeline(
     test_config: '''["test-cases/performance/perf-regression-predefined-throughput-steps.yaml",
                      "configurations/performance/cassandra_stress_gradual_load_steps_small_dataset.yaml",
                      "configurations/performance/perf-predefined-throughput-steps-small-dataset.yaml",
+                     "configurations/performance/disable_advanced_rpc_compression.yaml",
                      "configurations/disable_kms.yaml",
                      "configurations/arm_instance_types/i8g_4xlarge.yaml"]''',
     sub_tests: ["test_mixed_gradual_increase_load"],

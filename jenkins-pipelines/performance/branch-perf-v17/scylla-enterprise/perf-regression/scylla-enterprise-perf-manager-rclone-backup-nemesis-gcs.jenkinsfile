@@ -9,5 +9,5 @@ perfRegressionParallelPipeline(
     region: "us-east1",
     provision_type: 'on_demand',
     test_name: "performance_regression_manager_backup_test.PerformanceRegressionManagerBackupTest.test_manager_backup",
-    test_config: """["test-cases/performance/perf-regression-latency-backup-nemesis.yaml", "configurations/disable_kms.yaml", "configurations/performance/latency-decorator-error-thresholds-nemesis-ent-tablets.yaml", "configurations/manager/manager_rclone_backup_nemesis.yaml", "configurations/manager/2TB_backup_dataset.yaml",  "configurations/object_storage_gcs.yaml"]""",
+    test_config: """["test-cases/performance/perf-regression-latency-backup-nemesis.yaml", "configurations/performance/disable_advanced_rpc_compression.yaml", "configurations/disable_kms.yaml", "configurations/performance/latency-decorator-error-thresholds-nemesis-ent-tablets.yaml", "configurations/manager/manager_rclone_backup_nemesis.yaml", "configurations/manager/2TB_backup_dataset.yaml",  "configurations/object_storage_gcs.yaml"]""",
 )
