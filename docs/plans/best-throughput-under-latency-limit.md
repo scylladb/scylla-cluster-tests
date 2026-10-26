@@ -138,7 +138,7 @@ best-throughput-request            launcher job; the user fills in the request p
 2. Run `create-performance-jobs` from `branch-perf-v17`. It creates the `best-throughput` folder with the
    `best-throughput-request` launcher and the `best-throughput-generic` jenkinsfile job.
 3. Calibrate: run the launcher once for i4i and once for i8g, and check how many search steps were spent only
-   doubling. If most of the budget goes there, raise the default starting threads per shard.
+   doubling. If most of the steps go there, raise the default starting threads per shard.
 
 **Each request:**
 1. Open `best-throughput/best-throughput-request` and fill in at least `instance_type_db` and `scylla_version`
@@ -177,8 +177,9 @@ credentials.
 3. **Adaptive thread search**
    - Add `perf_best_throughput_search`, with starting threads per shard, a step limit and a precision setting.
    - Start from the DB nodes' shard count.
-   - Double the threads until P99 goes over the limit, throughput stops growing, or the step limit is reached.
-   - Bisect between the last pass and the first fail until within 5%.
+   - Double the threads until P99 goes over the limit or throughput stops growing; the step limit never stops
+     this part.
+   - Bisect between the last pass and the first fail until within 5% or the step limit (default 10).
 4. **Dataset sized from instance memory and disk**
    - Read RAM and data-disk size from the DB nodes.
    - Scale the test-case's key ranges by them relative to a 128 GiB / 3750 GB reference node: the hot range
@@ -251,11 +252,11 @@ the search runs only when its config is set.
 - The run reads the shard count of the DB nodes and starts at `threads per shard x total shards / loaders`
   threads per loader.
 - **Expand:** double the thread count each step, until a step fails the latency limit, or throughput grows by
-  less than 5% over the previous passing step (saturated: more threads only queue), or the step budget runs
-  out.
+  less than 5% over the previous passing step (saturated: more threads only queue). The step budget does not
+  stop this phase: stopping before the limit is found would report a thread count that isn't the best.
 - **Narrow:** bisect the thread count between the last passing and the first failing step. A pass moves the
   lower bound up, a fail moves the upper bound down. Stop when the gap is under the precision or the step
-  budget runs out.
+  budget (default 10 steps per workload, counting the expand steps) runs out.
 - Every step is unthrottled and named `unthrottled_<threads>_threads`, the name a fixed list would give it.
   `find_best_throughput` then picks the best step from all of them (Phase 1).
 - When the first step already fails, halve instead of doubling, down to one thread per loader.
@@ -360,7 +361,7 @@ Required for on-demand runs: the instance type is not known when the test-case i
   | `p99_limit_ms` | no | 10 | `SCT_PERF_GRADUAL_LATENCY_LIMIT` |
   | `step_duration` | no | 30m, every workload | `SCT_PERF_GRADUAL_STEP_DURATION` |
   | `start_threads_per_shard` | no | calibrated in Phase 3 | `SCT_PERF_BEST_THROUGHPUT_SEARCH` |
-  | `max_search_steps` | no | 8 per workload | `SCT_PERF_BEST_THROUGHPUT_SEARCH` |
+  | `max_search_steps` | no | 10 per workload | `SCT_PERF_BEST_THROUGHPUT_SEARCH` |
   | `search_precision_pct` | no | 5 | `SCT_PERF_BEST_THROUGHPUT_SEARCH` |
   | `overload_factors` | no | empty: no overload steps; e.g. `1.3,2`. Added with Phase 6 | the Phase 6 config variable |
 
@@ -502,8 +503,8 @@ Required for on-demand runs: the instance type is not known when the test-case i
 - Config: `perf_gradual_latency_limit` and `perf_best_throughput_search` defaults, per-workload override,
   invalid values rejected (extend `test_perf_gradual_config.py`).
 - Search, against fake latency curves: starting point from shard count; doubling until the limit, until
-  saturation, or until the budget; halving when the first step fails; bisection stops at the precision or
-  the budget; unique `unthrottled_<threads>_threads` names.
+  saturation, never stopped by the budget; halving when the first step fails; bisection stops at the
+  precision or the budget; unique `unthrottled_<threads>_threads` names.
 - Dataset sizing: derived ranges for i4i/i8g equal today's; scaling for other RAM/disk values.
 - Launcher command: job name per request, with and without `job_name_suffix`; same hardware with another
   Scylla version maps to the same job; final `test_config` (base list, tablets and backend overlays, request
@@ -533,7 +534,7 @@ Required for on-demand runs: the instance type is not known when the test-case i
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
 | Unthrottled steps are noisy near the limit, so the best value jumps between runs | High | Medium | Confirm step or stricter margin (Phase 3); Argus history makes the jitter visible before relying on it |
-| The search starts far from the limit and uses its step budget before narrowing | Medium | Medium | Start from threads per shard calibrated on i4i/i8g; doubling reaches the limit in a few steps; budget is configurable |
+| The search starts far from the limit and spends many steps doubling | Medium | Medium | Start from threads per shard calibrated on i4i/i8g; doubling reaches the limit in a few steps, and the budget only limits the bisection after it |
 | Loaders saturate before the cluster, so the best value measures loaders | Medium | High | Search stops on throughput saturation and reports it; check loader CPU at the last step; launcher can raise `n_loaders` |
 | Mixed probes run on a growing dataset, so later steps see more data | Medium | Medium | Keep compaction and tablet-split waits; note it in the report |
 | Derived dataset changes results of existing jobs | Low | High | Phase 4 defaults reproduce today's ranges on i4i/i8g; unit-tested |
