@@ -309,10 +309,11 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             # NOTE: latte's '-d' is a cycle count here, not a duration, so the phase gets an
             #       explicit 'duration' -- see DEFAULT_MAX_SHARD_LOAD.
             stress_cmd=(
-                f"latte run -f load {self.WORKLOAD.script} "
+                f"latte run -f load "
                 f"-d {shard_records} "
                 rf"-P {params.dataset_dir}=\"{container_ds_dir}\" "
                 rf"-P {params.records_file}=\"{shard_file}\" "
+                f"{self.WORKLOAD.script} "
             ),
             files_to_stage=[
                 (os.path.join(local_ds_dir, shard_file), posixpath.join(container_ds_dir, shard_file)),
@@ -366,12 +367,13 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         ):
             self._run_latte(
                 stress_cmd=(
-                    f"latte run -f build_index {self.WORKLOAD.script} "
+                    f"latte run -f build_index "
                     f"-d 1 "
                     f'-P {params.index_name}=\\"{index_name}\\" '
                     f"-P {params.record_count}={record_count} "
                     f"-P {params.max_index_wait}={max_index_wait} "
                     f"-P {params.min_probes}=3 "
+                    f"{self.WORKLOAD.script} "
                 ),
                 # An outer bound past the script's own give-up, so a clean "index never built" is
                 # not turned into a killed loader by both expiring in the same second.
