@@ -67,12 +67,13 @@ class SstableUtils:
         self.log.debug("Got %s sstables %s", len(selected_sstables), message)
         return selected_sstables
 
-    def check_that_sstables_are_encrypted(self, sstables=None, expected_bool_value: bool = True) -> list:
+    def check_that_sstables_are_encrypted(self, sstables=None, expected_bool_value: bool = True) -> None:
         if not sstables:
             sstables = self.get_sstables()
         if isinstance(sstables, str):
             sstables = [sstables]
         sstables_encrypted_mapping = {}
+        deleted_count, misordered_count = 0, 0
 
         if not sstables:
             raise SstablesNotFound(f"sstables for '{self.keyspace}.{self.table}' wasn't found")
@@ -105,6 +106,7 @@ class SstableUtils:
             #       Checked by file existence because the error text differs between Scylla versions.
             elif not self.db_node.remoter.sudo(f"test -e {sstable}", ignore_status=True).ok:
                 self.log.debug("'%s' sstable doesn't exist anymore. Skipping it.", sstable)
+                deleted_count += 1
             # NOTE: case when
             #       Could not load SSTable: /var/.../me-3g9w_104a_01xg12j55gjivrwtt5-big-Data.db: \
             #       sstables::malformed_sstable_exception (/var/.../me-3g9w_104a_01xg12j55gjivrwtt5-big-Data.db: \
@@ -117,6 +119,7 @@ class SstableUtils:
                     "Not representative. Skipping it.",
                     sstable,
                 )
+                misordered_count += 1
             elif (
                 "NullPointerException" in sstables_res.stderr or "ArrayIndexOutOfBoundsException" in sstables_res.stderr
             ):
@@ -130,7 +133,11 @@ class SstableUtils:
         # NOTE: we read sstables in a concurrent environment.
         #       So, we can get failures trying to read some of them when it gets deleted concurrently...
         encryption_success_part, encryption_results = 0.79, list(sstables_encrypted_mapping.values())
-        assert encryption_results
+        if not encryption_results:
+            raise SstablesNotFound(
+                f"No sstables of '{self.keyspace}.{self.table}' left to check for encryption:"
+                f" {deleted_count} deleted and {misordered_count} misordered out of {len(sstables)}"
+            )
         assert encryption_results.count(expected_bool_value) / len(encryption_results) >= encryption_success_part, (
             "Sstables encryption check failed."
             f" Required success part: '{encryption_success_part}'. Expected bool value: '{expected_bool_value}'."
