@@ -508,6 +508,39 @@ def test_a_search_retries_as_little_as_latte_allows():
     assert "--retry-number 1 " in _search_command()
 
 
+def _filtered_log_lines(monkeypatch, ignore_parse_errors):
+    """Run one search; return the database log lines it kept from failing the test."""
+    filtered = []
+
+    def events_filter(line, **_):
+        filtered.append(line)
+        return contextlib.nullcontext()
+
+    monkeypatch.setattr(search_perf_test, "DbEventsFilter", events_filter)
+    tester = _PhaseTester()
+    tester.get_hdrhistogram = lambda **_: {}
+    search_perf_test.SearchPerformanceTest._run_search(
+        tester,
+        "/local/ds",
+        "/tmp/bench/ds",
+        "queries_natural.tsv",
+        limit=5,
+        concurrency=1,
+        rate=0,
+        search_duration="10s",
+        ignore_parse_errors=ignore_parse_errors,
+    )
+    return filtered
+
+
+def test_a_query_parse_error_fails_the_test_by_default(monkeypatch):
+    assert _filtered_log_lines(monkeypatch, ignore_parse_errors=False) == []
+
+
+def test_a_query_parse_error_can_be_tolerated(monkeypatch):
+    assert _filtered_log_lines(monkeypatch, ignore_parse_errors=True) == [r"failed to parse query"]
+
+
 def test_a_search_is_a_read_to_latte():
     """Otherwise the HDR exporter cannot classify its 'fn--search' tag and fails the command."""
     assert get_latte_operation_type(_search_command()) == "read"
@@ -561,6 +594,12 @@ def test_a_plan_with_queries_needs_hdr_histograms(tmp_path):
     """Without them every query would be recorded with null latencies, after the corpus was loaded."""
     with pytest.raises(ValueError, match="use_hdrhistogram"):
         _run_plan(tmp_path, QUERYING_PLAN, use_hdrhistogram=False)
+
+
+def test_has_invalid_queries_must_be_a_boolean(tmp_path):
+    """A quoted "false" would read as true, and quietly let unparsable queries through."""
+    with pytest.raises(ValueError, match="has_invalid_queries"):
+        _run_plan(tmp_path, "datasets:\n  - name: first\n    has_invalid_queries: 'false'\n")
 
 
 def test_a_plan_without_queries_runs_without_hdr_histograms(tmp_path):
@@ -777,3 +816,68 @@ def test_every_query_of_a_step_is_recorded_in_order(tmp_path):
     ]
     assert {r["query_example"] for r in records} == {"the query"}
     assert {r["p99_ms"] for r in records} == {4.0}
+
+
+class _DatasetTester:
+    """Runs '_run_dataset' with every phase stubbed, recording how each step's queries are run."""
+
+    WORKLOAD = WORKLOAD
+
+    def __init__(self):
+        self.log = logging.getLogger("test")
+        self.params = {}
+        self.ignore_parse_errors = []
+
+    def _drop_table(self):
+        pass
+
+    def _create_schema(self):
+        pass
+
+    def _drop_index(self, *_):
+        pass
+
+    def _load_step_shards(self, *_):
+        return 0
+
+    def _build_index(self, *_, **__):
+        return 1.0
+
+    def _record_index_build(self, *_):
+        pass
+
+    def _run_step_queries(self, *_, ignore_parse_errors=False):
+        self.ignore_parse_errors.append(ignore_parse_errors)
+
+
+@pytest.mark.parametrize("has_invalid_queries", [False, True])
+def test_a_dataset_says_how_its_queries_handle_parse_errors(tmp_path, monkeypatch, has_invalid_queries):
+    monkeypatch.setattr(search_perf_test, "_local_path", lambda *_: str(tmp_path))
+    tester = _DatasetTester()
+
+    search_perf_test.SearchPerformanceTest._run_dataset(
+        tester, {"name": "ds", "has_invalid_queries": has_invalid_queries, "steps": [{"shards": []}, {"shards": []}]}
+    )
+
+    assert tester.ignore_parse_errors == [has_invalid_queries] * 2
+
+
+@pytest.mark.parametrize("ignore_parse_errors", [False, True])
+def test_every_query_of_a_step_gets_the_same_parse_error_handling(tmp_path, ignore_parse_errors):
+    (tmp_path / "queries_term_common.tsv").write_text("q1\tthe query\n", encoding="utf-8")
+    tester = _StepTester(tmp_path)
+    step = {"queries": [{"set": "term_common"}, {"set": "term_common"}]}
+
+    search_perf_test.SearchPerformanceTest._run_step_queries(
+        tester,
+        step,
+        "ds",
+        DEFAULTS,
+        record_count=900,
+        step_number=1,
+        local_ds_dir=str(tmp_path),
+        container_ds_dir="/r",
+        ignore_parse_errors=ignore_parse_errors,
+    )
+
+    assert [searched["ignore_parse_errors"] for searched in tester.searched] == [ignore_parse_errors] * 2

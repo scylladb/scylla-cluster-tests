@@ -28,6 +28,7 @@ subclass then only owns its 'test_*' entry point. See fts_test.py for a worked
 example, and docs/fts-search-test.md for the plan format.
 """
 
+import contextlib
 import json
 import math
 import os
@@ -339,6 +340,17 @@ def _expected_p99_read_ms(query: dict, defaults: dict) -> float:
     return _checked_positive_float(expected, f"expected_p99_read_ms for query set {query.get('set')!r}")
 
 
+def _has_invalid_queries(dataset: dict) -> bool:
+    """Whether the plan says the dataset's query sets include queries vector-store cannot parse."""
+    value = dataset.get("has_invalid_queries", False)
+    # NOTE: a quoted "false" would read as true.
+    if not isinstance(value, bool):
+        raise ValueError(
+            f"Invalid 'has_invalid_queries' {value!r} in dataset {dataset.get('name')!r}: expected true or false"
+        )
+    return value
+
+
 def validate_plan_queries(datasets: list) -> None:
     """Check every query entry of every dataset, so a bad plan fails before anything runs.
 
@@ -552,6 +564,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         rate,
         search_duration,
         qrels_file=None,
+        ignore_parse_errors=False,
     ) -> dict:
         """Run a single search configuration and return its latency summary.
 
@@ -571,26 +584,37 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             qrels_param = rf"-P {params.qrels_file}=\"{qrels_file}\" "
         rate_param = f"--rate={rate} " if rate else ""
 
-        start = time.time()
-        self._run_latte(
-            # NOTE: '--duration' spelled out rather than '-d': 'get_timeout_from_stress_cmd'
-            #       only recognises the long form, and without it the phase would fall back to
-            #       the whole 'test_duration' as its timeout. '--retry-number 1' is the lowest
-            #       that runs at all: latte counts it as attempts per cycle but as retries per
-            #       query, so a rejected query is still retried once (QATOOLS-629).
-            stress_cmd=(
-                f"latte run -f search "
-                f"--duration {search_duration} "
-                rf"-P {params.dataset_dir}=\"{container_ds_dir}/\" "
-                rf"-P {params.queries_file}=\"{queries_file}\" "
-                f"{qrels_param}"
-                f"-P {params.compute_accuracy}={'true' if qrels_file else 'false'} "
-                f"-P {params.search_limit}={limit} "
-                f"{rate_param}--concurrency={concurrency} --retry-number 1 "
-                f"{workload.script} "
-            ),
-            files_to_stage=files_to_stage,
+        # NOTE: a query vector-store cannot parse makes ScyllaDB log an error, which fails the test.
+        parse_errors_filter = (
+            DbEventsFilter(
+                db_event=DatabaseLogEvent.DATABASE_ERROR,
+                line=r"failed to parse query",
+                extra_time_to_expiration=120,
+            )
+            if ignore_parse_errors
+            else contextlib.nullcontext()
         )
+        start = time.time()
+        with parse_errors_filter:
+            self._run_latte(
+                # NOTE: '--duration' spelled out rather than '-d': 'get_timeout_from_stress_cmd'
+                #       only recognises the long form, and without it the phase would fall back to
+                #       the whole 'test_duration' as its timeout. '--retry-number 1' is the lowest
+                #       that runs at all: latte counts it as attempts per cycle but as retries per
+                #       query, so a rejected query is still retried once (QATOOLS-629).
+                stress_cmd=(
+                    f"latte run -f search "
+                    f"--duration {search_duration} "
+                    rf"-P {params.dataset_dir}=\"{container_ds_dir}/\" "
+                    rf"-P {params.queries_file}=\"{queries_file}\" "
+                    f"{qrels_param}"
+                    f"-P {params.compute_accuracy}={'true' if qrels_file else 'false'} "
+                    f"-P {params.search_limit}={limit} "
+                    f"{rate_param}--concurrency={concurrency} --retry-number 1 "
+                    f"{workload.script} "
+                ),
+                files_to_stage=files_to_stage,
+            )
         end = time.time()
         summary = self.get_hdrhistogram(
             hdr_tags=[workload.hdr_tag], stress_operation="read", start_time=start, end_time=end
@@ -630,6 +654,8 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         if duplicates := sorted({name for name in names if names.count(name) > 1}):
             raise ValueError(f"Duplicate dataset names in '{config_name}': {duplicates}")
         validate_plan_queries(datasets)
+        for dataset in datasets:
+            _has_invalid_queries(dataset)
         # Query latency comes from latte's HDR output, which is only written with 'use_hdrhistogram'.
         if not self.params.get("use_hdrhistogram") and any(
             step.get("queries") for dataset in datasets for step in dataset.get("steps") or []
@@ -669,6 +695,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         max_index_wait = dataset.get("max_index_wait_secs", DEFAULT_MAX_INDEX_WAIT)
         max_load_wait = dataset.get("max_shard_load_secs", DEFAULT_MAX_SHARD_LOAD)
         defaults = dataset.get("defaults", {})
+        has_invalid_queries = _has_invalid_queries(dataset)
         keyspace = (self.params.get("latte_schema_parameters") or {}).get("keyspace") or workload.default_keyspace
 
         # NOTE: the script drops with 'IF EXISTS', so on a fresh cluster this is a no-op.
@@ -690,14 +717,29 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             self._record_index_build(dataset_name, step_idx + 1, index_name, total_record_count, build_seconds)
 
             self._run_step_queries(
-                step, dataset_name, defaults, total_record_count, step_idx + 1, local_ds_dir, container_ds_dir
+                step,
+                dataset_name,
+                defaults,
+                total_record_count,
+                step_idx + 1,
+                local_ds_dir,
+                container_ds_dir,
+                ignore_parse_errors=has_invalid_queries,
             )
 
         if index_name is not None:
             self._drop_index(index_name, keyspace, max_index_wait)
 
     def _run_step_queries(
-        self, step, dataset_name, defaults, record_count, step_number, local_ds_dir, container_ds_dir
+        self,
+        step,
+        dataset_name,
+        defaults,
+        record_count,
+        step_number,
+        local_ds_dir,
+        container_ds_dir,
+        ignore_parse_errors=False,
     ):
         """Run every query set of a step against the index that was just built, recording each."""
         for query_index, query in enumerate(step.get("queries", []), start=1):
@@ -724,6 +766,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
                 rate=rate,
                 search_duration=search_duration,
                 qrels_file=qrels_file,
+                ignore_parse_errors=ignore_parse_errors,
             )
             if not latency:
                 self.log.warning("No HDR latency summary for query set %s of step #%d", qset, step_number)
