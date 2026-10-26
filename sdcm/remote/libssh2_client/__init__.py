@@ -112,7 +112,6 @@ class SSHReaderThread(Thread):
         """Reads data from ssh session, split it into lines and forward lines into stderr ad stdout pipes
         It is required for it to be fast, that is why there is code duplications and non-pythonic code
         """
-
         stdout_remainder = stderr_remainder = b""
         if timeout is None:
             end_time = float_info.max

@@ -29,9 +29,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def is_cf_a_view(node: BaseNode, ks, cf) -> bool:
-    """
-    Check if a CF is a materialized-view or not (a normal table)
-    """
+    """Check if a CF is a materialized-view or not (a normal table)"""
     with node.parent_cluster.cql_connection_patient(node) as session:
         try:
             result = session.execute(

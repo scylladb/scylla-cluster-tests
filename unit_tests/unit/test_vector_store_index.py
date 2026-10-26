@@ -94,7 +94,8 @@ def test_wait_for_index_build_seconds_returns_the_measurement(tmp_path):
 
 def test_wait_for_index_build_seconds_retries_until_the_lines_are_shipped(tmp_path, monkeypatch):
     """The lines are written on the node and forwarded asynchronously, so an empty log means
-    'not yet', not 'never'."""
+    'not yet', not 'never'.
+    """
     log = _write_log(tmp_path, "")
     monkeypatch.setattr(vector_store_index.time, "sleep", lambda _seconds: _write_log(tmp_path, DOCKER_SCAN_LINES))
 

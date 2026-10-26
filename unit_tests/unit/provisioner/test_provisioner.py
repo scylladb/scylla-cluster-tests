@@ -154,7 +154,7 @@ def test_null_tag_value_is_replaced_with_empty_string(provisioner, definition, b
 
 
 def test_can_terminate_vm_instance(provisioner, definition, backend, provisioner_params):
-    """should read from cache instead creating anything - so should be fast (after provisioner initialized)"""
+    """Should read from cache instead creating anything - so should be fast (after provisioner initialized)"""
     provisioner.terminate_instance(definition.name, wait=True)
 
     # validate cache has been cleaned up

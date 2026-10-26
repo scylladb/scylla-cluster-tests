@@ -68,7 +68,6 @@ def get_stress_cmd_params(cmd):
     :param cmd: stress cmd
     :return: dict with params
     """
-
     cmd_params = {"raw_cmd": cmd}
     try:
         cmd = cmd.strip().split("cassandra-stress")[1].strip()
@@ -166,7 +165,6 @@ def get_ycsb_cmd_params(cmd):
     :param cmd: stress cmd
     :return: dict with params
     """
-
     cmd_params = {"raw_cmd": cmd}
 
     threads_regex = re.compile(r"-threads\s*(.*?)[\s$]")
@@ -344,7 +342,7 @@ class PrometheusDBStats:
         return cross_shards_ops_per_node_shard_by_dc
 
     def get_latency(self, start_time, end_time, latency_type, scrap_metrics_step=None):
-        """latency values are returned in microseconds"""
+        """Latency values are returned in microseconds"""
         assert latency_type in ["read", "write"]
         if not self._check_start_end_time(start_time, end_time):
             return []

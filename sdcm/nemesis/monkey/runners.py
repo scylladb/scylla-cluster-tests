@@ -120,9 +120,7 @@ class K8sSetMonkey(NemesisRunner):
 
 
 class ScyllaOperatorBasicOperationsMonkey(NemesisRunner):
-    """
-    Selected number of nemesis that is focused on scylla-operator functionality
-    """
+    """Selected number of nemesis that is focused on scylla-operator functionality"""
 
     disruptive = True
 

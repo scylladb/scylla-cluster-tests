@@ -19,7 +19,8 @@ else. That is deliberate: it gives the unit tests a single module to neutralise,
 
 For the same reason, other submodules must call into this one through the module object
 (`images.version_exists_for_backend(...)`) rather than importing the names. `from ... import`
-would bind a copy per caller, so a test patching this module would silently miss them."""
+would bind a copy per caller, so a test patching this module would silently miss them.
+"""
 
 import logging
 import re

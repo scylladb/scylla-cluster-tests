@@ -56,9 +56,7 @@ class ScyllaUserDataBuilderBase(UserDataBuilderBase, metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def post_configuration_script(self) -> str:
-        """
-        Script that is ran right after node is initialized
-        """
+        """Script that is ran right after node is initialized"""
 
     @abc.abstractmethod
     def to_string(self) -> str:
@@ -67,6 +65,4 @@ class ScyllaUserDataBuilderBase(UserDataBuilderBase, metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def raid_level(self) -> RaidLevelType:
-        """
-        Tell scylla setup which raid to build RAID0 or RAID5
-        """
+        """Tell scylla setup which raid to build RAID0 or RAID5"""

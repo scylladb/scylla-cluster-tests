@@ -10,9 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-"""
-Keep AWS S3 info about test sstables for refresh nemesis
-"""
+"""Keep AWS S3 info about test sstables for refresh nemesis"""
 
 from typing import NamedTuple
 

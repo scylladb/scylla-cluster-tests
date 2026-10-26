@@ -105,7 +105,7 @@ def test_running_instance_is_returned_without_waiting(vm_provider, clock):
 
 
 def test_staging_instance_is_waited_for_until_running(vm_provider, clock):
-    """minicloud with a cold image cache: STAGING for the whole download, then RUNNING."""
+    """Minicloud with a cold image cache: STAGING for the whole download, then RUNNING."""
     running = _instance("RUNNING")
     vm_provider._instances_client.get.side_effect = [
         _instance("PROVISIONING"),

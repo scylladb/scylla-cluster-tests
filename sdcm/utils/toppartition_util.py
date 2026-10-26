@@ -16,7 +16,7 @@ class TopPartitionCmd(ABC):
 
     @staticmethod
     def _parse_toppartitions_output(output: str) -> dict:
-        """parsing output of toppartitions
+        """Parsing output of toppartitions
 
         input format stored in output parameter:
         WRITES Sampler:

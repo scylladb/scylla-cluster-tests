@@ -236,9 +236,7 @@ class TestSctEvents(RealEventsTest):
         assert "critical that should not be lowered #3" in crit_log_content
 
     def test_severity_changer_db_log(self):
-        """
-        See https://github.com/scylladb/scylla-cluster-tests/issues/2115
-        """
+        """See https://github.com/scylladb/scylla-cluster-tests/issues/2115"""
         extra_time_to_expiration = 2
         # 1) Lower DatabaseLogEvent to WARNING for 1 sec.
         with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=3):

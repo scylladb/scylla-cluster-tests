@@ -149,7 +149,8 @@ class TestReplicationStrategySetter:
 
 class DcNode:
     """Node stub whose `.datacenter` returns successive values, simulating a driver
-    metadata refresh that resolves the datacenter only after a few reads."""
+    metadata refresh that resolves the datacenter only after a few reads.
+    """
 
     def __init__(self, datacenter_values, name="node-1", dc_idx=0):
         self.name = name

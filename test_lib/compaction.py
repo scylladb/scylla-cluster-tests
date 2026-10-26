@@ -121,10 +121,7 @@ def get_table_compaction_info(keyspace: str, table: str, session: object):
 
 
 def get_compaction_random_additional_params(strategy: CompactionStrategy):
-    """
-
-    :return: list_additional_params
-    """
+    """:return: list_additional_params"""
     bucket_high = round(random.uniform(1.1, 1.8), 2)
     bucket_low = round(random.uniform(0.3, 0.8), 2)
     min_sstable_size = random.randint(10, 500)

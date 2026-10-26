@@ -61,9 +61,7 @@ class ThreadParams(ConfigParams):
 
 @dataclass
 class OperationThreadStats:
-    """
-    Keeps track of stats for multiple operations.
-    """
+    """Keeps track of stats for multiple operations."""
 
     number_of_rows_read: int = 0
     read_pages: int = 0
@@ -93,9 +91,7 @@ class OperationThreadStats:
 
 @dataclass
 class OneOperationStat:
-    """
-    Keeps track of stats for a single operation.
-    """
+    """Keeps track of stats for a single operation."""
 
     op_type: str = None
     duration: float = None

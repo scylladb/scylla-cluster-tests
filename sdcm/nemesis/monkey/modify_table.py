@@ -25,9 +25,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ModifyTableBaseMonkey(NemesisBaseClass, abc.ABC):
-    """
-    Abstract base class for all ModifyTable nemesis operations.
-    """
+    """Abstract base class for all ModifyTable nemesis operations."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -58,7 +58,8 @@ def test_categorical_monkey_simple(dist, output, capsys):
 
 def test_categorical_monkey_precheck_prunes_distribution(events_function_scope):
     """precheck() removes an infeasible member from both population and weights,
-    keeping them zipped, and leaves the runnable member's weight untouched."""
+    keeping them zipped, and leaves the runnable member's weight untouched.
+    """
     nemesis = FakeCategorialMonkey(FakeTester(), None, {"CustomNemesisA": 1, "CustomNemesisC": 2}, default_weight=0)
     _member_named(nemesis, "CustomNemesisA").precheck = MagicMock(return_value="not feasible")
 
@@ -91,7 +92,8 @@ def test_categorical_monkey_precheck_all_excluded(events_function_scope):
 
 def test_categorical_monkey_run_all_pruned_emits_critical_and_stops(categorical_runner, events_function_scope):
     """run() stops cleanly with a CRITICAL TestFrameworkEvent when precheck empties
-    the whole distribution, instead of select_next_nemesis() hitting its bare assert."""
+    the whole distribution, instead of select_next_nemesis() hitting its bare assert.
+    """
     nemesis = categorical_runner({"CustomNemesisA": 1})
     _member_named(nemesis, "CustomNemesisA").precheck = MagicMock(return_value="not feasible")
 

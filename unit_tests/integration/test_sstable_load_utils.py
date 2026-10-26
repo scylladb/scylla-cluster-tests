@@ -14,8 +14,7 @@ pytestmark = [
 
 @pytest.mark.integration
 def test_sstable_load_utils_usage(docker_scylla, params, request):
-    """test the sstable load utils base on the refrash monkey flow localy with a docker based scylla"""
-
+    """Test the sstable load utils base on the refrash monkey flow localy with a docker based scylla"""
     loader_set = LocalLoaderSetDummy(params=params)
 
     ks = "keyspace_refresh"

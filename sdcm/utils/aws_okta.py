@@ -30,9 +30,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def can_get_to_aws_account():
-    """
-    identify if we are connected to the account we are expecting
-    """
+    """Identify if we are connected to the account we are expecting"""
     try:
         session = boto3.Session()
         # Pin real STS explicitly: under minicloud the global AWS_ENDPOINT_URL override

@@ -595,10 +595,7 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer):
             ) from None
 
     def terminate_k8s_node(self):
-        """
-        Delete kubernetes node, which will terminate scylla node that is running on it
-        """
-
+        """Delete kubernetes node, which will terminate scylla node that is running on it"""
         # There is a bug in GCE, it keeps instance running when kubernetes node is deleted via kubectl
         # As result GKE infrastructure does not allow you to add a node to the cluster
         # In order to fix that we have to delete instance manually and add a node to the cluster

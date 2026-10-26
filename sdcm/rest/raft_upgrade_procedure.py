@@ -33,7 +33,7 @@ class RaftUpgradeProcedure(RemoteCurlClient):
         return self.run_remoter_curl(method="POST", path=path, params=None, timeout=30).stdout.strip()
 
     def get_upgrade_procedure_status(self) -> str:
-        """rest api return json string"""
+        """Rest api return json string"""
         path = "raft_topology/upgrade"
         return json.loads(self.run_remoter_curl(method="GET", path=path, params=None, timeout=30).stdout.strip())
 

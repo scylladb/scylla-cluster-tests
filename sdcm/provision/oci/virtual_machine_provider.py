@@ -152,9 +152,7 @@ class VirtualMachineProvider:
         )
 
     def _create_volumes(self, definition: InstanceDefinition) -> list[str]:
-        """
-        Useful for non-dense shapes (instance types)
-        """
+        """Useful for non-dense shapes (instance types)"""
         disk_num = getattr(definition, "data_volume_disk_num", 0)
         if disk_num < 1:
             return []
@@ -515,7 +513,6 @@ class VirtualMachineProvider:
 
     def convert_to_vm_instance(self, oci_instance: Instance, provisioner_ref) -> VmInstance:
         """Converts OCI SDK Instance model to SCT VmInstance."""
-
         # NOTE: transform the 'response' object into the instance one.
         if hasattr(oci_instance, "has_next_page") and hasattr(oci_instance, "data"):
             oci_instance = oci_instance.data

@@ -1645,8 +1645,9 @@ def test_azure_oracle_image_resolver_joins_image_ids_per_region():
     ],
 )
 def test_mixed_scylla_run_reserves_user_prefix_room_for_oracle_suffix(monkeypatch, db_type, expected_len):
-    """the oracle node prefix is user_prefix + '-oracle', so mixed runs must cap
-    user_prefix 7 chars shorter to keep node names inside the platform limits"""
+    """The oracle node prefix is user_prefix + '-oracle', so mixed runs must cap
+    user_prefix 7 chars shorter to keep node names inside the platform limits
+    """
     user_prefix = "longevity-5gb-1h-ToggleAuditRulesNemesisSyslog"
     env = {
         "SCT_CLUSTER_BACKEND": "azure",
@@ -2037,7 +2038,8 @@ def test_vector_store_scylla_username_on_xcloud_raises(monkeypatch):
 )
 def test_azure_minicloud_config_resolves_without_azure_calls(monkeypatch, test_case):
     """A pinned marketplace URN plus the minicloud azure overlay must resolve the config and the
-    scylla version before the endpoint is activated, so no ARM client may be built on the way"""
+    scylla version before the endpoint is activated, so no ARM client may be built on the way
+    """
     config_files = [test_case, "configurations/minicloud.yaml", "configurations/minicloud/azure.yaml"]
     env = {
         "SCT_CLUSTER_BACKEND": "azure",
@@ -2070,7 +2072,8 @@ def test_azure_minicloud_config_resolves_without_azure_calls(monkeypatch, test_c
 
 def test_azure_minicloud_yaml_only_activation_is_refused(monkeypatch, tmp_path):
     """The AzureService guard reads only the env, so minicloud turned on by a yaml alone must fail
-    before the config can build a real Azure client"""
+    before the config can build a real Azure client
+    """
     activation_yaml = tmp_path / "minicloud-endpoint.yaml"
     activation_yaml.write_text("minicloud_endpoint_url: http://localhost:5000\n")
     config_files = ["test-cases/artifacts/azure-image.yaml", str(activation_yaml)]

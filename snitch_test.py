@@ -18,14 +18,10 @@ from sdcm.utils.common import skip_optional_stage
 
 
 class SnitchTest(ClusterTester):
-    """
-    Endpoint Snitch Test
-    """
+    """Endpoint Snitch Test"""
 
     def test_cloud_snitch(self):
-        """
-        Verify the snitch setup, and check if system.peers is empty.
-        """
+        """Verify the snitch setup, and check if system.peers is empty."""
         result = self.db_cluster.nodes[0].run_nodetool("describecluster")
         assert "GoogleCloudSnitch" in result.stdout, "Cluster doesn't use GoogleCloudSnitch"
 

@@ -205,7 +205,6 @@ class TestSstableLoadUtils:
 
 def test_get_testrun_dir_returns_newest_when_multiple_found(tmp_path):
     """Test that get_testrun_dir returns the newest directory when multiple directories contain the same test_id."""
-
     # Create a test_id
     test_id = "12345678-1234-1234-1234-123456789abc"
 
@@ -234,7 +233,6 @@ def test_get_testrun_dir_returns_newest_when_multiple_found(tmp_path):
 
 def test_get_testrun_dir_returns_none_when_not_found(tmp_path):
     """Test that get_testrun_dir returns None when test_id is not found."""
-
     # Create a directory without any test_id file
     empty_dir = tmp_path / "empty"
     empty_dir.mkdir()
@@ -247,7 +245,6 @@ def test_get_testrun_dir_returns_none_when_not_found(tmp_path):
 
 def test_get_testrun_dir_returns_single_match(tmp_path):
     """Test that get_testrun_dir returns the directory when only one match is found."""
-
     test_id = "single-match-test-id"
 
     # Create a single test run directory

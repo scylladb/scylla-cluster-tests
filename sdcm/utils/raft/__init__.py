@@ -194,13 +194,13 @@ class RaftFeature(RaftFeatureOperations):
             return is_consistent_topology_changes_feature_enabled(session)
 
     def get_status(self) -> str:
-        """get raft status"""
+        """Get raft status"""
         with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node) as session:
             row = session.execute("SELECT * FROM system.scylla_local WHERE key = 'group0_upgrade_state'").one()
             return getattr(row, "value", "")
 
     def is_ready(self) -> bool:
-        """check if raft running
+        """Check if raft running
 
         According to https://docs.scylladb.com/branch-5.2/architecture/raft.html
         """

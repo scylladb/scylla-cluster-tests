@@ -602,7 +602,6 @@ def get_scylla_docker_repo_from_version(scylla_version: str):
 
     :return: scylla docker repo
     """
-
     # scylla_version can take on a variety of formats, so try to match non-standard/non-semver first
     if scylla_version in ("latest", "master:latest"):
         return "scylladb/scylla-nightly"
@@ -737,7 +736,6 @@ def get_specific_tag_of_docker_image(docker_repo: str, architecture: Literal["x8
     :return: docker image tag string if found
     :raises ValueError: if docker repo is not supported or tag info cannot be found
     """
-
     if docker_repo != "scylladb/scylla-nightly":
         raise ValueError(f"SCT doesn't support getting latest from {docker_repo}")
 
@@ -899,6 +897,7 @@ class scylla_versions:
         - Can't work with 'static' and 'class' methods. Only 'class instance' ones.
         - Depends on the 'params', 'cluster.params' or 'runner.cluster.params' attributes presence
           which store SCT configuration.
+
     Example:
         # Having "scylla_version" be set to "4.4.4" in the sct config
 
@@ -1026,7 +1025,7 @@ _S3_SCYLLA_REPOS_CACHE = defaultdict(dict)
 
 def get_s3_scylla_repos_mapping(dist_type="centos", dist_version=None):
     """
-    get the mapping from version prefixes to rpm .repo or deb .list files locations
+    Get the mapping from version prefixes to rpm .repo or deb .list files locations
 
     :param dist_type: which distro to look up centos/ubuntu/debian
     :param dist_version: family name of the distro version

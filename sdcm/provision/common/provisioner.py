@@ -15,15 +15,11 @@ class ProvisionParameters(BaseModel):
 
 
 class InstanceParamsBase(BaseModel):
-    """
-    Base class for instance parameters
-    """
+    """Base class for instance parameters"""
 
 
 class InstanceProvisionerBase(BaseModel, metaclass=abc.ABCMeta):
-    """
-    Base class for provisioner - a class that provide API to provision instances
-    """
+    """Base class for provisioner - a class that provide API to provision instances"""
 
     @abc.abstractmethod
     def provision(

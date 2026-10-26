@@ -477,7 +477,7 @@ class TestRolesNeverSplitAcrossZones:
 
     @staticmethod
     def _conflicting_advice():
-        """db prefers b, loaders prefer c, monitor prefers d."""
+        """Db prefers b, loaders prefer c, monitor prefers d."""
         return [
             [
                 ZoneCapacityAdvice(zone="us-east1-b", obtainability=0.9),

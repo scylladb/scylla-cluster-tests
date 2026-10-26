@@ -458,7 +458,6 @@ class DockerCluster(cluster.BaseCluster):
 
     def _get_new_node_indexes(self, count):
         """Return `count' indexes which will fill gaps or/and continue existent indexes in `self.nodes' list."""
-
         return sorted(set(range(len(self.nodes) + count)) - set(node.node_index for node in self.nodes))
 
     def _create_nodes(self, count, enable_auto_bootstrap=False, after_config=None, rack=None):

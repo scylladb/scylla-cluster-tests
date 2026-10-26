@@ -146,18 +146,14 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
 
     @property
     def _multi_region(self) -> bool:
-        """
-        Analog of TestConfig.MULTI_REGION
-        """
+        """Analog of TestConfig.MULTI_REGION"""
         if not self._regions:
             return False
         return len(self._regions) > 1
 
     @property
     def _intra_node_comm_public(self) -> bool:
-        """
-        Analog of TestConfig.INTRA_NODE_COMM_PUBLIC
-        """
+        """Analog of TestConfig.INTRA_NODE_COMM_PUBLIC"""
         return self.params.get("intra_node_comm_public")
 
     @property

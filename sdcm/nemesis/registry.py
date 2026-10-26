@@ -11,9 +11,7 @@ DisruptMethod = Callable[[Any], None]
 
 
 def get_members_from_class(cls: SourceType) -> List[str]:
-    """
-    Returns all members of the class, excluding methods and private attributes.
-    """
+    """Returns all members of the class, excluding methods and private attributes."""
     return [
         name
         for name, value in inspect.getmembers(cls, lambda a: not (inspect.isroutine(a)))

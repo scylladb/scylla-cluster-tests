@@ -208,7 +208,8 @@ def test_add_remove_mv_restarts_scylla_when_create_fails(runner):
 
 def test_add_remove_mv_restarts_scylla_when_connection_fails(runner):
     """If opening the CQL session itself fails, scylla is still restarted (not just
-    when MV creation fails after a session was successfully opened)."""
+    when MV creation fails after a session was successfully opened).
+    """
     for node in runner.cluster.data_nodes:
         node.running_nemesis = None
     runner.cluster.cql_connection_patient.side_effect = RuntimeError("connection boom")
@@ -285,7 +286,8 @@ def kill_runner(runner):
 
 def test_kill_mv_coordinator_happy_path(kill_runner):
     """Full orchestration: coordinator switch/restart loop, successful build and
-    query, and MV cleanup in the finally block."""
+    query, and MV cleanup in the finally block.
+    """
     coordinator = MagicMock(name="coordinator")
     with (
         patch(f"{_MODULE}.get_topology_coordinator_node", return_value=coordinator),

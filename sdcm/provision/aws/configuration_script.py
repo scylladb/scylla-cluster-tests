@@ -19,9 +19,7 @@ from sdcm.provision.common.configuration_script import ConfigurationScriptBuilde
 
 
 class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):
-    """
-    A class that builds instance initialization script from parameters
-    """
+    """A class that builds instance initialization script from parameters"""
 
     aws_additional_interface: bool = False
     aws_ipv6_workaround: bool = False

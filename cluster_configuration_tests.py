@@ -19,16 +19,12 @@ from sdcm.utils.common import skip_optional_stage
 
 
 class ClusterConfigurationTests(ClusterTester):
-    """
-    Build a Scylla cluster with the appropriate parameters.
-    """
+    """Build a Scylla cluster with the appropriate parameters."""
 
     default_params = {"timeout": 650000}
 
     def test_build(self):
-        """
-        Build a Scylla cluster with params defined in data_dir/scylla.yaml
-        """
+        """Build a Scylla cluster with params defined in data_dir/scylla.yaml"""
         self.log.info("DB cluster is: %s", self.db_cluster)
         for node in self.db_cluster.nodes:
             self.log.info(node.remoter.ssh_debug_cmd())

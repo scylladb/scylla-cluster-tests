@@ -155,7 +155,6 @@ def test_list_instances_all_regions():
 @pytest.mark.integration
 def test_oci_service_clients():
     """Test that OciService can create clients."""
-
     service = OciService()
 
     # Verify properties

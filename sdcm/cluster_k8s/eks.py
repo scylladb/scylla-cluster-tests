@@ -835,9 +835,7 @@ class EksScyllaPodContainer(BaseScyllaPodContainer):
             ) from None
 
     def terminate_k8s_node(self):
-        """
-        Delete kubernetes node, which will terminate scylla node that is running on it
-        """
+        """Delete kubernetes node, which will terminate scylla node that is running on it"""
         self.k8s_cluster.log.info(
             "terminate_k8s_node: kubernetes node will be deleted, the following is affected :\n"
             + dedent("""

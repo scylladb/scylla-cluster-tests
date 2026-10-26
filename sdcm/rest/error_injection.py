@@ -41,7 +41,6 @@ class ErrorInjection(RemoteCurlClient):
 
     def remove_errors(self) -> Result:
         """Disables all currently active error injections."""
-
         return self.run_remoter_curl(method="DELETE", path="", params=None)
 
     def inject_error(self, error_name: str, one_shot: bool = False, data: dict[str, str] | None = None) -> Result:

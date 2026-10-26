@@ -161,7 +161,8 @@ def mock_aws_backend():
 @pytest.fixture
 def mock_xcloud_backend(mock_aws_backend, mock_gce_backend):
     """Composes AWS + GCE fixtures (covers both xcloud providers) and adds
-    xcloud-specific mocks. KeyStore for aws_utils is already covered by mock_aws_backend."""
+    xcloud-specific mocks. KeyStore for aws_utils is already covered by mock_aws_backend.
+    """
     with ExitStack() as stack:
         stack.enter_context(patch("sdcm.tester.ScyllaCloudCluster"))
         stack.enter_context(patch("sdcm.tester.ScyllaCloudAPIClient"))

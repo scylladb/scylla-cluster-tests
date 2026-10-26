@@ -51,7 +51,8 @@ def test_every_mapped_parameter_is_a_parameter_of_the_script(script_source):
 def test_the_phases_the_flow_invokes_exist(script_source):
     """'load' and 'build_index' are the contract between the flow and any rune script. The script
     also carries a 'search' function, unused until the query phase lands -- it is mirrored whole
-    from scylladb/vector-store, so trimming it would only create a divergence to undo."""
+    from scylladb/vector-store, so trimming it would only create a divergence to undo.
+    """
     functions = set(RUNE_FUNCTION_RE.findall(script_source))
     assert {"load", "build_index"} <= functions
 
@@ -63,6 +64,7 @@ def test_the_step_record_file_key_shares_the_scripts_vocabulary():
 
 def test_the_test_case_entry_point_exists():
     """The name docs/fts-search-test.md tells you to run, and what the Jenkins job will name as its
-    sub_test once the aws test case lands. Renaming it breaks every documented invocation."""
+    sub_test once the aws test case lands. Renaming it breaks every documented invocation.
+    """
     assert callable(fts_test.FtsSearchTest.test_fts_search)
     assert fts_test.FtsSearchTest.WORKLOAD is FTS_WORKLOAD

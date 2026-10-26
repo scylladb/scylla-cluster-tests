@@ -175,9 +175,7 @@ class NodeLoadInfoService:
         return re.compile(r".*group=\"(?P<group>.*)\",shard=\"(?P<shard>\d+)")
 
     def scylla_scheduler_shares(self) -> dict:
-        """
-        output example: {"sl:sl200": [200, 200], "sl:default": [1000, 1000]}
-        """
+        """Output example: {"sl:sl200": [200, 200], "sl:default": [1000, 1000]}"""
         scheduler_group_shares = defaultdict(list)
         all_metrics = self._get_metrics(port=9180)
         for key, value in all_metrics.items():
@@ -195,12 +193,12 @@ class NodeLoadInfoService:
 
     @cached_property
     def read_bandwidth_mb(self) -> float:
-        """based on io_properties.yaml in MB/s"""
+        """Based on io_properties.yaml in MB/s"""
         return self._io_properties["disks"][0]["read_bandwidth"] / 1024 / 1024
 
     @cached_property
     def write_bandwidth_mb(self) -> float:
-        """based on io_properties.yaml in MB/s"""
+        """Based on io_properties.yaml in MB/s"""
         return self._io_properties["disks"][0]["write_bandwidth"] / 1024 / 1024
 
     @cached_property
@@ -245,7 +243,8 @@ class NodeLoadInfoService:
 class AdaptiveTimeoutStore(metaclass=Singleton):
     """Class for storing metrics and other info related to adaptive timeouts.
 
-    Used for future reference/node operations time tracking and calculations optimization."""
+    Used for future reference/node operations time tracking and calculations optimization.
+    """
 
     def store(
         self,
@@ -300,18 +299,14 @@ class AdaptiveTimeoutResultsTable(StaticGenericResultTable):
 
 
 class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
-    """
-    Report adaptive timeout results to Argus.
-    """
+    """Report adaptive timeout results to Argus."""
 
     def __init__(self):
         self.test_config = TestConfig()
         self.cycle_counters = defaultdict(count)
 
     def send_adaptive_timeout_results_to_argus(self, result: ArgusAdaptiveTimeoutResult):
-        """
-        Send adaptive timeout results to Argus.
-        """
+        """Send adaptive timeout results to Argus."""
         if not self.test_config.argus_client_ready():
             LOGGER.warning("Will not submit to argus - no client initialized")
             return

@@ -138,7 +138,8 @@ def test_disrupt_abort_succeeds(runner):
 )
 def test_disrupt_parallel_object_exception(runner, verify_side_effect, expect_replacement):
     """When ParallelObject.call_objects raises, disrupt() still calls verify_decommission()
-    and takes either the replacement or recovery path depending on the outcome."""
+    and takes either the replacement or recovery path depending on the outcome.
+    """
     with patch(f"{_MODULE}.ParallelObject.call_objects", side_effect=RuntimeError("simulated failure")):
         if verify_side_effect is None:
             runner.cluster.verify_decommission.return_value = None

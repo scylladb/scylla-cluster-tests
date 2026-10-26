@@ -445,9 +445,7 @@ class SstableUtils:
         return has_tombstones
 
     def corrupt_sstables(self, sstables_to_corrupt_count: int = 1):
-        """
-        Corrupts sstables by replace it's content with random data.
-        """
+        """Corrupts sstables by replace it's content with random data."""
         sstables = self.get_sstables()
         sstables_to_corrupt_count = min(sstables_to_corrupt_count, len(sstables))
 

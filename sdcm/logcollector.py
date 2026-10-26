@@ -1308,7 +1308,8 @@ def collect_diagnostic_data(node):
 def collect_log_entities(node, log_entities: List[BaseLogEntity]):
     """Collects diagnostics data from node - used during the test.
 
-    Log Entities should have unique names, otherwise won't be collected."""
+    Log Entities should have unique names, otherwise won't be collected.
+    """
     LOGGER.info("Collecting diagnostics data from: %s", node.name)
     if remote_node_dir := create_remote_storage_dir(node):
         for log_entity in log_entities:
@@ -1756,9 +1757,7 @@ class JepsenLogCollector(LogCollector):
 
 
 class SSTablesCollector(BaseSCTLogCollector):
-    """
-    Collect corrupted sstables from db node.
-    """
+    """Collect corrupted sstables from db node."""
 
     cluster_log_type = "corrupted-sstables"
     cluster_dir_prefix = "corrupted-sstables"
@@ -1878,7 +1877,6 @@ class Collector:
             test_dir {str} -- where to search and store log files (default: {None})
             params  {SCTConfiguration}  -- SCTConfiguration object (sdcm/sct_config.py)
         """
-
         self.base_dir = os.environ.get("HOME")
         self._test_id = test_id
         self.backend = params["cluster_backend"]
@@ -2452,7 +2450,6 @@ class FailureStatisticsCollector(LogCollector):
 
 def check_archive(remoter, path: str) -> bool:
     """Ensure that given path is a good and not empty archive."""
-
     if path.endswith(".tar.gz"):
         cmd = f"tar tzf '{path}'"
     elif path.endswith(".tar.zst"):

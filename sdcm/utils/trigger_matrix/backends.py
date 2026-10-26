@@ -14,7 +14,8 @@
 """Backend, region and architecture helpers.
 
 Turns a job's region field into the list of regions it actually provisions in, and converts
-architecture strings between SCT's `VmArch` enum and each cloud's own spelling."""
+architecture strings between SCT's `VmArch` enum and each cloud's own spelling.
+"""
 
 import json
 import logging

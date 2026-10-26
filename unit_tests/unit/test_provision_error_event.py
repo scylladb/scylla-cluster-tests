@@ -21,7 +21,6 @@ from click.testing import CliRunner
 
 def test_provision_resources_sends_error_event_to_argus():
     """Test that provision_resources sends error event to Argus on failure."""
-
     # Mock the necessary components
     with (
         patch("sct.init_and_verify_sct_config") as mock_config,

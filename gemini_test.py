@@ -29,9 +29,7 @@ class GeminiTest(ClusterTester):
     gemini_results = {"cmd": ["N/A"], "status": "Not Running", "results": [], "errors": {}}
 
     def test_random_load(self):
-        """
-        Run gemini tool
-        """
+        """Run gemini tool"""
         cmd = self.params.get("gemini_cmd")
 
         self.log.debug("Start gemini benchmark")

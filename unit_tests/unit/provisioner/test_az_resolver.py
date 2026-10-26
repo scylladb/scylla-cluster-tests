@@ -562,7 +562,8 @@ class TestSpotPlacementScoreOrdering:
 
     def test_scored_types_exclude_loader_and_monitor(self):
         """GetSpotPlacementScores treats InstanceTypes as interchangeable alternatives, so mixing a small
-        plentiful monitor type into the query would let it answer for the whole request and flatten scores."""
+        plentiful monitor type into the query would let it answer for the whole request and flatten scores.
+        """
         resolver = AZResolver(
             self._spot_params(
                 instance_type_db="i4i.large", instance_type_loader="t3.small", instance_type_monitor="t3.small"
@@ -573,7 +574,8 @@ class TestSpotPlacementScoreOrdering:
 
     def test_region_fallback_does_not_score_az_per_candidate(self, mock_aws_region_cls):
         """One GetSpotPlacementScores call per candidate region is wasted work - each is a distinct cache
-        key, and `resolve()` re-ranks AZs for whichever region is actually switched to."""
+        key, and `resolve()` re-ranks AZs for whichever region is actually switched to.
+        """
         mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a", "us-west-2b"]
         params = self._spot_params(availability_zone="a")
         with (
@@ -855,7 +857,7 @@ class TestRolesNeverSplitAcrossAzs:
 
     @staticmethod
     def _conflicting_scores():
-        """db prefers a, loaders prefer b, monitor prefers c - a maximally disagreeing set."""
+        """Db prefers a, loaders prefer b, monitor prefers c - a maximally disagreeing set."""
         return [
             [
                 PlacementScore(region="us-east-1", az_letter="a", score=9),
@@ -897,7 +899,8 @@ class TestRolesNeverSplitAcrossAzs:
 
     def test_the_winner_is_the_best_worst_role_not_any_role_favourite(self, mock_aws_region_cls):
         """With db=9/2/2, loaders=2/9/3 and monitor=2/3/9 the minimums are a=2, b=2, c=2 - all tied, so the
-        result must be a stable pick, never one role's favourite overriding the others."""
+        result must be a stable pick, never one role's favourite overriding the others.
+        """
         mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b", "us-east-1c"]
         params = self._params("a")
 

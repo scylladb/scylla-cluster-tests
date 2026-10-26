@@ -60,7 +60,7 @@ class NetworkInterfaceProvider:
 
     @staticmethod
     def _ip_configurations(nic_name: str, subnet_id: str, interface: Dict, addresses: Dict[str, str | None]) -> List:
-        """ipConfigurations of one NIC: an IPv4 one, and an IPv6 one when the NIC asks for it.
+        """IpConfigurations of one NIC: an IPv4 one, and an IPv6 one when the NIC asks for it.
 
         Azure requires the primary ipConfiguration to be IPv4, so the IPv6 one is always secondary.
         """
@@ -143,7 +143,8 @@ class NetworkInterfaceProvider:
     @staticmethod
     def get_nic_name(name: str, index: int = 0):
         """Name of the NIC of a device index: '<vm>-nic' for the primary one,
-        '<vm>-nic<index>' for the rest."""
+        '<vm>-nic<index>' for the rest.
+        """
         if index:
             return f"{name}-nic{index}"
         return f"{name}-nic"

@@ -188,7 +188,8 @@ def _images_of(containers: list) -> set:
 
 def _image_ref(name: str) -> str:
     """`docker images` prints `grafana/grafana:13.2.0`; a container that the monitoring scripts
-    started reports `docker.io/grafana/grafana:13.2.0`. Compare them on the same spelling."""
+    started reports `docker.io/grafana/grafana:13.2.0`. Compare them on the same spelling.
+    """
     return name.removeprefix("docker.io/")
 
 

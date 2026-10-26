@@ -751,7 +751,8 @@ class GceLoggingClient:
     def get_system_events(self, from_: float, until: float):
         """Gets system events logs entries from GCE between time (since -> to).
 
-        Returns list of entries in a form of dictionaries. See example output in unit tests."""
+        Returns list of entries in a form of dictionaries. See example output in unit tests.
+        """
         from_ = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(from_))
         until = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(until))
         query = {
@@ -1008,6 +1009,7 @@ def create_instance(  # noqa: PLR0913
             (N1, N2, C2, C3) - the same list as
             GceSctRunner.NESTED_VIRTUALIZATION_INSTANCE_FAMILIES. Not supported on E2, H4D,
             the memory-optimized M/X series, or anything on AMD (N2D/C2D/C3D) or Arm silicon.
+
     Returns:
         Instance object.
     """
@@ -1189,7 +1191,6 @@ def gce_set_tags(
     Returns:
         Whatever the operation.result() returns.
     """
-
     request = compute_v1.SetTagsInstanceRequest()
 
     request.tags_resource = instance.tags
@@ -1207,9 +1208,7 @@ def gce_set_tags(
 def gce_check_if_machine_type_supported(
     machine_types_client: compute_v1.MachineTypesClient, machine_type: str, project: str, zone: str
 ):
-    """
-    Check if the given machine type is supported in the given zone.
-    """
+    """Check if the given machine type is supported in the given zone."""
     request = compute_v1.GetMachineTypeRequest()
     request.project = project
     request.zone = zone
