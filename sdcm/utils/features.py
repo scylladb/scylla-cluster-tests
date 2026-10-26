@@ -31,7 +31,7 @@ LOGGER = logging.getLogger(__name__)
 
 def get_supported_features(session: Session) -> list[str]:
     """
-    helper function to get supported_features from a running cluster,
+    Helper function to get supported_features from a running cluster,
     if you need from a specific node use `patient_exclusive_cql_connection` session
     """
     result = session.execute("SELECT supported_features FROM system.local WHERE key='local'").one()
@@ -50,7 +50,7 @@ def get_supported_features(session: Session) -> list[str]:
 
 def get_enabled_features(session: Session) -> list[str]:
     """
-    helper function to get supported_features from a running cluster,
+    Helper function to get supported_features from a running cluster,
     if you need from a specific node use `patient_exclusive_cql_connection` session
     """
     result = session.execute("SELECT value FROM system.scylla_local WHERE key='enabled_features'").one()
@@ -71,7 +71,6 @@ def is_consistent_cluster_management_feature_enabled(session: Session) -> bool:
     """Check whether raft consistent cluster management feature enabled
     if you need from a specific node use `patient_exclusive_cql_connection` session
     """
-
     return CONSISTENT_CLUSTER_MANAGEMENT_FEATURE in get_enabled_features(session)
 
 
@@ -79,7 +78,6 @@ def is_consistent_topology_changes_feature_enabled(session: Session) -> bool:
     """Check whether raft topology feature enabled
     if you need from a specific node use `patient_exclusive_cql_connection` session
     """
-
     return CONSISTENT_TOPOLOGY_CHANGES_FEATURE in get_enabled_features(session)
 
 

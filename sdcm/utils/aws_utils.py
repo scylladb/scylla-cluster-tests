@@ -579,9 +579,9 @@ def get_scylla_images_ec2_client(region_name: str) -> EC2Client:
 
 def get_ssm_ami(parameter: str, region_name) -> str:
     """
-    get AMIs from SSM parameters
+    Get AMIs from SSM parameters
 
-    examples:
+    Examples:
     - '/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id'
     - '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 
@@ -593,10 +593,7 @@ def get_ssm_ami(parameter: str, region_name) -> str:
 
 
 def is_using_aws_mock() -> bool:
-    """
-    check if the aws mock host is available or not
-    """
-
+    """Check if the aws mock host is available or not"""
     try:
         socket.gethostbyname("aws-mock.itself")
         return True
@@ -606,12 +603,12 @@ def is_using_aws_mock() -> bool:
 
 def get_by_owner_ami(parameter: str, region_name) -> str:
     """
-    get AMIs by owner/architecture/name filter
+    Get AMIs by owner/architecture/name filter
 
     for case, we have only  the owner id, and it's not publish
     in marketplace, hence we can't use the ssm parameter store.
 
-    example:
+    Example:
     - '131827586825/x86_64/OL8.*' - it's oracle linux 8, and we want the latest one
 
     """
@@ -650,9 +647,7 @@ def get_by_owner_ami(parameter: str, region_name) -> str:
 
 
 def aws_check_instance_type_supported(instance_type: str, region_name: str) -> bool:
-    """
-    check if the instance type is supported in the region
-    """
+    """Check if the instance type is supported in the region"""
     client: EC2Client = boto3.client("ec2", region_name=region_name)
     try:
         client.describe_instance_types(InstanceTypes=[instance_type])

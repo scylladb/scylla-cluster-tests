@@ -180,7 +180,8 @@ def test_precheck_partitions_mixed_list(runner):
 def test_duplicate_instances_all_pruned_reported_once(runner, argus_mock, events_function_scope):
     """When disruptions_list contains N copies of the same excluded class
     (nemesis_multiply_factor > 1), the Argus report, excluded list, and
-    DisruptionEvent are each emitted exactly once — not N times."""
+    DisruptionEvent are each emitted exactly once — not N times.
+    """
     runner.disruptions_list = [PrecheckSkipNemesis(runner)] * 3
 
     excluded = runner.precheck_nemesis()
@@ -251,7 +252,8 @@ def test_duplicate_runnable_instances_precheck_called_once(runner):
 
 def test_skip_reason_emits_skipped_disruption_event(runner, events_function_scope):
     """A reason-returning precheck() emits one SKIPPED DisruptionEvent (END phase)
-    with the full expected shape."""
+    with the full expected shape.
+    """
     runner.disruptions_list = [PrecheckSkipNemesis(runner)]
 
     runner.precheck_nemesis()
@@ -262,7 +264,8 @@ def test_skip_reason_emits_skipped_disruption_event(runner, events_function_scop
 def test_exception_emits_failed_disruption_event(runner, events_function_scope):
     """A precheck() exception emits one FAILED DisruptionEvent (END phase).
     full_traceback is collapsed to 'Traceback...RuntimeError: <msg>' before
-    comparison so the assertion is precise without encoding absolute paths."""
+    comparison so the assertion is precise without encoding absolute paths.
+    """
     runner.disruptions_list = [PrecheckErrorNemesis(runner)]
 
     runner.precheck_nemesis()
@@ -304,7 +307,8 @@ def test_exception_emits_failed_disruption_event(runner, events_function_scope):
 )
 def test_exclusion_reports_to_argus(runner, argus_mock, nemesis_cls, description, status, message):
     """Each pruned nemesis is submitted to and finalized in the Argus nemesis tab,
-    using the representative precheck node and the matching status."""
+    using the representative precheck node and the matching status.
+    """
     runner.disruptions_list = [nemesis_cls(runner)]
 
     runner.precheck_nemesis()
@@ -356,7 +360,8 @@ def test_no_exclusion_does_not_touch_argus(runner, argus_mock):
 
 def test_exception_argus_message_contains_traceback(runner, argus_mock):
     """finalize_nemesis for a broken precheck() passes the full traceback as the
-    message, not just the bare exception string — matching the normal FAILED path."""
+    message, not just the bare exception string — matching the normal FAILED path.
+    """
     runner.disruptions_list = [PrecheckErrorNemesis(runner)]
 
     runner.precheck_nemesis()
@@ -374,7 +379,8 @@ def test_exception_argus_message_contains_traceback(runner, argus_mock):
 
 def test_run_all_pruned_emits_critical_and_stops(runner, events_function_scope):
     """When every selected nemesis is pruned, run() publishes one CRITICAL
-    TestFrameworkEvent and stops without executing any nemesis."""
+    TestFrameworkEvent and stops without executing any nemesis.
+    """
     runner.disruptions_list = [PrecheckSkipNemesis(runner)]
 
     runner.run(cycles_count=5)

@@ -744,7 +744,8 @@ class SparkMigratorTest(ClusterTester):
     def _make_create_idempotent(cql_stmt: str) -> str:
         """Rewrite leading `CREATE TABLE|TYPE|INDEX` to `CREATE … IF NOT EXISTS` so the apply
         loop is safe to re-run under SCT_REUSE_CLUSTER. No-op if the statement already contains
-        IF NOT EXISTS or does not start with one of the targeted DDL verbs."""
+        IF NOT EXISTS or does not start with one of the targeted DDL verbs.
+        """
         return re.sub(
             r"^(CREATE\s+(?:TABLE|TYPE|INDEX))(?!\s+IF\s+NOT\s+EXISTS)\b",
             r"\1 IF NOT EXISTS",
