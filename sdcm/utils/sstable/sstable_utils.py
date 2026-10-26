@@ -101,15 +101,9 @@ class SstableUtils:
             #       /var/.../me-3g9s_1eqc_2z60w2ushgma9j7ypu-big-Statistics.db)
             elif "malformed_sstable_exception (Buffer improperly sized to hold requested data" in sstables_res.stderr:
                 sstables_encrypted_mapping[sstable] = True
-            # NOTE: case when sstable was concurrently deleted:
-            #       [shard 0:main] seastar - Exiting on unhandled exception: \
-            #       sstables::malformed_sstable_exception \
-            #       (/var/.../me-3g9s_1941_4web4236cvthbyawsi-big-TOC.txt: file not found)
-            elif (
-                " file not found)" in sstables_res.stderr
-                or "Cannot find file" in sstables_res.stderr
-                or "No such file or directory" in sstables_res.stderr
-            ):
+            # NOTE: case when sstable was concurrently deleted, e.g. by compaction.
+            #       Checked by file existence because the error text differs between Scylla versions.
+            elif not self.db_node.remoter.sudo(f"test -e {sstable}", ignore_status=True).ok:
                 self.log.debug("'%s' sstable doesn't exist anymore. Skipping it.", sstable)
             # NOTE: case when
             #       Could not load SSTable: /var/.../me-3g9w_104a_01xg12j55gjivrwtt5-big-Data.db: \
@@ -139,8 +133,9 @@ class SstableUtils:
         assert encryption_results
         assert encryption_results.count(expected_bool_value) / len(encryption_results) >= encryption_success_part, (
             "Sstables encryption check failed."
-            f" Success part: '{encryption_success_part}'. Expected bool value: '{expected_bool_value}'."
-            f" Encryption results: {encryption_results}"
+            f" Required success part: '{encryption_success_part}'. Expected bool value: '{expected_bool_value}'."
+            f" Results out of {len(encryption_results)}: True={encryption_results.count(True)},"
+            f" False={encryption_results.count(False)}, None={encryption_results.count(None)}"
         )
 
     def count_sstable_tombstones(self, sstable: str) -> int:
