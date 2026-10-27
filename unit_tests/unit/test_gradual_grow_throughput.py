@@ -21,7 +21,7 @@ Tests import the production code directly to ensure we're validating real behavi
 import json
 import logging
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -337,3 +337,60 @@ def test_latency_decorator_finds_the_tags_run_step_returns():
     res = _run_step([["WRITE-st"], ["READ-st"]])
     kwargs = {"stress_cmds": ["stress-cmd-0", "stress-cmd-1"], "step_params": {}, "step_duration": None}
     assert _find_hdr_tags(kwargs, res, object()) == ["WRITE-st", "READ-st"]
+
+
+# ---------------------------------------------------------------------------
+# _collect_step_metrics: per-step Prometheus summary
+# ---------------------------------------------------------------------------
+
+
+def _collect_step_metrics(monkeypatch, prometheus, start=1000, end=1900):
+    monkeypatch.setattr(gradual_grow_module, "PrometheusDBStats", lambda host: prometheus)
+    instance = SimpleNamespace(
+        monitors=SimpleNamespace(nodes=[SimpleNamespace(external_address="10.0.0.9")]),
+        loaders=SimpleNamespace(nodes=[SimpleNamespace(ip_address="10.0.1.1")]),
+        log=logging.getLogger(__name__),
+    )
+    return gradual_grow_module.PerformanceRegressionPredefinedStepsTest._collect_step_metrics(instance, start, end)
+
+
+def test_collect_step_metrics_stores_every_metric(monkeypatch):
+    prometheus = MagicMock()
+    prometheus.query.return_value = [
+        {"metric": {"instance": "10.0.0.1", "shard": "0"}, "values": [[1900, "42.5"]]},
+        {"metric": {"instance": "10.0.0.2", "shard": "0"}, "values": [[1900, "NaN"]]},
+    ]
+    metrics = _collect_step_metrics(monkeypatch, prometheus)
+
+    assert metrics.keys() == gradual_grow_module.STEP_METRICS.keys()
+    assert all(value == {"instance=10.0.0.1,shard=0": 42.5} for value in metrics.values())
+    queries = [call.args[0] for call in prometheus.query.call_args_list]
+    assert all("$" not in query for query in queries)
+    assert all("[900s]" in query for query in queries)
+    assert any('instance=~"10.0.1.1"' in query for query in queries)
+    assert all(call.kwargs == {"start": 1900, "end": 1900} for call in prometheus.query.call_args_list)
+
+
+def test_collect_step_metrics_skips_failed_query(monkeypatch):
+    names = list(gradual_grow_module.STEP_METRICS)
+    prometheus = MagicMock()
+    prometheus.query.side_effect = [ConnectionError("boom")] + [[{"metric": {}, "values": [[1900, "1"]]}]] * (
+        len(names) - 1
+    )
+    metrics = _collect_step_metrics(monkeypatch, prometheus)
+
+    assert names[0] not in metrics
+    assert all(metrics[name] == {"total": 1.0} for name in names[1:])
+
+
+def test_collect_step_metrics_without_prometheus(monkeypatch):
+    def unreachable(host):
+        raise ConnectionError("no monitor")
+
+    monkeypatch.setattr(gradual_grow_module, "PrometheusDBStats", unreachable)
+    instance = SimpleNamespace(
+        monitors=SimpleNamespace(nodes=[SimpleNamespace(external_address="10.0.0.9")]),
+        loaders=SimpleNamespace(nodes=[]),
+        log=logging.getLogger(__name__),
+    )
+    assert gradual_grow_module.PerformanceRegressionPredefinedStepsTest._collect_step_metrics(instance, 0, 60) == {}

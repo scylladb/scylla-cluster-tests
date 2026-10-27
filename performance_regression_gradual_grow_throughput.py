@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
+from sdcm.db_stats import PrometheusDBStats
 from sdcm.rest.task_profiler_client import TaskProfilerClient
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events import Severity
@@ -17,6 +18,72 @@ from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
+
+
+# Per-step metrics saved to result_gradual_increase.log for investigation. Each query is evaluated
+# at the step end over the whole step ($range); $loaders is the regex of the loader IPs.
+# Names and types are from /metrics of scylla-nightly 2026.4.0~dev-0.20261023. The SC metrics
+# appear once a strongly consistent table exists. Latency histograms are in microseconds.
+# The monitor drops storage_proxy buckets outside the sl:* groups, so SC runs have no storage_proxy P99.
+STEP_METRICS = {
+    "scylla_transport_requests_served": "sum(rate(scylla_transport_requests_served[$range]))",
+    "scylla_transport_requests_served_by_shard": (
+        "sum by (instance, shard) (rate(scylla_transport_requests_served[$range]))"
+    ),
+    "scylla_transport_current_connections": (
+        "sum by (instance, shard) (avg_over_time(scylla_transport_current_connections[$range]))"
+    ),
+    "scylla_strong_consistency_coordinator_write_latency_p99_ms": (
+        "histogram_quantile(0.99, sum by (instance, le) "
+        "(rate(scylla_strong_consistency_coordinator_write_latency_bucket[$range]))) / 1000"
+    ),
+    "scylla_storage_proxy_coordinator_write_latency_p99_ms": (
+        "histogram_quantile(0.99, sum by (instance, le) "
+        "(rate(scylla_storage_proxy_coordinator_write_latency_bucket[$range]))) / 1000"
+    ),
+    "scylla_reactor_utilization": "avg by (instance) (avg_over_time(scylla_reactor_utilization[$range]))",
+    "scylla_reactor_cpu_busy_ms": "sum by (instance) (rate(scylla_reactor_cpu_busy_ms[$range]))",
+    "scylla_scheduler_runtime_ms": "sum by (instance, group) (rate(scylla_scheduler_runtime_ms[$range]))",
+    "loader_cpu_busy_ratio": (
+        '1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle",instance=~"$loaders"}[$range]))'
+    ),
+    "node_disk_written_bytes_total": (
+        'sum by (instance, device) (rate(node_disk_written_bytes_total{device=~"nvme.*|md.*"}[$range]))'
+    ),
+    "node_disk_io_time_seconds_total": (
+        'sum by (instance, device) (rate(node_disk_io_time_seconds_total{device=~"nvme.*|md.*"}[$range]))'
+    ),
+    "scylla_commitlog_cycle": "sum by (instance) (rate(scylla_commitlog_cycle[$range]))",
+    "scylla_commitlog_alloc": "sum by (instance) (rate(scylla_commitlog_alloc[$range]))",
+    "scylla_commitlog_bytes_written": "sum by (instance) (rate(scylla_commitlog_bytes_written[$range]))",
+    "scylla_commitlog_slack": "sum by (instance) (rate(scylla_commitlog_slack[$range]))",
+    "scylla_commitlog_pending_allocations": (
+        "sum by (instance) (avg_over_time(scylla_commitlog_pending_allocations[$range]))"
+    ),
+    "scylla_commitlog_requests_blocked_memory": (
+        "sum by (instance) (rate(scylla_commitlog_requests_blocked_memory[$range]))"
+    ),
+    "scylla_memory_regular_dirty_bytes": (
+        "sum by (instance) (avg_over_time(scylla_memory_regular_dirty_bytes[$range]))"
+    ),
+    "scylla_database_requests_blocked_memory": (
+        "sum by (instance) (rate(scylla_database_requests_blocked_memory[$range]))"
+    ),
+    "scylla_memtables_pending_flushes": "sum by (instance) (avg_over_time(scylla_memtables_pending_flushes[$range]))",
+    "scylla_strong_consistency_raft_persisted_log_entries": (
+        "sum by (instance) (rate(scylla_strong_consistency_raft_persisted_log_entries[$range]))"
+    ),
+    "scylla_strong_consistency_raft_polls": "sum by (instance) (rate(scylla_strong_consistency_raft_polls[$range]))",
+    "scylla_strong_consistency_raft_queue_entries_for_apply": (
+        "sum by (instance) (rate(scylla_strong_consistency_raft_queue_entries_for_apply[$range]))"
+    ),
+    "scylla_strong_consistency_raft_store_term_and_vote": (
+        "sum by (instance) (rate(scylla_strong_consistency_raft_store_term_and_vote[$range]))"
+    ),
+    "scylla_strong_consistency_raft_leaders": (
+        "sum by (instance) (avg_over_time(scylla_strong_consistency_raft_leaders[$range]))"
+    ),
+}
 
 
 class CSPopulateDistribution(Enum):
@@ -505,6 +572,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         """
         results = []
         stress_queue = []
+        start = time.time()
         for stress_cmd in stress_cmds:
             params = {"round_robin": True, "stats_aggregate_cmds": False}
             stress_cmd_to_run = stress_cmd
@@ -525,6 +593,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         for stress in stress_queue:
             results.extend(self.get_stress_results(queue=stress, store_results=False))
             self.log.debug("One c-s command results: %s", results[-1])
+        # Kept apart from the decorator's window, which also covers its own post-processing
+        self._step_window = (start, time.time())
         # NOTE: the returned 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator.
         # Every stress thread derives its own tags from the command it actually runs, which is the
         # only place the tags of a step can come from: they are tool specific (cassandra-stress
@@ -696,7 +766,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
             summary_result = self.check_latency_during_steps(step=current_throttle_step)
             summary_result[current_throttle_step].update(
-                {"ops_rate": self._aggregate_ops_rate(results, num_loaders, len(workload.cs_cmd_tmpl))}
+                {
+                    "ops_rate": self._aggregate_ops_rate(results, num_loaders, len(workload.cs_cmd_tmpl)),
+                    "metrics": self._collect_step_metrics(*self._step_window),
+                }
             )
             total_summary.update(summary_result)
             # Saved after every step, so a run that dies mid-way still leaves the finished steps
@@ -844,6 +917,31 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         for result in results:
             if result.exc is not None:
                 self.log.warning("Failed to stop/collect task profiler on %s: %s", result.obj.name, result.exc)
+
+    def _collect_step_metrics(self, start, end):
+        """Evaluate STEP_METRICS over the step window. A failed query is logged and left out."""
+        try:
+            prometheus = PrometheusDBStats(host=self.monitors.nodes[0].external_address)
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Step metrics are not collected, Prometheus is unavailable: %s", exc)
+            return {}
+        loaders = "|".join(node.ip_address for node in self.loaders.nodes)
+        metrics = {}
+        for name, query in STEP_METRICS.items():
+            query = query.replace("$range", f"{int(end - start)}s").replace("$loaders", loaders)  # noqa: PLW2901
+            try:
+                series = prometheus.query(query, start=end, end=end)
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Step metric %s is not collected: %s", name, exc)
+                continue
+            metrics[name] = {
+                ",".join(f"{key}={value}" for key, value in sorted(s["metric"].items())) or "total": round(
+                    float(s["values"][-1][1]), 3
+                )
+                for s in series
+                if s["values"] and s["values"][-1][1] != "NaN"
+            }
+        return metrics
 
     def save_total_summary_in_file(self, total_summary):
         total_summary_json = json.dumps(total_summary, indent=4, separators=(", ", ": "))
