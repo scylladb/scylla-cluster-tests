@@ -372,6 +372,6 @@ Useful, not dead: `sdcm/utils/argus.py` (`get_argus_client`, `ReplayOnlyArgusSCT
 | File | Contents |
 |---|---|
 | `<logdir>/latency_results.json` | Every cycle's full result dict, plus `Steady State` |
-| `<logdir>/result_gradual_increase.log` | Gradual-steps summary with `Cycles Average`, `Relative to Steady`, `color`, `ops_rate` |
+| `<logdir>/result_gradual_increase.log` | Gradual-steps summary with `Cycles Average`, `Relative to Steady`, `color`, `ops_rate`, per-step Prometheus `metrics` (`STEP_METRICS`); rewritten after every step |
 | `<logdir>/jenkins_perf_PerfPublisher.xml` | Legacy Jenkins PerfPublisher XML |
 | `<loaders logdir>/*/hdrh-*.hdr` | Raw HDR histogram logs — the input to `hydra hdr-investigate` |
