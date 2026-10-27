@@ -677,7 +677,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 clients = list(session.execute("SELECT address, port, shard_id, connection_stage FROM system.clients"))
             time.sleep(60)
             ss_after = node.remoter.run(ss_cmd, verbose=False).stdout
-            return connection_check_verdict(expected, node.scylla_shards, loader_ips, clients, ss_before, ss_after)
+            # scylla_shards is 0 when it can't be read, and an empty verdict would pass
+            if not (shards := node.scylla_shards):
+                raise ValueError("number of shards is unknown")
+            return connection_check_verdict(expected, shards, loader_ips, clients, ss_before, ss_after)
 
         results = ParallelObject(objects=self.db_cluster.nodes, timeout=300).run(check_node, ignore_exceptions=True)
         nodes = {res.obj.name: res.result if res.exc is None else {"error": repr(res.exc)} for res in results}
