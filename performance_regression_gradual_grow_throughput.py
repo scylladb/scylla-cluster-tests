@@ -36,11 +36,20 @@ STEP_METRICS = {
     "scylla_transport_current_connections": (
         "sum by (instance, shard) (avg_over_time(scylla_transport_current_connections[$range]))"
     ),
+    # Cluster-wide P99 is the server-side counterpart of the client HDR P99 over the step
     "scylla_strong_consistency_coordinator_write_latency_p99_ms": (
+        "histogram_quantile(0.99, sum by (le) "
+        "(rate(scylla_strong_consistency_coordinator_write_latency_bucket[$range]))) / 1000"
+    ),
+    "scylla_strong_consistency_coordinator_write_latency_p99_ms_by_instance": (
         "histogram_quantile(0.99, sum by (instance, le) "
         "(rate(scylla_strong_consistency_coordinator_write_latency_bucket[$range]))) / 1000"
     ),
     "scylla_storage_proxy_coordinator_write_latency_p99_ms": (
+        "histogram_quantile(0.99, sum by (le) "
+        "(rate(scylla_storage_proxy_coordinator_write_latency_bucket[$range]))) / 1000"
+    ),
+    "scylla_storage_proxy_coordinator_write_latency_p99_ms_by_instance": (
         "histogram_quantile(0.99, sum by (instance, le) "
         "(rate(scylla_storage_proxy_coordinator_write_latency_bucket[$range]))) / 1000"
     ),
