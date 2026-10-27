@@ -5,3 +5,5 @@
 perf_gradual_threads: {"write": 1000}
 perf_gradual_throttle_steps: {"write": ['50000', '300000', '350000', '400000', '450000', '500000', '550000', '600000', 'unthrottled']}
 perf_gradual_step_duration: {"write": '15m'}
+# Bracket for test_write_max_throughput_under_p99: the ladder ends until Phase 0 narrows it
+perf_p99_search: {"target_p99_ms": 10, "low": 300000, "high": 600000, "tolerance": 10000, "probe_duration": '10m', "confirm_duration": '15m'}
