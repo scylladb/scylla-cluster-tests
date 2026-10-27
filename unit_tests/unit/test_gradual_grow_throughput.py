@@ -280,6 +280,8 @@ def _run_step(queues_hdr_tags, stress_cmds=None, step_params=None, step_duration
         log=logging.getLogger(__name__),
         run_stress_thread=lambda **_: next(started),
         get_stress_results=lambda queue, store_results: [{"op rate": "1000"}],
+        _start_connection_check=lambda stress_cmds: None,
+        _connection_check_result=lambda check: None,
     )
     return gradual_grow_module.PerformanceRegressionPredefinedStepsTest.run_step(
         instance,
@@ -325,6 +327,8 @@ def test_run_step_skips_a_queue_that_carries_no_tags():
         log=logging.getLogger(__name__),
         run_stress_thread=lambda **_: next(started),
         get_stress_results=lambda queue, store_results: [{"op rate": "1000"}],
+        _start_connection_check=lambda stress_cmds: None,
+        _connection_check_result=lambda check: None,
     )
     _, decorator_input = gradual_grow_module.PerformanceRegressionPredefinedStepsTest.run_step(
         instance, ["cmd-0", "cmd-1", "cmd-2"], {}, None
@@ -394,3 +398,102 @@ def test_collect_step_metrics_without_prometheus(monkeypatch):
         log=logging.getLogger(__name__),
     )
     assert gradual_grow_module.PerformanceRegressionPredefinedStepsTest._collect_step_metrics(instance, 0, 60) == {}
+
+
+# ---------------------------------------------------------------------------
+# connection_check_verdict: every loader connection is alive and passing data
+# ---------------------------------------------------------------------------
+
+LOADER_IPS = {"10.0.1.1", "10.0.1.2"}
+
+
+def _ss(byte_counts):
+    """`ss -tinH state established` output: a socket line, then a tab-led info line."""
+    return "".join(
+        f"0      0      10.0.0.1:19042   {address}:{port} \n"
+        f"\t cubic rto:204 bytes_sent:{count} bytes_acked:{count} bytes_received:{count} segs_out:10\n"
+        for (address, port), count in byte_counts.items()
+    )
+
+
+def _verdict(clients, before, after, expected=2, shards=2):
+    return gradual_grow_module.connection_check_verdict(expected, shards, LOADER_IPS, clients, _ss(before), _ss(after))
+
+
+def test_connection_check_passes_full_shards_with_traffic():
+    clients = [
+        ("10.0.1.1", 40001, 0, "READY"),
+        ("10.0.1.2", 40002, 0, "READY"),
+        ("10.0.1.1", 40003, 1, "READY"),
+        ("10.0.1.2", 40004, 1, "READY"),
+        ("10.0.1.2", 40005, 1, "READY"),  # driver control connection on top of the pool, heartbeats only
+        ("10.0.0.5", 50000, 0, "READY"),  # SCT's own session, not a loader
+    ]
+    before = {(address, port): 1000 for address, port, *_ in clients}
+    after = {peer: 2000 for peer in before} | {("10.0.1.2", 40005): 1010, ("10.0.0.5", 50000): 1000}
+    # IPv4-mapped peer as ss prints it when Scylla listens on ::
+    before["[::ffff:10.0.1.2]", 40004] = before.pop(("10.0.1.2", 40004))
+    after["[::ffff:10.0.1.2]", 40004] = after.pop(("10.0.1.2", 40004))
+
+    verdict = _verdict(clients, before, after)
+
+    assert verdict[0] == {"expected": 2, "ready": 2, "with_traffic": 2, "ok": True, "idle": []}
+    assert verdict[1] == {"expected": 2, "ready": 3, "with_traffic": 2, "ok": True, "idle": ["10.0.1.2:40005"]}
+
+
+def test_connection_check_fails_shard_below_expected_count():
+    clients = [
+        ("10.0.1.1", 40001, 0, "READY"),
+        ("10.0.1.2", 40002, 0, "READY"),
+        ("10.0.1.1", 40003, 1, "READY"),
+        ("10.0.1.2", 40004, 1, "STARTUP"),
+    ]
+    before = {(address, port): 0 for address, port, *_ in clients}
+    after = {peer: 5000 for peer in before}
+
+    verdict = _verdict(clients, before, after, shards=3)
+
+    assert verdict[0]["ok"]
+    assert verdict[1] == {"expected": 2, "ready": 1, "with_traffic": 1, "ok": False, "idle": []}
+    assert verdict[2] == {"expected": 2, "ready": 0, "with_traffic": 0, "ok": False, "idle": []}
+
+
+def test_connection_check_fails_heartbeat_only_connection():
+    clients = [("10.0.1.1", 40001, 0, "READY"), ("10.0.1.2", 40002, 0, "READY")]
+    before = {("10.0.1.1", 40001): 1000, ("10.0.1.2", 40002): 1000}
+    after = {("10.0.1.1", 40001): 9000, ("10.0.1.2", 40002): 1020}
+
+    verdict = _verdict(clients, before, after, shards=1)
+
+    assert verdict[0] == {"expected": 2, "ready": 2, "with_traffic": 1, "ok": False, "idle": ["10.0.1.2:40002"]}
+
+
+def test_connection_check_is_off_without_connections_per_shard():
+    check = gradual_grow_module.PerformanceRegressionPredefinedStepsTest._start_connection_check(
+        SimpleNamespace(), ["cassandra-stress write cl=QUORUM duration=1m -rate threads=10"]
+    )
+    assert check is None
+
+
+def test_check_connections_records_failed_node(monkeypatch):
+    monkeypatch.setattr(gradual_grow_module.time, "sleep", lambda seconds: None)
+    peer = ("10.0.1.1", 40001)
+    samples = iter([_ss({peer: 0}), _ss({peer: 5000})])
+    good = MagicMock(scylla_shards=1)
+    good.name = "db-1"
+    good.remoter.run.side_effect = lambda *args, **kwargs: SimpleNamespace(stdout=next(samples))
+    broken = MagicMock(scylla_shards=1)
+    broken.name = "db-2"
+    broken.remoter.run.side_effect = ConnectionError("ssh down")
+    db_cluster = MagicMock(nodes=[good, broken])
+    session = db_cluster.cql_connection_patient_exclusive.return_value.__enter__.return_value
+    session.execute.return_value = [(*peer, 0, "READY")]
+    instance = SimpleNamespace(
+        db_cluster=db_cluster, loaders=SimpleNamespace(nodes=[SimpleNamespace(ip_address="10.0.1.1")])
+    )
+
+    result = gradual_grow_module.PerformanceRegressionPredefinedStepsTest._check_connections(instance, expected=1)
+
+    assert result["nodes"]["db-1"] == {0: {"expected": 1, "ready": 1, "with_traffic": 1, "ok": True, "idle": []}}
+    assert "ssh down" in result["nodes"]["db-2"]["error"]
+    assert result["ok"] is False

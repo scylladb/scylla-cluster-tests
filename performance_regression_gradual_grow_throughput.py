@@ -1,6 +1,8 @@
 import os
 import pathlib
+import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from enum import Enum
 from collections import defaultdict, Counter
@@ -125,6 +127,46 @@ class Workload:
                 # Should not happen due to validation, but handle gracefully
                 normalized_steps.append({"rate": str(step)})
         self.throttle_steps = normalized_steps
+
+
+def _ss_bytes(ss_output: str) -> dict:
+    """(peer address, peer port) -> bytes_received + bytes_acked, from `ss -tinH state established` output."""
+    sockets, peer = {}, None
+    for line in ss_output.splitlines():
+        if line.startswith(("\t", " ")):
+            sockets[peer] = sum(int(count) for count in re.findall(r"bytes_(?:received|acked):(\d+)", line))
+        elif line:
+            address, _, port = line.split()[3].rpartition(":")
+            peer = (address.strip("[]").removeprefix("::ffff:"), int(port))
+    return sockets
+
+
+def connection_check_verdict(expected, shards, loader_ips, clients, ss_before, ss_after) -> dict:
+    """Per shard: at least `expected` READY loader connections, each moving >= 1 KiB between the ss samples.
+
+    A CQL heartbeat moves tens of bytes, one write carries the 1 KiB column. Both directions count,
+    so the rule also works for reads. Driver control connections come on top of the pool, so an idle
+    extra connection doesn't fail the shard.
+
+    :param clients: (address, port, shard_id, connection_stage) rows of system.clients
+    """
+    before, after = _ss_bytes(ss_before), _ss_bytes(ss_after)
+    verdict = {}
+    for shard in range(shards):
+        ready = [
+            (address, port)
+            for address, port, shard_id, stage in clients
+            if shard_id == shard and stage == "READY" and address in loader_ips
+        ]
+        idle = [peer for peer in ready if after.get(peer, 0) - before.get(peer, 0) < 1024]
+        verdict[shard] = {
+            "expected": expected,
+            "ready": len(ready),
+            "with_traffic": len(ready) - len(idle),
+            "ok": len(ready) - len(idle) >= expected,
+            "idle": [f"{address}:{port}" for address, port in idle[:20]],
+        }
+    return verdict
 
 
 def is_latte_command(stress_cmd: Union[str, list]) -> bool:
@@ -590,11 +632,13 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             self.log.debug("RUNNING stress cmd: %s", stress_cmd_to_run)
             stress_queue.append(self.run_stress_thread(**params))
 
+        connection_check = self._start_connection_check(stress_cmds)
         for stress in stress_queue:
             results.extend(self.get_stress_results(queue=stress, store_results=False))
             self.log.debug("One c-s command results: %s", results[-1])
         # Kept apart from the decorator's window, which also covers its own post-processing
         self._step_window = (start, time.time())
+        self._step_connections = self._connection_check_result(connection_check)
         # NOTE: the returned 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator.
         # Every stress thread derives its own tags from the command it actually runs, which is the
         # only place the tags of a step can come from: they are tool specific (cassandra-stress
@@ -607,6 +651,49 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         )
         self.log.debug("HDR tags of the step, collected from %s stress queue(s): %s", len(stress_queue), hdr_tags)
         return results, {"hdr_tags": hdr_tags}
+
+    def _start_connection_check(self, stress_cmds):
+        """Run the connection check concurrently with the step. Off for commands without connectionsPerShard."""
+        expected = sum(int(count) for cmd in stress_cmds for count in re.findall(r"connectionsPerShard=(\d+)", cmd))
+        if not expected:
+            return None
+        executor = ThreadPoolExecutor(max_workers=1)
+        check = executor.submit(self._check_connections, expected)
+        executor.shutdown(wait=False)
+        return check
+
+    def _check_connections(self, expected):
+        """Sample the loader connections on every DB node twice, 60 s apart, starting ~2 min into the step."""
+        time.sleep(120)
+        loader_ips = {node.ip_address for node in self.loaders.nodes}
+        ss_cmd = "ss -tinH state established '( sport = :9042 or sport = :19042 )'"
+
+        def check_node(node):
+            # ss output is ~4 MB per node with 1,000 connections per shard, keep it out of the log
+            ss_before = node.remoter.run(ss_cmd, verbose=False).stdout
+            # system.clients is node-local
+            with self.db_cluster.cql_connection_patient_exclusive(node) as session:
+                clients = list(session.execute("SELECT address, port, shard_id, connection_stage FROM system.clients"))
+            time.sleep(60)
+            ss_after = node.remoter.run(ss_cmd, verbose=False).stdout
+            return connection_check_verdict(expected, node.scylla_shards, loader_ips, clients, ss_before, ss_after)
+
+        results = ParallelObject(objects=self.db_cluster.nodes, timeout=300).run(check_node, ignore_exceptions=True)
+        nodes = {res.obj.name: res.result if res.exc is None else {"error": repr(res.exc)} for res in results}
+        ok = all("error" not in shards and all(shard["ok"] for shard in shards.values()) for shards in nodes.values())
+        return {"ok": ok, "nodes": nodes}
+
+    def _connection_check_result(self, check):
+        """A failed or broken check is recorded and logged; it never fails the step."""
+        if check is None:
+            return None
+        try:
+            result = check.result(timeout=600)
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "error": repr(exc)}
+        if not result["ok"]:
+            self.log.warning("Connection check failed: %s", result)
+        return result
 
     def drop_keyspace(self, keyspace_name):
         self.log.debug(f"Drop keyspace {keyspace_name}")
@@ -769,6 +856,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 {
                     "ops_rate": self._aggregate_ops_rate(results, num_loaders, len(workload.cs_cmd_tmpl)),
                     "metrics": self._collect_step_metrics(*self._step_window),
+                    "connections": self._step_connections,
                 }
             )
             total_summary.update(summary_result)
