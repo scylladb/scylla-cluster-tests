@@ -67,6 +67,13 @@ class PerformanceConfigMixin(BaseModel):
         "have a chance of applying; not needed for INSERT-based write "
         "workloads on a fresh table.",
     )
+    perf_p99_search: DictOrStr = SctField(
+        description="Used by test_write_max_throughput_under_p99. Bisects the write rate between 'low' (must pass) "
+        "and 'high' (must fail) with 'probe_duration' steps until high - low <= 'tolerance', then confirms 'low' "
+        "with one 'confirm_duration' step. A rate fails when both the client and the server P99 are over "
+        "'target_p99_ms'. Example: {'target_p99_ms': 10, 'low': 50000, 'high': 150000, 'tolerance': 5000, "
+        "'probe_duration': '10m', 'confirm_duration': '15m'}",
+    )
     perf_simple_query_extra_command: String = SctField(
         description="Extra command line options to pass to perf_simple_query",
     )
