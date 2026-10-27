@@ -1,0 +1,5 @@
+# Leader-aware cql-stress built on scylla-rust-driver 1.9.0, pinned by digest so SC and EC runs share
+# one stress tool and driver. It routes to tablet leaders on strongly consistent keyspaces and uses
+# regular routing on EC ones (checked against 2026.4.0~dev-0.20261023).
+stress_image:
+  cql-stress-cassandra-stress: 'aleksbykov/cql-stress:leader-aware-strong-consistency@sha256:394369deebf39376932fad4411c12b7c32c644081c10b200ab2b398bf97e67a8'
