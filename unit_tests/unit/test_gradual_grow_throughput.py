@@ -498,3 +498,49 @@ def test_check_connections_records_failed_node(monkeypatch):
     assert result["nodes"]["db-1"] == {0: {"expected": 1, "ready": 1, "with_traffic": 1, "ok": True, "idle": []}}
     assert "ssh down" in result["nodes"]["db-2"]["error"]
     assert result["ok"] is False
+
+
+# ---------------------------------------------------------------------------
+# meets_p99 / search_max_rate: bisect the throttle rate under the P99 target
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "client_p99, server_p99, passed",
+    [
+        (12.0, 11.0, False),  # both over the target
+        (12.0, 9.0, True),  # client over, server under
+        (9.0, 12.0, True),  # client under, server over
+        (12.0, None, False),  # server unknown, the client decides
+    ],
+)
+def test_meets_p99_fails_only_when_both_are_over(client_p99, server_p99, passed):
+    assert gradual_grow_module.meets_p99(client_p99, server_p99, target=10) is passed
+
+
+def test_search_max_rate_brackets_the_p99_crossing():
+    crossing = 87_300  # P99 is 10 ms here and grows with the rate
+    probed = []
+
+    def probe(rate):
+        probed.append(rate)
+        return gradual_grow_module.meets_p99(10 * (rate / crossing) ** 4, None, target=10)
+
+    low, high = gradual_grow_module.search_max_rate(probe, low=50_000, high=150_000, tolerance=5_000)
+
+    assert low <= crossing < high
+    assert high - low <= 5_000
+    assert probed[:2] == [150_000, 50_000]
+    assert len(probed) <= 2 + 5  # bracket ends + ceil(log2(100k / 5k))
+
+
+@pytest.mark.parametrize(
+    "passing_rates, error",
+    [
+        ({50_000, 150_000}, "high end 150000 passes"),
+        (set(), "low end 50000 fails"),
+    ],
+)
+def test_search_max_rate_rejects_a_wrong_bracket(passing_rates, error):
+    with pytest.raises(ValueError, match=rf"{error}.*\[50000, 150000\]"):
+        gradual_grow_module.search_max_rate(lambda rate: rate in passing_rates, 50_000, 150_000, 5_000)

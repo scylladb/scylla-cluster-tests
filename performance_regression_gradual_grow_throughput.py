@@ -179,6 +179,35 @@ def connection_check_verdict(expected, shards, loader_ips, clients, ss_before, s
     return verdict
 
 
+def meets_p99(client_p99, server_p99, target) -> bool:
+    """A rate breaks the SLA only when both the client and the server P99 are over the target.
+
+    An unknown server P99 (None) leaves the decision to the client P99.
+    """
+    return client_p99 <= target or (server_p99 is not None and server_p99 <= target)
+
+
+def search_max_rate(probe, low, high, tolerance) -> tuple[int, int]:
+    """Bisect the rate between a passing `low` and a failing `high` until they are within `tolerance`.
+
+    probe(rate) runs the load at that rate and returns True when it meets the SLA.
+    Both ends are probed first, `high` first, so a wrong bracket stops the search early.
+    Returns the final (low, high): `low` passed, `high` failed.
+    """
+    bracket = f"[{low}, {high}]"
+    if probe(high):
+        raise ValueError(f"The high end {high} passes, the P99 crossing is above the bracket {bracket}")
+    if not probe(low):
+        raise ValueError(f"The low end {low} fails, the P99 crossing is below the bracket {bracket}")
+    while high - low > tolerance:
+        middle = (low + high) // 2
+        if probe(middle):
+            low = middle
+        else:
+            high = middle
+    return low, high
+
+
 def is_latte_command(stress_cmd: Union[str, list]) -> bool:
     """Check if stress command(s) use latte tool.
 
