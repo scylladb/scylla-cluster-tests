@@ -1,0 +1,7 @@
+# Write steps around the EC P99 = 10 ms knee on 3 x i8g.4xlarge (estimated at 450-490k op/s with batch
+# commitlog), used by both EC runs. 550k and 600k are there because periodic commitlog may cross 10 ms
+# above batch; they are reachable only with 1,000 threads per loader (EC's ceiling at 500 was 492k).
+# See docs/plans/mini-plans/2026-10-26-sc-ec-max-write-throughput-p99-10ms.md
+perf_gradual_threads: {"write": 1000}
+perf_gradual_throttle_steps: {"write": ['50000', '300000', '350000', '400000', '450000', '500000', '550000', '600000', 'unthrottled']}
+perf_gradual_step_duration: {"write": '15m'}
