@@ -1,3 +1,4 @@
+import os
 import pathlib
 import time
 from contextlib import contextmanager, nullcontext
@@ -698,6 +699,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 {"ops_rate": self._aggregate_ops_rate(results, num_loaders, len(workload.cs_cmd_tmpl))}
             )
             total_summary.update(summary_result)
+            # Saved after every step, so a run that dies mid-way still leaves the finished steps
+            self.save_total_summary_in_file(total_summary)
             if workload.drop_keyspace:
                 self.drop_keyspace(keyspace_name=workload.test_keyspace)
             # We want 3 minutes (180 sec) wait between steps.
@@ -715,8 +718,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 # The new condition for system idleness requires the resize_type column to be 'none' for all relevant tablets for a
                 # continuous period of three minutes.
                 self.wait_for_no_tablets_splits()
-
-        self.save_total_summary_in_file(total_summary)
 
     @contextmanager
     def _task_profiler_step(self, step_name: str):
@@ -851,8 +852,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         self.log.debug("---------------------------------")
 
         filename = f"{self.logdir}/result_gradual_increase.log"
-        with open(filename, "w", encoding="utf-8") as res_file:
+        # Write and rename, so a kill mid-write can't leave a truncated file
+        with open(f"{filename}.tmp", "w", encoding="utf-8") as res_file:
             res_file.write(total_summary_json)
+        os.replace(f"{filename}.tmp", filename)
 
     def _calculate_average_max_latency(self, results):
         status = defaultdict(float).fromkeys(results[0].keys(), 0.0)
