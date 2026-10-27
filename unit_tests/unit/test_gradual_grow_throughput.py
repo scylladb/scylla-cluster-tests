@@ -20,6 +20,7 @@ Tests import the production code directly to ensure we're validating real behavi
 
 import json
 import logging
+import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -544,3 +545,61 @@ def test_search_max_rate_brackets_the_p99_crossing():
 def test_search_max_rate_rejects_a_wrong_bracket(passing_rates, error):
     with pytest.raises(ValueError, match=rf"{error}.*\[50000, 150000\]"):
         gradual_grow_module.search_max_rate(lambda rate: rate in passing_rates, 50_000, 150_000, 5_000)
+
+
+def test_write_max_throughput_under_p99_records_every_step():
+    crossing = 87_300
+    saved = {}
+    instance = SimpleNamespace(
+        params={
+            "perf_p99_search": {
+                "target_p99_ms": 10,
+                "low": 50_000,
+                "high": 150_000,
+                "tolerance": 5_000,
+                "probe_duration": "10m",
+                "confirm_duration": "15m",
+            },
+            "stress_cmd_w": ["cql-stress-cassandra-stress write duration=$duration -rate 'threads=$threads $throttle'"]
+            * 4,
+            "perf_gradual_threads": {"write": [1000]},
+        },
+        loaders=SimpleNamespace(nodes=[object()] * 4),
+        log=logging.getLogger(__name__),
+        get_test_table_name=lambda cmds: ("keyspace1", "standard1"),
+        current_throttle=gradual_grow_module.PerformanceRegressionPredefinedStepsTest.current_throttle,
+        _aggregate_ops_rate=gradual_grow_module.PerformanceRegressionPredefinedStepsTest._aggregate_ops_rate,
+        run_fstrim_on_all_db_nodes=lambda: None,
+        prepare_schema=lambda workload: None,
+        drop_keyspace=lambda keyspace_name: None,
+        save_total_summary_in_file=saved.update,
+    )
+
+    def run_step(stress_cmds, step_params, step_duration):
+        instance.rate = int(re.search(r"fixed=(\d+)/s", step_params["throttle"]).group(1)) * 4
+        instance._step_window, instance._step_connections = (0, 600), {"ok": True}
+        return [{"op rate": str(instance.rate / 4)}] * 4, [SimpleNamespace(hdr_tags=["WRITE-rt"])]
+
+    def p99(rate):
+        return 10 * (rate / crossing) ** 4
+
+    instance.run_step = run_step
+    instance.get_hdrhistogram = lambda **kwargs: {"WRITE--WRITE-rt": {"percentile_99": p99(instance.rate)}}
+    instance._collect_step_metrics = lambda start, end: {
+        "scylla_strong_consistency_coordinator_write_latency_p99_ms": {"total": p99(instance.rate) * 0.9}
+    }
+
+    gradual_grow_module.PerformanceRegressionPredefinedStepsTest.test_write_max_throughput_under_p99(instance)
+
+    probes = [name for name in saved if name.startswith("probe_")]
+    assert probes[:2] == ["probe_1_150000", "probe_2_50000"]
+    search = saved["search"]
+    # Server P99 is 0.9 x client, so a rate fails only above the server's own crossing
+    both_over_from = crossing * (1 / 0.9) ** 0.25
+    assert search["bracket"][0] == search["max_rate"] <= both_over_from < search["bracket"][1]
+    assert search["probes"] == len(probes)
+    assert search["confirmed"]
+    confirmation = saved[f"confirm_{search['max_rate']}"]
+    assert confirmation["server_p99_ms"] == pytest.approx(confirmation["client_p99_ms"] * 0.9)
+    assert confirmation["ops_rate"] == pytest.approx(search["max_rate"], rel=0.001)
+    assert confirmation["connections"] == {"ok": True}

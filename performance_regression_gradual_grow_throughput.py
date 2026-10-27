@@ -1,3 +1,4 @@
+import itertools
 import os
 import pathlib
 import re
@@ -417,6 +418,95 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload=workload,
             test_name="test_write_gradual_increase_load_with_task_profiler (100% writes)",
         )
+
+    def test_write_max_throughput_under_p99(self):
+        """Find the highest write rate that meets the P99 target, see perf_p99_search.
+
+        Probes and the confirmation step call run_step directly, not through latency_calculator_decorator:
+        nothing goes to Argus, so probes that are over the target by design don't fail the run.
+        Every step goes to result_gradual_increase.log, and the result under its "search" key.
+        """
+        search = self.params["perf_p99_search"]
+        stress_cmds = self.params.get("stress_cmd_w")
+        keyspace, table = self.get_test_table_name(stress_cmds)
+        workload = Workload(
+            workload_type="write",
+            cs_cmd_tmpl=stress_cmds,
+            cs_cmd_warm_up=None,
+            num_threads=self.params["perf_gradual_threads"]["write"],
+            throttle_steps=[],
+            preload_data=False,
+            drop_keyspace=True,
+            wait_no_compactions=False,
+            step_duration=search["probe_duration"],
+            test_keyspace=keyspace,
+            test_table=table,
+            prepare_schema=True,
+        )
+        num_loaders = len(self.loaders.nodes)
+        total_summary = {}
+        probe_numbers = itertools.count(1)
+
+        def run_at(step_name, rate, duration):
+            self.prepare_schema(workload=workload)
+            step_params = {
+                "threads": workload.num_threads[0],
+                "throttle": self.current_throttle({"rate": rate}, num_loaders, 1, stress_cmds[0]),
+            }
+            results, stress_queue = self.run_step(
+                stress_cmds=stress_cmds, step_params=step_params, step_duration=duration
+            )
+            start, end = self._step_window
+            hdr = self.get_hdrhistogram(
+                hdr_tags=stress_queue[0].hdr_tags, stress_operation="write", start_time=start, end_time=end
+            )
+            if not hdr:
+                raise ValueError(f"No HDR histogram for step {step_name}, its client P99 is unknown")
+            metrics = self._collect_step_metrics(start, end)
+            # Only one of them has data: SC runs write through the SC coordinator, EC runs through storage_proxy
+            server_p99s = [
+                metrics[name]["total"]
+                for name in (
+                    "scylla_strong_consistency_coordinator_write_latency_p99_ms",
+                    "scylla_storage_proxy_coordinator_write_latency_p99_ms",
+                )
+                if "total" in metrics.get(name, {})
+            ]
+            step = {
+                "rate": rate,
+                "client_p99_ms": max(summary["percentile_99"] for summary in hdr.values()),
+                "server_p99_ms": max(server_p99s, default=None),
+                "ops_rate": self._aggregate_ops_rate(results, num_loaders, len(stress_cmds)),
+                "metrics": metrics,
+                "connections": self._step_connections,
+            }
+            step["passed"] = meets_p99(step["client_p99_ms"], step["server_p99_ms"], search["target_p99_ms"])
+            total_summary[step_name] = step
+            self.save_total_summary_in_file(total_summary)
+            self.drop_keyspace(keyspace_name=keyspace)
+            return step
+
+        self.run_fstrim_on_all_db_nodes()
+        low, high = search_max_rate(
+            lambda rate: run_at(f"probe_{next(probe_numbers)}_{rate}", rate, search["probe_duration"])["passed"],
+            search["low"],
+            search["high"],
+            search["tolerance"],
+        )
+        # A failed confirmation is recorded, not retried
+        confirmation = run_at(f"confirm_{low}", low, search["confirm_duration"])
+        total_summary["search"] = {
+            "max_rate": low,
+            "bracket": [low, high],
+            "probes": sum(name.startswith("probe_") for name in total_summary),
+            "confirmed": confirmation["passed"],
+            "client_p99_ms": confirmation["client_p99_ms"],
+            "server_p99_ms": confirmation["server_p99_ms"],
+            "ops_rate": confirmation["ops_rate"],
+        }
+        self.save_total_summary_in_file(total_summary)
+        if not confirmation["passed"]:
+            self.log.warning("The confirmation step is over the P99 target: %s", total_summary["search"])
 
     def test_read_gradual_increase_load(self):
         """
