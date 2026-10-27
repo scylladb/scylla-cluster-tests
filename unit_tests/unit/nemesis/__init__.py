@@ -3,6 +3,8 @@
 from abc import ABC, abstractmethod
 from unittest.mock import MagicMock
 
+from sdcm.nemesis import NemesisBaseClass
+
 
 class TestRunner:
     """Lightweight mock runner for nemesis unit tests.
@@ -63,6 +65,8 @@ class TestBaseClass(ABC):
     @abstractmethod
     def disrupt(self):
         """Disrupt method"""
+
+    description = classmethod(NemesisBaseClass.description.__func__)
 
 
 class CustomNemesisA(TestBaseClass):

@@ -267,6 +267,14 @@ class NemesisBaseClass(NemesisFlags, ABC):
         Runs the actual disruption
         """
 
+    @classmethod
+    def description(cls) -> str:
+        """Human-readable summary of the disruption, reported to Argus with every run of the nemesis.
+
+        Taken from the nemesis class docstring, with the indentation stripped.
+        """
+        return inspect.cleandoc(cls.__doc__ or "")
+
 
 class NemesisRunner:
     def __init__(
@@ -1873,7 +1881,7 @@ class NemesisRunner:
                     nemesis_name=class_name,
                     start_time=start_time,
                     nemesis_event=nemesis_event,
-                    description=nemesis.__class__.__doc__,
+                    description=nemesis.description(),
                 ),
                 self.verify_nodes(),
                 self.tester.run_nemesis_hooks(),
@@ -2017,7 +2025,7 @@ class NemesisRunner:
                     nemesis_name=name,
                     start_time=start_time,
                     nemesis_event=event,
-                    description=nemesis.__class__.__doc__,
+                    description=nemesis.description(),
                     node=precheck_node,
                 ),
             ):
