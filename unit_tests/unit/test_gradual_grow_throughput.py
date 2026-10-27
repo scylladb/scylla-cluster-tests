@@ -24,6 +24,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 import performance_regression_gradual_grow_throughput as gradual_grow_module
 from sdcm.utils.decorators import _find_hdr_tags
@@ -348,23 +349,22 @@ def test_latency_decorator_finds_the_tags_run_step_returns():
 # ---------------------------------------------------------------------------
 
 
-def _collect_step_metrics(monkeypatch, prometheus, start=1000, end=1900):
-    monkeypatch.setattr(gradual_grow_module, "PrometheusDBStats", lambda host: prometheus)
+def _collect_step_metrics(prometheus, start=1000, end=1900):
     instance = SimpleNamespace(
-        monitors=SimpleNamespace(nodes=[SimpleNamespace(external_address="10.0.0.9")]),
+        prometheus_db=prometheus,
         loaders=SimpleNamespace(nodes=[SimpleNamespace(ip_address="10.0.1.1")]),
         log=logging.getLogger(__name__),
     )
     return gradual_grow_module.PerformanceRegressionPredefinedStepsTest._collect_step_metrics(instance, start, end)
 
 
-def test_collect_step_metrics_stores_every_metric(monkeypatch):
+def test_collect_step_metrics_stores_every_metric():
     prometheus = MagicMock()
     prometheus.query.return_value = [
         {"metric": {"instance": "10.0.0.1", "shard": "0"}, "values": [[1900, "42.5"]]},
         {"metric": {"instance": "10.0.0.2", "shard": "0"}, "values": [[1900, "NaN"]]},
     ]
-    metrics = _collect_step_metrics(monkeypatch, prometheus)
+    metrics = _collect_step_metrics(prometheus)
 
     assert metrics.keys() == gradual_grow_module.STEP_METRICS.keys()
     assert all(value == {"instance=10.0.0.1,shard=0": 42.5} for value in metrics.values())
@@ -373,31 +373,32 @@ def test_collect_step_metrics_stores_every_metric(monkeypatch):
     assert all("[900s]" in query for query in queries)
     assert any('instance=~"10.0.1.1"' in query for query in queries)
     assert all(call.kwargs == {"start": 1900, "end": 1900} for call in prometheus.query.call_args_list)
+    # PrometheusDBStats.query doesn't URL-encode, these would reach Prometheus altered
+    assert not any(char in query for query in queries for char in "+&#%")
 
 
-def test_collect_step_metrics_skips_failed_query(monkeypatch):
+def test_collect_step_metrics_skips_failed_query():
     names = list(gradual_grow_module.STEP_METRICS)
     prometheus = MagicMock()
-    prometheus.query.side_effect = [ConnectionError("boom")] + [[{"metric": {}, "values": [[1900, "1"]]}]] * (
+    prometheus.query.side_effect = [requests.HTTPError("400")] + [[{"metric": {}, "values": [[1900, "1"]]}]] * (
         len(names) - 1
     )
-    metrics = _collect_step_metrics(monkeypatch, prometheus)
+    metrics = _collect_step_metrics(prometheus)
 
     assert names[0] not in metrics
     assert all(metrics[name] == {"total": 1.0} for name in names[1:])
 
 
-def test_collect_step_metrics_without_prometheus(monkeypatch):
-    def unreachable(host):
-        raise ConnectionError("no monitor")
+def test_collect_step_metrics_stops_on_unreachable_prometheus():
+    prometheus = MagicMock()
+    prometheus.query.side_effect = requests.ConnectionError("refused")
 
-    monkeypatch.setattr(gradual_grow_module, "PrometheusDBStats", unreachable)
-    instance = SimpleNamespace(
-        monitors=SimpleNamespace(nodes=[SimpleNamespace(external_address="10.0.0.9")]),
-        loaders=SimpleNamespace(nodes=[]),
-        log=logging.getLogger(__name__),
-    )
-    assert gradual_grow_module.PerformanceRegressionPredefinedStepsTest._collect_step_metrics(instance, 0, 60) == {}
+    assert _collect_step_metrics(prometheus) == {}
+    assert prometheus.query.call_count == 1
+
+
+def test_collect_step_metrics_without_monitor():
+    assert _collect_step_metrics(None) == {}
 
 
 # ---------------------------------------------------------------------------

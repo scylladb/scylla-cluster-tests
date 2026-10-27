@@ -11,8 +11,9 @@ import json
 from dataclasses import dataclass, replace
 from typing import List, Union
 
+import requests
+
 from performance_regression_test import PerformanceRegressionTest
-from sdcm.db_stats import PrometheusDBStats
 from sdcm.rest.task_profiler_client import TaskProfilerClient
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events import Severity
@@ -666,7 +667,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         """Sample the loader connections on every DB node twice, 60 s apart, starting ~2 min into the step."""
         time.sleep(120)
         loader_ips = {node.ip_address for node in self.loaders.nodes}
-        ss_cmd = "ss -tinH state established '( sport = :9042 or sport = :19042 )'"
+        ss_cmd = "ss -tinH state established '( sport = :9042 or sport = :19042 or sport = :9142 or sport = :19142 )'"
 
         def check_node(node):
             # ss output is ~4 MB per node with 1,000 connections per shard, keep it out of the log
@@ -1008,27 +1009,26 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
     def _collect_step_metrics(self, start, end):
         """Evaluate STEP_METRICS over the step window. A failed query is logged and left out."""
-        try:
-            prometheus = PrometheusDBStats(host=self.monitors.nodes[0].external_address)
-        except Exception as exc:  # noqa: BLE001
-            self.log.warning("Step metrics are not collected, Prometheus is unavailable: %s", exc)
+        if not self.prometheus_db:
             return {}
         loaders = "|".join(node.ip_address for node in self.loaders.nodes)
         metrics = {}
         for name, query in STEP_METRICS.items():
-            query = query.replace("$range", f"{int(end - start)}s").replace("$loaders", loaders)  # noqa: PLW2901
+            promql = query.replace("$range", f"{int(end - start)}s").replace("$loaders", loaders)
             try:
-                series = prometheus.query(query, start=end, end=end)
+                metrics[name] = {
+                    ",".join(f"{key}={value}" for key, value in sorted(s["metric"].items())) or "total": round(
+                        float(s["values"][-1][1]), 3
+                    )
+                    for s in self.prometheus_db.query(promql, start=end, end=end)
+                    if s["values"] and s["values"][-1][1] != "NaN"
+                }
+            except requests.ConnectionError as exc:
+                # Each query retries for ~35 s, don't pay that for every metric of a dead monitor
+                self.log.warning("Step metrics are not collected, Prometheus is unreachable: %s", exc)
+                break
             except Exception as exc:  # noqa: BLE001
                 self.log.warning("Step metric %s is not collected: %s", name, exc)
-                continue
-            metrics[name] = {
-                ",".join(f"{key}={value}" for key, value in sorted(s["metric"].items())) or "total": round(
-                    float(s["values"][-1][1]), 3
-                )
-                for s in series
-                if s["values"] and s["values"][-1][1] != "NaN"
-            }
         return metrics
 
     def save_total_summary_in_file(self, total_summary):
