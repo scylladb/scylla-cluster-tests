@@ -36,8 +36,10 @@ sizing_loader:
 sizing_monitor:
   vcpu: 8
   memory: '>=32'
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 31
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        seed: 31
 seeds_num: 3
 round_robin: true
 keyspace_num: 50

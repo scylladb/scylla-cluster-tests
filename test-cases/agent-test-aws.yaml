@@ -37,6 +37,8 @@ agent:
   log_level: "info"
 
 user_prefix: agent-test
-nemesis_class_name: NoOpMonkey
+nemesis:
+  runners:
+    - NoOpMonkey: {}
 
 use_preinstalled_scylla: true

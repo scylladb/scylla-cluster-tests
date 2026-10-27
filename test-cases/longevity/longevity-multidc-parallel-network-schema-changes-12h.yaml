@@ -17,8 +17,12 @@ simulated_racks: 0
 
 instance_type_db: 'i3en.xlarge'
 
-nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']
-nemesis_selector: ["networking","schema_changes and not disruptive"]
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "networking"
+    - SisyphusMonkey:
+        selector: "schema_changes and not disruptive"
 
 seeds_num: 2
 round_robin: true

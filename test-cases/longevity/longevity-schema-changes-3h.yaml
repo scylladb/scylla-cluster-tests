@@ -12,7 +12,9 @@ round_robin: true
 
 instance_type_db: 'i3en.large'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'schema_changes'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'schema_changes'
 
 user_prefix: 'longevity-schemachanges-3h'

@@ -28,7 +28,7 @@ import dataclasses
 from textwrap import dedent
 
 import yaml
-from typing import List, Union, Set, Literal, Callable, get_origin, get_args, ClassVar
+from typing import List, NamedTuple, Union, Set, Literal, Callable, get_origin, get_args, ClassVar
 from functools import cached_property
 
 import anyconfig
@@ -115,11 +115,11 @@ from sdcm.sct_config.defaults import (
     available_backends,
 )
 from sdcm.sct_config.mixins import CONFIG_GROUPS
+from sdcm.sct_config.sections import ConfigSection
 from sdcm.sct_config.helpers import (
     DOCKER_RACK_ARG_MIN_VERSION,
     _load_docker_images_defaults_cached,
     _nested_env_subkey,
-    is_config_option_appendable,
     merge_dicts_append_strings,
     simulated_racks_enabled,
 )
@@ -339,6 +339,19 @@ def _ordinal(position: int) -> str:
     return _ORDINALS[position - 1] if 1 <= position <= len(_ORDINALS) else f"#{position}"
 
 
+class DocsOption(NamedTuple):
+    """One documented option: a root field, a section, or a field inside a section (dotted ``path``)."""
+
+    path: str
+    field: pydantic_fields.FieldInfo
+    #: Environment variable setting it; ``None`` for a field set only through its section's variable.
+    env: str | None
+
+
+#: Marks an option a defaults file does not set.
+DOCS_UNSET = object()
+
+
 @dataclasses.dataclass(frozen=True)
 class ScyllaNetworkConfigRule:
     """One constraint on a single `scylla_network_config` address entry.
@@ -406,8 +419,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
     """The SCT configuration, assembled from the domain mixins in `sdcm.sct_config.mixins`.
 
     Every configuration option lives in exactly one mixin, grouped by domain (cross-cutting
-    concerns, then per-backend, then per-test-type). Fields stay flat -- `config.nemesis_class_name`
-    and every YAML key are unchanged; only the source is split. `CONFIG_GROUPS` fixes both the
+    concerns, then per-backend, then per-test-type). Most fields stay flat (`config.n_db_nodes`); a
+    converted group's mixin declares one section instead (`config.nemesis.interval`, see
+    ``sdcm.sct_config.sections``). `CONFIG_GROUPS` fixes both the
     field order on this model and the section order in the generated documentation.
 
     What stays here: the assembled model's own runtime state, the per-backend lookup tables, and
@@ -1456,6 +1470,33 @@ class SCTConfiguration(*CONFIG_GROUPS):
         return grouped
 
     @classmethod
+    def _docs_options_by_group(cls) -> list[tuple[str, list[DocsOption]]]:
+        """`_fields_by_group` with every section expanded into its fields, recursively, after the section itself."""
+
+        def expand(path: str, field, env: str | None, depth: int) -> list[DocsOption]:
+            options = [DocsOption(path, field, env)]
+            if (section := cls._docs_section_of(field.annotation)) is not None:
+                for name, sub_field in section.model_fields.items():
+                    sub_env = f"{env}__{name.upper()}" if depth == 0 else None
+                    options += expand(f"{path}.{name}", sub_field, sub_env, depth + 1)
+            return options
+
+        return [
+            (title, [option for name, field in fields for option in expand(name, field, f"SCT_{name.upper()}", 0)])
+            for title, fields in cls._fields_by_group()
+        ]
+
+    @staticmethod
+    def _docs_default(defaults: dict, path: str):
+        """The value at dotted ``path`` of a loaded defaults file, or ``DOCS_UNSET`` when it sets none."""
+        value = defaults
+        for key in path.split("."):
+            if not isinstance(value, dict) or key not in value:
+                return DOCS_UNSET
+            value = value[key]
+        return value
+
+    @classmethod
     def _get_defaults_for_docs(cls):
         test_default_path = sct_abs_path("defaults/test_default.yaml")
         base_defaults = anyconfig.load(test_default_path)
@@ -1468,17 +1509,17 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     @classmethod
     def _get_backend_overrides_for_docs(cls, field_name, base_defaults, backend_defaults):
-        if field_name in base_defaults:
-            base_value = str(cls._format_default_value_for_docs(base_defaults[field_name]))
+        if (base_value := cls._docs_default(base_defaults, field_name)) is not DOCS_UNSET:
+            base_value = str(cls._format_default_value_for_docs(base_value))
         else:
             base_value = "N/A"
         grouped_values = {}
 
         for backend, defaults in backend_defaults.items():
-            if field_name not in defaults:
+            if (backend_value := cls._docs_default(defaults, field_name)) is DOCS_UNSET:
                 continue
 
-            backend_value = str(cls._format_default_value_for_docs(defaults[field_name]))
+            backend_value = str(cls._format_default_value_for_docs(backend_value))
             if backend_value == base_value:
                 continue
 
@@ -1669,18 +1710,15 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     def _dotted_get(self, key: str):
         """
-        if key for retrieval is dot notation, ex. 'stress_image.ycsb' or 'nemesis.interval'
-        we assume `stress_image` would be a dict and `nemesis` a pydantic model
+        if key for retrieval is dot notation, ex. 'stress_image.ycsb'
+        we assume `stress_image` would be a dict; sections are read through attributes, not here
         """
         keys = key.split(".")
         current = self.get(keys[0])
         for k in keys[1:]:
-            if isinstance(current, BaseModel):
-                current = getattr(current, k, None)
-            elif isinstance(current, dict):
-                current = current.get(k)
-            else:
-                break
+            if not isinstance(current, dict):
+                return None
+            current = current.get(k)
         return current
 
     def _validate_value(self, field_name: str, field: pydantic_fields.FieldInfo):
@@ -1795,6 +1833,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
         if self.get("n_db_nodes"):
             self._validate_seeds_number()
+            self._validate_nemesis_can_run_on_non_seed()
             self._validate_number_of_db_nodes_divides_by_az_number()
 
         if self.get("use_zero_nodes"):
@@ -2235,6 +2274,17 @@ class SCTConfiguration(*CONFIG_GROUPS):
             f"Seeds number ({seeds_num}) should be not more then nodes number ({num_of_db_nodes})"
         )
 
+    def _validate_nemesis_can_run_on_non_seed(self) -> None:
+        """Fail when a runner targets non-seed nodes only, but every node of the cluster is a seed."""
+        seeds_num = self.get("seeds_num")
+        num_of_db_nodes = sum(self.get("n_db_nodes")) + self.get("add_node_cnt")
+        for runner_class, runner_config in self.nemesis.resolve_runners():
+            if runner_class.__name__ != "NoOpMonkey" and runner_config.filter_seeds:
+                assert num_of_db_nodes > seeds_num, (
+                    f"Nemesis runner {runner_class.__name__} cannot run when `filter_seeds` is true "
+                    "and seeds number is equal to nodes number"
+                )
+
     def _validate_number_of_db_nodes_divides_by_az_number(self):
         if self.get("cluster_backend").startswith("k8s"):
             return
@@ -2286,12 +2336,13 @@ class SCTConfiguration(*CONFIG_GROUPS):
             raise ValueError(f"Unsupported backend [{backend}]")
 
     def _check_backend_defaults(self, backend, required_params):
-        fields = [
-            field_name
-            for field_name, field in self.__class__.model_fields.items()
-            if field_name in required_params and not is_ignored_field(field)
-        ]
-        for field_name in fields:
+        if unknown := sorted(
+            name
+            for name in set(required_params)
+            if name not in self.__class__.model_fields or is_ignored_field(self.__class__.model_fields[name])
+        ):
+            raise ValueError(f"Required params of {backend} name unknown options: {unknown}")
+        for field_name in required_params:
             value = self.get(field_name)
             assert value is not None and not (isinstance(value, str) and not value.strip()), (
                 f"{field_name} missing from config for {backend}"
@@ -2319,7 +2370,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
                         )
 
         # Validate nemesis.grow_shrink.instance_type
-        if instance_type := self.get("nemesis.grow_shrink.instance_type"):
+        if instance_type := self.nemesis.grow_shrink.instance_type:
             match backend:
                 case "aws":
                     for region in self.region_names:
@@ -2814,9 +2865,11 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     @classmethod
     def _docs_option_index(cls):
-        """-> {option_name: "<slug>.md#<anchor>"} for cross-linking between pages."""
+        """-> {option_path: "<slug>.md#<anchor>"} for cross-linking between pages; section fields by dotted path."""
         return {
-            name: f"{cls._docs_slug(title)}.md#{name}" for title, fields in cls._fields_by_group() for name, _ in fields
+            option.path: f"{cls._docs_slug(title)}.md#{option.path}"
+            for title, options in cls._docs_options_by_group()
+            for option in options
         }
 
     @classmethod
@@ -2868,6 +2921,19 @@ class SCTConfiguration(*CONFIG_GROUPS):
         return "\n".join(out)
 
     @staticmethod
+    def _docs_section_of(annotation) -> type[ConfigSection] | None:
+        """The section model an option holds, if it is a section."""
+        return annotation if inspect.isclass(annotation) and issubclass(annotation, ConfigSection) else None
+
+    @staticmethod
+    def _docs_yaml_example(path: str, value) -> str:
+        """A YAML snippet setting the option at dotted ``path`` to ``value``, in its nested form."""
+        *parents, name = path.split(".")
+        lines = [f"{'  ' * depth}{parent}:" for depth, parent in enumerate(parents)]
+        lines.append(f"{'  ' * len(parents)}{name}: {value}")
+        return "```yaml\n" + "\n".join(lines) + "\n```"
+
+    @staticmethod
     def _docs_model_of(annotation) -> type[BaseModel] | None:
         """The pydantic model an option or sub-option holds directly (or optionally), if it has named fields."""
         for candidate in (annotation, *get_args(annotation)):
@@ -2914,7 +2980,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         historical `docs/configuration_options.md` path so existing links still resolve.
         """
         defaults, backend_defaults = cls._get_defaults_for_docs()
-        groups = cls._fields_by_group()
+        groups = cls._docs_options_by_group()
         option_index = cls._docs_option_index()
 
         def strip_help_text(text, preserve_indent=False):
@@ -2938,24 +3004,43 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
             page += f"\n**{len(group_fields)} options.**\n"
 
-            for field_name, field in group_fields:
+            for field_name, field, env in group_fields:
                 help_text = "<br>".join(strip_help_text(field.description).splitlines()) if field.description else ""
-                appendable = " (appendable)" if is_config_option_appendable(field_name, cls) else ""
-                default_text = (
-                    cls._format_default_value_for_docs(defaults[field_name]) if field_name in defaults else "N/A"
-                )
+                appendable = " (appendable)" if (field.json_schema_extra or {}).get("appendable") else ""
+                default = cls._docs_default(defaults, field_name)
+                default_text = cls._format_default_value_for_docs(default) if default is not DOCS_UNSET else "N/A"
                 backend_overrides = cls._get_backend_overrides_for_docs(field_name, defaults, backend_defaults)
                 field_metadata = getattr(field, "metadata", None)
                 input_type_meta = next((m for m in (field_metadata or []) if isinstance(m, InputType)), None)
-                output_type = cls.get_annotations_as_strings(field.annotation, field_metadata=field_metadata)
-                type_str = f"{input_type_meta.description} → {output_type}" if input_type_meta else output_type
+                if (section := cls._docs_section_of(field.annotation)) is not None:
+                    type_str = f"section ({len(section.model_fields)} options below)"
+                    default_text = "the defaults of its options"
+                else:
+                    output_type = cls.get_annotations_as_strings(field.annotation, field_metadata=field_metadata)
+                    if input_type_meta and len(output_type) > 100:
+                        type_str = input_type_meta.description
+                    else:
+                        type_str = f"{input_type_meta.description} → {output_type}" if input_type_meta else output_type
+                if env is None:
+                    parent_env = next(
+                        o.env for o in reversed(group_fields) if field_name.startswith(f"{o.path}.") and o.env
+                    )
+                    env_text = f"\n\n**env:** within the YAML/JSON of `{parent_env}`"
+                else:
+                    env_text = ""
+                example = (
+                    "\n\n" + cls._docs_yaml_example(field_name, default_text if default is not DOCS_UNSET else "...")
+                    if "." in field_name and section is None
+                    else ""
+                )
 
                 # explicit anchor: GitHub slugs this heading as "<name>--sct_<name>", so the bare
                 # "#<name>" used by the index and by every cross-link needs a target of its own
+                heading = f"## **{field_name}** / {env}" if env else f"## **{field_name}**"
                 page += (
                     f'\n\n<a id="{field_name}"></a>\n\n'
                     + dedent(f"""
-                    ## **{field_name}** / SCT_{field_name.upper()}
+                    {heading}
 
                     {help_text}
 
@@ -2963,10 +3048,12 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
                     **type:** {type_str}{appendable}
                     """).strip()
+                    + env_text
+                    + example
                 )
                 if backend_overrides:
                     page += f"\n\n**backend overrides:**\n{backend_overrides}"
-                if (option_model := cls._docs_model_of(field.annotation)) is not None:
+                if section is None and (option_model := cls._docs_model_of(field.annotation)) is not None:
                     page += "\n\n**sub-options:**\n\n| option | type | default | description |\n|---|---|---|---|\n"
                     page += "\n".join(cls._docs_sub_options(option_model))
                 page += "\n"
@@ -2980,6 +3067,16 @@ class SCTConfiguration(*CONFIG_GROUPS):
             Every option can be set in a config file, or as an environment variable named
             `SCT_<OPTION>` (upper-cased). Options are grouped by what they configure: cross-cutting
             concerns first, then one page per backend, then one per test type.
+
+            #### Sections
+            * Some groups hold their options in a section, e.g. `nemesis`: in YAML they nest under
+                   the section key (`nemesis: {interval: 5}`), and they are listed by their dotted
+                   path (`nemesis.interval`).
+            * A section field is set from the environment as `SCT_<SECTION>__<FIELD>`
+                   (`SCT_NEMESIS__INTERVAL=5`); a whole section, or a field holding a list or a
+                   nested section, takes a YAML or JSON string (`SCT_NEMESIS__RUNNERS='[...]'`).
+            * Each layer (defaults, config files, environment) merges into a section field by
+                   field, so a config file setting `nemesis: {interval: 5}` keeps every other default.
 
             #### Appending with environment variables or with config files
             * **strings:** can be appended with adding `++` at the beginning of the string:
@@ -3020,12 +3117,15 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
         index += "\n## All options, alphabetically\n\n"
         index += "| Option | Environment variable | Group |\n|---|---|---|\n"
-        by_name = sorted(((name, title) for title, fields in groups for name, _ in fields), key=lambda kv: kv[0])
+        by_name = sorted(
+            ((option, title) for title, options in groups for option in options), key=lambda kv: kv[0].path
+        )
         docs_dir = pathlib.Path(cls.DOCS_DIR).name
-        for name, group_title in by_name:
+        for option, group_title in by_name:
             slug = cls._docs_slug(group_title)
+            env = f"`{option.env}`" if option.env else "within its section's variable"
             index += (
-                f"| [`{name}`]({docs_dir}/{slug}.md#{name}) | `SCT_{name.upper()}` "
+                f"| [`{option.path}`]({docs_dir}/{slug}.md#{option.path}) | {env} "
                 f"| [{group_title}]({docs_dir}/{slug}.md) |\n"
             )
 

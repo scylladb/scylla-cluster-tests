@@ -64,7 +64,9 @@ user_prefix: 'minicloud-scale-test'
 # grow_cluster() starts the nemesis only after the cluster has reached its target size.
 # Non-disruptive only: a 4-node cluster losing a node is a different test, and one the emulated
 # path cannot tell apart from a real fault.
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'not disruptive'
-nemesis_interval: 5
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'not disruptive'
+        interval: 5
+  during_prepare: false

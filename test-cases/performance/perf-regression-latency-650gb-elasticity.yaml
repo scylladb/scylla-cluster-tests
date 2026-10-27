@@ -35,10 +35,14 @@ instance_type_loader: 'c6i.2xlarge'
 instance_type_monitor: 't3.large'
 instance_type_db: 'i4i.2xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'GrowShrinkClusterNemesis'
-nemesis_interval: 30
-nemesis_sequence_sleep_between_ops: 10
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'GrowShrinkClusterNemesis'
+        interval: 30
+  sequence_sleep_between_ops: 10
+  grow_shrink:
+    double_load_duration: 30
 
 user_prefix: 'elasticity-test'
 space_node_threshold: 644245094
@@ -58,7 +62,6 @@ use_hdrhistogram: true
 # two c-s processes run on the same loader, so 8g each causes OOM.
 cs_extra_jvm_opts: '-XX:+UseZGC -XX:+ZGenerational -Xms4g -Xmx4g -XX:+AlwaysPreTouch'
 email_subject_postfix: 'elasticity test'
-nemesis_double_load_during_grow_shrink_duration: 30
 parallel_node_operations: true
 cluster_health_check: false
 

@@ -25,7 +25,7 @@ class SlaMonkeyBase(NemesisBaseClass):
 
     def precheck(self, node) -> str | None:
         """Common static preconditions for all SLA nemeses."""
-        if not self.runner.cluster.params.get("sla"):
+        if not self.runner.cluster.params.nemesis.sla:
             return "SLA nemesis can be run during SLA test only"
 
         if not node.is_enterprise:

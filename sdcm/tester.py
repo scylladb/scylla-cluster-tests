@@ -174,7 +174,7 @@ from sdcm.utils.issues import SkipPerIssues
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.sct_config import init_and_verify_sct_config
-from sdcm.sct_config.nemesis_runners import NemesisThread
+from sdcm.sct_config.sections.nemesis import NemesisThread
 from sdcm.sct_events import Severity
 from sdcm.sct_events.setup import (
     enable_teardown_filters,
@@ -1579,7 +1579,7 @@ class ClusterTester(unittest.TestCase):
 
     def get_nemesis_class(self) -> list[NemesisThread]:
         """Return the runner class and resolved config of each `nemesis.runners` entry, one per nemesis thread."""
-        nemesis_threads = self.params.nemesis.nemesis_threads()
+        nemesis_threads = self.params.nemesis.resolve_runners()
         self.log.debug("Nemesis threads %s", nemesis_threads)
         return nemesis_threads
 

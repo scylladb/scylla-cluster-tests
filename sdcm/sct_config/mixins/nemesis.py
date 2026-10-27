@@ -15,16 +15,17 @@
 
 from typing import Annotated, ClassVar
 
-from pydantic import BaseModel, BeforeValidator
+from pydantic import BaseModel, BeforeValidator, Field
 
-from sdcm.sct_config.nemesis_runners import NemesisConfig, yaml_from_str
-from sdcm.sct_config.types import Boolean, IntOrList, SctField, String, StringOrList
+from sdcm.sct_config.sections.nemesis import NemesisConfig
+from sdcm.sct_config.types import yaml_from_str
 
 
 class NemesisConfigMixin(BaseModel):
     """Nemesis (chaos testing).
 
-    Which disruptions run, how often, and how targets are selected.
+    Which disruptions run, how often, and how targets are selected. Every option lives in the
+    `nemesis` section; see ``sdcm.sct_config.sections.nemesis``.
 
     See ``sdcm.sct_config.mixins`` for how these are assembled into ``SCTConfiguration``.
     """
@@ -32,52 +33,13 @@ class NemesisConfigMixin(BaseModel):
     #: Section title used to group this mixin's options in the generated documentation.
     config_group: ClassVar[str] = "Nemesis (chaos testing)"
 
-    nemesis: Annotated[NemesisConfig, BeforeValidator(yaml_from_str)] = SctField(
+    nemesis: Annotated[NemesisConfig, BeforeValidator(yaml_from_str)] = Field(
+        default_factory=NemesisConfig,
         description="""
-                Nemesis configuration: nemesis-wide settings, defaults shared by all runners, and the
-                runners to start, one thread each. `runners` is a list of single-key mappings of a
-                runner class to its options, e.g. `{SisyphusMonkey: {selector: disruptive, interval: 15}}`;
-                the options accepted depend on the runner class. Options a runner leaves unset take
-                the `nemesis` defaults; a runner without `seed` gets a random one. `selector` is a
-                logical expression over nemesis flags filtering the disruptions a runner runs.
-                Accepts YAML or JSON from the environment, for the whole option or one sub-key, e.g.
-                SCT_NEMESIS__INTERVAL=10 or SCT_NEMESIS__RUNNERS='[{"SisyphusMonkey": {"selector": "disruptive"}}]'.
+                Nemesis section: settings shared by all runners, defaults for options a runner leaves
+                unset, and `runners`, the runners to start, one thread each. A runner entry is a
+                single-key mapping of a runner class to its options, e.g.
+                `{SisyphusMonkey: {selector: disruptive, interval: 15}}`; the options accepted depend
+                on the runner class. A runner without `seed`, own or default, gets a random one.
         """,
-    )
-    nemesis_add_node_cnt: int = SctField(
-        description="Not read; replaced by `nemesis.grow_shrink.add_node_cnt`.",
-    )
-    nemesis_class_name: StringOrList = SctField(
-        description="Not read; replaced by `nemesis.runners`.",
-    )
-    nemesis_double_load_during_grow_shrink_duration: int = SctField(
-        description="Not read; replaced by `nemesis.grow_shrink.double_load_duration`.",
-    )
-    nemesis_during_prepare: Boolean = SctField(
-        description="Not read; replaced by `nemesis.during_prepare`.",
-    )
-    nemesis_filter_seeds: Boolean = SctField(
-        description="Not read; replaced by `nemesis.filter_seeds`.",
-    )
-    nemesis_grow_shrink_instance_type: String = SctField(
-        description="Not read; replaced by `nemesis.grow_shrink.instance_type`.",
-    )
-    nemesis_interval: int = SctField(
-        description="Not read; replaced by `nemesis.interval`.",
-    )
-    nemesis_multiply_factor: int = SctField(
-        description="Not read; replaced by `nemesis.multiply_factor`.",
-    )
-    nemesis_seed: IntOrList = SctField(
-        description="Not read; replaced by `nemesis.seed`.",
-    )
-    nemesis_selector: StringOrList = SctField(
-        description="Not read; replaced by `nemesis.selector`.",
-    )
-    nemesis_sequence_sleep_between_ops: int = SctField(
-        description="Not read; replaced by `nemesis.sequence_sleep_between_ops`.",
-    )
-    # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
-    sla: Boolean = SctField(
-        description="run SLA nemeses if the test is SLA only",
     )

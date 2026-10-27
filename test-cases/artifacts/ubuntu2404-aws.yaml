@@ -35,7 +35,9 @@ instance_provision_fallback_on_demand: true
 n_db_nodes: 1
 n_loaders: 0
 n_monitor_nodes: 0
-nemesis_class_name: 'NoOpMonkey'
+nemesis:
+  runners:
+    - NoOpMonkey: {}
 test_duration: 60
 user_prefix: 'artifacts-ubuntu2404-aws'
 fallback_to_next_availability_zone: true

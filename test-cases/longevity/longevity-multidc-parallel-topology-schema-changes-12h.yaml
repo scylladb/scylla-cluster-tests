@@ -100,11 +100,15 @@ sizing_db:
   arch: x86_64
   local_disk_gb: '>=900'
 
-nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']
-# keyspace1.standard2 is created with LCS and Zstd compression in pre_create_keyspace; keep them for the whole run
-nemesis_selector: ["topology_changes", "schema_changes and not disruptive and not ModifyTableCompactionMonkey and not ModifyTableCompressionMonkey"]
-nemesis_interval: 10
-nemesis_during_prepare: false
+nemesis:
+  # keyspace1.standard2 is created with LCS and Zstd compression in pre_create_keyspace; keep them for the whole run
+  runners:
+    - SisyphusMonkey:
+        selector: "topology_changes"
+    - SisyphusMonkey:
+        selector: "schema_changes and not disruptive and not ModifyTableCompactionMonkey and not ModifyTableCompressionMonkey"
+  interval: 10
+  during_prepare: false
 
 seeds_num: 3
 # disabled the round robin, so each command would run on every loader.

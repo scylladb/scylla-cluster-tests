@@ -60,10 +60,12 @@ sizing_db:
   memory: '>=64'
   local_disk_gb: '>=1500'  # ~80% of i4i.2xlarge's 1875GB
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 7
-nemesis_interval: 30
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        seed: 7
+        interval: 30
+  during_prepare: false
 
 user_prefix: 'alternator-48h'
 

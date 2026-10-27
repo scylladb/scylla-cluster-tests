@@ -24,9 +24,11 @@ n_db_nodes: 1
 
 instance_type_runner: c6i.2xlarge
 
-nemesis_class_name: SisyphusMonkey
-nemesis_selector: "not disruptive"
-nemesis_interval: 1
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "not disruptive"
+        interval: 1
 
 user_prefix: 'PR-provision-docker'
 

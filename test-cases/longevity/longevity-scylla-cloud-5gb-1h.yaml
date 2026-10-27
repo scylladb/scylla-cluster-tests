@@ -35,10 +35,12 @@ sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 2
   memory: '>=16'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: "not disruptive and xcloud"
-nemesis_seed: 111
-nemesis_interval: 5
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "not disruptive and xcloud"
+        seed: 111
+        interval: 5
 
 run_db_node_benchmarks: false
 

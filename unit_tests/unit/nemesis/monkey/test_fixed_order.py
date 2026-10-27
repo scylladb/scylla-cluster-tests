@@ -7,7 +7,7 @@ from sdcm.nemesis.monkey.runners import FixedOrderMonkey, FixedOrderMonkeyConfig
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from unit_tests.lib.fake_tester import ClusterTesterForTests
 from unit_tests.unit.nemesis import CustomNemesisA, CustomNemesisB, CustomNemesisC, TestNemesisClass, runner_config
-from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
+from unit_tests.unit.nemesis.fake_cluster import FakeTester, Cluster, Node
 
 
 class FakeFixedOrderMonkey(FixedOrderMonkey, TestNemesisClass):
@@ -15,9 +15,9 @@ class FakeFixedOrderMonkey(FixedOrderMonkey, TestNemesisClass):
 
 
 def build_fixed_order_monkey(order):
-    """Build from the ordered `nemesis_class_names` of a `nemesis.runners` entry."""
-    config = runner_config(FixedOrderMonkeyConfig, nemesis_class_names=order)
-    return FakeFixedOrderMonkey(FakeTester(params=dict(PARAMS)), None, config=config)
+    """Build from the `order` of a `nemesis.runners` entry."""
+    config = runner_config(FixedOrderMonkeyConfig, order=order)
+    return FakeFixedOrderMonkey(FakeTester(), None, config=config)
 
 
 @pytest.fixture()
@@ -42,11 +42,6 @@ def test_repeated_name_yields_one_entry_per_occurrence_reusing_one_instance():
     assert nemesis.disruptions_list[0] is nemesis.disruptions_list[2]
 
 
-def test_unknown_name_raises_at_construction_and_names_it():
-    with pytest.raises(ValueError, match="DoesNotExist"):
-        build_fixed_order_monkey(["DoesNotExist"])
-
-
 def test_sequence_repeats_from_first_entry_via_infinite_cycle():
     nemesis = build_fixed_order_monkey(["CustomNemesisA", "CustomNemesisB"])
     order = [next(nemesis.infinite_cycle).__class__ for _ in range(5)]
@@ -63,36 +58,40 @@ def test_precheck_prunes_entry_while_remaining_order_is_unchanged(events_functio
     assert [d.__class__ for d in nemesis.disruptions_list] == [CustomNemesisB, CustomNemesisC]
 
 
-def test_class_names_are_stripped_of_surrounding_whitespace():
-    nemesis = build_fixed_order_monkey(["  CustomNemesisA ", "CustomNemesisB  "])
-    assert [d.__class__ for d in nemesis.disruptions_list] == [CustomNemesisA, CustomNemesisB]
-
-
 def test_single_name_yields_single_entry():
     nemesis = build_fixed_order_monkey(["CustomNemesisB"])
     assert [d.__class__ for d in nemesis.disruptions_list] == [CustomNemesisB]
 
 
-@pytest.mark.parametrize("options", [{}, {"nemesis_class_names": []}])
-def test_missing_or_empty_class_names_fail_validation(options):
-    with pytest.raises(ValidationError, match="nemesis_class_names"):
+@pytest.mark.parametrize("options", [{}, {"order": []}])
+def test_missing_or_empty_order_fails_validation(options):
+    with pytest.raises(ValidationError, match="order"):
         FixedOrderMonkeyConfig(**options)
 
 
-def test_flag_expression_is_rejected_as_unknown_name():
-    with pytest.raises(ValueError, match="not disruptive"):
-        build_fixed_order_monkey(["not disruptive"])
+@pytest.mark.parametrize("option", ["selector", "multiply_factor"])
+def test_options_it_would_ignore_fail_validation(option):
+    with pytest.raises(ValidationError, match=option):
+        FixedOrderMonkeyConfig(order=["CustomNemesisA"], **{option: 1})
 
 
-def test_each_fixed_order_entry_takes_its_own_class_names(tester):
+def test_each_fixed_order_entry_takes_its_own_order(tester):
     tester.params["nemesis"] = {
+        "selector": "disruptive",
         "runners": [
-            {"FixedOrderMonkey": {"nemesis_class_names": ["CustomNemesisA", "CustomNemesisB"]}},
-            {"FixedOrderMonkey": {"nemesis_class_names": ["CustomNemesisC"]}},
-        ]
+            {"FixedOrderMonkey": {"order": ["StopStartMonkey", "NoCorruptRepairMonkey"]}},
+            {"FixedOrderMonkey": {"order": ["StopStartMonkey"]}},
+        ],
     }
 
     threads = tester.get_nemesis_class()
 
     assert [t.runner_class for t in threads] == [FixedOrderMonkey, FixedOrderMonkey]
-    assert [t.config.nemesis_class_names for t in threads] == [["CustomNemesisA", "CustomNemesisB"], ["CustomNemesisC"]]
+    assert [t.config.order for t in threads] == [["StopStartMonkey", "NoCorruptRepairMonkey"], ["StopStartMonkey"]]
+    assert not any(hasattr(t.config, "selector") for t in threads), "the `nemesis` selector default must not reach it"
+
+
+@pytest.mark.parametrize("name", ["NoSuchMonkey", "not disruptive"])
+def test_order_naming_unknown_nemesis_fails_config_load(tester, name):
+    with pytest.raises(ValueError, match=rf"`order` names unknown nemesis classes: \['{name}'\]"):
+        tester.params["nemesis"] = {"runners": [{"FixedOrderMonkey": {"order": [name]}}]}

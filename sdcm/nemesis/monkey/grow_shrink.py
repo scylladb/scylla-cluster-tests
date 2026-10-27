@@ -42,7 +42,7 @@ class GrowShrinkClusterNemesis(NemesisBaseClass):
     topology_changes = True
 
     def disrupt(self):
-        nemesis_config = self.runner.tester.params.get("nemesis")
+        nemesis_config = self.runner.tester.params.nemesis
         sleep_time_between_ops = nemesis_config.sequence_sleep_between_ops
         if not self.runner.has_steady_run and sleep_time_between_ops:
             self.runner.steady_state_latency()

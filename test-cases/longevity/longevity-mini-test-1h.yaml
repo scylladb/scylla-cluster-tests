@@ -26,8 +26,10 @@ sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 2
   memory: '>=16'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_interval: 1
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        interval: 1
 
 user_prefix: 'longevity-mini-test'
 space_node_threshold: 6442

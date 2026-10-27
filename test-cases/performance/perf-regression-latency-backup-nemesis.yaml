@@ -37,7 +37,8 @@ user_prefix: 'manager-backup-benchmark'
 use_hdrhistogram: true
 
 ami_id_db_scylla_desc: 'VERSION_DESC'
-nemesis_interval: 1
+nemesis:
+  interval: 1
 round_robin: true
 
 backtrace_decoding: true

@@ -18,6 +18,7 @@ from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.exceptions import CapacityReservationError
 
 from unit_tests.lib.dot_dict import DotDict
+from unit_tests.unit.nemesis import nemesis_config
 
 
 @pytest.fixture(autouse=True)
@@ -30,6 +31,7 @@ def params_fixture():
     return DotDict(
         {
             "test_id": "example-test-id",
+            "nemesis": nemesis_config(grow_shrink={"add_node_cnt": 0}),
             "region_name": ["us-east-1"],
             "use_capacity_reservation": True,
             "instance_provision": "on_demand",
@@ -141,12 +143,7 @@ def test_request_includes_instance_type_db_target(params):
 )
 def test_request_includes_grow_shrink_nodes(params, grow_shrink_instance_type, expected_request):
     """Nodes a grow/shrink nemesis adds are reserved as its instance type, or as DB nodes when it has none."""
-    params.update(
-        {
-            "nemesis.grow_shrink.add_node_cnt": 3,
-            "nemesis.grow_shrink.instance_type": grow_shrink_instance_type,
-        }
-    )
+    params.nemesis = nemesis_config(grow_shrink={"add_node_cnt": 3, "instance_type": grow_shrink_instance_type})
 
     request, _ = SCTCapacityReservation._get_cr_request_based_on_sct_config(params)
 

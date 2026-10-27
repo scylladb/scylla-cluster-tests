@@ -15,7 +15,8 @@ n_db_nodes: 3
 n_loaders: 1
 seeds_num: 3
 
-nemesis_interval: 3
+nemesis:
+  interval: 3
 
 # Instance type for the case when tests are executed on Docker backend in AWS
 instance_type_runner: 'i4i.xlarge'

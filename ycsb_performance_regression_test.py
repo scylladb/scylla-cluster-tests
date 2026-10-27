@@ -80,7 +80,7 @@ class BaseYCSBPerformanceRegressionTest(PerformanceRegressionTest):
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False)
         if nemesis:
             # Sleeping one default nemesis interval (in minutes) before starting the nemesis
-            time.sleep(self.params.get("nemesis").interval * 60)
+            time.sleep(self.params.nemesis.interval * 60)
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis()
         results = self.get_stress_results(queue=stress_queue)

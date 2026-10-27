@@ -21,12 +21,17 @@ n_loaders: 2
 
 instance_type_db: 'i4i.4xlarge'
 
-nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']
-nemesis_seed: 156
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "delete_rows"
+    - SisyphusMonkey:
+        selector: "disruptive"
+  seed: 156
+  interval: 30
+  during_prepare: false
 instance_type_loader: 'c5n.4xlarge'
 round_robin: true
-nemesis_interval: 30
-nemesis_during_prepare: false
 
 user_prefix: 'longevity-large-partitions-2d-order-by-desc'
 
@@ -41,4 +46,3 @@ data_validation: |
 
 
 run_fullscan: ['{"mode": "random", "ks_cf": "scylla_bench.test", "interval": 3600, "pk_name":"pk", "rows_count": 50000, "validate_data": true}']
-nemesis_selector: ['delete_rows', 'disruptive']

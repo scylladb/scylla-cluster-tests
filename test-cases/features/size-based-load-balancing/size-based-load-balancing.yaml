@@ -66,8 +66,10 @@ n_loaders: 6
 instance_type_loader: 'c6i.4xlarge'
 # the test should run on a heterogeneous cluster, so it adds different instance types
 # reuses the nemesis_ variables for simplicity
-nemesis_add_node_cnt: 3
-nemesis_grow_shrink_instance_type: 'i4i.large'
+nemesis:
+  grow_shrink:
+    add_node_cnt: 3
+    instance_type: 'i4i.large'
 
 user_prefix: 'balancer-test'
 

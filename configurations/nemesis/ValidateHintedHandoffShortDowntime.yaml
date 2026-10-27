@@ -1,3 +1,5 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'ValidateHintedHandoffShortDowntime'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'ValidateHintedHandoffShortDowntime'
 user_prefix: 'longevity-5gb-1h-ValidateHintedHandoffShortDowntime'

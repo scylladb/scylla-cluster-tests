@@ -60,9 +60,11 @@ sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   memory: '>=16'
 n_db_nodes: 3
 
-nemesis_class_name: SisyphusMonkey
-nemesis_selector: "not disruptive"
-nemesis_interval: 1
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "not disruptive"
+        interval: 1
 
 user_prefix: 'simple-data-validation-latte'
 instance_provision: 'spot'

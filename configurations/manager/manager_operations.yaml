@@ -1,2 +1,4 @@
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'manager_operation'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'manager_operation'

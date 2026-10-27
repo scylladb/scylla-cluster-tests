@@ -98,7 +98,9 @@ sizing_loader:  # no GCE match (e2 family tops out at 32 vCPUs); >= used since 3
   vcpu: '>=36'
   memory: '>=72'
 
-nemesis_class_name: 'NoOpMonkey'
+nemesis:
+  runners:
+    - NoOpMonkey: {}
 
 user_prefix: 'longevity-ycsb-a-10M-8h'
 space_node_threshold: 64424

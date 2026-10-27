@@ -28,7 +28,9 @@ instance_provision_fallback_on_demand: true
 n_db_nodes: 1
 n_loaders: 0
 n_monitor_nodes: 0
-nemesis_class_name: 'NoOpMonkey'
+nemesis:
+  runners:
+    - NoOpMonkey: {}
 scylla_linux_distro: 'centos'
 test_duration: 60
 user_prefix: 'artifacts-fedora44'

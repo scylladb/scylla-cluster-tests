@@ -1,3 +1,5 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'ManagerNativeBackup'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'ManagerNativeBackup'
 user_prefix: 'longevity-5gb-1h-ManagerNativeBackup'

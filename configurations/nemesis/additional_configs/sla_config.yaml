@@ -7,4 +7,5 @@ stress_cmd:
 
 n_loaders: 3
 instance_type_loader: "c5.2xlarge"
-sla: true
+nemesis:
+  sla: true

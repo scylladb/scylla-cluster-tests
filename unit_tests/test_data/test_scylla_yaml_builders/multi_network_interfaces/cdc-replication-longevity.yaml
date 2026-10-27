@@ -13,7 +13,41 @@ n_loaders: 1
 instance_type_loader: 'c6i.large'
 
 
-nemesis_class_name: 'CategoricalMonkey'
+nemesis:
+  runners:
+    - CategoricalMonkey:
+        dist:
+          DecommissionMonkey: 5
+          NodeTerminateAndReplace: 5
+          GrowShrinkClusterNemesis: 5
+          TerminateAndRemoveNodeMonkey: 5
+          DecommissionStreamingErrMonkey: 5
+          RandomInterruptionNetworkMonkey: 4
+          # BlockNetworkMonkey: 2  # disabled due to #2745
+          # StopStartInterfacesNetworkMonkey: 2  # as above
+          StopWaitStartMonkey: 1
+          StopStartMonkey: 1
+          RestartThenRepairNodeMonkey: 1
+          HardRebootNodeMonkey: 1
+          MultipleHardRebootNodeMonkey: 1
+          SoftRebootNodeMonkey: 1
+          NodeRestartWithResharding: 1
+          CorruptThenRepairMonkey: 1
+          CorruptThenRebuildMonkey: 1
+          DrainerMonkey: 1
+          ScyllaKillMonkey: 1
+          NoCorruptRepairMonkey: 1
+          MajorCompactionMonkey: 1
+          RefreshMonkey: 1
+          EnospcMonkey: 1
+          TruncateMonkey: 1
+          TruncateLargeParititionMonkey: 1
+          AbortRepairMonkey: 1
+          SnapshotOperations: 1
+          RebuildStreamingErrMonkey: 1
+          RepairStreamingErrMonkey: 1
+          MemoryStressMonkey: 1
+        default_weight: 0
 
 gemini_cmd: |
   --duration 30m

@@ -3,16 +3,40 @@
 from abc import ABC, abstractmethod
 from unittest.mock import MagicMock
 
+from functools import cache
+
+import yaml
 from pydantic import NonNegativeFloat
 
-from sdcm.nemesis import NemesisBaseClass, NemesisRunner, NemesisRunnerConfig
+from sdcm import sct_abs_path
+from sdcm.nemesis import NemesisBaseClass, NemesisRunner, NemesisRunnerConfig, RunnerConfig
 from sdcm.nemesis.registry import NemesisRegistry
-from sdcm.sct_config.nemesis_runners import NemesisDefaults
+from sdcm.sct_config.helpers import merged_into_model
+from sdcm.sct_config.sections.nemesis import NemesisConfig
+from unit_tests.lib.dot_dict import DotDict
 
 
-def runner_config(config_model=NemesisRunnerConfig, **options) -> NemesisRunnerConfig:
+@cache
+def default_nemesis_options() -> dict:
+    """The `nemesis` section of `defaults/test_default.yaml`."""
+    with open(sct_abs_path("defaults/test_default.yaml"), encoding="utf-8") as defaults:
+        return yaml.safe_load(defaults)["nemesis"]
+
+
+def nemesis_config(**options) -> NemesisConfig:
+    """`nemesis` section holding the defaults of `defaults/test_default.yaml`, merged with ``options`` as a config layer."""
+    defaults = NemesisConfig.model_validate(default_nemesis_options())
+    return NemesisConfig.model_validate(merged_into_model(defaults, options))
+
+
+def params_with_nemesis(nemesis: NemesisConfig | None = None, **options) -> DotDict:
+    """Tester params: a real `nemesis` section, plus the options of other groups the test reads."""
+    return DotDict(nemesis=nemesis or nemesis_config(), **options)
+
+
+def runner_config(config_model=NemesisRunnerConfig, **options) -> RunnerConfig:
     """Runner config with ``options``, the rest resolved from the `nemesis` defaults as the tester does."""
-    return NemesisDefaults().resolve(config_model(**options))
+    return nemesis_config().resolve(config_model(**options))
 
 
 def make_mock_node(name="node1", rack="rack1", is_seed=False, dc_idx=0, ip_address=None):

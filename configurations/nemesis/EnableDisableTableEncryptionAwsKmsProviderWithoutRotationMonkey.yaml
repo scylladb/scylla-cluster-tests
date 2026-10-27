@@ -1,3 +1,5 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey'
 user_prefix: 'longevity-5gb-1h-EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey'

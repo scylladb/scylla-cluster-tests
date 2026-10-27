@@ -62,8 +62,10 @@ prepare_wait_no_compactions_timeout: 60 # (minutes)
 num_nodes_to_rollback: 1  # max is "n_db_nodes -1"
 upgrade_sstables: true
 
-nemesis_class_name: 'NoOpMonkey'
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - NoOpMonkey: {}
+  during_prepare: false
 use_mgmt: false
 
 user_prefix: 'rolling-upgrade-ltncy-rgrssn'

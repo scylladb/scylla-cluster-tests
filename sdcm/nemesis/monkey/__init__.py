@@ -1,6 +1,6 @@
 """
 Module containing all disruptions logic/classes
-Classes can be used in nemesis_selector
+Classes can be used in a nemesis runner `selector`
 """
 
 from sdcm.nemesis import target_all_nodes, NemesisBaseClass, target_data_nodes

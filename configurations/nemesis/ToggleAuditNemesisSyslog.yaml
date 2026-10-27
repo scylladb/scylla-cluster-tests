@@ -1,3 +1,5 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'ToggleAuditNemesisSyslog'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'ToggleAuditNemesisSyslog'
 user_prefix: 'longevity-5gb-1h-ToggleAuditNemesisSyslog'

@@ -27,8 +27,10 @@ sizing_loader:
 
 user_prefix: 'gemini-basic-3h'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: "not disruptive"
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "not disruptive"
 
 gemini_cmd: |
   --duration 3h

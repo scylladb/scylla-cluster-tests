@@ -2,7 +2,12 @@ test_duration: 840
 k8s_minio_storage_size: '900Gi'
 
 # We should wait for the end of write-prepare stage to avoid unneeded overloads
-nemesis_during_prepare: false
+nemesis:
+  during_prepare: false
+  runners:
+    - SisyphusMonkey:
+        selector: 'kubernetes'
+        seed: 26
 
 # NOTE: Following is needed to make OperatorNodetoolFlushAndReshard work correctly
 #       It is sub-part of the 'ScyllaOperatorBasicOperationsMonkey' one
@@ -18,9 +23,6 @@ n_loaders: 2
 instance_type_db: 'i4i.4xlarge'
 gce_instance_type_db: 'n2-highmem-16'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'kubernetes'
-nemesis_seed: 26
 space_node_threshold: 100246000000
 
 user_prefix: 'longevity-scylla-operator-basic-3h'

@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from sdcm.nemesis.registry import NemesisRegistry
-from sdcm.sct_config.nemesis_runners import nemesis_config_model
+from sdcm.sct_config.sections.nemesis import nemesis_config_model
 from unit_tests.unit.nemesis import (
     PlainTestRunner,
     TestBaseClass,
@@ -81,10 +81,11 @@ def test_runner_entry_is_rejected_by_its_class_config_model(entry, error_locatio
     assert error_message in details["msg"]
 
 
-def test_nemesis_threads_resolve_unset_options_from_defaults():
+def test_resolve_runners_fills_unset_options_from_defaults():
     config = TestNemesisConfig.model_validate(
         {
             "interval": 7,
+            "multiply_factor": 2,
             "runners": [
                 {"PlainTestRunner": {"interval": 15, "seed": 3}},
                 {"WeightedTestRunner": {"weights": {"CustomNemesisA": 1}}},
@@ -92,7 +93,7 @@ def test_nemesis_threads_resolve_unset_options_from_defaults():
         }
     )
 
-    own_options, defaults = config.nemesis_threads()
+    own_options, defaults = config.resolve_runners()
 
     assert (own_options.runner_class, own_options.config.interval, own_options.config.seed) == (PlainTestRunner, 15, 3)
     assert (defaults.runner_class, defaults.config.interval, defaults.config.multiply_factor) == (
@@ -102,3 +103,21 @@ def test_nemesis_threads_resolve_unset_options_from_defaults():
     )
     assert defaults.config.seed is not None
     assert config.runners[1].interval is None, "resolving must not change the stored runners"
+
+
+def test_random_seed_is_drawn_once_per_runner():
+    config = TestNemesisConfig.model_validate({"runners": [{"PlainTestRunner": {}}, {"PlainTestRunner": {}}]})
+
+    first, second = config.resolve_runners(), config.resolve_runners()
+
+    assert [thread.config.seed for thread in first] == [thread.config.seed for thread in second]
+    assert all(thread.config.seed is not None for thread in first)
+
+
+def test_section_rejects_unknown_option_and_invalid_assignment():
+    with pytest.raises(ValidationError, match="intervl"):
+        TestNemesisConfig.model_validate({"intervl": 5})
+
+    config = TestNemesisConfig.model_validate({"interval": 5})
+    with pytest.raises(ValidationError, match="interval"):
+        config.interval = "often"

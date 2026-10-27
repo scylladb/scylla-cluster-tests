@@ -25,8 +25,10 @@ sizing_db:
   memory: '>=16'
   arch: x86_64
 
-nemesis_class_name: 'NoOpMonkey'
-nemesis_interval: 1
+nemesis:
+  runners:
+    - NoOpMonkey:
+        interval: 1
 
 user_prefix: 'kafka'
 use_mgmt: false

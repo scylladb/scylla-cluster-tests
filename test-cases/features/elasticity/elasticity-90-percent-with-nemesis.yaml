@@ -43,12 +43,14 @@ pre_create_keyspace: "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication =
 
 n_db_nodes: 6
 n_loaders: 4
-nemesis_grow_shrink_instance_type: 'i8g.2xlarge'
+nemesis:
+  grow_shrink:
+    instance_type: 'i8g.2xlarge'
+  runners:
+    - SisyphusMonkey:
+        selector: 'supports_high_disk_utilization'
+  during_prepare: false
 instance_type_db: 'i8g.large'
-
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'supports_high_disk_utilization'
-nemesis_during_prepare: false
 
 user_prefix: 'elasticity-test-nemesis'
 space_node_threshold: 6442450

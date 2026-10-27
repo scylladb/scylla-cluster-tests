@@ -11,7 +11,7 @@ import pytest
 from sdcm.nemesis.monkey.runners import SisyphusMonkey
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from unit_tests.unit.nemesis import TestNemesisClass, runner_config
-from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
+from unit_tests.unit.nemesis.fake_cluster import FakeTester, Cluster, Node
 from unit_tests.lib.fake_tester import ClusterTesterForTests
 
 
@@ -23,8 +23,8 @@ class FakeSisyphusMonkey(SisyphusMonkey, TestNemesisClass):
 
 @pytest.fixture()
 def get_sisyphus():
-    def _create_sisyphus(params=PARAMS):
-        return FakeSisyphusMonkey(FakeTester(params=params), None, runner_config())
+    def _create_sisyphus():
+        return FakeSisyphusMonkey(FakeTester(), None, runner_config())
 
     return _create_sisyphus
 
@@ -37,7 +37,7 @@ def tester(tmp_path):
     cluster_tester._init_params()
     cluster_tester.db_cluster = Cluster(nodes=[Node(), Node()])
     cluster_tester.db_cluster.params = cluster_tester.params
-    cluster_tester.params["nemesis_multiply_factor"] = 1
+    cluster_tester.params.nemesis.multiply_factor = 1
     cluster_tester.nemesis_allocator = NemesisNodeAllocator(cluster_tester)
     return cluster_tester
 

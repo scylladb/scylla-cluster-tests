@@ -9,11 +9,15 @@ instance_type_db: 'i7i.4xlarge'
 gce_instance_type_db: 'n2-highmem-8'
 gce_n_local_ssd_disk_db: 8
 
-nemesis_class_name: [SisyphusMonkey, SisyphusMonkey]
-nemesis_selector: ["MajorCompactionMonkey", "topology_changes"]
-nemesis_interval: 15
-nemesis_seed: 21
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "MajorCompactionMonkey"
+    - SisyphusMonkey:
+        selector: "topology_changes"
+  interval: 15
+  seed: 21
+  during_prepare: false
 space_node_threshold: 64424
 
 user_prefix: 'longevity-mv-24h'

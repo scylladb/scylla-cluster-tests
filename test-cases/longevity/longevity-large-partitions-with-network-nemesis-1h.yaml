@@ -54,11 +54,13 @@ sizing_loader:
   vcpu: 8
   memory: '>=16'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'disruptive and not (sla or limited or manager_operation or config_changes)'
-nemesis_seed: 7
-nemesis_interval: 3
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'disruptive and not (sla or limited or manager_operation or config_changes)'
+        seed: 7
+        interval: 3
+  during_prepare: false
 
 user_prefix: 'longevity-large-partitions-1h'
 

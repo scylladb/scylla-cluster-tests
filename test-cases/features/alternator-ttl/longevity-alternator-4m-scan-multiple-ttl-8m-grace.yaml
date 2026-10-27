@@ -100,8 +100,10 @@ sizing_db:
   local_disk_gb: '>=1500'  # ~80% of i4i.2xlarge's 1875GB
 n_db_nodes: 6
 
-nemesis_class_name: 'NoOpMonkey'
-nemesis_seed: 33
+nemesis:
+  runners:
+    - NoOpMonkey:
+        seed: 33
 user_prefix: 'longevity-alternator-multiple-ttl'
 
 alternator_port: 8080

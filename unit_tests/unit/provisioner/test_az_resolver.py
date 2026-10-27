@@ -29,6 +29,7 @@ from sdcm.provision.common.fallback import is_az_fallback_enabled
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted
 
 from unit_tests.lib.dot_dict import DotDict
+from unit_tests.unit.nemesis import nemesis_config
 
 
 def _make_params(**overrides):
@@ -44,6 +45,7 @@ def _make_params(**overrides):
             "n_loaders": 1,
             "n_monitor_nodes": 1,
             "pre_filter_unavailable_availability_zones": True,
+            "nemesis": nemesis_config(),
             **overrides,
         }
     )
@@ -69,7 +71,7 @@ def test_required_instance_types_collects_all_role_types_when_active():
         instance_type_monitor="t3.medium",
         instance_type_db_oracle="i3.large",
         instance_type_db_target="m6g.large",
-        **{"nemesis.grow_shrink.instance_type": "i4i.xlarge"},
+        nemesis=nemesis_config(grow_shrink={"instance_type": "i4i.xlarge"}),
         zero_token_instance_type_db="t3.micro",
         instance_type_vector_store="t4g.medium",
         n_loaders=1,
@@ -252,7 +254,7 @@ def test_required_instance_types_skips_target_when_none():
     params = _make_params(
         instance_type_db="i4i.large",
         instance_type_db_target=None,
-        **{"nemesis.grow_shrink.instance_type": ""},
+        nemesis=nemesis_config(grow_shrink={"instance_type": ""}),
         instance_type_loader="",
         n_loaders=0,
         instance_type_monitor="",
@@ -385,7 +387,7 @@ def test_probe_capacity_passes_through_non_capacity_error(mock_probe_aws):
         {
             "pre_flight_capacity_probe": True,
             "instance_type_db_target": None,
-            "nemesis.grow_shrink.instance_type": "",
+            "nemesis": nemesis_config(grow_shrink={"instance_type": ""}),
         },
     ],
     ids=["flag_off", "no_dynamic_types"],
@@ -402,7 +404,7 @@ def test_run_pre_flight_capacity_probe_succeeds_when_all_types_available(mock_pr
         _make_params(
             pre_flight_capacity_probe=True,
             instance_type_db_target="m6g.large",
-            **{"nemesis.grow_shrink.instance_type": "i4i.xlarge"},
+            nemesis=nemesis_config(grow_shrink={"instance_type": "i4i.xlarge"}),
             availability_zone="a,b",
             test_id="t-1",
         )

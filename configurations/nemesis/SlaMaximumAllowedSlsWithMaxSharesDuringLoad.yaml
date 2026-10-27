@@ -1,3 +1,5 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'SlaMaximumAllowedSlsWithMaxSharesDuringLoad'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'SlaMaximumAllowedSlsWithMaxSharesDuringLoad'
 user_prefix: 'longevity-5gb-1h-SlaMaximumAllowedSlsWithMaxSharesDuringLoad'

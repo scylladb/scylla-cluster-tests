@@ -59,7 +59,6 @@ from sdcm.provision.aws.spot_placement_score import get_scores as get_spot_place
 from sdcm.provision.gce.capacity_advisor import get_zone_advice
 from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
-from sdcm.nemesis import NemesisRunnerConfig
 from sdcm.nemesis.monkey.runners import SisyphusMonkey
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS, SCTConfiguration, init_and_verify_sct_config, available_backends
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
@@ -3413,7 +3412,7 @@ def get_nemesis_list(backend, config):
     tester = FakeTester()
 
     tester.params = SCTConfiguration()
-    sisyphus_nemesis = SisyphusMonkey(tester, None, tester.params.nemesis.resolve(NemesisRunnerConfig()))
+    sisyphus_nemesis = SisyphusMonkey(tester, None, tester.params.nemesis.resolve(SisyphusMonkey.config_model()))
 
     collected_disrupt_methods_names = [disrupt.__class__.__name__ for disrupt in sisyphus_nemesis.disruptions_list]
 

@@ -6,4 +6,5 @@ stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=4320m -schema 'replicati
 stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=4320m -mode cql3 native  -rate threads=25 -pop seq=1..100000000 -log interval=5"]
 
 round_robin: true
-nemesis_during_prepare: false
+nemesis:
+  during_prepare: false

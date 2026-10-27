@@ -29,8 +29,10 @@ data_volume_disk_size: 300
 
 instance_provision: 'on_demand'
 
-nemesis_class_name: 'NoOpMonkey'
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - NoOpMonkey: {}
+  during_prepare: false
 
 user_prefix: 'lwt-paxos'
 

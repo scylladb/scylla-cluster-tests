@@ -46,7 +46,9 @@ instance_type_loader: 'c7i.xlarge'
 instance_type_monitor: 't3.large'
 use_capacity_reservation: true
 use_placement_group: true
-nemesis_add_node_cnt: 0
+nemesis:
+  grow_shrink:
+    add_node_cnt: 0
 
 use_preinstalled_scylla: true
 

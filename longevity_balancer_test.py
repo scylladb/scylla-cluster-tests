@@ -45,8 +45,8 @@ class LongevityBalancerTest(LongevityTest):
 
     def expand_cluster_heterogenous(self):
         new_nodes = self.db_cluster.add_nodes(
-            count=self.params.get("nemesis").grow_shrink.add_node_cnt,
-            instance_type=self.params.get("nemesis").grow_shrink.instance_type,
+            count=self.params.nemesis.grow_shrink.add_node_cnt,
+            instance_type=self.params.nemesis.grow_shrink.instance_type,
             enable_auto_bootstrap=True,
             rack=None,
         )
@@ -79,7 +79,7 @@ class LongevityBalancerTest(LongevityTest):
     def scale_out(self):
         added_nodes = self.db_cluster.add_nodes(
             count=self.db_cluster.racks_count,
-            instance_type=self.params.get("nemesis").grow_shrink.instance_type,
+            instance_type=self.params.nemesis.grow_shrink.instance_type,
             enable_auto_bootstrap=True,
             rack=None,
         )

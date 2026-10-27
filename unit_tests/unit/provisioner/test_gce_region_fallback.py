@@ -30,6 +30,7 @@ from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.tester import ClusterTester, CriticalTestFailure
 
 from unit_tests.lib.dot_dict import DotDict
+from unit_tests.unit.nemesis import nemesis_config
 
 CAPACITY_MSG = "Operation failed: ZONE_RESOURCE_POOL_EXHAUSTED"
 # Verbatim GCE shape: an unsupported machine-type/disk-type pair reported under the capacity code.
@@ -69,6 +70,7 @@ def _make_params(**overrides):
             "n_monitor_nodes": 1,
             "fallback_to_next_region": True,
             "pre_filter_unavailable_availability_zones": True,
+            "nemesis": nemesis_config(),
             **overrides,
         }
     )

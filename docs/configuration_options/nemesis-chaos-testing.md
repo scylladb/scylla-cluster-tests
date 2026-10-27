@@ -2,165 +2,230 @@
 
 [← All configuration options](../configuration_options.md)
 
-Which disruptions run, how often, and how targets are selected.
+Which disruptions run, how often, and how targets are selected. Every option lives in the
+[`nemesis`](#nemesis) section; see `sdcm.sct_config.sections.nemesis`.
 
-**13 options.**
+**14 options.**
 
 
 <a id="nemesis"></a>
 
 ## **nemesis** / SCT_NEMESIS
 
-Nemesis configuration: nemesis-wide settings, defaults shared by all runners, and the<br>runners to start, one thread each. `runners` is a list of single-key mappings of a<br>runner class to its options, e.g. `{SisyphusMonkey: {selector: disruptive, interval: 15}}`;<br>the options accepted depend on the runner class. Options a runner leaves unset take<br>the [`nemesis`](#nemesis) defaults; a runner without `seed` gets a random one. `selector` is a<br>logical expression over nemesis flags filtering the disruptions a runner runs.<br>Accepts YAML or JSON from the environment, for the whole option or one sub-key, e.g.<br>SCT_NEMESIS__INTERVAL=10 or SCT_NEMESIS__RUNNERS='[{"SisyphusMonkey": {"selector": "disruptive"}}]'.
+Nemesis section: settings shared by all runners, defaults for options a runner leaves<br>unset, and `runners`, the runners to start, one thread each. A runner entry is a<br>single-key mapping of a runner class to its options, e.g.<br>`{SisyphusMonkey: {selector: disruptive, interval: 15}}`; the options accepted depend<br>on the runner class. A runner without `seed`, own or default, gets a random one.
 
-**default:** {'runners': [{'NoOpMonkey': {}}]}
+**default:** the defaults of its options
 
-**type:** sdcm.sct_config.nemesis_runners.NemesisConfig
-
-**sub-options:**
-
-| option | type | default | description |
-|---|---|---|---|
-| `during_prepare` | bool | True | Run nemesis during the prepare stage of the test |
-| `sequence_sleep_between_ops` | int | N/A | Minutes to sleep between the operations of sequence nemeses |
-| `grow_shrink.add_node_cnt` | int | 3 | Number of nodes added and removed |
-| `grow_shrink.instance_type` | str | N/A | Instance type of the added nodes; the cluster's DB instance type when unset |
-| `grow_shrink.double_load_duration` | int | 0 | Minutes to double the load for after growing and before shrinking; 0 disables it |
-| `interval` | int | 5 | Default for runner `interval` |
-| `seed` | int | N/A | Default for runner `seed`; a random one when unset |
-| `filter_seeds` | bool | False | Default for runner `filter_seeds` |
-| `selector` | str | N/A | Default for runner `selector` |
-| `multiply_factor` | int | 2 | Default for runner `multiply_factor` |
-| `runners` | list[...] | [] | Runners to start, one thread each |
+**type:** section (10 options below)
 
 
-<a id="nemesis_add_node_cnt"></a>
+<a id="nemesis.during_prepare"></a>
 
-## **nemesis_add_node_cnt** / SCT_NEMESIS_ADD_NODE_CNT
+## **nemesis.during_prepare** / SCT_NEMESIS__DURING_PREPARE
 
-Not read; replaced by `nemesis.grow_shrink.add_node_cnt`.
-
-**default:** 3
-
-**type:** int
-
-
-<a id="nemesis_class_name"></a>
-
-## **nemesis_class_name** / SCT_NEMESIS_CLASS_NAME
-
-Not read; replaced by `nemesis.runners`.
-
-**default:** NoOpMonkey
-
-**type:** str | list[str] → list[str] (appendable)
-
-
-<a id="nemesis_double_load_during_grow_shrink_duration"></a>
-
-## **nemesis_double_load_during_grow_shrink_duration** / SCT_NEMESIS_DOUBLE_LOAD_DURING_GROW_SHRINK_DURATION
-
-Not read; replaced by `nemesis.grow_shrink.double_load_duration`.
-
-**default:** 0
-
-**type:** int
-
-
-<a id="nemesis_during_prepare"></a>
-
-## **nemesis_during_prepare** / SCT_NEMESIS_DURING_PREPARE
-
-Not read; replaced by `nemesis.during_prepare`.
+Run nemesis during the prepare stage of the test
 
 **default:** True
 
 **type:** bool
 
+```yaml
+nemesis:
+  during_prepare: True
+```
 
-<a id="nemesis_filter_seeds"></a>
 
-## **nemesis_filter_seeds** / SCT_NEMESIS_FILTER_SEEDS
+<a id="nemesis.sequence_sleep_between_ops"></a>
 
-Not read; replaced by `nemesis.filter_seeds`.
+## **nemesis.sequence_sleep_between_ops** / SCT_NEMESIS__SEQUENCE_SLEEP_BETWEEN_OPS
 
-**default:** False
+Minutes to sleep between the operations of sequence nemeses
+
+**default:** N/A
+
+**type:** int
+
+```yaml
+nemesis:
+  sequence_sleep_between_ops: ...
+```
+
+
+<a id="nemesis.sla"></a>
+
+## **nemesis.sla** / SCT_NEMESIS__SLA
+
+Run the SLA nemeses; set only in SLA tests
+
+**default:** N/A
 
 **type:** bool
 
+```yaml
+nemesis:
+  sla: ...
+```
 
-<a id="nemesis_grow_shrink_instance_type"></a>
 
-## **nemesis_grow_shrink_instance_type** / SCT_NEMESIS_GROW_SHRINK_INSTANCE_TYPE
+<a id="nemesis.grow_shrink"></a>
 
-Not read; replaced by `nemesis.grow_shrink.instance_type`.
+## **nemesis.grow_shrink** / SCT_NEMESIS__GROW_SHRINK
+
+Options of the nemeses that grow and shrink the cluster
+
+**default:** the defaults of its options
+
+**type:** section (3 options below)
+
+
+<a id="nemesis.grow_shrink.add_node_cnt"></a>
+
+## **nemesis.grow_shrink.add_node_cnt**
+
+Number of nodes added and removed
+
+**default:** 3
+
+**type:** int
+
+**env:** within the YAML/JSON of `SCT_NEMESIS__GROW_SHRINK`
+
+```yaml
+nemesis:
+  grow_shrink:
+    add_node_cnt: 3
+```
+
+
+<a id="nemesis.grow_shrink.instance_type"></a>
+
+## **nemesis.grow_shrink.instance_type**
+
+Instance type of the added nodes; the cluster's DB instance type when unset
 
 **default:** N/A
 
 **type:** str (appendable)
 
+**env:** within the YAML/JSON of `SCT_NEMESIS__GROW_SHRINK`
 
-<a id="nemesis_interval"></a>
+```yaml
+nemesis:
+  grow_shrink:
+    instance_type: ...
+```
 
-## **nemesis_interval** / SCT_NEMESIS_INTERVAL
 
-Not read; replaced by `nemesis.interval`.
+<a id="nemesis.grow_shrink.double_load_duration"></a>
+
+## **nemesis.grow_shrink.double_load_duration**
+
+Minutes to double the load for after growing and before shrinking; 0 disables it
+
+**default:** 0
+
+**type:** int
+
+**env:** within the YAML/JSON of `SCT_NEMESIS__GROW_SHRINK`
+
+```yaml
+nemesis:
+  grow_shrink:
+    double_load_duration: 0
+```
+
+
+<a id="nemesis.interval"></a>
+
+## **nemesis.interval** / SCT_NEMESIS__INTERVAL
+
+Default for runner `interval`: minutes between disruptions
 
 **default:** 5
 
 **type:** int
 
+```yaml
+nemesis:
+  interval: 5
+```
 
-<a id="nemesis_multiply_factor"></a>
 
-## **nemesis_multiply_factor** / SCT_NEMESIS_MULTIPLY_FACTOR
+<a id="nemesis.seed"></a>
 
-Not read; replaced by `nemesis.multiply_factor`.
+## **nemesis.seed** / SCT_NEMESIS__SEED
+
+Default for runner `seed`; a random one per runner when unset
+
+**default:** N/A
+
+**type:** int
+
+```yaml
+nemesis:
+  seed: ...
+```
+
+
+<a id="nemesis.filter_seeds"></a>
+
+## **nemesis.filter_seeds** / SCT_NEMESIS__FILTER_SEEDS
+
+Default for runner `filter_seeds`: target non-seed nodes only
+
+**default:** False
+
+**type:** bool
+
+```yaml
+nemesis:
+  filter_seeds: False
+```
+
+
+<a id="nemesis.selector"></a>
+
+## **nemesis.selector** / SCT_NEMESIS__SELECTOR
+
+Default for runner `selector`: a logical expression over nemesis flags filtering the disruptions
+
+**default:** N/A
+
+**type:** str (appendable)
+
+```yaml
+nemesis:
+  selector: ...
+```
+
+
+<a id="nemesis.multiply_factor"></a>
+
+## **nemesis.multiply_factor** / SCT_NEMESIS__MULTIPLY_FACTOR
+
+Default for runner `multiply_factor`: how many times the disruption list repeats before shuffling
 
 **default:** 2
 
 **type:** int
 
-
-<a id="nemesis_seed"></a>
-
-## **nemesis_seed** / SCT_NEMESIS_SEED
-
-Not read; replaced by `nemesis.seed`.
-
-**default:** N/A
-
-**type:** int | list[int] → list[int]
+```yaml
+nemesis:
+  multiply_factor: 2
+```
 
 
-<a id="nemesis_selector"></a>
+<a id="nemesis.runners"></a>
 
-## **nemesis_selector** / SCT_NEMESIS_SELECTOR
+## **nemesis.runners** / SCT_NEMESIS__RUNNERS
 
-Not read; replaced by `nemesis.selector`.
+Runners to start, one thread each. Every runner takes `interval`, `seed` and<br>`filter_seeds`; most also take `selector` and `multiply_factor`; a runner with options of<br>its own (e.g. CategoricalMonkey `dist`, FixedOrderMonkey `order`) declares them in its<br>config model. See docs/nemesis.md.
 
-**default:** N/A
+**default:** [{'NoOpMonkey': {}}]
 
-**type:** str | list[str] → list[str] (appendable)
+**type:** list of {<RunnerClass>: {<options>}} | YAML/JSON string (appendable)
 
-
-<a id="nemesis_sequence_sleep_between_ops"></a>
-
-## **nemesis_sequence_sleep_between_ops** / SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS
-
-Not read; replaced by `nemesis.sequence_sleep_between_ops`.
-
-**default:** N/A
-
-**type:** int
-
-
-<a id="sla"></a>
-
-## **sla** / SCT_SLA
-
-run SLA nemeses if the test is SLA only
-
-**default:** N/A
-
-**type:** bool
+```yaml
+nemesis:
+  runners: [{'NoOpMonkey': {}}]
+```

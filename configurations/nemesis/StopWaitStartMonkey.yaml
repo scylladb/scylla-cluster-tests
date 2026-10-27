@@ -1,3 +1,5 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'StopWaitStartMonkey'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'StopWaitStartMonkey'
 user_prefix: 'longevity-5gb-1h-StopWaitStartMonkey'

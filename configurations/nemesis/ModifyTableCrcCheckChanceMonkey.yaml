@@ -1,3 +1,5 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'ModifyTableCrcCheckChanceMonkey'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'ModifyTableCrcCheckChanceMonkey'
 user_prefix: 'longevity-5gb-1h-ModifyTableCrcCheckChanceMonkey'

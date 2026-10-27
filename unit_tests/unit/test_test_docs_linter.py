@@ -159,7 +159,7 @@ def test_valid_full_metadata_passes(tmp_path):
         "test.yaml",
         {
             "test_duration": 255,
-            "nemesis_class_name": "SisyphusMonkey",
+            "nemesis": {"runners": [{"SisyphusMonkey": {}}]},
             "stress_cmd": "cassandra-stress write cl=QUORUM duration=180m",
             "test_metadata": {
                 "description": "Basic longevity test running cassandra-stress write workload for 4 hours.",

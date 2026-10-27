@@ -1,7 +1,7 @@
 """
 NemesisRunner override, also known as Complex Nemesis
-Runners can be used in the nemesis_class_name config option or as entries of `nemesis.runners`;
-each runner's `config_model` validates its `nemesis.runners` entry.
+Runners are the entries of the `nemesis.runners` config option;
+each runner's `config_model` validates its entry.
 """
 
 import time
@@ -10,7 +10,7 @@ from typing import Callable, List, Set, Tuple
 from pydantic import Field, NonNegativeFloat
 
 from sdcm.mgmt.common import ObjectStorageUploadMode
-from sdcm.nemesis import NemesisRunner, NemesisRunnerConfig
+from sdcm.nemesis import NemesisRunner, NemesisRunnerConfig, RunnerConfig
 from sdcm.nemesis.monkey.manager import manager_backup
 
 
@@ -21,20 +21,27 @@ class SisyphusMonkey(NemesisRunner):
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
 
-class FixedOrderMonkeyConfig(NemesisRunnerConfig):
-    nemesis_class_names: list[str] = Field(
+class FixedOrderMonkeyConfig(RunnerConfig):
+    """Options of `FixedOrderMonkey`; it neither selects nor shuffles, so it takes no `selector` or `multiply_factor`."""
+
+    order: list[str] = Field(
         min_length=1, description="Nemesis class names to run in this order, e.g. [DecommissionMonkey, RepairMonkey]"
     )
 
+    def check_disruptions(self, disruption_names: frozenset[str]) -> None:
+        if unknown := sorted(set(self.order) - disruption_names):
+            raise ValueError(f"`order` names unknown nemesis classes: {unknown}")
+
 
 class FixedOrderMonkey(NemesisRunner):
-    """Runs nemesis in the exact order given by `nemesis_class_names`, repeating it.
+    """Runs nemesis in the exact order given by `order`, repeating it.
 
-    The `nemesis_class_names` of a FixedOrderMonkey entry in `nemesis.runners` is an ordered list of
+    The `order` of a FixedOrderMonkey entry in `nemesis.runners` is an ordered list of
     nemesis class names, e.g. [DecommissionMonkey, RepairMonkey, DecommissionMonkey]. A name may
     repeat to run that nemesis more than once per cycle.
 
-    Each name is looked up in the nemesis registry and instantiated once; repeated names share
+    The names are checked against the registered nemesis classes when the config loads (see
+    ``FixedOrderMonkeyConfig.check_disruptions``). Each name is instantiated once; repeated names share
     that instance. The resulting list is cycled in order, and precheck_nemesis() (called from
     run()) prunes entries the current backend cannot run and reports them as SKIPPED.
     """
@@ -43,7 +50,7 @@ class FixedOrderMonkey(NemesisRunner):
 
     def __init__(self, tester_obj, termination_event, config: FixedOrderMonkeyConfig):
         super().__init__(tester_obj, termination_event, config=config)
-        self.disruptions_list = self.resolve_fixed_order([name.strip() for name in self.config.nemesis_class_names])
+        self.disruptions_list = self.resolve_fixed_order(self.config.order)
         self.log.info(
             "FixedOrderMonkey resolved order: %s", [nemesis.__class__.__name__ for nemesis in self.disruptions_list]
         )
@@ -53,8 +60,6 @@ class FixedOrderMonkey(NemesisRunner):
         instances_by_name = {}
         resolved = []
         for name in names:
-            if name not in classes_by_name:
-                raise ValueError(f"Unknown nemesis class name in 'nemesis_class_names': {name!r}")
             if name not in instances_by_name:
                 instances_by_name[name] = classes_by_name[name](runner=self)
             resolved.append(instances_by_name[name])

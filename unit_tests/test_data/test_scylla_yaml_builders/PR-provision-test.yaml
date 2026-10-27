@@ -20,9 +20,11 @@ instance_type_db: 'i4i.large'
 force_run_iotune: true
 n_db_nodes: 3
 
-nemesis_class_name: SisyphusMonkey
-nemesis_selector: "not disruptive"
-nemesis_interval: 1
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "not disruptive"
+        interval: 1
 
 user_prefix: 'PR-provision-test'
 instance_provision: 'spot'

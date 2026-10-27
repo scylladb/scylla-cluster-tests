@@ -55,4 +55,6 @@ space_node_threshold: 64424
 internode_compression: 'all'
 internode_encryption: 'dc'
 
-nemesis_class_name: 'NoOpMonkey'
+nemesis:
+  runners:
+    - NoOpMonkey: {}

@@ -96,14 +96,44 @@ def test_dump_help_config_markdown_backend_overrides(help_markdown, field_name, 
         assert backend_override_text not in help_markdown
 
 
+def test_dump_help_config_markdown_lists_sub_options_of_model_options(help_markdown):
+    assert "| `tier` | str | ondemand |  |" in help_markdown
+
+
 @pytest.mark.parametrize(
-    "sub_option_row",
+    ("heading", "default_text", "example"),
     [
-        pytest.param("| `interval` | int | 5 | Default for runner `interval` |", id="sub_option"),
         pytest.param(
-            "| `grow_shrink.add_node_cnt` | int | 3 | Number of nodes added and removed |", id="nested_sub_option"
+            "## **nemesis.interval** / SCT_NEMESIS__INTERVAL",
+            "**default:** 5",
+            "```yaml\nnemesis:\n  interval: 5\n```",
+            id="section_field",
+        ),
+        pytest.param(
+            "## **nemesis.grow_shrink.add_node_cnt**",
+            "**default:** 3",
+            "```yaml\nnemesis:\n  grow_shrink:\n    add_node_cnt: 3\n```",
+            id="nested_section_field",
         ),
     ],
 )
-def test_dump_help_config_markdown_lists_sub_options_of_model_options(help_markdown, sub_option_row):
-    assert sub_option_row in help_markdown
+def test_dump_help_config_markdown_documents_section_fields_by_dotted_path(
+    help_markdown, heading, default_text, example
+):
+    option_docs = help_markdown[help_markdown.index(heading) :].split("<a id=", 1)[0]
+
+    assert default_text in option_docs
+    assert example in option_docs
+
+
+def test_dump_help_config_markdown_documents_how_to_set_nested_section_field_from_env(help_markdown):
+    option_docs = help_markdown[help_markdown.index("## **nemesis.grow_shrink.add_node_cnt**") :].split("<a id=", 1)[0]
+
+    assert "**env:** within the YAML/JSON of `SCT_NEMESIS__GROW_SHRINK`" in option_docs
+
+
+def test_dump_help_config_markdown_index_lists_section_fields_by_dotted_path(help_markdown):
+    assert (
+        "| [`nemesis.interval`](configuration_options/nemesis-chaos-testing.md#nemesis.interval) "
+        "| `SCT_NEMESIS__INTERVAL` |" in help_markdown
+    )

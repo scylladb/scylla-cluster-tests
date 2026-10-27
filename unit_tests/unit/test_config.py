@@ -714,7 +714,7 @@ def test_23_1_include_nemesis_selector(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
-    assert conf.nemesis_selector == ["config_changes and topology_changes"]
+    assert conf.nemesis.selector == "config_changes and topology_changes"
 
 
 def test_26_run_fullscan_params_validtion_positive(monkeypatch):

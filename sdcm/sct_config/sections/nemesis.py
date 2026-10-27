@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""Nested nemesis configuration: shared defaults plus a list of runners, each validated by its class.
+"""The `nemesis` section: shared settings, runner defaults, and a list of runners each validated by its class.
 
 YAML form::
 
@@ -23,40 +23,31 @@ YAML form::
             interval: 15
         - CategoricalMonkey:
             dist: {StopStartMonkey: 2}
-        - ManagerRcloneBackup: {}
+        - FixedOrderMonkey:
+            order: [StopStartMonkey, NoCorruptRepairMonkey]
 
 Every runner entry is a single-key mapping ``{<RunnerClass>: {<options>}}``. The runner class is
 looked up among the registered ``NemesisRunner`` subclasses and the entry is validated by that
 class's ``config_model`` (a pydantic discriminated union, one member per runner class). Most
-runners use the shared ``NemesisRunnerConfig``; a runner with options of its own defines a
-subclass of it next to the runner.
+runners use ``NemesisRunnerConfig``; a runner with options of its own defines a model next to the
+runner.
 """
 
-import random
 from typing import Annotated, ClassVar, NamedTuple, Union
 
-import yaml
-from pydantic import (
-    BaseModel,
-    BeforeValidator,
-    ConfigDict,
-    Discriminator,
-    Field,
-    PositiveInt,
-    Tag,
-    create_model,
-    model_validator,
-)
+from pydantic import BeforeValidator, Discriminator, Field, PositiveInt, Tag, create_model, model_validator
 
-from sdcm.nemesis import NemesisBaseClass, NemesisFlags, NemesisRunner, NemesisRunnerConfig
+from sdcm.nemesis import NemesisBaseClass, NemesisFlags, NemesisRunner, RunnerConfig
 from sdcm.nemesis.registry import NemesisRegistry
+from sdcm.sct_config.sections import ConfigSection
+from sdcm.sct_config.types import Boolean, InputType, SctField, String
 
 
 class NemesisThread(NamedTuple):
     """A runner to start and its resolved config."""
 
     runner_class: type[NemesisRunner]
-    config: NemesisRunnerConfig
+    config: RunnerConfig
 
 
 def runner_entry_from_mapping(value):
@@ -72,19 +63,12 @@ def runner_entry_from_mapping(value):
     return value
 
 
-def yaml_from_str(value):
-    """Parse a string value (e.g. from an ``SCT_NEMESIS__RUNNERS`` env var) as YAML/JSON."""
-    if isinstance(value, str):
-        return yaml.safe_load(value)
-    return value
-
-
 def runner_class_name(value) -> str | None:
     """Return the runner class name of a runner entry, which picks the model validating it."""
     return value.get("class_name") if isinstance(value, dict) else getattr(value, "class_name", None)
 
 
-def runner_entry_model(runner) -> type[NemesisRunnerConfig]:
+def runner_entry_model(runner) -> type[RunnerConfig]:
     """Model of a `nemesis.runners` entry naming ``runner``: its ``config_model``, bound to ``runner``."""
     return type(f"{runner.__name__}Entry", (runner.config_model,), {"runner_class": runner, "__module__": __name__})
 
@@ -98,45 +82,48 @@ def runner_entry_type(runner_classes):
     ]
 
 
-class GrowShrinkConfig(BaseModel):
+class GrowShrinkConfig(ConfigSection):
     """Options of the nemeses that add nodes and decommission them back (e.g. GrowShrinkCluster)."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    add_node_cnt: int = Field(default=3, description="Number of nodes added and removed")
-    instance_type: str | None = Field(
-        default=None, description="Instance type of the added nodes; the cluster's DB instance type when unset"
+    add_node_cnt: int | None = SctField(description="Number of nodes added and removed")
+    instance_type: String = SctField(
+        description="Instance type of the added nodes; the cluster's DB instance type when unset"
     )
-    double_load_duration: int = Field(
-        default=0, description="Minutes to double the load for after growing and before shrinking; 0 disables it"
+    double_load_duration: int | None = SctField(
+        description="Minutes to double the load for after growing and before shrinking; 0 disables it"
     )
 
 
-class NemesisDefaults(BaseModel):
-    """The `nemesis` option: nemesis-wide settings and defaults for options a runner's own entry leaves unset.
+class NemesisConfigBase(ConfigSection):
+    """The `nemesis` section: shared settings, defaults for options a runner's own entry leaves unset, and the runners.
 
-    `nemesis_config_model` adds the runners.
+    `nemesis_config_model` types the runners by the runner classes they may name.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     #: Nemesis class names runner configs may name (e.g. CategoricalMonkey `dist` keys); empty skips the check.
     disruption_names: ClassVar[frozenset[str]] = frozenset()
 
-    during_prepare: bool = Field(default=True, description="Run nemesis during the prepare stage of the test")
-    sequence_sleep_between_ops: PositiveInt | None = Field(
-        default=None, description="Minutes to sleep between the operations of sequence nemeses"
+    # Shared by all runners
+    during_prepare: Boolean | None = SctField(description="Run nemesis during the prepare stage of the test")
+    sequence_sleep_between_ops: PositiveInt | None = SctField(
+        description="Minutes to sleep between the operations of sequence nemeses"
     )
-    grow_shrink: Annotated[GrowShrinkConfig, BeforeValidator(yaml_from_str)] = Field(
+    sla: Boolean | None = SctField(description="Run the SLA nemeses; set only in SLA tests")
+    grow_shrink: GrowShrinkConfig = Field(
         default_factory=GrowShrinkConfig, description="Options of the nemeses that grow and shrink the cluster"
     )
 
-    interval: PositiveInt = Field(default=5, description="Default for runner `interval`")
-    seed: int | None = Field(default=None, description="Default for runner `seed`; a random one when unset")
-    filter_seeds: bool = Field(default=False, description="Default for runner `filter_seeds`")
-    selector: str | None = Field(default=None, description="Default for runner `selector`")
-    multiply_factor: PositiveInt = Field(default=2, description="Default for runner `multiply_factor`")
-    runners: list[NemesisRunnerConfig] = Field(default_factory=list)
+    # Defaults for every runner
+    interval: PositiveInt | None = SctField(description="Default for runner `interval`: minutes between disruptions")
+    seed: int | None = SctField(description="Default for runner `seed`; a random one per runner when unset")
+    filter_seeds: Boolean | None = SctField(description="Default for runner `filter_seeds`: target non-seed nodes only")
+    selector: String = SctField(
+        description="Default for runner `selector`: a logical expression over nemesis flags filtering the disruptions"
+    )
+    multiply_factor: PositiveInt | None = SctField(
+        description="Default for runner `multiply_factor`: how many times the disruption list repeats before shuffling"
+    )
+    runners: list[RunnerConfig] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def check_runner_disruptions(self):
@@ -149,36 +136,47 @@ class NemesisDefaults(BaseModel):
                     raise ValueError(f"runners.{index}.{runner.class_name}: {error}") from error
         return self
 
-    def resolve(self, runner: NemesisRunnerConfig) -> NemesisRunnerConfig:
-        """Return a copy of ``runner`` with unset options taken from these defaults, and a random seed if still unset.
+    def resolve(self, runner: RunnerConfig) -> RunnerConfig:
+        """Return a copy of ``runner`` with unset options taken from these defaults, and its random seed if still unset.
 
-        The stored runners are left untouched, so a later config source changing a default still
-        applies to every runner.
+        Only options ``runner``'s model declares are filled. The stored runners are left untouched,
+        so a later config source changing a default still applies to every runner.
         """
         update = {}
         for name in type(runner).model_fields:
             if getattr(runner, name) is None and (default := getattr(self, name, None)) is not None:
                 update[name] = default
         if runner.seed is None and "seed" not in update:
-            update["seed"] = random.randint(0, 1000)
+            update["seed"] = runner.random_seed
         return runner.model_copy(update=update)
 
-    def nemesis_threads(self) -> list[NemesisThread]:
+    def resolve_runners(self) -> list[NemesisThread]:
         """Return the runner class and resolved config of each runner, one nemesis thread each."""
         return [NemesisThread(runner.runner_class, self.resolve(runner)) for runner in self.runners]
 
 
-def nemesis_config_model(runner_classes, disruption_classes=()) -> type[NemesisDefaults]:
-    """Build the `nemesis` option model whose runner entries may name any of ``runner_classes``.
+def nemesis_config_model(runner_classes, disruption_classes=()) -> type[NemesisConfigBase]:
+    """Build the `nemesis` section model whose runner entries may name any of ``runner_classes``.
 
     Runner configs may name only ``disruption_classes`` as disruptions.
     """
     model = create_model(
         "NemesisConfig",
-        __base__=NemesisDefaults,
+        __base__=NemesisConfigBase,
+        __module__=__name__,
         runners=(
-            Annotated[list[runner_entry_type(runner_classes)], BeforeValidator(yaml_from_str)],
-            Field(default_factory=list, description="Runners to start, one thread each"),
+            Annotated[
+                list[runner_entry_type(runner_classes)],
+                InputType("list of {<RunnerClass>: {<options>}} | YAML/JSON string"),
+            ],
+            SctField(
+                default_factory=list,
+                appendable=True,
+                description="""Runners to start, one thread each. Every runner takes `interval`, `seed` and
+                `filter_seeds`; most also take `selector` and `multiply_factor`; a runner with options of
+                its own (e.g. CategoricalMonkey `dist`, FixedOrderMonkey `order`) declares them in its
+                config model. See docs/nemesis.md.""",
+            ),
         ),
     )
     model.disruption_names = frozenset(disruption.__name__ for disruption in disruption_classes)

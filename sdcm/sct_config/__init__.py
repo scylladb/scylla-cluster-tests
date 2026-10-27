@@ -44,6 +44,7 @@ from sdcm.sct_config.types import (
     dict_or_str,
     int_or_list_or_eval,
     str_or_list_or_eval,
+    yaml_from_str,
 )
 
 __all__ = [
@@ -63,5 +64,6 @@ __all__ = [
     "is_arm_instance_type",
     "simulated_racks_enabled",
     "str_or_list_or_eval",
+    "yaml_from_str",
     "substitute_arch_markers",
 ]
