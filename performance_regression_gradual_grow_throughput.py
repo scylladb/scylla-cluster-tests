@@ -196,6 +196,9 @@ def search_max_rate(probe, low, high, tolerance) -> tuple[int, int]:
     Returns the final (low, high): `low` passed, `high` failed.
     """
     bracket = f"[{low}, {high}]"
+    if tolerance < 1 or low >= high:
+        # tolerance < 1 never ends: (low + high) // 2 == low once high - low == 1
+        raise ValueError(f"The bracket {bracket} needs low < high and a tolerance of at least 1, got {tolerance}")
     if probe(high):
         raise ValueError(f"The high end {high} passes, the P99 crossing is above the bracket {bracket}")
     if not probe(low):
@@ -480,7 +483,12 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 "metrics": metrics,
                 "connections": self._step_connections,
             }
-            step["passed"] = meets_p99(step["client_p99_ms"], step["server_p99_ms"], search["target_p99_ms"])
+            # Above the cluster's capacity the client P99 explodes while the server P99 can stay low,
+            # so a rate also has to be delivered to pass
+            step["passed"] = (
+                meets_p99(step["client_p99_ms"], step["server_p99_ms"], search["target_p99_ms"])
+                and step["ops_rate"] >= 0.95 * rate
+            )
             total_summary[step_name] = step
             self.save_total_summary_in_file(total_summary)
             self.drop_keyspace(keyspace_name=keyspace)

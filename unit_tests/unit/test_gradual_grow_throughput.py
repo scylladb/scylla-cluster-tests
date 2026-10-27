@@ -547,8 +547,16 @@ def test_search_max_rate_rejects_a_wrong_bracket(passing_rates, error):
         gradual_grow_module.search_max_rate(lambda rate: rate in passing_rates, 50_000, 150_000, 5_000)
 
 
-def test_write_max_throughput_under_p99_records_every_step():
-    crossing = 87_300
+@pytest.mark.parametrize("low, high, tolerance", [(50_000, 150_000, 0), (150_000, 50_000, 5_000)])
+def test_search_max_rate_rejects_bad_parameters_before_probing(low, high, tolerance):
+    probe = MagicMock()
+    with pytest.raises(ValueError, match="bracket"):
+        gradual_grow_module.search_max_rate(probe, low, high, tolerance)
+    probe.assert_not_called()
+
+
+def _search_on_fake_cluster(client_p99, server_p99, capacity=float("inf")):
+    """Run test_write_max_throughput_under_p99 with P99 and delivered op/s as functions of the rate."""
     saved = {}
     instance = SimpleNamespace(
         params={
@@ -578,18 +586,25 @@ def test_write_max_throughput_under_p99_records_every_step():
     def run_step(stress_cmds, step_params, step_duration):
         instance.rate = int(re.search(r"fixed=(\d+)/s", step_params["throttle"]).group(1)) * 4
         instance._step_window, instance._step_connections = (0, 600), {"ok": True}
-        return [{"op rate": str(instance.rate / 4)}] * 4, [SimpleNamespace(hdr_tags=["WRITE-rt"])]
+        delivered = min(instance.rate, capacity)
+        return [{"op rate": str(delivered / 4)}] * 4, [SimpleNamespace(hdr_tags=["WRITE-rt"])]
+
+    instance.run_step = run_step
+    instance.get_hdrhistogram = lambda **kwargs: {"WRITE--WRITE-rt": {"percentile_99": client_p99(instance.rate)}}
+    instance._collect_step_metrics = lambda start, end: {
+        "scylla_strong_consistency_coordinator_write_latency_p99_ms": {"total": server_p99(instance.rate)}
+    }
+    gradual_grow_module.PerformanceRegressionPredefinedStepsTest.test_write_max_throughput_under_p99(instance)
+    return saved
+
+
+def test_write_max_throughput_under_p99_records_every_step():
+    crossing = 87_300
 
     def p99(rate):
         return 10 * (rate / crossing) ** 4
 
-    instance.run_step = run_step
-    instance.get_hdrhistogram = lambda **kwargs: {"WRITE--WRITE-rt": {"percentile_99": p99(instance.rate)}}
-    instance._collect_step_metrics = lambda start, end: {
-        "scylla_strong_consistency_coordinator_write_latency_p99_ms": {"total": p99(instance.rate) * 0.9}
-    }
-
-    gradual_grow_module.PerformanceRegressionPredefinedStepsTest.test_write_max_throughput_under_p99(instance)
+    saved = _search_on_fake_cluster(client_p99=p99, server_p99=lambda rate: p99(rate) * 0.9)
 
     probes = [name for name in saved if name.startswith("probe_")]
     assert probes[:2] == ["probe_1_150000", "probe_2_50000"]
@@ -603,3 +618,13 @@ def test_write_max_throughput_under_p99_records_every_step():
     assert confirmation["server_p99_ms"] == pytest.approx(confirmation["client_p99_ms"] * 0.9)
     assert confirmation["ops_rate"] == pytest.approx(search["max_rate"], rel=0.001)
     assert confirmation["connections"] == {"ok": True}
+
+
+def test_write_max_throughput_under_p99_fails_rates_above_capacity():
+    """Above capacity the client P99 explodes while the server P99 can stay low: the rate isn't delivered."""
+    saved = _search_on_fake_cluster(
+        client_p99=lambda rate: 2 if rate <= 100_000 else 50, server_p99=lambda rate: 5, capacity=100_000
+    )
+
+    assert not saved["probe_1_150000"]["passed"]
+    assert saved["search"]["max_rate"] <= 100_000 / 0.95
