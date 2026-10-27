@@ -203,6 +203,8 @@ class EnableDisableTableEncryptionBaseMonkey(NemesisBaseClass, abc.ABC):
 
 @target_all_nodes
 class EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey(EnableDisableTableEncryptionBaseMonkey):
+    """Create a table encrypted with an AWS KMS key, write and read it, rotate the key, decrypt and drop it."""
+
     disruptive = True
     kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
 
@@ -214,6 +216,8 @@ class EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey(EnableDisable
 
 @target_all_nodes
 class EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(EnableDisableTableEncryptionBaseMonkey):
+    """Create a table encrypted with an AWS KMS key, write and read it, disable encryption and drop the table."""
+
     disruptive = True
     kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
 

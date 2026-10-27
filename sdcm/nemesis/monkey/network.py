@@ -204,7 +204,7 @@ def get_rate_limit_for_network_disruption(monitoring_set, target_node, rnd) -> O
 
 @target_all_nodes
 class RandomInterruptionNetworkMonkey(NemesisBaseClass):
-    """Randomly applies network interruptions (loss, corruption, delay, or bandwidth limiting) to a node."""
+    """Apply a random network interruption (loss, corruption, delay, or bandwidth cap) for a random duration."""
 
     disruptive = True
     networking = True
@@ -222,7 +222,6 @@ class RandomInterruptionNetworkMonkey(NemesisBaseClass):
         return extra_network_interface_precheck(self.runner)
 
     def disrupt(self):
-        """Apply a random network interruption (loss, corruption, delay, or bandwidth cap) for a random duration."""
         list_of_timeout_options = [10, 60, 120, 300, 500]
         if self.runner._is_it_on_kubernetes():
             self._disrupt_k8s(list_of_timeout_options)
@@ -364,7 +363,7 @@ class RandomInterruptionNetworkMonkey(NemesisBaseClass):
 
 @target_all_nodes
 class BlockNetworkMonkey(NemesisBaseClass):
-    """Blocks all network traffic on a node using 100% packet loss."""
+    """Block all network traffic on the target node using 100% packet loss for a random duration."""
 
     disruptive = True
     networking = True
@@ -382,7 +381,6 @@ class BlockNetworkMonkey(NemesisBaseClass):
         return extra_network_interface_precheck(self.runner)
 
     def disrupt(self):
-        """Block all network traffic on the target node using 100% packet loss for a random duration."""
         list_of_timeout_options = [10, 60, 120, 300, 500]
         if self.runner._is_it_on_kubernetes():
             with self.runner.action_log_scope(f"Block network on {self.runner.target_node.name} node"):
@@ -443,7 +441,7 @@ class BlockNetworkMonkey(NemesisBaseClass):
 
 @target_all_nodes
 class RejectInterNodeNetworkMonkey(NemesisBaseClass):
-    """Generates random firewall rule to drop/reject packets for inter-node communications, port 7000 and 7001."""
+    """Drop or reject inter-node gossip/streaming traffic (ports 7000/7001) with a random iptables rule."""
 
     disruptive = True
     networking = True
@@ -456,7 +454,6 @@ class RejectInterNodeNetworkMonkey(NemesisBaseClass):
         return None
 
     def disrupt(self):
-        """Drop or reject inter-node gossip/streaming traffic (ports 7000/7001) with a random iptables rule."""
         install_iptables(self.runner.target_node)
 
         textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule(rnd=self.runner.random)
@@ -489,13 +486,12 @@ class RejectInterNodeNetworkMonkey(NemesisBaseClass):
 
 @target_all_nodes
 class RejectNodeExporterNetworkMonkey(NemesisBaseClass):
-    """Generates random firewall rule to drop/reject packets for node exporter connections, port 9100."""
+    """Drop or reject node-exporter traffic (port 9100) with a random iptables rule for a random duration."""
 
     disruptive = True
     networking = True
 
     def disrupt(self):
-        """Drop or reject node-exporter traffic (port 9100) with a random iptables rule for a random duration."""
         install_iptables(self.runner.target_node)
 
         textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule(rnd=self.runner.random)
@@ -519,13 +515,12 @@ class RejectNodeExporterNetworkMonkey(NemesisBaseClass):
 
 @target_all_nodes
 class RejectThriftNetworkMonkey(NemesisBaseClass):
-    """Generates random firewall rule to drop/reject packets for thrift connections, port 9160."""
+    """Drop or reject Thrift traffic (port 9160) with a random iptables rule for a random duration."""
 
     disruptive = True
     networking = True
 
     def disrupt(self):
-        """Drop or reject Thrift traffic (port 9160) with a random iptables rule for a random duration."""
         install_iptables(self.runner.target_node)
 
         textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule(rnd=self.runner.random)
@@ -549,7 +544,7 @@ class RejectThriftNetworkMonkey(NemesisBaseClass):
 
 @target_all_nodes
 class StopStartInterfacesNetworkMonkey(NemesisBaseClass):
-    """Stops and restarts the secondary network interface on a node."""
+    """Take the secondary network interface down for a random duration, then bring it back up."""
 
     disruptive = True
     networking = True
@@ -564,7 +559,6 @@ class StopStartInterfacesNetworkMonkey(NemesisBaseClass):
         return extra_network_interface_precheck(self.runner)
 
     def disrupt(self):
-        """Take the secondary network interface down for a random duration, then bring it back up."""
         list_of_timeout_options = [10, 60, 120, 300, 500]
         wait_time = self.runner.random.choice(list_of_timeout_options)
         self.runner.log.debug("Taking down eth1 for %dsec", wait_time)
