@@ -124,7 +124,7 @@ arithmetic written down for the overlay header.
    replace what is there. A base selector usually exists to protect something the test asserts
    on, and overwriting it puts those nemeses back in the pool. The field takes a boolean
    expression, so compose:
-   `nemesis_selector: 'not disruptive and not ModifyTableCompactionMonkey'`.
+   `nemesis: {selector: 'not disruptive and not ModifyTableCompactionMonkey'}`.
 8. Add `user_prefix` so the local run's resources are recognisable.
 9. Comment **why** each value is what it is. The existing overlays are the house style — a
    value with no reason attached gets "corrected" by the next person.

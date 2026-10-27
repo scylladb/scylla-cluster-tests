@@ -39,14 +39,19 @@ NemesisRunner             # Orchestrator — contains execution flow, node selec
 
 ```
 Test YAML config
-  nemesis_class_name: 'SisyphusMonkey'
-  nemesis_selector: 'not disruptive'
+  nemesis:
+    runners:
+      - SisyphusMonkey:
+          selector: 'not disruptive'
            │
            ▼
-ClusterTester sets up NemesisRunner subclass (e.g. SisyphusMonkey)
+config.nemesis.resolve_runners()  →  (runner class, resolved config) per entry
            │
            ▼
-SisyphusMonkey.__init__()
+ClusterTester sets up one NemesisRunner subclass per entry (e.g. SisyphusMonkey)
+           │
+           ▼
+SisyphusMonkey.__init__(..., config=<resolved config>)
   └─ build_disruptions_by_selector(nemesis_selector)
        └─ NemesisRegistry.filter_subclasses("not disruptive")
             └─ Returns list of NemesisBaseClass subclasses matching flags
@@ -62,7 +67,7 @@ BaseScyllaCluster.start_nemesis()
                       └─ NemesisNodeAllocator acquires a target node
                       └─ Disruption logic runs
                       └─ Node is released
-            └─ Sleep for nemesis_interval
+            └─ Sleep for `interval`
 ```
 
 ## Module Structure
@@ -90,56 +95,103 @@ sdcm/nemesis/
 
 ### Configuration Parameters
 
-Nemesis behavior is controlled through test YAML configs or environment variables:
+Nemesis behavior is controlled by the `nemesis` section of the test YAML config:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `nemesis_class_name` | `str` | `'NoOpMonkey'` | Runner class to use. Accepts a YAML list; repeat a class to run parallel threads, e.g. `["SisyphusMonkey", "SisyphusMonkey"]` |
-| `nemesis_selector` | `str` | `None` | Boolean flag expression to filter nemesis (e.g. `"not disruptive"`). |
-| `nemesis_interval` | `int` | `5` | Sleep interval between operations, in **minutes** |
-| `nemesis_seed` | `int` | random | Seed for reproducible nemesis sequences |
-| `nemesis_filter_seeds` | `bool` | `false` | If true, target only non-seed nodes |
-| `nemesis_multiply_factor` | `int` | `2` | Multiply the disruption list before shuffling |
-| `nemesis_during_prepare` | `bool` | `true` | Run nemesis during test prepare stage |
-| `nemesis_add_node_cnt` | `int` | `3` | Nodes to add/remove in GrowShrinkCluster |
-| `nemesis_sequence_sleep_between_ops` | `int` | `None` | Sleep between operations in sequence tests |
+| `nemesis.runners` | `list` | `[{NoOpMonkey: {}}]` | Runners to start, one thread per entry. See [`nemesis.runners`](#nemesisrunners) |
+| `nemesis.selector` | `str` | `None` (all nemesis) | Default runner `selector`: boolean flag expression filtering nemesis (e.g. `"not disruptive"`) |
+| `nemesis.interval` | `int` | `5` | Default runner `interval`: sleep between operations, in **minutes** |
+| `nemesis.seed` | `int` | random per runner | Default runner `seed` for reproducible nemesis sequences |
+| `nemesis.filter_seeds` | `bool` | `false` | Default runner `filter_seeds`: target only non-seed nodes |
+| `nemesis.multiply_factor` | `int` | `2` | Default runner `multiply_factor`: repeat the disruption list before shuffling |
+| `nemesis.during_prepare` | `bool` | `true` | Run nemesis during test prepare stage |
+| `nemesis.sequence_sleep_between_ops` | `int` | `None` | Minutes to sleep between operations of sequence nemesis |
+| `nemesis.sla` | `bool` | `None` | Run the SLA nemesis; set only in SLA tests |
+| `nemesis.grow_shrink.add_node_cnt` | `int` | `3` | Nodes to add/remove in GrowShrinkCluster |
+| `nemesis.grow_shrink.instance_type` | `str` | DB instance type | Instance type of the added nodes |
+| `nemesis.grow_shrink.double_load_duration` | `int` | `0` | Minutes to double the load between growing and shrinking; `0` disables it |
 
-### `nemesis_class_name` Syntax
+The `selector`, `interval`, `seed`, `filter_seeds` and `multiply_factor` of the section are defaults: a runner entry that sets its own value uses that instead. A test case with one runner sets these options in the runner's entry. Section-level defaults serve configs with several runners (values the runners share) and overlay files stacked after a test case. An overlay's default reaches only runners that leave the option unset, and an overlay that sets `runners` replaces the whole list, so a test case stacked with a nemesis overlay keeps all of these options as section defaults.
 
-The `nemesis_class_name` parameter supports several formats:
+Config layers (defaults, config files, environment) merge the `nemesis` section field by field, so a file setting `nemesis: {interval: 10}` keeps every other default. `runners` is a list: a later layer that sets it replaces the whole list, or extends it with `["++", {SisyphusMonkey: {}}]`.
+
+From the environment, set a scalar field with `SCT_NEMESIS__<FIELD>` (e.g. `SCT_NEMESIS__INTERVAL=10`). `SCT_NEMESIS`, `SCT_NEMESIS__RUNNERS` and `SCT_NEMESIS__GROW_SHRINK` take a YAML or JSON string:
+
+```bash
+export SCT_NEMESIS__RUNNERS='[{SisyphusMonkey: {selector: "not disruptive"}}]'
+```
+
+### `nemesis.runners`
+
+Each entry is a single-key mapping `{<RunnerClass>: {<options>}}` and starts one runner thread. Example values of `nemesis.runners`:
 
 ```yaml
 # Single nemesis runner, one thread
-nemesis_class_name: 'SisyphusMonkey'
+runners:
+  - SisyphusMonkey: {}
 
 # Single nemesis runner, 2 parallel threads
-nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']
+runners:
+  - SisyphusMonkey: {}
+  - SisyphusMonkey: {}
 
 # Multiple different runners
-nemesis_class_name: ['SisyphusMonkey', 'NoOpMonkey']
+runners:
+  - SisyphusMonkey: {}
+  - NoOpMonkey: {}
 ```
 
-The former `Class:N` count syntax (e.g. `'SisyphusMonkey:2'`) and space-separated strings are rejected with a `ValueError`.
+Every runner takes `interval`, `seed` and `filter_seeds`. Runners that select by flags (e.g. `SisyphusMonkey`, `CategoricalMonkey`) also take `selector` and `multiply_factor`. Options a runner does not declare are rejected at config load. A runner with no `seed` of its own or in the section gets a random one.
 
-### `nemesis_selector` Syntax
+### Per-runner Overrides
 
-The `nemesis_selector` uses Python boolean expressions to filter nemesis by their flags:
+Options set on a runner entry override the section defaults for that runner only. Here the first runner uses the section `interval` of 10 minutes and the second its own 5, and each filters its own nemesis:
+
+```yaml
+nemesis:
+  interval: 10
+  during_prepare: false
+  runners:
+    - SisyphusMonkey:
+        selector: "topology_changes"
+        seed: 253
+    - SisyphusMonkey:
+        selector: "schema_changes and not disruptive"
+        interval: 5
+```
+
+Some runners take options of their own:
+
+```yaml
+nemesis:
+  runners:
+    - CategoricalMonkey:
+        dist: {StopStartMonkey: 2, DecommissionMonkey: 1}
+        default_weight: 0
+    - FixedOrderMonkey:
+        order: [DecommissionMonkey, RepairMonkey]
+```
+
+### `selector` Syntax
+
+`selector` (in the section or on a runner entry) uses Python boolean expressions to filter nemesis by their flags. Example values:
 
 ```yaml
 # Only non-disruptive nemesis
-nemesis_selector: 'not disruptive'
+selector: 'not disruptive'
 
 # Only topology-changing nemesis that are not limited
-nemesis_selector: 'topology_changes and not limited'
+selector: 'topology_changes and not limited'
 
 # A specific nemesis by name
-nemesis_selector: 'DecommissionMonkey'
+selector: 'DecommissionMonkey'
 
 # Combine flag filters with specific names
-nemesis_selector: 'DecommissionMonkey or GrowShrinkClusterNemesis'
+selector: 'DecommissionMonkey or GrowShrinkClusterNemesis'
 
 # Exclude specific nemesis
-nemesis_selector: 'not DecommissionMonkey'
+selector: 'not DecommissionMonkey'
 ```
 
 On Kubernetes backends, `" and kubernetes"` is automatically appended to ensure only K8s-compatible nemesis run.
@@ -152,54 +204,68 @@ Nemesis do not know what the test is about. So, when you write a test config, as
 
 ```yaml
 # TWCS test: keep compaction strategy and TTL unchanged
-nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableDefaultTimeToLiveMonkey and not ModifyTableTwcsWindowSizeMonkey'
+nemesis:
+  selector: 'not ModifyTableCompactionMonkey and not ModifyTableDefaultTimeToLiveMonkey and not ModifyTableTwcsWindowSizeMonkey'
 ```
 
-Turn off only the nemesis that your test really depends on. Let the others run. Note that `nemesis_selector` is not merged when you stack config files: the last file wins. If an overlay sets its own `nemesis_selector`, it must repeat the exclusion.
+Turn off only the nemesis that your test really depends on. Let the others run. When you stack config files, the last file that sets `selector` wins: the files are merged together before `++` appends apply, so `"++ and not X"` appends only to the defaults, not to an earlier file. If an overlay sets its own `selector`, it must repeat the exclusion. A runner entry with its own `selector` ignores the section `selector`, so put the exclusion on that entry too.
 
 ### Example Configurations
 
 **Standard longevity test with random disruptions:**
 ```yaml
-nemesis_class_name: "SisyphusMonkey"
-nemesis_interval: 5
-nemesis_multiply_factor: 2
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        interval: 5
+        multiply_factor: 2
 ```
 
 **Run a specific nemesis for debugging:**
 ```yaml
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: "DecommissionMonkey"
-nemesis_interval: 5
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "DecommissionMonkey"
+        interval: 5
 ```
 
 **Multiple parallel nemesis threads:**
 ```yaml
-nemesis_class_name: ["SisyphusMonkey", "SisyphusMonkey", "SisyphusMonkey"]
-nemesis_interval: 2
+nemesis:
+  interval: 2
+  runners:
+    - SisyphusMonkey: {}
+    - SisyphusMonkey: {}
+    - SisyphusMonkey: {}
 ```
 
 **Non-disruptive nemesis only:**
 ```yaml
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: "not disruptive"
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "not disruptive"
 ```
 
-**Non-disruptive nemesis only (list selector syntax):**
+**One non-disruptive thread and one unfiltered thread:**
 ```yaml
-nemesis_class_name: ["SisyphusMonkey", "SisyphusMonkey"]
-nemesis_selector: ["not disruptive", ""]
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "not disruptive"
+    - SisyphusMonkey: {}
 ```
 
-### `FixedOrderMonkey` class names
+### `FixedOrderMonkey` order
 
-`FixedOrderMonkey` takes `nemesis_class_names`, an ordered list of nemesis class names in its `nemesis.runners` entry. It runs them in that order and repeats the sequence once exhausted. A name may repeat to run that nemesis more than once per cycle. An unknown class name raises `ValueError`; entries the backend cannot run are reported as SKIPPED.
+`FixedOrderMonkey` takes `order`, an ordered list of nemesis class names. It runs them in that order and repeats the sequence once exhausted. A name may repeat to run that nemesis more than once per cycle. It takes no `selector` or `multiply_factor`. Names are validated against the registered nemesis classes at config load; entries the backend cannot run are reported as SKIPPED.
 
 ```yaml
 nemesis:
   runners:
     - FixedOrderMonkey:
-        nemesis_class_names: [DecommissionMonkey, RepairMonkey, DecommissionMonkey]
+        order: [DecommissionMonkey, RepairMonkey, DecommissionMonkey]
 ```
 
 Each entry takes its own list, so several entries give parallel threads different sequences:
@@ -208,9 +274,21 @@ Each entry takes its own list, so several entries give parallel threads differen
 nemesis:
   runners:
     - FixedOrderMonkey:
-        nemesis_class_names: [DecommissionMonkey, RepairMonkey]
+        order: [DecommissionMonkey, RepairMonkey]
     - FixedOrderMonkey:
-        nemesis_class_names: [TruncateMonkey]
+        order: [TruncateMonkey]
+```
+
+### `CategoricalMonkey` distribution
+
+`CategoricalMonkey` picks each next nemesis at random by weight. `dist` maps nemesis class names to weights; `default_weight` (default `1`) is the weight of every other nemesis matching `selector`. Names in `dist` are validated against the registered nemesis classes at config load.
+
+```yaml
+nemesis:
+  runners:
+    - CategoricalMonkey:
+        dist: {StopStartMonkey: 3, HardRebootNodeMonkey: 1}
+        default_weight: 0   # run only the nemesis listed in dist
 ```
 
 ### Running with Docker Backend
@@ -395,9 +473,11 @@ Run your nemesis locally using the Docker backend:
 test_duration: 60
 stress_cmd: "cassandra-stress write cl=QUORUM duration=5m ..."
 n_db_nodes: 4
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'MyNewMonkey'
-nemesis_interval: 5
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'MyNewMonkey'
+        interval: 5
 ```
 
 ```bash
@@ -457,13 +537,43 @@ class MyWeightedRunner(NemesisRunner):
 
 See `CategoricalMonkey` in `monkey/runners.py` for a complete example of weighted random selection.
 
+### Adding options to a runner
+
+A runner's entry in `nemesis.runners` is validated by the runner's `config_model`:
+
+- `RunnerConfig` (`sdcm/nemesis/__init__.py`) — `interval`, `seed`, `filter_seeds`
+- `NemesisRunnerConfig(RunnerConfig)` — adds `selector` and `multiply_factor`; the default `config_model` of `NemesisRunner`
+
+For options of its own, define a model next to the runner, subclassing `RunnerConfig` or `NemesisRunnerConfig`, and point `config_model` at it. The runner receives its resolved config as the `config` constructor argument and reads options from `self.config`:
+
+```python
+from pydantic import Field
+
+from sdcm.nemesis import NemesisRunner, NemesisRunnerConfig
+
+
+class MyRunnerConfig(NemesisRunnerConfig):
+    rounds: int = Field(default=1, description="Times to run each disruption")
+
+
+class MyRunner(NemesisRunner):
+    config_model = MyRunnerConfig
+
+    def __init__(self, tester_obj, termination_event, config: MyRunnerConfig):
+        super().__init__(tester_obj, termination_event, config=config)
+        disruptions = self.build_disruptions_by_selector(self.nemesis_selector)
+        self.disruptions_list = disruptions * self.config.rounds
+```
+
+`config.nemesis.resolve_runners()` returns `(runner_class, resolved_config)` per entry: options the entry leaves unset take the `nemesis:` section defaults, filling only the options the runner's model declares. To validate nemesis class names in an option at config load, override `check_disruptions()` (see `CategoricalMonkeyConfig` and `FixedOrderMonkeyConfig` in `sdcm/nemesis/monkey/runners.py`).
+
 ### Available Runners
 
 | Runner | Description |
 |--------|-------------|
-| `SisyphusMonkey` | Standard runner — filters by `nemesis_selector`, shuffles, cycles through all |
-| `FixedOrderMonkey` | Runs the nemesis named in `nemesis_class_names` in exact order, repeating the sequence |
-| `CategoricalMonkey` | Weighted random selection from a distribution |
+| `SisyphusMonkey` | Standard runner — filters by `selector`, shuffles, cycles through all |
+| `FixedOrderMonkey` | Runs the nemesis named in `order` in exact order, repeating the sequence |
+| `CategoricalMonkey` | Weighted random selection from the `dist` distribution |
 | `NoOpMonkey` | Does nothing (sleeps) — useful for control experiments |
 | `ScyllaCloudLimitedChaosMonkey` | Limited set for Scylla Cloud (no AWS API access) |
 | `K8sSetMonkey` | Kubernetes-specific disruptions |

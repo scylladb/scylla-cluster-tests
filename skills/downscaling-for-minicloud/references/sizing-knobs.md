@@ -212,10 +212,10 @@ Shrinking the workload without shrinking `test_duration` wastes wall-clock; shri
 
 | Param | Under minicloud |
 |---|---|
-| `nemesis_selector` | **Add** `not disruptive`, never replace. Terminate/reboot/stop exercise emulated lifecycle paths that are not all implemented, but a base selector usually protects something the test asserts on. The field takes a boolean expression: `'not disruptive and not ModifyTableCompactionMonkey'` |
-| `nemesis_class_name` | `SisyphusMonkey` is the house choice; the selector does the filtering |
-| `nemesis_interval` | 1-5 minutes, so a short run sees more than one disruption |
-| `nemesis_during_prepare` | `false` for grow tests — the nemesis starts after the cluster reaches its target size |
+| `nemesis.selector` | **Add** `not disruptive`, never replace. Terminate/reboot/stop exercise emulated lifecycle paths that are not all implemented, but a base selector usually protects something the test asserts on. The field takes a boolean expression: `'not disruptive and not ModifyTableCompactionMonkey'`. A single-runner test case usually sets `selector` on its runner entry, which ignores the section `selector`; then the overlay sets `runners` with the edited entry, copying the base entry's other options |
+| `nemesis.runners` | `[{SisyphusMonkey: {...}}]` is the house choice; the selector does the filtering |
+| `nemesis.interval` | 1-5 minutes, so a short run sees more than one disruption; like `selector`, set it on the runner entry when the base sets it there |
+| `nemesis.during_prepare` | `false` for grow tests — the nemesis starts after the cluster reaches its target size |
 
 ---
 

@@ -322,6 +322,19 @@ n_db_nodes: [3, 3, 0]  # 3 nodes in DC1, 3 in DC2, 0 in DC3
 n_loaders: [2, 2]      # 2 loaders in each DC
 ```
 
+### Nemesis Configuration
+
+```yaml
+# Nested section; merges field by field across config layers
+nemesis:
+  interval: 10                 # default for runners that leave it unset
+  runners:                     # one thread per entry
+    - SisyphusMonkey:
+        selector: "not disruptive"
+```
+
+From the environment: `SCT_NEMESIS__INTERVAL=10`, or a YAML/JSON string in `SCT_NEMESIS__RUNNERS`. Code reads `self.params.nemesis.interval`. See [nemesis.md](nemesis.md#configuration-parameters).
+
 ### Multitenant Configuration
 
 ```yaml
@@ -329,10 +342,6 @@ n_loaders: [2, 2]      # 2 loaders in each DC
 stress_cmd:
   tenant1: "cassandra-stress write n=1000000"
   tenant2: "cassandra-stress write n=5000000"
-
-nemesis_interval:
-  tenant1: 5
-  tenant2: 10
 ```
 
 ## Accessing Configuration in Tests

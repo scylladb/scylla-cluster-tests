@@ -77,9 +77,11 @@ n_monitor_nodes: 1
 sizing_db: {vcpu: '>=8', memory: '>=64.0'}
 
 # chaos
-nemesis_class_name: SisyphusMonkey
-nemesis_selector: "not disruptive"
-nemesis_interval: 5
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "not disruptive"
+        interval: 5
 
 user_prefix: my-feature
 ```

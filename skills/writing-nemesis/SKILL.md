@@ -30,7 +30,7 @@ The auto-discovery mechanism at the bottom of `sdcm/nemesis/__init__.py` uses `p
 
 ### Flags Drive Filtering
 
-**Boolean flags on your class determine which `nemesis_selector` expressions match it.** Incorrect flags cause your nemesis to run in the wrong tests (or not run at all). A nemesis that reboots nodes but lacks `disruptive = True` will be included in `"not disruptive"` selectors and disrupt non-disruptive test suites. Review the flags reference below and set them accurately.
+**Boolean flags on your class determine which `nemesis.selector` expressions match it.** Incorrect flags cause your nemesis to run in the wrong tests (or not run at all). A nemesis that reboots nodes but lacks `disruptive = True` will be included in `"not disruptive"` selectors and disrupt non-disruptive test suites. Review the flags reference below and set them accurately.
 
 ### Write Unit Tests
 
@@ -243,7 +243,7 @@ All flags are on `NemesisFlags` in `sdcm/nemesis/__init__.py`. Each defaults to 
 | `zero_node_changes` | Nemesis targets zero-token nodes |
 | `sla` | Nemesis is for SLA tests |
 | `enospc` | Nemesis causes disk-full (ENOSPC) |
-| `modify_table` | Nemesis modifies table properties and does not restore them. Tests that pin a property exclude these by class name in `nemesis_selector` (see docs/nemesis.md), so keep one property per class |
+| `modify_table` | Nemesis modifies table properties and does not restore them. Tests that pin a property exclude these by class name in `nemesis.selector` (see docs/nemesis.md), so keep one property per class |
 | `supports_high_disk_utilization` | Nemesis is safe at 90% disk usage (default: `True`) |
 
 ## Decision Guide

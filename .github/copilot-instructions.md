@@ -279,7 +279,7 @@ Add this section to your PR description:
   - Expected: Cluster provisions successfully and test runs
 
 - [ ] **Nemesis operations on real cluster**: Requires actual cluster infrastructure
-  - Test: Run with `nemesis_selector: 'DecommissionMonkey'`
+  - Test: Run with `nemesis: {selector: 'DecommissionMonkey', runners: [{SisyphusMonkey: {}}]}`
   - Expected: Node decommission completes without data loss
 
 - [ ] **Performance impact**: Requires production-like load

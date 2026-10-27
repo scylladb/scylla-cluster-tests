@@ -111,6 +111,33 @@ Save the commit hashes (oldest first).
 Resolution: take the incoming (backported) version as the intent of the PR. Keep any
 additions from HEAD that don't conflict with the backport's approach.
 
+**Nemesis config on release branches.** Release branches keep the flat nemesis options;
+`master` nests them under a `nemesis:` section. A backport that touches nemesis YAML,
+`SCT_NEMESIS*` env vars, or code reading `params.nemesis.<field>` must be translated to the
+target branch's form (`params.get("nemesis_...")` there):
+
+| Release branch (flat) | master (nested) |
+|---|---|
+| `nemesis_class_name: [A, B]` | `nemesis.runners: [{A: {}}, {B: {}}]` |
+| `nemesis_selector` (str or index-aligned list) | `nemesis.selector`, or per runner `runners[].<Runner>.selector` |
+| `nemesis_seed` (int or list) | `nemesis.seed`, or per runner `.seed` |
+| `nemesis_interval` | `nemesis.interval`, or per runner `.interval` |
+| `nemesis_multiply_factor` | `nemesis.multiply_factor`, or per runner |
+| `nemesis_filter_seeds` | `nemesis.filter_seeds`, or per runner |
+| `nemesis_during_prepare` | `nemesis.during_prepare` |
+| `nemesis_sequence_sleep_between_ops` | `nemesis.sequence_sleep_between_ops` |
+| `sla` | `nemesis.sla` |
+| `nemesis_add_node_cnt` | `nemesis.grow_shrink.add_node_cnt` |
+| `nemesis_grow_shrink_instance_type` | `nemesis.grow_shrink.instance_type` |
+| `nemesis_double_load_during_grow_shrink_duration` | `nemesis.grow_shrink.double_load_duration` |
+| `SCT_NEMESIS_INTERVAL=10` | `SCT_NEMESIS__INTERVAL=10` |
+
+On `master`, a test case with one runner keeps `selector`, `seed`, `interval`,
+`multiply_factor` and `filter_seeds` in that runner's entry; a release-branch file setting one of
+them for a single-runner test case maps there. Section-level values are defaults for several
+runners, for overlay files, and for test cases stacked with a nemesis overlay (listed in
+`NEMESIS_SECTION_LEVEL_FILES` of `utils/migrate_config_section.py`).
+
 **4c. Edit files to remove ALL conflict markers.**
 
 **4d. Verify clean:**

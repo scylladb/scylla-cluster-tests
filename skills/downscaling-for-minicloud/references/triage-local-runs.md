@@ -50,7 +50,7 @@ logdir. Read them before theorising about SCT.
 |---|---|---|
 | Quorum errors, or a nemesis leaves the cluster unusable | Fewer than 3 db nodes with RF=3 | 3 db nodes is a floor, not a suggestion |
 | The test fails setting up Prometheus, or in `reconfigure_scylla_monitoring()` | `n_monitor_nodes: 0` on a test that reads Prometheus | Give it a monitor and budget the extra guest |
-| A nemesis fails on node terminate, reboot or stop | A disruptive nemesis against emulated instance lifecycle | `nemesis_selector: "not disruptive"`. This is a minicloud gap, not a Scylla finding |
+| A nemesis fails on node terminate, reboot or stop | A disruptive nemesis against emulated instance lifecycle | `nemesis: {selector: "not disruptive"}`. This is a minicloud gap, not a Scylla finding |
 | A guest never boots, or boots unusably slowly, with an arm64 instance type | KVM cannot run a foreign architecture; the type is in the catalog but not runnable on this host | Pin the db role to an x86_64 type and an x86_64 image |
 | GCE provisioning fails asking for local SSDs | The `gce_config.yaml` default of 4 local SSDs | `gce_n_local_ssd_disk_db: 1` — guests get qcow2-backed disks |
 | GCE config validation fails before anything starts | `backend_required_params` needs the GCE instance types even though they are ignored | Set `gce_instance_type_db`, `_loader` and `_monitor` to types that exist in the catalog |

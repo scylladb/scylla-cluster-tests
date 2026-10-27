@@ -41,8 +41,9 @@ stress_cmd: ["cassandra-stress write cl=QUORUM duration=20m ... -rate threads=10
              "cassandra-stress read  cl=QUORUM duration=20m ... -rate threads=10 -pop seq=1..200000 ..."
              ]
 
-nemesis_selector: "not disruptive"
-nemesis_interval: 2
+nemesis:
+  selector: "not disruptive"
+  interval: 2
 ```
 
 `n=` and `-pop seq=1..N` moved together — a `-pop` range wider than `n=` changes the access
@@ -102,8 +103,14 @@ stress_read_cmd: [
 # is ADDED to it, not substituted for it - replacing it would put ModifyTableCompactionMonkey
 # and ModifyTableDefaultTimeToLiveMonkey back in the pool, and those change the compaction
 # strategy and the TTL the test depends on.
-nemesis_selector: 'not disruptive and not ModifyTableCompactionMonkey and not ModifyTableDefaultTimeToLiveMonkey and not ModifyTableTwcsWindowSizeMonkey'
-nemesis_interval: 5   # a 20m run sees no nemesis at all at the production interval of 15m
+# The base sets selector, seed and interval on its runner entry, which section defaults cannot
+# override, so the overlay replaces the runner and carries the base entry's seed over.
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'not disruptive and not ModifyTableCompactionMonkey and not ModifyTableDefaultTimeToLiveMonkey and not ModifyTableTwcsWindowSizeMonkey'
+        seed: 24
+        interval: 5   # a 20m run sees no nemesis at all at the production interval of 15m
 
 user_prefix: 'minicloud-twcs'
 ```

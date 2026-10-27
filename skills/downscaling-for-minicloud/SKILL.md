@@ -178,7 +178,7 @@ the test-case it shrinks. Produce the overlay you need; keep it if a job will ru
 - [ ] Fits the host: each role guests x its memory, plus 2 GiB, is under `MemAvailable`
 - [ ] Shrinks only params the test method actually reads
 - [ ] Keeps keyspace names, consistency levels and ops sets identical to production
-- [ ] **Adds** `not disruptive` to any existing `nemesis_selector` rather than replacing it
+- [ ] **Adds** `not disruptive` to any existing nemesis `selector` (`nemesis.selector` or a runner's own) rather than replacing it
 - [ ] Pins an x86_64 db type, and catalog types for roles the base leaves unpinned
 - [ ] Does not re-set anything `configurations/minicloud.yaml` already carries
 - [ ] Ships with a runner that exports `SCT_MINICLOUD_ENDPOINT_URL` and asserts the emulator is
