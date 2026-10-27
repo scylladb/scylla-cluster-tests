@@ -100,7 +100,7 @@ If true, preload data (via [`prepare_write_cmd`](stress-commands-and-load-genera
 
 ## **perf_p99_search** / SCT_PERF_P99_SEARCH
 
-Used by test_write_max_throughput_under_p99. Bisects the write rate between 'low' (must pass) and 'high' (must fail) with 'probe_duration' steps until high - low <= 'tolerance', then confirms 'low' with one 'confirm_duration' step. A rate fails when both the client and the server P99 are over 'target_p99_ms'. Example: {'target_p99_ms': 10, 'low': 50000, 'high': 150000, 'tolerance': 5000, 'probe_duration': '10m', 'confirm_duration': '15m'}
+Used by test_write_max_throughput_under_p99. Bisects the write rate between 'low' (must pass) and 'high' (must fail) with 'probe_duration' steps until high - low <= 'tolerance', then confirms 'low' with one 'confirm_duration' step. A rate fails when both the client and the server P99 are over 'target_p99_ms', or when less than 95% of it is delivered. Example: {'target_p99_ms': 10, 'low': 50000, 'high': 150000, 'tolerance': 5000, 'probe_duration': '10m', 'confirm_duration': '15m'}
 
 **default:** N/A
 
