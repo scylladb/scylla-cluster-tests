@@ -352,7 +352,7 @@ def call(Map pipelineParams) {
                     dir('scylla-cluster-tests') {
                         timeout(time: 5, unit: 'MINUTES') {
                             checkout scm
-                            checkoutQaInternal(params)
+                            checkoutQaInternal(params + [qa_internal_repo: pipelineParams.get('qa_internal_repo'), qa_internal_branch: pipelineParams.get('qa_internal_branch')])
                         }
                     }
                     dockerLogin(params)
