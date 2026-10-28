@@ -305,3 +305,21 @@ def test_latency_calculator_decorator_with_monitoring_set(tmp_path):
     assert cycle["Scylla P99_read - node-1"] == 1.5
     assert len(cycle["screenshots"]) == 1
     assert tester.monitors.screenshot_requests
+
+
+def test_latency_calculator_decorator_keeps_the_results_when_argus_rejects_them(tmp_path):
+    """A failed Argus submit (e.g. a run whose job has no Argus test yet) must not lose the step's latencies."""
+    tester = FakeLatencyTester(latency_results_file=tmp_path / "latency_results.json", monitors=FakeMonitorSet())
+
+    with (
+        patch("sdcm.tester.ClusterTester", FakeLatencyTester),
+        patch("sdcm.utils.decorators.EventCounterContextManager", FakeEventCounter),
+        patch("sdcm.utils.decorators.send_result_to_argus", side_effect=RuntimeError("Argus rejected")),
+        patch("sdcm.utils.decorators.TestFrameworkEvent") as framework_event_mock,
+    ):
+        res = _run_decorated_search(tester)
+
+    assert res == {"hdr_tags": ["fn--search"]}
+    framework_event_mock.assert_called_once()
+    latency_results = json.loads((tmp_path / "latency_results.json").read_text(encoding="utf-8"))
+    assert latency_results["fts_search"]["cycles"][0]["hdr_summary"] == HDR_SUMMARY
