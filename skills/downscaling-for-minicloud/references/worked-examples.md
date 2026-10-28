@@ -14,7 +14,7 @@ Three real overlays already live in `configurations/minicloud/` and are worth re
 Base: `test-cases/longevity/longevity-100gb-4h.yaml`, the most reused longevity config in the
 repo. 6 db + 2 loaders, a 20M-row preload and 4 hours of parallel write/read.
 
-Budget: 3 db + 1 loader + 1 monitor = 5 guests x 4GiB = 20GiB, plus ~2GiB headroom.
+Budget: 3 db x 4GiB + 1 loader x 2GiB + 1 monitor x 2GiB = 16GiB, plus ~2GiB headroom.
 
 ```yaml
 n_db_nodes: 3       # 3 keeps quorum with one node down; below that a nemesis breaks the cluster

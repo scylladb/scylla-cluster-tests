@@ -17,7 +17,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from sdcm.sct_config.types import Boolean, SctField, String, StringOrList
+from sdcm.sct_config.types import Boolean, OptionalPositiveInt, SctField, String, StringOrList
 
 
 class MinicloudConfigMixin(BaseModel):
@@ -74,10 +74,27 @@ class MinicloudConfigMixin(BaseModel):
     minicloud_lightweight_memory: String = SctField(
         description="Memory allocation for lightweight minicloud deployments",
     )
+    minicloud_lightweight_memory_loader: String = SctField(
+        description="RAM for loader guests in lightweight mode (minicloud matches their NodeType tag), "
+        "for example 2GiB. Empty gives them minicloud_lightweight_memory, the db size",
+    )
+    minicloud_lightweight_memory_monitor: String = SctField(
+        description="RAM for monitor guests in lightweight mode (minicloud matches their NodeType tag), "
+        "for example 2GiB. Empty gives them minicloud_lightweight_memory, the db size. "
+        "Ignored with use_mgmt on: Scylla Manager local Scylla needs the db size",
+    )
     minicloud_lightweight_vcpus: int = SctField(
-        description="vCPUs per guest in lightweight mode. Scylla runs one shard per vCPU, so this "
-        "multiplies with minicloud_lightweight_memory across every guest in the test — raise it "
+        description="vCPUs per db guest in lightweight mode. Scylla runs one shard per vCPU, so this "
+        "multiplies with minicloud_lightweight_memory across every db guest in the test; raise it "
         "only on a host with cores to spare",
+    )
+    minicloud_lightweight_vcpus_loader: OptionalPositiveInt = SctField(
+        description="vCPUs for loader guests in lightweight mode (minicloud matches their NodeType tag). "
+        "Empty gives them minicloud_lightweight_vcpus, the db count",
+    )
+    minicloud_lightweight_vcpus_monitor: OptionalPositiveInt = SctField(
+        description="vCPUs for monitor guests in lightweight mode (minicloud matches their NodeType tag). "
+        "Empty gives them minicloud_lightweight_vcpus, the db count. Ignored with use_mgmt on",
     )
     minicloud_lock_guest_memory: Boolean = SctField(
         description="Keep guest RAM from being swapped out on the host. On: Scylla keeps its own "

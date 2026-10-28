@@ -53,12 +53,20 @@ Params (defaults in `defaults/test_default.yaml`, reference in
 
 - `stress_image.minicloud` - image reference; the default tag lives in
   `defaults/docker_images/minicloud/values_minicloud.yaml` so renovate bumps it.
-- `minicloud_lightweight` (default `true`) - every guest gets 1 vCPU and a fixed amount of RAM,
-  ignoring the instance type the test asked for. SCT still validates and reports the requested
+- `minicloud_lightweight` (default `true`) - every guest gets a fixed number of vCPUs and amount
+  of RAM for its role (db, loader or monitor), ignoring the instance type the test asked for. SCT still validates and reports the requested
   type, so keep it realistic in the yaml.
-- `minicloud_lightweight_memory` (default `4GiB`) - per-guest RAM. Scylla needs >1 GiB per shard
-  on top of the ~1.7 GiB it reserves for the guest OS, so anything under ~3 GiB fails to boot
-  with "memory per shard too low".
+- `minicloud_lightweight_memory` (default `4GiB`) - RAM per db guest (zero-token, oracle and
+  vector-store guests included). Scylla needs >1 GiB per shard on top of the ~1.7 GiB it reserves
+  for the guest OS, so anything under ~3 GiB fails to boot with "memory per shard too low".
+- `minicloud_lightweight_memory_loader` / `_monitor` (default `2GiB`) and
+  `minicloud_lightweight_vcpus_loader` / `_monitor` (default `1`) - loader and monitor sizes.
+  Empty means the db size (`minicloud_lightweight_memory` / `minicloud_lightweight_vcpus`).
+  minicloud matches these sizes on the guest's `NodeType` tag, so they need a minicloud image
+  with tag-matched lightweight ceilings. An older image rejects them at start with
+  `unknown instance type 'NodeType'`; set the four options empty to run one. With `use_mgmt` on,
+  the monitor gets the db size whatever its own options say: Scylla Manager keeps its data in a
+  local Scylla on the monitor, and that Scylla does not start in 2GiB.
 - `minicloud_scylla_overcommitted_cpu` (default `true`) - scylla-server runs with
   `--idle-poll-time-us 0 --poll-aio 0` on every db guest, see
   [Reactor polling on shared host CPUs](#reactor-polling-on-shared-host-cpus).
@@ -91,13 +99,24 @@ GCE runs on qcow2-backed disks with no NVMe passthrough - cap local SSDs in the 
 The whole test must fit in the host's free RAM:
 
 ```
-(n_db_nodes + n_loaders + n_monitor_nodes) x minicloud_lightweight_memory + ~2 GiB host headroom
+  db guests x minicloud_lightweight_memory
++ n_loaders x minicloud_lightweight_memory_loader
++ n_monitor_nodes x minicloud_lightweight_memory_monitor
++ ~2 GiB host headroom
 ```
+
+where db guests are `n_db_nodes` plus the zero-token, vector-store and (for the mixed db types)
+oracle nodes, counted at `cluster_target_size` when the test grows the cluster.
 
 `preflight_check(params=...)` enforces exactly this before the container starts and prints the
 arithmetic when it fails. Without the check, an oversized test dies mid-run as a cgroup OOM kill
 (container exit 137) that takes every VM with it and surfaces as a wall of SSH timeouts far from
 the cause. `n_db_nodes` is a multi-DC list (`[3, 3]`), and is summed.
+
+The loader and monitor sizes reach minicloud as `NodeType=loader=<size>` and
+`NodeType=monitor=<size>` entries, so they apply only to guests created with that tag. A loader or
+monitor showing `memory_rule=plain` in the `lightweight ceilings applied` lines of `minicloud.log`
+was created without its tag: it got the db size, and the preflight under-counted it.
 
 On the Jenkins pipelines the gate runs again in `run-test`, after `provision-resources` has
 launched the guests. By then `MemAvailable` no longer includes the memory those guests use, so
@@ -231,9 +250,9 @@ script fails on that up front rather than after provisioning a cluster. The prod
 `configurations/minicloud/rolling-upgrade.yaml` on top of it: 3 db nodes (the floor for keeping
 quorum with one node down at a time), 1 loader, 1 monitor - the monitor is load-bearing, because the
 test queries Prometheus to confirm the write workload landed before it starts upgrading - and every
-workload cut to what a 1-vCPU guest can serve. That is 5 guests x `minicloud_lightweight_memory`
-= 20GiB plus host headroom, so raise the per-guest memory only if the host has room for 5x the
-increase.
+workload cut to what a 1-vCPU guest can serve. That is 3 db x `minicloud_lightweight_memory`
+(4GiB) + 2GiB for the loader + 2GiB for the monitor = 16GiB plus host headroom, so raise the db
+memory only if the host has room for 3x the increase.
 
 It is an overlay rather than a separate test-case copy on purpose: `test_rolling_upgrade` reads a
 dozen stress params, and a copy would silently miss any new one the real test-case grows. Passing
@@ -249,13 +268,13 @@ SCT_SCYLLA_VERSION=2026.2 scripts/run-minicloud-test.sh -f scale
 ```
 
 **What survives the shrink is the shape of the test, not the scale.** Production is 15 db nodes
-growing to 25 - 28 guests x `minicloud_lightweight_memory` = 112GiB at the peak, which no single
-host has. `configurations/minicloud/scale-cluster.yaml` cuts that to 3 -> 4 nodes and sizes the load
+growing to 25 - 25 db x 4GiB plus 2 loaders and a monitor at 2GiB = 106GiB at the peak, which no
+single host has. `configurations/minicloud/scale-cluster.yaml` cuts that to 3 -> 4 nodes and sizes the load
 down to what a 1-vCPU guest can serve, keeping what the test exists for: the add-node path
 (bootstrap, streaming, monitoring reconfigured per node) under load, with a nemesis once the target
 size is reached. It tells you nothing about behaviour at scale, so do not read performance or
 scalability conclusions off a local run. Grow further on a bigger host with `SCT_N_DB_NODES` /
-`SCT_CLUSTER_TARGET_SIZE` - every added node costs another `minicloud_lightweight_memory`.
+`SCT_CLUSTER_TARGET_SIZE` - every added db node costs another `minicloud_lightweight_memory`.
 
 One trap worth knowing if you tune that overlay: `test_grow_x_to_y` does **not** read the base
 test-case's `stress_cmd` or `prepare_write_cmd`, and `run_fullscan` is only wired up in
@@ -347,7 +366,8 @@ decoupled from the backend. The agent uses the Azure credential only for the ima
 | symptom | cause |
 |---|---|
 | preflight fails with "missing its parameter overlay" | `configurations/minicloud.yaml` was not layered after the test-case yaml |
-| container exit 137 mid-test, all VMs unreachable at once | cgroup OOM kill - the test was too big for the host. The preflight prints the required arithmetic; reduce node counts or `minicloud_lightweight_memory`, or use a bigger host |
+| container exit 137 mid-test, all VMs unreachable at once | cgroup OOM kill - the test was too big for the host. The preflight prints the required arithmetic; reduce node counts or the `minicloud_lightweight_memory*` sizes, or use a bigger host |
+| start fails with `unknown instance type 'NodeType'` in the minicloud container log | the minicloud image predates tag-matched lightweight ceilings - use a newer image, or set `minicloud_lightweight_memory_loader/_monitor` and `minicloud_lightweight_vcpus_loader/_monitor` empty |
 | container exit 143 | someone ran `docker stop minicloud` |
 | `InvalidAMIID.NotFound` on launch | AMI not cached and the container's `--aws-region` differs from where the AMI lives - or the AMI id is wrong |
 | `SnapshotNotFound` from `ListSnapshotBlocks` | dev AMI whose snapshot is not shared with the QA account - use a released version |
@@ -458,6 +478,10 @@ config option with a default in `defaults/test_default.yaml`; the pipeline layer
 |---|---|---|
 | `minicloud_lightweight_memory` | `minicloud_lightweight_memory` | keep the yaml value (4GiB) |
 | `minicloud_lightweight_vcpus` | `minicloud_lightweight_vcpus` | keep the yaml value (1) |
+| (`extra_environment_variables` only) | `minicloud_lightweight_memory_loader` | the db size (`minicloud_lightweight_memory`); unset keeps the yaml value (2GiB) |
+| (`extra_environment_variables` only) | `minicloud_lightweight_memory_monitor` | the db size (`minicloud_lightweight_memory`); unset keeps the yaml value (2GiB) |
+| (`extra_environment_variables` only) | `minicloud_lightweight_vcpus_loader` | the db count (`minicloud_lightweight_vcpus`); unset keeps the yaml value (1) |
+| (`extra_environment_variables` only) | `minicloud_lightweight_vcpus_monitor` | the db count (`minicloud_lightweight_vcpus`); unset keeps the yaml value (1) |
 | `minicloud_container_memory` | `minicloud_container_memory` | no docker cap on the container |
 | — (jenkinsfile / `extra_environment_variables` only) | `minicloud_container_cpus` | no docker limit |
 | — (jenkinsfile / `extra_environment_variables` only) | `minicloud_state_dir` | `~/.cache/minicloud` |

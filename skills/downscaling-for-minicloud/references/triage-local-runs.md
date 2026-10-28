@@ -13,8 +13,8 @@ logdir. Read them before theorising about SCT.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Container exit 137 mid-test, every guest unreachable at the same moment | cgroup OOM kill — the run did not fit | Recompute the budget. Lower `n_db_nodes`/`n_loaders`/`n_monitor_nodes`, or `minicloud_lightweight_memory`, or move to a bigger host |
-| Preflight refuses to start, printing guest count x per-guest memory | The gate did its job | Same fix. `minicloud_skip_memory_check: true` only if you are certain the host can take it |
+| Container exit 137 mid-test, every guest unreachable at the same moment | cgroup OOM kill — the run did not fit | Recompute the budget. Lower `n_db_nodes`/`n_loaders`/`n_monitor_nodes`, or `minicloud_lightweight_memory` / `minicloud_lightweight_memory_loader` / `_monitor`, or move to a bigger host |
+| Preflight refuses to start, printing each role guest count x its memory | The gate did its job | Same fix. `minicloud_skip_memory_check: true` only if you are certain the host can take it |
 | Preflight passes, then the run dies at the moment a node is added | The budget counted `n_db_nodes`, not the peak | Set `cluster_target_size` and let the gate budget the peak |
 | Exit 137 on a host with plenty of free RAM | `minicloud_container_memory` is set, and the cgroup cap is the real limit | Raise the cap or lower the guest count; the cap, not the host, is the budget |
 

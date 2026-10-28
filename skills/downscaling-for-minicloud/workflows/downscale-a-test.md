@@ -83,10 +83,11 @@ locally.
 **Actions:**
 
 1. Read the host's free memory: `free -g` (the `available` column, not `free`).
-2. Decide per-guest memory. `4GiB` is the default and a good starting point; `3GiB` is the
-   floor — below it Scylla fails to boot with "memory per shard too low".
-3. Solve for the guest count:
-   `guests = (available_GiB - 2) / per_guest_GiB`.
+2. Decide the db guest memory. `4GiB` is the default and a good starting point; `3GiB` is the
+   floor: below it Scylla fails to boot with "memory per shard too low". Loaders and monitors
+   take `minicloud_lightweight_memory_loader` / `_monitor` (2GiB each by default).
+3. Solve for the db guest count:
+   `db_guests = (available_GiB - 2 - loaders x loader_GiB - monitors x monitor_GiB) / db_GiB`.
 4. Split the guest budget into `n_db_nodes` (3 unless the test needs more),
    `n_loaders` (1), `n_monitor_nodes` (1 if the test reads Prometheus, else 0).
 5. For a growing test, budget `cluster_target_size`, not `n_db_nodes` — the peak is what has
@@ -95,7 +96,8 @@ locally.
    dropping below a floor. A 2-node "cluster" is a different test.
 
 **Exit:** Concrete numbers for `n_db_nodes`, `n_loaders`, `n_monitor_nodes`,
-`minicloud_lightweight_memory`, and the arithmetic written down for the overlay header.
+`minicloud_lightweight_memory` (and the loader and monitor sizes, if not the defaults), and the
+arithmetic written down for the overlay header.
 
 ---
 
