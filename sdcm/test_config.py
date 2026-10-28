@@ -436,16 +436,21 @@ class TestConfig(metaclass=Singleton):
         ).to_string()
 
     @classmethod
-    def get_logging_service_host_port(cls) -> tuple[str, int] | None:
+    def get_logging_service_host_port(cls, ip_ssh_connections: str | None = None) -> tuple[str, int] | None:
+        """Where a node sends its logs: the runner's address, or the node end of its reverse SSH tunnel.
+
+        :param ip_ssh_connections: how the runner reaches the node, defaults to the run's `ip_ssh_connections`
+        """
+        ip_ssh_connections = ip_ssh_connections or cls.IP_SSH_CONNECTIONS
         if cls.SYSLOGNG_ADDRESS:
-            if cls.IP_SSH_CONNECTIONS == "public":
+            if ip_ssh_connections == "public":
                 syslogng_host = "127.0.0.1"
                 syslogng_port = cls.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT
             else:
                 syslogng_host, syslogng_port = cls.SYSLOGNG_ADDRESS  # pylint: disable=unpacking-non-sequence
             return syslogng_host, syslogng_port
         elif cls.VECTOR_ADDRESS:
-            if cls.IP_SSH_CONNECTIONS == "public":
+            if ip_ssh_connections == "public":
                 vector_host = "127.0.0.1"
                 vector_port = cls.VECTOR_SSH_TUNNEL_LOCAL_PORT
             else:

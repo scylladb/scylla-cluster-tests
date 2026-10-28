@@ -24,6 +24,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from sdcm.test_config import TestConfig
 from sdcm import cluster as sdcm_cluster
 from sdcm.cluster_baremetal import (
     NodeIpsNotConfiguredError,
@@ -563,6 +564,7 @@ def _node_with_listeners(ss_output: str) -> PhysicalMachineNode:
     node = PhysicalMachineNode.__new__(PhysicalMachineNode)
     node.test_config = MagicMock(SYSLOGNG_SSH_TUNNEL_LOCAL_PORT=5000, VECTOR_SSH_TUNNEL_LOCAL_PORT=5001)
     node.log = MagicMock()
+    node.parent_cluster = MagicMock(ip_ssh_connections=None)
     node.remoter = MagicMock()
     node.remoter.run.return_value.stdout = ss_output
     return node
@@ -592,13 +594,58 @@ def test_nothing_is_killed_without_stale_tunnels():
 def test_stale_tunnels_released_only_when_tunnels_are_used(ip_ssh_connections, released, monkeypatch):
     node = _node_with_listeners("")
     node.test_config.IP_SSH_CONNECTIONS = ip_ssh_connections
+    node._public_ip = "10.0.0.60"
     release = MagicMock()
+    monkeypatch.setattr(PhysicalMachineNode, "_tunnel_ports_released_on", set())
     monkeypatch.setattr(node, "_release_stale_tunnel_ports", release)
     monkeypatch.setattr(sdcm_cluster.BaseNode, "_init_port_mapping", lambda self: None)
 
     node._init_port_mapping()
 
     assert release.called is released
+
+
+@pytest.mark.parametrize(
+    "run_setting, cluster_setting, expected",
+    [("public", None, "public"), ("public", "private", "private"), ("private", "public", "public")],
+)
+def test_cluster_setting_overrides_the_run_ip_ssh_connections(run_setting, cluster_setting, expected):
+    """Lab hosts next to a runner in the lab go `private` while the cloud DB nodes of the same run stay `public`."""
+    node = _node_with_listeners("")
+    node.test_config.IP_SSH_CONNECTIONS = run_setting
+    node.parent_cluster.ip_ssh_connections = cluster_setting
+
+    assert node.ip_ssh_connections == expected
+
+
+def test_private_node_on_a_public_run_opens_no_tunnels(monkeypatch):
+    node = _node_with_listeners("")
+    node.test_config.IP_SSH_CONNECTIONS = "public"
+    node.parent_cluster.ip_ssh_connections = "private"
+    node._public_ip = "10.0.0.60"
+    release = MagicMock()
+    monkeypatch.setattr(PhysicalMachineNode, "_tunnel_ports_released_on", set())
+    monkeypatch.setattr(node, "_release_stale_tunnel_ports", release)
+    monkeypatch.setattr(node, "_allow_reverse_tunnel_ports_in_selinux", release)
+
+    node._init_port_mapping()
+
+    release.assert_not_called()
+
+
+def test_stale_tunnels_released_once_per_shared_host(monkeypatch):
+    """A loader and a monitor on one host: the second node must not kill the tunnel the first one just opened."""
+    monkeypatch.setattr(PhysicalMachineNode, "_tunnel_ports_released_on", set())
+    monkeypatch.setattr(sdcm_cluster.BaseNode, "_init_port_mapping", lambda self: None)
+    releases = []
+    for public_ip in ("10.0.0.60", "10.0.0.60", "10.0.0.61"):
+        node = _node_with_listeners("")
+        node.test_config.IP_SSH_CONNECTIONS = "public"
+        node._public_ip = public_ip
+        monkeypatch.setattr(node, "_release_stale_tunnel_ports", lambda ip=public_ip: releases.append(ip))
+        node._init_port_mapping()
+
+    assert releases == ["10.0.0.60", "10.0.0.61"]
 
 
 def test_reset_undoes_the_coredump_bind_scylla_setup_made():
@@ -716,3 +763,17 @@ def test_the_run_is_marked_before_the_log_followers_start(monkeypatch):
     node.start_task_threads()
 
     assert seen_by_task_threads == ["@1791382530"]
+
+
+@pytest.mark.parametrize(
+    "node_setting, expected",
+    [(None, ("127.0.0.1", 5001)), ("public", ("127.0.0.1", 5001)), ("private", ("10.0.0.60", 49153))],
+)
+def test_logs_go_to_the_tunnel_or_straight_to_the_runner_per_node(node_setting, expected, monkeypatch):
+    """A `private` lab node on a `public` run sends its logs to the runner directly, not into a tunnel it never got."""
+    monkeypatch.setattr(TestConfig, "IP_SSH_CONNECTIONS", "public")
+    monkeypatch.setattr(TestConfig, "SYSLOGNG_ADDRESS", None)
+    monkeypatch.setattr(TestConfig, "VECTOR_ADDRESS", ("10.0.0.60", 49153))
+    monkeypatch.setattr(TestConfig, "VECTOR_SSH_TUNNEL_LOCAL_PORT", 5001)
+
+    assert TestConfig.get_logging_service_host_port(node_setting) == expected
