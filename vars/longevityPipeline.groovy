@@ -22,10 +22,14 @@ def call(Map pipelineParams) {
     // build #1, the params-loading build these pipelines abort anyway. Safe to read here, unlike
     // params.minicloud: getJenkinsLabels only ever merges a `minicloud` key into the global
     // binding, never this one.
-    // Gated on minicloudEnabled: without minicloud there is nothing to run on a KVM agent, and
-    // an ungated `local_agent` on a normal build would skip the runner stages while the label
-    // stayed the ordinary cloud builder - the test would then run on the builder itself.
-    def localAgent = minicloudEnabled && (params.local_agent != null
+    // Gated on minicloud or the baremetal backend: a cloud backend still needs its sct-runner,
+    // and an ungated `local_agent` there would skip the runner stages while the label stayed the
+    // ordinary cloud builder - the test would then run on the builder itself. A baremetal run
+    // provisions nothing, and an sct-runner in the cloud cannot reach hosts in a lab network, so
+    // its test runs on the agent: a lab agent pinned with `jenkins_label` next to the hosts, or
+    // the regular builder when the hosts are cloud instances.
+    def baremetal = (params.backend ?: pipelineParams.get('backend', 'aws')) == 'baremetal'
+    def localAgent = (minicloudEnabled || baremetal) && (params.local_agent != null
                                           ? params.local_agent.toString().toBoolean()
                                           : pipelineParams.get('local_agent', false))
 
@@ -123,10 +127,11 @@ def call(Map pipelineParams) {
             // KVM-capable instance_type_runner - is test-case configuration, not a job knob.
             separator(name: 'MINICLOUD_CONFIG', sectionHeader: 'Minicloud Configuration')
             booleanParam(defaultValue: "${pipelineParams.get('local_agent', false)}",
-                   description: 'Run minicloud on a KVM-capable Jenkins agent instead of ' +
-                                'provisioning an sct-runner. Needs an agent serving the ' +
-                                'minicloud label (or set jenkins_label). ' +
-                                'Ignored unless the jenkinsfile sets `minicloud: true`',
+                   description: 'Run the test on the Jenkins agent itself instead of ' +
+                                'provisioning an sct-runner: minicloud on a KVM-capable agent ' +
+                                '(the minicloud label, or set jenkins_label), or a baremetal run ' +
+                                'next to its hosts (set jenkins_label for a lab agent). ' +
+                                'Ignored unless the jenkinsfile sets `minicloud: true` or the backend is baremetal',
                    name: 'local_agent')
             string(defaultValue: "${pipelineParams.get('minicloud_docker', '')}",
                    description: 'Minicloud Docker image reference, e.g. ghcr.io/scylladb/minicloud:<tag>. ' +
@@ -254,7 +259,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                description: 'Gce project to use',
                name: 'gce_project')
-            string(defaultValue: '',
+            string(defaultValue: "${pipelineParams.get('jenkins_label', '')}",
                description: 'Pin this build to a specific Jenkins agent label, e.g. a lab machine. ' +
                             'Empty picks the usual builder for the backend/region',
                name: 'jenkins_label')
@@ -343,10 +348,15 @@ def call(Map pipelineParams) {
                         // the rest of the build, so 'Provision Resources' and 'Run SCT Test'
                         // both reach minicloud instead of the real cloud.
                         startMinicloud.exportEnv(params, pipelineParams)
-                        // tag only when not running on a local minicloud agent:
-                        // local agents have no IMDS, so tagBuilder() would fail there.
-                        if (!(minicloudEnabled && localAgent)) {
+                        // tag only when not running on a local agent:
+                        // lab agents have no IMDS, so tagBuilder() would fail there.
+                        if (!localAgent) {
                             tagBuilder()
+                        } else {
+                            // A persistent workspace may hold ./sct_runner_ip from an earlier runner
+                            // build; with no runner created here, later stages would SSH to it.
+                            // minicloudReclaim() clears it as well, this covers baremetal.
+                            sh 'rm -fv scylla-cluster-tests/sct_runner_ip'
                         }
                     }
                     dir('scylla-cluster-tests') {
