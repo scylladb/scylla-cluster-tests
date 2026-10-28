@@ -46,14 +46,36 @@ defaults:
   # Owner the jobs and their cloud resources are tagged with, unless the run names a user
   requested_by_user: "scylla-doctor"
 
-# Operating systems: one per category, as Vincent Reniers (Scylla Doctor) requested
-# on 2026-10-20:
-#   "We don't need every OS. For example one per category would be fine.
-#    Ubuntu 24, a RHEL distribution (rhel10). Perhaps an ARM AMI could be useful
-#    to test as well since we don't have this in our testing."
+# Operating systems: every artifact job of the sd-release-gating pipeline
+# (vars/sdReleaseGatingPipeline.groovy), so the trigger can replace it (SCT-1365).
+# Each region is the one the artifact job itself uses.
+# OEL9 is left out, as in sd-release-gating: there is no OEL9 AMI.
 # Docker is disabled for now: Scylla Doctor is being changed to skip by default
 # the collectors that cannot run in a container.
 jobs:
+
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-centos9-test"
+    backend: "gce"
+    wait: true
+    wait_timeout: 3600
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+      - "os-centos9"
+
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-rocky9-test"
+    backend: "gce"
+    wait: true
+    wait_timeout: 3600
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+      - "os-rocky9"
+
   - job_name: "/scylla-doctor/oss/artifacts/artifacts-ubuntu2404-test"
     backend: "gce"
     wait: true
@@ -65,6 +87,55 @@ jobs:
       - "gating"
       - "os-ubuntu2404"
 
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-debian12-test"
+    backend: "gce"
+    wait: true
+    wait_timeout: 3600
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+      - "os-debian12"
+
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-ami-test"
+    backend: "aws"
+    wait: true
+    wait_timeout: 7200
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+      - "os-ami"
+    params:
+      region: "eu-west-1"
+
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-amazon2023-arm-test"
+    backend: "aws"
+    arch: "aarch64"
+    wait: true
+    wait_timeout: 7200
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+      - "os-amazon2023-arm"
+    params:
+      region: "eu-west-1"
+
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-ubuntu2204-test"
+    backend: "gce"
+    wait: true
+    wait_timeout: 3600
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+      - "os-ubuntu2204"
+
   - job_name: "/scylla-doctor/oss/artifacts/artifacts-rhel10-test"
     backend: "aws"
     wait: true
@@ -75,6 +146,61 @@ jobs:
     labels:
       - "gating"
       - "os-rhel10"
+    params:
+      region: "eu-west-1"
+
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-amazon2023-test"
+    backend: "aws"
+    wait: true
+    wait_timeout: 7200
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+      - "os-amazon2023"
+    params:
+      region: "eu-west-1"
+
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-centos9-arm-test"
+    backend: "aws"
+    arch: "aarch64"
+    wait: true
+    wait_timeout: 7200
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+      - "os-centos9-arm"
+    params:
+      region: "eu-west-1"
+
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-ubuntu2204-arm-test"
+    backend: "aws"
+    arch: "aarch64"
+    wait: true
+    wait_timeout: 7200
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+      - "os-ubuntu2204-arm"
+    params:
+      region: "us-east-1"
+
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-ubuntu2404-arm-test"
+    backend: "aws"
+    arch: "aarch64"
+    wait: true
+    wait_timeout: 7200
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+      - "os-ubuntu2404-arm"
     params:
       region: "eu-west-1"
 
