@@ -77,6 +77,24 @@ def test_start_passes_lightweight_vcpus(tmp_path):
     assert cmd[cmd.index("--lightweight-vcpus") + 1] == "2"
 
 
+def test_start_sizes_loader_and_monitor_by_node_type(tmp_path):
+    """Loader and monitor entries follow the db value in a fixed order; an empty role adds none."""
+    cmd = _started_docker_cmd(
+        MinicloudConfig.from_env(
+            params={
+                "cluster_backend": "aws",
+                "minicloud_state_dir": str(tmp_path),
+                "minicloud_lightweight_memory_loader": "2GiB",
+                "minicloud_lightweight_memory_monitor": "3GiB",
+                "minicloud_lightweight_vcpus_loader": 2,
+                "minicloud_lightweight_vcpus_monitor": "",
+            }
+        )
+    )
+    assert cmd[cmd.index("--lightweight-memory") + 1] == "4GiB,NodeType=loader=2GiB,NodeType=monitor=3GiB"
+    assert cmd[cmd.index("--lightweight-vcpus") + 1] == "1,NodeType=loader=2"
+
+
 def test_start_locks_guest_memory_by_default(tmp_path):
     """minicloud locks guest RAM, and QEMU can only mlockall() with a memlock rlimit and IPC_LOCK."""
     cmd = _started_docker_cmd(MinicloudConfig(state_dir=str(tmp_path), log_file=str(tmp_path / "minicloud.log")))
@@ -385,6 +403,22 @@ def test_container_sizing_gaps_detects_changed_guest_sizing(tmp_path):
         assert manager._container_sizing_gaps() == [
             "--lightweight-memory is 4GiB, this run wants 8GiB",
             "--lightweight-vcpus is 1, this run wants 2",
+        ]
+
+
+def test_container_sizing_gaps_detects_changed_role_sizing(tmp_path):
+    """A container started with one size for every guest must not serve a run that sizes roles."""
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight_memory_loader="2GiB"))
+    with (
+        _host_memory_stub(),
+        patch.object(
+            MinicloudManager,
+            "_inspect_container",
+            side_effect=_inspect_stub(RUNNING_DEFAULT_SIZING_CMD, memory=int(HOST_MEMORY_GIB * 1024**3)),
+        ),
+    ):
+        assert manager._container_sizing_gaps() == [
+            "--lightweight-memory is 4GiB, this run wants 4GiB,NodeType=loader=2GiB",
         ]
 
 

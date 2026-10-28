@@ -38,6 +38,7 @@ from sdcm.utils.minicloud.preflight import (
 )
 
 LOGGER = logging.getLogger(__name__)
+DOCKER_LOGS_TIMEOUT = 20
 
 
 class MinicloudManager:
@@ -164,6 +165,24 @@ class MinicloudManager:
         container_id = self._inspect_container("{{json .Id}}")
         return container_id if isinstance(container_id, str) else None
 
+    def _container_log_tail(self, lines: int = 30) -> str:
+        """Return the container last log lines, or "" on any error so the caller error is kept."""
+        if not self._container_id:
+            return ""
+        try:
+            result = subprocess.run(
+                ["docker", "logs", "--tail", str(lines), self._container_id],
+                capture_output=True,
+                text=True,
+                timeout=DOCKER_LOGS_TIMEOUT,
+                check=False,
+            )
+        except OSError, subprocess.SubprocessError:
+            return ""
+        if result.returncode != 0:
+            return ""
+        return (result.stdout + result.stderr).strip()
+
     def _snapshot_container_state(self, reason: str) -> dict | None:
         """Record the container's exit state while it can still be inspected.
 
@@ -283,9 +302,10 @@ class MinicloudManager:
 
         Every sizing knob is start-time only — the guest sizing is a minicloud CLI argument and
         the docker caps are cgroup limits fixed at ``docker run`` — so reuse silently keeps the
-        previous run's sizing: a rerun with a new ``SCT_MINICLOUD_LIGHTWEIGHT_MEMORY`` would get
-        the old guests, and a changed ``minicloud_container_memory`` would leave the host-memory
-        gate measuring against a cap nothing enforces.
+        previous run's sizing: a rerun with a new ``SCT_MINICLOUD_LIGHTWEIGHT_MEMORY`` (or a new
+        loader or monitor size) would get the old guests, and a changed
+        ``minicloud_container_memory`` would leave the host-memory gate measuring against a cap
+        nothing enforces.
 
         A container that cannot be inspected yields no gaps: absence of evidence is not a reason
         to throw away a working emulator (and every VM it hosts) mid-workflow.
@@ -303,10 +323,8 @@ class MinicloudManager:
         if self.config.lightweight != ("--lightweight" in cmd):
             gaps.append(f"lightweight mode is {'--lightweight' in cmd}, this run wants {self.config.lightweight}")
         elif self.config.lightweight:
-            for flag, wanted in (
-                ("--lightweight-memory", self.config.lightweight_memory),
-                ("--lightweight-vcpus", str(self.config.lightweight_vcpus)),
-            ):
+            wanted_memory, wanted_vcpus = self.config.lightweight_flag_values()
+            for flag, wanted in (("--lightweight-memory", wanted_memory), ("--lightweight-vcpus", wanted_vcpus)):
                 if (running := running_arg(flag)) != wanted:
                     gaps.append(f"{flag} is {running or 'unset'}, this run wants {wanted}")
 
@@ -522,12 +540,13 @@ class MinicloudManager:
         # guest S3 names resolve to minicloud, so Manager backups reach the local store
         minicloud_args.append("--intercept-s3")
         if self.config.lightweight:
+            lightweight_memory, lightweight_vcpus = self.config.lightweight_flag_values()
             minicloud_args += [
                 "--lightweight",
                 "--lightweight-memory",
-                self.config.lightweight_memory,
+                lightweight_memory,
                 "--lightweight-vcpus",
-                str(self.config.lightweight_vcpus),
+                lightweight_vcpus,
             ]
 
         full_cmd = docker_cmd + minicloud_args
@@ -547,9 +566,12 @@ class MinicloudManager:
         try:
             self._wait_for_health(endpoint)
             self._wait_for_azure_tls()
-        except Exception:
+        except Exception as exc:
             # atexit is not registered yet, so remove the container here to avoid leaking it
             self._snapshot_container_state(reason="failed to become healthy during start")
+            if tail := self._container_log_tail():
+                LOGGER.error("last lines of the minicloud container log:\n%s", tail)
+                exc.add_note(f"last lines of the minicloud container log:\n{tail}")
             self._force_stop_container()
             raise
         self.set_env_overrides()

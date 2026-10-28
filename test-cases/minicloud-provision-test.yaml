@@ -62,8 +62,8 @@ instance_type_db: 'i4i.large'
 
 # GCE equivalents — required by SCTConfiguration.backend_required_params for the gce backend
 # (the gce_config.yaml defaults are empty, so declaring gce support without these fails
-# validation before startup). Lightweight mode caps every guest to 1 vCPU /
-# minicloud_lightweight_memory regardless, so the type only has to exist in the catalog.
+# validation before startup). Lightweight mode sizes every guest by its role regardless of
+# the type, so the type only has to exist in the catalog.
 gce_instance_type_db: 'n2-standard-2'
 gce_instance_type_loader: 'n2-standard-2'
 gce_instance_type_monitor: 'n2-standard-2'
@@ -86,7 +86,9 @@ use_preinstalled_scylla: true
 # sct-runner needs nested virtualization (KVM) for minicloud QEMU VMs.
 # Only c8i/m8i/r8i instance families support NestedVirtualization on AWS.
 #
-# Sizing: minicloud lightweight VMs get minicloud_lightweight_memory each (4GiB default),
-# and Scylla cannot start below ~3GiB. 3 DB + 1 loader + 1 monitor × 4GiB = 20GiB, so
-# m8i.xlarge (16GiB) no longer fits — m8i.2xlarge (32GiB) leaves room for host overhead.
+# Sizing: minicloud lightweight db VMs get minicloud_lightweight_memory each (4GiB default,
+# and Scylla cannot start below ~3GiB), the loader 2GiB, and the monitor the db size too,
+# because use_mgmt runs Scylla Manager local Scylla on it. 3 DB x 4GiB + 1 loader x 2GiB +
+# 1 monitor x 4GiB = 18GiB plus ~2GiB host headroom, so m8i.xlarge (16GiB) does not fit;
+# m8i.2xlarge (32GiB) leaves room for host overhead.
 instance_type_runner: 'm8i.2xlarge'

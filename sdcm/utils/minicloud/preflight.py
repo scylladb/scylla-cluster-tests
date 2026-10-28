@@ -148,12 +148,41 @@ def container_mem_in_use_gib(container_name: str) -> float:
         return 0.0
 
 
+def _guest_memory_gib(config: MinicloudConfig, params, guests: int) -> tuple[float, str]:
+    """Return the memory ``guests`` need and its per-role breakdown for messages.
+
+    Loaders and monitors use their own sizes (the db size when unset), all other guests the db size.
+    """
+    loaders = sum_node_counts(params.get("n_loaders"))
+    monitors = sum_node_counts(params.get("n_monitor_nodes"))
+    db_gib = parse_memory_gib(config.lightweight_memory, "minicloud_lightweight_memory")
+    loader_gib = monitor_gib = db_gib
+    if config.lightweight_memory_loader:
+        loader_gib = parse_memory_gib(config.lightweight_memory_loader, "minicloud_lightweight_memory_loader")
+    if config.lightweight_memory_monitor:
+        monitor_gib = parse_memory_gib(config.lightweight_memory_monitor, "minicloud_lightweight_memory_monitor")
+    roles = [
+        (role, count, gib)
+        for role, count, gib in (
+            ("db", guests - loaders - monitors, db_gib),
+            ("loader", loaders, loader_gib),
+            ("monitor", monitors, monitor_gib),
+        )
+        if count
+    ]
+    return (
+        sum(count * gib for _, count, gib in roles),
+        " + ".join(f"{count} {role} x {gib:.1f}GiB" for role, count, gib in roles),
+    )
+
+
 def check_host_memory(config: MinicloudConfig, params) -> None:
     """Fail before start when the test's guests cannot fit into this host's free memory.
 
-    Lightweight mode gives every guest a fixed ``lightweight_memory``, so the requirement
-    is exactly guests x per-guest plus host headroom - and only params knows the guest
-    count: ``n_db_nodes`` is IntOrList ([3, 3] for multi-DC), summed the way
+    Lightweight mode gives every guest a fixed size for its role (``lightweight_memory`` for
+    db-like guests, the loader and monitor sizes for theirs, which default to the db size), so
+    the requirement is exactly the per-role sum plus host headroom - and only params knows the
+    guest counts: ``n_db_nodes`` is IntOrList ([3, 3] for multi-DC), summed the way
     sct_config.py:sum(n_db_nodes) does. Without this check the container is
     cgroup-OOM-killed mid-test (exit 137) and every VM dies with it.
 
@@ -195,12 +224,11 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
         guests += max(0, target_size - sum_node_counts(params.get("n_db_nodes")))
     if not guests:
         return
-    per_guest_gib = parse_memory_gib(config.lightweight_memory, "minicloud_lightweight_memory")
+    needed_gib, breakdown = _guest_memory_gib(config, params, guests)
     if config.container_memory:
         # The cap is the whole budget the guests get, so no host headroom is subtracted from
         # it - dockerd and SCT live outside the cgroup.
         budget_gib = parse_memory_gib(config.container_memory, "minicloud_container_memory")
-        needed_gib = guests * per_guest_gib
         budget_source = f"the minicloud_container_memory cap ({config.container_memory})"
         headroom_note = ""
     else:
@@ -218,7 +246,7 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
         mem_in_use_gib = container_mem_in_use_gib(config.container_name)
         budget_gib = available_gib + mem_in_use_gib
         host_headroom_gib = 2.0  # dockerd, hydra, SCT itself and the page cache need to live too
-        needed_gib = guests * per_guest_gib + host_headroom_gib
+        needed_gib += host_headroom_gib
         budget_source = "available host memory"
         if mem_in_use_gib:
             budget_source += (
@@ -238,11 +266,11 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
         headroom_note = f" + {host_headroom_gib:.0f}GiB host headroom"
     if budget_gib < needed_gib:
         raise MinicloudError(
-            f"not enough memory for this test: {guests} guest(s) x "
-            f"{per_guest_gib:.1f}GiB ({config.lightweight_memory}){headroom_note} = "
+            f"not enough memory for this test: {guests} guest(s): {breakdown}{headroom_note} = "
             f"{needed_gib:.1f}GiB needed, but only {budget_gib:.1f}GiB is available from "
             f"{budget_source}. Reduce {'/'.join(counted_params)}, lower "
-            f"minicloud_lightweight_memory, raise the budget, or set "
+            f"minicloud_lightweight_memory or minicloud_lightweight_memory_loader/_monitor, "
+            f"raise the budget, or set "
             f"SCT_MINICLOUD_SKIP_MEMORY_CHECK=true if you know the real footprint - otherwise the "
             f"container is OOM-killed mid-test (exit 137) taking every VM with it."
         )

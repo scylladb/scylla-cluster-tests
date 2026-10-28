@@ -126,6 +126,24 @@ def test_check_host_memory_passes_when_it_fits(tmp_path):
         manager._check_host_memory(params)
 
 
+def test_check_host_memory_sizes_each_role(tmp_path):
+    """Loaders and monitors count at their own size, so the gate stops charging them a db node's RAM."""
+    config = MinicloudConfig(
+        state_dir=str(tmp_path),
+        lightweight=True,
+        lightweight_memory_loader="2GiB",
+        lightweight_memory_monitor="2GiB",
+    )
+    manager = MinicloudManager(config=config)
+    params = {"n_db_nodes": 3, "n_loaders": [1, 1], "n_monitor_nodes": 1}
+    with _meminfo_path_patch(19 * 1024 * 1024):
+        with pytest.raises(
+            MinicloudError,
+            match=r"6 guest.*3 db x 4\.0GiB \+ 2 loader x 2\.0GiB \+ 1 monitor x 2\.0GiB.*20\.0GiB needed",
+        ):
+            manager._check_host_memory(params)
+
+
 def test_check_host_memory_counts_every_guest_pool(tmp_path):
     """Oracle, zero-token and vector-store nodes are guests too.
 
