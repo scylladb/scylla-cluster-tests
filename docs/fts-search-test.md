@@ -1,12 +1,9 @@
 # Running the FTS (BM25 full-text search) performance test
 
 `fts_test.FtsSearchTest.test_fts_search` drives a full-text-search benchmark:
-load documents → build a `fulltext_index` → record index build time and indexing
-throughput in the run's results file, `search_results.jsonl`. Build time is read from
-vector-store's own "full scan" log lines (see "Index build timing" below).
-
-The query phase — running query sets against the index and reporting their latency — lands on
-top of this.
+load documents → build a `fulltext_index` → run query sets → record index build time,
+indexing throughput and query latency in the run's results file, `search_results.jsonl`. Index
+build time is read from vector-store's own "full scan" log lines (see "Index build timing" below).
 
 The flow is not specific to full text. It lives in `search_perf_test.py` and is shared with the
 other benchmarks of a vector-store-served index; `fts_test.py` is the full-text half — the rune
@@ -134,24 +131,39 @@ grep -E "Index build time \(vector-store full scan\)" $D/sct.log
 # 'starting'/'finished' pair for the same index (note the lower-cased index name).
 grep -E "(starting|finished) full scan on" $D/*vs-set*/*/system.log
 
-# The results file: one JSON object per line, one line per index build.
-jq -c '{dataset, step, record_count, build_time_s, indexing_throughput}' $D/search_results.jsonl
+# The results file: one JSON object per line -- an 'index_build' record per step and a 'search'
+# record per query entry.
+jq -c 'select(.phase == "index_build") | {dataset, step, record_count, build_time_s}' \
+  $D/search_results.jsonl
+jq -c 'select(.phase == "search") | {dataset, step, query_index, query_set, p99_ms}' \
+  $D/search_results.jsonl
 ```
 
-The shape to expect — one build record per step:
+The shape to expect — one build record per step and one search record per query entry, in plan
+order:
 
 ```
-{"dataset":"local_tiny","step":1,"record_count":300,"build_time_s":<s>,"indexing_throughput":<docs/s>}
-{"dataset":"local_tiny","step":2,"record_count":900,"build_time_s":<s>,"indexing_throughput":<docs/s>}
-{"dataset":"local_smoke","step":1,"record_count":10,"build_time_s":<s>,"indexing_throughput":<docs/s>}
-{"dataset":"local_smoke","step":2,"record_count":10,"build_time_s":<s>,"indexing_throughput":<docs/s>}
+{"dataset":"local_tiny","step":1,"record_count":300,"build_time_s":<s>}
+{"dataset":"local_tiny","step":2,"record_count":900,"build_time_s":<s>}
+{"dataset":"local_smoke","step":1,"record_count":10,"build_time_s":<s>}
+{"dataset":"local_smoke","step":2,"record_count":10,"build_time_s":<s>}
+{"dataset":"local_smoke","step":3,"record_count":10,"build_time_s":<s>}
+
+{"dataset":"local_tiny","step":1,"query_index":1,"query_set":"term_common","p99_ms":<ms>}
+{"dataset":"local_tiny","step":2,"query_index":1,"query_set":"term_common","p99_ms":<ms>}
+{"dataset":"local_tiny","step":2,"query_index":2,"query_set":"term_common","p99_ms":<ms>}
+{"dataset":"local_tiny","step":2,"query_index":3,"query_set":"natural","p99_ms":<ms>}
+{"dataset":"local_smoke","step":1,"query_index":1,"query_set":"natural","p99_ms":<ms>}
+{"dataset":"local_smoke","step":3,"query_index":1,"query_set":"natural","p99_ms":<ms>}
 ```
 
-A build whose time could not be read from the log is still recorded, with `null`s.
+A build whose time could not be read from the log is still recorded, with `null`s, and so is a
+query entry whose latency was not measured.
 
-local_smoke's second build (step 2) has no load -- it rebuilds the index on the corpus the
-first step already loaded, so its build time reflects only the index rebuild, not the load. See
-"Repeated builds on the same data" below.
+local_smoke's second and third builds have no load — they rebuild the index on the corpus the
+first step already loaded, so their build time reflects only the index rebuild, not the load (see
+"Repeated builds on the same data" below). Step 2 also has no queries at all, and step 3 repeats
+step 1's query set.
 
 The pieces that can be checked without a cluster already are, so a failure here is more likely to be
 the orchestration than the plumbing underneath it:
@@ -208,20 +220,53 @@ The dataset/query plan is a separate YAML from the SCT test case:
 The option is not full-text specific: the plan format belongs to the shared flow, so a vector-search
 test case will name its own plan through the same option.
 
-It has no default — which datasets and shards to run *is* the definition of the test, so a test
-case has to name a plan. The plans live in the repo, next to the rune scripts they
+It has no default — which datasets, shards and query sets to run *is* the definition of the test,
+so a test case has to name a plan. The plans live in the repo, next to the rune scripts they
 drive:
 
 | Plan | Used by | Size |
 |---|---|---|
 | `local_config.yaml` | the docker test case | two tiny generated corpora, read from disk |
 
-The index and load waits are plan values, not SCT params. Per dataset:
+The load and index waits and the query settings are plan values, not SCT params. Per dataset:
 
-| Key | Default | Bounds |
+| Key | Default | What it controls |
 |---|---|---|
 | `max_index_wait_secs` | 1800 | the rune script's own budget for probing the index until it answers, the index-build phase timeout, and how long SCT waits for a dropped index to disappear |
 | `max_shard_load_secs` | 3600 | the load phase timeout, **per shard** — shards load one at a time |
+| `has_invalid_queries` | `false` | set it when the dataset's query sets include queries vector-store cannot parse, e.g. a third-party corpus in a performance run. ScyllaDB's error for such a query then no longer fails the test; latte still logs each one as a warning. Leave it off for regression runs, whose query sets have to be valid |
+
+### Every query needs an expected latency
+
+Every query entry must resolve an `expected_p99_read_ms`, either on the entry itself or the
+dataset's `defaults` — there is no SCT-side default or hardcoded threshold, and missing it on both
+raises `ValueError` as soon as the plan is read:
+
+```yaml
+defaults:
+  expected_p99_read_ms: 10   # inherited by every query in the dataset unless overridden
+
+steps:
+  - queries:
+      - set: term_common          # uses the default: 10ms
+      - set: natural
+        expected_p99_read_ms: 50  # overridden: 50ms
+```
+
+Each search record carries it as `expected_p99_read_ms`, next to the measured `p99_ms` and
+`p99_within_expectation`, together with the query's `limit`, `concurrency`, `rate` and a
+`query_example` (the first line of the query set's `.tsv`).
+
+The whole plan is validated right after it is read, so a typo fails before a step spends tens of
+minutes loading shards. A query's `duration` has to be latte's *time* form (`60s`, `5m`, `1h`):
+SCT derives the phase timeout from it and cannot read the request-count form.
+
+### Repeated query configs
+
+A step may list the same query configuration more than once, e.g. to sample run-to-run variance.
+Every entry gets its own search record, told apart by `query_index`, its 1-based position in the
+step. `local_config.yaml` does it deliberately — `local_tiny`'s second step repeats
+`set: term_common` with identical parameters.
 
 ### Repeated builds on the same data
 
@@ -243,6 +288,8 @@ whether it loaded anything), so repeats do not collide.
 An *absent* `shards` key is a different thing: it falls back to the step's `documents_file`, i.e.
 a single unsharded corpus. `local_smoke` in `local_config.yaml` uses one, and then a warm rebuild
 on the same corpus.
+
+A step's `queries` are optional too, so a step can be build-only.
 
 ### Index build timing
 
