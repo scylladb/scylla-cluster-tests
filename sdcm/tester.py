@@ -2364,26 +2364,36 @@ class ClusterTester(unittest.TestCase):
         self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
         params = dict(
             n_nodes=len(baremetal_info["db_nodes"]["node_list"]),
-            public_ips=[n["public_ip"] for n in baremetal_info["db_nodes"]["node_list"]],
+            public_ips=[n.get("public_ip", n["private_ip"]) for n in baremetal_info["db_nodes"]["node_list"]],
             private_ips=[n["private_ip"] for n in baremetal_info["db_nodes"]["node_list"]],
             user_prefix=self.params.get("user_prefix"),
             credentials=self.credentials,
             ssh_username=baremetal_info["db_nodes"]["username"],
+            ip_ssh_connections=baremetal_info["db_nodes"].get("ip_ssh_connections"),
+            access_names=[n.get("access") for n in baremetal_info["db_nodes"]["node_list"]],
             params=self.params,
             region_names=["dummy_region"],
         )
         self.db_cluster = cluster_baremetal.ScyllaPhysicalCluster(**params)
 
         params["n_nodes"] = len(baremetal_info["loader_nodes"]["node_list"])
-        params["public_ips"] = [n["public_ip"] for n in baremetal_info["loader_nodes"]["node_list"]]
+        params["public_ips"] = [
+            n.get("public_ip", n["private_ip"]) for n in baremetal_info["loader_nodes"]["node_list"]
+        ]
         params["private_ips"] = [n["private_ip"] for n in baremetal_info["loader_nodes"]["node_list"]]
         params["ssh_username"] = baremetal_info["loader_nodes"]["username"]
+        params["ip_ssh_connections"] = baremetal_info["loader_nodes"].get("ip_ssh_connections")
+        params["access_names"] = [n.get("access") for n in baremetal_info["loader_nodes"]["node_list"]]
         self.loaders = cluster_baremetal.LoaderSetPhysical(**params)
 
         params["n_nodes"] = len(baremetal_info["monitor_nodes"]["node_list"])
-        params["public_ips"] = [n["public_ip"] for n in baremetal_info["monitor_nodes"]["node_list"]]
+        params["public_ips"] = [
+            n.get("public_ip", n["private_ip"]) for n in baremetal_info["monitor_nodes"]["node_list"]
+        ]
         params["private_ips"] = [n["private_ip"] for n in baremetal_info["monitor_nodes"]["node_list"]]
         params["ssh_username"] = baremetal_info["monitor_nodes"]["username"]
+        params["ip_ssh_connections"] = baremetal_info["monitor_nodes"].get("ip_ssh_connections")
+        params["access_names"] = [n.get("access") for n in baremetal_info["monitor_nodes"]["node_list"]]
         self.monitors = cluster_baremetal.MonitorSetPhysical(
             **params,
             targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
