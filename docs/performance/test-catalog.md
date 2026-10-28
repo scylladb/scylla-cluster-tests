@@ -84,6 +84,45 @@ threshold YAML must use:
 - Thread counts vary per step -> step name is `<rate>_<threads>_threads`.
 - A name repeats -> suffixed with an occurrence counter (`unthrottled_1`, `unthrottled_2`).
 
+**Best-throughput search** (SCT-580). When `perf_best_throughput_search` is set for a sub-test, the
+sub-test ignores `perf_gradual_throttle_steps`/`perf_gradual_threads` and runs unthrottled steps whose
+thread count an adaptive search picks (`sdcm/utils/thread_search.py`):
+
+1. Start at `start_threads_per_shard` x the DB nodes' shard count, over all stress commands.
+2. Double the threads until a step's P99 is over `perf_gradual_latency_limit` (default 10 ms) or throughput
+   grows less than `min_throughput_gain_pct`. When the first step already fails, halve instead.
+3. Bisect between the last passing and the first failing thread count until they are within
+   `precision_pct` or `max_steps` (default 10) is used up. The budget never stops steps 1-2, so the search
+   always finds the limit or saturation.
+
+Steps are named `unthrottled_<threads>_threads`; the best one is reported as `BestThroughputResult`.
+`configurations/performance/best-throughput/best_throughput.yaml` turns the search on for every
+sub-test with 30-minute steps and no per-step P99 limits (steps over the limit are expected);
+`cassandra_stress_time_bound_write.yaml` next to it makes the predefined-steps write commands
+time-bound, since an n-bound write step at a low thread count would take hours.
+
+**Goodput under overload** (`perf_overload_steps`, `sdcm/utils/overload.py`, SCYLLADB-3267). After the
+best step, one throttled step per factor (`overload_1.3x`, `overload_2x`) offers that multiple of the best
+throughput; the goodput (successful operations) is reported as a ratio of the best throughput, and a ratio
+under `min_goodput_ratio` (0.9) fails the run. See
+[results-and-regression.md](results-and-regression.md#goodput-under-overload-table).
+
+**Dataset sizing** (`perf_dataset_sizing`, `sdcm/utils/dataset_sizing.py`). The predefined-steps
+test-case's stress commands are the dataset of a reference node: 128 GiB RAM and a 3750 GB data disk
+(i4i.4xlarge, i8g.4xlarge). With `perf_dataset_sizing` set, `setUp` reads the smallest DB node's
+`MemTotal` and `/var/lib/scylla` size and scales each command's `n=` and `-pop seq=` range by them,
+rounded to `scale_step` (0.25), so the reference instance types keep today's dataset exactly:
+
+| Commands | Scale | Why |
+|---|---|---|
+| `stress_cmd_r`, `stress_cmd_m`, `stress_cmd_cache_warmup` | RAM | The hot range must keep fitting in cache |
+| `prepare_write_cmd`, `stress_cmd_read_disk` | smaller of RAM and disk | Several times RAM so disk reads miss the cache, but never outgrowing the disk |
+| `stress_cmd_w` | disk | Leaves the same share of the disk free for compaction |
+
+When the disk limits the preload below the RAM scale, the run logs a warning: disk-only reads then
+cover less data per GiB of RAM than on the reference node.
+`configurations/performance/best-throughput/cassandra_stress_sized_dataset.yaml` turns sizing on.
+
 ### `performance_regression_alternator_test.py`
 
 `PerformanceRegressionAlternatorTest(PerformanceRegressionTest)` — DynamoDB API via YCSB. All

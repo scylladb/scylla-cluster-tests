@@ -5,7 +5,7 @@
 Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram
 settings.
 
-**19 options.**
+**23 options.**
 
 
 <a id="max_deviation"></a>
@@ -52,6 +52,39 @@ Number of threads which should be added on per step
 **type:** int
 
 
+<a id="perf_best_throughput_search"></a>
+
+## **perf_best_throughput_search** / SCT_PERF_BEST_THROUGHPUT_SEARCH
+
+Adaptive thread search of the gradual performance test, which looks for the best throughput within [`perf_gradual_latency_limit`](#perf_gradual_latency_limit). When set, the sub-test runs unthrottled steps whose thread count the search picks, instead of perf_gradual_throttle_steps/perf_gradual_threads. Keyed by sub-test, with 'default' used for sub-tests not listed; a sub-test's entry overrides 'default' key by key. Keys: start_threads_per_shard (threads of the first step per DB shard, over all stress commands), max_steps (step budget per sub-test; it only limits the bisection once the latency limit is found), precision_pct (stop when the passing and failing thread counts are this close), min_throughput_gain_pct (stop doubling when throughput grows less than this). Example: {'default': {'start_threads_per_shard': 16, 'max_steps': 10, 'precision_pct': 5, 'min_throughput_gain_pct': 5}}
+
+**default:** N/A
+
+**type:** dict | YAML/JSON string → dict
+
+
+<a id="perf_dataset_sizing"></a>
+
+## **perf_dataset_sizing** / SCT_PERF_DATASET_SIZING
+
+Size the gradual performance test's dataset from the DB nodes' RAM and data disk. The test-case's stress commands define the dataset for a reference node; on other nodes their row counts (n=) and key ranges (-pop seq=) are scaled by the smallest node's RAM and disk relative to the reference, each rounded to scale_step: read/mixed hot ranges and cache warmup by RAM, the write dataset by disk, the preload and disk-only reads by the smaller of the two. Keys: reference_ram_gib, reference_disk_gb, scale_step. Not set: the commands run as written. Example: {'reference_ram_gib': 128, 'reference_disk_gb': 3750, 'scale_step': 0.25}
+
+**default:** N/A
+
+**type:** dict | YAML/JSON string → dict
+
+
+<a id="perf_gradual_latency_limit"></a>
+
+## **perf_gradual_latency_limit** / SCT_PERF_GRADUAL_LATENCY_LIMIT
+
+Latency limit, in ms, that a gradual performance test step must stay within to count as passing when looking for the best throughput. Keyed by sub-test, with 'default' used for sub-tests not listed. Only 'percentile_99' is supported. Example: {'default': {'percentile_99': 10}, 'read_disk_only': {'percentile_99': 15}}
+
+**default:** {'default': {'percentile_99': 10}}
+
+**type:** dict | YAML/JSON string → dict
+
+
 <a id="perf_gradual_step_duration"></a>
 
 ## **perf_gradual_step_duration** / SCT_PERF_GRADUAL_STEP_DURATION
@@ -94,6 +127,17 @@ If true, preload data (via [`prepare_write_cmd`](stress-commands-and-load-genera
 **default:** False
 
 **type:** bool
+
+
+<a id="perf_overload_steps"></a>
+
+## **perf_overload_steps** / SCT_PERF_OVERLOAD_STEPS
+
+Goodput under overload, run after the gradual performance test found its best throughput within [`perf_gradual_latency_limit`](#perf_gradual_latency_limit). One throttled step per factor offers factor x the best throughput, with the best step's thread count times the factor, capped at max_threads_multiplier x it; the goodput (throughput of successful operations) is reported as a ratio of the best throughput, and a ratio under min_goodput_ratio fails the run. Keyed by sub-test, with 'default' used for sub-tests not listed; a sub-test's entry overrides 'default' key by key. Not set: no overload steps. Example: {'default': {'factors': [1.3, 2], 'max_threads_multiplier': 4, 'min_goodput_ratio': 0.9}}
+
+**default:** N/A
+
+**type:** dict | YAML/JSON string → dict
 
 
 <a id="perf_simple_query_extra_command"></a>

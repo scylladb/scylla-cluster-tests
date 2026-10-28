@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-523 options across 29 groups.
+527 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -54,7 +54,7 @@ concerns first, then one page per backend, then one per test type.
 | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) | 12 | Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options. |
 | [Minicloud](configuration_options/minicloud.md) | 17 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with the `aws`, `gce` or `azure`... |
 | [Longevity tests](configuration_options/longevity-tests.md) | 12 | Options specific to long-running longevity test scenarios. |
-| [Performance regression tests](configuration_options/performance-regression-tests.md) | 19 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
+| [Performance regression tests](configuration_options/performance-regression-tests.md) | 23 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
 | [Upgrade tests](configuration_options/upgrade-tests.md) | 19 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
 | [Grow cluster tests](configuration_options/grow-cluster-tests.md) | 2 | Scaling the cluster up and down during a test. |
 | [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) | 3 | Loading pre-built SSTables into a running cluster via nodetool refresh. |
@@ -396,10 +396,14 @@ concerns first, then one page per backend, then one per test type.
 | [`oracle_user_data_format_version`](configuration_options/auxiliary-db-cluster-oracle-cassandra.md#oracle_user_data_format_version) | `SCT_ORACLE_USER_DATA_FORMAT_VERSION` | [Auxiliary DB cluster (oracle / Cassandra)](configuration_options/auxiliary-db-cluster-oracle-cassandra.md) |
 | [`parallel_node_operations`](configuration_options/general-and-provisioning.md#parallel_node_operations) | `SCT_PARALLEL_NODE_OPERATIONS` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`peer_verification`](configuration_options/scylla-installation-and-configuration.md#peer_verification) | `SCT_PEER_VERIFICATION` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
+| [`perf_best_throughput_search`](configuration_options/performance-regression-tests.md#perf_best_throughput_search) | `SCT_PERF_BEST_THROUGHPUT_SEARCH` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
+| [`perf_dataset_sizing`](configuration_options/performance-regression-tests.md#perf_dataset_sizing) | `SCT_PERF_DATASET_SIZING` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
+| [`perf_gradual_latency_limit`](configuration_options/performance-regression-tests.md#perf_gradual_latency_limit) | `SCT_PERF_GRADUAL_LATENCY_LIMIT` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_gradual_step_duration`](configuration_options/performance-regression-tests.md#perf_gradual_step_duration) | `SCT_PERF_GRADUAL_STEP_DURATION` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_gradual_threads`](configuration_options/performance-regression-tests.md#perf_gradual_threads) | `SCT_PERF_GRADUAL_THREADS` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_gradual_throttle_steps`](configuration_options/performance-regression-tests.md#perf_gradual_throttle_steps) | `SCT_PERF_GRADUAL_THROTTLE_STEPS` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_gradual_write_preload_data`](configuration_options/performance-regression-tests.md#perf_gradual_write_preload_data) | `SCT_PERF_GRADUAL_WRITE_PRELOAD_DATA` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
+| [`perf_overload_steps`](configuration_options/performance-regression-tests.md#perf_overload_steps) | `SCT_PERF_OVERLOAD_STEPS` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_simple_query_extra_command`](configuration_options/performance-regression-tests.md#perf_simple_query_extra_command) | `SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_stress_keyspace`](configuration_options/performance-regression-tests.md#perf_stress_keyspace) | `SCT_PERF_STRESS_KEYSPACE` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_stress_table`](configuration_options/performance-regression-tests.md#perf_stress_table) | `SCT_PERF_STRESS_TABLE` | [Performance regression tests](configuration_options/performance-regression-tests.md) |

@@ -1,0 +1,10 @@
+# Time-bound write commands for test-cases/performance/perf-regression-predefined-throughput-steps.yaml, for the
+# best-throughput run (SCT-580). Same commands and key ranges, with duration=$duration instead of n=: an n-bound
+# step at a low thread count would take hours to write its 1.6B rows. 30 minutes covers ~320M of the 402M keys
+# per loader at the highest write rate seen on i8g.4xlarge (~710k op/s over 4 loaders).
+stress_cmd_w:  [
+  "cassandra-stress write no-warmup cl=QUORUM duration=$duration -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..402653184",
+  "cassandra-stress write no-warmup cl=QUORUM duration=$duration -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=402653185..805306368",
+  "cassandra-stress write no-warmup cl=QUORUM duration=$duration -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=805306369..1207959552",
+  "cassandra-stress write no-warmup cl=QUORUM duration=$duration -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1207959553..1610612736"
+]

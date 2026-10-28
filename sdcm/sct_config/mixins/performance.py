@@ -44,6 +44,32 @@ class PerformanceConfigMixin(BaseModel):
     num_threads_step: int = SctField(
         description="Number of threads which should be added on per step",
     )
+    perf_best_throughput_search: DictOrStr = SctField(
+        description="Adaptive thread search of the gradual performance test, which looks for the best throughput "
+        "within perf_gradual_latency_limit. When set, the sub-test runs unthrottled steps whose thread count the "
+        "search picks, instead of perf_gradual_throttle_steps/perf_gradual_threads. Keyed by sub-test, with "
+        "'default' used for sub-tests not listed; a sub-test's entry overrides 'default' key by key. Keys: "
+        "start_threads_per_shard (threads of the first step per DB shard, over all stress commands), "
+        "max_steps (step budget per sub-test; it only limits the bisection once the latency limit is found), precision_pct (stop when the passing and failing thread counts "
+        "are this close), min_throughput_gain_pct (stop doubling when throughput grows less than this). "
+        "Example: {'default': {'start_threads_per_shard': 16, 'max_steps': 10, 'precision_pct': 5, "
+        "'min_throughput_gain_pct': 5}}",
+    )
+    perf_dataset_sizing: DictOrStr = SctField(
+        description="Size the gradual performance test's dataset from the DB nodes' RAM and data disk. The "
+        "test-case's stress commands define the dataset for a reference node; on other nodes their row counts "
+        "(n=) and key ranges (-pop seq=) are scaled by the smallest node's RAM and disk relative to the "
+        "reference, each rounded to scale_step: read/mixed hot ranges and cache warmup by RAM, the write "
+        "dataset by disk, the preload and disk-only reads by the smaller of the two. Keys: reference_ram_gib, "
+        "reference_disk_gb, scale_step. Not set: the commands run as written. "
+        "Example: {'reference_ram_gib': 128, 'reference_disk_gb': 3750, 'scale_step': 0.25}",
+    )
+    perf_gradual_latency_limit: DictOrStr = SctField(
+        description="Latency limit, in ms, that a gradual performance test step must stay within to count as "
+        "passing when looking for the best throughput. Keyed by sub-test, with 'default' used for sub-tests "
+        "not listed. Only 'percentile_99' is supported. "
+        "Example: {'default': {'percentile_99': 10}, 'read_disk_only': {'percentile_99': 15}}",
+    )
     perf_gradual_step_duration: DictOrStr = SctField(
         description="Step duration of c-s load for gradual performance test per sub-test. "
         "Example: {'read': '30m', 'write': None, 'mixed': '30m'}",
@@ -66,6 +92,15 @@ class PerformanceConfigMixin(BaseModel):
         "workloads (e.g. UPDATE ... IF <cond>) that require existing rows to "
         "have a chance of applying; not needed for INSERT-based write "
         "workloads on a fresh table.",
+    )
+    perf_overload_steps: DictOrStr = SctField(
+        description="Goodput under overload, run after the gradual performance test found its best throughput "
+        "within perf_gradual_latency_limit. One throttled step per factor offers factor x the best throughput, "
+        "with the best step's thread count times the factor, capped at max_threads_multiplier x it; the "
+        "goodput (throughput of successful operations) is reported as a ratio of the best throughput, and a "
+        "ratio under min_goodput_ratio fails the run. Keyed by sub-test, with 'default' used for sub-tests not "
+        "listed; a sub-test's entry overrides 'default' key by key. Not set: no overload steps. "
+        "Example: {'default': {'factors': [1.3, 2], 'max_threads_multiplier': 4, 'min_goodput_ratio': 0.9}}",
     )
     perf_simple_query_extra_command: String = SctField(
         description="Extra command line options to pass to perf_simple_query",
