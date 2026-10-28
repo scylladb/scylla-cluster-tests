@@ -14,8 +14,10 @@
 from pathlib import Path
 
 import pytest
+import yaml
 
 from sdcm.utils.trigger_matrix.config import load_matrix_config
+from sdcm.utils.trigger_matrix.models import job_arch
 
 PROJECT_ROOT = Path(__file__).parents[3]
 TRIGGERS_DIR = PROJECT_ROOT / "configurations" / "triggers"
@@ -80,12 +82,45 @@ def test_scylla_doctor_gating_defaults():
     assert config.supported_versions_only is True
 
 
-def test_scylla_doctor_gating_runs_one_os_per_category_and_not_docker():
+def test_scylla_doctor_gating_runs_every_sd_release_gating_os_but_docker():
     config = load_matrix_config(PROJECT_ROOT / "configurations/triggers/scylla-doctor-gating.yaml")
     enabled = {job.job_name.rsplit("/", 1)[-1] for job in config.jobs if not job.disabled}
     disabled = {job.job_name.rsplit("/", 1)[-1] for job in config.jobs if job.disabled}
-    assert enabled == {"artifacts-ubuntu2404-test", "artifacts-rhel10-test", "artifacts-ami-arm-test"}
+    assert enabled == {
+        f"artifacts-{os_name}-test"
+        for os_name in (
+            "centos9",
+            "rocky9",
+            "ubuntu2404",
+            "debian12",
+            "ami",
+            "amazon2023-arm",
+            "ubuntu2204",
+            "rhel10",
+            "amazon2023",
+            "centos9-arm",
+            "ubuntu2204-arm",
+            "ubuntu2404-arm",
+            "ami-arm",
+        )
+    }
     assert disabled == {"artifacts-docker-test"}
+
+
+def test_scylla_doctor_gating_jobs_are_defined_in_the_scylla_doctor_folder():
+    symlinks = yaml.safe_load(
+        (PROJECT_ROOT / "jenkins-pipelines/scylla-doctor/oss/artifacts/_symlinks.yaml").read_text()
+    )
+    defined = {f"/scylla-doctor/oss/artifacts/{link['name']}-test" for link in symlinks["symlinks"]}
+    config = load_matrix_config(PROJECT_ROOT / "configurations/triggers/scylla-doctor-gating.yaml")
+    assert {job.job_name for job in config.jobs} <= defined
+
+
+def test_scylla_doctor_gating_arm_jobs_run_on_aarch64():
+    config = load_matrix_config(PROJECT_ROOT / "configurations/triggers/scylla-doctor-gating.yaml")
+    for job in config.jobs:
+        expected = "aarch64" if job.job_name.endswith("-arm-test") else "x86_64"
+        assert job_arch(job) == expected, job.job_name
 
 
 def test_scylla_doctor_gating_jobs_have_their_os_label():

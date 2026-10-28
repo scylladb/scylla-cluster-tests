@@ -125,7 +125,7 @@ See the constant for the exact values and the reason for each.
 | Path | Edition | What it validates | Triggered by |
 |------|---------|-------------------|--------------|
 | Regular artifact tests (`jenkins-pipelines/oss/artifacts/`, release branch folders) | basic | A ScyllaDB build, with the pinned SD version | ScyllaDB package/image builds |
-| [SD release gate](#run-the-sd-release-gate) (`scylla-master/sct_triggers/scylla-doctor-gating-trigger`) | full | A new SD build, on all supported ScyllaDB versions and one OS per category | The SD team, manually, before each SD release |
+| [SD release gate](#run-the-sd-release-gate) (`scylla-master/sct_triggers/scylla-doctor-gating-trigger`) | full | A new SD build, on all supported ScyllaDB versions and every artifact OS but Docker | The SD team, manually, before each SD release |
 
 Analyzers are not run on new ScyllaDB builds: regular artifact tests run the basic edition, so an
 analyzer failure does not block a ScyllaDB release. Analyzers first run against a new ScyllaDB
@@ -382,27 +382,34 @@ for together and reported in one email.
 
 ### OS matrix
 
-The matrix runs one operating system per category, as Vincent Reniers (Scylla Doctor) requested:
-
-> We don't need every OS. For example one per category would be fine.
-> - Ubuntu 24
-> - A RHEL distribution (rhel10)
-> - Perhaps an ARM AMI could be useful to test as well since we don't have this in our testing
+The matrix runs every artifact job of the old sd-release-gating pipeline
+(`vars/sdReleaseGatingPipeline.groovy`); Docker is listed but disabled.
 
 | Label | Artifact job | Backend | `wait_timeout` | Runs |
 |-------|--------------|---------|----------------|------|
+| `os-centos9` | `artifacts-centos9-test` | GCE | 3600 s | yes |
+| `os-rocky9` | `artifacts-rocky9-test` | GCE | 3600 s | yes |
 | `os-ubuntu2404` | `artifacts-ubuntu2404-test` | GCE | 3600 s | yes |
+| `os-debian12` | `artifacts-debian12-test` | GCE | 3600 s | yes |
+| `os-ubuntu2204` | `artifacts-ubuntu2204-test` | GCE | 3600 s | yes |
+| `os-ami` | `artifacts-ami-test` | AWS `eu-west-1` | 7200 s | yes |
+| `os-amazon2023` | `artifacts-amazon2023-test` | AWS `eu-west-1` | 7200 s | yes |
 | `os-rhel10` | `artifacts-rhel10-test` | AWS `eu-west-1` | 7200 s | yes |
+| `os-amazon2023-arm` | `artifacts-amazon2023-arm-test` | AWS `eu-west-1`, aarch64 | 7200 s | yes |
+| `os-centos9-arm` | `artifacts-centos9-arm-test` | AWS `eu-west-1`, aarch64 | 7200 s | yes |
+| `os-ubuntu2204-arm` | `artifacts-ubuntu2204-arm-test` | AWS `us-east-1`, aarch64 | 7200 s | yes |
+| `os-ubuntu2404-arm` | `artifacts-ubuntu2404-arm-test` | AWS `eu-west-1`, aarch64 | 7200 s | yes |
 | `os-ami-arm` | `artifacts-ami-arm-test` | AWS `eu-west-1`, aarch64 | 7200 s | yes |
 | `os-docker` | `artifacts-docker-test` | AWS | | no, `disabled: true` |
 
-Docker is disabled until SD skips by default the collectors that cannot run in a container
+Each job passes the region its artifact jenkinsfile uses. Docker is disabled until SD skips by
+default the collectors that cannot run in a container
 ([DOCTOR-139](https://scylladb.atlassian.net/browse/DOCTOR-139)); `run_scylla_doctor()` skips SD on
-the Docker backend anyway. The old pipeline also ran CentOS 9, Rocky 9, Debian 12, Ubuntu 22.04,
-Amazon Linux 2023, the x86_64 AMI and the ARM variants of Amazon Linux 2023, CentOS 9, Ubuntu 22.04
-and 24.04; they are no longer gated.
+the Docker backend anyway. OEL9 is not in the matrix, as in the old pipeline: there is no OEL9 AMI.
 
-A full run is three artifact jobs per supported version: with four supported versions, 12 jobs.
+A full run is 13 artifact jobs per supported version: with four supported versions, 52 jobs. To
+run fewer, pick operating systems with `labels_selector`, for example
+`os-ubuntu2404/os-rhel10/os-ami-arm`.
 
 #### Where the triggered jobs live
 
@@ -417,8 +424,7 @@ so they are the same whichever branch folder the trigger runs from.
 
 `jenkins-pipelines/scylla-doctor/oss/artifacts/_symlinks.yaml` declares them, pointing to the
 existing jenkinsfiles (see `process_symlinks()` in `utils/build_system/create_test_release_jobs.py`):
-`artifacts-ami`, `artifacts-ami-arm`, `artifacts-docker`, `artifacts-ubuntu2404` and
-`artifacts-rhel10`. `sct.py create-test-release-jobs <folder>` creates the jobs of
+every job of the matrix. `sct.py create-test-release-jobs <folder>` creates the jobs of
 `jenkins-pipelines/scylla-doctor/` under `<folder>`; the gate's jobs are the ones created with the
 folder `scylla-doctor`.
 
