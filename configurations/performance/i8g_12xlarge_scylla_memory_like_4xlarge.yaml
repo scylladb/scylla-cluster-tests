@@ -1,0 +1,5 @@
+# One-off for read_disk_only on i8g.12xlarge: cap Scylla at the memory it gets on i8g.4xlarge.
+# On 12xlarge Scylla takes 343 GiB of 384 GiB (0.89); 0.89 x 128 GiB = 114 GiB on 4xlarge.
+# With the same 650M-row dataset, the row cache then holds the same ~14% of each node's data
+# as on 4xlarge, so reads stay disk-bound. Keeps the base config's args.
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --memory 114G'
