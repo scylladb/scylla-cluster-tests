@@ -7,18 +7,18 @@
 #
 # What survives the shrink is the *shape* of the test: a cluster that grows one node at a time
 # under load, with a nemesis afterwards. What does not survive is the scale. The production test is
-# 15 db nodes growing to 25; at minicloud_lightweight_memory that peak is 28 guests x 4GiB = 112GiB
-# of RAM, which no single host has. So this exercises the grow path - bootstrap, streaming,
+# 15 db nodes growing to 25; in lightweight mode that peak is 25 db x 4GiB + 2 loaders x 2GiB +
+# 1 monitor x 2GiB = 106GiB of RAM, which no single host has. So this exercises the grow path - bootstrap, streaming,
 # reconfiguring monitoring, reaching cluster_target_size - and nothing about behaviour at scale.
 # Do not read performance or scalability conclusions off a local run.
 #
-# Guest budget at the peak: 4 db + 1 loader + 1 monitor = 6 guests x 4GiB = 24GiB, plus ~2GiB host
-# headroom. The preflight gate counts cluster_target_size rather than n_db_nodes, so it blocks up
+# Guest budget at the peak: 4 db x 4GiB + 1 loader x 2GiB + 1 monitor x 2GiB = 20GiB, plus ~2GiB
+# host headroom. The preflight gate counts cluster_target_size rather than n_db_nodes, so it blocks up
 # front instead of at the moment the cluster grows.
 #
 # To go bigger on a bigger host, override the counts rather than editing this file:
 #   SCT_N_DB_NODES=5 SCT_CLUSTER_TARGET_SIZE=8 scripts/run-minicloud-test.sh -f scale
-# and remember every added node costs another minicloud_lightweight_memory.
+# and remember every added db node costs another minicloud_lightweight_memory.
 #
 # NOTE on which keys matter here: test_grow_x_to_y calls GrowClusterTest.get_stress_cmd(), which
 # *builds* its cassandra-stress command from cassandra_stress_population_size,
@@ -43,8 +43,8 @@ cassandra_stress_population_size: 50000
 cassandra_stress_threads: 10
 test_duration: 60
 
-# Lightweight mode caps every guest to 1 vCPU / minicloud_lightweight_memory regardless of the
-# type, so these only have to exist in the emulated catalogs.
+# Lightweight mode sizes every guest by its role (the minicloud_lightweight_* params) regardless of
+# the type, so these only have to exist in the emulated catalogs.
 instance_type_db: 'i4i.large'
 instance_type_loader: 'i4i.large'
 gce_instance_type_db: 'n2-standard-2'
@@ -54,7 +54,7 @@ gce_instance_type_monitor: 'n2-standard-2'
 # emulated GCE path cannot serve.
 gce_n_local_ssd_disk_db: 1
 
-# Nested virtualization for the QEMU guests, and RAM for the 24GiB peak above. AWS: only
+# Nested virtualization for the QEMU guests, and RAM for the 20GiB peak above. AWS: only
 # c8i/m8i/r8i support it; m8i.2xlarge is 32GiB, which leaves little room - use m8i.4xlarge if you
 # raise the node counts.
 instance_type_runner: 'm8i.2xlarge'

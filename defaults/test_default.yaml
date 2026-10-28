@@ -414,14 +414,21 @@ argus_email_report_template: email_report_template_basic.yaml
 # (renovate-managed, exposed as stress_image.minicloud); minicloud_docker_image overrides it.
 minicloud_docker_image: ''
 minicloud_lightweight: true
-# Lightweight VMs get minicloud_lightweight_vcpus vCPUs and this much RAM regardless of the
+# Lightweight db VMs get minicloud_lightweight_vcpus vCPUs and this much RAM regardless of the
 # requested instance type. Scylla needs >1 GiB per shard on top of the ~1.7 GiB it reserves
 # for the guest OS, so anything under ~3 GiB fails to boot with "memory per shard too low".
-# This is per VM.
+# This is per db VM.
 minicloud_lightweight_memory: '4GiB'
-# One shard per vCPU. Both this and the memory above multiply across every guest in the test,
+# One shard per vCPU. Both this and the memory above multiply across every db guest in the test,
 # so the sct-runner (or dev host) has to be sized for the product.
 minicloud_lightweight_vcpus: 1
+# loaders and monitors need about half a db node RAM. Empty means the db size above
+# (needed for minicloud images that cannot size guests by tag). With use_mgmt on, the monitor
+# takes the db size too: Scylla Manager local Scylla does not start in 2GiB.
+minicloud_lightweight_memory_loader: '2GiB'
+minicloud_lightweight_memory_monitor: '2GiB'
+minicloud_lightweight_vcpus_loader: 1
+minicloud_lightweight_vcpus_monitor: 1
 # Extra OS memory for scylla-server via --reserve-memory.
 # By default, Scylla keeps about ~1.5 GiB on guests below ~22 GiB RAM, which can be too little
 # for sshd and SCT tools. Empty means do not pass this option (tests opt in).

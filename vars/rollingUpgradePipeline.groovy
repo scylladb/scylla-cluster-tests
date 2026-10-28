@@ -112,11 +112,12 @@ def call(Map pipelineParams) {
                                 'Ignored unless the jenkinsfile sets `minicloud: true`',
                    name: 'minicloud_docker')
             string(defaultValue: "${pipelineParams.get('minicloud_lightweight_memory', '')}",
-                   description: 'RAM per emulated guest, e.g. 6GiB. Empty keeps the test-case/defaults value. ' +
-                                'Multiplies across every guest in the test, so the agent or sct-runner has to fit the product',
+                   description: 'RAM per emulated db guest, e.g. 6GiB (loaders and monitors have their own sizes). ' +
+                                'Empty keeps the test-case/defaults value. Multiplies across every db guest in the test, ' +
+                                'so the agent or sct-runner has to fit the product',
                    name: 'minicloud_lightweight_memory')
             string(defaultValue: "${pipelineParams.get('minicloud_lightweight_vcpus', '')}",
-                   description: 'vCPUs per emulated guest (one Scylla shard each). Empty keeps the test-case/defaults value',
+                   description: 'vCPUs per emulated db guest (one Scylla shard each). Empty keeps the test-case/defaults value',
                    name: 'minicloud_lightweight_vcpus')
             string(defaultValue: "${pipelineParams.get('minicloud_container_memory', '')}",
                    description: 'Cap the minicloud container itself, e.g. 32GiB. Empty means no docker limit. ' +

@@ -27,8 +27,8 @@ see [docs/minicloud.md](../../docs/minicloud.md), "Running locally".
 1. **Get the config list.** From a jenkinsfile, `parse_jenkinsfile()` prints it; from a yaml,
    it is that file plus whatever overlays the job layers.
 2. **Read what the test method actually consumes** — `grep -n "params.get" <module>.py`.
-3. **Budget the guests:** `guests x minicloud_lightweight_memory + ~2 GiB` must fit in
-   `MemAvailable`. That decides the node counts, not trial and error.
+3. **Budget the guests:** db guests x `minicloud_lightweight_memory` + loaders and monitors at
+   their own sizes (2 GiB each by default) + ~2 GiB must fit in `MemAvailable`. That decides the node counts, not trial and error.
 4. **Write the overlay** in `configurations/minicloud/`, layered *after* the test-case, with
    `configurations/minicloud.yaml` last.
 5. **Verify without booting:** `sct.py conf` resolves the merge and prints what you got.
@@ -40,7 +40,7 @@ Full procedure: [downscale-a-test.md](workflows/downscale-a-test.md).
 
 ### Budget the Guests Before Editing Anything
 
-`preflight_check()` enforces `guests x per-guest memory + ~2 GiB` against `MemAvailable` and
+`preflight_check()` enforces each role guests x its memory, summed, + ~2 GiB against `MemAvailable` and
 prints the arithmetic when it fails. Compute it first and let it decide the node counts.
 
 **Why:** a test that slips past the gate dies as a cgroup OOM kill (container exit 137) that
@@ -73,11 +73,12 @@ reads `stress_cmd`. Shrinking that is dead configuration — the run still execu
 
 ### Instance Types Are Labels Here, Not Sizes
 
-Lightweight mode gives every guest 1 vCPU and `minicloud_lightweight_memory` regardless of the
-type asked for. The type only has to exist in the emulated catalog, and be x86_64.
+Lightweight mode sizes every guest by its role regardless of the type asked for: db guests get
+`minicloud_lightweight_vcpus` / `minicloud_lightweight_memory`, loaders and monitors their own
+`_loader` / `_monitor` sizes. The type only has to exist in the emulated catalog, and be x86_64.
 
-**Why:** the only levers that change what the host carries are node counts and per-guest
-memory. Time spent picking a smaller `instance_type_db` changes nothing.
+**Why:** the only levers that change what the host carries are node counts and the per-role
+memory sizes. Time spent picking a smaller `instance_type_db` changes nothing.
 
 ## When to Use
 
@@ -174,7 +175,7 @@ the test-case it shrinks. Produce the overlay you need; keep it if a job will ru
 - [ ] Is an overlay in `configurations/minicloud/`, not a copied test-case
 - [ ] Header comment states the guest budget arithmetic it assumes
 - [ ] Passes `uv run sct.py conf` with `configurations/minicloud.yaml` layered last
-- [ ] Fits the host: guests x per-guest memory + 2 GiB is under `MemAvailable`
+- [ ] Fits the host: each role guests x its memory, plus 2 GiB, is under `MemAvailable`
 - [ ] Shrinks only params the test method actually reads
 - [ ] Keeps keyspace names, consistency levels and ops sets identical to production
 - [ ] **Adds** `not disruptive` to any existing `nemesis_selector` rather than replacing it

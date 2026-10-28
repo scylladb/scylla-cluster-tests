@@ -95,7 +95,7 @@ Prometheus metrics object for the add-node timing.
 false`.
 
 **Worked example:** `configurations/minicloud/scale-cluster.yaml` — production 15 to 25 nodes
-(112 GiB of guests at the peak) shrunk to 3 to 4.
+(106 GiB of guests at the peak) shrunk to 3 to 4.
 
 ---
 

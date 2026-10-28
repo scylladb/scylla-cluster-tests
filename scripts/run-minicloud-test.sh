@@ -31,9 +31,11 @@
 # Optional env:
 #   SCT_TEST_CASE           - override the flavor's default test-case yaml
 #   SCT_MINICLOUD_*         - any documented minicloud_* config option, e.g.
-#                             SCT_MINICLOUD_LIGHTWEIGHT_MEMORY / _VCPUS to resize the guests
+#                             SCT_MINICLOUD_LIGHTWEIGHT_MEMORY / _VCPUS to resize the db guests,
+#                             SCT_MINICLOUD_LIGHTWEIGHT_MEMORY_LOADER / _MONITOR (and the _VCPUS_
+#                             ones) for the loader and monitor
 #   SCT_N_DB_NODES / SCT_CLUSTER_TARGET_SIZE - scale flavor: grow further on a bigger host.
-#                             Every added node costs another minicloud_lightweight_memory.
+#                             Every added db node costs another minicloud_lightweight_memory.
 #
 # The container is started via `sct.py start-minicloud` (keep_alive), which owns
 # preflight, host networking, region preparation and health checks.
@@ -91,7 +93,7 @@ case "$FLAVOR" in
         # jenkins-pipelines/oss/raft/scale-40-60-cluster-test.jenkinsfile.
         TEST="grow_cluster_test.GrowClusterTest.test_grow_x_to_y"
         DEFAULT_CASE="test-cases/scale/scale-cluster.yaml"
-        # Production is 15 db nodes growing to 25 - 112GiB of guests at the peak. The overlay cuts
+        # Production is 15 db nodes growing to 25 - 106GiB of guests at the peak. The overlay cuts
         # that to 3 -> 4 nodes and sizes the load down to what a 1-vCPU guest can serve.
         EXTRA_CONFIGS=(configurations/minicloud/scale-cluster.yaml)
         ;;

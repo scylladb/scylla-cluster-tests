@@ -28,17 +28,20 @@ def default_minicloud_image() -> str:
         return yaml.safe_load(fh)["minicloud"]["image"]
 
 
-# In lightweight mode minicloud gives every VM 1 vCPU and this much RAM, ignoring the
-# instance type the test asked for. Scylla refuses to start below 1 GiB per shard, and it
-# reserves ~1.7 GiB of the guest for the OS before splitting the rest across shards - so a
-# 2.5 GiB VM leaves only 826 MiB and dies with "memory per shard too low" on first boot,
-# before SCT gets a chance to apply append_scylla_args or developer_mode. 4 GiB leaves
-# ~2.2 GiB for the single shard. Raising this multiplies across every VM in the test, so
-# the sct-runner has to be sized for n_db_nodes + n_loaders + n_monitor_nodes times this.
+# In lightweight mode minicloud gives every db VM 1 vCPU and this much RAM, ignoring the
+# instance type the test asked for (loaders and monitors get their own, smaller sizes). Scylla
+# refuses to start below 1 GiB per shard, and it reserves ~1.7 GiB of the guest for the OS before
+# splitting the rest across shards - so a 2.5 GiB VM leaves only 826 MiB and dies with "memory
+# per shard too low" on first boot, before SCT gets a chance to apply append_scylla_args or
+# developer_mode. 4 GiB leaves ~2.2 GiB for the single shard. Raising this multiplies across
+# every db VM in the test, so the sct-runner has to be sized for the db node count times this,
+# plus the loader and monitor sizes.
 MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT = "4GiB"
 # One shard per vCPU. minicloud's own default is also 1, but pass it explicitly so the value a
 # run used is visible in its config rather than inherited from whichever image version ran.
 MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT = 1
+# Role tag SCT sets on every guest. minicloud matches it ignoring case, so it also matches GCE lowercase label.
+MINICLOUD_ROLE_TAG_KEY = "NodeType"
 # Image cache, per-instance qcow2 disks and minicloud.log all live here - tens of GiB.
 MINICLOUD_STATE_DIR_DEFAULT = "~/.cache/minicloud"
 # Backend-independent: GCE runs also reach S3 (keystore, job artifacts, downloads, test
@@ -98,6 +101,22 @@ def resolve_minicloud_regions(params=None) -> List[str]:
     return list(AWS_SUPPORTED_REGIONS)
 
 
+def _param_or_none(params, name: str):
+    """Return a param value, or None when it is missing or empty; a 0 passes through."""
+    value = params.get(name) if params else None
+    return None if value in (None, "") else value
+
+
+def _monitor_size_param(params, name: str):
+    """Return a monitor size param, or None (use the db size) when use_mgmt is set.
+
+    Scylla Manager runs a local Scylla on the monitor, which needs ~2.5GiB of guest RAM.
+    """
+    if params and params.get("use_mgmt"):
+        return None
+    return _param_or_none(params, name)
+
+
 def _param_as_list(params, name: str) -> List[str]:
     """Flatten a StringOrList param: plain 'a,b' string, list, or list of joined strings."""
     value = params.get(name) if params else None
@@ -139,6 +158,11 @@ class MinicloudConfig:
     lightweight: bool = True
     lightweight_memory: str = MINICLOUD_LIGHTWEIGHT_MEMORY_DEFAULT
     lightweight_vcpus: int = MINICLOUD_LIGHTWEIGHT_VCPUS_DEFAULT
+    # loader and monitor sizes; None gives the roles the db size
+    lightweight_memory_loader: str | None = None
+    lightweight_memory_monitor: str | None = None
+    lightweight_vcpus_loader: int | None = None
+    lightweight_vcpus_monitor: int | None = None
     # Docker limits on the container itself. Empty means "pass no flag" — the container is then
     # bounded only by the host, which is what every run did before these became configurable.
     container_memory: str = ""
@@ -198,6 +222,23 @@ class MinicloudConfig:
         if self.default_region in self.regions:
             return self.default_region
         return self.regions[0] if self.regions else MINICLOUD_DEFAULT_REGION
+
+    def lightweight_flag_values(self) -> tuple[str, str]:
+        """Return the --lightweight-memory and --lightweight-vcpus values.
+
+        The db size comes first as the default; loader and monitor sizes follow as NodeType tag
+        entries. The fixed order lets unchanged sizes match a running container flags.
+        """
+        memory, vcpus = [self.lightweight_memory], [str(self.lightweight_vcpus)]
+        for role, role_memory, role_vcpus in (
+            ("loader", self.lightweight_memory_loader, self.lightweight_vcpus_loader),
+            ("monitor", self.lightweight_memory_monitor, self.lightweight_vcpus_monitor),
+        ):
+            if role_memory:
+                memory.append(f"{MINICLOUD_ROLE_TAG_KEY}={role}={role_memory}")
+            if role_vcpus is not None:
+                vcpus.append(f"{MINICLOUD_ROLE_TAG_KEY}={role}={role_vcpus}")
+        return ",".join(memory), ",".join(vcpus)
 
     @classmethod
     def from_env(cls, params=None) -> "MinicloudConfig":
@@ -272,6 +313,10 @@ class MinicloudConfig:
             lightweight=lightweight,
             lightweight_memory=lightweight_memory,
             lightweight_vcpus=lightweight_vcpus,
+            lightweight_memory_loader=_param_or_none(params, "minicloud_lightweight_memory_loader"),
+            lightweight_memory_monitor=_monitor_size_param(params, "minicloud_lightweight_memory_monitor"),
+            lightweight_vcpus_loader=_param_or_none(params, "minicloud_lightweight_vcpus_loader"),
+            lightweight_vcpus_monitor=_monitor_size_param(params, "minicloud_lightweight_vcpus_monitor"),
             container_memory=container_memory,
             container_cpus=container_cpus,
             container_name=container_name,

@@ -11,9 +11,9 @@
 # counts guests only, so it cannot see stress keys. This overlay must override every stress key
 # that upgrade_test.test_rolling_upgrade reads.
 #
-# Guest budget: 3 db + 1 loader + 1 monitor = 5 guests x minicloud_lightweight_memory (4GiB) = 20GiB,
-# plus ~2GiB host headroom. Raise minicloud_lightweight_memory only if the host has room for
-# 5x the increase.
+# Guest budget: 3 db x minicloud_lightweight_memory (4GiB) + 1 loader x minicloud_lightweight_memory_loader
+# (2GiB) + 1 monitor x minicloud_lightweight_memory_monitor (2GiB) = 16GiB, plus ~2GiB host headroom.
+# Raise minicloud_lightweight_memory only if the host has room for 3x the increase.
 
 # Scylla keeps about 1.5GiB for the guest OS when RAM is below ~22GiB.
 # This rolling-upgrade scenario puts heavy pressure on the node (upgrades, upgradesstables, five parallel
@@ -28,8 +28,8 @@ n_loaders: 1
 # upgrading, so the monitor is load-bearing here, not optional.
 n_monitor_nodes: 1
 
-# Lightweight mode caps every guest to 1 vCPU / minicloud_lightweight_memory regardless of the type,
-# so these only have to exist in the emulated catalogs.
+# Lightweight mode sizes every guest by its role (the minicloud_lightweight_* params) regardless of the
+# type, so these only have to exist in the emulated catalogs.
 instance_type_db: 'i4i.large'
 instance_type_loader: 'i4i.large'
 gce_instance_type_db: 'n2-standard-2'
@@ -38,7 +38,7 @@ gce_instance_type_monitor: 'n2-standard-2'
 # qcow2-backed disks, no NVMe passthrough - the gce_config.yaml default of 4 cannot be served.
 gce_n_local_ssd_disk_db: 1
 
-# Nested virtualization (KVM) for the QEMU guests, and enough RAM for the 20GiB above.
+# Nested virtualization (KVM) for the QEMU guests, and enough RAM for the 16GiB above.
 # AWS: only c8i/m8i/r8i support it. GCE: n1/n2/c2/c3 (see SctRunner families).
 instance_type_runner: 'm8i.2xlarge'
 

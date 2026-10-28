@@ -179,6 +179,18 @@ def test_minicloud_config_lightweight_params_are_honoured():
     assert config.lightweight_memory == "6GiB"
 
 
+def test_minicloud_config_monitor_gets_db_size_with_manager():
+    """Scylla Manager keeps its data in a local Scylla on the monitor, which does not start in 2GiB."""
+    config = MinicloudConfig.from_env(
+        params={
+            "use_mgmt": True,
+            "minicloud_lightweight_memory_monitor": "2GiB",
+            "minicloud_lightweight_vcpus_monitor": 1,
+        }
+    )
+    assert config.lightweight_flag_values() == ("4GiB", "1")
+
+
 def test_minicloud_config_lightweight_can_be_disabled_by_param():
     config = MinicloudConfig.from_env(params={"minicloud_lightweight": False})
     assert config.lightweight is False
