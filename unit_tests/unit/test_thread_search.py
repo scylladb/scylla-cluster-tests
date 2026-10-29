@@ -37,6 +37,7 @@ def test_doubles_then_bisects_to_the_precision():
     # 550 - 525 = 25 threads, within 5% of 525.
     assert (search.highest_passing, search.lowest_failing) == (525, 550)
     assert "narrowed to 525-550" in search.stop_reason
+    assert search.stop_kind == "narrowed"
 
 
 def test_halves_when_the_first_step_fails():
@@ -56,12 +57,14 @@ def test_stops_doubling_when_throughput_stops_growing():
     search = ThreadSearch(start_threads=100, config=CONFIG)
     assert _run(search, saturated) == [100, 200, 400]
     assert "throughput grew less than 5%" in search.stop_reason
+    assert search.stop_kind == "saturated"
 
 
 def test_nothing_passes_down_to_one_thread():
     search = ThreadSearch(start_threads=8, config=CONFIG)
     assert _run(search, lambda threads: (False, threads * 1000)) == [8, 4, 2, 1]
     assert search.stop_reason == "no thread count kept P99 within the limit"
+    assert search.stop_kind == "none passed"
     assert search.highest_passing is None
 
 
@@ -113,7 +116,9 @@ def test_retry_is_flagged_and_does_not_use_the_budget():
 def test_doubling_stops_at_the_thread_cap():
     search = ThreadSearch(start_threads=1500, config=ThreadSearchConfig(max_threads_per_command=4096))
     assert _run(search, _limit_at(10**6)) == [1500, 3000, 4096]
-    assert search.stop_reason == "reached the cap of 4096 threads per command"
+    assert search.stop_reason.startswith("reached the cap of 4096 threads per command")
+    assert "lower bound" in search.stop_reason
+    assert search.stop_kind == "thread cap"
 
 
 def test_start_threads_above_the_cap_start_at_the_cap():
@@ -138,6 +143,7 @@ def test_budget_does_not_stop_the_search_before_the_limit_is_found(start_threads
     search = ThreadSearch(start_threads=start_threads, config=ThreadSearchConfig(max_steps=2))
     assert _run(search, _limit_at(max_passing_threads)) == expected_steps
     assert search.stop_reason == "used the step budget of 2"
+    assert search.stop_kind == "budget"
 
 
 def test_gap_of_one_thread_ends_the_search():

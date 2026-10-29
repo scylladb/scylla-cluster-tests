@@ -125,6 +125,9 @@ class BestThroughputResult(StaticGenericResultTable):
             ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P99 limit", unit="ms", type=ResultType.FLOAT),
             ColumnMetadata(name="Step", unit="", type=ResultType.TEXT),
+            # Why the thread search stopped (sdcm.utils.thread_search.STOP_KINDS); empty for the fixed steps.
+            # "thread cap" means the limit is above the cap, so the throughput is a lower bound.
+            ColumnMetadata(name="Stop reason", unit="", type=ResultType.TEXT),
         ]
 
 
@@ -473,7 +476,11 @@ def worst_p99_per_operation(p99_per_hdr_key: dict[str, float]) -> dict[str, floa
 
 
 def send_best_throughput_result_to_argus(
-    argus_client: ArgusClient, workload: str, best_step: "BestThroughputStep | None", p99_limit_ms: float
+    argus_client: ArgusClient,
+    workload: str,
+    best_step: "BestThroughputStep | None",
+    p99_limit_ms: float,
+    stop_reason: str | None = None,
 ) -> None:
     """Send the best gradual step of a workload as a single row, so Argus tracks it across versions.
 
@@ -487,6 +494,8 @@ def send_best_throughput_result_to_argus(
     )
     row = "best"
     result_table.add_result(column="P99 limit", row=row, value=p99_limit_ms, status=Status.UNSET)
+    if stop_reason:
+        result_table.add_result(column="Stop reason", row=row, value=stop_reason, status=Status.UNSET)
     if best_step is None:
         result_table.add_result(column="Throughput", row=row, value=0, status=Status.UNSET)
         result_table.add_result(column="Step", row=row, value="none passed", status=Status.UNSET)

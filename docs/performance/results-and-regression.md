@@ -202,6 +202,7 @@ After the steps loop, the gradual test sends one `BestThroughputResult` table pe
 | `P99 write`, `P99 read` | P99 at the best step, worst across HDR tags of the same operation (ms) |
 | `P99 limit` | The limit used, from `perf_gradual_latency_limit` |
 | `Step` | Step name, or `none passed` |
+| `Stop reason` | Thread search runs only: `narrowed`, `saturated`, `thread cap`, `budget` or `none passed`. `thread cap` means every step up to `max_threads_per_command` stayed within the limit, so `Throughput` is a lower bound, not the limit |
 
 `find_best_throughput` (`sdcm/utils/latency.py`) picks the step: P99 of every operation within the
 limit (for mixed, read and write both), ranked by `cycle_hdr_throughput`, not by thread count or

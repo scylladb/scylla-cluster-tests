@@ -709,10 +709,12 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             time.sleep(240)
 
         total_summary = {}
+        search = None
         if search_config:
+            search = ThreadSearch(start_threads=search_start_threads, config=search_config)
             self.run_thread_search(
                 workload=workload,
-                search=ThreadSearch(start_threads=search_start_threads, config=search_config),
+                search=search,
                 total_summary=total_summary,
                 stress_num=stress_num,
                 num_loaders=num_loaders,
@@ -736,7 +738,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         best_step = self.find_best_step(workload=workload, total_summary=total_summary)
         # The results log is written before each Argus send, so the run's results survive a failed send.
         self.save_total_summary_in_file(total_summary, best_step=best_step)
-        self.report_best_throughput(workload=workload, best_step=best_step)
+        self.report_best_throughput(
+            workload=workload, best_step=best_step, stop_reason=search.stop_kind if search else None
+        )
         if overload_config := self.overload_config(workload.workload_type):
             if overload_results := self.run_overload_steps(
                 workload=workload,
@@ -964,14 +968,17 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             self.log.warning("No '%s' step kept P99 within %s ms", workload.workload_type, p99_limit_ms)
         return best_step
 
-    def report_best_throughput(self, workload: Workload, best_step: BestThroughputStep | None) -> None:
-        """Send the best step, or "none passed", to Argus."""
+    def report_best_throughput(
+        self, workload: Workload, best_step: BestThroughputStep | None, stop_reason: str | None = None
+    ) -> None:
+        """Send the best step, or "none passed", to Argus, with why the thread search stopped when one ran."""
         self.send_to_argus(
             f"the '{workload.workload_type}' best throughput",
             send_best_throughput_result_to_argus,
             workload=workload.workload_type,
             best_step=best_step,
             p99_limit_ms=self.p99_limit_ms(workload),
+            stop_reason=stop_reason,
         )
 
     def save_total_summary_in_file(
