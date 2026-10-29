@@ -93,8 +93,10 @@ thread count an adaptive search picks (`sdcm/utils/thread_search.py`):
    grows less than `min_throughput_gain_pct`, or the threads reach `max_threads_per_command` (default 4096).
    When the first step already fails, halve instead.
 3. Bisect between the last passing and the first failing thread count until they are within
-   `precision_pct` or `max_steps` (default 10) is used up. The budget never stops steps 1-2, so the search
-   always finds the limit or saturation.
+   `precision_pct` or `max_steps` (default 10) is used up. The budget never stops steps 1-2: the search ends
+   at the limit, at saturation, or at the thread cap. A cap stop means every step stayed within the limit, so
+   the best throughput is only a lower bound; the `Stop reason` column of `BestThroughputResult` says
+   `thread cap` then.
 
 A step that collected no results (e.g. a failed latency collection) runs once more at the same thread count,
 named `unthrottled_<threads>_threads_retry`, and counts as failed only if that has no results either; the

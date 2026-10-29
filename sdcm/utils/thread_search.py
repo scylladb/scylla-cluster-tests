@@ -54,11 +54,16 @@ class ThreadSearchConfig:
         return max(1, math.ceil(self.start_threads_per_shard * total_shards / max(1, num_stress_commands)))
 
 
+# Why a search ended, as the best-throughput row in Argus reports it. Only "narrowed" has a failing thread count
+# within the precision of the best one; "thread cap" means the limit is above the cap, a lower bound.
+STOP_KINDS = ("narrowed", "saturated", "thread cap", "budget", "none passed")
+
+
 class ThreadSearch:
     """Decide the thread count of each step from the results of the steps before it.
 
     Usage: run a step at `next_threads()`, report it with `record()`, repeat until `next_threads()` is None;
-    `stop_reason` then says why the search ended.
+    `stop_reason` then says why the search ended, and `stop_kind` names it in one of `STOP_KINDS`.
     """
 
     def __init__(self, start_threads: int, config: ThreadSearchConfig):
@@ -69,6 +74,7 @@ class ThreadSearch:
         self._highest_passing_throughput: int | None = None
         self._next: int | None = min(max(1, start_threads), config.max_threads_per_command)
         self.stop_reason: str | None = None
+        self.stop_kind: str | None = None
         self.is_retry = False
         self._retries = 0
 
@@ -98,7 +104,7 @@ class ThreadSearch:
         # limit hasn't been found, and stopping would report a thread count that isn't the best.
         limit_found = self.highest_passing is not None and self.lowest_failing is not None
         if self._next is not None and limit_found and len(self.steps) - self._retries >= self.config.max_steps:
-            self._next = self._stop(f"used the step budget of {self.config.max_steps}")
+            self._next = self._stop(f"used the step budget of {self.config.max_steps}", kind="budget")
 
     def _decide(self, threads: int, passed: bool, throughput: int | None) -> int | None:
         if passed:
@@ -112,14 +118,15 @@ class ThreadSearch:
                 self.lowest_failing = threads
             if self.highest_passing is None:
                 if threads <= 1:
-                    return self._stop("no thread count kept P99 within the limit")
+                    return self._stop("no thread count kept P99 within the limit", kind="none passed")
                 return max(1, threads // 2)
 
         gap = self.lowest_failing - self.highest_passing
         if gap <= max(1, self.highest_passing * self.config.precision_pct / 100):
             return self._stop(
                 f"narrowed to {self.highest_passing}-{self.lowest_failing} threads "
-                f"(within {self.config.precision_pct}%)"
+                f"(within {self.config.precision_pct}%)",
+                kind="narrowed",
             )
         return (self.highest_passing + self.lowest_failing) // 2
 
@@ -133,11 +140,19 @@ class ThreadSearch:
             and throughput is not None
             and throughput < previous_throughput * (1 + self.config.min_throughput_gain_pct / 100)
         ):
-            return self._stop(f"throughput grew less than {self.config.min_throughput_gain_pct}% at {threads} threads")
+            return self._stop(
+                f"throughput grew less than {self.config.min_throughput_gain_pct}% at {threads} threads",
+                kind="saturated",
+            )
         if threads >= self.config.max_threads_per_command:
-            return self._stop(f"reached the cap of {self.config.max_threads_per_command} threads per command")
+            # The limit lies above the cap, so the best throughput found is only a lower bound.
+            return self._stop(
+                f"reached the cap of {self.config.max_threads_per_command} threads per command while still within "
+                "the latency limit: the best throughput is a lower bound",
+                kind="thread cap",
+            )
         return min(threads * 2, self.config.max_threads_per_command)
 
-    def _stop(self, reason: str) -> None:
-        self.stop_reason = reason
+    def _stop(self, reason: str, kind: str) -> None:
+        self.stop_reason, self.stop_kind = reason, kind
         LOGGER.info("Thread search stopped: %s", reason)

@@ -69,6 +69,17 @@ def test_nothing_passed_is_sent_as_zero_throughput():
     assert _cells(table) == {"P99 limit": 10, "Throughput": 0, "Step": "none passed"}
 
 
+@pytest.mark.parametrize("stop_reason", ["narrowed", "thread cap"])
+def test_search_stop_reason_is_sent(stop_reason):
+    client = FakeArgusClient()
+    best_step = BestThroughputStep(name="unthrottled_4096_threads", throughput=900000, p99={}, threads=4096)
+    send_best_throughput_result_to_argus(
+        client, workload="read", best_step=best_step, p99_limit_ms=10, stop_reason=stop_reason
+    )
+
+    assert _cells(client.tables[0])["Stop reason"] == stop_reason
+
+
 def test_worst_p99_per_operation_across_hdr_tags():
     client = FakeArgusClient()
     best_step = BestThroughputStep(
