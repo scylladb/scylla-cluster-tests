@@ -143,6 +143,9 @@ class BestThroughputRequest:
     n_loaders: int | None = None
     sub_tests: list[str] = field(default_factory=lambda: list(ALL_SUB_TESTS))
     provision_type: str = "on_demand"
+    # Throttled, the sub-tests run one at a time: every throttle category allows one build at a time.
+    use_job_throttling: bool = True
+    job_throttle_category: str = ""
     # Search and result.
     p99_limit_ms: float | None = None
     step_duration: str = ""
@@ -181,8 +184,9 @@ class BestThroughputRequest:
             for name in ("p99_limit_ms", "search_precision_pct"):
                 if name in values:
                     values[name] = float(values[name])
-            if isinstance(values.get("tablets"), str):
-                values["tablets"] = values["tablets"].lower() in ("true", "1", "yes")
+            for name in ("tablets", "use_job_throttling"):
+                if isinstance(values.get(name), str):
+                    values[name] = values[name].lower() in ("true", "1", "yes")
             for name in ("test_config", "sub_tests"):
                 if isinstance(values.get(name), str):
                     values[name] = json.loads(values[name])
@@ -352,7 +356,12 @@ class BestThroughputRequest:
             "sub_tests": json.dumps(self.sub_tests),
             "extra_environment_variables": self.final_environment_variables(),
         }
-        for param in (*SCYLLA_IMAGE_PARAMS, "requested_by_user", "email_recipients"):
+        # Parameters reach Jenkins as strings, and the pipeline's `if (params.use_job_throttling)` takes "False" as
+        # true. So throttling is passed only when on; otherwise the job's default, false, applies.
+        if self.use_job_throttling:
+            parameters["use_job_throttling"] = True
+        # Empty: the perf pipeline's default category for the region, SCT-perf-<region>.
+        for param in (*SCYLLA_IMAGE_PARAMS, "requested_by_user", "email_recipients", "job_throttle_category"):
             if value := getattr(self, param):
                 parameters[param] = value
         return parameters

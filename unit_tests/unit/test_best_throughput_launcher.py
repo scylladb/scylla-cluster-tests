@@ -206,6 +206,24 @@ def test_build_parameters():
     assert "scylla_ami_id" not in parameters, "unset image parameters are not passed"
 
 
+@pytest.mark.parametrize(
+    "request_params, expected_throttling, expected_category",
+    [
+        # The perf pipeline then uses its region's category, SCT-perf-<region>, which allows one build at a time.
+        pytest.param({}, True, None, id="default_one_sub_test_at_a_time"),
+        # Not passed at all: the job's default, false. A string "False" would read as true in the pipeline.
+        pytest.param({"use_job_throttling": "false"}, None, None, id="parallel"),
+        pytest.param(
+            {"job_throttle_category": "SCT-perf-us-east-1-i8g"}, True, "SCT-perf-us-east-1-i8g", id="category"
+        ),
+    ],
+)
+def test_sub_tests_are_throttled(request_params, expected_throttling, expected_category):
+    parameters = _request(**request_params).build_parameters()
+    assert parameters.get("use_job_throttling") is expected_throttling
+    assert parameters.get("job_throttle_category") == expected_category
+
+
 def test_region_defaults_to_the_backend_region():
     assert _request().build_parameters()["region"] == "us-east-1"
 

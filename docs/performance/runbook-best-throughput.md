@@ -55,6 +55,8 @@ Empty means the default.
 | | `instance_type_loader`, `n_loaders` | the test-case's (c7i.8xlarge, 4) |
 | | `sub_tests` | all four workloads |
 | | `provision_type` | `on_demand` |
+| | `use_job_throttling` | true: the sub-tests run one at a time; unchecked runs them in parallel |
+| | `job_throttle_category` | empty: the perf pipeline's `SCT-perf-<region>`, e.g. `SCT-perf-us-east-1` |
 | Search and result | `p99_limit_ms` | 10 |
 | | `step_duration` | 30m |
 | | `start_threads_per_shard` | 16 |
@@ -66,8 +68,12 @@ Empty means the default.
 | | `dry_run` | false |
 
 A run takes ~7-8 h per workload at the defaults: the preload, then 6-10 steps of 30 minutes, each followed by
-waits for compactions (at least 3 minutes) and tablet splits (up to 6). The four workloads run in parallel on
-their own clusters.
+waits for compactions (at least 3 minutes) and tablet splits (up to 6). Each workload runs on its own cluster.
+
+With `use_job_throttling` (the default) the workloads run one at a time, so all four take ~30 h. They queue
+in the Jenkins throttle category with the other perf jobs that use it; every `SCT-perf-*` category allows one
+build at a time, so no other perf job in that category runs alongside and skews the results. Uncheck it to run
+the four in parallel, in ~8 h.
 
 The launcher sets `SCT_TEST_DURATION` for the longest run the settings allow, so the test timeout doesn't end a
 run before it reports: 180 minutes for setup, preload and teardown, plus (step duration + 10 minutes) for each
@@ -99,7 +105,7 @@ the defaults. Set `SCT_TEST_DURATION` in `extra_environment_variables` to overri
 
 ## 4. Read the result
 
-Each workload (read, write, mixed, read_disk_only) runs in parallel on its own cluster:
+Each workload (read, write, mixed, read_disk_only) runs on its own cluster, one at a time by default:
 
 - `<workload> - best throughput under P99 limit` (Argus): the best throughput, its thread count, P99 read/write,
   the limit and why the search stopped. Throughput 0 with step `none passed` means no thread count stayed within

@@ -50,6 +50,10 @@ Setting SCT_INSTANCE_TYPE_DB or SCT_N_DB_NODES to a different value than above i
                    description: 'JSON list of workloads to run, in parallel')
             string(name: 'provision_type', defaultValue: 'on_demand',
                    description: 'on_demand or spot')
+            booleanParam(name: 'use_job_throttling', defaultValue: true,
+                   description: 'Run the sub-tests one at a time, queued with the other perf jobs of the same throttle category. Unchecked runs them in parallel')
+            string(name: 'job_throttle_category', defaultValue: '',
+                   description: 'Jenkins throttle category. Empty: the perf pipeline default for the region, SCT-perf-<region>')
 
             separator(name: 'SEARCH', sectionHeader: 'Search and result (empty: the best-throughput overlay default)')
             string(name: 'p99_limit_ms', defaultValue: '',
@@ -112,7 +116,7 @@ Setting SCT_INSTANCE_TYPE_DB or SCT_N_DB_NODES to a different value than above i
                         def requestNames = [
                             'backend', 'instance_type_db', 'n_db_nodes', 'tablets', 'job_name_suffix',
                             'test_config', 'extra_environment_variables', 'region', 'instance_type_loader',
-                            'n_loaders', 'sub_tests', 'provision_type',
+                            'n_loaders', 'sub_tests', 'provision_type', 'use_job_throttling', 'job_throttle_category',
                             'p99_limit_ms', 'step_duration', 'start_threads_per_shard', 'max_search_steps',
                             'search_precision_pct', 'overload_factors',
                             'scylla_version', 'scylla_ami_id', 'gce_image_db', 'azure_image_db', 'scylla_repo',
