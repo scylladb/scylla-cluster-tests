@@ -9,6 +9,8 @@ Step-by-step process for reviewing a pull request on the SCT repository.
 **Entry criteria**: PR URL or diff is available.
 
 1. Read the PR title, description, and linked issues
+   - Read `REVIEW.md` at the repository root for the three review passes
+   - When the PR carries or links an idea directory `docs/plans/<feature>/<idea>/`, read the `intent.md`, `spec.md`, and `plan.md` that exist (SKILL.md Check 11)
 2. Identify the category of change: bug fix, feature, refactor, test, config, CI
 3. List the files modified and which SCT subsystems they touch
 4. Note the backends involved (AWS, GCE, Azure, Docker, K8S, baremetal)
@@ -67,6 +69,7 @@ Step-by-step process for reviewing a pull request on the SCT repository.
 2. **Missing docs**: Are docstrings updated? Is `docs/configuration_options.md` regenerated (happens via pre-commit)?
 3. **Missing changes**: Are there files that SHOULD have been modified but weren't? (Other backends, test stubs, config defaults)
 4. **Commit message**: Follows Conventional Commits format with valid type, scope (3+ chars), subject (10-120 chars), and body (30+ chars)
+5. **Spec compliance**: When the PR carries an idea directory, the change matches its documents (SKILL.md Check 11)
 
 **Exit criteria**: Review is complete. All findings documented with specific file/line references.
 

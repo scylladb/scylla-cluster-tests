@@ -14,6 +14,10 @@ description: >-
 
 Review SCT pull requests for correctness, safety, and convention compliance.
 
+[REVIEW.md](../../REVIEW.md) at the repository root is the short review guide for people and agents.
+This skill holds the detailed checks behind its three passes. The standards are indexed in
+[docs/INDEX.md](../../docs/INDEX.md).
+
 ## Essential Principles
 
 ### Override Safety Is the Highest-Priority Check
@@ -168,6 +172,7 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
 - Conventional Commits format: `type(scope): subject`
 - Valid types: `ci`, `docs`, `feature`, `fix`, `improvement`, `perf`, `refactor`, `revert`, `style`, `test`, `unit-test`, `build`, `chore`
 - Scope minimum 3 chars, subject 10-120 chars, body minimum 30 chars
+- A bug fix states its root cause in the commit body and the PR description: the mechanism, the code path, and the evidence
 
 ### Check 9: HTTP Resilience & Retry Patterns
 
@@ -185,6 +190,19 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
 - Follow the change to the job's entries in `configurations/triggers/*.yaml`; if the DB arch changes, the entry's `arch` must change for the releases this branch serves
 - Verify with `uv run sct.py trigger-matrix-audit --remote upstream`
 - How to split an entry by release: [review-checklist.md](references/review-checklist.md#trigger-matrix-arch-skillmd-check-10)
+
+### Check 11: Spec Compliance
+
+**Trigger**: PR adds or changes files in an idea directory `docs/plans/<feature>/<idea>/`, or its description links one.
+
+- Read the `intent.md`, `spec.md`, and `plan.md` that exist. Each one is optional. The flow is described in [docs/development-flow.md](../../docs/development-flow.md)
+- When `spec.md` exists:
+  - The change stays inside the design, the constraints, and the decisions, and keeps each contract the spec names
+  - The change builds nothing that the spec does not design. Each design change in the range updates the spec
+  - No `(open)` line remains in the spec's `Decisions` section
+- When only `intent.md` exists, the change solves the problem it states and stays out of its `Out of scope` section
+- When `plan.md` exists, every box is checked, or the PR description tells why a box stays open
+- The flow is optional: a PR without an idea directory is not a finding
 
 ## Reference Index
 
@@ -212,3 +230,4 @@ A complete code review:
 - [ ] Missing code identified — defaults, docstrings, tests, other backends
 - [ ] HTTP resilience verified — no bare curl or requests calls without retry
 - [ ] Trigger-matrix arch checked — DB instance/arch changes are reflected in `configurations/triggers/*.yaml`
+- [ ] Spec compliance checked — when the PR carries an idea directory, the change matches its `spec.md`

@@ -78,3 +78,4 @@ REVIEW.md                            # Pass 1 bugs and logic, Pass 2 security, P
 - The idea documents have no frontmatter and no `MASTER.md` entry. They describe one change and stay with it. (spec)
 - `REVIEW.md` sits at the repository root, where reviewers and automated review tools look for it. (spec)
 - The standards domains are `global`, `python`, `testing`, and `config`, the areas of SCT. (spec)
+- The discovery aligns the sources that disagree with the code: the generated nemesis files rule and the unit test paths. (build)

@@ -273,7 +273,7 @@ or context that helps reviewers understand why this phase differs from initial e
 ### Unit Tests
 - Test configuration parsing with valid/invalid inputs
 - Mock cluster nodes to test health check logic
-- Run with: `uv run sct.py unit-tests -t test_health_check.py`
+- Run with: `uv run sct.py unit-tests -t unit/test_health_check.py`
 
 ### Integration Tests
 - Test with Docker backend: `--backend docker`

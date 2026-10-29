@@ -19,7 +19,7 @@ A 4-phase process for creating a new unit test in the SCT repository.
 
 3. **Identify external dependencies.** List any network calls, file I/O, cloud API calls, or remote commands. These must be mocked in the unit test.
 
-4. **Decide the test file name.** Follow the pattern `unit_tests/test_<module_name>.py`. **If an existing file covers the module, add tests to it** — do not create a new file for the same module. Reuse existing fixtures and test utilities found in `unit_tests/conftest.py` or the existing test file.
+4. **Decide the test file name.** Follow the pattern `unit_tests/unit/test_<module_name>.py`. **If an existing file covers the module, add tests to it** — do not create a new file for the same module. Reuse existing fixtures and test utilities found in `unit_tests/conftest.py` or the existing test file.
 
 5. **Check that a unit test is the right tool.** If the change is in bash, Groovy, or other non-Python code (a generated script, `vars/*.groovy`, a `*.jenkinsfile`, a `*.sh` file), do not assert on its text. Run it with its own runtime if possible, test the Python logic around it, or leave it to integration or manual testing in real jobs (see AP-7 in `references/anti-patterns.md`). If there is no Python behavior to test, write no unit test.
 
@@ -154,19 +154,19 @@ A 4-phase process for creating a new unit test in the SCT repository.
 
 1. **Run the specific test file:**
    ```bash
-   uv run sct.py unit-tests -t test_your_module.py
+   uv run sct.py unit-tests -t unit/test_your_module.py
    ```
 
 2. **Run with verbose output for debugging:**
    ```bash
-   uv run python -m pytest unit_tests/test_your_module.py -v -s
+   uv run python -m pytest unit_tests/unit/test_your_module.py -v -s
    ```
 
 3. **Check for accidental network access.** If any test hangs or is slow, it may be making real network calls. Add mocking.
 
 4. **Verify test isolation.** Run the test file multiple times and in different order:
    ```bash
-   uv run python -m pytest unit_tests/test_your_module.py -v -p random-order
+   uv run python -m pytest unit_tests/unit/test_your_module.py -v -p random-order
    ```
 
 5. **Mutation-check each new test.** Break the code under test the way the test claims to catch (delete the stub, invert the branch, return early), confirm the test fails, then revert. A test that stays green is testing setup or a default. See P-18.
