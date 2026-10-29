@@ -85,19 +85,20 @@ def validate_minicloud_params(params) -> None:
     """Fail fast when a minicloud run is missing the configurations/minicloud.yaml overlay.
 
     The overlay is the single delivery mechanism for the params a minicloud run requires
-    (spot instances, public-IP SSH, KMS and iotune are all unsupported by the emulator). Env
-    exports cannot substitute for it — SCTConfiguration is built before the manager starts — so
-    a config list without the overlay would otherwise fail far from the cause: spot-provisioning
-    errors, SSH to unreachable public IPs, or KMS calls against an endpoint that serves no KMS
-    API.
+    (spot instances, public-IP SSH, iotune and, outside the aws backend, KMS are all
+    unsupported by the emulator). Env exports cannot substitute for it — SCTConfiguration is
+    built before the manager starts — so a config list without the overlay would otherwise fail
+    far from the cause: spot-provisioning errors, SSH to unreachable public IPs, or KMS calls
+    against an endpoint that serves no KMS API. On the aws backend minicloud serves KMS, so a
+    run may turn it on.
     """
     problems = []
     if params.get("instance_provision") != "on_demand":
         problems.append(f"instance_provision={params.get('instance_provision')!r} (need 'on_demand'; no spot market)")
     if params.get("ip_ssh_connections") != "private":
         problems.append(f"ip_ssh_connections={params.get('ip_ssh_connections')!r} (need 'private')")
-    if not params.get("enterprise_disable_kms"):
-        problems.append("enterprise_disable_kms is off (minicloud implements no KMS endpoint)")
+    if not params.get("enterprise_disable_kms") and params.get("cluster_backend") != "aws":
+        problems.append("enterprise_disable_kms is off (minicloud emulates KMS for the aws backend only)")
     if params.get("force_run_iotune"):
         problems.append("force_run_iotune is on (iotune is pointless against emulated storage)")
     if problems:
