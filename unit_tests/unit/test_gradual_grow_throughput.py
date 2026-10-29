@@ -343,6 +343,25 @@ def test_run_step_skips_a_queue_that_carries_no_tags():
     assert decorator_input == {"hdr_tags": ["WRITE-st"]}
 
 
+@pytest.mark.parametrize("stop_test_on_failure", [True, False])
+def test_run_step_passes_stop_test_on_failure_to_every_stress_command(stop_test_on_failure):
+    started = []
+
+    def run_stress_thread(**params):
+        started.append(params)
+        return SimpleNamespace(hdr_tags=["WRITE-st"])
+
+    instance = SimpleNamespace(
+        log=logging.getLogger(__name__),
+        run_stress_thread=run_stress_thread,
+        get_stress_results=lambda queue, store_results: [{"op rate": "1000"}],
+    )
+    gradual_grow_module.PerformanceRegressionPredefinedStepsTest.run_step(
+        instance, ["cmd-0", "cmd-1"], {}, None, stop_test_on_failure=stop_test_on_failure
+    )
+    assert [params["stop_test_on_failure"] for params in started] == [stop_test_on_failure] * 2
+
+
 def test_latency_decorator_finds_the_tags_run_step_returns():
     """The wiring that broke: what run_step returns must be what _find_hdr_tags picks up."""
     res = _run_step([["WRITE-st"], ["READ-st"]])

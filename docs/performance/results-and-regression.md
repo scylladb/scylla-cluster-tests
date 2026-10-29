@@ -214,7 +214,9 @@ history across versions.
 With `perf_overload_steps` set, after the best step is found the gradual test runs one throttled step per
 factor (`overload_<factor>x`), offering `factor x` the best throughput with the best step's thread count times
 the factor, capped at `max_threads_multiplier x` it. cassandra-stress commands get `-errors ignore` for these
-steps, so timeouts are counted instead of stopping the step; other tools run as they are. The results go to
+steps, so timeouts are counted instead of stopping the step; other tools run as they are. A stress command
+failing in these steps is reported as an error instead of stopping the test, since cassandra-stress logs every
+operation that fails all its retries as a CRITICAL `OperationOnKey` event. The results go to
 `<workload> - goodput under overload` (`GoodputUnderOverloadResult`), one row per factor (`1.3x`, `2x`):
 
 | Column | Contents |

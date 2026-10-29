@@ -537,7 +537,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             return latency_results
         return {step: {"step": step, "legend": "", "cycles": []}}
 
-    def run_step(self, stress_cmds, step_params, step_duration):
+    def run_step(self, stress_cmds, step_params, step_duration, stop_test_on_failure=True):
         """
         Run a single stress step with parameters from step_params dict.
 
@@ -545,6 +545,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             stress_cmds:   List of stress command templates
             step_params:   Dict with step parameters (threads, concurrency, rate, throttle)
             step_duration: Duration for this step
+            stop_test_on_failure: False reports a failing stress command as an error instead of stopping the test
 
         Returns the step's results and, for latency_calculator_decorator, the HDR tags to build
         the histograms of the step from.
@@ -552,7 +553,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         results = []
         stress_queue = []
         for stress_cmd in stress_cmds:
-            params = {"round_robin": True, "stats_aggregate_cmds": False}
+            params = {"round_robin": True, "stats_aggregate_cmds": False, "stop_test_on_failure": stop_test_on_failure}
             stress_cmd_to_run = stress_cmd
 
             # Replace placeholders from step_params dict
@@ -795,6 +796,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 step_name=step.name,
                 stress_num=stress_num,
                 num_loaders=num_loaders,
+                # Operations failing all their retries are what overload produces: cassandra-stress logs each as
+                # a CRITICAL OperationOnKey event, which would otherwise stop the test at the first one.
+                stop_test_on_failure=False,
             )[step.name]
             result = goodput_result(
                 step, step_summary, best_throughput=best_step.throughput, failed_ops=step_summary.get("failed_ops")
@@ -865,7 +869,14 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         )
 
     def run_gradual_step(  # noqa: PLR0913
-        self, workload: Workload, throttle_step_dict: dict, num_threads, step_name: str, stress_num, num_loaders
+        self,
+        workload: Workload,
+        throttle_step_dict: dict,
+        num_threads,
+        step_name: str,
+        stress_num,
+        num_loaders,
+        stop_test_on_failure: bool = True,
     ) -> dict:
         """Run one step and return its summary, keyed by the step name."""
         self.prepare_schema(workload=workload)
@@ -897,6 +908,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             stress_cmds=workload.cs_cmd_tmpl,
             step_params=step_params,
             step_duration=step_duration,
+            stop_test_on_failure=stop_test_on_failure,
         )
         self.log.debug("All c-s commands results collected and saved in Argus")
 

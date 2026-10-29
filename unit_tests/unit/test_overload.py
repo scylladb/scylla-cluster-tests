@@ -126,9 +126,17 @@ def test_failed_ops(results, expected):
 def _test_instance(run_steps, client):
     test_class = gradual_grow_module.PerformanceRegressionPredefinedStepsTest
 
-    def run_gradual_step(workload, throttle_step_dict, num_threads, step_name, stress_num, num_loaders):
+    def run_gradual_step(  # noqa: PLR0913
+        workload, throttle_step_dict, num_threads, step_name, stress_num, num_loaders, stop_test_on_failure=True
+    ):
         run_steps.append(
-            {"name": step_name, "step": throttle_step_dict, "threads": num_threads, "cmds": workload.cs_cmd_tmpl}
+            {
+                "name": step_name,
+                "step": throttle_step_dict,
+                "threads": num_threads,
+                "cmds": workload.cs_cmd_tmpl,
+                "stop_test_on_failure": stop_test_on_failure,
+            }
         )
         # Goodput drops as the offered rate grows past the best throughput.
         offered = int(throttle_step_dict["rate"])
@@ -175,6 +183,8 @@ def test_test_class_runs_a_throttled_step_per_factor():
     # cassandra-stress keeps going through errors; other tools are left as they are.
     assert all(step["cmds"][0].endswith(" -errors ignore") for step in run_steps)
     assert all(step["cmds"][1] == WORKLOAD.cs_cmd_tmpl[1] for step in run_steps)
+    # A failed operation under overload is expected, not a reason to stop the test.
+    assert not any(step["stop_test_on_failure"] for step in run_steps)
     assert [result.goodput_ratio for result in results] == [1.3, 1.0]
     assert [result.failed_ops for result in results] == [650, 1000]
     # Sent by report_goodput, after the results log has them.
