@@ -11,6 +11,6 @@ perfRegressionParallelPipeline(
     // NOTE: no disable_speculative_retry.yaml here - its post_prepare_cql_cmds ALTER
     // tables this test does not create, and speculative_retry='NONE' is already applied
     // to both tables by the rune script via latte_schema_parameters.
-    test_config: '''["test-cases/performance/perf-regression-predefined-throughput-steps.yaml", "configurations/disable_kms.yaml", "configurations/performance/latency-decorator-error-thresholds-steps-ent-tablets.yaml", "configurations/performance/enable_logstor.yaml", "configurations/performance/logstor_lsm_dual_60_40.yaml"]''',
+    test_config: '''["test-cases/performance/perf-regression-predefined-throughput-steps.yaml", "configurations/performance/disable_advanced_rpc_compression.yaml", "configurations/disable_kms.yaml", "configurations/performance/latency-decorator-error-thresholds-steps-ent-tablets.yaml", "configurations/performance/enable_logstor.yaml", "configurations/performance/logstor_lsm_dual_60_40.yaml"]''',
     sub_tests: ["test_dual_engine_mixed_gradual_increase_load"],
 )

@@ -1,0 +1,7 @@
+# Restores Scylla's own internode compression defaults (no compression, no RPC dictionary training),
+# keeping performance results comparable with baselines collected before advanced RPC compression
+# became the SCT default.
+internode_compression: 'none'
+append_scylla_yaml:
+  internode_compression_enable_advanced: false
+  rpc_dict_training_when: 'never'
