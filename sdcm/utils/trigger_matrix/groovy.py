@@ -28,8 +28,12 @@ logger = logging.getLogger(__name__)
 
 
 def _escape_groovy_string(value: str) -> str:
-    """Escape a value for embedding in a Groovy single-quoted string literal."""
-    return value.replace("\\", "\\\\").replace("'", "\\'")
+    """Escape a value for embedding in a Groovy single-quoted string literal.
+
+    A single-quoted literal can't span lines, so line breaks (e.g. in a multi-line `extra_environment_variables`)
+    become their escape sequences; Groovy turns them back into the same characters.
+    """
+    return value.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "\\r").replace("\n", "\\n")
 
 
 def _build_trigger_groovy(job_name: str, parameters: dict, return_queue_url: bool = False) -> str:

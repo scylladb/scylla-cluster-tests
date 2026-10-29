@@ -50,6 +50,11 @@ def _no_upstream_env(monkeypatch):
         # order matters: escaping quotes first would double-escape the backslashes it introduces
         ("\\", "\\\\"),
         ("'", "\\'"),
+        # a single-quoted Groovy literal ends at a line break, so a multi-line value must stay on one line
+        ("SCT_A=1\nSCT_B=2", r"SCT_A=1\nSCT_B=2"),
+        ("a\r\nb", r"a\r\nb"),
+        # a literal backslash-n in the value stays a backslash and an n
+        (r"a\nb", r"a\\nb"),
     ],
 )
 def test_escape_groovy_string(raw, expected):
@@ -95,6 +100,15 @@ def test_escape_groovy_string(raw, expected):
             ["new StringParameterValue('stress_duration', '1440')", "new StringParameterValue('enabled', 'True')"],
             [],
             id="non-string-values-stringified",
+        ),
+        pytest.param(
+            "job",
+            {"extra_environment_variables": "SCT_A=1\nSCT_B=2"},
+            {},
+            {},
+            [r"new StringParameterValue('extra_environment_variables', 'SCT_A=1\nSCT_B=2')"],
+            ["SCT_A=1\nSCT_B=2"],
+            id="multi-line-value-on-one-line",
         ),
         pytest.param("job", {}, {}, {}, ["def params = []"], [], id="no-parameters"),
         pytest.param(
