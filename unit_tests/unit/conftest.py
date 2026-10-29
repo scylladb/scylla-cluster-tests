@@ -25,6 +25,7 @@ import json
 import os
 from unittest.mock import patch, MagicMock, PropertyMock
 
+
 import pytest
 
 from sdcm.keystore import KeyStore, SSHKey

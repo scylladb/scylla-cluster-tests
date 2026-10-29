@@ -44,6 +44,17 @@ def tester(tmp_path):
     return cluster_tester
 
 
+@pytest.mark.parametrize("seed", [pytest.param(0, id="seed-zero"), pytest.param(7, id="seed-7")])
+def test_same_seed_yields_same_disruption_order(seed):
+    """Two runners built with the same nemesis_seed shuffle the disruptions identically, including
+    seed 0, which used to be treated as "no seed" and fell back to an unseeded generator."""
+    first = FakeSisyphusMonkey(FakeTester(params=PARAMS), nemesis_seed=seed)
+    second = FakeSisyphusMonkey(FakeTester(params=PARAMS), nemesis_seed=seed)
+
+    assert first.nemesis_seed == seed
+    assert first._disruption_list_names == second._disruption_list_names
+
+
 def test_disruptions_list(get_sisyphus):
     nemesis = get_sisyphus()
     assert set(method.__class__.__name__ for method in nemesis.disruptions_list) == {

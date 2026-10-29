@@ -120,17 +120,19 @@ def get_table_compaction_info(keyspace: str, table: str, session: object):
     return compaction_properties
 
 
-def get_compaction_random_additional_params(strategy: CompactionStrategy):
-    """
+def get_compaction_random_additional_params(strategy: CompactionStrategy, *, random_generator: random.Random):
+    """Random compaction parameters for ``strategy``, one dict per parameter.
 
+    :param random_generator: draws the values; nemesis code passes ``NemesisRunner.random`` so the
+        parameters replay from nemesis_seed.
     :return: list_additional_params
     """
-    bucket_high = round(random.uniform(1.1, 1.8), 2)
-    bucket_low = round(random.uniform(0.3, 0.8), 2)
-    min_sstable_size = random.randint(10, 500)
-    min_threshold = random.randint(2, 10)
-    max_threshold = random.randint(4, 64)
-    sstable_size_in_mb = random.randint(50, 2000)
+    bucket_high = round(random_generator.uniform(1.1, 1.8), 2)
+    bucket_low = round(random_generator.uniform(0.3, 0.8), 2)
+    min_sstable_size = random_generator.randint(10, 500)
+    min_threshold = random_generator.randint(2, 10)
+    max_threshold = random_generator.randint(4, 64)
+    sstable_size_in_mb = random_generator.randint(50, 2000)
 
     # doc : https://github.com/scylladb/scylladb/blob/d543b96d1837c73f2ded42d4c5c8de17005c2f36/docs/cql/compaction.rst
     list_additional_params_options = {
@@ -159,7 +161,14 @@ def calculate_allowed_twcs_ttl(
     compaction_properties: TimeWindowCompactionProperties,
     default_min_ttl: int = 864000,  # 10 days
     global_max_ttl: int = 4_300_000,  # 49 days
+    *,
+    random_generator: random.Random,
 ):
+    """Pick a TTL that TWCS can hold within its window count.
+
+    :param random_generator: draws the TTL; nemesis code passes ``NemesisRunner.random`` so it
+        replays from nemesis_seed.
+    """
     # TODO retrieve twcs_max_window_count from scylla
     compaction_window_size = int(compaction_properties.compaction_window_size or 1)
     compaction_window_unit = (compaction_properties.compaction_window_unit or "DAYS").upper()
@@ -186,4 +195,4 @@ def calculate_allowed_twcs_ttl(
     if safe_min_ttl > safe_max_ttl:
         return 1
 
-    return random.randint(safe_min_ttl, safe_max_ttl)
+    return random_generator.randint(safe_min_ttl, safe_max_ttl)
