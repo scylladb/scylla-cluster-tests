@@ -28,6 +28,12 @@ from unit_tests.lib.fake_cluster import DummyNode
 
 DECODED_BY_SERVICE = "decoded-by-external"
 BUILD_ID = "abc123"
+RAW_TOPOLOGY_BARRIER_STALL_BACKTRACES = [
+    "0x194b7ff\n0x3526010\n0x3527a31\n0x2e2d177\n"
+    "/opt/scylladb/libreloc/libc.so.6+0x72463\n/opt/scylladb/libreloc/libc.so.6+0xf55eb",
+    "0x194b7ff\n0x3526010\n0x3527a31\n/opt/scylladb/libreloc/libc.so.6+0x72463\n"
+    "/opt/scylladb/libreloc/libc.so.6+0xf55eb\n0x1234567",
+]
 
 
 def _service_response(success=True, stdout=DECODED_BY_SERVICE, stderr=""):
@@ -224,6 +230,30 @@ def test_backtrace_decoding_configuration(
             assert event.get("backtrace") is None, (
                 f"Event of type {event.get('type')} should not have decoded backtrace"
             )
+
+
+@pytest.mark.parametrize(
+    "stall_decoding,expected_backtrace",
+    [
+        pytest.param(True, DECODED_BY_SERVICE, id="decoded_when_stall_decoding_enabled"),
+        pytest.param(False, None, id="skipped_when_stall_decoding_disabled"),
+    ],
+)
+def test_topology_barrier_stall_decoding_follows_stall_decoding_option(
+    test_config, dummy_node, monitor_node, events_function_scope, test_data_dir, stall_decoding, expected_backtrace
+):
+    """backtrace_stall_decoding governs topology barrier stalls as it does reactor stalls."""
+    dummy_node.system_log = str(test_data_dir / "system_topology_barrier_stall.log")
+    db_log_reader = _make_db_log_reader(dummy_node, test_config.DECODING_QUEUE, stall_decoding)
+
+    with patch("sdcm.cluster.requests.post", return_value=_service_response()) as mock_post:
+        _run_decode_thread_over_log(monitor_node, db_log_reader)
+
+    stalls = [e for e in events_function_scope.published_events if e["type"] == "TOPOLOGY_BARRIER_STALL"]
+    assert [e["raw_backtrace"] for e in stalls] == RAW_TOPOLOGY_BARRIER_STALL_BACKTRACES
+    assert [e["backtrace"] for e in stalls] == [expected_backtrace] * 2
+    assert [e["severity"] for e in stalls] == ["WARNING", "ERROR"]
+    assert mock_post.call_count == (2 if stall_decoding else 0)
 
 
 def _run_decode_with_queue_item(monitor_node, build_id, raw_backtrace):

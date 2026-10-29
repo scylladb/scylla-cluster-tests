@@ -22,6 +22,8 @@ from sdcm.sct_events.database import (
     FullScanEvent,
     IndexSpecialColumnErrorEvent,
     TOLERABLE_REACTOR_STALL,
+    TOLERABLE_TOPOLOGY_BARRIER_STALL,
+    get_system_error_events_patterns,
     SYSTEM_ERROR_EVENTS,
     SYSTEM_ERROR_EVENTS_PATTERNS,
 )
@@ -72,6 +74,54 @@ def test_reactor_stalled_severity():
     assert event2.node == "n2"
     assert event2.line == f"{TOLERABLE_REACTOR_STALL} ms"
     assert event2.line_number == 2
+
+
+@pytest.mark.parametrize(
+    "held_for,expected_severity",
+    [
+        pytest.param(f"{TOLERABLE_TOPOLOGY_BARRIER_STALL - 0.001}", Severity.WARNING, id="just_below_threshold"),
+        pytest.param(f"{TOLERABLE_TOPOLOGY_BARRIER_STALL}", Severity.ERROR, id="integer_at_threshold"),
+        pytest.param(f"{TOLERABLE_TOPOLOGY_BARRIER_STALL}.000", Severity.ERROR, id="fraction_at_threshold"),
+    ],
+)
+def test_topology_barrier_stall_hold_time_sets_severity(held_for, expected_severity):
+    """Stalls at or above the tolerable hold time must be ERROR; shorter ones stay WARNING."""
+    line = f"token_metadata - topology version 1372 held for {held_for} [s] past expiry, released at: 0x194b7ff"
+
+    event = DatabaseLogEvent.TOPOLOGY_BARRIER_STALL().add_info(node="n1", line=line, line_number=1)
+
+    assert event.severity == expected_severity
+    assert event.node == "n1"
+    assert event.line_number == 1
+
+
+def test_topology_barrier_stall_unparseable_hold_time_keeps_default_severity():
+    """A line without a readable hold time must still publish, with the default WARNING severity."""
+    event = DatabaseLogEvent.TOPOLOGY_BARRIER_STALL().add_info(
+        node="n1", line="token_metadata - topology version 1372 held for", line_number=1
+    )
+
+    assert event.severity == Severity.WARNING
+
+
+@pytest.mark.parametrize(
+    "enabled,expected_type,expected_severity",
+    [
+        pytest.param(True, "TOPOLOGY_BARRIER_STALL", Severity.WARNING, id="enabled_publishes_stall_event"),
+        pytest.param(False, "WARNING", Severity.SUPPRESS, id="disabled_falls_back_to_suppressed_warning"),
+    ],
+)
+def test_topology_barrier_stall_line_matching_follows_enabled_flag(enabled, expected_type, expected_severity):
+    """A stall line is matched as a stall event only when enabled; otherwise it is suppressed as a warning."""
+    line = (
+        "2026-05-12T12:15:59.522+00:00 node-6 !WARNING | scylla[6531]: [shard 13:sl:d] "
+        "token_metadata - topology version 1372 held for 4.567 [s] past expiry, released at: 0x194b7ff"
+    )
+
+    matched = next(event for pattern, event in get_system_error_events_patterns(enabled) if pattern.search(line))
+
+    assert matched.type == expected_type
+    assert matched.severity == expected_severity
 
 
 def test_find_issue_by_reactor_stall(test_data_dir):
