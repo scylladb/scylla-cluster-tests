@@ -251,6 +251,17 @@ def test_check_latency_during_steps_tolerates_an_unfilled_results_file(tmp_path,
     assert results_file.exists()
 
 
+def test_check_latency_during_steps_tolerates_a_missing_results_file(tmp_path):
+    """Processing a step's results removes the file, and TestConfig creates it only once. When the next step
+    collects nothing, the file is missing: that step must be reported without latencies, so the search reruns
+    it, rather than end the run on FileNotFoundError."""
+    instance = SimpleNamespace(latency_results_file=str(tmp_path / "missing.json"), log=logging.getLogger(__name__))
+
+    result = gradual_grow_module.PerformanceRegressionPredefinedStepsTest.check_latency_during_steps(instance, "step")
+
+    assert result == {"step": {"step": "step", "legend": "", "cycles": []}}
+
+
 def test_check_latency_during_steps_still_processes_collected_results(tmp_path):
     """The happy path is untouched: the results are processed and the file is consumed."""
     collected = {"unthrottled": {"legend": "Gradual test step unthrottled op/s", "cycles": [{"duration": "0:10:00"}]}}

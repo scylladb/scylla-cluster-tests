@@ -2,6 +2,7 @@
 
 import json
 import logging
+from functools import partial
 from types import SimpleNamespace
 
 import pytest
@@ -175,11 +176,13 @@ def _test_instance(run_steps, client):
             )
         }
 
-    return SimpleNamespace(
+    instance = SimpleNamespace(
         log=logging.getLogger(__name__),
         run_gradual_step=run_gradual_step,
         test_config=SimpleNamespace(argus_client=lambda: client),
-    ), test_class
+    )
+    instance.send_to_argus = partial(test_class.send_to_argus, instance)
+    return instance, test_class
 
 
 WORKLOAD = gradual_grow_module.Workload(
@@ -220,6 +223,12 @@ def test_test_class_runs_a_throttled_step_per_factor(caplog):
     assert [result.attempted_ratio for result in results] == [1.0, 0.5]
     assert "Overload step overload_2x attempted only" in caplog.text
     assert "overload_1.3x attempted only" not in caplog.text
+    # Sent by report_goodput, after the results log has them.
+    assert not client.tables
+
+    test_class.report_goodput(
+        instance, workload=WORKLOAD, overload_config=OverloadConfig(), best_step=BEST, results=results
+    )
     assert len(client.tables) == 1
 
 

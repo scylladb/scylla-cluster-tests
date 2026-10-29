@@ -6,6 +6,8 @@ from functools import partial
 from types import SimpleNamespace
 
 import pytest
+import requests
+from argus.client.base import ArgusClientError
 
 import performance_regression_gradual_grow_throughput as gradual_grow_module
 from sdcm.argus_results import send_best_throughput_result_to_argus
@@ -83,18 +85,20 @@ def test_worst_p99_per_operation_across_hdr_tags():
     assert "Threads" not in cells
 
 
-def _report_best_throughput(latency_limit, workload_type, total_summary):
-    client = FakeArgusClient()
+def _report_best_throughput(latency_limit, workload_type, total_summary, client=None):
+    client = client or FakeArgusClient()
+    test_class = gradual_grow_module.PerformanceRegressionPredefinedStepsTest
     instance = SimpleNamespace(
         params={"perf_gradual_latency_limit": latency_limit},
         log=logging.getLogger(__name__),
         test_config=SimpleNamespace(argus_client=lambda: client),
     )
-    instance.p99_limit_ms = partial(gradual_grow_module.PerformanceRegressionPredefinedStepsTest.p99_limit_ms, instance)
-    best_step = gradual_grow_module.PerformanceRegressionPredefinedStepsTest.report_best_throughput(
-        instance, workload=SimpleNamespace(workload_type=workload_type), total_summary=total_summary
-    )
-    return best_step, _cells(client.tables[0])
+    instance.p99_limit_ms = partial(test_class.p99_limit_ms, instance)
+    instance.send_to_argus = partial(test_class.send_to_argus, instance)
+    workload = SimpleNamespace(workload_type=workload_type)
+    best_step = test_class.find_best_step(instance, workload=workload, total_summary=total_summary)
+    test_class.report_best_throughput(instance, workload=workload, best_step=best_step)
+    return best_step, _cells(client.tables[0]) if client.tables else None
 
 
 SUMMARY = {
@@ -128,6 +132,32 @@ def test_report_sends_nothing_passed():
     best_step, cells = _report_best_throughput({"default": {"percentile_99": 1}}, "read", SUMMARY)
     assert best_step is None
     assert cells["Step"] == "none passed"
+
+
+class FailingArgusClient:
+    tables = ()
+
+    def __init__(self, error):
+        self.error = error
+
+    def submit_results(self, table):
+        raise self.error
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(ArgusClientError("Internal Server Error", "APIException"), id="argus_5xx"),
+        pytest.param(requests.ConnectionError("Connection refused"), id="argus_unreachable"),
+    ],
+)
+def test_argus_failure_does_not_fail_the_test(error, caplog):
+    with caplog.at_level(logging.WARNING):
+        best_step, _ = _report_best_throughput(
+            {"default": {"percentile_99": 10}}, "read", SUMMARY, client=FailingArgusClient(error)
+        )
+    assert best_step.threads == 100
+    assert "Could not send the 'read' best throughput to Argus" in caplog.text
 
 
 @pytest.mark.parametrize(
