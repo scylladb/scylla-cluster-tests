@@ -134,13 +134,21 @@ if [[ "$FLAVOR" == "upgrade" ]]; then
     fi
 fi
 
-export SCT_MINICLOUD_ENDPOINT_URL="${SCT_MINICLOUD_ENDPOINT_URL:-http://localhost:5000}"
+# AirPlay Receiver holds port 5000 on macOS.
+[[ "$(uname -s)" == "Darwin" ]] && DEFAULT_PORT=5050 || DEFAULT_PORT=5000
+export SCT_MINICLOUD_ENDPOINT_URL="${SCT_MINICLOUD_ENDPOINT_URL:-http://localhost:$DEFAULT_PORT}"
 # AMIs live in eu-west-1 (minicloud validates uncached AMIs against its own region)
 [[ "$BACKEND" == "aws" ]] && export SCT_REGION_NAME="${SCT_REGION_NAME:-eu-west-1}"
 [[ "$BACKEND" == "azure" ]] && export SCT_AZURE_REGION_NAME="${SCT_AZURE_REGION_NAME:-eastus}"
 # local-dev conveniences — CI sets its own
 export SCT_USE_MGMT="${SCT_USE_MGMT:-false}"
 export SCT_ENABLE_ARGUS="${SCT_ENABLE_ARGUS:-false}"
+
+if [[ "$(uname -s)" == "Darwin" && "$MODE" == "hydra" ]]; then
+    # The native minicloud and its utun device live on the host, outside the hydra container.
+    echo "ERROR: macOS supports only -m direct" >&2
+    exit 5
+fi
 
 if [[ "$MODE" == "hydra" ]]; then
     RUNNER=(./docker/env/hydra.sh)
@@ -150,7 +158,16 @@ fi
 
 # minicloud.yaml goes after the test-case so its values win, then the backend overlay.
 # start-minicloud gets the same list, so the memory preflight sizes the test that actually runs.
-CONFIGS=("$TEST_CASE" "${EXTRA_CONFIGS[@]}" configurations/minicloud.yaml "${BACKEND_CONFIGS[@]}")
+# The ${a[@]+...} form keeps an empty array legal under set -u in bash 3.2, the macOS /bin/bash.
+CONFIGS=("$TEST_CASE" ${EXTRA_CONFIGS[@]+"${EXTRA_CONFIGS[@]}"} configurations/minicloud.yaml ${BACKEND_CONFIGS[@]+"${BACKEND_CONFIGS[@]}"})
+# An arm64 host runs arm64 guests - see configurations/minicloud/arm64.yaml.
+if [[ "$(uname -m)" == "arm64" || "$(uname -m)" == "aarch64" ]]; then
+    CONFIGS+=(configurations/minicloud/arm64.yaml)
+fi
+# macOS runs the native minicloud binary - see configurations/minicloud/macos.yaml.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    CONFIGS+=(configurations/minicloud/macos.yaml)
+fi
 CONFIG_ARGS=()
 for config in "${CONFIGS[@]}"; do
     CONFIG_ARGS+=(-c "$config")
