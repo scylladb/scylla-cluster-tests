@@ -1398,6 +1398,24 @@ def test_minicloud_reserve_memory_is_not_confused_by_an_unrelated_memory_flag():
     assert _append_minicloud_reserve(args) == f"{args} --reserve-memory 3072M"
 
 
+def _append_cpu_overcommit(args):
+    """Run the polling hook against a stand-in minicloud cluster: it only reads params and logs."""
+    params = {"minicloud_endpoint_url": "http://localhost:5000", "minicloud_scylla_overcommitted_cpu": True}
+    cluster = SimpleNamespace(params=params, log=unittest.mock.MagicMock())
+    return BaseScyllaCluster._append_minicloud_cpu_overcommit(cluster, args)
+
+
+def test_minicloud_cpu_overcommit_args_are_appended():
+    assert _append_cpu_overcommit(MINICLOUD_BASE_SCYLLA_ARGS) == (
+        f"{MINICLOUD_BASE_SCYLLA_ARGS} --idle-poll-time-us 0 --poll-aio 0"
+    )
+
+
+def test_minicloud_cpu_overcommit_keeps_a_test_s_own_polling_flag():
+    args = f"{MINICLOUD_BASE_SCYLLA_ARGS} --poll-aio=1"
+    assert _append_cpu_overcommit(args) == args
+
+
 def _install_minicloud_ca(monkeypatch, **params):
     """Run the real method against a stand-in node and return the commands it ran."""
     for var in ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL"):

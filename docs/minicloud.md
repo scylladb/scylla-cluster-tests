@@ -59,6 +59,9 @@ Params (defaults in `defaults/test_default.yaml`, reference in
 - `minicloud_lightweight_memory` (default `4GiB`) - per-guest RAM. Scylla needs >1 GiB per shard
   on top of the ~1.7 GiB it reserves for the guest OS, so anything under ~3 GiB fails to boot
   with "memory per shard too low".
+- `minicloud_scylla_overcommitted_cpu` (default `true`) - scylla-server runs with
+  `--idle-poll-time-us 0 --poll-aio 0` on every db guest, see
+  [Reactor polling on shared host CPUs](#reactor-polling-on-shared-host-cpus).
 
 S3 passthrough buckets (keystore, job artifacts, `downloads.scylladb.com`, test sstables) are configured via
 `minicloud_s3_passthrough_buckets`; this is why minicloud runs still need the
@@ -493,6 +496,19 @@ swapped out, but they hold far less memory: with `--lock-memory` Seastar prefaul
 memory. `developer_mode` does not control that lock - only `memory.conf` does. Switching modes
 restarts a reused container. Off also pairs well with aggressive KSM scanning on the host
 (`/sys/kernel/mm/ksm/pages_to_scan`, `sleep_millisecs`).
+
+### Reactor polling on shared host CPUs
+
+All guests share the host CPUs with QEMU, minicloud and SCT. A Seastar reactor polls for events
+instead of sleeping, so a mostly idle db guest still shows 100% CPU, and six 2-vCPU db guests hold
+twelve host threads. `minicloud_scylla_overcommitted_cpu` (default `true`) starts scylla-server on
+every db guest with `--idle-poll-time-us 0 --poll-aio 0`, so the reactors give the CPU back while
+they wait. Scylla documents this setting for hypervisors that overcommit the CPU. Unlike
+`--overprovisioned`, it does not change thread affinity or memory settings.
+
+To keep production polling, set `SCT_MINICLOUD_SCYLLA_OVERCOMMITTED_CPU=false`. If a test-case's
+`append_scylla_args` already sets `--idle-poll-time-us`, `--poll-aio` or `--overprovisioned`, SCT
+keeps those.
 
 ### Triggering from staging_trigger.py
 
