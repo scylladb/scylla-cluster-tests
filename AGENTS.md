@@ -40,8 +40,8 @@ hydra bash
 # All unit tests
 uv run sct.py unit-tests
 
-# Specific unit test
-uv run sct.py unit-tests -t test_config.py
+# Specific unit test (path relative to unit_tests/)
+uv run sct.py unit-tests -t unit/test_config.py
 ```
 
 #### Run integration tests
@@ -340,12 +340,16 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | Skill | Description | Path |
 |-------|-------------|------|
 | code-review | Guides AI-assisted code review of SCT PRs. Use when reviewing diffs, checking override compatibility, verifying import conventions, or assessing backend impact. | `skills/code-review/SKILL.md` |
+| discovering-standards | Discovers the coding standards of SCT, writes `docs/standards/` and `docs/INDEX.md`, and generates `REVIEW.md`. Use when the standards must be discovered or refreshed. | `skills/discovering-standards/SKILL.md` |
+| updating-standards | Adds or changes one coding standard in `docs/standards/` and its `docs/INDEX.md` entry. Use when a convention is stated or settled in a review. | `skills/updating-standards/SKILL.md` |
 | designing-skills | Guides the design and structuring of AI agent skills for SCT. Use when creating new skills, reviewing existing skills, or editing SKILL.md files. | `skills/designing-skills/SKILL.md` |
 | fix-backport-conflicts | Fix inline merge conflict markers in backport PRs. Use when a backport PR has unresolved conflict markers or a cherry-pick produced merge conflicts. | `skills/fix-backport-conflicts/SKILL.md` |
 | profiling-sct-code | Profile Python code in SCT to find CPU, memory, and concurrency bottlenecks. Use when a test or operation is unexpectedly slow or memory usage grows unbounded. | `skills/profiling-sct-code/SKILL.md` |
 | perf-weekly-status-report | Generate Gmail-compatible HTML performance weekly status reports from Argus CLI data. Use when producing a weekly perf summary, aggregating latency and throughput results, or creating a status email for stakeholders. | `skills/perf-weekly-status-report/SKILL.md` |
 | test-run-comparison-reports | Generate Confluence-compatible HTML comparison pages from multiple SCT test runs. Use when comparing performance or elasticity test results across runs with different parameters (instance types, configurations, versions). | `skills/test-run-comparison-reports/SKILL.md` |
-| writing-plans | Use when asked to generate an implementation plan, draft a plan, or design a phased feature rollout for SCT. | `skills/writing-plans/SKILL.md` |
+| writing-intents | Writes the intent of a change: the problem, who it affects, the evidence, and the outcome, in `docs/plans/<feature>/<idea>/intent.md`. Use when stating the problem before a design. | `skills/writing-intents/SKILL.md` |
+| writing-specs | Writes the design spec of a change in `docs/plans/<feature>/<idea>/spec.md`. Use when a change needs a design review document. | `skills/writing-specs/SKILL.md` |
+| writing-plans | Use when asked to generate an implementation plan, draft a plan, design a phased feature rollout for SCT, or plan the build of a spec. | `skills/writing-plans/SKILL.md` |
 | writing-unit-tests | Guides writing and debugging unit tests for SCT using pytest. Use when creating test files in unit_tests/, adding test cases, or mocking external services. | `skills/writing-unit-tests/SKILL.md` |
 | writing-integration-tests | Guides writing integration tests that interact with real external services. Use when creating tests requiring Docker, AWS, GCE, Azure, OCI, or Kubernetes backends. | `skills/writing-integration-tests/SKILL.md` |
 | commit-summary | Generate weekly commit summary reports for the SCT repository | `skills/commit-summary/SKILL.md` |
@@ -365,8 +369,11 @@ I have strict standards for feature planning. You can find the full guidelines i
 
 **Rule:** When I ask you to "generate an implementation plan" or "draft a plan", you MUST read `docs/plans/INSTRUCTIONS.md` and follow the structure defined there. Do not apply this format to regular coding questions.
 
-**Plan types:** The `writing-plans` skill supports two formats:
+**Plan types:** The `writing-plans` skill supports three formats:
 - **Full plans** (7-section, `docs/plans/`): For multi-phase work, 1K+ LOC. Requires YAML frontmatter, MASTER.md registration, and progress.json tracking. PRs with a `plans` label use this format.
 - **Mini-plans** (4-section, `docs/plans/mini-plans/`): For single-PR changes under ~1K LOC. No frontmatter, no registration. Disposable after merge.
+- **Idea plans** (`docs/plans/<feature>/<idea>/plan.md`): The build plan of a spec in the same directory. No frontmatter, no registration.
 
-The skill routes automatically based on the PR `plans` label, user input, or task size estimate.
+The skill routes automatically based on an idea spec, the PR `plans` label, user input, or task size estimate.
+
+**Development flow:** A big change, or a change to the SCT architecture, can have an intent, a spec, and a plan in `docs/plans/<feature>/<idea>/`. The flow is optional. See [docs/development-flow.md](docs/development-flow.md). The coding standards are indexed in [docs/INDEX.md](docs/INDEX.md), and the review guide is [REVIEW.md](REVIEW.md).
