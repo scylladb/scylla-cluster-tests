@@ -121,6 +121,7 @@ def test_launcher_default_environment_placeholder_is_ignored():
     assert parse_properties(request.final_environment_variables()) == {
         "SCT_INSTANCE_TYPE_DB": "i8g.4xlarge",
         "SCT_N_DB_NODES": "3",
+        "SCT_TEST_DURATION": "780",
     }
 
 
@@ -128,7 +129,46 @@ def test_environment_variables_minimal_request():
     assert parse_properties(_request().final_environment_variables()) == {
         "SCT_INSTANCE_TYPE_DB": "i8g.4xlarge",
         "SCT_N_DB_NODES": "3",
+        "SCT_TEST_DURATION": "780",
     }
+
+
+@pytest.mark.parametrize(
+    "request_params, expected_minutes",
+    [
+        # 180 for setup, preload and teardown, then (13 search steps: 1 thread to the 4096 cap, + 2 reruns)
+        # x (30-minute steps + 10 minutes of waits).
+        pytest.param({}, 180 + 15 * 40, id="defaults"),
+        pytest.param({"max_search_steps": "20"}, 180 + 22 * 40, id="budget_above_the_doubling_steps"),
+        pytest.param({"step_duration": "1h"}, 180 + 15 * 70, id="longer_steps"),
+        pytest.param({"overload_factors": "1.3,2"}, 180 + 17 * 40, id="overload_steps"),
+        pytest.param(
+            {
+                "extra_environment_variables": 'SCT_PERF_BEST_THROUGHPUT_SEARCH={"read": {"max_threads_per_command": 512}}'
+            },
+            180 + 15 * 40,
+            id="the_longest_workload_counts",
+        ),
+        pytest.param(
+            {
+                "sub_tests": '["test_read_gradual_increase_load"]',
+                "extra_environment_variables": 'SCT_PERF_BEST_THROUGHPUT_SEARCH={"read": {"max_threads_per_command": 512}}',
+            },
+            180 + 12 * 40,
+            id="lower_cap",
+        ),
+    ],
+)
+def test_test_duration_covers_the_longest_search(request_params, expected_minutes):
+    variables = parse_properties(_request(**request_params).final_environment_variables())
+    assert int(variables["SCT_TEST_DURATION"]) == expected_minutes
+
+
+def test_requested_test_duration_is_kept():
+    variables = parse_properties(
+        _request(extra_environment_variables="SCT_TEST_DURATION=2000").final_environment_variables()
+    )
+    assert variables["SCT_TEST_DURATION"] == "2000"
 
 
 def test_environment_variables_full_request():

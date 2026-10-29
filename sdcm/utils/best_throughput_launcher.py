@@ -26,17 +26,21 @@ hasn't scanned yet can't report results, so the first request for a configuratio
 
 import json
 import logging
+import math
 import re
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Self
 
 import requests
+import yaml
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.aws_utils import aws_check_instance_type_supported
-from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.common import get_sct_root_path, time_period_str_to_seconds
+from sdcm.utils.overload import OverloadConfig
 from sdcm.utils.session import create_retry_session
+from sdcm.utils.thread_search import ThreadSearchConfig
 from sdcm.utils.trigger_matrix.jenkins_client import JenkinsClient
 from sdcm.wait import WaitForTimeoutError, wait_for
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
@@ -68,6 +72,12 @@ DEFAULT_TEST_CASE_OVERLAYS = (
     "configurations/performance/best-throughput/cassandra_stress_time_bound_write.yaml",
     "configurations/performance/best-throughput/cassandra_stress_sized_dataset.yaml",
 )
+
+# test_duration allowances, in minutes: setup, preload and teardown; the waits after every step for compactions
+# (at least 3 minutes) and tablet splits (up to 6); and reruns of steps that collected no results.
+SETUP_PRELOAD_TEARDOWN_MINUTES = 180
+STEP_WAIT_MINUTES = 10
+RERUN_STEPS = 2
 
 ALL_SUB_TESTS = (
     "test_read_gradual_increase_load",
@@ -289,9 +299,49 @@ class BestThroughputRequest:
         return variables
 
     def final_environment_variables(self) -> str:
-        """The request's variables, then the launcher's; on a shared variable the structured parameter wins."""
-        variables = parse_properties(self.extra_environment_variables) | self.launcher_variables()
+        """The request's variables, then the launcher's; on a shared variable the structured parameter wins.
+
+        `SCT_TEST_DURATION` is added from the search settings unless the request sets it.
+        """
+        extra_variables = parse_properties(self.extra_environment_variables)
+        variables = extra_variables | self.launcher_variables()
+        if "SCT_TEST_DURATION" not in extra_variables:
+            variables["SCT_TEST_DURATION"] = str(self.test_duration_minutes(variables))
         return "\n".join(f"{key}={value}" for key, value in variables.items())
+
+    def test_duration_minutes(self, variables: dict[str, str], sct_root: Path | None = None) -> int:
+        """Minutes for the longest run these settings allow, so the test timeout can't end it before it reports.
+
+        The step budget doesn't stop doubling or halving, so a search runs up to max(max_steps, the steps from
+        one thread to the cap) steps, plus reruns of steps without results, then one step per overload factor.
+        `variables` are the run's SCT variables; a setting they don't hold comes from the best-throughput overlay.
+        """
+        overlay = yaml.safe_load(((sct_root or get_sct_root_path()) / BEST_THROUGHPUT_OVERLAY).read_text())
+
+        def setting(variable: str, key: str):
+            return yaml.safe_load(variables[variable]) if variable in variables else overlay.get(key)
+
+        workloads = [
+            sub_test.removeprefix("test_").removesuffix("_gradual_increase_load") for sub_test in self.sub_tests
+        ]
+        search_params = setting("SCT_PERF_BEST_THROUGHPUT_SEARCH", "perf_best_throughput_search")
+        overload_params = setting("SCT_PERF_OVERLOAD_STEPS", "perf_overload_steps")
+        steps = 0
+        for workload in workloads:
+            search = ThreadSearchConfig.from_params(search_params, workload) or ThreadSearchConfig()
+            overload = OverloadConfig.from_params(overload_params, workload)
+            search_steps = max(search.max_steps, math.ceil(math.log2(search.max_threads_per_command)) + 1)
+            steps = max(steps, search_steps + RERUN_STEPS + (len(overload.factors) if overload else 0))
+        step_durations = setting("SCT_PERF_GRADUAL_STEP_DURATION", "perf_gradual_step_duration") or {}
+        step_minutes = max(
+            (
+                time_period_str_to_seconds(str(step_durations[workload])) // 60
+                for workload in workloads
+                if step_durations.get(workload)
+            ),
+            default=0,
+        )
+        return SETUP_PRELOAD_TEARDOWN_MINUTES + steps * (step_minutes + STEP_WAIT_MINUTES)
 
     def build_parameters(self) -> dict[str, str]:
         """Parameters of the generated job's build, by their perf-pipeline names."""
