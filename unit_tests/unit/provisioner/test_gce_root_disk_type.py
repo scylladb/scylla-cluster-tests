@@ -16,12 +16,20 @@ import pytest
 from sdcm.provision.gce.constants import (
     DISK_TYPE_HYPERDISK_BALANCED,
 )
+from sdcm.provision.gce.instance_provider import has_bundled_local_ssds
 from sdcm.provision.gce.instance_provider import resolve_root_disk_type as _resolve_root_disk_type
 
 
 @pytest.mark.parametrize(
     "instance_type",
-    ["n4a-standard-4", "n4a-highcpu-8", "n4-standard-4", "c4a-standard-4", "z3-highmem-8-highlssd"],
+    [
+        "n4a-standard-4",
+        "n4a-highcpu-8",
+        "n4-standard-4",
+        "c4a-standard-4",
+        "c4d-highmem-8-lssd",
+        "z3-highmem-8-highlssd",
+    ],
 )
 @pytest.mark.parametrize("configured", ["pd-standard", "pd-balanced", "pd-ssd", None])
 def test_hyperdisk_only_families_override_the_configured_root_disk_type(instance_type, configured):
@@ -39,3 +47,20 @@ def test_hyperdisk_only_families_override_the_configured_root_disk_type(instance
 )
 def test_other_families_keep_the_configured_root_disk_type(instance_type, configured, expected):
     assert _resolve_root_disk_type(instance_type, configured) == expected
+
+
+@pytest.mark.parametrize(
+    "instance_type, expected",
+    [
+        ("z3-highmem-8-highlssd", True),
+        ("z3-highmem-88-standardlssd", True),
+        ("z3-highmem-88", True),
+        ("c4-highmem-8-lssd", True),
+        ("c4-highmem-288-lssd-metal", True),
+        ("c4d-highmem-96-lssd", True),
+        ("c4-highmem-8", False),
+        ("n2-highmem-32", False),
+    ],
+)
+def test_has_bundled_local_ssds(instance_type, expected):
+    assert has_bundled_local_ssds(instance_type) is expected
