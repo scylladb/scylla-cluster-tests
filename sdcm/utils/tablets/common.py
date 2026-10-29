@@ -3,6 +3,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Optional
 
+from cassandra import InvalidRequest
+
 from sdcm import wait
 from sdcm.rest.remote_curl_client import RemoteCurlClient
 from sdcm.rest.task_manager_client import TaskManagerClient
@@ -14,6 +16,8 @@ from sdcm.utils.features import is_tablets_feature_enabled
 LOGGER = logging.getLogger(__name__)
 
 AUTO_REPAIR_PARAM = "auto_repair_enabled_default"
+# CQL cluster configuration option that supersedes AUTO_REPAIR_PARAM (Automatic Repair MS2, SCYLLADB-100)
+AUTO_REPAIR_OPTION = "auto_repair_enabled"
 # In-flight tablet auto-repair sessions were observed running up to ~17 minutes (SCT-905)
 AUTO_REPAIR_DRAIN_TIMEOUT = 30 * 60
 
@@ -98,13 +102,88 @@ def set_node_auto_repair(node, enabled: bool) -> bool:
     return True
 
 
+def get_cluster_config(db_cluster, option: str) -> Optional[str]:
+    """Return the value stored for a CQL cluster configuration option at CLUSTER scope, or None
+    when nothing is stored there. Raises InvalidRequest on Scylla releases without CQL cluster
+    configuration, where system_schema.scylla_clusters does not exist.
+    """
+    with db_cluster.cql_connection_patient(db_cluster.data_nodes[0], verbose=False) as session:
+        row = session.execute("SELECT configs FROM system_schema.scylla_clusters").one()
+    return (row.configs or {}).get(option) if row else None
+
+
+def set_cluster_config(db_cluster, option: str, value: Optional[str]) -> bool:
+    """Store a CQL cluster configuration option at CLUSTER scope; None removes the stored value."""
+    statement = f"ALTER CLUSTER WITH {option} = {'NULL' if value is None else value}"
+    try:
+        with db_cluster.cql_connection_patient(db_cluster.data_nodes[0], verbose=False) as session:
+            session.execute(statement)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.error("Failed to run '%s': %s", statement, exc)
+        return False
+    LOGGER.info("Ran '%s'", statement)
+    return True
+
+
+def drain_repair_tasks(db_cluster, drain_timeout: int) -> None:
+    # Drain all data nodes, not only the ones auto-repair was disabled on: a node that was
+    # already disabled or unreachable can still be running an in-flight repair session
+    if not wait_no_active_repair_tasks(db_cluster.data_nodes, timeout=drain_timeout):
+        LOGGER.warning("In-flight repair tasks did not finish within %s seconds, proceeding anyway", drain_timeout)
+
+
 @contextmanager
 def temporarily_disable_auto_repair(db_cluster, drain_timeout: int = AUTO_REPAIR_DRAIN_TIMEOUT):
-    """Disable tablet auto-repair on all data nodes and drain in-flight repair tasks before
-    yielding, so a user-driven repair can run without colliding with it (SCT-905).
-    Re-enables it on exit, on the nodes it disabled. No-op when auto-repair is off or
-    unsupported, which also makes nested use safe: an inner use sees auto-repair already off.
+    """Disable tablet auto-repair and drain in-flight repair tasks before yielding, so a
+    user-driven repair can run without colliding with it (SCT-905). Restores it on exit.
+
+    With CQL cluster configuration, runs ALTER CLUSTER WITH auto_repair_enabled = false, which also
+    overrides the deprecated scylla.yaml option on every node, and restores the previously stored
+    value (or NULL) on exit. A keyspace or table that stores its own auto_repair_enabled = true keeps
+    auto-repair. Older releases fall back to toggling the scylla.yaml option on each node.
+
+    No-op when auto-repair is off or unsupported, which also makes nested use safe: an inner use
+    sees auto-repair already off.
     Not guarded against parallel nemeses: a sibling nemesis exiting first re-enables it.
+    """
+    try:
+        stored_value = get_cluster_config(db_cluster, AUTO_REPAIR_OPTION)
+    except InvalidRequest:
+        disable_auto_repair = temporarily_disable_node_auto_repair(db_cluster, drain_timeout)
+    else:
+        disable_auto_repair = temporarily_disable_cluster_auto_repair(db_cluster, stored_value, drain_timeout)
+    with disable_auto_repair:
+        yield
+
+
+@contextmanager
+def temporarily_disable_cluster_auto_repair(db_cluster, stored_value: Optional[str], drain_timeout: int):
+    """Variant of temporarily_disable_auto_repair for Scylla releases with CQL cluster configuration.
+    stored_value is the auto_repair_enabled value stored at CLUSTER scope, restored on exit.
+    """
+    if stored_value is None:
+        # Nothing is stored at CLUSTER scope, so the deprecated scylla.yaml option decides on each node
+        enabled = any(
+            (node.get_scylla_config_param(AUTO_REPAIR_PARAM, verbose=False) or "").strip() == "true"
+            for node in db_cluster.data_nodes
+        )
+    else:
+        enabled = stored_value == "true"
+    disabled = enabled and set_cluster_config(db_cluster, AUTO_REPAIR_OPTION, "false")
+    if disabled:
+        drain_repair_tasks(db_cluster, drain_timeout)
+    try:
+        yield
+    finally:
+        if disabled and not set_cluster_config(db_cluster, AUTO_REPAIR_OPTION, stored_value):
+            LOGGER.error("Failed to restore the cluster-scope %s to %s", AUTO_REPAIR_OPTION, stored_value)
+
+
+@contextmanager
+def temporarily_disable_node_auto_repair(db_cluster, drain_timeout: int = AUTO_REPAIR_DRAIN_TIMEOUT):
+    """Variant of temporarily_disable_auto_repair for Scylla releases without CQL cluster
+    configuration: toggles the scylla.yaml option on all data nodes, and re-enables it on exit on
+    the nodes it disabled.
     """
     disabled_nodes = []
     for node in db_cluster.data_nodes:
@@ -117,13 +196,7 @@ def temporarily_disable_auto_repair(db_cluster, drain_timeout: int = AUTO_REPAIR
             LOGGER.warning("Could not disable auto-repair on node %s, skipping it", node.name)
     if disabled_nodes:
         LOGGER.info("Temporarily disabled tablet auto-repair on %d nodes", len(disabled_nodes))
-        # Drain all data nodes, not only the just-disabled ones: a node that was already
-        # disabled or unreachable can still be running an in-flight repair session
-        if not wait_no_active_repair_tasks(db_cluster.data_nodes, timeout=drain_timeout):
-            LOGGER.warning(
-                "In-flight repair tasks did not finish within %s seconds, proceeding anyway",
-                drain_timeout,
-            )
+        drain_repair_tasks(db_cluster, drain_timeout)
     try:
         yield
     finally:
