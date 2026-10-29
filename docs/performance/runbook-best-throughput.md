@@ -55,6 +55,8 @@ Empty means the default.
 | | `instance_type_loader`, `n_loaders` | the test-case's (c7i.8xlarge, 4). Each workload's key range is split into one stress command per loader, so every loader generates load |
 | | `sub_tests` | all four workloads |
 | | `provision_type` | `on_demand` |
+| | `use_job_throttling` | true: the sub-tests run one at a time; unchecked runs them in parallel |
+| | `job_throttle_category` | empty: the perf pipeline's `SCT-perf-<region>`, e.g. `SCT-perf-us-east-1` |
 | Search and result | `p99_limit_ms` | 10 |
 | | `step_duration` | 15m, for read, mixed and read_disk_only; a write step runs until all its rows are written |
 | | `start_threads_per_shard` | 16 |
@@ -69,7 +71,13 @@ A read, mixed or read_disk_only run takes ~4-5 h at the defaults: the preload, t
 each followed by waits for compactions (at least 3 minutes) and tablet splits (up to 6). A write step has no
 duration: like in the predefined-steps jobs, it writes its whole key range (1.6B rows on i4i/i8g.4xlarge), so
 every step inserts all the data and lasts as long as its throughput needs, ~40 minutes at the highest rate and
-longer at lower thread counts. The four workloads run in parallel on their own clusters.
+longer at lower thread counts. Each workload runs on its own cluster.
+
+With `use_job_throttling` (the default) the workloads run one at a time, so all four take ~20-30 h, most of it
+write, depending on how long its steps take. They queue in the Jenkins throttle category with the other perf
+jobs that use it; every `SCT-perf-*` category allows one build at a time, so no other perf job in that category
+runs alongside and skews the results. Uncheck it to run the four in parallel, in as long as the longest of
+them.
 
 The launcher sets `SCT_TEST_DURATION` for the longest run the settings allow, so the test timeout doesn't end a
 run before it reports: 180 minutes for setup, preload and teardown, plus (step duration + 10 minutes) for each
@@ -102,7 +110,7 @@ when a file in your `test_config` adds steps.
 
 ## 4. Read the result
 
-Each workload (read, write, mixed, read_disk_only) runs in parallel on its own cluster:
+Each workload (read, write, mixed, read_disk_only) runs on its own cluster, one at a time by default:
 
 - `<workload> - best throughput under P99 limit` (Argus): the best throughput, its thread count, P99 read/write,
   the limit and why the search stopped. Throughput 0 with step `none passed` means no thread count stayed within
