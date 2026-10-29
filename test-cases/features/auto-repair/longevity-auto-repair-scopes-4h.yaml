@@ -28,8 +28,8 @@ test_duration: 330
 n_db_nodes: 6
 n_loaders: 1
 sizing_db:
-  vcpu: 4
-  memory: '>=32'
+  vcpu: 2
+  memory: '>=16'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_interval: 5
@@ -43,9 +43,9 @@ user_prefix: 'longevity-auto-repair-scopes-4h'
 #   ks_manual.t        keyspace scope false: no auto repair
 #   ks_mixed.auto_t    follows the cluster value: auto repair every 15 minutes
 #   ks_mixed.manual_t  table scope false: no auto repair
+# Auto repair is enabled at CLUSTER scope last: a never-repaired tablet is eligible right away, so
+# enabling it first would repair ks_manual.t and ks_mixed.manual_t before their own scopes are set
 pre_create_keyspace:
-  - "ALTER CLUSTER WITH auto_repair_enabled = true"
-  - "ALTER CLUSTER WITH auto_repair_threshold_in_seconds = 900"
   - "CREATE KEYSPACE ks_auto WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'enabled': true}"
   - "CREATE KEYSPACE ks_manual WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'enabled': true}"
   - "CREATE KEYSPACE ks_mixed WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'enabled': true}"
@@ -55,6 +55,8 @@ pre_create_keyspace:
   - "CREATE TABLE ks_mixed.manual_t (pk bigint, ck bigint, PRIMARY KEY (pk, ck))"
   - "ALTER KEYSPACE ks_manual WITH auto_repair_enabled = false"
   - "ALTER TABLE ks_mixed.manual_t WITH auto_repair_enabled = false"
+  - "ALTER CLUSTER WITH auto_repair_threshold_in_seconds = 900"
+  - "ALTER CLUSTER WITH auto_repair_enabled = true"
 
 # 'latte schema' runs once per script: point it at an existing table, so it creates nothing
 latte_schema_parameters:
