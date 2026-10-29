@@ -148,7 +148,7 @@ Limit severity level for event types
 
 The port of scylla management
 
-**default:** branch-4.16
+**default:** branch-4.17
 
 **type:** str (appendable)
 

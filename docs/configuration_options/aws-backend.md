@@ -91,7 +91,7 @@ AMS AMI id to use for monitor node
 **type:** str (appendable)
 
 **backend overrides:**
-- `scylladb-monitor-4-16-0-amd64-2026-08-30t08-46-39z`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+- `scylladb-monitor-4-17-0-rc0-amd64-2026-10-22t11-42-06z`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
 
 
 <a id="ami_id_vector_store"></a>
