@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import requests
 
 from sdcm.utils import best_throughput_launcher as launcher
 from sdcm.utils.best_throughput_launcher import (
@@ -330,6 +331,24 @@ def test_job_without_argus_test_is_not_started(jenkins, job_exists):
     jenkins.client.trigger.assert_not_called()
 
 
+def test_failed_argus_lookups_are_polled_again(jenkins):
+    jenkins.pipelines.jenkins.job_exists.return_value = True
+    jenkins.argus_test_exists.side_effect = [requests.HTTPError("502 Bad Gateway"), True]
+
+    launcher.launch(_request(), sct_branch="branch-perf-v17", sct_repo="repo")
+
+    jenkins.client.trigger.assert_called_once()
+
+
+def test_argus_lookup_error_is_named_on_timeout(jenkins):
+    jenkins.pipelines.jenkins.job_exists.return_value = True
+    jenkins.argus_test_exists.side_effect = requests.HTTPError("401 Unauthorized")
+
+    with pytest.raises(BestThroughputRequestError, match="The last lookup failed: 401 Unauthorized"):
+        launcher.launch(_request(), sct_branch="branch-perf-v17", sct_repo="repo")
+    jenkins.client.trigger.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "hits, expected",
     [
@@ -349,8 +368,10 @@ def test_argus_test_exists(monkeypatch, hits, expected):
     monkeypatch.setattr(launcher, "KeyStore", MagicMock(return_value=keystore))
     response = MagicMock()
     response.json.return_value = {"status": "ok", "response": {"hits": hits, "total": len(hits)}}
-    get = MagicMock(return_value=response)
-    monkeypatch.setattr(launcher.requests, "get", get)
+    session = MagicMock()
+    get = session.get
+    get.return_value = response
+    monkeypatch.setattr(launcher, "create_retry_session", MagicMock(return_value=session))
 
     assert launcher.argus_test_exists(JOB_PATH) is expected
     assert get.call_args.args[0] == "https://argus/api/v1/planning/search"

@@ -36,6 +36,7 @@ import requests
 from sdcm.keystore import KeyStore
 from sdcm.utils.aws_utils import aws_check_instance_type_supported
 from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.session import create_retry_session
 from sdcm.utils.trigger_matrix.jenkins_client import JenkinsClient
 from sdcm.wait import WaitForTimeoutError, wait_for
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
@@ -331,7 +332,7 @@ def wait_for_first_build(jenkins_client, job_path: str, timeout: int = 900) -> N
 def argus_test_exists(job_path: str) -> bool:
     """Whether Argus has a test for the job, which its runs need to report results."""
     creds = KeyStore().get_argus_rest_credentials_per_provider()
-    response = requests.get(
+    response = create_retry_session().get(
         f"{creds['baseUrl']}/api/v1/planning/search",
         params={"query": job_path.rsplit("/", 1)[-1], "limit": 100},
         headers={
@@ -348,19 +349,31 @@ def argus_test_exists(job_path: str) -> bool:
 
 def wait_for_argus_test(job_path: str, timeout: int = ARGUS_TEST_TIMEOUT) -> None:
     """Wait until Argus has a test for the job: a run started before that would report nothing."""
+    last_error = []
+
+    def test_exists() -> bool:
+        # A failed lookup is another poll without the test, so an Argus outage gets the same wait as a slow scan.
+        try:
+            return argus_test_exists(job_path)
+        except requests.RequestException as exc:
+            LOGGER.warning("Looking up the Argus test of %s failed: %s", job_path, exc)
+            last_error[:] = [exc]
+            return False
+
     try:
         wait_for(
-            lambda: argus_test_exists(job_path),
+            test_exists,
             step=60,
             text=f"Waiting for Argus to import {job_path} as a test",
             timeout=timeout,
             throw_exc=True,
         )
     except WaitForTimeoutError as exc:
+        lookup_error = f" The last lookup failed: {last_error[0]}." if last_error else ""
         raise BestThroughputRequestError(
-            f"Argus has no test for {job_path} after {timeout // 60} minutes, so its run could not report results. "
-            "Check that Argus scans this Jenkins folder (JENKINS_MONITORED_RELEASES), then rerun the request: "
-            "the job is already created and will be reused"
+            f"Argus has no test for {job_path} after {timeout // 60} minutes, so its run could not report results."
+            f"{lookup_error} Check that Argus scans this Jenkins folder (JENKINS_MONITORED_RELEASES), then rerun the "
+            "request: the job is already created and will be reused"
         ) from exc
 
 
