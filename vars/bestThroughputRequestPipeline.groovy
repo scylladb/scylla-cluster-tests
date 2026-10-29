@@ -36,7 +36,7 @@ def call(Map pipelineParams = [:]) {
 
             separator(name: 'SETUP', sectionHeader: 'Setup')
             text(name: 'test_config', defaultValue: '''["test-cases/performance/perf-regression-predefined-throughput-steps.yaml", "configurations/performance/cassandra_stress_gradual_load_steps_i8g.yaml", "configurations/c-s-driver-version-4.yaml", "configurations/disable_kms.yaml", "configurations/disable_speculative_retry.yaml"]''')
-            text(name: 'extra_environment_variables', defaultValue: 'SCT_INSTANCE_TYPE_DB=',
+            text(name: 'extra_environment_variables', defaultValue: '',
                  description: '''KEY=VALUE lines passed to SCT, e.g. SCT_C_S_DRIVER_VERSION=4. A variable left empty is ignored.
 The launcher appends the variables of the parameters on this page; on a shared variable the parameter wins.
 Setting SCT_INSTANCE_TYPE_DB or SCT_N_DB_NODES to a different value than above is rejected.''')

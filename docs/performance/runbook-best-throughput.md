@@ -50,7 +50,7 @@ Empty means the default.
 | | `tablets` | true; unchecked runs vnodes |
 | | `job_name_suffix` | empty; set it to give an experiment its own job and history |
 | Setup | `test_config` | the predefined-steps test-case and the i8g job's configs (see section 3) |
-| | `extra_environment_variables` | `SCT_INSTANCE_TYPE_DB=` (a placeholder; empty variables are ignored) |
+| | `extra_environment_variables` | empty; `KEY=VALUE` lines, and variables left empty are ignored. The instance type and node count come from their own parameters |
 | | `region` | us-east-1, where the i4i and i8g predefined-steps jobs run |
 | | `instance_type_loader`, `n_loaders` | the test-case's (c7i.8xlarge, 4) |
 | | `sub_tests` | all four workloads |
@@ -93,10 +93,9 @@ the defaults. Set `SCT_TEST_DURATION` in `extra_environment_variables` to overri
      `c-s-driver-version-4.yaml`, `disable_kms.yaml` and `disable_speculative_retry.yaml`), then
      `tablets_disabled.yaml` for vnodes, then for the default test-case its time-bound write commands and
      RAM/disk-sized dataset, and last `best_throughput.yaml`, which turns the thread search on.
-   - `extra_environment_variables`: yours (variables left empty, like the default `SCT_INSTANCE_TYPE_DB=`, are
-     ignored), then `SCT_INSTANCE_TYPE_DB`, `SCT_N_DB_NODES`, the variables of the loader and search
-     parameters you set, and `SCT_TEST_DURATION` unless you set it (section 2). A parameter wins over the same
-     variable in your text.
+   - `extra_environment_variables`: yours (variables left empty are ignored), then `SCT_INSTANCE_TYPE_DB`,
+     `SCT_N_DB_NODES`, the variables of the loader and search parameters you set, and `SCT_TEST_DURATION` unless
+     you set it (section 2). A parameter wins over the same variable in your text.
 
 ## 4. Read the result
 

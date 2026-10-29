@@ -115,8 +115,7 @@ class BestThroughputRequestError(ValueError):
 def parse_properties(text: str) -> dict[str, str]:
     """Parse `extra_environment_variables` the way the perf pipeline does (`readProperties`): KEY=VALUE lines.
 
-    A variable with an empty value is a placeholder left unfilled (e.g. the launcher's default `SCT_INSTANCE_TYPE_DB=`)
-    and is dropped.
+    A variable with an empty value is a placeholder left unfilled, and is dropped.
     """
     variables = {}
     for line in (text or "").splitlines():

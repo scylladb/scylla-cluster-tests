@@ -115,7 +115,7 @@ def test_parse_properties():
     assert parse_properties(text) == {"SCT_A": "1", "SCT_B": "quoted value", "SCT_C": '{"x": 1}'}
 
 
-def test_launcher_default_environment_placeholder_is_ignored():
+def test_empty_environment_variables_are_ignored():
     request = _request(extra_environment_variables="SCT_INSTANCE_TYPE_DB=\nSCT_C_S_DRIVER_VERSION=''")
     request.validate()
     assert parse_properties(request.final_environment_variables()) == {
