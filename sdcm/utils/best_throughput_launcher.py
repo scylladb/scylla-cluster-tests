@@ -26,16 +26,21 @@ hasn't scanned yet can't report results, so the first request for a configuratio
 
 import json
 import logging
+import math
 import re
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Self
 
 import requests
+import yaml
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.aws_utils import aws_check_instance_type_supported
-from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.common import get_sct_root_path, time_period_str_to_seconds
+from sdcm.utils.overload import OverloadConfig
+from sdcm.utils.session import create_retry_session
+from sdcm.utils.thread_search import ThreadSearchConfig
 from sdcm.utils.trigger_matrix.jenkins_client import JenkinsClient
 from sdcm.wait import WaitForTimeoutError, wait_for
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
@@ -64,6 +69,15 @@ TABLETS_DISABLED = "configurations/tablets_disabled.yaml"
 BEST_THROUGHPUT_OVERLAY = "configurations/performance/best-throughput/best_throughput.yaml"
 # It rewrites the stress commands of the default test-case, so it only goes with it.
 DEFAULT_TEST_CASE_OVERLAYS = ("configurations/performance/best-throughput/cassandra_stress_sized_dataset.yaml",)
+
+# test_duration allowances, in minutes: setup, preload and teardown; the waits after every step for compactions
+# (at least 3 minutes) and tablet splits (up to 6); and reruns of steps that collected no results.
+SETUP_PRELOAD_TEARDOWN_MINUTES = 180
+STEP_WAIT_MINUTES = 10
+RERUN_STEPS = 2
+# A write step has no duration: it writes its whole key range, so its length follows its throughput. 1.6B rows
+# take ~40 minutes at the highest i8g.4xlarge write rate (~690k op/s); this allows for steps at a third of it.
+UNTIMED_STEP_MINUTES = 120
 
 ALL_SUB_TESTS = (
     "test_read_gradual_increase_load",
@@ -287,9 +301,50 @@ class BestThroughputRequest:
         return variables
 
     def final_environment_variables(self) -> str:
-        """The request's variables, then the launcher's; on a shared variable the structured parameter wins."""
-        variables = parse_properties(self.extra_environment_variables) | self.launcher_variables()
+        """The request's variables, then the launcher's; on a shared variable the structured parameter wins.
+
+        `SCT_TEST_DURATION` is added from the search settings unless the request sets it.
+        """
+        extra_variables = parse_properties(self.extra_environment_variables)
+        variables = extra_variables | self.launcher_variables()
+        if "SCT_TEST_DURATION" not in extra_variables:
+            variables["SCT_TEST_DURATION"] = str(self.test_duration_minutes(variables))
         return "\n".join(f"{key}={value}" for key, value in variables.items())
+
+    def test_duration_minutes(self, variables: dict[str, str], sct_root: Path | None = None) -> int:
+        """Minutes for the longest run these settings allow, so the test timeout can't end it before it reports.
+
+        The step budget doesn't stop doubling or halving, so a search runs up to max(max_steps, the steps from
+        one thread to the cap) steps, plus reruns of steps without results, then one step per overload factor.
+        A step without a duration (write) is allowed `UNTIMED_STEP_MINUTES`.
+        `variables` are the run's SCT variables; a setting they don't hold comes from the best-throughput overlay.
+        """
+        overlay = yaml.safe_load(((sct_root or get_sct_root_path()) / BEST_THROUGHPUT_OVERLAY).read_text())
+
+        def setting(variable: str, key: str):
+            return yaml.safe_load(variables[variable]) if variable in variables else overlay.get(key)
+
+        workloads = [
+            sub_test.removeprefix("test_").removesuffix("_gradual_increase_load") for sub_test in self.sub_tests
+        ]
+        search_params = setting("SCT_PERF_BEST_THROUGHPUT_SEARCH", "perf_best_throughput_search")
+        overload_params = setting("SCT_PERF_OVERLOAD_STEPS", "perf_overload_steps")
+        step_durations = setting("SCT_PERF_GRADUAL_STEP_DURATION", "perf_gradual_step_duration") or {}
+        steps_minutes = 0
+        for workload in workloads:
+            search = ThreadSearchConfig.from_params(search_params, workload) or ThreadSearchConfig()
+            overload = OverloadConfig.from_params(overload_params, workload)
+            search_steps = max(search.max_steps, math.ceil(math.log2(search.max_threads_per_command)) + 1)
+            steps = search_steps + RERUN_STEPS + (len(overload.factors) if overload else 0)
+            # The predefined-steps configs spell "no duration" as the string None.
+            step_duration = step_durations.get(workload)
+            step_minutes = (
+                time_period_str_to_seconds(str(step_duration)) // 60
+                if step_duration not in (None, "", "None")
+                else UNTIMED_STEP_MINUTES
+            )
+            steps_minutes = max(steps_minutes, steps * (step_minutes + STEP_WAIT_MINUTES))
+        return SETUP_PRELOAD_TEARDOWN_MINUTES + steps_minutes
 
     def build_parameters(self) -> dict[str, str]:
         """Parameters of the generated job's build, by their perf-pipeline names."""
@@ -330,7 +385,7 @@ def wait_for_first_build(jenkins_client, job_path: str, timeout: int = 900) -> N
 def argus_test_exists(job_path: str) -> bool:
     """Whether Argus has a test for the job, which its runs need to report results."""
     creds = KeyStore().get_argus_rest_credentials_per_provider()
-    response = requests.get(
+    response = create_retry_session().get(
         f"{creds['baseUrl']}/api/v1/planning/search",
         params={"query": job_path.rsplit("/", 1)[-1], "limit": 100},
         headers={
@@ -347,19 +402,31 @@ def argus_test_exists(job_path: str) -> bool:
 
 def wait_for_argus_test(job_path: str, timeout: int = ARGUS_TEST_TIMEOUT) -> None:
     """Wait until Argus has a test for the job: a run started before that would report nothing."""
+    last_error = []
+
+    def test_exists() -> bool:
+        # A failed lookup is another poll without the test, so an Argus outage gets the same wait as a slow scan.
+        try:
+            return argus_test_exists(job_path)
+        except requests.RequestException as exc:
+            LOGGER.warning("Looking up the Argus test of %s failed: %s", job_path, exc)
+            last_error[:] = [exc]
+            return False
+
     try:
         wait_for(
-            lambda: argus_test_exists(job_path),
+            test_exists,
             step=60,
             text=f"Waiting for Argus to import {job_path} as a test",
             timeout=timeout,
             throw_exc=True,
         )
     except WaitForTimeoutError as exc:
+        lookup_error = f" The last lookup failed: {last_error[0]}." if last_error else ""
         raise BestThroughputRequestError(
-            f"Argus has no test for {job_path} after {timeout // 60} minutes, so its run could not report results. "
-            "Check that Argus scans this Jenkins folder (JENKINS_MONITORED_RELEASES), then rerun the request: "
-            "the job is already created and will be reused"
+            f"Argus has no test for {job_path} after {timeout // 60} minutes, so its run could not report results."
+            f"{lookup_error} Check that Argus scans this Jenkins folder (JENKINS_MONITORED_RELEASES), then rerun the "
+            "request: the job is already created and will be reused"
         ) from exc
 
 

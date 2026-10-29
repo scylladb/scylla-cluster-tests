@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import requests
 
 from sdcm.utils import best_throughput_launcher as launcher
 from sdcm.utils.best_throughput_launcher import (
@@ -28,6 +29,7 @@ LAUNCHER_GROOVY = get_sct_root_path() / "vars/bestThroughputRequestPipeline.groo
 GENERIC_JENKINSFILE = get_sct_root_path() / launcher.GENERIC_JENKINSFILE
 LWT_TEST_CASE = "test-cases/performance/perf-regression-predefined-throughput-steps-lwt-light.yaml"
 JOB_PATH = f"{launcher.JOB_FOLDER}/aws-i8g.4xlarge-3n-tablets"
+READ_ONLY = '["test_read_gradual_increase_load"]'
 
 
 def _request(**overrides) -> BestThroughputRequest:
@@ -121,6 +123,7 @@ def test_launcher_default_environment_placeholder_is_ignored():
     assert parse_properties(request.final_environment_variables()) == {
         "SCT_INSTANCE_TYPE_DB": "i8g.4xlarge",
         "SCT_N_DB_NODES": "3",
+        "SCT_TEST_DURATION": "2130",
     }
 
 
@@ -128,7 +131,51 @@ def test_environment_variables_minimal_request():
     assert parse_properties(_request().final_environment_variables()) == {
         "SCT_INSTANCE_TYPE_DB": "i8g.4xlarge",
         "SCT_N_DB_NODES": "3",
+        "SCT_TEST_DURATION": "2130",
     }
+
+
+@pytest.mark.parametrize(
+    "request_params, expected_minutes",
+    [
+        # 180 for setup, preload and teardown, then (13 search steps: 1 thread to the 4096 cap, + 2 reruns)
+        # x (the step + 10 minutes of waits). A write step has no duration and is allowed 120 minutes.
+        pytest.param({}, 180 + 15 * 130, id="defaults"),
+        pytest.param({"sub_tests": READ_ONLY}, 180 + 15 * 25, id="timed_steps"),
+        pytest.param(
+            {"sub_tests": READ_ONLY, "max_search_steps": "20"}, 180 + 22 * 25, id="budget_above_the_doubling_steps"
+        ),
+        pytest.param({"sub_tests": READ_ONLY, "step_duration": "1h"}, 180 + 15 * 70, id="longer_steps"),
+        pytest.param({"step_duration": "3h"}, 180 + 15 * 190, id="timed_steps_longer_than_write"),
+        pytest.param({"sub_tests": READ_ONLY, "overload_factors": "1.3,2"}, 180 + 17 * 25, id="overload_steps"),
+        pytest.param(
+            {
+                "sub_tests": '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load"]',
+                "extra_environment_variables": 'SCT_PERF_BEST_THROUGHPUT_SEARCH={"read": {"max_threads_per_command": 512}}',
+            },
+            180 + 15 * 25,
+            id="the_longest_workload_counts",
+        ),
+        pytest.param(
+            {
+                "sub_tests": READ_ONLY,
+                "extra_environment_variables": 'SCT_PERF_BEST_THROUGHPUT_SEARCH={"read": {"max_threads_per_command": 512}}',
+            },
+            180 + 12 * 25,
+            id="lower_cap",
+        ),
+    ],
+)
+def test_test_duration_covers_the_longest_search(request_params, expected_minutes):
+    variables = parse_properties(_request(**request_params).final_environment_variables())
+    assert int(variables["SCT_TEST_DURATION"]) == expected_minutes
+
+
+def test_requested_test_duration_is_kept():
+    variables = parse_properties(
+        _request(extra_environment_variables="SCT_TEST_DURATION=2000").final_environment_variables()
+    )
+    assert variables["SCT_TEST_DURATION"] == "2000"
 
 
 def test_environment_variables_full_request():
@@ -334,6 +381,24 @@ def test_job_without_argus_test_is_not_started(jenkins, job_exists):
     jenkins.client.trigger.assert_not_called()
 
 
+def test_failed_argus_lookups_are_polled_again(jenkins):
+    jenkins.pipelines.jenkins.job_exists.return_value = True
+    jenkins.argus_test_exists.side_effect = [requests.HTTPError("502 Bad Gateway"), True]
+
+    launcher.launch(_request(), sct_branch="branch-perf-v17", sct_repo="repo")
+
+    jenkins.client.trigger.assert_called_once()
+
+
+def test_argus_lookup_error_is_named_on_timeout(jenkins):
+    jenkins.pipelines.jenkins.job_exists.return_value = True
+    jenkins.argus_test_exists.side_effect = requests.HTTPError("401 Unauthorized")
+
+    with pytest.raises(BestThroughputRequestError, match="The last lookup failed: 401 Unauthorized"):
+        launcher.launch(_request(), sct_branch="branch-perf-v17", sct_repo="repo")
+    jenkins.client.trigger.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "hits, expected",
     [
@@ -353,8 +418,10 @@ def test_argus_test_exists(monkeypatch, hits, expected):
     monkeypatch.setattr(launcher, "KeyStore", MagicMock(return_value=keystore))
     response = MagicMock()
     response.json.return_value = {"status": "ok", "response": {"hits": hits, "total": len(hits)}}
-    get = MagicMock(return_value=response)
-    monkeypatch.setattr(launcher.requests, "get", get)
+    session = MagicMock()
+    get = session.get
+    get.return_value = response
+    monkeypatch.setattr(launcher, "create_retry_session", MagicMock(return_value=session))
 
     assert launcher.argus_test_exists(JOB_PATH) is expected
     assert get.call_args.args[0] == "https://argus/api/v1/planning/search"
@@ -441,3 +508,11 @@ def test_overload_factors_reach_sct():
     variables = parse_properties(_request(overload_factors="1.3, 2").final_environment_variables())
     assert json.loads(variables["SCT_PERF_OVERLOAD_STEPS"]) == {"default": {"factors": [1.3, 2.0]}}
     assert "SCT_PERF_OVERLOAD_STEPS" not in parse_properties(_request().final_environment_variables())
+
+
+def test_write_step_spelled_as_the_string_none_has_no_duration():
+    request = _request(
+        sub_tests='["test_write_gradual_increase_load"]',
+        extra_environment_variables='SCT_PERF_GRADUAL_STEP_DURATION={"read": "30m", "write": "None"}',
+    )
+    assert int(parse_properties(request.final_environment_variables())["SCT_TEST_DURATION"]) == 180 + 15 * 130

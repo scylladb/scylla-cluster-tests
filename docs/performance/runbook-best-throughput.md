@@ -65,10 +65,19 @@ Empty means the default.
 | | `requested_by_user`, `email_recipients` | empty (set by automated requests); the test-case's recipients |
 | | `dry_run` | false |
 
-A read, mixed or read_disk_only run takes up to ~2.5 h of stress at the defaults (10 steps of 15 minutes), plus
-the preload. A write step has no duration: like in the predefined-steps jobs, it writes its whole key range, so
-every step inserts all the data and a write run is longer. The four workloads run in parallel on their own
-clusters.
+A read, mixed or read_disk_only run takes ~4-5 h at the defaults: the preload, then 6-10 steps of 15 minutes,
+each followed by waits for compactions (at least 3 minutes) and tablet splits (up to 6). A write step has no
+duration: like in the predefined-steps jobs, it writes its whole key range (1.6B rows on i4i/i8g.4xlarge), so
+every step inserts all the data and lasts as long as its throughput needs, ~40 minutes at the highest rate and
+longer at lower thread counts. The four workloads run in parallel on their own clusters.
+
+The launcher sets `SCT_TEST_DURATION` for the longest run the settings allow, so the test timeout doesn't end a
+run before it reports: 180 minutes for setup, preload and teardown, plus (step duration + 10 minutes) for each
+of up to max(`max_search_steps`, 13) search steps, 2 reruns and one step per overload factor, for the longest
+workload. 13 is the steps from 1 thread to the cap of 4096 threads per command, which the budget doesn't cut
+short. A write step, having no duration, is allowed 120 minutes. That is 555 minutes for the read workloads and
+2130 for write at the defaults. Set `SCT_TEST_DURATION` in `extra_environment_variables` to override it, e.g.
+when a file in your `test_config` adds steps.
 
 ## 3. What the launcher does
 
@@ -88,15 +97,18 @@ clusters.
      `tablets_disabled.yaml` for vnodes, then for the default test-case its RAM/disk-sized
      dataset, and last `best_throughput.yaml`, which turns the thread search on.
    - `extra_environment_variables`: yours (variables left empty, like the default `SCT_INSTANCE_TYPE_DB=`, are
-     ignored), then `SCT_INSTANCE_TYPE_DB`, `SCT_N_DB_NODES` and the variables of the loader and search
-     parameters you set. A parameter wins over the same variable in your text.
+     ignored), then `SCT_INSTANCE_TYPE_DB`, `SCT_N_DB_NODES`, the variables of the loader and search
+     parameters you set, and `SCT_TEST_DURATION` unless you set it (section 2). A parameter wins over the same
+     variable in your text.
 
 ## 4. Read the result
 
 Each workload (read, write, mixed, read_disk_only) runs in parallel on its own cluster:
 
-- `<workload> - best throughput under P99 limit` (Argus): the best throughput, its thread count, P99 read/write
-  and the limit. Throughput 0 with step `none passed` means no thread count stayed within the limit.
+- `<workload> - best throughput under P99 limit` (Argus): the best throughput, its thread count, P99 read/write,
+  the limit and why the search stopped. Throughput 0 with step `none passed` means no thread count stayed within
+  the limit. Stop reason `thread cap` means every step up to the cap stayed within it: the throughput is a lower
+  bound, not the limit.
 - Per-step tables `<workload> - unthrottled_<threads>_threads - latencies`: what the search tried.
 - The run log says why the search stopped (narrowed to the precision, throughput saturated, reached the cap of
   threads per command, or the step budget ran out while bisecting; the budget never stops the search before it
@@ -109,7 +121,7 @@ Each workload (read, write, mixed, read_disk_only) runs in parallel on its own c
 | A separate history for an experiment on the same hardware | Set `job_name_suffix` |
 | Another stress tool, distribution, compaction or compression | Add its file to `test_config` |
 | A different limit | `p99_limit_ms` |
-| A finer or longer search | `search_precision_pct`, `max_search_steps`, `step_duration` (not write) |
+| A finer or longer search | `search_precision_pct`, `max_search_steps`, `step_duration` (not write); `SCT_TEST_DURATION` grows with them (section 2) |
 | Goodput under overload ([SCYLLADB-3267](https://scylladb.atlassian.net/browse/SCYLLADB-3267)) | `overload_factors`, e.g. `1.3,2`: after the search, offer that many times the best throughput; `<workload> - goodput under overload` in Argus, failing the run under 0.9 of the best. Check `Attempted ratio`: cassandra-stress can fall short of the target, and a step under 0.95 of it didn't overload the cluster (the run warns) |
 | A one-off run that shouldn't create a job | Run `best-throughput-generic` (next to the launcher) directly |
 | Repeat a run | Rebuild the generated job's last build |
