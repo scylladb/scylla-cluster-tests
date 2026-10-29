@@ -352,6 +352,11 @@ class MgmtRestore(ManagerMonkeyBase):
             return "MultiDC cluster configuration is not supported by this nemesis"
         if params.get("cluster_backend") not in ("aws", "k8s-eks"):
             return "The restore test only supports 'AWS' and 'K8S-EKS' backends."
+        # The persistent snapshots were taken on an enterprise AWS cluster with the default KMS encryption at rest,
+        # so their SSTables can only be loaded by nodes that define the same 'auto' KMS host (see SCYLLADB-2208).
+        kms_hosts = (params.get("append_scylla_yaml") or {}).get("kms_hosts") or {}
+        if "auto" not in kms_hosts:
+            return "The persistent snapshots are KMS-encrypted, but the 'auto' KMS host is not configured"
         return None
 
     def disrupt(self):  # noqa: PLR0914
