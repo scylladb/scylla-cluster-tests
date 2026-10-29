@@ -19,6 +19,9 @@ Before you begin, ensure you have the following installed on your system:
 
 - Git
 - Basic system development tools (build-essential, or equivalent for your distro)
+- CMake, OpenSSL and zlib headers (`cmake libssl-dev zlib1g-dev` on Ubuntu, `cmake openssl-devel zlib-devel` on Fedora,
+  `brew install cmake openssl` on macOS). `ssh2-python` has no Python 3.15 wheels yet and builds its bundled libssh2
+  from source.
 - librdkafka headers, version 2.12.1 or newer (`librdkafka-dev` on Ubuntu 26.04, `librdkafka-devel` on Fedora,
   `brew install librdkafka` on macOS). `confluent-kafka` has no Python 3.15 wheels yet and builds from source.
   Older distros (e.g. Debian trixie ships 2.8) can use [Confluent's APT repository](https://docs.confluent.io/platform/current/installation/installing_cp/deb-ubuntu.html#get-the-software).
