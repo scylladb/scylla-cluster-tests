@@ -7,6 +7,9 @@ import json
 from dataclasses import asdict, dataclass, replace
 from typing import List, Union
 
+import requests
+from argus.client.base import ArgusClientError
+
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.argus_results import (
     LATENCY_ERROR_THRESHOLDS,
@@ -513,8 +516,12 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         # decorator failed to collect the results of the step. An empty file is not valid JSON:
         # read it the way the decorator itself does, to report the step without latencies rather
         # than fail the whole test on a JSONDecodeError that hides the original failure.
-        with open(self.latency_results_file, encoding="utf-8") as file:
-            latency_results = json.loads(file.read().strip() or "{}")
+        # A step after one with results finds no file at all: processing those results removed it, and
+        # TestConfig creates it only once. Read that as an empty file too.
+        results_file = pathlib.Path(self.latency_results_file)
+        latency_results = json.loads(
+            (results_file.read_text(encoding="utf-8") if results_file.exists() else "").strip() or "{}"
+        )
         self.log.debug(
             "Step %s: latency_results were loaded from file %s and its result is %s",
             step,
@@ -725,17 +732,22 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                     )
                 )
 
-        best_step = self.report_best_throughput(workload=workload, total_summary=total_summary)
-        overload_results = None
+        best_step = self.find_best_step(workload=workload, total_summary=total_summary)
+        # The results log is written before each Argus send, so the run's results survive a failed send.
+        self.save_total_summary_in_file(total_summary, best_step=best_step)
+        self.report_best_throughput(workload=workload, best_step=best_step)
         if overload_config := self.overload_config(workload.workload_type):
-            overload_results = self.run_overload_steps(
+            if overload_results := self.run_overload_steps(
                 workload=workload,
                 overload_config=overload_config,
                 best_step=best_step,
                 stress_num=stress_num,
                 num_loaders=num_loaders,
-            )
-        self.save_total_summary_in_file(total_summary, best_step=best_step, overload_results=overload_results)
+            ):
+                self.save_total_summary_in_file(total_summary, best_step=best_step, overload_results=overload_results)
+                self.report_goodput(
+                    workload=workload, overload_config=overload_config, best_step=best_step, results=overload_results
+                )
 
     def overload_config(self, workload_type: str) -> OverloadConfig | None:
         """The workload's goodput-under-overload settings, or None when it runs no overload steps."""
@@ -795,15 +807,27 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 result.failed_ops,
             )
             results.append(result)
+        return results
 
-        send_goodput_results_to_argus(
-            argus_client=self.test_config.argus_client(),
+    def report_goodput(
+        self, workload: Workload, overload_config: OverloadConfig, best_step: BestThroughputStep, results
+    ) -> None:
+        """Send the goodput of every overload step to Argus."""
+        self.send_to_argus(
+            f"the '{workload.workload_type}' goodput under overload",
+            send_goodput_results_to_argus,
             workload=workload.workload_type,
             results=results,
             best_throughput=best_step.throughput,
             min_goodput_ratio=overload_config.min_goodput_ratio,
         )
-        return results
+
+    def send_to_argus(self, what: str, send, **kwargs) -> None:
+        """Send a result table to Argus. An Argus outage must not fail the test: the results log keeps the values."""
+        try:
+            send(argus_client=self.test_config.argus_client(), **kwargs)
+        except ArgusClientError, requests.RequestException:
+            self.log.warning("Could not send %s to Argus", what, exc_info=True)
 
     def thread_search_config(self, workload_type: str) -> ThreadSearchConfig | None:
         """The workload's adaptive thread search settings, or None when it runs its fixed steps."""
@@ -910,8 +934,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload.workload_type, latency_limit.get("default", LATENCY_ERROR_THRESHOLDS["default"])
         )["percentile_99"]
 
-    def report_best_throughput(self, workload: Workload, total_summary: dict) -> BestThroughputStep | None:
-        """Find the step with the highest throughput within the P99 limit and send it to Argus."""
+    def find_best_step(self, workload: Workload, total_summary: dict) -> BestThroughputStep | None:
+        """Find the step with the highest throughput within the P99 limit."""
         p99_limit_ms = self.p99_limit_ms(workload)
         best_step = find_best_throughput(total_summary=total_summary, p99_limit_ms=p99_limit_ms)
         if best_step:
@@ -926,13 +950,17 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             )
         else:
             self.log.warning("No '%s' step kept P99 within %s ms", workload.workload_type, p99_limit_ms)
-        send_best_throughput_result_to_argus(
-            argus_client=self.test_config.argus_client(),
+        return best_step
+
+    def report_best_throughput(self, workload: Workload, best_step: BestThroughputStep | None) -> None:
+        """Send the best step, or "none passed", to Argus."""
+        self.send_to_argus(
+            f"the '{workload.workload_type}' best throughput",
+            send_best_throughput_result_to_argus,
             workload=workload.workload_type,
             best_step=best_step,
-            p99_limit_ms=p99_limit_ms,
+            p99_limit_ms=self.p99_limit_ms(workload),
         )
-        return best_step
 
     def save_total_summary_in_file(
         self,

@@ -2,6 +2,7 @@
 
 import json
 import logging
+from functools import partial
 from types import SimpleNamespace
 
 import pytest
@@ -133,11 +134,13 @@ def _test_instance(run_steps, client):
         offered = int(throttle_step_dict["rate"])
         return {step_name: _step_summary(min(offered, 1_000_000 - offered // 2), failed_ops=offered // 1000)}
 
-    return SimpleNamespace(
+    instance = SimpleNamespace(
         log=logging.getLogger(__name__),
         run_gradual_step=run_gradual_step,
         test_config=SimpleNamespace(argus_client=lambda: client),
-    ), test_class
+    )
+    instance.send_to_argus = partial(test_class.send_to_argus, instance)
+    return instance, test_class
 
 
 WORKLOAD = gradual_grow_module.Workload(
@@ -174,6 +177,12 @@ def test_test_class_runs_a_throttled_step_per_factor():
     assert all(step["cmds"][1] == WORKLOAD.cs_cmd_tmpl[1] for step in run_steps)
     assert [result.goodput_ratio for result in results] == [1.3, 1.0]
     assert [result.failed_ops for result in results] == [650, 1000]
+    # Sent by report_goodput, after the results log has them.
+    assert not client.tables
+
+    test_class.report_goodput(
+        instance, workload=WORKLOAD, overload_config=OverloadConfig(), best_step=BEST, results=results
+    )
     assert len(client.tables) == 1
 
 
