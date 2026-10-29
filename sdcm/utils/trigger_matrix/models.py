@@ -17,7 +17,8 @@ The pydantic models describing a matrix YAML, plus the small records the trigger
 phases pass around.
 
 `JOB_LEVEL_KEYS` and `MATRIX_LEVEL_KEYS` are derived from `model_fields` at import time, so
-they have to stay in this module, below the models they describe."""
+they have to stay in this module, below the models they describe.
+"""
 
 import logging
 from dataclasses import dataclass, field

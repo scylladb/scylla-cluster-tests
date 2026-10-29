@@ -14,7 +14,8 @@
 """Loading and validation of trigger matrix YAML files.
 
 Layout validation runs before pydantic so that a typo in a matrix file is reported with all
-its siblings and a "did you mean" hint, rather than one pydantic error at a time."""
+its siblings and a "did you mean" hint, rather than one pydantic error at a time.
+"""
 
 import difflib
 import logging

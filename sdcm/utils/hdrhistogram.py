@@ -149,10 +149,7 @@ class _HdrRangeHistogramBuilder:
 
     @log_run_info("HdrHistogram Summary Builder")
     def build_histogram_summary(self, path: str) -> list[dict[str, dict[str, int]]]:
-        """
-        Build Range Histogram Summary from provided hdr logs files path
-        """
-
+        """Build Range Histogram Summary from provided hdr logs files path"""
         LOGGER.debug(f"Building histogram summary for {path} with tags {self.hdr_tags}")
         try:
             scan_results = {}
@@ -173,10 +170,7 @@ class _HdrRangeHistogramBuilder:
     def build_histograms_summary_with_interval(
         self, path: str, interval=TIME_INTERVAL
     ) -> list[dict[str, dict[str, int]]]:
-        """
-        Build Several Range Histogram Summaries from provided hdr logs files path splitted by interval
-        """
-
+        """Build Several Range Histogram Summaries from provided hdr logs files path splitted by interval"""
         LOGGER.debug(f"Building histogram summary for {path} with tags {self.hdr_tags}")
         try:
             start_ts = int(self.start_time)
@@ -234,9 +228,7 @@ class _HdrRangeHistogramBuilder:
             LOGGER.debug(f"Finished building histogram summary for {path} with tags {self.hdr_tags}")
 
     def build_from_log_line(self, log_line: str, hst_log_start_time: float) -> dict[str, dict[str, int]]:
-        """
-        Build Range Histogram Summary from provided log_line
-        """
+        """Build Range Histogram Summary from provided log_line"""
         tag, start, interval_len, _, encoded_hist = log_line.split(",")
         tag = tag.split("=")[-1]
         if tag not in self.hdr_tags:
@@ -350,7 +342,7 @@ class _HdrRangeHistogramBuilder:
 
     def _get_list_of_hdr_files(self, base_path: str) -> list[str]:
         """
-        find all hdr log file by pattern like glob wc
+        Find all hdr log file by pattern like glob wc
         in profided by base_path dir.
         """
         if not base_path:
@@ -368,9 +360,7 @@ class _HdrRangeHistogramBuilder:
 
     @staticmethod
     def _merge_range_histograms(range_histograms: list[_HdrRangeHistogram]) -> _HdrRangeHistogram:
-        """
-        Merge several time range histogram to one containg summary result.
-        """
+        """Merge several time range histogram to one containg summary result."""
         if not range_histograms:
             return _HdrRangeHistogram(start_time=0, end_time=0, histogram=None, hdr_tag=None)
 
@@ -390,7 +380,7 @@ class _HdrRangeHistogramBuilder:
         hdr_tag: str,
     ) -> _HdrRangeHistogram:
         """
-        search in dir from 'base_path' with provided pattern or
+        Search in dir from 'base_path' with provided pattern or
         default global pattern 'CS_HDR_FILE_WC' hdr log files
         and build Range Histogram with time interval (start_time, end_time)
         For timestamps is used absolute time in ms since epoch start

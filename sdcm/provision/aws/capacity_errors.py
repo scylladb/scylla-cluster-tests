@@ -56,4 +56,5 @@ class ProvisioningCapacityExhausted(Exception):
 
 class RegionAMINotFoundError(Exception):
     """Raised when no equivalent AMI exists in a target region, making that region ineligible
-    for AWS region fallback."""
+    for AWS region fallback.
+    """

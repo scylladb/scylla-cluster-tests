@@ -106,7 +106,8 @@ def test_comment_monkey(runner):
 def test_compaction_twcs_sets_compaction_before_ttl(runner):
     """When TimeWindowCompactionStrategy is chosen, compaction must be set before
     default_time_to_live so that the new DAYS-based window is active when ScyllaDB
-    validates the TTL against twcs_max_window_count."""
+    validates the TTL against twcs_max_window_count.
+    """
     monkey = ModifyTableCompactionMonkey(runner)
     # Force the TWCS lambda to be picked
     monkey.random.choice = lambda seq: seq[2] if callable(seq[0]) else seq[0]
@@ -164,7 +165,8 @@ def test_default_ttl_raises_unsupported_when_no_tables():
 
 def test_twcs_disrupt(twcs_runner):
     """Verify the full disrupt() flow: CQL statements, node restart,
-    major compaction, and schema agreement."""
+    major compaction, and schema agreement.
+    """
     monkey = ModifyTableTwcsWindowSizeMonkey(twcs_runner)
     monkey.disrupt()
 

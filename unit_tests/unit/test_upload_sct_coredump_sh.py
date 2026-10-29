@@ -84,7 +84,7 @@ def _make_core(core_dir, comm, age_seconds, uid=1000):
 
 @pytest.fixture()
 def work_dir(tmp_path):
-    """cwd for the script under test.
+    """Cwd for the script under test.
 
     Holds a stub docker/env/hydra.sh, the real upload_sct_coredump_inside_hydra.sh symlinked in
     at the relative path the host script invokes it through (so that path resolves against this

@@ -507,6 +507,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
     def _step_names(step_names, total_counts):
         """
         Helper function to generate names based on throttle_steps and num_threads.
+
         Example:
             step_names = ["100", "unthrottled", "unthrottled"]
             total_counts = {"unthrottled": 2, "100": 1}

@@ -160,6 +160,6 @@ class LocalScyllaClusterDummy(BaseScyllaCluster, BaseCluster):
         raise NotImplementedError
 
     def get_ip_to_node_map(self, nodes=None):
-        """returns {ip: node} map for all nodes in cluster to get node by ip"""
+        """Returns {ip: node} map for all nodes in cluster to get node by ip"""
         source = nodes if nodes is not None else self.nodes
         return {node.ip_address: node for node in source}

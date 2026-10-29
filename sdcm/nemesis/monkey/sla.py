@@ -40,6 +40,7 @@ class SlaMonkeyBase(NemesisBaseClass):
         return None
 
     def get_cassandra_stress_write_cmds(self):
+        """Return the cassandra-stress prepare write commands that can fill a table, or None when there are none."""
         write_cmds = self.runner.tester.params.get("prepare_write_cmd")
         if not write_cmds:
             return None
@@ -54,6 +55,7 @@ class SlaMonkeyBase(NemesisBaseClass):
         return stress_cmds
 
     def get_cassandra_stress_definition(self, stress_cmds, default_data_set_size=5000000):
+        """Return the column definition and dataset size derived from the first stress command."""
         stress_cmd = stress_cmds[0]
         self.runner.log.debug("Stress commands to get cassandra_stress_definition: %s", stress_cmd)
         column_definition = self.runner.tester.get_c_s_column_definition(cs_cmd=stress_cmd)
@@ -81,6 +83,7 @@ class SlaMonkeyBase(NemesisBaseClass):
 
     @staticmethod
     def format_error_for_sla_test_and_raise(error_events):
+        """Raise NemesisSubTestFailure listing the step and message of each error event."""
         if any(error_events):
             raise NemesisSubTestFailure(
                 "\n".join(f"Step: {error.step}. Error:\n - {error}" for error in error_events if error)
@@ -94,6 +97,7 @@ class RemoveServiceLevelMonkey(SlaMonkeyBase):
     requires_prefilled_cs_data = False  # works on pre-defined roles, not on cassandra-stress data
 
     def disrupt(self):
+        """Drop the service level of the first role under load and re-create it."""
         if not getattr(self.runner.tester, "roles", None):
             raise UnsupportedNemesis("This nemesis is supported with Service Level and role are pre-defined")
 
@@ -127,6 +131,7 @@ class SlaIncreaseSharesDuringLoad(SlaMonkeyBase):
     disruptive = False
 
     def disrupt(self):
+        """Run the increase-shares SLA test under load and report failures."""
         column_definition, dataset_size = self.get_stress_params()
 
         prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
@@ -145,6 +150,7 @@ class SlaDecreaseSharesDuringLoad(SlaMonkeyBase):
     disruptive = False
 
     def disrupt(self):
+        """Run the decrease-shares SLA test under load and report failures."""
         column_definition, dataset_size = self.get_stress_params()
 
         prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
@@ -164,6 +170,7 @@ class SlaReplaceUsingDetachDuringLoad(SlaMonkeyBase):
     disruptive = True
 
     def disrupt(self):
+        """Run the replace-by-detach SLA test under load and report failures."""
         column_definition, dataset_size = self.get_stress_params()
 
         prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
@@ -183,6 +190,7 @@ class SlaReplaceUsingDropDuringLoad(SlaMonkeyBase):
     disruptive = True
 
     def disrupt(self):
+        """Run the replace-by-drop SLA test under load and report failures."""
         column_definition, dataset_size = self.get_stress_params()
 
         prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
@@ -202,6 +210,7 @@ class SlaIncreaseSharesByAttachAnotherSlDuringLoad(SlaMonkeyBase):
     disruptive = True
 
     def disrupt(self):
+        """Run the attach-another-service-level SLA test under load and report failures."""
         column_definition, dataset_size = self.get_stress_params()
 
         prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)
@@ -220,6 +229,7 @@ class SlaMaximumAllowedSlsWithMaxSharesDuringLoad(SlaMonkeyBase):
     disruptive = False
 
     def disrupt(self):
+        """Fill the allowed service level quota with max-shares levels under load and report failures."""
         column_definition, dataset_size = self.get_stress_params()
 
         prometheus_stats = PrometheusDBStats(host=self.runner.monitoring_set.nodes[0].external_address)

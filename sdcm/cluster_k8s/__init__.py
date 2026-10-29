@@ -2285,15 +2285,11 @@ class BasePodContainer(cluster.BaseNode):
         return self.node_name
 
     def terminate_k8s_node(self):
-        """
-        Delete kubernetes node, which will terminate scylla node that is running on it
-        """
+        """Delete kubernetes node, which will terminate scylla node that is running on it"""
         self.k8s_cluster.kubectl(f"delete node {self.node_name} --now", timeout=self.pod_terminate_timeout * 60 + 10)
 
     def terminate_k8s_host(self):
-        """
-        Terminate kubernetes node via cloud API (like GCE/EC2), which will terminate scylla node that is running on it
-        """
+        """Terminate kubernetes node via cloud API (like GCE/EC2), which will terminate scylla node that is running on it"""
         raise NotImplementedError("To be overridden in child class")
 
     @staticmethod
@@ -2311,9 +2307,7 @@ class BaseScyllaPodContainer(BasePodContainer):
 
     @property
     def proposed_scylla_yaml(self) -> ScyllaYaml:
-        """
-        For kubernetes there is no node-specific scylla.yaml, only cluster-wide
-        """
+        """For kubernetes there is no node-specific scylla.yaml, only cluster-wide"""
         return self.k8s_cluster.proposed_scylla_yaml
 
     @property
@@ -2953,9 +2947,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         )
 
     def get_scylla_cluster_value(self, path: str, dc_idx: int = 0) -> Optional[ANY_KUBERNETES_RESOURCE]:
-        """
-        Get scylla cluster value from kubernetes API.
-        """
+        """Get scylla cluster value from kubernetes API."""
         cluster_data = self._k8s_scylla_cluster_api(dc_idx=dc_idx).get(
             namespace=self.namespace, name=self.scylla_cluster_name
         )

@@ -65,7 +65,8 @@ def set_params(runner):
 @pytest.fixture(autouse=True)
 def stub_common_helpers():
     """Stub the ``utils.common`` internals: DbNodeLogger opens SSH sessions to every
-    node, and the SStable pick has to be deterministic."""
+    node, and the SStable pick has to be deterministic.
+    """
     with patch(f"{COMMON_MODULE}.DbNodeLogger"), patch(f"{COMMON_MODULE}.random") as mock_random:
         mock_random.choice.side_effect = lambda seq: seq[0]
         yield
@@ -115,7 +116,8 @@ def snapshot_catalog(snapshot_tag, restored_ks):
 @pytest.fixture()
 def destroy_node_data_runner(runner):
     """``runner`` wired for a successful ``destroy_data_and_restart_scylla`` run:
-    one table holding one SStable that ``rm`` removes without complaining."""
+    one table holding one SStable that ``rm`` removes without complaining.
+    """
     runner.cluster.get_non_system_ks_cf_list.return_value = ["ks1.table1"]
     runner.get_all_sstables.return_value = ["/var/lib/scylla/data/ks1/table1/mc-1-big-Data.db"]
     runner.replace_full_file_name_to_prefix.return_value = "/var/lib/scylla/data/ks1/table1/mc-1-*"
@@ -335,7 +337,8 @@ def test_destroy_data_restarts_scylla_on_file_removal_error(destroy_node_data_ru
 )
 def test_restore_precheck(runner, set_params, cluster_backend, region_names, issues_open, expected):
     """MgmtRestore.precheck() skips non-AWS backends, and multi-DC clusters only while the
-    Manager cross-DC restore issues are still open."""
+    Manager cross-DC restore issues are still open.
+    """
     set_params(use_mgmt=True, cluster_backend=cluster_backend)
     runner.cluster.params.region_names = region_names
 
@@ -362,7 +365,8 @@ def test_restore_happy_path_existing_keyspace(restore_snapshot_runner, snapshot_
 
 def test_restore_happy_path_with_schema_restoration(restore_snapshot_with_schema_runner, snapshot_tag):
     """The keyspace is missing and the DC names mismatch: apply the schema CQL with the
-    DC name rewritten, restart the cluster, then restore the data as usual."""
+    DC name rewritten, restart the cluster, then restore the data as usual.
+    """
     MgmtRestore(restore_snapshot_with_schema_runner).disrupt()
 
     statements = [str(call) for call in restore_snapshot_with_schema_runner.target_node.run_cqlsh.call_args_list]

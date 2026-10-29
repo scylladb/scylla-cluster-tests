@@ -71,7 +71,6 @@ def test_execute_nemesis_failure(failing_nemesis, nemesis_runner):
 
 def test_execute_nemesis_skip(skipping_nemesis, nemesis_runner):
     """Test execute_nemesis handles nemesis skip."""
-
     with pytest.raises(UnsupportedNemesis, match="Intentional skip"):
         nemesis_runner.execute_nemesis(skipping_nemesis)
 
@@ -148,7 +147,6 @@ def test_execute_multiple_nemesis_in_sequence(nemesis, kill_nemesis, failing_nem
     operation_log entry, and duration record, and that a failure in one
     does not corrupt the state for subsequent executions.
     """
-
     # 1. Run a successful nemesis
     nemesis_runner.execute_nemesis(nemesis)
 

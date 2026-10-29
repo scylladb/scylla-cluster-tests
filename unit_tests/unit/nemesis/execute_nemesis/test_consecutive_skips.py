@@ -95,7 +95,8 @@ def test_run_does_not_crash_on_skipped_nemesis(make_nemesis_runner):
 
 def test_run_stops_and_publishes_critical_after_3_consecutive_skips(make_nemesis_runner, events_function_scope):
     """run() must stop the nemesis loop and publish a CRITICAL InfoEvent when a
-    single-disruption list skips 3 or more times consecutively."""
+    single-disruption list skips 3 or more times consecutively.
+    """
     runner = make_nemesis_runner(SkippingTestNemesis)
 
     # Request 5 cycles — but the loop should break after 3 skips
@@ -112,7 +113,8 @@ def test_run_stops_and_publishes_critical_after_3_consecutive_skips(make_nemesis
 
 def test_run_continues_when_multiple_disruptions_and_one_skips(make_nemesis_runner, events_function_scope):
     """run() must NOT stop early when the disruptions list has more than one entry,
-    even if one nemesis keeps skipping."""
+    even if one nemesis keeps skipping.
+    """
     runner = make_nemesis_runner(SkippingTestNemesis, CustomTestNemesis)
 
     runner.run(cycles_count=6)
@@ -124,7 +126,8 @@ def test_run_continues_when_multiple_disruptions_and_one_skips(make_nemesis_runn
 
 def test_run_resets_skips_after_success(make_nemesis_runner, events_function_scope):
     """A successful execution must clear consecutive_skips, preventing a false
-    CRITICAL event even if many skips occur in total."""
+    CRITICAL event even if many skips occur in total.
+    """
     # Pattern: skip, skip, success, skip, skip, success — never reaches 3 consecutive
     runner = make_nemesis_runner(SkippingTestNemesis, SkippingTestNemesis, CustomTestNemesis)
 
@@ -139,7 +142,8 @@ def test_run_resets_skips_after_success(make_nemesis_runner, events_function_sco
 
 def test_run_stops_on_method_version_not_found(make_nemesis_runner, events_function_scope):
     """run() must also stop and publish a CRITICAL InfoEvent when the skip is caused
-    by MethodVersionNotFound, not just UnsupportedNemesis."""
+    by MethodVersionNotFound, not just UnsupportedNemesis.
+    """
     runner = make_nemesis_runner(VersionNotFoundTestNemesis)
 
     runner.run(cycles_count=5)

@@ -29,9 +29,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def is_cf_a_view(node: BaseNode, ks, cf) -> bool:
-    """
-    Check if a CF is a materialized-view or not (a normal table)
-    """
+    """Check if a CF is a materialized-view or not (a normal table)"""
     with node.parent_cluster.cql_connection_patient(node) as session:
         try:
             result = session.execute(
@@ -52,6 +50,7 @@ def get_column_names(
     filter_out_static_columns: bool = False,
     filter_out_column_types: list[str] | None = None,
 ) -> list:
+    """Return the column names of `ks.cf`, optionally restricted to primary-key columns and filtered by kind or type."""
     column_types = "'regular'" if filter_out_static_columns else "'static', 'regular'"
     filter_kind = f" kind in ({column_types})" if not is_primary_key else "kind in ('partition_key', 'clustering')"
     res = session.execute(
@@ -79,6 +78,7 @@ def get_random_column_name(
     filter_out_static_columns: bool = False,
     filter_out_column_types: list[str] | None = None,
 ) -> str | None:
+    """Return a random column name of `ks.cf` that passes the filters, or None when there is none."""
     if column_names := get_column_names(
         session=session,
         ks=ks,
@@ -92,6 +92,7 @@ def get_random_column_name(
 
 
 def create_index(session, ks, cf, column) -> str:
+    """Create an index on `column` and return its name."""
     InfoEvent(message=f"Starting creating index: {ks}.{cf}({column})").publish()
     index_name = f"{cf}_{column}_nemesis".lower()
     session.execute(f'CREATE INDEX {index_name} ON {ks}.{cf}("{column}")', timeout=600)
@@ -99,10 +100,12 @@ def create_index(session, ks, cf, column) -> str:
 
 
 def wait_for_index_to_be_built(node: BaseNode, ks, index_name, timeout=300) -> None:
+    """Wait until the index `index_name` is built."""
     wait_for_view_to_be_built(node=node, ks=ks, view_name=f"{index_name}_index", timeout=timeout)
 
 
 def wait_for_view_to_be_built(node: BaseNode, ks, view_name, timeout=300) -> None:
+    """Wait up to `timeout` seconds until the view `view_name` is built."""
     LOGGER.info(f"waiting {timeout} seconds for view/index {view_name} to be built")
     start_time = time.time()
     while time.time() - start_time < timeout:
@@ -125,6 +128,7 @@ def wait_for_view_to_be_built(node: BaseNode, ks, view_name, timeout=300) -> Non
 
 
 def verify_query_by_index_works(session, ks, cf, column) -> None:
+    """Query `ks.cf` by an existing value of `column` and verify the result."""
     # get some value from table to use it in query by index
     result = session.execute(SimpleStatement(f'SELECT "{column}" FROM {ks}.{cf} limit 1', fetch_size=1))
     value = list(result)[0][0]
@@ -151,11 +155,13 @@ def verify_query_by_index_works(session, ks, cf, column) -> None:
 
 
 def drop_index(session, ks, index_name) -> None:
+    """Drop the index `index_name`."""
     InfoEvent(message=f"Starting dropping index: {ks}.{index_name}").publish()
     session.execute(SimpleStatement(f"DROP INDEX {ks}.{index_name}"), timeout=300)
 
 
 def drop_materialized_view(session, ks, view_name, timeout=300) -> None:
+    """Drop the materialized view `view_name`, tolerating view update errors."""
     LOGGER.info("start dropping MV: %s.%s", ks, view_name)
     with EventsFilter(
         event_class=DatabaseLogEvent.DATABASE_ERROR,
@@ -179,6 +185,7 @@ def create_materialized_view(
     gc_grace=None,
     compact_storage=False,
 ):
+    """Create a materialized view of a base table with the given keys, columns and table options."""
     # Fix quotes for column names, only use quotes where needed
     if mv_columns != "*":
         mv_columns = [

@@ -77,9 +77,7 @@ class HydraTestCaseParams:
 
 
 class LongevityPipelineTest:
-    """
-    This class takes pipeline parameters and produces hydra test cases parameters as a tuple in hydra_test_cases
-    """
+    """This class takes pipeline parameters and produces hydra test cases parameters as a tuple in hydra_test_cases"""
 
     sct_base_path = sct_abs_path("").rstrip("/")
     test_id = "11111111-1111-1111-1111-111111111111"
@@ -386,9 +384,7 @@ class LongevityPipelineTest:
 
     @property
     def hydra_test_cases(self) -> Iterable[Tuple[HydraTestCaseParams, HydraTestCaseTmpDir]]:
-        """
-        Creates list of test case parameters that represent steps in longevity pipeline steps
-        """
+        """Creates list of test case parameters that represent steps in longevity pipeline steps"""
         return (
             self.test_case_show_conf,
             self.test_case_create_runner,

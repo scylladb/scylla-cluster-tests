@@ -25,7 +25,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def rules_to_payload(rules: Iterable) -> List[Dict[str, Union[str, int]]]:
-    """convert iterable rules to format accepted by provisioner"""
+    """Convert iterable rules to format accepted by provisioner"""
     template = {
         "name": "",
         "protocol": "TCP",

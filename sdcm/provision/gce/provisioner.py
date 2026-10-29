@@ -11,9 +11,7 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""
-Main GCE provisioner implementation.
-"""
+"""Main GCE provisioner implementation."""
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed

@@ -43,7 +43,8 @@ def test_temporarily_disable_auto_repair_disables_then_restores(db_cluster):
     """Auto-repair must be off while the block runs and back on afterwards, on every node —
     a missed restore would leave the whole test running without auto-repair (SCT-905).
     The value must also be persisted to scylla.yaml, or a node restart/config reload inside
-    the block would silently re-enable auto-repair."""
+    the block would silently re-enable auto-repair.
+    """
     with temporarily_disable_auto_repair(db_cluster):
         for node in db_cluster.data_nodes:
             node.set_scylla_config_param.assert_called_once_with(AUTO_REPAIR_PARAM, "false")
@@ -73,7 +74,8 @@ def test_temporarily_disable_auto_repair_restores_when_body_raises(db_cluster):
 )
 def test_temporarily_disable_auto_repair_noop(db_cluster, config_value):
     """Nothing may be written when auto-repair is off or unsupported — a blind write would fail
-    on pre-2026.1 Scylla and would wrongly enable auto-repair on exit."""
+    on pre-2026.1 Scylla and would wrongly enable auto-repair on exit.
+    """
     for node in db_cluster.data_nodes:
         node.get_scylla_config_param.return_value = config_value
     with temporarily_disable_auto_repair(db_cluster):
@@ -85,7 +87,8 @@ def test_temporarily_disable_auto_repair_noop(db_cluster, config_value):
 def test_temporarily_disable_auto_repair_nested_toggles_once(db_cluster):
     """The repair choke points nest (e.g. disrupt_abort_repair -> run_repair -> run_repair_manager):
     the inner use must see auto-repair already off and neither disable nor restore anything,
-    so only the outermost use toggles it."""
+    so only the outermost use toggles it.
+    """
     with temporarily_disable_auto_repair(db_cluster), temporarily_disable_auto_repair(db_cluster):
         pass
     for node in db_cluster.data_nodes:
@@ -97,7 +100,8 @@ def test_temporarily_disable_auto_repair_nested_toggles_once(db_cluster):
 
 def test_temporarily_disable_auto_repair_skips_unreachable_node(db_cluster):
     """A down/isolated node (remove-node and isolation nemeses) must not fail the repair, and
-    no restore may be attempted on it."""
+    no restore may be attempted on it.
+    """
     down_node, *up_nodes = db_cluster.data_nodes
     down_node.get_scylla_config_param.return_value = None
     with temporarily_disable_auto_repair(db_cluster):

@@ -35,6 +35,7 @@ def open_none_auth(self):
     This method manually creates a Paramiko Transport, starts the SSH client, and authenticates
     using the "none" method for the specified user. It then assigns the resulting transport
     to the connection instance, allowing commands to be executed without standard authentication.
+
     Args:
         self: The Fabric Connection instance being modified.
     """

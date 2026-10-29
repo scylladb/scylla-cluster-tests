@@ -174,7 +174,8 @@ def test_dump_schema_command_failure_raises_runtime_error(make_cassandra_cluster
 
 def test_dump_schema_banner_with_semicolons_does_not_confuse_stripper(make_cassandra_cluster):
     """regression: banner lines containing ';' before CREATE KEYSPACE must not be mistaken
-    for the end of the CREATE KEYSPACE statement."""
+    for the end of the CREATE KEYSPACE statement.
+    """
     cluster = make_cassandra_cluster(
         result_map={r"cqlsh.*DESCRIBE KEYSPACE.*": Result(stdout=_DESCRIBE_OUTPUT_WITH_BANNER, stderr="", exited=0)}
     )
@@ -314,7 +315,8 @@ def test_dump_schema_rewrites_compression_enabled_false_to_disabled(make_cassand
     """Cassandra 4.x `compression = {'enabled': 'false'}` (no 'class' key) means
     compression is disabled. Scylla rejects that form with "Missing sub-option
     'sstable_compression'" - the equivalent on Scylla is `{'sstable_compression': ''}`.
-    Latte's latte_cs_alike.rn schema emits exactly this disabled-compression form."""
+    Latte's latte_cs_alike.rn schema emits exactly this disabled-compression form.
+    """
     output = (
         'CREATE TABLE keyspace1.standard1 (key blob PRIMARY KEY, "C0" blob) WITH bloom_filter_fp_chance = 0.01\n'
         "    AND compression = {'enabled': 'false'}\n"

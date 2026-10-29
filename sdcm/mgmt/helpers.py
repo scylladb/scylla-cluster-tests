@@ -68,7 +68,7 @@ def get_dc_name_from_ks_statement(ks_statement: str) -> list[str]:
 
     For example, for the statement:
 
-        "CREATE KEYSPACE \"5gb_stcs_quorum_64_16_2024_2_4\"
+        "CREATE KEYSPACE \\"5gb_stcs_quorum_64_16_2024_2_4\\"
             WITH replication = {'class': 'org.apache.cassandra.locator.NetworkTopologyStrategy', 'us-east': '3'}
             AND durable_writes = true
             AND tablets = {'enabled': false};"

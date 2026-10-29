@@ -39,9 +39,7 @@ def test_find_equivalent_ami_real_scylla_ami():
 
 @pytest.mark.integration
 def test_find_equivalent_ami_cross_architecture():
-    """
-    Test finding ARM64 equivalent of an x86_64 AMI.
-    """
+    """Test finding ARM64 equivalent of an x86_64 AMI."""
     # Use a known ScyllaDB x86_64 AMI
     source_ami = "ami-0d9726c9053daff76"
     source_region = "us-east-1"
@@ -60,9 +58,7 @@ def test_find_equivalent_ami_cross_architecture():
 
 @pytest.mark.integration
 def test_find_equivalent_ami_all_aws_regions():
-    """
-    Test finding equivalents across all major AWS regions.
-    """
+    """Test finding equivalents across all major AWS regions."""
     source_ami = "ami-0d9726c9053daff76"
     source_region = "us-east-1"
     target_regions = ["us-east-1", "us-west-2", "eu-west-1", "eu-central-1", "ap-southeast-1", "ap-northeast-1"]

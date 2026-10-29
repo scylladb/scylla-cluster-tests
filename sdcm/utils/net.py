@@ -1,6 +1,4 @@
-"""
-Utility functions related to network information
-"""
+"""Utility functions related to network information"""
 
 import ipaddress
 

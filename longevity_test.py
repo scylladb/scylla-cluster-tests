@@ -46,9 +46,7 @@ from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
 
 
 class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
-    """
-    Test a Scylla cluster stability over a time period.
-    """
+    """Test a Scylla cluster stability over a time period."""
 
     STATIC_SIZING_OVERHEAD_RATIO = 1.1
 
@@ -172,10 +170,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             InfoEvent(f"Did not find expected log message warning: {msg}", severity=Severity.ERROR)
 
     def test_custom_time(self):  # noqa: PLR0914
-        """
-        Run cassandra-stress with params defined in data_dir/scylla.yaml
-        """
-
+        """Run cassandra-stress with params defined in data_dir/scylla.yaml"""
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
 
         self.download_artifacts_from_s3()
@@ -339,7 +334,6 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         :param user_profile_table_count: Number of tables to be batched.
         :param batch_size: Number of stress commands to run together in a batch.
         """
-
         cs_user_profiles = self.params.get("cs_user_profiles")
         if not cs_user_profiles:
             TestFrameworkEvent(
@@ -398,7 +392,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     def _run_user_stress_in_batches(self, batch_size, stress_params_list, duration):
         """
-        run user profile in batches, optionally adding stress-commands which are not with pre-created tables
+        Run user profile in batches, optionally adding stress-commands which are not with pre-created tables
         and wait for them to finish.
         The optional tables are set by add_cs_user_profiles_extra_tables parameter.
 
@@ -500,7 +494,6 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
         cassandra-stress.
         """
-
         self.log.debug(f"Pre Creating Schema for c-s with {keyspace_num} keyspaces")
         compaction_strategy = self.params.get("compaction_strategy")
         sstable_size = self.params.get("sstable_size")

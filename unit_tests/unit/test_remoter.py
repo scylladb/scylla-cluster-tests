@@ -554,7 +554,8 @@ class TestRemoteFile:
 
     def test_remote_file_empty_mktemp_raises(self):
         """If 'mktemp' comes back with an empty result, remote_file() must raise clearly
-        instead of proceeding with dst="" into a 300s retry loop that always fails."""
+        instead of proceeding with dst="" into a 300s retry loop that always fails.
+        """
 
         class _EmptyMktempRunner(self.remoter_cls):
             def run(self, cmd, *_, **__):

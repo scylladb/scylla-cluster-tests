@@ -77,7 +77,6 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
         Run a major compaction.
         Verify no tombstones.
         """
-
         self.create_tables_for_scylla_bench()
         self.db_node = self.db_cluster.nodes[0]
         self.run_post_prepare_cql_cmds()

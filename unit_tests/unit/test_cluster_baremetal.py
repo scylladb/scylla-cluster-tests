@@ -137,7 +137,8 @@ def test_running_out_of_configured_hosts_is_reported_clearly():
 def test_an_oversized_request_creates_nothing():
     """Validation happens up front: a request that cannot be satisfied in full must not leave
     half the nodes on the cluster, with _node_index advanced, while the caller gets an
-    exception instead of the list it needs to initialize them with."""
+    exception instead of the list it needs to initialize them with.
+    """
     cluster = _cluster(node_count=2, racks_count=2)
 
     with pytest.raises(NodeIpsNotConfiguredError):
@@ -164,7 +165,8 @@ def test_a_grow_past_the_end_leaves_the_existing_nodes_alone():
 def test_disruption_name_is_accepted_and_marks_the_new_nodes():
     """Every other backend decorates add_nodes with @mark_new_nodes_as_running_nemesis;
     without it `_add_and_init_new_cluster_nodes()` -- which always passes disruption_name --
-    raises TypeError before a node is added."""
+    raises TypeError before a node is added.
+    """
     cluster = _cluster(node_count=2, racks_count=2)
     allocator = MagicMock()
     cluster.test_config.tester_obj.return_value.nemesis_allocator = allocator
@@ -177,7 +179,8 @@ def test_disruption_name_is_accepted_and_marks_the_new_nodes():
 
 def test_after_config_reaches_the_node():
     """BaseScyllaCluster.node_setup runs BaseNode.after_config; dropping it here silently
-    skips the caller's post-install hook."""
+    skips the caller's post-install hook.
+    """
     cluster = _cluster(node_count=1, racks_count=1)
     callback = MagicMock()
 
@@ -821,7 +824,7 @@ def _node_answering_hostname(tmp_path, vector_address=None, syslogng_address=Non
 
 
 def test_vector_logs_are_looked_up_under_the_full_hostname(tmp_path):
-    """vector files a host's logs under the hostname its journal reports, which a physical host keeps whole."""
+    """Vector files a host's logs under the hostname its journal reports, which a physical host keeps whole."""
     node = _node_answering_hostname(tmp_path, vector_address=("10.0.0.1", 49153))
 
     assert node.short_hostname == FQDN

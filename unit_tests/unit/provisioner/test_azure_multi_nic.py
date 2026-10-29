@@ -354,7 +354,8 @@ class TestMonitoringConnectivity:
 
     def test_every_subnet_carries_the_scylla_security_group(self, make_provisioner, azure_service):
         """Prometheus scrapes a DB node on the address scylla_network_config picks, which may be on
-        a secondary subnet - so the open-ports rules must apply there too, not only on 'default'."""
+        a secondary subnet - so the open-ports rules must apply there too, not only on 'default'.
+        """
         provisioner = make_provisioner(3)
         provisioner.get_or_create_instance(definition("nsg-vm"), PricingModel.ON_DEMAND)
         resource_group = provisioner.resource_group_name

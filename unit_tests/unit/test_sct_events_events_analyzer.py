@@ -78,7 +78,8 @@ class TestEventsAnalyzer(EventsUtilsMixin):
 
     def test_kill_test_not_called_for_gce_live_migration_of_loader(self):
         """A GCE host-maintenance live migration of a loader node is a known-benign, transient
-        cloud event and must not abort the test."""
+        cloud event and must not abort the test.
+        """
         start_events_analyzer(_registry=self.events_processes_registry)
         events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
 
@@ -97,7 +98,8 @@ class TestEventsAnalyzer(EventsUtilsMixin):
 
     def test_kill_test_called_for_gce_live_migration_of_db_node(self):
         """The same live-migration event on a db node must still abort the test: the benign-event
-        exemption is specific to loader nodes only."""
+        exemption is specific to loader nodes only.
+        """
         start_events_analyzer(_registry=self.events_processes_registry)
         events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
 
@@ -117,7 +119,8 @@ class TestEventsAnalyzer(EventsUtilsMixin):
     def test_kill_test_called_for_non_live_migration_gce_event_on_loader(self):
         """A CRITICAL GceInstanceEvent on a loader node that is NOT a live migration (e.g. a
         host-maintenance terminate) must still abort the test: the exemption is specific to the
-        live-migration scenario, not "any GceInstanceEvent on a loader"."""
+        live-migration scenario, not "any GceInstanceEvent on a loader".
+        """
         start_events_analyzer(_registry=self.events_processes_registry)
         events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
 

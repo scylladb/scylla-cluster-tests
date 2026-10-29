@@ -67,7 +67,6 @@ def vmarch_to_oci(arch: VmArch) -> str:
     Raises:
         ValueError: If architecture is not supported
     """
-
     if arch is VmArch.X86:
         return "x86_64"
     elif arch is VmArch.ARM:

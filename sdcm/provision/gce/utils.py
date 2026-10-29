@@ -11,9 +11,7 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""
-Utility functions for GCE provisioning.
-"""
+"""Utility functions for GCE provisioning."""
 
 import re
 import logging

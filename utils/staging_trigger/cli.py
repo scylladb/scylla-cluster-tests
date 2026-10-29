@@ -195,7 +195,7 @@ def trigger(  # noqa: PLR0913, PLR0911, PLR0912, PLR0914
     trigger, dry-run, or export to YAML. Pass job names as arguments to
     skip interactive selection and trigger directly.
 
-    \b
+    \\b
     Examples:
       trigger                                         # interactive browse & trigger
       trigger "longevity*"                            # filter, select, trigger
@@ -368,7 +368,7 @@ def trigger(  # noqa: PLR0913, PLR0911, PLR0912, PLR0914
 def run_config(config_file, dry_run):
     """Trigger jobs defined in a YAML config file.
 
-    \b
+    \\b
     Example YAML:
       folder: scylla-staging/<username>   # optional, defaults to your username
       branch: my-feature-branch
@@ -439,7 +439,7 @@ def generate(ctx, pipelines, branch, repo, pr, pipeline_path, suffix, dry_run, o
     PIPELINES are jenkinsfile stems (e.g. "longevity-100gb-4h") or paths
     (e.g. "manager/debian12-manager-sanity") for direct (non-interactive) mode.
 
-    \b
+    \\b
     Examples:
       generate -b my-branch                           # interactive browse
       generate --pr 12345                             # use PR branch
@@ -507,7 +507,7 @@ def generate(ctx, pipelines, branch, repo, pr, pipeline_path, suffix, dry_run, o
 def setup_completion(shell):
     """Print shell completion setup instructions and install the completion script.
 
-    \b
+    \\b
     Detects your current shell automatically, or specify one explicitly:
       setup-completion bash
       setup-completion zsh

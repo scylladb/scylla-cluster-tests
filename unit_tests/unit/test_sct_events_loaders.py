@@ -460,7 +460,6 @@ class TestCassandraStressLogEvent:
         """Check that all events are listed in CS_ERROR_EVENTS and CS_NORMAL_EVENTS
         since python3.14 also __annotate_func__ need to be excluded from the dir() output
         """
-
         assert set(dir(CassandraStressLogEvent)) - set(dir(LogEvent)) - {"__annotate_func__"} == {
             ev.type for ev in chain(CS_NORMAL_EVENTS, CS_ERROR_EVENTS)
         }

@@ -15,7 +15,8 @@
 
 This module is a leaf on purpose. Several of these values are pydantic field defaults
 (`JobConfig.wait_timeout`, `MatrixConfig.version_resolution`), so keeping them here is what
-stops `models` from having to import the wait and resolution layers that import it back."""
+stops `models` from having to import the wait and resolution layers that import it back.
+"""
 
 from typing import Literal
 

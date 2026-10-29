@@ -78,11 +78,10 @@ def is_config_option_appendable(option_name: str, model: type[BaseModel]) -> boo
 
 def merge_dicts_append_strings(d1, d2, model: type[BaseModel]):
     """
-    merge two dictionaries, while having option
+    Merge two dictionaries, while having option
     to append string if the value starts with '++'
     and append list if first item is '++'
     """
-
     for key, value in copy.deepcopy(d2).items():
         if isinstance(value, str) and value.startswith("++"):
             assert is_config_option_appendable(key, model), f"Option {key} is not appendable"

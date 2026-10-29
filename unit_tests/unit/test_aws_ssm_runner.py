@@ -11,9 +11,7 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-"""
-Unit tests for AWS SSM Runner module.
-"""
+"""Unit tests for AWS SSM Runner module."""
 
 import pytest
 from unittest.mock import patch, MagicMock, mock_open

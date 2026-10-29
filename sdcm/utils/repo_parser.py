@@ -6,10 +6,10 @@ from xml.dom import minidom
 
 
 class Parser:
-    "A class for reading a Yum repos primary.xml.gz and returning data"
+    """A class for reading a Yum repos primary.xml.gz and returning data"""
 
     def __init__(self, *args, **kwargs):
-        "Our initializer for the class"
+        """Our initializer for the class"""
         if "url" in kwargs:
             self.url = kwargs.get("url")
             # the file content: fetch it with version_utils.get_url_bytes(), which retries and times out
@@ -23,7 +23,7 @@ class Parser:
             raise Exception("kwargs url missing")
 
     def __decompress(self):
-        "Attempts to decompress a string as Gzip"
+        """Attempts to decompress a string as Gzip"""
         buf = BytesIO(self.res)
         f = GzipFile(fileobj=buf)
         try:
@@ -43,11 +43,11 @@ class Parser:
                     print(f"Error during decompression: {e}")
 
     def __dom(self):
-        "get the XML dom object"
+        """Get the XML dom object"""
         self.dom = minidom.parse(BytesIO(self.content))
 
     def __elements(self):
-        "Get a Element by ID name"
+        """Get a Element by ID name"""
         self.elements = self.dom.getElementsByTagName("package")
 
     def __node_get_attributes(self, node):
@@ -59,7 +59,7 @@ class Parser:
             return node.firstChild.nodeValue
 
     def __todict(self):
-        "create a dict from the XML data"
+        """Create a dict from the XML data"""
         data = []
         if self.elements:
             for item in self.elements:
@@ -74,11 +74,11 @@ class Parser:
         self.data = data
 
     def getList(self):
-        "returns a python list of dicts of the nodes in a XML files TagName"
+        """Returns a python list of dicts of the nodes in a XML files TagName"""
         return self.data
 
     def getPackage(self, package):
-        "return a python list of dicts for a package name"
+        """Return a python list of dicts for a package name"""
         mypackages = []
         for pkg in self.data:
             if pkg["name"][0] == package:

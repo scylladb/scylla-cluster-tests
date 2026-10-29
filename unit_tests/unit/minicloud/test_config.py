@@ -107,7 +107,8 @@ def test_minicloud_config_empty_image_params_do_not_blank_default():
 
 def test_minicloud_config_port_follows_endpoint_url(monkeypatch):
     """The port derives only from the resolved endpoint — a custom-port endpoint must
-    drive the manager's port instead of being overwritten by a rebuilt localhost:5000."""
+    drive the manager's port instead of being overwritten by a rebuilt localhost:5000.
+    """
     config = MinicloudConfig.from_env(params={"minicloud_endpoint_url": "http://localhost:6000"})
     assert config.port == 6000
 
@@ -116,7 +117,7 @@ def test_minicloud_config_port_follows_endpoint_url(monkeypatch):
 
 
 def test_minicloud_config_prepares_all_supported_regions_by_default():
-    """minicloud scopes resources per region, so every region a test might use must exist."""
+    """Minicloud scopes resources per region, so every region a test might use must exist."""
     config = MinicloudConfig.from_env()
     assert config.regions == AWS_SUPPORTED_REGIONS
     assert "eu-west-1" in config.regions

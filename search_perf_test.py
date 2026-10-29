@@ -169,7 +169,7 @@ def _checked_data_file(name: str, kind: str) -> str:
 def _count_tsv_lines(path: str) -> int:
     """Count the records in a shard: its non-empty lines.
 
-    The format has no header -- every record is one '<id>\t<body>' line, and the rune script
+    The format has no header -- every record is one '<id>\\t<body>' line, and the rune script
     rejects a non-empty line without a tab -- so this is also the number of rows the load inserts.
     """
     count = 0

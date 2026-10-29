@@ -316,7 +316,8 @@ def test_suspended_context_manager():
 
 class ScriptedSshProbe:
     """Stands in for `_check_ssh_connectivity`: returns `results` in turn, then `default`, and stops the checker
-    after `limit` probes so a checker that never publishes does not run forever."""
+    after `limit` probes so a checker that never publishes does not run forever.
+    """
 
     def __init__(self, checker, results, default=False, limit=100):
         self.checker = checker

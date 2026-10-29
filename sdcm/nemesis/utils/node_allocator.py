@@ -32,6 +32,8 @@ class NoNodeMatchesCriteriaError(NemesisNodeAllocationError):
 
 
 class NemesisNodeAllocator(metaclass=Singleton):
+    """Track which nemesis runs on each node and hand out nodes from the target pools."""
+
     def __init__(self, tester_obj):
         self.lock = threading.Lock()
         self._tester = tester_obj

@@ -25,9 +25,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ModifyTableBaseMonkey(NemesisBaseClass, abc.ABC):
-    """
-    Abstract base class for all ModifyTable nemesis operations.
-    """
+    """Abstract base class for all ModifyTable nemesis operations."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -85,6 +83,7 @@ class ModifyTableCommentMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Set the table comment to a random string."""
         self.modify_table_property(name="comment", val=f"'{generate_random_string(24)}'")
 
 
@@ -104,6 +103,7 @@ class ModifyTableGcGraceTimeMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Set `gc_grace_seconds` to a random value between 2.5 and 10 days."""
         self.modify_table_property(name="gc_grace_seconds", val=self.random.randint(216000, 864000))
 
 
@@ -122,6 +122,7 @@ class ModifyTableCachingMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Set the table caching options to random values."""
         prop_val = dict(
             keys=self.random.choice(["NONE", "ALL"]),
             rows_per_partition=self.random.choice(["NONE", "ALL", self.random.randint(1, 10000)]),
@@ -145,6 +146,7 @@ class ModifyTableBloomFilterFpChanceMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Set `bloom_filter_fp_chance` to a random value in [6.71e-05, 0.5]."""
         # minimum value cannot be 0, as that would require "infinite" memory
         # the actual minimum value is 6.71e-05, as declared in `min_supported_bloom_filter_fp_chance()`
         self.modify_table_property(name="bloom_filter_fp_chance", val=self.random.uniform(6.71e-05, 0.5))
@@ -166,6 +168,7 @@ class ModifyTableCompactionMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Alter the compaction strategy to a random strategy with random options."""
         strategies = [
             lambda: {
                 "class": "SizeTieredCompactionStrategy",
@@ -230,6 +233,7 @@ class ModifyTableCompressionMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Set a random compression algorithm, or none, with random options."""
         algos = (
             "",  # no compression
             "LZ4Compressor",
@@ -259,6 +263,7 @@ class ModifyTableCrcCheckChanceMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Set `crc_check_chance` to a random probability."""
         self.modify_table_property(name="crc_check_chance", val=self.random.random())
 
 
@@ -278,6 +283,7 @@ class ModifyTableDclocalReadRepairChanceMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Set `dclocal_read_repair_chance` to a random value from a fixed list."""
         self.modify_table_property(name="dclocal_read_repair_chance", val=self.random.choice([0, 0.2, 0.5, 0.9]))
 
 
@@ -300,6 +306,7 @@ class ModifyTableDefaultTimeToLiveMonkey(ModifyTableBaseMonkey):
         # Select table without columns with "counter" type — issue #1037
         # max allowed TTL - 49 days (4300000) (to be compatible with default TWCS settings)
 
+        """Set `default_time_to_live` on a random table without counter columns."""
         default_min_ttl = 864000  # 10 days in seconds
         default_max_ttl = 4300000
 
@@ -348,6 +355,7 @@ class ModifyTableMaxIndexIntervalMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Set `max_index_interval` to a random value from a fixed list."""
         self.modify_table_property(name="max_index_interval", val=self.random.choice([1024, 4096, 8192]))
 
 
@@ -366,6 +374,7 @@ class ModifyTableMinIndexIntervalMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Set `min_index_interval` to a random value from a fixed list."""
         self.modify_table_property(name="min_index_interval", val=self.random.choice([128, 256, 512]))
 
 
@@ -385,6 +394,7 @@ class ModifyTableMemtableFlushPeriodInMsMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Set `memtable_flush_period_in_ms` to zero or a random period."""
         self.modify_table_property(
             name="memtable_flush_period_in_ms", val=self.random.choice([0, self.random.randint(60000, 200000)])
         )
@@ -406,6 +416,7 @@ class ModifyTableReadRepairChanceMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Set `read_repair_chance` to a random value from a fixed list."""
         self.modify_table_property(name="read_repair_chance", val=self.random.choice([0, 0.2, 0.5, 0.9]))
 
 
@@ -425,6 +436,7 @@ class ModifyTableSpeculativeRetryMonkey(ModifyTableBaseMonkey):
     modify_table = True
 
     def disrupt(self):
+        """Set `speculative_retry` to a random policy."""
         options = (
             "'ALWAYS'",
             "'%spercentile'" % self.random.randint(95, 99),
@@ -495,6 +507,7 @@ class ModifyTableTwcsWindowSizeMonkey(ModifyTableBaseMonkey):
         return settings
 
     def disrupt(self):
+        """Set a random compaction window size on a random TWCS table."""
         runner = self.runner
 
         all_ks_cs_with_twcs = runner.cluster.get_all_tables_with_twcs(runner.target_node)

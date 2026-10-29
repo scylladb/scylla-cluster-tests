@@ -117,7 +117,8 @@ def test_provision_non_capacity_error_propagates(patched_aws_region, patched_cap
 
 def test_provision_retries_on_spot_capacity_exhausted(patched_aws_region, patched_capacity_reservation):  # noqa: ARG001
     """Spot path raises ProvisioningCapacityExhausted (no ClientError) when capacity is unavailable;
-    AZ fallback must treat it the same as an on-demand capacity ClientError."""
+    AZ fallback must treat it the same as an on-demand capacity ClientError.
+    """
     params = _make_layout_params(instance_provision="spot")
     layout = SCTProvisionAWSLayout(params)
     seen_azs: list[str] = []
@@ -295,7 +296,8 @@ def test_provision_legacy_with_az_fallback_succeeds(
     first_exc, expected_calls, expected_cleanup_calls, expected_final_az
 ):
     """Both on-demand capacity errors (ClientError) and spot exhaustion (ProvisioningCapacityExhausted)
-    trigger AZ retry; clean first attempts skip cleanup entirely."""
+    trigger AZ retry; clean first attempts skip cleanup entirely.
+    """
     stub = _make_tester_stub(_make_tester_params(availability_zone="a"))
     calls = [first_exc, None]
     stub._provision_legacy_aws_clusters = MagicMock(side_effect=lambda *_a, **_k: _raise_or_none(calls))
@@ -689,7 +691,8 @@ def test_cleanup_abandoned_region_never_raises_on_failure():
 def test_upfront_spot_relocation_never_fails_provisioning(failure):
     """Relocation is an opt-in optimization run before the first attempt; the configured region is always a
     valid place to start. Anything `_switch_region` raises must degrade to "stay put" - otherwise a tuning
-    knob becomes a new way for runs to fail outright."""
+    knob becomes a new way for runs to fail outright.
+    """
     params = _make_layout_params(spot_score_region_relocation_margin=3)
     layout = SCTProvisionAWSLayout(params)
 

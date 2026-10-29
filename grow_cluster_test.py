@@ -24,9 +24,7 @@ from sdcm import prometheus
 
 
 class GrowClusterTest(ClusterTester):
-    """
-    Test scylla cluster growth (adding nodes after an initial cluster size).
-    """
+    """Test scylla cluster growth (adding nodes after an initial cluster size)."""
 
     def setUp(self):
         super().setUp()

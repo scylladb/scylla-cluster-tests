@@ -3,15 +3,15 @@ from uuid import uuid4
 
 
 class NEMESIS_TARGET_POOLS(enum.Enum):
+    """Node pools a nemesis can pick its target from."""
+
     data_nodes = "data_nodes"
     zero_nodes = "zero_nodes"
     all_nodes = "nodes"
 
 
 class DefaultValue:
-    """
-    This is class is intended to be used as default value for the cases when None is not applicable
-    """
+    """This is class is intended to be used as default value for the cases when None is not applicable"""
 
 
 def unique_disruption_name(disruption: str) -> str:

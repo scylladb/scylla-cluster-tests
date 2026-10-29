@@ -415,9 +415,7 @@ class ContainerManager:
     def get_host_volume_path(
         cls, instance: INodeWithContainerManager, container_name: str, path_in_container: str
     ) -> str:
-        """
-        Return directory on the host that is mounted into the container to path `path_in_container`
-        """
+        """Return directory on the host that is mounted into the container to path `path_in_container`"""
         container = cls.get_container(instance, container_name, raise_not_found_exc=False)
         if not container:
             return ""
@@ -485,7 +483,7 @@ class ContainerManager:
     @classmethod
     def build_with_progress_prints(cls, docker_client, image_tag, **kwargs):
         """
-        build image while printing the progress to log
+        Build image while printing the progress to log
 
         this is using the low level api.build, and the logic
         is copied from images.build command, but with added logging

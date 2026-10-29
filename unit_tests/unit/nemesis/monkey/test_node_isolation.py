@@ -25,7 +25,8 @@ def _working_node(runner):
 def _instant_wait_for(func, step=1, text=None, timeout=None, throw_exc=True, stop_event=None, **kwargs):
     """A same-contract, non-blocking stand-in for sdcm.wait.wait_for: evaluates ``func``
     once instead of retrying for real (up to 600s) wall-clock seconds, so tests that
-    exercise the timeout/failure branch don't have to actually wait it out."""
+    exercise the timeout/failure branch don't have to actually wait it out.
+    """
     result = func(**kwargs)
     if not result and throw_exc:
         raise WaitForTimeoutError(text or "mock timeout")
@@ -117,7 +118,8 @@ def runner(base_runner):
 @pytest.mark.parametrize("nemesis_class", [IsolateNodeWithProcessSignalNemesis, IsolateNodeWithIptableRuleNemesis])
 def test_precheck_skips_when_raft_topology_changes_disabled(runner, nemesis_class):
     """precheck() must return a skip reason when consistent-topology-changes raft feature is off,
-    for both the SIGSTOP and iptables variants, since they share the same guard."""
+    for both the SIGSTOP and iptables variants, since they share the same guard.
+    """
     runner.target_node.raft.is_consistent_topology_changes_enabled = False
 
     reason = nemesis_class(runner).precheck(runner.target_node)
@@ -128,7 +130,8 @@ def test_precheck_skips_when_raft_topology_changes_disabled(runner, nemesis_clas
 @pytest.mark.parametrize("nemesis_class", [IsolateNodeWithProcessSignalNemesis, IsolateNodeWithIptableRuleNemesis])
 def test_precheck_skips_on_kubernetes(runner, nemesis_class):
     """precheck() must return a skip reason on kubernetes, which isn't supported yet,
-    for both the SIGSTOP and iptables variants, since they share the same guard."""
+    for both the SIGSTOP and iptables variants, since they share the same guard.
+    """
     runner._is_it_on_kubernetes.return_value = True
 
     reason = nemesis_class(runner).precheck(runner.target_node)
@@ -162,7 +165,8 @@ def test_open_driver_issue_triggers_rack_switch(mock_skip_per_issues, runner):
     surrounding inline comment ("we should disable the target node switching") reads as
     the opposite of what this branch does (it performs the switch) — that mismatch
     predates this extraction (introduced in 7ba6cec3c) and is called out for pehala to
-    clarify rather than resolved here; this test only pins down the current behavior."""
+    clarify rather than resolved here; this test only pins down the current behavior.
+    """
     mock_skip_per_issues.return_value = True  # issue still open
 
     runner.cluster.params.get.return_value = True  # rack_aware_loader on
@@ -189,7 +193,8 @@ def test_kill_nemesis_during_removal_skips_finalizer_cleanup(runner):
     Contrast with test_generic_exception_during_removal_still_runs_finalizer_cleanup_and_reraises,
     which raises a different exception type from the same call site and gets the opposite
     cleanup behavior — that's what proves the `is not KillNemesis` branch actually matters,
-    rather than both tests merely observing "the finalizer never ran"."""
+    rather than both tests merely observing "the finalizer never ran".
+    """
     working_node = _working_node(runner)
     working_node.run_nodetool.side_effect = KillNemesis()
 
@@ -202,7 +207,8 @@ def test_kill_nemesis_during_removal_skips_finalizer_cleanup(runner):
 def test_cleanup_failure_during_kill_skips_remove_add(runner):
     """`stop_nemesis` sets the termination event, then raises KillNemesis. If a context
     manager cleanup raises while that happens, the new exception replaces KillNemesis.
-    The finalizer must still skip _remove_node_add_node, because the event is set."""
+    The finalizer must still skip _remove_node_add_node, because the event is set.
+    """
     working_node = _working_node(runner)
 
     def _kill_nemesis(*_, **__):
@@ -225,7 +231,8 @@ def test_cleanup_failure_during_kill_skips_remove_add(runner):
 def test_generic_exception_during_removal_still_runs_finalizer_cleanup_and_reraises(runner):
     """Same injection point as the KillNemesis test above (`nodetool removenode` raising),
     but with a plain exception: the finalizer must still perform its best-effort cleanup
-    via _remove_node_add_node, and the original exception must still propagate."""
+    via _remove_node_add_node, and the original exception must still propagate.
+    """
     working_node = _working_node(runner)
     working_node.run_nodetool.side_effect = RuntimeError("removenode failed unexpectedly")
 
@@ -242,7 +249,8 @@ def test_generic_exception_during_removal_still_runs_finalizer_cleanup_and_rerai
 def test_raises_when_node_not_removed_from_cluster(runner):
     """The `is_node_removed_from_cluster` assertion must fail — a distinct failure
     point from the two above — when the target is still listed as part of the cluster
-    after `nodetool removenode` genuinely fails to remove it."""
+    after `nodetool removenode` genuinely fails to remove it.
+    """
     runner.target_node.parent_cluster.get_nodetool_status.return_value = {
         "dc1": {runner.target_node.ip_address: {"state": "UN"}}
     }
@@ -258,7 +266,8 @@ def test_raises_when_node_not_removed_from_cluster(runner):
 
 def test_raises_when_scylla_still_running_after_ban(runner):
     """The closing assertion must fail if the target's scylla process is still
-    running after the ban/removal sequence otherwise completes successfully."""
+    running after the ban/removal sequence otherwise completes successfully.
+    """
     runner.target_node.remoter.run.return_value = MagicMock(ok=True, stdout="12345\n")
 
     with pytest.raises(AssertionError):
@@ -269,7 +278,8 @@ def test_raises_when_scylla_still_running_after_ban(runner):
 def test_raises_when_ban_notification_pattern_not_found(mock_wait_for, runner):
     """The closing assertion must fail when the target's system log never emits the
     'received notification of being banned' pattern, even though the node was
-    otherwise successfully banned and removed."""
+    otherwise successfully banned and removed.
+    """
     mock_wait_for.side_effect = _instant_wait_for
     runner.target_node.follow_system_log.return_value = iter([])  # no ban notification ever logged
 
@@ -285,7 +295,8 @@ def test_raises_when_ban_notification_pattern_not_found(mock_wait_for, runner):
 def test_iptables_path_blocks_and_unblocks_every_scylla_port(runner):
     """``IsolateNodeWithIptableRuleNemesis`` (use_iptables=True) must DROP every
     Scylla port with iptables/ip6tables, run `nodetool removenode` while blocked,
-    then remove all the rules once the node is confirmed banned."""
+    then remove all the rules once the node is confirmed banned.
+    """
     IsolateNodeWithIptableRuleNemesis(runner).disrupt()
 
     runner.node_allocator.run_nemesis.assert_called_once_with(nemesis_label="block_scylla_ports")
@@ -343,7 +354,8 @@ def test_sigstop_path_pauses_scylla_and_only_blocks_gossip_ports_during_removal(
     """``IsolateNodeWithProcessSignalNemesis`` (use_iptables=False) must SIGSTOP/SIGCONT
     the scylla process, and additionally DROP only the inter-node ports (7000/7001)
     while `nodetool removenode` runs, so raft barriers can't stick to the still-open
-    socket of the paused process."""
+    socket of the paused process.
+    """
     IsolateNodeWithProcessSignalNemesis(runner).disrupt()
 
     runner.node_allocator.run_nemesis.assert_called_once_with(nemesis_label="pause_scylla_with_sigstop")

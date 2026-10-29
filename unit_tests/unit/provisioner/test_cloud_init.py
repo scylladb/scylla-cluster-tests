@@ -49,7 +49,8 @@ def _status_call_count(sudo_spy) -> int:
 
 def test_wait_cloud_init_completes_raises_timeout_error_on_json_branch():
     """On the json-capable branch (cloud-init >= 23.4), a timed-out wait raises TimeoutError
-    with an actionable message: node identifier, timeout bound, log path, and its tail."""
+    with an actionable message: node identifier, timeout bound, log path, and its tail.
+    """
     remoter = _remoter()
     FakeRemoter.result_map = {
         r"sudo bash -c 'command -v cloud-init'": CLOUD_INIT_PRESENT,
@@ -73,7 +74,8 @@ def test_wait_cloud_init_completes_raises_timeout_error_on_json_branch():
 
 def test_wait_cloud_init_completes_timeout_is_not_retried_20x():
     """Core regression guard: a timeout must not be silently retried by the @retrying(n=20) wrapper -
-    the status/wait command is issued exactly once."""
+    the status/wait command is issued exactly once.
+    """
     remoter = _remoter()
     FakeRemoter.result_map = {
         r"sudo bash -c 'command -v cloud-init'": CLOUD_INIT_PRESENT,
@@ -119,7 +121,8 @@ def test_wait_cloud_init_completes_raises_timeout_error_on_legacy_branch():
 
 def test_wait_cloud_init_completes_happy_path_applies_timeout_bound():
     """On success, behavior is unchanged (no exception), but the command actually sent to the node
-    is wrapped in `timeout N`, proving the bound is applied even when cloud-init completes fine."""
+    is wrapped in `timeout N`, proving the bound is applied even when cloud-init completes fine.
+    """
     remoter = _remoter()
     FakeRemoter.result_map = {
         r"sudo bash -c 'command -v cloud-init'": CLOUD_INIT_PRESENT,

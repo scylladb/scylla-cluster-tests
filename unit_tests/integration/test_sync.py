@@ -9,7 +9,7 @@ from sdcm.keystore import KeyStore
 @pytest.mark.integration
 def test_multiple_sync_on_lots_of_files():
     """
-    this start multiple client of boto3 in multiple thread,
+    This start multiple client of boto3 in multiple thread,
     opening boto3 session isn't thread safe, so this test is to make sure our lock is working
     """
 

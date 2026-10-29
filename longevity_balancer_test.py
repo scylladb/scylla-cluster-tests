@@ -111,9 +111,7 @@ class LongevityBalancerTest(LongevityTest):
 
     @contextmanager
     def enforce_balance(self):
-        """
-        Add a property to the cluster to enforce balance checking in Argus.
-        """
+        """Add a property to the cluster to enforce balance checking in Argus."""
         self.db_cluster._enforce_balance = True
         try:
             yield

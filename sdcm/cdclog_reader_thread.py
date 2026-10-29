@@ -114,7 +114,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
 
     @staticmethod
     def _parse_cdcreaderstressor_results(lines: List[str]) -> Dict:
-        """parse result of cdcreader results
+        """Parse result of cdcreader results
         lines:
             Results:
             num rows read:  95185
@@ -129,7 +129,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
             latency 99.9%:  88.604671 ms
             latency max:    156.762111 ms
 
-        return
+        Return:
             {
                 "op rate": "1000",
                 "latency min": "0.5",

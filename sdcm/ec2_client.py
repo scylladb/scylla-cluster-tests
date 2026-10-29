@@ -102,7 +102,6 @@ class EC2ClientWrapper:
         Create a spot instance request
         :return: list of request id-s
         """
-
         params = dict(
             DryRun=False,
             InstanceCount=count,
@@ -185,9 +184,7 @@ class EC2ClientWrapper:
         return request_id
 
     def _is_request_fulfilled(self, request_ids):
-        """
-        Check request status
-        """
+        """Check request status"""
         resp = self._client.describe_spot_instance_requests(SpotInstanceRequestIds=request_ids)
         for req in resp["SpotInstanceRequests"]:
             if req["Status"]["Code"] != STATUS_FULFILLED or req["State"] != "active":
@@ -218,9 +215,7 @@ class EC2ClientWrapper:
         return [req["InstanceId"] for req in resp["SpotInstanceRequests"]], resp
 
     def _is_fleet_request_fulfilled(self, request_id):
-        """
-        Check fleet request status
-        """
+        """Check fleet request status"""
         resp = self._client.describe_spot_fleet_requests(SpotFleetRequestIds=[request_id])
         for req in resp["SpotFleetRequestConfigs"]:
             if (
@@ -280,9 +275,7 @@ class EC2ClientWrapper:
 
     @retrying(n=5, sleep_time=10, allowed_exceptions=(ClientError,), message="Waiting for instance is available")
     def add_tags(self, instance_ids: list[str] | list[Instance] | str | Instance, tags: dict = None) -> None:
-        """
-        Add tags to instances
-        """
+        """Add tags to instances"""
         if not isinstance(instance_ids, list):
             instance_ids = [instance_ids]
         instance_ids = [
@@ -388,7 +381,6 @@ class EC2ClientWrapper:
         :param tag_specifications: tags to be added to the instances
         :return: list of instance id-s
         """
-
         assert tag_specifications, "Tag specifications is a must for all instances creation api"
 
         # Tags here live inside the fleet's LaunchSpecifications[].TagSpecifications, where AWS only accepts
@@ -430,9 +422,7 @@ class EC2ClientWrapper:
         return instances
 
     def terminate_instances(self, instance_ids):
-        """
-        Terminate instances
-        """
+        """Terminate instances"""
         self._client.terminate_instances(InstanceIds=instance_ids)
 
     def get_subnet_info(self, subnet_id):

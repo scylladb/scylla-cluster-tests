@@ -70,7 +70,7 @@ def test_a_new_node_is_read_from_the_beginning(logger_class, tmp_path):
 
 
 def test_a_log_file_follower_ignores_the_start_of_the_run(tmp_path):
-    """tail reads the whole file whatever it is told, so there is nothing to mark."""
+    """Tail reads the whole file whatever it is told, so there is nothing to mark."""
     logger = _logger(SSHGeneralFileLogger, tmp_path, journal_since=RUN_START)
 
     assert _read_since(logger)[0] is None
@@ -78,7 +78,7 @@ def test_a_log_file_follower_ignores_the_start_of_the_run(tmp_path):
 
 
 def test_a_reconnect_reads_on_from_a_time_free_of_zones(tmp_path, monkeypatch):
-    """journalctl reads a date without a zone in the host's local time, and systemd < 220 rejects one with a zone."""
+    """Journalctl reads a date without a zone in the host's local time, and systemd < 220 rejects one with a zone."""
     monkeypatch.setattr("sdcm.utils.remote_logger.time.time", lambda: 1791382590.7)
     logger = _logger(SSHGeneralSystemdLogger, tmp_path, journal_since=None)
 

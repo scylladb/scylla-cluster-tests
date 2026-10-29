@@ -76,7 +76,7 @@ class LoaderUtilsMixin:
 
     def _create_counter_table(self):
         """
-        workaround for the issue https://github.com/scylladb/scylla-tools-java/issues/32
+        Workaround for the issue https://github.com/scylladb/scylla-tools-java/issues/32
         remove when resolved
         """
         node = self.db_cluster.nodes[0]

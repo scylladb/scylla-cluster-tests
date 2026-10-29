@@ -77,7 +77,8 @@ def test_raises_when_not_aws_backend(runner, monkey_class):
 
 def test_with_rotation_full_flow(runner):
     """The rotation nemesis writes/reads data twice, rotates the KMS key once, and
-    disables encryption again (creating, enabling, rotating, disabling, dropping)."""
+    disables encryption again (creating, enabling, rotating, disabling, dropping).
+    """
     monkey = EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey(runner)
     monkey.disrupt()
 
@@ -130,7 +131,8 @@ def test_skips_disable_when_user_info_encryption_enabled(runner):
 
 def test_kms_host_reconfiguration_only_restarts_nodes_missing_it(runner):
     """AWS KMS host config is written per-node; only nodes missing the kms_host
-    entry get restarted, and nodes that already have it are left untouched."""
+    entry get restarted, and nodes that already have it are left untouched.
+    """
     node1, node2 = runner.cluster.data_nodes
 
     yaml1 = _make_scylla_yaml()
@@ -157,7 +159,8 @@ def test_kms_host_reconfiguration_only_restarts_nodes_missing_it(runner):
 
 def test_drops_table_even_when_stress_fails(runner):
     """The temporary encrypted table must be dropped (the 'finally' cleanup)
-    even when something in the write/read flow raises."""
+    even when something in the write/read flow raises.
+    """
     runner.tester.verify_stress_thread.side_effect = RuntimeError("boom")
 
     monkey = EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(runner)

@@ -11,9 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-"""
-Handling Scylla-cluster-test configuration loading
-"""
+"""Handling Scylla-cluster-test configuration loading"""
 
 import os
 import random
@@ -529,7 +527,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     def update(self, other=None, **new_data):
         """
-        Provide dict-like update() method that triggers Pydantic validation on each field assignment.
+        Provide a dict-like method that triggers Pydantic validation on each field assignment.
 
         Enables updating multiple config fields at once while ensuring validation, unlike direct
         attribute assignment which could bypass checks when done in bulk operations.
@@ -1701,9 +1699,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
                     setattr(self, param_name, resolved)
 
     def get(self, key: str | None):
-        """
-        get the value of test configuration parameter by the name
-        """
+        """Get the value of test configuration parameter by the name"""
         if key is None:
             return None
 
@@ -1719,7 +1715,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     def _dotted_get(self, key: str):
         """
-        if key for retrieval is dot notation, ex. 'stress_image.ycsb'
+        If key for retrieval is dot notation, ex. 'stress_image.ycsb'
         we assume `stress_image` would be a dict
         """
         keys = key.split(".")
@@ -2524,9 +2520,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         assert backend == "aws", "Only AWS supports zero nodes configuration"
 
     def verify_configuration_urls_validity(self):  # noqa: PLR0914
-        """
-        Check if ami_id and repo urls are valid
-        """
+        """Check if ami_id and repo urls are valid"""
         backend = self.get("cluster_backend")
         if backend in ("k8s-eks", "k8s-gke"):
             return
@@ -2630,7 +2624,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
 
     def get_version_based_on_conf(self):
         """
-        figure out which version and if it's enterprise version
+        Figure out which version and if it's enterprise version
         base on configuration only, before nodes are up and running
         so test configuration can set up things which need to happen
         before nodes are up

@@ -16,7 +16,7 @@ import re
 
 def cql_quote_if_needed(identifier: str) -> str:
     """
-    quote cql identifier if needed
+    Quote cql identifier if needed
 
     cql identifiers that start with a digit, or that aren't lower case ascii
     should be quoted

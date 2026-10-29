@@ -76,7 +76,7 @@ class UpgradeBaseVersion:
 
     def get_version(self, scylla_version: str = None) -> str:
         """
-        return scylla product name and major version. if scylla_version isn't assigned,
+        Return scylla product name and major version. if scylla_version isn't assigned,
         we will try to get the major version from the scylla_repo url.
         """
         LOGGER.info("Getting scylla product and major version for upgrade versions listing...")
@@ -264,9 +264,7 @@ class UpgradeBaseVersion:
         return base_version_list
 
     def get_version_list(self) -> tuple[list, list]:
-        """
-        return all supported releases versions, and the supported base versions of upgrade test.
-        """
+        """Return all supported releases versions, and the supported base versions of upgrade test."""
         LOGGER.info("Getting the supported releases version list...")
         supported_versions = []
 

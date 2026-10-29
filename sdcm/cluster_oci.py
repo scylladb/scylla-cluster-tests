@@ -51,9 +51,7 @@ class CreateOciNodeError(Exception):
 
 
 class OciNode(cluster.BaseNode):
-    """
-    Wraps OCI instances, so that we can also control the instance through SSH.
-    """
+    """Wraps OCI instances, so that we can also control the instance through SSH."""
 
     METADATA_BASE_URL = "http://169.254.169.254/opc/v2/instance/"
 

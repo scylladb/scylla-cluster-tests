@@ -54,10 +54,7 @@ class TruncateTablesError(Exception):
 
 
 class FillDatabaseData(ClusterTester):
-    """
-    Fill scylla with many types of records, tables and data types (taken from dtest) originally by Andrei.
-
-    """
+    """Fill scylla with many types of records, tables and data types (taken from dtest) originally by Andrei."""
 
     NON_FROZEN_SUPPORT_OS_MIN_VERSION = "4.1"  # open source version with non-frozen user_types support
     NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION = "2020.1"  # enterprise version with non-frozen user_types support
@@ -3814,9 +3811,7 @@ class FillDatabaseData(ClusterTester):
             self.cql_insert_data_to_tables(session, session.default_fetch_size)
 
     def prepare_keyspaces_and_tables(self):
-        """
-        Prepare keyspaces and tables
-        """
+        """Prepare keyspaces and tables"""
         # Prepare connection and keyspace
         node = self.db_cluster.nodes[0]
 

@@ -113,9 +113,7 @@ class CoredumpThreadBase(Thread):
 
     @raise_event_on_failure
     def run(self):
-        """
-        Keep reporting new coredumps found, every 30 seconds.
-        """
+        """Keep reporting new coredumps found, every 30 seconds."""
         exceptions_count = 0
         while not self.termination_event.wait(self.lookup_period) or self.in_progress:
             try:
@@ -153,9 +151,7 @@ class CoredumpThreadBase(Thread):
     def _process_coredumps(
         self, in_progress: List[CoreDumpInfo], completed: List[CoreDumpInfo], uploaded: List[CoreDumpInfo]
     ):
-        """
-        Get core files from node and report them
-        """
+        """Get core files from node and report them"""
         if not in_progress:
             return
         for core_info in in_progress.copy():
@@ -418,9 +414,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         return pid_list
 
     def _wait_for_pending_coredumps(self):
-        """
-        Check for active coredumps being created by waiting for systemd-coredump@ to stop running.
-        """
+        """Check for active coredumps being created by waiting for systemd-coredump@ to stop running."""
         result = self.node.remoter.run(
             'systemctl list-units --type=service --state=running | grep -q "systemd-coredump@"',
             verbose=False,
@@ -556,7 +550,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         )
 
     def _filter_out_modules_info(self, core_info: str) -> List[str]:
-        """filters all lines between 'Found module' and 'Stack trace of' lines."""
+        """Filters all lines between 'Found module' and 'Stack trace of' lines."""
         lines = core_info.splitlines()
         removed_lines = []
         filtered_lines = []

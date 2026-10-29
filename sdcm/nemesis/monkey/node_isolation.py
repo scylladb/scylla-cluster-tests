@@ -33,6 +33,7 @@ def switch_target_node_to_another_rack(runner) -> None:
 
 
 def is_single_node_in_rack(runner, node: BaseNode) -> bool:
+    """Return whether `node` is the only data node in its rack and datacenter."""
     return len([n for n in runner.cluster.data_nodes if (n.rack == node.rack and n.dc_idx == node.dc_idx)]) == 1
 
 
@@ -157,6 +158,7 @@ class IsolateNodeWithProcessSignalNemesis(NemesisBaseClass):
     supports_high_disk_utilization = False  # Runs nodetool removenode
 
     def precheck(self, node: BaseNode) -> str | None:
+        """Require consistent topology changes and a non-Kubernetes cluster."""
         if not node.raft.is_consistent_topology_changes_enabled:
             return "Raft feature: consistent-topology-changes is not enabled"
         if self.runner._is_it_on_kubernetes():
@@ -164,6 +166,7 @@ class IsolateNodeWithProcessSignalNemesis(NemesisBaseClass):
         return None
 
     def disrupt(self):
+        """Isolate a banned node from the cluster without iptables."""
         refuse_connection_from_banned_node(self.runner, use_iptables=False)
 
 
@@ -172,4 +175,5 @@ class IsolateNodeWithIptableRuleNemesis(IsolateNodeWithProcessSignalNemesis):
     """Block Scylla ports with iptables on the target node, remove it from the cluster, verify the node is refused."""
 
     def disrupt(self):
+        """Isolate a banned node from the cluster with iptables rules."""
         refuse_connection_from_banned_node(self.runner, use_iptables=True)

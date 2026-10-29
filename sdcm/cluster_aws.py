@@ -91,9 +91,7 @@ class TransientEipReleaseError(Exception):
 
 
 class AWSCluster(cluster.BaseCluster):
-    """
-    Cluster of Node objects, started on Amazon EC2.
-    """
+    """Cluster of Node objects, started on Amazon EC2."""
 
     def __init__(  # noqa: PLR0913
         self,
@@ -555,9 +553,7 @@ class AWSCluster(cluster.BaseCluster):
 
     @staticmethod
     def update_bootstrap(ec2_user_data, enable_auto_bootstrap):
-        """
-        Update --bootstrap argument inside ec2_user_data string.
-        """
+        """Update --bootstrap argument inside ec2_user_data string."""
         if isinstance(ec2_user_data, dict):
             ec2_user_data["scylla_yaml"]["auto_bootstrap"] = enable_auto_bootstrap
             return ec2_user_data
@@ -699,9 +695,7 @@ class AWSCluster(cluster.BaseCluster):
 
 
 class AWSNode(cluster.BaseNode):
-    """
-    Wraps EC2.Instance, so that we can also control the instance through SSH.
-    """
+    """Wraps EC2.Instance, so that we can also control the instance through SSH."""
 
     METADATA_BASE_URL = "http://169.254.169.254/latest/meta-data/"
     TOKEN_URL = "http://169.254.169.254/latest/api/token"
@@ -824,9 +818,7 @@ class AWSNode(cluster.BaseNode):
 
     @property
     def short_hostname(self):
-        """
-        Don't need to get hostname from the system since we already know what it should be
-        """
+        """Don't need to get hostname from the system since we already know what it should be"""
         return self.name
 
     @cached_property

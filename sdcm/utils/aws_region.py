@@ -304,9 +304,7 @@ class AwsRegion:
             igw.attach_to_vpc(VpcId=self.sct_vpc.vpc_id)
 
     def sct_route_table_name(self, index: int = None):
-        """
-        :param index: suffix of the route table name
-        """
+        """:param index: suffix of the route table name"""
         # For first subnet the main rout table will be used, so ignore the index number
         return self.SCT_ROUTE_TABLE_NAME.format(index="" if not index else f"-{index}")
 
@@ -840,7 +838,6 @@ class AwsRegion:
 
     def configure_ssm(self, role_name=SCT_NODES_ROLE_ARN):
         """Ensure that SSM agent can work in the region by adding necessary IAM role and instance profile"""
-
         # Replace with the actual ARN of your IAM role created in step 1
         # Example: service-role/AWSSystemsManagerDefaultEC2InstanceManagementRole
         # Note: The 'service-role/' prefix is crucial when setting the value.

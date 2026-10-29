@@ -152,7 +152,7 @@ class JenkinsPipelines:
             self._log_jenkins_exception(ex)
 
     def build_job_and_wait_completion(self, name):
-        """start job first time
+        """Start job first time
 
         Need to start job first time
         so jenkins will read all job parameters

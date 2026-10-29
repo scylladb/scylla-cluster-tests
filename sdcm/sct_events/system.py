@@ -388,7 +388,6 @@ class TestResultEvent(InformationalEvent, Exception):
 
     def __reduce__(self):
         """Need to define it for pickling because of Exception class in MRO."""
-
         return type(self), (self.test_status, self.events, self.event_timestamp)
 
 

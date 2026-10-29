@@ -609,10 +609,7 @@ class BaseNode(AutoSshContainerMixin):
         raise NotImplementedError()
 
     def do_default_installations(self):
-        """
-        Install default packages for all types of nodes
-        """
-
+        """Install default packages for all types of nodes"""
         # TODO: consider moving this to cloud-init, since it's has nothing todo with scylla
         self.install_package("rsync")
 
@@ -1603,7 +1600,7 @@ class BaseNode(AutoSshContainerMixin):
     @property
     def external_address(self):
         """
-        the communication address for usage between the test and the nodes
+        The communication address for usage between the test and the nodes
         :return:
         """
         if self.scylla_network_configuration:
@@ -1619,7 +1616,7 @@ class BaseNode(AutoSshContainerMixin):
     @property
     def grafana_address(self):
         """
-        the communication address for usage between the test and grafana server
+        The communication address for usage between the test and grafana server
         :return:
         """
         return self.external_address
@@ -1641,9 +1638,7 @@ class BaseNode(AutoSshContainerMixin):
 
     @property
     def instance_name(self) -> str:
-        """
-        Return name of the instance related to the node, when node is running in the cloud, or on the docker
-        """
+        """Return name of the instance related to the node, when node is running in the cloud, or on the docker"""
         return self.name
 
     @property
@@ -1805,9 +1800,7 @@ class BaseNode(AutoSshContainerMixin):
             pass
 
     def restart_binary_protocol(self, verify_up=True):
-        """
-        Restart the native transport.
-        """
+        """Restart the native transport."""
         # Disable cql interface, so all connections will be dropped, but the node will still function as replica
         self.run_nodetool(sub_cmd="disablebinary")
         # Bring cql interface back
@@ -3064,9 +3057,7 @@ class BaseNode(AutoSshContainerMixin):
             self.remoter.sudo(cmd, ignore_status=True)
 
     def clean_scylla(self):
-        """
-        Uninstall scylla
-        """
+        """Uninstall scylla"""
         self.stop_scylla_server(verify_down=False, ignore_status=True)
         if self.distro.is_rhel_like:
             self.remoter.sudo("yum remove -y scylla\\*")
@@ -3163,9 +3154,7 @@ class BaseNode(AutoSshContainerMixin):
             self.install_package(package_name="scylla-node-exporter", ignore_status=True)
 
     def offline_install_scylla(self, unified_package, nonroot):
-        """
-        Offline install scylla by unified package.
-        """
+        """Offline install scylla by unified package."""
         # Validate architecture match between unified package and node
         node_arch = self.remoter.run("uname -m", verbose=False).stdout.strip()
         pkg_url_lower = unified_package.lower()
@@ -3384,7 +3373,6 @@ class BaseNode(AutoSshContainerMixin):
         Returns:
             True if DNS resolution succeeds within the timeout, False otherwise.
         """
-
         try:
             wait.wait_for(
                 lambda: _dns_resolves(self, dns_host),
@@ -3443,7 +3431,6 @@ class BaseNode(AutoSshContainerMixin):
             Failure, UnexpectedExit, Libssh2_UnexpectedExit: If the command fails
                 with a non-DNS error or after exhausting retries.
         """
-
         remoter = self.remoter
         assert remoter is not None
         try:
@@ -3636,7 +3623,7 @@ class BaseNode(AutoSshContainerMixin):
 
     def add_install_prefix(self, abs_path) -> Path:
         """
-        nonroot install included all files inside a install root directory,
+        Nonroot install included all files inside a install root directory,
         it's different with root install.
         """
         assert os.path.isabs(abs_path), f"abs_path ({abs_path}) should be an absolute path"
@@ -3842,9 +3829,7 @@ class BaseNode(AutoSshContainerMixin):
 
     # Default value of murmur3_partitioner_ignore_msb_bits parameter is 12
     def restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits: int = 12) -> None:
-        """
-        Resharding is started during Scylla startup and Scylla initialization has to wait until resharding done
-        """
+        """Resharding is started during Scylla startup and Scylla initialization has to wait until resharding done"""
         self.stop_scylla()
         # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
         with self.remote_scylla_yaml() as scylla_yml:
@@ -4106,7 +4091,7 @@ class BaseNode(AutoSshContainerMixin):
         return ComparableScyllaVersion(self.scylla_version) > "5.2.0~dev"
 
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, connect_timeout):
-        """cqlsh [options] [host [port]]"""
+        """Cqlsh [options] [host [port]]"""
         credentials = self.parent_cluster.get_db_auth()
         auth_params = "-u {} -p '{}'".format(*credentials) if credentials else ""
         use_keyspace = f"--keyspace {keyspace}" if keyspace else ""
@@ -4217,9 +4202,7 @@ class BaseNode(AutoSshContainerMixin):
         return []
 
     def get_scylla_config_param(self, config_param_name, verbose=True):
-        """
-        Get Scylla configuration parameter that not exists in the scylla.yaml
-        """
+        """Get Scylla configuration parameter that not exists in the scylla.yaml"""
         try:
             request_out = self.remoter.run(
                 f"sudo curl --request GET http://localhost:10000/v2/config/{config_param_name}"
@@ -4634,9 +4617,7 @@ class BaseNode(AutoSshContainerMixin):
 
 
 class FlakyRetryPolicy(RetryPolicy):
-    """
-    A retry policy that retries 5 times
-    """
+    """A retry policy that retries 5 times"""
 
     def _retry_message(self, msg, retry_num):
         if retry_num < 5:
@@ -4685,9 +4666,7 @@ class DeadNode:
 
 
 class BaseCluster:
-    """
-    Cluster of Node objects.
-    """
+    """Cluster of Node objects."""
 
     def __init__(
         self,
@@ -4800,9 +4779,7 @@ class BaseCluster:
 
     @property
     def auto_bootstrap(self):
-        """
-        When enabled scylla nodes will be bootstraped automatically on first boot
-        """
+        """When enabled scylla nodes will be bootstraped automatically on first boot"""
         return not self.params.get("use_legacy_cluster_init")
 
     @cached_property
@@ -5320,7 +5297,6 @@ class BaseCluster:
             - If a connection bundle file is available in the parent cluster, it will be used for the connection.
             - If no connection bundle file is provided, the method will use the WhiteListRoundRobinPolicy with the specified nodes.
         """
-
         wlrr, node_ips = self.get_load_balancing_policy(whitelist_nodes=whitelist_nodes)
         return self._create_session(
             node=node,
@@ -5444,7 +5420,6 @@ class BaseCluster:
 
         If the maximum number of retries is exceeded, the exception is raised.
         """
-
         kwargs = locals()
         del kwargs["self"]
         return self.cql_connection_exclusive(**kwargs)
@@ -7274,7 +7249,7 @@ class BaseScyllaCluster:
         return manager_tool.add_cluster(**add_cluster_params)
 
     def is_additional_data_volume_used(self) -> bool:
-        """return true if additional data volume is configured
+        """Return true if additional data volume is configured
 
         :returns: if ebs volumes attached return true
         :rtype: {bool}
@@ -8438,9 +8413,7 @@ class BaseMonitorSet:
         node.remoter.run("bash -ce '%s'" % kill_script)
 
     def get_grafana_screenshots_from_all_monitors(self, test_start_time: Optional[float] = None) -> list[str]:
-        """
-        Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
-        """
+        """Take screenshot of the Grafana per-server-metrics dashboard and upload to S3"""
         if not test_start_time:
             self.log.error("No start time for test")
             return {}

@@ -260,7 +260,8 @@ def test_more_than_ten_regions_issues_multiple_calls(mock_ec2):
 
 def test_transport_errors_fall_back_to_given_order(mock_ec2):
     """BotoCoreError subclasses are NOT ClientError. Scoring is on by default for AWS and runs on every
-    provisioning path, so missing these would turn a transient network blip into a provisioning abort."""
+    provisioning path, so missing these would turn a transient network blip into a provisioning abort.
+    """
     mock_ec2.get_spot_placement_scores.side_effect = EndpointConnectionError(endpoint_url="https://ec2")
 
     assert get_scores(["i4i.large"], 6, ["eu-west-1"]) == []
@@ -276,7 +277,8 @@ def test_credentials_error_falls_back_to_given_order(mock_ec2):
 def test_fleet_allocation_strategy_is_valid_for_request_spot_fleet():
     """RequestSpotFleet takes camelCase ('capacityOptimized'); the hyphenated spelling belongs to the
     different CreateFleet API. botocore does not validate enums client-side, so the wrong value would only
-    fail against real AWS with InvalidParameterValue."""
+    fail against real AWS with InvalidParameterValue.
+    """
     shape = botocore.session.get_session().get_service_model("ec2").shape_for("SpotFleetRequestConfigData")
     assert SPOT_FLEET_ALLOCATION_STRATEGY in shape.members["AllocationStrategy"].enum
 
@@ -380,7 +382,8 @@ class TestRoleAwareRanking:
 
     def test_roles_are_scored_separately_never_merged(self):
         """Merged into one request the types become interchangeable alternatives, and a plentiful
-        monitor type answers for the whole cluster."""
+        monitor type answers for the whole cluster.
+        """
         roles = [("db", ["i7i.2xlarge"], 6), ("monitor", ["t3.large"], 1)]
         with patch(
             "sdcm.provision.aws.spot_placement_score.get_scores",

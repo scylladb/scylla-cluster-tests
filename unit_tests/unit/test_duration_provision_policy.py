@@ -217,7 +217,8 @@ class TestAutoProvisionType:
 
     def test_auto_without_a_duration_falls_back_to_on_demand(self):
         """An unknown duration is not evidence of a short test, and the two wrong guesses are not equal:
-        guessing spot can lose a multi-day run to a reclamation, guessing on_demand only costs money."""
+        guessing spot can lose a multi-day run to a reclamation, guessing on_demand only costs money.
+        """
         config = _make_config(explicit={"instance_provision"}, instance_provision="auto", test_duration=0)
         config._apply_duration_based_provision_policy()
         assert config.get("instance_provision") == "on_demand"

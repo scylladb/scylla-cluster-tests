@@ -243,7 +243,8 @@ def _check_latency_during_steps(tmp_path, content, step="unthrottled"):
 def test_check_latency_during_steps_tolerates_an_unfilled_results_file(tmp_path, content):
     """TestConfig.latency_results_file() creates the file empty, and the decorator leaves it that
     way when it fails to collect the results. That must report a step without latencies, not kill
-    the test with a JSONDecodeError that hides the failure that actually happened."""
+    the test with a JSONDecodeError that hides the failure that actually happened.
+    """
     result, results_file = _check_latency_during_steps(tmp_path, content)
 
     assert result == {"unthrottled": {"step": "unthrottled", "legend": "", "cycles": []}}
@@ -300,7 +301,8 @@ def _run_step(queues_hdr_tags, stress_cmds=None, step_params=None, step_duration
 )
 def test_run_step_reports_the_tags_of_whatever_stress_tool_ran(queues_hdr_tags, expected):
     """The tags are tool specific and, for cassandra-stress, step specific, so they can only come
-    from the stress threads: each derives its own from the command it actually runs."""
+    from the stress threads: each derives its own from the command it actually runs.
+    """
     _, decorator_input = _run_step(queues_hdr_tags)
     assert decorator_input == {"hdr_tags": expected}
 

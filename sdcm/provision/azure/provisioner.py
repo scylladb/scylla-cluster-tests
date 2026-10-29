@@ -150,8 +150,8 @@ class AzureProvisioner(Provisioner):
     ) -> List["AzureProvisioner"]:
         """Discovers provisioners for in each region for given test id.
 
-        If test_id is not provided, it discovers all related to SCT provisioners."""
-
+        If test_id is not provided, it discovers all related to SCT provisioners.
+        """
         all_resource_groups: List[ResourceGroup] = [
             rg
             for rg in azure_service.resource.resource_groups.list()
@@ -177,14 +177,16 @@ class AzureProvisioner(Provisioner):
     ) -> VmInstance:
         """Create virtual machine in provided region, specified by InstanceDefinition.
 
-        Set definition.user_data to empty string when using specialized image."""
+        Set definition.user_data to empty string when using specialized image.
+        """
         return self.get_or_create_instances(definitions=[definition], pricing_model=pricing_model)[0]
 
     def get_or_create_instances(
         self, definitions: List[InstanceDefinition], pricing_model: PricingModel = PricingModel.SPOT
     ) -> List[VmInstance]:
         """Create a set of instances specified by a list of InstanceDefinition.
-        If instances already exist, returns them."""
+        If instances already exist, returns them.
+        """
         definitions_to_provision = [definition for definition in definitions if definition.name not in self._cache]
         if definitions_to_provision:
             v_ms = self._provision_with_stuck_recreate(definitions_to_provision, pricing_model)

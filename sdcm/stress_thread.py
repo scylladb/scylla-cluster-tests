@@ -270,9 +270,7 @@ class CassandraStressThread(DockerBasedStressThread):
 
     @staticmethod
     def _add_errors_option(stress_cmd: str, to_add: list) -> str:
-        """
-        Add suboption to -errors option, if such suboption is there, does not add or change it
-        """
+        """Add suboption to -errors option, if such suboption is there, does not add or change it"""
         to_add = list(to_add)
         current_error_option = next((option for option in stress_cmd.split(" -") if option.startswith("errors ")), None)
         if current_error_option is None:

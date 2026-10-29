@@ -16,10 +16,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Result:
-    """
-    A copy-cat from invoke.runners.Result
-
-    """
+    """A copy-cat from invoke.runners.Result"""
 
     stdout: str
     stderr: str

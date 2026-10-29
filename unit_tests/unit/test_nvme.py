@@ -1419,7 +1419,7 @@ def test_parse_error_entry_reads_spec_offsets():
 
 
 def test_parse_error_entry_opcode_requires_log_page_version_1():
-    """csi and opcode are reserved bytes unless Log Page Version is 1h.
+    """Csi and opcode are reserved bytes unless Log Page Version is 1h.
 
     All 64 entries captured from an i4i node report log_page_version 0, so the
     'opcode=0x00' nvme-cli prints there is a reserved byte, not an opcode.
@@ -1613,7 +1613,7 @@ def test_get_self_test_log_reads_raw_log_page():
 
 
 def test_collected_artifact_marks_opcode_unavailable(monkeypatch, tmp_path):
-    """opcode is written as n/a when the controller did not report one."""
+    """Opcode is written as n/a when the controller did not report one."""
     node = _make_mock_node()
     node.logdir = str(tmp_path)
     entry = parse_error_log_entry(_make_error_entry(error_count=2, cmdid=0x4, status_field=0x2001, opcode=0x14))

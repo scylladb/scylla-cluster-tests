@@ -11,9 +11,7 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""
-Constants for GCE provisioning.
-"""
+"""Constants for GCE provisioning."""
 
 # Label constraints (GCE labels are more restrictive than AWS tags)
 MAX_LABEL_KEY_LENGTH = 63

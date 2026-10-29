@@ -138,9 +138,7 @@ class ScyllaNetworkConfiguration:
 
     @property
     def test_communication(self):
-        """
-        IP is used to connect from test to DB/monitor instances
-        """
+        """IP is used to connect from test to DB/monitor instances"""
         if test_communication_address_config := [
             conf for conf in self.scylla_network_config if conf["address"] == "test_communication"
         ]:

@@ -102,9 +102,7 @@ def test_01_keystore() -> None:
 
 
 def test_02_keystore_sync(tmp_path) -> None:
-    """
-    Validate the sync is working and setting right permissions.
-    """
+    """Validate the sync is working and setting right permissions."""
     k = KeyStore()
     k.sync(keys=["scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"], local_path=tmp_path, permissions=0o0600)
 
@@ -165,7 +163,6 @@ def test_04b_get_scylla_ami_versions_full_tag() -> None:
     This test uses the mocked AWS infrastructure provided by moto,
     which loads AMI data from mocked_ami_data.json.
     """
-
     # Full version tag that exists in mocked_ami_data.json
     full_version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
 

@@ -74,9 +74,7 @@ class ToolReporterBase:
 
 
 class PythonDriverReporter(ToolReporterBase):
-    """
-    Reports python-driver version used for SCT operations.
-    """
+    """Reports python-driver version used for SCT operations."""
 
     TOOL_NAME = "scylla-cluster-tests/python-driver"
 
@@ -233,9 +231,7 @@ class LatteRustDriverVersionReporter(ToolReporterBase):
 
 
 class ScyllaBenchVersionReporter(ToolReporterBase):
-    """
-    Reports scylla-bench and scylla gocql driver versions used in SCT.
-    """
+    """Reports scylla-bench and scylla gocql driver versions used in SCT."""
 
     TOOL_NAME = "scylla-bench"
 
@@ -273,9 +269,7 @@ class ScyllaBenchGoCqlDriverVersionReporter(ToolReporterBase):
 
 
 class GeminiVersionReporter(ToolReporterBase):
-    """
-    Reports Gemini and scylla gocql driver versions used in SCT.
-    """
+    """Reports Gemini and scylla gocql driver versions used in SCT."""
 
     TOOL_NAME = "gemini"
 
