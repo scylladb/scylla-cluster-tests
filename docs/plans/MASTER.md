@@ -49,6 +49,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 
 | Plan | Status | File / PR |
 |------|--------|-----------|
+| Best Throughput Under a Latency Limit, On Demand (SCT-580) | `draft` | [best-throughput-under-latency-limit.md](best-throughput-under-latency-limit.md) |
 
 ### CI/CD — Jenkins pipelines, Groovy libs
 
