@@ -5932,7 +5932,7 @@ class BaseScyllaCluster:
             if self.name.find("oracle") > 0
             else self.params.get("append_scylla_args")
         )
-        return self._append_minicloud_reserve_memory(args or "")
+        return self._append_minicloud_cpu_overcommit(self._append_minicloud_reserve_memory(args or ""))
 
     def _append_minicloud_reserve_memory(self, args: str) -> str:
         """Leave the guest OS room to breathe on a lightweight minicloud guest.
@@ -5957,6 +5957,22 @@ class BaseScyllaCluster:
 
         self.log.info("minicloud: reserving %s of guest memory for the OS (--reserve-memory)", reserve)
         return f"{args} --reserve-memory {reserve}".strip()
+
+    def _append_minicloud_cpu_overcommit(self, args: str) -> str:
+        """Turn off reactor polling on minicloud guests, which share the host CPUs.
+
+        A polling reactor burns CPU even when idle, starving other guests.
+        Appended for the same reason as --reserve-memory.
+        """
+        if not is_minicloud_active(self.params) or not self.params.get("minicloud_scylla_overcommitted_cpu"):
+            return args
+
+        polling_flags = ("--idle-poll-time-us", "--poll-aio", "--overprovisioned")
+        if any(token.split("=", 1)[0] in polling_flags for token in args.split()):
+            return args
+
+        self.log.info("minicloud: starting Scylla without reactor polling (--idle-poll-time-us 0 --poll-aio 0)")
+        return f"{args} --idle-poll-time-us 0 --poll-aio 0".strip()
 
     def _drop_minicloud_scylla_memory_lock(self, node: BaseNode) -> None:
         """Start Scylla without --lock-memory on a minicloud guest that is not locked in the host.

@@ -6,7 +6,7 @@ Minicloud is an AWS-API-compatible environment rather than a cloud of its own: i
 the `aws`, `gce` or `azure` cluster backend and an endpoint override, and these options control
 the local minicloud service.
 
-**17 options.**
+**18 options.**
 
 
 <a id="minicloud_azure_scratch_resource_group"></a>
@@ -161,6 +161,17 @@ S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads, te
 **default:** scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com,scylla-qa-team
 
 **type:** str | list[str] → list[str] (appendable)
+
+
+<a id="minicloud_scylla_overcommitted_cpu"></a>
+
+## **minicloud_scylla_overcommitted_cpu** / SCT_MINICLOUD_SCYLLA_OVERCOMMITTED_CPU
+
+Start scylla-server on db guests with --idle-poll-time-us 0 --poll-aio 0, so the reactors give the host CPU back instead of polling while they wait. Unlike --overprovisioned, it does not change thread affinity or memory settings. Turn off to keep production polling. If [`append_scylla_args`](scylla-installation-and-configuration.md#append_scylla_args) already sets --idle-poll-time-us, --poll-aio or --overprovisioned, SCT keeps those
+
+**default:** True
+
+**type:** bool
 
 
 <a id="minicloud_scylla_reserve_memory"></a>

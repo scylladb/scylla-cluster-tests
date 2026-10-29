@@ -95,6 +95,13 @@ class MinicloudConfigMixin(BaseModel):
         description="S3 buckets minicloud proxies to real AWS (keystore, job artifacts, downloads, test sstables). "
         "Backend-independent: GCE runs reach S3 for the same content",
     )
+    minicloud_scylla_overcommitted_cpu: Boolean = SctField(
+        description="Start scylla-server on db guests with --idle-poll-time-us 0 --poll-aio 0, so the "
+        "reactors give the host CPU back instead of polling while they wait. Unlike --overprovisioned, "
+        "it does not change thread affinity or memory settings. Turn off to keep production polling. "
+        "If append_scylla_args already sets --idle-poll-time-us, --poll-aio or --overprovisioned, "
+        "SCT keeps those",
+    )
     minicloud_scylla_reserve_memory: String = SctField(
         description="Extra memory reserved by scylla-server for the guest OS on lightweight minicloud guests, "
         "passed as --reserve-memory (for example, '3G'). Without this option, Scylla usually keeps about "
