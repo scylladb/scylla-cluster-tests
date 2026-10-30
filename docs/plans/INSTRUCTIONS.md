@@ -131,6 +131,12 @@ owner: null            # GitHub username or null
 5. **No Filler:** Start your response immediately with the `# Plan Title`. Do not include conversational prologues.
 6. Do NOT apply this format to regular coding questions or small changes.
 
+## Idea Documents
+
+A big change, or a change to the SCT architecture, can have an intent, a spec, and a plan in one directory, `docs/plans/<feature>/<idea>/`. The documents are optional. They have no frontmatter and are not registered in `MASTER.md` or `progress.json`.
+
+See [docs/development-flow.md](../development-flow.md) for the flow, and the `writing-intents`, `writing-specs`, and `writing-plans` skills for the templates.
+
 ## Mini-Plans
 
 For small changes (under ~1K LOC, single PR), use a lightweight mini-plan instead of the full 7-section format.
@@ -152,6 +158,7 @@ See `skills/writing-plans/references/mini-plan-template.md` for the template and
 ### Routing
 
 The `writing-plans` skill handles routing automatically. When asked to create a plan, it checks:
+0. Whether an idea directory holds a `spec.md`, with no request for a full plan and no `plans` label (-> idea plan, see [Idea Documents](#idea-documents))
 1. Whether the user explicitly requested a big or small plan
 2. Whether the current PR has a `plans` label (label present -> full plan)
 3. Task size estimate as a fallback

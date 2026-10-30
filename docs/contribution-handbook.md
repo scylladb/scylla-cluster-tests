@@ -201,6 +201,10 @@ Every pull request must be reviewed before merging. Reviewers should check for:
 - **Performance** — no unnecessary loops over large datasets, no blocking calls in async
   paths, no unmocked network calls in tests
 
+[`REVIEW.md`](../REVIEW.md) lists the three review passes: bugs and logic, security, and
+compliance. When the PR carries a spec in `docs/plans/<feature>/<idea>/`, the reviewer checks
+the change against it. See [`development-flow.md`](development-flow.md).
+
 Reviewers should explain *why* something needs to change, not just request a change.
 A good review comment teaches the author something for next time.
 
@@ -251,7 +255,9 @@ large:
   each commit should represent a coherent step
 
 For high-impact changes, an implementation plan should define the PR breakdown
-upfront. See [`docs/plans/INSTRUCTIONS.md`](plans/INSTRUCTIONS.md).
+upfront. See [`docs/plans/INSTRUCTIONS.md`](plans/INSTRUCTIONS.md). A change that
+touches the SCT architecture can also carry an intent and a spec for the reviewers.
+See [`development-flow.md`](development-flow.md).
 
 ### 2.5 Backport Process
 
