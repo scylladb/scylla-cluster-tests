@@ -1,7 +1,7 @@
 #!groovy
 import groovy.json.JsonSlurperClassic
 
-def call(Map params, boolean build_image){
+def call(Map params, boolean build_image, String region = '', Map pipelineParams = [:]){
     if (! (params.byo_scylla_repo && params.byo_scylla_branch) ) {
         println("BYO scylladb is not provided. Skipping this step.")
         return ''
@@ -159,5 +159,15 @@ def call(Map params, boolean build_image){
         } else {
             env.SCT_NEW_SCYLLA_REPO = 'https://' + byoBuildInfo.BYO_SCYLLA_DEB_LIST_FILE_URL
         }
+    }
+
+    // The image variables above are decided after the configuration cache was written, so the
+    // cache is written again with them in place. Later stages restore the BYO image from it.
+    def export_cache = configCacheExportOption()
+    if (export_cache && region) {
+        sh """#!/bin/bash
+        ${exportSctEnv(params, region, pipelineParams)}
+        ./docker/env/hydra.sh load-config -b "${params.backend}" ${export_cache}
+        """
     }
 }
