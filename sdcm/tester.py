@@ -1306,6 +1306,12 @@ class ClusterTester(unittest.TestCase):
         if self.params.get("backup_bucket_backend") == "azure":
             self.test_config.set_backup_azure_blob_credentials()
 
+        # every OCI backup credentials consumer (Scylla native S3, manager agent, bucket access) needs the endpoint
+        if self.params.get("cluster_backend") == "oci" and (self.params.get("append_scylla_yaml") or {}).get(
+            "object_storage_endpoints"
+        ):
+            self.test_config.set_backup_oci_credentials()
+
         self.test_config.BACKTRACE_DECODING = self.params.get("backtrace_decoding")
         if self.test_config.BACKTRACE_DECODING:
             self.test_config.set_decoding_queue()
