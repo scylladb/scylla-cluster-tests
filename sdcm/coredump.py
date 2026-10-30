@@ -210,7 +210,7 @@ class CoredumpThreadBase(Thread):
         coredump = core_info.corefile
         coredump = self._pack_coredump(coredump)
         coredump_id = os.path.basename(coredump)[:-3]
-        upload_url = f"upload.scylladb.com/{coredump_id}/{os.path.basename(coredump)}"
+        upload_url = f"upload.scylladb.com/sct-sdcm/{coredump_id}/{os.path.basename(coredump)}"
         self.log.info("Uploading coredump %s to %s", coredump, upload_url)
         self.node.remoter.run(
             "sudo curl --request PUT --fail --show-error --upload-file '%s' 'https://%s'" % (coredump, upload_url)
