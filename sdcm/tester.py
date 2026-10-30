@@ -240,6 +240,8 @@ from test_lib.compaction import CompactionStrategy
 from sdcm.exceptions import TestFailedByEvents, CapacityReservationError
 from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 
+# latte --duration/-d with a time value (240m, 1h30m); a cycle count has no unit and is left alone
+LATTE_TIME_DURATION_RE = r"\s(?:--duration|-d)[ =](?:\d+[smhd])+(?=\s|$)"
 CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:
     import cluster_cloud
@@ -3254,11 +3256,10 @@ class ClusterTester(unittest.TestCase):
     ):
         if duration:
             timeout = self.get_duration(duration)
+            stress_cmd = re.sub(LATTE_TIME_DURATION_RE, f" --duration {duration}m", stress_cmd)
         elif self._stress_duration and (" --duration" in stress_cmd or " -d" in stress_cmd):
             timeout = self.get_duration(self._stress_duration)
-            stress_cmd = re.sub(
-                r"\s(?:--duration|-d)[ =]\d+[smhd]\s", f" --duration {self._stress_duration}m ", stress_cmd
-            )
+            stress_cmd = re.sub(LATTE_TIME_DURATION_RE, f" --duration {self._stress_duration}m", stress_cmd)
         else:
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
 

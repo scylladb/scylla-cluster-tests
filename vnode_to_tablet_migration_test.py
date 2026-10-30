@@ -70,10 +70,10 @@ def get_nodetool_migrate_to_tablets_status(node, keyspace: str) -> MigrateToTabl
         Status: migrating_to_tablets
 
         Nodes:
-        Host ID                              Status
-        dc1c5a03-8878-49da-a6f3-bd27d6a2d85d uses vnodes
-        b1428349-2154-41c9-a5c1-dd33c71bd571 migrating to tablets
-        017dd39a-3d06-4c8a-8ac4-379f9e595607 uses vnodes
+        Host ID                              Address    Status
+        dc1c5a03-8878-49da-a6f3-bd27d6a2d85d 10.0.0.1   uses vnodes
+        b1428349-2154-41c9-a5c1-dd33c71bd571 10.0.0.2   migrating to tablets
+        017dd39a-3d06-4c8a-8ac4-379f9e595607 10.0.0.3   uses vnodes
 
     Example output when no migration is in flight (e.g. after a rollback finalize):
         Keyspace: ks
@@ -83,11 +83,15 @@ def get_nodetool_migrate_to_tablets_status(node, keyspace: str) -> MigrateToTabl
     status_match = re.search(r"^Status:\s*(?P<status>\S+)", res.stdout, re.MULTILINE)
 
     nodes: dict[str, NodeMigrationStatus] = {}
-    pattern = re.compile(r"(?P<host_id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\s+(?P<status>.+)")
+    statuses = "|".join(status.value for status in NodeMigrationStatus)
+    pattern = re.compile(
+        r"(?P<host_id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+        rf"(?:\s+\S+)?\s+(?P<status>{statuses})$"
+    )
     for line in res.stdout.splitlines():
         match = pattern.match(line.strip())
         if match:
-            nodes[match.group("host_id")] = NodeMigrationStatus(match.group("status").strip())
+            nodes[match.group("host_id")] = NodeMigrationStatus(match.group("status"))
     return MigrateToTabletsStatus(status=status_match.group("status"), nodes=nodes)
 
 
@@ -184,9 +188,11 @@ class VnodeToTabletMigrationTest(LongevityTest):
     def _start_migration(self, keyspaces: list[str]) -> None:
         """Start tablet migration for all given keyspaces and verify all nodes use vnodes.
 
-        Runs 'migrate-to-tablets start <ks>' for each keyspace from the coordinator
-        (data_nodes[0]) and asserts that every node reports USES_VNODES immediately
-        after, confirming the migration is in the preparation phase.
+        Runs 'migrate-to-tablets start <ks>' for each keyspace from a node reserved
+        from the nemesis allocator (a node being restarted by a nemesis answers 404
+        from its REST API while Scylla boots) and asserts that every node reports
+        USES_VNODES immediately after, confirming the migration is in the preparation
+        phase.
 
         Args:
             keyspaces: User keyspaces to migrate.
@@ -195,16 +201,16 @@ class VnodeToTabletMigrationTest(LongevityTest):
             raise AssertionError(
                 "No user keyspaces found to migrate. Ensure prepare_write_cmd populates at least one keyspace."
             )
-        coordinator_node = self.db_cluster.data_nodes[0]
         InfoEvent(message=f"Starting tablet migration for keyspaces: {keyspaces}").publish()
-        for ks in keyspaces:
-            coordinator_node.run_nodetool(f"migrate-to-tablets start {ks}")
-            migration_status = get_nodetool_migrate_to_tablets_status(coordinator_node, ks)
-            for node in self.db_cluster.data_nodes:
-                assert migration_status.nodes[node.host_id] == NodeMigrationStatus.USES_VNODES, (
-                    f"[ks={ks}] Expected {NodeMigrationStatus.USES_VNODES!r} for {node.host_id}, "
-                    f"got {migration_status.nodes[node.host_id]!r}"
-                )
+        with self.nemesis_allocator.run_nemesis(nemesis_label="migrate_to_tablets_start") as node:
+            for ks in keyspaces:
+                node.run_nodetool(f"migrate-to-tablets start {ks}")
+                migration_status = get_nodetool_migrate_to_tablets_status(node, ks)
+                for data_node in self.db_cluster.data_nodes:
+                    assert migration_status.nodes[data_node.host_id] == NodeMigrationStatus.USES_VNODES, (
+                        f"[ks={ks}] Expected {NodeMigrationStatus.USES_VNODES!r} for {data_node.host_id}, "
+                        f"got {migration_status.nodes[data_node.host_id]!r}"
+                    )
 
     def _upgrade_node_to_tablets(self, node, keyspaces: list[str]) -> None:
         """Upgrade a single node from vnodes to tablets storage.
@@ -305,29 +311,29 @@ class VnodeToTabletMigrationTest(LongevityTest):
         Args:
             keyspaces: User keyspaces that were migrated.
         """
-        coordinator_node = self.db_cluster.data_nodes[0]
         InfoEvent(message="Finalizing tablet migration").publish()
-        for ks in keyspaces:
-            coordinator_node.run_nodetool(f"migrate-to-tablets finalize {ks}")
+        with self.nemesis_allocator.run_nemesis(nemesis_label="migrate_to_tablets_finalize") as node:
+            for ks in keyspaces:
+                node.run_nodetool(f"migrate-to-tablets finalize {ks}")
 
-        InfoEvent(message="Verifying migrated keyspaces have tablets in system.tablets").publish()
-        with self.db_cluster.cql_connection_patient(coordinator_node, connect_timeout=600) as session:
-            result = session.execute("SELECT keyspace_name FROM system.tablets")
-            tablet_keyspaces = {row.keyspace_name for row in result}
+            InfoEvent(message="Verifying migrated keyspaces have tablets in system.tablets").publish()
+            with self.db_cluster.cql_connection_patient(node, connect_timeout=600) as session:
+                result = session.execute("SELECT keyspace_name FROM system.tablets")
+                tablet_keyspaces = {row.keyspace_name for row in result}
         self.log.info("Keyspaces with tablets: %s", tablet_keyspaces)
         for ks in keyspaces:
             assert ks in tablet_keyspaces, f"Keyspace {ks} not found in system.tablets after migration"
 
-        InfoEvent(message="Waiting for pow2 tablet layout convergence to complete").publish()
+        with self.nemesis_allocator.run_nemesis(nemesis_label="migrate_to_tablets_status") as status_node:
+            InfoEvent(message="Waiting for pow2 tablet layout convergence to complete").publish()
+            wait_for(
+                func=lambda: all(is_keyspace_pow2_converged(status_node, ks) for ks in keyspaces),
+                step=60,
+                timeout=21600,
+            )
 
-        wait_for(
-            func=lambda: all([is_keyspace_pow2_converged(coordinator_node, ks) for ks in keyspaces]),
-            step=60,
-            timeout=21600,
-        )
-
-        InfoEvent(message="Waiting for tablet migration to fully complete").publish()
-        wait_tablets_balanced(self.db_cluster.data_nodes[0], timeout=21600)
+            InfoEvent(message="Waiting for tablet migration to fully complete").publish()
+            wait_tablets_balanced(status_node, timeout=21600)
 
     def _finalize_rollback(self, keyspaces: list[str]) -> None:
         """Finalize a rollback for all given keyspaces, returning the cluster to vnodes.
@@ -346,15 +352,20 @@ class VnodeToTabletMigrationTest(LongevityTest):
         Args:
             keyspaces: User keyspaces whose migration is being rolled back.
         """
-        coordinator_node = self.db_cluster.data_nodes[0]
         InfoEvent(message="Finalizing rollback to clear migration state").publish()
-        for ks in keyspaces:
-            coordinator_node.run_nodetool(f"migrate-to-tablets finalize {ks}")
+        with self.nemesis_allocator.run_nemesis(nemesis_label="migrate_to_tablets_finalize") as node:
+            for ks in keyspaces:
+                node.run_nodetool(f"migrate-to-tablets finalize {ks}")
 
         InfoEvent(message="Waiting for rollback to fully complete").publish()
+
+        def keyspace_on_vnodes(ks: str) -> bool:
+            with self.nemesis_allocator.run_nemesis(nemesis_label="migrate_to_tablets_status") as status_node:
+                return get_nodetool_migrate_to_tablets_status(status_node, ks).status == "vnodes"
+
         for ks in keyspaces:
             wait_for(
-                func=lambda k=ks: get_nodetool_migrate_to_tablets_status(coordinator_node, k).status == "vnodes",
+                func=lambda: keyspace_on_vnodes(ks),
                 step=60,
                 timeout=3600,
                 text=f"Waiting for keyspace status to reach 'vnodes' for ks={ks}",
