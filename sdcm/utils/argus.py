@@ -17,6 +17,29 @@ from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)
 
+TEST_ERROR_PATTERNS = (
+    re.compile(r"SpotTerminationEvent", re.IGNORECASE),
+    re.compile(r"ZonalAllocationFailed", re.IGNORECASE),
+    re.compile(r"source=[\w]+.SetUp\(\).+exception=403 FORBIDDEN QUOTA_EXCEEDED", re.IGNORECASE | re.DOTALL),
+    re.compile(r"source=[\w]+.SetUp\(\).+InsufficientInstanceCapacity", re.IGNORECASE | re.DOTALL),
+    re.compile(r"source=[\w]+.SetUp\(\).+InvalidInstanceType", re.IGNORECASE | re.DOTALL),
+    re.compile(r"source=[\w]+.SetUp\(\).+is not (supported|available) in region", re.IGNORECASE | re.DOTALL),
+)
+
+
+def is_test_error(events: dict[str, list[str]]) -> bool:
+    """
+    Test whether or not the result of the test can be considered as a TEST_ERROR
+    status for Argus. TEST_ERROR status is used for times when the SCT failure is caused by
+    either infrastructure or problems within SCT itself.
+
+    """
+    return any(
+        pattern.search(event)
+        for event in [*events.get("CRITICAL"), *events.get("ERROR")]
+        for pattern in TEST_ERROR_PATTERNS
+    )
+
 
 class Argus:
     """Process-wide handle to the current Argus client.

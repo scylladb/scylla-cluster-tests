@@ -60,6 +60,8 @@ from sdcm.provision.gce.capacity_advisor import get_zone_advice
 from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis.monkey.runners import SisyphusMonkey
+from sdcm.sct_events.events_device import EVENTS_LOG_DIR
+from sdcm.sct_events.file_logger import get_events_by_category_from_dir
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS, SCTConfiguration, init_and_verify_sct_config, available_backends
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.sct_provision.instances_provider import provision_sct_resources
@@ -95,6 +97,7 @@ from sdcm.utils.argus import (
     create_proxy_argus_s3_url,
     get_argus_client,
     get_argus_use_tunnel_from_env,
+    is_test_error,
 )
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
@@ -3457,7 +3460,8 @@ def create_argus_test_run():
 
 @cli.command("finish-argus-test-run", help="Finish argus test run if it is not finished by SCT.")
 @click.option("-s", "--jenkins-status", type=str, help="jenkins build status", required=True)
-def finish_argus_test_run(jenkins_status):
+@click.option("--logdir", type=str, help="directory with test run")
+def finish_argus_test_run(jenkins_status, logdir):
     try:
         LOGGER.info("Finishing Argus TestRun with jenkins status %s", jenkins_status)
         params = SCTConfiguration()
@@ -3468,8 +3472,14 @@ def finish_argus_test_run(jenkins_status):
         test_config.set_test_id_only(params.get("test_id"))
         test_config.init_argus_client(params)
         if jenkins_status == "ABORTED":
-            LOGGER.info("Jenkins build status is ABORTED, setting Argus TestRun status to ABORTED")
             new_status = TestStatus.ABORTED
+            testrun_dir = get_testrun_dir(logdir or test_config.base_logdir(), params.get("test_id"))
+            if testrun_dir and is_test_error(
+                get_events_by_category_from_dir(Path(testrun_dir) / EVENTS_LOG_DIR, limit=100)
+            ):
+                LOGGER.info("Jenkins build status is ABORTED and events match an infra error pattern")
+                new_status = TestStatus.TEST_ERROR
+            LOGGER.info("Setting Argus TestRun status to %s", new_status.value)
         else:
             status = test_config.argus_client().get_status()
             if status in [TestStatus.PASSED, TestStatus.FAILED, TestStatus.TEST_ERROR]:

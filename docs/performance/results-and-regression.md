@@ -334,7 +334,7 @@ There is **no in-SCT numeric comparison** for latency or throughput. The chain i
    `"FAILED"` if the event summary contains any ERROR or CRITICAL.
 
 `argus_finalize_test_run` maps that to `TestStatus.FAILED`, or to `TEST_ERROR` when
-`_is_test_error()` matches an infrastructure pattern such as `InsufficientInstanceCapacity`.
+`is_test_error()` matches an infrastructure pattern such as `InsufficientInstanceCapacity`.
 
 ### What this means in practice
 
