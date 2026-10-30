@@ -3,6 +3,7 @@
 import dataclasses
 import functools
 import os
+import sys
 from typing import List
 from urllib.parse import urlparse
 
@@ -52,6 +53,13 @@ MINICLOUD_S3_PASSTHROUGH_BUCKETS_DEFAULT = (
 )
 
 MINICLOUD_CONTAINER_NAME = "minicloud"
+# macOS runs minicloud as a native process under Hypervisor.framework: Docker on macOS cannot
+# give a container /dev/kvm or HVF, so the container image does not work there. The native
+# binary gets its utun device from the root minicloud-tund launchd helper over this socket.
+MINICLOUD_NATIVE_DEFAULT = sys.platform == "darwin"
+MINICLOUD_BINARY = "minicloud"
+MINICLOUD_TUND_SOCKET = "/var/run/minicloud-tund.sock"
+MINICLOUD_PID_FILE = "minicloud.pid"
 MINICLOUD_HEALTH_TIMEOUT = 30
 MINICLOUD_HEALTH_INTERVAL = 1
 # EC2 action used as the liveness probe. Must be an action minicloud actually implements
@@ -168,6 +176,8 @@ class MinicloudConfig:
     # set at runtime once the Azure credentials have been read
     azure_subscription_id: str = ""
     azure_scratch_resource_group: str = MINICLOUD_AZURE_SCRATCH_RG_DEFAULT
+    # Run the minicloud binary as a host process instead of the docker container.
+    native: bool = dataclasses.field(default_factory=lambda: MINICLOUD_NATIVE_DEFAULT)
 
     @property
     def tls_endpoint(self) -> str:
@@ -184,6 +194,16 @@ class MinicloudConfig:
     @property
     def azure_env_file(self) -> str:
         return os.path.join(self.state_dir, MINICLOUD_AZURE_ENV_FILE_NAME)
+
+    @property
+    def pid_file(self) -> str:
+        """PID of the native minicloud process, so separate hydra invocations find the same one."""
+        return os.path.join(self.state_dir, MINICLOUD_PID_FILE)
+
+    @property
+    def native_log_file(self) -> str:
+        """stdout and stderr of the native minicloud process, for its whole life."""
+        return os.path.join(self.state_dir, "minicloud-native.log")
 
     @property
     def region(self) -> str:

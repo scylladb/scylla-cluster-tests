@@ -1,0 +1,5 @@
+# Overlay for a minicloud run on macOS. Layer it after configurations/minicloud/arm64.yaml -
+# scripts/run-minicloud-test.sh does that on macOS.
+#
+# minicloud cannot lock guest memory on macOS. The guests drop Scylla's --lock-memory instead.
+minicloud_lock_guest_memory: false

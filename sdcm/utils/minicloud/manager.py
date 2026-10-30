@@ -1,10 +1,11 @@
-"""MinicloudManager: docker container lifecycle, forensics and region preparation."""
+"""MinicloudManager: container or native-process lifecycle, forensics and region preparation."""
 
 import atexit
 import json
 import logging
 import os
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -20,8 +21,10 @@ from sdcm.utils.minicloud.activation import (
 )
 from sdcm.utils.minicloud.azure import setup_azure_credentials, wait_for_tls
 from sdcm.utils.minicloud.config import (
+    MINICLOUD_BINARY,
     MINICLOUD_HEALTH_INTERVAL,
     MINICLOUD_HEALTH_TIMEOUT,
+    MINICLOUD_TUND_SOCKET,
     MinicloudConfig,
     MinicloudError,
 )
@@ -84,13 +87,18 @@ class MinicloudManager:
         no --config at all (a bare `hydra start-minicloud -b aws` builds default params
         that legitimately fail the overlay check but runs no test with them).
         """
-        if not Path("/dev/kvm").exists():
-            raise MinicloudError(
-                "/dev/kvm is not available. Ensure KVM is enabled on this host and the current "
-                "user is in the 'kvm' group: sudo usermod -aG kvm $USER"
-            )
-        if not shutil.which("docker"):
-            raise MinicloudError("docker is not available on PATH. Install Docker to run minicloud in container mode.")
+        if self.config.native:
+            self._check_native_host()
+        else:
+            if not Path("/dev/kvm").exists():
+                raise MinicloudError(
+                    "/dev/kvm is not available. Ensure KVM is enabled on this host and the current "
+                    "user is in the 'kvm' group: sudo usermod -aG kvm $USER"
+                )
+            if not shutil.which("docker"):
+                raise MinicloudError(
+                    "docker is not available on PATH. Install Docker to run minicloud in container mode."
+                )
         if params is not None:
             self._check_host_memory(params)
             self._check_scylla_memory_budget(params)
@@ -103,6 +111,31 @@ class MinicloudManager:
                     LOGGER.warning("%s", exc)
         if not skip_aws_creds:
             self._check_aws_credentials()
+
+    def _check_native_host(self) -> None:
+        """Verify the macOS host can run the native minicloud binary.
+
+        A healthy endpoint is enough on its own: whoever started that minicloud already
+        satisfied the rest.
+        """
+        if self.is_endpoint_healthy():
+            return
+        if not shutil.which(MINICLOUD_BINARY):
+            raise MinicloudError(
+                f"'{MINICLOUD_BINARY}' is not on PATH. Build it from scylladb/minicloud with "
+                f"'cargo build --release' and put target/release/{MINICLOUD_BINARY} on PATH."
+            )
+        if not Path(MINICLOUD_TUND_SOCKET).exists():
+            raise MinicloudError(
+                f"{MINICLOUD_TUND_SOCKET} does not exist, so minicloud cannot get its utun device. "
+                "Install the helper one time from the minicloud checkout: "
+                "sudo MINICLOUD_VPC_ROUTES=10.160.0.0/11,172.31.0.0/16 ./minicloud-setup.sh"
+            )
+        if self.config.lock_guest_memory:
+            raise MinicloudError(
+                "minicloud cannot lock guest memory on macOS. Layer configurations/minicloud/macos.yaml, "
+                "or set minicloud_lock_guest_memory: false."
+            )
 
     # thin delegates to sdcm.utils.minicloud.preflight — kept as methods so existing
     # call sites and test patch targets on the class stay valid
@@ -361,6 +394,9 @@ class MinicloudManager:
         return 0.0
 
     def _force_stop_container(self) -> None:
+        if self.config.native:
+            self._stop_native_process()
+            return
         # Target the ID we started when we know it, so we can never remove a different
         # container that has meanwhile taken over the 'minicloud' name.
         target = self._container_id or self.config.container_name
@@ -393,6 +429,9 @@ class MinicloudManager:
         that merely answers health probes may still be unusable for this backend.
         """
         self._setup_gcp_credentials()
+        if self.config.native:
+            self._start_native()
+            return
         self._setup_host_networking()
 
         if self.is_endpoint_healthy():
@@ -494,6 +533,36 @@ class MinicloudManager:
 
         docker_cmd.append(image)
 
+        full_cmd = docker_cmd + self._minicloud_args()
+        # safe to log: the command holds credential names and the --env-file path, not secret values
+        LOGGER.info("Starting minicloud container: %s", " ".join(full_cmd))
+        # `docker run -d` prints the container ID - keep it, it is what we inspect and
+        # remove later, and it stays valid even if the name gets taken over.
+        run_result = subprocess.run(full_cmd, capture_output=True, text=True, check=False)
+        if run_result.returncode != 0:
+            raise MinicloudError(
+                f"docker run failed (exit {run_result.returncode}) for image {image}: {run_result.stderr.strip()}"
+            )
+        self._container_id = run_result.stdout.strip() or self._resolve_container_id()
+        LOGGER.info("minicloud container id: %s", self._container_id)
+
+        endpoint = f"http://localhost:{self.config.port}"
+        try:
+            self._wait_for_health(endpoint)
+            self._wait_for_azure_tls()
+        except Exception:
+            # atexit is not registered yet, so remove the container here to avoid leaking it
+            self._snapshot_container_state(reason="failed to become healthy during start")
+            self._force_stop_container()
+            raise
+        self.set_env_overrides()
+        self._start_log_streaming()
+
+        atexit.register(self._atexit_stop)
+        LOGGER.info("minicloud container is ready")
+
+    def _minicloud_args(self) -> list[str]:
+        """minicloud's own arguments, the same for the container and the native binary."""
         minicloud_args = [
             "--port",
             str(self.config.port),
@@ -529,37 +598,97 @@ class MinicloudManager:
                 "--lightweight-vcpus",
                 str(self.config.lightweight_vcpus),
             ]
+        return minicloud_args
 
-        full_cmd = docker_cmd + minicloud_args
-        # safe to log: the command holds credential names and the --env-file path, not secret values
-        LOGGER.info("Starting minicloud container: %s", " ".join(full_cmd))
-        # `docker run -d` prints the container ID - keep it, it is what we inspect and
-        # remove later, and it stays valid even if the name gets taken over.
-        run_result = subprocess.run(full_cmd, capture_output=True, text=True, check=False)
-        if run_result.returncode != 0:
-            raise MinicloudError(
-                f"docker run failed (exit {run_result.returncode}) for image {image}: {run_result.stderr.strip()}"
-            )
-        self._container_id = run_result.stdout.strip() or self._resolve_container_id()
-        LOGGER.info("minicloud container id: %s", self._container_id)
+    def _start_native(self) -> None:
+        """Start the native minicloud binary as a host process and wait for it to become healthy.
 
+        The process runs in its own session, so it outlives this process when keep_alive is
+        set. Its PID goes to the state dir, so the next hydra invocation finds the same process.
+        """
         endpoint = f"http://localhost:{self.config.port}"
+        if self.is_endpoint_healthy():
+            LOGGER.info("minicloud already running at %s (pid %s), reusing", endpoint, self._native_pid())
+            self._wait_for_azure_tls()
+            self.set_env_overrides()
+            self._start_log_streaming()
+            return
+
+        self._stop_native_process()
+        self._setup_azure_credentials()
+        os.makedirs(self.config.state_dir, exist_ok=True)
+        env = os.environ.copy()
+        if self.backend in AZURE_BACKENDS:
+            # the same file the container reads with --env-file
+            for line in Path(self.config.azure_env_file).read_text().splitlines():
+                if "=" in line:
+                    name, value = line.split("=", 1)
+                    env[name] = value
+        env["AWS_REGION"] = self.config.region
+        gcs_key = os.environ.get("GCS_KEY_FILE") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+        if gcs_key and Path(gcs_key).is_file():
+            env["GOOGLE_APPLICATION_CREDENTIALS"] = gcs_key
+            env["GOOGLE_CLOUD_PROJECT"] = self.config.gcp_project
+        cmd = [MINICLOUD_BINARY, *self._minicloud_args(), "--cache-dir", self.config.state_dir]
+        LOGGER.info("Starting native minicloud: %s", " ".join(cmd))
+        with open(self.config.native_log_file, "w") as log_fh:
+            process = subprocess.Popen(
+                cmd, stdin=subprocess.DEVNULL, stdout=log_fh, stderr=subprocess.STDOUT, env=env, start_new_session=True
+            )
+        Path(self.config.pid_file).write_text(str(process.pid))
+        LOGGER.info("minicloud pid: %s, log: %s", process.pid, self.config.native_log_file)
+
         try:
             self._wait_for_health(endpoint)
             self._wait_for_azure_tls()
         except Exception:
-            # atexit is not registered yet, so remove the container here to avoid leaking it
-            self._snapshot_container_state(reason="failed to become healthy during start")
-            self._force_stop_container()
+            self._stop_native_process()
             raise
         self.set_env_overrides()
         self._start_log_streaming()
 
         atexit.register(self._atexit_stop)
-        LOGGER.info("minicloud container is ready")
+        LOGGER.info("native minicloud is ready")
+
+    def _native_pid(self) -> int | None:
+        """PID of the native minicloud process when it is still alive, else None."""
+        try:
+            pid = int(Path(self.config.pid_file).read_text().strip())
+            os.kill(pid, 0)
+        except OSError, ValueError:
+            return None
+        return pid
+
+    def _stop_native_process(self) -> None:
+        """Stop the native minicloud process with SIGTERM, then SIGKILL after 30 seconds."""
+        if pid := self._native_pid():
+            os.kill(pid, signal.SIGTERM)
+            deadline = time.time() + 30
+            while time.time() < deadline and self._native_pid():
+                time.sleep(MINICLOUD_HEALTH_INTERVAL)
+            if self._native_pid():
+                os.kill(pid, signal.SIGKILL)
+        Path(self.config.pid_file).unlink(missing_ok=True)
+
+    def _watch_native_death(self) -> None:
+        """Publish an ERROR event when the native minicloud process dies mid-test."""
+        while not (self._stopping or self._stopped):
+            if self._native_pid() is None:
+                if self._stopping or self._stopped:
+                    return
+                TestFrameworkEvent(
+                    source="MinicloudManager",
+                    message=(
+                        f"native minicloud process died mid-test (see {self.config.native_log_file}); "
+                        f"all VMs it hosted are gone - any SSH failure after this is a consequence, not the cause"
+                    ),
+                    severity=Severity.ERROR,
+                ).publish_or_dump()
+                return
+            time.sleep(5)
 
     def stop(self) -> None:
-        """Stop and remove the minicloud Docker container."""
+        """Stop and remove the minicloud Docker container, or stop the native process."""
         if self._stopped:
             return
         if self.keep_alive:
@@ -577,7 +706,10 @@ class MinicloudManager:
                 self._container_log_process.kill()
             self._container_log_process = None
         self._close_log_file()
-        LOGGER.info("Stopping minicloud container '%s'...", container_name)
+        if self.config.native:
+            LOGGER.info("Stopping native minicloud (pid %s)...", self._native_pid())
+        else:
+            LOGGER.info("Stopping minicloud container '%s'...", container_name)
         # Snapshot before removal - `docker rm -f` destroys the exit code for good.
         self._snapshot_container_state(reason="teardown")
         self._force_stop_container()
@@ -619,12 +751,23 @@ class MinicloudManager:
         os.makedirs(log_path.parent, exist_ok=True)
         self._close_log_file()
         self._container_log_file = open(log_path, "a")  # noqa: SIM115
+        if self.config.native:
+            follow_cmd = ["tail", "-n", "+1", "-F", self.config.native_log_file]
+        else:
+            follow_cmd = ["docker", "logs", "-f", self._container_id or self.config.container_name]
         self._container_log_process = subprocess.Popen(
-            ["docker", "logs", "-f", self._container_id or self.config.container_name],
+            follow_cmd,
             stdout=self._container_log_file,
             stderr=self._container_log_file,
         )
         LOGGER.info("minicloud logs streaming to %s", log_path)
+        if self.config.native:
+            # `tail -F` never returns on its own, so the PID is the death signal here.
+            self._death_watcher = threading.Thread(
+                target=self._watch_native_death, name="minicloud-death-watcher", daemon=True
+            )
+            self._death_watcher.start()
+            return
         # `docker logs -f` returns exactly when the container exits, so waiting on the
         # streamer we already spawn is a free, precise death signal.
         self._death_watcher = threading.Thread(
@@ -696,7 +839,9 @@ class MinicloudManager:
 
     @property
     def is_running(self) -> bool:
-        """Check if minicloud container is running."""
+        """Check if minicloud container or native process is running."""
+        if self.config.native:
+            return self._native_pid() is not None
         result = subprocess.run(
             ["docker", "inspect", "-f", "{{.State.Running}}", self.config.container_name],
             capture_output=True,

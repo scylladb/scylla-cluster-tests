@@ -1,0 +1,13 @@
+# Overlay for a minicloud run on an arm64 host: Apple silicon, or an arm64 Linux box or VM.
+# Layer it after configurations/minicloud.yaml - scripts/run-minicloud-test.sh does that when
+# `uname -m` is arm64 or aarch64.
+#
+# KVM and HVF accelerate only guests of the host architecture, so every guest is arm64: an
+# x86-64 guest boots about 7 times slower under TCG, and minicloud runs with --cross-arch=fail.
+# The literal instance types below skip sizing, so the x86_64 sizing pin in
+# configurations/minicloud.yaml does not apply.
+instance_type_db: 'i8g.large'
+instance_type_loader: 'c7g.large'
+
+# The scylladb-monitor AMI is published for amd64 only, so there is no arm64 monitor to boot.
+n_monitor_nodes: 0
