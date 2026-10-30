@@ -36,4 +36,4 @@ user_prefix: 'cassandra-aws-test'
 enable_kms_key_rotation: false
 run_commit_log_check_thread: false
 
-stress_cmd: ["cassandra-stress write cl=ONE duration=1m -schema 'replication(strategy=SimpleStrategy,replication_factor=1)' -mode cql3 native -rate threads=10 -pop seq=1..10000 -log interval=5"]
+stress_cmd: ["cassandra-stress write cl=ONE duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate threads=10 -pop seq=1..10000 -log interval=5"]
