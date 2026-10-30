@@ -339,6 +339,12 @@ CI runs both Azure jobs on the lab KVM agent (`local_agent: true`), not on an sc
 runner has no nested-virtualization sizing, and an AWS runner would need the runner cloud
 decoupled from the backend. The agent uses the Azure credential only for the image download.
 
+### Publish the run to Argus
+
+A minicloud run is a local run, so it sends nothing to Argus. To show it in Argus, send its replay
+log with `argus run replay`. See [Upload a minicloud run to Argus](minicloud-argus-upload.md), which
+also covers the native macOS setup.
+
 ## Troubleshooting
 
 | symptom | cause |
