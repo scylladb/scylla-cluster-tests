@@ -4242,7 +4242,7 @@ class BaseNode(AutoSshContainerMixin):
 
         Works only for options declared with liveness::LiveUpdate in scylladb.
         This method itself does not touch scylla.yaml, so a node restart reverts the change
-        unless the caller also persists it there (as set_node_auto_repair does).
+        unless the caller also persists it there.
         Returns True on success, False otherwise (e.g. node down or CQL unavailable).
         """
         try:
