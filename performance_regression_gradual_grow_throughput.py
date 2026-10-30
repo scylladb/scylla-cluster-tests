@@ -1,5 +1,10 @@
+import itertools
+import os
 import pathlib
+import re
 import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager, nullcontext
 from enum import Enum
 from collections import defaultdict, Counter
 
@@ -7,12 +12,91 @@ import json
 from dataclasses import dataclass, replace
 from typing import List, Union
 
+import requests
+
 from performance_regression_test import PerformanceRegressionTest
+from sdcm.rest.task_profiler_client import TaskProfilerClient
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
+
+
+# Per-step metrics saved to result_gradual_increase.log for investigation. Each query is evaluated
+# at the step end over the whole step ($range); $loaders is the regex of the loader IPs.
+# Names and types are from /metrics of scylla-nightly 2026.4.0~dev-0.20261023. The SC metrics
+# appear once a strongly consistent table exists. Latency histograms are in microseconds.
+# The monitor drops storage_proxy buckets outside the sl:* groups, so SC runs have no storage_proxy P99.
+STEP_METRICS = {
+    "scylla_transport_requests_served": "sum(rate(scylla_transport_requests_served[$range]))",
+    "scylla_transport_requests_served_by_shard": (
+        "sum by (instance, shard) (rate(scylla_transport_requests_served[$range]))"
+    ),
+    "scylla_transport_current_connections": (
+        "sum by (instance, shard) (avg_over_time(scylla_transport_current_connections[$range]))"
+    ),
+    # Cluster-wide P99 is the server-side counterpart of the client HDR P99 over the step
+    "scylla_strong_consistency_coordinator_write_latency_p99_ms": (
+        "histogram_quantile(0.99, sum by (le) "
+        "(rate(scylla_strong_consistency_coordinator_write_latency_bucket[$range]))) / 1000"
+    ),
+    "scylla_strong_consistency_coordinator_write_latency_p99_ms_by_instance": (
+        "histogram_quantile(0.99, sum by (instance, le) "
+        "(rate(scylla_strong_consistency_coordinator_write_latency_bucket[$range]))) / 1000"
+    ),
+    "scylla_storage_proxy_coordinator_write_latency_p99_ms": (
+        "histogram_quantile(0.99, sum by (le) "
+        "(rate(scylla_storage_proxy_coordinator_write_latency_bucket[$range]))) / 1000"
+    ),
+    "scylla_storage_proxy_coordinator_write_latency_p99_ms_by_instance": (
+        "histogram_quantile(0.99, sum by (instance, le) "
+        "(rate(scylla_storage_proxy_coordinator_write_latency_bucket[$range]))) / 1000"
+    ),
+    "scylla_reactor_utilization": "avg by (instance) (avg_over_time(scylla_reactor_utilization[$range]))",
+    "scylla_reactor_cpu_busy_ms": "sum by (instance) (rate(scylla_reactor_cpu_busy_ms[$range]))",
+    "scylla_scheduler_runtime_ms": "sum by (instance, group) (rate(scylla_scheduler_runtime_ms[$range]))",
+    "loader_cpu_busy_ratio": (
+        '1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle",instance=~"$loaders"}[$range]))'
+    ),
+    "node_disk_written_bytes_total": (
+        'sum by (instance, device) (rate(node_disk_written_bytes_total{device=~"nvme.*|md.*"}[$range]))'
+    ),
+    "node_disk_io_time_seconds_total": (
+        'sum by (instance, device) (rate(node_disk_io_time_seconds_total{device=~"nvme.*|md.*"}[$range]))'
+    ),
+    "scylla_commitlog_cycle": "sum by (instance) (rate(scylla_commitlog_cycle[$range]))",
+    "scylla_commitlog_alloc": "sum by (instance) (rate(scylla_commitlog_alloc[$range]))",
+    "scylla_commitlog_bytes_written": "sum by (instance) (rate(scylla_commitlog_bytes_written[$range]))",
+    "scylla_commitlog_slack": "sum by (instance) (rate(scylla_commitlog_slack[$range]))",
+    "scylla_commitlog_pending_allocations": (
+        "sum by (instance) (avg_over_time(scylla_commitlog_pending_allocations[$range]))"
+    ),
+    "scylla_commitlog_requests_blocked_memory": (
+        "sum by (instance) (rate(scylla_commitlog_requests_blocked_memory[$range]))"
+    ),
+    "scylla_memory_regular_dirty_bytes": (
+        "sum by (instance) (avg_over_time(scylla_memory_regular_dirty_bytes[$range]))"
+    ),
+    "scylla_database_requests_blocked_memory": (
+        "sum by (instance) (rate(scylla_database_requests_blocked_memory[$range]))"
+    ),
+    "scylla_memtables_pending_flushes": "sum by (instance) (avg_over_time(scylla_memtables_pending_flushes[$range]))",
+    "scylla_strong_consistency_raft_persisted_log_entries": (
+        "sum by (instance) (rate(scylla_strong_consistency_raft_persisted_log_entries[$range]))"
+    ),
+    "scylla_strong_consistency_raft_polls": "sum by (instance) (rate(scylla_strong_consistency_raft_polls[$range]))",
+    "scylla_strong_consistency_raft_queue_entries_for_apply": (
+        "sum by (instance) (rate(scylla_strong_consistency_raft_queue_entries_for_apply[$range]))"
+    ),
+    "scylla_strong_consistency_raft_store_term_and_vote": (
+        "sum by (instance) (rate(scylla_strong_consistency_raft_store_term_and_vote[$range]))"
+    ),
+    "scylla_strong_consistency_raft_leaders": (
+        "sum by (instance) (avg_over_time(scylla_strong_consistency_raft_leaders[$range]))"
+    ),
+}
 
 
 class CSPopulateDistribution(Enum):
@@ -34,6 +118,7 @@ class Workload:
     prepare_schema: bool
     test_keyspace: str = ""
     test_table: str = ""
+    task_profiler: bool = False
 
     def __post_init__(self):
         if isinstance(self.num_threads, int):
@@ -53,6 +138,78 @@ class Workload:
                 # Should not happen due to validation, but handle gracefully
                 normalized_steps.append({"rate": str(step)})
         self.throttle_steps = normalized_steps
+
+
+def _ss_bytes(ss_output: str) -> dict:
+    """(peer address, peer port) -> bytes_received + bytes_acked, from `ss -tinH state established` output."""
+    sockets, peer = {}, None
+    for line in ss_output.splitlines():
+        if line.startswith(("\t", " ")):
+            sockets[peer] = sum(int(count) for count in re.findall(r"bytes_(?:received|acked):(\d+)", line))
+        elif line:
+            address, _, port = line.split()[3].rpartition(":")
+            peer = (address.strip("[]").removeprefix("::ffff:"), int(port))
+    return sockets
+
+
+def connection_check_verdict(expected, shards, loader_ips, clients, ss_before, ss_after) -> dict:
+    """Per shard: at least `expected` READY loader connections, each moving >= 1 KiB between the ss samples.
+
+    A CQL heartbeat moves tens of bytes, one write carries the 1 KiB column. Both directions count,
+    so the rule also works for reads. Driver control connections come on top of the pool, so an idle
+    extra connection doesn't fail the shard.
+
+    :param clients: (address, port, shard_id, connection_stage) rows of system.clients
+    """
+    before, after = _ss_bytes(ss_before), _ss_bytes(ss_after)
+    verdict = {}
+    for shard in range(shards):
+        ready = [
+            (address, port)
+            for address, port, shard_id, stage in clients
+            if shard_id == shard and stage == "READY" and address in loader_ips
+        ]
+        idle = [peer for peer in ready if after.get(peer, 0) - before.get(peer, 0) < 1024]
+        verdict[shard] = {
+            "expected": expected,
+            "ready": len(ready),
+            "with_traffic": len(ready) - len(idle),
+            "ok": len(ready) - len(idle) >= expected,
+            "idle": [f"{address}:{port}" for address, port in idle[:20]],
+        }
+    return verdict
+
+
+def meets_p99(client_p99, server_p99, target) -> bool:
+    """A rate breaks the SLA only when both the client and the server P99 are over the target.
+
+    An unknown server P99 (None) leaves the decision to the client P99.
+    """
+    return client_p99 <= target or (server_p99 is not None and server_p99 <= target)
+
+
+def search_max_rate(probe, low, high, tolerance) -> tuple[int, int]:
+    """Bisect the rate between a passing `low` and a failing `high` until they are within `tolerance`.
+
+    probe(rate) runs the load at that rate and returns True when it meets the SLA.
+    Both ends are probed first, `high` first, so a wrong bracket stops the search early.
+    Returns the final (low, high): `low` passed, `high` failed.
+    """
+    bracket = f"[{low}, {high}]"
+    if tolerance < 1 or low >= high:
+        # tolerance < 1 never ends: (low + high) // 2 == low once high - low == 1
+        raise ValueError(f"The bracket {bracket} needs low < high and a tolerance of at least 1, got {tolerance}")
+    if probe(high):
+        raise ValueError(f"The high end {high} passes, the P99 crossing is above the bracket {bracket}")
+    if not probe(low):
+        raise ValueError(f"The low end {low} fails, the P99 crossing is below the bracket {bracket}")
+    while high - low > tolerance:
+        middle = (low + high) // 2
+        if probe(middle):
+            low = middle
+        else:
+            high = middle
+    return low, high
 
 
 def is_latte_command(stress_cmd: Union[str, list]) -> bool:
@@ -234,6 +391,131 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         )
         self._base_test_workflow(workload=workload, test_name="test_write_gradual_increase_load (100% writes)")
 
+    def test_write_gradual_increase_load_with_task_profiler(self):
+        """Run write workload with task profiler enabled.
+
+        Identical to test_write_gradual_increase_load but brackets each
+        throttle step with task profiler start/stop calls on all DB
+        nodes. The stop call also dumps per-shard profiling data.
+        Requires a Scylla build from
+        https://github.com/Jadw1/scylla/tree/sc_perf_with_profile
+        """
+        workload_type = "write"
+        keyspace, table = self.get_test_table_name(self.params.get("stress_cmd_w"))
+        workload = Workload(
+            workload_type=workload_type,
+            cs_cmd_tmpl=self.params.get("stress_cmd_w"),
+            cs_cmd_warm_up=None,
+            num_threads=self.get_num_threads_for_workload(workload_type),
+            throttle_steps=self.throttle_steps(workload_type),
+            preload_data=False,
+            drop_keyspace=True,
+            wait_no_compactions=False,
+            step_duration=self.step_duration(workload_type),
+            test_keyspace=keyspace,
+            test_table=table,
+            prepare_schema=True,
+            task_profiler=True,
+        )
+        self._base_test_workflow(
+            workload=workload,
+            test_name="test_write_gradual_increase_load_with_task_profiler (100% writes)",
+        )
+
+    def test_write_max_throughput_under_p99(self):
+        """Find the highest write rate that meets the P99 target, see perf_p99_search.
+
+        Probes and the confirmation step call run_step directly, not through latency_calculator_decorator:
+        nothing goes to Argus, so probes that are over the target by design don't fail the run.
+        Every step goes to result_gradual_increase.log, and the result under its "search" key.
+        """
+        search = self.params["perf_p99_search"]
+        stress_cmds = self.params.get("stress_cmd_w")
+        keyspace, table = self.get_test_table_name(stress_cmds)
+        workload = Workload(
+            workload_type="write",
+            cs_cmd_tmpl=stress_cmds,
+            cs_cmd_warm_up=None,
+            num_threads=self.params["perf_gradual_threads"]["write"],
+            throttle_steps=[],
+            preload_data=False,
+            drop_keyspace=True,
+            wait_no_compactions=False,
+            step_duration=search["probe_duration"],
+            test_keyspace=keyspace,
+            test_table=table,
+            prepare_schema=True,
+        )
+        num_loaders = len(self.loaders.nodes)
+        total_summary = {}
+        probe_numbers = itertools.count(1)
+
+        def run_at(step_name, rate, duration):
+            self.prepare_schema(workload=workload)
+            step_params = {
+                "threads": workload.num_threads[0],
+                "throttle": self.current_throttle({"rate": rate}, num_loaders, 1, stress_cmds[0]),
+            }
+            results, stress_queue = self.run_step(
+                stress_cmds=stress_cmds, step_params=step_params, step_duration=duration
+            )
+            start, end = self._step_window
+            hdr = self.get_hdrhistogram(
+                hdr_tags=stress_queue[0].hdr_tags, stress_operation="write", start_time=start, end_time=end
+            )
+            if not hdr:
+                raise ValueError(f"No HDR histogram for step {step_name}, its client P99 is unknown")
+            metrics = self._collect_step_metrics(start, end)
+            # Only one of them has data: SC runs write through the SC coordinator, EC runs through storage_proxy
+            server_p99s = [
+                metrics[name]["total"]
+                for name in (
+                    "scylla_strong_consistency_coordinator_write_latency_p99_ms",
+                    "scylla_storage_proxy_coordinator_write_latency_p99_ms",
+                )
+                if "total" in metrics.get(name, {})
+            ]
+            step = {
+                "rate": rate,
+                "client_p99_ms": max(summary["percentile_99"] for summary in hdr.values()),
+                "server_p99_ms": max(server_p99s, default=None),
+                "ops_rate": self._aggregate_ops_rate(results, num_loaders, len(stress_cmds)),
+                "metrics": metrics,
+                "connections": self._step_connections,
+            }
+            # Above the cluster's capacity the client P99 explodes while the server P99 can stay low,
+            # so a rate also has to be delivered to pass
+            step["passed"] = (
+                meets_p99(step["client_p99_ms"], step["server_p99_ms"], search["target_p99_ms"])
+                and step["ops_rate"] >= 0.95 * rate
+            )
+            total_summary[step_name] = step
+            self.save_total_summary_in_file(total_summary)
+            self.drop_keyspace(keyspace_name=keyspace)
+            return step
+
+        self.run_fstrim_on_all_db_nodes()
+        low, high = search_max_rate(
+            lambda rate: run_at(f"probe_{next(probe_numbers)}_{rate}", rate, search["probe_duration"])["passed"],
+            search["low"],
+            search["high"],
+            search["tolerance"],
+        )
+        # A failed confirmation is recorded, not retried
+        confirmation = run_at(f"confirm_{low}", low, search["confirm_duration"])
+        total_summary["search"] = {
+            "max_rate": low,
+            "bracket": [low, high],
+            "probes": sum(name.startswith("probe_") for name in total_summary),
+            "confirmed": confirmation["passed"],
+            "client_p99_ms": confirmation["client_p99_ms"],
+            "server_p99_ms": confirmation["server_p99_ms"],
+            "ops_rate": confirmation["ops_rate"],
+        }
+        self.save_total_summary_in_file(total_summary)
+        if not confirmation["passed"]:
+            self.log.warning("The confirmation step is over the P99 target: %s", total_summary["search"])
+
     def test_read_gradual_increase_load(self):
         """
         Test steps:
@@ -326,6 +608,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 self._run_cql_commands(matching_cmds)
 
     def preload_data(self, compaction_strategy=None):
+        if self.params.get("pre_create_keyspace"):
+            self._pre_create_keyspace()
+
         population_commands: list = self.params.get("prepare_write_cmd")
 
         self.log.info("Population c-s commands: %s", population_commands)
@@ -357,7 +642,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         self.log.info("Dataset has been populated")
 
     def prepare_schema(self, workload: Workload):
-        if workload.prepare_schema and (prepare_stress_cmds := self.params.get("prepare_stress_cmd")):
+        if workload.prepare_schema and self.params.get("pre_create_keyspace"):
+            self._pre_create_keyspace()
+        elif workload.prepare_schema and (prepare_stress_cmds := self.params.get("prepare_stress_cmd")):
             stress_queue = []
             for stress_cmd in prepare_stress_cmds:
                 self.log.info("Preparing schema using command: %s", stress_cmd)
@@ -464,6 +751,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         """
         results = []
         stress_queue = []
+        start = time.time()
         for stress_cmd in stress_cmds:
             params = {"round_robin": True, "stats_aggregate_cmds": False}
             stress_cmd_to_run = stress_cmd
@@ -481,9 +769,13 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             self.log.debug("RUNNING stress cmd: %s", stress_cmd_to_run)
             stress_queue.append(self.run_stress_thread(**params))
 
+        connection_check = self._start_connection_check(stress_cmds)
         for stress in stress_queue:
             results.extend(self.get_stress_results(queue=stress, store_results=False))
             self.log.debug("One c-s command results: %s", results[-1])
+        # Kept apart from the decorator's window, which also covers its own post-processing
+        self._step_window = (start, time.time())
+        self._step_connections = self._connection_check_result(connection_check)
         # NOTE: the returned 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator.
         # Every stress thread derives its own tags from the command it actually runs, which is the
         # only place the tags of a step can come from: they are tool specific (cassandra-stress
@@ -496,6 +788,52 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         )
         self.log.debug("HDR tags of the step, collected from %s stress queue(s): %s", len(stress_queue), hdr_tags)
         return results, {"hdr_tags": hdr_tags}
+
+    def _start_connection_check(self, stress_cmds):
+        """Run the connection check concurrently with the step. Off for commands without connectionsPerShard."""
+        expected = sum(int(count) for cmd in stress_cmds for count in re.findall(r"connectionsPerShard=(\d+)", cmd))
+        if not expected:
+            return None
+        executor = ThreadPoolExecutor(max_workers=1)
+        check = executor.submit(self._check_connections, expected)
+        executor.shutdown(wait=False)
+        return check
+
+    def _check_connections(self, expected):
+        """Sample the loader connections on every DB node twice, 60 s apart, starting ~2 min into the step."""
+        time.sleep(120)
+        loader_ips = {node.ip_address for node in self.loaders.nodes}
+        ss_cmd = "ss -tinH state established '( sport = :9042 or sport = :19042 or sport = :9142 or sport = :19142 )'"
+
+        def check_node(node):
+            # ss output is ~4 MB per node with 1,000 connections per shard, keep it out of the log
+            ss_before = node.remoter.run(ss_cmd, verbose=False).stdout
+            # system.clients is node-local
+            with self.db_cluster.cql_connection_patient_exclusive(node) as session:
+                clients = list(session.execute("SELECT address, port, shard_id, connection_stage FROM system.clients"))
+            time.sleep(60)
+            ss_after = node.remoter.run(ss_cmd, verbose=False).stdout
+            # scylla_shards is 0 when it can't be read, and an empty verdict would pass
+            if not (shards := node.scylla_shards):
+                raise ValueError("number of shards is unknown")
+            return connection_check_verdict(expected, shards, loader_ips, clients, ss_before, ss_after)
+
+        results = ParallelObject(objects=self.db_cluster.nodes, timeout=300).run(check_node, ignore_exceptions=True)
+        nodes = {res.obj.name: res.result if res.exc is None else {"error": repr(res.exc)} for res in results}
+        ok = all("error" not in shards and all(shard["ok"] for shard in shards.values()) for shards in nodes.values())
+        return {"ok": ok, "nodes": nodes}
+
+    def _connection_check_result(self, check):
+        """A failed or broken check is recorded and logged; it never fails the step."""
+        if check is None:
+            return None
+        try:
+            result = check.result(timeout=600)
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "error": repr(exc)}
+        if not result["ok"]:
+            self.log.warning("Connection check failed: %s", result)
+        return result
 
     def drop_keyspace(self, keyspace_name):
         self.log.debug(f"Drop keyspace {keyspace_name}")
@@ -639,23 +977,31 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 current_throttle_step,
                 step_duration,
             )
-            run_step = (
-                latency_calculator_decorator(
-                    legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
+            with self._task_profiler_step(current_throttle_step) if workload.task_profiler else nullcontext():
+                run_step = (
+                    latency_calculator_decorator(
+                        legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
+                    )
+                )(self.run_step)
+                results, _ = run_step(
+                    stress_cmds=workload.cs_cmd_tmpl,
+                    step_params=step_params,
+                    step_duration=step_duration,
                 )
-            )(self.run_step)
-            results, _ = run_step(
-                stress_cmds=workload.cs_cmd_tmpl,
-                step_params=step_params,
-                step_duration=step_duration,
-            )
+
             self.log.debug("All c-s commands results collected and saved in Argus")
 
             summary_result = self.check_latency_during_steps(step=current_throttle_step)
             summary_result[current_throttle_step].update(
-                {"ops_rate": self._aggregate_ops_rate(results, num_loaders, len(workload.cs_cmd_tmpl))}
+                {
+                    "ops_rate": self._aggregate_ops_rate(results, num_loaders, len(workload.cs_cmd_tmpl)),
+                    "metrics": self._collect_step_metrics(*self._step_window),
+                    "connections": self._step_connections,
+                }
             )
             total_summary.update(summary_result)
+            # Saved after every step, so a run that dies mid-way still leaves the finished steps
+            self.save_total_summary_in_file(total_summary)
             if workload.drop_keyspace:
                 self.drop_keyspace(keyspace_name=workload.test_keyspace)
             # We want 3 minutes (180 sec) wait between steps.
@@ -674,7 +1020,155 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 # continuous period of three minutes.
                 self.wait_for_no_tablets_splits()
 
-        self.save_total_summary_in_file(total_summary)
+    @contextmanager
+    def _task_profiler_step(self, step_name: str):
+        """Bracket a single throttle step with task profiler start/stop+collect.
+
+        Starts the profiler on all DB nodes and always runs stop+collect in the
+        ``finally`` block, so any profiler that was started (even when a later
+        node's startup fails) is stopped and cannot skew subsequent steps.
+        Startup is inside the protected boundary and startup failures are
+        tolerated per node: nodes that started successfully are stopped, and a
+        failure to start on some nodes does not abort the whole step.
+        """
+        try:
+            self._task_profiler_start_all_nodes()
+            yield
+        finally:
+            try:
+                self._task_profiler_stop_and_collect(step_name=step_name)
+            except Exception:  # noqa: BLE001
+                self.log.error("Task profiler stop/collect failed for step %s", step_name, exc_info=True)
+
+    def _task_profiler_start_all_nodes(self, sampling_interval_ms: int = 10):
+        """Start task profiler on all DB nodes in parallel.
+
+        Startup failures are tolerated so a single node that fails to start does
+        not leave already-started profilers running on the other nodes; the
+        ``finally`` in :meth:`_task_profiler_step` still stops every node.
+        """
+
+        def start_on_node(node):
+            self.log.info("Starting task profiler on %s", node.name)
+            TaskProfilerClient(node).start(sampling_interval_ms=sampling_interval_ms)
+
+        results = ParallelObject(objects=self.db_cluster.nodes, timeout=120).run(start_on_node, ignore_exceptions=True)
+        for result in results:
+            if result.exc is not None:
+                self.log.warning("Failed to start task profiler on %s: %s", result.obj.name, result.exc)
+
+    def _task_profiler_stop_and_collect(self, step_name: str):
+        """Stop profiler, write dump files, verify, archive, download, and clean up for one step.
+
+        For each node in parallel:
+        1. Create the dump directory on the remote node.
+        2. Call the REST stop endpoint which stops profiling AND writes per-shard
+           folded-stack files to the given path.
+        3. Verify at least one dump file exists and is non-empty.
+        4. Create a tar.gz archive on the remote node.
+        5. Download the archive into node.logdir/ via receive_files.
+        6. Clean up remote files.
+        """
+
+        def stop_and_collect_on_node(node):
+            run_id = self.test_id  # unique per test run, prevents collisions on reused nodes
+            base_dir = f"/tmp/async_profile_{run_id}"  # noqa: S108 - remote scratch dir on ephemeral test node
+            dir_name = f"{step_name}_{node.name}"
+            dump_dir = f"{base_dir}/{dir_name}"
+            dump_filename = f"{dump_dir}/async_profile_{step_name}"
+            archive_name = f"async_profiles_{run_id}_{step_name}_{node.name}.tar.gz"
+            remote_archive = f"/tmp/{archive_name}"  # noqa: S108 - remote scratch dir on ephemeral test node
+
+            # mkdir must happen first (stop writes files into this dir).
+            # If mkdir fails, stop profiler with a fallback path so it
+            # doesn't keep running and skew subsequent steps.
+            try:
+                node.remoter.run(f"mkdir -p {dump_dir} && chmod 777 {dump_dir}")
+            except Exception:
+                self.log.warning("mkdir failed on %s, stopping profiler with fallback path", node.name)
+                try:
+                    TaskProfilerClient(node).stop(filename=f"{base_dir}/fallback_{step_name}")
+                except Exception:  # noqa: BLE001
+                    self.log.error("Fallback stop also failed on %s, profiler may still be running", node.name)
+                raise
+
+            # Stop profiler + write dump files into the prepared directory
+            self.log.info("Stopping task profiler on %s, dumping to %s", node.name, dump_filename)
+            TaskProfilerClient(node).stop(filename=dump_filename)
+
+            # Verify dumps exist
+            result = node.remoter.run(
+                f"ls {dump_dir}/async_profile_* 2>/dev/null | head -1",
+                ignore_status=True,
+            )
+            if result.failed or not result.stdout.strip():
+                raise FileNotFoundError(f"No task profiler dump files found on {node.name} under {dump_dir}/")
+
+            # Verify at least the first file is non-empty
+            first_file = result.stdout.strip()
+            size_result = node.remoter.run(f"stat -c %s {first_file}")
+            file_size = int(size_result.stdout.strip())
+            if file_size == 0:
+                raise ValueError(f"Task profiler dump file {first_file} on {node.name} is empty")
+
+            # Count total dump files
+            count_result = node.remoter.run(f"ls -1 {dump_dir}/async_profile_* | wc -l")
+            file_count = int(count_result.stdout.strip())
+            self.log.info(
+                "Found %d task profiler dump files on %s for step %s",
+                file_count,
+                node.name,
+                step_name,
+            )
+
+            # Archive
+            node.remoter.run(f"tar -czf {remote_archive} -C {base_dir} {dir_name}/")
+
+            # Download into node.logdir (where FileLog search_locally finds it)
+            node.remoter.receive_files(
+                src=remote_archive,
+                dst=node.logdir,
+            )
+            self.log.info(
+                "Downloaded %s to %s/%s",
+                archive_name,
+                node.logdir,
+                archive_name,
+            )
+
+            # Cleanup remote files
+            node.remoter.run(f"rm -rf {dump_dir} {remote_archive}")
+
+        results = ParallelObject(objects=self.db_cluster.nodes, timeout=600).run(
+            stop_and_collect_on_node, ignore_exceptions=True
+        )
+        for result in results:
+            if result.exc is not None:
+                self.log.warning("Failed to stop/collect task profiler on %s: %s", result.obj.name, result.exc)
+
+    def _collect_step_metrics(self, start, end):
+        """Evaluate STEP_METRICS over the step window. A failed query is logged and left out."""
+        if not self.prometheus_db:
+            return {}
+        loaders = "|".join(node.ip_address for node in self.loaders.nodes)
+        metrics = {}
+        for name, query in STEP_METRICS.items():
+            promql = query.replace("$range", f"{int(end - start)}s").replace("$loaders", loaders)
+            try:
+                metrics[name] = {
+                    ",".join(f"{key}={value}" for key, value in sorted(s["metric"].items())) or "total": round(
+                        float(s["values"][-1][1]), 3
+                    )
+                    for s in self.prometheus_db.query(promql, start=end, end=end)
+                    if s["values"] and s["values"][-1][1] != "NaN"
+                }
+            except requests.ConnectionError as exc:
+                # Each query retries for ~35 s, don't pay that for every metric of a dead monitor
+                self.log.warning("Step metrics are not collected, Prometheus is unreachable: %s", exc)
+                break
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Step metric %s is not collected: %s", name, exc)
+        return metrics
 
     def save_total_summary_in_file(self, total_summary):
         total_summary_json = json.dumps(total_summary, indent=4, separators=(", ", ": "))
@@ -683,8 +1177,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         self.log.debug("---------------------------------")
 
         filename = f"{self.logdir}/result_gradual_increase.log"
-        with open(filename, "w", encoding="utf-8") as res_file:
+        # Write and rename, so a kill mid-write can't leave a truncated file
+        with open(f"{filename}.tmp", "w", encoding="utf-8") as res_file:
             res_file.write(total_summary_json)
+        os.replace(f"{filename}.tmp", filename)
 
     def _calculate_average_max_latency(self, results):
         status = defaultdict(float).fromkeys(results[0].keys(), 0.0)

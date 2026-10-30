@@ -6825,6 +6825,50 @@ class BaseScyllaCluster:
         if self.params.get("collect_nvme_diagnostics"):
             self._setup_nvme_diagnostics(node)
 
+        if clockbound_version := self.params.get("clockbound_version"):
+            self._install_clockbound(node, clockbound_version)
+
+    @staticmethod
+    def _install_clockbound(node: BaseNode, version: str) -> None:
+        """Run the AWS ClockBound daemon in place of chrony, for Scylla's clockbound LeaseGuard clock source.
+
+        Only the daemon binary is taken from the release RPM: the packaged unit also runs configure_phc,
+        which reloads the ENA driver and drops the node's network.
+        """
+        node.install_package("cpio" if node.distro.is_rhel_like else "rpm2cpio cpio")
+        arch = node.remoter.run("uname -m").stdout.strip()
+        node.remoter.sudo(
+            shell_script_cmd(f"""\
+            cd /tmp
+            curl -fsSL --retry 5 -o clockbound.rpm \\
+                https://github.com/aws/clock-bound/releases/download/{version}/clockbound-{version}-1.{arch}.rpm
+            rpm2cpio clockbound.rpm | cpio -idm ./usr/bin/clockbound
+            install -m 0755 usr/bin/clockbound /usr/bin/clockbound
+            systemctl disable --now chrony || true
+            systemctl disable --now chronyd || true
+            systemctl disable --now ntp || true
+            systemctl disable --now systemd-timesyncd || true
+            cat > /etc/systemd/system/clockbound.service <<EOF
+            [Unit]
+            Description=AWS ClockBound
+            Conflicts=chrony.service chronyd.service ntp.service systemd-timesyncd.service
+
+            [Service]
+            Type=exec
+            ExecStartPre=-/usr/bin/chmod a+r /dev/vmclock0
+            ExecStart=/usr/bin/clockbound
+            Restart=on-failure
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+            systemctl daemon-reload
+            systemctl enable --now clockbound
+            timeout 60 sh -c 'until ls /var/run/clockbound/* >/dev/null 2>&1; do sleep 1; done'
+            """),
+            verbose=True,
+        )
+
     def _setup_nvme_diagnostics(self, node: BaseNode) -> None:
         """Install nvme-cli and collect baseline SMART logs for NVMe data disks.
 

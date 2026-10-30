@@ -1,0 +1,15 @@
+# LeaseGuard leader leases for strongly-consistent tables (scylladb/scylladb#30777), adjtimex clock.
+# The tablet Raft leader serves linearizable reads locally while its lease is valid, instead of a quorum
+# read barrier per read. Off by default, and read when a Raft group starts, so it has to be in scylla.yaml
+# before the keyspace is created.
+# adjtimex reads the clock bound from the kernel: chrony has to keep the clock synchronized (the Scylla AMI
+# syncs to the Amazon Time Sync Service) with 2 x maxerror well below the lease duration.
+# For the AWS ClockBound daemon instead, use enable_sc_leaseguard_clockbound.yaml.
+# Check on each node: "LeaseGuard leader leases enabled; using 'adjtimex'" in the Scylla log.
+append_scylla_yaml:
+  strongly_consistent_raft_leader_leases_enabled: true
+  strongly_consistent_raft_leader_lease_duration_in_ms: 1000
+  strongly_consistent_raft_leader_lease_clock_source: adjtimex
+
+# There is no Raft leader balancer yet: keep tablets (and their leaders) where they were created.
+disable_tablet_balancing: true
