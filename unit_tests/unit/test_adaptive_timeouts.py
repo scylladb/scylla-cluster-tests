@@ -32,7 +32,11 @@ from sdcm.utils.adaptive_timeouts.load_info_store import (
     _I4I_LARGE_SHARD_COUNT,
 )
 from sdcm.utils.adaptive_timeouts import (
+    _BARRIER_OVERHEAD_PER_NODE,
+    _LOAD_THROUGHPUT_PENALTY,
+    _RBNO_FACTOR,
     _STREAMING_OVERHEAD,
+    _TABLET_OVERHEAD,
     _get_operation_timeout_factor,
     Operations,
     adaptive_timeout,
@@ -51,6 +55,14 @@ class FakeNode:
         params = SCTConfiguration()
         params["n_db_nodes"] = 1
         self.parent_cluster = DummyDbCluster(nodes=[self], params=params)
+        # REST /v2/config output: bools are bare, strings are JSON-quoted
+        self.scylla_config = {
+            "enable_repair_based_node_ops": "true",
+            "allowed_repair_based_node_ops": '"replace,removenode,rebuild"',
+        }
+
+    def get_scylla_config_param(self, config_param_name, verbose=True):
+        return self.scylla_config.get(config_param_name)
 
 
 class MemoryAdaptiveTimeoutStore(AdaptiveTimeoutStore):
@@ -174,6 +186,27 @@ def clear_node_load_info_services_singleton():
     NodeLoadInfoServices()._services.clear()
 
 
+SCYLLA_METRICS_KEY = r"curl -s --connect-timeout 10 http://localhost:9180/metrics"
+
+
+def _expected_decommission_hard_timeout(fake_node, tablets: int = 0, rbno_factor: int = 1) -> int:
+    """Mirror of the formula with the fixture values: 102400 MB, 3 shards, load5 2.30."""
+    throughput = _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
+    cpu_load = min(2.30 / 3, 1.0)
+    streaming_time = 102400 / (throughput / (1 + _LOAD_THROUGHPUT_PENALTY * cpu_load))
+    barrier_overhead = _BARRIER_OVERHEAD_PER_NODE * len(fake_node.parent_cluster.nodes)
+    soft = int(_STREAMING_OVERHEAD + (streaming_time + barrier_overhead + _TABLET_OVERHEAD * tablets) * rbno_factor)
+    return soft * 2
+
+
+def _add_tablets_metrics(fake_node, per_shard_counts: list[int]) -> None:
+    current = fake_node.remoter.result_map[SCYLLA_METRICS_KEY].stdout
+    lines = "".join(
+        f'scylla_tablets_count{{shard="{shard}"}} {count}.000000\n' for shard, count in enumerate(per_shard_counts)
+    )
+    fake_node.remoter.result_map[SCYLLA_METRICS_KEY] = Result(stdout=current.rstrip() + "\n" + lines, exited=0)
+
+
 @mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
 def test_soft_timeout_is_raised_when_timeout_reached(publish_or_dump, fake_node, adaptive_timeout_store):
     with adaptive_timeout(
@@ -208,35 +241,71 @@ def test_decommission_timeout_is_calculated_and_stored(publish_or_dump, fake_nod
     with adaptive_timeout(
         operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
     ) as timeout:
-        assert timeout == 7200  # based on data size
+        assert timeout == 7200  # vnodes: max(102400 MB * 0.03, 7200)
     publish_or_dump.assert_not_called()
     metrics = adaptive_timeout_store.get(operation=Operations.DECOMMISSION.name, timeout_occurred=False)
-    assert metrics
     assert metrics[0]["hard_timeout"] is None  # non-tablet decommission has no hard timeout
+    assert metrics[0]["tablets_count"] == 0
 
 
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
 @mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
-def test_tablets_decommission_timeout_is_calculated_from_data_size(
+def test_tablets_decommission_timeout_adds_per_tablet_overhead(
     hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
 ):
     mock_tablets_feature.return_value = True
+    _add_tablets_metrics(fake_node, [40, 41, 42])
     with adaptive_timeout(
         operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
     ) as timeout:
-        # node_data_size_mb=102400, expected_throughput=69/2*3=103.5 → estimated≈989.4s
-        # soft = int(estimated) * 2 + 600 (10-minute overhead); hard = soft * 2
-        throughput = _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
-        estimated = int(102400 / throughput)
-        soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
-        expected_hard = soft_timeout * 2
+        expected_hard = _expected_decommission_hard_timeout(fake_node, tablets=123)
         assert timeout == expected_hard
 
     soft_timeout_mock.assert_not_called()
     hard_timeout_mock.assert_not_called()
     metrics = adaptive_timeout_store.get(operation=Operations.DECOMMISSION.name)
-    assert metrics[0].get("tablets_enabled") is True
+    assert metrics[0]["tablets_enabled"] is True
+    assert metrics[0]["tablets_count"] == 123
     assert metrics[0]["hard_timeout"] == expected_hard
+
+
+@pytest.mark.parametrize(
+    ("enable_rbno", "allowed_rbno", "expected_factor"),
+    [
+        pytest.param("true", '"replace,removenode,rebuild"', 1, id="scylla-default-excludes-decommission"),
+        pytest.param(
+            "true", '"replace,removenode,rebuild,bootstrap,decommission"', _RBNO_FACTOR, id="rbno-decommission"
+        ),
+        pytest.param("false", '"replace,removenode,rebuild,bootstrap,decommission"', 1, id="rbno-disabled"),
+        pytest.param(None, None, 1, id="config-unavailable"),
+    ],
+)
+@mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
+def test_decommission_timeout_doubles_for_repair_based_decommission(
+    publish_or_dump, fake_node, adaptive_timeout_store, mock_tablets_feature, enable_rbno, allowed_rbno, expected_factor
+):
+    mock_tablets_feature.return_value = True
+    fake_node.scylla_config = {
+        "enable_repair_based_node_ops": enable_rbno,
+        "allowed_repair_based_node_ops": allowed_rbno,
+    }
+    with adaptive_timeout(
+        operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
+    ) as timeout:
+        assert timeout == _expected_decommission_hard_timeout(fake_node, rbno_factor=expected_factor)
+
+
+@mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
+def test_decommission_timeout_scales_barrier_overhead_with_cluster_size(
+    publish_or_dump, fake_node, adaptive_timeout_store, mock_tablets_feature
+):
+    mock_tablets_feature.return_value = True
+    fake_node.parent_cluster.add_nodes(count=5)
+    assert len(fake_node.parent_cluster.nodes) == 6
+    with adaptive_timeout(
+        operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
+    ) as timeout:
+        assert timeout == _expected_decommission_hard_timeout(fake_node)
 
 
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
