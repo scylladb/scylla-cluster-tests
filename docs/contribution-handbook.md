@@ -417,11 +417,12 @@ These stages run conditionally, triggered by **GitHub labels**:
 | **provision reuse** | `test-provision-<backend>-reuse` | Re-runs the provision test with `SCT_REUSE_CLUSTER` to verify cluster reuse |
 
 Available provision backends: `aws`, `gce`, `docker`, `azure`, `k8s-local-kind-aws`,
-`k8s-eks`, `xcloud-aws`, `xcloud-gce`, `vs-docker`, `vs-aws`, `minicloud-aws`, `minicloud-gce`.
+`k8s-eks`, `xcloud-aws`, `xcloud-gce`, `vs-docker`, `vs-aws`, `minicloud-aws`, `minicloud-gce`,
+`minicloud-azure`.
 
-`test-provision-minicloud-aws` and `test-provision-minicloud-gce` run the AMI and GCE image
-artifacts tests against [minicloud](minicloud.md) on an sct-runner. They have no `-reuse`
-variant. Renovate adds both labels to minicloud image bumps.
+`test-provision-minicloud-aws`, `test-provision-minicloud-gce` and `test-provision-minicloud-azure`
+run the AMI, GCE image and Azure image artifacts tests against [minicloud](minicloud.md) on an
+sct-runner. They have no `-reuse` variant. Renovate adds all three labels to minicloud image bumps.
 
 `test-artifacts` runs the AMI (aws), CentOS 9 and Ubuntu 22.04 (gce) artifacts tests, the same
 as `jenkins-pipelines/oss/artifacts/artifacts-{ami,centos9,ubuntu2204}.jenkinsfile`, each

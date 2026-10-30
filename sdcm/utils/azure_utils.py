@@ -81,6 +81,18 @@ class VirtualMachineIPs(NamedTuple):
 
 
 class AzureService(metaclass=Singleton):
+    _real_cloud: bool = False
+    _real_cloud_instance: "AzureService | None" = None
+
+    @classmethod
+    def real_cloud(cls) -> "AzureService":
+        """Return a cached instance that always uses real Azure, even when minicloud is set."""
+        if cls._real_cloud_instance is None:
+            instance = object.__new__(cls)
+            instance._real_cloud = True
+            cls._real_cloud_instance = instance
+        return cls._real_cloud_instance
+
     @cached_property
     def azure_credentials(self) -> dict[str, str]:
         return KeyStore().get_azure_credentials()
@@ -98,8 +110,10 @@ class AzureService(metaclass=Singleton):
         """The minicloud endpoint for ARM clients, or None for real Azure.
 
         Raises if minicloud is active but AZURE_ENDPOINT_URL is not set yet, so no client
-        reaches real Azure by mistake. The raise is not cached.
+        reaches real Azure by mistake. The raise is not cached. Always None for real_cloud().
         """
+        if self._real_cloud:
+            return None
         if endpoint := get_minicloud_azure_endpoint():
             return endpoint
 
@@ -342,7 +356,10 @@ class AzureService(metaclass=Singleton):
 
 
 def list_instances_azure(
-    tags_dict: Optional[dict[str, str]] = None, running: bool = False, verbose: bool = False
+    tags_dict: Optional[dict[str, str]] = None,
+    running: bool = False,
+    verbose: bool = False,
+    azure_service: AzureService | None = None,
 ) -> list[VirtualMachine]:
     query_bits = [
         "Resources",
@@ -358,7 +375,7 @@ def list_instances_azure(
 
     if verbose:
         LOGGER.info("Going to list Azure instances")
-    azure_service = AzureService()
+    azure_service = azure_service or AzureService()
     res = azure_service.resource_graph_query(query=" | ".join(query_bits))
     get_virtual_machine = azure_service.compute.virtual_machines.get
     instances = []

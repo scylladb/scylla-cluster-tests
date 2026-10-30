@@ -881,6 +881,7 @@ class FakeAzureService:
         self.azure_credentials = {"tenant_id": "fake-tenant-id"}
         self.subscription_id = "fake-subscription-id"
         self.tenant_id = "fake-tenant-id"
+        self.minicloud_endpoint = None
 
     def get_vault_key(self, vault_uri, key_name):
         return None
