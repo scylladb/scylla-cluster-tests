@@ -5,7 +5,7 @@ test_metadata:
     fullscans validating row counts and data before and after each disruption. The 3-hour entry point
     of the large-partition family.
   test_type: longevity
-  tier: tier1
+  tier: release
   duration_class: short
   supported_backends:
     - aws

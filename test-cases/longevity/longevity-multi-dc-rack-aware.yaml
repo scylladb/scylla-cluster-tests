@@ -4,7 +4,7 @@ test_metadata:
     cassandra-stress write and read streams at LOCAL_QUORUM from rack-aware and region-aware loaders,
     under SisyphusMonkey. The baseline rack-aware soak.
   test_type: longevity
-  tier: tier1
+  tier: release
   duration_class: medium
   supported_backends:
     - aws
