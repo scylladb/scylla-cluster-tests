@@ -258,6 +258,11 @@ def str_to_bool(bool_as_str: str) -> bool:
     raise ValueError("'bool_as_str' is of the unexpected type: %s" % type(bool_as_str))
 
 
+def pascal_to_camel_case(name: str) -> str:
+    """Convert a PascalCase name to camelCase, e.g. TargetUtilization -> targetUtilization"""
+    return name[:1].lower() + name[1:]
+
+
 def get_data_dir_path(*args):
     sct_root_path = get_sct_root_path()
     data_dir = os.path.join(sct_root_path, "data_dir", *args)
