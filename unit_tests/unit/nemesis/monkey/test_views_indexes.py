@@ -95,6 +95,7 @@ def test_create_index_happy_path_creates_and_drops(runner):
         patch(f"{_MODULE}.verify_query_by_index_works") as mock_verify,
         patch(f"{_MODULE}.sleep_for_percent_of_duration"),
         patch(f"{_MODULE}.drop_index") as mock_drop,
+        patch(f"{_MODULE}.clear_snapshots") as mock_clear,
     ):
         mock_timeout.return_value.__enter__.return_value = 100
         monkey = CreateIndexNemesis(runner)
@@ -105,6 +106,7 @@ def test_create_index_happy_path_creates_and_drops(runner):
     mock_verify.assert_called_once()
     mock_drop.assert_called_once()
     assert mock_drop.call_args[0][2] == "idx1"
+    mock_clear.assert_called_once_with(runner.cluster.data_nodes, "pre-drop-", "ks1", "idx1_index")
 
 
 def test_create_index_drops_index_even_when_verify_fails(runner):
@@ -116,6 +118,7 @@ def test_create_index_drops_index_even_when_verify_fails(runner):
         patch(f"{_MODULE}.create_index", return_value="idx1"),
         patch(f"{_MODULE}.wait_for_index_to_be_built", side_effect=RuntimeError("boom")),
         patch(f"{_MODULE}.drop_index") as mock_drop,
+        patch(f"{_MODULE}.clear_snapshots") as mock_clear,
     ):
         mock_timeout.return_value.__enter__.return_value = 100
         monkey = CreateIndexNemesis(runner)
@@ -123,6 +126,7 @@ def test_create_index_drops_index_even_when_verify_fails(runner):
             monkey.disrupt()
 
     mock_drop.assert_called_once()
+    mock_clear.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +179,7 @@ def test_add_remove_mv_happy_path(runner):
         patch(f"{_MODULE}.wait_for_view_to_be_built") as mock_wait,
         patch(f"{_MODULE}.sleep_for_percent_of_duration"),
         patch(f"{_MODULE}.drop_materialized_view") as mock_drop,
+        patch(f"{_MODULE}.clear_snapshots") as mock_clear,
     ):
         mock_timeout.return_value.__enter__.return_value = 100
         monkey = AddRemoveMvNemesis(runner)
@@ -185,6 +190,7 @@ def test_add_remove_mv_happy_path(runner):
     mock_create.assert_called_once()
     mock_wait.assert_called_once()
     mock_drop.assert_called_once()
+    mock_clear.assert_called_once_with(runner.cluster.data_nodes, "pre-drop-", "ks1", "tbl1_view")
 
 
 def test_add_remove_mv_restarts_scylla_when_create_fails(runner):
@@ -294,6 +300,7 @@ def test_kill_mv_coordinator_happy_path(kill_runner):
         patch(f"{_MODULE}.adaptive_timeout") as mock_timeout,
         patch(f"{_MODULE}.wait_for_view_to_be_built") as mock_wait,
         patch(f"{_MODULE}.drop_materialized_view") as mock_drop,
+        patch(f"{_MODULE}.clear_snapshots") as mock_clear,
     ):
         mock_timeout.return_value.__enter__.return_value = 100
         monkey = KillMVBuildingCoordinator(kill_runner)
@@ -302,6 +309,7 @@ def test_kill_mv_coordinator_happy_path(kill_runner):
     mock_create.assert_called_once()
     mock_wait.assert_called_once()
     mock_drop.assert_called_once()
+    mock_clear.assert_called_once_with(kill_runner.cluster.data_nodes, "pre-drop-", "ks1", mock_drop.call_args[0][2])
     # runner delegation: coordinator is targeted and killed once (len(nodes) // 2 == 1).
     kill_runner.switch_target_node.assert_called_with(coordinator)
     kill_runner._kill_scylla_daemon.assert_called_once()
@@ -320,6 +328,7 @@ def test_kill_mv_coordinator_empty_view(kill_runner, base_has_rows):
         patch(f"{_MODULE}.wait_for_view_to_be_built"),
         patch(f"{_MODULE}.base_table_has_rows_with_column", return_value=base_has_rows) as mock_base_check,
         patch(f"{_MODULE}.drop_materialized_view") as mock_drop,
+        patch(f"{_MODULE}.clear_snapshots") as mock_clear,
     ):
         mock_timeout.return_value.__enter__.return_value = 100
         monkey = KillMVBuildingCoordinator(kill_runner)
@@ -328,6 +337,7 @@ def test_kill_mv_coordinator_empty_view(kill_runner, base_has_rows):
 
     mock_base_check.assert_called_once_with(session, "ks1", "tbl1", "col1")
     mock_drop.assert_called_once()
+    mock_clear.assert_called_once()
 
 
 def test_kill_mv_coordinator_drops_view_when_build_fails(kill_runner):
@@ -340,6 +350,7 @@ def test_kill_mv_coordinator_drops_view_when_build_fails(kill_runner):
         patch(f"{_MODULE}.adaptive_timeout") as mock_timeout,
         patch(f"{_MODULE}.wait_for_view_to_be_built", side_effect=RuntimeError("not built")),
         patch(f"{_MODULE}.drop_materialized_view") as mock_drop,
+        patch(f"{_MODULE}.clear_snapshots") as mock_clear,
     ):
         mock_timeout.return_value.__enter__.return_value = 100
         monkey = KillMVBuildingCoordinator(kill_runner)
@@ -347,6 +358,7 @@ def test_kill_mv_coordinator_drops_view_when_build_fails(kill_runner):
             monkey.disrupt()
 
     mock_drop.assert_called_once()
+    mock_clear.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

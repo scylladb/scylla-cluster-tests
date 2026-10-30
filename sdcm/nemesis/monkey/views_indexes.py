@@ -38,7 +38,7 @@ from sdcm.sct_events.group_common_events import (
     suppress_expected_unavailability_errors,
 )
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
-from sdcm.utils.common import sleep_for_percent_of_duration
+from sdcm.utils.common import clear_snapshots, sleep_for_percent_of_duration
 from sdcm.utils.context_managers import DbNodeLogger
 from sdcm.utils.diagnostic_collector.handlers import EventExceptionHandler
 from sdcm.utils.diagnostic_collector.manager import collect_diagnostics
@@ -124,6 +124,10 @@ class CreateIndexNemesis(NemesisBaseClass):
                 ):
                     self.runner.actions_log.info(f"Drop {index_name} index")
                     drop_index(session, ks, index_name)
+                with self.runner.action_log_scope(
+                    f"Clear {ks}.{index_name}_index pre-drop snapshots on all data nodes"
+                ):
+                    clear_snapshots(self.runner.cluster.data_nodes, "pre-drop-", ks, f"{index_name}_index")
 
 
 @target_data_nodes
@@ -196,6 +200,10 @@ class AddRemoveMvNemesis(NemesisBaseClass):
                     finally:
                         with self.runner.action_log_scope("Drop materialized view"):
                             drop_materialized_view(session, ks_name, view_name)
+                        with self.runner.action_log_scope(
+                            f"Clear {ks_name}.{view_name} pre-drop snapshots on all data nodes"
+                        ):
+                            clear_snapshots(self.runner.cluster.data_nodes, "pre-drop-", ks_name, view_name)
             except Exception:
                 # Covers both a failed cql_connection_patient (node never restarted otherwise) and
                 # any failure surfaced from inside the session block (start_scylla is a no-op if
@@ -262,6 +270,8 @@ class KillMVBuildingCoordinator(NemesisBaseClass):
                 wait_materialized_view_building_tasks_started(session, ks_name, view_name)
             except ViewFinishedBuildingException:
                 drop_materialized_view(session, ks_name, view_name)
+                with self.runner.action_log_scope(f"Clear {ks_name}.{view_name} pre-drop snapshots on all data nodes"):
+                    clear_snapshots(self.runner.cluster.data_nodes, "pre-drop-", ks_name, view_name)
                 raise UnsupportedNemesis(
                     f"Skip nemesis because view {ks_name}.{view_name} has already finished building"
                 )
@@ -303,3 +313,5 @@ class KillMVBuildingCoordinator(NemesisBaseClass):
                     )
             finally:
                 drop_materialized_view(session, ks_name, view_name)
+                with self.runner.action_log_scope(f"Clear {ks_name}.{view_name} pre-drop snapshots on all data nodes"):
+                    clear_snapshots(self.runner.cluster.data_nodes, "pre-drop-", ks_name, view_name)
