@@ -8,7 +8,7 @@ ami_db_scylla_user: 'ubuntu'
 scylla_linux_distro: 'ubuntu-noble'
 
 instance_type_db: 'i4i.large'
-# Lightweight mode caps every guest to 1 vCPU regardless of the type, so the GCE ones only have to
+# Lightweight mode sizes every guest by its role regardless of the type, so the GCE ones only have to
 # exist in the emulated catalog; qcow2-backed disks serve a single local SSD, not the default 4.
 gce_instance_type_db: 'n2-standard-2'
 gce_instance_type_loader: 'n2-standard-2'

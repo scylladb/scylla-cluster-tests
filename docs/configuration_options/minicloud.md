@@ -6,7 +6,7 @@ Minicloud is an AWS-API-compatible environment rather than a cloud of its own: i
 the `aws`, `gce` or `azure` cluster backend and an endpoint override, and these options control
 the local minicloud service.
 
-**18 options.**
+**22 options.**
 
 
 <a id="minicloud_azure_scratch_resource_group"></a>
@@ -119,11 +119,55 @@ Memory allocation for lightweight minicloud deployments
 **type:** str (appendable)
 
 
+<a id="minicloud_lightweight_memory_loader"></a>
+
+## **minicloud_lightweight_memory_loader** / SCT_MINICLOUD_LIGHTWEIGHT_MEMORY_LOADER
+
+RAM for loader guests in lightweight mode (minicloud matches their NodeType tag), for example 2GiB. Empty gives them [`minicloud_lightweight_memory`](#minicloud_lightweight_memory), the db size
+
+**default:** 2GiB
+
+**type:** str (appendable)
+
+
+<a id="minicloud_lightweight_memory_monitor"></a>
+
+## **minicloud_lightweight_memory_monitor** / SCT_MINICLOUD_LIGHTWEIGHT_MEMORY_MONITOR
+
+RAM for monitor guests in lightweight mode (minicloud matches their NodeType tag), for example 2GiB. Empty gives them [`minicloud_lightweight_memory`](#minicloud_lightweight_memory), the db size. Ignored with [`use_mgmt`](scylla-manager.md#use_mgmt) on: Scylla Manager local Scylla needs the db size
+
+**default:** 2GiB
+
+**type:** str (appendable)
+
+
 <a id="minicloud_lightweight_vcpus"></a>
 
 ## **minicloud_lightweight_vcpus** / SCT_MINICLOUD_LIGHTWEIGHT_VCPUS
 
-vCPUs per guest in lightweight mode. Scylla runs one shard per vCPU, so this multiplies with [`minicloud_lightweight_memory`](#minicloud_lightweight_memory) across every guest in the test — raise it only on a host with cores to spare
+vCPUs per db guest in lightweight mode. Scylla runs one shard per vCPU, so this multiplies with [`minicloud_lightweight_memory`](#minicloud_lightweight_memory) across every db guest in the test; raise it only on a host with cores to spare
+
+**default:** 1
+
+**type:** int
+
+
+<a id="minicloud_lightweight_vcpus_loader"></a>
+
+## **minicloud_lightweight_vcpus_loader** / SCT_MINICLOUD_LIGHTWEIGHT_VCPUS_LOADER
+
+vCPUs for loader guests in lightweight mode (minicloud matches their NodeType tag). Empty gives them [`minicloud_lightweight_vcpus`](#minicloud_lightweight_vcpus), the db count
+
+**default:** 1
+
+**type:** int
+
+
+<a id="minicloud_lightweight_vcpus_monitor"></a>
+
+## **minicloud_lightweight_vcpus_monitor** / SCT_MINICLOUD_LIGHTWEIGHT_VCPUS_MONITOR
+
+vCPUs for monitor guests in lightweight mode (minicloud matches their NodeType tag). Empty gives them [`minicloud_lightweight_vcpus`](#minicloud_lightweight_vcpus), the db count. Ignored with [`use_mgmt`](scylla-manager.md#use_mgmt) on
 
 **default:** 1
 

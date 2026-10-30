@@ -210,7 +210,7 @@ Enough to stop a bad run before it costs anything:
 
 - that the config resolves (`sct.py conf` exits 0)
 - the guest architecture (`sct.py get-db-arch`) — arm64 cannot boot under KVM on an x86_64 host
-- the arithmetic: guests x per-guest memory + 2 GiB, against `MemAvailable`
+- the arithmetic: each role's guests x its memory, summed, + 2 GiB, against `MemAvailable`
 
 The preflight gate does the memory arithmetic itself and fails with the numbers. Printing it in
 `check` means you see it before spending anything, not after the container is up.

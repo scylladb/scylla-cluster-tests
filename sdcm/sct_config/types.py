@@ -201,6 +201,25 @@ def int_or_list_or_eval(value: str | int | list[int]) -> list[int] | None:
 IntOrList = Annotated[list[int], BeforeValidator(int_or_list_or_eval), InputType("int | list[int]")]
 
 
+def positive_int_or_none(value: str | int | None) -> int | None:
+    """Return None for None or a blank string, else a positive int; zero and anything else raise."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    number = value
+    if isinstance(value, str):
+        try:
+            number = int(value.strip())
+        except ValueError:
+            pass
+    if isinstance(number, int) and not isinstance(number, bool) and number >= 1:
+        return number
+    raise ValueError(f"{value} (type {type(value).__name__}) isn't a positive int or empty")
+
+
+# Config type for an optional positive count: None or a blank string means "not set".
+OptionalPositiveInt = Annotated[int | None, BeforeValidator(positive_int_or_none)]
+
+
 def dict_or_str(value: dict | str | None) -> dict | None:
     """Coerce a dict, or a Python/YAML literal string holding a mapping, into a dict."""
     if value is None:

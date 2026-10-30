@@ -30,14 +30,16 @@ how much RAM it needs.
 ## The Guest Memory Budget
 
 
-Every guest costs `minicloud_lightweight_memory` whether it is a db node, a loader or a
-monitor. What a host can carry:
+Every db guest (zero-token, oracle and vector-store included) costs `minicloud_lightweight_memory`;
+a loader costs `minicloud_lightweight_memory_loader` and a monitor
+`minicloud_lightweight_memory_monitor`, 2GiB each by default. What a host can carry next to one
+loader and one monitor, with ~2GiB headroom:
 
-| Host free RAM | Guests at 4GiB | Guests at 3GiB | Realistic shape |
+| Host free RAM | db guests at 4GiB | db guests at 3GiB | Realistic shape |
 |---|---|---|---|
-| 16 GiB | 3 | 4 | 3 db + 1 loader at 3GiB, no monitor |
-| 32 GiB | 7 | 10 | 3 db + 1 loader + 1 monitor (the default shape) |
-| 64 GiB | 15 | 20 | 6 db + 2 loaders + 1 monitor, or a 3 to 6 grow test |
+| 16 GiB | 2 | 3 | 3 db at 3GiB + 1 loader + 1 monitor, or 3 db at 4GiB + 1 loader and no monitor |
+| 32 GiB | 6 | 8 | 3 db + 1 loader + 1 monitor (the default shape, 16GiB) |
+| 64 GiB | 14 | 19 | 6 db + 2 loaders + 1 monitor, or a 3 to 6 grow test |
 
 Two adjustments the gate makes:
 
@@ -89,8 +91,10 @@ it to a lab host rather than dropping below a floor.
 | Param | Default | Effect |
 |---|---|---|
 | `minicloud_lightweight` | `true` | Every guest gets the fixed vCPU/RAM below, **ignoring the instance type the test asked for** |
-| `minicloud_lightweight_memory` | `4GiB` | Per guest. Floor ~3 GiB: Scylla reserves ~1.7 GiB for the guest OS and needs 1 GiB per shard, below which it fails to boot with "memory per shard too low" |
-| `minicloud_lightweight_vcpus` | `1` | One Scylla shard per vCPU. Multiplies across every guest — raise only on a host with cores to spare |
+| `minicloud_lightweight_memory` | `4GiB` | Per db guest (zero-token, oracle and vector-store included). Floor ~3 GiB: Scylla reserves ~1.7 GiB for the guest OS and needs 1 GiB per shard, below which it fails to boot with "memory per shard too low" |
+| `minicloud_lightweight_vcpus` | `1` | Per db guest. One Scylla shard per vCPU. Multiplies across every db guest; raise only on a host with cores to spare |
+| `minicloud_lightweight_memory_loader` / `_monitor` | `2GiB` | Per loader / monitor, matched on the guest's `NodeType` tag. Empty means the db size. A minicloud image without tag-matched ceilings rejects these at start (`unknown instance type 'NodeType'`); set all four empty to run one. With `use_mgmt` on, the monitor gets the db size: Scylla Manager local Scylla does not start in 2GiB |
+| `minicloud_lightweight_vcpus_loader` / `_monitor` | `1` | The same for vCPUs. A loader running full-size stress commands may want 2; vCPUs cost no host memory |
 
 Because lightweight mode ignores instance types, `instance_type_db`, `instance_type_loader`
 and the `gce_instance_type_*` keys only have to **exist in the emulated catalog and pass SCT
@@ -155,9 +159,10 @@ It prints `arm64` or `x86_64`. Check every role the test-case pins, not just the
 | `minicloud_regions` | empty (all) | Narrows AWS region preparation (~2s each) at start-up |
 | `minicloud_docker_image` | empty | Overrides the renovate-managed default. **Selecting an image does not activate minicloud** |
 
-A reused container keeps the sizing it was started with — the docker caps are cgroup limits
-fixed at `docker run`. Changing `minicloud_lightweight_memory` and rerunning against a live
-container gets you the *previous* value; SCT detects the drift and reports it.
+Guest sizing and the docker caps are fixed at `docker run`, so a live container cannot change
+them. Rerunning with a different `minicloud_lightweight_memory`, `minicloud_lightweight_vcpus`,
+loader or monitor size, or docker cap makes SCT log the sizing gap and restart the container,
+which takes every guest in it down too.
 
 ---
 
