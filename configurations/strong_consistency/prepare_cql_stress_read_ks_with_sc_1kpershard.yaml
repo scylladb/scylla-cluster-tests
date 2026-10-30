@@ -1,5 +1,8 @@
 prepare_stress_cmd: []
-pre_create_keyspace: ["CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} and consistency = 'global' and tablets = {'enabled': true, 'initial': 256};"]
+pre_create_keyspace: [
+  "CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} and consistency = 'global' and tablets = {'enabled': true, 'initial': 45};",
+  "CREATE TABLE IF NOT EXISTS keyspace1.standard1 (key blob PRIMARY KEY, \"C0\" blob) WITH compression = {} AND tablets = {'pow2_count': false};"
+]
 
 # round_robin runs one command per loader: every command list below has exactly n_loaders entries.
 # 8x c7i.8xlarge; 930 read threads per loader keep the same 7440 in-flight
@@ -7,9 +10,9 @@ pre_create_keyspace: ["CREATE KEYSPACE keyspace1 WITH replication = {'class': 'N
 # connectionsPerShard adds up to 1000 per shard over all loaders (8 x 125).
 # Prepare writes at 240k/s in total (8 x 30000/s), about 80% of the SC i8g unthrottled write
 # ceiling (~294k op/s at cl=QUORUM), so the 650M keys load in ~45 min.
-# 256 initial tablets, the count Scylla picks for this table on its own, pinned so every run uses
-# the same count. 1024 tablets cut read throughput by 37%: the Raft leader spread over shards got
-# wider (busiest shard ~2x the average) and the gossip-group Raft work rose to ~40% of reactor time.
+# 45 initial tablets, one per shard (3 x i8g.4xlarge = 45 shards), so the Raft leaders can spread
+# at most one per shard. The table is pre-created with pow2_count false, otherwise Scylla rounds 45
+# up to 64; cql-stress creates standard1 with IF NOT EXISTS and no compression, so it keeps this one.
 n_loaders: 8
 instance_type_loader: 'c7i.8xlarge'
 perf_gradual_threads: {"read": 930}
