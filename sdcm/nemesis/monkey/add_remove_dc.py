@@ -1,6 +1,9 @@
+import re
 from collections.abc import Generator
 from contextlib import ExitStack, contextmanager
 from functools import cached_property
+
+from cassandra import InvalidRequest
 
 from sdcm.cluster import BaseNode
 from sdcm.exceptions import KillNemesis, UnsupportedNemesis
@@ -15,6 +18,9 @@ from sdcm.utils.replication_strategy_utils import (
     temporary_replication_strategy_setter,
 )
 from sdcm.wait import wait_for_log_lines
+
+# Keyspaces whose replication the topology coordinator manages with AUTO_REPLICATION_FACTOR
+AUTO_RF_KEYSPACES = ("audit", "system_traces")
 
 
 class AddRemoveDcNemesis(NemesisBaseClass):
@@ -68,6 +74,16 @@ class AddRemoveDcNemesis(NemesisBaseClass):
             system_keyspaces.append("system_auth")
         return system_keyspaces
 
+    def is_auto_rf_keyspace(self, keyspace: str) -> bool:
+        """Whether keyspace replication is managed automatically (auto RF, on tablets only)."""
+        if keyspace not in AUTO_RF_KEYSPACES or not self.runner.cluster.is_features_enabled_on_node(
+            feature_list=["AUTO_REPLICATION_FACTOR"], node=self.runner.target_node
+        ):
+            return False
+        # upgraded clusters keep these keyspaces on vnodes, managed manually
+        describe = self.runner.target_node.run_cqlsh(f"describe {keyspace}").stdout
+        return bool(re.search(r"tablets = \{'enabled': true", describe))
+
     @contextmanager
     def temporary_system_keyspaces_network_topology_strategy(self) -> Generator[None]:
         """Temporarily switch system keyspaces to NetworkTopologyStrategy."""
@@ -108,6 +124,8 @@ class AddRemoveDcNemesis(NemesisBaseClass):
                 continue
 
             try:
+                if self.is_auto_rf_keyspace(keyspace):
+                    continue  # rolled back by remove_new_dc_from_auto_rf_keyspaces()
                 strategy = ReplicationStrategy.get(self.runner.target_node, keyspace)
                 rollback_strategy = NetworkTopologyReplicationStrategy(
                     **{**strategy.replication_factors_per_dc, new_dc_name: 0}
@@ -119,14 +137,56 @@ class AddRemoveDcNemesis(NemesisBaseClass):
             self.runner.log.info(f"Preserve rollback strategy for keyspace {keyspace} with RF=0 in {new_dc_name}")
             new_dc_setter.preserved[keyspace] = rollback_strategy
 
+    @retrying(n=10, sleep_time=30, allowed_exceptions=(AssertionError,))
+    def wait_for_auto_rf_keyspaces_in_new_dc(self, keyspaces: list[str]) -> None:
+        """Wait until auto RF extends the keyspaces into the new datacenter."""
+        for keyspace in keyspaces:
+            strategy = ReplicationStrategy.get(self.runner.target_node, keyspace)
+            assert self.new_dc_name in strategy.replication_factors_per_dc, (
+                f"auto RF did not extend {keyspace} into {self.new_dc_name} yet"
+            )
+
+    # retry while an auto RF change of the keyspace is ongoing
+    @retrying(n=10, sleep_time=10, allowed_exceptions=(InvalidRequest,))
+    def remove_new_dc_from_auto_rf_keyspace(self, keyspace: str) -> None:
+        """Set RF=0 in the new datacenter for an auto RF keyspace."""
+        strategy = ReplicationStrategy.get(self.runner.target_node, keyspace)
+        if self.new_dc_name not in strategy.replication_factors_per_dc:
+            return
+        with self.runner.action_log_scope(f"Set RF=0 in {self.new_dc_name} for auto RF keyspace {keyspace}"):
+            NetworkTopologyReplicationStrategy(**{**strategy.replication_factors_per_dc, self.new_dc_name: 0}).apply(
+                self.runner.target_node, keyspace
+            )
+
+    def remove_new_dc_from_auto_rf_keyspaces(self) -> None:
+        """Set RF=0 in the new datacenter for auto RF keyspaces, as auto RF never drops a datacenter.
+
+        Must run after user keyspaces left the new datacenter, otherwise auto RF adds it back.
+        Keyspaces are looked up only then, as auto RF may extend them into the new datacenter until that point.
+        """
+        new_dc_name = self.new_dc_name
+        with self.runner.cluster.cql_connection_patient(self.runner.target_node) as session:
+            rows = session.execute("SELECT keyspace_name, replication FROM system_schema.keyspaces").current_rows
+        for row in rows:
+            if new_dc_name in row.replication and self.is_auto_rf_keyspace(row.keyspace_name):
+                self.remove_new_dc_from_auto_rf_keyspace(row.keyspace_name)
+
     @contextmanager
     def temporary_new_dc_replication_factors(self) -> Generator[None]:
         """Temporarily update replication factors for the new datacenter."""
+        auto_rf_keyspaces = []
         with (
+            # exits after the setter rollback, so no user keyspace replicates to the new DC anymore
+            ExitStack() as auto_rf_cleanup,
             temporary_replication_strategy_setter(self.runner.target_node) as new_dc_setter,
             self.runner.action_log_scope("Temporarily update replication factors for new datacenter"),
         ):
+            auto_rf_cleanup.callback(self.remove_new_dc_from_auto_rf_keyspaces)
             for keyspace in self.system_keyspaces + [self.new_ks_name]:
+                if self.is_auto_rf_keyspace(keyspace):
+                    self.runner.log.info(f"Skip altering {keyspace}, its replication is managed by auto RF")
+                    auto_rf_keyspaces.append(keyspace)
+                    continue
                 strategy = ReplicationStrategy.get(self.runner.target_node, keyspace)
                 strategy.replication_factors_per_dc.update({self.new_dc_name: self.num_nodes_in_new_dc})
                 try:
@@ -141,6 +201,7 @@ class AddRemoveDcNemesis(NemesisBaseClass):
                     new_dc_setter.preserved[keyspace] = rollback_strategy
 
             try:
+                self.wait_for_auto_rf_keyspaces_in_new_dc(auto_rf_keyspaces)
                 yield
             finally:
                 self._preserve_keyspaces_with_new_dc_replication(new_dc_setter)
