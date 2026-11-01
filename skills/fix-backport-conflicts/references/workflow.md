@@ -122,14 +122,29 @@ $SCRIPT verify
 Must print "CLEAN" — necessary, but not on its own sufficient: also
 re-read each file you edited to confirm the resolution is actually correct.
 
-**4e. Create temp commit and prepare for recommit:**
+**4e. Check whether the PR commits share files:**
+
+```bash
+git log --format= --name-only upstream/<baseRefName>..HEAD | sort | uniq -d
+```
+
+`recommit` copies each file's *final* resolved content into every commit that touches it.
+If this prints any file, a later commit's changes to it would leak into earlier commits —
+**do not use `prepare-recommit`/`recommit`**. Instead:
+
+- Markers only in the tip commit → `git commit --amend --no-edit -a` (keeps author and message), then go to step 5.
+- Markers in an earlier commit → stop and ask the user.
+
+If it prints nothing, continue with 4f.
+
+**4f. Create temp commit and prepare for recommit:**
 
 ```bash
 $SCRIPT resolve-commit
 $SCRIPT prepare-recommit upstream/<baseRefName>
 ```
 
-**4f. Recommit each original commit cleanly:**
+**4g. Recommit each original commit cleanly:**
 
 ```bash
 $SCRIPT recommit <original-commit-hash>
@@ -167,6 +182,7 @@ $SCRIPT update-pr $PR_NUMBER
 - **Always rebase onto the latest base branch first** — resolving stale conflicts wastes work
 - **Never use `git stash`** — stashes are global across worktrees
 - **Never use `git -C`** — all commands run from the worktree working directory
+- **Never `recommit` when PR commits share files** — it leaks later changes into earlier commits (step 4e)
 - **Verify file scope after recommit** — each commit must touch ONLY the files from the original commit
 - Never modify commit messages beyond what's needed (preserve co-author lines, cherry-pick refs)
 - If a conflict resolution is ambiguous, ask the user before proceeding
