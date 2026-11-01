@@ -1320,6 +1320,31 @@ def test_a_loader_host_cleanup_skips_the_scylla_steps_and_the_baseline_restore(m
     host.remoter.sudo.assert_not_called()
 
 
+def test_a_monitor_host_cleanup_removes_only_the_runs_monitoring_stack(monkeypatch):
+    """The run's own stack (containers with a mount under its directory) and directory go; other runs' stay."""
+    host = _host_with_disk_state()
+    monkeypatch.setattr(host, "_stop_stale_log_followers", lambda: None)
+
+    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=False, restore_baseline=False, monitoring_stack_of="1234")
+
+    stop_script = host.remoter.run.call_args.args[0]
+    assert 'run_dir="$HOME/sct-monitoring-1234"' in stop_script
+    assert "docker rm -f" in stop_script
+    assert "kill-all.sh" not in stop_script
+    host.remoter.sudo.assert_called_once_with('rm -rf "$HOME/sct-monitoring-1234"')
+
+
+def test_the_baremetal_monitor_restart_stops_only_its_own_stack():
+    """A restart (REUSE_CLUSTER) stops the run's stack, not every container with the stack's default names."""
+    node = MagicMock()
+    node.tags = {"TestId": "1234"}
+
+    MonitorSetPhysical.stop_scylla_monitoring(MagicMock(), node)
+
+    node.stop_monitoring_stack.assert_called_once_with("1234")
+    node.remoter.run.assert_not_called()
+
+
 def test_a_failed_package_restore_does_not_skip_the_leftovers(monkeypatch):
     host = _host_with_disk_state()
     calls = []
