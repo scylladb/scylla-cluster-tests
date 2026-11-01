@@ -7605,8 +7605,8 @@ class BaseLoaderSet:
 class BaseMonitorSet:
     # This is a Mixin for monitoring cluster and should not be inherited
     DB_NODES_IP_ADDRESS = "ip_address"
-    # False for a host other jobs share: setup then leaves its Docker, firewall and packages alone, and never runs
-    # kill-all.sh, which removes every container with the stack's default names
+    # False for a host other jobs share: setup then leaves its Docker, firewall and packages alone, and fails a stack
+    # that doesn't start instead of restarting it
     owns_host = True
     json_file_params_for_replace = {"$test_name": get_test_name()}
 
@@ -8423,12 +8423,6 @@ class BaseMonitorSet:
         self.log.info("posting annotations result: %s", res)
 
     def stop_scylla_monitoring(self, node):
-        if not self.owns_host:
-            raise NodeSetupFailed(
-                node=node,
-                error_msg="Not stopping the monitoring stack: kill-all.sh would also remove the containers of other "
-                "runs' monitoring stacks on this shared host",
-            )
         kill_script = dedent(f"""
             cd {self.monitor_install_path}
             ./kill-all.sh

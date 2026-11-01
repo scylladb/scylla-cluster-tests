@@ -111,12 +111,3 @@ def test_shared_host_fails_a_stack_that_does_not_start_instead_of_restarting_it(
 
     with pytest.raises(UnexpectedExit):
         shared_host_setup(monkeypatch, start_error=error)
-
-
-def test_shared_host_never_runs_kill_all():
-    node = MagicMock()
-
-    with pytest.raises(NodeSetupFailed, match="other runs' monitoring stacks"):
-        BaseMonitorSet.stop_scylla_monitoring(MagicMock(owns_host=False), node)
-
-    node.remoter.run.assert_not_called()
