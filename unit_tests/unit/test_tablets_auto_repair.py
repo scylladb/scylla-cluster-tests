@@ -34,10 +34,7 @@ def run_cluster_config_cql(cluster_configs, statement):
         result.one.return_value = MagicMock(configs=dict(cluster_configs)) if cluster_configs else None
         return result
     option, value = re.fullmatch(r"ALTER CLUSTER WITH (\w+) = (\w+)", statement).groups()
-    if value == "NULL":
-        cluster_configs.pop(option, None)
-    else:
-        cluster_configs[option] = value
+    cluster_configs[option] = value
     return MagicMock()
 
 
@@ -57,11 +54,9 @@ def drain_wait(monkeypatch):
 
 @pytest.fixture()
 def db_cluster(drain_wait, cluster_configs):
-    """Three-node cluster with CQL cluster configuration and auto-repair enabled in scylla.yaml."""
+    """Three-node cluster with CQL cluster configuration."""
     cluster = MagicMock()
     cluster.data_nodes = [MagicMock(name=f"node-{i}") for i in range(3)]
-    for node in cluster.data_nodes:
-        node.get_scylla_config_param.return_value = "true"
     session = cluster.cql_connection_patient.return_value.__enter__.return_value
     session.execute.side_effect = partial(run_cluster_config_cql, cluster_configs)
     return cluster
@@ -80,34 +75,18 @@ def alter_cluster_statements(db_cluster):
     return [args[0] for args, _ in session.execute.call_args_list if args[0].startswith("ALTER")]
 
 
-@pytest.mark.parametrize(
-    ("stored_configs", "restore_statement"),
-    [
-        pytest.param(
-            {AUTO_REPAIR_OPTION: "true"},
-            f"ALTER CLUSTER WITH {AUTO_REPAIR_OPTION} = true",
-            id="enabled-at-cluster-scope",
-        ),
-        pytest.param({}, f"ALTER CLUSTER WITH {AUTO_REPAIR_OPTION} = NULL", id="enabled-by-scylla-yaml"),
-    ],
-)
-def test_cluster_scope_disables_then_restores(
-    db_cluster, cluster_configs, drain_wait, stored_configs, restore_statement
-):
-    """Auto-repair must be off at CLUSTER scope while the block runs and the stored value restored
-    afterwards: NULL when only scylla.yaml enabled it, which ALTER CLUSTER overrides on every node,
-    and the system.config path must not be used, since MS2 ignores it once a CQL scope stores a value."""
-    cluster_configs.update(stored_configs)
+def test_cluster_scope_disables_then_restores(db_cluster, cluster_configs, drain_wait):
+    """Auto-repair must be off at CLUSTER scope while the block runs, with in-flight repairs drained
+    first, and back on afterwards — a missed restore would leave the whole test without auto-repair."""
+    cluster_configs[AUTO_REPAIR_OPTION] = "true"
     with temporarily_disable_auto_repair(db_cluster):
         assert cluster_configs[AUTO_REPAIR_OPTION] == "false"
-    assert cluster_configs == stored_configs
+    assert cluster_configs == {AUTO_REPAIR_OPTION: "true"}
     assert alter_cluster_statements(db_cluster) == [
         f"ALTER CLUSTER WITH {AUTO_REPAIR_OPTION} = false",
-        restore_statement,
+        f"ALTER CLUSTER WITH {AUTO_REPAIR_OPTION} = true",
     ]
     drain_wait.assert_called_once_with(db_cluster.data_nodes, timeout=AUTO_REPAIR_DRAIN_TIMEOUT)
-    for node in db_cluster.data_nodes:
-        node.set_scylla_config_param.assert_not_called()
 
 
 def test_cluster_scope_restores_when_body_raises(db_cluster, cluster_configs):
@@ -119,18 +98,16 @@ def test_cluster_scope_restores_when_body_raises(db_cluster, cluster_configs):
 
 
 @pytest.mark.parametrize(
-    ("stored_configs", "yaml_value"),
+    "stored_configs",
     [
-        pytest.param({AUTO_REPAIR_OPTION: "false"}, "true", id="disabled-at-cluster-scope-or-nested-use"),
-        pytest.param({}, "false", id="disabled-in-scylla-yaml"),
+        pytest.param({AUTO_REPAIR_OPTION: "false"}, id="disabled-at-cluster-scope-or-nested-use"),
+        pytest.param({}, id="nothing-stored"),
     ],
 )
-def test_cluster_scope_noop(db_cluster, cluster_configs, stored_configs, yaml_value):
-    """Nothing may be stored when auto-repair is already off — a stored false would outlive the
-    block, and an inner nested use restoring true would re-enable it under the outer repair."""
+def test_cluster_scope_noop(db_cluster, cluster_configs, stored_configs):
+    """Nothing may be stored when auto-repair is not enabled at CLUSTER scope — a stored false would
+    outlive the block, and an inner nested use restoring true would re-enable it under the outer repair."""
     cluster_configs.update(stored_configs)
-    for node in db_cluster.data_nodes:
-        node.get_scylla_config_param.return_value = yaml_value
     with temporarily_disable_auto_repair(db_cluster):
         pass
     assert alter_cluster_statements(db_cluster) == []
@@ -144,5 +121,3 @@ def test_noop_without_cluster_config(db_cluster_without_cluster_config, drain_wa
         pass
     assert alter_cluster_statements(db_cluster_without_cluster_config) == []
     drain_wait.assert_not_called()
-    for node in db_cluster_without_cluster_config.data_nodes:
-        node.set_scylla_config_param.assert_not_called()
