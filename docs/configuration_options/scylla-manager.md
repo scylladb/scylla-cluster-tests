@@ -291,3 +291,6 @@ When define true, will install scylla management
 **default:** True
 
 **type:** bool
+
+**backend overrides:**
+- `False`: baremetal
