@@ -181,12 +181,14 @@ def test_truncate_monkey_uses_timeout_suffix(truncate_runner):
 
 
 def test_truncate_large_partition_runs_bench_and_truncates(truncate_large_monkey):
+    truncate_large_monkey.runner.tester.reliable_replication_factor = 1
     truncate_large_monkey.disrupt()
 
     runner = truncate_large_monkey.runner
     runner.tester.run_stress_thread.assert_called_once()
     stress_cmd = runner.tester.run_stress_thread.call_args.kwargs["stress_cmd"]
     assert "scylla-bench" in stress_cmd
+    assert "-replication-factor=1 " in stress_cmd
     runner.target_node.run_nodetool.assert_called_once_with("flush")
     cmd = runner.target_node.run_cqlsh.call_args.kwargs["cmd"]
     assert "TRUNCATE ks_truncate_large_partition.test_table" in cmd
