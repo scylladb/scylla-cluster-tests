@@ -1855,6 +1855,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
             self._validate_cloud_backend_parameters()
         self._verify_data_volume_configuration(backend)
         self._verify_cs_safepoint_logging(backend)
+        if backend == "baremetal" and self.get("use_mgmt"):
+            # Manager brings a running Scylla, its ports and timers onto the monitor host other jobs share
+            raise ValueError("use_mgmt isn't supported on the baremetal backend, set use_mgmt: false")
 
         if self.get("n_db_nodes"):
             self._validate_seeds_number()
