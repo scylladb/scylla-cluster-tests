@@ -5,6 +5,9 @@
     "helpers:pinGitHubActionDigestsToSemver"
   ],
   "commitBodyTable": true,
+  "constraints": {
+    "uv": "0.13.0"
+  },
   "recreateWhen": "always",
   "ignorePresets": [
     "group:monorepos",
