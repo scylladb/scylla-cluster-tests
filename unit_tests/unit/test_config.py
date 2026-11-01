@@ -125,6 +125,19 @@ def test_08_baremetal(monkeypatch):
     assert conf.db_nodes_private_ip == ["1.2.3.4", "1.2.3.5"]
 
 
+def test_08_baremetal_rejects_manager(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "baremetal")
+    monkeypatch.setenv("SCT_DB_NODES_PRIVATE_IP", '["1.2.3.4", "1.2.3.5"]')
+    monkeypatch.setenv("SCT_DB_NODES_PUBLIC_IP", '["1.2.3.4", "1.2.3.5"]')
+    monkeypatch.setenv("SCT_USE_PREINSTALLED_SCYLLA", "true")
+    monkeypatch.setenv("SCT_S3_BAREMETAL_CONFIG", "some_config")
+    monkeypatch.setenv("SCT_USE_MGMT", "true")
+    conf = sct_config.SCTConfiguration()
+
+    with pytest.raises(ValueError, match="use_mgmt isn't supported on the baremetal backend"):
+        conf.verify_configuration()
+
+
 def test_08_baremetal_requires_version_source(monkeypatch):
     monkeypatch.delenv("SCT_SCYLLA_VERSION")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "baremetal")
