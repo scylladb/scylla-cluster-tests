@@ -86,6 +86,7 @@ See `references/workflow.md` for detailed step-by-step instructions. High-level 
 | `REBASE_OK` + `verify` = CLEAN | Skip to push (step 6) |
 | `REBASE_CONFLICTS` | Resolve in-place, `git add`, `$SCRIPT rebase-continue` |
 | `verify` finds markers after rebase | Full recommit flow (step 4 in workflow) |
+| PR commits share files (step 4e) | No `recommit` — amend the conflicted tip commit; ask if markers are in an earlier commit |
 | `ERROR: Found N commits` (>50) | Wrong base ref — abort, report to user |
 | Ambiguous conflict resolution | Ask user before proceeding |
 | Script not found at derived path | Use bootstrap fallback to `/tmp/fix-backport.sh` |
