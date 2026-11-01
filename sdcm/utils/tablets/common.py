@@ -11,7 +11,7 @@ from sdcm.rest.task_manager_client import TaskManagerClient
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
-from sdcm.utils.cluster_config import get_cluster_config, set_cluster_config
+from sdcm.utils.cluster_config import apply_cluster_config, get_cluster_config, set_cluster_config
 from sdcm.utils.features import is_tablets_feature_enabled
 
 LOGGER = logging.getLogger(__name__)
@@ -20,6 +20,9 @@ LOGGER = logging.getLogger(__name__)
 AUTO_REPAIR_OPTION = "auto_repair_enabled"
 # In-flight tablet auto-repair sessions were observed running up to ~17 minutes (SCT-905)
 AUTO_REPAIR_DRAIN_TIMEOUT = 30 * 60
+# A failed restore is retried, otherwise auto-repair stays off for the rest of the test
+AUTO_REPAIR_RESTORE_TIMEOUT = 5 * 60
+AUTO_REPAIR_RESTORE_STEP = 15
 
 
 @dataclass
@@ -88,7 +91,8 @@ def temporarily_disable_auto_repair(db_cluster, drain_timeout: int = AUTO_REPAIR
     user-driven repair can run without colliding with it (SCT-905). Restores it on exit.
 
     Runs ALTER CLUSTER WITH auto_repair_enabled = false and restores the previously stored value on
-    exit. A keyspace or table that stores its own auto_repair_enabled = true keeps auto-repair.
+    exit, retrying the restore for AUTO_REPAIR_RESTORE_TIMEOUT. Raises without yielding when the
+    disable fails. A keyspace or table that stores its own auto_repair_enabled = true keeps auto-repair.
 
     No-op when auto-repair is off, which also makes nested use safe: an inner use sees auto-repair
     already off. Also a no-op on Scylla releases without CQL cluster configuration.
@@ -99,11 +103,22 @@ def temporarily_disable_auto_repair(db_cluster, drain_timeout: int = AUTO_REPAIR
     except InvalidRequest:
         LOGGER.info("No CQL cluster configuration on this Scylla release, leaving auto-repair as is")
         stored_value = None
-    disabled = stored_value == "true" and set_cluster_config(db_cluster, AUTO_REPAIR_OPTION, "false")
-    if disabled and not wait_no_active_repair_tasks(db_cluster.data_nodes, timeout=drain_timeout):
-        LOGGER.warning("In-flight repair tasks did not finish within %s seconds, proceeding anyway", drain_timeout)
+    disabled = stored_value == "true"
+    if disabled:
+        apply_cluster_config(db_cluster, {AUTO_REPAIR_OPTION: False})
+        if not wait_no_active_repair_tasks(db_cluster.data_nodes, timeout=drain_timeout):
+            LOGGER.warning("In-flight repair tasks did not finish within %s seconds, proceeding anyway", drain_timeout)
     try:
         yield
     finally:
-        if disabled and not set_cluster_config(db_cluster, AUTO_REPAIR_OPTION, stored_value):
+        if disabled and not wait.wait_for(
+            func=set_cluster_config,
+            step=AUTO_REPAIR_RESTORE_STEP,
+            timeout=AUTO_REPAIR_RESTORE_TIMEOUT,
+            throw_exc=False,
+            text=f"Restoring the cluster-scope {AUTO_REPAIR_OPTION}",
+            db_cluster=db_cluster,
+            option=AUTO_REPAIR_OPTION,
+            value=stored_value,
+        ):
             LOGGER.error("Failed to restore the cluster-scope %s to %s", AUTO_REPAIR_OPTION, stored_value)

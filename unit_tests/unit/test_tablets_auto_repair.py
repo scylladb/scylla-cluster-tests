@@ -16,7 +16,7 @@ from functools import partial
 from unittest.mock import MagicMock
 
 import pytest
-from cassandra import InvalidRequest
+from cassandra import InvalidRequest, OperationTimedOut
 
 from sdcm.utils.tablets.common import (
     AUTO_REPAIR_DRAIN_TIMEOUT,
@@ -25,10 +25,16 @@ from sdcm.utils.tablets.common import (
 )
 
 MODULE = "sdcm.utils.tablets.common"
+DISABLE = f"ALTER CLUSTER WITH {AUTO_REPAIR_OPTION} = false"
+RESTORE = f"ALTER CLUSTER WITH {AUTO_REPAIR_OPTION} = true"
 
 
-def run_cluster_config_cql(cluster_configs, statement):
-    """Mimic system_schema.scylla_clusters: ALTER CLUSTER changes what the SELECT reads back."""
+def run_cluster_config_cql(cluster_configs, rejected_statements, statement):
+    """Mimic system_schema.scylla_clusters: ALTER CLUSTER changes what the SELECT reads back, unless
+    the statement is still due to be rejected per ``rejected_statements``."""
+    if rejected_statements.get(statement):
+        rejected_statements[statement] -= 1
+        raise OperationTimedOut(f"rejected: {statement}")
     if statement.startswith("SELECT"):
         result = MagicMock()
         result.one.return_value = MagicMock(configs=dict(cluster_configs)) if cluster_configs else None
@@ -45,6 +51,12 @@ def cluster_configs():
 
 
 @pytest.fixture()
+def rejected_statements():
+    """How many more times the session rejects a statement; empty means it accepts everything."""
+    return {}
+
+
+@pytest.fixture()
 def drain_wait(monkeypatch):
     """Drain-wait patched out (not under test here), always reporting the repair tasks drained."""
     wait = MagicMock(return_value=True)
@@ -53,12 +65,13 @@ def drain_wait(monkeypatch):
 
 
 @pytest.fixture()
-def db_cluster(drain_wait, cluster_configs):
-    """Three-node cluster with CQL cluster configuration."""
+def db_cluster(monkeypatch, drain_wait, cluster_configs, rejected_statements):
+    """Three-node cluster with CQL cluster configuration, retrying a failed restore without a pause."""
+    monkeypatch.setattr(f"{MODULE}.AUTO_REPAIR_RESTORE_STEP", 0)
     cluster = MagicMock()
     cluster.data_nodes = [MagicMock(name=f"node-{i}") for i in range(3)]
     session = cluster.cql_connection_patient.return_value.__enter__.return_value
-    session.execute.side_effect = partial(run_cluster_config_cql, cluster_configs)
+    session.execute.side_effect = partial(run_cluster_config_cql, cluster_configs, rejected_statements)
     return cluster
 
 
@@ -82,10 +95,7 @@ def test_cluster_scope_disables_then_restores(db_cluster, cluster_configs, drain
     with temporarily_disable_auto_repair(db_cluster):
         assert cluster_configs[AUTO_REPAIR_OPTION] == "false"
     assert cluster_configs == {AUTO_REPAIR_OPTION: "true"}
-    assert alter_cluster_statements(db_cluster) == [
-        f"ALTER CLUSTER WITH {AUTO_REPAIR_OPTION} = false",
-        f"ALTER CLUSTER WITH {AUTO_REPAIR_OPTION} = true",
-    ]
+    assert alter_cluster_statements(db_cluster) == [DISABLE, RESTORE]
     drain_wait.assert_called_once_with(db_cluster.data_nodes, timeout=AUTO_REPAIR_DRAIN_TIMEOUT)
 
 
@@ -94,6 +104,31 @@ def test_cluster_scope_restores_when_body_raises(db_cluster, cluster_configs):
     cluster_configs[AUTO_REPAIR_OPTION] = "true"
     with pytest.raises(ValueError, match="repair failed"), temporarily_disable_auto_repair(db_cluster):
         raise ValueError("repair failed")
+    assert cluster_configs == {AUTO_REPAIR_OPTION: "true"}
+
+
+def test_cluster_scope_disable_failure_raises(db_cluster, cluster_configs, rejected_statements, drain_wait):
+    """The repair must not run alongside auto-repair (SCT-905): when the disable is rejected, the
+    block must not run, and nothing is left to restore."""
+    cluster_configs[AUTO_REPAIR_OPTION] = "true"
+    rejected_statements[DISABLE] = 1
+    body = MagicMock()
+    with pytest.raises(OperationTimedOut, match="rejected"), temporarily_disable_auto_repair(db_cluster):
+        body()
+    body.assert_not_called()
+    drain_wait.assert_not_called()
+    assert alter_cluster_statements(db_cluster) == [DISABLE]
+    assert cluster_configs == {AUTO_REPAIR_OPTION: "true"}
+
+
+def test_cluster_scope_restore_retried(db_cluster, cluster_configs, rejected_statements):
+    """A rejected restore must be retried: each later use reads false and skips the disable, so
+    nothing else would re-enable auto-repair for the rest of the test."""
+    cluster_configs[AUTO_REPAIR_OPTION] = "true"
+    rejected_statements[RESTORE] = 2
+    with temporarily_disable_auto_repair(db_cluster):
+        pass
+    assert alter_cluster_statements(db_cluster) == [DISABLE, RESTORE, RESTORE, RESTORE]
     assert cluster_configs == {AUTO_REPAIR_OPTION: "true"}
 
 
