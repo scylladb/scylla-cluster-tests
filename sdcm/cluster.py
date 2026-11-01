@@ -3459,13 +3459,26 @@ class BaseNode(AutoSshContainerMixin):
                 raise _ScyllaSetupDnsRetryError(exc) from exc
             raise _ScyllaSetupNonRetryableError(exc) from exc
 
+    def _append_minicloud_no_io_setup(self, args: str) -> str:
+        """Add --no-io-setup on minicloud: iotune on an emulated disk measures the host page cache."""
+        if not is_minicloud_active(self.parent_cluster.params):
+            return args
+
+        if any(token.split("=", 1)[0] in ("--io-setup", "--no-io-setup") for token in args.split()):
+            return args
+
+        self.log.info("minicloud: scylla_setup without iotune (--no-io-setup)")
+        return f"{args} --no-io-setup".strip()
+
     @log_run_info
     def scylla_setup(self, disks, devname: str):
         """
         TestConfig scylla
         :param disks: list of disk names, empty to leave /var/lib/scylla on the root filesystem (--no-raid-setup)
         """
-        extra_setup_args = self.parent_cluster.params.get("append_scylla_setup_args")
+        extra_setup_args = self._append_minicloud_no_io_setup(
+            self.parent_cluster.params.get("append_scylla_setup_args") or ""
+        )
         remoter = self.remoter
         assert remoter is not None
         result = remoter.run("sudo /usr/lib/scylla/scylla_setup --help")
@@ -6658,6 +6671,15 @@ class BaseScyllaCluster:
             f"sed -ie 's/^rpc_address: .*/rpc_address: {node.ip_address}/g' {node.offline_install_dir}/etc/scylla/scylla.yaml"
         )
 
+    def _deploy_scylla_d_overrides(self, node: BaseNode) -> None:
+        for config_file_path in self.params.get("scylla_d_overrides_files"):
+            config_file = Path(get_sct_root_path()) / config_file_path
+            remote_path = f"/etc/scylla.d/{config_file.name}"
+            node.remoter.sudo(f"sh -c 'test -e {remote_path} || install -m 0644 /dev/null {remote_path}'")
+            with remote_file(remoter=node.remoter, remote_path=remote_path, sudo=True) as fobj:
+                fobj.truncate(0)  # first clear the file
+                fobj.write(config_file.read_text())
+
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # noqa: PLR0912, PLR0914, PLR0915
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
         node.install_minicloud_ca()
@@ -6808,11 +6830,7 @@ class BaseScyllaCluster:
             # So this make sure the "mdadm --create" command will get enough time to finish.
             node.remoter.run('sudo bash -cxe "%s"' % hybrid_raid_setup_cmd, timeout=7200)
 
-        for config_file_path in self.params.get("scylla_d_overrides_files"):
-            config_file = Path(get_sct_root_path()) / config_file_path
-            with remote_file(remoter=node.remoter, remote_path=f"/etc/scylla.d/{config_file.name}", sudo=True) as fobj:
-                fobj.truncate(0)  # first clear the file
-                fobj.write(config_file.read_text())
+        self._deploy_scylla_d_overrides(node)
         self._drop_minicloud_scylla_memory_lock(node)
 
         # code to increase java heap memory to scylla-jmx (because of #7609)

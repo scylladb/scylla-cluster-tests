@@ -58,6 +58,7 @@ def existing_node():
     node._capture_dns_diagnostics = MethodType(BaseNode._capture_dns_diagnostics, node)
     node._refresh_package_cache_after_dns_error = MethodType(BaseNode._refresh_package_cache_after_dns_error, node)
     node._run_scylla_setup_with_dns_retry = MethodType(BaseNode._run_scylla_setup_with_dns_retry, node)
+    node._append_minicloud_no_io_setup = MethodType(BaseNode._append_minicloud_no_io_setup, node)
     node.scylla_setup = MethodType(BaseNode.scylla_setup, node)
     node.parent_cluster = MagicMock()
     node.parent_cluster.params = _setup_params()
