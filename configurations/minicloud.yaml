@@ -21,8 +21,12 @@ instance_provision: 'on_demand'
 # them, which is where SCT itself runs.
 ip_ssh_connections: 'private'
 
-# iotune against emulated storage produces meaningless numbers and wastes minutes per node.
+# iotune on an emulated disk measures the host page cache, so SCT runs scylla_setup with
+# --no-io-setup on minicloud and these files replace iotune output.
 force_run_iotune: false
+scylla_d_overrides_files:
+  - configurations/minicloud/scylla.d/io.conf
+  - configurations/minicloud/scylla.d/io_properties.yaml
 
 # The emulator has no capacity limits, so a capacity fallback can only mask a real bug —
 # and minicloud rejects DescribeVpcPeeringConnections (region ranking) outright. Keeps the

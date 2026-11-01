@@ -238,14 +238,12 @@ and a second place to update when the emulator grows the missing feature:
 
 `enterprise_disable_kms`, `enable_kms_key_rotation`, `instance_provision`,
 `ip_ssh_connections`, `force_run_iotune`, `fallback_to_next_availability_zone`,
-`fallback_to_next_region`, `enable_kernel_panic_checker`, `use_placement_group`,
-`use_capacity_reservation`, `append_scylla_yaml: {developer_mode: true}`.
+`fallback_to_next_region`, `enable_kernel_panic_checker`, `append_scylla_yaml: {developer_mode: true}`.
 
-The last two matter most to anyone downscaling a performance test-case, which sets both.
-Neither placement groups nor capacity reservations exist in minicloud's EC2 surface, and the
-emulator fails closed rather than forwarding an action it does not implement. Both are checked
-by `validate_minicloud_params()`, so a run that misses the overlay is refused at startup
-instead of dying in provisioning.
+Lists replace rather than merge, so `scylla_d_overrides_files` set in a shrink overlay or the
+test-case is lost to the one in `configurations/minicloud.yaml`. A run that needs its own
+`scylla.d` files sets the list in a layer after `configurations/minicloud.yaml` and also lists
+`configurations/minicloud/scylla.d/io.conf` and `io_properties.yaml`.
 
 Note that `append_scylla_yaml` **merges** with the default dict rather than replacing it, so
 an overlay adding its own keys there does not lose `developer_mode`.

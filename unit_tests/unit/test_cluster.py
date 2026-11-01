@@ -1416,6 +1416,14 @@ def test_minicloud_cpu_overcommit_keeps_a_test_s_own_polling_flag():
     assert _append_cpu_overcommit(args) == args
 
 
+def test_minicloud_scylla_setup_skips_iotune_and_keeps_a_test_s_own_args():
+    node = SimpleNamespace(
+        parent_cluster=SimpleNamespace(params={"minicloud_endpoint_url": "http://localhost:5000"}),
+        log=unittest.mock.MagicMock(),
+    )
+    assert BaseNode._append_minicloud_no_io_setup(node, "--no-ec2-check") == "--no-ec2-check --no-io-setup"
+
+
 def _install_minicloud_ca(monkeypatch, **params):
     """Run the real method against a stand-in node and return the commands it ran."""
     for var in ("AWS_ENDPOINT_URL", "GCE_ENDPOINT_URL", "SCT_MINICLOUD_ENDPOINT_URL"):

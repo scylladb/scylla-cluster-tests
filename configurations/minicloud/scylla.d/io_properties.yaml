@@ -1,0 +1,8 @@
+# used on minicloud instead of iotune; values are GCP limits for one 375 GB local SSD
+# (scylla-machine-image common/gcp_io_params.yaml).
+disks:
+  - mountpoint: /var/lib/scylla
+    read_iops: 170000
+    read_bandwidth: 692060160
+    write_iops: 90000
+    write_bandwidth: 367001600

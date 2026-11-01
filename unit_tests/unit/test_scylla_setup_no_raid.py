@@ -29,6 +29,7 @@ def _node(mounts: str = "") -> BaseNode:
     node.parent_cluster.params.get.side_effect = {"append_scylla_setup_args": "", "unified_package": None}.get
     node.is_service_exists.return_value = False
     node._run_scylla_setup_with_dns_retry = MagicMock()
+    node._append_minicloud_no_io_setup = MethodType(BaseNode._append_minicloud_no_io_setup, node)
     node.scylla_setup = MethodType(BaseNode.scylla_setup, node)
 
     def run(cmd, **_):

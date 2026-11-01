@@ -43,10 +43,23 @@ are separate hydra invocations that all need to reach the same live endpoint.
 test-case yaml. It is the single delivery mechanism for the params the emulator requires:
 KMS off (minicloud implements no KMS endpoint), `instance_provision: on_demand` (no spot
 market), `ip_ssh_connections: private` (guests live on the host's userspace switch),
-`force_run_iotune: false`, AZ/region fallbacks off, kernel-panic checker off, and
+shipped IO properties instead of iotune, AZ/region fallbacks off, kernel-panic checker off, and
 `developer_mode: true` via `append_scylla_yaml`. `preflight_check()` fails fast with the exact
 missing values when the overlay is not in the config list. Env exports cannot substitute for
 it: `SCT_*` variables set after `SCTConfiguration` is built never reach params.
+
+On a minicloud guest, iotune measures the host page cache instead of a disk, so results vary from
+tens of MiB/s to several GiB/s between nodes, and Scylla throttles a slow node for the whole run.
+SCT therefore adds `--no-io-setup` to `scylla_setup` on every minicloud guest (`force_run_iotune`
+cannot do this: it only controls SCT own extra iotune call). The overlay ships
+`configurations/minicloud/scylla.d/io.conf` and `io_properties.yaml` instead, through
+`scylla_d_overrides_files`. The values are GCP limits for one local SSD, well above what a
+lightweight guest uses. Image-based runs get the same files. Nonroot installs and extra data
+volumes still run iotune.
+
+To ship your own `scylla.d` files, set `scylla_d_overrides_files` in a layer after
+`configurations/minicloud.yaml` and include the two minicloud files: a later layer replaces the
+whole list.
 
 Params (defaults in `defaults/test_default.yaml`, reference in
 [configuration_options](./configuration_options.md)):
