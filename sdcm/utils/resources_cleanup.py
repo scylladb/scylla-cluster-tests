@@ -257,15 +257,18 @@ def clean_resources_baremetal(tags_dict: dict, config, dry_run: bool = False) ->
     for node_type in node_types:
         section = hosts_config[BAREMETAL_HOSTS_SECTIONS[node_type]]
         scylla_disk_setup = node_type == "scylla-db" and not config.get("use_preinstalled_scylla")
+        # Loader and monitor hosts are shared with other jobs: their packages stay as they are
+        restore_baseline = node_type == "scylla-db"
         for host_ips in section["node_list"]:
             address = host_ips["public_ip"] if tunnel_ports else host_ips["private_ip"]
             if dry_run:
                 LOGGER.info(
-                    "Would clean up %s host %s (tunnel ports: %s, scylla install: %s, packages: yes)",
+                    "Would clean up %s host %s (tunnel ports: %s, scylla install: %s, packages: %s)",
                     node_type,
                     address,
                     tunnel_ports,
                     scylla_disk_setup,
+                    restore_baseline,
                 )
                 continue
             LOGGER.info("Cleaning up %s host %s", node_type, address)
@@ -274,7 +277,7 @@ def clean_resources_baremetal(tags_dict: dict, config, dry_run: bool = False) ->
             )
             try:
                 PhysicalHost(name=f"{node_type} {address}", remoter=remoter).clean_up_host(
-                    tunnel_ports=tunnel_ports, scylla_disk_setup=scylla_disk_setup
+                    tunnel_ports=tunnel_ports, scylla_disk_setup=scylla_disk_setup, restore_baseline=restore_baseline
                 )
             finally:
                 remoter.stop()
