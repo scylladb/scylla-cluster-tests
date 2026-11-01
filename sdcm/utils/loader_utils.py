@@ -433,29 +433,39 @@ class LoaderUtilsMixin:
         self.log.info("Prepare finished")
 
     @staticmethod
-    def add_sla_credentials_to_stress_cmds(workload_names: list, roles, params, parent_class_name: str):
-        def _set_credentials_to_cmd(cmd):
-            if roles and "<sla credentials " in cmd:
-                if "user=" in cmd:
-                    # if stress command is not defined as expected, stop the tests and fix it. Then re-run
-                    raise EnvironmentError(
-                        "Stress command is defined wrong. Credentials already applied. Remove "
-                        f"unnecessary and re-run the test. Command: {cmd}"
-                    )
+    def set_sla_credentials_to_cmd(cmd: str, roles) -> str:
+        """Replace '<sla credentials N>' in a stress command with the login of roles[N].
 
-                index = re.search(r"<sla credentials (\d+)>", cmd)
-                role_index = int(index.groups(0)[0]) if index else None
-                if role_index is None:
-                    # if stress command is not defined as expected, stop the tests and fix it. Then re-run
-                    raise EnvironmentError(
-                        "Stress command is defined wrong. Expected pattern '<credentials \\d>' was "
-                        f"not found. Fix the command and re-run the test. Command: {cmd}"
-                    )
-                sla_role_name = roles[role_index].name.replace('"', "")
-                sla_role_password = roles[role_index].password
-                return re.sub(r"<sla credentials \d+>", f"user={sla_role_name} password={sla_role_password}", cmd)
+        cassandra-stress takes 'user=X password=Y', latte takes '--user X --password Y'.
+        """
+        if not roles or "<sla credentials " not in cmd:
             return cmd
+        is_latte = cmd.lstrip().startswith("latte ")
+        if (" --user " if is_latte else "user=") in cmd:
+            # if stress command is not defined as expected, stop the tests and fix it. Then re-run
+            raise EnvironmentError(
+                f"Stress command is defined wrong. Credentials already applied. Remove unnecessary and re-run the test. Command: {cmd}"
+            )
 
+        index = re.search(r"<sla credentials (\d+)>", cmd)
+        role_index = int(index.groups(0)[0]) if index else None
+        if role_index is None:
+            # if stress command is not defined as expected, stop the tests and fix it. Then re-run
+            raise EnvironmentError(
+                "Stress command is defined wrong. Expected pattern '<credentials \\d>' was "
+                f"not found. Fix the command and re-run the test. Command: {cmd}"
+            )
+        sla_role_name = roles[role_index].name.replace('"', "")
+        sla_role_password = roles[role_index].password
+        credentials = (
+            f"--user {sla_role_name} --password {sla_role_password}"
+            if is_latte
+            else f"user={sla_role_name} password={sla_role_password}"
+        )
+        return re.sub(r"<sla credentials \d+>", credentials, cmd)
+
+    @staticmethod
+    def add_sla_credentials_to_stress_cmds(workload_names: list, roles, params, parent_class_name: str):
         try:
             for stress_op in workload_names:
                 stress_cmds = []
@@ -465,7 +475,7 @@ class LoaderUtilsMixin:
                     continue
 
                 for stress_cmd in stress_params:
-                    stress_cmds.append(_set_credentials_to_cmd(cmd=stress_cmd))
+                    stress_cmds.append(LoaderUtilsMixin.set_sla_credentials_to_cmd(cmd=stress_cmd, roles=roles))
 
                 params[stress_op] = stress_cmds
         except EnvironmentError as error_message:
