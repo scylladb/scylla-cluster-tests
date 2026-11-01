@@ -3,6 +3,9 @@
   "extends": [
     "config:recommended"
   ],
+  "constraints": {
+    "uv": "0.13.0"
+  },
   "ignorePresets": [
     "group:monorepos",
     "group:recommended"
