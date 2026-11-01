@@ -44,6 +44,11 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID = UUID.randomUUID().toString()
+            // written by 'Get test duration', restored by every later hydra command of this build;
+            // named by the test id so a reused workspace never hands one build's cache to the next.
+            // Minicloud builds load cold in every stage: their SCT_MINICLOUD_* overrides are decided
+            // on the runner, after the cache would be written.
+            SCT_CONFIG_CACHE_FILE = "${minicloudEnabled ? '' : "sct_config_cache_${SCT_TEST_ID}.json"}"
             SCT_GCE_PROJECT = "${params.gce_project}"
             SCT_BILLING_PROJECT = "${params.billing_project}"
         }
@@ -353,6 +358,8 @@ def call(Map pipelineParams) {
                         timeout(time: 5, unit: 'MINUTES') {
                             checkout scm
                             checkoutQaInternal(params)
+                            // checkout keeps untracked files: sweep the caches earlier builds left behind
+                            sh 'rm -fv sct_config_cache_*.json'
                         }
                     }
                     dockerLogin(params)
@@ -360,7 +367,7 @@ def call(Map pipelineParams) {
             }
             // Only on a local agent: a persistent workspace needs sweeping, and the agent has to be
             // proven KVM-capable, before anything expensive or externally visible happens - so this
-            // sits ahead of 'Create Argus Test Run' and the hydra pull it triggers, not after them.
+            // sits ahead of 'Get test duration' and the hydra pull it triggers, not after them.
             // Reclaim is also the only thing that removes a stale ./sct_runner_ip once 'Create SCT
             // Runner' is skipped; without it every later stage would take the --execute-on-runner
             // branch and SSH to an IP from some earlier build.
@@ -377,6 +384,21 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('Get test duration') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        timeout(time: 10, unit: 'MINUTES') {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region, pipelineParams)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('Create Argus Test Run') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
@@ -385,21 +407,6 @@ def call(Map pipelineParams) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: 5, unit: 'MINUTES') {
                                         createArgusTestRun(params)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            stage('Get test duration') {
-                steps {
-                    catchError(stageResult: 'FAILURE') {
-                        timeout(time: 10, unit: 'MINUTES') {
-                            script {
-                                wrap([$class: 'BuildUser']) {
-                                    dir('scylla-cluster-tests') {
-                                        (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
                                     }
                                 }
                             }
@@ -432,7 +439,7 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: 240, unit: 'MINUTES') {
-                                        byoScylladb(params, true)
+                                        byoScylladb(params, true, builder.region, pipelineParams)
                                     }
                                 }
                             }

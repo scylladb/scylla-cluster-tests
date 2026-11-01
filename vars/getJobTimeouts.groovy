@@ -1,37 +1,20 @@
 #!groovy
 
-List<Integer> call(Map params, String region){
-    // handle params which can be a json list
-    def current_region = initAwsRegionParam(params.region, region)
-    def current_oci_region = ""
-    if (params.oci_region_name) {
-        current_oci_region = initAwsRegionParam(params.oci_region_name, region)
-    }
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+/**
+ * Load the configuration once for the build and derive the stage timeouts from it.
+ *
+ * This is the stage that loads the configuration on behalf of the whole build: when the pipeline
+ * sets SCT_CONFIG_CACHE_FILE, the loaded configuration is exported to that file and every later
+ * hydra command restores it from there instead of resolving images, repositories and sizes again.
+ * The export happens under the union of every stage's SCT_* overrides (exportSctEnv), so the cache
+ * holds what each stage would have exported for itself. Minicloud jobs leave SCT_CONFIG_CACHE_FILE
+ * empty and load cold in every stage.
+ */
+List<Integer> call(Map params, String region, Map pipelineParams = [:]){
+    def export_cache = configCacheExportOption()
     def cmd = """#!/bin/bash
-    export SCT_CLUSTER_BACKEND="${params.backend}"
-    export SCT_CONFIG_FILES=${test_config}
-    if [[ -n "${params.region ? params.region : ''}" ]] ; then
-        export SCT_REGION_NAME=${current_region}
-    fi
-
-    if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-        export SCT_GCE_DATACENTER='${params.gce_datacenter}'
-    fi
-
-    if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
-        export SCT_AZURE_REGION_NAME=${groovy.json.JsonOutput.toJson(params.azure_region_name)}
-    fi
-
-    if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
-        export SCT_OCI_REGION_NAME=${current_oci_region}
-    fi
-
-    if [[ "${params.backend}" == "xcloud" ]] ; then
-        export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
-        export SCT_XCLOUD_ENV="${params.xcloud_env}"
-    fi
-    ./docker/env/hydra.sh output-conf -b "${params.backend}"
+    ${exportSctEnv(params, region, pipelineParams)}
+    ./docker/env/hydra.sh load-config -b "${params.backend}" ${export_cache}
     """
     def testData = sh(script: cmd, returnStdout: true).trim()
     println(testData)
