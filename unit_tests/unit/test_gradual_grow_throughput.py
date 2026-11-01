@@ -20,10 +20,12 @@ Tests import the production code directly to ensure we're validating real behavi
 
 import json
 import logging
+import re
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 import performance_regression_gradual_grow_throughput as gradual_grow_module
 from sdcm.utils.decorators import _find_hdr_tags
@@ -280,6 +282,8 @@ def _run_step(queues_hdr_tags, stress_cmds=None, step_params=None, step_duration
         log=logging.getLogger(__name__),
         run_stress_thread=lambda **_: next(started),
         get_stress_results=lambda queue, store_results: [{"op rate": "1000"}],
+        _start_connection_check=lambda stress_cmds: None,
+        _connection_check_result=lambda check: None,
     )
     return gradual_grow_module.PerformanceRegressionPredefinedStepsTest.run_step(
         instance,
@@ -325,6 +329,8 @@ def test_run_step_skips_a_queue_that_carries_no_tags():
         log=logging.getLogger(__name__),
         run_stress_thread=lambda **_: next(started),
         get_stress_results=lambda queue, store_results: [{"op rate": "1000"}],
+        _start_connection_check=lambda stress_cmds: None,
+        _connection_check_result=lambda check: None,
     )
     _, decorator_input = gradual_grow_module.PerformanceRegressionPredefinedStepsTest.run_step(
         instance, ["cmd-0", "cmd-1", "cmd-2"], {}, None
@@ -337,3 +343,288 @@ def test_latency_decorator_finds_the_tags_run_step_returns():
     res = _run_step([["WRITE-st"], ["READ-st"]])
     kwargs = {"stress_cmds": ["stress-cmd-0", "stress-cmd-1"], "step_params": {}, "step_duration": None}
     assert _find_hdr_tags(kwargs, res, object()) == ["WRITE-st", "READ-st"]
+
+
+# ---------------------------------------------------------------------------
+# _collect_step_metrics: per-step Prometheus summary
+# ---------------------------------------------------------------------------
+
+
+def _collect_step_metrics(prometheus, start=1000, end=1900):
+    instance = SimpleNamespace(
+        prometheus_db=prometheus,
+        loaders=SimpleNamespace(nodes=[SimpleNamespace(ip_address="10.0.1.1")]),
+        log=logging.getLogger(__name__),
+    )
+    return gradual_grow_module.PerformanceRegressionPredefinedStepsTest._collect_step_metrics(instance, start, end)
+
+
+def test_collect_step_metrics_stores_every_metric():
+    prometheus = MagicMock()
+    prometheus.query.return_value = [
+        {"metric": {"instance": "10.0.0.1", "shard": "0"}, "values": [[1900, "42.5"]]},
+        {"metric": {"instance": "10.0.0.2", "shard": "0"}, "values": [[1900, "NaN"]]},
+    ]
+    metrics = _collect_step_metrics(prometheus)
+
+    assert metrics.keys() == gradual_grow_module.STEP_METRICS.keys()
+    assert all(value == {"instance=10.0.0.1,shard=0": 42.5} for value in metrics.values())
+    queries = [call.args[0] for call in prometheus.query.call_args_list]
+    assert all("$" not in query for query in queries)
+    assert all("[900s]" in query for query in queries)
+    assert any('instance=~"10.0.1.1"' in query for query in queries)
+    assert all(call.kwargs == {"start": 1900, "end": 1900} for call in prometheus.query.call_args_list)
+    # PrometheusDBStats.query doesn't URL-encode, these would reach Prometheus altered
+    assert not any(char in query for query in queries for char in "+&#%")
+
+
+def test_collect_step_metrics_skips_failed_query():
+    names = list(gradual_grow_module.STEP_METRICS)
+    prometheus = MagicMock()
+    prometheus.query.side_effect = [requests.HTTPError("400")] + [[{"metric": {}, "values": [[1900, "1"]]}]] * (
+        len(names) - 1
+    )
+    metrics = _collect_step_metrics(prometheus)
+
+    assert names[0] not in metrics
+    assert all(metrics[name] == {"total": 1.0} for name in names[1:])
+
+
+def test_collect_step_metrics_stops_on_unreachable_prometheus():
+    prometheus = MagicMock()
+    prometheus.query.side_effect = requests.ConnectionError("refused")
+
+    assert _collect_step_metrics(prometheus) == {}
+    assert prometheus.query.call_count == 1
+
+
+def test_collect_step_metrics_without_monitor():
+    assert _collect_step_metrics(None) == {}
+
+
+# ---------------------------------------------------------------------------
+# connection_check_verdict: every loader connection is alive and passing data
+# ---------------------------------------------------------------------------
+
+LOADER_IPS = {"10.0.1.1", "10.0.1.2"}
+
+
+def _ss(byte_counts):
+    """`ss -tinH state established` output: a socket line, then a tab-led info line."""
+    return "".join(
+        f"0      0      10.0.0.1:19042   {address}:{port} \n"
+        f"\t cubic rto:204 bytes_sent:{count} bytes_acked:{count} bytes_received:{count} segs_out:10\n"
+        for (address, port), count in byte_counts.items()
+    )
+
+
+def _verdict(clients, before, after, expected=2, shards=2):
+    return gradual_grow_module.connection_check_verdict(expected, shards, LOADER_IPS, clients, _ss(before), _ss(after))
+
+
+def test_connection_check_passes_full_shards_with_traffic():
+    clients = [
+        ("10.0.1.1", 40001, 0, "READY"),
+        ("10.0.1.2", 40002, 0, "READY"),
+        ("10.0.1.1", 40003, 1, "READY"),
+        ("10.0.1.2", 40004, 1, "READY"),
+        ("10.0.1.2", 40005, 1, "READY"),  # driver control connection on top of the pool, heartbeats only
+        ("10.0.0.5", 50000, 0, "READY"),  # SCT's own session, not a loader
+    ]
+    before = {(address, port): 1000 for address, port, *_ in clients}
+    after = {peer: 2000 for peer in before} | {("10.0.1.2", 40005): 1010, ("10.0.0.5", 50000): 1000}
+    # IPv4-mapped peer as ss prints it when Scylla listens on ::
+    before["[::ffff:10.0.1.2]", 40004] = before.pop(("10.0.1.2", 40004))
+    after["[::ffff:10.0.1.2]", 40004] = after.pop(("10.0.1.2", 40004))
+
+    verdict = _verdict(clients, before, after)
+
+    assert verdict[0] == {"expected": 2, "ready": 2, "with_traffic": 2, "ok": True, "idle": []}
+    assert verdict[1] == {"expected": 2, "ready": 3, "with_traffic": 2, "ok": True, "idle": ["10.0.1.2:40005"]}
+
+
+def test_connection_check_fails_shard_below_expected_count():
+    clients = [
+        ("10.0.1.1", 40001, 0, "READY"),
+        ("10.0.1.2", 40002, 0, "READY"),
+        ("10.0.1.1", 40003, 1, "READY"),
+        ("10.0.1.2", 40004, 1, "STARTUP"),
+    ]
+    before = {(address, port): 0 for address, port, *_ in clients}
+    after = {peer: 5000 for peer in before}
+
+    verdict = _verdict(clients, before, after, shards=3)
+
+    assert verdict[0]["ok"]
+    assert verdict[1] == {"expected": 2, "ready": 1, "with_traffic": 1, "ok": False, "idle": []}
+    assert verdict[2] == {"expected": 2, "ready": 0, "with_traffic": 0, "ok": False, "idle": []}
+
+
+def test_connection_check_fails_heartbeat_only_connection():
+    clients = [("10.0.1.1", 40001, 0, "READY"), ("10.0.1.2", 40002, 0, "READY")]
+    before = {("10.0.1.1", 40001): 1000, ("10.0.1.2", 40002): 1000}
+    after = {("10.0.1.1", 40001): 9000, ("10.0.1.2", 40002): 1020}
+
+    verdict = _verdict(clients, before, after, shards=1)
+
+    assert verdict[0] == {"expected": 2, "ready": 2, "with_traffic": 1, "ok": False, "idle": ["10.0.1.2:40002"]}
+
+
+def test_connection_check_is_off_without_connections_per_shard():
+    check = gradual_grow_module.PerformanceRegressionPredefinedStepsTest._start_connection_check(
+        SimpleNamespace(), ["cassandra-stress write cl=QUORUM duration=1m -rate threads=10"]
+    )
+    assert check is None
+
+
+def test_check_connections_records_failed_node(monkeypatch):
+    monkeypatch.setattr(gradual_grow_module.time, "sleep", lambda seconds: None)
+    peer = ("10.0.1.1", 40001)
+    samples = iter([_ss({peer: 0}), _ss({peer: 5000})])
+    good = MagicMock(scylla_shards=1)
+    good.name = "db-1"
+    good.remoter.run.side_effect = lambda *args, **kwargs: SimpleNamespace(stdout=next(samples))
+    broken = MagicMock(scylla_shards=1)
+    broken.name = "db-2"
+    broken.remoter.run.side_effect = ConnectionError("ssh down")
+    db_cluster = MagicMock(nodes=[good, broken])
+    session = db_cluster.cql_connection_patient_exclusive.return_value.__enter__.return_value
+    session.execute.return_value = [(*peer, 0, "READY")]
+    instance = SimpleNamespace(
+        db_cluster=db_cluster, loaders=SimpleNamespace(nodes=[SimpleNamespace(ip_address="10.0.1.1")])
+    )
+
+    result = gradual_grow_module.PerformanceRegressionPredefinedStepsTest._check_connections(instance, expected=1)
+
+    assert result["nodes"]["db-1"] == {0: {"expected": 1, "ready": 1, "with_traffic": 1, "ok": True, "idle": []}}
+    assert "ssh down" in result["nodes"]["db-2"]["error"]
+    assert result["ok"] is False
+
+
+# ---------------------------------------------------------------------------
+# meets_p99 / search_max_rate: bisect the throttle rate under the P99 target
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "client_p99, server_p99, passed",
+    [
+        (12.0, 11.0, False),  # both over the target
+        (12.0, 9.0, True),  # client over, server under
+        (9.0, 12.0, True),  # client under, server over
+        (12.0, None, False),  # server unknown, the client decides
+    ],
+)
+def test_meets_p99_fails_only_when_both_are_over(client_p99, server_p99, passed):
+    assert gradual_grow_module.meets_p99(client_p99, server_p99, target=10) is passed
+
+
+def test_search_max_rate_brackets_the_p99_crossing():
+    crossing = 87_300  # P99 is 10 ms here and grows with the rate
+    probed = []
+
+    def probe(rate):
+        probed.append(rate)
+        return gradual_grow_module.meets_p99(10 * (rate / crossing) ** 4, None, target=10)
+
+    low, high = gradual_grow_module.search_max_rate(probe, low=50_000, high=150_000, tolerance=5_000)
+
+    assert low <= crossing < high
+    assert high - low <= 5_000
+    assert probed[:2] == [150_000, 50_000]
+    assert len(probed) <= 2 + 5  # bracket ends + ceil(log2(100k / 5k))
+
+
+@pytest.mark.parametrize(
+    "passing_rates, error",
+    [
+        ({50_000, 150_000}, "high end 150000 passes"),
+        (set(), "low end 50000 fails"),
+    ],
+)
+def test_search_max_rate_rejects_a_wrong_bracket(passing_rates, error):
+    with pytest.raises(ValueError, match=rf"{error}.*\[50000, 150000\]"):
+        gradual_grow_module.search_max_rate(lambda rate: rate in passing_rates, 50_000, 150_000, 5_000)
+
+
+@pytest.mark.parametrize("low, high, tolerance", [(50_000, 150_000, 0), (150_000, 50_000, 5_000)])
+def test_search_max_rate_rejects_bad_parameters_before_probing(low, high, tolerance):
+    probe = MagicMock()
+    with pytest.raises(ValueError, match="bracket"):
+        gradual_grow_module.search_max_rate(probe, low, high, tolerance)
+    probe.assert_not_called()
+
+
+def _search_on_fake_cluster(client_p99, server_p99, capacity=float("inf")):
+    """Run test_write_max_throughput_under_p99 with P99 and delivered op/s as functions of the rate."""
+    saved = {}
+    instance = SimpleNamespace(
+        params={
+            "perf_p99_search": {
+                "target_p99_ms": 10,
+                "low": 50_000,
+                "high": 150_000,
+                "tolerance": 5_000,
+                "probe_duration": "10m",
+                "confirm_duration": "15m",
+            },
+            "stress_cmd_w": ["cql-stress-cassandra-stress write duration=$duration -rate 'threads=$threads $throttle'"]
+            * 4,
+            "perf_gradual_threads": {"write": [1000]},
+        },
+        loaders=SimpleNamespace(nodes=[object()] * 4),
+        log=logging.getLogger(__name__),
+        get_test_table_name=lambda cmds: ("keyspace1", "standard1"),
+        current_throttle=gradual_grow_module.PerformanceRegressionPredefinedStepsTest.current_throttle,
+        _aggregate_ops_rate=gradual_grow_module.PerformanceRegressionPredefinedStepsTest._aggregate_ops_rate,
+        run_fstrim_on_all_db_nodes=lambda: None,
+        prepare_schema=lambda workload: None,
+        drop_keyspace=lambda keyspace_name: None,
+        save_total_summary_in_file=saved.update,
+    )
+
+    def run_step(stress_cmds, step_params, step_duration):
+        instance.rate = int(re.search(r"fixed=(\d+)/s", step_params["throttle"]).group(1)) * 4
+        instance._step_window, instance._step_connections = (0, 600), {"ok": True}
+        delivered = min(instance.rate, capacity)
+        return [{"op rate": str(delivered / 4)}] * 4, [SimpleNamespace(hdr_tags=["WRITE-rt"])]
+
+    instance.run_step = run_step
+    instance.get_hdrhistogram = lambda **kwargs: {"WRITE--WRITE-rt": {"percentile_99": client_p99(instance.rate)}}
+    instance._collect_step_metrics = lambda start, end: {
+        "scylla_strong_consistency_coordinator_write_latency_p99_ms": {"total": server_p99(instance.rate)}
+    }
+    gradual_grow_module.PerformanceRegressionPredefinedStepsTest.test_write_max_throughput_under_p99(instance)
+    return saved
+
+
+def test_write_max_throughput_under_p99_records_every_step():
+    crossing = 87_300
+
+    def p99(rate):
+        return 10 * (rate / crossing) ** 4
+
+    saved = _search_on_fake_cluster(client_p99=p99, server_p99=lambda rate: p99(rate) * 0.9)
+
+    probes = [name for name in saved if name.startswith("probe_")]
+    assert probes[:2] == ["probe_1_150000", "probe_2_50000"]
+    search = saved["search"]
+    # Server P99 is 0.9 x client, so a rate fails only above the server's own crossing
+    both_over_from = crossing * (1 / 0.9) ** 0.25
+    assert search["bracket"][0] == search["max_rate"] <= both_over_from < search["bracket"][1]
+    assert search["probes"] == len(probes)
+    assert search["confirmed"]
+    confirmation = saved[f"confirm_{search['max_rate']}"]
+    assert confirmation["server_p99_ms"] == pytest.approx(confirmation["client_p99_ms"] * 0.9)
+    assert confirmation["ops_rate"] == pytest.approx(search["max_rate"], rel=0.001)
+    assert confirmation["connections"] == {"ok": True}
+
+
+def test_write_max_throughput_under_p99_fails_rates_above_capacity():
+    """Above capacity the client P99 explodes while the server P99 can stay low: the rate isn't delivered."""
+    saved = _search_on_fake_cluster(
+        client_p99=lambda rate: 2 if rate <= 100_000 else 50, server_p99=lambda rate: 5, capacity=100_000
+    )
+
+    assert not saved["probe_1_150000"]["passed"]
+    assert saved["search"]["max_rate"] <= 100_000 / 0.95

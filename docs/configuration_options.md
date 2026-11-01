@@ -28,12 +28,12 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-525 options across 29 groups.
+528 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 74 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
-| [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
+| [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 46 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 72 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 16 | The monitoring stack, event severities, Argus reporting and email reports. |
@@ -54,7 +54,7 @@ concerns first, then one page per backend, then one per test type.
 | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) | 12 | Clusters provisioned through the Scylla Cloud API, including the legacy siren `cloud_*` options. |
 | [Minicloud](configuration_options/minicloud.md) | 18 | Minicloud is an AWS-API-compatible environment rather than a cloud of its own: it runs with the `aws`, `gce` or `azure`... |
 | [Longevity tests](configuration_options/longevity-tests.md) | 12 | Options specific to long-running longevity test scenarios. |
-| [Performance regression tests](configuration_options/performance-regression-tests.md) | 19 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
+| [Performance regression tests](configuration_options/performance-regression-tests.md) | 20 | Throughput/latency measurement runs, including gradual-throughput steps and HDR histogram settings. |
 | [Upgrade tests](configuration_options/upgrade-tests.md) | 19 | Rolling upgrade and rollback scenarios: target versions and the load applied across the upgrade. |
 | [Grow cluster tests](configuration_options/grow-cluster-tests.md) | 2 | Scaling the cluster up and down during a test. |
 | [Refresh (sstable loading) tests](configuration_options/refresh-sstable-loading-tests.md) | 3 | Loading pre-built SSTables into a running cluster via nodetool refresh. |
@@ -142,6 +142,7 @@ concerns first, then one page per backend, then one per test type.
 | [`cassandra_version`](configuration_options/auxiliary-db-cluster-oracle-cassandra.md#cassandra_version) | `SCT_CASSANDRA_VERSION` | [Auxiliary DB cluster (oracle / Cassandra)](configuration_options/auxiliary-db-cluster-oracle-cassandra.md) |
 | [`client_encrypt`](configuration_options/scylla-installation-and-configuration.md#client_encrypt) | `SCT_CLIENT_ENCRYPT` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`client_encrypt_mtls`](configuration_options/scylla-installation-and-configuration.md#client_encrypt_mtls) | `SCT_CLIENT_ENCRYPT_MTLS` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
+| [`clockbound_version`](configuration_options/scylla-installation-and-configuration.md#clockbound_version) | `SCT_CLOCKBOUND_VERSION` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`cloud_cluster_id`](configuration_options/scylla-cloud-xcloud-backend.md#cloud_cluster_id) | `SCT_CLOUD_CLUSTER_ID` | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) |
 | [`cloud_credentials_path`](configuration_options/scylla-cloud-xcloud-backend.md#cloud_credentials_path) | `SCT_CLOUD_CREDENTIALS_PATH` | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) |
 | [`cloud_prom_bearer_token`](configuration_options/scylla-cloud-xcloud-backend.md#cloud_prom_bearer_token) | `SCT_CLOUD_PROM_BEARER_TOKEN` | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) |
@@ -172,6 +173,7 @@ concerns first, then one page per backend, then one per test type.
 | [`db_nodes_shards_selection`](configuration_options/general-and-provisioning.md#db_nodes_shards_selection) | `SCT_DB_NODES_SHARDS_SELECTION` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`db_type`](configuration_options/scylla-installation-and-configuration.md#db_type) | `SCT_DB_TYPE` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`disable_raft`](configuration_options/upgrade-tests.md#disable_raft) | `SCT_DISABLE_RAFT` | [Upgrade tests](configuration_options/upgrade-tests.md) |
+| [`disable_tablet_balancing`](configuration_options/scylla-installation-and-configuration.md#disable_tablet_balancing) | `SCT_DISABLE_TABLET_BALANCING` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`docker_image`](configuration_options/docker-backend.md#docker_image) | `SCT_DOCKER_IMAGE` | [Docker backend](configuration_options/docker-backend.md) |
 | [`docker_image_cassandra`](configuration_options/auxiliary-db-cluster-oracle-cassandra.md#docker_image_cassandra) | `SCT_DOCKER_IMAGE_CASSANDRA` | [Auxiliary DB cluster (oracle / Cassandra)](configuration_options/auxiliary-db-cluster-oracle-cassandra.md) |
 | [`docker_network`](configuration_options/docker-backend.md#docker_network) | `SCT_DOCKER_NETWORK` | [Docker backend](configuration_options/docker-backend.md) |
@@ -401,6 +403,7 @@ concerns first, then one page per backend, then one per test type.
 | [`perf_gradual_threads`](configuration_options/performance-regression-tests.md#perf_gradual_threads) | `SCT_PERF_GRADUAL_THREADS` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_gradual_throttle_steps`](configuration_options/performance-regression-tests.md#perf_gradual_throttle_steps) | `SCT_PERF_GRADUAL_THROTTLE_STEPS` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_gradual_write_preload_data`](configuration_options/performance-regression-tests.md#perf_gradual_write_preload_data) | `SCT_PERF_GRADUAL_WRITE_PRELOAD_DATA` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
+| [`perf_p99_search`](configuration_options/performance-regression-tests.md#perf_p99_search) | `SCT_PERF_P99_SEARCH` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_simple_query_extra_command`](configuration_options/performance-regression-tests.md#perf_simple_query_extra_command) | `SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_stress_keyspace`](configuration_options/performance-regression-tests.md#perf_stress_keyspace) | `SCT_PERF_STRESS_KEYSPACE` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`perf_stress_table`](configuration_options/performance-regression-tests.md#perf_stress_table) | `SCT_PERF_STRESS_TABLE` | [Performance regression tests](configuration_options/performance-regression-tests.md) |

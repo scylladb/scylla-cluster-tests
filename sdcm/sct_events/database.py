@@ -49,6 +49,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     FILESYSTEM_ERROR: Type[LogEventProtocol]
     STACKTRACE: Type[LogEventProtocol]
     RAFT_TRANSFER_SNAPSHOT_ERROR: Type[LogEventProtocol]
+    RAFT_TRANSFER_SNAPSHOT_NOT_IMPLEMENTED: Type[LogEventProtocol]
     RAFT_TOPOLOGY_SENDING_ERROR: Type[LogEventProtocol]
     DISK_ERROR: Type[LogEventProtocol]
     COMPACTION_STOPPED: Type[LogEventProtocol]
@@ -187,6 +188,17 @@ DatabaseLogEvent.add_subevent_type(
     regex=r"raft - \[[\w-]*\] Transferring snapshot to [\w-]* "
     r"failed with: seastar::rpc::remote_verb_error \(connection is closed\)",
 )
+# SCYLLADB-2565: the raft groups of strongly consistent tablets cannot transfer a snapshot yet, and a stuck
+# migration retries it in a tight loop, hundreds of thousands of lines an hour. As events they put the event
+# pipeline up to two hours behind and, echoed to the console, fill the Jenkins builder's disk quota, so no event
+# is made.
+# The node's own log keeps the lines.
+DatabaseLogEvent.add_subevent_type(
+    "RAFT_TRANSFER_SNAPSHOT_NOT_IMPLEMENTED",
+    severity=Severity.SUPPRESS,
+    regex=r"raft - \[[\w-]*\] Transferring snapshot to [\w-]* "
+    r"failed with: std::runtime_error \(transfer_snapshot\(\) not implemented\)",
+)
 
 # scylladb/scylladb#22980
 DatabaseLogEvent.add_subevent_type(
@@ -262,6 +274,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.COMPACTION_STOPPED(),
     DatabaseLogEvent.DIRECTORY_NOT_EMPTY(),
     DatabaseLogEvent.RAFT_TRANSFER_SNAPSHOT_ERROR(),
+    DatabaseLogEvent.RAFT_TRANSFER_SNAPSHOT_NOT_IMPLEMENTED(),
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     DatabaseLogEvent.REACTOR_STALLED(),
     DatabaseLogEvent.KERNEL_CALLSTACK(),

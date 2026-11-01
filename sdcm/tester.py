@@ -118,6 +118,7 @@ from sdcm.provision.helpers.certificate import (
     SCYLLA_SSL_CONF_DIR,
 )
 from sdcm.reporting.tooling_reporter import PythonDriverReporter
+from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.scan_operation_thread import ScanOperationThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
 from sdcm.scylla_bench_thread import ScyllaBenchThread
@@ -1417,6 +1418,9 @@ class ClusterTester(unittest.TestCase):
                         # TODO: Replace with strong password generation
             else:
                 self.set_system_auth_rf(db_cluster=self.db_cluster)
+
+            if self.params.get("disable_tablet_balancing"):
+                StorageServiceClient(self.db_cluster.nodes[0]).set_tablet_balancing(enabled=False)
 
             if self.db_cluster.vector_store_cluster:
                 self.db_cluster.vector_store_cluster.configure_with_scylla_cluster(self.db_cluster)

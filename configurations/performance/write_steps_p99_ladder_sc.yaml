@@ -1,0 +1,9 @@
+# Write steps around the SC P99 = 10 ms knee on 3 x i8g.4xlarge (estimated at 75-100k op/s).
+# 80k runs twice to check that step P99 repeats. 1,000 threads per loader keep 4,000 requests in flight,
+# so at 1,000 threads the 50k step is not comparable with the weekly page (500 threads).
+# See docs/plans/mini-plans/2026-10-26-sc-ec-max-write-throughput-p99-10ms.md
+perf_gradual_threads: {"write": 1000}
+perf_gradual_throttle_steps: {"write": ['50000', '65000', '80000', '80000', '100000', '120000', '150000', 'unthrottled']}
+perf_gradual_step_duration: {"write": '15m'}
+# Bracket for test_write_max_throughput_under_p99: the ladder ends until Phase 0 narrows it
+perf_p99_search: {"target_p99_ms": 10, "low": 50000, "high": 150000, "tolerance": 5000, "probe_duration": '10m', "confirm_duration": '15m'}
