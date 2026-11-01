@@ -49,8 +49,9 @@ const USE_PREPARED_STATEMENTS = latte::param!("use_prepared_statements", true);
 const DELETE_START_INDEX = latte::param!("delete_start_index", 0);
 const DELETE_END_INDEX = latte::param!("delete_end_index", 0);
 
-const KEYSPACE = "latte";
-const TABLE = "validation";
+// NOTE: string params must be passed in escaped double-quotes: -P keyspace=\"ks1\"
+const KEYSPACE = latte::param!("keyspace", "latte");
+const TABLE = latte::param!("table", "validation");
 
 const P_STMT = #{
     "INSERT": #{

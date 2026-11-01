@@ -155,6 +155,7 @@ from sdcm.utils.common import (
     get_data_dir_path,
 )
 from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.cluster_config import apply_cluster_config
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.features import is_tablets_feature_enabled
@@ -1417,6 +1418,9 @@ class ClusterTester(unittest.TestCase):
                         # TODO: Replace with strong password generation
             else:
                 self.set_system_auth_rf(db_cluster=self.db_cluster)
+
+            if cluster_config := self.params.get("cluster_config"):
+                apply_cluster_config(self.db_cluster, cluster_config)
 
             if self.db_cluster.vector_store_cluster:
                 self.db_cluster.vector_store_cluster.configure_with_scylla_cluster(self.db_cluster)
