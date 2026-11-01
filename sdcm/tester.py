@@ -870,6 +870,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def latency_results_file(self):
         return TestConfig.latency_results_file()
 
+    def _is_rf_rack_valid_keyspaces_enabled(self) -> bool:
+        """'rf_rack_valid_keyspaces' bounds a keyspace's RF by the number of racks in the DC."""
+        return bool((self.params.get("append_scylla_yaml") or {}).get("rf_rack_valid_keyspaces", False))
+
     @property
     def reliable_replication_factor(self) -> int:
         """
@@ -883,11 +887,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         min_nodes_dc = min([int(nodes_num) for nodes_num in n_db_nodes.split() if int(nodes_num) > 0])
 
         # In case tablets are enabled, it's better to set RF smaller than dc-nodes-number, so decommission is allowed.
-        rf_candidate = (
-            max([min_nodes_dc - 1, 1]) if is_tablets_feature_enabled(self.db_cluster.nodes[0]) else min_nodes_dc
-        )
+        tablets_enabled = is_tablets_feature_enabled(self.db_cluster.nodes[0])
+        rf_candidate = max([min_nodes_dc - 1, 1]) if tablets_enabled else min_nodes_dc
         # NOTE: use RF=3 at max to avoid problems on big setups
-        return min(rf_candidate, 3)
+        rf_candidate = min(rf_candidate, 3)
+        if tablets_enabled and self._is_rf_rack_valid_keyspaces_enabled():
+            # 'rf_rack_valid_keyspaces' makes Scylla reject CREATE KEYSPACE with RF above the rack count
+            rf_candidate = min(rf_candidate, max(self.db_cluster.racks_count, 1))
+        return rf_candidate
 
     @property
     def test_id(self):
