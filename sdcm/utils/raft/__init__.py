@@ -407,9 +407,7 @@ class RaftFeature(RaftFeatureOperations):
         This method generates health check events and never raises exceptions to avoid
         breaking the nemesis thread. Any exceptions are caught and converted to health events.
         """
-        LOGGER.debug(
-            "Check group0 and token ring consistency on node %s (host_id=%s)...", self._node.name, self._node.host_id
-        )
+        LOGGER.debug("Check group0 and token ring consistency on node %s...", self._node.name)
 
         try:
             # Filter out any None values from tokenring_members
@@ -458,11 +456,7 @@ class RaftFeature(RaftFeatureOperations):
                     error=error_message,
                 )
 
-            LOGGER.debug(
-                "Group0 and token-ring consistency check completed on node %s (host_id=%s)...",
-                self._node.name,
-                self._node.host_id,
-            )
+            LOGGER.debug("Group0 and token-ring consistency check completed on node %s", self._node.name)
         except Exception as exc:  # noqa: BLE001
             # Never raise exceptions from health checks - convert to health events instead
             error_message = (
