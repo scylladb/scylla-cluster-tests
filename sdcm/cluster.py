@@ -7605,7 +7605,8 @@ class BaseLoaderSet:
 class BaseMonitorSet:
     # This is a Mixin for monitoring cluster and should not be inherited
     DB_NODES_IP_ADDRESS = "ip_address"
-    # False for a host other jobs share: setup then fails on a missing Docker instead of installing it
+    # False for a host other jobs share: setup then leaves its Docker, firewall and packages alone, and never runs
+    # kill-all.sh, which removes every container with the stack's default names
     owns_host = True
     json_file_params_for_replace = {"$test_name": get_test_name()}
 
@@ -7730,7 +7731,7 @@ class BaseMonitorSet:
         node.wait_ssh_up()
         node.install_minicloud_ca()
 
-        if node.distro.is_rhel_like or self.params.get("cluster_backend") == "oci":
+        if self.owns_host and (node.distro.is_rhel_like or self.params.get("cluster_backend") == "oci"):
             node.disable_firewall()
             node.upgrade_ssh_packages()
 
@@ -7752,6 +7753,8 @@ class BaseMonitorSet:
         try:
             self.start_scylla_monitoring(node)
         except Failure, UnexpectedExit, Libssh2_UnexpectedExit:
+            if not self.owns_host:
+                raise
             self.restart_scylla_monitoring()
         # The time will be used in url of Grafana monitor,
         # the data from this point to the end of test will
@@ -8420,6 +8423,12 @@ class BaseMonitorSet:
         self.log.info("posting annotations result: %s", res)
 
     def stop_scylla_monitoring(self, node):
+        if not self.owns_host:
+            raise NodeSetupFailed(
+                node=node,
+                error_msg="Not stopping the monitoring stack: kill-all.sh would also remove the containers of other "
+                "runs' monitoring stacks on this shared host",
+            )
         kill_script = dedent(f"""
             cd {self.monitor_install_path}
             ./kill-all.sh

@@ -6,6 +6,7 @@ Lab hosts already run Docker and other jobs, so the setup must not reinstall or 
 from unittest.mock import MagicMock
 
 import pytest
+from invoke.exceptions import UnexpectedExit
 
 from sdcm.cluster import BaseMonitorSet, NodeSetupFailed
 
@@ -84,3 +85,38 @@ def test_host_sct_does_not_own_fails_instead_of_changing_docker(missing):
 
     node.remoter.sudo.assert_not_called()
     assert commands(node) == [], "no Docker install, group change or restart"
+
+
+def shared_host_setup(monkeypatch, start_error=None) -> tuple[MagicMock, MagicMock]:
+    """Run the monitor node setup on a RHEL-like baremetal host, with every step of its own mocked."""
+    monkeypatch.setattr("sdcm.cluster.set_grafana_url", MagicMock())
+    node = MagicMock(external_address="1.2.3.4")
+    node.distro.is_rhel_like = True
+    monitor_set = MagicMock(owns_host=False, params={"cluster_backend": "baremetal"})
+    monitor_set.test_config.REUSE_CLUSTER = False
+    monitor_set.start_scylla_monitoring.side_effect = start_error
+    BaseMonitorSet.node_setup(monitor_set, node)
+    return node, monitor_set
+
+
+def test_shared_host_keeps_its_firewall_and_ssh_packages(monkeypatch):
+    node, _ = shared_host_setup(monkeypatch)
+
+    node.disable_firewall.assert_not_called()
+    node.upgrade_ssh_packages.assert_not_called()
+
+
+def test_shared_host_fails_a_stack_that_does_not_start_instead_of_restarting_it(monkeypatch):
+    error = UnexpectedExit(MagicMock(exited=1))
+
+    with pytest.raises(UnexpectedExit):
+        shared_host_setup(monkeypatch, start_error=error)
+
+
+def test_shared_host_never_runs_kill_all():
+    node = MagicMock()
+
+    with pytest.raises(NodeSetupFailed, match="other runs' monitoring stacks"):
+        BaseMonitorSet.stop_scylla_monitoring(MagicMock(owns_host=False), node)
+
+    node.remoter.run.assert_not_called()
