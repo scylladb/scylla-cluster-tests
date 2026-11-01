@@ -3367,9 +3367,10 @@ class NemesisRunner:
             errors = []
             audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)
             InfoEvent(message="Writing/Reading data from audited keyspace").publish()
+            rf = self.tester.reliable_replication_factor
             write_cmd = (
                 f"cassandra-stress write no-warmup cl=ONE n=1000 -schema"
-                f" 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)"
+                f" 'replication(strategy=NetworkTopologyStrategy,replication_factor={rf})"
                 f" keyspace={audit_keyspace}' -mode cql3 native -rate 'threads=1 throttle=1000/s'"
                 f" -pop seq=1..1000 -col 'n=FIXED(1) size=FIXED(128)' -log interval=5"
             )
@@ -3379,7 +3380,7 @@ class NemesisRunner:
             self.tester.verify_stress_thread(write_thread, error_handler=self._nemesis_stress_failure_handler)
             read_cmd = (
                 f"cassandra-stress read no-warmup cl=ONE n=1000 "
-                f" -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)"
+                f" -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={rf})"
                 f" keyspace={audit_keyspace}' -mode cql3 native -rate 'threads=1 throttle=1000/s'"
                 f" -pop seq=1..1000 -col 'n=FIXED(1) size=FIXED(128)' -log interval=5"
             )
