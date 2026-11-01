@@ -964,10 +964,6 @@ class ClusterTester(unittest.TestCase):
     def latency_results_file(self):
         return TestConfig.latency_results_file()
 
-    def _is_rf_rack_valid_keyspaces_enabled(self) -> bool:
-        """'rf_rack_valid_keyspaces' bounds a keyspace's RF by the number of racks in the DC."""
-        return bool((self.params.get("append_scylla_yaml") or {}).get("rf_rack_valid_keyspaces", False))
-
     @property
     def reliable_replication_factor(self) -> int:
         """
@@ -985,7 +981,8 @@ class ClusterTester(unittest.TestCase):
         rf_candidate = max([min_nodes_dc - 1, 1]) if tablets_enabled else min_nodes_dc
         # NOTE: use RF=3 at max to avoid problems on big setups
         rf_candidate = min(rf_candidate, 3)
-        if tablets_enabled and self._is_rf_rack_valid_keyspaces_enabled():
+        rf_rack_valid = (self.params.get("append_scylla_yaml") or {}).get("rf_rack_valid_keyspaces", False)
+        if tablets_enabled and rf_rack_valid:
             # 'rf_rack_valid_keyspaces' makes Scylla reject CREATE KEYSPACE with RF above the rack count
             rf_candidate = min(rf_candidate, max(self.db_cluster.racks_count, 1))
         return rf_candidate
