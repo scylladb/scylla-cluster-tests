@@ -138,7 +138,7 @@ or run Hydra on an [SCT runner](docs/sct-runners.md) (see below), where the defa
 | `azure` | `export SCT_IP_SSH_CONNECTIONS=public` | [Azure networking](docs/azure_configuration.md) |
 | `oci` | `export SCT_IP_SSH_CONNECTIONS=public` | Oracle Cloud |
 | `xcloud` | `export SCT_XCLOUD_PROVIDER=aws SCT_XCLOUD_ENV=lab` | ScyllaDB Cloud managed clusters. [xcloud backend](docs/xcloud-backend.md) |
-| `baremetal` | `export SCT_S3_BAREMETAL_CONFIG=<name>` (required, no default) | Runs against hosts that already exist, such as lab machines. The inventory is a local `<name>.json` if present, otherwise `<name>.json` from the keystore. Being hardened for regular local lab use. |
+| `baremetal` | `export SCT_S3_BAREMETAL_CONFIG=<name>` (required, no default) | Runs against hosts that already exist, such as lab machines. The inventory is a local `<name>.json` if present, otherwise `<name>.json` from the keystore. [baremetal backend](docs/baremetal-backend.md) |
 | `k8s-eks`, `k8s-gke` | | Scylla Operator on managed Kubernetes. [K8S functional tests](docs/k8s-functional-test.md) |
 | `k8s-local-kind`, `k8s-local-kind-aws`, `k8s-local-kind-gce` | | Kubernetes functional tests on a local or single-VM kind cluster. |
 
