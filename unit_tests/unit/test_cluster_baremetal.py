@@ -34,6 +34,7 @@ from sdcm.cluster_baremetal import (
     PACKAGE_BASELINE,
     SCYLLA_COREDUMP_MOUNT_UNIT,
     SERVICE_BASELINE,
+    MonitorSetPhysical,
     NodeIpsNotConfiguredError,
     PhysicalHost,
     PhysicalMachineCluster,
@@ -1364,6 +1365,13 @@ def test_a_baseline_that_fails_to_record_does_not_fail_the_node():
 
     node.record_host_baseline.assert_called_once()
     assert "leaves them as they are" in node.log.warning.call_args.args[0]
+
+
+def test_each_run_gets_its_own_monitoring_directory():
+    node = MagicMock(tags={"TestId": "1234-abcd"})
+    node.remoter.run.return_value = MagicMock(stdout="/home/fedora\n")
+
+    assert str(MonitorSetPhysical.get_monitor_install_path_base(node)) == "/home/fedora/sct-monitoring-1234-abcd"
 
 
 def _host_with_log_followers(leaders: str) -> PhysicalHost:
