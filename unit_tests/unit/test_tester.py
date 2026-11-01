@@ -750,25 +750,30 @@ def _rf_tester(n_db_nodes, racks_count, append_scylla_yaml=None, tablets_enabled
         return ClusterTester.reliable_replication_factor.fget(tester)
 
 
+RF_RACK_VALID = {"rf_rack_valid_keyspaces": True}
+ENFORCE_RACK_LIST = {"enforce_rack_list": True}
+
+
 @pytest.mark.parametrize(
-    "tablets_enabled, rf_rack_valid, n_db_nodes, racks_count, expected_rf",
+    "tablets_enabled, append_scylla_yaml, n_db_nodes, racks_count, expected_rf",
     [
-        pytest.param(True, True, [3], 1, 1, id="tablets-rfrack-one-rack-sct-717"),
-        pytest.param(True, True, [6], 1, 1, id="tablets-rfrack-one-rack-bites"),
-        pytest.param(True, True, [6], 3, 3, id="tablets-rfrack-multi-rack-unaffected"),
-        pytest.param(True, True, [6], 4, 3, id="tablets-rfrack-cap-at-3-still-wins"),
-        pytest.param(True, False, [6], 1, 3, id="tablets-rfrack-disabled-no-change"),
-        pytest.param(False, True, [6], 1, 3, id="no-tablets-rfrack-enabled-no-change"),
-        pytest.param(False, True, [2, 3], 1, 2, id="no-tablets-path-untouched"),
-        pytest.param(True, True, [1], 0, 1, id="never-degenerates-to-zero"),
+        pytest.param(True, RF_RACK_VALID, [3], 1, 1, id="tablets-rfrack-one-rack-sct-717"),
+        pytest.param(True, RF_RACK_VALID, [6], 1, 1, id="tablets-rfrack-one-rack-bites"),
+        pytest.param(True, ENFORCE_RACK_LIST, [3], 1, 1, id="tablets-enforce-rack-list-one-rack"),
+        pytest.param(True, RF_RACK_VALID, [6], 3, 3, id="tablets-rfrack-multi-rack-unaffected"),
+        pytest.param(True, RF_RACK_VALID, [6], 4, 3, id="tablets-rfrack-cap-at-3-still-wins"),
+        pytest.param(True, {"rf_rack_valid_keyspaces": False}, [6], 1, 3, id="tablets-rfrack-disabled-no-change"),
+        pytest.param(False, RF_RACK_VALID, [6], 1, 3, id="no-tablets-rfrack-enabled-no-change"),
+        pytest.param(False, RF_RACK_VALID, [2, 3], 1, 2, id="no-tablets-path-untouched"),
+        pytest.param(True, RF_RACK_VALID, [1], 0, 1, id="never-degenerates-to-zero"),
         pytest.param(True, None, [6], 1, 3, id="tablets-no-append-scylla-yaml-no-change"),
     ],
 )
-def test_reliable_replication_factor(tablets_enabled, rf_rack_valid, n_db_nodes, racks_count, expected_rf):
+def test_reliable_replication_factor(tablets_enabled, append_scylla_yaml, n_db_nodes, racks_count, expected_rf):
     rf = _rf_tester(
         n_db_nodes=n_db_nodes,
         racks_count=racks_count,
-        append_scylla_yaml=None if rf_rack_valid is None else {"rf_rack_valid_keyspaces": rf_rack_valid},
+        append_scylla_yaml=append_scylla_yaml,
         tablets_enabled=tablets_enabled,
     )
     assert rf == expected_rf
