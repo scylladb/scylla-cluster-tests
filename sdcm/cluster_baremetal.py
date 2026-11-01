@@ -7,12 +7,14 @@ This backend is experimental and not regularly tested in CI.
 import logging
 import re
 import shlex
+from pathlib import Path
 from typing import Literal, NotRequired, Optional, TypedDict
 
 from sdcm import cluster
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.test_config import TestConfig
 from sdcm.utils.apt import apt_cmd
+from sdcm.utils.decorators import retrying
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT
 from sdcm.utils.remote_logger import journal_time
 from sdcm.utils.rpm import rpm_cmd
@@ -800,8 +802,15 @@ class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):
 
 
 class MonitorSetPhysical(cluster.BaseMonitorSet, PhysicalMachineCluster):
-    # A shared lab host: a Docker install or restart would hit other jobs' containers
+    # A shared lab host: changing its Docker, firewall or packages would hit the other jobs on it
     owns_host = False
+
+    @staticmethod
+    @retrying(n=5)
+    def get_monitor_install_path_base(node) -> Path:
+        # Each run gets its own install and data directory, so a second run's monitor on the host can't delete them
+        home = node.remoter.run("echo $HOME").stdout.strip()
+        return Path(home) / f"sct-monitoring-{node.tags['TestId']}"
 
     def __init__(self, **kwargs):
         user_prefix = kwargs.pop("user_prefix")
