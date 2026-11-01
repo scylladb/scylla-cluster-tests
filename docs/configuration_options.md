@@ -28,12 +28,12 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-525 options across 29 groups.
+526 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 74 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
-| [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
+| [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 45 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 72 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 16 | The monitoring stack, event severities, Argus reporting and email reports. |
@@ -148,6 +148,7 @@ concerns first, then one page per backend, then one per test type.
 | [`cloud_prom_host`](configuration_options/scylla-cloud-xcloud-backend.md#cloud_prom_host) | `SCT_CLOUD_PROM_HOST` | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) |
 | [`cloud_prom_path`](configuration_options/scylla-cloud-xcloud-backend.md#cloud_prom_path) | `SCT_CLOUD_PROM_PATH` | [Scylla Cloud (xcloud) backend](configuration_options/scylla-cloud-xcloud-backend.md) |
 | [`cluster_backend`](configuration_options/general-and-provisioning.md#cluster_backend) | `SCT_CLUSTER_BACKEND` | [General and provisioning](configuration_options/general-and-provisioning.md) |
+| [`cluster_config`](configuration_options/scylla-installation-and-configuration.md#cluster_config) | `SCT_CLUSTER_CONFIG` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
 | [`cluster_health_check`](configuration_options/general-and-provisioning.md#cluster_health_check) | `SCT_CLUSTER_HEALTH_CHECK` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`cluster_health_check_parallel_workers`](configuration_options/general-and-provisioning.md#cluster_health_check_parallel_workers) | `SCT_CLUSTER_HEALTH_CHECK_PARALLEL_WORKERS` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`cluster_target_size`](configuration_options/longevity-tests.md#cluster_target_size) | `SCT_CLUSTER_TARGET_SIZE` | [Longevity tests](configuration_options/longevity-tests.md) |
