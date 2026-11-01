@@ -105,9 +105,12 @@ class PhysicalHostCleanup:
     `test_config`.
     """
 
-    def clean_up_host(self, tunnel_ports: bool, scylla_disk_setup: bool) -> None:
+    def clean_up_host(self, tunnel_ports: bool, scylla_disk_setup: bool, restore_baseline: bool = True) -> None:
         """Run the cleanup steps asked for, and restore the host's packages. A failing step is logged and does not
         skip the others.
+
+        `restore_baseline` is False for a loader or monitor host: other jobs share it, and restoring the baseline
+        would remove the packages they installed since, and those the next run needs.
 
         `scylla_disk_setup` is for a DB host the run installed Scylla on: its disk setup is reset, and once its
         packages are restored, the files the Scylla install left are removed.
@@ -129,14 +132,15 @@ class PhysicalHostCleanup:
                     self._reset_scylla_disk_setup(disks)
             except Exception as exc:  # noqa: BLE001
                 self.log.warning("Could not reset the scylla disk setup, the next setup will: %s", exc)
-        try:
-            self.restore_packages()
-        except Exception as exc:  # noqa: BLE001
-            self.log.warning("Could not restore the packages of the host, the next cleanup will: %s", exc)
-        try:
-            self.restore_services()
-        except Exception as exc:  # noqa: BLE001
-            self.log.warning("Could not restore the services of the host, the next cleanup will: %s", exc)
+        if restore_baseline:
+            try:
+                self.restore_packages()
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Could not restore the packages of the host, the next cleanup will: %s", exc)
+            try:
+                self.restore_services()
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Could not restore the services of the host, the next cleanup will: %s", exc)
         if scylla_disk_setup:
             try:
                 self.remove_scylla_leftovers()
@@ -575,6 +579,9 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
     def wait_for_cloud_init(self):
         # The first step of BaseNode.init() once SSH is up: the baseline is recorded before SCT installs anything on
         # the host, e.g. vector by configure_remote_logging() and rsync by do_default_installations()
+        if self.node_type != "db":
+            # Loader and monitor hosts are shared with other jobs, and their cleanup doesn't restore a baseline
+            return
         try:
             self.record_host_baseline()
         except Exception as exc:  # noqa: BLE001

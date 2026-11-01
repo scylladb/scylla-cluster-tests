@@ -1305,7 +1305,8 @@ def test_the_db_host_cleanup_stops_scylla_restores_packages_then_removes_leftove
     assert calls == ["log followers", "systemctl stop scylla-server.service", "packages", "services", "leftovers"]
 
 
-def test_a_loader_host_cleanup_skips_the_scylla_steps(monkeypatch):
+def test_a_loader_host_cleanup_skips_the_scylla_steps_and_the_baseline_restore(monkeypatch):
+    """Other jobs share a loader or monitor host: a restore would remove the packages they installed."""
     host = _host_with_disk_state()
     calls = []
     monkeypatch.setattr(host, "_stop_stale_log_followers", lambda: calls.append("log followers"))
@@ -1313,9 +1314,9 @@ def test_a_loader_host_cleanup_skips_the_scylla_steps(monkeypatch):
     monkeypatch.setattr(host, "restore_services", lambda: calls.append("services"))
     monkeypatch.setattr(host, "remove_scylla_leftovers", lambda: calls.append("leftovers"))
 
-    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=False)
+    host.clean_up_host(tunnel_ports=False, scylla_disk_setup=False, restore_baseline=False)
 
-    assert calls == ["log followers", "packages", "services"]
+    assert calls == ["log followers"]
     host.remoter.sudo.assert_not_called()
 
 
@@ -1336,6 +1337,7 @@ def test_the_node_records_the_baseline_before_installing_anything(monkeypatch):
     """BaseNode.init() installs vector and rsync once SSH is up: the baseline must not have them."""
     calls = []
     node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.node_type = "db"
     node.ssh_login_info = {"hostname": None}
     node.logdir = None
     node.log = MagicMock()
@@ -1358,6 +1360,7 @@ def test_the_node_records_the_baseline_before_installing_anything(monkeypatch):
 
 def test_a_baseline_that_fails_to_record_does_not_fail_the_node():
     node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.node_type = "db"
     node.log = MagicMock()
     node.record_host_baseline = MagicMock(side_effect=RuntimeError("rpm: exited with 1"))
 
@@ -1365,6 +1368,17 @@ def test_a_baseline_that_fails_to_record_does_not_fail_the_node():
 
     node.record_host_baseline.assert_called_once()
     assert "leaves them as they are" in node.log.warning.call_args.args[0]
+
+
+@pytest.mark.parametrize("node_type", ["loader", "monitor"])
+def test_a_shared_host_records_no_baseline(node_type):
+    node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.node_type = node_type
+    node.record_host_baseline = MagicMock()
+
+    node.wait_for_cloud_init()
+
+    node.record_host_baseline.assert_not_called()
 
 
 def test_each_run_gets_its_own_monitoring_directory():
