@@ -56,6 +56,10 @@ for a public function or method.
 A comment tells why the code does something, or names a constraint that the
 code does not show. Do not repeat what the code says.
 
+Describe the code as it is. Do not describe an earlier version of the code,
+or tell why an earlier approach was wrong. The commit message and the pull
+request carry that history.
+
 ### No Silent Errors
 
 Do not write a bare `except:` or an `except` block that only passes. Catch the
@@ -64,6 +68,6 @@ A custom exception subclasses the SCT exception of its area.
 
 Sources: `pyproject.toml`, `.pre-commit-config.yaml`, `AGENTS.md` sections
 Code Style Guidelines and Documentation Standards, `skills/code-review/SKILL.md`
-check 4, and the code: `LOGGER` in 212 of 238 `sdcm` modules with a module
+check 4, the review of pull request #16699, and the code: `LOGGER` in 212 of 238 `sdcm` modules with a module
 logger, lazy arguments in 1032 of 1142 `LOGGER.info`, `LOGGER.debug`, and
 `LOGGER.warning` calls.
