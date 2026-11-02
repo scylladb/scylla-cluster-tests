@@ -29,8 +29,17 @@ one scale, and labels it states do not move when the rest of the plan changes. S
 Argus' in docs/fts-search-test.md.
 """
 
+import hashlib
+import logging
+from datetime import datetime, timezone
+
 from argus.client.generic_result import ColumnMetadata, GenericResultTable, ResultType, Status, ValidationRule
 from sdcm.argus_results import submit_results_to_argus
+
+LOGGER = logging.getLogger(__name__)
+
+DAY = 24 * 60 * 60
+X_AXIS_NOTE = "The x axis is the later of the ScyllaDB and the vector-store build dates."
 
 LATENCY_COLUMNS = {"p50_ms": "P50", "p90_ms": "P90", "p99_ms": "P99", "p99_9_ms": "P99.9"}
 THROUGHPUT_COLUMN = "throughput"
@@ -71,7 +80,7 @@ def _log_description(workload, what: str) -> str:
     )
 
 
-def build_log_table(workload) -> GenericResultTable:
+def build_log_table(workload, sut_timestamp: int = 0) -> GenericResultTable:
     return GenericResultTable(
         name=_table_name(workload, "index builds"),
         description=_log_description(workload, "index build"),
@@ -83,10 +92,11 @@ def build_log_table(workload) -> GenericResultTable:
             _label(INDEXING_THROUGHPUT_COLUMN, f"{workload.item_noun}/s"),
             _label("track"),
         ],
+        sut_timestamp=sut_timestamp,
     )
 
 
-def search_log_table(workload) -> GenericResultTable:
+def search_log_table(workload, sut_timestamp: int = 0) -> GenericResultTable:
     return GenericResultTable(
         name=_table_name(workload, "searches"),
         description=_log_description(workload, "query configuration"),
@@ -103,16 +113,17 @@ def search_log_table(workload) -> GenericResultTable:
             _label("P99 limit", "ms"),
             _label("track"),
         ],
+        sut_timestamp=sut_timestamp,
     )
 
 
-def build_track_table(workload, track: str) -> GenericResultTable:
+def build_track_table(workload, track: str, sut_timestamp: int = 0) -> GenericResultTable:
     return GenericResultTable(
         name=_table_name(workload, track),
         description=(
             f"{_subject(workload)} index build time and indexing throughput of the plan steps in the "
             f"'{track}' track, one row per step under its 'build_label'. '{workload.record_label}' is how "
-            "much the index covers."
+            f"much the index covers. {X_AXIS_NOTE}"
         ),
         columns=[
             ColumnMetadata(name=BUILD_TIME_COLUMN, unit="s", type=ResultType.FLOAT, higher_is_better=False),
@@ -124,10 +135,13 @@ def build_track_table(workload, track: str) -> GenericResultTable:
             ),
             _label(workload.record_label),
         ],
+        sut_timestamp=sut_timestamp,
     )
 
 
-def search_track_table(workload, track: str, expected_p99_ms: float, rate_limited: bool) -> GenericResultTable:
+def search_track_table(
+    workload, track: str, expected_p99_ms: float, rate_limited: bool, sut_timestamp: int = 0
+) -> GenericResultTable:
     # NOTE: a rate-limited query runs at its target rate, so its throughput says nothing to graph. An
     #       unthrottled one runs at saturation, where P99 follows concurrency over throughput, so only
     #       a rate-limited track checks it.
@@ -136,7 +150,7 @@ def search_track_table(workload, track: str, expected_p99_ms: float, rate_limite
         if rate_limited
         else [ColumnMetadata(name=THROUGHPUT_COLUMN, unit="op/s", type=ResultType.FLOAT, higher_is_better=True)]
     )
-    limit = f"P99 is checked against {expected_p99_ms:g} ms." if rate_limited else ""
+    limit = f"P99 is checked against {expected_p99_ms:g} ms. " if rate_limited else ""
     rules = {LATENCY_COLUMNS["p99_ms"]: ValidationRule(fixed_limit=expected_p99_ms)} if rate_limited else {}
     return GenericResultTable(
         name=_table_name(workload, track),
@@ -146,7 +160,7 @@ def search_track_table(workload, track: str, expected_p99_ms: float, rate_limite
             "query; rate: target queries per second; stress options: the latte flags the plan adds, such as "
             "concurrency, queries in flight. "
             f"'{workload.record_label}' is how much was indexed when the queries ran. "
-            f"{limit}"
+            f"{limit}{X_AXIS_NOTE}"
         ),
         columns=[
             *(
@@ -161,6 +175,7 @@ def search_track_table(workload, track: str, expected_p99_ms: float, rate_limite
             _label("stress options"),
             _label("query example"),
         ],
+        sut_timestamp=sut_timestamp,
         validation_rules=rules,
     )
 
@@ -173,9 +188,10 @@ class SearchArgusReporter:
     got. Track rows need no deduplication here -- the plan is checked for repeated labels up front.
     """
 
-    def __init__(self, workload, argus_client):
+    def __init__(self, workload, argus_client, sut_timestamp: int = 0):
         self.workload = workload
         self.argus_client = argus_client
+        self.sut_timestamp = sut_timestamp
         self._records = 0
 
     def report(self, record: dict) -> None:
@@ -204,7 +220,7 @@ class SearchArgusReporter:
 
     def _log(self, record: dict) -> GenericResultTable:
         search = record["phase"] == "search"
-        table = (search_log_table if search else build_log_table)(self.workload)
+        table = (search_log_table if search else build_log_table)(self.workload, self.sut_timestamp)
         # Numbered across both logs, so rows keep the run's order and stay apart; the rest is in the columns.
         row = f"#{self._records:02d} {record['query_set'] if search else 'index build'}"
         cells = {
@@ -232,7 +248,7 @@ class SearchArgusReporter:
         return table
 
     def _build_track(self, record: dict) -> GenericResultTable:
-        table = build_track_table(self.workload, record["track"])
+        table = build_track_table(self.workload, record["track"], self.sut_timestamp)
         self._add(
             table,
             record["label"],
@@ -246,7 +262,9 @@ class SearchArgusReporter:
 
     def _search_track(self, record: dict) -> GenericResultTable:
         rate_limited = record["rate"] > 0
-        table = search_track_table(self.workload, record["track"], record["expected_p99_read_ms"], rate_limited)
+        table = search_track_table(
+            self.workload, record["track"], record["expected_p99_read_ms"], rate_limited, self.sut_timestamp
+        )
         self._add(
             table,
             record["label"],
@@ -262,3 +280,24 @@ class SearchArgusReporter:
             },
         )
         return table
+
+
+def sut_timestamp(
+    scylla_date: str | None, scylla_revision: str, vector_store_time: int | None, vector_store_revision: str
+) -> int:
+    """The x position of a run in the Argus graphs: the later of the two builds' days, plus an offset
+    within that day hashed from both revisions, so each pair of builds gets a point of its own. 0,
+    which leaves the position to Argus, when neither date is known.
+    """
+    days = []
+    if scylla_date:
+        try:
+            days.append(int(datetime.strptime(scylla_date, "%Y%m%d").replace(tzinfo=timezone.utc).timestamp()))
+        except ValueError:
+            LOGGER.warning("Unexpected ScyllaDB build date %r", scylla_date)
+    if vector_store_time:
+        days.append(vector_store_time - vector_store_time % DAY)
+    if not days:
+        return 0
+    offset = int(hashlib.sha256(f"{scylla_revision}/{vector_store_revision}".encode()).hexdigest(), 16) % DAY
+    return max(days) + offset

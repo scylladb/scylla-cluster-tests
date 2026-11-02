@@ -326,6 +326,11 @@ rate-limited track's P99 over its limit fails the run: Argus marks the cell as a
 reports the test as failed, but the run carries on to the end and records everything else. Any
 other entry's limit is only recorded, as `p99_within_expectation` in the results file.
 
+The x-axis is not the usual ScyllaDB build date alone: it is the later of the ScyllaDB and the
+vector-store build dates, so a new build of either gives a new point, and runs of the same two
+builds share one. The vector-store date is its AMI's creation date, or for a source build the date
+of the commit it built. `sct.log` shows what a run used (`Argus x-axis:`).
+
 ---
 
 ## Notes on the test config format

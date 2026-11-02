@@ -1108,6 +1108,9 @@ class _ArgusTester:
         self.log = logging.getLogger("test")
         self.test_config = types.SimpleNamespace(argus_client=lambda: argus_client)
 
+    def _sut_timestamp(self):
+        return 0
+
 
 def test_the_records_of_a_run_share_one_reporter():
     """Its row count numbers the overview rows; a reporter per record would make them all '#01'."""
@@ -1133,6 +1136,68 @@ def test_an_argus_failure_is_logged_not_raised(caplog):
 
     assert "Failed to report the index_build record to Argus" in caplog.text
     assert "argus down" in caplog.text
+
+
+class _SutTester:
+    """The flow's view of the builds under test, for '_sut_timestamp'."""
+
+    def __init__(self, scylla_versions=None, scylla_package=None, build=(1760000000, "ami-0vs")):
+        self.log = logging.getLogger("test")
+        self._scylla_versions = scylla_versions or {}
+        self._scylla_package = scylla_package
+        self.build = build
+
+    def get_scylla_versions(self):
+        return self._scylla_versions
+
+    def generate_scylla_server_package(self):
+        if self._scylla_package is None:
+            raise ValueError("Unable to parse scylla version")
+        return self._scylla_package
+
+    def _vector_store_node(self):
+        if isinstance(self.build, Exception):
+            raise self.build
+        return types.SimpleNamespace(get_vector_store_build=lambda: self.build)
+
+
+@pytest.fixture(name="positioned")
+def fixture_positioned(monkeypatch):
+    """'sut_timestamp' returns its arguments, so a test sees what the flow passed it."""
+    monkeypatch.setattr(search_perf_test, "sut_timestamp", lambda *args: args)
+
+
+def test_the_position_comes_from_both_builds(positioned):
+    tester = _SutTester(scylla_versions={"scylla-server": {"date": "20261007", "commit_id": "96e73c66cc74"}})
+
+    assert search_perf_test.SearchPerformanceTest._sut_timestamp(tester) == (
+        "20261007",
+        "96e73c66cc74",
+        1760000000,
+        "ami-0vs",
+    )
+
+
+def test_an_offline_scylla_is_dated_by_its_version_string(positioned):
+    package = types.SimpleNamespace(date="20261007", revision_id="96e73c66cc74")
+
+    assert search_perf_test.SearchPerformanceTest._sut_timestamp(_SutTester(scylla_package=package))[:2] == (
+        "20261007",
+        "96e73c66cc74",
+    )
+
+
+def test_an_undated_scylla_still_dates_the_run_by_vector_store(positioned):
+    assert search_perf_test.SearchPerformanceTest._sut_timestamp(_SutTester())[:3] == (None, "", 1760000000)
+
+
+def test_a_failed_lookup_leaves_the_position_to_argus(positioned, caplog):
+    """Raising would stop every record of the run from reaching Argus."""
+    tester = _SutTester(build=RuntimeError("vector-store unreachable"))
+
+    with caplog.at_level(logging.WARNING):
+        assert search_perf_test.SearchPerformanceTest._sut_timestamp(tester) == 0
+    assert "vector-store unreachable" in caplog.text
 
 
 def test_an_unmeasured_build_is_recorded_with_nulls(tmp_path):

@@ -207,9 +207,8 @@ def test_a_dataset_is_loaded_indexed_and_reported(request, docker_scylla, docker
             "".join(f"{doc_id}_{shard}\t{body}\n" for doc_id, body in documents), encoding="utf-8"
         )
     # The flow resolves a dataset directory inside the repo; keep this run's data out of the tree.
-    request.getfixturevalue("monkeypatch").setattr(
-        search_perf_test, "_local_path", lambda _workload, *parts: str(tmp_path.joinpath(*parts))
-    )
+    monkeypatch = request.getfixturevalue("monkeypatch")
+    monkeypatch.setattr(search_perf_test, "_local_path", lambda _workload, *parts: str(tmp_path.joinpath(*parts)))
 
     logdir = tmp_path / "logs"
     logdir.mkdir()
@@ -245,6 +244,9 @@ def test_a_dataset_is_loaded_indexed_and_reported(request, docker_scylla, docker
         ("FTS index builds", [("#02 index build", "build time")]),
         ("FTS indexing", [("two shards", "build time")]),
     ], "every build is a row of the build log, and a tracked one also of its track"
+    assert all(table.sut_timestamp > 0 for table in flow.argus_submitted), (
+        "the x position falls back to the ScyllaDB build date, read from the node under test"
+    )
 
     vs_client = docker_vector_store.nodes[0].get_vector_store_api_client()
     last_index = f"{FTS_WORKLOAD.index_prefix}_{dataset_name}_1"

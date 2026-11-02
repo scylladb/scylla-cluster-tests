@@ -14,12 +14,13 @@
 """Unit tests for sdcm/utils/search_argus.py: results records in, Argus tables out."""
 
 import dataclasses
+from datetime import datetime, timezone
 
 import pytest
 
 from argus.client.generic_result import ResultType
 from fts_test import FTS_WORKLOAD
-from sdcm.utils.search_argus import SearchArgusReporter
+from sdcm.utils.search_argus import SearchArgusReporter, sut_timestamp
 
 WORKLOAD = dataclasses.replace(
     FTS_WORKLOAD, name="search_bench", description="Search", table_prefix="SB", record_label="document count"
@@ -73,9 +74,9 @@ class _ArgusClient:
         self.submitted.append(table)
 
 
-def _report(*records):
+def _report(*records, sut_timestamp=0):
     client = _ArgusClient()
-    reporter = SearchArgusReporter(WORKLOAD, client)
+    reporter = SearchArgusReporter(WORKLOAD, client, sut_timestamp=sut_timestamp)
     for record in records:
         reporter.report(record)
     return client.submitted
@@ -295,3 +296,54 @@ def test_a_failed_log_row_still_sends_the_track_row():
 def test_an_unknown_phase_is_an_error():
     with pytest.raises(ValueError, match="Unknown results record phase 'warmup'"):
         _report({**BUILD, "phase": "warmup"})
+
+
+def test_every_table_carries_the_runs_x_position():
+    tables = _report(TRACKED_BUILD, TRACKED_SEARCH, sut_timestamp=1760000123)
+
+    assert [table.sut_timestamp for table in tables] == [1760000123] * 4
+
+
+# ---------------------------------------------------------------------------
+# The x-axis
+# ---------------------------------------------------------------------------
+
+
+def _day(date: str) -> int:
+    return int(datetime.strptime(date, "%Y%m%d").replace(tzinfo=timezone.utc).timestamp())
+
+
+def test_the_later_build_sets_the_day():
+    vector_store_noon = _day("20261005") + 12 * 3600
+
+    newer_scylla = sut_timestamp("20261007", "abc", vector_store_noon, "1.11.0")
+    newer_vector_store = sut_timestamp("20261001", "abc", vector_store_noon, "1.11.0")
+
+    assert _day("20261007") <= newer_scylla < _day("20261008")
+    assert _day("20261005") <= newer_vector_store < _day("20261006")
+
+
+def test_each_pair_of_builds_has_its_own_position_and_keeps_it():
+    """An older ScyllaDB build than the vector-store commit must still move the point."""
+    vector_store = _day("20261005")
+
+    assert sut_timestamp("20261001", "abc", vector_store, "1.11.0") != sut_timestamp(
+        "20261002", "def", vector_store, "1.11.0"
+    )
+    assert sut_timestamp("20261001", "abc", vector_store, "1.11.0") == sut_timestamp(
+        "20261001", "abc", vector_store, "1.11.0"
+    )
+    # Two vector-store commits of one day, too.
+    assert sut_timestamp("20261001", "abc", vector_store, "3f162c9") != sut_timestamp(
+        "20261001", "abc", vector_store + 60, "4a2b1c0"
+    )
+
+
+def test_one_known_date_is_enough():
+    assert _day("20261007") <= sut_timestamp("20261007", "abc", None, "") < _day("20261008")
+    assert _day("20261005") <= sut_timestamp(None, "", _day("20261005") + 5, "x") < _day("20261006")
+
+
+@pytest.mark.parametrize("scylla_date", (None, "#NO_DATE"))
+def test_no_known_date_leaves_the_position_to_argus(scylla_date):
+    assert sut_timestamp(scylla_date, "", None, "") == 0

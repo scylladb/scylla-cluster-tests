@@ -128,6 +128,7 @@ sudo -u "$SERVICE_USER" git -C "$CLONE_DIR" checkout -q FETCH_HEAD
 
 # Resolve to a concrete SHA, so what actually got built is recorded even when REF is a branch.
 BUILT_SHA=$(sudo -u "$SERVICE_USER" git -C "$CLONE_DIR" rev-parse HEAD)
+COMMIT_TIME=$(sudo -u "$SERVICE_USER" git -C "$CLONE_DIR" log -1 --format=%ct)
 log "Building ${BUILT_SHA} (${REF})"
 
 # Install the exact toolchain version specified in the repo.
@@ -152,9 +153,9 @@ mkdir -p "$INSTALL_DIR"
 cp "${CLONE_DIR}/target/release/vector-store" "${INSTALL_DIR}/vector-store"
 chmod +x "${INSTALL_DIR}/vector-store"
 
-# Record what was built so the test run can report it -- read back by
-# VectorStoreAWSNode.get_vector_store_source_build_info().
-printf '%s %s\n' "$BUILT_SHA" "$REF" > "${INSTALL_DIR}/.source-commit"
+# Record what was built so the test run can report it -- read back by VectorStoreAWSNode's
+# get_vector_store_source_build_info() and get_vector_store_build(), which need this field order.
+printf '%s %s %s\n' "$BUILT_SHA" "$REF" "$COMMIT_TIME" > "${INSTALL_DIR}/.source-commit"
 chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"
 
 # --- Step 5: Install/refresh systemd service ---

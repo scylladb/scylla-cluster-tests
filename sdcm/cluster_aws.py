@@ -1582,8 +1582,24 @@ class VectorStoreAWSNode(VectorStoreNodeMixin, AWSNode):
         )
         if not result.ok:
             return "", ""
-        sha, _, ref = result.stdout.strip().partition(" ")
+        sha, ref = (result.stdout.split() + ["", ""])[:2]
         return sha, ref
+
+    def get_vector_store_build(self) -> tuple[int | None, str]:
+        """A source build's commit time and SHA, else the AMI's creation time and id."""
+        if is_vector_store_source_build(self.parent_cluster.params):
+            result = self.remoter.run(
+                f"cat {self.vector_store_install_dir}/.source-commit", ignore_status=True, verbose=False
+            )
+            fields = result.stdout.split() if result.ok else []
+            if len(fields) == 3 and fields[2].isdigit():
+                return int(fields[2]), fields[0]
+            # Not the base AMI's date: that is not the build under test.
+            LOGGER.warning("No commit time in the source-build marker on %s", self.name)
+            return None, ""
+        image = self._instance.image
+        created = datetime.fromisoformat(image.creation_date.replace("Z", "+00:00"))
+        return int(created.timestamp()), image.image_id
 
 
 class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
