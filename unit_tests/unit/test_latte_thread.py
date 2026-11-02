@@ -205,22 +205,7 @@ def test_complex_schema_cmds_cover_every_row(config_file, param_name):
     assert cycles.group(1) == row_count.group(1)
 
 
-class _ContainerRunner:
-    """Stands in for the 'RemoteDocker' runner of one latte call, recording what is copied in."""
-
-    def __init__(self, copy_ok=True):
-        self.copied = []
-        self.copy_ok = copy_ok
-
-    def run(self, *_, **__):
-        return types.SimpleNamespace(ok=True, stdout="", stderr="")
-
-    def send_files(self, src, dst, **_):
-        self.copied.append((src, dst))
-        return self.copy_ok
-
-
-def _staging_thread(files):
+def _staging_thread(files, backend="docker", **kwargs):
     loader_set = types.SimpleNamespace(
         get_db_auth=lambda: None,
         test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
@@ -230,40 +215,34 @@ def _staging_thread(files):
         stress_cmd="latte run -f load data_dir/latte/fts_search/fts.rn -d 100",
         timeout=60,
         node_list=["fake-db-node-1"],
-        params={"cluster_backend": "docker", "client_encrypt": False, "latte_schema_parameters": {}},
+        params={"cluster_backend": backend, "client_encrypt": False, "latte_schema_parameters": {}},
         extra_files_to_stage=files,
+        **kwargs,
     )
 
 
 SHARD = ("/local/ds/shards/documents_000.tsv", "/tmp/fts/ds/shards/documents_000.tsv")
 
 
-def test_a_staged_file_is_copied_into_the_loader_container():
-    runner = _ContainerRunner()
-
-    _staging_thread([SHARD]).build_stress_cmd(runner, loader=None, hosts="10.0.0.1")
-
-    assert runner.copied == [SHARD]
-
-
-def test_a_failed_copy_fails_the_command():
-    """Rather than a latte run that reads nothing."""
-    with pytest.raises(RuntimeError, match="Failed to copy /local/ds/shards/documents_000.tsv"):
-        _staging_thread([SHARD]).build_stress_cmd(_ContainerRunner(copy_ok=False), loader=None, hosts="10.0.0.1")
-
-
-def test_nothing_is_staged_by_default():
-    """The default has to stay empty: every existing caller stages nothing, and pays nothing for it."""
-    runner = _ContainerRunner()
-
-    _staging_thread(None).build_stress_cmd(runner, loader=None, hosts="10.0.0.1")
-
-    assert runner.copied == []
-
-
 def test_a_staged_file_needs_an_absolute_container_path():
     with pytest.raises(ValueError, match="not absolute"):
         _staging_thread([("/local/documents.tsv", "documents.tsv")])
+
+
+def test_staged_files_need_one_command_per_loader():
+    """Two commands on one loader would share the file, and the first to finish would remove it."""
+    with pytest.raises(ValueError, match="needs stress_num=1"):
+        _staging_thread([SHARD], stress_num=2)
+
+
+def test_round_robin_stages_files_whatever_stress_num_says():
+    """Round-robin runs a single command per call, so the file is never shared."""
+    assert _staging_thread([SHARD], stress_num=2, round_robin=True).extra_files_to_stage == [SHARD]
+
+
+def test_staged_files_need_a_docker_loader():
+    with pytest.raises(ValueError, match="k8s loaders lack"):
+        _staging_thread([SHARD], backend="k8s-eks")
 
 
 def _hdr_thread(stress_cmd, use_hdrhistogram=True, **kwargs):
@@ -427,3 +406,118 @@ def test_host_paths_are_quoted(script_dir):
     assert (
         loader.remoter.commands[-1] == "mkdir -p '/home/loader/latte-staging/run/loader 1/scripts/data_dir/latte/bench'"
     )
+
+
+# Staged files go to the loader's host, are mounted read-only and removed afterwards
+
+
+@pytest.fixture
+def shard(tmp_path):
+    path = tmp_path / "documents_000.tsv"
+    path.write_text("doc_0\tbody\n", encoding="utf-8")
+    return str(path), SHARD[1]
+
+
+HOST_SHARD = "/home/loader/latte-staging/run/loader-1/files/tmp/fts/ds/shards/documents_000.tsv"
+
+
+def test_a_staged_file_goes_to_the_loaders_host_and_is_mounted_read_only(shard):
+    loader = _loader()
+
+    with _staging_thread([shard])._staged_files(loader) as mounts:
+        assert loader.remoter.sent == [("documents_000.tsv", HOST_SHARD)]
+        assert mounts == f" -v {HOST_SHARD}:{SHARD[1]}:ro,z"
+
+    assert loader.remoter.commands[-1] == f"rm -f {HOST_SHARD}"
+
+
+def test_nothing_is_staged_by_default():
+    """The default has to stay empty: every existing caller stages nothing, and pays nothing for it."""
+    loader = _loader()
+
+    with _staging_thread(None)._staged_files(loader) as mounts:
+        assert mounts == ""
+
+    assert loader.remoter.commands == loader.remoter.sent == []
+
+
+def test_a_staged_file_is_removed_even_when_the_command_fails(shard):
+    loader = _loader()
+
+    with pytest.raises(RuntimeError, match="latte failed"), _staging_thread([shard])._staged_files(loader):
+        raise RuntimeError("latte failed")
+
+    assert loader.remoter.commands[-1] == f"rm -f {HOST_SHARD}"
+
+
+def test_a_file_that_failed_to_send_is_removed_too(shard):
+    """A send that fails partway can leave a partial file behind."""
+    loader = _loader()
+    loader.remoter.send_files = lambda src, dst, **_: False
+
+    with pytest.raises(RuntimeError, match="Failed to send"), _staging_thread([shard])._staged_files(loader):
+        pytest.fail("the command must not run without its file")
+
+    assert loader.remoter.commands[-1] == f"rm -f {HOST_SHARD}"
+
+
+def test_a_failed_removal_does_not_replace_the_commands_outcome(shard):
+    """A connection dropped during the cleanup must not fail a load that succeeded."""
+    loader = _loader()
+    run = loader.remoter.run
+
+    def rm_drops_the_connection(cmd, **kwargs):
+        if cmd.startswith("rm -f "):
+            raise ConnectionError("connection lost")
+        return run(cmd, **kwargs)
+
+    loader.remoter.run = rm_drops_the_connection
+
+    with _staging_thread([shard])._staged_files(loader):
+        pass
+
+
+def test_staging_stops_when_the_home_cannot_be_resolved(shard):
+    loader = _loader()
+    loader.remoter.run = lambda cmd, **_: types.SimpleNamespace(stdout="\n")
+
+    with pytest.raises(RuntimeError, match="Cannot resolve the home"), _staging_thread([shard])._staged_files(loader):
+        pytest.fail("the command must not run without its file")
+
+    assert loader.remoter.sent == []
+
+
+def test_a_file_sent_ahead_is_not_sent_again(shard):
+    """A caller may send a file ahead of the command that stages it."""
+    loader = _loader()
+    latte_thread.send_to_loader(loader, [(shard[0], latte_thread.staged_file_path(loader, shard[1]))])
+
+    with _staging_thread([shard])._staged_files(loader):
+        assert len(loader.remoter.sent) == 1
+
+
+def test_a_removed_file_is_sent_again(shard):
+    loader = _loader()
+    with _staging_thread([shard])._staged_files(loader):
+        pass
+
+    with _staging_thread([shard])._staged_files(loader):
+        assert len(loader.remoter.sent) == 2
+
+
+def test_docker_loaders_stage_apart(shard):
+    """Docker loaders share one host: one finishing must not remove the other's file."""
+    first, second = _loader("loader-1"), _loader("loader-2")
+
+    with _staging_thread([shard])._staged_files(first), _staging_thread([shard])._staged_files(second):
+        assert first.remoter.sent[0][1] != second.remoter.sent[0][1]
+
+
+def test_a_staged_file_mount_is_quoted(shard):
+    loader = _loader("loader 1")
+
+    with _staging_thread([shard])._staged_files(loader) as mounts:
+        host_path = HOST_SHARD.replace("loader-1", "loader 1")
+        assert mounts == f" -v '{host_path}:{SHARD[1]}:ro,z'"
+
+    assert loader.remoter.commands[-1] == f"rm -f '{host_path}'"

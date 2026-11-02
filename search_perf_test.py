@@ -205,9 +205,9 @@ def _checked_name(name: str, kind: str) -> str:
 def _checked_data_file(name: str, kind: str) -> str:
     """Validate a plan-supplied, dataset-relative data file name.
 
-    The name is interpolated into the shell commands that copy the file into the loader container,
-    and joined onto the local dataset directory, so reject both shell metacharacters and anything
-    that escapes the dataset directory.
+    The name is interpolated into the latte command line and into the commands that stage the file
+    on a loader, and joined onto the local dataset directory, so reject both shell metacharacters
+    and anything that escapes the dataset directory.
     """
     if not isinstance(name, str) or not SAFE_DATA_FILE_RE.fullmatch(name):
         raise ValueError(f"Invalid {kind} {name!r}: expected only letters, digits, '.', '-', '_' and '/'")
@@ -572,8 +572,8 @@ class SearchPerformanceTest(PerformanceRegressionTest):
     def _run_latte(self, stress_cmd, files_to_stage=None, **kwargs):
         """Run one latte command to completion and return its stress thread.
 
-        Bypasses `run_stress_thread` so that the per-run data files of this command are staged into
-        the loader container. `files_to_stage` is a list of `(local_path, container_path)` pairs.
+        Bypasses `run_stress_thread` so that the per-run data files of this command are staged on
+        its loader. `files_to_stage` is a list of `(local_path, container_path)` pairs.
         """
         thread = self.run_latte_thread(
             stress_cmd=stress_cmd,
