@@ -2481,16 +2481,19 @@ class NemesisRunner:
             else:
                 return ComparableScyllaVersion(self.target_node.scylla_version) >= "6.3.0-dev"
 
-        filter_func = self.cluster.is_table_has_no_sstables if is_virtual_tables_get_snapshot() else None
-        ks_cf = self.cluster.get_any_ks_cf_list(
-            db_node=self.target_node, filter_empty_tables=False, filter_func=filter_func
-        )
-        # remove quotes from keyspace or column family, since output of `nodetool listsnapshots` isn't returning them quoted
-        ks_cf = [k_c.replace('"', "") for k_c in ks_cf]
+        def get_ks_cf():
+            filter_func = self.cluster.is_table_has_no_sstables if is_virtual_tables_get_snapshot() else None
+            ks_cf = self.cluster.get_any_ks_cf_list(
+                db_node=self.target_node, filter_empty_tables=False, filter_func=filter_func
+            )
+            # remove quotes from keyspace or column family, since output of `nodetool listsnapshots` isn't returning them quoted
+            return [k_c.replace('"', "") for k_c in ks_cf]
+
         keyspace_table = []
         if len(snapshot_params) > 1:
             if snapshot_params[1] == "-kc":
                 # Example: snapshot -kc cqlstress_lwt_example
+                ks_cf = get_ks_cf()
                 for ks in snapshot_params[2].split(","):
                     keyspace_table.extend([k_c.split(".") for k_c in ks_cf if k_c.startswith(f"{ks}.")])
             else:
@@ -2508,7 +2511,7 @@ class NemesisRunner:
                                 keyspace_table.extend([[keyspace, view]])
         else:
             # Example: snapshot
-            keyspace_table.extend([k_c.split(".") for k_c in ks_cf])
+            keyspace_table.extend([k_c.split(".") for k_c in get_ks_cf()])
 
         if ComparableScyllaVersion(self.target_node.scylla_version) >= "2026.2.0":
             # Since https://github.com/scylladb/scylladb/commit/39baa1870e2cd84304ec453a12955fdb0a0abc61
