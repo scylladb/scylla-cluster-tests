@@ -1067,6 +1067,24 @@ class ClusterTester(unittest.TestCase):
             return "FAILED"
         return "SUCCESS"
 
+    @contextlib.contextmanager
+    def subTest(self, *args, **params):
+        """`unittest.TestCase.subTest` that lets a critical failure end the test.
+
+        unittest records any exception of a subtest as that subtest's failure and goes on with the next one, so
+        `kill_test` (a spot reclaim, the test duration running out) would only fail one subtest, and the rest
+        would run against dead nodes until the job timeout. The failure is still recorded on the subtest.
+        """
+        critical = None
+        with super().subTest(*args, **params):
+            try:
+                yield
+            except CriticalTestFailure as exc:
+                critical = exc
+                raise
+        if critical:
+            raise critical
+
     def kill_test(self, backtrace_with_reason):
         test_pid = os.getpid()
         self.result.addFailure(self.test_config.tester_obj(), backtrace_with_reason)

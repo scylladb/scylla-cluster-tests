@@ -4,6 +4,7 @@ The Jenkins loop in `vars/runWithSpotRetry.groovy` only acts on what `sct.py spo
 so every rule that decides whether a build spends another attempt is pinned down here.
 """
 
+import unittest
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,7 +12,7 @@ from click.testing import CliRunner
 
 import sct
 from sdcm.provision.provisioner import OperationPreemptedError, ProvisionError
-from sdcm.tester import teardown_on_exception
+from sdcm.tester import ClusterTester, CriticalTestFailure, teardown_on_exception
 from sdcm.utils import spot_retry
 from sdcm.utils.argus import ReplayOnlyArgusSCTClient
 
@@ -172,3 +173,32 @@ def test_cli_prints_stop_when_argus_is_unreachable(monkeypatch):
 def test_cli_prints_stop_with_a_replay_only_argus_client(monkeypatch):
     """SCT falls back to a replay-only client when Argus is unreachable; its GETs return nothing real."""
     assert _run_cli(monkeypatch, ["spot", "on_demand"], [SPOT_EVENT], replay_only=True) == ("SPOT_RETRY_DECISION=stop")
+
+
+class _SubtestCase(ClusterTester):
+    __test__ = False  # run by the test below
+    ran_after_kill = False
+
+    def __init__(self, method_name):  # skip ClusterTester's setup of a real test
+        unittest.TestCase.__init__(self, method_name)
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    def test_killed_inside_a_subtest(self):
+        with self.subTest("reclaimed"):
+            raise CriticalTestFailure("Critical Error has failed the test")
+        with self.subTest("next check"):
+            type(self).ran_after_kill = True
+
+
+def test_critical_failure_inside_a_subtest_ends_the_test():
+    """A reclaim mid-test must end it, not just fail one subtest (Azure waited out the job timeout)."""
+    result = unittest.TestResult()
+    _SubtestCase("test_killed_inside_a_subtest").run(result)
+
+    assert not _SubtestCase.ran_after_kill
+    assert len(result.failures) + len(result.errors) == 2  # the subtest, and the test itself
