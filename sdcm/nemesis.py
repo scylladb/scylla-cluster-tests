@@ -107,6 +107,7 @@ from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import (
+    MAX_NAMES_IN_CMD,
     get_db_tables,
     generate_random_string,
     reach_enospc_on_node,
@@ -3729,7 +3730,8 @@ class Nemesis(NemesisFlags):
                 return _full_snapshot()
 
             selected_keyspace = random.choice(ks_with_few_tables)
-            tables = ",".join([k_c.split(".")[1] for k_c in ks_cf if k_c.startswith(f"{selected_keyspace}.")])
+            ks_tables = [k_c.split(".")[1] for k_c in ks_cf if k_c.startswith(f"{selected_keyspace}.")]
+            tables = ",".join(random.sample(ks_tables, k=min(len(ks_tables), MAX_NAMES_IN_CMD)))
 
             if not tables:
                 # it's unexpected situation. We have system keyspaces with few tables, so the keyspaces should be found.
