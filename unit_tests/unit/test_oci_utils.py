@@ -20,9 +20,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+<<<<<<< HEAD
 from pathlib import Path
 
 from sdcm.provision.provisioner import VmArch
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.provision.provisioner import VmArch
+=======
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 from sdcm.sct_config import is_arm_instance_type
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
 from sdcm.utils.oci_utils import (
@@ -38,6 +43,7 @@ from sdcm.utils.oci_utils import (
     resolve_availability_domain,
     wait_for_instance_state,
 )
+from sdcm.utils.vm_arch import VmArch
 
 
 @pytest.fixture
