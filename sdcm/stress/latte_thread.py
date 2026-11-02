@@ -158,14 +158,31 @@ def send_to_loader(loader, files: list[tuple[str, str]]) -> None:
             _SENT_TO_LOADERS[key] = fingerprint
 
 
+def remove_from_loader(loader, host_paths: list[str]) -> None:
+    """Remove staged files from *loader*'s host. Never raises: it runs from 'finally' blocks, where
+    a dropped connection must not replace the outcome of the command it cleans up after.
+    """
+    for host_path in host_paths:
+        _SENT_TO_LOADERS.pop((loader.name, host_path), None)
+    try:
+        loader.remoter.run(f"rm -f {' '.join(map(shlex.quote, host_paths))}", verbose=False, ignore_status=True)
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Could not remove %s from %s", host_paths, loader.name, exc_info=True)
+
+
+def staged_file_path(loader, container_path: str) -> str:
+    """Where an 'extra_files_to_stage' file for *container_path* lives on *loader*'s host."""
+    return loader_path(loader, f"files{container_path}")
+
+
 class LatteStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
     SCHEMA_CMD_CALL_COUNTER = {}
 
     def __init__(self, *args, extra_files_to_stage=None, record_hdr=True, **kwargs):
         """*extra_files_to_stage* is a list of '(local_path, container_path)' pairs only this
-        invocation needs, such as a dataset shard. 'build_stress_cmd' copies them into the loader
-        container; the container is removed after the run.
+        invocation needs, such as a dataset shard: each is sent to the host of the loader the
+        command runs on, mounted read-only at its container path and removed afterwards.
 
         *record_hdr* set to False skips the HDR histogram of this invocation even when
         'use_hdrhistogram' is on, for a command whose latency nobody reads.
@@ -176,10 +193,36 @@ class LatteStressThread(DockerBasedStressThread):
         for _, container_path in self.extra_files_to_stage:
             if not container_path.startswith("/"):
                 raise ValueError(f"Container path {container_path!r} of a staged file is not absolute")
+        # NOTE: a staged file's place on the host follows from its loader and container path, so two
+        #       commands on one loader would share it and the first to finish would remove it.
+        #       Round-robin runs a single command whatever 'stress_num' says.
+        if self.extra_files_to_stage and self.stress_num > 1 and not self.round_robin:
+            raise ValueError("Files are staged per loader, so 'extra_files_to_stage' needs stress_num=1")
+        if self.extra_files_to_stage and "k8s" in self.params.get("cluster_backend"):
+            raise ValueError("'extra_files_to_stage' mounts files from a loader's docker host, which k8s loaders lack")
 
     def records_hdr(self) -> bool:
         # 'latte schema' takes no '--hdrfile'
         return self.record_hdr and bool(self.params.get("use_hdrhistogram")) and "latte schema" not in self.stress_cmd
+
+    @contextlib.contextmanager
+    def _staged_files(self, loader):
+        """Put 'extra_files_to_stage' on *loader*'s host for the command, and yield the docker
+        options mounting them. They are removed afterwards, whether the command ran or not.
+        """
+        if not self.extra_files_to_stage:
+            yield ""
+            return
+        files = [(local, staged_file_path(loader, container)) for local, container in self.extra_files_to_stage]
+        try:
+            send_to_loader(loader, files)
+            # 'z' relabels the file for SELinux loaders, like every other stress tool mount.
+            yield "".join(
+                " -v " + shlex.quote(f"{host_path}:{container_path}:ro,z")
+                for (_, host_path), (_, container_path) in zip(files, self.extra_files_to_stage)
+            )
+        finally:
+            remove_from_loader(loader, [host_path for _, host_path in files])
 
     def set_stress_operation(self, stress_cmd):
         return get_latte_operation_type(self.stress_cmd)
@@ -249,10 +292,6 @@ class LatteStressThread(DockerBasedStressThread):
         script_name = self._script_name()
         if script_name not in self.SCHEMA_CMD_CALL_COUNTER:
             self.SCHEMA_CMD_CALL_COUNTER[script_name] = 0
-
-        for local_path, container_path in self.extra_files_to_stage:
-            if not cmd_runner.send_files(local_path, container_path, verbose=False):
-                raise RuntimeError(f"Failed to copy {local_path} into the loader container at {container_path}")
 
         ssl_config = self._build_ssl_config(cmd_runner, loader)
 
@@ -345,13 +384,14 @@ class LatteStressThread(DockerBasedStressThread):
         return output
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
-        try:
-            mounts = self._script_dir_mount(loader)
-        except Exception as exc:  # noqa: BLE001
-            # Staging runs before the container starts, so outside the stress event. Reported as a
-            # failed run, so that it stops the test the same way.
-            return loader, {}, self._report_staging_failure(loader, exc)
-        return self._run_container(loader, loader_idx, cpu_idx, mounts)
+        with contextlib.ExitStack() as staging:
+            try:
+                mounts = self._script_dir_mount(loader) + staging.enter_context(self._staged_files(loader))
+            except Exception as exc:  # noqa: BLE001
+                # Staging runs before the container starts, so outside the stress event. Reported as a
+                # failed run, so that it stops the test the same way.
+                return loader, {}, self._report_staging_failure(loader, exc)
+            return self._run_container(loader, loader_idx, cpu_idx, mounts)
 
     def _report_staging_failure(self, loader, exc: Exception) -> LatteStressEvent:
         with LatteStressEvent(node=loader, stress_cmd=self.stress_cmd) as stress_event:
