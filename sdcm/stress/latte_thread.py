@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
+import concurrent.futures
 import contextlib
 import logging
 import os
@@ -179,17 +180,21 @@ class LatteStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
     SCHEMA_CMD_CALL_COUNTER = {}
 
-    def __init__(self, *args, extra_files_to_stage=None, record_hdr=True, **kwargs):
+    def __init__(self, *args, extra_files_to_stage=None, record_hdr=True, loader=None, **kwargs):
         """*extra_files_to_stage* is a list of '(local_path, container_path)' pairs only this
         invocation needs, such as a dataset shard: each is sent to the host of the loader the
         command runs on, mounted read-only at its container path and removed afterwards.
 
         *record_hdr* set to False skips the HDR histogram of this invocation even when
         'use_hdrhistogram' is on, for a command whose latency nobody reads.
+
+        *loader* runs the command on that loader only, instead of the next one round-robin or all
+        of them -- for a caller that sent its staged files to that loader ahead of the command.
         """
         super().__init__(*args, **kwargs)
         self.extra_files_to_stage: list[tuple[str, str]] = extra_files_to_stage or []
         self.record_hdr = record_hdr
+        self.pinned_loader = loader
         for _, container_path in self.extra_files_to_stage:
             if not container_path.startswith("/"):
                 raise ValueError(f"Container path {container_path!r} of a staged file is not absolute")
@@ -200,6 +205,15 @@ class LatteStressThread(DockerBasedStressThread):
             raise ValueError("Files are staged per loader, so 'extra_files_to_stage' needs stress_num=1")
         if self.extra_files_to_stage and "k8s" in self.params.get("cluster_backend"):
             raise ValueError("'extra_files_to_stage' mounts files from a loader's docker host, which k8s loaders lack")
+
+    def configure_executer(self):
+        if self.pinned_loader is None:
+            super().configure_executer()
+            return
+        self.stress_num = 1
+        self.loaders = [self.pinned_loader]
+        self.max_workers = 1
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     def records_hdr(self) -> bool:
         # 'latte schema' takes no '--hdrfile'

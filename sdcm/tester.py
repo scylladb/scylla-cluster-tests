@@ -3261,6 +3261,7 @@ class ClusterTester(unittest.TestCase):
         node_list=None,
         extra_files_to_stage=None,
         record_hdr=True,
+        loader=None,
         **_,
     ):
         if duration:
@@ -3284,6 +3285,7 @@ class ClusterTester(unittest.TestCase):
             params=self.params,
             extra_files_to_stage=extra_files_to_stage,
             record_hdr=record_hdr,
+            loader=loader,
         ).run()
 
     def run_hydra_kcl_thread(

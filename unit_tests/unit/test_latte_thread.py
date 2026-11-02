@@ -581,3 +581,34 @@ def test_a_run_gets_the_mounts_of_both_the_script_directory_and_its_staged_files
     assert mounts.startswith("-v /home/loader/latte-staging/run/loader-1/scripts/data_dir/latte/fts_search:")
     assert mounts.endswith(f" -v {HOST_SHARD}:{SHARD[1]}:ro,z")
     assert loader.remoter.commands[-1] == f"rm -f {HOST_SHARD}"
+
+
+def _pinnable_thread(**kwargs):
+    loader_set = types.SimpleNamespace(
+        get_db_auth=lambda: None,
+        test_config=types.SimpleNamespace(MULTI_REGION=False, tester_obj=object),
+        get_loader=lambda: "next-round-robin-loader",
+        nodes=["loader-1", "loader-2"],
+    )
+    return LatteStressThread(
+        loader_set=loader_set,
+        stress_cmd="latte run -f load data_dir/latte/fts_search/fts.rn -d 100",
+        timeout=60,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": "docker", "client_encrypt": False, "latte_schema_parameters": {}},
+        round_robin=True,
+        **kwargs,
+    )
+
+
+def test_a_pinned_loader_runs_the_command_there_only():
+    """A caller that sent the staged files ahead to one loader must get that loader."""
+    thread = _pinnable_thread(loader="loader-2")
+    thread.configure_executer()
+    assert thread.loaders == ["loader-2"]
+
+
+def test_without_a_pinned_loader_round_robin_picks_it():
+    thread = _pinnable_thread()
+    thread.configure_executer()
+    assert thread.loaders == ["next-round-robin-loader"]

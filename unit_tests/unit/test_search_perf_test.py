@@ -19,16 +19,19 @@ in test_fts_test.py.
 """
 
 import contextlib
+import itertools
 import json
 import logging
 import os
 import pathlib
 import re
+import threading
 import types
 
 import pytest
 
 import search_perf_test
+from sdcm.stress import latte_thread
 from sdcm.stress.latte_thread import get_latte_operation_type
 from search_perf_test import (
     QUERY_EXAMPLE_MAX_CHARS,
@@ -741,17 +744,41 @@ def test_every_phase_runs_on_one_loader():
     assert tester.asked["round_robin"] is True
 
 
+def test_a_load_runs_on_the_loader_its_shard_was_sent_to():
+    tester = _RecordingTester()
+    search_perf_test.SearchPerformanceTest._run_latte(tester, "latte run -f load bench.rn", loader="loader-2")
+    assert tester.asked["loader"] == "loader-2"
+
+
 def test_a_missing_shard_is_named_in_the_error(tmp_path):
     """Rather than a bare 'No such file' from counting its lines."""
-
-    class _Tester:
-        WORKLOAD = WORKLOAD
-        log = logging.getLogger("test")
-
     with pytest.raises(FileNotFoundError, match=r"Shard shards/records_000\.tsv is not in the dataset directory"):
         search_perf_test.SearchPerformanceTest._load_step_shards(
-            _Tester, {"shards": [0]}, None, "", str(tmp_path), "/tmp/bench/ds", 60
+            _PhaseTester(), {"shards": [0]}, None, "", str(tmp_path), "/tmp/bench/ds", 60
         )
+
+
+@pytest.fixture(autouse=True)
+def nothing_sent_yet(monkeypatch):
+    """What earlier tests sent to their fake loaders must not count as sent here."""
+    monkeypatch.setattr(latte_thread, "_SENT_TO_LOADERS", {})
+    monkeypatch.setattr(latte_thread, "_SEND_LOCKS", {})
+    monkeypatch.setattr(latte_thread, "_LOADER_HOMES", {})
+
+
+class _LoaderRemoter:
+    """Records what is run on, and sent to, one loader's host."""
+
+    def __init__(self):
+        self.ran, self.sent = [], []
+
+    def run(self, cmd, **_):
+        self.ran.append(cmd)
+        return types.SimpleNamespace(stdout="/home/ubuntu\n" if cmd == "echo $HOME" else "")
+
+    def send_files(self, src, dst, **_):
+        self.sent.append((src, dst))
+        return True
 
 
 class _PhaseTester:
@@ -759,18 +786,26 @@ class _PhaseTester:
 
     WORKLOAD = WORKLOAD
 
-    def __init__(self):
+    def __init__(self, loaders=("loader-1",), fail_latte=False):
         self.log = logging.getLogger("test")
+        nodes = [types.SimpleNamespace(name=name, remoter=_LoaderRemoter()) for name in loaders]
+        self.loaders = types.SimpleNamespace(nodes=nodes, get_loader=itertools.cycle(nodes).__next__)
         self.asked = []
+        self.fail_latte = fail_latte
 
     def _run_latte(self, stress_cmd, **kwargs):
         self.asked.append({"stress_cmd": stress_cmd, **kwargs})
+        if self.fail_latte:
+            raise RuntimeError("latte failed")
 
     def _vector_store_node(self):
         return types.SimpleNamespace(system_log="system.log")
 
-    def _load_shard(self, *args):
-        return search_perf_test.SearchPerformanceTest._load_shard(self, *args)
+    def _load_shard(self, *args, **kwargs):
+        return search_perf_test.SearchPerformanceTest._load_shard(self, *args, **kwargs)
+
+    def _prepare_shard(self, *args):
+        return search_perf_test.SearchPerformanceTest._prepare_shard(self, *args)
 
 
 def test_setup_phases_record_no_hdr(monkeypatch):
@@ -896,6 +931,118 @@ def test_a_query_parse_error_can_be_tolerated(monkeypatch):
 def test_a_search_is_a_read_to_latte():
     """Otherwise the HDR exporter cannot classify its 'fn--search' tag and fails the command."""
     assert get_latte_operation_type(_search_command()) == "read"
+
+
+def _sent_names(loader):
+    return [dst.rsplit("/", 1)[1] for _, dst in loader.remoter.sent]
+
+
+def test_each_shard_is_sent_ahead_to_the_loader_its_load_runs_on(tmp_path):
+    """Sending every shard to every loader would multiply the transfers by the loader count."""
+    tester = _PhaseTester(loaders=("loader-1", "loader-2"))
+
+    assert _load(tester, tmp_path, 0, 1, 2) == 3
+
+    assert [asked["loader"].name for asked in tester.asked] == ["loader-1", "loader-2", "loader-1"]
+    first, second = tester.loaders.nodes
+    assert _sent_names(first) == ["records_000.tsv", "records_002.tsv"]
+    assert _sent_names(second) == ["records_001.tsv"]
+    assert first.remoter.ran[-1].startswith("rm -f "), "a loaded shard is removed from its loader"
+
+
+def _watch_sends(tester, file_name):
+    """An event set once *file_name* is sent to the (first) loader."""
+    sent = threading.Event()
+    remoter = tester.loaders.nodes[0].remoter
+    send_files = remoter.send_files
+
+    def watched(src, dst, **kwargs):
+        if dst.endswith(file_name):
+            sent.set()
+        return send_files(src, dst, **kwargs)
+
+    remoter.send_files = watched
+    return sent
+
+
+def test_the_next_shard_is_sent_while_the_current_one_loads(tmp_path):
+    tester = _PhaseTester()
+    next_sent = _watch_sends(tester, "records_001.tsv")
+    sent_during_load = []
+
+    def run_latte(stress_cmd, **kwargs):
+        tester.asked.append(kwargs)
+        if "records_000" in stress_cmd:
+            sent_during_load.append(next_sent.wait(timeout=5))
+
+    tester._run_latte = run_latte
+
+    assert _load(tester, tmp_path, 0, 1) == 2
+    assert sent_during_load == [True]
+
+
+def test_a_failed_load_also_removes_the_shard_sent_after_it(tmp_path):
+    tester = _PhaseTester(fail_latte=True)
+    next_sent = _watch_sends(tester, "records_001.tsv")
+    run_latte = tester._run_latte
+
+    def fail_once_the_next_is_sent(stress_cmd, **kwargs):
+        next_sent.wait(timeout=5)
+        run_latte(stress_cmd, **kwargs)
+
+    tester._run_latte = fail_once_the_next_is_sent
+
+    with pytest.raises(RuntimeError, match="latte failed"):
+        _load(tester, tmp_path, 0, 1)
+
+    removed = [cmd for cmd in tester.loaders.nodes[0].remoter.ran if cmd.startswith("rm -f ")]
+    assert [cmd.rsplit("/", 1)[1] for cmd in removed] == ["records_000.tsv", "records_001.tsv"]
+    assert len(tester.asked) == 1, "the shard after a failed one is never loaded"
+
+
+def test_a_step_without_shards_loads_nothing(tmp_path):
+    """A step may only rebuild the index over what earlier steps loaded -- 'local_smoke' has one."""
+    tester = _PhaseTester()
+
+    assert _load(tester, tmp_path) == 0
+    assert tester.asked == []
+
+
+def test_an_empty_shard_is_neither_sent_nor_loaded(tmp_path):
+    tester = _PhaseTester()
+    (tmp_path / "shards").mkdir()
+    (tmp_path / "shards" / "records_001.tsv").write_text("\n", encoding="utf-8")
+
+    assert _load(tester, tmp_path, 0) == 1
+    step = {"shards": [1]}
+    assert (
+        search_perf_test.SearchPerformanceTest._load_step_shards(
+            tester, step, None, "", str(tmp_path), "/tmp/bench/ds", 60
+        )
+        == 0
+    )
+    assert _sent_names(tester.loaders.nodes[0]) == ["records_000.tsv"]
+
+
+def test_a_downloaded_shard_leaves_the_runner_once_loaded(monkeypatch, tmp_path):
+    tester = _PhaseTester()
+    downloaded = []
+
+    def fake_download(_bucket, key, path):
+        downloaded.append(key)
+        with open(path, "w", encoding="utf-8") as shard:
+            shard.write("doc_0\tbody\n")
+
+    monkeypatch.setattr(search_perf_test, "_s3_download_file", fake_download)
+
+    step = {"shards": [0, 1]}
+    count = search_perf_test.SearchPerformanceTest._load_step_shards(
+        tester, step, "bucket", "fts/ds", str(tmp_path), "/tmp/bench/ds", 60
+    )
+
+    assert count == 2
+    assert downloaded == ["fts/ds/shards/records_000.tsv", "fts/ds/shards/records_001.tsv"]
+    assert list((tmp_path / "shards").iterdir()) == []
 
 
 # ---------------------------------------------------------------------------
