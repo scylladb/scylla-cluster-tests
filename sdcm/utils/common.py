@@ -63,7 +63,7 @@ from packaging.version import Version
 from rich.console import Console
 from rich.table import Table
 
-from sdcm.provision.provisioner import VmArch
+from sdcm.utils.vm_arch import VmArch
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.argus import create_proxy_argus_s3_url

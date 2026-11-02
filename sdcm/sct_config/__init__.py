@@ -25,16 +25,16 @@ even for names defined in ``types`` or ``helpers``: ``from .types import f`` bin
 ``config``'s namespace, so patching ``sdcm.sct_config.types.f`` leaves every call site untouched.
 """
 
-from sdcm.sct_config.config import (
+lazy from sdcm.sct_config.config import (
     SCTConfiguration,
     backend_to_cloud,
     init_and_verify_sct_config,
     is_arm_instance_type,
     substitute_arch_markers,
 )
-from sdcm.sct_config.defaults import AWS_SUPPORTED_REGIONS, available_backends
-from sdcm.sct_config.helpers import simulated_racks_enabled
-from sdcm.sct_config.types import (
+lazy from sdcm.sct_config.defaults import AWS_SUPPORTED_REGIONS, available_backends
+lazy from sdcm.sct_config.helpers import simulated_racks_enabled
+lazy from sdcm.sct_config.types import (
     AdaptiveTimeoutMultipliers,
     IntOrList,
     SctField,
