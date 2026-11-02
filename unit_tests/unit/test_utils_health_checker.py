@@ -422,6 +422,32 @@ def test_check_group0_tokenring_consistency_member_missing_from_token_ring_repor
     )
 
 
+def test_check_group0_tokenring_consistency_failed_group0_read_warns(raft_node, non_voter_token_ring):
+    """A failed group0 read (empty members) with a populated token ring is reported, not passed as consistent."""
+    raft = RaftFeature(raft_node)
+
+    with patch.object(RaftFeature, "search_inconsistent_host_ids") as search:
+        events = list(raft.check_group0_tokenring_consistency([], non_voter_token_ring))
+
+    assert len(events) == 1
+    assert events[0].severity == Severity.WARNING
+    assert events[0].error == (
+        "Node node-1 could not read group0 members while the token ring has 2 member(s); "
+        "group0/token-ring consistency was not checked"
+    )
+    search.assert_not_called()
+    raft_node.parent_cluster.cql_connection_patient_exclusive.assert_not_called()
+
+
+def test_check_group0_tokenring_consistency_empty_group0_and_token_ring_no_event(raft_node):
+    """With both lists empty there is nothing to compare, so no event (unchanged behaviour)."""
+    with patch.object(RaftFeature, "search_inconsistent_host_ids") as search:
+        events = list(RaftFeature(raft_node).check_group0_tokenring_consistency([], []))
+
+    assert events == []
+    search.assert_not_called()
+
+
 def test_check_group0_tokenring_consistency_limited_voters_flag_read_once_per_cluster(
     raft_node, non_voter_group0, non_voter_token_ring
 ):
