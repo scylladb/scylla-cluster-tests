@@ -98,7 +98,7 @@ lint.preview = true
 lint.explicit-preview-rules = true
 exclude = ["argus/"]
 
-target-version = "py314"
+target-version = "py315"
 
 force-exclude = true
 line-length = 120

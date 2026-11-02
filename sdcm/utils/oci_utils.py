@@ -28,7 +28,7 @@ from oci.exceptions import ServiceError
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.metaclasses import Singleton
-from sdcm.provision.provisioner import VmArch
+from sdcm.utils.vm_arch import VmArch
 
 
 LOGGER = logging.getLogger(__name__)

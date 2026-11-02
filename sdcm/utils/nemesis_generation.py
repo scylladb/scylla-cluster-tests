@@ -1,9 +1,9 @@
-from pathlib import Path
+lazy from pathlib import Path
 
-import yaml
-from jinja2 import Template
+lazy import yaml
+lazy from jinja2 import Template
 
-from sdcm import sct_abs_path
+lazy from sdcm import sct_abs_path
 from sdcm.nemesis import *
 
 DEFAULT_JOB_NAME = "longevity-5gb-1h"

@@ -32,7 +32,7 @@ from sdcm.utils.decorators import retrying
 from sdcm.wait import wait_for
 from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
-from sdcm.provision.provisioner import VmArch
+from sdcm.utils.vm_arch import VmArch
 
 if TYPE_CHECKING:
     from sdcm.utils.aws_region import AwsRegion
