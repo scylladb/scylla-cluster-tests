@@ -23,9 +23,9 @@ import yaml
 from sdcm.sct_config import config as sct_config
 from sdcm.keystore import KeyStore
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
-from sdcm.provision.provisioner import VmArch
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_latest_scylla_release
+from sdcm.utils.vm_arch import VmArch
 
 
 def _get_latest_scylla_release(product="scylla"):
