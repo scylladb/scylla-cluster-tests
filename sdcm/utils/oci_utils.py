@@ -33,8 +33,8 @@ from oci.object_storage import ObjectStorageClient
 from oci.work_requests import WorkRequestClient
 
 from sdcm.keystore import KeyStore
-from sdcm.provision.provisioner import VmArch
 from sdcm.utils.metaclasses import Singleton
+from sdcm.utils.vm_arch import VmArch
 
 LOGGER = logging.getLogger(__name__)
 

@@ -33,7 +33,7 @@ from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
-from sdcm.provision.provisioner import VmArch
+from sdcm.utils.vm_arch import VmArch
 
 # NOTE: we cannot use neither 'slim' nor 'alpine' versions because we need the 'beta' component be installed.
 GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:437.0.1"

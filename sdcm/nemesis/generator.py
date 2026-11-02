@@ -5,16 +5,16 @@ Generates configs/pipelines for each nemesis
 
 """
 
-import logging
-from functools import cached_property
-from pathlib import Path
+lazy import logging
+lazy from functools import cached_property
+lazy from pathlib import Path
 
-import yaml
-from jinja2 import Template
+lazy import yaml
+lazy from jinja2 import Template
 
-from sdcm import sct_abs_path, nemesis
-from sdcm.nemesis import NemesisBaseClass, NemesisFlags
-from sdcm.nemesis.registry import NemesisRegistry
+lazy from sdcm import nemesis, sct_abs_path
+lazy from sdcm.nemesis import NemesisBaseClass, NemesisFlags
+lazy from sdcm.nemesis.registry import NemesisRegistry
 
 DEFAULT_JOB_NAME = "longevity-5gb-1h"
 TEST_CASE_TEMPLATE_DIR = "test_config"

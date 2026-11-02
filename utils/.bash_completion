@@ -1,9 +1,14 @@
-_hydra_completion() {
+# Bash completion for hydra, ./sct.py and `uv run sct.py`. Install with `hydra --install-bash-completion`
+# (or `uv run sct.py --install-bash-completion`); it is copied to ~/.bash_completion.
+
+# Complete from sct.py's click completion. $1: index of the program word in COMP_WORDS, rest: command to run.
+_hydra_complete_from() {
+    local offset=$1; shift
+    local response completion type value
+    response=$(COMP_WORDS="${COMP_WORDS[*]:offset}" COMP_CWORD=$((COMP_CWORD - offset)) \
+        _HYDRA_COMPLETE=bash_complete "$@" 2>/dev/null)
+
     local IFS=$'\n'
-    local response
-
-    response=$(env COMP_WORDS="${COMP_WORDS[*]}" COMP_CWORD=$COMP_CWORD _HYDRA_COMPLETE=bash_complete $1)
-
     for completion in $response; do
         IFS=',' read type value <<< "$completion"
 
@@ -17,18 +22,27 @@ _hydra_completion() {
             COMPREPLY+=($value)
         fi
     done
-
     return 0
 }
 
-_hydra_completion_setup() {
-    complete -o nosort -F _hydra_completion hydra
-
+_hydra_completion() {
+    _hydra_complete_from 0 "$1"
 }
-_hydra_completion_setup;
 
-_sct_completion_setup() {
-    complete -o nosort -F _hydra_completion ./sct.py
-
+# `uv run sct.py ...` completes sct.py; anything else goes to uv's own completion, loaded on first use.
+_sct_uv_completion() {
+    if [[ ${COMP_WORDS[1]} == run && ${COMP_WORDS[2]} == *sct.py && $COMP_CWORD -ge 3 ]]; then
+        compopt -o nosort
+        _hydra_complete_from 2 uv run --no-sync "${COMP_WORDS[2]}"
+        return 0
+    fi
+    if ! declare -F _uv >/dev/null; then
+        eval "$(uv generate-shell-completion bash 2>/dev/null)"
+        complete -o bashdefault -o default -F _sct_uv_completion uv  # uv's script re-registers itself; take the hook back
+    fi
+    declare -F _uv >/dev/null && _uv "$@"
 }
-_sct_completion_setup;
+
+complete -o nosort -F _hydra_completion hydra hydra.sh  # hydra.sh: bash also looks up the basename of ./docker/env/hydra.sh
+complete -o nosort -F _hydra_completion sct.py  # matches ./sct.py and /path/to/sct.py the same way
+complete -o bashdefault -o default -F _sct_uv_completion uv
