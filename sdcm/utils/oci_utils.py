@@ -28,8 +28,15 @@ from oci.exceptions import ServiceError
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.metaclasses import Singleton
+<<<<<<< HEAD
 from sdcm.provision.provisioner import VmArch
 
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.utils.scylla_sha import scylla_sha_from_version, scylla_version_matches_sha, sha_selector
+=======
+from sdcm.utils.scylla_sha import scylla_sha_from_version, scylla_version_matches_sha, sha_selector
+from sdcm.utils.vm_arch import VmArch
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 
 LOGGER = logging.getLogger(__name__)
 

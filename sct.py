@@ -11,13 +11,14 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-import platform
-from textwrap import dedent
+lazy import platform
+lazy from textwrap import dedent
 
 from sdcm.utils.mp_start import ensure_start_method
 
 ensure_start_method()
 
+<<<<<<< HEAD
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta, UTC
 import os
@@ -34,7 +35,47 @@ from pathlib import Path
 from functools import partial, reduce
 from typing import List, Literal
 from uuid import UUID
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+import json
+import logging
+import os
+import pprint
+import re
+import subprocess
+import sys
+import time
+import traceback
+import unittest
+import xml.etree.ElementTree as ET
+from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor
+from datetime import UTC, datetime, timedelta, timezone
+from functools import partial, reduce
+from pathlib import Path
+from typing import List, Literal
+from uuid import UUID
+=======
+lazy import json
+lazy import logging
+lazy import os
+lazy import pprint
+lazy import re
+lazy import subprocess
+lazy import sys
+lazy import time
+lazy import traceback
+lazy import unittest
+lazy import xml.etree.ElementTree as ET
+lazy from collections import defaultdict
+lazy from concurrent.futures import ProcessPoolExecutor
+lazy from datetime import UTC, datetime, timedelta, timezone
+lazy from functools import partial, reduce
+lazy from pathlib import Path
+lazy from typing import List, Literal
+lazy from uuid import UUID
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 
+<<<<<<< HEAD
 import pytest
 import click
 import yaml
@@ -61,26 +102,141 @@ from sdcm.sct_runner import (
     AwsSctRunner,
     GceSctRunner,
     AzureSctRunner,
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+import click
+import pytest
+import yaml
+from rich.table import Table
+
+import sct_scan_issues
+import sct_sizing
+import sct_ssh
+import sdcm.provision.azure.utils as azure_utils
+from argus.client.base import ArgusClientError
+from argus.client.sct.types import LogLink
+from argus.common.enums import TestStatus
+from argus.common.sct_types import RawEventPayload
+from sdcm import sct_abs_path
+from sdcm.cluster_cloud import extract_short_test_id_from_name
+from sdcm.cluster_k8s import mini_k8s
+from sdcm.keystore import KeyStore
+from sdcm.localhost import LocalHost
+from sdcm.logcollector import Collector
+from sdcm.monitorstack.restore import (
+    get_monitoring_stack_services,
+    kill_running_monitoring_stack_services,
+    restore_monitoring_stack,
+)
+from sdcm.nemesis.generator import NemesisJobGenerator, generate_nemesis_yaml
+from sdcm.nemesis.monkey.runners import SisyphusMonkey
+from sdcm.provision import AzureProvisioner
+from sdcm.provision.aws.spot_placement_score import get_scores as get_spot_placement_scores
+from sdcm.provision.gce.capacity_advisor import get_zone_advice
+from sdcm.provision.provisioner import VmArch, VmInstance
+from sdcm.remote import LOCALRUNNER
+from sdcm.sct_config import AWS_SUPPORTED_REGIONS, SCTConfiguration, available_backends, init_and_verify_sct_config
+from sdcm.sct_provision.common.layout import SCTProvisionLayout
+from sdcm.sct_provision.instances_provider import provision_sct_resources
+from sdcm.sct_runner import (
+    AwsSctRunner,
+    AzureSctRunner,
+    GceSctRunner,
+    OciSctRunner,
+    clean_sct_runners,
+=======
+lazy import click
+lazy import pytest
+lazy import yaml
+lazy from rich.table import Table
+
+lazy import sct_scan_issues
+lazy import sct_sizing
+lazy import sct_ssh
+lazy import sdcm.provision.azure.utils as azure_utils
+lazy from argus.client.base import ArgusClientError
+lazy from argus.client.sct.types import LogLink
+lazy from argus.common.enums import TestStatus
+lazy from argus.common.sct_types import RawEventPayload
+lazy from sdcm import sct_abs_path
+lazy from sdcm.cluster_cloud import extract_short_test_id_from_name
+lazy from sdcm.cluster_k8s import mini_k8s
+lazy from sdcm.keystore import KeyStore
+lazy from sdcm.localhost import LocalHost
+lazy from sdcm.logcollector import Collector
+lazy from sdcm.monitorstack.restore import (
+    get_monitoring_stack_services,
+    kill_running_monitoring_stack_services,
+    restore_monitoring_stack,
+)
+lazy from sdcm.nemesis.generator import NemesisJobGenerator, generate_nemesis_yaml
+lazy from sdcm.nemesis.monkey.runners import SisyphusMonkey
+lazy from sdcm.provision import AzureProvisioner
+lazy from sdcm.provision.aws.spot_placement_score import get_scores as get_spot_placement_scores
+lazy from sdcm.provision.gce.capacity_advisor import get_zone_advice
+lazy from sdcm.provision.provisioner import VmInstance
+lazy from sdcm.remote import LOCALRUNNER
+lazy from sdcm.sct_config import AWS_SUPPORTED_REGIONS, SCTConfiguration, available_backends, init_and_verify_sct_config
+lazy from sdcm.sct_provision.common.layout import SCTProvisionLayout
+lazy from sdcm.sct_provision.instances_provider import provision_sct_resources
+lazy from sdcm.sct_runner import (
+    clean_sct_runners,
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
     get_sct_runner,
     clean_sct_runners,
     update_sct_runner_tags,
     list_sct_runners,
 )
+<<<<<<< HEAD
 
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import (
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.test_config import TestConfig
+from sdcm.utils.argus import (
+=======
+lazy from sdcm.test_config import TestConfig
+lazy from sdcm.utils.argus import (
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
     ReplayOnlyArgusSCTClient,
     argus_offline_collect_events,
     create_proxy_argus_s3_url,
     get_argus_client,
     get_argus_use_tunnel_from_env,
 )
+<<<<<<< HEAD
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
 from sdcm.utils.common import (
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.utils.aws_builder import AwsBuilder, AwsCiBuilder, AwsFipsCiBuilder
+from sdcm.utils.aws_kms import AwsKms
+from sdcm.utils.aws_okta import try_auth_with_okta
+from sdcm.utils.aws_peering import AwsVpcPeering
+from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.aws_utils import AwsArchType, get_arch_from_instance_type
+from sdcm.utils.azure_region import AzureRegion
+from sdcm.utils.ci_tools import get_job_name, get_job_url
+from sdcm.utils.cloud_catalog.cost import RunCostEstimate, estimate_run_cost
+from sdcm.utils.cloud_monitor import cloud_qa_report, cloud_report
+from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
+from sdcm.utils.common import (
+=======
+lazy from sdcm.utils.aws_builder import AwsBuilder, AwsCiBuilder, AwsFipsCiBuilder
+lazy from sdcm.utils.aws_kms import AwsKms
+lazy from sdcm.utils.aws_okta import try_auth_with_okta
+lazy from sdcm.utils.aws_peering import AwsVpcPeering
+lazy from sdcm.utils.aws_region import AwsRegion
+lazy from sdcm.utils.aws_utils import AwsArchType, get_arch_from_instance_type
+lazy from sdcm.utils.azure_region import AzureRegion
+lazy from sdcm.utils.ci_tools import get_job_name, get_job_url
+lazy from sdcm.utils.cloud_catalog.cost import RunCostEstimate, estimate_run_cost
+lazy from sdcm.utils.cloud_monitor import cloud_qa_report, cloud_report
+lazy from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
+lazy from sdcm.utils.common import (
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
     S3Storage,
     aws_tags_to_dict,
     create_pretty_table,
@@ -107,13 +263,76 @@ from sdcm.utils.common import (
     get_hdr_tags,
     download_and_unpack_logs,
 )
+<<<<<<< HEAD
 from sdcm.utils.nemesis_generation import generate_nemesis_yaml, NemesisJobGenerator
 from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
 from sdcm.utils.resources_cleanup import (
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.utils.context_managers import environment
+from sdcm.utils.cost_reporting import report_estimated_cost
+from sdcm.utils.decorators import retrying
+from sdcm.utils.docker_utils import docker_hub_login, get_ip_address_of_container, running_in_podman
+from sdcm.utils.gce_builder import GceBuilder
+from sdcm.utils.gce_region import GceRegion
+from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, GceZoneResolver, gce_public_addresses
+from sdcm.utils.get_username import get_username
+from sdcm.utils.git import clone_repo, get_git_commit_id, get_git_status_info
+from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
+from sdcm.utils.jepsen import JepsenResults
+from sdcm.utils.lint.docs_linter import lint_test_metadata
+from sdcm.utils.lint.env_builder import build_env
+from sdcm.utils.lint.jenkins_parser import discover_pipeline_files, parse_jenkinsfile
+from sdcm.utils.log import disable_loggers_during_startup, setup_stdout_logger
+from sdcm.utils.minicloud.activation import check_minicloud_reachability, set_minicloud_endpoint_env
+from sdcm.utils.minicloud.bootstrap import ensure_minicloud_ready
+from sdcm.utils.minicloud.config import MinicloudConfig
+from sdcm.utils.minicloud.endpoint import AZURE_BACKENDS, get_minicloud_endpoint, is_minicloud_active
+from sdcm.utils.minicloud.log_collection import collect_minicloud_guest_serial_logs, collect_minicloud_logs
+from sdcm.utils.minicloud.manager import MinicloudManager
+from sdcm.utils.minicloud.tls import ca_bundle_for
+from sdcm.utils.net import get_sct_runner_ip
+from sdcm.utils.oci_builder import OciBuilder
+from sdcm.utils.oci_peering import OciVcnPeering
+from sdcm.utils.oci_region import OciRegion
+from sdcm.utils.oci_utils import get_scylla_images_by_branch, get_scylla_images_by_version, list_instances_oci
+from sdcm.utils.open_with_diff import ErrorCarrier, OpenWithDiff
+from sdcm.utils.resources_cleanup import (
+=======
+lazy from sdcm.utils.context_managers import environment
+lazy from sdcm.utils.cost_reporting import report_estimated_cost
+lazy from sdcm.utils.decorators import retrying
+lazy from sdcm.utils.docker_utils import docker_hub_login, get_ip_address_of_container, running_in_podman
+lazy from sdcm.utils.gce_builder import GceBuilder
+lazy from sdcm.utils.gce_region import GceRegion
+lazy from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, GceZoneResolver, gce_public_addresses
+lazy from sdcm.utils.get_username import get_username
+lazy from sdcm.utils.git import clone_repo, get_git_commit_id, get_git_status_info
+lazy from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
+lazy from sdcm.utils.jepsen import JepsenResults
+lazy from sdcm.utils.lint.docs_linter import lint_test_metadata
+lazy from sdcm.utils.lint.env_builder import build_env
+lazy from sdcm.utils.lint.jenkins_parser import discover_pipeline_files, parse_jenkinsfile
+lazy from sdcm.utils.log import disable_loggers_during_startup, setup_stdout_logger
+lazy from sdcm.utils.minicloud.activation import check_minicloud_reachability, set_minicloud_endpoint_env
+lazy from sdcm.utils.minicloud.bootstrap import ensure_minicloud_ready
+lazy from sdcm.utils.minicloud.config import MinicloudConfig
+lazy from sdcm.utils.minicloud.endpoint import AZURE_BACKENDS, get_minicloud_endpoint, is_minicloud_active
+lazy from sdcm.utils.minicloud.log_collection import collect_minicloud_guest_serial_logs, collect_minicloud_logs
+lazy from sdcm.utils.minicloud.manager import MinicloudManager
+lazy from sdcm.utils.minicloud.tls import ca_bundle_for
+lazy from sdcm.utils.net import get_sct_runner_ip
+lazy from sdcm.utils.oci_builder import OciBuilder
+lazy from sdcm.utils.oci_peering import OciVcnPeering
+lazy from sdcm.utils.oci_region import OciRegion
+lazy from sdcm.utils.oci_utils import get_scylla_images_by_branch, get_scylla_images_by_version, list_instances_oci
+lazy from sdcm.utils.open_with_diff import ErrorCarrier, OpenWithDiff
+lazy from sdcm.utils.resources_cleanup import (
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
     clean_cloud_resources,
     clean_resources_according_post_behavior,
     init_argus_client,
 )
+<<<<<<< HEAD
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login, running_in_podman
@@ -121,7 +340,35 @@ from sdcm.monitorstack import (
     restore_monitoring_stack,
     get_monitoring_stack_services,
     kill_running_monitoring_stack_services,
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.utils.sct_cmd_helpers import CloudRegion, add_file_logger, get_all_regions, get_test_config
+from sdcm.utils.scylla_sha import scylla_sha_from_version
+from sdcm.utils.trigger_matrix.audit import audit_matrices
+from sdcm.utils.trigger_matrix.config import load_matrix_config
+from sdcm.utils.trigger_matrix.constants import VERSION_RESOLUTION_STRATEGIES
+from sdcm.utils.trigger_matrix.images import resolve_image_architecture, resolve_scylla_version_from_image
+from sdcm.utils.trigger_matrix.matrix import trigger_matrix_versions as run_trigger_matrix
+from sdcm.utils.trigger_matrix.reporting import send_arch_audit_email
+from sdcm.utils.trigger_matrix.resolution import (
+    check_only_supported_versions,
+    resolve_to_full_version,
+    supported_only_versions,
+=======
+lazy from sdcm.utils.sct_cmd_helpers import CloudRegion, add_file_logger, get_all_regions, get_test_config
+lazy from sdcm.utils.scylla_sha import scylla_sha_from_version
+lazy from sdcm.utils.trigger_matrix.audit import audit_matrices
+lazy from sdcm.utils.trigger_matrix.config import load_matrix_config
+lazy from sdcm.utils.trigger_matrix.constants import VERSION_RESOLUTION_STRATEGIES
+lazy from sdcm.utils.trigger_matrix.images import resolve_image_architecture, resolve_scylla_version_from_image
+lazy from sdcm.utils.trigger_matrix.matrix import trigger_matrix_versions as run_trigger_matrix
+lazy from sdcm.utils.trigger_matrix.reporting import send_arch_audit_email
+lazy from sdcm.utils.trigger_matrix.resolution import (
+    check_only_supported_versions,
+    resolve_to_full_version,
+    supported_only_versions,
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 )
+<<<<<<< HEAD
 from sdcm.utils.log import setup_stdout_logger, disable_loggers_during_startup
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder
@@ -143,6 +390,22 @@ from sdcm.utils.docker_utils import get_ip_address_of_container
 from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
 from unit_tests.nemesis.fake_cluster import FakeTester
 from sdcm.logcollector import Collector
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
+from sdcm.xcloud.api_client import CloudProviderType, ScyllaCloudAPIClient
+from unit_tests.unit.nemesis.fake_cluster import FakeTester
+from utils.build_system.create_test_release_jobs import JenkinsPipelines
+from utils.build_system.throttle_categories import ThrottleCategory, ThrottleCategoryManager
+from utils.get_supported_scylla_base_versions import UpgradeBaseVersion, fetch_official_supported_versions
+=======
+lazy from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
+lazy from sdcm.utils.vm_arch import AWS_ARCH_TYPES, VmArch
+lazy from sdcm.xcloud.api_client import CloudProviderType, ScyllaCloudAPIClient
+lazy from unit_tests.unit.nemesis.fake_cluster import FakeTester
+lazy from utils.build_system.create_test_release_jobs import JenkinsPipelines
+lazy from utils.build_system.throttle_categories import ThrottleCategory, ThrottleCategoryManager
+lazy from utils.get_supported_scylla_base_versions import UpgradeBaseVersion, fetch_official_supported_versions
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 
 SUPPORTED_CLOUDS = (
     "aws",
@@ -150,8 +413,6 @@ SUPPORTED_CLOUDS = (
     "azure",
 )
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
-
-SCT_RUNNER_HOST = get_sct_runner_ip()
 
 LOGGER = setup_stdout_logger()
 
@@ -1121,6 +1382,202 @@ def list_images(  # noqa: PLR0912, PLR0914
                     click.echo(f"Cloud provider {cloud_provider} is not supported")
 
 
+<<<<<<< HEAD
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+@cli.command("find-ami-equivalent", help="Find equivalent AMI in different region or architecture")
+@click.option("--ami-id", required=True, type=str, help="Source AMI ID to find equivalents for")
+@click.option("--source-region", required=True, type=str, help="AWS region where source AMI is located")
+@click.option(
+    "-r",
+    "--target-region",
+    "target_regions",
+    type=str,
+    multiple=True,
+    help="Target region(s) to search for equivalents. Can be specified multiple times. "
+    "If not specified, searches in source region only.",
+)
+@click.option(
+    "-a",
+    "--target-arch",
+    type=click.Choice(AwsArchType.__args__),
+    help="Target architecture (x86_64 or arm64). If not specified, uses same arch as source AMI.",
+)
+@click.option(
+    "-o",
+    "--output-format",
+    type=click.Choice(["table", "json", "text"]),
+    default="table",
+    help="Output format: 'table' for human-readable table, 'json' for structured data, or 'text' for AMI IDs only",
+)
+def find_ami_equivalent(
+    ami_id: str,
+    source_region: str,
+    target_regions: tuple[str, ...],
+    target_arch: AwsArchType | None,
+    output_format: str,
+):
+    """Find equivalent AMIs in different regions or architectures based on tags."""
+    add_file_logger()
+
+    # Convert tuple to list or None
+    target_regions_list = list(target_regions) if target_regions else None
+
+    # Find equivalent AMIs
+    results = find_equivalent_ami(
+        ami_id=ami_id, source_region=source_region, target_regions=target_regions_list, target_arch=target_arch
+    )
+
+    if not results:
+        click.echo(f"No equivalent AMIs found for {ami_id}")
+        return
+
+    if output_format == "table":
+        # Create pretty table output
+        field_names = [
+            "Region",
+            "AMI ID",
+            "Name",
+            "Architecture",
+            "Creation Date",
+            "Name Tag",
+            "Scylla Version",
+            "Build ID",
+            "Owner ID",
+        ]
+        table = Table(*field_names, show_lines=False)
+
+        for result in results:
+            table.add_row(
+                result["region"],
+                result["ami_id"],
+                result["name"],
+                result["architecture"],
+                result["creation_date"],
+                result["name_tag"],
+                result["scylla_version"],
+                result["build_id"][:6] if result["build_id"] else "N/A",
+                result["owner_id"],
+            )
+
+        title = f"Equivalent AMIs for {ami_id} (source: {source_region})"
+        if target_arch:
+            title += f" - Target arch: {target_arch}"
+        click.echo(rich_table_to_string(table, title=title))
+
+    elif output_format == "json":
+        # Create JSON output for pipeline usage
+        output = {
+            "source_ami_id": ami_id,
+            "source_region": source_region,
+            "target_arch": target_arch,
+            "results": results,
+        }
+        click.echo(json.dumps(output, indent=2))
+
+    elif output_format == "text":
+        # Output only AMI IDs, one per line
+        for result in results:
+            click.echo(result["ami_id"])
+
+
+=======
+@cli.command("find-ami-equivalent", help="Find equivalent AMI in different region or architecture")
+@click.option("--ami-id", required=True, type=str, help="Source AMI ID to find equivalents for")
+@click.option("--source-region", required=True, type=str, help="AWS region where source AMI is located")
+@click.option(
+    "-r",
+    "--target-region",
+    "target_regions",
+    type=str,
+    multiple=True,
+    help="Target region(s) to search for equivalents. Can be specified multiple times. "
+    "If not specified, searches in source region only.",
+)
+@click.option(
+    "-a",
+    "--target-arch",
+    type=click.Choice(AWS_ARCH_TYPES),
+    help="Target architecture (x86_64 or arm64). If not specified, uses same arch as source AMI.",
+)
+@click.option(
+    "-o",
+    "--output-format",
+    type=click.Choice(["table", "json", "text"]),
+    default="table",
+    help="Output format: 'table' for human-readable table, 'json' for structured data, or 'text' for AMI IDs only",
+)
+def find_ami_equivalent(
+    ami_id: str,
+    source_region: str,
+    target_regions: tuple[str, ...],
+    target_arch: AwsArchType | None,
+    output_format: str,
+):
+    """Find equivalent AMIs in different regions or architectures based on tags."""
+    add_file_logger()
+
+    # Convert tuple to list or None
+    target_regions_list = list(target_regions) if target_regions else None
+
+    # Find equivalent AMIs
+    results = find_equivalent_ami(
+        ami_id=ami_id, source_region=source_region, target_regions=target_regions_list, target_arch=target_arch
+    )
+
+    if not results:
+        click.echo(f"No equivalent AMIs found for {ami_id}")
+        return
+
+    if output_format == "table":
+        # Create pretty table output
+        field_names = [
+            "Region",
+            "AMI ID",
+            "Name",
+            "Architecture",
+            "Creation Date",
+            "Name Tag",
+            "Scylla Version",
+            "Build ID",
+            "Owner ID",
+        ]
+        table = Table(*field_names, show_lines=False)
+
+        for result in results:
+            table.add_row(
+                result["region"],
+                result["ami_id"],
+                result["name"],
+                result["architecture"],
+                result["creation_date"],
+                result["name_tag"],
+                result["scylla_version"],
+                result["build_id"][:6] if result["build_id"] else "N/A",
+                result["owner_id"],
+            )
+
+        title = f"Equivalent AMIs for {ami_id} (source: {source_region})"
+        if target_arch:
+            title += f" - Target arch: {target_arch}"
+        click.echo(rich_table_to_string(table, title=title))
+
+    elif output_format == "json":
+        # Create JSON output for pipeline usage
+        output = {
+            "source_ami_id": ami_id,
+            "source_region": source_region,
+            "target_arch": target_arch,
+            "results": results,
+        }
+        click.echo(json.dumps(output, indent=2))
+
+    elif output_format == "text":
+        # Output only AMI IDs, one per line
+        for result in results:
+            click.echo(result["ami_id"])
+
+
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 @cli.command("list-repos", help="List repos url of Scylla formal versions")
 @click.option(
     "-d", "--dist-type", type=click.Choice(["centos", "ubuntu", "debian"]), default="centos", help="Distribution type"
@@ -1535,8 +1992,16 @@ def show_monitor(test_id, date_time, kill, cluster_name):
         click.echo(f"Monitoring stack for cluster {cluster} restored")
         table = PrettyTable(["Service", "Container", "Link"], align="l")
         for docker in get_monitoring_stack_services(ports=containers_ports):
+<<<<<<< HEAD
             table.add_row([docker["service"], docker["name"], f"http://{SCT_RUNNER_HOST}:{docker['port']}"])
         click.echo(table.get_string(title=f"Monitoring stack services for cluster {cluster}"))
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+            table.add_row(docker["service"], docker["name"], f"http://{SCT_RUNNER_HOST}:{docker['port']}")
+        click.echo(rich_table_to_string(table, title=f"Monitoring stack services for cluster {cluster}"))
+=======
+            table.add_row(docker["service"], docker["name"], f"http://{get_sct_runner_ip()}:{docker['port']}")
+        click.echo(rich_table_to_string(table, title=f"Monitoring stack services for cluster {cluster}"))
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
         click.echo("")
         if kill:
             kill_running_monitoring_stack_services(ports=containers_ports)
@@ -1552,10 +2017,10 @@ def show_jepsen_results(test_id):
     if jepsen.restore_jepsen_data(test_id):
         click.secho(
             message=f"\nJepsen data restored, starting web server on "
-            f"http://{SCT_RUNNER_HOST}:{jepsen.jepsen_results_port}/",
+            f"http://{get_sct_runner_ip()}:{jepsen.jepsen_results_port}/",
             fg="green",
         )
-        detach = SCT_RUNNER_HOST != "127.0.0.1"
+        detach = get_sct_runner_ip() != "127.0.0.1"
         if not detach:
             click.secho(message="Press Ctrl-C to stop the server.", fg="green")
         click.echo("")
@@ -2034,12 +2499,13 @@ def create_nemesis_yaml(diff):
 
 @cli.command("create-nemesis-pipelines")
 @click.option("--base-job", default=None, type=str)
-@click.option("--backend", default=NemesisJobGenerator.BACKEND_TO_REGION.keys(), multiple=True)
+@click.option("--backend", multiple=True, help="Backends to generate for  [default: all known backends]")
 @click.option("--diff/--no-diff", default=True)
 def create_nemesis_pipelines(base_job: str, backend: list[str], diff: bool):
     error_carrier = ErrorCarrier() if diff else None
     file_opener = partial(OpenWithDiff, error_carrier=error_carrier) if diff else open
 
+    backend = backend or list(NemesisJobGenerator.BACKEND_TO_REGION)
     gen = NemesisJobGenerator(base_job=base_job, backends=backend, base_dir="", file_opener=file_opener)
     gen.render_base_job_config()
     gen.create_test_cases_from_template()
@@ -2101,11 +2567,23 @@ def configure_aws_peering(regions):
 
 @cli.command(
     "create-runner-image",
+<<<<<<< HEAD
     help=f"Create an SCT runner image in the selected cloud region."
     f" If the requested region is not a source region"
     f" (aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION},"
     f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
     f" source region and then copied to the chosen one.",
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+    help=f"Create an SCT runner image in the selected cloud region."
+    f" If the requested region is not a source region"
+    f" (aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION},"
+    f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}, oci: {OciSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
+    f" source region and then copied to the chosen one.",
+=======
+    help="Create an SCT runner image in the selected cloud region."
+    " If the requested region is not the cloud's source region (SOURCE_IMAGE_REGION in sdcm/sct_runner.py)"
+    " the image will be first created in the source region and then copied to the chosen one.",
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 )
 @cloud_provider_option
 @click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")

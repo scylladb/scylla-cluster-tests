@@ -18,8 +18,16 @@ import random
 import logging
 import time
 import uuid
+<<<<<<< HEAD
 from functools import cached_property
 from typing import Any, List, Literal
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from functools import cache, cached_property
+from typing import TYPE_CHECKING, Any, Callable, List, Literal
+=======
+from functools import cache, cached_property
+from typing import Any, Callable, List, Literal
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 
 from google.oauth2 import service_account
 from google.cloud import compute_v1
@@ -29,8 +37,18 @@ from google.api_core.extended_operation import ExtendedOperation
 from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
+<<<<<<< HEAD
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 from sdcm.provision.provisioner import VmArch
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.utils.docker_utils import Container, ContainerManager, DockerClient, DockerException
+
+if TYPE_CHECKING:
+    from sdcm.provision.provisioner import VmArch
+=======
+from sdcm.utils.docker_utils import Container, ContainerManager, DockerClient, DockerException
+from sdcm.utils.vm_arch import VmArch
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 
 # NOTE: we cannot use neither 'slim' nor 'alpine' versions because we need the 'beta' component be installed.
 GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:437.0.1"
