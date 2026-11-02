@@ -57,6 +57,9 @@ FTS_WORKLOAD = SearchWorkload(
     step_records_file_key="documents_file",
     default_records_file="documents.tsv",
     default_shard_suffix="documents_{:03d}.tsv",
+    description="Full-text search (BM25)",
+    table_prefix="FTS",
+    record_label="document count",
 )
 
 

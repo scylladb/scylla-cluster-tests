@@ -45,6 +45,7 @@ from search_perf_test import (
     indexing_throughput,
     resolve_test_config_path,
     validate_plan_queries,
+    validate_plan_tracks,
 )
 
 WORKLOAD = SearchWorkload(
@@ -154,6 +155,134 @@ def test_validate_plan_queries_names_the_offending_step():
 
 def test_validate_plan_queries_ignores_steps_without_queries():
     validate_plan_queries([{"name": "ds", "steps": [{"shards": []}, {"documents_file": "documents.tsv"}]}])
+
+
+# ---------------------------------------------------------------------------
+# Argus tracks named by the plan
+# ---------------------------------------------------------------------------
+
+
+def _steps(*steps, name="ds"):
+    return {"name": name, "defaults": DEFAULTS, "steps": list(steps)}
+
+
+def test_a_plan_without_tracks_is_valid():
+    validate_plan_tracks([_steps({"shards": [0], "queries": [{"set": "t"}, {"set": "t"}]})])
+
+
+def test_one_track_may_span_steps_and_datasets():
+    """What a track compares is the plan's choice, e.g. one query set over two corpora."""
+    validate_plan_tracks(
+        [
+            _steps(
+                {
+                    "build_track": "builds",
+                    "build_label": "small",
+                    "queries": [{"set": "t", "track": "t", "label": "small"}],
+                },
+                name="small",
+            ),
+            _steps(
+                {
+                    "build_track": "builds",
+                    "build_label": "large",
+                    "queries": [{"set": "t", "track": "t", "label": "large"}],
+                },
+                name="large",
+            ),
+        ]
+    )
+
+
+def test_an_unthrottled_track_may_mix_p99_limits():
+    """Only a rate-limited track checks P99, so only its entries must agree on the limit."""
+    validate_plan_tracks(
+        [
+            _steps(
+                {
+                    "queries": [
+                        {"set": "t", "track": "throughput", "label": "a"},
+                        {"set": "t", "track": "throughput", "expected_p99_read_ms": 50, "label": "b"},
+                    ]
+                }
+            )
+        ]
+    )
+
+
+def test_a_tracked_entry_names_its_track_and_row():
+    assert search_perf_test._query_track({"set": "t", "track": "latency", "label": "small"}) == ("latency", "small")
+    assert search_perf_test._build_track({"build_track": "builds", "build_label": "small"}) == ("builds", "small")
+
+
+def test_an_untracked_entry_has_no_track():
+    assert search_perf_test._query_track({"set": "t"}) == (None, None)
+    assert search_perf_test._build_track({"shards": [0]}) == (None, None)
+
+
+@pytest.mark.parametrize(
+    "step, message",
+    (
+        (
+            {"queries": [{"set": "t", "track": "t", "label": "a"}, {"set": "t", "track": "t", "label": "a"}]},
+            "Track 't' already has a row 'a'",
+        ),
+        (
+            {
+                "queries": [
+                    {"set": "t", "track": "t", "rate": 50, "label": "a"},
+                    {"set": "t", "track": "t", "rate": 50, "expected_p99_read_ms": 50, "label": "b"},
+                ]
+            },
+            "Track 't' checks P99 against 50 ms here but 10 ms elsewhere",
+        ),
+        (
+            {
+                "queries": [
+                    {"set": "t", "track": "t", "label": "a"},
+                    {"set": "t", "track": "t", "rate": 50, "label": "b"},
+                ]
+            },
+            "Track 't' mixes rate-limited and unthrottled queries",
+        ),
+        ({"queries": [{"set": "t", "label": "row"}]}, "'label' without 'track'"),
+        ({"build_label": "row"}, "'build_label' without 'build_track'"),
+        ({"queries": [{"set": "t", "track": "t"}]}, "'track' without 'label'"),
+        ({"build_track": "builds"}, "'build_track' without 'build_label'"),
+        ({"queries": [{"set": "t", "track": "latency\nP99", "label": "a"}]}, "Invalid track"),
+        ({"queries": [{"set": "t", "track": " leading space", "label": "a"}]}, "Invalid track"),
+        ({"queries": [{"set": "t", "track": "t", "label": "x" * 121}]}, "Invalid label"),
+    ),
+)
+def test_a_bad_track_is_rejected_before_the_run(step, message):
+    with pytest.raises(ValueError, match=re.escape(message)):
+        validate_plan_tracks([_steps(step)])
+
+
+def test_a_repeated_build_label_is_rejected_across_datasets():
+    with pytest.raises(ValueError, match=r"Track 'builds' already has a row 'same'.*\(in dataset 'b', step #1\)"):
+        validate_plan_tracks(
+            [
+                _steps({"build_track": "builds", "build_label": "same"}, name="a"),
+                _steps({"build_track": "builds", "build_label": "same"}, name="b"),
+            ]
+        )
+
+
+def test_a_track_holds_builds_or_searches_not_both():
+    """Their columns differ, and a track is one table."""
+    with pytest.raises(ValueError, match=r"Track\(s\) \['mixed'\] hold both index builds and searches"):
+        validate_plan_tracks(
+            [
+                _steps(
+                    {
+                        "build_track": "mixed",
+                        "build_label": "a",
+                        "queries": [{"set": "t", "track": "mixed", "label": "b"}],
+                    }
+                )
+            ]
+        )
 
 
 def test_rate_zero_is_allowed_as_unthrottled():
@@ -837,6 +966,13 @@ def test_a_plan_without_queries_runs_without_hdr_histograms(tmp_path):
     assert tester.ran == ["first"]
 
 
+def test_a_bad_track_is_rejected_before_any_dataset_runs(tmp_path):
+    plan = "datasets:\n  - name: first\n    steps:\n      - build_track: builds\n"
+    # '_PlanTester' runs no dataset, so the error can only come from the plan check before them.
+    with pytest.raises(ValueError, match="'build_track' without 'build_label'"):
+        _run_plan(tmp_path, plan)
+
+
 def test_repeated_dataset_names_are_rejected(tmp_path):
     """An index is named after its dataset and step, and its build time is read from the first
     matching 'full scan' pair in the log -- so a repeated name would silently re-report the first
@@ -909,9 +1045,13 @@ class _ResultsTester:
     def __init__(self, logdir):
         self.log = logging.getLogger("test")
         self.logdir = str(logdir)
+        self.reported = []
 
     def _record_result(self, phase, **fields):
         search_perf_test.SearchPerformanceTest._record_result(self, phase, **fields)
+
+    def _report_to_argus(self, record):
+        self.reported.append(record)
 
 
 def _results(logdir):
@@ -950,6 +1090,49 @@ def test_index_builds_are_appended_one_json_object_per_line(tmp_path):
         },
     ]
     assert all(record["time"] for record in records)
+
+
+def test_every_record_goes_to_argus_as_written(tmp_path):
+    tester = _ResultsTester(tmp_path)
+
+    search_perf_test.SearchPerformanceTest._record_index_build(tester, "local_tiny", 1, "idx", 1000, 2.5)
+
+    assert tester.reported == _results(tmp_path)
+
+
+class _ArgusTester:
+    WORKLOAD = WORKLOAD
+    _argus_reporter = None
+
+    def __init__(self, argus_client):
+        self.log = logging.getLogger("test")
+        self.test_config = types.SimpleNamespace(argus_client=lambda: argus_client)
+
+
+def test_the_records_of_a_run_share_one_reporter():
+    """Its row count numbers the overview rows; a reporter per record would make them all '#01'."""
+    submitted = []
+    tester = _ArgusTester(types.SimpleNamespace(submit_results=submitted.append))
+    record = {"phase": "index_build", "dataset": "ds", "step": 1, "record_count": 1, "build_time_s": 1.0}
+    record["indexing_throughput"] = 1.0
+
+    for _ in range(2):
+        search_perf_test.SearchPerformanceTest._report_to_argus(tester, record)
+
+    assert [table.results[0].row for table in submitted] == ["#01 index build", "#02 index build"]
+
+
+def test_an_argus_failure_is_logged_not_raised(caplog):
+    """The record is already in the results file; a reporting problem must not fail the run."""
+    client = types.SimpleNamespace(submit_results=lambda table: (_ for _ in ()).throw(RuntimeError("argus down")))
+    record = {"phase": "index_build", "dataset": "ds", "step": 1, "record_count": 1, "build_time_s": 1.0}
+    record["indexing_throughput"] = 1.0
+
+    with caplog.at_level(logging.ERROR):
+        search_perf_test.SearchPerformanceTest._report_to_argus(_ArgusTester(client), record)
+
+    assert "Failed to report the index_build record to Argus" in caplog.text
+    assert "argus down" in caplog.text
 
 
 def test_an_unmeasured_build_is_recorded_with_nulls(tmp_path):
@@ -1120,3 +1303,27 @@ def test_every_query_of_a_step_gets_the_same_parse_error_handling(tmp_path, igno
     )
 
     assert [searched["ignore_parse_errors"] for searched in tester.searched] == [ignore_parse_errors] * 2
+
+
+def test_a_tracked_query_carries_its_track_into_the_record(tmp_path):
+    (tmp_path / "queries_term_common.tsv").write_text("q1\tthe query\n", encoding="utf-8")
+    tester = _StepTester(tmp_path)
+    step = {"queries": [{"set": "term_common", "track": "latency", "label": "small"}, {"set": "term_common"}]}
+
+    search_perf_test.SearchPerformanceTest._run_step_queries(
+        tester, step, "ds", DEFAULTS, record_count=900, step_number=1, local_ds_dir=str(tmp_path), container_ds_dir="/r"
+    )
+
+    tracked, untracked = _results(tmp_path)
+    assert (tracked["track"], tracked["label"]) == ("latency", "small")
+    assert "track" not in untracked
+    assert "label" not in untracked
+
+
+def test_a_tracked_index_build_carries_its_track_into_the_record(tmp_path):
+    search_perf_test.SearchPerformanceTest._record_index_build(
+        _ResultsTester(tmp_path), "local_tiny", 1, "bench_idx_local_tiny_0", 1000, 2.5, "builds", "local_tiny"
+    )
+
+    (record,) = _results(tmp_path)
+    assert (record["track"], record["label"]) == ("builds", "local_tiny")

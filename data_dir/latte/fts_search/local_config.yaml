@@ -18,17 +18,27 @@ datasets:
       duration: 10s
       expected_p99_read_ms: 10
     steps:
-      # Single shard: simplest load path, one rate-limited query.
+      # Single shard: simplest load path, one rate-limited query. Both steps put their build in
+      # one Argus track, and each puts a query in another, so a local run exercises the track
+      # tables next to the logs -- see docs/fts-search-test.md "Results in Argus".
       - shards: [0]
+        build_track: indexing
+        build_label: local_tiny 1 shard
         queries:
           - set: term_common
             stress_options: {concurrency: 1, warmup: 20}
             rate: 50
+            track: term latency
+            label: local_tiny 1 shard
       # Shard range: exercises _parse_shard_spec, cumulative doc counts and the
       # _drop_index of the previous step's index.
       - shards: [1..2]
+        build_track: indexing
+        build_label: local_tiny 3 shards
         queries:
           - set: term_common
+            track: throughput
+            label: local_tiny 3 shards term_common
           # Deliberate duplicate of the entry above: both are recorded, told apart by
           # their 'query_index'.
           - set: term_common
