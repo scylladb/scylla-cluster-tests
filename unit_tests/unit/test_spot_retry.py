@@ -13,6 +13,7 @@ from click.testing import CliRunner
 
 import sct
 from argus.common.enums import TestStatus as ArgusStatus  # not "Test*", pytest would try to collect it
+from sdcm import cluster as sdcm_cluster
 from sdcm.provision.provisioner import OperationPreemptedError, ProvisionError
 from sdcm.tester import ClusterTester, CriticalTestFailure, teardown_on_exception
 from sdcm.utils import spot_retry
@@ -240,3 +241,16 @@ def test_critical_failure_inside_a_subtest_ends_the_test():
 
     assert not _SubtestCase.ran_after_kill
     assert len(result.failures) + len(result.errors) == 2  # the subtest, and the test itself
+
+
+def test_spot_monitoring_starts_before_the_cloud_init_wait(monkeypatch):
+    """A reclaim while cloud-init runs must publish SpotTerminationEvent, or the attempt is not retried."""
+    node = MagicMock(logdir=None, ssh_login_info={"hostname": None})
+    node.wait_for_cloud_init.side_effect = StopIteration  # nothing after it matters here
+    monkeypatch.setattr(sdcm_cluster.RemoteCmdRunnerBase, "create_remoter", lambda **_: MagicMock())
+
+    with pytest.raises(StopIteration):
+        sdcm_cluster.BaseNode.init(node)
+
+    called = [name for name, *_ in node.mock_calls]
+    assert called.index("start_spot_monitoring_if_needed") < called.index("wait_for_cloud_init")
