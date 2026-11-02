@@ -289,7 +289,7 @@ class DBCluster(ClusterBase):
             user_data_format_version=self.params.get("user_data_format_version"),
             syslog_host_port=self._test_config.get_logging_service_host_port(),
             test_config=self._test_config,
-            install_agent=bool(agent_config.get("enabled") and agent_config.get("binary_url")),
+            install_agent=agent_config.installed,
         ).to_string()
 
     def _zero_token_instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
@@ -415,7 +415,7 @@ class LoaderCluster(ClusterBase):
             aws_additional_interface=network_interfaces_count(self.params) > 1,
             test_config=self._test_config,
             install_docker=True,
-            install_agent=bool(agent_config.get("enabled") and agent_config.get("binary_url")),
+            install_agent=agent_config.installed,
         ).to_string()
 
 
@@ -436,7 +436,7 @@ class MonitoringCluster(ClusterBase):
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
             test_config=self._test_config,
-            install_agent=bool(agent_config.get("enabled") and agent_config.get("binary_url")),
+            install_agent=agent_config.installed,
         ).to_string()
 
 

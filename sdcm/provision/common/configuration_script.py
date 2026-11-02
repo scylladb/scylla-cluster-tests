@@ -162,17 +162,17 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         if self.install_agent and self.test_config:
             params = self.params if self.params else self.test_config.tester_obj().params
             agent_config = params.get("agent")
-            if agent_config.get("enabled"):
+            if agent_config.enabled:
                 api_key = self.test_config.agent_api_key()
                 if not api_key:
                     raise ValueError("Agent API key not available. Ensure it is generated before provisioning.")
 
                 script += install_agent_script(
-                    agent_binary_url=agent_config["binary_url"],
+                    agent_binary_url=agent_config.binary_url,
                     api_keys=[api_key],
-                    port=agent_config["port"],
-                    max_concurrent_jobs=agent_config["max_concurrent_jobs"],
-                    log_level=agent_config.get("log_level"),
+                    port=agent_config.port,
+                    max_concurrent_jobs=agent_config.max_concurrent_jobs,
+                    log_level=agent_config.log_level,
                 )
 
         return script
