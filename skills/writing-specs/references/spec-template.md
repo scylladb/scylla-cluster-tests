@@ -14,12 +14,17 @@ the change adds nothing. `Constraints` and `Risks` stay, with `None` when
 empty. Files, internal functions, and tests go to `plan.md`. Name no line
 numbers.
 
+The `Status` line takes one value: `draft`, `built`, or `superseded`.
+`docs/development-flow.md` tells who sets each value.
+
 ## Template
 
 ````markdown
 # <Short title>
 
 **Jira:** <KEY>
+
+**Status:** draft
 
 ## Overview
 

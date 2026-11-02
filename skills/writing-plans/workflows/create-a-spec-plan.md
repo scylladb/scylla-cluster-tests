@@ -48,9 +48,11 @@ plan is optional: the diff can carry the files and the tests.
 **Actions:**
 
 1. Show the file to the user.
-2. Ask whether to commit it. On a yes, commit it with a subject such as
+2. Tell the user that the plan can stay local. It keeps the build on track,
+   and the commits carry the result.
+3. Ask whether to commit it. On a yes, commit it with a subject such as
    `docs(plans): plan <short title>`.
-3. During the build, check each box when its step is done. Commit the checked
-   boxes with the task.
+4. During the build, check each box when its step is done. When the plan is
+   committed, commit the checked boxes with the task.
 
 **Exit:** The user has read the plan and decided about the commit.

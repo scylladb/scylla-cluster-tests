@@ -49,6 +49,9 @@ in order, so that a reader sees which pass found what.
 - Does the change build something that the spec does not design? Does each
   design change in the range update the spec?
 - Does an `(open)` line remain in the `Decisions` section of the spec?
+- Does the last pull request of the change set the `Status` line of the spec
+  to `built`? Does a change that replaces an older design set `superseded`
+  in the older spec?
 - When the flow directory holds a `plan.md`, is each box checked? The
   description tells why a box stays open.
 - Does a bug fix state its root cause in the commit message and the pull

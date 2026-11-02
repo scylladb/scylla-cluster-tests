@@ -200,6 +200,7 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
   - The change stays inside the design, the constraints, and the decisions, and keeps each contract the spec names
   - The change builds nothing that the spec does not design. Each design change in the range updates the spec
   - No `(open)` line remains in the spec's `Decisions` section
+  - The last PR of the change sets the spec's `Status` line to `built`. A change that replaces an older design sets `superseded` in the older spec
 - When only `intent.md` exists, the change solves the problem it states and stays out of its `Out of scope` section
 - When `plan.md` exists, every box is checked, or the PR description tells why a box stays open
 - The flow is optional: a PR without a flow directory is not a finding
