@@ -28,28 +28,60 @@ datasets:
       duration: 30s
       expected_p99_read_ms: 10
     steps:
+      # Every entry is tracked in Argus, under the names large_config.yaml uses for the same
+      # measurement, so a series continues whichever of the two plans ran -- see
+      # docs/fts-search-test.md "Results in Argus".
+      #
       # ~100k documents, then two rebuilds over them; after the last, one rate-limited query for
       # latency and one unthrottled for throughput.
       - shards: [0]
+        build_track: indexing
+        build_label: 10M_20tok 100k
       - shards: []
+        build_track: indexing
+        build_label: 10M_20tok 100k rebuild 1
       - shards: []
+        build_track: indexing
+        build_label: 10M_20tok 100k rebuild 2
         queries:
           - set: term_common
             stress_options: {concurrency: 1}
             rate: 50
+            track: term latency
+            label: 10M_20tok 100k
           - set: term_common
+            track: throughput
+            label: 10M_20tok 100k term_common
       # ~500k documents, on top of the shard above.
       - shards: [1..4]
+        build_track: indexing
+        build_label: 10M_20tok 500k
         queries:
           - set: term_common
             stress_options: {concurrency: 1}
             rate: 50
+            track: term latency
+            label: 10M_20tok 500k
           - set: term_common
-          # A slow query set as well, with an expected latency of its own.
+            track: throughput
+            label: 10M_20tok 500k term_common
+          # A compound query set as well, rate-limited in a track of its own, as its P99 limit differs.
+          - set: natural
+            stress_options: {concurrency: 1, warmup: false}
+            rate: 50
+            expected_p99_read_ms: 50
+            track: compound query latency
+            label: 10M_20tok 500k natural
           - set: natural
             stress_options: {warmup: false}
             expected_p99_read_ms: 50
+            track: throughput
+            label: 10M_20tok 500k natural
       # Warm rebuilds on the same ~500k-document corpus: an empty 'shards' list makes
       # _load_step_shards a no-op, so each of these is only an index build.
       - shards: []
+        build_track: indexing
+        build_label: 10M_20tok 500k rebuild 1
       - shards: []
+        build_track: indexing
+        build_label: 10M_20tok 500k rebuild 2
