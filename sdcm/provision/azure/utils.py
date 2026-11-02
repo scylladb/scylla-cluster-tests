@@ -18,7 +18,14 @@ from contextlib import suppress
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from azure.mgmt.compute.models import GalleryImageVersion, CommunityGalleryImageVersion
 
+<<<<<<< HEAD
 from sdcm.provision.provisioner import VmArch
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.provision.network_configuration import azure_network_interfaces
+from sdcm.provision.provisioner import VmArch
+=======
+from sdcm.provision.network_configuration import azure_network_interfaces
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.version_utils import (
     SCYLLA_VERSION_GROUPED_RE,
@@ -26,6 +33,7 @@ from sdcm.utils.version_utils import (
     ComparableScyllaVersion,
     parse_scylla_version_tag,
 )
+from sdcm.utils.vm_arch import VmArch
 
 LOGGER = logging.getLogger(__name__)
 
