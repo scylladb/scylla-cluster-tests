@@ -11,92 +11,88 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-import platform
-from textwrap import dedent
+lazy import platform
+lazy from textwrap import dedent
 
 from sdcm.utils.mp_start import ensure_start_method
 
 ensure_start_method()
 
-from collections import defaultdict
-from datetime import datetime, timezone, timedelta, UTC
-import json
-import os
-import re
-import sys
-import unittest
-import logging
-import time
-import subprocess
-import traceback
-import pprint
-import xml.etree.ElementTree as ET
-from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
-from functools import partial, reduce
-from typing import List, Literal
-from uuid import UUID
+lazy from collections import defaultdict
+lazy from datetime import datetime, timezone, timedelta, UTC
+lazy import json
+lazy import os
+lazy import re
+lazy import sys
+lazy import unittest
+lazy import logging
+lazy import time
+lazy import subprocess
+lazy import traceback
+lazy import pprint
+lazy import xml.etree.ElementTree as ET
+lazy from concurrent.futures import ProcessPoolExecutor
+lazy from pathlib import Path
+lazy from functools import partial, reduce
+lazy from typing import List, Literal
+lazy from uuid import UUID
 
-import pytest
-import click
-import yaml
-from rich.table import Table
-from argus.client.sct.types import LogLink
-from argus.client.base import ArgusClientError
-from argus.common.enums import TestStatus
-from argus.common.sct_types import RawEventPayload
+lazy import pytest
+lazy import click
+lazy import yaml
+lazy from rich.table import Table
+lazy from argus.client.sct.types import LogLink
+lazy from argus.client.base import ArgusClientError
+lazy from argus.common.enums import TestStatus
+lazy from argus.common.sct_types import RawEventPayload
 
-import sct_sizing
-import sct_ssh
-import sct_scan_issues
-from sdcm.cloud_api_client import ScyllaCloudAPIClient
-from sdcm.cluster_cloud import extract_short_test_id_from_name
-from sdcm.keystore import KeyStore
-from sdcm.localhost import LocalHost
-from sdcm.provision import AzureProvisioner
-from sdcm.provision.provisioner import VmInstance, VmArch
-from sdcm.remote import LOCALRUNNER
-from sdcm.nemesis.monkey.runners import SisyphusMonkey
-from sdcm.sct_config import AWS_SUPPORTED_REGIONS, SCTConfiguration, init_and_verify_sct_config, available_backends
-from sdcm.sct_provision.common.layout import SCTProvisionLayout
-from sdcm.sct_provision.instances_provider import provision_sct_resources
-from sdcm.sct_runner import (
-    AwsSctRunner,
-    GceSctRunner,
-    AzureSctRunner,
-    OciSctRunner,
+lazy import sct_sizing
+lazy import sct_ssh
+lazy import sct_scan_issues
+lazy from sdcm.cloud_api_client import ScyllaCloudAPIClient
+lazy from sdcm.cluster_cloud import extract_short_test_id_from_name
+lazy from sdcm.keystore import KeyStore
+lazy from sdcm.localhost import LocalHost
+lazy from sdcm.provision import AzureProvisioner
+lazy from sdcm.provision.provisioner import VmInstance
+lazy from sdcm.remote import LOCALRUNNER
+lazy from sdcm.nemesis.monkey.runners import SisyphusMonkey
+lazy from sdcm.sct_config import AWS_SUPPORTED_REGIONS, SCTConfiguration, init_and_verify_sct_config, available_backends
+lazy from sdcm.sct_provision.common.layout import SCTProvisionLayout
+lazy from sdcm.sct_provision.instances_provider import provision_sct_resources
+lazy from sdcm.sct_runner import (
     get_sct_runner,
     clean_sct_runners,
     update_sct_runner_tags,
     list_sct_runners,
 )
 
-from sdcm.utils.ci_tools import get_job_name, get_job_url
-from sdcm.utils.decorators import retrying
-from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
-from sdcm.utils.trigger_matrix import (
+lazy from sdcm.utils.ci_tools import get_job_name, get_job_url
+lazy from sdcm.utils.decorators import retrying
+lazy from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
+lazy from sdcm.utils.trigger_matrix import (
     resolve_image_architecture,
     resolve_scylla_version_from_image,
     resolve_to_full_version,
     trigger_matrix as run_trigger_matrix,
 )
-from sdcm.utils.cloud_catalog.cost import RunCostEstimate, estimate_run_cost
-from sdcm.utils.cost_reporting import report_estimated_cost
-from sdcm.utils.argus import (
+lazy from sdcm.utils.cloud_catalog.cost import RunCostEstimate, estimate_run_cost
+lazy from sdcm.utils.cost_reporting import report_estimated_cost
+lazy from sdcm.utils.argus import (
     ReplayOnlyArgusSCTClient,
     create_proxy_argus_s3_url,
     get_argus_client,
     get_argus_use_tunnel_from_env,
 )
-from sdcm.utils.aws_kms import AwsKms
-from sdcm.utils.azure_region import AzureRegion
-from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
-from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
-from sdcm.utils.lint.env_builder import build_env
-from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile, discover_pipeline_files
-from sdcm.utils.lint.docs_linter import lint_test_metadata
-from sdcm.utils.oci_utils import get_scylla_images_by_branch, get_scylla_images_by_version, list_instances_oci
-from sdcm.utils.common import (
+lazy from sdcm.utils.aws_kms import AwsKms
+lazy from sdcm.utils.azure_region import AzureRegion
+lazy from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
+lazy from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
+lazy from sdcm.utils.lint.env_builder import build_env
+lazy from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile, discover_pipeline_files
+lazy from sdcm.utils.lint.docs_linter import lint_test_metadata
+lazy from sdcm.utils.oci_utils import get_scylla_images_by_branch, get_scylla_images_by_version, list_instances_oci
+lazy from sdcm.utils.common import (
     S3Storage,
     aws_tags_to_dict,
     create_pretty_table,
@@ -125,46 +121,47 @@ from sdcm.utils.common import (
     download_and_unpack_logs,
     find_equivalent_ami,
 )
-from sdcm.nemesis.generator import generate_nemesis_yaml, NemesisJobGenerator
-from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
-from sdcm.utils.resources_cleanup import (
+lazy from sdcm.nemesis.generator import generate_nemesis_yaml, NemesisJobGenerator
+lazy from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
+lazy from sdcm.utils.resources_cleanup import (
     clean_cloud_resources,
     clean_resources_according_post_behavior,
     init_argus_client,
 )
-from sdcm.utils.net import get_sct_runner_ip
-from sdcm.utils.jepsen import JepsenResults
-from sdcm.utils.docker_utils import docker_hub_login, running_in_podman
-from sdcm.monitorstack.restore import (
+lazy from sdcm.utils.net import get_sct_runner_ip
+lazy from sdcm.utils.jepsen import JepsenResults
+lazy from sdcm.utils.docker_utils import docker_hub_login, running_in_podman
+lazy from sdcm.monitorstack.restore import (
     restore_monitoring_stack,
     get_monitoring_stack_services,
     kill_running_monitoring_stack_services,
 )
-from sdcm.utils.log import setup_stdout_logger, disable_loggers_during_startup
-from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder, AwsFipsCiBuilder
-from sdcm.utils.gce_region import GceRegion
-from sdcm.utils.gce_builder import GceBuilder
-from sdcm.utils.oci_region import OciRegion
-from sdcm.utils.oci_builder import OciBuilder
-from sdcm.utils.aws_peering import AwsVpcPeering
-from sdcm.utils.oci_peering import OciVcnPeering
-from sdcm.utils.get_username import get_username
-from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
-from sdcm.utils.aws_utils import AwsArchType, get_arch_from_instance_type
-from sdcm.utils.aws_okta import try_auth_with_okta
-from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
-from sdcm.utils.context_managers import environment
-from sdcm.cluster_k8s import mini_k8s
-from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
-import sdcm.provision.azure.utils as azure_utils
-from utils.build_system.create_test_release_jobs import JenkinsPipelines
-from utils.build_system.throttle_categories import ThrottleCategoryManager, ThrottleCategory
-from utils.get_supported_scylla_base_versions import UpgradeBaseVersion, fetch_official_supported_versions
-from sdcm.utils.docker_utils import get_ip_address_of_container
-from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
-from unit_tests.unit.nemesis.fake_cluster import FakeTester
-from sdcm.logcollector import Collector
+lazy from sdcm.utils.log import setup_stdout_logger, disable_loggers_during_startup
+lazy from sdcm.utils.aws_region import AwsRegion
+lazy from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder, AwsFipsCiBuilder
+lazy from sdcm.utils.gce_region import GceRegion
+lazy from sdcm.utils.gce_builder import GceBuilder
+lazy from sdcm.utils.oci_region import OciRegion
+lazy from sdcm.utils.oci_builder import OciBuilder
+lazy from sdcm.utils.aws_peering import AwsVpcPeering
+lazy from sdcm.utils.oci_peering import OciVcnPeering
+lazy from sdcm.utils.get_username import get_username
+lazy from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
+lazy from sdcm.utils.aws_utils import AwsArchType, get_arch_from_instance_type
+lazy from sdcm.utils.vm_arch import AWS_ARCH_TYPES, VmArch
+lazy from sdcm.utils.aws_okta import try_auth_with_okta
+lazy from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
+lazy from sdcm.utils.context_managers import environment
+lazy from sdcm.cluster_k8s import mini_k8s
+lazy from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
+lazy import sdcm.provision.azure.utils as azure_utils
+lazy from utils.build_system.create_test_release_jobs import JenkinsPipelines
+lazy from utils.build_system.throttle_categories import ThrottleCategoryManager, ThrottleCategory
+lazy from utils.get_supported_scylla_base_versions import UpgradeBaseVersion, fetch_official_supported_versions
+lazy from sdcm.utils.docker_utils import get_ip_address_of_container
+lazy from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
+lazy from unit_tests.unit.nemesis.fake_cluster import FakeTester
+lazy from sdcm.logcollector import Collector
 
 SUPPORTED_CLOUDS = (
     "aws",
@@ -173,8 +170,6 @@ SUPPORTED_CLOUDS = (
     "oci",
 )
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
-
-SCT_RUNNER_HOST = get_sct_runner_ip()
 
 LOGGER = setup_stdout_logger()
 
@@ -1307,7 +1302,7 @@ def list_images(  # noqa: PLR0912, PLR0914
 @click.option(
     "-a",
     "--target-arch",
-    type=click.Choice(AwsArchType.__args__),
+    type=click.Choice(AWS_ARCH_TYPES),
     help="Target architecture (x86_64 or arm64). If not specified, uses same arch as source AMI.",
 )
 @click.option(
@@ -2212,7 +2207,7 @@ def show_monitor(test_id, date_time, kill, cluster_name):
         click.echo(f"Monitoring stack for cluster {cluster} restored")
         table = Table("Service", "Container", "Link", show_lines=False)
         for docker in get_monitoring_stack_services(ports=containers_ports):
-            table.add_row(docker["service"], docker["name"], f"http://{SCT_RUNNER_HOST}:{docker['port']}")
+            table.add_row(docker["service"], docker["name"], f"http://{get_sct_runner_ip()}:{docker['port']}")
         click.echo(rich_table_to_string(table, title=f"Monitoring stack services for cluster {cluster}"))
         click.echo("")
         if kill:
@@ -2229,10 +2224,10 @@ def show_jepsen_results(test_id):
     if jepsen.restore_jepsen_data(test_id):
         click.secho(
             message=f"\nJepsen data restored, starting web server on "
-            f"http://{SCT_RUNNER_HOST}:{jepsen.jepsen_results_port}/",
+            f"http://{get_sct_runner_ip()}:{jepsen.jepsen_results_port}/",
             fg="green",
         )
-        detach = SCT_RUNNER_HOST != "127.0.0.1"
+        detach = get_sct_runner_ip() != "127.0.0.1"
         if not detach:
             click.secho(message="Press Ctrl-C to stop the server.", fg="green")
         click.echo("")
@@ -2727,12 +2722,13 @@ def create_nemesis_yaml(diff):
 
 @cli.command("create-nemesis-pipelines")
 @click.option("--base-job", default=None, type=str)
-@click.option("--backend", default=NemesisJobGenerator.BACKEND_TO_REGION.keys(), multiple=True)
+@click.option("--backend", multiple=True, help="Backends to generate for  [default: all known backends]")
 @click.option("--diff/--no-diff", default=True)
 def create_nemesis_pipelines(base_job: str, backend: list[str], diff: bool):
     error_carrier = ErrorCarrier() if diff else None
     file_opener = partial(OpenWithDiff, error_carrier=error_carrier) if diff else open
 
+    backend = backend or list(NemesisJobGenerator.BACKEND_TO_REGION)
     gen = NemesisJobGenerator(base_job=base_job, backends=backend, base_dir="", file_opener=file_opener)
     gen.render_base_job_config()
     gen.create_test_cases_from_template()
@@ -2851,11 +2847,9 @@ def configure_oci_peering(regions):
 
 @cli.command(
     "create-runner-image",
-    help=f"Create an SCT runner image in the selected cloud region."
-    f" If the requested region is not a source region"
-    f" (aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION},"
-    f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}, oci: {OciSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
-    f" source region and then copied to the chosen one.",
+    help="Create an SCT runner image in the selected cloud region."
+    " If the requested region is not the cloud's source region (SOURCE_IMAGE_REGION in sdcm/sct_runner.py)"
+    " the image will be first created in the source region and then copied to the chosen one.",
 )
 @cloud_provider_option
 @click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")

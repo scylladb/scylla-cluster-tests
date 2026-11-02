@@ -43,7 +43,7 @@ from sdcm.utils.cloud_api_utils import get_cloud_rest_credentials_from_file
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
-from sdcm.provision.provisioner import VmArch
+from sdcm.utils.vm_arch import VmArch
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
 from sdcm.utils.common import (
     ami_built_by_scylla,

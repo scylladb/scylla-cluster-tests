@@ -28,11 +28,11 @@ from mypy_boto3_ec2.literals import ArchitectureTypeType
 
 from sdcm.provision.network_configuration import ssh_connection_ip_type, network_interfaces_count
 from sdcm.utils.decorators import retrying
+from sdcm.utils.vm_arch import VmArch
 
 from sdcm.wait import wait_for
 from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
-from sdcm.provision.provisioner import VmArch
 
 if TYPE_CHECKING:
     from sdcm.utils.aws_region import AwsRegion

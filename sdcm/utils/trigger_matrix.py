@@ -27,6 +27,8 @@ import requests
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
+from sdcm.utils.vm_arch import VmArch
+
 logger = logging.getLogger(__name__)
 
 
@@ -265,7 +267,6 @@ def _aws_arch_to_vmarch(aws_arch: str):
 
     Inverse of vmarch_to_aws: 'arm64' → VmArch.ARM, 'x86_64' → VmArch.X86.
     """
-    from sdcm.provision.provisioner import VmArch  # noqa: PLC0415 - avoid circular import
     from sdcm.utils.aws_utils import vmarch_to_aws  # noqa: PLC0415 - avoid circular import
 
     for member in VmArch:
