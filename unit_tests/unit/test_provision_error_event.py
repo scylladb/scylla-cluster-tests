@@ -18,6 +18,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
+from sdcm.sct_config.sections.agent import AgentConfig
+
 
 def test_provision_resources_sends_error_event_to_argus():
     """Test that provision_resources sends error event to Argus on failure."""
@@ -35,7 +37,7 @@ def test_provision_resources_sends_error_event_to_argus():
             "user_prefix": "test",
             "test_id": "test-id-12345",
             "logs_transport": "none",
-            "agent": {"enabled": False},
+            "agent": AgentConfig(enabled=False),
         }.get(key, default)
         mock_config.return_value = mock_params
 
