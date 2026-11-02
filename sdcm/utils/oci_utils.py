@@ -33,9 +33,9 @@ from oci.object_storage import ObjectStorageClient
 from oci.work_requests import WorkRequestClient
 
 from sdcm.keystore import KeyStore
-from sdcm.provision.provisioner import VmArch
 from sdcm.utils.metaclasses import Singleton
 from sdcm.utils.scylla_sha import scylla_sha_from_version, scylla_version_matches_sha, sha_selector
+from sdcm.utils.vm_arch import VmArch
 
 LOGGER = logging.getLogger(__name__)
 

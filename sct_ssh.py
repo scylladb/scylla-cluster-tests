@@ -10,43 +10,40 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-import logging
-import os
-import pty
-import shlex
-import socket
-import subprocess
-import sys
-from functools import singledispatch, cached_property
+lazy import logging
+lazy import os
+lazy import pty
+lazy import shlex
+lazy import socket
+lazy import subprocess
+lazy import sys
 
-import click
-import questionary
-from questionary import Choice
-from google.cloud import compute_v1
-from azure.mgmt.compute.models import VirtualMachine
+lazy import click
+lazy import questionary
+lazy from azure.mgmt.compute.models import VirtualMachine
+lazy from google.cloud import compute_v1
+lazy from questionary import Choice
 
-from sdcm.cluster import BaseScyllaCluster, BaseCluster, BaseNode
-from sdcm.remote import RemoteCmdRunnerBase
-from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.azure_utils import AzureService, list_instances_azure
-from sdcm.utils.common import (
-    list_instances_aws,
-    get_free_port,
-    list_instances_gce,
-    gce_meta_to_dict,
+lazy from sdcm.utils.aws_region import AwsRegion
+lazy from sdcm.utils.azure_utils import AzureService, list_instances_azure
+lazy from sdcm.utils.common import (
     SSH_KEY_AWS_DEFAULT,
-    SSH_KEY_GCE_DEFAULT,
     SSH_KEY_AZURE_DEFAULT,
+    SSH_KEY_GCE_DEFAULT,
     download_dir_from_cloud,
+    gce_meta_to_dict,
+    get_free_port,
+    list_instances_aws,
+    list_instances_gce,
 )
-from sdcm.utils.gce_utils import (
-    gce_public_addresses,
+lazy from sdcm.utils.db_packages_update import ScyllaDBCluster
+lazy from sdcm.utils.decorators import retrying
+lazy from sdcm.utils.gce_utils import (
     gce_private_addresses,
-    get_gce_compute_instances_client,
+    gce_public_addresses,
     gce_set_tags,
+    get_gce_compute_instances_client,
 )
-from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
 
@@ -55,64 +52,32 @@ def get_region(instance: dict) -> str:
     return instance.get("Placement").get("AvailabilityZone")[:-1]
 
 
-@singledispatch
 def get_tags(instance) -> dict:
+    if isinstance(instance, dict):
+        return {i["Key"]: i["Value"] for i in instance["Tags"]}
+    if isinstance(instance, compute_v1.Instance):
+        return gce_meta_to_dict(instance.metadata)
+    if isinstance(instance, VirtualMachine):
+        return instance.tags
     raise NotImplementedError()
 
 
-@get_tags.register
-def _(instance: dict) -> dict:
-    return {i["Key"]: i["Value"] for i in instance["Tags"]}
-
-
-@get_tags.register
-def _(instance: compute_v1.Instance) -> dict:
-    return gce_meta_to_dict(instance.metadata)
-
-
-@get_tags.register
-def _(instance: VirtualMachine) -> dict:
-    return instance.tags
-
-
-@singledispatch
 def get_name(instance):
+    if isinstance(instance, dict):
+        return get_tags(instance).get("Name")
+    if isinstance(instance, (compute_v1.Instance, VirtualMachine)):
+        return instance.name
     raise NotImplementedError()
 
 
-@get_name.register(dict)
-def _(instance: dict):
-    return get_tags(instance).get("Name")
-
-
-@get_name.register(compute_v1.Instance)
-def _(instance: compute_v1.Instance):
-    return instance.name
-
-
-@get_name.register(VirtualMachine)
-def _(instance: VirtualMachine):
-    return instance.name
-
-
-@singledispatch
 def get_target_ip(instance):
+    if isinstance(instance, dict):
+        return instance["PrivateIpAddress"]
+    if isinstance(instance, compute_v1.Instance):
+        return list(gce_private_addresses(instance))[0]
+    if isinstance(instance, VirtualMachine):
+        return AzureService().get_virtual_machine_ips(virtual_machine=instance).private_ip
     raise NotImplementedError()
-
-
-@get_target_ip.register(dict)
-def _(instance: dict):
-    return instance["PrivateIpAddress"]
-
-
-@get_target_ip.register(compute_v1.Instance)
-def _(instance: compute_v1.Instance):
-    return list(gce_private_addresses(instance))[0]
-
-
-@get_target_ip.register(VirtualMachine)
-def _(instance: VirtualMachine):
-    return AzureService().get_virtual_machine_ips(virtual_machine=instance).private_ip
 
 
 def aws_find_bastion_for_instance(instance: dict) -> dict:
@@ -638,44 +603,9 @@ def update_scylla_packages(test_id: str, backend: str, region: str, packages_loc
         sys.exit(1)
 
     cluster = ScyllaDBCluster(test_id, backend=backend)
-    cluster.init_nodes(instances)
+    cluster.init_nodes(
+        [(get_name(i), get_target_ip(i), guess_username(i)) for i in instances],
+        proxy=get_proxy_connect_info(instances[0]),
+    )
     cluster.params["update_db_packages"] = packages_location
     cluster.update_db_packages(cluster.nodes)
-
-
-class ScyllaDBCluster(BaseScyllaCluster, BaseCluster):
-    """
-    Simple composition of cluster classes to get access to update_db_packages
-    API of cluster objects
-    """
-
-    nodes: list[BaseNode]
-
-    def __init__(self, test_id, *args, **kwargs):
-        self.uuid = test_id
-        self.nodes = []
-        self.params = kwargs.get("params") or SCTConfiguration()
-        self.backend = kwargs.get("params", "aws")
-        self.log = logging.getLogger(self.__class__.__name__)
-        logging.getLogger("paramiko").setLevel(logging.WARNING)
-
-    @cached_property
-    def key_name(self):
-        key = SSH_KEY_AWS_DEFAULT if self.backend == "aws" else SSH_KEY_GCE_DEFAULT
-        return f"~/.ssh/{key}"
-
-    def init_nodes(self, instances):
-        proxy_host, proxy_user, proxy_key = get_proxy_connect_info(instances[0])
-        for instance in instances:
-            login_info = {
-                "hostname": get_target_ip(instance),
-                "user": guess_username(instance),
-                "key_file": self.key_name,
-            }
-            node = BaseNode(name=get_name(instance), parent_cluster=self, ssh_login_info=login_info)
-            node.set_seed_flag(True)
-            RemoteCmdRunnerBase.set_default_ssh_transport("fabric")
-            node.remoter = RemoteCmdRunnerBase.create_remoter(
-                **node.ssh_login_info, proxy_host=proxy_host, proxy_user=proxy_user, proxy_key=proxy_key
-            )
-            self.nodes.append(node)

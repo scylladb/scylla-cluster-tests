@@ -21,6 +21,7 @@ import logging
 import re
 
 from sdcm.utils.trigger_matrix.constants import DEFAULT_AWS_REGION, DEFAULT_AZURE_REGION, REGIONAL_BACKENDS
+from sdcm.utils.vm_arch import VmArch
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +66,6 @@ def _backend_region(backend: str, region: str | None) -> str:
 
 def _vm_arch(arch: str):
     """Convert an architecture string to the VmArch enum used by the image lookups."""
-    from sdcm.provision.provisioner import VmArch  # noqa: PLC0415 - circular import avoidance
-
     return VmArch.ARM if arch == "aarch64" else VmArch.X86
 
 

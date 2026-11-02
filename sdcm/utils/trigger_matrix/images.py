@@ -28,6 +28,7 @@ from sdcm.utils.trigger_matrix.backends import _aws_arch, _backend_region, _vm_a
 from sdcm.utils.trigger_matrix.constants import DEFAULT_ARCH, DEFAULT_AWS_REGION
 from sdcm.utils.trigger_matrix.errors import TriggerMatrixError
 from sdcm.utils.trigger_matrix.versions import _as_branch_qualifier, _gce_label_to_version
+from sdcm.utils.vm_arch import VmArch
 
 logger = logging.getLogger(__name__)
 
@@ -300,7 +301,6 @@ def _aws_arch_to_vmarch(aws_arch: str):
 
     Inverse of vmarch_to_aws: 'arm64' → VmArch.ARM, 'x86_64' → VmArch.X86.
     """
-    from sdcm.provision.provisioner import VmArch  # noqa: PLC0415 - avoid circular import
     from sdcm.utils.aws_utils import vmarch_to_aws  # noqa: PLC0415 - avoid circular import
 
     for member in VmArch:
