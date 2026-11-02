@@ -77,6 +77,10 @@ class VectorStoreNodeMixin:
         """
         return "", ""
 
+    def get_vector_store_build(self) -> tuple[int | None, str]:
+        """Return '(Unix time, revision)' of the vector-store build on this node, or '(None, "")'."""
+        return None, ""
+
     @property
     def vector_store_uri(self) -> str:
         """Get Vector Store URI"""
