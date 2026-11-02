@@ -74,6 +74,6 @@ setting.
 ## Updating this documentation
 
 - Add or change a standard with the `updating-standards` skill.
-- Discover the standards again, and generate `REVIEW.md`, with the
+- Discover the standards again, and update `REVIEW.md`, with the
   `discovering-standards` skill.
 - Update this index when you add, remove, or change a file.

@@ -340,7 +340,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | Skill | Description | Path |
 |-------|-------------|------|
 | code-review | Guides AI-assisted code review of SCT PRs. Use when reviewing diffs, checking override compatibility, verifying import conventions, or assessing backend impact. | `skills/code-review/SKILL.md` |
-| discovering-standards | Discovers the coding standards of SCT, writes `docs/standards/` and `docs/INDEX.md`, and generates `REVIEW.md`. Use when the standards must be discovered or refreshed. | `skills/discovering-standards/SKILL.md` |
+| discovering-standards | Discovers the coding standards of SCT, writes `docs/standards/` and `docs/INDEX.md`, and updates `REVIEW.md`. Use when the standards must be discovered or refreshed. | `skills/discovering-standards/SKILL.md` |
 | updating-standards | Adds or changes one coding standard in `docs/standards/` and its `docs/INDEX.md` entry. Use when a convention is stated or settled in a review. | `skills/updating-standards/SKILL.md` |
 | designing-skills | Guides the design and structuring of AI agent skills for SCT. Use when creating new skills, reviewing existing skills, or editing SKILL.md files. | `skills/designing-skills/SKILL.md` |
 | fix-backport-conflicts | Fix inline merge conflict markers in backport PRs. Use when a backport PR has unresolved conflict markers or a cherry-pick produced merge conflicts. | `skills/fix-backport-conflicts/SKILL.md` |

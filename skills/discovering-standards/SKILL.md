@@ -4,7 +4,7 @@ description: >-
   Discovers the coding standards of SCT from its configuration files, its
   documentation, and its code. Owns docs/standards/, the docs/INDEX.md index,
   and REVIEW.md, the review guide for reviewers and the code-review skill.
-  Use when the user asks to discover, refresh, or audit the standards, to regenerate docs/INDEX.md or REVIEW.md,
+  Use when the user asks to discover, refresh, or audit the standards, to refresh docs/INDEX.md or REVIEW.md,
   or when the standards drift from the code. Not for one new convention (use
   updating-standards) or for a review of a pull request (use code-review).
 argument-hint: "[domain]"
@@ -14,7 +14,7 @@ argument-hint: "[domain]"
 
 Find the conventions that SCT already follows. Write them to
 `docs/standards/<domain>/<topic>.md`, index them in `docs/INDEX.md`, and
-generate `REVIEW.md` from them.
+update `REVIEW.md` from them.
 
 ## Essential Principles
 
@@ -55,20 +55,21 @@ the sources of that domain.
 **Exit criteria**: each finding has a domain, a name, a one-line rule, and
 its evidence.
 
-## Phase 2: Score and Propose
+## Phase 2: Rank and Propose
 
 **Entry criteria**: Phase 1 complete.
 
-1. Score each finding. A configuration rule scores 70 to 85. A documented
-   rule scores 80 to 92. A code pattern scores 60 to 88, by the share of files
-   that follow it. Add 10 when a second source agrees, up to 100.
+1. Rank the findings by source: a configuration rule first, then a stated
+   rule in the documentation, then a code pattern. Note when a second source
+   agrees.
 2. Merge two findings with the same domain and name. Flag two findings that
    contradict each other, with both sources.
 3. Use the domains that exist under `docs/standards/`: `global`, `python`,
    `testing`, and `config`. Add a domain only when a group of findings fits
    none of them.
-4. Show one table for each domain: name, score, sources, and rule. Ask the
-   user which findings to write, and which side of each contradiction holds.
+4. Show one table for each domain: name, sources, and rule, in the order of
+   the ranking. Ask the user which findings to write, and which side of each
+   contradiction holds.
 
 **Exit criteria**: the user has approved the findings to write.
 
@@ -81,12 +82,11 @@ its evidence.
    one `### <Name>` section with one to ten lines of rule and, when it helps,
    one example under ten lines.
 2. End each file with a `Sources:` line.
-3. Write `docs/INDEX.md` in the shape of
-   [index-template.md](references/index-template.md). The paragraph of each
-   entry names every practice in the file.
-4. Generate `REVIEW.md` at the repository root from
-   [review-template.md](references/review-template.md). Keep the three passes.
-   Fill each pass from the standards and from the checks of
+3. Update `docs/INDEX.md`. Keep its sections and give each standards file
+   one entry under its domain heading. The paragraph of each entry names
+   every practice in the file, not the topic alone.
+4. Update `REVIEW.md` at the repository root. Keep its three passes and its
+   other sections. Fill each pass from the standards and from the checks of
    `skills/code-review/SKILL.md` that find bugs that the linters miss.
 5. Write the prose in ASD-STE100 Simplified Technical English.
 
