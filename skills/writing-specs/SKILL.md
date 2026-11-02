@@ -85,8 +85,7 @@ design.
 
 1. Read [spec-template.md](references/spec-template.md).
 2. Write the file in the shape of the template. Follow its section rule.
-   Set the `Status` line to `draft`. With `--from-code` on merged code, set
-   it to `built`.
+   Set the `Status` line to `draft`.
 3. A spec can near 200 lines, with design areas that can ship alone. Then
    propose a split into more flow directories.
 4. Write the prose in ASD-STE100 Simplified Technical English.
