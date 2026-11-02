@@ -26,13 +26,13 @@ from unittest.mock import call, patch
 
 import pytest
 
-from sdcm.provision.provisioner import VmArch
 from sdcm.utils.trigger_matrix.backends import _aws_arch, _vm_arch
 from sdcm.utils.trigger_matrix.images import (
     _extract_version_from_tags,
     _version_exists_in_region,
     version_exists_for_backend,
 )
+from sdcm.utils.vm_arch import VmArch
 
 VERSION = "2025.4.1-0.20250601.abc123def456-1"
 

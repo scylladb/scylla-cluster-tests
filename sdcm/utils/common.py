@@ -67,7 +67,6 @@ from rich.table import Table
 import docker
 from sdcm import wait
 from sdcm.keystore import KeyStore
-from sdcm.provision.provisioner import VmArch
 from sdcm.remote import LocalCmdRunner, RemoteCmdRunnerBase
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
@@ -97,6 +96,7 @@ from sdcm.utils.ldap import DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, LdapSer
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.scylla_sha import scylla_sha_from_version, scylla_version_matches_sha, sha_selector
 from sdcm.utils.version_utils import RC_VERSION_TAG_RE, parse_scylla_version_tag
+from sdcm.utils.vm_arch import VmArch
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
