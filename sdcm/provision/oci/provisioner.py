@@ -25,6 +25,7 @@ from sdcm.provision.provisioner import (
     VmInstance,
 )
 from sdcm.utils.oci_utils import (
+    SUPPORTED_REGIONS,
     OciService,
     get_oci_compartment_id,
 )
@@ -81,22 +82,28 @@ class OciProvisioner(Provisioner):
     def discover_regions(
         cls, test_id: str = "", regions: list = None, oci_service: OciService = OciService(), **kwargs
     ) -> List["OciProvisioner"]:
-        """Discovers provisioners for given test id."""
+        """Discovers provisioners for given test id in each of the regions, or in all supported regions if none given.
+
+        A region that fails is logged and skipped, so the other regions are still searched.
+        """
         discovered_provisioners = []
-        target_regions = regions if regions else [oci_service.oci_credentials["region"]]
+        target_regions = regions if regions else SUPPORTED_REGIONS
         for region in target_regions:
-            provider = VirtualMachineProvider(get_oci_compartment_id(), region, "", oci_service)
-            instances = provider.list_instances(test_id)
-            found_azs = set()
-            for inst in instances:
-                # NOTE: Extract AD number from "ewbj:US-ASHBURN-AD-2" -> "2"
-                ad_name = inst.availability_domain
-                if ad_name:
-                    found_azs.add(ad_name.split("-")[-1])
-            if found_azs:
-                for az in found_azs:
-                    discovered_provisioners.append(cls(test_id, region, az, oci_service))
+            try:
+                discovered_provisioners.extend(cls._discover_region(test_id, region, oci_service))
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning("Failed to discover OCI instances of test %s in region %s: %s", test_id, region, exc)
         return discovered_provisioners
+
+    @classmethod
+    def _discover_region(cls, test_id: str, region: str, oci_service: OciService) -> List["OciProvisioner"]:
+        provider = VirtualMachineProvider(get_oci_compartment_id(), region, "", oci_service)
+        found_azs = set()
+        for inst in provider.list_instances(test_id):
+            # NOTE: Extract AD number from "ewbj:US-ASHBURN-AD-2" -> "2"
+            if ad_name := inst.availability_domain:
+                found_azs.add(ad_name.split("-")[-1])
+        return [cls(test_id, region, az, oci_service) for az in found_azs]
 
     def get_or_create_instance(
         self, definition: InstanceDefinition, pricing_model: PricingModel = PricingModel.SPOT
