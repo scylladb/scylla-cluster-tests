@@ -4236,6 +4236,78 @@ class BaseCluster:
         self.log.debug("%s replication_factors", set(ks_rf.replication_factors))
         return set(ks_rf.replication_factors) == {1}
 
+<<<<<<< HEAD
+||||||| parent of 8b302f42e (fix(cluster): run one cfstats in get_any_ks_cf_list empty-table check)
+    def get_non_system_ks_cf_with_tablets_list(
+        self,
+        db_node,
+        filter_out_table_with_counter=False,
+        filter_out_mv=False,
+        filter_empty_tables=True,
+        filter_func: Callable[..., bool] = None,
+    ) -> List[str]:
+        with self.cql_connection_patient(db_node, connect_timeout=600) as session:
+            session.default_timeout = 60.0 * 5
+            keyspaces = [
+                row.keyspace_name for row in session.execute("select keyspace_name from system_schema.scylla_keyspaces")
+            ]
+            self.log.debug("Keyspaces with tablets enabled %s", keyspaces)
+
+        return self.get_any_ks_cf_list(
+            db_node,
+            filter_out_table_with_counter=filter_out_table_with_counter,
+            filter_out_mv=filter_out_mv,
+            filter_empty_tables=filter_empty_tables,
+            filter_out_system=True,
+            filter_out_cdc_log_tables=True,
+            filter_by_keyspace=keyspaces,
+            filter_func=filter_func,
+            filter_out_paxos_tables=True,
+        )
+
+=======
+    @staticmethod
+    def _parse_cfstats_partitions(cfstats_output: str) -> dict[str, int]:
+        """Map 'ks.table' to its 'Number of partitions (estimate)' from plain 'nodetool cfstats' output."""
+        partitions = {}
+        keyspace = table = None
+        for line in map(str.strip, cfstats_output.splitlines()):
+            if match := re.match(r"Keyspace\s*:\s*(.+)$", line):
+                keyspace, table = match.group(1), None
+            elif match := re.match(r"Table:\s*(.+)$", line):
+                table = match.group(1)
+            elif keyspace and table and (match := re.match(r"Number of partitions \(estimate\):\s*(\d+)", line)):
+                partitions[f"{keyspace}.{table}"] = int(match.group(1))
+        return partitions
+
+    def get_non_system_ks_cf_with_tablets_list(
+        self,
+        db_node,
+        filter_out_table_with_counter=False,
+        filter_out_mv=False,
+        filter_empty_tables=True,
+        filter_func: Callable[..., bool] = None,
+    ) -> List[str]:
+        with self.cql_connection_patient(db_node, connect_timeout=600) as session:
+            session.default_timeout = 60.0 * 5
+            keyspaces = [
+                row.keyspace_name for row in session.execute("select keyspace_name from system_schema.scylla_keyspaces")
+            ]
+            self.log.debug("Keyspaces with tablets enabled %s", keyspaces)
+
+        return self.get_any_ks_cf_list(
+            db_node,
+            filter_out_table_with_counter=filter_out_table_with_counter,
+            filter_out_mv=filter_out_mv,
+            filter_empty_tables=filter_empty_tables,
+            filter_out_system=True,
+            filter_out_cdc_log_tables=True,
+            filter_by_keyspace=keyspaces,
+            filter_func=filter_func,
+            filter_out_paxos_tables=True,
+        )
+
+>>>>>>> 8b302f42e (fix(cluster): run one cfstats in get_any_ks_cf_list empty-table check)
     def get_non_system_ks_cf_list(
         self,
         db_node,
@@ -4322,29 +4394,31 @@ class BaseCluster:
                 result.add(table_name)
 
             if is_column_type and filter_empty_tables:
-                for i, table_name in enumerate(result.copy()):
-                    has_data = False
-                    try:
-                        self.log.debug(f"{i}: {table_name}")
-                        res = db_node.run_nodetool(
-                            sub_cmd="cfstats",
-                            args=table_name,
-                            timeout=300,
-                            warning_event_on_exception=(
-                                Failure,
-                                UnexpectedExit,
-                                Libssh2_UnexpectedExit,
-                            ),
-                            publish_event=False,
-                            retry=3,
-                        )
-                        cf_stats = db_node._parse_cfstats(res.stdout)
-                        has_data = bool(cf_stats["Number of partitions (estimate)"])
-                    except Exception as exc:  # noqa: BLE001
-                        self.log.warning(f"Failed to get rows from {table_name} table. Error: {exc}")
-
-                    if not has_data:
-                        result.discard(table_name)
+                # one cfstats for all tables, not one SSH call per table (5000 tables) or per keyspace (1000 keyspaces)
+                try:
+                    self.log.debug(f"Getting partition estimates of {len(result)} tables")
+                    res = db_node.run_nodetool(
+                        sub_cmd="cfstats",
+                        # covers all tables of the node: up to 96 s measured for 5000 tables on 16 shards
+                        timeout=max(300, 0.1 * len(result)),
+                        warning_event_on_exception=(
+                            Failure,
+                            UnexpectedExit,
+                            Libssh2_UnexpectedExit,
+                        ),
+                        publish_event=False,
+                        retry=3,
+                        verbose=False,
+                    )
+                    partitions = self._parse_cfstats_partitions(res.stdout)
+                    if not partitions:
+                        raise ValueError("no partition estimates in cfstats output")
+                    result = {table_name for table_name in result if partitions.get(table_name)}
+                except Exception as exc:  # noqa: BLE001
+                    # the filter is best-effort: an empty list would skip or break the callers
+                    self.log.warning(
+                        f"Failed to get partition estimates, empty tables are not filtered out. Error: {exc}"
+                    )
 
             if filter_func is not None:
                 self.get_keyspace_info.cache_clear()
