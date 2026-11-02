@@ -53,7 +53,7 @@ from sdcm import sct_abs_path
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.utils.common import DEFAULT_AWS_REGION
-from sdcm.utils.search_argus import SearchArgusReporter
+from sdcm.utils.search_argus import SearchArgusReporter, sut_timestamp
 from sdcm.utils.vector_store_client import VectorStoreClient
 from sdcm.utils.vector_store_index import wait_for_index_build_seconds
 
@@ -1072,10 +1072,40 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         """
         try:
             if self._argus_reporter is None:
-                self._argus_reporter = SearchArgusReporter(self.WORKLOAD, self.test_config.argus_client())
+                self._argus_reporter = SearchArgusReporter(
+                    self.WORKLOAD, self.test_config.argus_client(), self._sut_timestamp()
+                )
             self._argus_reporter.report(record)
         except Exception:  # noqa: BLE001
             self.log.error("Failed to report the %s record to Argus", record["phase"], exc_info=True)
+
+    def _sut_timestamp(self) -> int:
+        """Where this run goes on the x-axis of the Argus graphs, or 0 to leave it to Argus."""
+        try:
+            scylla = self.get_scylla_versions().get("scylla-server")
+            if scylla:
+                scylla_date, scylla_revision = scylla["date"], scylla["commit_id"]
+            else:
+                try:
+                    package = self.generate_scylla_server_package()
+                    scylla_date, scylla_revision = package.date, package.revision_id
+                except ValueError:
+                    self.log.warning("No ScyllaDB build date for the Argus x-axis", exc_info=True)
+                    scylla_date, scylla_revision = None, ""
+            vector_store_time, vector_store_revision = self._vector_store_node().get_vector_store_build()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("No Argus x-axis position for this run, left to Argus: %s", exc)
+            return 0
+        timestamp = sut_timestamp(scylla_date, scylla_revision, vector_store_time, vector_store_revision)
+        self.log.info(
+            "Argus x-axis: %s (ScyllaDB %s %s, vector-store %s built %s)",
+            timestamp,
+            scylla_date,
+            scylla_revision,
+            vector_store_revision,
+            vector_store_time,
+        )
+        return timestamp
 
     def _record_index_build(
         self,

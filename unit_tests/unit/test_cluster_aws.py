@@ -179,6 +179,7 @@ VECTOR_STORE_PASSWORD_FILE = "/home/ubuntu/vector-store/.scylla_password"
 def vector_store_aws_node():
     """Vector Store AWS node with a remoter that records the commands it runs."""
     node = VectorStoreAWSNode.__new__(VectorStoreAWSNode)
+    node.name = "vs-node-1"
     node.parent_cluster = Mock(scylla_cluster=None)
     node.parent_cluster.params = {
         "vector_store_port": 6080,
@@ -234,3 +235,31 @@ def test_the_service_is_stopped_before_a_source_build_replaces_its_binary():
 
     assert [step[0] for step in steps.mock_calls][:2] == ["run", "install"]
     assert steps.mock_calls[0].args == ("sudo systemctl stop vector-store",)
+
+
+def _with_marker(node, marker: str | None):
+    node.remoter.run.return_value = Mock(ok=marker is not None, stdout=marker or "")
+    node._instance = Mock()
+    node._instance.image = Mock(creation_date="2026-10-22T11:24:37.000Z", image_id="ami-0vs")
+    return node
+
+
+def test_a_source_build_is_dated_by_the_commit_it_built(vector_store_aws_node):
+    vector_store_aws_node.parent_cluster.params["vector_store_source_ref"] = "my-branch"
+    node = _with_marker(vector_store_aws_node, "3f162c9 my-branch 1760000000\n")
+
+    assert node.get_vector_store_build() == (1760000000, "3f162c9")
+    assert node.get_vector_store_source_build_info() == ("3f162c9", "my-branch")
+
+
+def test_a_prebuilt_vector_store_is_dated_by_its_ami(vector_store_aws_node):
+    """2026-10-22T11:24:37Z, the AMI's creation date."""
+    assert _with_marker(vector_store_aws_node, None).get_vector_store_build() == (1792668277, "ami-0vs")
+
+
+@pytest.mark.parametrize("marker", [None, "3f162c9 my-branch\n"], ids=["unreadable", "no-commit-time"])
+def test_a_source_build_without_its_commit_time_is_not_dated_by_the_base_ami(vector_store_aws_node, marker):
+    """The base AMI is not the build under test; no date leaves the placement to the ScyllaDB build."""
+    vector_store_aws_node.parent_cluster.params["vector_store_source_ref"] = "my-branch"
+
+    assert _with_marker(vector_store_aws_node, marker).get_vector_store_build() == (None, "")
