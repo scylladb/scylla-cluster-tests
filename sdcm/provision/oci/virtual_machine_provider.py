@@ -39,9 +39,9 @@ from sdcm.provision.provisioner import (
     VmInstance,
 )
 from sdcm.provision.user_data import UserDataBuilder
-from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.oci_utils import OciService, build_hostname_label
 from sdcm.utils.parallel_object import ParallelObject
+lazy from sdcm.utils.oci_region import OciRegion  # lazy, or it closes a cycle: oci_region -> sdcm.provision -> here
 
 LOGGER = logging.getLogger(__name__)
 
