@@ -21,14 +21,7 @@ from invoke import Result
 
 from sdcm.keystore import SSHKey
 from sdcm.provision.user_data import UserDataObject
-
-
-class VmArch(Enum):
-    X86 = "x86_64"
-    ARM = "aarch64"
-
-    def __str__(self):
-        return self.value
+from sdcm.utils.vm_arch import VmArch
 
 
 @dataclass

@@ -15,88 +15,37 @@
 Handling Scylla-cluster-test configuration loading
 """
 
-import os
-import random
-import re
+import dataclasses
+import getpass
 import json
 import logging
-import getpass
+import os
 import pathlib
+import random
+import re
 import tempfile
-import dataclasses
-from textwrap import dedent
-
-import yaml
-from typing import List, Union, Set, Literal, Callable, get_origin, get_args, ClassVar
 from functools import cached_property
+from textwrap import dedent
+from typing import Callable, ClassVar, List, Literal, Set, Union, get_args, get_origin
 
 import anyconfig
-from argus.client.sct.types import Package
+import yaml
 from packaging import version
-from pydantic import Field, ConfigDict, fields as pydantic_fields
-from typing_extensions import Annotated
+from pydantic import ConfigDict, Field
+from pydantic import fields as pydantic_fields
 from pydantic.functional_validators import BeforeValidator
-from sdcm import sct_abs_path
+from typing_extensions import Annotated
+
 import sdcm.provision.azure.utils as azure_utils
-from sdcm.xcloud.api_client import ScyllaCloudAPIClient, CloudProviderType
+from argus.client.sct.types import Package
+from sdcm import sct_abs_path
 from sdcm.keystore import KeyStore
-from sdcm.xcloud.cluster_config_utils import (
-    get_cloud_rest_credentials_from_file,
-    expand_availability_zones,
-    parse_availability_zones,
-)
-from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
+from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.common.oracle import ORACLE_IMAGE_PARAMS, ORACLE_USER_PREFIX_SUFFIX
 from sdcm.provision.network_configuration import azure_network_interfaces, ssh_connection_ip_type
-from sdcm.provision.provisioner import VmArch
-from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
-from sdcm.utils.common import (
-    ami_built_by_scylla,
-    get_ami_tags,
-    get_branched_ami,
-    get_branched_gce_images,
-    get_scylla_ami_versions,
-    get_scylla_gce_images_versions,
-    convert_name_to_ami_if_needed,
-    find_equivalent_ami,
-    get_sct_root_path,
-    get_vector_store_ami_versions,
-)
-from sdcm.utils import oci_utils
-from sdcm.utils.operations_thread import ConfigParams
-from sdcm.utils.version_utils import (
-    ARGUS_VERSION_RE,
-    get_branch_version,
-    get_branch_version_for_multiple_repositories,
-    get_scylla_docker_repo_from_version,
-    resolve_latest_repo_symlink,
-    get_specific_tag_of_docker_image,
-    find_scylla_repo,
-    is_enterprise,
-    ComparableScyllaVersion,
-    latest_unified_package,
-)
-from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
-from sdcm.utils.gce_utils import (
-    get_gce_image_tags,
-    get_gce_compute_machine_types_client,
-    get_gce_compute_regions_client,
-    gce_check_if_machine_type_supported,
-)
-from sdcm.utils.azure_utils import (
-    azure_check_instance_type_available,
-)
-from sdcm.xcloud.cluster_config_utils import MIN_SCYLLA_VERSION_FOR_VS
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
-from sdcm.utils.curl import curl_with_retry
-from sdcm.test_config import TestConfig
-from sdcm.utils.version_utils import parse_scylla_version_tag
-from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
-from sdcm.utils.cloud_catalog.instance_matcher import ARCH_ALIASES, NoMatchingInstanceError, select_instance
-from sdcm.utils.minicloud.endpoint import AZURE_BACKENDS, MinicloudActivationError, get_minicloud_azure_endpoint
-from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS
 from sdcm.sct_config.defaults import (
     AMI_ID_PARAMS,
     AWS_SUPPORTED_REGIONS,
@@ -108,7 +57,6 @@ from sdcm.sct_config.defaults import (
     XCLOUD_PER_PROVIDER_REQUIRED_PARAMS,
     available_backends,
 )
-from sdcm.sct_config.mixins import CONFIG_GROUPS
 from sdcm.sct_config.helpers import (
     DOCKER_RACK_ARG_MIN_VERSION,
     _load_docker_images_defaults_cached,
@@ -117,11 +65,64 @@ from sdcm.sct_config.helpers import (
     merge_dicts_append_strings,
     simulated_racks_enabled,
 )
+from sdcm.sct_config.mixins import CONFIG_GROUPS
 from sdcm.sct_config.types import (
     IgnoredType,
     InputType,
     _check_file_exists,
     is_ignored_field,
+)
+from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
+from sdcm.test_config import TestConfig
+from sdcm.utils import oci_utils
+from sdcm.utils.aws_utils import aws_check_instance_type_supported, get_arch_from_instance_type
+from sdcm.utils.azure_utils import (
+    azure_check_instance_type_available,
+)
+from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
+from sdcm.utils.cloud_catalog.instance_matcher import ARCH_ALIASES, NoMatchingInstanceError, select_instance
+from sdcm.utils.common import (
+    ami_built_by_scylla,
+    convert_name_to_ami_if_needed,
+    find_equivalent_ami,
+    get_ami_tags,
+    get_branched_ami,
+    get_branched_gce_images,
+    get_sct_root_path,
+    get_scylla_ami_versions,
+    get_scylla_gce_images_versions,
+    get_vector_store_ami_versions,
+)
+from sdcm.utils.curl import curl_with_retry
+from sdcm.utils.gce_utils import (
+    gce_check_if_machine_type_supported,
+    get_gce_compute_machine_types_client,
+    get_gce_compute_regions_client,
+    get_gce_image_tags,
+)
+from sdcm.utils.minicloud.endpoint import AZURE_BACKENDS, MinicloudActivationError, get_minicloud_azure_endpoint
+from sdcm.utils.nested_env_key import NESTED_ENV_SEPARATORS
+from sdcm.utils.operations_thread import ConfigParams
+from sdcm.utils.version_utils import (
+    ARGUS_VERSION_RE,
+    ComparableScyllaVersion,
+    find_scylla_repo,
+    get_branch_version,
+    get_branch_version_for_multiple_repositories,
+    get_scylla_docker_repo_from_version,
+    get_specific_tag_of_docker_image,
+    is_enterprise,
+    latest_unified_package,
+    parse_scylla_version_tag,
+    resolve_latest_repo_symlink,
+)
+from sdcm.utils.vm_arch import VmArch
+from sdcm.xcloud.api_client import CloudProviderType, ScyllaCloudAPIClient
+from sdcm.xcloud.cluster_config_utils import (
+    MIN_SCYLLA_VERSION_FOR_VS,
+    expand_availability_zones,
+    get_cloud_rest_credentials_from_file,
+    parse_availability_zones,
 )
 
 _SIZING_RESOLUTION_CACHE: dict[tuple, tuple[str, str]] = {}

@@ -10,18 +10,18 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2025 ScyllaDB
-import os
-import re
-from dataclasses import replace as dc_replace
-from pathlib import Path
+lazy import os
+lazy import re
+lazy from dataclasses import replace as dc_replace
+lazy from pathlib import Path
 
-import click
-import yaml
+lazy import click
+lazy import yaml
 
 # sdcm.utils.nested_env_key is stdlib-only, so importing it here at module load time does
 # not pull in sdcm's boto3/google-cloud/azure-mgmt transitive dependencies and keeps this
 # CLI's lazy cloud-SDK import boundary intact (see the imports inside sizing_preview()).
-from sdcm.utils.nested_env_key import split_earliest_nested_key
+lazy from sdcm.utils.nested_env_key import split_earliest_nested_key
 
 _SSD_SUFFIX_RE = re.compile(r"-(\d+)ssd$")
 

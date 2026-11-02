@@ -16,28 +16,27 @@
 import ast
 import subprocess
 import tempfile
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pathlib import Path
-
-from sdcm.provision.provisioner import VmArch
 from sdcm.sct_config import is_arm_instance_type
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
 from sdcm.utils.oci_utils import (
     SECONDARY_VNICS_SCRIPT,
     SECONDARY_VNICS_SCRIPT_PATH,
     SECONDARY_VNICS_SERVICE_UNIT_TMPL,
+    OciService,
     build_hostname_label,
     filter_oci_by_tags,
     get_arch_from_oci_shape,
     get_ubuntu_image_ocid,
     list_instances_oci,
-    OciService,
     resolve_availability_domain,
     wait_for_instance_state,
 )
+from sdcm.utils.vm_arch import VmArch
 
 
 @pytest.fixture
