@@ -376,4 +376,4 @@ I have strict standards for feature planning. You can find the full guidelines i
 
 The skill routes automatically based on a flow spec, the PR `plans` label, user input, or task size estimate.
 
-**Development flow:** A big change, or a change to the SCT architecture, can have an intent, a spec, and a plan in `docs/plans/<feature>/<change>/`. The flow is optional. See [docs/development-flow.md](docs/development-flow.md). The coding standards are indexed in [docs/INDEX.md](docs/INDEX.md), and the review guide is [REVIEW.md](REVIEW.md).
+**Development flow:** A big change, or a change to the SCT architecture, can have an intent, a spec, and a plan in `docs/plans/<feature>/<change>/`. The flow is optional. See [docs/development-flow.md](docs/development-flow.md). The coding standards are indexed in [docs/INDEX.md](docs/INDEX.md), and the review guide is [REVIEW.md](REVIEW.md). A review of a change follows `REVIEW.md`.

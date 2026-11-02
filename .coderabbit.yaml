@@ -138,6 +138,8 @@ knowledge_base:
   code_guidelines:
     enabled: true
     filePatterns:
+      - "REVIEW.md"
+      - "docs/standards/**/*.md"
       - "docs/nemesis.md"
       - "docs/sct-configuration.md"
       - "skills/code-review/SKILL.md"

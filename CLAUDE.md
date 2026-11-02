@@ -48,3 +48,4 @@ The intent, the spec, and the plan of a change are optional. They go to
 - A bug fix puts its root cause in the commit message and the PR description. It uses the flow only when it changes a contract or a module boundary.
 
 The coding standards are indexed in [docs/INDEX.md](docs/INDEX.md). The review guide is [REVIEW.md](REVIEW.md).
+When you review a change, follow `REVIEW.md` and report the outcome of each of its three passes.
