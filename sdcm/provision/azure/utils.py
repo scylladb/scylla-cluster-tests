@@ -18,7 +18,7 @@ from contextlib import suppress
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from azure.mgmt.compute.models import GalleryImageVersion, CommunityGalleryImageVersion
 
-from sdcm.provision.provisioner import VmArch
+from sdcm.utils.vm_arch import VmArch
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.version_utils import (
     SCYLLA_VERSION_GROUPED_RE,
