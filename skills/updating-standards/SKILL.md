@@ -41,9 +41,9 @@ update the entry of that file in `docs/INDEX.md`.
    same rule exists, change that section. Start a new file with
    `## <Topic>`.
 3. Add the source to the `Sources:` line at the end of the file.
-4. Update the entry of the file in `docs/INDEX.md`, in the shape of
-   `skills/discovering-standards/references/index-template.md`. The
-   paragraph names every practice that the file now holds. Add the entry and
+4. Update the entry of the file in `docs/INDEX.md`, in the shape of the
+   other entries. The paragraph names every practice that the file now
+   holds. Add the entry and
    the domain heading when they are absent.
 5. A reviewer can need to check the convention on each pull request. Then
    add one question for it to the right pass of `REVIEW.md`.
