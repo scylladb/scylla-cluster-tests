@@ -26,6 +26,7 @@ from sdcm.provision.provisioner import (
 )
 from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.oci_utils import (
+    SUPPORTED_REGIONS,
     OciService,
     get_oci_compartment_id,
 )
@@ -69,9 +70,9 @@ class OciProvisioner(Provisioner):
     def discover_regions(
         cls, test_id: str = "", regions: list = None, oci_service: OciService = OciService(), **kwargs
     ) -> List["OciProvisioner"]:
-        """Discovers provisioners for given test id."""
+        """Discovers provisioners for given test id in each of the regions, or in all supported regions if none given."""
         discovered_provisioners = []
-        target_regions = regions if regions else [oci_service.oci_credentials["region"]]
+        target_regions = regions if regions else SUPPORTED_REGIONS
         for region in target_regions:
             provider = VirtualMachineProvider(get_oci_compartment_id(), region, "", oci_service)
             instances = provider.list_instances(test_id)
