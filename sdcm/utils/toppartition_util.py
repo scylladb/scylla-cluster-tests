@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from typing import List, Tuple
 
+from sdcm.utils.common import MAX_NAMES_IN_CMD
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -120,7 +122,7 @@ class NewApiTopPartitionCmd(TopPartitionCmd):
     def _filter_ks_cf(self) -> List[Tuple[str, str]]:
         filter_ks_cf = []
         try:
-            for _ in range(random.randint(1, len(self.ks_cf_list))):
+            for _ in range(random.randint(1, min(len(self.ks_cf_list), MAX_NAMES_IN_CMD))):
                 keyspace, table_name = random.choice(self.ks_cf_list).split(".", maxsplit=1)
                 filter_ks_cf.append((keyspace, table_name))
         except IndexError as details:
