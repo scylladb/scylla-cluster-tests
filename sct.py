@@ -236,7 +236,17 @@ class SctLoader(unittest.TestLoader):
         return test_cases
 
 
-@click.group()
+class SctGroup(click.Group):
+    def parse_args(self, ctx, args):
+        # Click hides the subcommand's args from the group callback, so note `--help` while they are visible
+        own_args = (
+            args[: args.index("--")] if "--" in args else args
+        )  # after `--` it's a value, e.g. `ssh-cmd -- nodetool --help`
+        ctx.meta["help_requested"] = any(arg in ctx.help_option_names for arg in own_args)
+        return super().parse_args(ctx, args)
+
+
+@click.group(cls=SctGroup)
 @click.option(
     "--install-bash-completion",
     is_flag=True,
@@ -256,6 +266,8 @@ class SctLoader(unittest.TestLoader):
 @click.pass_context
 def cli(ctx):
     disable_loggers_during_startup()
+    if ctx.meta.get("help_requested"):  # `<cmd> --help` only prints usage, no credentials needed
+        return
     # Ugly way of filtering the few command that do not require OKTA verification
     if ctx.invoked_subcommand not in (
         "update-conf-docs",
