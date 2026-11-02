@@ -21,7 +21,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sdcm.provision.provisioner import VmArch
 from sdcm.sct_config import is_arm_instance_type
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
 from sdcm.utils.oci_utils import (
@@ -37,6 +36,7 @@ from sdcm.utils.oci_utils import (
     resolve_availability_domain,
     wait_for_instance_state,
 )
+from sdcm.utils.vm_arch import VmArch
 
 
 @pytest.fixture

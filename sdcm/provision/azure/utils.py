@@ -20,7 +20,6 @@ from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFound
 from azure.mgmt.compute.models import CommunityGalleryImageVersion, GalleryImageVersion
 
 from sdcm.provision.network_configuration import azure_network_interfaces
-from sdcm.provision.provisioner import VmArch
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.scylla_sha import scylla_version_matches_sha, sha_selector
 from sdcm.utils.version_utils import (
@@ -29,6 +28,7 @@ from sdcm.utils.version_utils import (
     is_enterprise,
     parse_scylla_version_tag,
 )
+from sdcm.utils.vm_arch import VmArch
 
 LOGGER = logging.getLogger(__name__)
 

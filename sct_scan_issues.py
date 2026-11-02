@@ -13,19 +13,19 @@
 #
 # Copyright (c) 2024 ScyllaDB
 
-import ast
-import logging
-import sys
-import tempfile
-from pathlib import Path
+lazy import ast
+lazy import logging
+lazy import sys
+lazy import tempfile
+lazy from pathlib import Path
 
-import click
+lazy import click
 
-from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_events.setup import start_events_device, stop_events_device
-from sdcm.utils.common import get_sct_root_path
-from sdcm.utils.issues import SkipPerIssues
-from sdcm.utils.sct_cmd_helpers import add_file_logger
+lazy from sdcm.sct_config import SCTConfiguration
+lazy from sdcm.sct_events.setup import start_events_device, stop_events_device
+lazy from sdcm.utils.common import get_sct_root_path
+lazy from sdcm.utils.issues import SkipPerIssues
+lazy from sdcm.utils.sct_cmd_helpers import add_file_logger
 
 LOGGER = logging.getLogger(__name__)
 

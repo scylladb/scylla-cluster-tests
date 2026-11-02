@@ -25,11 +25,11 @@ from sdcm.provision.provisioner import (
     Provisioner,
     VmInstance,
 )
-from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.oci_utils import (
     OciService,
     get_oci_compartment_id,
 )
+lazy from sdcm.utils.oci_region import OciRegion  # lazy, or it closes a cycle: oci_region -> sdcm.provision -> here
 
 LOGGER = logging.getLogger(__name__)
 

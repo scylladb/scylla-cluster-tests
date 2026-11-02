@@ -15,8 +15,8 @@
 
 import pytest
 
-from sdcm.provision.provisioner import VmArch
 from sdcm.utils.common import build_gce_image_filter, gce_image_version_label
+from sdcm.utils.vm_arch import VmArch
 
 
 @pytest.mark.parametrize(

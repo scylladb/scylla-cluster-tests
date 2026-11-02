@@ -22,13 +22,13 @@ import yaml
 
 from sdcm.keystore import KeyStore
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
-from sdcm.provision.provisioner import VmArch
 from sdcm.sct_config import config as sct_config
 from sdcm.test_config import TestConfig
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.common import get_latest_scylla_release
 from sdcm.utils.metaclasses import Singleton
 from sdcm.utils.minicloud.endpoint import MinicloudActivationError
+from sdcm.utils.vm_arch import VmArch
 
 LOGGER = logging.getLogger(__name__)
 

@@ -28,9 +28,9 @@ from mypy_boto3_ec2.literals import ArchitectureTypeType
 
 from sdcm.keystore import KeyStore
 from sdcm.provision.network_configuration import network_interfaces_count, ssh_connection_ip_type
-from sdcm.provision.provisioner import VmArch
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying
+from sdcm.utils.vm_arch import VmArch
 from sdcm.wait import wait_for
 
 if TYPE_CHECKING:
