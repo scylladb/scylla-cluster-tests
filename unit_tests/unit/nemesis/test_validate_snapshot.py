@@ -105,3 +105,11 @@ def test_validate_snapshot_2026_2_plus_kc_snapshot_normalizes_index_backing_view
         SnapshotDetails("sec_index", "users_address_ind"),
     ]
     NemesisRunner._validate_snapshot(runner, nodetool_cmd="snapshot -kc sec_index", snapshot_content=snapshot_content)
+
+
+def test_validate_snapshot_cf_snapshot_skips_table_listing():
+    """A "-cf" snapshot takes the expected tables from the command, so the cluster-wide listing is not needed."""
+    runner = _make_runner(scylla_version="2026.2.3", ks_cf=[])
+    snapshot_content = [SnapshotDetails("ks", "t1"), SnapshotDetails("ks", "t2")]
+    NemesisRunner._validate_snapshot(runner, nodetool_cmd="snapshot ks -cf t1,t2", snapshot_content=snapshot_content)
+    runner.cluster.get_any_ks_cf_list.assert_not_called()
