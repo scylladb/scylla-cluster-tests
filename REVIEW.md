@@ -42,14 +42,14 @@ in order, so that a reader sees which pass found what.
 
 ## Pass 3 — Compliance
 
-- When the pull request carries an idea directory in
-  `docs/plans/<feature>/<idea>/`, read its `spec.md`. Does the change stay
+- When the pull request carries a flow directory in
+  `docs/plans/<feature>/<change>/`, read its `spec.md`. Does the change stay
   inside the design, the constraints, and the decisions? Does it keep each
   contract that the spec names?
 - Does the change build something that the spec does not design? Does each
   design change in the range update the spec?
 - Does an `(open)` line remain in the `Decisions` section of the spec?
-- When the idea directory holds a `plan.md`, is each box checked? The
+- When the flow directory holds a `plan.md`, is each box checked? The
   description tells why a box stays open.
 - Does a bug fix state its root cause in the commit message and the pull
   request description?

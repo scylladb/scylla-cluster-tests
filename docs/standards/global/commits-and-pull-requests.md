@@ -45,7 +45,7 @@ changes.
 
 Open each pull request as a draft. Fill the template in
 `.github/pull_request_template.md` with the tests that ran, and their Argus or
-Jenkins links. List the manual tests that a reviewer must run. Link the idea
+Jenkins links. List the manual tests that a reviewer must run. Link the flow
 directory under `docs/plans/` when the change has a spec.
 
 ### Labels

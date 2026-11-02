@@ -8,9 +8,9 @@ description: >-
   "break this into phases", "plan before implementing", or reviewing and
   shortening an existing plan. Supports three formats: full 7-section plans for
   multi-phase work (1K+ LOC, tracked in MASTER.md), lightweight mini-plans
-  for single-PR changes (under 1K LOC, in docs/plans/mini-plans/), and idea
-  plans that build a spec (plan.md next to spec.md in docs/plans/FEATURE/IDEA/).
-  Routes automatically based on an idea spec, PR plans label, user input, or
+  for single-PR changes (under 1K LOC, in docs/plans/mini-plans/), and spec
+  plans that build a spec (plan.md next to spec.md in docs/plans/FEATURE/CHANGE/).
+  Routes automatically based on a flow spec, PR plans label, user input, or
   task size estimate.
 ---
 
@@ -32,7 +32,7 @@ This skill supplements — not replaces — the official instructions. Always re
 
 Write what should happen and why; leave the "how" to the PR. No line numbers, no snippets of internal logic, no file-internal detail. Test: if a sentence would have to change because someone refactored a function *without changing its behaviour*, it does not belong in the plan. This is the most common review complaint on SCT plans — see [PAP-1, PAP-9, PAP-10, PAP-11](references/anti-patterns.md) for what to cut and how.
 
-This principle applies to full plans and mini-plans. An idea plan builds a spec that already holds the design, so it names the files, the symbols it adds, and the tests. It still names no line numbers.
+This principle applies to full plans and mini-plans. A spec plan builds a spec that already holds the design, so it names the files, the symbols it adds, and the tests. It still names no line numbers.
 
 ### One Plan, One Concern
 
@@ -77,27 +77,27 @@ When the user asks to "save a plan", "draft a plan", or similar, determine the p
 ### Decision Tree
 
 ```
-0. Idea spec.md, no full-plan request,
-   no `plans` label?                     -> IDEA plan
+0. Flow spec.md, no full-plan request,
+   no `plans` label?                     -> SPEC plan
 1. User explicitly said big/small?       -> Use that
 2. Working on a PR with `plans` label?   -> FULL plan
 3. Working on a PR without `plans` label? -> MINI-plan
 4. No PR context?                        -> Ask user, or estimate: >=1K LOC -> FULL, <1K LOC -> MINI
 ```
 
-### Step 0: Idea Plan (When a Spec Exists)
+### Step 0: Spec Plan (When a Spec Exists)
 
-When the plan builds a spec in `docs/plans/<feature>/<idea>/spec.md`, write
+When the plan builds a spec in `docs/plans/<feature>/<change>/spec.md`, write
 `plan.md` in the same directory. A user request for a big plan, or a PR with
 the `plans` label, still gets a full plan. Do not ask the big-or-small question of Step 1.
 When the spec spans more than one pull request, group the tasks by pull request.
-Follow [create-an-idea-plan.md](workflows/create-an-idea-plan.md). The development
+Follow [create-a-spec-plan.md](workflows/create-a-spec-plan.md). The development
 flow in `docs/development-flow.md` describes the intent, the spec, and the
 plan.
 
 ### Step 1: Ask the User (Preferred)
 
-When explicitly asked to create/save a plan and no idea spec applies, ask:
+When explicitly asked to create/save a plan and no flow spec applies, ask:
 
 > "Is this a big plan (multi-phase, 1K+ LOC, needs tracking) or a small plan (single PR, under ~1K LOC)?"
 
@@ -189,13 +189,13 @@ When writing plans for SCT, consider these domain-specific areas:
 
 Mini-plans are a lightweight 4-section format for small changes. See [mini-plan-template.md](references/mini-plan-template.md) for the full template and example.
 
-| Aspect | Full Plan | Mini-Plan | Idea Plan |
+| Aspect | Full Plan | Mini-Plan | Spec Plan |
 |--------|-----------|-----------|-----------|
 | Sections | 7 | 4 (Problem, Approach, Files, Verification) | Rules, then one section per task |
 | Frontmatter | Required | None | None |
 | MASTER.md | Required | None | None |
 | progress.json | Required | None | None |
-| Location | `docs/plans/<domain>/` | `docs/plans/mini-plans/` | `docs/plans/<feature>/<idea>/` |
+| Location | `docs/plans/<domain>/` | `docs/plans/mini-plans/` | `docs/plans/<feature>/<change>/` |
 | Filename | `kebab-case-name.md` | `YYYY-MM-DD-kebab-case-name.md` | `plan.md`, next to `spec.md` |
 | Lifecycle | Tracked until archived | Disposable after PR merge or 30 days | Kept with its intent and spec |
 
@@ -211,13 +211,13 @@ See [anti-patterns.md](references/anti-patterns.md) for the full catalog with be
 | [anti-patterns.md](references/anti-patterns.md) | Common plan writing mistakes with before/after fixes |
 | [frontmatter-fields.md](references/frontmatter-fields.md) | YAML frontmatter field definitions, valid values, and domain taxonomy |
 | [mini-plan-template.md](references/mini-plan-template.md) | Mini-plan 4-section template with example and rules |
-| [idea-plan-template.md](references/idea-plan-template.md) | Idea plan template: the tasks that build a spec |
+| [spec-plan-template.md](references/spec-plan-template.md) | Spec plan template: the tasks that build a spec |
 
 | Workflow | Purpose |
 |----------|---------|
 | [create-a-plan.md](workflows/create-a-plan.md) | 5-phase process for writing a full implementation plan from scratch |
 | [create-a-mini-plan.md](workflows/create-a-mini-plan.md) | 3-phase lightweight workflow for writing a mini-plan |
-| [create-an-idea-plan.md](workflows/create-an-idea-plan.md) | 3-phase workflow for writing the plan of a spec |
+| [create-a-spec-plan.md](workflows/create-a-spec-plan.md) | 3-phase workflow for writing the plan of a spec |
 | [update-plan-status.md](workflows/update-plan-status.md) | 3-phase workflow for updating plan status across frontmatter, MASTER.md, and progress.json |
 
 ## Supporting Documents
@@ -260,9 +260,9 @@ See [anti-patterns.md](references/anti-patterns.md) for the full catalog with be
 - [ ] Is saved as `docs/plans/mini-plans/YYYY-MM-DD-kebab-case-name.md`
 - [ ] Is NOT registered in MASTER.md or progress.json
 
-### Idea Plan
+### Spec Plan
 
-- [ ] Sits in `docs/plans/<feature>/<idea>/plan.md`, next to its `spec.md`
+- [ ] Sits in `docs/plans/<feature>/<change>/plan.md`, next to its `spec.md`
 - [ ] Has no YAML frontmatter and is NOT registered in MASTER.md or progress.json
 - [ ] Has one task per unit of work, each with its files and its checkboxes, the failing test first
 - [ ] Names files by path and symbol, never by line number

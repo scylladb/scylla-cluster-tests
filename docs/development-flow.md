@@ -1,6 +1,6 @@
 # Development flow
 
-An idea can go through three written documents before the code: the intent,
+A change can go through three written documents before the code: the intent,
 the spec, and the plan. The flow is optional. The author decides for each
 change.
 
@@ -21,10 +21,10 @@ A small fix, a configuration tweak, or a test addition does not need them.
 
 ## The documents
 
-All the documents of one idea go to one directory:
+All the documents of one change go to one directory, the flow directory:
 
 ```
-docs/plans/<feature>/<idea>/
+docs/plans/<feature>/<change>/
 ├── intent.md   # the problem
 ├── spec.md     # the design
 └── plan.md     # the files, the order of work, and the tests
@@ -32,7 +32,7 @@ docs/plans/<feature>/<idea>/
 
 `<feature>` is the area of SCT, as in `config`, `nemesis`, `cleanup`, or
 `costs`. Use a directory that exists under `docs/plans/` when one fits.
-`<idea>` is a short kebab-case name for the specific change.
+`<change>` is a short kebab-case name for the specific change.
 
 | Document | Holds | Skill |
 |---|---|---|
@@ -54,7 +54,7 @@ their own rules.
 2. Write the spec from the intent.
 3. Write the plan from the spec.
 4. Write the code. Follow the standards in [INDEX.md](INDEX.md).
-5. Open the pull request. Link the idea directory in the description.
+5. Open the pull request. Link the flow directory in the description.
 
 The author reads each document before the next one starts. An agent shows the
 document to the author, and asks before it commits the document.
@@ -84,4 +84,4 @@ state the reason.
 ## Review
 
 [REVIEW.md](../REVIEW.md) holds the review guide. When the pull request
-carries an idea directory, the reviewer checks the code against its spec.
+carries a flow directory, the reviewer checks the code against its spec.

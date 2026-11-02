@@ -7,7 +7,7 @@
 The flow becomes repository skills in `skills/`, which Claude Code and
 GitHub Copilot already discover. `writing-intents` and `writing-specs` write
 `intent.md` and `spec.md`, and `writing-plans` gets a third format that
-writes `plan.md`, all in `docs/plans/<feature>/<idea>/`.
+writes `plan.md`, all in `docs/plans/<feature>/<change>/`.
 `discovering-standards` writes `docs/standards/`, `docs/INDEX.md`, and
 `REVIEW.md`. `updating-standards` adds one standard. `code-review` checks a
 change against its spec.
@@ -37,10 +37,10 @@ flowchart LR
 | `docs/development-flow.md` | The flow for people: when to use it, the layout, the order of work |
 | `writing-intents` | Writes `intent.md` from the conversation or from a diff |
 | `writing-specs` | Writes `spec.md` from the intent, the code, and the answers of the user |
-| `writing-plans` | Routes to the idea plan when the idea directory holds a `spec.md` |
+| `writing-plans` | Routes to the spec plan when the flow directory holds a `spec.md` |
 | `discovering-standards` | Finds the conventions, writes the standards, the index, and `REVIEW.md` |
 | `updating-standards` | Writes one convention and its index entry |
-| `code-review` | Check 11 compares the change with the spec of its idea directory |
+| `code-review` | Check 11 compares the change with the spec of its flow directory |
 | `REVIEW.md` | The three review passes for people and agents |
 | `CLAUDE.md` | Tells the agent when to propose the documents |
 
@@ -53,7 +53,7 @@ it.
 ### Outputs
 
 ```
-docs/plans/<feature>/<idea>/
+docs/plans/<feature>/<change>/
 ├── intent.md   # Problem, Who it affects, Evidence, What good looks like, Out of scope
 ├── spec.md     # Overview, Constraints, Design, Contracts, Risks, Deferred work, Decisions
 └── plan.md     # Rules, then one task per unit of work
@@ -72,10 +72,10 @@ REVIEW.md                            # Pass 1 bugs and logic, Pass 2 security, P
 ## Decisions
 
 - The skills use the gerund names of the other SCT skills. (spec)
-- `writing-plans` writes the idea plan, so that one skill answers each plan request. (spec)
+- `writing-plans` writes the spec plan, so that one skill answers each plan request. (spec)
 - The root cause of a bug goes in the commit message and the pull request description. (spec)
 - Each team files SCT issues with its own Jira tooling. (spec)
-- The idea documents have no frontmatter and no `MASTER.md` entry. They describe one change and stay with it. (spec)
+- The flow documents have no frontmatter and no `MASTER.md` entry. They describe one change and stay with it. (spec)
 - `REVIEW.md` sits at the repository root, where reviewers and automated review tools look for it. (spec)
 - The standards domains are `global`, `python`, `testing`, and `config`, the areas of SCT. (spec)
 - The discovery aligns the sources that disagree with the code: the generated nemesis files rule and the unit test paths. (build)

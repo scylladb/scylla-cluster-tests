@@ -1,7 +1,7 @@
-# Creating an Idea Plan
+# Creating a Spec Plan
 
 A 3-phase workflow for writing `plan.md`, the build plan of a spec in
-`docs/plans/<feature>/<idea>/`. The development flow in
+`docs/plans/<feature>/<change>/`. The development flow in
 `docs/development-flow.md` describes the intent, the spec, and the plan. The
 plan is optional: the diff can carry the files and the tests.
 
@@ -9,7 +9,7 @@ plan is optional: the diff can carry the files and the tests.
 
 ## Phase 1: Read the Spec
 
-**Entry:** `docs/plans/<feature>/<idea>/spec.md` exists.
+**Entry:** `docs/plans/<feature>/<change>/spec.md` exists.
 
 **Actions:**
 
@@ -29,7 +29,7 @@ plan is optional: the diff can carry the files and the tests.
 
 **Actions:**
 
-1. Read [idea-plan-template.md](../references/idea-plan-template.md).
+1. Read [spec-plan-template.md](../references/spec-plan-template.md).
 2. Write one task for each unit of work, in the order of dependency. Each
    task names its files, its internals, and its checkboxes, the failing test
    first.

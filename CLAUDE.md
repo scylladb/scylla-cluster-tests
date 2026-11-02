@@ -22,8 +22,8 @@ Available skills (invoke via Skill tool or `/skill-name`):
 - `designing-skills` — Create and structure AI agent skills
 - `fix-backport-conflicts` — Resolve merge conflicts in backport PRs
 - `profiling-sct-code` — Profile Python code for performance bottlenecks
-- `writing-intents` — Write the intent of a change: the problem, in `docs/plans/<feature>/<idea>/intent.md`
-- `writing-specs` — Write the design spec of a change in `docs/plans/<feature>/<idea>/spec.md`
+- `writing-intents` — Write the intent of a change: the problem, in `docs/plans/<feature>/<change>/intent.md`
+- `writing-specs` — Write the design spec of a change in `docs/plans/<feature>/<change>/spec.md`
 - `writing-plans` — Write implementation plans (full 7-section, mini, or the plan of a spec)
 - `writing-unit-tests` — Write pytest unit tests for SCT
 - `writing-integration-tests` — Write integration tests with external services
@@ -40,7 +40,7 @@ Available skills (invoke via Skill tool or `/skill-name`):
 ## Development flow
 
 The intent, the spec, and the plan of a change are optional. They go to
-`docs/plans/<feature>/<idea>/`. See [docs/development-flow.md](docs/development-flow.md).
+`docs/plans/<feature>/<change>/`. See [docs/development-flow.md](docs/development-flow.md).
 
 - Propose them when a change is big or touches the SCT architecture. Reviewers value them.
 - Offer to write them for the user to review before the implementation starts.

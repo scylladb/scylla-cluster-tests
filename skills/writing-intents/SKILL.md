@@ -2,18 +2,18 @@
 name: writing-intents
 description: >-
   Writes the intent of an SCT change: the problem, who it affects, the
-  evidence, and what good looks like, in docs/plans/FEATURE/IDEA/intent.md.
-  Use when the user asks to state the problem, write an intent, start an
-  idea, or describe a change before its design. Also use to write an intent
+  evidence, and what good looks like, in docs/plans/FEATURE/CHANGE/intent.md.
+  Use when the user asks to state the problem, write an intent, start a
+  change, or describe a change before its design. Also use to write an intent
   from code that already exists. The intent is the first, optional document
   of the development flow, before the spec and the plan. Not for the design
   (use writing-specs) or the build plan (use writing-plans).
-argument-hint: "[feature/idea] [--from-code]"
+argument-hint: "[feature/change] [--from-code]"
 ---
 
 # Writing an Intent
 
-Write `docs/plans/<feature>/<idea>/intent.md`, the first document of the
+Write `docs/plans/<feature>/<change>/intent.md`, the first document of the
 development flow in `docs/development-flow.md`. The flow is optional. Write
 an intent only when the user asks for one, or agrees to one.
 
@@ -44,11 +44,11 @@ it.
 
 **Entry criteria**: the user wants an intent.
 
-1. Take `<feature>/<idea>` from the arguments when they give it.
+1. Take `<feature>/<change>` from the arguments when they give it.
 2. Otherwise propose one. `<feature>` is the area of SCT, as in `config`,
    `nemesis`, `cleanup`, or `costs`. Run `ls docs/plans/` and reuse a
-   directory that fits. `<idea>` is a short kebab-case name for the change.
-3. When `docs/plans/<feature>/<idea>/intent.md` exists, read it and update it.
+   directory that fits. `<change>` is a short kebab-case name for the change.
+3. When `docs/plans/<feature>/<change>/intent.md` exists, read it and update it.
    Do not write a second one.
 
 **Exit criteria**: the directory path is known and the user agrees to it.

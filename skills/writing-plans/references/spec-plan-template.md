@@ -1,7 +1,7 @@
-# Idea Plan Template
+# Spec Plan Template
 
-An idea plan builds the spec in the same directory,
-`docs/plans/<feature>/<idea>/spec.md`. It names the files, the internals, the
+A spec plan builds the spec in the same directory,
+`docs/plans/<feature>/<change>/spec.md`. It names the files, the internals, the
 order of work, and the tests. Somebody who never saw the change must be able
 to follow it. A small change keeps a short plan.
 
@@ -11,7 +11,7 @@ numbers goes stale at the first refactor.
 ```markdown
 # <Short title> — plan
 
-**Spec:** `docs/plans/<feature>/<idea>/spec.md`
+**Spec:** `docs/plans/<feature>/<change>/spec.md`
 
 A decision during the build that changes what the spec states updates the
 spec in the same commit. A line in its `Decisions` section records the

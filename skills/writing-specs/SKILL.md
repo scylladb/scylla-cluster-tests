@@ -1,7 +1,7 @@
 ---
 name: writing-specs
 description: >-
-  Writes the design spec of an SCT change in docs/plans/FEATURE/IDEA/spec.md:
+  Writes the design spec of an SCT change in docs/plans/FEATURE/CHANGE/spec.md:
   the overview, the constraints, the components, the contracts, the risks,
   and the decisions, with code and Mermaid diagrams first. Use when the user
   asks for a spec, a design, or a design review document for one change, or
@@ -9,12 +9,12 @@ description: >-
   spec from code that already exists. Not for the problem statement (use
   writing-intents), the build plan, a multi-phase roadmap, or a mini-plan
   (use writing-plans).
-argument-hint: "[feature/idea] [--from-code]"
+argument-hint: "[feature/change] [--from-code]"
 ---
 
 # Writing a Spec
 
-Write `docs/plans/<feature>/<idea>/spec.md`, the design document of the
+Write `docs/plans/<feature>/<change>/spec.md`, the design document of the
 development flow in `docs/development-flow.md`. The flow is optional. Write a
 spec only when the user asks for one, or agrees to one.
 
@@ -49,9 +49,9 @@ question for the reviewer gets an `(open)` line. Name no rejected option.
 
 **Entry criteria**: the user wants a spec.
 
-1. Take `<feature>/<idea>` from the arguments when they give it.
+1. Take `<feature>/<change>` from the arguments when they give it.
 2. Otherwise run `ls docs/plans/*/*/intent.md docs/plans/*/*/spec.md` and
-   find the idea directory that holds an `intent.md` and no `spec.md`. When none or several fit, propose a path as
+   find the flow directory that holds an `intent.md` and no `spec.md`. When none or several fit, propose a path as
    in `writing-intents` and ask the user.
 3. When `spec.md` exists, read it and update it. Do not write a second one.
 
@@ -86,7 +86,7 @@ design.
 1. Read [spec-template.md](references/spec-template.md).
 2. Write the file in the shape of the template. Follow its section rule.
 3. A spec can near 200 lines, with design areas that can ship alone. Then
-   propose a split into more idea directories.
+   propose a split into more flow directories.
 4. Write the prose in ASD-STE100 Simplified Technical English.
 5. Show the file to the user.
 6. Ask whether to commit it. On a yes, commit it with a subject such as
