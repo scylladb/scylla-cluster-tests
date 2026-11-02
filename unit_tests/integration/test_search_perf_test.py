@@ -164,7 +164,7 @@ def _flow_over(params, docker_scylla, vs_cluster, loader_set, logdir):
     flow.db_cluster = docker_scylla.parent_cluster
     flow.db_cluster.vector_store_cluster = vs_cluster
 
-    def run_latte(stress_cmd, files_to_stage=None, **_kwargs):
+    def run_latte(stress_cmd, files_to_stage=None, loader=None, **_kwargs):
         thread = LatteStressThread(
             loader_set,
             stress_cmd,
@@ -172,6 +172,7 @@ def _flow_over(params, docker_scylla, vs_cluster, loader_set, logdir):
             timeout=10,
             params=params,
             extra_files_to_stage=files_to_stage or [],
+            loader=loader,
         )
         thread.run()
         _, errors = thread.parse_results()

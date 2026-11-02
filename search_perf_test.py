@@ -28,7 +28,9 @@ subclass then only owns its 'test_*' entry point. See fts_test.py for a worked
 example, and docs/fts-search-test.md for the plan format.
 """
 
+import concurrent.futures
 import contextlib
+import functools
 import json
 import math
 import os
@@ -52,6 +54,7 @@ from performance_regression_test import PerformanceRegressionTest
 from sdcm import sct_abs_path
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.stress.latte_thread import remove_from_loader, send_to_loader, staged_file_path
 from sdcm.utils.common import DEFAULT_AWS_REGION
 from sdcm.utils.search_argus import SearchArgusReporter, sut_timestamp
 from sdcm.utils.vector_store_client import VectorStoreClient
@@ -554,6 +557,16 @@ def validate_plan_tracks(datasets: list) -> None:
         raise ValueError(f"Track(s) {both} hold both index builds and searches")
 
 
+@dataclass
+class _PreparedShard:
+    """A shard ready to load, see 'SearchPerformanceTest._prepare_shard'."""
+
+    file: str
+    records: int  # 0 for an empty shard, which is neither sent nor loaded
+    loader: object
+    cleanup: contextlib.ExitStack
+
+
 # ---------------------------------------------------------------------------
 # Test class
 # ---------------------------------------------------------------------------
@@ -569,15 +582,17 @@ class SearchPerformanceTest(PerformanceRegressionTest):
     WORKLOAD: SearchWorkload = None
     _argus_reporter: SearchArgusReporter | None = None
 
-    def _run_latte(self, stress_cmd, files_to_stage=None, **kwargs):
+    def _run_latte(self, stress_cmd, files_to_stage=None, loader=None, **kwargs):
         """Run one latte command to completion and return its stress thread.
 
         Bypasses `run_stress_thread` so that the per-run data files of this command are staged on
         its loader. `files_to_stage` is a list of `(local_path, container_path)` pairs.
+        `loader` runs it on that loader rather than the next one, see '_prepare_shard'.
         """
         thread = self.run_latte_thread(
             stress_cmd=stress_cmd,
             extra_files_to_stage=files_to_stage or [],
+            loader=loader,
             # NOTE: every phase here is a single command -- one schema change, one shard, one index
             #       build -- so it belongs on one loader. Without this the thread fans out to *all*
             #       of them ('DockerBasedStressThread.configure_executer'), which on a multi-loader
@@ -626,7 +641,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         self.log.info("Creating schema")
         self._run_latte(f"latte schema {self.WORKLOAD.script}", duration=_timeout_minutes(DEFAULT_SCHEMA_TIMEOUT))
 
-    def _load_shard(self, local_ds_dir, container_ds_dir, shard_file, shard_records, max_load_wait):
+    def _load_shard(self, local_ds_dir, container_ds_dir, shard_file, shard_records, max_load_wait, loader=None):
         """Load a single shard file into Scylla via the loader container."""
         params = self.WORKLOAD.params
         self.log.info("Loading shard %s (%d %s)", shard_file, shard_records, self.WORKLOAD.item_noun)
@@ -643,6 +658,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             files_to_stage=[
                 (os.path.join(local_ds_dir, shard_file), posixpath.join(container_ds_dir, shard_file)),
             ],
+            loader=loader,
             duration=_timeout_minutes(max_load_wait),
             # NOTE: nothing reads the latency of a setup phase, and its 'fn--load' tag is neither a
             #       read nor a write to the HDR exporter, which fails the command on such a tag.
@@ -660,27 +676,74 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             shard_files = [step.get(workload.step_records_file_key, workload.default_records_file)]
         shard_files = [_checked_data_file(shard_file, "records file") for shard_file in shard_files]
 
+        # A step may load nothing and only rebuild the index over what earlier steps loaded.
+        if not shard_files:
+            return 0
         record_count = 0
-        for shard_file in shard_files:
+        prepare = functools.partial(self._prepare_shard, bucket, prefix, local_ds_dir, container_ds_dir)
+        # NOTE: one shard ahead -- while a shard loads, the next one is downloaded and sent to the
+        #       loader that will load it, so a load overlaps the next shard's transfers.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="shard-prefetch") as prefetch:
+            upcoming = [prefetch.submit(prepare, shard_files[0])]
+            try:
+                for next_file in [*shard_files[1:], None]:
+                    shard = upcoming[0].result()
+                    with shard.cleanup:
+                        # Taken off 'upcoming' only once its own cleanup is armed, so an interrupt
+                        # while waiting for it still leaves it to the cleanup below.
+                        upcoming.pop(0)
+                        if next_file is not None:
+                            upcoming.append(prefetch.submit(prepare, next_file))
+                        if shard.records:
+                            self._load_shard(
+                                local_ds_dir,
+                                container_ds_dir,
+                                shard.file,
+                                shard.records,
+                                max_load_wait,
+                                loader=shard.loader,
+                            )
+                            record_count += shard.records
+            except BaseException:
+                # Whatever the next shard put on its loader and on the runner goes too.
+                for pending in upcoming:
+                    with contextlib.suppress(Exception):
+                        pending.result().cleanup.close()
+                raise
+        return record_count
+
+    def _prepare_shard(self, bucket, prefix, local_ds_dir, container_ds_dir, shard_file) -> "_PreparedShard":
+        """Get one shard ready to load: on the runner, counted, and sent to the loader that loads it.
+
+        The load then stages the shard as any other file -- 'extra_files_to_stage' finds it already in
+        place and does not send it again. Closing the returned 'cleanup' undoes all of it, including
+        after a failure half way.
+        """
+        cleanup = contextlib.ExitStack()
+        try:
             local_shard_path = os.path.join(local_ds_dir, shard_file)
             if bucket:
-                s3_key = _s3_key(prefix, shard_file)
                 os.makedirs(os.path.dirname(local_shard_path), exist_ok=True)
-                _s3_download_file(bucket, s3_key, local_shard_path)
+                _s3_download_file(bucket, _s3_key(prefix, shard_file), local_shard_path)
+                # The full corpora do not fit on the runner's disk next to each other.
+                cleanup.callback(os.remove, local_shard_path)
 
             if not os.path.isfile(local_shard_path):
                 raise FileNotFoundError(f"Shard {shard_file} is not in the dataset directory {local_ds_dir}")
             shard_records = _count_tsv_lines(local_shard_path)
             if shard_records == 0:
                 self.log.warning("Shard file %s is empty, skipping", local_shard_path)
-                continue
+                return _PreparedShard(shard_file, 0, None, cleanup)
 
-            self._load_shard(local_ds_dir, container_ds_dir, shard_file, shard_records, max_load_wait)
-            record_count += shard_records
-            if bucket:
-                # The full corpora do not fit on the runner's disk next to each other.
-                os.remove(local_shard_path)
-        return record_count
+            loader = self.loaders.get_loader()
+            host_path = staged_file_path(loader, posixpath.join(container_ds_dir, shard_file))
+            # Registered before sending, so a send that fails half way is cleaned up too.
+            cleanup.callback(remove_from_loader, loader, [host_path])
+            send_to_loader(loader, [(local_shard_path, host_path)])
+            return _PreparedShard(shard_file, shard_records, loader, cleanup)
+        except BaseException:
+            cleanup.close()
+            raise
 
     def _build_index(self, record_count, max_index_wait, index_name, keyspace) -> float | None:
         """Build the index on the current table and return how long the build took, in seconds.

@@ -1120,3 +1120,15 @@ def test_run_latte_thread_forwards_record_hdr(record_hdr):
         )
 
     assert mock_init.call_args.kwargs["record_hdr"] is record_hdr
+
+
+def test_run_latte_thread_forwards_the_loader():
+    with (
+        patch.object(LatteStressThread, "__init__", return_value=None) as mock_init,
+        patch.object(LatteStressThread, "run", return_value="thread-pool"),
+    ):
+        ClusterTester.run_latte_thread(
+            _fake_latte_tester(), stress_cmd="latte run -f load data_dir/latte/x.rn", duration=10, loader="loader-2"
+        )
+
+    assert mock_init.call_args.kwargs["loader"] == "loader-2"

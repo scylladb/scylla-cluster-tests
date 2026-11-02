@@ -350,9 +350,10 @@ test case will name its own plan through the same option.
 
 The plans live in the repo, next to the rune scripts they drive. Only the corpora come from S3: a
 dataset with a `base_url` downloads into a fresh folder under `downloaded/datasets/`, removed when
-the dataset is done. Its shards are fetched one at a time, right before the latte invocation that
-loads them, and deleted once loaded, as the full corpora do not fit next to each other on a
-runner's disk. A dataset without `base_url` is read in place and never deleted.
+the dataset is done. Its shards are fetched one ahead: while a shard loads, the next one is
+downloaded and staged on the loader that will load it. Each is deleted once loaded, as the full
+corpora do not fit next to each other on a runner's disk. A dataset without `base_url` is read in
+place and never deleted.
 
 A dataset's files -- the documents, `queries_<set>.tsv` and `qrels_<set>.tsv` -- follow the "Dataset
 Format" of `latte/full-text-search/README.md` in scylladb/vector-store, where `fts.rn` comes from.
