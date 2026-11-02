@@ -552,14 +552,29 @@ class BackupTask(ManagerTask):
 
 
 class RestoreTask(ManagerTask):
+    # Header of the bandwidth section of the sctool restore progress output. Older Manager versions print
+    # "Bandwidth:", newer ones (reporting the restore method) print "Bandwidth (rclone restore only):".
+    _BANDWIDTH_HEADER = re.compile(r"^Bandwidth(?: \([^)]*\))?:$")
+
     def __init__(self, task_id, cluster_id, manager_node):
         ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
+
+    def _bandwidth_header_index(self, res: list[list[str]]) -> int:
+        """Index of the bandwidth section header in the parsed sctool restore progress output.
+
+        Raises ValueError when the section is missing. Manager prints it starting from 3.4
+        and only when the rclone restore method was used (native and tablet restores do not download data).
+        """
+        for index, row in enumerate(res):
+            if len(row) == 1 and self._BANDWIDTH_HEADER.match(row[0]):
+                return index
+        raise ValueError("Bandwidth section not found")
 
     @property
     def download_bw(self) -> float | None:
         """Restore download phase bandwidth in MiB/s/shard"""
         # ...
-        # Bandwidth:
+        # Bandwidth (rclone restore only):
         #   - Download:    22.313MiB/s/shard
         #   - Load&stream: 3.556MiB/s/shard
         #
@@ -567,11 +582,11 @@ class RestoreTask(ManagerTask):
         res = self.progress_string()
 
         try:
-            download_bandwidth_str = res[res.index(["Bandwidth:"]) + 1][0]
+            download_bandwidth_str = res[self._bandwidth_header_index(res) + 1][0]
         except ValueError:
             LOGGER.warning(
-                "Failed to extract Download bandwidth from the sctool restore progress output."
-                "Check Manager version, bandwidth metrics are supported starting from 3.4."
+                "Failed to extract Download bandwidth from the sctool restore progress output. "
+                "It is reported only for rclone restores and Manager versions starting from 3.4."
             )
             return None
 
@@ -588,7 +603,7 @@ class RestoreTask(ManagerTask):
     def load_and_stream_bw(self) -> float | None:
         """Restore load&stream phase bandwidth in MiB/s/shard"""
         # ...
-        # Bandwidth:
+        # Bandwidth (rclone restore only):
         #   - Download:    22.313MiB/s/shard
         #   - Load&stream: 3.556MiB/s/shard
         #
@@ -596,11 +611,11 @@ class RestoreTask(ManagerTask):
         res = self.progress_string()
 
         try:
-            las_bandwidth_str = res[res.index(["Bandwidth:"]) + 2][0]
+            las_bandwidth_str = res[self._bandwidth_header_index(res) + 2][0]
         except ValueError:
             LOGGER.warning(
-                "Failed to extract Load&Stream bandwidth from the sctool restore progress output."
-                "Check Manager version, bandwidth metrics are supported starting from 3.4."
+                "Failed to extract Load&Stream bandwidth from the sctool restore progress output. "
+                "It is reported only for rclone restores and Manager versions starting from 3.4."
             )
             return None
 

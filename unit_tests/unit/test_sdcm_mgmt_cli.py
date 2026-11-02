@@ -9,6 +9,7 @@ from sdcm.mgmt.cli import (
     BackupTask,
     ManagerCluster,
     ManagerTask,
+    RestoreTask,
     SCTool,
     SCToolDocker,
     create_sctool,
@@ -180,3 +181,64 @@ def test_wait_for_started_upload_stage_keeps_waiting_before_the_upload(stage):
         pytest.raises(BackupStageNotReachedError),
     ):
         task.wait_for_started_upload_stage(timeout=10)
+
+
+def _restore_task_with_progress(progress_stdout: str) -> RestoreTask:
+    manager_node_mock = _manager_node_mock(is_docker=False)
+    remoter_result = mock.MagicMock()
+    type(remoter_result).stdout = mock.PropertyMock(return_value=progress_stdout)
+    type(remoter_result).stderr = mock.PropertyMock(return_value=None)
+    type(remoter_result).exited = mock.PropertyMock(return_value=0)
+    manager_node_mock.remoter.sudo.return_value = remoter_result
+    return RestoreTask(
+        task_id="e10ec718-a7bf-11ed-b05a-0892040e83bb",
+        cluster_id="8c20f334-cf37-4528-9219-862d75b84c99",
+        manager_node=manager_node_mock,
+    )
+
+
+_RESTORE_PROGRESS_HEADER = """\
+Restore progress
+Run:            e10ec718-a7bf-11ed-b05a-0892040e83bb
+Status:         DONE
+Start time:     23 Feb 24 02:12:00 CET
+End time:       23 Feb 24 02:12:05 CET
+Duration:       5s
+Progress:       100% | 100%
+Snapshot Tag:   sm_20240223011159UTC
+"""
+
+_RESTORE_PROGRESS_KEYSPACES = """
+╭──────────┬─────────────┬──────┬─────────┬────────────┬────────┬────────╮
+│ Keyspace │    Progress │ Size │ Success │ Downloaded │ Failed │ Method │
+├──────────┼─────────────┼──────┼─────────┼────────────┼────────┼────────┤
+│ ks       │ 100% | 100% │ 180B │    180B │       180B │     0B │ rclone │
+╰──────────┴─────────────┴──────┴─────────┴────────────┴────────┴────────╯
+
+Restored views
+View: ks.mv, Status:
+"""
+
+
+@pytest.mark.parametrize(
+    "bandwidth_section,expected",
+    [
+        pytest.param(
+            "Bandwidth:\n  - Download:    22.313MiB/s/shard\n  - Load&stream: 3.556MiB/s/shard\n",
+            (22.313, 3.556),
+            id="header-without-method-note",
+        ),
+        pytest.param(
+            "Bandwidth (rclone restore only):\n  - Download:    22.313MiB/s/shard\n  - Load&stream: 3.556MiB/s/shard\n",
+            (22.313, 3.556),
+            id="header-with-method-note",
+        ),
+        pytest.param("", (None, None), id="no-bandwidth-section"),
+    ],
+)
+def test_restore_task_bandwidth_is_parsed_from_both_header_variants(bandwidth_section, expected):
+    """Manager renamed the header to 'Bandwidth (rclone restore only):' and skips the section for
+    native and tablet restores; both header variants must parse and a missing section must yield None."""
+    task = _restore_task_with_progress(_RESTORE_PROGRESS_HEADER + bandwidth_section + _RESTORE_PROGRESS_KEYSPACES)
+
+    assert (task.download_bw, task.load_and_stream_bw) == expected
