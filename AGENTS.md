@@ -372,7 +372,7 @@ I have strict standards for feature planning. You can find the full guidelines i
 **Plan types:** The `writing-plans` skill supports three formats:
 - **Full plans** (7-section, `docs/plans/`): For multi-phase work, 1K+ LOC. Requires YAML frontmatter, MASTER.md registration, and progress.json tracking. PRs with a `plans` label use this format.
 - **Mini-plans** (4-section, `docs/plans/mini-plans/`): For single-PR changes under ~1K LOC. No frontmatter, no registration. Disposable after merge.
-- **Spec plans** (`docs/plans/<feature>/<change>/plan.md`): The build plan of a spec in the same directory. No frontmatter, no registration.
+- **Spec plans** (`docs/plans/<feature>/<change>/plan.md`): The build plan of a spec in the same directory. No frontmatter, no registration. Local by default.
 
 The skill routes automatically based on a flow spec, the PR `plans` label, user input, or task size estimate.
 

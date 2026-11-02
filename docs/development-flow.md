@@ -27,7 +27,7 @@ All the documents of one change go to one directory, the flow directory:
 docs/plans/<feature>/<change>/
 ├── intent.md   # the problem
 ├── spec.md     # the design
-└── plan.md     # the files, the order of work, and the tests
+└── plan.md     # the files, the order of work, and the tests (local)
 ```
 
 `<feature>` is the area of SCT, as in `config`, `nemesis`, `cleanup`, or
@@ -43,24 +43,38 @@ docs/plans/<feature>/<change>/
 Each document is optional. A change can have an intent and a spec, and let
 the diff carry the plan. A spec reads the intent when it exists.
 
+`plan.md` helps an agent keep focus and split the work into commits. Keep it
+on your machine. You do not have to commit it.
+
 These documents do not get frontmatter. They are not registered in
 `docs/plans/MASTER.md` or `docs/plans/progress.json`. The full 7-section plans
 and the mini-plans in [plans/INSTRUCTIONS.md](plans/INSTRUCTIONS.md) keep
 their own rules.
+
+## Status
+
+`spec.md` has a `**Status:**` line under its title. It tells a reader
+whether the design is current.
+
+| Status | Meaning | Who sets it |
+|---|---|---|
+| `draft` | The code of the change is not merged | `writing-specs`, when it writes the spec |
+| `built` | The merged code follows the spec | The last pull request of the change |
+| `superseded` | A later change replaced the design | The later change, with a link to its flow directory on the same line |
 
 ## Order of work
 
 1. Write the intent. State the problem and the requirements of the solution,
    not the design.
 2. Write the spec from the intent.
-3. Write the plan from the spec.
+3. Write the plan from the spec. You do not have to commit it.
 4. Write the code. Follow the standards in [INDEX.md](INDEX.md).
 5. Open the pull request. Link the flow directory in the description.
 
 The author reads each document before the next one starts. An agent shows the
 document to the author, and asks before it commits the document.
 
-Commit the documents before the code on the branch. The reviewer then reads
+Commit the intent and the spec before the code on the branch. The reviewer then reads
 the problem, the design, and the code in that order.
 
 When the code exists first, write the intent and the spec from the diff. The

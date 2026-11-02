@@ -36,5 +36,5 @@ Leave out the line when the task adds none.
 - [ ] Run it with `uv run sct.py unit-tests -t unit/<path>` and confirm that the assertion fails.
 - [ ] Write the smallest change that makes it pass.
 - [ ] Run `uv run sct.py pre-commit`.
-- [ ] Commit, with the boxes of this task checked.
+- [ ] Commit the task. When `plan.md` is committed, commit it with the boxes of this task checked.
 ```

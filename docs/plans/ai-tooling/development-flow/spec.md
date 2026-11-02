@@ -2,6 +2,8 @@
 
 **Jira:** SCT-1379
 
+**Status:** built
+
 ## Overview
 
 The flow becomes repository skills in `skills/`, which Claude Code and
@@ -55,8 +57,8 @@ it.
 ```
 docs/plans/<feature>/<change>/
 ├── intent.md   # Problem, Who it affects, Evidence, Definition of done, Out of scope
-├── spec.md     # Overview, Constraints, Design, Contracts, Risks, Deferred work, Decisions
-└── plan.md     # Rules, then one task per unit of work
+├── spec.md     # Status line, Overview, Constraints, Design, Contracts, Risks, Deferred work, Decisions
+└── plan.md     # Rules, then one task per unit of work (local)
 docs/standards/<domain>/<topic>.md   # ## Topic, ### Standard, Sources: line
 docs/INDEX.md                        # one entry per standards file
 REVIEW.md                            # Pass 1 bugs and logic, Pass 2 security, Pass 3 compliance
@@ -78,4 +80,6 @@ REVIEW.md                            # Pass 1 bugs and logic, Pass 2 security, P
 - The flow documents have no frontmatter and no `MASTER.md` entry. They describe one change and stay with it. (spec)
 - `REVIEW.md` sits at the repository root, where reviewers and automated review tools look for it. (spec)
 - The standards domains are `global`, `python`, `testing`, and `config`, the areas of SCT. (spec)
+- `spec.md` carries a `Status` line: `draft`, `built`, or `superseded`. It shows whether the design is current. (build)
+- `plan.md` stays local by default. It keeps the agent on the tasks and splits the work into commits. (build)
 - The discovery aligns the sources that disagree with the code: the generated nemesis files rule and the unit test paths. (build)

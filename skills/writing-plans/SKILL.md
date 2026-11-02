@@ -197,7 +197,7 @@ Mini-plans are a lightweight 4-section format for small changes. See [mini-plan-
 | progress.json | Required | None | None |
 | Location | `docs/plans/<domain>/` | `docs/plans/mini-plans/` | `docs/plans/<feature>/<change>/` |
 | Filename | `kebab-case-name.md` | `YYYY-MM-DD-kebab-case-name.md` | `plan.md`, next to `spec.md` |
-| Lifecycle | Tracked until archived | Disposable after PR merge or 30 days | Kept with its intent and spec |
+| Lifecycle | Tracked until archived | Disposable after PR merge or 30 days | Local. Commit is optional. The `Status` line of the spec tells whether the directory is current |
 
 ## Anti-Pattern Quick Reference
 
