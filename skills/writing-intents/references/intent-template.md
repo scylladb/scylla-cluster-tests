@@ -22,9 +22,10 @@ Which test, which pipeline, which backend, or which team.
 A Jenkins or Argus link, a log line, a Jira issue, or a metric. Copy the
 text verbatim. Replace each password, token, and key with `<redacted>`.
 
-## What good looks like
+## Definition of done
 
-The observable outcome that tells us the problem is gone.
+The requirements that the solution must meet, and the observable result that
+tells us the problem is gone. Write each one as a result, not as a design.
 
 ## Out of scope
 

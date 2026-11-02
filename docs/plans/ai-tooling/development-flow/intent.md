@@ -28,7 +28,7 @@ and the agents that work in the repository.
 The QA Tools team uses the `qatools-sdlc` plugin in most of its repositories.
 SCT has no `docs/standards/`, no `docs/INDEX.md`, and no `REVIEW.md`.
 
-## What good looks like
+## Definition of done
 
 - An agent in a fresh SCT checkout, with no plugin installed, writes an
   intent, a spec, and a plan in `docs/plans/<feature>/<change>/`.
