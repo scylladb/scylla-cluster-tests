@@ -16,9 +16,9 @@
 Two levels, because they need different things to run:
 
   - staging a dataset file and loading it, which need only a ScyllaDB container: the unit tests can
-    only assert what 'LatteStressThread' copies into the loader container, but whether the file
-    arrives where the rune script looks for it depends on the copy itself, the '-P' names the script
-    declares and the path the flow interpolates, none of which a mock can check;
+    only assert what 'LatteStressThread' sends to the loader and mounts, but whether the file arrives
+    where the rune script looks for it depends on the mount itself, the '-P' names the script declares
+    and the path the flow interpolates, none of which a mock can check;
   - the whole per-dataset cycle -- schema, load, index build, build time, index drop -- which needs a
     ScyllaDB with full-text indexes (2026.3+) and a vector-store that serves them. It runs the 'latest'
     images by default; override either with SCT_FTS_IT_SCYLLA_IMAGE / SCT_FTS_IT_VECTOR_STORE_IMAGE,
@@ -26,9 +26,9 @@ Two levels, because they need different things to run:
 
 The second one runs the flow's own methods, not a re-implementation of them. Two seams are
 replaced: '_run_latte', which would otherwise need ClusterTester's loader provisioning, and the Argus
-client, which records the tables instead of posting them. Everything behind them -- copying each
-shard into the loader container, the step loop, the '-P' mapping, the index naming, reading the build
-time out of vector-store's log, the results file and the Argus rows built from it, waiting for the drop --
+client, which records the tables instead of posting them. Everything behind them -- staging each
+shard on the loader's host, the step loop, the '-P' mapping, the index naming, reading the build time
+out of vector-store's log, the results file and the Argus rows built from it, waiting for the drop --
 is the code that ships.
 """
 
