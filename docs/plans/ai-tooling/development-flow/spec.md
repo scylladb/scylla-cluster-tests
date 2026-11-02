@@ -78,7 +78,7 @@ REVIEW.md                            # Pass 1 bugs and logic, Pass 2 security, P
 - The root cause of a bug goes in the commit message and the pull request description. (spec)
 - Each team files SCT issues with its own Jira tooling. (spec)
 - The flow documents have no frontmatter and no `MASTER.md` entry. They describe one change and stay with it. (spec)
-- `REVIEW.md` sits at the repository root, where reviewers and automated review tools look for it. (spec)
+- `REVIEW.md` sits at the repository root. `CLAUDE.md`, `AGENTS.md`, `.coderabbit.yaml`, and the `code-review` skill point the reviewers to it. (spec)
 - The standards domains are `global`, `python`, `testing`, and `config`, the areas of SCT. (spec)
 - `spec.md` carries a `Status` line: `draft`, `built`, or `superseded`. It shows whether the design is current. (build)
 - `plan.md` stays local by default. It keeps the agent on the tasks and splits the work into commits. (build)

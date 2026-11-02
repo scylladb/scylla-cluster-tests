@@ -74,8 +74,8 @@ whether the design is current.
 The author reads each document before the next one starts. An agent shows the
 document to the author, and asks before it commits the document.
 
-Commit the intent and the spec before the code on the branch. The reviewer then reads
-the problem, the design, and the code in that order.
+Commit the intent and the spec before the code on the branch. The reviewer
+then reads the problem, the design, and the code in that order.
 
 When the code exists first, write the intent and the spec from the diff. The
 spec then states the design that the code carries. The diff carries the plan.

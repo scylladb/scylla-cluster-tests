@@ -65,7 +65,9 @@ in order, so that a reader sees which pass found what.
 
 ## Volume
 
-Report each finding that changes the code. Group the small findings in one
-comment. A review with twenty small findings hides the one that matters.
+Report the findings that block the merge first: a bug, a security risk, or
+broken behavior. Keep a review to three to five findings, unless more
+blockers exist. Group the small findings in one comment. A review with twenty
+small findings hides the one that matters.
 
 Findings do not block a merge alone. A maintainer approves the merge.
