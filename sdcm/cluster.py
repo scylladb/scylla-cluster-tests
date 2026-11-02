@@ -631,6 +631,9 @@ class BaseNode(AutoSshContainerMixin):
             # Start task threads after ssh is up, otherwise the dense ssh attempts from task
             # threads will make SCT builder to be blocked by sshguard of gce instance.
             self.wait_ssh_up(verbose=True)
+            # A reclaim during the rest of the setup (cloud-init can take minutes) must be reported too,
+            # or SCT-707 cannot tell it from a real setup failure.
+            self.start_spot_monitoring_if_needed()
             self.wait_for_cloud_init()
 
             self._reconfigure_agent(self.remoter)
@@ -1669,6 +1672,10 @@ class BaseNode(AutoSshContainerMixin):
         )
         self._spot_monitoring_thread.start()
 
+    def start_spot_monitoring_if_needed(self):
+        if (self.is_spot or self.is_gce()) and self._spot_monitoring_thread is None:
+            self.start_spot_monitoring_thread()
+
     def start_journal_thread(self):
         logs_transport = self.parent_cluster.params.get("logs_transport")
         self._journal_thread = get_system_logging_thread(
@@ -1894,8 +1901,7 @@ class BaseNode(AutoSshContainerMixin):
     @log_run_info
     def start_task_threads(self):
         self.start_journal_thread()
-        if self.is_spot or self.is_gce():
-            self.start_spot_monitoring_thread()
+        self.start_spot_monitoring_if_needed()
         if self.node_type == "db":
             self.start_coredump_thread()
             self.start_db_log_reader_thread()

@@ -11,6 +11,8 @@ import pytest
 from click.testing import CliRunner
 
 import sct
+from sdcm import cluster as sdcm_cluster
+from sdcm.cluster_baremetal import PhysicalMachineNode
 from sdcm.provision.provisioner import OperationPreemptedError, ProvisionError
 from sdcm.tester import ClusterTester, CriticalTestFailure, teardown_on_exception
 from sdcm.utils import spot_retry
@@ -202,3 +204,43 @@ def test_critical_failure_inside_a_subtest_ends_the_test():
 
     assert not _SubtestCase.ran_after_kill
     assert len(result.failures) + len(result.errors) == 2  # the subtest, and the test itself
+
+
+def test_spot_monitoring_starts_before_the_cloud_init_wait(monkeypatch):
+    """A reclaim while cloud-init runs must publish SpotTerminationEvent, or the attempt is not retried."""
+    calls = []
+    node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.ssh_login_info = {"hostname": None}
+    node.logdir = None
+    node.log = MagicMock()
+    node.test_config = MagicMock(REUSE_CLUSTER=False)
+    node._spot_monitoring_thread = None
+    monkeypatch.setattr(PhysicalMachineNode, "is_spot", True, raising=False)
+    monkeypatch.setattr(PhysicalMachineNode, "external_address", "1.2.3.4", raising=False)
+    monkeypatch.setattr(PhysicalMachineNode, "__str__", lambda self: "db-node-1")
+    monkeypatch.setattr(sdcm_cluster.RemoteCmdRunnerBase, "create_remoter", lambda **_: MagicMock())
+    for method in (
+        "resolve_ip_addresses",
+        "wait_ssh_up",
+        "_reconfigure_agent",
+        "_init_remoter",
+        "configure_remote_logging",
+        "do_default_installations",
+        "start_journal_thread",
+    ):
+        monkeypatch.setattr(node, method, lambda *_, **__: None)
+
+    def start_monitoring():
+        calls.append("spot monitoring")
+        node._spot_monitoring_thread = MagicMock()
+
+    node.start_spot_monitoring_thread = start_monitoring
+    node.wait_for_cloud_init = lambda: calls.append("cloud-init")
+    monkeypatch.setattr(PhysicalMachineNode, "node_type", "loader", raising=False)
+    node.start_coredump_thread = lambda: calls.append("task threads")
+    node._init_port_mapping = MagicMock(side_effect=StopIteration)
+
+    with pytest.raises(StopIteration):
+        node.init()
+
+    assert calls == ["spot monitoring", "cloud-init", "task threads"]
