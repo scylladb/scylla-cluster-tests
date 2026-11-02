@@ -41,7 +41,7 @@ Located in `docs/standards/python/`.
 ruff format and ruff check with line length 120 and the pylint limits,
 imports at the top of the module, three sorted import groups, the `LOGGER`
 module logger, lazy logging arguments, Google style docstrings, comments that
-tell why, and no silent errors.
+tell why and describe the code as it is, and no silent errors.
 
 #### Class hierarchies (`standards/python/class-hierarchies.md`)
 Override safety when a base class signature changes, including the test stubs
