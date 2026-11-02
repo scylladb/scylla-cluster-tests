@@ -39,9 +39,17 @@ from sdcm.provision.provisioner import (
     VmInstance,
 )
 from sdcm.provision.user_data import UserDataBuilder
+<<<<<<< HEAD
 from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.oci_utils import OciService, build_hostname_label
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.utils.oci_region import OciRegion
+from sdcm.utils.oci_utils import OciService, build_hostname_label, build_image_source_details
+=======
+from sdcm.utils.oci_utils import OciService, build_hostname_label, build_image_source_details
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 from sdcm.utils.parallel_object import ParallelObject
+lazy from sdcm.utils.oci_region import OciRegion  # lazy, or it closes a cycle: oci_region -> sdcm.provision -> here
 
 LOGGER = logging.getLogger(__name__)
 

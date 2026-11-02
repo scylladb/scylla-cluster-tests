@@ -17,6 +17,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+<<<<<<< HEAD:unit_tests/test_oci_utils.py
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports):unit_tests/unit/test_oci_utils.py
+from sdcm.provision.provisioner import VmArch
+from sdcm.sct_config import is_arm_instance_type
+from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
+=======
+from sdcm.sct_config import is_arm_instance_type
+from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports):unit_tests/unit/test_oci_utils.py
 from sdcm.utils.oci_utils import (
     build_hostname_label,
     filter_oci_by_tags,
@@ -26,6 +35,7 @@ from sdcm.utils.oci_utils import (
     resolve_availability_domain,
     wait_for_instance_state,
 )
+from sdcm.utils.vm_arch import VmArch
 
 
 @pytest.fixture
