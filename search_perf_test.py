@@ -53,6 +53,7 @@ from sdcm import sct_abs_path
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.utils.common import DEFAULT_AWS_REGION
+from sdcm.utils.search_argus import SearchArgusReporter
 from sdcm.utils.vector_store_client import VectorStoreClient
 from sdcm.utils.vector_store_index import wait_for_index_build_seconds
 
@@ -99,6 +100,9 @@ INDEX_BUILD_TIMEOUT_GRACE_SECS = 120
 # Validated once on the way in instead of being quoted differently at each of those three places.
 SAFE_NAME_RE = re.compile(r"[A-Za-z0-9_]+")
 SAFE_DATA_FILE_RE = re.compile(r"[A-Za-z0-9_.\-/]+")
+# Argus track and row names: free text, but they only ever reach a table or row name, and a short
+# printable one keeps that readable.
+SAFE_TRACK_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9 _.,:;()/|+-]{0,119}")
 # A latte '--duration': digits and one of its unit suffixes, the form 'get_timeout_from_stress_cmd'
 # parses a phase timeout out of.
 SAFE_DURATION_RE = re.compile(r"\d+[hms]")
@@ -167,6 +171,11 @@ class SearchWorkload:
     step_records_file_key: str
     default_records_file: str
     default_shard_suffix: str
+    # How the Argus tables describe the workload, and the label of what an index covers.
+    description: str = ""
+    # Starts every Argus table name, so workloads reporting to one Argus test keep their tables apart.
+    table_prefix: str = ""
+    record_label: str = "record count"
 
 
 def _local_path(workload: SearchWorkload, *parts: str) -> str:
@@ -469,6 +478,82 @@ def validate_plan_queries(datasets: list) -> None:
                     raise ValueError(f"{exc} (in {where})") from exc
 
 
+def _checked_track_name(value, kind: str) -> str:
+    if not isinstance(value, str) or not SAFE_TRACK_NAME_RE.fullmatch(value):
+        raise ValueError(
+            f"Invalid {kind} {value!r}: expected up to 120 letters, digits, spaces and ' _.,:;()/|+-', "
+            "starting with a letter or digit"
+        )
+    return value
+
+
+def _tracked(entry: dict, track_key: str, label_key: str) -> tuple[str | None, str | None]:
+    """The Argus track and row label a plan entry names, or (None, None) for an untracked one.
+
+    The label is required: it names the row's series across runs, so the plan states it rather than
+    SCT deriving one that changes with the entry, or does not when it should.
+    """
+    track, label = entry.get(track_key), entry.get(label_key)
+    if track is None:
+        if label is not None:
+            raise ValueError(f"'{label_key}' without '{track_key}': the label names a row of a track")
+        return None, None
+    if label is None:
+        raise ValueError(f"'{track_key}' without '{label_key}': a tracked entry needs a row label")
+    return _checked_track_name(track, track_key), _checked_track_name(label, label_key)
+
+
+def _query_track(query: dict) -> tuple[str | None, str | None]:
+    return _tracked(query, "track", "label")
+
+
+def _build_track(step: dict) -> tuple[str | None, str | None]:
+    return _tracked(step, "build_track", "build_label")
+
+
+def validate_plan_tracks(datasets: list) -> None:
+    """Check the plan's Argus tracks up front, as 'validate_plan_queries' does its queries.
+
+    A track is one Argus table and each of its rows one graphed series, so: a row label appears once
+    per track; a track holds index builds or searches, whose columns differ, not both; its searches
+    are all rate-limited or all unthrottled, whose latency and throughput do not share a scale; and a
+    rate-limited track's searches share one P99 limit, a rule of the table.
+    """
+    build_tracks, search_tracks, rows = set(), {}, set()
+    for dataset in datasets:
+        defaults = dataset.get("defaults", {})
+        for step_idx, step in enumerate(dataset.get("steps", [])):
+            where = f"dataset {dataset.get('name')!r}, step #{step_idx + 1}"
+            try:
+                track, label = _build_track(step)
+                tracked = [(track, label)] if track else []
+                if track:
+                    build_tracks.add(track)
+                for query in step.get("queries", []):
+                    track, label = _query_track(query)
+                    if not track:
+                        continue
+                    expected = _expected_p99_read_ms(query, defaults)
+                    rate_limited = _query_params(query, defaults)[1] > 0
+                    first_expected, first_rate_limited = search_tracks.setdefault(track, (expected, rate_limited))
+                    if rate_limited and expected != first_expected:
+                        raise ValueError(
+                            f"Track {track!r} checks P99 against {expected:g} ms here but {first_expected:g} ms "
+                            "elsewhere: one track has one limit"
+                        )
+                    if rate_limited != first_rate_limited:
+                        raise ValueError(f"Track {track!r} mixes rate-limited and unthrottled queries")
+                    tracked.append((track, label))
+                for track, label in tracked:
+                    if (track, label) in rows:
+                        raise ValueError(f"Track {track!r} already has a row {label!r}: give one a different label")
+                    rows.add((track, label))
+            except ValueError as exc:
+                raise ValueError(f"{exc} (in {where})") from exc
+    if both := sorted(build_tracks & search_tracks.keys()):
+        raise ValueError(f"Track(s) {both} hold both index builds and searches")
+
+
 # ---------------------------------------------------------------------------
 # Test class
 # ---------------------------------------------------------------------------
@@ -482,6 +567,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
     """
 
     WORKLOAD: SearchWorkload = None
+    _argus_reporter: SearchArgusReporter | None = None
 
     def _run_latte(self, stress_cmd, files_to_stage=None, **kwargs):
         """Run one latte command to completion and return its stress thread.
@@ -765,6 +851,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         validate_plan_queries(datasets)
         for dataset in datasets:
             _has_invalid_queries(dataset)
+        validate_plan_tracks(datasets)
         # Query latency comes from latte's HDR output, which is only written with 'use_hdrhistogram'.
         if not self.params.get("use_hdrhistogram") and any(
             step.get("queries") for dataset in datasets for step in dataset.get("steps") or []
@@ -845,7 +932,14 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             build_seconds = self._build_index(
                 total_record_count, max_index_wait, index_name=index_name, keyspace=keyspace
             )
-            self._record_index_build(dataset_name, step_idx + 1, index_name, total_record_count, build_seconds)
+            self._record_index_build(
+                dataset_name,
+                step_idx + 1,
+                index_name,
+                total_record_count,
+                build_seconds,
+                *_build_track(step),
+            )
 
             self._run_step_queries(
                 step,
@@ -879,6 +973,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             stress_options = _stress_options(query, defaults)
             search_duration = _query_duration(query, defaults)
             expected_p99_read_ms = _expected_p99_read_ms(query, defaults)
+            track, label = _query_track(query)
             queries_file = f"queries_{qset}.tsv"
             qrels_file = f"qrels_{qset}.tsv" if query.get("qrels") else None
             # Checked here to name the query set that asked for a missing file, rather than fail
@@ -917,6 +1012,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
                 query_example=_first_query_example(local_ds_dir, queries_file),
                 expected_p99_read_ms=expected_p99_read_ms,
                 latency=latency,
+                **({"track": track, "label": label} if track else {}),
             )
 
     def _download_dataset_files(self, bucket, prefix, local_dir, dataset):
@@ -966,9 +1062,32 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         }
         with open(os.path.join(self.logdir, RESULTS_FILE_NAME), "a", encoding="utf-8") as results:
             results.write(json.dumps(record) + "\n")
+        self._report_to_argus(record)
 
-    def _record_index_build(self, dataset_name, step_number, index_name, record_count, build_seconds: float | None):
-        """Record the build time and indexing throughput of one step's index.
+    def _report_to_argus(self, record: dict):
+        """Send one results record to Argus as well.
+
+        A failure is logged rather than raised: the record is already in the results file, and a
+        reporting problem should not fail a run that measured what it set out to.
+        """
+        try:
+            if self._argus_reporter is None:
+                self._argus_reporter = SearchArgusReporter(self.WORKLOAD, self.test_config.argus_client())
+            self._argus_reporter.report(record)
+        except Exception:  # noqa: BLE001
+            self.log.error("Failed to report the %s record to Argus", record["phase"], exc_info=True)
+
+    def _record_index_build(
+        self,
+        dataset_name,
+        step_number,
+        index_name,
+        record_count,
+        build_seconds: float | None,
+        track: str | None = None,
+        label: str | None = None,
+    ):
+        """Record the build time and indexing throughput of one step's index, and its track if any.
 
         A build whose time was not measured is recorded too, with nulls, so the gap stays visible.
         """
@@ -984,4 +1103,5 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             record_count=record_count,
             build_time_s=build_seconds,
             indexing_throughput=indexing_throughput(record_count, build_seconds),
+            **({"track": track, "label": label} if track else {}),
         )

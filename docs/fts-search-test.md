@@ -274,6 +274,58 @@ SCT_VECTOR_STORE_SOURCE_REF=my-branch
 SCT_SEARCH_TEST_CONFIG=data_dir/latte/fts_search/large_config.yaml
 ```
 
+### Results in Argus
+
+Every record of `search_results.jsonl` is also sent to Argus:
+
+- **`FTS index builds`** and **`FTS searches`** -- the run's log: every index build in
+  the first, every query configuration in the second, numbered in run order across both
+  (`#01 index build`, `#02 term_common`, ...), with the dataset, step and configuration in their
+  columns. All of them are text, so Argus shows them but graphs nothing: they are the run's
+  overview, and an exploratory plan entry costs no graph.
+- **`FTS <track>`** -- only the entries the plan puts in that track, one row per entry. These
+  are graphed: one graph per measurement column, one series per row across runs.
+
+`FTS` is the workload's `table_prefix`: it keeps the tables apart should several workloads report to
+one Argus test, such as sub-tests of one Jenkins job.
+
+What is tracked is decided in the plan. A query entry names a track with `track:`, and a step puts
+its index build in one with `build_track:`. Each also needs a row name, `label:` / `build_label:`,
+which names its series across runs:
+
+```yaml
+steps:
+  - shards: [0..99]
+    build_track: indexing                # -> table "FTS indexing"
+    build_label: 10M_20tok               # its row
+    queries:
+      - set: term_common
+        stress_options: {concurrency: 1}
+        rate: 50
+        track: term latency              # -> table "FTS term latency"
+        label: 10M_20tok term_common     # its row
+      - set: boolean_or                  # untracked: in the searches log only
+```
+
+Group entries whose values are on one scale, so a graph stays readable, and name rows by what they
+measure rather than by where they sit in the plan: a series continues across runs only while its
+track and label stay the same. Search tracks graph `P50`, `P90`, `P99`, `P99.9` and, unless
+rate-limited (whose throughput is just the rate asked for), `throughput`. Index-build tracks graph
+`build time` and `indexing throughput`. The query configuration, the document count and an example
+query are text columns.
+
+The plan is checked when it is read (`validate_plan_tracks()`): a label appears once per track, a
+track holds index builds or searches but not both, its searches are all rate-limited or all
+unthrottled, and a rate-limited track's searches share one `expected_p99_read_ms` (the table's
+`P99` limit).
+
+Only a rate-limited track checks P99. An unthrottled query runs at saturation, where P99 follows
+concurrency over throughput, so a throughput track has no rule yet. Argus can check throughput
+against the best earlier result of each row, which is worth adding once the rows have a history. A
+rate-limited track's P99 over its limit fails the run: Argus marks the cell as an error and SCT
+reports the test as failed, but the run carries on to the end and records everything else. Any
+other entry's limit is only recorded, as `p99_within_expectation` in the results file.
+
 ---
 
 ## Notes on the test config format
@@ -373,10 +425,10 @@ steps:
 
 SCT checks only that they are shell-safe and not `rate`, a plan key SCT reads itself. latte itself
 rejects an option it does not know, and one given twice, as one SCT also sets, such as `duration`,
-would be. They are reported as given, as `stress_options` in the search record. Without
-`concurrency` latte runs 128 queries in flight, so a plan sets it. The plans warm up 200 queries on
-the sets of about 30 queries a run repeats, and not on `natural`, whose queries are mostly new and
-meant to run cold.
+would be. They are reported as given: a `stress options` column in Argus and `stress_options` in the
+search record. Without `concurrency` latte runs 128 queries in flight, so a plan sets it. The plans
+warm up 200 queries on the sets of about 30 queries a run repeats, and not on `natural`, whose
+queries are mostly new and meant to run cold.
 
 ### Repeated query configs
 

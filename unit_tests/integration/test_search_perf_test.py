@@ -24,16 +24,18 @@ Two levels, because they need different things to run:
     images by default; override either with SCT_FTS_IT_SCYLLA_IMAGE / SCT_FTS_IT_VECTOR_STORE_IMAGE,
     e.g. to test a local vector-store build.
 
-The second one runs the flow's own methods, not a re-implementation of them. Only one seam is
-replaced: '_run_latte', which would otherwise need ClusterTester's loader provisioning. Everything
-behind it -- copying each shard into the loader container, the step loop, the '-P' mapping, the index
-naming, reading the build time out of vector-store's log, the results file, waiting for the drop --
+The second one runs the flow's own methods, not a re-implementation of them. Two seams are
+replaced: '_run_latte', which would otherwise need ClusterTester's loader provisioning, and the Argus
+client, which records the tables instead of posting them. Everything behind them -- copying each
+shard into the loader container, the step loop, the '-P' mapping, the index naming, reading the build
+time out of vector-store's log, the results file and the Argus rows built from it, waiting for the drop --
 is the code that ships.
 """
 
 import json
 import logging
 import os
+import types
 
 import pytest
 
@@ -177,6 +179,10 @@ def _flow_over(params, docker_scylla, vs_cluster, loader_set, logdir):
         return thread
 
     flow._run_latte = run_latte
+    flow.argus_submitted = []
+    flow.test_config = types.SimpleNamespace(
+        argus_client=lambda: types.SimpleNamespace(submit_results=flow.argus_submitted.append)
+    )
     return flow
 
 
@@ -212,7 +218,7 @@ def test_a_dataset_is_loaded_indexed_and_reported(request, docker_scylla, docker
         {
             "name": dataset_name,
             "max_index_wait_secs": 300,
-            "steps": [{"shards": [0]}, {"shards": [1]}],
+            "steps": [{"shards": [0]}, {"shards": [1], "build_track": "indexing", "build_label": "two shards"}],
         }
     )
 
@@ -230,6 +236,15 @@ def test_a_dataset_is_loaded_indexed_and_reported(request, docker_scylla, docker
     with flow.db_cluster.cql_connection_patient(docker_scylla) as session:
         loaded = list(session.execute(f"SELECT doc_id FROM {keyspace}.documents"))
     assert len(loaded) == len(DOCUMENTS) + 2, "both shards must be in the table"
+
+    assert [
+        (table.name, [(cell.row, cell.column) for cell in table.results if cell.column == "build time"])
+        for table in flow.argus_submitted
+    ] == [
+        ("FTS index builds", [("#01 index build", "build time")]),
+        ("FTS index builds", [("#02 index build", "build time")]),
+        ("FTS indexing", [("two shards", "build time")]),
+    ], "every build is a row of the build log, and a tracked one also of its track"
 
     vs_client = docker_vector_store.nodes[0].get_vector_store_api_client()
     last_index = f"{FTS_WORKLOAD.index_prefix}_{dataset_name}_1"
