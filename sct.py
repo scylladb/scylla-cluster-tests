@@ -158,7 +158,13 @@ lazy from sdcm.utils.resources_cleanup import (
     clean_resources_according_post_behavior,
     init_argus_client,
 )
-lazy from sdcm.utils.sct_cmd_helpers import CloudRegion, add_file_logger, get_all_regions, get_test_config
+lazy from sdcm.utils.sct_cmd_helpers import (
+    CloudRegion,
+    add_file_logger,
+    add_value_completion,
+    get_all_regions,
+    get_test_config,
+)
 lazy from sdcm.utils.scylla_sha import scylla_sha_from_version
 lazy from sdcm.utils.trigger_matrix.audit import audit_matrices
 lazy from sdcm.utils.trigger_matrix.config import load_matrix_config
@@ -4044,6 +4050,7 @@ cli.add_command(sct_ssh.gcp_allow_public)
 cli.add_command(sct_ssh.update_scylla_packages)
 cli.add_command(sct_scan_issues.scan_issue_skips)
 cli.add_command(sct_sizing.sizing_group)
+add_value_completion(cli)
 
 
 if __name__ == "__main__":
