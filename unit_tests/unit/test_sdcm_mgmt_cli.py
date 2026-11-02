@@ -242,3 +242,59 @@ def test_restore_task_bandwidth_is_parsed_from_both_header_variants(bandwidth_se
     task = _restore_task_with_progress(_RESTORE_PROGRESS_HEADER + bandwidth_section + _RESTORE_PROGRESS_KEYSPACES)
 
     assert (task.download_bw, task.load_and_stream_bw) == expected
+
+
+_RESTORE_PROGRESS_KEYSPACES_RCLONE_WITHOUT_METHOD = """
+╭───────────────┬───────────┬────────┬─────────┬────────────┬────────╮
+│ Keyspace      │  Progress │   Size │ Success │ Downloaded │ Failed │
+├───────────────┼───────────┼────────┼─────────┼────────────┼────────┤
+│ ks            │ 77% | 88% │   180B │    140B │       160B │     0B │
+│ system_traces │      100% │ 1.5KiB │  1.5KiB │     1.5KiB │     0B │
+╰───────────────┴───────────┴────────┴─────────┴────────────┴────────╯
+"""
+
+_RESTORE_PROGRESS_KEYSPACES_RCLONE = """
+╭───────────────┬───────────┬────────┬─────────┬────────────┬────────┬────────╮
+│ Keyspace      │  Progress │   Size │ Success │ Downloaded │ Failed │ Method │
+├───────────────┼───────────┼────────┼─────────┼────────────┼────────┼────────┤
+│ ks            │ 77% | 88% │   180B │    140B │       160B │     0B │ rclone │
+│ system_traces │      100% │ 1.5KiB │  1.5KiB │     1.5KiB │     0B │ rclone │
+╰───────────────┴───────────┴────────┴─────────┴────────────┴────────┴────────╯
+"""
+
+_RESTORE_PROGRESS_KEYSPACES_RCLONE_ASCII_BORDERS = """
++---------------+-----------+--------+---------+------------+--------+--------+
+| Keyspace      |  Progress |   Size | Success | Downloaded | Failed | Method |
++---------------+-----------+--------+---------+------------+--------+--------+
+| ks            | 77% | 88% |   180B |    140B |       160B |     0B | rclone |
+| system_traces |      100% | 1.5KiB |  1.5KiB |     1.5KiB |     0B | rclone |
++---------------+-----------+--------+---------+------------+--------+--------+
+"""
+
+_RESTORE_PROGRESS_KEYSPACES_NATIVE = """
+╭───────────────┬──────────┬────────┬─────────┬────────────┬────────┬────────╮
+│ Keyspace      │ Progress │   Size │ Success │ Downloaded │ Failed │ Method │
+├───────────────┼──────────┼────────┼─────────┼────────────┼────────┼────────┤
+│ ks            │      77% │   180B │    140B │         0B │     0B │ native │
+│ system_traces │     100% │ 1.5KiB │  1.5KiB │         0B │     0B │ native │
+╰───────────────┴──────────┴────────┴─────────┴────────────┴────────┴────────╯
+"""
+
+
+@pytest.mark.parametrize(
+    "keyspaces_table",
+    [
+        pytest.param(_RESTORE_PROGRESS_KEYSPACES_RCLONE_WITHOUT_METHOD, id="rclone-without-method-column"),
+        pytest.param(_RESTORE_PROGRESS_KEYSPACES_RCLONE, id="rclone-with-method-column"),
+        pytest.param(_RESTORE_PROGRESS_KEYSPACES_RCLONE_ASCII_BORDERS, id="rclone-with-method-column-ascii-borders"),
+        pytest.param(_RESTORE_PROGRESS_KEYSPACES_NATIVE, id="native-with-method-column"),
+    ],
+)
+def test_restore_task_keyspace_sizes_come_from_the_size_column(keyspaces_table):
+    """Newer Manager versions append the 'Method' column to the keyspace table, the rclone "X% | Y%" progress
+    cell contains the ASCII border character and the borders are ASCII under a non UTF-8 locale. Sizes must
+    be read from the 'Size' column (not 'Success') with a single sctool call."""
+    task = _restore_task_with_progress(_RESTORE_PROGRESS_HEADER + keyspaces_table)
+
+    assert task.restored_keyspace_sizes() == {"ks": 180, "system_traces": 1536}
+    assert task.manager_node.remoter.sudo.call_count == 1

@@ -555,6 +555,11 @@ class RestoreTask(ManagerTask):
     # Header of the bandwidth section of the sctool restore progress output. Older Manager versions print
     # "Bandwidth:", newer ones (reporting the restore method) print "Bandwidth (rclone restore only):".
     _BANDWIDTH_HEADER = re.compile(r"^Bandwidth(?: \([^)]*\))?:$")
+    # Header line of the keyspace table of the sctool restore progress output. Table borders are drawn
+    # with "│" under a UTF-8 locale and with "|" otherwise. Newer Manager versions append more columns.
+    _KEYSPACE_TABLE_HEADER = re.compile(
+        r"^(?P<border>[│|])\s*Keyspace\s*(?P=border)\s*Progress\s*(?P=border)\s*(?P<size>Size)\s*(?P=border)"
+    )
 
     def __init__(self, task_id, cluster_id, manager_node):
         ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
@@ -653,44 +658,43 @@ class RestoreTask(ManagerTask):
 
         It parses the 'Keyspace' progress table and extracts the 'Size' column.
         System keyspaces are included; caller may filter them out.
+        The table is read from the raw output by character positions: the 'Size' column span is
+        located in the header line and the same span is read from every row. Rows can't be split by
+        the border character, as with ASCII borders it is the same '|' as the one inside the
+        "X% | Y%" 'Progress' cell (which is also why the parsed table is not used), and relying on
+        column count would break whenever Manager appends a column (e.g. 'Method').
 
         Example output table:
 
-        ╭───────────────────────────────────┬───────────┬────────────┬────────────┬────────────┬────────╮
-        │ Keyspace                          │  Progress │       Size │    Success │ Downloaded │ Failed │
-        ├───────────────────────────────────┼───────────┼────────────┼────────────┼────────────┼────────┤
-        │ 128gb_twcs_quorum_1024_1_2025_2_5 │ 100% | 0% │ 404.545GiB │ 404.545GiB │         0B │     0B │
-        │ system_traces                     │      100% │         0B │         0B │         0B │     0B │
-        │ system_replicated_keys            │      100% │         0B │         0B │         0B │     0B │
-        │ system_distributed                │      100% │         0B │         0B │         0B │     0B │
-        ╰───────────────────────────────────┴───────────┴────────────┴────────────┴────────────┴────────╯
+        ╭───────────────────────────────────┬───────────┬────────────┬────────────┬────────────┬────────┬────────╮
+        │ Keyspace                          │  Progress │       Size │    Success │ Downloaded │ Failed │ Method │
+        ├───────────────────────────────────┼───────────┼────────────┼────────────┼────────────┼────────┼────────┤
+        │ 128gb_twcs_quorum_1024_1_2025_2_5 │ 100% | 0% │ 404.545GiB │ 404.545GiB │         0B │     0B │ rclone │
+        │ system_traces                     │      100% │         0B │         0B │         0B │     0B │ -      │
+        │ system_replicated_keys            │      100% │         0B │         0B │         0B │     0B │ -      │
+        │ system_distributed                │      100% │         0B │         0B │         0B │     0B │ -      │
+        ╰───────────────────────────────────┴───────────┴────────────┴────────────┴────────────┴────────┴────────╯
         """
         sizes: dict[str, int] = {}
-        res = self.progress_string()
-        try:
-            header_index = res.index(["Keyspace", "Progress", "Size", "Success", "Downloaded", "Failed"])
-            rows = res[header_index + 1 :]
-        except ValueError as ex:
-            LOGGER.warning("Failed to find 'Keyspace' progress table in the sctool restore progress output: %s", ex)
-            # Fallback: try raw stdout parsing when table parsing is disabled
-            raw = self.progress_string(parse_table_res=False).stdout
-            for line in raw.splitlines():
-                parts = [p.strip() for p in line.split("│")]
-                if len(parts) >= 5 and parts[1] and parts[3]:
-                    keyspace = parts[1]
-                    size_str = parts[3]
-                    try:
-                        sizes[keyspace] = parse_size_to_bytes(size_str)
-                    except Exception:  # noqa: BLE001
-                        continue
+        lines = self.progress_string(parse_table_res=False).stdout.splitlines()
+        for header_index, header in enumerate(lines):
+            if header_match := self._KEYSPACE_TABLE_HEADER.match(header):
+                break
+        else:
+            LOGGER.warning("Failed to find 'Keyspace' progress table in the sctool restore progress output")
             return sizes
 
-        for row in rows:
-            if len(row) < 6:
-                break  # end of table or separator
-            keyspace, *_middle, size_str, _success, _downloaded, _failed = row
+        border = header_match["border"]
+        size_end = header_match.end() - 1
+        size_start = header.rindex(border, 0, header_match.start("size"))
+        for line in lines[header_index + 1 :]:
+            if line[:1] in ("├", "+"):
+                continue  # header separator or bottom border
+            if not (line.startswith(border) and len(line) > size_end and line[size_start] == line[size_end] == border):
+                break  # end of table
+            keyspace = line[1 : line.index(border, 1)].strip()
             try:
-                sizes[keyspace] = parse_size_to_bytes(size_str)
+                sizes[keyspace] = parse_size_to_bytes(line[size_start + 1 : size_end])
             except Exception:  # noqa: BLE001
                 continue
         LOGGER.debug("Got restored keyspace sizes: %s", sizes)
