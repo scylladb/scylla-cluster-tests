@@ -5,7 +5,7 @@
 Cluster topology, region/AZ placement, instance provisioning, credentials and test-level
 plumbing. Options here apply to every backend and every test type.
 
-**74 options.**
+**80 options.**
 
 
 <a id="adaptive_timeout_multipliers"></a>
@@ -45,11 +45,107 @@ The number of nodes to add during the test.
 
 ## **agent** / SCT_AGENT
 
-Configuration for SCT agent - a lightweight service for remote command execution.                 When enabled, replaces SSH-based command execution with RESTful API calls for DB nodes.<br>Configuration options:<br>- enabled: bool - enable agent (required)<br>- port: int - agent HTTP API port (default: 16000)<br>- binary_url: str - URL to download agent binary<br>- max_concurrent_jobs: int - max concurrent jobs per agent (default: 10)<br>- log_level: str - logging level (default: info)<br>- tls: bool - enable TLS for agent communication (default: false)
+SCT agent section: a lightweight service installed on DB, loader and monitor nodes that<br>replaces SSH-based command execution with REST API calls.
 
-**default:** {'enabled': False, 'port': 16000, 'binary_url': '', 'max_concurrent_jobs': 10, 'log_level': 'info', 'tls': False}
+**default:** the defaults of its options
 
-**type:** dict | YAML/JSON string → dict
+**type:** section (6 options below)
+
+
+<a id="agent.enabled"></a>
+
+## **agent.enabled** / SCT_AGENT__ENABLED
+
+Install the SCT agent on the nodes and run commands through its REST API instead of SSH
+
+**default:** False
+
+**type:** bool
+
+```yaml
+agent:
+  enabled: False
+```
+
+
+<a id="agent.port"></a>
+
+## **agent.port** / SCT_AGENT__PORT
+
+Port of the agent's HTTP API
+
+**default:** 16000
+
+**type:** int
+
+```yaml
+agent:
+  port: 16000
+```
+
+
+<a id="agent.binary_url"></a>
+
+## **agent.binary_url** / SCT_AGENT__BINARY_URL
+
+URL the nodes download the agent binary from
+
+**default:** N/A
+
+**type:** str (appendable)
+
+```yaml
+agent:
+  binary_url: N/A
+```
+
+
+<a id="agent.max_concurrent_jobs"></a>
+
+## **agent.max_concurrent_jobs** / SCT_AGENT__MAX_CONCURRENT_JOBS
+
+Most jobs one agent runs at the same time
+
+**default:** 10
+
+**type:** int
+
+```yaml
+agent:
+  max_concurrent_jobs: 10
+```
+
+
+<a id="agent.log_level"></a>
+
+## **agent.log_level** / SCT_AGENT__LOG_LEVEL
+
+Log level of the agent service, e.g. `info` or `debug`
+
+**default:** info
+
+**type:** str (appendable)
+
+```yaml
+agent:
+  log_level: info
+```
+
+
+<a id="agent.tls"></a>
+
+## **agent.tls** / SCT_AGENT__TLS
+
+Serve the agent's API over TLS, with a certificate signed by the test CA
+
+**default:** False
+
+**type:** bool
+
+```yaml
+agent:
+  tls: False
+```
 
 
 <a id="availability_zone"></a>

@@ -441,7 +441,7 @@ def provision_resources(backend, test_name: str, config: str):
             click.echo("No need provision logging service")
 
         agent_config = params.get("agent")
-        if agent_config.get("enabled") and agent_config.get("binary_url"):
+        if agent_config.installed:
             click.echo("Generate SCT agent API key")
             test_config.generate_and_save_agent_api_key()
 

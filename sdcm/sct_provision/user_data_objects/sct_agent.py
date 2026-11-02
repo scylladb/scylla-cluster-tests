@@ -25,12 +25,7 @@ logger = logging.getLogger(__name__)
 class SctAgentUserDataObject(SctUserDataObject):
     @property
     def is_applicable(self) -> bool:
-        agent_config = self.params.get("agent")
-        return (
-            agent_config.get("enabled")
-            and self.node_type in ("scylla-db", "loader", "monitor")
-            and agent_config.get("binary_url")
-        )
+        return self.params.get("agent").installed and self.node_type in ("scylla-db", "loader", "monitor")
 
     @property
     def packages_to_install(self) -> set[str]:
@@ -53,9 +48,9 @@ class SctAgentUserDataObject(SctUserDataObject):
             raise ValueError("Agent API key not available. Ensure it is generated before provisioning.")
 
         return install_agent_script(
-            agent_binary_url=agent_config["binary_url"],
+            agent_binary_url=agent_config.binary_url,
             api_keys=[api_key],
-            port=agent_config["port"],
-            max_concurrent_jobs=agent_config["max_concurrent_jobs"],
-            log_level=agent_config.get("log_level"),
+            port=agent_config.port,
+            max_concurrent_jobs=agent_config.max_concurrent_jobs,
+            log_level=agent_config.log_level,
         )

@@ -21,6 +21,7 @@ import pytest
 
 from sdcm.provision.aws.configuration_script import AWSConfigurationScriptBuilder
 from sdcm.provision.common.utils import minify_shell_script
+from sdcm.sct_config.sections.agent import AgentConfig
 from sdcm.sct_provision.aws.user_data import AWSInstanceUserDataBuilder, ScyllaUserDataBuilder
 
 # EC2 rejects user data above this many bytes, counted before base64 (SCT-1147)
@@ -131,13 +132,13 @@ def test_aws_user_data_fits_the_ec2_limit_with_everything_enabled(build_user_dat
         logs_transport="vector",
         cluster_backend="aws",
         ip_ssh_connections="ipv6",
-        agent={
-            "enabled": True,
-            "binary_url": "https://downloads.scylladb.com/sct-agent/sct-agent-linux-amd64-" + "0" * 40,
-            "port": 16000,
-            "max_concurrent_jobs": 10,
-            "log_level": "info",
-        },
+        agent=AgentConfig(
+            enabled=True,
+            binary_url="https://downloads.scylladb.com/sct-agent/sct-agent-linux-amd64-" + "0" * 40,
+            port=16000,
+            max_concurrent_jobs=10,
+            log_level="info",
+        ),
     )
     test_config = Mock()
     test_config.agent_api_key.return_value = "k" * 64

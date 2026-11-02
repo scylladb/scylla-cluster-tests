@@ -406,8 +406,7 @@ class TestConfig(metaclass=Singleton):
     @classmethod
     def ensure_agent_api_key(cls):
         """Ensure SCT agent API key is available"""
-        agent_config = cls._tester_obj.params.get("agent") if cls._tester_obj else {}
-        if not (agent_config.get("enabled") and agent_config.get("binary_url")):
+        if not (cls._tester_obj and cls._tester_obj.params.get("agent").installed):
             return
 
         if cls.agent_api_key():
@@ -428,8 +427,7 @@ class TestConfig(metaclass=Singleton):
         if not host_port or not host_port[0]:
             host_port = None
 
-        agent_config = cls._tester_obj.params.get("agent")
-        install_agent = bool(agent_config.get("enabled", False) and agent_config.get("binary_url"))
+        install_agent = cls._tester_obj.params.get("agent").installed
 
         return ConfigurationScriptBuilder(
             syslog_host_port=host_port,
