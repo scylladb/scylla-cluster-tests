@@ -31,7 +31,7 @@ SCT has no `docs/standards/`, no `docs/INDEX.md`, and no `REVIEW.md`.
 ## What good looks like
 
 - An agent in a fresh SCT checkout, with no plugin installed, writes an
-  intent, a spec, and a plan in `docs/plans/<feature>/<idea>/`.
+  intent, a spec, and a plan in `docs/plans/<feature>/<change>/`.
 - The agent proposes them for a big or architectural change, and does not
   force them on a small one.
 - `docs/standards/`, `docs/INDEX.md`, and `REVIEW.md` describe the SCT

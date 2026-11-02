@@ -202,7 +202,7 @@ Every pull request must be reviewed before merging. Reviewers should check for:
   paths, no unmocked network calls in tests
 
 [`REVIEW.md`](../REVIEW.md) lists the three review passes: bugs and logic, security, and
-compliance. When the PR carries a spec in `docs/plans/<feature>/<idea>/`, the reviewer checks
+compliance. When the PR carries a spec in `docs/plans/<feature>/<change>/`, the reviewer checks
 the change against it. See [`development-flow.md`](development-flow.md).
 
 Reviewers should explain *why* something needs to change, not just request a change.

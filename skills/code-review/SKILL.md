@@ -193,7 +193,7 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
 
 ### Check 11: Spec Compliance
 
-**Trigger**: PR adds or changes files in an idea directory `docs/plans/<feature>/<idea>/`, or its description links one.
+**Trigger**: PR adds or changes files in a flow directory `docs/plans/<feature>/<change>/`, or its description links one.
 
 - Read the `intent.md`, `spec.md`, and `plan.md` that exist. Each one is optional. The flow is described in [docs/development-flow.md](../../docs/development-flow.md)
 - When `spec.md` exists:
@@ -202,7 +202,7 @@ Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verif
   - No `(open)` line remains in the spec's `Decisions` section
 - When only `intent.md` exists, the change solves the problem it states and stays out of its `Out of scope` section
 - When `plan.md` exists, every box is checked, or the PR description tells why a box stays open
-- The flow is optional: a PR without an idea directory is not a finding
+- The flow is optional: a PR without a flow directory is not a finding
 
 ## Reference Index
 
@@ -230,4 +230,4 @@ A complete code review:
 - [ ] Missing code identified — defaults, docstrings, tests, other backends
 - [ ] HTTP resilience verified — no bare curl or requests calls without retry
 - [ ] Trigger-matrix arch checked — DB instance/arch changes are reflected in `configurations/triggers/*.yaml`
-- [ ] Spec compliance checked — when the PR carries an idea directory, the change matches its `spec.md`
+- [ ] Spec compliance checked — when the PR carries a flow directory, the change matches its `spec.md`

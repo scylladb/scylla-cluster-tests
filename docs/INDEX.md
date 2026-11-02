@@ -12,7 +12,7 @@ other topics have their own files in this directory, as in
 ## Development flow
 
 ### Development flow (`development-flow.md`)
-The optional intent, spec, and plan documents in `docs/plans/<feature>/<idea>/`:
+The optional intent, spec, and plan documents in `docs/plans/<feature>/<change>/`:
 when to write them, the order of work, the root cause of a bug in the commit
 message, and how the review uses the spec.
 
