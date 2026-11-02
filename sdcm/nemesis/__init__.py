@@ -113,6 +113,7 @@ from sdcm.utils import cdc
 from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import (
+    MAX_TABLES_IN_CMD,
     clean_enospc_on_node,
     get_views_of_base_table,
     parse_nodetool_listsnapshots,
@@ -2571,7 +2572,8 @@ class NemesisRunner:
                 return _full_snapshot()
 
             selected_keyspace = random.choice(ks_with_few_tables)
-            tables = ",".join([k_c.split(".")[1] for k_c in ks_cf if k_c.startswith(f"{selected_keyspace}.")])
+            ks_tables = [k_c.split(".")[1] for k_c in ks_cf if k_c.startswith(f"{selected_keyspace}.")]
+            tables = ",".join(random.sample(ks_tables, k=min(len(ks_tables), MAX_TABLES_IN_CMD)))
 
             if not tables:
                 # it's unexpected situation. We have system keyspaces with few tables, so the keyspaces should be found.
