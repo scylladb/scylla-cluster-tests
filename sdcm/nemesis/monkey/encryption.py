@@ -26,8 +26,14 @@ from sdcm.utils.sstable.sstable_utils import SstableUtils
 
 
 @retrying(n=4, sleep_time=30, allowed_exceptions=(AssertionError, SstablesNotFound))
-def _check_encryption_fact(sstable_util_instance, expected_bool_value):
-    sstable_util_instance.check_that_sstables_are_encrypted(expected_bool_value=expected_bool_value)
+def _check_encryption_fact(nodes, ks_cf, expected_bool_value):
+    # A node may hold no replica of the table (e.g. tablets with RF < nodes), so check the first one with sstables
+    for node in nodes:
+        sstable_util = SstableUtils(db_node=node, ks_cf=ks_cf)
+        if sstables := sstable_util.get_sstables():
+            sstable_util.check_that_sstables_are_encrypted(sstables=sstables, expected_bool_value=expected_bool_value)
+            return
+    raise SstablesNotFound(f"sstables for '{ks_cf}' weren't found on any of the nodes")
 
 
 class EnableDisableTableEncryptionBaseMonkey(NemesisBaseClass, abc.ABC):
@@ -157,8 +163,9 @@ class EnableDisableTableEncryptionBaseMonkey(NemesisBaseClass, abc.ABC):
                     aws_kms.rotate_kms_key(kms_key_alias_name)
 
             # Check that sstables of that table are really encrypted
-            sstable_util = SstableUtils(db_node=self.runner.target_node, ks_cf=f"{keyspace_name}.{table_name}")
-            _check_encryption_fact(sstable_util, True)
+            ks_cf = f"{keyspace_name}.{table_name}"
+            check_nodes = sorted(self.runner.cluster.data_nodes, key=lambda node: node is not self.runner.target_node)
+            _check_encryption_fact(check_nodes, ks_cf, True)
 
             with self.runner.target_node.remote_scylla_yaml() as scylla_yaml:
                 user_info_encryption_enabled = (
@@ -193,7 +200,7 @@ class EnableDisableTableEncryptionBaseMonkey(NemesisBaseClass, abc.ABC):
                 )
 
                 # Check that sstables of that table are not encrypted anymore
-                _check_encryption_fact(sstable_util, False)
+                _check_encryption_fact(check_nodes, ks_cf, False)
         finally:
             # Delete table
             self.runner.actions_log.info(f"Delete encrypted table {keyspace_name}.{table_name}")
