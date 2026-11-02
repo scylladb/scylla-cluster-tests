@@ -67,7 +67,8 @@ question for the reviewer gets an `(open)` line. Name no rejected option.
    configuration key that the spec names must exist, or be new in this
    change. Read `docs/INDEX.md` and the standards that apply.
 3. When the arguments hold `--from-code`, read the diff with `git diff` and
-   `git diff --cached`. State the design that the code carries.
+   `git diff --cached`. Also read the untracked files that
+   `git status --short` lists. State the design that the code carries.
 4. Otherwise work out the constraints and the design with the user. Ask one
    question at a time. Each answer that shapes the design becomes a
    `Decisions` line. A question that the user leaves to the reviewer becomes
@@ -85,7 +86,8 @@ design.
 
 1. Read [spec-template.md](references/spec-template.md).
 2. Write the file in the shape of the template. Follow its section rule.
-   Set the `Status` line to `draft`.
+   Set the `Status` line of a new spec to `draft`. Keep the `Status` line of
+   an existing spec.
 3. A spec can near 200 lines, with design areas that can ship alone. Then
    propose a split into more flow directories.
 4. Write the prose in ASD-STE100 Simplified Technical English.

@@ -60,7 +60,8 @@ it.
 1. Start from what the conversation gives: the request, a Jira issue, a
    failing run, or a pull request.
 2. When the arguments hold `--from-code`, read the working tree diff with
-   `git diff` and `git diff --cached`. State the problem that the code solves.
+   `git diff` and `git diff --cached`. Also read the untracked files that
+   `git status --short` lists. State the problem that the code solves.
 3. Ask the user for what is missing, one question at a time. Ask about the
    evidence and the definition of done first, because the reviewer needs them
    most.
