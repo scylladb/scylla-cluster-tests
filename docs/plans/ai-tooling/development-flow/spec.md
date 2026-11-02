@@ -54,7 +54,7 @@ it.
 
 ```
 docs/plans/<feature>/<change>/
-├── intent.md   # Problem, Who it affects, Evidence, What good looks like, Out of scope
+├── intent.md   # Problem, Who it affects, Evidence, Definition of done, Out of scope
 ├── spec.md     # Overview, Constraints, Design, Contracts, Risks, Deferred work, Decisions
 └── plan.md     # Rules, then one task per unit of work
 docs/standards/<domain>/<topic>.md   # ## Topic, ### Standard, Sources: line

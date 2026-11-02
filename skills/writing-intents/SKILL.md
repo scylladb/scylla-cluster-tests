@@ -2,7 +2,7 @@
 name: writing-intents
 description: >-
   Writes the intent of an SCT change: the problem, who it affects, the
-  evidence, and what good looks like, in docs/plans/FEATURE/CHANGE/intent.md.
+  evidence, and the definition of done, in docs/plans/FEATURE/CHANGE/intent.md.
   Use when the user asks to state the problem, write an intent, start a
   change, or describe a change before its design. Also use to write an intent
   from code that already exists. The intent is the first, optional document
@@ -19,11 +19,11 @@ an intent only when the user asks for one, or agrees to one.
 
 ## Essential Principles
 
-### State the Problem, Not the Fix
+### State the Problem and the Requirements, Not the Design
 
-The intent says what goes wrong and why it matters. The spec holds the
-design. A fix in the intent anchors the reviewer on one solution before
-anybody checks the problem.
+The intent says what goes wrong, why it matters, and what the solution must
+achieve. The spec holds the design. A design in the intent anchors the
+reviewer on one solution before anybody checks the problem.
 
 ### Copy Evidence Verbatim
 
@@ -62,7 +62,8 @@ it.
 2. When the arguments hold `--from-code`, read the working tree diff with
    `git diff` and `git diff --cached`. State the problem that the code solves.
 3. Ask the user for what is missing, one question at a time. Ask about the
-   evidence and the outcome first, because the reviewer needs them most.
+   evidence and the definition of done first, because the reviewer needs them
+   most.
 
 **Exit criteria**: you can fill every section of the template.
 

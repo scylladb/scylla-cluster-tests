@@ -36,7 +36,7 @@ docs/plans/<feature>/<change>/
 
 | Document | Holds | Skill |
 |---|---|---|
-| `intent.md` | The problem, who it affects, the evidence, and the outcome | `writing-intents` |
+| `intent.md` | The problem, who it affects, the evidence, and the definition of done | `writing-intents` |
 | `spec.md` | The overview, the constraints, the design, the contracts, the risks, and the decisions | `writing-specs` |
 | `plan.md` | One task per unit of work, with its files and its tests | `writing-plans` |
 
@@ -50,7 +50,8 @@ their own rules.
 
 ## Order of work
 
-1. Write the intent. State the problem, not the fix.
+1. Write the intent. State the problem and the requirements of the solution,
+   not the design.
 2. Write the spec from the intent.
 3. Write the plan from the spec.
 4. Write the code. Follow the standards in [INDEX.md](INDEX.md).
