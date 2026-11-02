@@ -107,6 +107,9 @@ CREATE_TABLE_REGEX = re.compile(
     r"CREATE\s+TABLE\s+(?P<keyspace>[^\s.]+)\.(?P<table>[^\s(]+)\s*\([^)]+\)(?P<options>[^;]*)"
 )
 
+# thousands of keyspace or table names overflow the ssh exec command line
+MAX_NAMES_IN_CMD = 100
+
 AWS_SCAN_FAIL_FAST_CONFIG = Config(connect_timeout=10, read_timeout=30, retries={"total_max_attempts": 1})
 # The account keeps these regions enabled, but their endpoints do not answer. AWS cannot restore
 # me-south-1 after physical damage to its facilities in 2026.
