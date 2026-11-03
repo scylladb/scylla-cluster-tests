@@ -67,6 +67,7 @@ def test_a_store_df_cannot_read_fails_with_dfs_error():
 
 
 def test_a_host_with_two_roles_is_checked_against_their_sum_and_pruned_once(monkeypatch):
+    monkeypatch.setattr("sdcm.cluster._DOCKER_HOST_CHECKS", {})
     version_check = MagicMock()
     monkeypatch.setattr("sdcm.cluster.ensure_docker_version", version_check)
     loader = make_node("/var/lib/containerd", 2, 5)  # short for the loader's 3GB, enough after pruning
