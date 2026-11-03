@@ -330,8 +330,8 @@ class CommonConfigMixin(BaseModel):
         "since interruption exposure grows with runtime. Only applies when `instance_provision` was not set "
         "explicitly by a test case, env var or CLI - an explicit value always wins.",
     )
-    ssh_transport: Literal["libssh2", "fabric"] = SctField(
-        description="""Set type of ssh library to use. Could be 'libssh2' (default) or 'fabric'""",
+    ssh_transport: Literal["libssh2", "fabric", "asyncssh"] = SctField(
+        description="""Set type of ssh library to use. Could be 'libssh2' (default), 'fabric' or 'asyncssh'""",
         default="libssh2",
     )
     test_duration: int = SctField(
