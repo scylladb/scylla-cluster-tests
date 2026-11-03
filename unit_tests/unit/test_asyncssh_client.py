@@ -134,12 +134,13 @@ def test_dropped_client_closes_its_connection(ssh_port):
     # RemoteCmdRunnerBase drops a thread's client when the thread ends, without calling close()
     ssh_client = new_client(ssh_port, user="dropped")
     ssh_client.run("true")
+    route = ssh_client.route
     conn = asyncssh_client._pool[ssh_client.key][0].task.result()
 
     del ssh_client
     gc.collect()
 
-    submit(conn.wait_closed()).result(timeout=SERVER_WAIT)
+    submit(conn.wait_closed(), route).result(timeout=SERVER_WAIT)
 
 
 def test_clients_of_a_host_share_connections_up_to_max_channels(ssh_port):
@@ -160,13 +161,31 @@ def test_clients_of_a_host_share_connections_up_to_max_channels(ssh_port):
     for c in clients[1:]:
         c.close()
     for conn in conns:
-        submit(conn.wait_closed()).result(timeout=SERVER_WAIT)
+        submit(conn.wait_closed(), key).result(timeout=SERVER_WAIT)
 
 
-def test_fork_child_gets_a_new_loop(monkeypatch):
+def test_hosts_spread_over_several_loops(ssh_port, monkeypatch):
+    monkeypatch.setattr(asyncssh_client, "LOOP_COUNT", 4)
+    # a fresh list: the module server keeps running on the original loop
+    monkeypatch.setattr(asyncssh_client, "_loops", [])
+    clients = [new_client(ssh_port, user=f"host{i}") for i in range(8)]
+
+    for c in clients:
+        assert c.run("echo ok").stdout == "ok\n"
+
+    used = {get_loop(c.route) for c in clients}
+    assert len(asyncssh_client._loops) == 4
+    assert len(used) > 1
+    for c in clients:
+        c.close()
+    for loop in asyncssh_client._loops:
+        loop.call_soon_threadsafe(loop.stop)
+
+
+def test_fork_child_gets_new_loops(monkeypatch):
     parent_loop = get_loop()
-    # keep the module server's loop for the other tests
-    monkeypatch.setattr(asyncssh_client, "_loop", parent_loop)
+    # a copy: the reset clears the list in place, keep the module server's loop for the other tests
+    monkeypatch.setattr(asyncssh_client, "_loops", list(asyncssh_client._loops))
 
     asyncssh_client._reset_loop_after_fork()
     child_loop = get_loop()

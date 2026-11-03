@@ -56,8 +56,12 @@ MAX_CHANNELS = 10
 # asyncssh logs every channel open/close at INFO: noise in sct.log and ~5% of the loop thread CPU at 200 sessions
 asyncssh.set_log_level(logging.WARNING)
 
+# ponytail: one loop is what the GIL allows; more only spread hosts over threads. Upgrade path: a loop per core on a
+# free-threaded build, once cryptography ships cp3xxt wheels SCT can install
+LOOP_COUNT = 1
+
 _loop_lock = threading.Lock()
-_loop: asyncio.AbstractEventLoop | None = None
+_loops: list[asyncio.AbstractEventLoop] = []
 
 
 class _SharedConnection:
@@ -86,9 +90,9 @@ _background: set[asyncio.Task] = set()
 
 
 def _reset_loop_after_fork() -> None:
-    """The loop thread does not survive a fork, so the child starts its own loop, and connections, on first use."""
-    global _loop, _loop_lock  # noqa: PLW0603
-    _loop = None
+    """Loop threads do not survive a fork, so the child starts its own loops, and connections, on first use."""
+    global _loop_lock  # noqa: PLW0603
+    _loops.clear()
     _loop_lock = threading.Lock()
     _pool.clear()
     _clients.clear()
@@ -98,26 +102,33 @@ def _reset_loop_after_fork() -> None:
 os.register_at_fork(after_in_child=_reset_loop_after_fork)
 
 
-def get_loop() -> asyncio.AbstractEventLoop:
-    """Return the event loop of this process that runs all asyncssh connections, start it on first use."""
-    global _loop  # noqa: PLW0603
+def _start_loop(index: int) -> asyncio.AbstractEventLoop:
+    loop = asyncio.new_event_loop()
+    threading.Thread(target=loop.run_forever, name=f"asyncssh-loop-{index}", daemon=True).start()
+    return loop
+
+
+def get_loop(route: tuple | None = None) -> asyncio.AbstractEventLoop:
+    """Return the event loop that runs the connections of `route` (a host key), start the loops on first use.
+
+    A host always maps to the same loop: its shared connections, and the pool state of its key, belong to that loop.
+    """
     with _loop_lock:
-        if _loop is None or _loop.is_closed():
-            loop = asyncio.new_event_loop()
-            threading.Thread(target=loop.run_forever, name="asyncssh-loop", daemon=True).start()
-            _loop = loop
-        return _loop
+        if not _loops or any(loop.is_closed() for loop in _loops):
+            _loops[:] = [_start_loop(i) for i in range(LOOP_COUNT)]
+        return _loops[hash(route) % len(_loops)]
 
 
-def submit(coro) -> Future:
-    return asyncio.run_coroutine_threadsafe(coro, get_loop())
+def submit(coro, route: tuple | None = None) -> Future:
+    return asyncio.run_coroutine_threadsafe(coro, get_loop(route))
 
 
-def _call_on_loop(func, *args) -> None:
-    """Run `func` on the loop thread, from any thread, without waiting."""
-    loop = _loop
-    if loop is not None and not loop.is_closed():
-        loop.call_soon_threadsafe(func, *args)
+def _call_on_loop(route: tuple, func, *args) -> None:
+    """Run `func` on the loop of `route`, from any thread, without waiting. No loops (after a fork): nothing to do."""
+    if _loops:
+        loop = _loops[hash(route) % len(_loops)]
+        if not loop.is_closed():
+            loop.call_soon_threadsafe(func, *args)
 
 
 def _add_client(key: tuple) -> None:
@@ -195,6 +206,8 @@ class Client:
         self.timings = timings or Timings()
         self.proxy = proxy
         self.key = (host, port, user, pkey, password, proxy.key if proxy else None)
+        # the loop of the outermost proxy: a tunnel connection only works on the loop it was opened on
+        self.route = proxy.route if proxy else self.key
         self._registered = False
         self._finalizer: weakref.finalize | None = None
         self._abort_event = threading.Event()
@@ -268,7 +281,7 @@ class Client:
 
     def _connect_once(self) -> None:
         wait = (self.timings.ssh_session_timeout or 0) + (self.timings.auth_timeout or 0) + LOOP_WAIT_GRACE
-        future = submit(self._aregister())
+        future = submit(self._aregister(), self.route)
         try:
             future.result(timeout=wait)
         except FutureTimeoutError:
@@ -277,7 +290,7 @@ class Client:
             future.result()  # it finished between the timeout and the cancel
         self._registered = True
         # RemoteCmdRunnerBase drops a thread's client with the thread, without close()
-        self._finalizer = weakref.finalize(self, _call_on_loop, _remove_client, self.key)
+        self._finalizer = weakref.finalize(self, _call_on_loop, self.route, _remove_client, self.key)
 
     def connect(self, timeout: float | None = None) -> None:
         """Connect and authenticate, retrying until `timeout` passes, as `libssh2_client.Client.connect` does."""
@@ -312,7 +325,7 @@ class Client:
             return
         self._registered = False
         self._finalizer.detach()
-        _call_on_loop(_remove_client, self.key)
+        _call_on_loop(self.route, _remove_client, self.key)
 
     def close(self) -> None:
         self.disconnect()
@@ -412,7 +425,7 @@ class Client:
             raise FailedToRunCommand(result, exc) from exc
 
         lines = queue.Queue() if watchers else None
-        future = self._running = submit(self._arun(command, encoding, env, timeout, lines))
+        future = self._running = submit(self._arun(command, encoding, env, timeout, lines), self.route)
         wait = timeout + LOOP_WAIT_GRACE if timeout else None
         try:
             if watchers:
