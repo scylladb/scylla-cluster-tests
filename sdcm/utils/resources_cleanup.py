@@ -240,8 +240,9 @@ def clean_resources_baremetal(tags_dict: dict, config, dry_run: bool = False) ->
     SCT neither creates nor destroys physical hosts, so cleaning them up means undoing what the run left on them that
     breaks the next one: the SSH tunnel ports it bound on the roles with `ip_ssh_connections: public` (the role's own
     setting in the hosts config, else the run's), and the Scylla install of a DB host (its disk setup and the files it
-    left), unless Scylla came preinstalled. Every host also gets back the packages it had before the run. Runs in the cleanup phase, after the logs were collected, for the node types the
-    post behavior asks to clean (`NodeType`, all of them when not given).
+    left), unless Scylla came preinstalled. Every host also gets back the packages it had before the run. Runs in the
+    cleanup phase, after the logs were collected, for the node types the post behavior asks to clean (`NodeType`, all
+    of them when not given).
     """
     node_types = tags_dict.get("NodeType")
     node_types = list(BAREMETAL_HOSTS_SECTIONS) if node_types is None else node_types
