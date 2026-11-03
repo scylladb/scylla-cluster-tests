@@ -101,6 +101,7 @@ The node setup every SCT backend runs also runs on baremetal hosts, whatever the
   `LoginGraceTime`, `ClientAlive*`), restarts sshd, and writes `/etc/security/limits.d/20-nproc.conf`.
 - Installs `rsync`.
 - Refreshes the package cache: `apt-get clean` and `apt-get update`, or `yum clean all`.
+- Marks where the run starts in the host's journal, since one journal holds every run.
 
 **Loader and monitor hosts**
 
@@ -128,7 +129,7 @@ The node setup every SCT backend runs also runs on baremetal hosts, whatever the
 
 **DB hosts**
 
-- Sets up the Scylla disks, and marks where the run starts in the host's journal, since one journal holds every run.
+- Sets up the Scylla disks.
 
 ## What cleanup undoes
 
