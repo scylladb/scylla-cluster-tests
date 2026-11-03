@@ -9,15 +9,18 @@ plan is optional: the diff can carry the files and the tests.
 
 ## Phase 1: Read the Spec
 
-**Entry:** `docs/plans/<feature>/<change>/spec.md` exists.
+**Entry:** a flow directory holds a `spec.md`.
 
 **Actions:**
 
-1. Read `spec.md`, and `intent.md` when it exists.
-2. Read `docs/INDEX.md` and the standards that the change touches.
-3. Read the code that the spec names. Confirm that each file and class exists,
+1. Take `<feature>/<change>` from the arguments when they give it.
+2. Otherwise run `ls docs/plans/*/*/spec.md` and find the flow directory whose
+   spec has `**Status:** draft`. When none or several fit, ask the user.
+3. Read `spec.md`, and `intent.md` when it exists.
+4. Read `docs/INDEX.md` and the standards that the change touches.
+5. Read the code that the spec names. Confirm that each file and class exists,
    or is new in this change.
-4. When `plan.md` exists, update it. Do not write a second one.
+6. When `plan.md` exists, update it. Do not write a second one.
 
 **Exit:** You know the components and the contracts that the plan must build.
 

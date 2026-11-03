@@ -91,7 +91,8 @@ When the plan builds a spec in `docs/plans/<feature>/<change>/spec.md`, write
 `plan.md` in the same directory. A user request for a big plan, or a PR with
 the `plans` label, still gets a full plan. Do not ask the big-or-small question of Step 1.
 When the spec spans more than one pull request, group the tasks by pull request.
-Follow [create-a-spec-plan.md](workflows/create-a-spec-plan.md). The development
+Follow [create-a-spec-plan.md](workflows/create-a-spec-plan.md). Its Phase 1 finds the flow directory
+when more than one holds a `spec.md`. The development
 flow in `docs/development-flow.md` describes the intent, the spec, and the
 plan.
 
