@@ -1427,3 +1427,19 @@ def test_without_log_followers_only_their_scripts_are_removed():
     host._stop_stale_log_followers()
 
     assert [call.args[0] for call in host.remoter.sudo.call_args_list] == [REMOVE_LOG_FOLLOWER_SCRIPTS]
+
+
+@pytest.mark.parametrize(
+    "node_type,registered", [("loader", {"loader"}), ("monitor", {"monitor"}), ("scylla-db", None)]
+)
+def test_loader_and_monitor_hosts_are_registered_for_their_docker_preflight(monkeypatch, node_type, registered):
+    """Registered at construction, before any setup, so a loader+monitor host is checked once for both roles."""
+    monkeypatch.setattr(sdcm_cluster, "_DOCKER_HOST_CHECKS", {})
+    monkeypatch.setattr(sdcm_cluster.BaseCluster, "__init__", lambda self, **kwargs: None)
+
+    PhysicalMachineCluster(
+        credentials=[MagicMock()], n_nodes=1, public_ips=["1.0.0.1"], private_ips=["10.0.0.1"], node_type=node_type
+    )
+
+    host = sdcm_cluster._DOCKER_HOST_CHECKS.get("10.0.0.1")
+    assert (host.roles if host else None) == registered
