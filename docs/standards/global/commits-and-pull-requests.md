@@ -14,8 +14,9 @@ Write each commit subject as `type(scope): subject`. commitlint checks it.
 
 ### One Logical Change per Commit
 
-Each commit is one coherent step that a reviewer can read alone. Squash fixup
-commits before the review.
+Each commit is one coherent step that a reviewer can read alone. During a
+review, push each fix as a new commit, so that the reviewer sees the fix.
+Fold each fixup commit into the commit that it amends before the merge.
 
 ### Root Cause of a Bug
 
