@@ -29,7 +29,6 @@ class LongevitySlaTest(LongevityTest, loader_utils.LoaderUtilsMixin):
         self.roles = []
 
     def test_custom_time(self):
-        is_enterprise = self.db_cluster.nodes[0].is_enterprise
         with self.db_cluster.cql_connection_patient(
             node=self.db_cluster.nodes[0], user=loader_utils.DEFAULT_USER, password=loader_utils.DEFAULT_USER_PASSWORD
         ) as session:
@@ -37,11 +36,7 @@ class LongevitySlaTest(LongevityTest, loader_utils.LoaderUtilsMixin):
             # it unique and prevent failure when try to create role/SL with same name
 
             for index, shares in enumerate(self.service_level_shares):
-                self.roles.append(
-                    create_sla_auth(
-                        session=session, shares=shares, index=str(index), attach_service_level=is_enterprise
-                    )
-                )
+                self.roles.append(create_sla_auth(session=session, shares=shares, index=str(index)))
 
             if self.params.get("run_fullscan"):
                 self.fullscan_role = create_sla_auth(
@@ -51,7 +46,7 @@ class LongevitySlaTest(LongevityTest, loader_utils.LoaderUtilsMixin):
         # Wait for all SLs are propagated to all nodes
         for role in self.roles + [self.fullscan_role]:
             # self.fullscan_role may be None if "run_fullscan" is not defined
-            if role and is_enterprise:
+            if role:
                 with adaptive_timeout(
                     Operations.SERVICE_LEVEL_PROPAGATION,
                     node=self.db_cluster.data_nodes[0],

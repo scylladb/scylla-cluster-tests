@@ -464,9 +464,7 @@ def is_new_sstable_dump_supported(node) -> bool:
     :param node: A DB node object to provide Scylla version.
     :return: True if the new "scylla sstable" dump is supported, else False.
     """
-    if node.is_enterprise:
-        return ComparableScyllaVersion(node.scylla_version) >= "2023.1.3"
-    return ComparableScyllaVersion(node.scylla_version) >= "5.4.0~rc0"
+    return ComparableScyllaVersion(node.scylla_version) >= "2023.1.3"
 
 
 def _generate_sstable_dump_command(node, command: str, keyspace: str, table: str) -> str:

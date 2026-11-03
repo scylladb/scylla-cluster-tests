@@ -238,7 +238,7 @@ class NemesisBaseClass(NemesisFlags, ABC):
 
         Use ONLY for conditions that do not change during the test run:
           - Test config, backend, or product edition
-            (e.g. cluster.params.get(...), _is_it_on_kubernetes(), node.is_enterprise)
+            (e.g. cluster.params.get(...), _is_it_on_kubernetes())
           - Scylla version, feature flags, or cluster-uniform node attributes
             (e.g. ComparableScyllaVersion checks, is_tablets_feature_enabled(), node.distro)
 
@@ -839,8 +839,6 @@ class NemesisRunner:
         """
         if not self.cluster.params.get("prepare_saslauthd"):
             raise UnsupportedNemesis("SaslauthdAuthenticator can't work without saslauthd environment")
-        if not self.cluster.nodes[0].is_enterprise:
-            raise UnsupportedNemesis("SaslauthdAuthenticator is only supported by Scylla Enterprise")
 
         with self.target_node.remote_scylla_yaml() as scylla_yml:
             orig_auth = scylla_yml.authenticator
@@ -1045,8 +1043,6 @@ class NemesisRunner:
     def disrupt_ldap_connection_toggle(self):
         if not self.cluster.params.get("use_ldap_authorization"):
             raise UnsupportedNemesis("Cluster is not configured to run with LDAP authorization, hence skipping")
-        if not self.target_node.is_enterprise:
-            raise UnsupportedNemesis("Cluster is not enterprise. LDAP is supported only for enterprise. Skipping")
         if not self.cluster.params.get("ldap_server_type") == LdapServerType.OPENLDAP:
             raise UnsupportedNemesis("This nemesis is supported only for open-Ldap. Skipping")
 
@@ -1060,8 +1056,6 @@ class NemesisRunner:
     def disrupt_disable_enable_ldap_authorization(self):
         if not self.cluster.params.get("use_ldap_authorization"):
             raise UnsupportedNemesis("Cluster is not configured to run with LDAP authorization, hence skipping")
-        if not self.target_node.is_enterprise:
-            raise UnsupportedNemesis("Cluster is not enterprise. LDAP is supported only for enterprise. Skipping")
 
         ldap_config = {
             "role_manager": "",
@@ -2460,10 +2454,7 @@ class NemesisRunner:
             has stopped creating snapshots for virtual tables.
             hence we need to filter them out when compare tables to snapshot content.
             """
-            if self.target_node.is_enterprise:
-                return ComparableScyllaVersion(self.target_node.scylla_version) >= "2024.3.0-dev"
-            else:
-                return ComparableScyllaVersion(self.target_node.scylla_version) >= "6.3.0-dev"
+            return ComparableScyllaVersion(self.target_node.scylla_version) >= "2024.3.0-dev"
 
         filter_func = self.cluster.is_table_has_no_sstables if is_virtual_tables_get_snapshot() else None
         ks_cf = self.cluster.get_any_ks_cf_list(
@@ -2624,13 +2615,11 @@ class NemesisRunner:
         self.clear_snapshots()
 
     # NOTE: '2023.1.rc0' is set in advance, not guaranteed to match when appears
-    @scylla_versions(("4.6.rc0", None), ("2023.1.rc0", None))
+    @scylla_versions(("2023.1.rc0", None))
     def disrupt_show_toppartitions(self):
-        # NOTE: new API is supported only starting with Scylla 4.6
-        #       In Scylla 4.5 it exists but disabled.
         return self._disrupt_show_toppartitions(allow_new_api=True)
 
-    @scylla_versions(("4.3.rc1", "4.5"), ("2020.1.rc0", "2022.1"))
+    @scylla_versions(("2020.1.rc0", "2022.1"))
     def disrupt_show_toppartitions(self):
         return self._disrupt_show_toppartitions(allow_new_api=False)
 
@@ -3345,9 +3334,6 @@ class NemesisRunner:
         reduce categories by excluding DML and QUERY,
         verify DDL are logged in audit log correctly. Leaves audit log enabled this way.
         """
-        if not self.target_node.is_enterprise:
-            raise UnsupportedNemesis("Auditing feature is only supported by Scylla Enterprise")
-
         if store == "syslog" and self._is_it_on_kubernetes():
             # generally syslog is not supported on K8S because of different log line format
             raise UnsupportedNemesis("syslog store is not supported on Kubernetes scylladb/scylla-operator#1299")

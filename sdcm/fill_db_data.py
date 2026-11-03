@@ -56,12 +56,9 @@ class FillDatabaseData(ClusterTester):
 
     """
 
-    NON_FROZEN_SUPPORT_OS_MIN_VERSION = "4.1"  # open source version with non-frozen user_types support
-    NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION = "2020.1"  # enterprise version with non-frozen user_types support
-    NULL_VALUES_SUPPORT_OS_MIN_VERSION = "4.4.rc0"
-    NULL_VALUES_SUPPORT_ENTERPRISE_MIN_VERSION = "2021.1.3"
-    NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION = "4.4.rc0"
-    NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_ENTERPRISE_MIN_VERSION = "2021.1.dev"
+    NON_FROZEN_SUPPORT_MIN_VERSION = "2020.1"
+    NULL_VALUES_SUPPORT_MIN_VERSION = "2021.1.3"
+    NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_MIN_VERSION = "2021.1.dev"
 
     base_ks = "keyspace_fill_db_data"
     # List of dictionaries for all items tables and their data
@@ -3570,34 +3567,18 @@ class FillDatabaseData(ClusterTester):
     def parsed_scylla_version(self):
         return ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version)
 
-    @property
-    def is_enterprise(self) -> bool:
-        return self.db_cluster.nodes[0].is_enterprise
-
     def version_null_values_support(self):
-        if self.is_enterprise:
-            version_with_support = self.NULL_VALUES_SUPPORT_ENTERPRISE_MIN_VERSION
-        else:
-            version_with_support = self.NULL_VALUES_SUPPORT_OS_MIN_VERSION
-        return self.parsed_scylla_version >= version_with_support
+        return self.parsed_scylla_version >= self.NULL_VALUES_SUPPORT_MIN_VERSION
 
     def version_new_sorting_order_with_secondary_indexes(self):
-        if self.is_enterprise:
-            version_with_support = self.NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_ENTERPRISE_MIN_VERSION
-        else:
-            version_with_support = self.NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION
-        return self.parsed_scylla_version >= version_with_support
+        return self.parsed_scylla_version >= self.NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_MIN_VERSION
 
     def version_non_frozen_udt_support(self):
         """
         Check if current version supports non-frozen user type
         Issue: https://github.com/scylladb/scylla/pull/4934
         """
-        if self.is_enterprise:
-            version_with_support = self.NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION
-        else:
-            version_with_support = self.NON_FROZEN_SUPPORT_OS_MIN_VERSION
-        return self.parsed_scylla_version >= version_with_support
+        return self.parsed_scylla_version >= self.NON_FROZEN_SUPPORT_MIN_VERSION
 
     @property
     def enable_cdc_for_tables(self) -> bool:

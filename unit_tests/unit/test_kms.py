@@ -70,7 +70,6 @@ def _make_kms_tester_self(**param_overrides):
     params = DotDict(
         {
             "cluster_backend": "aws",
-            "is_enterprise": True,
             "artifact_scylla_version": "2026.2.0",
             "region_names": ["us-east-1"],
             "enterprise_disable_kms": False,

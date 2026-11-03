@@ -310,10 +310,7 @@ def test_is_table_has_no_sstables(docker_scylla, params, events):
             has stopped creating snapshots for virtual tables.
             hence we need to filter them out when compare tables to snapshot content.
             """
-            if docker_scylla.is_enterprise:
-                return ComparableScyllaVersion(docker_scylla.scylla_version) >= "2024.3.0-dev"
-            else:
-                return ComparableScyllaVersion(docker_scylla.scylla_version) >= "6.3.0-dev"
+            return ComparableScyllaVersion(docker_scylla.scylla_version) >= "2024.3.0-dev"
 
         if is_virtual_tables_get_snapshot():
             ks_cf = cluster.get_any_ks_cf_list(

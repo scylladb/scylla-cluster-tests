@@ -514,16 +514,6 @@ def get_branch_version_for_multiple_repositories(urls):
     return [thread.result for thread in threads]
 
 
-def is_enterprise(scylla_version):
-    """
-    :param scylla_version: scylla version string
-    :return: True if this version string passed is a scylla enterprise version
-    """
-    if scylla_version is None:
-        return False
-    return bool(re.search(r"^20[0-9]{2}.*", scylla_version))
-
-
 def assume_version(params: dict[str], scylla_version: Optional[str] = None) -> str:
     # Try to get the major version from the branch name, it will only be used when scylla_version isn't assigned.
     # It can be switched to RELEASE_BRANCH from an upstream job
@@ -900,24 +890,24 @@ class scylla_versions:
         - Depends on the 'params', 'cluster.params' or 'runner.cluster.params' attributes presence
           which store SCT configuration.
     Example:
-        # Having "scylla_version" be set to "4.4.4" in the sct config
+        # Having "scylla_version" be set to "2025.4.4" in the sct config
 
         In [3]: class Foo():
            ...:
-           ...:     @scylla_versions((None, "4.3"))
+           ...:     @scylla_versions((None, "2025.3"))
            ...:     def foo(self):
-           ...:         return "any 4.3.x and lower"
+           ...:         return "any 2025.3.x and lower"
            ...:
-           ...:     @scylla_versions(("4.4.rc1", "4.4.rc1"), ("4.4.rc4", "4.5"))
+           ...:     @scylla_versions(("2025.4.rc1", "2025.4.rc1"), ("2025.4.rc4", "2026.1"))
            ...:     def foo(self):
-           ...:         return "all 4.4 and 4.5 except 4.4.rc2 and 4.4.rc3"
+           ...:         return "all 2025.4 and 2026.1 except 2025.4.rc2 and 2025.4.rc3"
            ...:
-           ...:     @scylla_versions(("4.6.rc1", None))
+           ...:     @scylla_versions(("2026.2.rc1", None))
            ...:     def foo(self):
-           ...:         return "4.6.rc1 and higher"
+           ...:         return "2026.2.rc1 and higher"
 
         In [4]: Foo().foo()
-        Out[4]: 'all 4.4 and 4.5 except 4.4.rc2 and 4.4.rc3'
+        Out[4]: 'all 2025.4 and 2026.1 except 2025.4.rc2 and 2025.4.rc3'
     """
 
     VERSIONS = {}
@@ -929,9 +919,8 @@ class scylla_versions:
         if (func.__name__, func.__code__.co_filename) not in self.VERSIONS:
             self.VERSIONS[(func.__name__, func.__code__.co_filename)] = {}
         for min_v, max_v in self.min_max_version_pairs:
-            scylla_type = "enterprise" if any((is_enterprise(v) for v in (min_v, max_v) if v)) else "oss"
-            min_v = min_v or ("3.0.0" if scylla_type == "oss" else "2019.1.rc0")  # noqa: PLW2901
-            max_v = max_v or ("99.99.99" if scylla_type == "oss" else "2099.99.99")  # noqa: PLW2901
+            min_v = min_v or "2019.1.rc0"  # noqa: PLW2901
+            max_v = max_v or "2099.99.99"  # noqa: PLW2901
             if max_v.count(".") == 1:
                 # NOTE: version parse function considers 4.4 as lower than 4.4.1,
                 #       but we expect it to be any of the 4.4.x versions.
@@ -1120,7 +1109,7 @@ def get_branched_repo(
         is_source_available = ComparableScyllaVersion(branch_id) >= "2025.1.0"
     except ValueError:
         is_source_available = True
-    if branch == "enterprise" or (is_enterprise(branch_id) and not is_source_available):
+    if branch == "enterprise" or not is_source_available:
         product = "scylla-enterprise"
     else:
         product = "scylla"

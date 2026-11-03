@@ -26,7 +26,6 @@ from sdcm.utils.version_utils import (
     get_scylla_docker_repo_from_version,
     get_scylla_urls_from_repository,
     get_specific_tag_of_docker_image,
-    is_enterprise,
     latest_unified_package,
     parse_scylla_version_tag,
     scylla_versions,
@@ -76,14 +75,6 @@ class TestVersionUtils:
             get_branch_version(BROKEN_URL)
         with pytest.raises(ValueError, match=msg_error):
             get_branch_version(BROKEN_URL)
-
-    def test_05_is_enterprise(self):
-        assert is_enterprise(None) is False
-        assert is_enterprise("2019.1.1") is True
-        assert is_enterprise("2018") is True
-        assert is_enterprise("3.1") is False
-        assert is_enterprise("2.2") is False
-        assert is_enterprise("666.development") is False
 
     def test_06_get_scylla_urls_from_repository_rpm_one_arch(self):
         with unittest.mock.patch.object(sdcm.utils.version_utils, "get_url_content", return_value="", clear=True):
@@ -241,18 +232,6 @@ class ClassWithVersiondMethods:
             self.params = params
             self.nodes = nodes
 
-    @scylla_versions((None, "4.3"))
-    def oss_method(self):
-        return "any 4.3.x and lower"
-
-    @scylla_versions(("4.4.rc1", "4.4.rc1"), ("4.4.rc4", "4.5"))
-    def oss_method(self):
-        return "all 4.4 and 4.5 except 4.4.rc2 and 4.4.rc3"
-
-    @scylla_versions(("4.6.rc1", None))
-    def oss_method(self):
-        return "4.6.rc1 and higher"
-
     @scylla_versions((None, "2019.1"))
     def es_method(self):
         return "any 2019.1.x and lower"
@@ -265,73 +244,15 @@ class ClassWithVersiondMethods:
     def es_method(self):
         return "2022.1.rc1 and higher"
 
-    @scylla_versions((None, "4.3"), (None, "2019.1"))
-    def mixed_method(self):
-        return "any 4.3.x and lower, any 2019.1.x and lower"
-
-    @scylla_versions(("4.4.rc1", "4.4.rc1"), ("4.4.rc4", "4.5"), ("2020.1.rc1", "2020.1.rc1"), ("2020.1.rc4", "2021.1"))
-    def mixed_method(self):
-        return "all 4.4, 4.5, 2020.1 and 2021.1 except 4.4.rc2, 4.4.rc3, 2020.1.rc2 and 2020.1.rc3"
-
-    @scylla_versions(("4.6.rc1", None), ("2022.1.rc1", None))
-    def mixed_method(self):
-        return "4.6.rc1 and higher, 2022.1.rc1 and higher"
-
-    @scylla_versions(("4.6.rc1", None))
-    def new_oss_method(self):
-        return "4.6.rc1 and higher"
-
     @scylla_versions(("2022.1.rc1", None))
     def new_es_method(self):
-        return "4.6.rc1 and higher"
-
-    @scylla_versions(("4.6.rc1", None), ("2022.1.rc1", None))
-    def new_mixed_method(self):
         return "4.6.rc1 and higher"
 
 
 @pytest.mark.parametrize(
     "scylla_version,method",
     [
-        (scylla_version, method)
-        for scylla_version in (
-            "",
-            "4.2.rc1",
-            "4.2",
-            "4.2.0",
-            "4.2.1",
-            "4.3.rc1",
-            "4.3",
-            "4.3.0",
-            "4.3.1",
-            "4.4.rc1",
-            "4.4.rc4",
-            "4.4",
-            "4.4.0",
-            "4.4.4",
-            "4.5.rc1",
-            "4.5",
-            "4.5.0",
-            "4.5.1",
-            "4.6.rc1",
-            "4.6",
-            "4.6.0",
-            "4.6.1",
-            "4.7.rc1",
-            "4.7",
-            "4.7.0",
-            "4.7.1",
-            "5.0.rc1",
-            "5.0",
-            "5.0.0",
-            "5.0.1",
-            "4.7:latest",
-            "master:latest",
-        )
-        for method in ("oss_method", "mixed_method")
-    ]
-    + [
-        (scylla_version, method)
+        (scylla_version, "es_method")
         for scylla_version in (
             "2019.1",
             "2019.1.0",
@@ -347,24 +268,10 @@ class ClassWithVersiondMethods:
             "2022.1.1",
             "2023:latest",
         )
-        for method in ("es_method", "mixed_method")
     ]
     + [
-        (scylla_version, method)
-        for scylla_version in (
-            "4.6.rc1",
-            "4.6",
-            "4.6.0",
-            "4.6.1",
-            "4.7:latest",
-            "master:latest",
-        )
-        for method in ("new_oss_method", "new_mixed_method")
-    ]
-    + [
-        (scylla_version, method)
+        (scylla_version, "new_es_method")
         for scylla_version in ("2022.1.rc1", "2022.1", "2022.1.0", "2022.1.1", "2023:latest")
-        for method in ("new_es_method", "new_mixed_method")
     ],
 )
 def test_scylla_versions_decorator_positive(scylla_version, method):
@@ -376,22 +283,10 @@ def test_scylla_versions_decorator_positive(scylla_version, method):
 @pytest.mark.parametrize(
     "scylla_version,method",
     (
-        ("4.4.rc2", "oss_method"),
-        ("4.4.rc2", "mixed_method"),
-        ("4.4.rc3", "oss_method"),
-        ("4.4.rc3", "mixed_method"),
         ("2020.1.rc2", "es_method"),
-        ("2020.1.rc2", "mixed_method"),
         ("2020.1.rc3", "es_method"),
-        ("2020.1.rc3", "mixed_method"),
         ("4.4", "es_method"),
-        ("2020.1", "oss_method"),
-        ("4.5", "new_oss_method"),
-        ("4.5", "new_mixed_method"),
-        ("4.6.rc1", "new_es_method"),
         ("2021.1", "new_es_method"),
-        ("2021.1", "new_mixed_method"),
-        ("2022.1.rc1", "new_oss_method"),
     ),
 )
 def test_scylla_versions_decorator_negative(scylla_version, method):
@@ -421,10 +316,10 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_nodes():
                 cls_instance.cluster.nodes = []
             except AttributeError:
                 cls_instance.nodes = []
-            cls_instance.oss_method()
+            cls_instance.es_method()
         except MethodVersionNotFound as exc:
             assert (
-                f"Method 'oss_method' with version 'n/a' is not supported in '{cls_instance.__class__.__name__}'!"
+                f"Method 'es_method' with version 'n/a' is not supported in '{cls_instance.__class__.__name__}'!"
                 in str(exc)
             )
         else:
@@ -442,10 +337,10 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_attr():
                 delattr(cls_instance.cluster.nodes[0], "scylla_version")
             except AttributeError:
                 delattr(cls_instance.nodes[0], "scylla_version")
-            cls_instance.oss_method()
+            cls_instance.es_method()
         except MethodVersionNotFound as exc:
             assert (
-                f"Method 'oss_method' with version 'n/a' is not supported in '{cls_instance.__class__.__name__}'!"
+                f"Method 'es_method' with version 'n/a' is not supported in '{cls_instance.__class__.__name__}'!"
                 in str(exc)
             )
         else:

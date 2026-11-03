@@ -33,8 +33,6 @@ class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
         InfoEvent(message=f"Starting C-S stress load: {background_write_cmd}").publish()
         self.assemble_and_run_all_stress_cmd(stress_queue, background_write_cmd, keyspace_num=1)
 
-        if not node.is_enterprise:
-            raise ValueError("Cluster is not enterprise. LDAP is supported only for enterprise. aborting.")
         if self.params.get("use_ldap_authentication"):
             raise ValueError("Skipping this test with use_ldap_authentication because of scylla-enterprise#2641")
         if not self.params.get("use_ldap_authorization"):

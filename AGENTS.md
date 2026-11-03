@@ -163,7 +163,7 @@ Nemesis are chaos operations that test database resilience. For a comprehensive 
 **Static skip checks (`precheck()`):**
 
 `NemesisBaseClass.precheck(node) -> str | None` is evaluated **once** before the nemesis execution loop starts. Return `None` to keep the nemesis in the rotation; return a string (the skip reason) to permanently exclude it. The `node` argument is a representative live node for static version, feature-flag, and cluster-uniform attribute checks. Use this for static conditions that do not change during the test:
-- Test config / backend / product edition (`cluster.params.get(...)`, `_is_it_on_kubernetes()`, `node.is_enterprise`)
+- Test config / backend / product edition (`cluster.params.get(...)`, `_is_it_on_kubernetes()`)
 - Scylla version / feature flags / cluster-uniform node attributes (`ComparableScyllaVersion`, `is_tablets_feature_enabled()`, `node.distro`)
 
 **Do not** use `precheck(node)` for dynamic state (data presence, live node counts, target-node state) — those belong in `disrupt()`.

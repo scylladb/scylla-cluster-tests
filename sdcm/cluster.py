@@ -234,7 +234,6 @@ from sdcm.utils.version_utils import (
     assume_version,
     get_gemini_version,
     get_systemd_version,
-    is_enterprise,
 )
 from sdcm.wait import wait_for_log_lines
 
@@ -1376,10 +1375,6 @@ class BaseNode(AutoSshContainerMixin):
         # assumes the image ships tc out of the box (true for SMI-based AMIs/GCE
         # images); the caller nemesis skips when this returns False
         return self.remoter.run("/sbin/tc -h", ignore_status=True).ok
-
-    @property
-    def is_enterprise(self) -> bool:
-        return is_enterprise(self.scylla_version)
 
     @optional_cached_property
     def is_product_enterprise(self) -> bool | None:
@@ -3332,7 +3327,6 @@ class BaseNode(AutoSshContainerMixin):
     def forget_scylla_version(self) -> None:
         self.__dict__.pop("scylla_version_detailed", None)
         self.__dict__.pop("scylla_version", None)
-        self.__dict__.pop("is_enterprise", None)
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
@@ -6009,11 +6003,7 @@ class BaseScyllaCluster:
     def parallel_startup(self):
         parallel_startup = False
         if self.parallel_node_operations:
-            node = self.nodes[0]
-            if node.is_enterprise:
-                parallel_startup = ComparableScyllaVersion(node.scylla_version) >= "2024.2.0~dev"
-            else:
-                parallel_startup = ComparableScyllaVersion(node.scylla_version) >= "6.0.0"
+            parallel_startup = ComparableScyllaVersion(self.nodes[0].scylla_version) >= "2024.2.0~dev"
         if parallel_startup:
             LOGGER.info("Starting nodes in parallel")
         else:

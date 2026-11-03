@@ -53,7 +53,6 @@ class DummyNode(BaseNode):
     """
 
     _system_log = None
-    is_enterprise = False
     is_product_enterprise = False
     distro = Distro.CENTOS7
 

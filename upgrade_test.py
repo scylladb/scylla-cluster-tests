@@ -1115,10 +1115,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         roles = []
         service_level_shares = self.params.get("service_level_shares")
-        # OSS Scylla version does not support "shares" option for Service Level
-        if service_level_shares and not self.db_cluster.nodes[0].is_enterprise:
-            service_level_shares = [None for _ in service_level_shares]
-
         with self.db_cluster.cql_connection_patient(
             node=self.db_cluster.nodes[0], user=loader_utils.DEFAULT_USER, password=loader_utils.DEFAULT_USER_PASSWORD
         ) as session:

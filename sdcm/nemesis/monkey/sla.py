@@ -28,9 +28,6 @@ class SlaMonkeyBase(NemesisBaseClass):
         if not self.runner.cluster.params.get("sla"):
             return "SLA nemesis can be run during SLA test only"
 
-        if not node.is_enterprise:
-            return "SLA feature is only supported by Scylla Enterprise"
-
         if not self.runner.cluster.params.get("authenticator"):
             return "SLA feature can't work without authenticator"
 

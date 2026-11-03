@@ -25,15 +25,11 @@ from sdcm.utils.parallel_object import ParallelObject
 logger = getLogger(__name__)
 
 
-def get_repo_urls(start_date: datetime, end_date: datetime, is_enterprise: bool = False):
+def get_repo_urls(start_date: datetime, end_date: datetime):
     bucket = "downloads.scylladb.com"
-    logger.debug("getting repo urls for is_enterprise: %s date range: %s - %s", is_enterprise, start_date, end_date)
-    if is_enterprise:
-        prefix = "unstable/scylla-enterprise/enterprise/deb/unified/"
-        suffix = "scylladb-enterprise/scylla.list"
-    else:
-        prefix = "unstable/scylla/master/deb/unified/"
-        suffix = "scylladb-master/scylla.list"
+    logger.debug("getting repo urls for date range: %s - %s", start_date, end_date)
+    prefix = "unstable/scylla/master/deb/unified/"
+    suffix = "scylladb-master/scylla.list"
     response = boto3.client("s3").list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter="/")
     dates = [
         obj["Prefix"].rsplit("/", 2)[-2] for obj in response.get("CommonPrefixes", []) if obj["Prefix"].endswith("Z/")
@@ -77,7 +73,7 @@ def bisect_test(test_func):
         end_date = tester_obj.params.get("bisect_end_date")
         bisect_start_date = datetime.strptime(start_date, "%Y-%m-%d")
         bisect_end_date = datetime.strptime(end_date, "%Y-%m-%d") if end_date else datetime.today()
-        repo_urls = get_repo_urls(bisect_start_date, bisect_end_date, is_enterprise=cluster.nodes[0].is_enterprise)
+        repo_urls = get_repo_urls(bisect_start_date, bisect_end_date)
 
         low, high = 0, len(repo_urls) - 1
         last_good_version = "unknown"

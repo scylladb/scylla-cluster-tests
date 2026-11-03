@@ -55,16 +55,14 @@ def function_setup(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    argnames="scylla_version, expected_docker_image, expected_version, expected_is_enterprise",
+    argnames="scylla_version, expected_docker_image, expected_version",
     argvalues=[
-        pytest.param("LATEST", "scylladb/scylla", "LATEST", False, id="latest-release"),
-        pytest.param("latest", "scylladb/scylla-nightly", None, False, id="latest"),
-        pytest.param("master:latest", "scylladb/scylla-nightly", None, False, id="master:latest"),
+        pytest.param("LATEST", "scylladb/scylla", "LATEST", id="latest-release"),
+        pytest.param("latest", "scylladb/scylla-nightly", None, id="latest"),
+        pytest.param("master:latest", "scylladb/scylla-nightly", None, id="master:latest"),
     ],
 )
-def test_docker(
-    scylla_version, expected_docker_image, expected_version, expected_is_enterprise, monkeypatch, latest_release
-):
+def test_docker(scylla_version, expected_docker_image, expected_version, monkeypatch, latest_release):
     if scylla_version == "LATEST":
         scylla_version = latest_release
     if expected_version == "LATEST":
@@ -78,22 +76,21 @@ def test_docker(
     conf.verify_configuration()
     assert "docker_image" in conf.dump_config()
     assert conf.get("docker_image") == expected_docker_image
-    _version, _is_enterprise = conf.get_version_based_on_conf()
-    assert _is_enterprise == expected_is_enterprise
+    _version = conf.get_version_based_on_conf()
     if expected_version is not None:
         assert _version == expected_version
 
 
 @pytest.mark.parametrize(argnames="distro", argvalues=("ubuntu-xenial", "centos", "debian-jessie"))
 @pytest.mark.parametrize(
-    argnames="scylla_version, expected_version, expected_is_enterprise",
+    argnames="scylla_version, expected_version",
     argvalues=[
-        pytest.param("LATEST", "LATEST", True, id="latest-release"),
-        pytest.param("master:latest", None, True, id="master"),
-        pytest.param("branch-LATEST:latest", None, True, id="branch"),
+        pytest.param("LATEST", "LATEST", id="latest-release"),
+        pytest.param("master:latest", None, id="master"),
+        pytest.param("branch-LATEST:latest", None, id="branch"),
     ],
 )
-def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, distro, monkeypatch, latest_release):
+def test_scylla_repo(scylla_version, expected_version, distro, monkeypatch, latest_release):
     scylla_version = scylla_version.replace("LATEST", latest_release)
     if expected_version == "LATEST":
         expected_version = latest_release
@@ -109,23 +106,22 @@ def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, d
 
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
-    _version, _is_enterprise = conf.get_version_based_on_conf()
+    _version = conf.get_version_based_on_conf()
 
-    assert _is_enterprise == expected_is_enterprise
     if expected_version is not None:
         assert expected_version in _version
 
 
 @pytest.mark.parametrize(
-    argnames="scylla_version, expected_version, expected_is_enterprise",
+    argnames="scylla_version, expected_version",
     argvalues=[
-        pytest.param("LATEST", "LATEST", True, id="latest-release"),
-        pytest.param("master:latest", None, True, id="master"),
-        pytest.param("branch-LATEST:latest", None, True, id="branch"),
+        pytest.param("LATEST", "LATEST", id="latest-release"),
+        pytest.param("master:latest", None, id="master"),
+        pytest.param("branch-LATEST:latest", None, id="branch"),
     ],
 )
 @pytest.mark.parametrize(argnames="backend", argvalues=("aws", "gce", "azure"))
-def test_images(backend, scylla_version, expected_version, expected_is_enterprise, monkeypatch, latest_release):
+def test_images(backend, scylla_version, expected_version, monkeypatch, latest_release):
     scylla_version = scylla_version.replace("LATEST", latest_release)
     if expected_version == "LATEST":
         expected_version = latest_release
@@ -136,9 +132,8 @@ def test_images(backend, scylla_version, expected_version, expected_is_enterpris
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
-    _version, _is_enterprise = conf.get_version_based_on_conf()
+    _version = conf.get_version_based_on_conf()
 
-    assert _is_enterprise == expected_is_enterprise
     if expected_version is not None:
         assert expected_version in _version
 
@@ -153,10 +148,9 @@ def test_baremetal(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
-    _version, _is_enterprise = conf.get_version_based_on_conf()
+    _version = conf.get_version_based_on_conf()
 
     assert "6.1" in _version
-    assert not _is_enterprise
 
 
 def test_unified_package(monkeypatch):
@@ -179,12 +173,11 @@ def test_unified_package(monkeypatch):
     # unified_package should auto-set use_preinstalled_scylla to False
     assert conf.get("use_preinstalled_scylla") is False
 
-    _version, _is_enterprise = conf.get_version_based_on_conf()
+    _version = conf.get_version_based_on_conf()
 
     # e.g. scylla-unified-2026.4.0~dev-0.20260804.0cba3cd2a4b0.x86_64.tar.gz -> 2026.4.0
     expected_version = unified_package.rsplit("/", 1)[-1].removeprefix("scylla-unified-").split("~")[0]
     assert expected_version in _version
-    assert not _is_enterprise
 
 
 def test_unified_package_aws_sets_ubuntu_user(monkeypatch):

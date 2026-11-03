@@ -796,7 +796,6 @@ def test_36_update_config_based_on_version():
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     conf.artifact_scylla_version = "2025.1.0~dev"
-    conf.is_enterprise = True
     conf.update_config_based_on_version()
 
 
@@ -2056,7 +2055,7 @@ def test_azure_minicloud_config_resolves_without_azure_calls(monkeypatch, test_c
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()
-        scylla_version, _ = conf.get_version_based_on_conf()
+        scylla_version = conf.get_version_based_on_conf()
         conf.update_config_based_on_version()
         azure_service_built = AzureService in Singleton._instances
     finally:
