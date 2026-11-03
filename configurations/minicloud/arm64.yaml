@@ -1,13 +1,23 @@
 # Overlay for a minicloud run on an arm64 host: Apple silicon, or an arm64 Linux box or VM.
 # Layer it after configurations/minicloud.yaml - scripts/run-minicloud-test.sh does that when
-# `uname -m` is arm64 or aarch64.
+# `uname -m` is arm64 or aarch64. It covers the aws backend only: the gce and azure guest
+# images are x86-64, so run-minicloud-test.sh refuses those backends on an arm64 host.
 #
 # KVM and HVF accelerate only guests of the host architecture, so every guest is arm64: an
 # x86-64 guest boots about 7 times slower under TCG, and minicloud runs with --cross-arch=fail.
-# The literal instance types below skip sizing, so the x86_64 sizing pin in
-# configurations/minicloud.yaml does not apply.
+# A test-case can set a literal x86-64 instance type, which skips sizing, so the db and loader
+# types are literals here too.
 instance_type_db: 'i8g.large'
 instance_type_loader: 'c7g.large'
+
+# The roles without a literal type fall back to sizing: zero-token nodes to sizing_db and the
+# oracle cluster to sizing_db_oracle. These override the x86_64 pin of configurations/minicloud.yaml.
+sizing_db:
+  arch: arm64
+sizing_db_oracle:
+  arch: arm64
+sizing_loader:
+  arch: arm64
 
 # The scylladb-monitor AMI is published for amd64 only, so there is no arm64 monitor to boot.
 n_monitor_nodes: 0

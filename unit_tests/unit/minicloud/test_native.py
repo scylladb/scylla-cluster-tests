@@ -1,6 +1,7 @@
 """Native minicloud process on macOS: preflight, start, reuse and stop."""
 
 import os
+import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -101,6 +102,8 @@ def test_start_reuses_healthy_endpoint(native_config):
     manager = MinicloudManager(config=native_config)
     with (
         patch.object(MinicloudManager, "is_endpoint_healthy", return_value=True),
+        patch.object(MinicloudManager, "_native_pid", return_value=4242),
+        patch.object(MinicloudManager, "_container_sizing_gaps", return_value=[]),
         patch.object(MinicloudManager, "_start_log_streaming") as streaming,
         patch("sdcm.utils.minicloud.manager.subprocess.Popen") as popen,
         patch("sdcm.utils.minicloud.manager.subprocess.run") as run,
@@ -138,3 +141,107 @@ def test_is_running_reads_pid(native_config):
         assert manager.is_running
     with patch.object(MinicloudManager, "_native_pid", return_value=None):
         assert not manager.is_running
+
+
+def test_start_refuses_healthy_endpoint_without_known_pid(native_config):
+    manager = MinicloudManager(config=native_config)
+    with (
+        patch.object(MinicloudManager, "is_endpoint_healthy", return_value=True),
+        patch.object(MinicloudManager, "_native_pid", return_value=None),
+        patch("sdcm.utils.minicloud.manager.subprocess.Popen") as popen,
+    ):
+        with pytest.raises(MinicloudError, match="SCT did not start"):
+            manager.start()
+    popen.assert_not_called()
+
+
+def test_start_restarts_process_with_different_sizing(native_config):
+    manager = MinicloudManager(config=native_config)
+    with (
+        patch.object(MinicloudManager, "is_endpoint_healthy", side_effect=[True, False]),
+        patch.object(MinicloudManager, "_native_pid", return_value=4242),
+        patch.object(MinicloudManager, "_container_sizing_gaps", return_value=["no --intercept-s3"]),
+        patch.object(MinicloudManager, "_stop_native_process") as stop,
+        patch.object(MinicloudManager, "_wait_for_health"),
+        patch.object(MinicloudManager, "_start_log_streaming"),
+        patch("sdcm.utils.minicloud.manager.subprocess.Popen", return_value=MagicMock(pid=5151)) as popen,
+    ):
+        manager.start()
+    stop.assert_called()
+    popen.assert_called_once()
+
+
+def test_sizing_gaps_read_native_process_args(native_config):
+    manager = MinicloudManager(config=native_config)
+    args = ["/opt/homebrew/bin/minicloud", "--port", "5050", "--cache-dir", "/x", "PATH=/usr/bin"]
+    with (
+        patch.object(MinicloudManager, "_native_pid", return_value=4242),
+        patch.object(MinicloudManager, "_native_process_args", return_value=args),
+        patch.object(MinicloudManager, "_inspect_container") as inspect,
+    ):
+        gaps = manager._container_sizing_gaps()
+    assert "no --intercept-s3" in gaps
+    assert any(gap.startswith("lightweight mode") for gap in gaps)
+    inspect.assert_not_called()
+
+
+def test_gce_gaps_read_native_process_env(native_config):
+    manager = MinicloudManager(config=native_config)
+    args = ["minicloud", "--gcs-bucket", "bucket", "GOOGLE_APPLICATION_CREDENTIALS=/key.json"]
+    with (
+        patch.object(MinicloudManager, "_native_pid", return_value=4242),
+        patch.object(MinicloudManager, "_native_process_args", return_value=args),
+    ):
+        assert manager._container_gce_gaps() == []
+
+
+def _write_pid(config, pid):
+    os.makedirs(config.state_dir, exist_ok=True)
+    with open(config.pid_file, "w") as fh:
+        fh.write(str(pid))
+
+
+def test_native_pid_drops_stale_file_of_other_process(native_config):
+    _write_pid(native_config, os.getpid())
+    manager = MinicloudManager(config=native_config)
+    with patch.object(MinicloudManager, "_native_process_args", return_value=None):
+        assert manager._native_pid() is None
+    assert not os.path.exists(native_config.pid_file)
+
+
+def test_native_pid_reaps_dead_child(native_config):
+    child = subprocess.Popen(["true"])
+    os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOWAIT)
+    _write_pid(native_config, child.pid)
+    manager = MinicloudManager(config=native_config)
+    with patch.object(MinicloudManager, "_native_process_args", return_value=["minicloud"]):
+        assert manager._native_pid() is None
+    assert not os.path.exists(native_config.pid_file)
+
+
+def test_native_process_args_rejects_other_binary():
+    assert MinicloudManager._native_process_args(os.getpid()) is None
+
+
+def test_watcher_not_started_without_known_pid(native_config):
+    manager = MinicloudManager(config=native_config)
+    with (
+        patch.object(MinicloudManager, "_native_pid", return_value=None),
+        patch("sdcm.utils.minicloud.manager.subprocess.Popen"),
+        patch("sdcm.utils.minicloud.manager.threading.Thread") as thread,
+    ):
+        manager._start_log_streaming()
+        manager._close_log_file()
+    thread.assert_not_called()
+
+
+def test_tund_socket_honours_env(native_config, monkeypatch):
+    monkeypatch.setenv("MINICLOUD_TUND_SOCKET", "/tmp/other-tund.sock")
+    manager = MinicloudManager(config=native_config)
+    with (
+        patch.object(MinicloudManager, "is_endpoint_healthy", return_value=False),
+        patch("sdcm.utils.minicloud.manager.shutil.which", return_value="/usr/local/bin/minicloud"),
+        patch("sdcm.utils.minicloud.manager.Path.exists", return_value=False),
+    ):
+        with pytest.raises(MinicloudError, match="/tmp/other-tund.sock"):
+            manager.preflight_check(skip_aws_creds=True)

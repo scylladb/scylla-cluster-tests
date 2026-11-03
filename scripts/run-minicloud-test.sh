@@ -146,6 +146,12 @@ export SCT_MINICLOUD_ENDPOINT_URL="${SCT_MINICLOUD_ENDPOINT_URL:-http://localhos
 export SCT_USE_MGMT="${SCT_USE_MGMT:-false}"
 export SCT_ENABLE_ARGUS="${SCT_ENABLE_ARGUS:-false}"
 
+if [[ ("$(uname -m)" == "arm64" || "$(uname -m)" == "aarch64") && "$BACKEND" != "aws" ]]; then
+    # The gce and azure guest images are x86-64, and minicloud runs with --cross-arch=fail.
+    echo "ERROR: an arm64 host supports only -b aws" >&2
+    exit 5
+fi
+
 if [[ "$(uname -s)" == "Darwin" && "$MODE" == "hydra" ]]; then
     # The native minicloud and its utun device live on the host, outside the hydra container.
     echo "ERROR: macOS supports only -m direct" >&2
