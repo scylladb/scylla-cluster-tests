@@ -1379,8 +1379,8 @@ class ClusterTester(unittest.TestCase):
             self.download_encrypt_keys()
         if not is_minicloud_active(self.params):
             self.prepare_kms_host()
+            self.prepare_gcp_kms()
         self.prepare_azure_kms()
-        self.prepare_gcp_kms()
 
         self.nemesis_allocator = NemesisNodeAllocator(self)
 
@@ -2980,6 +2980,7 @@ class ClusterTester(unittest.TestCase):
                 self.prepare_kms_host()
             elif cluster_backend in ("gce", "gce-siren"):
                 manager.prepare_gce_network()
+                self.prepare_gcp_kms()
             self.minicloud = manager
 
         self.get_cluster_kafka()
