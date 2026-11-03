@@ -3478,10 +3478,16 @@ class BaseNode(AutoSshContainerMixin):
 
         return statistics_files
 
-    def sstable_folder_exists(self, keyspace_name: str, table_name: str, verbose=True) -> bool:
-        find_cmd = f"find /var/lib/scylla/data/{keyspace_name}/{table_name}-* -type d"
-        result = self.remoter.run(find_cmd, ignore_status=True, verbose=verbose)
-        return result.ok
+    def get_tables_with_sstable_folder(self) -> set[str]:
+        """Return "ks.table" of every table with a data folder, with one SSH call instead of one per table."""
+        table_dirs = self.remoter.sudo(
+            "find /var/lib/scylla/data -mindepth 2 -maxdepth 2 -type d", ignore_status=True, verbose=False
+        ).stdout.split()
+        # paths are /var/lib/scylla/data/<ks>/<table>-<uuid>
+        return {
+            f"{keyspace}.{table_dir.rsplit('-', 1)[0]}"
+            for keyspace, table_dir in (path.rsplit("/", 2)[-2:] for path in table_dirs)
+        }
 
     def reload_config(self):
         """
@@ -4229,10 +4235,6 @@ class BaseCluster:
         ks_rf = self.get_keyspace_info(keyspace_name, node)
         self.log.debug("%s replication_factors", set(ks_rf.replication_factors))
         return set(ks_rf.replication_factors) == {1}
-
-    @staticmethod
-    def is_table_has_no_sstables(keyspace_name: str, node: BaseNode, table_name: str, **kwarg) -> bool:
-        return not bool(node.sstable_folder_exists(keyspace_name, table_name, verbose=False))
 
     def get_non_system_ks_cf_list(
         self,
