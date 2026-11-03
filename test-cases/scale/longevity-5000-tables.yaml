@@ -49,10 +49,12 @@ root_disk_size_runner: 120
 user_prefix: 'long-5000-tables'
 cluster_health_check: true
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 404
-# NOTE: health checks will take some time, so, don't add significant waiting in this part
-nemesis_interval: 3
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        seed: 404
+        # NOTE: health checks will take some time, so, don't add significant waiting in this part
+        interval: 3
 
 append_scylla_yaml:
   # NOTE: https://github.com/scylladb/scylla-monitoring/issues/2429

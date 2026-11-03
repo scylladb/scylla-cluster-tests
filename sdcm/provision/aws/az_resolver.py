@@ -27,11 +27,11 @@ from sdcm.utils.aws_region import AwsRegion
 
 LOGGER = logging.getLogger(__name__)
 
-# instance types added mid-test; AZ fallback at provisioning time is unsafe for them
-_DYNAMIC_ADD_TYPE_PARAMS: tuple[str, ...] = (
-    "instance_type_db_target",
-    "nemesis_grow_shrink_instance_type",
-)
+
+def dynamic_add_instance_types(params) -> list[str]:
+    """Instance types added mid-test (target DB type, grow/shrink nemesis type); AZ fallback at provisioning time is unsafe for them."""
+    candidates = (params.get("instance_type_db_target"), params.nemesis.grow_shrink.instance_type)
+    return [instance_type for instance_type in candidates if instance_type]
 
 
 def _node_count_positive(value) -> bool:
@@ -111,7 +111,6 @@ _INSTANCE_TYPE_PARAM_GATES: tuple[tuple[str, Callable[[object], bool]], ...] = (
     ("zero_token_instance_type_db", _has_zero_token),
     ("instance_type_db_oracle", _has_oracle),
     ("instance_type_db_target", _always),
-    ("nemesis_grow_shrink_instance_type", _always),
     ("instance_type_vector_store", _has_vector_store),
 )
 
@@ -132,6 +131,9 @@ class AZResolver:
         for key, gate in _INSTANCE_TYPE_PARAM_GATES:
             instance_type = self._params.get(key)
             if instance_type and gate(self._params) and instance_type not in selected:
+                selected.append(instance_type)
+        for instance_type in dynamic_add_instance_types(self._params):
+            if instance_type not in selected:
                 selected.append(instance_type)
         return selected
 
@@ -724,7 +726,7 @@ def run_pre_flight_capacity_probe(params) -> None:
     if not params.get("pre_flight_capacity_probe"):
         return
 
-    types = [t for key in _DYNAMIC_ADD_TYPE_PARAMS if (t := params.get(key))]
+    types = dynamic_add_instance_types(params)
     if not types:
         return
 

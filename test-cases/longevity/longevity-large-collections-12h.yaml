@@ -29,9 +29,11 @@ n_loaders: 1
 
 instance_type_db: 'i3en.3xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 12
-nemesis_interval: 15
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        seed: 12
+        interval: 15
 
 user_prefix: 'longevity-large-collections-12h'
 space_node_threshold: 64424

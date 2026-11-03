@@ -125,8 +125,9 @@ class OperationThread:
         self.thread_stats = OperationThreadStats()
         self.log = logging.getLogger(self.__class__.__name__)
         self.log.debug("Thread params: %s", thread_params)
-        nemesis_seed = self.thread_params.db_cluster.params.get("nemesis_seed")
-        self.generator = random.Random(nemesis_seed[0]) if nemesis_seed else random.Random()
+        # Seeded like the first nemesis runner, so a nemesis seed also replays the scan operations
+        runners = self.thread_params.db_cluster.params.nemesis.resolve_runners()
+        self.generator = random.Random(runners[0].config.seed if runners else None)
         self._thread = threading.Thread(daemon=True, name=f"{self.__class__.__name__}_{thread_name}", target=self.run)
         self.termination_event = thread_params.termination_event
 

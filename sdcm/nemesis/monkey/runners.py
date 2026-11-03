@@ -1,13 +1,16 @@
 """
 NemesisRunner override, also known as Complex Nemesis
-Runners can be used in nemesis_class_names config option
+Runners are the entries of the `nemesis.runners` config option;
+each runner's `config_model` validates its entry.
 """
 
 import time
 from typing import Callable, List, Set, Tuple
 
+from pydantic import Field, NonNegativeFloat
+
 from sdcm.mgmt.common import ObjectStorageUploadMode
-from sdcm.nemesis import NemesisRunner
+from sdcm.nemesis import NemesisRunner, NemesisRunnerConfig, RunnerConfig
 from sdcm.nemesis.monkey.manager import manager_backup
 
 
@@ -18,24 +21,36 @@ class SisyphusMonkey(NemesisRunner):
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
 
-class FixedOrderMonkey(NemesisRunner):
-    """Runs nemesis in the exact order given by `nemesis_selector`, repeating it.
+class FixedOrderMonkeyConfig(RunnerConfig):
+    """Options of `FixedOrderMonkey`; it neither selects nor shuffles, so it takes no `selector` or `multiply_factor`."""
 
-    The selector of a FixedOrderMonkey thread is a comma-separated ordered list of nemesis
-    class names, e.g. "DecommissionMonkey, RepairMonkey, DecommissionMonkey". A name may
+    order: list[str] = Field(
+        min_length=1, description="Nemesis class names to run in this order, e.g. [DecommissionMonkey, RepairMonkey]"
+    )
+
+    def check_disruptions(self, disruption_names: frozenset[str]) -> None:
+        if unknown := sorted(set(self.order) - disruption_names):
+            raise ValueError(f"`order` names unknown nemesis classes: {unknown}")
+
+
+class FixedOrderMonkey(NemesisRunner):
+    """Runs nemesis in the exact order given by `order`, repeating it.
+
+    The `order` of a FixedOrderMonkey entry in `nemesis.runners` is an ordered list of
+    nemesis class names, e.g. [DecommissionMonkey, RepairMonkey, DecommissionMonkey]. A name may
     repeat to run that nemesis more than once per cycle.
 
-    Each name is looked up in the nemesis registry and instantiated once; repeated names share
+    The names are checked against the registered nemesis classes when the config loads (see
+    ``FixedOrderMonkeyConfig.check_disruptions``). Each name is instantiated once; repeated names share
     that instance. The resulting list is cycled in order, and precheck_nemesis() (called from
     run()) prunes entries the current backend cannot run and reports them as SKIPPED.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        names = [name.strip() for name in self.nemesis_selector.split(",") if name.strip()]
-        if not names:
-            raise ValueError("FixedOrderMonkey requires 'nemesis_selector' to list nemesis class names, e.g. 'A, B'")
-        self.disruptions_list = self.resolve_fixed_order(names)
+    config_model = FixedOrderMonkeyConfig
+
+    def __init__(self, tester_obj, termination_event, config: FixedOrderMonkeyConfig):
+        super().__init__(tester_obj, termination_event, config=config)
+        self.disruptions_list = self.resolve_fixed_order(self.config.order)
         self.log.info(
             "FixedOrderMonkey resolved order: %s", [nemesis.__class__.__name__ for nemesis in self.disruptions_list]
         )
@@ -45,8 +60,6 @@ class FixedOrderMonkey(NemesisRunner):
         instances_by_name = {}
         resolved = []
         for name in names:
-            if name not in classes_by_name:
-                raise ValueError(f"Unknown nemesis class name in 'nemesis_selector': {name!r}")
             if name not in instances_by_name:
                 instances_by_name[name] = classes_by_name[name](runner=self)
             resolved.append(instances_by_name[name])
@@ -182,20 +195,30 @@ class EnableDisableTableEncryptionAwsKmsProviderMonkey(NemesisRunner):
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
 
+class CategoricalMonkeyConfig(NemesisRunnerConfig):
+    dist: dict[str, NonNegativeFloat] = Field(description="Weight of each disruption, keyed by nemesis class name")
+    default_weight: NonNegativeFloat = Field(default=1, description="Weight of disruptions not listed in `dist`")
+
+    def check_disruptions(self, disruption_names: frozenset[str]) -> None:
+        if unknown := sorted(set(self.dist) - disruption_names):
+            raise ValueError(f"`dist` names unknown nemesis classes: {unknown}")
+
+
 class CategoricalMonkey(NemesisRunner):
     """Randomly picks disruptions to execute using the given categorical distribution.
 
     Each disruption is assigned a weight. The probability that a disruption D with weight W
     will be executed is W / T, where T is the sum of weights of all disruptions.
 
-    The distribution is passed into the monkey's constructor as a dictionary.
-    Keys in the dictionary are names of the disruption methods (from the `Nemesis` class)
-    e.g. `disrupt_hard_reboot_node`. The value for each key is the weight of this disruption.
-    You can omit the ``disrupt_'' prefix from the key, e.g. `hard_reboot_node`.
+    The distribution is the `dist` dictionary of the monkey's config (its `nemesis.runners` entry).
+    Keys in the dictionary are nemesis class names, e.g. `HardRebootNodeMonkey`; the value for
+    each key is the weight of that disruption.
 
-    A default weight can be passed; it will be assigned to each disruption that is not listed.
+    The config's `default_weight` is assigned to each disruption that is not listed.
     In particular if the default weight is 0 then the unlisted disruptions won't be executed.
     """
+
+    config_model = CategoricalMonkeyConfig
 
     def get_disruption_distribution(self, dist: dict, default_weight: float) -> Tuple[List[Callable], List[float]]:
         def is_nonnegative_number(val):
@@ -241,9 +264,9 @@ class CategoricalMonkey(NemesisRunner):
 
         return population, weights
 
-    def __init__(self, tester_obj, termination_event, dist: dict, *args, default_weight: float = 1, **kwargs):
-        super().__init__(tester_obj, termination_event, *args, **kwargs)
-        population, weights = self.get_disruption_distribution(dist, default_weight)
+    def __init__(self, tester_obj, termination_event, config: CategoricalMonkeyConfig):
+        super().__init__(tester_obj, termination_event, config=config)
+        population, weights = self.get_disruption_distribution(self.config.dist, self.config.default_weight)
         self._weight_by_nemesis = dict(zip(population, weights))
         self.disruptions_list = population
         self.disruption_distribution = (population, weights)

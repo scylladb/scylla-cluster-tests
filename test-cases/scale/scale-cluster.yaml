@@ -47,8 +47,10 @@ fallback_to_next_region: false
 
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 10}']
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey: {}
+  during_prepare: false
 
 user_prefix: 'cluster-base-scale-test'
 

@@ -6,9 +6,11 @@ k8s_n_scylla_pods_per_cluster: 3
 
 n_loaders: 2
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'kubernetes'
-nemesis_seed: 26
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'kubernetes'
+        seed: 26
 user_prefix: 'longevity-scylla-operator-3h'
 
 space_node_threshold: 64424

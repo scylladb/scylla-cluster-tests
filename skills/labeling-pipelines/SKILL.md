@@ -88,7 +88,7 @@ The authoritative source is always `docs/pipeline-labels/taxonomy.yaml`.
 | TD-002 | description >20 chars | error |
 | TD-003 | all values valid per pydantic | error |
 | TD-004 | test_type matches directory | warning |
-| TD-005 | nemesis_labels includes nemesis_class_name | warning |
+| TD-005 | nemesis_labels includes the `nemesis.runners` classes | warning |
 | TD-006 | stress_tools matches stress_cmd* | warning |
 | TD-007 | supported_backends includes cluster_backend | warning |
 | TD-008 | duration_class matches test_duration | warning |

@@ -32,10 +32,12 @@ prepare_stress_duration: 600
 #       are 1000 tables. Also, 'random' is not truly random: it picks the first table it finds.
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "schema_scale_k0001.schema_scale_t1", "interval": 30}']
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 22
-nemesis_interval: 30
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        seed: 22
+        interval: 30
+  during_prepare: false
 
 # Env
 n_db_nodes: 6

@@ -23,10 +23,10 @@ import pathlib
 from functools import lru_cache
 
 import anyconfig
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
 
 from sdcm import sct_abs_path
-from sdcm.sct_config.types import is_ignored_field
+from sdcm.sct_config.types import is_ignored_field, yaml_from_str
 from sdcm.utils.nested_env_key import nested_env_subkey
 
 
@@ -76,26 +76,65 @@ def is_config_option_appendable(option_name: str, model: type[BaseModel]) -> boo
     raise ValueError(f"Option {option_name} not found in {model.__name__} fields")
 
 
+def is_append(value) -> bool:
+    """True if *value* uses the `++` append syntax: a string starting with `++` or a list whose first item is `++`."""
+    if isinstance(value, str):
+        return value.startswith("++")
+    return isinstance(value, list) and bool(value) and isinstance(value[0], str) and value[0].startswith("++")
+
+
+def appended(current, value):
+    """Return *current* with the `++` *value* appended: string to string, list items to list."""
+    if isinstance(value, str):
+        current = "" if current is None else current
+        current += value[2:]
+        return current
+    return [*(current or []), *value[1:]]
+
+
+def merged_into_model(current: BaseModel, update: dict) -> dict:
+    """Return the values set on *current* merged with *update*, ready to validate into *current*'s model.
+
+    Nested models merge field by field, recursively; dicts merge key by key; `++` appends on an
+    appendable field; any other value replaces the earlier one. A YAML/JSON string given for a
+    nested model, list or dict (e.g. from `SCT_NEMESIS__RUNNERS`) is parsed first, then merged.
+    """
+    merged = current.model_dump(exclude_unset=True)
+    fields = type(current).model_fields
+    for key, given in update.items():
+        existing = getattr(current, key) if key in fields else merged.get(key)
+        parse = isinstance(given, str) and isinstance(existing, (BaseModel, list, dict)) and not is_append(given)
+        value = yaml_from_str(given) if parse else given
+        if is_append(value):
+            extra = fields[key].json_schema_extra if key in fields else None
+            assert extra and extra.get("appendable"), f"Option {key} is not appendable"
+            merged[key] = appended(merged.get(key), value)
+        elif isinstance(value, dict) and isinstance(existing, BaseModel) and not isinstance(existing, RootModel):
+            merged[key] = merged_into_model(existing, value)
+        elif isinstance(value, dict) and isinstance(merged.get(key), dict):
+            anyconfig.merge(merged[key], value, ac_merge=anyconfig.MS_DICTS)
+        else:
+            merged[key] = value
+    return merged
+
+
 def merge_dicts_append_strings(d1, d2, model: type[BaseModel]):
     """
     merge two dictionaries, while having option
     to append string if the value starts with '++'
     and append list if first item is '++'
+
+    A dict merged into a pydantic-model value (a section or a model-typed option) merges field by
+    field at every depth, see `merged_into_model`.
     """
 
     for key, value in copy.deepcopy(d2).items():
-        if isinstance(value, str) and value.startswith("++"):
+        if is_append(value):
             assert is_config_option_appendable(key, model), f"Option {key} is not appendable"
-            if key not in d1 or d1[key] is None:
-                d1[key] = ""
-            d1[key] += value[2:]
+            d1[key] = appended(d1[key] if key in d1 else None, value)
             del d2[key]
-        if isinstance(value, list) and value and isinstance(value[0], str) and value[0].startswith("++"):
-            assert is_config_option_appendable(key, model), f"Option {key} is not appendable"
-            if key not in d1 or d1[key] is None:
-                d1[key] = []
-            d1[key].extend(value[1:])
-            del d2[key]
+        elif isinstance(value, dict) and key in d1 and isinstance(d1[key], BaseModel):
+            d2[key] = merged_into_model(d1[key], value)
 
     anyconfig.merge(d1, d2, ac_merge=anyconfig.MS_DICTS)
 

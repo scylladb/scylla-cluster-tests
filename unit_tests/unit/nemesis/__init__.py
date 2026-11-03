@@ -3,8 +3,40 @@
 from abc import ABC, abstractmethod
 from unittest.mock import MagicMock
 
-from sdcm.nemesis import NemesisBaseClass, NemesisRunner
+from functools import cache
+
+import yaml
+from pydantic import NonNegativeFloat
+
+from sdcm import sct_abs_path
+from sdcm.nemesis import NemesisBaseClass, NemesisRunner, NemesisRunnerConfig, RunnerConfig
 from sdcm.nemesis.registry import NemesisRegistry
+from sdcm.sct_config.helpers import merged_into_model
+from sdcm.sct_config.sections.nemesis import NemesisConfig
+from unit_tests.lib.dot_dict import DotDict
+
+
+@cache
+def default_nemesis_options() -> dict:
+    """The `nemesis` section of `defaults/test_default.yaml`."""
+    with open(sct_abs_path("defaults/test_default.yaml"), encoding="utf-8") as defaults:
+        return yaml.safe_load(defaults)["nemesis"]
+
+
+def nemesis_config(**options) -> NemesisConfig:
+    """`nemesis` section holding the defaults of `defaults/test_default.yaml`, merged with ``options`` as a config layer."""
+    defaults = NemesisConfig.model_validate(default_nemesis_options())
+    return NemesisConfig.model_validate(merged_into_model(defaults, options))
+
+
+def params_with_nemesis(nemesis: NemesisConfig | None = None, **options) -> DotDict:
+    """Tester params: a real `nemesis` section, plus the options of other groups the test reads."""
+    return DotDict(nemesis=nemesis or nemesis_config(), **options)
+
+
+def runner_config(config_model=NemesisRunnerConfig, **options) -> RunnerConfig:
+    """Runner config with ``options``, the rest resolved from the `nemesis` defaults as the tester does."""
+    return nemesis_config().resolve(config_model(**options))
 
 
 def make_mock_node(name="node1", rack="rack1", is_seed=False, dc_idx=0, ip_address=None):
@@ -175,8 +207,37 @@ class TestNemesisClass(NemesisRunner):
     flag_common = False
     __test__ = False
 
-    def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
-        super().__init__(
-            tester_obj, termination_event, *args, nemesis_selector=nemesis_selector, nemesis_seed=nemesis_seed, **kwargs
-        )
+    def __init__(self, tester_obj, termination_event, config):
+        super().__init__(tester_obj, termination_event, config=config)
         self.nemesis_registry = NemesisRegistry(base_class=TestBaseClass, flag_class=TestBaseClass)
+
+
+class TestRunnerBase:
+    """Root of a test-only runner hierarchy for `nemesis.runners` config tests.
+
+    Follows the ``config_model`` contract of ``NemesisRunner`` without touching the real runner
+    tree; pass ``NemesisRegistry(base_class=TestRunnerBase, ...).get_subclasses()`` to
+    ``nemesis_config_model``.
+    """
+
+    __test__ = False
+    config_model = NemesisRunnerConfig
+
+
+class PlainTestRunner(TestRunnerBase):
+    """Runner accepting only the shared runner options."""
+
+
+class WeightedTestRunnerConfig(NemesisRunnerConfig):
+    weights: dict[str, NonNegativeFloat]
+    default_weight: NonNegativeFloat = 1
+
+    def check_disruptions(self, disruption_names: frozenset[str]) -> None:
+        if unknown := sorted(set(self.weights) - disruption_names):
+            raise ValueError(f"`weights` names unknown nemesis classes: {unknown}")
+
+
+class WeightedTestRunner(TestRunnerBase):
+    """Runner with options of its own."""
+
+    config_model = WeightedTestRunnerConfig

@@ -35,15 +35,17 @@ n_db_nodes: 3
 simulated_racks: 3
 instance_type_db: 'i4i.4xlarge'
 
-nemesis_add_node_cnt: 3
-nemesis_grow_shrink_instance_type: 'i4i.large'
+nemesis:
+  grow_shrink:
+    add_node_cnt: 3
+    instance_type: 'i4i.large'
+  runners:
+    - SisyphusMonkey:
+        selector: 'GrowShrinkClusterNemesis'
 
 n_loaders: 3
 instance_type_loader: 'c6i.2xlarge'
 instance_type_monitor: 't3.large'
-
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'GrowShrinkClusterNemesis'
 
 user_prefix: 'elasticity-test'
 round_robin: true

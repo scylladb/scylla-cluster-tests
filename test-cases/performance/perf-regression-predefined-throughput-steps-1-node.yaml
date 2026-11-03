@@ -82,7 +82,9 @@ instance_type_db: 'i7i.4xlarge'
 instance_type_loader: 'c7i.8xlarge'
 instance_type_monitor: 't3.small'
 use_capacity_reservation: true
-nemesis_add_node_cnt: 0
+nemesis:
+  grow_shrink:
+    add_node_cnt: 0
 
 use_preinstalled_scylla: true
 

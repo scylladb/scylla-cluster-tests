@@ -1,3 +1,5 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'TopPartitions'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'TopPartitions'
 user_prefix: 'longevity-5gb-1h-TopPartitions'

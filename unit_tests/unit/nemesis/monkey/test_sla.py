@@ -21,6 +21,7 @@ from sdcm.nemesis.monkey.sla import (
     SlaReplaceUsingDropDuringLoad,
 )
 from sdcm.sct_events.system import TestStepEvent
+from unit_tests.unit.nemesis import nemesis_config
 
 _MODULE = "sdcm.nemesis.monkey.sla"
 
@@ -45,8 +46,8 @@ def runner(base_runner):
     base_runner.monitoring_set = monitor
 
     # pass all three SLA preconditions by default
+    base_runner.cluster.params.nemesis = nemesis_config(sla=True)
     base_runner.cluster.params.get.side_effect = lambda key, **kw: {
-        "sla": True,
         "authenticator": "PasswordAuthenticator",
     }.get(key)
     base_runner.cluster.nodes = base_runner.cluster.data_nodes
@@ -93,7 +94,8 @@ ALL_SLA_MONKEYS = [
 @pytest.mark.parametrize("monkey_cls", ALL_SLA_MONKEYS)
 def test_precheck_skips_when_sla_disabled(runner, monkey_cls):
     """precheck() skips when the 'sla' param is falsy."""
-    runner.cluster.params.get.side_effect = lambda key, **kw: {"sla": False, "authenticator": "Password"}.get(key)
+    runner.cluster.params.nemesis = nemesis_config(sla=False)
+    runner.cluster.params.get.side_effect = lambda key, **kw: {"authenticator": "Password"}.get(key)
 
     assert monkey_cls(runner).precheck(node=runner.cluster.nodes[0]) == "SLA nemesis can be run during SLA test only"
 
@@ -110,7 +112,7 @@ def test_precheck_skips_when_not_enterprise(runner, monkey_cls):
 @pytest.mark.parametrize("monkey_cls", ALL_SLA_MONKEYS)
 def test_precheck_skips_when_no_authenticator(runner, monkey_cls):
     """precheck() skips when the authenticator param is falsy."""
-    runner.cluster.params.get.side_effect = lambda key, **kw: {"sla": True, "authenticator": None}.get(key)
+    runner.cluster.params.get.side_effect = lambda key, **kw: {"authenticator": None}.get(key)
 
     assert monkey_cls(runner).precheck(node=runner.cluster.nodes[0]) == "SLA feature can't work without authenticator"
 

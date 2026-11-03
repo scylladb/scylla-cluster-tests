@@ -54,6 +54,8 @@ append_scylla_yaml:
   stream_throughput_outbound_megabits_per_sec: 800
 
 round_robin: true
-nemesis_class_name: 'NoOpMonkey'
+nemesis:
+  runners:
+    - NoOpMonkey: {}
 user_prefix: 'platform-migration'
 use_preinstalled_scylla: true

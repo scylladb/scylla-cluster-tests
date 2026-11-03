@@ -29,6 +29,7 @@ from sdcm.sct_provision.aws.layout import SCTProvisionAWSLayout
 from sdcm.tester import ClusterTester
 
 from unit_tests.lib.dot_dict import DotDict
+from unit_tests.unit.nemesis import nemesis_config
 
 
 def _capacity_error() -> ClientError:
@@ -54,6 +55,7 @@ def _make_layout_params(**overrides):
             "instance_provision": "spot",
             "test_id": "test-id-123",
             "n_db_nodes": 3,
+            "nemesis": nemesis_config(),
             **overrides,
         }
     )
@@ -230,6 +232,7 @@ def _make_tester_params(**overrides) -> DotDict:
             "region_name": "us-east-1",
             "availability_zone": "a",
             "n_db_nodes": 1,
+            "nemesis": nemesis_config(),
             **overrides,
         }
     )

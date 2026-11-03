@@ -95,9 +95,11 @@ sizing_loader:
   vcpu: 16
   memory: '>=16'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_interval: 30
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        interval: 30
+  during_prepare: false
 
 # Operations that take longer with the larger dataset. Measured durations:
 #   - NEW_NODE bootstrap: ~2h18m (default soft timeout: 1h)

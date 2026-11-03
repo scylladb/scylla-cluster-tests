@@ -23,7 +23,8 @@ from unit_tests.unit.nemesis.execute_nemesis import (
     PrecheckSkipNemesis,
     TestNemesisRunner,
 )
-from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS
+from unit_tests.unit.nemesis import runner_config
+from unit_tests.unit.nemesis.fake_cluster import FakeTester
 
 # Fields that vary with time or identity — excluded from full-dict event assertions.
 _TIMESTAMP_FIELDS = frozenset({"event_id", "event_timestamp", "begin_timestamp", "end_timestamp", "source_timestamp"})
@@ -85,10 +86,10 @@ def disruption_end_events(events_fixture) -> list[dict]:
 def runner(events_function_scope):
     """A TestNemesisRunner with a fresh FakeEventsDevice per test."""
     termination_event = threading.Event()
-    tester = FakeTester(params=PARAMS)
+    tester = FakeTester()
     tester.db_cluster.check_cluster_health = MagicMock()
     tester.db_cluster.test_config = MagicMock()
-    instance = TestNemesisRunner(tester, termination_event)
+    instance = TestNemesisRunner(tester, termination_event, runner_config())
     instance.interval = 0
     return instance
 

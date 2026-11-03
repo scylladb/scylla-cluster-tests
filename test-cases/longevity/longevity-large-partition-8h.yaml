@@ -66,10 +66,12 @@ sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   memory: '>=64'
   arch: x86_64
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 15
-nemesis_interval: 15
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey: {}
+  seed: 15
+  interval: 15
+  during_prepare: false
 
 user_prefix: 'longevity-large-partitions-8h'
 

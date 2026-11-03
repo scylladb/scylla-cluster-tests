@@ -7,6 +7,8 @@ stress_cmd:
 n_db_nodes: 3
 n_loaders: 1
 
-nemesis_class_name: 'NoOpMonkey'
+nemesis:
+  runners:
+    - NoOpMonkey: {}
 
 user_prefix: 'sct-test'

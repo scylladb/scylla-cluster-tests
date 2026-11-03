@@ -51,9 +51,11 @@ sizing_db:
   local_disk_gb: '>=350'  # ~80% of i4i.large's 468GB
 n_db_nodes: 6
 
-nemesis_class_name: 'NoOpMonkey'
-nemesis_seed: 33
-nemesis_interval: 30
+nemesis:
+  runners:
+    - NoOpMonkey:
+        seed: 33
+        interval: 30
 
 user_prefix: 'alternator-disable-enable-ttl'
 

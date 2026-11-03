@@ -45,9 +45,11 @@ n_loaders: 2
 # https://github.com/scylladb/scylla-cluster-tests/issues/7279 is not fixed
 k8s_loader_run_type: 'dynamic'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 80
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        seed: 80
+  during_prepare: false
 
 user_prefix: 'k8s-alternator-https-3h'
 space_node_threshold: 64424

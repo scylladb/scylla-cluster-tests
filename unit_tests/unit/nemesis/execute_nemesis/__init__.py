@@ -88,10 +88,8 @@ class TestNemesisRunner(NemesisRunner):
 
     __test__ = False
 
-    def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
-        super().__init__(
-            tester_obj, termination_event, *args, nemesis_selector=nemesis_selector, nemesis_seed=nemesis_seed, **kwargs
-        )
+    def __init__(self, tester_obj, termination_event, config):
+        super().__init__(tester_obj, termination_event, config=config)
         self.node_allocator = MagicMock()
         self.metrics_srv = MagicMock()
         self.nemesis_registry = NemesisRegistry(base_class=TestExecuteBaseClass, flag_class=TestExecuteBaseClass)

@@ -94,6 +94,14 @@ Manager agent backup general configuration: checkers, transfers, low_level_retri
 
 **type:** sdcm.mgmt.common.AgentBackupParameters
 
+**sub-options:**
+
+| option | type | default | description |
+|---|---|---|---|
+| `checkers` | int | 100 |  |
+| `transfers` | int | 2 |  |
+| `low_level_retries` | int | 20 |  |
+
 
 <a id="mgmt_docker_image"></a>
 

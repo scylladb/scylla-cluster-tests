@@ -75,9 +75,11 @@ post_prepare_cql_cmds: "ALTER TABLE keyspace1.standard1 WITH compaction = {'clas
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "random", "interval": 120}']
 
 # Nemesis
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_interval: 30
-nemesis_selector: 'supports_high_disk_utilization'
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        interval: 30
+        selector: 'supports_high_disk_utilization'
+  during_prepare: false
 space_node_threshold: 644245094
 round_robin: true

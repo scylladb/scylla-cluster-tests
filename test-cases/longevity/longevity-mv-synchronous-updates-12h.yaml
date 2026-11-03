@@ -19,7 +19,9 @@ round_robin: true
 
 instance_type_db: 'i4i.4xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey: {}
+  during_prepare: false
 
 user_prefix: 'longevity-mv-synch-12h'

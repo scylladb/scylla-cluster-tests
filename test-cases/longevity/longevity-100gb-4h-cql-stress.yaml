@@ -24,8 +24,10 @@ sizing_db:  # aligned with longevity-100gb-4h.yaml (i7i.2xlarge); arch pinned be
   memory: '>=64'
   arch: x86_64
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 32
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        seed: 32
 user_prefix: 'longevity-100gb-4h'
 space_node_threshold: 64424
 

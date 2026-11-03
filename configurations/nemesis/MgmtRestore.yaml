@@ -1,3 +1,5 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'MgmtRestore'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'MgmtRestore'
 user_prefix: 'longevity-5gb-1h-MgmtRestore'

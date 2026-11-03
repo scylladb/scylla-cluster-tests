@@ -12,9 +12,11 @@ simulated_racks: 0
 
 instance_type_db: 'i4i.4xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 18
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        seed: 18
+  during_prepare: false
 space_node_threshold: 64424
 
 user_prefix: 'lwt-longevity-multi-dc-24h'

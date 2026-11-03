@@ -1,3 +1,5 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'SslHotReloadingNemesis'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'SslHotReloadingNemesis'
 user_prefix: 'longevity-5gb-1h-SslHotReloadingNemesis'

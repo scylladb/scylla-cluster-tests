@@ -18,9 +18,11 @@ user_prefix: longevity-counters-multidc
 
 space_node_threshold: 6442
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 11
-nemesis_interval: 15
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        seed: 11
+        interval: 15
 
 server_encrypt: true
 internode_encryption: 'dc'

@@ -32,9 +32,11 @@ sizing_loader:
   vcpu: 4
   memory: '>=16'
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 10}']
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 111
-nemesis_interval: 2
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        seed: 111
+        interval: 2
 
 user_prefix: 'longevity-10gb-3h'
 space_node_threshold: 64424

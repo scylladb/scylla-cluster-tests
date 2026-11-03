@@ -519,7 +519,7 @@ Filter availability zones upfront to only those that support all required instan
 
 ## **pre_flight_capacity_probe** / SCT_PRE_FLIGHT_CAPACITY_PROBE
 
-Before provisioning, probe capacity by launching and terminating one on-demand instance per dynamic type ([`instance_type_db_target`](#instance_type_db_target), [`nemesis_grow_shrink_instance_type`](nemesis-chaos-testing.md#nemesis_grow_shrink_instance_type)) in the chosen AZ. On capacity errors, raise to trigger AZ/region fallback. Costs ~1 min per type. AWS-only.
+Before provisioning, probe capacity by launching and terminating one on-demand instance per dynamic type ([`instance_type_db_target`](#instance_type_db_target), `nemesis.grow_shrink.instance_type`) in the chosen AZ. On capacity errors, raise to trigger AZ/region fallback. Costs ~1 min per type. AWS-only.
 
 **default:** False
 
@@ -796,6 +796,20 @@ Structured metadata for test documentation and labeling, embedded in the test-ca
 **default:** N/A
 
 **type:** sdcm.test_metadata.TestMetadata
+
+**sub-options:**
+
+| option | type | default | description |
+|---|---|---|---|
+| `description` | str | N/A |  |
+| `test_type` | str | N/A |  |
+| `tier` | str | ondemand |  |
+| `duration_class` | str | N/A |  |
+| `supported_backends` | list[str] | N/A |  |
+| `stress_tools` | list[str] | [] |  |
+| `workload` | str | N/A |  |
+| `features` | list[str] | [] |  |
+| `team_ownership` | str | N/A |  |
 
 
 <a id="test_method"></a>

@@ -194,9 +194,11 @@ To run one specific nemesis, edit `test-cases/PR-provision-test-docker.yaml`:
 test_duration: 60
 stress_cmd: "cassandra-stress write cl=QUORUM duration=5m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) ' -mode cql3 native -rate threads=10 -pop seq=1..100000 -log interval=5"
 n_db_nodes: 4
-nemesis_class_name: 'SisyphusMonkey'     # the runner
-nemesis_selector: 'DecommissionMonkey'   # only run this nemesis (class names or flag expressions)
-nemesis_interval: 5
+nemesis:
+  runners:
+    - SisyphusMonkey:              # the runner
+        selector: 'DecommissionMonkey'   # only run this nemesis (class names or flag expressions)
+        interval: 5
 ```
 
 For architecture, flags, and writing new ones, see the [Nemesis Developer Guide](docs/nemesis.md).

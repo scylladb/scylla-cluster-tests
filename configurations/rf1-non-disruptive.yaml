@@ -10,7 +10,9 @@ run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", 
 # See: https://scylladb.atlassian.net/browse/SCYLLADB-2896
 simulated_racks: 0
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: "not disruptive"
-nemesis_seed: 24325345
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "not disruptive"
+        seed: 24325345
 user_prefix: 'longevity-200gb-48h-rf1'

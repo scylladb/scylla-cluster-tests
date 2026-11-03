@@ -37,8 +37,8 @@ The baseline. Typically 6 DB nodes, 2 loaders, 1 monitor.
 - Scylla Manager is on by default (`use_mgmt: true`): server on the monitor, agent on every DB
   node. The manager nemeses (`MgmtBackup`, `MgmtRestore`, `MgmtRepair`, ...) back up to and
   restore from the backend's object storage.
-- Keys: `n_db_nodes`, `n_loaders`, `stress_cmd`, `prepare_write_cmd`, `nemesis_class_name`,
-  `nemesis_selector`, `use_mgmt`, `backup_bucket_location`.
+- Keys: `n_db_nodes`, `n_loaders`, `stress_cmd`, `prepare_write_cmd`, `nemesis.runners`,
+  `nemesis.selector`, `use_mgmt`, `backup_bucket_location`.
 - Code: `longevity_test.py` `LongevityTest.test_custom_time`. Manager CLI tests that drive
   sctool directly: `mgmt_cli_test.py`.
 - Example: `test-cases/longevity/longevity-100gb-4h.yaml`. Docs: [longevity](longevity.md),

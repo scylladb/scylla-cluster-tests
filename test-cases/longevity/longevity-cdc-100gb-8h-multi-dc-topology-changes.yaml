@@ -17,10 +17,13 @@ region_aware_loader: true
 availability_zone: "a,b,c"
 simulated_racks: 0
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'topology_changes'
-nemesis_seed: 32
-nemesis_add_node_cnt: 2
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'topology_changes'
+        seed: 32
+  grow_shrink:
+    add_node_cnt: 2
 
 round_robin: true
 

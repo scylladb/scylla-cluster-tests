@@ -1,1 +1,3 @@
-nemesis_class_name: "ManagerRcloneBackup"
+nemesis:
+  runners:
+    - ManagerRcloneBackup: {}

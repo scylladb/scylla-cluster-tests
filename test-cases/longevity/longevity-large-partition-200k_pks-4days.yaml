@@ -51,10 +51,12 @@ sizing_loader:
   vcpu: 16
   memory: '>=16'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 16
-nemesis_interval: 30
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        seed: 16
+        interval: 30
+  during_prepare: false
 
 user_prefix: 'longevity-large-partitions-200k-pks-4d'
 

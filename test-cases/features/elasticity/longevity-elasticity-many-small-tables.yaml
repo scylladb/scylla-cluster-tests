@@ -49,5 +49,7 @@ append_scylla_yaml:
 
 cluster_health_check: false
 
-nemesis_class_name: 'NoOpMonkey'
-nemesis_interval: 60
+nemesis:
+  runners:
+    - NoOpMonkey:
+        interval: 60

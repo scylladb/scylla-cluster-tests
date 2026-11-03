@@ -1,1 +1,3 @@
-nemesis_class_name: "ManagerNativeBackup"
+nemesis:
+  runners:
+    - ManagerNativeBackup: {}

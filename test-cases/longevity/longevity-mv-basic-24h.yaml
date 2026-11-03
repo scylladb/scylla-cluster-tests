@@ -9,10 +9,12 @@ instance_type_db: 'i7i.2xlarge'
 gce_instance_type_db: 'n2-highmem-8'
 gce_n_local_ssd_disk_db: 8
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: ["schema_changes and not disruptive"]
-nemesis_seed: 21
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "schema_changes and not disruptive"
+        seed: 21
+  during_prepare: false
 space_node_threshold: 64424
 
 user_prefix: 'longevity-mv-24h'

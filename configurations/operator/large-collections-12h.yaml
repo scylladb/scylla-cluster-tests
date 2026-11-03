@@ -1,11 +1,12 @@
 user_prefix: 'longevity-operator-large-collections-12h'
-nemesis_selector: 'kubernetes'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'kubernetes'
+        seed: 256
+        interval: 15
 
 n_db_nodes: 5
 k8s_n_scylla_pods_per_cluster: 4
-
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 256
-nemesis_interval: 15
 
 k8s_scylla_disk_gi: 6983

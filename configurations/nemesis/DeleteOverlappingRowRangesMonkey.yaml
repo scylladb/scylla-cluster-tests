@@ -1,3 +1,5 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'DeleteOverlappingRowRangesMonkey'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'DeleteOverlappingRowRangesMonkey'
 user_prefix: 'longevity-5gb-1h-DeleteOverlappingRowRangesMonkey'

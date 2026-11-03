@@ -270,12 +270,11 @@ class BaseCassandraCluster:
 
     @optional_stage("nemesis")
     def add_nemesis(self, nemesis, tester_obj, hdr_tags: list[str] = None):
-        for nem in nemesis:
-            nemesis_obj = nem["nemesis"](
+        for nemesis_thread in nemesis:
+            nemesis_obj = nemesis_thread.runner_class(
                 tester_obj=tester_obj,
                 termination_event=self.nemesis_termination_event,
-                nemesis_selector=nem["nemesis_selector"],
-                nemesis_seed=nem["nemesis_seed"],
+                config=nemesis_thread.config,
             )
             if hdr_tags:
                 nemesis_obj.hdr_tags = hdr_tags

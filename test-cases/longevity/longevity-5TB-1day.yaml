@@ -47,14 +47,16 @@ sizing_loader:
   vcpu: 16
   memory: '>=32'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: 31
-nemesis_interval: 30
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        seed: 31
+        interval: 30
+  during_prepare: false
 
 user_prefix: 'longevity-5TB'
 space_node_threshold: 644245094
 server_encrypt: true
 client_encrypt: true
 
-nemesis_during_prepare: false
 use_preinstalled_scylla: true

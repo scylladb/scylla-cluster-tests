@@ -51,8 +51,10 @@ num_nodes_to_rollback: 2   # max is n_db_nodes -1
 upgrade_sstables: true
 enable_truncate_checks_on_node_upgrade: false
 
-nemesis_class_name: 'NoOpMonkey'
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - NoOpMonkey: {}
+  during_prepare: false
 use_mgmt: false
 
 client_encrypt: true

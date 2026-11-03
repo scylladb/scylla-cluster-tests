@@ -24,7 +24,7 @@ The general-purpose longevity entry point, and the one most local smoke runs use
 
 **Also read, and worth turning off locally:**
 `run_fullscan` (a background full-scan thread — extra load a 1-vCPU guest does not need),
-`nemesis_during_prepare`, `space_node_threshold`.
+`nemesis.during_prepare`, `space_node_threshold`.
 
 **Grows the cluster if set:** `cluster_target_size` and `add_node_cnt` — `test_custom_time`
 grows to the target like `GrowClusterTest` does, so the memory gate budgets the target.
@@ -91,7 +91,7 @@ The trap case. This test **builds** its own cassandra-stress command.
 required: `add_nodes()` reconfigures Scylla monitoring after every node, and `setUp()` builds a
 Prometheus metrics object for the add-node timing.
 
-**Nemesis:** starts only after the cluster reaches its target size, so `nemesis_during_prepare:
+**Nemesis:** starts only after the cluster reaches its target size, so `nemesis.during_prepare:
 false`.
 
 **Worked example:** `configurations/minicloud/scale-cluster.yaml` — production 15 to 25 nodes

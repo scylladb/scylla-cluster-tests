@@ -61,11 +61,13 @@ sizing_db:
   local_disk_gb: '>=1500'  # ~80% of i4i.2xlarge's 1875GB
 n_db_nodes: 6
 
-nemesis_class_name: 'SisyphusMonkey'
-# post_prepare_cql_cmds sets gc_grace_seconds and the test validates TTL expiration; keep table TTL settings unchanged
-nemesis_selector: 'not ModifyTableGcGraceTimeMonkey and not ModifyTableDefaultTimeToLiveMonkey'
-nemesis_seed: 33
-nemesis_interval: 10
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        # post_prepare_cql_cmds sets gc_grace_seconds and the test validates TTL expiration; keep table TTL settings unchanged
+        selector: 'not ModifyTableGcGraceTimeMonkey and not ModifyTableDefaultTimeToLiveMonkey'
+        seed: 33
+        interval: 10
 
 user_prefix: 'alternator-ttl-4-loaders-no-lwt-sisyphus'
 

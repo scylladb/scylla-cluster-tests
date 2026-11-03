@@ -6,7 +6,7 @@ description: >-
   instance_type_db, gce_instance_type_db, azure_instance_type_db, instance_type_loader,
   instance_type_monitor to sizing constraints. Covers identifying instance specs,
   choosing vcpu/memory/arch/disk constraints, running sizing preview, and handling
-  multi-DC or special params like nemesis_grow_shrink_instance_type.
+  multi-DC or special params like nemesis.grow_shrink.instance_type.
 ---
 
 # Migrate Test Configs to Constraint-Based Sizing
@@ -41,7 +41,7 @@ Add `arch: x86_64` when the original config used Intel-only families (i7i, i7ie,
 
 ### Keep Special Params As-Is
 
-Some params like `nemesis_grow_shrink_instance_type` are AWS-specific operational parameters, not sizing constraints. Leave them as literal instance types.
+Some params like `nemesis.grow_shrink.instance_type` are AWS-specific operational parameters, not sizing constraints. Leave them as literal instance types.
 
 ## Working from Jenkins Pipeline Files
 
@@ -113,7 +113,7 @@ Other clouds will still resolve to their natural >=128 GB instances because thei
 - Adding new instance types to the catalog (that's catalog maintenance)
 - Modifying the sizing resolver logic itself
 - Working on k8s-specific instance configurations (sizing ignores k8s for now)
-- Changing `nemesis_grow_shrink_instance_type` or other non-sizing instance params
+- Changing `nemesis.grow_shrink.instance_type` or other non-sizing instance params
 
 ## Migration Process
 
@@ -207,4 +207,4 @@ Check that:
 - [ ] Disk size pinned only when needed to differentiate tiers
 - [ ] `sizing preview` resolves without errors (except known multi-DC limitation)
 - [ ] Any "No match" clouds documented with YAML comment next to the sizing block
-- [ ] Special params (nemesis_grow_shrink_instance_type) left untouched
+- [ ] Special params (`nemesis.grow_shrink.instance_type`) left untouched

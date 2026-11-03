@@ -60,11 +60,13 @@ sizing_db:
   memory: '>=32'
   local_disk_gb: '>=900'
 
-nemesis_class_name: 'SisyphusMonkey'
-# exclude nemeses that change TWCS parameters
-nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
-nemesis_interval: 15
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey: {}
+  # exclude nemeses that change TWCS parameters
+  selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
+  interval: 15
+  during_prepare: false
 space_node_threshold: 64424
 
 user_prefix: 'longevity-twcs-48h'

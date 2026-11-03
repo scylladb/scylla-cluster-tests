@@ -3412,7 +3412,7 @@ def get_nemesis_list(backend, config):
     tester = FakeTester()
 
     tester.params = SCTConfiguration()
-    sisyphus_nemesis = SisyphusMonkey(tester, None)
+    sisyphus_nemesis = SisyphusMonkey(tester, None, tester.params.nemesis.resolve(SisyphusMonkey.config_model()))
 
     collected_disrupt_methods_names = [disrupt.__class__.__name__ for disrupt in sisyphus_nemesis.disruptions_list]
 

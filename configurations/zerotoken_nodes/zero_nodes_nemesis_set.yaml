@@ -1,4 +1,6 @@
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: "zero_node_changes"
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "zero_node_changes"
 use_zero_nodes: true
 zero_token_instance_type_db: 'i4i.large'

@@ -249,6 +249,13 @@ def dict_or_str(value: dict | str | None) -> dict | None:
     raise ValueError(f'"{value}" isn\'t a dict')
 
 
+def yaml_from_str(value):
+    """Parse a string value (e.g. a whole option from an ``SCT_*`` env var) as YAML/JSON; pass anything else through."""
+    if isinstance(value, str):
+        return yaml.safe_load(value)
+    return value
+
+
 #: Config type that always returns dict. Accepts dict or string parseable as dict (via literal_eval or yaml).
 DictOrStr = Annotated[
     dict,
@@ -397,8 +404,9 @@ class SctField(FieldInfo):
     """
 
     def __init__(self, *args, **kwargs):
-        """Default the field to None and move SCT-specific keys into `json_schema_extra`."""
-        kwargs.setdefault("default", None)
+        """Default the field to None (unless it has a `default_factory`) and move SCT-specific keys into `json_schema_extra`."""
+        if "default_factory" not in kwargs:
+            kwargs.setdefault("default", None)
         extra = {k: v for k, v in kwargs.items() if k in ("appendable",)}
         kwargs.setdefault("json_schema_extra", extra)
         # remove extra keys from kwargs since we moved them to json_schema_extra

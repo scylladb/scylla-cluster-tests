@@ -4,6 +4,16 @@ Every option can be set in a config file, or as an environment variable named
 `SCT_<OPTION>` (upper-cased). Options are grouped by what they configure: cross-cutting
 concerns first, then one page per backend, then one per test type.
 
+#### Sections
+* Some groups hold their options in a section, e.g. `nemesis`: in YAML they nest under
+       the section key (`nemesis: {interval: 5}`), and they are listed by their dotted
+       path (`nemesis.interval`).
+* A section field is set from the environment as `SCT_<SECTION>__<FIELD>`
+       (`SCT_NEMESIS__INTERVAL=5`); a whole section, or a field holding a list or a
+       nested section, takes a YAML or JSON string (`SCT_NEMESIS__RUNNERS='[...]'`).
+* Each layer (defaults, config files, environment) merges into a section field by
+       field, so a config file setting `nemesis: {interval: 5}` keeps every other default.
+
 #### Appending with environment variables or with config files
 * **strings:** can be appended with adding `++` at the beginning of the string:
        `export SCT_APPEND_SCYLLA_ARGS="++ --overprovisioned 1"`
@@ -28,13 +38,13 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-529 options across 29 groups.
+531 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 74 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
-| [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
+| [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 14 | Which disruptions run, how often, and how targets are selected. Every option lives in the `nemesis` section; see... |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 72 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 16 | The monitoring stack, event severities, Argus reporting and email reports. |
 | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) | 13 | How logs and diagnostics are collected, and what happens to the resources when the test ends. |
@@ -369,17 +379,20 @@ concerns first, then one page per backend, then one per test type.
 | [`n_stress_process`](configuration_options/performance-regression-tests.md#n_stress_process) | `SCT_N_STRESS_PROCESS` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`n_test_oracle_db_nodes`](configuration_options/auxiliary-db-cluster-oracle-cassandra.md#n_test_oracle_db_nodes) | `SCT_N_TEST_ORACLE_DB_NODES` | [Auxiliary DB cluster (oracle / Cassandra)](configuration_options/auxiliary-db-cluster-oracle-cassandra.md) |
 | [`n_vector_store_nodes`](configuration_options/vector-store.md#n_vector_store_nodes) | `SCT_N_VECTOR_STORE_NODES` | [Vector Store](configuration_options/vector-store.md) |
-| [`nemesis_add_node_cnt`](configuration_options/nemesis-chaos-testing.md#nemesis_add_node_cnt) | `SCT_NEMESIS_ADD_NODE_CNT` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
-| [`nemesis_class_name`](configuration_options/nemesis-chaos-testing.md#nemesis_class_name) | `SCT_NEMESIS_CLASS_NAME` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
-| [`nemesis_double_load_during_grow_shrink_duration`](configuration_options/nemesis-chaos-testing.md#nemesis_double_load_during_grow_shrink_duration) | `SCT_NEMESIS_DOUBLE_LOAD_DURING_GROW_SHRINK_DURATION` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
-| [`nemesis_during_prepare`](configuration_options/nemesis-chaos-testing.md#nemesis_during_prepare) | `SCT_NEMESIS_DURING_PREPARE` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
-| [`nemesis_filter_seeds`](configuration_options/nemesis-chaos-testing.md#nemesis_filter_seeds) | `SCT_NEMESIS_FILTER_SEEDS` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
-| [`nemesis_grow_shrink_instance_type`](configuration_options/nemesis-chaos-testing.md#nemesis_grow_shrink_instance_type) | `SCT_NEMESIS_GROW_SHRINK_INSTANCE_TYPE` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
-| [`nemesis_interval`](configuration_options/nemesis-chaos-testing.md#nemesis_interval) | `SCT_NEMESIS_INTERVAL` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
-| [`nemesis_multiply_factor`](configuration_options/nemesis-chaos-testing.md#nemesis_multiply_factor) | `SCT_NEMESIS_MULTIPLY_FACTOR` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
-| [`nemesis_seed`](configuration_options/nemesis-chaos-testing.md#nemesis_seed) | `SCT_NEMESIS_SEED` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
-| [`nemesis_selector`](configuration_options/nemesis-chaos-testing.md#nemesis_selector) | `SCT_NEMESIS_SELECTOR` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
-| [`nemesis_sequence_sleep_between_ops`](configuration_options/nemesis-chaos-testing.md#nemesis_sequence_sleep_between_ops) | `SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis`](configuration_options/nemesis-chaos-testing.md#nemesis) | `SCT_NEMESIS` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.during_prepare`](configuration_options/nemesis-chaos-testing.md#nemesis.during_prepare) | `SCT_NEMESIS__DURING_PREPARE` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.filter_seeds`](configuration_options/nemesis-chaos-testing.md#nemesis.filter_seeds) | `SCT_NEMESIS__FILTER_SEEDS` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.grow_shrink`](configuration_options/nemesis-chaos-testing.md#nemesis.grow_shrink) | `SCT_NEMESIS__GROW_SHRINK` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.grow_shrink.add_node_cnt`](configuration_options/nemesis-chaos-testing.md#nemesis.grow_shrink.add_node_cnt) | within its section's variable | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.grow_shrink.double_load_duration`](configuration_options/nemesis-chaos-testing.md#nemesis.grow_shrink.double_load_duration) | within its section's variable | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.grow_shrink.instance_type`](configuration_options/nemesis-chaos-testing.md#nemesis.grow_shrink.instance_type) | within its section's variable | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.interval`](configuration_options/nemesis-chaos-testing.md#nemesis.interval) | `SCT_NEMESIS__INTERVAL` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.multiply_factor`](configuration_options/nemesis-chaos-testing.md#nemesis.multiply_factor) | `SCT_NEMESIS__MULTIPLY_FACTOR` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.runners`](configuration_options/nemesis-chaos-testing.md#nemesis.runners) | `SCT_NEMESIS__RUNNERS` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.seed`](configuration_options/nemesis-chaos-testing.md#nemesis.seed) | `SCT_NEMESIS__SEED` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.selector`](configuration_options/nemesis-chaos-testing.md#nemesis.selector) | `SCT_NEMESIS__SELECTOR` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.sequence_sleep_between_ops`](configuration_options/nemesis-chaos-testing.md#nemesis.sequence_sleep_between_ops) | `SCT_NEMESIS__SEQUENCE_SLEEP_BETWEEN_OPS` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
+| [`nemesis.sla`](configuration_options/nemesis-chaos-testing.md#nemesis.sla) | `SCT_NEMESIS__SLA` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
 | [`new_scylla_repo`](configuration_options/upgrade-tests.md#new_scylla_repo) | `SCT_NEW_SCYLLA_REPO` | [Upgrade tests](configuration_options/upgrade-tests.md) |
 | [`new_version`](configuration_options/upgrade-tests.md#new_version) | `SCT_NEW_VERSION` | [Upgrade tests](configuration_options/upgrade-tests.md) |
 | [`nonroot_offline_install`](configuration_options/scylla-installation-and-configuration.md#nonroot_offline_install) | `SCT_NONROOT_OFFLINE_INSTALL` | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) |
@@ -481,7 +494,6 @@ concerns first, then one page per backend, then one per test type.
 | [`sizing_loader`](configuration_options/general-and-provisioning.md#sizing_loader) | `SCT_SIZING_LOADER` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`sizing_monitor`](configuration_options/general-and-provisioning.md#sizing_monitor) | `SCT_SIZING_MONITOR` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`skip_test_stages`](configuration_options/general-and-provisioning.md#skip_test_stages) | `SCT_SKIP_TEST_STAGES` | [General and provisioning](configuration_options/general-and-provisioning.md) |
-| [`sla`](configuration_options/nemesis-chaos-testing.md#sla) | `SCT_SLA` | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) |
 | [`space_node_threshold`](configuration_options/longevity-tests.md#space_node_threshold) | `SCT_SPACE_NODE_THRESHOLD` | [Longevity tests](configuration_options/longevity-tests.md) |
 | [`spot_max_test_duration`](configuration_options/general-and-provisioning.md#spot_max_test_duration) | `SCT_SPOT_MAX_TEST_DURATION` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`spot_placement_score_min`](configuration_options/aws-backend.md#spot_placement_score_min) | `SCT_SPOT_PLACEMENT_SCORE_MIN` | [AWS backend](configuration_options/aws-backend.md) |

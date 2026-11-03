@@ -1,2 +1,4 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'ToggleAuditRulesNemesisSyslog'
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: 'ToggleAuditRulesNemesisSyslog'

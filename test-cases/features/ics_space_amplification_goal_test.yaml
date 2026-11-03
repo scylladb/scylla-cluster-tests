@@ -34,8 +34,10 @@ n_loaders: 4
 
 instance_type_db: 'i4i.4xlarge'
 
-nemesis_class_name: 'NoOpMonkey'
+nemesis:
+  runners:
+    - NoOpMonkey: {}
+  during_prepare: false
 user_prefix: 'ics-space-amplification'
 
 use_mgmt: false
-nemesis_during_prepare: false

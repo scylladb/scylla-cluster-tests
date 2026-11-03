@@ -64,7 +64,9 @@ sizing_loader:
   vcpu: 16
   memory: '>=32'
 
-nemesis_class_name: 'NoOpMonkey'
+nemesis:
+  runners:
+    - NoOpMonkey: {}
 
 user_prefix: 'alternator-streams-4h'
 space_node_threshold: 64424

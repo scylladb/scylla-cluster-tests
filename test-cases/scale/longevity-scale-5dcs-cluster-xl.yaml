@@ -39,9 +39,11 @@ sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   memory: '>=32'
   arch: x86_64
 
-nemesis_class_name: 'NoOpMonkey'
-nemesis_selector: ''
-nemesis_interval: 15
+nemesis:
+  runners:
+    - NoOpMonkey:
+        selector: ''
+        interval: 15
 
 seeds_num: 4
 

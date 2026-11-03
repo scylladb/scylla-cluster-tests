@@ -88,6 +88,7 @@ See `references/workflow.md` for detailed step-by-step instructions. High-level 
 | `verify` finds markers after rebase | Full recommit flow (step 4 in workflow) |
 | PR commits share files (step 4e) | No `recommit` — amend the conflicted tip commit; ask if markers are in an earlier commit |
 | `ERROR: Found N commits` (>50) | Wrong base ref — abort, report to user |
+| Conflict in nemesis config (`nemesis:` vs flat `nemesis_*`) | Translate to the target branch's form, see the mapping in `references/workflow.md` step 4b |
 | Ambiguous conflict resolution | Ask user before proceeding |
 | Script not found at derived path | Use bootstrap fallback to `/tmp/fix-backport.sh` |
 

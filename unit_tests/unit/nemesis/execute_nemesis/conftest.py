@@ -3,6 +3,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from unit_tests.unit.nemesis import runner_config
+
 from unit_tests.unit.nemesis.execute_nemesis import (
     TestNemesisRunner,
     CustomTestNemesis,
@@ -10,17 +12,17 @@ from unit_tests.unit.nemesis.execute_nemesis import (
     FailingTestNemesis,
     KillTestNemesis,
 )
-from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS
+from unit_tests.unit.nemesis.fake_cluster import FakeTester
 
 
 @pytest.fixture
 def nemesis_runner(events):
     """Create a NemesisRunner for testing with mocked external dependencies."""
     termination_event = threading.Event()
-    tester = FakeTester(params=PARAMS)
+    tester = FakeTester()
     tester.db_cluster.check_cluster_health = MagicMock()
     tester.db_cluster.test_config = MagicMock()
-    runner = TestNemesisRunner(tester, termination_event, nemesis_selector="flag_a")
+    runner = TestNemesisRunner(tester, termination_event, runner_config(selector="flag_a"))
     return runner
 
 

@@ -7,9 +7,7 @@ from unittest.mock import MagicMock
 from sdcm.cluster import BaseScyllaCluster
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
-
-
-PARAMS = dict(nemesis_interval=1, nemesis_filter_seeds=False)
+from unit_tests.unit.nemesis import params_with_nemesis
 
 
 @dataclass
@@ -33,7 +31,7 @@ class Node:
 @dataclass
 class Cluster:
     nodes: list
-    params: dict = field(default_factory=lambda: PARAMS)
+    params: dict = field(default_factory=params_with_nemesis)
 
     def check_cluster_health(self):
         pass
@@ -52,7 +50,7 @@ class Cluster:
 
 @dataclass
 class FakeTester:
-    params: dict = field(default_factory=lambda: PARAMS)
+    params: dict = field(default_factory=params_with_nemesis)
     loaders: LocalLoaderSetDummy = field(default_factory=LocalLoaderSetDummy)
     db_cluster: Cluster | BaseScyllaCluster = field(default_factory=lambda: Cluster(nodes=[Node(), Node()]))
     monitors: list = field(default_factory=list)

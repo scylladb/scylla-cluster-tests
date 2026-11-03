@@ -130,6 +130,14 @@ Extra single-panel Grafana screenshots to capture at log-collection time, on top
 
 **type:** list[sdcm.sct_config.GrafanaPanelScreenshot]
 
+**sub-options:**
+
+| option | type | default | description |
+|---|---|---|---|
+| `dashboard_title` | str | required | Grafana dashboard title (substring match used for search) |
+| `panel_title` | str | required | Panel title within the dashboard (substring match) |
+| `resolution` | tuple[int, int] | (1920, 4000) | Screenshot resolution (width, height) |
+
 
 <a id="max_events_severities"></a>
 

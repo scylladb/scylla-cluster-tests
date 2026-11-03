@@ -27,10 +27,13 @@ round_robin: true
 
 instance_type_db: 'i8g.xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
-# disk utilization depends on IncrementalCompactionStrategy; keep it for the whole run
-nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
-nemesis_interval: 15
+nemesis:
+  runners:
+    - SisyphusMonkey: {}
+  # disk utilization depends on IncrementalCompactionStrategy; keep it for the whole run
+  selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
+  interval: 15
+  during_prepare: false
 
 user_prefix: 'longevity-50-percent-utilization-4h'
 
@@ -41,8 +44,6 @@ client_encrypt: true
 
 hinted_handoff: 'enabled'
 parallel_node_operations: true
-
-nemesis_during_prepare: false
 
 prepare_write_cmd:
   - >-

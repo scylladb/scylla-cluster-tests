@@ -45,7 +45,7 @@ from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
 from argus.client.sct.types import Package, LogLink
 from argus.common.enums import TestStatus
-from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, wait
+from sdcm import cluster_docker, cluster_k8s, cluster_baremetal, wait
 from sdcm.xcloud.api_client import ScyllaCloudAPIClient
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from sdcm.provision.azure.utils import azure_provisioner_config
@@ -174,6 +174,7 @@ from sdcm.utils.issues import SkipPerIssues
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.sct_config import init_and_verify_sct_config
+from sdcm.sct_config.sections.nemesis import NemesisThread
 from sdcm.sct_events import Severity
 from sdcm.sct_events.setup import (
     enable_teardown_filters,
@@ -1576,74 +1577,9 @@ class ClusterTester(unittest.TestCase):
                 self.alternator.update_table_ttl(node=node, table_name=alternator.consts.TABLE_NAME)
                 self.alternator.update_table_ttl(node=node, table_name=alternator.consts.NO_LWT_TABLE_NAME)
 
-    def get_nemesis_class(self):
-        """
-        Get a Nemesis class from parameters.
-
-        :return: list of dicts, each with keys 'nemesis', 'nemesis_selector', 'nemesis_seed'.
-        :rtype: list[dict]
-        """
-        nemesis_threads = []
-        list_class_name = self.params.get("nemesis_class_name")
-        nemesis_selectors = self.params.get("nemesis_selector")
-        nemesis_seeds = self.params.get("nemesis_seed")
-
-        # Build the flat list of class names.  The old 'Class:N' count syntax and
-        # space-separated strings are no longer supported — use an explicit YAML list.
-        nemesis_class_names = []
-        for entry in list_class_name:
-            name = entry.strip()
-            if ":" in name:
-                raise ValueError(
-                    f"The 'Class:N' count syntax is no longer supported in 'nemesis_class_name'. "
-                    f"Got: {name!r}. Use an explicit YAML list to repeat a class, e.g.\n"
-                    f"  nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey', 'SisyphusMonkey']"
-                )
-            if " " in name:
-                raise ValueError(
-                    f"Space-separated 'nemesis_class_name' values are no longer supported. "
-                    f"Got: {name!r}. Use an explicit YAML list instead, e.g.\n"
-                    f"  nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']"
-                )
-            nemesis_class_names.append(name)
-
-        for i, nemesis_name in enumerate(nemesis_class_names):
-            # Selector: single value broadcasts to all threads; exact-length list maps 1:1.
-            # Length parity is enforced at config-load time by _validate_nemesis_parallel_config.
-            if not nemesis_selectors:
-                nemesis_selector = ""
-            elif len(nemesis_selectors) == 1:
-                nemesis_selector = nemesis_selectors[0]
-            else:
-                nemesis_selector = nemesis_selectors[i]
-
-            runner_clazz = getattr(nemesis, nemesis_name)
-            if not issubclass(runner_clazz, nemesis.NemesisRunner):
-                if issubclass(runner_clazz, nemesis.NemesisBaseClass):
-                    raise ValueError(
-                        "The 'nemesis_class_name' config option is allowed to store only nemesis classes "
-                        "which are 'NemesisRunner' class subclasses. "
-                        "Basic non-runner nemesis can be used in the 'nemesis_selector' config option only."
-                    )
-                else:
-                    raise ValueError(f"Nemesis class {runner_clazz} should be subclass of NemesisRunner.")
-
-            # Seed: single value broadcasts to all threads; exact-length list maps 1:1.
-            if not nemesis_seeds:
-                nemesis_seed = None
-            elif len(nemesis_seeds) == 1:
-                nemesis_seed = int(nemesis_seeds[0])
-            else:
-                nemesis_seed = int(nemesis_seeds[i])
-
-            nemesis_threads.append(
-                {
-                    "nemesis": runner_clazz,
-                    "nemesis_selector": nemesis_selector,
-                    "nemesis_seed": nemesis_seed,
-                }
-            )
-
+    def get_nemesis_class(self) -> list[NemesisThread]:
+        """Return the runner class and resolved config of each `nemesis.runners` entry, one per nemesis thread."""
+        nemesis_threads = self.params.nemesis.resolve_runners()
         self.log.debug("Nemesis threads %s", nemesis_threads)
         return nemesis_threads
 

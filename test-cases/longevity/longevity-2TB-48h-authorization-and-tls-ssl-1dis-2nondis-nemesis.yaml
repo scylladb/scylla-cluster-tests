@@ -56,10 +56,16 @@ sizing_loader:
 instance_type_runner: 'r6i.2xlarge'
 
 cluster_health_check: false
-nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey', 'SisyphusMonkey']
-nemesis_selector: ["disruptive", "not disruptive", "not disruptive and not manager_operation"]
-nemesis_interval: 30
-nemesis_during_prepare: false
+nemesis:
+  runners:
+    - SisyphusMonkey:
+        selector: "disruptive"
+    - SisyphusMonkey:
+        selector: "not disruptive"
+    - SisyphusMonkey:
+        selector: "not disruptive and not manager_operation"
+  interval: 30
+  during_prepare: false
 seeds_num: 3
 
 user_prefix: 'longevity-tls-2tb-48h-1dis-2nondis'

@@ -30,7 +30,7 @@ import traceback
 import json
 import itertools
 from abc import ABC, abstractmethod
-from typing import List, Optional, Callable, Union, Iterable, TYPE_CHECKING
+from typing import ClassVar, List, Optional, Callable, Union, Iterable, TYPE_CHECKING
 from functools import partial, cached_property
 from collections import Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
@@ -38,6 +38,7 @@ from uuid import uuid4
 
 from cassandra.query import SimpleStatement
 from invoke import UnexpectedExit
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt, model_serializer
 from argus.common.enums import NemesisStatus
 from sdcm.nemesis.registry import NemesisRegistry
 from sdcm.utils.action_logger import get_action_logger
@@ -265,12 +266,57 @@ class NemesisBaseClass(NemesisFlags, ABC):
         return inspect.cleandoc(cls.__doc__ or "")
 
 
+class RunnerConfig(BaseModel):
+    """Options every runner accepts in its `nemesis.runners` entry.
+
+    ``None`` takes the value from the `nemesis` defaults (see ``NemesisConfigBase.resolve``). A
+    runner with options of its own subclasses this model, or ``NemesisRunnerConfig``, and points
+    its ``config_model`` at the subclass. Resolution fills only the options the model declares.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Runner the entry starts; set on the per-runner entry models built when the `nemesis` option is parsed.
+    runner_class: ClassVar[type["NemesisRunner"]]
+
+    class_name: str | None = Field(default=None, description="Runner class the entry belongs to")
+    interval: PositiveInt | None = Field(default=None, description="Minutes to sleep between disruptions")
+    seed: int | None = Field(default=None, description="Seed for the runner's random choices")
+    filter_seeds: bool | None = Field(default=None, description="Target only non-seed nodes")
+
+    @model_serializer(mode="wrap")
+    def serialize_as_entry(self, handler):
+        """Dump an entry in its YAML form, ``{<RunnerClass>: {<options>}}``."""
+        data = handler(self)
+        class_name = data.pop("class_name", None)
+        return {class_name: data} if class_name else data
+
+    @cached_property
+    def random_seed(self) -> int:
+        """Seed used when neither the entry nor the `nemesis` defaults set one; drawn once per entry."""
+        return random.randint(0, 1000)
+
+    def check_disruptions(self, disruption_names: frozenset[str]) -> None:
+        """Raise ``ValueError`` when the config names a nemesis class outside ``disruption_names``."""
+
+
+class NemesisRunnerConfig(RunnerConfig):
+    """Options of a runner that selects its disruptions by `selector` and shuffles them."""
+
+    selector: str | None = Field(default=None, description="Nemesis selector filtering the disruptions")
+    multiply_factor: PositiveInt | None = Field(
+        default=None, description="How many times the disruption list is repeated before shuffling"
+    )
+
+
 class NemesisRunner:
-    def __init__(
-        self, tester_obj, termination_event, *args, nemesis_selector: Optional[str] = None, nemesis_seed=None, **kwargs
-    ):
-        # *args -  compatible with CategoricalMonkey
+    #: Model validating this runner's entry in the nested `nemesis.runners` config.
+    config_model: ClassVar[type[RunnerConfig]] = NemesisRunnerConfig
+
+    def __init__(self, tester_obj, termination_event, config: RunnerConfig):
+        """``config`` is this runner's config with defaults applied (see ``NemesisConfigBase.resolve``)."""
         self.tester: "ClusterTester" = tester_obj
+        self.config = config
         self.nemesis_registry = NemesisRegistry(base_class=NemesisBaseClass, flag_class=NemesisFlags)
         self.cluster: Union[BaseCluster, BaseScyllaCluster] = tester_obj.db_cluster
         self.loaders = tester_obj.loaders
@@ -287,10 +333,10 @@ class NemesisRunner:
         self.consecutive_skips = {}
         self.duration_list = []
         self.error_list = []
-        self.interval = 60 * self.tester.params.get("nemesis_interval")  # convert from min to sec
+        self.interval = 60 * self.config.interval  # convert from min to sec
         self.start_time = time.time()
         self.stats = {}
-        self.nemesis_selector = nemesis_selector
+        self.nemesis_selector = getattr(self.config, "selector", None)
         self.last_nemesis_event = None  # Track last nemesis event for this nemesis instance
         # NOTE: 'cluster_index' is set in K8S tenant case
         if hasattr(self.tester, "cluster_index"):
@@ -302,8 +348,8 @@ class NemesisRunner:
             logger = logging.getLogger(__name__)
         self.log = SDCMAdapter(logger, extra={"prefix": str(self)})
         self.task_used_streaming = None
-        self.filter_seed = self.cluster.params.get("nemesis_filter_seeds")
-        self.nemesis_seed = nemesis_seed or random.randint(0, 1000)
+        self.filter_seed = self.config.filter_seeds
+        self.nemesis_seed = self.config.seed
         self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
         self.hdr_tags = []
 
@@ -1914,7 +1960,7 @@ class NemesisRunner:
 
         nemesis_selector: Logical phrase selector to filter available disruption methods.
         To be able to be filtered, method needs to have corresponding class.
-        Usually retrieved from the test yaml by using the "nemesis_selector", more about nemesis_selector behaviour in sct_config.py
+        Usually the runner config `selector`, set in the `nemesis.runners` entry or the `nemesis` defaults.
         """
         if self._is_it_on_kubernetes():
             if nemesis_selector:
@@ -2018,23 +2064,6 @@ class NemesisRunner:
         return list(by_name.values())
 
     @property
-    def nemesis_selector(self) -> str:
-        # None means selector wasn't provided explicitly for this runner instance.
-        # In that case, fall back to config-level selector (if any) for direct instantiation paths
-        # such as `sct.py nemesis-list`. An explicit empty string means "run all nemeses".
-        if self._nemesis_selector is not None:
-            return self._nemesis_selector
-
-        params_selector = self.cluster.params.get("nemesis_selector")
-        if isinstance(params_selector, list):
-            return params_selector[0] if params_selector else ""
-        return params_selector or ""
-
-    @nemesis_selector.setter
-    def nemesis_selector(self, value: Optional[str]):
-        self._nemesis_selector = value
-
-    @property
     def _disruption_list_names(self):
         """Returns name of all collected nemesis"""
         return [nemesis.__class__.__name__ for nemesis in self.disruptions_list]
@@ -2045,11 +2074,11 @@ class NemesisRunner:
 
         nemesis_multiply_factor: How many times to multiply the original list before shuffle
         Useful for increasing probability of the same nemesis twice in a row
-        Usually retrieved from the test yaml by using the "nemesis_selector", more about nemesis_selector behaviour in sct_config.py
+        Defaults to the runner config `multiply_factor`.
         """
         self.log.debug(f"nemesis_seed to be used is {self.nemesis_seed}")
         self.log.debug(f"nemesis stack BEFORE SHUFFLE is {[nemesis.__class__.__name__ for nemesis in disruption_list]}")
-        nemesis_multiply_factor = nemesis_multiply_factor or self.cluster.params.get("nemesis_multiply_factor") or 1
+        nemesis_multiply_factor = nemesis_multiply_factor or getattr(self.config, "multiply_factor", None) or 1
         multipled_disruption_list = disruption_list * nemesis_multiply_factor
         self.random.shuffle(multipled_disruption_list)
         self.log.info(
@@ -3097,13 +3126,13 @@ class NemesisRunner:
     @latency_calculator_decorator
     def steady_state_latency(self, sleep_time=None):
         if not sleep_time:
-            sleep_time = self.cluster.params.get("nemesis_interval") * 60
+            sleep_time = self.interval
         InfoEvent(message=f"StartEvent - start a sleep of {sleep_time} as Steady State").publish()
         time.sleep(sleep_time)
         InfoEvent(message="FinishEvent - Steady State sleep has been finished").publish()
 
     def disrupt_run_unique_sequence(self):
-        sleep_time_between_ops = self.cluster.params.get("nemesis_sequence_sleep_between_ops")
+        sleep_time_between_ops = self.tester.params.nemesis.sequence_sleep_between_ops
         sleep_time_between_ops = sleep_time_between_ops if sleep_time_between_ops else 8
         sleep_time_between_ops = sleep_time_between_ops * 60
         if not self.has_steady_run:

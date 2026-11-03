@@ -60,7 +60,7 @@ For each role (db, loader, monitor):
 1. Remove all `instance_type_*`, `gce_instance_type_*`, `azure_instance_type_*` params for the roles being migrated
 2. Remove `gce_n_local_ssd_disk_db` if present
 3. Add the `sizing_db`/`sizing_loader`/`sizing_monitor` blocks in their place
-4. Keep any special params like `nemesis_grow_shrink_instance_type` unchanged
+4. Keep any special params like `nemesis.grow_shrink.instance_type` unchanged
 
 **Exit criteria**: The YAML file has sizing constraints instead of literal instance types.
 
