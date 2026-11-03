@@ -10,9 +10,12 @@ from typing import List, Union
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.sla.libs.sla_utils import SlaUtils
+from sdcm.utils import loader_utils
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
+from test_lib.sla import create_sla_auth
 
 
 class CSPopulateDistribution(Enum):
@@ -304,8 +307,39 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             self.wait_for_no_tablets_splits()
             self.run_fstrim_on_all_db_nodes()
 
+        workload = self.apply_service_levels(workload=workload)
         self.run_gradual_increase_load(
             workload=workload, stress_num=stress_num, num_loaders=num_loaders, test_name=test_name
+        )
+
+    def apply_service_levels(self, workload: Workload) -> Workload:
+        """Run the step commands under service levels, when the test asks for them.
+
+        For every 'service_level_shares' entry, create a role with a service level of those shares,
+        and replace '<sla credentials N>' in the step commands with the login of role N. Done after
+        the preload, so the preload keeps running as the superuser.
+        """
+        shares = self.params.get("service_level_shares")
+        if not shares or not any("<sla credentials " in cmd for cmd in workload.cs_cmd_tmpl):
+            return workload
+        is_enterprise = self.db_cluster.nodes[0].is_enterprise
+        if not is_enterprise:
+            self.log.warning("Service level shares need Scylla Enterprise; roles are created without them")
+        with self.db_cluster.cql_connection_patient(
+            node=self.db_cluster.nodes[0], user=loader_utils.DEFAULT_USER, password=loader_utils.DEFAULT_USER_PASSWORD
+        ) as session:
+            roles = [
+                create_sla_auth(session=session, shares=share, index=str(index), attach_service_level=is_enterprise)
+                for index, share in enumerate(shares)
+            ]
+        if is_enterprise:
+            for role in roles:
+                SlaUtils().wait_for_service_level_propagated(
+                    cluster=self.db_cluster, service_level=role.attached_service_level
+                )
+        return replace(
+            workload,
+            cs_cmd_tmpl=[self.set_sla_credentials_to_cmd(cmd=cmd, roles=roles) for cmd in workload.cs_cmd_tmpl],
         )
 
     def run_post_prepare_cql(self, workload):

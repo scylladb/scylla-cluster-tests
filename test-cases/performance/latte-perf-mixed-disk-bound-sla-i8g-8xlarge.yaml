@@ -1,0 +1,172 @@
+# Mixed 50% write / 50% read, served mostly from disk, with writes and reads in two service
+# levels of 300 and 700 shares. It reproduces the load where io_properties that overstate the
+# disks hurt the most (SMI-324): with the I/O budget N times too high, the I/O scheduler never
+# saturates, so it never throttles and never enforces priorities; the device queue is the only
+# limiter, and commitlog and memtable-flush writes wait behind compaction and reads.
+#
+# Disk-bound by size: 150M rows x 16 KB, RF=3 on 3 nodes, is ~2.4 TB per node, ~9x the RAM of
+# an i8g.8xlarge (256 GiB, 2 x 3.75 TB NVMe). Steps read and write uniformly random keys over
+# the whole data set, so few reads hit the cache. 16 KB cells move more bytes per request than
+# 4 KB, so the disks saturate before the CPU does.
+#
+# The test runs one stress command per loader and splits each step's rate evenly between them:
+# 2 write commands (service level 0, 300 shares) and 2 read commands (service level 1, 700 shares)
+# on 4 loaders give a 50/50 mix. Run with configurations/auth_cassandra.yaml.
+
+test_metadata:
+  description: >-
+    Disk-bound mixed predefined-throughput-steps test driven by latte: preloads
+    150M x 16 KB rows (~2.4 TB per node) into a 3-node i8g.8xlarge cluster, then
+    runs 50% writes and 50% reads on uniformly random keys at fixed throughput
+    steps, with writes in a 300-share service level and reads in a 700-share one.
+    Shows the effect of io_properties that overstate multi-disk instances.
+  test_type: performance
+  tier: ondemand
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - latte
+  features:
+    - sla
+    - authorization
+    - tablets
+  team_ownership: core-test-infra
+
+test_duration: 600
+
+prepare_stress_cmd: >-
+  latte schema
+  -P column_count=1 -P column_size=16384 -P speculative_retry="\"NONE\""
+  data_dir/latte/latte_cs_alike.rn
+
+prepare_write_cmd:
+  - >-
+    latte run --function write --consistency ALL --duration 37500000
+    --threads 60 --concurrency 15 --rate 15000
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 0 --end-cycle 37500000
+    -P row_count=150000000 -P offset=0
+    -P column_count=1 -P column_size=16384
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency ALL --duration 37500000
+    --threads 60 --concurrency 15 --rate 15000
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 37500000 --end-cycle 75000000
+    -P row_count=150000000 -P offset=0
+    -P column_count=1 -P column_size=16384
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency ALL --duration 37500000
+    --threads 60 --concurrency 15 --rate 15000
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 75000000 --end-cycle 112500000
+    -P row_count=150000000 -P offset=0
+    -P column_count=1 -P column_size=16384
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency ALL --duration 37500000
+    --threads 60 --concurrency 15 --rate 15000
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 112500000 --end-cycle 150000000
+    -P row_count=150000000 -P offset=0
+    -P column_count=1 -P column_size=16384
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_m:
+  - >-
+    latte run --function write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 0
+    -P row_count=150000000 -P offset=0 -P distribution=\"random\"
+    -P column_count=1 -P column_size=16384
+    <sla credentials 0>
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 1000000000000
+    -P row_count=150000000 -P offset=0 -P distribution=\"random\"
+    -P column_count=1 -P column_size=16384
+    <sla credentials 0>
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 2000000000000
+    -P row_count=150000000 -P offset=0 -P distribution=\"random\"
+    -P column_count=1 -P column_size=16384
+    <sla credentials 1>
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --request-timeout 30 --retry-number=10 --retry-interval '1s,5s'
+    --start-cycle 3000000000000
+    -P row_count=150000000 -P offset=0 -P distribution=\"random\"
+    -P column_count=1 -P column_size=16384
+    <sla credentials 1>
+    data_dir/latte/latte_cs_alike.rn
+
+latte_schema_parameters:
+  keyspace: 'keyspace1'
+  table: 'standard1'
+  replication_factor: 3
+  column_count: 1
+  column_size: 16384
+  speculative_retry: 'NONE'
+
+service_level_shares: [300, 700]
+
+# Measured peak (unthrottled, 4 loaders): ~165k mixed ops/s with the old io_properties preset,
+# ~240k with iotune figures. The old preset falls behind at ~145k, so the throttled steps span it.
+# Throttled steps: threads x concurrency is 2,048 in flight per loader, enough to hold the top
+# step's rate per loader through ~50 ms stalls (rate per loader x latency budget) without being
+# the limit.
+# Unthrottled step: concurrency 16 (512 in flight per loader). Throughput stops growing past this
+# point, and more in flight only adds queueing and timeouts (sweep at 8/16/32/64).
+perf_gradual_throttle_steps:
+  mixed:
+    - {threads: 32, concurrency: 64, rate: '40000'}
+    - {threads: 32, concurrency: 64, rate: '80000'}
+    - {threads: 32, concurrency: 64, rate: '120000'}
+    - {threads: 32, concurrency: 64, rate: '160000'}
+    - {threads: 32, concurrency: 16, rate: 'unthrottled'}
+perf_gradual_step_duration:
+  mixed: '30m'
+
+round_robin: true
+
+n_db_nodes: 3
+n_loaders: 4
+
+instance_type_db: 'i8g.8xlarge'
+instance_type_loader: 'c7i.8xlarge'
+instance_type_monitor: 't3.small'
+use_capacity_reservation: true
+nemesis_add_node_cnt: 0
+
+use_preinstalled_scylla: true
+
+user_prefix: 'latte-perf-mixed-disk-bound-sla'
+
+backtrace_decoding: true
+backtrace_stall_decoding: false
+
+use_mgmt: false
+email_recipients: ['']
+
+use_hdrhistogram: true
+
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+append_scylla_yaml:
+  auto_snapshot: false
+
+use_placement_group: true
+use_prepared_loaders: false
+
+adaptive_timeout_store_metrics: false
