@@ -1604,7 +1604,7 @@ class BaseNode(AutoSshContainerMixin):
         A run can mix nodes the runner reaches directly (lab hosts next to a runner in the lab) with nodes it reaches
         over public addresses and reverse SSH tunnels (a DB node in a cloud).
         """
-        return getattr(self.parent_cluster, "ip_ssh_connections", None) or self.test_config.IP_SSH_CONNECTIONS
+        return self.parent_cluster.ip_ssh_connections or self.test_config.IP_SSH_CONNECTIONS
 
     @property
     def external_address(self):
@@ -4697,6 +4697,9 @@ class DeadNode:
 class BaseCluster:
     """Cluster of Node objects."""
 
+    # How the runner reaches this cluster's nodes, when it differs from the run's `ip_ssh_connections`
+    ip_ssh_connections: str | None = None
+
     def __init__(
         self,
         cluster_uuid=None,
@@ -6027,7 +6030,7 @@ class BaseScyllaCluster:
             params=self.params,
             test_config=self.test_config,
             msldap_server_info=KeyStore().get_ldap_ms_ad_credentials(),
-            ip_ssh_connections=getattr(self, "ip_ssh_connections", None),
+            ip_ssh_connections=self.ip_ssh_connections,
         )
         return ScyllaYaml(**cluster_params_builder.model_dump(exclude_unset=True, exclude_none=True))
 
