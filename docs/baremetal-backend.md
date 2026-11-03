@@ -84,8 +84,9 @@ its ports and its timers onto the shared monitor host.
   Since the ports are fixed, a host runs one SCT monitor at a time: a second run's monitor fails the check.
 - DB hosts: the disks for Scylla, unless `use_preinstalled_scylla` is set.
 
-Setup checks the loader and monitor requirements before the first image pull (the preflight check), and fails right
-away naming what is wrong and what is needed. A host with several roles is checked as one host. SCT does not upgrade
+Setup checks the loader and monitor requirements before the first image pull (the preflight check), and fails
+naming what is wrong and what is needed. The missing monitoring prerequisites and node_exporter are installed before
+that check. A host with several roles is checked as one host. SCT does not upgrade
 Docker on these hosts: an upgrade restarts the daemon under other jobs' containers.
 
 ## What SCT changes on a host
