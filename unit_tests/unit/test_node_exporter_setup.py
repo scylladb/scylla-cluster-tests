@@ -66,20 +66,30 @@ def test_running_node_exporter_is_reused():
     """
     remoter = _remoter("x86_64", probe="running 9100\n")
 
-    assert NodeExporterSetup.install(remoter=remoter) == 9100
+    assert NodeExporterSetup.install(remoter=remoter, scrape_host="10.0.0.7") == 9100
 
 
 def test_install_listens_on_the_free_port_the_probe_found():
     remoter = _remoter("x86_64", probe="free 9101\n")
 
-    assert NodeExporterSetup.install(remoter=remoter) == 9101
+    assert NodeExporterSetup.install(remoter=remoter, scrape_host="10.0.0.7") == 9101
 
 
 def test_install_fails_when_every_port_is_taken():
     remoter = _remoter("x86_64", probe="free \n")
 
     with pytest.raises(RuntimeError, match="No free port"):
-        NodeExporterSetup.install(remoter=remoter)
+        NodeExporterSetup.install(remoter=remoter, scrape_host="10.0.0.7")
+
+
+def test_install_without_a_scrape_host_skips_the_probe():
+    """DB nodes and the runner are scraped at the default port, so they don't move off it."""
+    remoter = _remoter("x86_64", probe="free 9100\n")
+
+    assert NodeExporterSetup.install(remoter=remoter) == 9100
+    script = remoter.sudo.call_args.args[0]
+    assert "port=9100" in script
+    assert "ss -Hltn" not in script
 
 
 def test_probe_asks_the_address_prometheus_scrapes():
