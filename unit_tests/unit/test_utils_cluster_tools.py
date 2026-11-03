@@ -1,5 +1,19 @@
-from sdcm.utils.cluster_tools import group_nodes_by_dc_idx, check_cluster_layout
+import threading
+from functools import partial
 from unittest.mock import MagicMock
+
+import pytest
+
+from sdcm.utils.cluster_tools import (
+    check_cluster_layout,
+    clear_snapshot_nodes,
+    flush_nodes,
+    group_nodes_by_dc_idx,
+    major_compaction_nodes,
+)
+
+# More nodes than ThreadPoolExecutor's default pool can ever hold (min(32, cpu_count + 4)).
+NODES_ABOVE_DEFAULT_POOL = 40
 
 
 def test_nodes_grouped_by_dc_idx_are_correctly_grouped():
@@ -83,3 +97,26 @@ def test_cluster_with_no_nodes():
     db_cluster = MagicMock(nodes=[])
     db_cluster.params = {"capacity_errors_check_mode": "per-initial_config"}
     assert check_cluster_layout(db_cluster) is True
+
+
+@pytest.mark.parametrize(
+    "run_on_nodes",
+    [
+        pytest.param(partial(flush_nodes, keyspace="ks"), id="flush_nodes"),
+        pytest.param(partial(major_compaction_nodes, keyspace="ks", table="t"), id="major_compaction_nodes"),
+        pytest.param(clear_snapshot_nodes, id="clear_snapshot_nodes"),
+    ],
+)
+def test_nodetool_runs_on_all_data_nodes_concurrently(run_on_nodes):
+    """Every data node gets its own worker, so a cluster larger than the default thread pool is not serialized."""
+    barrier = threading.Barrier(NODES_ABOVE_DEFAULT_POOL, timeout=30)
+    nodes = [
+        MagicMock(**{"run_nodetool.side_effect": lambda *_, **__: barrier.wait()})
+        for _ in range(NODES_ABOVE_DEFAULT_POOL)
+    ]
+    cluster = MagicMock(data_nodes=nodes)
+
+    run_on_nodes(cluster)
+
+    assert not barrier.broken
+    assert all(node.run_nodetool.called for node in nodes)
