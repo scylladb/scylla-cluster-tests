@@ -23,7 +23,11 @@ from sdcm.cluster_aws import AWSCluster
 from sdcm.exceptions import CapacityReservationError
 from sdcm.provision.aws import utils as aws_utils
 from sdcm.provision.aws.az_resolver import AZResolver
-from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, RegionAMINotFoundError
+from sdcm.provision.aws.capacity_errors import (
+    InstanceTerminatedAtLaunchError,
+    ProvisioningCapacityExhausted,
+    RegionAMINotFoundError,
+)
 from sdcm.provision.aws.region_fallback import cleanup_region, switch_region
 from sdcm.sct_provision.aws.layout import SCTProvisionAWSLayout
 from sdcm.tester import ClusterTester
@@ -289,6 +293,13 @@ def test_cleanup_skips_no_monitor_set_and_swallows_destroy_errors():
         pytest.param(None, 1, 0, "a", id="success_first_attempt"),
         pytest.param(_capacity_error(), 2, 1, "b", id="capacity_error_then_retry"),
         pytest.param(ProvisioningCapacityExhausted("spot empty"), 2, 1, "b", id="spot_exhaustion_then_retry"),
+        pytest.param(
+            InstanceTerminatedAtLaunchError("Server.InternalError: Internal error on launch"),
+            2,
+            1,
+            "b",
+            id="instance_terminated_at_launch_then_retry",
+        ),
     ],
 )
 def test_provision_legacy_with_az_fallback_succeeds(

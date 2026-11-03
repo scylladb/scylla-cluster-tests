@@ -21,6 +21,11 @@ CAPACITY_ERROR_CODES: list[str] = [
     "InsufficientCapacity",
 ]
 
+INSTANCE_LAUNCH_FAILURE_REASON_CODES: tuple[str, ...] = (
+    "Server.InternalError",
+    "Server.InsufficientInstanceCapacity",
+)
+
 _AWS_ERROR_CODE_RE = re.compile(r"An error occurred \(([A-Za-z]+)\)")
 
 
@@ -51,6 +56,13 @@ class ProvisioningCapacityExhausted(Exception):
     and returns an empty result instead of propagating a ``ClientError``. Cluster code
     raises this exception in that case so the AZ-fallback layer can treat it the same
     as an on-demand capacity ``ClientError``.
+    """
+
+
+class InstanceTerminatedAtLaunchError(Exception):
+    """Raised when AWS terminates an instance right after launch with a server-side StateReason.
+
+    The AZ-fallback layer treats it like a capacity error and retries in another AZ.
     """
 
 
