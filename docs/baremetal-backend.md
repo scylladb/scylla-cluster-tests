@@ -141,7 +141,10 @@ The node setup every SCT backend runs also runs on baremetal hosts, whatever the
 - Loader and monitor hosts keep their packages: other jobs share them, so restoring a baseline would remove their
   packages too. The prerequisites SCT installed stay for the next run.
 
-A run repeats the tunnel and disk steps at its start, for a host whose cleanup did not run.
+A run repeats the tunnel and disk steps at its start, for a host whose cleanup did not run. It doesn't remove a
+monitoring stack left by an earlier run whose cleanup did not run: that stack keeps the ports, and the next run's
+preflight check fails on them. Clean it up with `hydra clean-resources` and the earlier run's test id, which is the
+suffix of its `~/sct-monitoring-<test id>` directory on the host.
 
 ## Known gaps
 
