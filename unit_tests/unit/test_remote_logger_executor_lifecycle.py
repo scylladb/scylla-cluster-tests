@@ -103,7 +103,8 @@ def test_stop_without_remote_pid_warns_instead_of_running_bare_kill(tmp_path, ca
     with caplog.at_level("WARNING"):
         logger.stop()
 
-    assert not any("kill" in str(call) for call in logger._remoter.run.call_args_list)
+    remote_calls = logger._remoter.run.call_args_list + logger._remoter.sudo.call_args_list
+    assert not any("kill" in str(call) for call in remote_calls)
     assert "No remote pid file" in caplog.text
 
 
@@ -119,3 +120,33 @@ def test_k8s_client_logger_reads_multibyte_char_split_across_chunks():
         ("2026-10-06T00:00:00Z", "duration=530µs\n"),
         ("2026-10-06T00:00:01Z", "next\n"),
     ]
+
+
+def test_stop_kills_the_follower_group_as_root(tmp_path):
+    """The group holds `sudo journalctl`; an unprivileged kill can't signal it and the follower outlives stop()."""
+    logger = SSHGeneralSystemdLogger(node=_node(remote_pid="1522"), target_log_file=str(tmp_path / "target.log"))
+    journal = _stub_journal_task(logger)
+
+    logger.start()
+    assert journal.entered.wait(timeout=10)
+    logger.stop()
+
+    logger._remoter.sudo.assert_called_once_with("kill -9 -1522", ignore_status=True)
+    assert not any("kill" in str(call) for call in logger._remoter.run.call_args_list)
+
+
+def test_loggers_on_one_node_keep_separate_pid_files(tmp_path):
+    """A loader follows its journal and an HDR file at once; stopping one must not kill the other's follower."""
+    node = _node()
+    journal_logger = SSHGeneralSystemdLogger(node=node, target_log_file=str(tmp_path / "journal.log"))
+    hdr_logger = HDRHistogramFileLogger(
+        node=node, remote_log_file="/tmp/remote.hdr", target_log_file=str(tmp_path / "target.hdr")
+    )
+
+    assert journal_logger._remote_pid_file != hdr_logger._remote_pid_file
+    assert journal_logger._remote_cmd_file != hdr_logger._remote_cmd_file
+
+    journal_logger._retrieve(since="")
+    remote_cmd = node.remoter.run.call_args.kwargs["cmd"]
+    assert f"> {journal_logger._remote_pid_file};" in remote_cmd
+    assert f"setsid bash {journal_logger._remote_cmd_file} " in remote_cmd
