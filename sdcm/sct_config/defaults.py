@@ -49,6 +49,7 @@ AWS_SUPPORTED_REGIONS: list[str] = [
     "us-east-1",
     "eu-north-1",
     "eu-central-1",
+    "ca-central-1",
 ]
 
 REQUIRED_PARAMS: list = [
