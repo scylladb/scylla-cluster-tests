@@ -21,7 +21,13 @@ def call(Map params, RunWrapper currentBuild) {
         export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
         export SCT_XCLOUD_ENV="${params.xcloud_env}"
     fi
-    ./docker/env/hydra.sh finish-argus-test-run --jenkins-status "${test_status}"
+    RUNNER_IP=\$(cat sct_runner_ip||echo "")
+    if [[ -n "\${RUNNER_IP}" ]] ; then
+        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} finish-argus-test-run --jenkins-status "${test_status}" || \\
+        ./docker/env/hydra.sh finish-argus-test-run --jenkins-status "${test_status}" --logdir "`pwd`"
+    else
+        ./docker/env/hydra.sh finish-argus-test-run --jenkins-status "${test_status}" --logdir "`pwd`"
+    fi
 
     echo " Argus test run finished."
     """

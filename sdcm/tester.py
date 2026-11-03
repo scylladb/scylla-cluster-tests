@@ -126,7 +126,7 @@ from sdcm.teardown_validators import teardown_validators_list
 from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
 from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
-from sdcm.utils.argus import ReplayOnlyArgusSCTClient, report_scylla_yaml_to_argus
+from sdcm.utils.argus import ReplayOnlyArgusSCTClient, is_test_error, report_scylla_yaml_to_argus
 from sdcm.utils.cloud_catalog.cost import estimate_run_cost
 from sdcm.utils.cost_reporting import report_estimated_cost
 from sdcm.utils.aws_kms import AwsKms
@@ -713,41 +713,13 @@ class ClusterTester(unittest.TestCase):
             severity=Severity.ERROR,
         )
 
-    def _is_test_error(self, events: dict[str, list[str]]) -> bool:
-        """
-        Test whether or not the result of the test can be considered as a TEST_ERROR
-        status for Argus. TEST_ERROR status is used for times when the SCT failure is caused by
-        either infrastructure or problems within SCT itself.
-
-        """
-
-        def check_error(event: str):
-            errors = [
-                re.compile(r"SpotTerminationEvent", re.IGNORECASE),
-                re.compile(r"ZonalAllocationFailed", re.IGNORECASE),
-                re.compile(
-                    r"source=[\w]+.SetUp\(\).+exception=403 FORBIDDEN QUOTA_EXCEEDED", re.IGNORECASE | re.DOTALL
-                ),
-                re.compile(r"source=[\w]+.SetUp\(\).+InsufficientInstanceCapacity", re.IGNORECASE | re.DOTALL),
-                re.compile(r"source=[\w]+.SetUp\(\).+InvalidInstanceType", re.IGNORECASE | re.DOTALL),
-                re.compile(
-                    r"source=[\w]+.SetUp\(\).+is not (supported|available) in region", re.IGNORECASE | re.DOTALL
-                ),
-            ]
-            for error in errors:
-                if error.search(event):
-                    return True
-            return False
-
-        return any(check_error(e) for e in [*events.get("CRITICAL"), *events.get("ERROR")])
-
     def argus_finalize_test_run(self):
         try:
             stat_map = {"SUCCESS": TestStatus.PASSED, "FAILED": TestStatus.FAILED}
 
             last_events = get_events_grouped_by_category(limit=100, _registry=self.events_processes_registry)
             test_status = stat_map.get(self.get_test_status(), TestStatus.FAILED)
-            if test_status == TestStatus.FAILED and self._is_test_error(last_events):
+            if test_status == TestStatus.FAILED and is_test_error(last_events):
                 test_status = TestStatus.TEST_ERROR
             self.argus_update_status(test_status)
 

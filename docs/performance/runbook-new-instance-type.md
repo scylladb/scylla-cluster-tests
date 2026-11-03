@@ -67,7 +67,7 @@ jobs for versions that do not support the new hardware.
   `SCT-perf-eu-west-2-i8g`.
 
 Insufficient capacity surfaces as `InsufficientInstanceCapacity`, which
-`_is_test_error()` maps to `TEST_ERROR` rather than `FAILED` — so a capacity problem will not
+`is_test_error()` maps to `TEST_ERROR` rather than `FAILED` — so a capacity problem will not
 look like a regression, but it will cost you a cycle.
 
 ## Step 4 — Validation runs on the old config
