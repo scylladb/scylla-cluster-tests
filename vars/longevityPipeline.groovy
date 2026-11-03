@@ -22,12 +22,8 @@ def call(Map pipelineParams) {
     // build #1, the params-loading build these pipelines abort anyway. Safe to read here, unlike
     // params.minicloud: getJenkinsLabels only ever merges a `minicloud` key into the global
     // binding, never this one.
-    // Gated on minicloud or the baremetal backend: a cloud backend still needs its sct-runner,
-    // and an ungated `local_agent` there would skip the runner stages while the label stayed the
-    // ordinary cloud builder - the test would then run on the builder itself. A baremetal run
-    // provisions nothing, and an sct-runner in the cloud cannot reach hosts in a lab network, so
-    // its test runs on the agent: a lab agent pinned with `jenkins_label` next to the hosts, or
-    // the regular builder when the hosts are cloud instances.
+    // minicloud and baremetal provision nothing on a runner; any other backend still needs its
+    // sct-runner.
     def baremetal = (params.backend ?: pipelineParams.get('backend', 'aws')) == 'baremetal'
     def localAgent = (minicloudEnabled || baremetal) && (params.local_agent != null
                                           ? params.local_agent.toString().toBoolean()
