@@ -61,6 +61,12 @@ class BackupRetentionLockMode(StrEnum):
     EVENT_BASED_HOLD = "event-based-hold"
 
 
+class RepairIncrementalMode(StrEnum):
+    INCREMENTAL = "incremental"
+    FULL = "full"
+    DISABLED = "disabled"
+
+
 class HostRestStatus(Enum):
     UP = "UP"
     DOWN = "DOWN"
