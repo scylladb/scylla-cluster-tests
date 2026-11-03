@@ -1406,6 +1406,45 @@ def test_a_shared_host_records_no_baseline(node_type):
     node.record_host_baseline.assert_not_called()
 
 
+@pytest.mark.parametrize("node_type,disabled", [("db", True), ("loader", False), ("monitor", False)])
+def test_only_a_db_host_gets_its_daily_apt_timers_disabled(node_type, disabled):
+    """Loader and monitor hosts are shared: their apt-daily timers stay on."""
+    node = PhysicalMachineNode.__new__(PhysicalMachineNode)
+    node.node_type = node_type
+    node.distro = MagicMock(uses_systemd=True, is_ubuntu=True)
+    node.remoter = MagicMock()
+
+    node.disable_daily_triggered_services()
+
+    assert node.remoter.sudo.called == disabled
+
+
+@pytest.mark.parametrize(
+    "node_class,node_type,disabled",
+    [
+        pytest.param(PhysicalMachineNode, "db", True, id="baremetal-db"),
+        pytest.param(PhysicalMachineNode, "loader", False, id="baremetal-loader"),
+        pytest.param(PhysicalMachineNode, "monitor", False, id="baremetal-monitor"),
+        pytest.param(sdcm_cluster.BaseNode, "loader", True, id="cloud-loader"),
+    ],
+)
+def test_the_logging_script_leaves_the_apt_timers_of_a_shared_host_on(node_class, node_type, disabled):
+    """The first run on a host also disables the apt-daily timers in its logging setup script: not on a shared host."""
+    node = node_class.__new__(node_class)
+    node.name = "node-1"
+    node.node_type = node_type
+    node.journal_since = None
+    node.parent_cluster = MagicMock(params={"logs_transport": "vector"})
+    node.test_config = MagicMock(get_logging_service_host_port=MagicMock(return_value=("127.0.0.1", 5003)))
+    node.remoter = MagicMock()
+
+    node.configure_remote_logging()
+
+    script = node.remoter.sudo.call_args.args[0]
+    assert ("systemctl disable apt-daily.timer" in script) == disabled
+    assert ("unattended-upgrades" in script) == disabled
+
+
 def test_each_run_gets_its_own_monitoring_directory():
     node = MagicMock(tags={"TestId": "1234-abcd"})
     node.remoter.run.return_value = MagicMock(stdout="/home/fedora\n")
