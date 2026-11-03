@@ -7,6 +7,7 @@ from sdcm.keystore import KeyStore
 
 
 @pytest.mark.integration
+@pytest.mark.requires_aws
 def test_multiple_sync_on_lots_of_files():
     """
     this start multiple client of boto3 in multiple thread,

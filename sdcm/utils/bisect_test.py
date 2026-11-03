@@ -15,9 +15,9 @@ from datetime import datetime
 from logging import getLogger
 from functools import wraps
 
-import boto3
 import requests
 from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.version_utils import public_bucket_s3_client
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events import Severity
 
@@ -34,7 +34,7 @@ def get_repo_urls(start_date: datetime, end_date: datetime, is_enterprise: bool 
     else:
         prefix = "unstable/scylla/master/deb/unified/"
         suffix = "scylladb-master/scylla.list"
-    response = boto3.client("s3").list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter="/")
+    response = public_bucket_s3_client().list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter="/")
     dates = [
         obj["Prefix"].rsplit("/", 2)[-2] for obj in response.get("CommonPrefixes", []) if obj["Prefix"].endswith("Z/")
     ]

@@ -637,6 +637,11 @@ def get_scylla_docker_repo_from_version(scylla_version: str):
     raise ValueError(f"Unsupported scylla version {scylla_version}, check test logic")
 
 
+def public_bucket_s3_client() -> S3Client:
+    """S3 client for public buckets such as downloads.scylladb.com; unsigned, so it works without AWS credentials."""
+    return boto3.client("s3", region_name=DEFAULT_AWS_REGION, config=Config(signature_version=UNSIGNED))
+
+
 def _list_repo_file_etag(s3_client: S3Client, prefix: str) -> Optional[dict]:
     repo_file = s3_client.list_objects_v2(Bucket=SCYLLA_REPO_BUCKET, Prefix=prefix)
     if repo_file["KeyCount"] != 1:
@@ -674,7 +679,7 @@ def resolve_latest_repo_symlink(url: str) -> str:
     else:
         raise ValueError(f"Unsupported URL: {url}")
 
-    s3_client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION, config=Config(signature_version=UNSIGNED))
+    s3_client = public_bucket_s3_client()
 
     latest_etag = _list_repo_file_etag(s3_client=s3_client, prefix=f"{prefix}{LATEST_SYMLINK_NAME}{rest}")
     if latest_etag is None:
@@ -1011,7 +1016,7 @@ def latest_unified_package(arch: str = "x86_64", product: str = "scylla", branch
     if arch == "arm64":
         arch = "aarch64"
     prefix = f"unstable/{product}/{branch}/relocatable/latest/"
-    s3_client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION, config=Config(signature_version=UNSIGNED))
+    s3_client = public_bucket_s3_client()
     paginator = s3_client.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=SCYLLA_REPO_BUCKET, Prefix=prefix):
         for obj in page.get("Contents", []):
@@ -1037,8 +1042,8 @@ def get_s3_scylla_repos_mapping(dist_type="centos", dist_version=None):
     if (dist_type, dist_version) in _S3_SCYLLA_REPOS_CACHE:
         return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
 
-    s3_client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION)
-    bucket = "downloads.scylladb.com"
+    s3_client = public_bucket_s3_client()
+    bucket = SCYLLA_REPO_BUCKET
 
     if dist_type in ("centos", "rocky", "rhel"):
         response = s3_client.list_objects(Bucket=bucket, Prefix="rpm/centos/", Delimiter="/")
@@ -1137,7 +1142,7 @@ def get_branched_repo(
     else:
         raise ValueError(f"Unsupported {dist_type=}")
 
-    s3_client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION)
+    s3_client = public_bucket_s3_client()
     response = s3_client.list_objects(Bucket=bucket, Prefix=prefix, Delimiter="/")
 
     for repo_file in response.get("Contents", ()):
