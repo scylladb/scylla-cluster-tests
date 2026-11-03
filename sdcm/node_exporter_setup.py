@@ -44,18 +44,21 @@ class NodeExporterSetup:
     def install(
         node: "BaseNode | None" = None,  # noqa: F821
         remoter: "Remoter | None" = None,  # noqa: F821
-        scrape_host: str = "127.0.0.1",
+        scrape_host: str | None = None,
     ) -> int:
         """Make a node_exporter serve the host and return its port.
 
-        A node_exporter that already answers at `scrape_host` (URL form, IPv6 in brackets) is reused, whatever its
-        version and collectors: the dashboards read the same metric names. Otherwise SCT installs its own on the first
-        free port.
+        With `scrape_host` (URL form, IPv6 in brackets), a node_exporter that already answers there is reused, whatever
+        its version and collectors: the dashboards read the same metric names. Otherwise SCT installs its own on the
+        first free port. Without it, for callers whose scrape target is fixed, SCT installs on the default port.
         """
         assert node or remoter, "node or remoter much be pass to this function"
         if node:
             remoter = node.remoter
-        probe = f"host={scrape_host}\n{NODE_EXPORTER_PORT_PROBE}"
+        if scrape_host:
+            probe = f"host={scrape_host}\n{NODE_EXPORTER_PORT_PROBE}"
+        else:
+            probe = f"state=free\nport={NODE_EXPORTER_DEFAULT_PORT}\n"
         machine = remoter.run("uname -m", verbose=False).stdout.strip()
         if not (arch := NODE_EXPORTER_ARCHITECTURES.get(machine)):
             raise ValueError(
