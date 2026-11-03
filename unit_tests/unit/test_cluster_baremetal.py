@@ -1269,16 +1269,16 @@ def test_a_loader_host_cleanup_skips_the_scylla_steps_and_the_baseline_restore(m
 
 
 def test_a_monitor_host_cleanup_removes_only_the_runs_monitoring_stack(monkeypatch):
-    """The run's own stack (containers with a mount under its directory) and directory go; other runs' stay."""
+    """The run's own stack (containers with its TestId label and NodeType=monitor, the mountless renderer too) and
+    directory go; other runs' stacks and the run's stress containers stay."""
     host = _host_with_disk_state()
     monkeypatch.setattr(host, "_stop_stale_log_followers", lambda: None)
 
     host.clean_up_host(tunnel_ports=False, scylla_disk_setup=False, restore_baseline=False, monitoring_stack_of="1234")
 
-    stop_script = host.remoter.run.call_args.args[0]
-    assert 'run_dir="$HOME/sct-monitoring-1234"' in stop_script
-    assert "docker rm -f" in stop_script
-    assert "kill-all.sh" not in stop_script
+    host.remoter.run.assert_called_once_with(
+        "docker ps -aq --filter label=TestId=1234 --filter label=NodeType=monitor | xargs -r docker rm -f"
+    )
     host.remoter.sudo.assert_called_once_with('rm -rf "$HOME/sct-monitoring-1234"')
 
 

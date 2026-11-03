@@ -70,19 +70,13 @@ LIST_RUNNING_SERVICES = (
 
 # Each run installs its monitoring stack, and keeps its data, in its own directory under the monitor host's home
 MONITOR_RUN_DIR = "sct-monitoring-{test_id}"
-# Removes the containers with a mount under one run's monitoring directory: that run's stack, and no other run's. The
-# stack runs with scylla-monitoring's default container names, so kill-all.sh would remove another run's stack too.
-STOP_RUN_MONITORING_STACK = """
-    run_dir="$HOME/{run_dir}"
-    [ -d "$run_dir" ] || exit 0
-    real_dir=$(realpath "$run_dir")
-    for container in $(docker ps -aq); do
-        if docker inspect -f '{{{{range .Mounts}}}}{{{{.Source}}}} {{{{end}}}}' "$container" \\
-                | grep -qF -e "$run_dir/" -e "$run_dir " -e "$real_dir/" -e "$real_dir "; then
-            docker rm -f "$container"
-        fi
-    done
-"""
+# Removes the containers of one run's monitoring stack, and no other run's: every container of the stack, the Grafana
+# renderer included, carries the run's TestId label and NodeType=monitor; the run's stress containers on a loader and
+# monitor host carry only the TestId. The stack runs with scylla-monitoring's default container names, so kill-all.sh
+# would remove another run's stack too.
+STOP_RUN_MONITORING_STACK = (
+    "docker ps -aq --filter label=TestId={test_id} --filter label=NodeType=monitor | xargs -r docker rm -f"
+)
 
 BASE_NAME = "db-node"
 LOADER_NAME = "loader-node"
@@ -175,10 +169,9 @@ class PhysicalHostCleanup:
                 self.log.warning("Could not remove the leftovers of the Scylla install, the next install will: %s", exc)
 
     def stop_monitoring_stack(self, test_id: str) -> None:
-        """Remove the containers of the monitoring stack of the run `test_id`, and only those: they are the ones with a
-        mount under its directory."""
-        script = STOP_RUN_MONITORING_STACK.format(run_dir=MONITOR_RUN_DIR.format(test_id=test_id))
-        self.remoter.run(f"bash -ce {shlex.quote(script)}")
+        """Remove the containers of the monitoring stack of the run `test_id`, and only those: the ones with its TestId
+        label and NodeType=monitor."""
+        self.remoter.run(STOP_RUN_MONITORING_STACK.format(test_id=shlex.quote(test_id)))
 
     def remove_monitoring_stack(self, test_id: str) -> None:
         """Remove the monitoring stack of the run `test_id` and its directory, the Prometheus data included: log
