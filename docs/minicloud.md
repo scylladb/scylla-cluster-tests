@@ -341,8 +341,8 @@ decoupled from the backend. The agent uses the Azure credential only for the ima
 
 ### Publish the run to Argus
 
-A minicloud run is a local run, so it sends nothing to Argus. To show it in Argus, send its replay
-log with `argus run replay`. See [Upload a minicloud run to Argus](minicloud-argus-upload.md), which
+`scripts/run-minicloud-test.sh` sets `SCT_ENABLE_ARGUS=false`, so the run sends nothing to Argus. To
+show it in Argus, send its replay log with `argus run replay`. See [Upload a minicloud run to Argus](minicloud-argus-upload.md), which
 also covers the native macOS setup.
 
 ## Troubleshooting
