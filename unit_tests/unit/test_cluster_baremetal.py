@@ -1494,3 +1494,19 @@ def test_logs_go_to_the_tunnel_or_straight_to_the_runner_per_node(node_setting, 
     monkeypatch.setattr(TestConfig, "VECTOR_SSH_TUNNEL_LOCAL_PORT", 5001)
 
     assert TestConfig.get_logging_service_host_port(node_setting) == expected
+
+
+@pytest.mark.parametrize(
+    "node_type,registered", [("loader", {"loader"}), ("monitor", {"monitor"}), ("scylla-db", None)]
+)
+def test_loader_and_monitor_hosts_are_registered_for_their_docker_preflight(monkeypatch, node_type, registered):
+    """Registered at construction, before any setup, so a loader+monitor host is checked once for both roles."""
+    monkeypatch.setattr(sdcm_cluster, "_DOCKER_HOST_CHECKS", {})
+    monkeypatch.setattr(sdcm_cluster.BaseCluster, "__init__", lambda self, **kwargs: None)
+
+    PhysicalMachineCluster(
+        credentials=[MagicMock()], n_nodes=1, public_ips=["1.0.0.1"], private_ips=["10.0.0.1"], node_type=node_type
+    )
+
+    host = sdcm_cluster._DOCKER_HOST_CHECKS.get("10.0.0.1")
+    assert (host.roles if host else None) == registered

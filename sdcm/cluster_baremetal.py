@@ -728,6 +728,10 @@ class PhysicalMachineCluster(cluster.BaseCluster):
         node_cnt = n_nodes[0] if isinstance(n_nodes, list) else n_nodes
         if len(self._node_public_ips) < node_cnt or len(self._node_private_ips) < node_cnt:
             raise NodeIpsNotConfiguredError("Physical hosts IPs are not configured!")
+        # Before any setup: a host that is both loader and monitor gets its Docker checked once, for both roles
+        if (role := kwargs.get("node_type")) in ("loader", "monitor"):
+            for address in self._node_private_ips:
+                cluster.register_docker_host_role(address, role)
         super().__init__(**kwargs)
 
     @property
