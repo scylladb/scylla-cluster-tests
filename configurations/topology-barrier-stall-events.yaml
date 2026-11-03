@@ -1,0 +1,2 @@
+# Publish Scylla topology barrier stall log lines as TOPOLOGY_BARRIER_STALL events.
+topology_barrier_stall_events: true

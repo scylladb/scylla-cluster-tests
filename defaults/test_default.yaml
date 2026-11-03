@@ -72,6 +72,7 @@ cloud_prom_bearer_token: ''
 
 backtrace_decoding: true
 backtrace_stall_decoding: true
+topology_barrier_stall_events: false
 backtrace_decoding_disable_regex: null
 print_kernel_callstack: true
 
