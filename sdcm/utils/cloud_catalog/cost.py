@@ -29,13 +29,13 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
+from sdcm.provision.gce.constants import BUNDLED_LOCAL_SSD_FAMILIES
 from sdcm.sct_config.config import (
     SIZING_ROLE_PARAMS,
     SCTConfiguration,
     backend_to_cloud,
     oracle_cluster_in_use,
 )
-from sdcm.provision.gce.constants import BUNDLED_LOCAL_SSD_FAMILIES
 from sdcm.utils.cloud_catalog.lifecycle import InstanceLifecycle
 from sdcm.utils.cloud_catalog.pricing import (
     AWSPricing,

@@ -5,11 +5,11 @@ from contextlib import contextmanager, nullcontext
 from enum import Enum
 from typing import Any
 
-from sdcm.sct_events.system import SoftTimeoutEvent, HardTimeoutEvent
+from sdcm.sct_events.system import HardTimeoutEvent, SoftTimeoutEvent
 from sdcm.utils.adaptive_timeouts.load_info_store import (
-    NodeLoadInfoService,
     AdaptiveTimeoutStore,
     ArgusAdaptiveTimeoutStore,
+    NodeLoadInfoService,
     NodeLoadInfoServices,
 )
 from sdcm.utils.features import is_tablets_feature_enabled

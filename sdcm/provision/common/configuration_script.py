@@ -17,23 +17,23 @@ from typing import Any
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
-    configure_sshd_script,
-    disable_firewall,
-    restart_sshd_service,
+    VECTOR_TARGET_FUNCTION,
     configure_backoff_timeout,
-    update_repo_cache,
-    install_syslogng_service,
-    configure_syslogng_target_script,
-    restart_syslogng_service,
-    install_syslogng_exporter,
-    disable_daily_apt_triggers,
+    configure_sshd_script,
     configure_syslogng_destination_conf,
     configure_syslogng_file_source,
-    install_vector_service,
+    configure_syslogng_target_script,
     define_vector_target_function,
+    disable_daily_apt_triggers,
+    disable_firewall,
     install_docker_service,
+    install_syslogng_exporter,
+    install_syslogng_service,
+    install_vector_service,
     minify_shell_script,
-    VECTOR_TARGET_FUNCTION,
+    restart_sshd_service,
+    restart_syslogng_service,
+    update_repo_cache,
 )
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 from sdcm.utils.sct_agent_installer import install_agent_script

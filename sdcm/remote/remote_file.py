@@ -11,18 +11,17 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import logging
-import tempfile
 import contextlib
-from pathlib import Path
+import logging
+import os
+import tempfile
 from io import StringIO
+from pathlib import Path
 
 import yaml
 
 from sdcm import wait
 from sdcm.remote import shell_script_cmd
-
 
 LOGGER = logging.getLogger(__name__)
 

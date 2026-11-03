@@ -11,20 +11,20 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
 import os
 import re
-import logging
 import time
 import uuid
 from typing import Any
 
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events.base import publish_log_line_event
-from sdcm.sct_events.loaders import NdBenchStressEvent, NDBENCH_ERROR_EVENTS_PATTERNS
+from sdcm.sct_events.loaders import NDBENCH_ERROR_EVENTS_PATTERNS, NdBenchStressEvent
+from sdcm.stress.base import format_stress_cmd_error
+from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.stress_thread import DockerBasedStressThread
-from sdcm.stress.base import format_stress_cmd_error
 
 LOGGER = logging.getLogger(__name__)
 

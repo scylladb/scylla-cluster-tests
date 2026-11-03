@@ -41,7 +41,6 @@ from sdcm.sct_config import AWS_SUPPORTED_REGIONS
 from sdcm.utils.common import convert_name_to_ami_if_needed
 from sdcm.utils.gce_utils import GCE_IMAGE_URL_REGEX, get_gce_compute_images_client
 
-
 pytestmark = pytest.mark.integration
 
 

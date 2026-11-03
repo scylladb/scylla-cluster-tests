@@ -18,12 +18,12 @@ import pytest
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent, find_log_event
 from sdcm.sct_events.database import (
+    SYSTEM_ERROR_EVENTS,
+    SYSTEM_ERROR_EVENTS_PATTERNS,
+    TOLERABLE_REACTOR_STALL,
     DatabaseLogEvent,
     FullScanEvent,
     IndexSpecialColumnErrorEvent,
-    TOLERABLE_REACTOR_STALL,
-    SYSTEM_ERROR_EVENTS,
-    SYSTEM_ERROR_EVENTS_PATTERNS,
 )
 from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 

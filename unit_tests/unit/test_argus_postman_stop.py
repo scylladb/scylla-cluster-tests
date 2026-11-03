@@ -14,9 +14,9 @@
 """Tests for ArgusEventPostman draining its queue on stop() and staying time-bounded."""
 
 import json
-import time
 import logging
 import threading
+import time
 import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -26,8 +26,6 @@ import pytest
 from argus.client.sct.client import ArgusSCTClient
 from sdcm.sct_events import Severity
 from sdcm.sct_events import events_processes as events_processes_module
-from sdcm.sct_events.base import SctEvent
-from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, stop_events_device
 from sdcm.sct_events.argus import (
     ArgusEventAggregator,
     ArgusEventCollector,
@@ -36,8 +34,10 @@ from sdcm.sct_events.argus import (
     start_argus_pipeline,
     start_argus_postman,
 )
+from sdcm.sct_events.base import SctEvent
 from sdcm.sct_events.events_device import start_events_main_device
 from sdcm.sct_events.events_processes import EVENTS_ARGUS_AGGREGATOR_ID, EventsProcessesRegistry, get_events_process
+from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, stop_events_device
 from sdcm.test_config import TestConfig
 from sdcm.utils.argus import Argus, ArgusError, ReplayOnlyArgusSCTClient
 

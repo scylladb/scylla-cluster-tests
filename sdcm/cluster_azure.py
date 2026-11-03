@@ -16,18 +16,18 @@ from functools import cached_property
 from typing import Dict, List
 
 from sdcm import cluster
-from sdcm.provision.azure.provisioner import AzureProvisioner
-from sdcm.provision.provisioner import PricingModel, VmInstance
-from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.kernel_panic_checker import AzureKernelPanicChecker
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
-from sdcm.sct_provision import region_definition_builder
-from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
+from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import (
     NetworkInterface,
     azure_network_interfaces,
     network_interfaces_count,
 )
+from sdcm.provision.provisioner import PricingModel, VmInstance
+from sdcm.sct_events.system import SpotTerminationEvent
+from sdcm.sct_provision import region_definition_builder
+from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.azure_utils import (
     HEREDOC_DELIMITER,
     SECONDARY_NICS_SCRIPT,

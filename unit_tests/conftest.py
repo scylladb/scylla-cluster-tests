@@ -32,11 +32,9 @@ from sdcm.provision import provisioner_factory
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_provision import region_definition_builder
 from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
-
 from unit_tests.lib.fake_events import make_fake_events
 from unit_tests.lib.fake_provisioner import FakeProvisioner
 from unit_tests.lib.fake_region_definition_builder import FakeDefinitionBuilder
-
 
 pytest_plugins = ["pytester"]
 

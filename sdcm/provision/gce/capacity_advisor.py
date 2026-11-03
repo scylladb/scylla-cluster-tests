@@ -49,8 +49,8 @@ from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
 from sdcm.provision.gce.constants import (
-    GCE_CAPACITY_ADVICE_CACHE_TTL,
     GCE_CAPACITY_ADVICE_API_VERSION,
+    GCE_CAPACITY_ADVICE_CACHE_TTL,
 )
 from sdcm.utils.gce_utils import _gce_client_options
 

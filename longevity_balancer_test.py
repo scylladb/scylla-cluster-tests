@@ -16,6 +16,7 @@
 
 from collections import defaultdict
 from contextlib import contextmanager
+
 from longevity_test import LongevityTest
 from sdcm.argus_results import PeriodicDiskUsageToArgus
 from sdcm.cluster import MAX_TIME_WAIT_FOR_DECOMMISSION, MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode

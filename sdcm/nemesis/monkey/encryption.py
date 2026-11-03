@@ -17,7 +17,7 @@ from sdcm.nemesis import NemesisBaseClass, target_all_nodes
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
-from sdcm.sct_events.group_common_events import suppress_expected_unavailability_errors, decorate_with_context
+from sdcm.sct_events.group_common_events import decorate_with_context, suppress_expected_unavailability_errors
 from sdcm.sct_events.loaders import ScyllaBenchEvent
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed

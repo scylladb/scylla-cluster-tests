@@ -31,7 +31,6 @@ from sdcm.utils.gce_utils import (
     gce_mac_address_for_ipv4,
 )
 
-
 PROJECT_ID = "sct-project"
 NETWORK_NAME = "qa-vpc"
 NETWORK_URL = f"projects/{PROJECT_ID}/global/networks/{NETWORK_NAME}"

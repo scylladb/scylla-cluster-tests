@@ -16,7 +16,6 @@ from sdcm.sct_provision.gce.gce_region_definition_builder import GceDefinitionBu
 from sdcm.sct_provision.oci.oci_region_definition_builder import OciDefinitionBuilder
 from sdcm.sct_provision.region_definition_builder import RegionDefinitionBuilder
 
-
 region_definition_builder = RegionDefinitionBuilder()
 region_definition_builder.register_builder(backend="azure", builder_class=AzureDefinitionBuilder)
 region_definition_builder.register_builder(backend="gce", builder_class=GceDefinitionBuilder)

@@ -11,12 +11,13 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import uuid
-import time
-import random
-import pytest
 import logging
+import random
+import time
 import typing
+import uuid
+
+import pytest
 
 from sdcm.utils.vector_store_index import index_key, wait_for_index_build_seconds
 

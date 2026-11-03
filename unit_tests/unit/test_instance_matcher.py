@@ -11,7 +11,6 @@ from sdcm.utils.cloud_catalog.instance_matcher import (
     select_instance,
 )
 
-
 # ---------------------------------------------------------------------------
 # parse_constraints — vcpu-only cases
 # ---------------------------------------------------------------------------

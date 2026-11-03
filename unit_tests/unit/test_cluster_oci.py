@@ -7,7 +7,6 @@ import pytest
 
 from sdcm.cluster_oci import CreateOciNodeError, OciCluster, OciNode
 from sdcm.utils.oci_utils import SECONDARY_VNICS_SCRIPT_PATH
-
 from unit_tests.lib.oci_test_helpers import (
     MOCK_CREDENTIALS,
     MOCK_PARENT_CLUSTER,

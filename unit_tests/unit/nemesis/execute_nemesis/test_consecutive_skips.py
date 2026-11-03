@@ -19,7 +19,7 @@ from unit_tests.unit.nemesis.execute_nemesis import (
     TestNemesisRunner,
     VersionNotFoundTestNemesis,
 )
-from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS
+from unit_tests.unit.nemesis.fake_cluster import PARAMS, FakeTester
 
 
 @pytest.fixture

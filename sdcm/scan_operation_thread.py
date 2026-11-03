@@ -7,32 +7,32 @@ import tempfile
 import threading
 import time
 import traceback
-from pathlib import Path
 from abc import abstractmethod
-from string import Template
-from typing import Optional, Type, NamedTuple, TYPE_CHECKING
 from contextlib import contextmanager
+from pathlib import Path
+from string import Template
+from typing import TYPE_CHECKING, NamedTuple, Optional, Type
 
-from pytz import utc
 from cassandra import ConsistencyLevel
 from cassandra.cluster import ResponseFuture, ResultSet
-from cassandra.query import SimpleStatement
 from cassandra.policies import ExponentialBackoffRetryPolicy
+from cassandra.query import SimpleStatement
+from pytz import utc
 
+from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import (
-    FullScanEvent,
-    FullPartitionScanReversedOrderEvent,
     FullPartitionScanEvent,
+    FullPartitionScanReversedOrderEvent,
     FullScanAggregateEvent,
+    FullScanEvent,
 )
-from sdcm.utils.database_query_utils import get_table_clustering_order, get_partition_keys
-from sdcm.utils.operations_thread import OperationThreadStats, OneOperationStat, OperationThread, ThreadParams
-from sdcm.db_stats import PrometheusDBStats
 from sdcm.test_config import TestConfig
-from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.database_query_utils import get_partition_keys, get_table_clustering_order
+from sdcm.utils.decorators import Retry, retrying
 from sdcm.utils.issues import SkipPerIssues
+from sdcm.utils.operations_thread import OneOperationStat, OperationThread, OperationThreadStats, ThreadParams
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode

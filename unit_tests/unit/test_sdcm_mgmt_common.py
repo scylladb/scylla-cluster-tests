@@ -1,6 +1,6 @@
 import pytest
 
-from sdcm.mgmt.common import get_manager_scylla_backend, get_manager_repo
+from sdcm.mgmt.common import get_manager_repo, get_manager_scylla_backend
 from sdcm.utils.distro import Distro
 
 

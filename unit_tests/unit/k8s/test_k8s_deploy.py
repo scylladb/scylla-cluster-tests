@@ -27,10 +27,8 @@ are patched so no real AWS/GCE API calls are made.
 
 from unittest.mock import MagicMock, patch
 
-
 from sdcm.cluster_k8s.eks import deploy_k8s_eks_cluster
 from sdcm.cluster_k8s.gke import deploy_k8s_gke_cluster
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers

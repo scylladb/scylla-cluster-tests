@@ -6,12 +6,11 @@ import pytest
 import yaml
 
 from sdcm.utils.k8s import (
-    _ManifestLoader,
     HelmValues,
     KubernetesOps,
     ScyllaPodsIPChangeTrackerThread,
+    _ManifestLoader,
 )
-
 
 BASE_HELM_VALUES = {
     "no_nesting_key": "no_nesting_value",

@@ -11,28 +11,27 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
 import logging
 import threading
-from typing import NewType, Dict, Any, Tuple, Optional, Callable, cast
-from functools import partial
+import time
 from collections import defaultdict
+from functools import partial
+from typing import Any, Callable, Dict, NewType, Optional, Tuple, cast
 
 import requests
 
 from sdcm.sct_events.events_processes import (
-    EVENTS_GRAFANA_ANNOTATOR_ID,
     EVENTS_GRAFANA_AGGREGATOR_ID,
+    EVENTS_GRAFANA_ANNOTATOR_ID,
     EVENTS_GRAFANA_POSTMAN_ID,
-    EventsProcessesRegistry,
     BaseEventsProcess,
+    EventsProcessesRegistry,
     EventsProcessPipe,
-    start_events_process,
     get_events_process,
+    start_events_process,
     verbose_suppress,
 )
 from sdcm.utils.grafana_api import GRAFANA_ANNOTATIONS_API_PATH
-
 
 GRAFANA_EVENT_AGGREGATOR_TIME_WINDOW: float = 90  # seconds
 GRAFANA_EVENT_AGGREGATOR_MAX_DUPLICATES: int = 5

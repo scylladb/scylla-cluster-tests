@@ -29,7 +29,6 @@ from sdcm.utils.trigger_matrix.config import load_matrix_config
 from sdcm.utils.trigger_matrix.filters import filter_jobs
 from sdcm.utils.trigger_matrix.parameters import build_job_parameters
 
-
 PERF_YAML = Path(__file__).parents[3] / "configurations" / "triggers" / "perf-regression.yaml"
 
 

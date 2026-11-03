@@ -18,15 +18,15 @@ is called out, which is what catches a rotation that forgot to update the tag.
 Exit codes: 0 when nothing is expired, 1 when at least one secret is.
 """
 
+import argparse
+import datetime
+import json
 import os
 import sys
-import json
-import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
-import argparse
-import datetime
+import uuid
 
 import boto3
 from botocore.exceptions import ClientError

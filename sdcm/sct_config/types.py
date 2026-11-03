@@ -33,7 +33,6 @@ from typing_extensions import Annotated
 
 from sdcm.utils.adaptive_timeouts import Operations
 
-
 #: Accepted string spellings of true/false, matching what `distutils.util.strtobool` accepted.
 _TRUTHY = frozenset({"y", "yes", "t", "true", "on", "1"})
 _FALSY = frozenset({"n", "no", "f", "false", "off", "0"})

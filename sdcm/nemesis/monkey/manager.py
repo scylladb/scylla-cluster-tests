@@ -14,7 +14,7 @@ from sdcm import mgmt
 from sdcm.exceptions import UnsupportedNemesis, WaitForTimeoutError
 from sdcm.mgmt.argus_report import report_manager_backup_results_to_argus
 from sdcm.mgmt.backup import run_manager_backup
-from sdcm.mgmt.common import TaskStatus, TERMINAL_TASK_STATUSES, ObjectStorageUploadMode, get_persistent_snapshots
+from sdcm.mgmt.common import TERMINAL_TASK_STATUSES, ObjectStorageUploadMode, TaskStatus, get_persistent_snapshots
 from sdcm.mgmt.helpers import get_dc_name_from_ks_statement, get_schema_create_statements_from_snapshot
 from sdcm.nemesis import NemesisBaseClass, target_data_nodes
 from sdcm.nemesis.utils.common import destroy_data_and_restart_scylla

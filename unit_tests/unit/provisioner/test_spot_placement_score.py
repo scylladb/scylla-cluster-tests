@@ -20,17 +20,15 @@ from botocore.exceptions import (
     EndpointConnectionError,
     NoCredentialsError,
 )
-
-from sdcm.provision.aws.constants import SPOT_FLEET_ALLOCATION_STRATEGY
-
 from botocore.parsers import ResponseParserError
 
 from sdcm.provision.aws import spot_placement_score
+from sdcm.provision.aws.constants import SPOT_FLEET_ALLOCATION_STRATEGY
 from sdcm.provision.aws.spot_placement_score import (
-    rank_az_letters_for_roles,
     PlacementScore,
     _chunk_regions,
     get_scores,
+    rank_az_letters_for_roles,
     rank_regions,
 )
 

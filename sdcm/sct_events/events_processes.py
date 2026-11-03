@@ -14,17 +14,15 @@
 from __future__ import annotations
 
 import abc
-import queue
 import ctypes
 import logging
-import threading
 import multiprocessing
-from typing import Union, Generator, Protocol, TypeVar, Generic, Type, Optional, cast
-from pathlib import Path
+import queue
+import threading
 from contextlib import contextmanager
-
+from pathlib import Path
+from typing import Generator, Generic, Optional, Protocol, Type, TypeVar, Union, cast
 from weakref import proxy as weakproxy
-
 
 EVENTS_MAIN_DEVICE_ID = "MainDevice"
 EVENTS_FILE_LOGGER_ID = "EVENTS_FILE_LOGGER"

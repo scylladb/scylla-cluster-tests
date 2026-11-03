@@ -11,8 +11,9 @@
 #
 # Copyright (c) 2022 ScyllaDB
 import logging
-from dataclasses import dataclass
 import time
+from dataclasses import dataclass
+
 import yaml
 
 from sdcm.cluster import BaseNode
@@ -20,7 +21,6 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.tester import ClusterTester
-
 
 LOGGER = logging.getLogger(__name__)
 

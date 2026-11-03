@@ -20,8 +20,8 @@ import gzip
 import socket
 import threading
 import time
-from unittest.mock import MagicMock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest.mock import MagicMock
 
 import pytest
 import requests

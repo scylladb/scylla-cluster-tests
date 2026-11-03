@@ -15,14 +15,14 @@
 
 from __future__ import annotations
 
-from functools import (
-    cache,
-    cached_property,
-)
 import hashlib
 import logging
 import re
 import time
+from functools import (
+    cache,
+    cached_property,
+)
 
 import oci
 from oci.core import BlockstorageClient, ComputeClient, VirtualNetworkClient

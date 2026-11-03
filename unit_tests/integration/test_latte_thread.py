@@ -11,10 +11,11 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import pytest
 import re
-import requests
 import time
+
+import pytest
+import requests
 
 from sdcm.stress.latte_thread import LatteStressThread
 from unit_tests.lib.dummy_remote import LocalLoaderSetDummy

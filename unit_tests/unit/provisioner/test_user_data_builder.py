@@ -19,7 +19,7 @@ import pytest
 import yaml
 
 from sdcm.provision.common.utils import minify_shell_script
-from sdcm.provision.user_data import UserDataObject, UserDataBuilder, gzipped_mime_part
+from sdcm.provision.user_data import UserDataBuilder, UserDataObject, gzipped_mime_part
 from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
 
 

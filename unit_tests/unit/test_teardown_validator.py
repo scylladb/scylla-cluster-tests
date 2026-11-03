@@ -1,11 +1,11 @@
 import logging
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, mock_open, patch
 
 import pytest
 
+from sdcm.sct_config import SCTConfiguration
 from sdcm.teardown_validators.events import ErrorEventsValidator, Severity
 from sdcm.teardown_validators.rackaware import RackawareValidator
-from sdcm.sct_config import SCTConfiguration
 
 LOGGER = logging.getLogger(__name__)
 

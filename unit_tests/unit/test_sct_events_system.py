@@ -14,21 +14,20 @@
 import pickle
 from textwrap import dedent
 
-
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import find_log_event
 from sdcm.sct_events.system import (
-    StartupTestEvent,
-    TestFrameworkEvent,
-    SpotTerminationEvent,
+    INSTANCE_STATUS_EVENTS_PATTERNS,
+    CoreDumpEvent,
+    InfoEvent,
+    InstanceStatusEvent,
     NodeUnreachableEvent,
     ScyllaRepoEvent,
-    InfoEvent,
-    ThreadFailedEvent,
-    CoreDumpEvent,
+    SpotTerminationEvent,
+    StartupTestEvent,
+    TestFrameworkEvent,
     TestResultEvent,
-    InstanceStatusEvent,
-    INSTANCE_STATUS_EVENTS_PATTERNS,
+    ThreadFailedEvent,
 )
 
 

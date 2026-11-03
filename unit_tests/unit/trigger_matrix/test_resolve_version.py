@@ -16,10 +16,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.utils.trigger_matrix.errors import TriggerMatrixError
-from sdcm.utils.trigger_matrix.images import resolve_image_architecture
+from sdcm.utils.trigger_matrix.images import (
+    _arch_from_image_name,
+    resolve_architecture_from_ami,
+    resolve_image_architecture,
+)
 from sdcm.utils.trigger_matrix.resolution import resolve_to_full_version
-from sdcm.utils.trigger_matrix.images import _arch_from_image_name, resolve_architecture_from_ami
-
 
 FULL_TAG = "2025.4.1-0.20250601.abc123def456-1"
 

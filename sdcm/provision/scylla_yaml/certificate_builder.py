@@ -12,25 +12,24 @@
 # Copyright (c) 2021 ScyllaDB
 from functools import cached_property
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any, Optional
 
 from pydantic import Field, computed_field
 
 from sdcm.provision.helpers.certificate import (
-    install_client_certificate,
+    CA_CERT_FILE,
     CLIENT_FACING_CERTFILE,
     CLIENT_FACING_KEYFILE,
-    CA_CERT_FILE,
+    SCYLLA_SSL_CONF_DIR,
     SERVER_CERT_FILE,
     SERVER_KEY_FILE,
-    SCYLLA_SSL_CONF_DIR,
+    install_client_certificate,
 )
 from sdcm.provision.scylla_yaml.auxiliaries import (
-    ScyllaYamlAttrBuilderBase,
     ClientEncryptionOptions,
+    ScyllaYamlAttrBuilderBase,
     ServerEncryptionOptions,
 )
-
 
 # Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
 

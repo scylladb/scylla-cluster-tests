@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import logging
+import time
 from concurrent.futures.thread import ThreadPoolExecutor
 from itertools import chain
 from pprint import pformat
-import time
-from typing import NamedTuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import boto3
 from cassandra import InvalidRequest
 from mypy_boto3_dynamodb import DynamoDBClient, DynamoDBServiceResource
 from mypy_boto3_dynamodb.service_resource import Table
 
-from sdcm.utils.alternator import schemas, enums, consts
-from sdcm.utils.alternator.consts import TABLE_NAME, NO_LWT_TABLE_NAME
+from sdcm.utils.alternator import consts, enums, schemas
+from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME, TABLE_NAME
 from sdcm.utils.common import normalize_ipv6_url
 from sdcm.utils.context_managers import environment
 

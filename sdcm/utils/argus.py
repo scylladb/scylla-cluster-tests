@@ -1,8 +1,8 @@
 import datetime
 import json
 import logging
-import re
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -10,9 +10,8 @@ from uuid import UUID
 
 from botocore.exceptions import ClientError
 
-from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
-
+from argus.client.sct.client import ArgusSCTClient
 from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)

@@ -3,8 +3,8 @@ from uuid import uuid4
 
 import pytest
 
-from sdcm.sct_runner import AzureSctRunner
 from sdcm.provision import AzureProvisioner
+from sdcm.sct_runner import AzureSctRunner
 from sdcm.utils.decorators import retrying
 
 

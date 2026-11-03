@@ -11,34 +11,34 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import getpass
+import os
 import threading
-from types import SimpleNamespace
-from typing import Union, Optional
 from logging import getLogger
+from types import SimpleNamespace
+from typing import Optional, Union
 from unittest.mock import patch
 
 import pytest
 
-# from parameterized import parameterized
+from sdcm.cluster_k8s import KubernetesCluster
 
+# from parameterized import parameterized
 from sdcm.remote import (
-    RemoteLibSSH2CmdRunner,
-    RemoteCmdRunner,
     LocalCmdRunner,
+    RemoteCmdRunner,
+    RemoteLibSSH2CmdRunner,
     RetryableNetworkException,
     SSHConnectTimeoutError,
     shell_script_cmd,
 )
-from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.remote.base import CommandRunner, Result
+from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.remote.libssh2_client.exceptions import FailedToRunCommand, OpenChannelTimeout
 from sdcm.remote.remote_file import remote_file
 from sdcm.remote.remote_libssh_cmd_runner import MINICLOUD_CHANNEL_TIMEOUT_ALERT_THRESHOLD
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.cluster_k8s import KubernetesCluster
 
 
 class FakeKluster(KubernetesCluster):

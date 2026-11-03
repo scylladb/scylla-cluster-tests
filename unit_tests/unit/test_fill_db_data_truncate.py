@@ -13,10 +13,10 @@ import pytest
 from cassandra import OperationTimedOut
 
 from sdcm.fill_db_data import (
-    FillDatabaseData,
-    TruncateTablesError,
     MAX_TRUNCATE_FAILURES,
     TRUNCATE_TIMEOUT,
+    FillDatabaseData,
+    TruncateTablesError,
 )
 
 

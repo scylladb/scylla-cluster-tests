@@ -17,11 +17,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.reporting.tooling_reporter import (
-    YcsbVersionReporter,
     YcsbAwsSdkVersionReporter,
     YcsbScyllaDriverVersionReporter,
+    YcsbVersionReporter,
 )
-
 
 SAMPLE_VERSION_JSON = json.dumps(
     {

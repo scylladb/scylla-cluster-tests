@@ -4,7 +4,7 @@ import threading
 import time
 
 from sdcm import wait
-from sdcm.cluster import BaseScyllaCluster, BaseCluster
+from sdcm.cluster import BaseCluster, BaseScyllaCluster
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import TombstoneGcVerificationEvent

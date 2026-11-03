@@ -12,8 +12,8 @@
 # Copyright (c) 2026 ScyllaDB
 
 
-from sdcm.utils.trigger_matrix.models import JobConfig
 from sdcm.utils.trigger_matrix.filters import filter_jobs
+from sdcm.utils.trigger_matrix.models import JobConfig
 
 
 def test_no_filters_returns_all(sample_jobs):

@@ -1,6 +1,7 @@
-from sdcm.utils.alternator import enums, consts
-from sdcm.utils.alternator.api import Alternator
 from contextlib import contextmanager
+
+from sdcm.utils.alternator import consts, enums
+from sdcm.utils.alternator.api import Alternator
 
 
 def pre_create_alternator_backuped_tables(node, alternator: Alternator, params, **kwargs):

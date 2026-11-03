@@ -18,7 +18,6 @@ import pytest
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils import resources_cleanup
 from sdcm.utils.resources_cleanup import (
-    clean_spot_fleet_requests_aws,
     clean_cloud_resources,
     clean_clusters_gke,
     clean_elastic_ips_aws,
@@ -26,8 +25,8 @@ from sdcm.utils.resources_cleanup import (
     clean_instances_gce,
     clean_instances_oci,
     clean_resources_docker,
+    clean_spot_fleet_requests_aws,
 )
-
 
 SCT_RUNNER_AWS = {
     "Tags": [{"Key": "NodeType", "Value": "sct-runner"}],

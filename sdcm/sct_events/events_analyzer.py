@@ -11,23 +11,22 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import sys
 import logging
+import sys
 import threading
-from typing import Tuple, Any, Optional
 from functools import partial
+from typing import Any, Optional, Tuple
 
 from sdcm.cluster import TestConfig
 from sdcm.sct_events import Severity
 from sdcm.sct_events.events_processes import (
     EVENTS_ANALYZER_ID,
-    EventsProcessesRegistry,
     BaseEventsProcess,
-    start_events_process,
+    EventsProcessesRegistry,
     get_events_process,
+    start_events_process,
     verbose_suppress,
 )
-
 
 LOADERS_EVENTS = {
     "CassandraStressEvent",

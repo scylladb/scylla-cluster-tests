@@ -22,22 +22,21 @@ import pytest
 
 from sdcm.cluster import BaseNode
 from sdcm.cluster_gce import GCENode
-from sdcm.provision.oci.virtual_machine_provider import VirtualMachineProvider
-from sdcm.utils.cloud_catalog.cost import get_hourly_rate
-from utils import cloud_cleanup
 from sdcm.provision.gce.utils import tags_to_gce_labels
-from sdcm.utils.cloud_catalog.cost import InstanceRate, RunCostEstimate
+from sdcm.provision.oci.virtual_machine_provider import VirtualMachineProvider
+from sdcm.utils.cloud_catalog.cost import InstanceRate, RunCostEstimate, get_hourly_rate
 from sdcm.utils.cost_reporting import (
     PRICE_TAG,
     PRICING_TIER_TAG,
-    instance_cost_item,
     cost_item_from_tags,
+    instance_cost_item,
     price_tags,
     rate_from_tags,
     report_cost_items,
-    report_estimated_cost,
     report_costs_from_tags,
+    report_estimated_cost,
 )
+from utils import cloud_cleanup
 
 
 class _FakeArgus:

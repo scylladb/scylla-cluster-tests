@@ -31,11 +31,11 @@ from botocore.config import Config
 
 from sdcm.utils.aws_utils import EksClusterForCleaner
 from sdcm.utils.common import all_aws_regions
-from utils.cloud_cleanup import LOGGER
 from utils.cloud_cleanup import (
-    should_keep,
-    get_keep_hours_from_tags,
     DEFAULT_KEEP_HOURS,
+    LOGGER,
+    get_keep_hours_from_tags,
+    should_keep,
 )
 
 BOTO3_TIMEOUT_CONFIG = Config(connect_timeout=10, read_timeout=30, retries={"max_attempts": 2})

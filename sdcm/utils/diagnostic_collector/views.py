@@ -1,10 +1,8 @@
-import logging
 import json
-
-
+import logging
 from datetime import datetime
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 from sdcm.test_config import TestConfig
 from sdcm.utils.diagnostic_collector import DiagnosticCollector, ExceptionHandler

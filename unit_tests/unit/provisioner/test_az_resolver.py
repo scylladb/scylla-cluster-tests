@@ -24,10 +24,9 @@ from sdcm.provision.aws.az_resolver import (
     is_spot_placement_scoring_enabled,
     run_pre_flight_capacity_probe,
 )
+from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted
 from sdcm.provision.aws.spot_placement_score import PlacementScore
 from sdcm.provision.common.fallback import is_az_fallback_enabled
-from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted
-
 from unit_tests.lib.dot_dict import DotDict
 
 

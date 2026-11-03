@@ -15,7 +15,7 @@ import logging
 import time
 
 from sdcm.cluster_cloud import ScyllaCloudCluster, ScyllaCloudError
-from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.decorators import Retry, retrying
 
 LOGGER = logging.getLogger(__name__)
 

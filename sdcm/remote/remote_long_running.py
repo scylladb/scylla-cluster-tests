@@ -1,14 +1,14 @@
-import time
 import logging
-from uuid import uuid4
-from pathlib import Path
+import time
 from contextlib import ExitStack
+from pathlib import Path
+from uuid import uuid4
 
 from invoke.exceptions import CommandTimedOut as InvokeCommandTimedOut
 
-from sdcm.remote.remote_cmd_runner import RemoteCmdRunnerBase
-from sdcm.remote.libssh2_client.result import Result
 from sdcm.remote.libssh2_client.exceptions import CommandTimedOut, UnexpectedExit
+from sdcm.remote.libssh2_client.result import Result
+from sdcm.remote.remote_cmd_runner import RemoteCmdRunnerBase
 
 logger = logging.getLogger(__name__)
 

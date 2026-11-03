@@ -27,7 +27,6 @@ from sdcm.provision.gce import instance_provider
 from sdcm.provision.gce.instance_provider import VirtualMachineProvider
 from sdcm.provision.provisioner import InstanceDefinition, OperationPreemptedError, PricingModel, ProvisionError
 
-
 FAKE_SSH_KEY = SSHKey(name="test_key", public_key=b"ssh-rsa AAAA fake\n", private_key=b"fake-private\n")
 
 

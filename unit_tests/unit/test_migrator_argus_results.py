@@ -21,7 +21,6 @@ from sdcm.argus_results import (
     send_migrator_results_to_argus,
 )
 
-
 EXPECTED_BENCHMARK_COLUMNS = {
     "P99 write max",
     "P99 write avg",

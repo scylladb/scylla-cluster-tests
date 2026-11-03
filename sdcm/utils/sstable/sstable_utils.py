@@ -4,9 +4,9 @@ import logging
 import random
 from pathlib import Path
 
+from sdcm.exceptions import SstablesNotFound
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.utils.version_utils import ComparableScyllaVersion
-from sdcm.exceptions import SstablesNotFound
 
 
 class NonDeletedTombstonesFound(Exception):

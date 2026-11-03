@@ -4,8 +4,8 @@ import re
 from functools import reduce
 from typing import Optional, Union
 
-from sdcm.sct_events.events_device import get_events_main_device
 from sdcm.sct_events import Severity
+from sdcm.sct_events.events_device import get_events_main_device
 from sdcm.teardown_validators.base import TeardownValidator
 
 LOGGER = logging.getLogger(__name__)

@@ -11,9 +11,10 @@
 #
 # Copyright (c) 2020 ScyllaDB
 from __future__ import annotations
-import time
+
 import logging
-from typing import Generator, TYPE_CHECKING
+import time
+from typing import TYPE_CHECKING, Generator
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent

@@ -6,11 +6,11 @@ import pytest
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressEventsPublisher
 from sdcm.ndbench_thread import NdBenchStressEventsPublisher
-from sdcm.scylla_bench_thread import ScyllaBenchStressEventsPublisher
 from sdcm.sct_events import loaders
 from sdcm.sct_events.base import publish_log_line_event
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.operator import SCYLLA_OPERATOR_EVENT_PATTERNS
+from sdcm.scylla_bench_thread import ScyllaBenchStressEventsPublisher
 from sdcm.stress_thread import CassandraStressEventsPublisher
 
 LINE_PREFIX = "2026-10-14T10:00:00.000 "

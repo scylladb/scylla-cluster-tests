@@ -1,9 +1,8 @@
 from typing import Union
 
-from .common import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
 from .cli import ManagerCluster, ScyllaManagerToolDocker, ScyllaManagerToolNonRedhat, ScyllaManagerToolRedhatLike
-from .operator import ScyllaManagerToolOperator, OperatorManagerCluster
-
+from .common import HostRestStatus, HostSsl, HostStatus, ScyllaManagerError, TaskStatus
+from .operator import OperatorManagerCluster, ScyllaManagerToolOperator
 
 AnyManagerTool = Union[
     ScyllaManagerToolOperator, ScyllaManagerToolRedhatLike, ScyllaManagerToolNonRedhat, ScyllaManagerToolDocker

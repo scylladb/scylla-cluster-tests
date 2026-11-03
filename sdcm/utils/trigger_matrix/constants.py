@@ -19,7 +19,6 @@ stops `models` from having to import the wait and resolution layers that import 
 
 from typing import Literal
 
-
 VALID_BACKENDS = {"aws", "gce", "azure", "docker", "oci"}
 
 # Backends whose Scylla build is published as an image SCT looks up by version

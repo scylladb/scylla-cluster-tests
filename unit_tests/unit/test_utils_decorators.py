@@ -14,7 +14,6 @@ from sdcm.utils.decorators import (
     skip_on_capacity_issues,
 )
 
-
 HDR_TAGS1 = ["foohdr1", "foohdr2"]
 HDR_TAGS2 = ["barhdr1", "barhdr2"]
 

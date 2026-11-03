@@ -3,7 +3,6 @@ from unittest.mock import MagicMock, PropertyMock
 from sdcm.cluster import BaseCluster, BaseNode
 from sdcm.cluster_aws import AWSNode
 from sdcm.provision.network_configuration import NetworkInterfaceNotFound, ScyllaNetworkConfiguration
-
 from unit_tests.lib.oci_test_helpers import make_oci_node_mock
 
 

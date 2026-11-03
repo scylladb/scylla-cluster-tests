@@ -1,9 +1,8 @@
 import logging
-
 from abc import ABC, abstractmethod
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
-from enum import StrEnum
 
 LOGGER = logging.getLogger(__name__)
 

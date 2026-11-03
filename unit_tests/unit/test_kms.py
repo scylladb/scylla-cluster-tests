@@ -31,7 +31,6 @@ from unit_tests.lib.dot_dict import DotDict
 from unit_tests.lib.dummy_remote import DummyRemote
 from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode
 
-
 # ---------------------------------------------------------------------------
 # Shared test data and fixtures
 # ---------------------------------------------------------------------------

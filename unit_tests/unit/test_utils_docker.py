@@ -19,21 +19,22 @@ import http.client
 import io
 import os
 import socket
-import pytest
-from types import SimpleNamespace
-from unittest.mock import Mock, patch, mock_open, sentinel
 from collections import namedtuple
+from types import SimpleNamespace
+from unittest.mock import Mock, mock_open, patch, sentinel
+
+import pytest
 
 from sdcm.utils.docker_utils import (
-    _Name,
+    ContainerAlreadyRegistered,
     ContainerManager,
     DockerClient,
     DockerException,
-    NotFound,
     ImageNotFound,
+    NotFound,
     NullResource,
     Retry,
-    ContainerAlreadyRegistered,
+    _Name,
 )
 
 # Docker sends 101 upgrade headers, then multiplexed frames on the same connection.

@@ -18,16 +18,15 @@ zones, one rack per zone. Which zone a node goes to is derived from the node its
 index, or its node index - never from its position in the batch being provisioned.
 """
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from google.cloud import compute_v1
 
+from sdcm.keystore import SSHKey
 from sdcm.provision.gce.provisioner import GceProvisioner
 from sdcm.provision.gce.utils import normalize_instance_name
 from sdcm.provision.provisioner import InstanceDefinition, PricingModel, ProvisionError
-from sdcm.keystore import SSHKey
-
 
 FAKE_SSH_KEY = SSHKey(
     name="test_key",

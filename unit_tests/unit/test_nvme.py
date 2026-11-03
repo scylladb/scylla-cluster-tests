@@ -23,7 +23,6 @@ import base64
 import json
 from unittest.mock import MagicMock, PropertyMock
 
-
 from sdcm.cluster import BaseScyllaCluster
 from sdcm.sct_events import Severity
 from sdcm.utils.nvme_diagnostics import (
@@ -68,7 +67,6 @@ from sdcm.utils.nvme_diagnostics import (
     run_self_test_on_all_devices,
     store_baseline_smart_logs,
 )
-
 
 # ---------------------------------------------------------------------------
 # Sample outputs for testing

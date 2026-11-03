@@ -13,7 +13,6 @@
 
 from typing import Optional
 
-
 # Cloud provider agents run their own apt commands at boot and may hold the apt locks for
 # minutes (e.g. the oracle-cloud-agent snap runs `apt update` on OCI instances), so wait
 # as long as the cloud-init apt configuration does (see sdcm/provision/user_data.py).

@@ -14,10 +14,9 @@
 """Unit tests for `sdcm.utils.oci_region.OciRegion`."""
 
 from ipaddress import ip_network
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
-
 from oci.core.models import EgressSecurityRule, IngressSecurityRule, PortRange, TcpOptions
 
 from sdcm.utils.oci_region import OciRegion

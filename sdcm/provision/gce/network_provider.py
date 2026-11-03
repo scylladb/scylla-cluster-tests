@@ -19,8 +19,8 @@ import logging
 from typing import List
 
 from sdcm.provision.gce.constants import (
-    NETWORK_TAG_SCT_NETWORK_ONLY,
     NETWORK_TAG_SCT_ALLOW_PUBLIC,
+    NETWORK_TAG_SCT_NETWORK_ONLY,
     SECONDARY_SUBNET_NAME_TMPL,
 )
 

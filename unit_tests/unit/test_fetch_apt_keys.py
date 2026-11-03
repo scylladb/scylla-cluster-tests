@@ -7,7 +7,6 @@ from sdcm.cluster import BaseNode, NodeSetupFailed
 from sdcm.remote import shell_script_cmd
 from sdcm.utils.curl import curl_with_retry
 
-
 APT_KEY = "AABBCCDD11223344"
 HKP_KEYSERVERS = [
     "hkp://keyserver.ubuntu.com:80",

@@ -11,21 +11,21 @@
 #
 # Copyright (c) 2020 ScyllaDB
 import datetime
+import json
 import pprint
 import re
 from contextlib import contextmanager
 from functools import cached_property
-import json
 from typing import Iterator
 from unittest import SkipTest
 
-import yaml
 import requests
+import yaml
 
 from sdcm.argus_results import send_iotune_results_to_argus
-from sdcm.sct_events import Severity
 from sdcm.provision.gce.constants import BUNDLED_LOCAL_SSD_FAMILIES
 from sdcm.provision.helpers.certificate import c_s_transport_str
+from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.tester import ClusterTester
 from sdcm.utils.adaptive_timeouts import NodeLoadInfoServices

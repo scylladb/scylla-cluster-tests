@@ -11,29 +11,39 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
 import math
 import os
 import time
-import logging
-from typing import Dict, ParamSpec, TypeVar, List
-from functools import cached_property, cache
 from collections.abc import Callable
+from functools import cache, cached_property
+from typing import Dict, List, ParamSpec, TypeVar
 
-import tenacity
 import google.api_core.exceptions
+import tenacity
 from google.cloud import compute_v1
 
 from sdcm import cluster
-from sdcm.provision.gce.provisioner import GceProvisioner
+from sdcm.kernel_panic_checker import GCPKernelPanicChecker
+from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.provision.gce.instance_provider import _is_zone_exhausted
+from sdcm.provision.gce.provisioner import GceProvisioner
 from sdcm.provision.gce.utils import normalize_instance_name
+from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.provision.network_configuration import NetworkInterface, network_interfaces_count, ssh_connection_ip_type
 from sdcm.provision.provisioner import PricingModel, ProvisionError, ZoneResourcesExhaustedError
-from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
-from sdcm.sct_provision import region_definition_builder
-from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
+from sdcm.sct_events.system import SpotTerminationEvent
+from sdcm.sct_provision import region_definition_builder
+from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
+from sdcm.utils.common import (
+    MINICLOUD_PENDING_INSTANCES_TIMEOUT,
+    PENDING_INSTANCES_TIMEOUT,
+    gce_meta_to_dict,
+    list_instances_gce,
+)
+from sdcm.utils.decorators import retrying
 from sdcm.utils.gce_utils import (
     SECONDARY_NIC_ROUTING_SCRIPT,
     SECONDARY_NIC_ROUTING_SCRIPT_PATH,
@@ -41,28 +51,17 @@ from sdcm.utils.gce_utils import (
     SECONDARY_NIC_ROUTING_SERVICE_UNIT,
     GceLoggingClient,
     gce_instance_zone,
-    get_gce_compute_disks_client,
-    get_alternative_zones,
-    wait_for_extended_operation,
     gce_mac_address_for_ipv4,
     gce_private_addresses,
     gce_public_addresses,
     gce_set_labels,
+    get_alternative_zones,
+    get_gce_compute_disks_client,
+    wait_for_extended_operation,
 )
-from sdcm.wait import exponential_retry
-from sdcm.kernel_panic_checker import GCPKernelPanicChecker
-from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.utils.common import (
-    MINICLOUD_PENDING_INSTANCES_TIMEOUT,
-    PENDING_INSTANCES_TIMEOUT,
-    list_instances_gce,
-    gce_meta_to_dict,
-)
-from sdcm.utils.decorators import retrying
 from sdcm.utils.minicloud.endpoint import is_minicloud_active
-from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import resolve_ip_to_dns
-
+from sdcm.wait import exponential_retry
 
 SPOT_TERMINATION_CHECK_DELAY = 5 * 60
 GCE_RUNNING_POLL_INTERVAL = 30

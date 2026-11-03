@@ -15,16 +15,15 @@ import time
 import unittest.mock
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.gce_events import GceInstanceEvent
-from sdcm.sct_events.system import InfoEvent, SpotTerminationEvent
-from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT, EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.sct_events.events_analyzer import (
     EventsAnalyzer,
     _is_benign_gce_live_migration_of_loader,
     start_events_analyzer,
 )
 from sdcm.sct_events.events_processes import EVENTS_ANALYZER_ID, get_events_process
-
+from sdcm.sct_events.gce_events import GceInstanceEvent
+from sdcm.sct_events.setup import EVENTS_PROCESS_STOP_TIMEOUT, EVENTS_SUBSCRIBERS_START_DELAY
+from sdcm.sct_events.system import InfoEvent, SpotTerminationEvent
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 

@@ -6,9 +6,7 @@ import pytest
 
 from sdcm.utils.diagnostic_collector import ExceptionStrategy
 from sdcm.utils.diagnostic_collector.manager import DiagnosticManager, DiagnosticResult, collect_diagnostics
-
 from unit_tests.unit.diagnostic_collector import MockDiagnosticCollector, MockExceptionHandler
-
 
 # --- Test DiagnosticManager Collection ---
 

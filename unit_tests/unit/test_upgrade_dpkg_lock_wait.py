@@ -18,7 +18,6 @@ import pytest
 
 from upgrade_test import UpgradeTest
 
-
 UpgradeTest.__test__ = False
 
 pytestmark = pytest.mark.usefixtures("events")

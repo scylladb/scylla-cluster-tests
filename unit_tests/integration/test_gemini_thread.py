@@ -15,9 +15,9 @@ import json
 from pathlib import Path
 from time import sleep, time
 
+import pytest
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster
-import pytest
 
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.docker_utils import running_in_docker

@@ -11,8 +11,9 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, List, Union
-from sdcm.remote.remote_base import StreamWatcher, Result, CommandRunner
+from typing import List, Optional, Union
+
+from sdcm.remote.remote_base import CommandRunner, Result, StreamWatcher
 from unit_tests.lib.data_pickle import Pickler
 
 

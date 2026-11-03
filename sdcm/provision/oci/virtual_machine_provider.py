@@ -19,14 +19,14 @@ from typing import Dict, List, Optional
 import oci
 from oci.core.models import (
     AttachVnicDetails,
+    CreateVnicDetails,
+    CreateVolumeDetails,
+    Instance,
+    LaunchAttachParavirtualizedVolumeDetails,
     LaunchInstanceDetails,
     LaunchInstanceShapeConfigDetails,
-    CreateVnicDetails,
-    Instance,
-    PreemptionAction,
     PreemptibleInstanceConfigDetails,
-    CreateVolumeDetails,
-    LaunchAttachParavirtualizedVolumeDetails,
+    PreemptionAction,
 )
 
 from sdcm.provision.oci.constants import (

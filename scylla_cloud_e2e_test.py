@@ -26,7 +26,7 @@ from cassandra.query import BatchStatement
 
 from sdcm.rest.remote_curl_client import RemoteCurlClient
 from sdcm.tester import ClusterTester
-from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.decorators import Retry, retrying
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.xcloud.cluster_runtime_utils import (
     wait_for_cluster_disk_utilization,

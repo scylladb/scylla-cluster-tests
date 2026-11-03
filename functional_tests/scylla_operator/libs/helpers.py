@@ -12,17 +12,17 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from enum import Enum
 import logging
 import time
+from enum import Enum
 from typing import Union
-import yaml
 
+import yaml
 from kubernetes.client import exceptions as k8s_exceptions
 
 from sdcm.cluster import (
-    DB_LOG_PATTERN_RESHARDING_START,
     DB_LOG_PATTERN_RESHARDING_FINISH,
+    DB_LOG_PATTERN_RESHARDING_START,
 )
 from sdcm.cluster_k8s import (
     SCYLLA_MANAGER_NAMESPACE,

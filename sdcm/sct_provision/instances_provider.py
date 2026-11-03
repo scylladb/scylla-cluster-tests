@@ -12,8 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 import logging
-from typing import List, Any
-
+from typing import Any, List
 
 from sdcm.provision import provisioner_factory
 from sdcm.provision.common.fallback import is_region_fallback_enabled
@@ -23,14 +22,14 @@ from sdcm.provision.gce.region_fallback import current_datacenters, is_capacity_
 from sdcm.provision.gce.zone_resolver import GceAZResolver
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.provision.provisioner import (
+    InstanceConfigurationError,
+    InstanceDefinition,
+    OperationPreemptedError,
     PricingModel,
-    VmInstance,
+    Provisioner,
     ProvisionError,
     ProvisionUnrecoverableError,
-    Provisioner,
-    InstanceDefinition,
-    InstanceConfigurationError,
-    OperationPreemptedError,
+    VmInstance,
 )
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration

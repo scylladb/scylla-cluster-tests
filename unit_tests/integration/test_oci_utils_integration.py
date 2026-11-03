@@ -23,10 +23,10 @@ import pytest
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.oci_utils import (
+    OciService,
     get_availability_domains,
     get_ubuntu_image_ocid,
     list_instances_oci,
-    OciService,
     resolve_availability_domain,
 )
 

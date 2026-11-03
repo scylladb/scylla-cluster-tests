@@ -1,7 +1,8 @@
 """Tests for LoaderUtilsMixin.render_stress_cmd."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 from jinja2 import TemplateSyntaxError
 
 from sdcm.utils.loader_utils import LoaderUtilsMixin

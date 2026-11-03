@@ -12,20 +12,19 @@
 # Copyright (c) 2021 ScyllaDB
 
 import logging
+from dataclasses import asdict, dataclass, fields
 from typing import List, Optional
-from dataclasses import dataclass, asdict, fields
 
 from sdcm.mgmt.cli import (
     BackupTask,
     HealthcheckTask,
     ManagerCluster,
+    ManagerTask,
     RepairTask,
     ScyllaManagerTool,
-    ManagerTask,
 )
 from sdcm.mgmt.common import TaskStatus
 from sdcm.wait import wait_for
-
 
 LOGGER = logging.getLogger(__name__)
 

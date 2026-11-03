@@ -12,11 +12,11 @@
 # Copyright (c) 2022 ScyllaDB
 import datetime
 import subprocess
-from typing import List, Dict
+from typing import Dict, List
 
 from invoke import Result
 
-from sdcm.provision.provisioner import Provisioner, VmInstance, InstanceDefinition, PricingModel
+from sdcm.provision.provisioner import InstanceDefinition, PricingModel, Provisioner, VmInstance
 
 
 class FakeProvisioner(Provisioner):

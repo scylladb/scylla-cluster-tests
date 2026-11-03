@@ -34,7 +34,6 @@ from sdcm.provision.provisioner import (
 )
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 
-
 FAKE_SSH_KEY = SSHKey(name="test_key", public_key=b"ssh-rsa AAAA fake\n", private_key=b"fake-private\n")
 
 

@@ -18,7 +18,6 @@ from pathlib import Path
 
 import yaml
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_ALLOWLIST = REPO_ROOT / "data" / "known_cyclic_imports.yml"
 ALLOWLIST_HEADER = """\

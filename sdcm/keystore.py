@@ -11,27 +11,27 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import json
-import time
+import configparser
 import hashlib
+import json
 import logging
+import os
 import tempfile
 import threading
-import configparser
+import time
+from collections import namedtuple
+from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 from typing import BinaryIO, Iterator
-from concurrent.futures.thread import ThreadPoolExecutor
-from collections import namedtuple
 
 import boto3
 import paramiko
 import tenacity
-from mypy_boto3_s3.client import S3Client
-from mypy_boto3_s3.service_resource import S3ServiceResource
 from botocore.exceptions import ClientError
 from cloud_detect import provider
+from mypy_boto3_s3.client import S3Client
+from mypy_boto3_s3.service_resource import S3ServiceResource
 
 LOGGER = logging.getLogger(__name__)
 

@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
-from argus.client.generic_result import Status
 
+from argus.client.generic_result import Status
 from sdcm.argus_results import send_iotune_results_to_argus
 from sdcm.utils.validators.iotune import IOTuneValidator
 

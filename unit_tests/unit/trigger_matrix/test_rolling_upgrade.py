@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 
 from sdcm.utils.trigger_matrix.config import load_matrix_config
-from sdcm.utils.trigger_matrix.models import JobConfig
 from sdcm.utils.trigger_matrix.filters import filter_jobs
+from sdcm.utils.trigger_matrix.models import JobConfig
 from sdcm.utils.trigger_matrix.parameters import build_job_parameters
 from sdcm.utils.trigger_matrix.versions import _branch_directory_id, _extract_branch_from_version
 

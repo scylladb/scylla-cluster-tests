@@ -1,26 +1,26 @@
 """Unit tests for cluster_cloud module."""
 
 import inspect
-
-import pytest
 from unittest.mock import MagicMock, patch
 
-from sdcm.xcloud.api_client import ScyllaCloudAPIClient
+import pytest
+
 from sdcm.cluster import BaseNode
 from sdcm.cluster_cloud import (
-    xcloud_super_if_supported,
+    CloudNode,
     ScyllaCloudCluster,
     ScyllaCloudError,
-    CloudNode,
     VectorStoreSetCloud,
-)
-from sdcm.sct_config import SCTConfiguration
-from sdcm.xcloud.cluster_config_utils import (
-    build_cloud_cluster_name,
-    apply_keep_tag_to_name,
-    CLOUD_KEEP_ALIVE_HOURS,
+    xcloud_super_if_supported,
 )
 from sdcm.exceptions import WaitForTimeoutError
+from sdcm.sct_config import SCTConfiguration
+from sdcm.xcloud.api_client import ScyllaCloudAPIClient
+from sdcm.xcloud.cluster_config_utils import (
+    CLOUD_KEEP_ALIVE_HOURS,
+    apply_keep_tag_to_name,
+    build_cloud_cluster_name,
+)
 
 
 class TestXCloudSuperIfSupportedDecorator:

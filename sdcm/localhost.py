@@ -14,14 +14,14 @@
 import logging
 from typing import Optional
 
-from sdcm.utils.java import JavaContainerMixin
 from sdcm.utils.docker_utils import ContainerManager
-from sdcm.utils.k8s import HelmContainerMixin
 from sdcm.utils.gce_utils import GcloudContainerMixin
+from sdcm.utils.internal_modules import XCloudConnectivityContainerMixin
+from sdcm.utils.java import JavaContainerMixin
+from sdcm.utils.k8s import HelmContainerMixin
 from sdcm.utils.ldap import LDAP_PORT, LDAP_SSL_PORT, LdapContainerMixin
 from sdcm.utils.syslogng import SyslogNGContainerMixin
 from sdcm.utils.vector_dev import VectorDevContainerMixin
-from sdcm.utils.internal_modules import XCloudConnectivityContainerMixin
 
 LOGGER = logging.getLogger(__name__)
 

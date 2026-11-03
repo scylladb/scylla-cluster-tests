@@ -4,13 +4,13 @@ from typing import NamedTuple
 
 import pytest
 
+from sdcm.sla.libs.sla_utils import SchedulerRuntimeUnexpectedValue, SlaUtils
 from sdcm.utils.loader_utils import (
+    SERVICE_LEVEL_NAME_TEMPLATE,
     STRESS_ROLE_NAME_TEMPLATE,
     STRESS_ROLE_PASSWORD_TEMPLATE,
-    SERVICE_LEVEL_NAME_TEMPLATE,
 )
-from sdcm.sla.libs.sla_utils import SlaUtils, SchedulerRuntimeUnexpectedValue
-from test_lib.sla import Role, UserRoleBase, ServiceLevel
+from test_lib.sla import Role, ServiceLevel, UserRoleBase
 from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode
 
 logging.basicConfig(level=logging.DEBUG)
