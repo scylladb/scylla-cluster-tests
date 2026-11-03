@@ -95,6 +95,14 @@ Post a **single top-level PR comment** using `gh pr comment`. Do NOT post inline
 
 <1-2 sentence summary of what the PR does>
 
+### Pass outcomes
+
+The three passes of `REVIEW.md`. Write `pass`, or name the findings below.
+
+- **Bugs and logic**: <pass | findings>
+- **Security**: <pass | findings>
+- **Compliance**: <pass | findings>
+
 ### Findings
 
 <If no issues: "No issues found. The change looks correct and follows SCT conventions.">
