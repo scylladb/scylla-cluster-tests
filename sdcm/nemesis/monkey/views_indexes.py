@@ -63,6 +63,7 @@ class CreateIndexNemesis(NemesisBaseClass):
     schema_changes = True
     free_tier_set = True
     supports_high_disk_utilization = False  # Creating an Index consumes disk space
+    supports_logstor = False  # MV (and indexes, built on MV) not supported on logstor yet (SCYLLADB-3512)
 
     def precheck(self, node) -> str | None:
         if self.runner.cluster.nemesis_count > 1 and SkipPerIssues(
@@ -134,6 +135,7 @@ class AddRemoveMvNemesis(NemesisBaseClass):
     schema_changes = True
     free_tier_set = True
     supports_high_disk_utilization = False  # Creating an MV consumes disk space
+    supports_logstor = False  # MV (and indexes, built on MV) not supported on logstor yet (SCYLLADB-3512)
 
     def precheck(self, node) -> str | None:
         # Disable MV tests with tablets.
@@ -217,6 +219,7 @@ class KillMVBuildingCoordinator(NemesisBaseClass):
     schema_changes = True
     topology_changes = True
     supports_high_disk_utilization = False  # Creating an MV consumes disk space
+    supports_logstor = False  # MV (and indexes, built on MV) not supported on logstor yet (SCYLLADB-3512)
 
     def precheck(self, node) -> str | None:
         if not node.raft.is_consistent_topology_changes_enabled:

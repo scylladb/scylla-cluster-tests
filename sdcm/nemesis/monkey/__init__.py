@@ -138,6 +138,7 @@ class CorruptThenRepairMonkey(NemesisBaseClass):
 
     disruptive = True
     kubernetes = True
+    supports_logstor = False  # corrupts sstable files, logstor has none
 
     def disrupt(self):
         self.runner.disrupt_destroy_data_then_repair()
@@ -149,6 +150,7 @@ class CorruptThenRebuildMonkey(NemesisBaseClass):
     disruptive = True
     kubernetes = True
     xcloud = True
+    supports_logstor = False  # corrupts sstable files, logstor has none
 
     def disrupt(self):
         self.runner.disrupt_destroy_data_then_rebuild()
@@ -202,6 +204,7 @@ class MajorCompactionMonkey(NemesisBaseClass):
     kubernetes = True
     xcloud = True
     limited = True
+    supports_logstor = False  # nodetool compact does nothing on logstor (own compaction)
 
     def disrupt(self):
         self.runner.disrupt_major_compaction()
@@ -214,6 +217,7 @@ class RefreshMonkey(NemesisBaseClass):
     disruptive = False
     kubernetes = True
     limited = True
+    supports_logstor = False  # loads sstables into the table, logstor has none
 
     def disrupt(self):
         self.runner.disrupt_nodetool_refresh(big_sstable=False)
@@ -226,6 +230,7 @@ class LoadAndStreamMonkey(NemesisBaseClass):
     disruptive = False
     kubernetes = True
     limited = True
+    supports_logstor = False  # loads sstables into the table, logstor has none
 
     def disrupt(self):
         self.runner.disrupt_load_and_stream()
@@ -237,6 +242,7 @@ class RefreshBigMonkey(NemesisBaseClass):
 
     disruptive = False
     kubernetes = True
+    supports_logstor = False  # loads sstables into the table, logstor has none
 
     def disrupt(self):
         self.runner.disrupt_nodetool_refresh(big_sstable=True)
@@ -251,6 +257,7 @@ class EnospcMonkey(NemesisBaseClass):
     xcloud = True
     limited = True
     enospc = True
+    supports_logstor = False  # logstor behaviour on a full disk is not defined yet (SCYLLADB-1988)
 
     def disrupt(self):
         self.runner.disrupt_nodetool_enospc()
@@ -264,6 +271,7 @@ class EnospcAllNodesMonkey(NemesisBaseClass):
     kubernetes = True
     xcloud = True
     enospc = True
+    supports_logstor = False  # logstor behaviour on a full disk is not defined yet (SCYLLADB-1988)
 
     def disrupt(self):
         self.runner.disrupt_nodetool_enospc(all_nodes=True)
@@ -289,6 +297,7 @@ class ToggleTableIcsMonkey(NemesisBaseClass):
     xcloud = True
     schema_changes = True
     free_tier_set = True
+    supports_logstor = False  # logstor has its own compaction, sstable compaction does not apply
 
     def disrupt(self):
         self.runner.disrupt_toggle_table_ics()
@@ -428,6 +437,7 @@ class SnapshotOperations(NemesisBaseClass):
     kubernetes = True
     xcloud = True
     limited = True
+    supports_logstor = False  # snapshots sstables, logstor backup/snapshot is SCYLLADB-3588
 
     def disrupt(self):
         self.runner.disrupt_snapshot_operations()
@@ -522,6 +532,7 @@ class ToggleCDCMonkey(NemesisBaseClass):
     schema_changes = True
     config_changes = True
     free_tier_set = True
+    supports_logstor = False  # CDC on logstor is not committed or verified for 2027.1 (logstor devs)
 
     def disrupt(self):
         self.runner.disrupt_toggle_cdc_feature_properties_on_table()
@@ -532,6 +543,7 @@ class CDCStressorMonkey(NemesisBaseClass):
 
     disruptive = False
     free_tier_set = True
+    supports_logstor = False  # CDC on logstor is not committed or verified for 2027.1 (logstor devs)
 
     def disrupt(self):
         self.runner.disrupt_run_cdcstressor_tool()
@@ -571,6 +583,7 @@ class CorruptThenScrubMonkey(NemesisBaseClass):
 
     disruptive = False
     supports_high_disk_utilization = False  # Failed for: https://github.com/scylladb/scylladb/issues/22088
+    supports_logstor = False  # corrupts and scrubs sstable files, logstor has none
 
     def disrupt(self):
         self.runner.disrupt_corrupt_then_scrub()
@@ -591,6 +604,7 @@ class StartStopMajorCompaction(NemesisBaseClass):
     """Start a major compaction on a non-system table and stop it with nodetool stop COMPACTION once it is logged."""
 
     disruptive = False
+    supports_logstor = False  # waits for an sstable compaction to start, a no-op on logstor
 
     def disrupt(self):
         self.runner.disrupt_start_stop_major_compaction()
@@ -600,6 +614,7 @@ class StartStopScrubCompaction(NemesisBaseClass):
     """Start a scrub compaction on a non-system table and stop it with nodetool stop SCRUB once it is logged."""
 
     disruptive = False
+    supports_logstor = False  # waits for an sstable compaction to start, a no-op on logstor
 
     def disrupt(self):
         self.runner.disrupt_start_stop_scrub_compaction()
@@ -609,6 +624,7 @@ class StartStopCleanupCompaction(NemesisBaseClass):
     """Start a cleanup compaction on a non-system table and stop it with nodetool stop CLEANUP once it is logged."""
 
     disruptive = False
+    supports_logstor = False  # waits for an sstable compaction to start, a no-op on logstor
 
     def disrupt(self):
         self.runner.disrupt_start_stop_cleanup_compaction()
@@ -619,6 +635,7 @@ class StartStopValidationCompaction(NemesisBaseClass):
 
     disruptive = False
     supports_high_disk_utilization = False  # Failed for: https://github.com/scylladb/scylladb/issues/22088
+    supports_logstor = False  # waits for an sstable compaction to start, a no-op on logstor
 
     def disrupt(self):
         self.runner.disrupt_start_stop_validation_compaction()
@@ -666,6 +683,7 @@ class DisableBinaryGossipExecuteMajorCompaction(NemesisBaseClass):
     disruptive = True
     kubernetes = True
     xcloud = True
+    supports_logstor = False  # nodetool compact does nothing on logstor (own compaction)
 
     def disrupt(self):
         self.runner.disrupt_disable_binary_gossip_execute_major_compaction()
@@ -677,6 +695,7 @@ class EndOfQuotaNemesis(NemesisBaseClass):
 
     disruptive = True
     config_changes = True
+    supports_logstor = False  # logstor behaviour on a full disk is not defined yet (SCYLLADB-1988)
 
     def disrupt(self):
         self.runner.disrupt_end_of_quota_nemesis()
@@ -698,6 +717,9 @@ class SplitMergeTabletsWithAlter(NemesisBaseClass):
     """Alter min_tablet_count on every tablets-enabled table and view to trigger a tablet split or merge."""
 
     schema_changes = True
+    # TODO: re-enable once SCYLLADB-5866 is fixed: after a logstor tablet merge the node aborts and
+    # then fails to start ("Storage wasn't found for tablet N")
+    supports_logstor = False
 
     def disrupt(self):
         self.runner.disrupt_trigger_split_merge_tablets_with_alter()

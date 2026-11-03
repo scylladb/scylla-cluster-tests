@@ -312,6 +312,7 @@ class MgmtBackup(ManagerMonkeyBase):
     disruptive = False
     limited = True
     supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
+    supports_logstor = False  # logstor backup and restore is not implemented yet (SCYLLADB-3588)
 
     def disrupt(self):
         mgmt_backup(self.runner, backup_specific_tables=False)
@@ -324,6 +325,7 @@ class MgmtBackupSpecificKeyspaces(ManagerMonkeyBase):
     disruptive = False
     limited = True
     supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
+    supports_logstor = False  # logstor backup and restore is not implemented yet (SCYLLADB-3588)
 
     def disrupt(self):
         mgmt_backup(self.runner, backup_specific_tables=True)
@@ -338,6 +340,7 @@ class MgmtRestore(ManagerMonkeyBase):
     xcloud = True
     limited = True
     supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
+    supports_logstor = False  # logstor backup and restore is not implemented yet (SCYLLADB-3588)
 
     def precheck(self, node) -> str | None:
         if reason := super().precheck(node):
@@ -444,6 +447,7 @@ class MgmtCorruptThenRepair(ManagerMonkeyBase):
 
     disruptive = True
     kubernetes = True
+    supports_logstor = False  # corrupts sstable files, logstor has none
 
     def disrupt(self):
         # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
