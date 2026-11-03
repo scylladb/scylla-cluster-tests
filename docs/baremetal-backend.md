@@ -76,9 +76,9 @@ its ports and its timers onto the shared monitor host.
   - Docker Engine 20.10 or newer, any packaging (`docker-ce`, `moby-engine`, distro `docker.io`), running and usable
     by the SSH user without sudo (the user is in the `docker` group). The Podman `docker` shim is rejected. SCT doesn't
     install Docker or change the group on these hosts.
-  - Free space where Docker keeps images, at least the minimum above, summed over the host's roles. With the
-    containerd image store (the default since Docker 29, and Fedora's `moby-engine`) that is `/var/lib/containerd`,
-    not `/var/lib/docker`.
+  - Free space where Docker keeps images, at least the minimum above, summed over all the host's roles in the run
+    and checked once per host before any pull. With the containerd image store (the default since Docker 29, and
+    Fedora's `moby-engine`) that is `/var/lib/containerd`, not `/var/lib/docker`.
   - A firewall that lets the monitor scrape the host's node_exporter, at the address and port SCT finds (see below).
 - Monitor hosts: the monitoring stack's ports free, since SCT starts it on the host network: Grafana 3000 and its
   renderer 8081, Prometheus 9090, Alertmanager 9093 and its gossip port 9094, Loki 3100 and its gRPC port 9095,
@@ -128,6 +128,8 @@ The node setup every SCT backend runs also runs on baremetal hosts, whatever the
   delete the first one's.
 - The run's stack is the containers with a mount under that directory. A restart stops only those, never the stack's
   `kill-all.sh`, which removes every container with the stack's names. A stack that fails to start fails the setup.
+- Cleanup finds the run's stack containers by their `TestId` label instead, since the Grafana renderer has no mount
+  under the run's directory.
 
 **DB hosts**
 
