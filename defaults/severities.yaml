@@ -21,6 +21,7 @@ FullPartitionScanEvent: ERROR
 TombstoneGcVerificationEvent: ERROR
 FullScanAggregateEvent: ERROR
 DatabaseLogEvent.OVERSIZED_ALLOCATION: ERROR
+DatabaseLogEvent.TOPOLOGY_BARRIER_STALL: ERROR
 DatabaseLogEvent.WARNING: WARNING
 DatabaseLogEvent.INFO: NORMAL
 DatabaseLogEvent.NO_SPACE_ERROR: ERROR
