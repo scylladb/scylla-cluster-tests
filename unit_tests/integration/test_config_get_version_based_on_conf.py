@@ -93,6 +93,7 @@ def test_docker(
         pytest.param("branch-LATEST:latest", None, True, id="branch"),
     ],
 )
+@pytest.mark.requires_aws
 def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, distro, monkeypatch, latest_release):
     scylla_version = scylla_version.replace("LATEST", latest_release)
     if expected_version == "LATEST":
@@ -125,6 +126,7 @@ def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, d
     ],
 )
 @pytest.mark.parametrize(argnames="backend", argvalues=("aws", "gce", "azure"))
+@pytest.mark.requires_aws
 def test_images(backend, scylla_version, expected_version, expected_is_enterprise, monkeypatch, latest_release):
     scylla_version = scylla_version.replace("LATEST", latest_release)
     if expected_version == "LATEST":
@@ -143,6 +145,7 @@ def test_images(backend, scylla_version, expected_version, expected_is_enterpris
         assert expected_version in _version
 
 
+@pytest.mark.requires_aws
 def test_baremetal(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "baremetal")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "6.1")
@@ -187,6 +190,7 @@ def test_unified_package(monkeypatch):
     assert not _is_enterprise
 
 
+@pytest.mark.requires_aws
 def test_unified_package_aws_sets_ubuntu_user(monkeypatch):
     """Test that unified_package on AWS forces ami_db_scylla_user='ubuntu'."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -215,18 +219,21 @@ def test_unified_package_aws_sets_ubuntu_user(monkeypatch):
             "aws",
             "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
             id="relocatable-latest-aws-x86_64",
+            marks=pytest.mark.requires_aws,
         ),
         pytest.param(
             "relocatable:master:x86_64",
             "aws",
             "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
             id="relocatable-master-x86_64-aws",
+            marks=pytest.mark.requires_aws,
         ),
         pytest.param(
             "relocatable:master:aarch64",
             "aws",
             "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id",
             id="relocatable-master-aarch64-aws",
+            marks=pytest.mark.requires_aws,
         ),
         pytest.param("relocatable:latest", "gce", None, id="relocatable-latest-gce"),
     ],
@@ -263,6 +270,7 @@ def test_relocatable_version_resolves_unified_package(scylla_version, backend, e
         assert conf.get("ami_id_db_scylla") == expected_ami_ssm
 
 
+@pytest.mark.requires_aws
 def test_unified_package_aws_auto_resolves_ami(monkeypatch):
     """Test that unified_package on AWS auto-resolves ami_id_db_scylla to Ubuntu 24.04 base AMI when not set."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -288,6 +296,7 @@ def test_unified_package_aws_auto_resolves_ami(monkeypatch):
     assert "ubuntu" in conf.get("ami_id_db_scylla")
 
 
+@pytest.mark.requires_aws
 def test_unified_package_aws_verify_passes_without_ami(monkeypatch):
     """Test that verify_configuration passes with unified_package on AWS even if ami_id_db_scylla is not explicitly set."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -314,6 +323,7 @@ def test_unified_package_aws_verify_passes_without_ami(monkeypatch):
     assert conf.get("unified_package") is not None
 
 
+@pytest.mark.requires_aws
 def test_aws_ami_missing_scylla_version_tag(monkeypatch):
     """Test that missing scylla_version tag in AWS AMI raises clear ValueError."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")

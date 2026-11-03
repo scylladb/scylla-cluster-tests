@@ -42,7 +42,7 @@ from sdcm.utils.common import convert_name_to_ami_if_needed
 from sdcm.utils.gce_utils import GCE_IMAGE_URL_REGEX, get_gce_compute_images_client
 
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.requires_aws]
 
 
 def _default_value(config_file: str, key: str) -> str:
