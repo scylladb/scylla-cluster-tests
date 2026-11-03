@@ -46,7 +46,7 @@ from pathlib import Path
 
 from invoke.watchers import StreamWatcher
 
-from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.remote import RemoteCmdRunnerBase, asyncssh_client
 from utils.ssh_transport_benchmark import cpu_seconds, percentile, start_hosts, stop_hosts
 
 COMPONENTS = ("setup-connect", "setup-cmd", "poll", "stream-lag", "fanout", "burst")
@@ -75,6 +75,8 @@ class Recorder:
         self.lock = threading.Lock()
         self.values = defaultdict(list)
         self.errors = defaultdict(int)
+        # component -> [first command start, last command end], for throughput
+        self.window = {}
 
     def add(self, component, value):
         with self.lock:
@@ -88,11 +90,17 @@ class Recorder:
             with self.lock:
                 self.errors[component] += 1
             return
-        self.add(component, time.perf_counter() - started)
+        ended = time.perf_counter()
+        with self.lock:
+            self.values[component].append(ended - started)
+            first, last = self.window.get(component, (started, ended))
+            self.window[component] = (min(first, started), max(last, ended))
 
 
 def run_model(args) -> list[dict]:  # noqa: PLR0914
-    RemoteCmdRunnerBase.set_default_ssh_transport(args.child)
+    transport, _, loops = args.child.partition(":")
+    asyncssh_client.LOOP_COUNT = int(loops or 1)
+    RemoteCmdRunnerBase.set_default_ssh_transport(transport)
     _, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))  # one fd per connection, SCT runners raise it too
     rec = Recorder()
@@ -175,6 +183,10 @@ def run_model(args) -> list[dict]:  # noqa: PLR0914
             row["p50_ms"] = percentile(values, 0.5) * 1000
             row["p99_ms"] = percentile(values, 0.99) * 1000
             row["max_ms"] = max(values) * 1000
+            row["mean_ms"] = sum(values) / len(values) * 1000
+        if component in rec.window:
+            first, last = rec.window[component]
+            row["per_s"] = len(values) / (last - first)
         rows.append(row)
     for phase, prev in (("setup", "start"), ("steady", "setup")):
         rows.append({"transport": args.child, "component": f"[{phase}]", "wall_s": marks[phase][0] - marks[prev][0],
@@ -185,20 +197,18 @@ def run_model(args) -> list[dict]:  # noqa: PLR0914
 
 
 def print_table(rows: list[dict]) -> None:
-    header = (
-        f"{'transport':<9} {'component':<14} {'count':>7} {'err':>5} {'p50 ms':>8} {'p99 ms':>9} {'max ms':>9}  other"
-    )
+    columns = ("p50_ms", "mean_ms", "p99_ms", "max_ms", "per_s")
+    header = f"{'transport':<11} {'component':<14} {'count':>7} {'err':>5} " + " ".join(f"{c:>9}" for c in columns)
     print(header)
-    print("-" * (len(header) + 20))
+    print("-" * len(header))
     for r in sorted(rows, key=lambda r: (r["component"], r["transport"])):
         if "count" in r:
-            nums = [f"{r[k]:.1f}" if k in r else "-" for k in ("p50_ms", "p99_ms", "max_ms")]
-            print(f"{r['transport']:<9} {r['component']:<14} {r['count']:>7} {r['errors']:>5} "
-                  f"{nums[0]:>8} {nums[1]:>9} {nums[2]:>9}")  # fmt: skip
+            nums = " ".join(f"{r[c]:>9.1f}" if c in r else f"{'-':>9}" for c in columns)
+            print(f"{r['transport']:<11} {r['component']:<14} {r['count']:>7} {r['errors']:>5} {nums}")
         else:
             other = " ".join(f"{k}={v:.1f}" if isinstance(v, float) else f"{k}={v}" for k, v in r.items()
                              if k not in ("transport", "component"))  # fmt: skip
-            print(f"{r['transport']:<9} {r['component']:<14} {'':>7} {'':>5} {'':>8} {'':>9} {'':>9}  {other}")
+            print(f"{r['transport']:<11} {r['component']:<14} {other}")
 
 
 def main() -> None:
