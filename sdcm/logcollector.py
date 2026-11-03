@@ -2300,6 +2300,8 @@ class Collector:
             for idx, node_info in enumerate(node_list):
                 private_ip = node_info.get("private_ip")
                 public_ip = node_info.get("public_ip", private_ip)
+                # `private_ip` is required in the hosts config (`NodeInfo`): the run itself can't start without it, so
+                # a host with only a public address took no part in the run and has no logs to collect
                 if not private_ip and not node_info.get("access"):
                     LOGGER.warning("No address found for baremetal node %s-%d, skipping", config_key, idx)
                     continue
