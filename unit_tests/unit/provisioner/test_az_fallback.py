@@ -27,7 +27,6 @@ from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, Re
 from sdcm.provision.aws.region_fallback import cleanup_region, switch_region
 from sdcm.sct_provision.aws.layout import SCTProvisionAWSLayout
 from sdcm.tester import ClusterTester
-
 from unit_tests.lib.dot_dict import DotDict
 
 

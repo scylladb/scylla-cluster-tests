@@ -4,12 +4,12 @@ import json
 
 import pytest
 
-from sdcm.utils.lint.jenkins_parser import PipelineConfig
 from sdcm.utils.lint.env_builder import (
+    build_env,
     count_regions,
     parse_extra_env_vars,
-    build_env,
 )
+from sdcm.utils.lint.jenkins_parser import PipelineConfig
 
 
 def _make_config(params=None, test_config=None, pipeline_function="longevityPipeline"):

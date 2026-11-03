@@ -28,34 +28,33 @@ import tenacity
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import EC2ServiceResource
 
-from sdcm import ec2_client, cluster, wait
+from sdcm import cluster, ec2_client, wait
 from sdcm.cluster_cassandra import BaseCassandraCluster, CassandraNodeMixin
 from sdcm.ec2_client import CreateSpotInstancesError
+from sdcm.kernel_panic_checker import AWSKernelPanicChecker
+from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
 from sdcm.provision.common.spot_outcome import record_spot_provision_outcome
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
+from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.provision.network_configuration import (
     NetworkInterface,
     is_ip_ssh_connections_ipv6,
     network_interfaces_count,
     ssh_connection_ip_type,
 )
-from sdcm.provision.scylla_yaml import SeedProvider
-from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.provision.provisioner import ProvisionError
-from sdcm.sct_provision.aws.cluster import PlacementGroup
-
-from sdcm.remote import shell_script_cmd, NETWORK_EXCEPTIONS
+from sdcm.provision.scylla_yaml import SeedProvider
+from sdcm.remote import NETWORK_EXCEPTIONS, shell_script_cmd
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import SpotTerminationEvent, TestFrameworkEvent
-from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
+from sdcm.sct_provision.aws.cluster import PlacementGroup
+from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, tags_as_ec2_tags
 from sdcm.utils.common import MINICLOUD_PENDING_INSTANCES_TIMEOUT, PENDING_INSTANCES_TIMEOUT, list_instances_aws
-from sdcm.utils.minicloud.endpoint import is_minicloud_active
-from sdcm.kernel_panic_checker import AWSKernelPanicChecker
 from sdcm.utils.decorators import retrying
-from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
+from sdcm.utils.minicloud.endpoint import is_minicloud_active
 from sdcm.utils.net import to_inet_ntop_format
 from sdcm.utils.vector_store_utils import VectorStoreClusterMixin, VectorStoreNodeMixin
 from sdcm.wait import exponential_retry

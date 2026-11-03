@@ -10,8 +10,8 @@
 # Copyright (c) 2026 ScyllaDB
 from typing import TYPE_CHECKING
 
-from sdcm.rest.remote_curl_client import RemoteCurlClient
 from sdcm.remote.libssh2_client import Result
+from sdcm.rest.remote_curl_client import RemoteCurlClient
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode

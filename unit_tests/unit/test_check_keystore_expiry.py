@@ -17,10 +17,10 @@ The script lives under ``.github/scripts``, which is not an importable
 package, so it is loaded by path.
 """
 
-import io
-import json
 import datetime
 import importlib.util
+import io
+import json
 import urllib.error
 from pathlib import Path
 

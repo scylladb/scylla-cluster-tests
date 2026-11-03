@@ -20,11 +20,10 @@ we are using the GrafanaAnnotator
 
 import logging
 import threading
-from typing import Tuple, Any
+from typing import Any, Tuple
 
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events.events_processes import BaseEventsProcess, verbose_suppress
-
 
 LOGGER = logging.getLogger(__name__)
 

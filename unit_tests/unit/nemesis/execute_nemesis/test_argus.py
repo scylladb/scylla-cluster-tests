@@ -2,7 +2,7 @@
 Unit tests for Argus submission in NemesisRunner.execute_nemesis
 """
 
-from unittest.mock import MagicMock, ANY
+from unittest.mock import ANY, MagicMock
 
 import pytest
 

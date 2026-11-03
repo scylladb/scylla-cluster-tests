@@ -11,18 +11,17 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import json
+import logging
 import re
 import time
-import logging
-import json
 import urllib.parse
-
-from textwrap import dedent
-from math import sqrt
 from collections import defaultdict
+from math import sqrt
+from textwrap import dedent
 
-import yaml
 import requests
+import yaml
 
 from sdcm.utils.common import normalize_ipv6_url
 from sdcm.utils.decorators import retrying

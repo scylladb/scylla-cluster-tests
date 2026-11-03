@@ -11,7 +11,6 @@ from urllib.parse import urlparse
 import boto3
 
 from argus.client.sct.types import Package
-
 from sdcm.cluster import BaseNode
 from sdcm.keystore import KeyStore
 from sdcm.remote.remote_file import remote_file

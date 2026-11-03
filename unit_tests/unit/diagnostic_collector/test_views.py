@@ -6,7 +6,6 @@ import pytest
 
 from sdcm.utils.diagnostic_collector.views import MVDiagnosticCollector
 
-
 # --- Mock session ---
 
 

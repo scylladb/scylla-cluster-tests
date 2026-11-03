@@ -13,7 +13,7 @@
 
 """GCE region definition builder for SCT provisioning."""
 
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 from sdcm.sct_provision.common.types import NodeTypeType
 from sdcm.sct_provision.region_definition_builder import ConfigParamsMap, DefinitionBuilder

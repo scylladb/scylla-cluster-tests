@@ -16,12 +16,26 @@
 import logging
 import time
 from datetime import datetime, timezone
-from typing import List, Dict, NoReturn, Optional
+from typing import Dict, List, NoReturn, Optional
 
 import google.api_core.exceptions
 from google.api_core.extended_operation import ExtendedOperation
 from google.cloud import compute_v1
 
+from sdcm.provision.gce.capacity_errors import is_config_error, is_preemption_error
+from sdcm.provision.gce.constants import (
+    BUNDLED_LOCAL_SSD_FAMILIES,
+    DISK_TYPE_HYPERDISK_BALANCED,
+    DISK_TYPE_LOCAL_SSD,
+    DISK_TYPE_PD_STANDARD,
+    GCE_MAX_NETWORK_INTERFACES,
+    GCE_MIN_NETWORK_INTERFACES,
+    GCE_SUPPORTED_NETWORK_INTERFACES,
+    HYPERDISK_ONLY_FAMILIES,
+)
+from sdcm.provision.gce.disk_provider import DiskProvider
+from sdcm.provision.gce.network_provider import NetworkProvider
+from sdcm.provision.gce.utils import normalize_instance_name, tags_to_gce_labels
 from sdcm.provision.provisioner import (
     InstanceConfigurationError,
     InstanceDefinition,
@@ -31,28 +45,14 @@ from sdcm.provision.provisioner import (
     ProvisionUnrecoverableError,
     ZoneResourcesExhaustedError,
 )
-from sdcm.provision.gce.capacity_errors import is_config_error, is_preemption_error
-from sdcm.provision.gce.disk_provider import DiskProvider
-from sdcm.provision.gce.network_provider import NetworkProvider
-from sdcm.provision.gce.constants import (
-    DISK_TYPE_HYPERDISK_BALANCED,
-    DISK_TYPE_PD_STANDARD,
-    DISK_TYPE_LOCAL_SSD,
-    BUNDLED_LOCAL_SSD_FAMILIES,
-    HYPERDISK_ONLY_FAMILIES,
-    GCE_MAX_NETWORK_INTERFACES,
-    GCE_MIN_NETWORK_INTERFACES,
-    GCE_SUPPORTED_NETWORK_INTERFACES,
-)
-from sdcm.provision.gce.utils import tags_to_gce_labels, normalize_instance_name
+from sdcm.utils.decorators import retrying
 from sdcm.utils.gce_utils import (
+    gce_set_labels,
     get_gce_compute_instances_client,
     get_gce_compute_machine_types_client,
-    wait_for_extended_operation,
-    gce_set_labels,
     get_gce_service_accounts,
+    wait_for_extended_operation,
 )
-from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
 

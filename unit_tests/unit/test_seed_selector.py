@@ -1,6 +1,7 @@
 import logging
 
 import pytest
+
 import sdcm.cluster
 from sdcm import sct_config
 from sdcm.test_config import TestConfig

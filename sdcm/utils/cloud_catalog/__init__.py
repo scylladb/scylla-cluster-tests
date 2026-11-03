@@ -11,13 +11,13 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+from sdcm.utils.cloud_catalog.catalog_generator import update_catalog, write_catalog_file
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo, RoleConfig
 from sdcm.utils.cloud_catalog.instance_matcher import (
     NoMatchingInstanceError,
     is_literal_instance_type,
     select_instance,
 )
-from sdcm.utils.cloud_catalog.catalog_generator import update_catalog, write_catalog_file
 
 __all__ = [
     "InstanceCatalog",

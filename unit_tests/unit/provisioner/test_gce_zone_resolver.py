@@ -18,7 +18,6 @@ import pytest
 from sdcm.provision.gce.capacity_advisor import ZoneCapacityAdvice
 from sdcm.provision.gce.zone_resolver import GceAZResolver, NoValidAvailabilityZoneError, _node_count_positive
 from sdcm.utils.gce_utils import get_alternative_zones
-
 from unit_tests.lib.dot_dict import DotDict
 
 

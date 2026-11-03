@@ -4,10 +4,11 @@ import argparse
 import datetime
 import os
 import re
+
 import pytz
 
-from sdcm.xcloud.api_client import ScyllaCloudAPIClient
 from sdcm.keystore import KeyStore
+from sdcm.xcloud.api_client import ScyllaCloudAPIClient
 
 DRY_RUN = False
 ENVIRONMENTS = ["lab", "staging", "prod"]

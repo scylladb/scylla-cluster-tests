@@ -14,10 +14,10 @@
 """Scylla Cloud (xcloud) backend configuration options."""
 
 from typing import ClassVar
-from typing_extensions import Annotated
 
 from pydantic import BaseModel
 from pydantic.functional_validators import BeforeValidator
+from typing_extensions import Annotated
 
 from sdcm.sct_config.types import SctField, String, dict_or_str
 

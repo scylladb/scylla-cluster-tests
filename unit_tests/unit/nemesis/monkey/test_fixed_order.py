@@ -6,7 +6,7 @@ from sdcm.nemesis.monkey.runners import FixedOrderMonkey
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from unit_tests.lib.fake_tester import ClusterTesterForTests
 from unit_tests.unit.nemesis import CustomNemesisA, CustomNemesisB, CustomNemesisC, TestNemesisClass
-from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
+from unit_tests.unit.nemesis.fake_cluster import PARAMS, Cluster, FakeTester, Node
 
 
 class FakeFixedOrderMonkey(FixedOrderMonkey, TestNemesisClass):

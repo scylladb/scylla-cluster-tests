@@ -13,23 +13,21 @@
 
 from __future__ import annotations
 
-import time
-import pytest
-import tempfile
 import logging
+import tempfile
+import time
 from typing import TYPE_CHECKING
 
 import boto3
+import pytest
 import requests
 
-from sdcm.prometheus import start_metrics_server, nemesis_metrics_obj
+from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
+from sdcm.prometheus import nemesis_metrics_obj, start_metrics_server
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.setup import start_events_device, stop_events_device
-
-from sdcm.stress_thread import CassandraStressThread, CassandraStressEventsPublisher
-from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
+from sdcm.stress_thread import CassandraStressEventsPublisher, CassandraStressThread
 from sdcm.ycsb_thread import YcsbStressThread
-
 
 LOGGER = logging.getLogger(__name__)
 if TYPE_CHECKING:

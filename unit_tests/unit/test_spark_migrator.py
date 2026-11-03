@@ -10,6 +10,7 @@ import boto3
 import pytest
 from moto import mock_aws
 
+import spark_migrator_test
 from sdcm.spark_migrator import (
     SPARK4_INSTALL_DIR,
     SPARK4_VERSION,
@@ -21,7 +22,6 @@ from sdcm.spark_migrator import (
     upload_migrator_jar_to_s3,
     upload_spark4_tarball_to_s3,
 )
-import spark_migrator_test
 
 
 def test_migrator_config_defaults():

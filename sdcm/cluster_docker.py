@@ -11,17 +11,19 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
 import os
 import re
-import logging
 import shutil
 import time
+from functools import cached_property
 from pathlib import Path
 from textwrap import dedent
-from typing import Optional, Union, Dict
-from functools import cached_property
+from typing import Dict, Optional, Union
 
 from sdcm import cluster
+from sdcm.cluster_cassandra import BaseCassandraCluster, CassandraNodeMixin
+from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.provision.helpers.certificate import (
     CA_CERT_FILE,
     JKS_TRUSTSTORE_FILE,
@@ -35,16 +37,14 @@ from sdcm.sct_config import simulated_racks_enabled
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.utils.docker_utils import (
-    get_docker_bridge_gateway,
     Container,
     ContainerManager,
     DockerException,
     _default_docker_client,
+    get_docker_bridge_gateway,
 )
 from sdcm.utils.health_checker import check_nodes_status
-from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import get_my_public_ip
-from sdcm.cluster_cassandra import BaseCassandraCluster, CassandraNodeMixin
 from sdcm.utils.vector_store_utils import VectorStoreClusterMixin, VectorStoreNodeMixin
 
 DEFAULT_SCYLLA_DB_IMAGE = "scylladb/scylla-nightly"

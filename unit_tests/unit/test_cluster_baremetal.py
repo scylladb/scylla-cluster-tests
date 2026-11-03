@@ -35,8 +35,8 @@ from sdcm.cluster_baremetal import (
     SCYLLA_COREDUMP_MOUNT_UNIT,
     SERVICE_BASELINE,
     NodeIpsNotConfiguredError,
-    PhysicalMachineCluster,
     PhysicalHost,
+    PhysicalMachineCluster,
     PhysicalMachineNode,
 )
 

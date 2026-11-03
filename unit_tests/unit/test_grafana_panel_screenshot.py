@@ -14,9 +14,8 @@
 import pytest
 from pydantic import ValidationError
 
-from sdcm.sct_config.types import GrafanaPanelScreenshot
 from sdcm.logcollector import MonitoringStack
-
+from sdcm.sct_config.types import GrafanaPanelScreenshot
 
 # =============================================================================
 # GrafanaPanelScreenshot Model Tests

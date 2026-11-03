@@ -11,30 +11,29 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
+import collections
 import json
 import logging
-import collections
 import multiprocessing
-from typing import Tuple, Optional, Callable, Any, Dict, List, cast
-from pathlib import Path
+import re
+from collections import deque as tail
 from functools import partial
 from itertools import chain
-from collections import deque as tail
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import SctEvent
-from sdcm.sct_events.system import TestResultEvent
 from sdcm.sct_events.events_device import get_events_main_device
 from sdcm.sct_events.events_processes import (
     EVENTS_FILE_LOGGER_ID,
-    EventsProcessesRegistry,
     BaseEventsProcess,
-    start_events_process,
+    EventsProcessesRegistry,
     get_events_process,
+    start_events_process,
     verbose_suppress,
 )
-
+from sdcm.sct_events.system import TestResultEvent
 
 EVENTS_LOG: str = "events.log"
 SUMMARY_LOG: str = "summary.log"

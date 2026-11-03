@@ -20,14 +20,14 @@ import yaml
 
 from sdcm.keystore import SSHKey
 from sdcm.sct_runner import (
-    list_sct_runners,
-    clean_sct_runners,
-    update_sct_runner_tags,
-    SctRunnerInfo,
     AwsSctRunner,
-    GceSctRunner,
     AzureSctRunner,
+    GceSctRunner,
     OciSctRunner,
+    SctRunnerInfo,
+    clean_sct_runners,
+    list_sct_runners,
+    update_sct_runner_tags,
 )
 
 BASE_IMAGE_OCID = "ocid1.image.oc1.iad.aaaaaaaatestimage"

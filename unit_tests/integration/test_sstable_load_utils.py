@@ -1,8 +1,7 @@
 import pytest
 
-from sdcm.utils.sstable.load_utils import SstableLoadUtils
-
 from sdcm.stress_thread import CassandraStressThread
+from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [

@@ -23,7 +23,6 @@ from typing import Annotated
 import pytest
 from pydantic import TypeAdapter
 
-from sdcm.utils.cloud_catalog.pricing import AWSPricing, AzurePricing, GCEPricing, OCIPricing
 from sdcm.sct_config.config import SIZING_ROLE_PARAMS, SCTConfiguration, backend_to_cloud
 from sdcm.sct_config.defaults import PER_PROVIDER_MULTI_REGION_PARAMS
 from sdcm.utils.cloud_catalog.cost import (
@@ -34,6 +33,7 @@ from sdcm.utils.cloud_catalog.cost import (
     estimate_run_cost,
     get_hourly_rate,
 )
+from sdcm.utils.cloud_catalog.pricing import AWSPricing, AzurePricing, GCEPricing, OCIPricing
 
 
 def _config(**values) -> SCTConfiguration:

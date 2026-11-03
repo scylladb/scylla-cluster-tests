@@ -13,12 +13,11 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 from collections import defaultdict
 from functools import partial
+from typing import TYPE_CHECKING
 
 from sdcm.utils.parallel_object import ParallelObject
-
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseCluster, BaseNode

@@ -1,6 +1,5 @@
 import contextlib
 import logging
-
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime

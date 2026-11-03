@@ -11,23 +11,21 @@
 #
 # Copyright (c) 2024 ScyllaDB
 
-import logging
-import time
-import random
 import itertools
+import logging
+import random
+import time
 from typing import Dict
 
 import boto3
-from botocore.exceptions import ClientError
 import tenacity
+from botocore.exceptions import ClientError
 
-
-from sdcm.wait import exponential_retry
+from sdcm.test_config import TestConfig
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import tags_as_ec2_tags
-from sdcm.utils.common import all_aws_regions, run_per_region_ignore_failures, AWS_SCAN_FAIL_FAST_CONFIG
-from sdcm.test_config import TestConfig
-
+from sdcm.utils.common import AWS_SCAN_FAIL_FAST_CONFIG, all_aws_regions, run_per_region_ignore_failures
+from sdcm.wait import exponential_retry
 
 LOGGER = logging.getLogger(__name__)
 

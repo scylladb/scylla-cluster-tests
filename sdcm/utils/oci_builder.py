@@ -14,9 +14,9 @@
 import json
 import logging
 from functools import cached_property
-from typing import Optional
-from string import Template
 from pathlib import Path
+from string import Template
+from typing import Optional
 
 import click
 import requests

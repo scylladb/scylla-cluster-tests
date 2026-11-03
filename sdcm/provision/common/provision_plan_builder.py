@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.common.provision_plan import ProvisionPlan
-from sdcm.provision.common.provisioner import ProvisionParameters, InstanceProvisionerBase
+from sdcm.provision.common.provisioner import InstanceProvisionerBase, ProvisionParameters
 
 LOGGER = logging.getLogger(__name__)
 

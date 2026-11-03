@@ -28,7 +28,6 @@ from sdcm.provision.provisioner import ProvisionError, ZoneResourcesExhaustedErr
 from sdcm.sct_events import Severity
 from sdcm.tester import teardown_on_exception
 
-
 # ---------------------------------------------------------------------------
 # GCE: add_nodes count validation
 # ---------------------------------------------------------------------------

@@ -15,8 +15,8 @@
 import logging
 from pathlib import Path
 
-import click
 import boto3
+import click
 from botocore.exceptions import ClientError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

@@ -21,7 +21,6 @@ from requests import Response
 
 from sdcm.utils.session import create_retry_session
 
-
 LOGGER = logging.getLogger(__name__)
 
 

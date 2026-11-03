@@ -12,8 +12,9 @@
 # Copyright (c) 2020 ScyllaDB
 
 import json
-from typing import Optional, List
-from sdcm.remote.remote_base import StreamWatcher, Result
+from typing import List, Optional
+
+from sdcm.remote.remote_base import Result, StreamWatcher
 from sdcm.remote.remote_cmd_runner import RemoteCmdRunner
 from unit_tests.lib.data_pickle import Pickler
 

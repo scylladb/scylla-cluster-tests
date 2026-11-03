@@ -9,7 +9,6 @@ import click
 import questionary
 
 from sdcm.utils.common import get_sct_root_path
-
 from utils.staging_trigger.cache import _load_cache, prompt_for_source
 from utils.staging_trigger.constants import (
     DTEST_TOPOLOGY_FLAGS,
@@ -23,8 +22,8 @@ from utils.staging_trigger.interactive import (
     generate_yaml_config,
     prompt_for_params,
 )
-from utils.staging_trigger.job_generation import generate_from_path, generate_job, generate_jobs
 from utils.staging_trigger.jenkins_client import JenkinsJobTrigger
+from utils.staging_trigger.job_generation import generate_from_path, generate_job, generate_jobs
 from utils.staging_trigger.trigger import (
     StagingTrigger,
     detect_preset_from_job_name,
@@ -33,7 +32,6 @@ from utils.staging_trigger.trigger import (
     run_from_config,
     update_pr_description,
 )
-
 
 # ---------------------------------------------------------------------------
 # Shell completion helpers

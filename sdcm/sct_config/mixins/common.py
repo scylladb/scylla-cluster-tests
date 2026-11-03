@@ -14,10 +14,10 @@
 """General and provisioning configuration options."""
 
 from typing import ClassVar, Literal
-from typing_extensions import Annotated
 
 from pydantic import BaseModel
 from pydantic.functional_validators import BeforeValidator
+from typing_extensions import Annotated
 
 from sdcm.sct_config.types import (
     AdaptiveTimeoutMultipliers,

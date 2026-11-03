@@ -3,9 +3,10 @@ from __future__ import absolute_import, annotations
 import logging
 import threading
 import traceback
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from functools import wraps
-from typing import Iterable, Callable, List
+from typing import Callable, Iterable, List
 
 LOGGER = logging.getLogger("utils")
 

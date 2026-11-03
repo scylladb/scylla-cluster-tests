@@ -20,10 +20,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
-from sdcm.sct_config import config as sct_config
 from sdcm.keystore import KeyStore
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.provisioner import VmArch
+from sdcm.sct_config import config as sct_config
 from sdcm.test_config import TestConfig
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.common import get_latest_scylla_release

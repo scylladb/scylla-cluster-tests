@@ -8,7 +8,7 @@ from sdcm.rest.remote_curl_client import RemoteCurlClient
 from sdcm.rest.task_manager_client import TaskManagerClient
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.features import is_tablets_feature_enabled
 
 LOGGER = logging.getLogger(__name__)

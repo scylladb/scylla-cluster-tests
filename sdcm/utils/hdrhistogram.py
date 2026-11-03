@@ -1,10 +1,10 @@
 import glob
+import logging
 import os.path
 import time
-import logging
 import traceback
-from typing import Any
 from dataclasses import asdict, dataclass, make_dataclass
+from typing import Any
 
 from hdrh.histogram import HdrHistogram
 from hdrh.log import HistogramLogReader

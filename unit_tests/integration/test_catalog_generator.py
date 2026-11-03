@@ -37,8 +37,8 @@ def _check_aws_credentials():
 @pytest.fixture()
 def _check_gce_credentials():
     try:
-        from google.cloud import compute_v1  # noqa: PLC0415, F401
         import google.auth  # noqa: PLC0415
+        from google.cloud import compute_v1  # noqa: PLC0415, F401
 
         _, project = google.auth.default()
         if not project:

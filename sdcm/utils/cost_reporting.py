@@ -33,7 +33,6 @@ from datetime import UTC, datetime
 
 from argus.client.sct.client import ArgusSCTClient
 from argus.client.types import CostItem
-
 from sdcm.utils.cloud_catalog.cost import InstanceRate, RunCostEstimate
 
 LOGGER = logging.getLogger(__name__)

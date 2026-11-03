@@ -17,9 +17,9 @@ from typing import Callable
 import boto3
 from botocore.exceptions import ClientError
 
-from sdcm.provision.common.fallback import is_spot_capacity_scoring_enabled
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, is_capacity_error
 from sdcm.provision.aws.spot_placement_score import get_scores, rank_az_letters_for_roles, rank_regions
+from sdcm.provision.common.fallback import is_spot_capacity_scoring_enabled
 from sdcm.sct_config import AWS_SUPPORTED_REGIONS
 from sdcm.test_config import TestConfig
 from sdcm.utils.aws_peering import AwsVpcPeering

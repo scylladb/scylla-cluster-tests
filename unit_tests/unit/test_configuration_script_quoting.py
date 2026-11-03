@@ -19,7 +19,6 @@ import pytest
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 from sdcm.remote.base import shell_script_cmd
 
-
 pytestmark = pytest.mark.skipif(not shutil.which("bash"), reason="bash is not available")
 
 

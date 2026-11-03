@@ -13,13 +13,13 @@
 
 import json
 import pickle
-from typing import Type, Protocol, runtime_checkable
+from typing import Protocol, Type, runtime_checkable
 from unittest.mock import patch
 
 import pytest
 
-from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SctEvent, SctEventTypesRegistry, BaseFilter, LogEvent, LogEventProtocol
+from sdcm.sct_events import SctEventProtocol, Severity
+from sdcm.sct_events.base import BaseFilter, LogEvent, LogEventProtocol, SctEvent, SctEventTypesRegistry
 from sdcm.sct_events.nemesis import DisruptionEvent
 
 Y = None  # define a global name for pickle.

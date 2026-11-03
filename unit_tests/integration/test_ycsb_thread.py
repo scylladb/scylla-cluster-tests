@@ -16,15 +16,15 @@ from unittest.mock import MagicMock
 
 import pytest
 import requests
-from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
+from cassandra.cluster import Cluster
 
 from sdcm.utils import alternator
 from sdcm.utils.decorators import timeout
 from sdcm.utils.docker_utils import running_in_docker
 from sdcm.ycsb_thread import YcsbStressThread
-from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
+from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
     pytest.mark.usefixtures("events"),

@@ -12,12 +12,11 @@ import yaml
 from sdcm.utils.common import get_latest_scylla_release, get_sct_root_path
 from sdcm.utils.get_username import get_username
 from sdcm.utils.version_utils import get_scylla_docker_repo_from_version
-
 from utils.staging_trigger.constants import (
     CUSTOM_VALUE_SENTINEL,
     KNOWN_PARAM_CHOICES,
-    ParamDefinition,
     SCT_REPO,
+    ParamDefinition,
     _default_folder,
     get_presets,
 )

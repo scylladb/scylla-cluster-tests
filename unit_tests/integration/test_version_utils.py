@@ -2,12 +2,12 @@ from __future__ import absolute_import
 
 import pytest
 
-from unit_tests.lib.s3_utils import get_latest_branches_from_s3
 from sdcm.utils.version_utils import (
     get_branched_repo,
     get_relocatable_pkg_url,
     get_specific_tag_of_docker_image,
 )
+from unit_tests.lib.s3_utils import get_latest_branches_from_s3
 
 
 @pytest.mark.need_network

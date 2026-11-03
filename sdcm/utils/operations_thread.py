@@ -7,16 +7,15 @@ import threading
 import time
 import traceback
 from dataclasses import dataclass, fields
-from typing import Literal, TYPE_CHECKING, get_type_hints, get_origin
+from typing import TYPE_CHECKING, Literal, get_origin, get_type_hints
 
 from rich.table import Table
 
+from sdcm import wait
 from sdcm.utils.common import rich_table_to_string
 
-from sdcm import wait
-
 if TYPE_CHECKING:
-    from sdcm.cluster import BaseScyllaCluster, BaseCluster
+    from sdcm.cluster import BaseCluster, BaseScyllaCluster
 
 
 @dataclass

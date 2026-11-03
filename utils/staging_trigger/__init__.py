@@ -23,8 +23,8 @@ from utils.staging_trigger.constants import (
     DTEST_TOPOLOGY_FLAGS,
     PIPELINE_TO_PRESET,
     PRESET_NAMES,
-    Preset,
     SCT_REPO,
+    Preset,
     TriggeredJob,
     get_presets,
 )

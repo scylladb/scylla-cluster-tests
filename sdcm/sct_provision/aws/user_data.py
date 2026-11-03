@@ -1,23 +1,23 @@
 import base64
 import json
 import logging
-from typing import Union, Any
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
+from typing import Any, Union
 
 from pydantic import Field, computed_field
 
 from sdcm.provision.aws.configuration_script import AWSConfigurationScriptBuilder
-from sdcm.provision.common.utils import guest_firewall_needs_disabling
 from sdcm.provision.common.user_data import (
-    UserDataBuilderBase,
     DataDeviceType,
-    ScyllaUserDataBuilderBase,
     RaidLevelType,
+    ScyllaUserDataBuilderBase,
+    UserDataBuilderBase,
 )
-from sdcm.provision.user_data import gzipped_mime_part
+from sdcm.provision.common.utils import guest_firewall_needs_disabling
 from sdcm.provision.network_configuration import is_ip_ssh_connections_ipv6, network_interfaces_count
 from sdcm.provision.scylla_yaml import ScyllaYaml
+from sdcm.provision.user_data import gzipped_mime_part
 from sdcm.sct_config import SCTConfiguration
 
 LOGGER = logging.getLogger()

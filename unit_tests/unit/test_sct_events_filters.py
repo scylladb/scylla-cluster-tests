@@ -11,16 +11,16 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
 import pickle
+import re
 import unittest.mock
 
 import pytest
 
 import upgrade_test
 from sdcm.sct_events import Severity
-from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import (
     ignore_drop_table_during_repair_errors,
     oversized_allocation_filter,

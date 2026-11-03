@@ -16,20 +16,18 @@ from unittest.mock import patch
 import pytest
 import yaml
 
+from sdcm.utils.trigger_matrix.backends import split_regions
+from sdcm.utils.trigger_matrix.constants import DEFAULT_ARCH
 from sdcm.utils.trigger_matrix.errors import TriggerMatrixError
+from sdcm.utils.trigger_matrix.images import version_exists_for_backend
 from sdcm.utils.trigger_matrix.matrix import trigger_matrix
 from sdcm.utils.trigger_matrix.models import BackendTarget, JobConfig
-from sdcm.utils.trigger_matrix.constants import DEFAULT_ARCH
 from sdcm.utils.trigger_matrix.resolution import job_uses_scylla_version, resolve_versions_for_targets, target_for_job
-
-from sdcm.utils.trigger_matrix.backends import split_regions
-from sdcm.utils.trigger_matrix.images import version_exists_for_backend
 from sdcm.utils.trigger_matrix.versions import (
     _as_branch_qualifier,
     _gce_label_to_version,
     is_resolvable_partial_version,
 )
-
 
 AWS_BUILD = "2026.4.0~dev-0.20260804.9a3aba9e452a"
 GCE_BUILD = "2026.4.0~dev-0.20260803.1122334455aa"

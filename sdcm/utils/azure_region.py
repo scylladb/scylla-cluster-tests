@@ -13,13 +13,13 @@
 
 from __future__ import annotations
 
-import os
+import binascii
 import enum
 import logging
-import binascii
-from typing import TYPE_CHECKING
-from functools import cached_property
+import os
 from contextlib import suppress
+from functools import cached_property
+from typing import TYPE_CHECKING
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.compute.models import TargetRegion

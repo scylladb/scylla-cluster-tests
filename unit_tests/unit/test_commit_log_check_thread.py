@@ -25,7 +25,6 @@ from sdcm.cluster import BaseNode
 from sdcm.commit_log_check_thread import CommitlogConfigParams, PrometheusQueries
 from sdcm.utils.distro import Distro
 
-
 # Values captured from a real 14-shard node (longevity-100gb-4h-oci-test #121).
 SHARDS = 14
 # /commitlog/metrics/max_disk_size sums the per-shard limit over all shards of the node.

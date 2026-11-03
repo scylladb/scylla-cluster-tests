@@ -13,20 +13,20 @@ import yaml
 from google.api_core.exceptions import Forbidden
 from invoke import exceptions
 
-from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
-from sdcm.mgmt.cli import ScyllaManagerTool
-from sdcm.mgmt.common import ObjectStorageUploadMode
 from sdcm import mgmt
 from sdcm.exceptions import FilesNotCorrupted
 from sdcm.keystore import KeyStore
-from sdcm.remote import shell_script_cmd, LOCALRUNNER
-from sdcm.utils.curl import curl_with_retry
+from sdcm.mgmt import TaskStatus, get_scylla_manager_tool
+from sdcm.mgmt.cli import ScyllaManagerTool
+from sdcm.mgmt.common import ObjectStorageUploadMode
+from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.sct_events.system import InfoEvent
 from sdcm.test_config import TestConfig
 from sdcm.tester import ClusterTester
 from sdcm.utils.azure_utils import AzureService
-from sdcm.utils.cluster_tools import flush_nodes, major_compaction_nodes, clear_snapshot_nodes
+from sdcm.utils.cluster_tools import clear_snapshot_nodes, flush_nodes, major_compaction_nodes
 from sdcm.utils.compaction_ops import CompactionOps
+from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.gce_utils import (
     create_event_based_hold_bucket,

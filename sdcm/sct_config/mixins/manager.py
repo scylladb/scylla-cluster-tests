@@ -14,10 +14,10 @@
 """Scylla Manager configuration options."""
 
 from typing import ClassVar
-from typing_extensions import Annotated
 
 from pydantic import BaseModel
 from pydantic.functional_validators import BeforeValidator
+from typing_extensions import Annotated
 
 from sdcm.mgmt.common import AgentBackupParameters
 from sdcm.sct_config.types import Boolean, DictOrStr, SctField, String, StringOrList, dict_or_str

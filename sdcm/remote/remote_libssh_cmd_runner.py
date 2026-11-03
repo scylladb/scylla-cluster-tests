@@ -12,27 +12,28 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
+import socket
 import threading
 import time
-import socket
 
-from .libssh2_client import Client as LibSSH2Client, Timings
-from .libssh2_client.exceptions import (
-    AuthenticationException,
-    UnknownHostException,
-    ConnectError,
-    FailedToReadCommandOutput,
-    CommandTimedOut,
-    FailedToRunCommand,
-    OpenChannelTimeout,
-    SocketRecvError,
-    UnexpectedExit,
-    Failure,
-)
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 
 from .base import RetryableNetworkException
+from .libssh2_client import Client as LibSSH2Client
+from .libssh2_client import Timings
+from .libssh2_client.exceptions import (
+    AuthenticationException,
+    CommandTimedOut,
+    ConnectError,
+    FailedToReadCommandOutput,
+    FailedToRunCommand,
+    Failure,
+    OpenChannelTimeout,
+    SocketRecvError,
+    UnexpectedExit,
+    UnknownHostException,
+)
 from .remote_base import RemoteCmdRunnerBase
 
 # Lightweight minicloud guest that cannot open an SSH channel is likely out of memory to fork sshd.

@@ -3,9 +3,7 @@
 from unittest.mock import MagicMock
 
 from sdcm.utils.diagnostic_collector import ExceptionHandler, ExceptionStrategy
-
 from unit_tests.unit.diagnostic_collector import MockDiagnosticCollector
-
 
 # --- Test DiagnosticCollector ---
 

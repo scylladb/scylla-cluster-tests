@@ -30,6 +30,8 @@ from sdcm.db_log_reader import DbLogReader
 from sdcm.exceptions import ExitByEventError, FirewallNotDisabled, WaitForTimeoutError
 from sdcm.provision.common.utils import disable_firewall as disable_firewall_script
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
+from sdcm.remote import LocalCmdRunner
+from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
@@ -39,8 +41,6 @@ from sdcm.utils.common import (
     keyspace_min_max_tokens,
 )
 from sdcm.utils.distro import Distro
-from sdcm.remote import LocalCmdRunner
-from sdcm.sct_config import SCTConfiguration
 from unit_tests.lib.dummy_remote import DummyRemote, LocalNode
 from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, DummyScyllaCluster, NodetoolDummyNode
 

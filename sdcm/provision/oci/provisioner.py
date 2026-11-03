@@ -14,6 +14,7 @@
 import logging
 import string
 from typing import Dict, List
+
 from invoke import Result
 
 from sdcm.provision.oci.constants import OCI_REGION_NAMES_MAPPING

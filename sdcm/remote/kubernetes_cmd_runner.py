@@ -15,11 +15,11 @@ import inspect
 import logging
 import threading
 import time
-from typing import Optional, Callable, Iterator, List
-import yaml
+from typing import Callable, Iterator, List, Optional
 
 import kubernetes as k8s
-from invoke import Runner, Context, Config
+import yaml
+from invoke import Config, Context, Runner
 from invoke.exceptions import ThreadException
 from urllib3.exceptions import (
     MaxRetryError,
@@ -27,16 +27,16 @@ from urllib3.exceptions import (
     ReadTimeoutError,
 )
 
-from sdcm.cluster import TestConfig
 from sdcm import sct_abs_path
+from sdcm.cluster import TestConfig
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent
-from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.common import (
     deprecation,
     generate_random_string,
 )
 from sdcm.utils.decorators import retrying
+from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.lock_utils import KeyBasedLock
 from sdcm.wait import wait_for
 

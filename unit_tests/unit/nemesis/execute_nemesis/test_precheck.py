@@ -15,15 +15,15 @@ import threading
 from unittest.mock import ANY, MagicMock
 
 import pytest
-from argus.common.enums import NemesisStatus
 
+from argus.common.enums import NemesisStatus
 from unit_tests.unit.nemesis.execute_nemesis import (
     CustomTestNemesis,
     PrecheckErrorNemesis,
     PrecheckSkipNemesis,
     TestNemesisRunner,
 )
-from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS
+from unit_tests.unit.nemesis.fake_cluster import PARAMS, FakeTester
 
 # Fields that vary with time or identity — excluded from full-dict event assertions.
 _TIMESTAMP_FIELDS = frozenset({"event_id", "event_timestamp", "begin_timestamp", "end_timestamp", "source_timestamp"})

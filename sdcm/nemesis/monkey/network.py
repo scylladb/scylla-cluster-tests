@@ -24,7 +24,7 @@ from sdcm.sct_events.group_common_events import (
     ignore_alternator_client_errors,
     suppress_expected_unavailability_errors,
 )
-from sdcm.sct_events.system import InfoEvent, CoreDumpEvent
+from sdcm.sct_events.system import CoreDumpEvent, InfoEvent
 from sdcm.utils.context_managers import DbNodeLogger
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.k8s.chaos_mesh import (

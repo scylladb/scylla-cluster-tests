@@ -15,7 +15,7 @@ from abc import ABC
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import List, Dict
+from typing import Dict, List
 
 from invoke import Result
 

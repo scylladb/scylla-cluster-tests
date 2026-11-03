@@ -2,21 +2,21 @@ import os.path
 import random
 import re
 from collections import namedtuple
-from typing import Any, List, Iterable
+from typing import Any, Iterable, List
 
 from sdcm.keystore import KeyStore
 from sdcm.remote import LocalCmdRunner
-from sdcm.utils.common import remote_get_file, LOGGER, RemoteTemporaryFolder
+from sdcm.utils.common import LOGGER, RemoteTemporaryFolder, remote_get_file
 from sdcm.utils.decorators import timeout as timeout_decor
-from sdcm.utils.sstable.load_inventory import (
-    TestDataInventory,
-    BIG_SSTABLE_COLUMN_1_DATA,
-    COLUMN_1_DATA,
-    MULTI_NODE_DATA,
-    BIG_SSTABLE_MULTI_COLUMNS_DATA,
-    MULTI_COLUMNS_DATA,
-)
 from sdcm.utils.node import RequestMethods, build_node_api_command
+from sdcm.utils.sstable.load_inventory import (
+    BIG_SSTABLE_COLUMN_1_DATA,
+    BIG_SSTABLE_MULTI_COLUMNS_DATA,
+    COLUMN_1_DATA,
+    MULTI_COLUMNS_DATA,
+    MULTI_NODE_DATA,
+    TestDataInventory,
+)
 from sdcm.wait import wait_for_log_lines
 
 LOCAL_CMD_RUNNER = LocalCmdRunner()

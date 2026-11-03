@@ -1,6 +1,6 @@
 import yaml
 
-from sdcm.utils.lint.docs_linter import LintResult, lint_test_metadata, cross_reference_config
+from sdcm.utils.lint.docs_linter import LintResult, cross_reference_config, lint_test_metadata
 
 
 def write_yaml(tmp_path, name, data):

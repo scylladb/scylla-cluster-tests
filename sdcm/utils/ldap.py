@@ -11,16 +11,15 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from time import sleep
 from enum import Enum
+from time import sleep
 
 from cassandra import Unauthorized
-from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES
+from ldap3 import ALL, ALL_ATTRIBUTES, Connection, Server
 from ldap3.core.exceptions import LDAPSocketOpenError
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.decorators import retrying
-
 
 LDAP_IMAGE = "osixia/openldap:1.4.0"
 LDAP_PORT = 389

@@ -28,6 +28,8 @@ from collections.abc import Callable, Iterable
 from sdcm.provision.common.fallback import is_az_fallback_enabled
 from sdcm.provision.common.region_fallback import (
     provision_with_dc_fallback as _provision_with_dc_fallback,
+)
+from sdcm.provision.common.region_fallback import (
     provision_with_region_fallback as _provision_with_region_fallback,
 )
 from sdcm.provision.gce.capacity_errors import is_zone_capacity_error

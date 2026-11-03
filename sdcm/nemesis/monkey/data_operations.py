@@ -34,7 +34,7 @@ from sdcm.exceptions import PartitionNotFound, TimestampNotFound, UnsupportedNem
 from sdcm.nemesis import NemesisBaseClass
 from sdcm.nemesis.utils.common import nemesis_stress_failure_handler, prepare_test_table
 from sdcm.sct_events.system import InfoEvent
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import get_db_tables
 from sdcm.utils.issues import SkipPerIssues
 from test_lib.cql_types import CQLTypeBuilder

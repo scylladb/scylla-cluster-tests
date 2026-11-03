@@ -11,14 +11,14 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import pytest
 from unittest.mock import Mock, patch
 
+import pytest
 from azure.core.exceptions import HttpResponseError
 
 from sdcm.utils.azure_utils import AzureService
-from sdcm.utils.cloud_monitor.resources.static_ips import StaticIPs
 from sdcm.utils.cloud_monitor.resources.instances import CloudInstances
+from sdcm.utils.cloud_monitor.resources.static_ips import StaticIPs
 
 
 def test_static_ips_azure_failure_continues_with_other_clouds():

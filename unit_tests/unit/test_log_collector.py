@@ -13,26 +13,26 @@
 
 import logging
 import uuid
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
 from sdcm.logcollector import (
-    Collector,
     BaseSCTLogCollector,
-    PythonSCTLogCollector,
-    SchemaLogCollector,
+    Collector,
     FailureStatisticsCollector,
-    PrometheusSnapshots,
-    MonitoringStack,
     GrafanaScreenShot,
-    RemoteDirArchiveLog,
-    ScyllaLogCollector,
     LogCollector,
+    MonitoringStack,
+    PrometheusSnapshots,
+    PythonSCTLogCollector,
+    RemoteDirArchiveLog,
+    SchemaLogCollector,
+    ScyllaLogCollector,
 )
 from sdcm.provision import provisioner_factory
-from unit_tests.lib.fake_resources import prepare_fake_region
 from sdcm.utils import common
+from unit_tests.lib.fake_resources import prepare_fake_region
 
 
 @pytest.fixture(scope="session")

@@ -49,9 +49,8 @@ from sdcm.test_config import TestConfig
 from sdcm.utils.aws_utils import AwsArchType
 from sdcm.utils.common import get_data_dir_path, get_ec2_image_version_tag, get_scylla_ami_versions
 from sdcm.utils.docker_remote import RemoteDocker
-
-from unit_tests.lib.dummy_remote import LocalNode, LocalScyllaClusterDummy
 from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
+from unit_tests.lib.dummy_remote import LocalNode, LocalScyllaClusterDummy
 
 LOGGER = logging.getLogger(__name__)
 

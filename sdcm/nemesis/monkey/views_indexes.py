@@ -18,18 +18,18 @@ from cassandra import InvalidRequest
 from cassandra.query import SimpleStatement
 
 from sdcm.exceptions import UnsupportedNemesis
-from sdcm.nemesis import NemesisBaseClass, target_data_nodes, target_all_nodes
+from sdcm.nemesis import NemesisBaseClass, target_all_nodes, target_data_nodes
 from sdcm.nemesis.utils.indexes import (
     ViewFinishedBuildingException,
     base_table_has_rows_with_column,
-    get_random_column_name,
     create_index,
-    wait_for_index_to_be_built,
-    verify_query_by_index_works,
-    drop_index,
-    wait_for_view_to_be_built,
-    drop_materialized_view,
     create_materialized_view_for_random_column,
+    drop_index,
+    drop_materialized_view,
+    get_random_column_name,
+    verify_query_by_index_works,
+    wait_for_index_to_be_built,
+    wait_for_view_to_be_built,
     wait_materialized_view_building_tasks_started,
 )
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocationError
@@ -37,7 +37,7 @@ from sdcm.sct_events.group_common_events import (
     decorate_with_context,
     suppress_expected_unavailability_errors,
 )
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import sleep_for_percent_of_duration
 from sdcm.utils.context_managers import DbNodeLogger
 from sdcm.utils.diagnostic_collector.handlers import EventExceptionHandler

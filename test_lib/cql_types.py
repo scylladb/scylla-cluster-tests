@@ -1,6 +1,5 @@
 import random
 
-
 __ALL__ = ["CQLTypeBuilder", "ALL_COLUMN_TYPES", "NOT_EMBEDDABLE_COLUMN_TYPES", "COLLECTION_COLUMN_TYPES"]
 
 

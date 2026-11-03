@@ -11,16 +11,14 @@
 #
 # Copyright (c) 2020 ScyllaDB
 import datetime
-import re
 import logging
+import re
 import time
-
 from typing import List, Tuple, Type
 
 from sdcm.sct_events import Severity
-from sdcm.utils.remote_logger import KubernetesWrongSchedulingLogger
 from sdcm.sct_events.base import LogEvent, LogEventProtocol, T_log_event
-
+from sdcm.utils.remote_logger import KubernetesWrongSchedulingLogger
 
 LOGGER = logging.getLogger(__name__)
 

@@ -9,9 +9,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.utils.minicloud.azure import write_azure_env_file
-from sdcm.utils.minicloud.tls import build_ca_bundle, system_ca_bundle
 from sdcm.utils.minicloud.config import MinicloudConfig
 from sdcm.utils.minicloud.manager import MinicloudManager
+from sdcm.utils.minicloud.tls import build_ca_bundle, system_ca_bundle
 
 
 def test_start_runs_docker_container(tmp_path, monkeypatch):

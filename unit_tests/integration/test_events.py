@@ -14,12 +14,11 @@
 import pytest
 
 import sdcm.sct_events.setup as events_setup
-from sdcm.sct_events.loaders import CassandraStressLogEvent
-from sdcm.sct_events.database import DatabaseLogEvent
-from sdcm.sct_events.setup import enable_default_filters
 from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.loaders import CassandraStressLogEvent
+from sdcm.sct_events.setup import enable_default_filters
 from sdcm.utils.context_managers import environment
-
 from unit_tests.lib.real_events import RealEventsTest
 
 

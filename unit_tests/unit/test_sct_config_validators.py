@@ -1,8 +1,8 @@
 """Tests for sct_config type-coercion validators."""
 
 import pytest
-
 from pydantic import ValidationError
+
 from sdcm.sct_config import (
     SCTConfiguration,
     dict_or_str,
@@ -10,7 +10,6 @@ from sdcm.sct_config import (
     str_or_list_or_eval,
 )
 from sdcm.sct_config.types import strtobool
-
 
 # ---------------------------------------------------------------------------
 # int_or_list_or_eval

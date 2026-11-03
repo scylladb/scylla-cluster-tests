@@ -21,10 +21,9 @@ import gc
 import logging
 from unittest.mock import MagicMock, patch
 
-import sct
-
 import pytest
 
+import sct
 from sdcm.provision.common.provision_plan import ProvisionPlan
 from sdcm.provision.common.provisioner import InstanceProvisionerBase, ProvisionParameters
 from sdcm.sct_events import Severity

@@ -14,10 +14,10 @@
 import os
 
 from sdcm.utils.sct_agent_installer import (
-    generate_agent_api_key,
-    save_agent_api_key,
-    load_agent_api_key,
     AGENT_API_KEY_FILENAME,
+    generate_agent_api_key,
+    load_agent_api_key,
+    save_agent_api_key,
 )
 
 

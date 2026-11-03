@@ -20,12 +20,12 @@ from contextlib import contextmanager
 
 import pytest
 
-from sdcm.remote.base import shell_script_cmd
 from sdcm.provision.common import utils as provision_utils
 from sdcm.provision.common.utils import (
     configure_backoff_timeout,
     install_vector_service,
 )
+from sdcm.remote.base import shell_script_cmd
 
 pytestmark = [
     pytest.mark.integration,

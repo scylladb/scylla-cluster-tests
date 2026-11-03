@@ -11,9 +11,9 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import datetime
 import pickle
 import re
-import datetime
 
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.operator import ScyllaOperatorLogEvent

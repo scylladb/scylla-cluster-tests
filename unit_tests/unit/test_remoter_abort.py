@@ -26,9 +26,9 @@ from unittest.mock import MagicMock
 import pytest
 from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN
 
+from sdcm.remote.kubernetes_cmd_runner import KubernetesPodRunner
 from sdcm.remote.libssh2_client import Client, SSHReaderThread
 from sdcm.remote.libssh2_client.exceptions import CommandAborted
-from sdcm.remote.kubernetes_cmd_runner import KubernetesPodRunner
 from sdcm.remote.local_cmd_runner import LocalCmdRunner
 from sdcm.remote.remote_libssh_cmd_runner import RemoteLibSSH2CmdRunner
 
