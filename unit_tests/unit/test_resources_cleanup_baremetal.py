@@ -19,6 +19,7 @@ import pytest
 
 from sdcm import cluster_baremetal, keystore, remote
 from sdcm.utils import resources_cleanup
+from sdcm.utils.baremetal_hosts import host_ssh_address
 
 TEST_ID = "c0ffee00-0000-4000-8000-000000000001"
 HOSTS = {
@@ -152,6 +153,11 @@ def test_lab_hosts_are_cleaned_up_through_the_lab_access_service(cleaned, monkey
     assert [call[:3] for call in cleaned[1:]] == [("scylla-db 10.0.0.1", True, True), ("loader monster", False, False)]
     localhost.lab_access_ssh_address.assert_called_once_with("monster")
     localhost.destroy.assert_called_once()
+
+
+def test_a_lab_host_without_a_localhost_is_reported_clearly():
+    with pytest.raises(ValueError, match="'monster' is reached through the lab access service"):
+        host_ssh_address({"private_ip": "10.0.0.60", "access": "monster"}, "private", None)
 
 
 def test_cleanup_without_lab_hosts_starts_no_access_container(cleaned, monkeypatch):
