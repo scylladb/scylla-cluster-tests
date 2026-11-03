@@ -41,7 +41,7 @@ are separate hydra invocations that all need to reach the same live endpoint.
 
 `configurations/minicloud.yaml` is **mandatory** for every minicloud run - layer it after the
 test-case yaml. It is the single delivery mechanism for the params the emulator requires:
-KMS off (minicloud implements no KMS endpoint), `instance_provision: on_demand` (no spot
+KMS off by default (aws and gce may opt in, see below), `instance_provision: on_demand` (no spot
 market), `ip_ssh_connections: private` (guests live on the host's userspace switch),
 shipped IO properties instead of iotune, AZ/region fallbacks off, and kernel-panic checker off.
 Scylla runs in production mode: the shipped IO properties satisfy its IO check, and each shard
@@ -176,8 +176,9 @@ exit-137 failure mode above if you were wrong.
 
 ## What minicloud does not implement
 
-- **KMS** (AWS or GCP) - hence `enterprise_disable_kms: true` in the overlay. When minicloud
-  grows KMS support, only the overlay changes; no pipeline knows about KMS.
+- **Azure Key Vault** - the overlay keeps KMS off on every backend. minicloud emulates AWS KMS
+  and GCP Cloud KMS, so an aws or gce run may opt in with `SCT_ENTERPRISE_DISABLE_KMS=false`;
+  the preflight check rejects KMS on azure. No pipeline knows about KMS.
 - **Spot** - `instance_provision` must stay `on_demand`.
 - **Local SSDs / NVMe passthrough** - guests get qcow2-backed disks.
 - Anything not in the emulated API surface fails closed with an explicit error rather than
