@@ -1267,6 +1267,17 @@ def test_destroy_drops_the_remoter():
     assert node.destroyed is True
 
 
+def test_get_tables_with_sstable_folder():
+    node = unittest.mock.MagicMock()
+    node.remoter.sudo.return_value.stdout = """
+/var/lib/scylla/data/ks/t1-0123456789abcdef0123456789abcdef
+/var/lib/scylla/data/alternator_my-tbl/my-tbl-0123456789abcdef0123456789abcdef
+"""
+
+    assert BaseNode.get_tables_with_sstable_folder(node) == {"ks.t1", "alternator_my-tbl.my-tbl"}
+    node.remoter.sudo.assert_called_once()
+
+
 def test_network_configuration_skips_a_destroyed_node():
     """`ip -j link` must not be attempted against a node whose instance is already gone."""
     node = unittest.mock.MagicMock()
