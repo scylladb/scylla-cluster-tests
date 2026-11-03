@@ -349,11 +349,12 @@ def call(Map pipelineParams) {
                         // the rest of the build, so 'Provision Resources' and 'Run SCT Test'
                         // both reach minicloud instead of the real cloud.
                         startMinicloud.exportEnv(params, pipelineParams)
-                        // tag only when not running on a local agent:
-                        // lab agents have no IMDS, so tagBuilder() would fail there.
-                        if (!localAgent) {
+                        // A baremetal local agent may still be a cloud builder, so tag it; on a
+                        // lab agent identifyCloud() finds no IMDS and tagBuilder() tags nothing.
+                        if (!(minicloudEnabled && localAgent)) {
                             tagBuilder()
-                        } else {
+                        }
+                        if (localAgent) {
                             // A persistent workspace may hold ./sct_runner_ip from an earlier runner
                             // build; with no runner created here, later stages would SSH to it.
                             // minicloudReclaim() clears it as well, this covers baremetal.
