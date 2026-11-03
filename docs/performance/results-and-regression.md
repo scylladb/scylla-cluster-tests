@@ -190,6 +190,50 @@ Built on `argus.client.generic_result` (`StaticGenericResultTable`, `ColumnMetad
 The table is selected by `workload`: `mixed` and `throughput` -> mixed table, `write` -> write
 table, `read` -> read table, `read_disk_only` -> read-disk-only table.
 
+### Best throughput table
+
+After the steps loop, the gradual test sends one `BestThroughputResult` table per workload, named
+`<workload> - best throughput under P99 limit`, with a single row `best`:
+
+| Column | Contents |
+|---|---|
+| `Throughput` | HDR-measured op/s of the best step (INTEGER, `higher_is_better=True`); `0` when no step passed |
+| `Threads` | Thread count of the best step |
+| `P99 write`, `P99 read` | P99 at the best step, worst across HDR tags of the same operation (ms) |
+| `P99 limit` | The limit used, from `perf_gradual_latency_limit` |
+| `Step` | Step name, or `none passed` |
+| `Stop reason` | Thread search runs only: `narrowed`, `saturated`, `thread cap`, `budget` or `none passed`. `thread cap` means every step up to `max_threads_per_command` stayed within the limit, so `Throughput` is a lower bound, not the limit |
+
+`find_best_throughput` (`sdcm/utils/latency.py`) picks the step: P99 of every operation within the
+limit (for mixed, read and write both), ranked by `cycle_hdr_throughput`, not by thread count or
+rate. Steps without HDR results are skipped. The limit is `perf_gradual_latency_limit[<workload>]`,
+else its `default` entry (10 ms). The table carries no validation rules yet; it is there to build
+history across versions.
+
+### Goodput under overload table
+
+With `perf_overload_steps` set, after the best step is found the gradual test runs one throttled step per
+factor (`overload_<factor>x`), offering `factor x` the best throughput with the best step's thread count times
+the factor. cassandra-stress commands get `-errors ignore` for these steps, so timeouts are counted instead of
+stopping the step; other tools run as they are. A stress command failing in these steps is reported as an
+error instead of stopping the test, since cassandra-stress logs every operation that fails all its retries as
+a CRITICAL `OperationOnKey` event. The results go to `<workload> - goodput under overload`
+(`GoodputUnderOverloadResult`), one row per factor (`1.3x`, `2x`):
+
+| Column | Contents |
+|---|---|
+| `Goodput ratio` | Goodput / best throughput (FLOAT, `higher_is_better=True`), with `ValidationRule(fixed_limit=min_goodput_ratio)`, default 0.9: a lower ratio fails the run |
+| `Goodput` | HDR-measured throughput of the step, i.e. successful operations (op/s) |
+| `Target rate`, `Best throughput`, `Threads` | The rate the step asked for (`factor x` best throughput), the best throughput it is a factor of, its thread count |
+| `Attempted rate`, `Attempted ratio` | What the stress tool really sent: goodput plus failed operations per step-second, and its ratio to the target rate. Empty when the tool reports no error count |
+| `Failed ops` | Sum of cassandra-stress `Total errors`; empty when the tool doesn't report it |
+| `P99 write`, `P99 read` | P99 under overload (ms) |
+
+cassandra-stress is closed-loop: each thread waits for its reply, so its threads cap what it sends, and near
+saturation a step can attempt far less than its target. An `Attempted ratio` under 0.95 (`MIN_ATTEMPTED_RATIO`)
+means the cluster wasn't loaded at that factor: the run logs a warning, and the row's goodput ratio says little
+about overload. It doesn't fail the run, as it is a limit of the stress tool, not of Scylla.
+
 ### Other perf tables
 
 | Class | Purpose | Validation |
@@ -372,6 +416,6 @@ Useful, not dead: `sdcm/utils/argus.py` (`get_argus_client`, `ReplayOnlyArgusSCT
 | File | Contents |
 |---|---|
 | `<logdir>/latency_results.json` | Every cycle's full result dict, plus `Steady State` |
-| `<logdir>/result_gradual_increase.log` | Gradual-steps summary with `Cycles Average`, `Relative to Steady`, `color`, `ops_rate` |
+| `<logdir>/result_gradual_increase.log` | Gradual-steps summary with `Cycles Average`, `Relative to Steady`, `color`, `ops_rate`, `threads`, plus a `best_throughput` entry (the best step, or `null`) |
 | `<logdir>/jenkins_perf_PerfPublisher.xml` | Legacy Jenkins PerfPublisher XML |
 | `<loaders logdir>/*/hdrh-*.hdr` | Raw HDR histogram logs — the input to `hydra hdr-investigate` |
