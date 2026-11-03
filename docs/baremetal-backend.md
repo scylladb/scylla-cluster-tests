@@ -90,10 +90,26 @@ Docker on these hosts: an upgrade restarts the daemon under other jobs' containe
 
 ## What SCT changes on a host
 
+**Every host**
+
+The node setup every SCT backend runs also runs on baremetal hosts, whatever their role:
+
+- Installs the log shipper (vector, with the default `logs_transport: vector`) as a host service, pointed at the run's
+  log collector. A later run on the host points it at its own collector.
+- The first time on a host, the same script edits `/etc/ssh/sshd_config` (`MaxSessions`, `MaxStartups`,
+  `LoginGraceTime`, `ClientAlive*`), restarts sshd, and writes `/etc/security/limits.d/20-nproc.conf`.
+- Installs `rsync`.
+- Refreshes the package cache: `apt-get clean` and `apt-get update`, or `yum clean all`.
+
 **Loader and monitor hosts**
 
+- Doesn't disable the host's apt-daily timers: the host's owner decides how it updates.
+- Loaders: install EPEL on RHEL-like hosts other than Fedora, append the coredump limits to
+  `/etc/security/limits.d/20-coredump.conf` on every run, and log in to Docker Hub, which writes the SSH user's
+  `~/.docker/config.json`.
 - Installs only the monitoring prerequisites that are missing: `curl`, `unzip`, `python3`, `pip3`, and the `yaml` and
-  `psutil` Python modules. With everything present it runs no package manager or pip command.
+  `psutil` Python modules. With everything present it installs no package and runs no pip command; the package cache
+  refresh above still runs.
 - Doesn't install, restart or reconfigure Docker, change the firewall, or upgrade the SSH packages.
 - Removes Docker images no container uses when the free space is below the minimum, at most once per host, and fails
   before any pull if that is not enough. Images a container uses, other jobs' included, are never removed.
