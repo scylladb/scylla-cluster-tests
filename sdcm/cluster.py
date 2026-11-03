@@ -506,6 +506,8 @@ class BaseNode(AutoSshContainerMixin):
     journal_since: str | None = None
     # A host that outlives the run (bare metal) keeps one journal for every run on it
     journal_outlives_run: bool = False
+    # a host shared with other jobs keeps its apt-daily timers and unattended-upgrades
+    keeps_daily_apt_triggers: bool = False
 
     GOSSIP_STATUSES_FILTER_OUT = [
         "LEFT",  # in case the node was decommissioned
@@ -4261,6 +4263,7 @@ class BaseNode(AutoSshContainerMixin):
             # NOTE: only before the run start is marked: a later call keeps the checkpoint of this run
             vector_journal_from_now=self.journal_outlives_run and not self.journal_since,
             test_config=self.test_config,
+            disable_apt_triggers=not self.keeps_daily_apt_triggers,
             # NOTE: no 'disable_guest_firewall' here on purpose - this one re-runs on a live node
             #       to re-point the logs, long after boot, and flushing the tables there would
             #       take the rules of a running network nemesis with it
@@ -4372,6 +4375,8 @@ class BaseNode(AutoSshContainerMixin):
             self.log.extra["prefix"] = str(self)
 
     def disable_daily_triggered_services(self):
+        if self.keeps_daily_apt_triggers:
+            return
         if self.distro.uses_systemd and (self.distro.is_ubuntu or self.distro.is_debian):
             self.remoter.sudo(shell_script_cmd(disable_daily_apt_triggers(), quote="'"))
 

@@ -616,6 +616,11 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
                 "Could not record the packages and services of the host, the cleanup leaves them as they are: %s", exc
             )
 
+    @property
+    def keeps_daily_apt_triggers(self) -> bool:
+        # Loader and monitor hosts are shared with other jobs, and nothing would turn their apt-daily timers back on
+        return self.node_type != "db"
+
     def _get_public_ip_address(self) -> Optional[str]:
         return self._public_ip
 
