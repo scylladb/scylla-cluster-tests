@@ -14,21 +14,6 @@ exception is a cyclic dependency that is hard to remove. Put a comment above
 that import to tell why. The `cyclic-imports` pre-commit hook checks the
 import graph.
 
-### Import Groups
-
-Write three groups, with a blank line between them: the standard library,
-the third-party packages, and the internal `sdcm` modules. Sort the imports
-alphabetically in each group.
-
-```python
-import logging
-from pathlib import Path
-
-import boto3
-
-from sdcm.cluster import BaseNode
-```
-
 ### Module Logger
 
 Name the module-level logger `LOGGER`.
