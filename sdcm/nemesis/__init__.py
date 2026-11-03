@@ -2458,12 +2458,18 @@ class NemesisRunner:
                 return ComparableScyllaVersion(self.target_node.scylla_version) >= "6.3.0-dev"
 
         def get_ks_cf():
-            filter_func = self.cluster.is_table_has_no_sstables if is_virtual_tables_get_snapshot() else None
-            ks_cf = self.cluster.get_any_ks_cf_list(
-                db_node=self.target_node, filter_empty_tables=False, filter_func=filter_func
-            )
+            """Return the "ks.table" names expected in a '-kc' or full snapshot.
+
+            Called only for those, since a '-cf' snapshot takes its tables from the command.
+            """
+            ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node, filter_empty_tables=False)
             # remove quotes from keyspace or column family, since output of `nodetool listsnapshots` isn't returning them quoted
-            return [k_c.replace('"', "") for k_c in ks_cf]
+            ks_cf = [k_c.replace('"', "") for k_c in ks_cf]
+            if is_virtual_tables_get_snapshot():
+                # virtual tables have no data folder
+                tables_with_folder = self.target_node.get_tables_with_sstable_folder()
+                ks_cf = [k_c for k_c in ks_cf if k_c in tables_with_folder]
+            return ks_cf
 
         keyspace_table = []
         if len(snapshot_params) > 1:

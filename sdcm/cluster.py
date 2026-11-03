@@ -4394,6 +4394,17 @@ class BaseNode(AutoSshContainerMixin):
         result = self.remoter.run(find_cmd, ignore_status=True, verbose=verbose)
         return result.ok
 
+    def get_tables_with_sstable_folder(self) -> set[str]:
+        """Return "ks.table" of every table with a data folder, with one SSH call instead of one per table."""
+        table_dirs = self.remoter.run(
+            "find /var/lib/scylla/data -mindepth 2 -maxdepth 2 -type d", ignore_status=True, verbose=False
+        ).stdout.split()
+        # paths are /var/lib/scylla/data/<ks>/<table>-<uuid>
+        return {
+            f"{keyspace}.{table_dir.rsplit('-', 1)[0]}"
+            for keyspace, table_dir in (path.rsplit("/", 2)[-2:] for path in table_dirs)
+        }
+
     def reload_config(self):
         """
         Reloads scylla configuration without restarting scylla.
