@@ -33,7 +33,7 @@ import threading
 import time
 import traceback
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import ExitStack, contextmanager
@@ -6497,6 +6497,25 @@ class BaseScyllaCluster:
                 stack_trace = traceback.format_stack(current_thread_frames[nemesis_thread.ident])
                 threads_tracebacks.append("\n".join(stack_trace))
 
+    def get_ks_cf_with_most_sstables(self, db_node: BaseNode, default: str = "keyspace1.standard1") -> str:
+        """Non-system table with the most sstables on db_node, using one SSH call instead of a cfstats per table."""
+        ks_cf_list = self.get_non_system_ks_cf_list(
+            db_node=db_node, filter_out_table_with_counter=True, filter_out_mv=True, filter_empty_tables=False
+        )
+        data_files = db_node.remoter.sudo(
+            "find /var/lib/scylla/data -mindepth 3 -maxdepth 3 -name '*-Data.db'", ignore_status=True, verbose=False
+        ).stdout.split()
+        # paths are /var/lib/scylla/data/<ks>/<table>-<uuid>/<sstable>-Data.db
+        sstables_count = Counter(
+            f"{keyspace}.{table_dir.rsplit('-', 1)[0]}"
+            for keyspace, table_dir, _ in (path.rsplit("/", 3)[-3:] for path in data_files)
+        )
+
+        def sstables_num(ks_cf):
+            return sstables_count[ks_cf.replace('"', "")]
+
+        return max(filter(sstables_num, ks_cf_list), key=sstables_num, default=default)
+
     def start_kms_key_rotation_thread(self) -> None:
         if self.params.get("cluster_backend") != "aws":
             return None
@@ -6535,28 +6554,7 @@ class BaseScyllaCluster:
                     ) as target_node:
                         self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
 
-                        ks_cf_list = db_cluster.get_non_system_ks_cf_list(
-                            db_node=target_node,
-                            filter_out_table_with_counter=True,
-                            filter_out_mv=True,
-                            filter_empty_tables=True,
-                        )
-                        chosen_ks_cf, chosen_ks_cf_sstables_num = "keyspace1.standard1", 0
-                        for ks_cf in ks_cf_list:
-                            res = target_node.run_nodetool(
-                                sub_cmd="cfstats",
-                                args=ks_cf,
-                                timeout=300,
-                                retry=3,
-                                publish_event=False,
-                                warning_event_on_exception=(Failure, UnexpectedExit, Libssh2_UnexpectedExit),
-                            )
-                            if res:
-                                cf_stats = target_node._parse_cfstats(res.stdout)
-                                if int(cf_stats["SSTable count"]) > chosen_ks_cf_sstables_num:
-                                    chosen_ks_cf, chosen_ks_cf_sstables_num = ks_cf, int(cf_stats["SSTable count"])
-                            else:
-                                self.log.warning("Failed to get cf_stats for the '%s' table", ks_cf)
+                        chosen_ks_cf = db_cluster.get_ks_cf_with_most_sstables(db_node=target_node)
                         SstableUtils(db_node=target_node, ks_cf=chosen_ks_cf).check_that_sstables_are_encrypted()
                 except SstablesNotFound as exc:
                     self.log.warning(f"Couldn't check the fact of encryption (KMS) for sstables: {exc}")
