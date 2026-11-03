@@ -123,6 +123,17 @@ def new_client(port, user="test"):
     return Client(host="127.0.0.1", user=user, port=port, allow_agent=False)
 
 
+def test_watchers_add_no_poll_interval(client):
+    # SCT runs most commands with a log watcher; a command with no output must not wait out a read timeout
+    class Ignore:
+        def submit_line(self, line):
+            pass
+
+    started = time.perf_counter()
+    client.run("true", watchers=[Ignore()])
+    assert time.perf_counter() - started < client.timings.interactive_read_data_chunk_timeout
+
+
 def test_key_file_disables_the_agent():
     # as the libssh2 client: agent keys offered first can use up sshd MaxAuthTries before the key file
     assert Client(host="h", user="u", pkey="/key")._connect_options()["agent_path"] is None

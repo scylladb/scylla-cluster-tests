@@ -450,13 +450,17 @@ class Client:
         return result
 
     def _feed_watchers(self, future: Future, lines: queue.Queue, watchers, wait: float | None) -> None:
+        # an end marker after the last line: waiting on the queue alone would add a poll interval to every command
+        future.add_done_callback(lambda _: lines.put(None))
         end_time = perf_counter() + wait if wait else None
-        while not (future.done() and lines.empty()):
+        while True:
             if end_time is not None and perf_counter() > end_time:
                 raise FutureTimeoutError()
             try:
                 line = lines.get(timeout=self.timings.interactive_read_data_chunk_timeout)
             except queue.Empty:
                 continue
+            if line is None:
+                return
             for watcher in watchers:
                 watcher.submit_line(line)
