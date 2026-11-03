@@ -13,15 +13,20 @@
 
 """Hosts of the baremetal hosts config, for code that has no node object for them."""
 
+from sdcm.localhost import LocalHost
 
-def host_ssh_address(host: dict, ip_ssh_connections: str | None, localhost=None) -> dict:
+
+def host_ssh_address(host: dict, ip_ssh_connections: str | None, localhost: LocalHost | None) -> dict:
     """Where the runner opens SSH to a host of the hosts config, as `ssh_login_info` keys.
 
-    A host named in the lab access service (`access`) is reached where that service says, through `localhost`; any
-    other at its public address on a `public` role (its private one when it has none), else at its private one.
+    A host named in the lab access service (`access`) is reached where that service says, through `localhost`: the
+    caller must pass one for such a host. Any other host is reached at its public address on a `public` role (its
+    private one when it has none), else at its private one.
     Used where SCT has no node object for the host: log collection and cleanup after the run.
     """
     if access := host.get("access"):
+        if localhost is None:
+            raise ValueError(f"Host {access!r} is reached through the lab access service, which needs a LocalHost")
         return localhost.lab_access_ssh_address(access)
     if ip_ssh_connections == "public":
         return {"hostname": host.get("public_ip", host["private_ip"])}
