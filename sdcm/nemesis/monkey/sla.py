@@ -1,4 +1,3 @@
-import random
 import time
 
 from sdcm.db_stats import PrometheusDBStats
@@ -115,7 +114,7 @@ class RemoveServiceLevelMonkey(SlaMonkeyBase):
                 role.attach_service_level(
                     ServiceLevel(
                         session=session,
-                        name=SERVICE_LEVEL_NAME_TEMPLATE % (removed_shares, random.randint(0, 10)),
+                        name=SERVICE_LEVEL_NAME_TEMPLATE % (removed_shares, self.runner.random.randint(0, 10)),
                         shares=removed_shares,
                     ).create()
                 )

@@ -319,7 +319,9 @@ class ModifyTableDefaultTimeToLiveMonkey(ModifyTableBaseMonkey):
             with runner.cluster.cql_connection_patient(runner.target_node) as session:
                 LOGGER.debug("Getting data from Scylla node: %s, table: %s", runner.target_node, keyspace_table)
                 compaction_properties = get_table_compaction_info(keyspace=keyspace, table=table, session=session)
-            ttl_to_set = calculate_allowed_twcs_ttl(compaction_properties, default_min_ttl, default_max_ttl)
+            ttl_to_set = calculate_allowed_twcs_ttl(
+                compaction_properties, default_min_ttl, default_max_ttl, random_generator=runner.random
+            )
         else:
             ttl_to_set = default_max_ttl
 
