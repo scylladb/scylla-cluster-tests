@@ -1,0 +1,16 @@
+# caps the cassandra-stress writes of configurations/rolling-upgrade-artifacts.yaml,
+# because on minicloud all db guests share one host SSD. Use it right after that file:
+#
+#   -c configurations/rolling-upgrade-artifacts.yaml \
+#   -c configurations/minicloud/rolling-upgrade-write-rate-cap.yaml \
+#   -c configurations/minicloud.yaml
+#
+# the read is repeated because lists are replaced, not merged.
+# a write costs about 15x its payload on disk, so both caps keep the host near 90 MB/s:
+#   5 KB rows: 1200 ops/s (uncapped about 11000)
+#   1 KB rows: 6000 ops/s (uncapped about 12000)
+
+stress_before_upgrade: cassandra-stress write no-warmup cl=QUORUM n=1000000 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 throttle=1200/s -pop seq=1..1000000 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5
+stress_during_entire_upgrade:
+  - cassandra-stress write no-warmup cl=QUORUM n=15000000 -schema 'keyspace=keyspace_during_upgrade replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 throttle=6000/s -pop seq=1..15000000 -col 'n=FIXED(1) size=FIXED(1024)' -log interval=5
+  - cassandra-stress read cl=QUORUM duration=25m -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -pop seq=1..1000000 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5
