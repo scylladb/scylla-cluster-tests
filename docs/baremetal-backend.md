@@ -45,7 +45,8 @@ directory when it exists, otherwise `<name>.json` from the KeyStore (Secrets Man
     reaches but which can't reach the runner, such as a cloud VM when SCT runs in the lab.
 - `public_ip` (optional): defaults to `private_ip`, since lab hosts often have no other address.
 - `access` (optional): the host's name in the lab access service. SCT then opens SSH where that service says instead
-  of to the host's address, and the host needs no SCT key. The lookup lives in scylla-qa-internal (SCT-1275).
+  of to the host's address. What the lookup returns replaces the SSH address; SCT still uses the key in
+  `user_credentials_path` unless the lookup returns another one. The lookup lives in scylla-qa-internal (SCT-1275).
 
 ## Configuration
 
@@ -68,7 +69,8 @@ its ports and its timers onto the shared monitor host.
 
 ## What a host must provide
 
-- SSH as `username`, with the key in `user_credentials_path`, or an `access` name.
+- SSH as `username` with the key in `user_credentials_path`, at the host's address or where its `access` name
+  points.
 - Passwordless sudo for that user.
 - Loader and monitor hosts:
   - Docker Engine 20.10 or newer, any packaging (`docker-ce`, `moby-engine`, distro `docker.io`), running and usable
