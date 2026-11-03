@@ -898,8 +898,10 @@ class SCTConfiguration(*CONFIG_GROUPS):
             self.log.info("unified_package is set, forcing use_preinstalled_scylla=False")
             self["use_preinstalled_scylla"] = False
             if self.get("cluster_backend") == "aws":
-                self.log.info("unified_package is set on AWS backend, forcing ami_db_scylla_user='ubuntu'")
-                self["ami_db_scylla_user"] = "ubuntu"
+                # 'scyllaadm' exists only on Scylla AMIs; keep a user the test-case set for its own AMI (ec2-user, ...)
+                if self.get("ami_db_scylla_user") == "scyllaadm":
+                    self.log.info("unified_package is set on AWS backend, forcing ami_db_scylla_user='ubuntu'")
+                    self["ami_db_scylla_user"] = "ubuntu"
                 if not self.get("ami_id_db_scylla"):
                     # Use arch from relocatable: format if available, otherwise detect from instance type
                     arch = relocatable_arch or self._get_normalized_arch(

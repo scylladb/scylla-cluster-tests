@@ -187,8 +187,17 @@ def test_unified_package(monkeypatch):
     assert not _is_enterprise
 
 
-def test_unified_package_aws_sets_ubuntu_user(monkeypatch):
-    """Test that unified_package on AWS forces ami_db_scylla_user='ubuntu'."""
+@pytest.mark.parametrize(
+    "configured_user, expected_user",
+    [
+        pytest.param(None, "ubuntu", id="default-scyllaadm-forced-to-ubuntu"),
+        pytest.param("ec2-user", "ec2-user", id="explicit-user-kept"),
+    ],
+)
+def test_unified_package_aws_sets_ubuntu_user(configured_user, expected_user, monkeypatch):
+    """unified_package on AWS replaces the Scylla-AMI default user with 'ubuntu', but keeps an explicit one."""
+    if configured_user:
+        monkeypatch.setenv("SCT_AMI_DB_SCYLLA_USER", configured_user)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv(
         "SCT_UNIFIED_PACKAGE",
@@ -204,7 +213,7 @@ def test_unified_package_aws_sets_ubuntu_user(monkeypatch):
     conf.verify_configuration()
 
     assert conf.get("use_preinstalled_scylla") is False
-    assert conf.get("ami_db_scylla_user") == "ubuntu"
+    assert conf.get("ami_db_scylla_user") == expected_user
 
 
 @pytest.mark.parametrize(
