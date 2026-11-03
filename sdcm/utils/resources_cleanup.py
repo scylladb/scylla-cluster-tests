@@ -272,9 +272,11 @@ def clean_resources_baremetal(tags_dict: dict, config, dry_run: bool = False) ->
     )
     try:
         for node_type, section in sections.items():
-            tunnel_ports = node_type in public_roles
+            role_tunnel_ports = node_type in public_roles
             scylla_disk_setup = node_type == "scylla-db" and not config.get("use_preinstalled_scylla")
             for host in section["node_list"]:
+                # A host reached through the lab access service never gets tunnels, see PhysicalMachineNode
+                tunnel_ports = role_tunnel_ports and not host.get("access")
                 name = host.get("access") or (
                     host.get("public_ip", host["private_ip"]) if tunnel_ports else host["private_ip"]
                 )
