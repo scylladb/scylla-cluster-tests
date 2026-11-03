@@ -63,6 +63,7 @@ from sdcm.sct_config.helpers import (
     simulated_racks_enabled,
 )
 from sdcm.sct_config.mixins import CONFIG_GROUPS
+from sdcm.sct_config.sections import ConfigSection
 from sdcm.sct_config.types import (
     IgnoredType,
     InputType,
@@ -409,8 +410,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
     """The SCT configuration, assembled from the domain mixins in `sdcm.sct_config.mixins`.
 
     Every configuration option lives in exactly one mixin, grouped by domain (cross-cutting
-    concerns, then per-backend, then per-test-type). Fields stay flat -- `config.nemesis_class_name`
-    and every YAML key are unchanged; only the source is split. `CONFIG_GROUPS` fixes both the
+    concerns, then per-backend, then per-test-type). Most fields stay flat (`config.n_db_nodes`); a
+    converted group's mixin declares one section instead (`config.agent.port`, see
+    ``sdcm.sct_config.sections``). `CONFIG_GROUPS` fixes both the
     field order on this model and the section order in the generated documentation.
 
     What stays here: the assembled model's own runtime state, the per-backend lookup tables, and
@@ -1758,9 +1760,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if key is None:
             return None
 
-        if key and "." in key:
-            if ret_val := self._dotted_get(key):
-                return ret_val
+        if "." in key:
+            return self._dotted_get(key)
         ret_val = getattr(self, key, None)
 
         if key in self.multi_region_params and isinstance(ret_val, list):
@@ -1771,13 +1772,15 @@ class SCTConfiguration(*CONFIG_GROUPS):
     def _dotted_get(self, key: str):
         """
         If key for retrieval is dot notation, ex. 'stress_image.ycsb'
-        we assume `stress_image` would be a dict
+        we assume `stress_image` would be a dict; a section key raises, sections are read through attributes
         """
         keys = key.split(".")
         current = self.get(keys[0])
+        if isinstance(current, ConfigSection):
+            raise TypeError(f"{keys[0]} is a section, read config.{key}")
         for k in keys[1:]:
             if not isinstance(current, dict):
-                break
+                return None
             current = current.get(k)
         return current
 
@@ -2439,12 +2442,13 @@ class SCTConfiguration(*CONFIG_GROUPS):
             raise ValueError(f"Unsupported backend [{backend}]")
 
     def _check_backend_defaults(self, backend, required_params):
-        fields = [
-            field_name
-            for field_name, field in self.__class__.model_fields.items()
-            if field_name in required_params and not is_ignored_field(field)
-        ]
-        for field_name in fields:
+        if unknown := sorted(
+            name
+            for name in set(required_params)
+            if name not in self.__class__.model_fields or is_ignored_field(self.__class__.model_fields[name])
+        ):
+            raise ValueError(f"Required params of {backend} name unknown options: {unknown}")
+        for field_name in required_params:
             value = self.get(field_name)
             assert value is not None and not (isinstance(value, str) and not value.strip()), (
                 f"{field_name} missing from config for {backend}"
