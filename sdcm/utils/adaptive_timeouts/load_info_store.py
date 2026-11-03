@@ -170,6 +170,12 @@ class NodeLoadInfoService:
     def shards_count(self) -> int:
         return len([key for key in self._get_scylla_metrics() if key.startswith("scylla_lsa_free_space")])
 
+    @property
+    def tablets_count(self) -> int:
+        """Tablet replicas hosted on this node, summed over shards. 0 when no keyspace uses tablets."""
+        metrics = self._get_scylla_metrics()
+        return int(sum(float(value) for key, value in metrics.items() if key.startswith("scylla_tablets_count{")))
+
     @cached_property
     def scheduler_regex(self) -> re.compile:
         return re.compile(r".*group=\"(?P<group>.*)\",shard=\"(?P<shard>\d+)")
@@ -238,6 +244,7 @@ class NodeLoadInfoService:
             "node_data_size_mb": self.node_data_size_mb,
             "node_disk_size_mb": self.node_disk_size_mb,
             "expected_throughput": self.expected_throughput,
+            "tablets_count": self.tablets_count,
             "scylla_version": self._scylla_version,
         }
 
@@ -295,6 +302,7 @@ class AdaptiveTimeoutResultsTable(StaticGenericResultTable):
             ColumnMetadata(name="node_data_size_mb", unit="MB", type=ResultType.INTEGER, visible=False),
             ColumnMetadata(name="node_disk_size_mb", unit="MB", type=ResultType.INTEGER, visible=False),
             ColumnMetadata(name="expected_throughput", unit="MB/s", type=ResultType.FLOAT, visible=False),
+            ColumnMetadata(name="tablets_count", unit="", type=ResultType.INTEGER, visible=False),
             ColumnMetadata(name="node_idx", unit="", type=ResultType.TEXT),
         ]
 
@@ -370,6 +378,9 @@ class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
             row=f"#{cycle}",
             value=result.metrics.get("expected_throughput"),
             status=Status.UNSET,
+        )
+        table.add_result(
+            column="tablets_count", row=f"#{cycle}", value=result.metrics.get("tablets_count"), status=Status.UNSET
         )
         table.add_result(column="node_idx", row=f"#{cycle}", value=result.metrics.get("node_idx"), status=Status.UNSET)
 
