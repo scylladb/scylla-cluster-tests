@@ -1213,10 +1213,8 @@ def test_filter_out_ks_with_rf_one(docker_scylla, params, events):
 
 
 @pytest.mark.integration
-def test_is_table_has_no_sstables(docker_scylla, params, events):
-    """
-    test is_table_has_no_sstables filter function, as it would be used in `disrupt_snapshot_operations` nemesis
-    """
+def test_get_tables_with_sstable_folder(docker_scylla, params, events):
+    """Test get_tables_with_sstable_folder, as it is used in `_validate_snapshot` of the SnapshotOperations nemesis"""
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
 
@@ -1246,16 +1244,11 @@ def test_is_table_has_no_sstables(docker_scylla, params, events):
             else:
                 return ComparableScyllaVersion(docker_scylla.scylla_version) >= "6.3.0-dev"
 
+        ks_cf = [k_c.replace('"', "") for k_c in cluster.get_any_ks_cf_list(docker_scylla, filter_empty_tables=False)]
         if is_virtual_tables_get_snapshot():
-            ks_cf = cluster.get_any_ks_cf_list(
-                docker_scylla, filter_func=cluster.is_table_has_no_sstables, filter_empty_tables=False
-            )
-        else:
-            ks_cf = cluster.get_any_ks_cf_list(docker_scylla, filter_empty_tables=False)
-
-        keyspace_table = []
-        ks_cf = [k_c.replace('"', "") for k_c in ks_cf]
-        keyspace_table.extend([k_c.split(".") for k_c in ks_cf])
+            tables_with_folder = docker_scylla.get_tables_with_sstable_folder()
+            ks_cf = [k_c for k_c in ks_cf if k_c in tables_with_folder]
+        keyspace_table = [k_c.split(".") for k_c in ks_cf]
 
         result = docker_scylla.run_nodetool("snapshot")
         snapshot_name = re.findall(r"(\d+)", result.stdout.split("snapshot name")[1])[0]
@@ -1372,3 +1365,14 @@ def test_vector_store_address_follows_the_re_created_container():
         assert node.private_ip_address == "172.17.0.2"
         assert node.vector_store_uri == "http://172.17.0.2:6080"
         assert node.get_vector_store_api_client().base_url == "http://172.17.0.2:6080"
+
+
+def test_get_tables_with_sstable_folder_parses_find_output():
+    node = unittest.mock.MagicMock()
+    node.remoter.sudo.return_value.stdout = """
+/var/lib/scylla/data/ks/t1-0123456789abcdef0123456789abcdef
+/var/lib/scylla/data/alternator_my-tbl/my-tbl-0123456789abcdef0123456789abcdef
+"""
+
+    assert BaseNode.get_tables_with_sstable_folder(node) == {"ks.t1", "alternator_my-tbl.my-tbl"}
+    node.remoter.sudo.assert_called_once()
