@@ -4,6 +4,16 @@ Every option can be set in a config file, or as an environment variable named
 `SCT_<OPTION>` (upper-cased). Options are grouped by what they configure: cross-cutting
 concerns first, then one page per backend, then one per test type.
 
+#### Sections
+* Some groups hold their options in a section, e.g. `agent`: in YAML they nest under
+       the section key (`agent: {enabled: true}`), and they are listed by their dotted
+       path (`agent.enabled`).
+* A section field is set from the environment as `SCT_<SECTION>__<FIELD>`
+       (`SCT_AGENT__ENABLED=true`); a whole section, or a field holding a list or a
+       nested section, takes a YAML or JSON string (`SCT_AGENT='{enabled: true}'`).
+* Each layer (defaults, config files, environment) merges into a section field by
+       field, so a config file setting `agent: {enabled: true}` keeps every other default.
+
 #### Appending with environment variables or with config files
 * **strings:** can be appended with adding `++` at the beginning of the string:
        `export SCT_APPEND_SCYLLA_ARGS="++ --overprovisioned 1"`
