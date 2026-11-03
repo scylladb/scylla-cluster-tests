@@ -606,13 +606,6 @@ def test_comparable_scylla_operator_versions_to_str(version_string_input, versio
 @pytest.mark.parametrize(
     "version, expected_repo",
     (
-        ("6.2.2", "scylladb/scylla"),
-        ("6.2.3", "scylladb/scylla"),
-        ("6.2.4", "scylladb/scylla"),
-        ("6.2.66", "scylladb/scylla"),
-        ("2024.1.1", "scylladb/scylla-enterprise"),
-        ("2024.2.13", "scylladb/scylla-enterprise"),
-        ("2024.2.14", "scylladb/scylla-enterprise"),
         ("2025.1.0", "scylladb/scylla"),
         ("2025.2.99", "scylladb/scylla"),
         ("2025.4.0", "scylladb/scylla"),
@@ -888,19 +881,23 @@ def test_azure_version_routing_logic(version_string, should_use_released, is_ful
     [
         # Full version tags → nightly repos
         ("2026.1.0~dev-0.20260119.4cde34f6f20b", "scylladb/scylla-nightly"),
-        ("5.2.0-dev-0.20220829.67c91e8bcd61", "scylladb/scylla-nightly"),
         # Branch/latest versions
         ("latest", "scylladb/scylla-nightly"),
         ("master:latest", "scylladb/scylla-nightly"),
         # Simple versions
-        ("5.2.1", "scylladb/scylla"),  # Release version
-        ("2024.2.0", "scylladb/scylla-enterprise"),  # Release version
+        ("2026.1.3", "scylladb/scylla"),  # Release version
     ],
 )
 def test_docker_version_routing_logic(version, expected_repo):
     """Test Docker repo selection for various version formats."""
     repo = get_scylla_docker_repo_from_version(version)
     assert repo == expected_repo, f"Version '{version}' should route to '{expected_repo}', got '{repo}'"
+
+
+@pytest.mark.parametrize("version", ["6.2.3", "2024.2.13", "2024.2.5-0.20250221.cb9e2a54ae6d-1"])
+def test_docker_repo_rejects_pre_source_available_versions(version):
+    with pytest.raises(ValueError, match="Unsupported scylla version"):
+        get_scylla_docker_repo_from_version(version)
 
 
 class TestLatestUnifiedPackage:

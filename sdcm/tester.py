@@ -1066,9 +1066,6 @@ class ClusterTester(unittest.TestCase):
         if not self.params.artifact_scylla_version:
             TEST_LOG.debug("Skip configuring AWS KMS, Scylla version is unknown")
             return
-        if ComparableScyllaVersion(self.params.artifact_scylla_version) < "2023.1.3":
-            TEST_LOG.debug("Skip configuring AWS KMS, version does not support KMS")
-            return
         if self.params.get("enterprise_disable_kms"):
             TEST_LOG.debug("Skip configuring AWS KMS, `enterprise_disable_kms` is set in the config")
             return

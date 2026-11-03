@@ -101,28 +101,26 @@ class UpgradeBaseVersion:
         LOGGER.info("Getting supported scylla base versions...")
         source_available_base_version = []
 
-        source_available_release_list = supported_versions
-
         # The major version of unstable scylla, eg: 2021.2.dev, 2021.1
         version = self.scylla_version
 
         if version in supported_versions:
-            idx = source_available_release_list.index(version)
+            idx = supported_versions.index(version)
             lts_version = re.compile(r"\d{4}\.1")  # lts = long term support
             sts_version = re.compile(r"\d{4}\.[2345]")  # sts = short term support
 
             # Find last LTS version before current version
             last_lts_idx = None
             for i in range(idx - 1, -1, -1):
-                if lts_version.search(source_available_release_list[i]):
+                if lts_version.search(supported_versions[i]):
                     last_lts_idx = i
                     break
 
-            if sts_version.search(version) or ComparableScyllaVersion(version) < "2023.1":
+            if sts_version.search(version):
                 # For STS version, support upgrade from STS versions since last LTS and the last LTS version
                 # Current STS version should not be counted as a base version candidate
                 if last_lts_idx is not None:
-                    sts_range = source_available_release_list[last_lts_idx + 1 : idx]  # exclude current STS (idx)
+                    sts_range = supported_versions[last_lts_idx + 1 : idx]  # exclude current STS (idx)
                     if self.base_version_all_sts_versions:
                         # Add all preceding STS versions between last LTS (exclusive) and current STS (exclusive)
                         for v in sts_range:
@@ -135,11 +133,11 @@ class UpgradeBaseVersion:
                                 source_available_base_version.append(v)
                                 break
                     # Always add the last LTS version itself
-                    source_available_base_version.append(source_available_release_list[last_lts_idx])
+                    source_available_base_version.append(supported_versions[last_lts_idx])
                 # If no previous LTS, fallback to previous logic (previous version only if exists)
                 elif idx > 0:
                     # previous version could be STS or LTS; treat as single baseline
-                    prev_version = source_available_release_list[idx - 1]
+                    prev_version = supported_versions[idx - 1]
                     if sts_version.search(prev_version) or lts_version.search(prev_version):
                         source_available_base_version.append(prev_version)
                 else:
@@ -148,7 +146,7 @@ class UpgradeBaseVersion:
             elif lts_version.search(version):
                 # For LTS version, support upgrade from STS versions since last LTS and the last LTS version
                 if last_lts_idx is not None:
-                    sts_range = source_available_release_list[last_lts_idx + 1 : idx]
+                    sts_range = supported_versions[last_lts_idx + 1 : idx]
                     if self.base_version_all_sts_versions:
                         # Add all STS versions between last LTS (exclusive) and current LTS (exclusive)
                         for v in sts_range:
@@ -161,10 +159,10 @@ class UpgradeBaseVersion:
                                 source_available_base_version.append(v)
                                 break
                     # Add the previous LTS version itself
-                    source_available_base_version.append(source_available_release_list[last_lts_idx])
+                    source_available_base_version.append(supported_versions[last_lts_idx])
                 elif idx > 0:
                     # If no previous LTS was found (shouldn't happen for pattern), fallback to previous version
-                    source_available_base_version.append(source_available_release_list[idx - 1])
+                    source_available_base_version.append(supported_versions[idx - 1])
                 else:
                     LOGGER.warning("This is the first supported version, no upgrade source available.")
             else:
@@ -179,7 +177,7 @@ class UpgradeBaseVersion:
             sts_pattern = re.compile(r"\d{4}\.[2345]")
             last_lts = None
             last_sts = None
-            for v in reversed(source_available_release_list):
+            for v in reversed(supported_versions):
                 if last_lts is None and lts_pattern.search(v) and self.filter_rc_only_version([v]):
                     last_lts = v
                 if last_sts is None and sts_pattern.search(v) and self.filter_rc_only_version([v]):
@@ -196,7 +194,7 @@ class UpgradeBaseVersion:
                 # a backend whose start support version is past the last LTS has no LTS to upgrade from yet
                 source_available_base_version.append(last_lts or last_sts)
         elif re.match(r"\d+.\d+", version):
-            relevant_versions = [v for v in source_available_release_list if ComparableScyllaVersion(v) < version]
+            relevant_versions = [v for v in supported_versions if ComparableScyllaVersion(v) < version]
             # If dest version is smaller than the first supported release,
             # it might be an invalid dest version
             if relevant_versions:

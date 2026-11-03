@@ -2772,7 +2772,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
     def update_config_based_on_version(self):
         try:
             supports_views_with_tablets = ComparableScyllaVersion(self.artifact_scylla_version) >= "2025.1.0~dev"
-        except TypeError, ValueError:  # no version (cassandra, cloud) or unparsable, e.g. docker "latest"
+        except ValueError:  # no version (cassandra, cloud) or unparsable, e.g. docker "latest"
             supports_views_with_tablets = False
         if supports_views_with_tablets and "views-with-tablets" not in self.get("experimental_features"):
             self.experimental_features.append("views-with-tablets")

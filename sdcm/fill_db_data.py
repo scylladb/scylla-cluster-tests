@@ -33,7 +33,6 @@ from sdcm.utils.database_query_utils import fetch_all_rows
 from sdcm.utils.decorators import retrying
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.issues import SkipPerIssues
-from sdcm.utils.version_utils import ComparableScyllaVersion
 
 LOGGER = logging.getLogger(__name__)
 
@@ -55,10 +54,6 @@ class FillDatabaseData(ClusterTester):
     Fill scylla with many types of records, tables and data types (taken from dtest) originally by Andrei.
 
     """
-
-    NON_FROZEN_SUPPORT_MIN_VERSION = "2020.1"
-    NULL_VALUES_SUPPORT_MIN_VERSION = "2021.1.3"
-    NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_MIN_VERSION = "2021.1.dev"
 
     base_ks = "keyspace_fill_db_data"
     # List of dictionaries for all items tables and their data
@@ -914,45 +909,6 @@ class FillDatabaseData(ClusterTester):
             ],
             "min_version": "4.4.rc0",
             "max_version": "",
-            "skip_condition": "self.version_null_values_support()",
-            "skip": "",
-        },
-        {
-            "name": "null_support_test_old_version:  Test support for nulls on old versions",
-            # NOTE: Useful for scylla-operator's scylla upgrade tests
-            # while https://github.com/scylladb/scylla/issues/8032 is not fixed
-            "create_tables": [
-                """CREATE TABLE null_support_test_old_version (
-                                k int,
-                                c int,
-                                v1 int,
-                                v2 set<text>,
-                                PRIMARY KEY (k, c));"""
-            ],
-            "truncates": ["TRUNCATE order_by_validation_test"],
-            "inserts": [
-                "INSERT INTO null_support_test_old_version (k, c, v1, v2) VALUES (0, 0, null, {'1', '2'})",
-                "INSERT INTO null_support_test_old_version (k, c, v1) VALUES (0, 1, 1)",
-            ],
-            "queries": [
-                "SELECT * FROM null_support_test_old_version",
-                "INSERT INTO null_support_test_old_version (k, c, v1) VALUES (0, 1, null)",
-                "INSERT INTO null_support_test_old_version (k, c, v2) VALUES(0, 0, null)",
-                "SELECT * FROM null_support_test_old_version",
-            ],
-            "results": [
-                [[0, 0, None, set(["1", "2"])], [0, 1, 1, None]],
-                [],
-                [],
-                [[0, 0, None, None], [0, 1, None, None]],
-            ],
-            "invalid_queries": [
-                "INSERT INTO null_support_test_old_version (k, c, v2) VALUES (0, 2, {1, null})",
-                "INSERT INTO null_support_test_old_version (k, c, v2) VALUES (0, 0, { 'foo', 'bar', null })",
-            ],
-            "min_version": "",
-            "max_version": "4.3",
-            "skip_condition": "not self.version_null_values_support()",
             "skip": "",
         },
         {
@@ -976,32 +932,6 @@ class FillDatabaseData(ClusterTester):
             "results": [[["Tom"], ["Bob"]]],
             "min_version": "4.4.rc0",
             "max_version": "",
-            "skip_condition": "self.version_new_sorting_order_with_secondary_indexes()",
-            "skip": "",
-        },
-        {
-            "name": "nameless_index_test_old_version:  Test CREATE INDEX without name and validate the index can "
-            "be dropped",
-            "create_tables": [
-                """CREATE TABLE nameless_index_test_old_version (
-                                id text PRIMARY KEY,
-                                birth_year int,
-                            )""",
-                "CREATE INDEX on nameless_index_test_old_version(birth_year)",
-            ],
-            "truncates": ["TRUNCATE nameless_index_test_old_version"],
-            "inserts": [
-                "INSERT INTO nameless_index_test_old_version (id, birth_year) VALUES ('Tom', 42)",
-                "INSERT INTO nameless_index_test_old_version (id, birth_year) VALUES ('Paul', 24)",
-                "INSERT INTO nameless_index_test_old_version (id, birth_year) VALUES ('Bob', 42)",
-            ],
-            "queries": ["SELECT id FROM nameless_index_test_old_version WHERE birth_year = 42"],
-            # Due the issue https://github.com/scylladb/scylla/issues/7443, the result of the query changed
-            # from "[['Bob'], ['Tom']]" to "[['Tom'], ['Bob']]" from versions Scylla 4.4 and above
-            "results": [[["Bob"], ["Tom"]]],
-            "min_version": "3.0",
-            "max_version": "4.3",
-            "skip_condition": "not self.version_new_sorting_order_with_secondary_indexes()",
             "skip": "",
         },
         {
@@ -3159,7 +3089,6 @@ class FillDatabaseData(ClusterTester):
             ],
             "min_version": "",
             "max_version": "",
-            "skip_condition": "self.version_non_frozen_udt_support()",
             "skip": "",
         },
         {
@@ -3562,23 +3491,6 @@ class FillDatabaseData(ClusterTester):
             # - https://github.com/scylladb/scylladb/issues/22166
             # - https://github.com/scylladb/scylladb/issues/21946
             session.execute(truncate, timeout=300)
-
-    @property
-    def parsed_scylla_version(self):
-        return ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version)
-
-    def version_null_values_support(self):
-        return self.parsed_scylla_version >= self.NULL_VALUES_SUPPORT_MIN_VERSION
-
-    def version_new_sorting_order_with_secondary_indexes(self):
-        return self.parsed_scylla_version >= self.NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_MIN_VERSION
-
-    def version_non_frozen_udt_support(self):
-        """
-        Check if current version supports non-frozen user type
-        Issue: https://github.com/scylladb/scylla/pull/4934
-        """
-        return self.parsed_scylla_version >= self.NON_FROZEN_SUPPORT_MIN_VERSION
 
     @property
     def enable_cdc_for_tables(self) -> bool:

@@ -20,7 +20,6 @@ from sdcm.nemesis.utils.indexes import get_column_names
 from sdcm.utils.common import (
     parse_nodetool_listsnapshots,
 )
-from sdcm.utils.version_utils import ComparableScyllaVersion
 from unit_tests.lib.fake_cluster import DummyScyllaCluster
 
 LOGGER = logging.getLogger(__name__)
@@ -304,20 +303,10 @@ def test_is_table_has_no_sstables(docker_scylla, params, events):
         )
         docker_scylla.run_nodetool("flush")
 
-        def is_virtual_tables_get_snapshot():
-            """
-            scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
-            has stopped creating snapshots for virtual tables.
-            hence we need to filter them out when compare tables to snapshot content.
-            """
-            return ComparableScyllaVersion(docker_scylla.scylla_version) >= "2024.3.0-dev"
-
-        if is_virtual_tables_get_snapshot():
-            ks_cf = cluster.get_any_ks_cf_list(
-                docker_scylla, filter_func=cluster.is_table_has_no_sstables, filter_empty_tables=False
-            )
-        else:
-            ks_cf = cluster.get_any_ks_cf_list(docker_scylla, filter_empty_tables=False)
+        # virtual tables have no snapshots (scylladb/scylladb@24589cf00cf8), so filter them out
+        ks_cf = cluster.get_any_ks_cf_list(
+            docker_scylla, filter_func=cluster.is_table_has_no_sstables, filter_empty_tables=False
+        )
 
         keyspace_table = []
         ks_cf = [k_c.replace('"', "") for k_c in ks_cf]

@@ -577,16 +577,11 @@ def get_scylla_docker_repo_from_version(scylla_version: str):
     Get scylla docker repo based scylla version.
 
     Supports various version formats:
-    - Simple versions: "5.2.1", "2024.2.0"
+    - Simple versions: "2025.1.0", "2026.1.3"
     - Branch versions: "latest", "master:latest"
-    - Full version tags: "2024.2.5-0.20250221.cb9e2a54ae6d-1", "2026.1.0~dev-0.20260119.4cde34f6f20b"
+    - Full version tags: "2026.1.0~dev-0.20260119.4cde34f6f20b"
 
-    scylladb/scylla-enterprise-nightly is not supported anymore: pre-2025.1.0 enterprise
-    versions no longer have an actively publishing nightly docker repo, so any version
-    that would have routed there now raises ValueError instead. scylladb/scylla-enterprise
-    (the release repo, returned below for release-version inputs in the same pre-2025.1.0
-    range) is deprecated as well, see SCT-882; still returned here pending a follow-up to
-    drop it too.
+    Only source-available versions (2025.1 and newer) have docker repos, anything older raises ValueError.
 
     :param scylla_version: scylla version string
 
@@ -597,31 +592,18 @@ def get_scylla_docker_repo_from_version(scylla_version: str):
     if scylla_version in ("latest", "master:latest"):
         return "scylladb/scylla-nightly"
 
-    # Check if this is a full version tag (e.g., "2024.2.5-0.20250221.cb9e2a54ae6d-1")
-    # Full version tags are always non-release versions and go to nightly repos
+    # Full version tags (e.g., "2026.1.0~dev-0.20260119.4cde34f6f20b") are never releases
     if full_version_tag := parse_scylla_version_tag(scylla_version):
-        # Extract base version to determine enterprise vs non-enterprise
-        base_version = full_version_tag.base_version
         try:
-            comparable_version = ComparableScyllaVersion(base_version)
-            if comparable_version <= "6.2.99" or comparable_version >= "2025.1.0~dev":
+            if ComparableScyllaVersion(full_version_tag.base_version) >= "2025.1.0~dev":
                 return "scylladb/scylla-nightly"
         except ValueError:
-            # If we can't parse the base version, default to scylla-nightly
             return "scylladb/scylla-nightly"
 
-    # should be a semver then, but fail fast if not
     try:
         comparable_version = ComparableScyllaVersion(scylla_version)
-        if comparable_version <= "6.2.99" or comparable_version >= "2025.1.0~dev":
-            if comparable_version.isReleaseVersion():
-                return "scylladb/scylla"
-            else:
-                return "scylladb/scylla-nightly"
-        elif "6.2.99" < comparable_version < "2025.1.0~dev":
-            if comparable_version.isReleaseVersion():
-                # scylladb/scylla-enterprise is deprecated too, see SCT-882
-                return "scylladb/scylla-enterprise"
+        if comparable_version >= "2025.1.0~dev":
+            return "scylladb/scylla" if comparable_version.isReleaseVersion() else "scylladb/scylla-nightly"
     except ValueError:
         pass
     raise ValueError(f"Unsupported scylla version {scylla_version}, check test logic")
@@ -1109,7 +1091,7 @@ def get_branched_repo(
         is_source_available = ComparableScyllaVersion(branch_id) >= "2025.1.0"
     except ValueError:
         is_source_available = True
-    if branch == "enterprise" or not is_source_available:
+    if not is_source_available:
         product = "scylla-enterprise"
     else:
         product = "scylla"

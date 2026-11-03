@@ -792,11 +792,16 @@ def test_35_append_unsupported_str_options(monkeypatch):
     assert "Option manager_version is not appendable" == str(context.value)
 
 
-def test_36_update_config_based_on_version():
+@pytest.mark.parametrize(
+    "version, expected", [("2025.1.0~dev", True), ("2024.2.0", False), ("latest", False), (None, False)]
+)
+def test_36_update_config_based_on_version(version, expected):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
-    conf.artifact_scylla_version = "2025.1.0~dev"
+    conf.experimental_features = []
+    conf.artifact_scylla_version = version
     conf.update_config_based_on_version()
+    assert ("views-with-tablets" in conf.experimental_features) is expected
 
 
 def test_36a_scale_tests_disable_region_fallback(monkeypatch):
@@ -854,8 +859,6 @@ def test_37_raises_error_for_invalid_thread_count_type(monkeypatch):
 @pytest.mark.parametrize(
     "backend, version, expected_repo",
     (
-        ("k8s-eks", "2024.1.21", "scylladb/scylla-enterprise"),
-        ("k8s-gke", "2024.1.21", "scylladb/scylla-enterprise"),
         ("k8s-eks", "2025.4.0", "scylladb/scylla"),
         ("k8s-gke", "2025.4.0", "scylladb/scylla"),
         ("docker", "2026.1.0", "scylladb/scylla"),
@@ -1018,7 +1021,7 @@ def test_migrator_source_hosts_and_test_id_mutually_exclusive(monkeypatch):
     "raw_value,expected",
     [
         ("  2025.1.0  ", "2025.1.0"),
-        ("\t5.4.0\n", "5.4.0"),
+        ("\t2026.1.0\n", "2026.1.0"),
         ("2025.1.0", "2025.1.0"),
     ],
 )

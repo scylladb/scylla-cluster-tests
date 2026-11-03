@@ -6,7 +6,6 @@ from pathlib import Path
 
 from sdcm.exceptions import SstablesNotFound
 from sdcm.paths import SCYLLA_YAML_PATH
-from sdcm.utils.version_utils import ComparableScyllaVersion
 
 
 class NonDeletedTombstonesFound(Exception):
@@ -20,7 +19,7 @@ class SstableUtils:
 
     """
 
-    REMOTE_SSTABLEDUMP_PATH = "/var/tmp/sstabledump.json"
+    REMOTE_SSTABLE_DUMP_PATH = "/var/tmp/sstable_dump.json"
 
     # How many sstables to pass to a single "scylla sstable dump-statistics --sstables ..." call.
     # Bounds the command-line length and the size of the returned JSON while still amortizing the
@@ -87,14 +86,11 @@ class SstableUtils:
             # NOTE: if we have 'stdout' then the data was successfully read and it means there was no encryption
             if sstables_res.stdout:
                 self.log.debug("Successfully read the sstable located at '%s'.", sstable)
-                if dump_cmd == "sstabledump":
-                    sstables_encrypted_mapping[sstable] = False
-                else:
-                    scylla_metadata = json.loads(sstables_res.stdout, strict=False)["sstables"]
-                    sstables_encrypted_mapping[sstable] = all(
-                        "scylla_encryption_options" in metadata.get("extension_attributes", {})
-                        for table, metadata in scylla_metadata.items()
-                    )
+                scylla_metadata = json.loads(sstables_res.stdout, strict=False)["sstables"]
+                sstables_encrypted_mapping[sstable] = all(
+                    "scylla_encryption_options" in metadata.get("extension_attributes", {})
+                    for table, metadata in scylla_metadata.items()
+                )
             # NOTE: case when sstable exists and it is encrypted:
             #       [shard 0:main] seastar - Exiting on unhandled exception: \
             #       sstables::malformed_sstable_exception (Buffer improperly sized to hold requested data. \
@@ -120,11 +116,6 @@ class SstableUtils:
                     sstable,
                 )
                 misordered_count += 1
-            elif (
-                "NullPointerException" in sstables_res.stderr or "ArrayIndexOutOfBoundsException" in sstables_res.stderr
-            ):
-                # using sstabledump
-                sstables_encrypted_mapping[sstable] = True
             # NOTE: all other unexpected cases
             else:
                 self.log.warning("Unexpected error reading sstable located at '%s': %s", sstable, sstables_res.stderr)
@@ -152,13 +143,13 @@ class SstableUtils:
         :param sstable: The SSTable file path.
         :return: The number of tombstones in the SSTable, or 0 if SSTable doesn't exist.
         """
-        if not self._run_sstabledump(sstable=sstable):  # Check if SSTable exists and was dumped
+        if not self._dump_sstable_json(sstable=sstable):  # Check if SSTable exists and was dumped
             self.log.debug("Skipping tombstone count as SSTable %s does not exist or dump failed.", sstable)
             return 0
 
         # Fetch the dumped JSON content
         result = self.db_node.remoter.run(
-            f"sudo cat {self.REMOTE_SSTABLEDUMP_PATH}", verbose=False, ignore_status=False
+            f"sudo cat {self.REMOTE_SSTABLE_DUMP_PATH}", verbose=False, ignore_status=False
         )
 
         if not result.ok:
@@ -225,7 +216,7 @@ class SstableUtils:
         )
         return table_repair_date, delta_repair_date_minutes
 
-    def _run_sstabledump(self, sstable: str, remote_json_path: str = REMOTE_SSTABLEDUMP_PATH) -> bool:
+    def _dump_sstable_json(self, sstable: str, remote_json_path: str = REMOTE_SSTABLE_DUMP_PATH) -> bool:
         """
         Runs the SSTable dump command if the SSTable exists.
 
@@ -253,8 +244,8 @@ class SstableUtils:
 
         return True  # Successfully dumped SSTable
 
-    def _are_tombstones_in_sstabledump(self, sstable: str, remote_json_path: str = REMOTE_SSTABLEDUMP_PATH) -> bool:
-        # Operates on an already-dumped "Data.db" JSON (see `_run_sstabledump`); it exists for the
+    def _are_tombstones_in_sstable_dump(self, sstable: str, remote_json_path: str = REMOTE_SSTABLE_DUMP_PATH) -> bool:
+        # Operates on an already-dumped "Data.db" JSON (see `_dump_sstable_json`); it exists for the
         # data-dump callers that also need the tombstone contents. For a cheap yes/no check over many
         # sstables (no full data dump), prefer `filter_out_sstables_with_tombstones`, which reads only
         # "Statistics.db".
@@ -276,15 +267,15 @@ class SstableUtils:
         :param sstable: The SSTable file path.
         :return: List of tombstone deletion entries.
         """
-        if not self._run_sstabledump(sstable=sstable):  # Check if SSTable exists and was dumped
+        if not self._dump_sstable_json(sstable=sstable):  # Check if SSTable exists and was dumped
             self.log.debug("Skipping tombstone search as SSTable %s does not exist or dump failed.", sstable)
             return []
-        if not self._are_tombstones_in_sstabledump(sstable=sstable):
+        if not self._are_tombstones_in_sstable_dump(sstable=sstable):
             return []
 
         tombstones_deletion_info = []
         result = self.db_node.remoter.run(
-            f"sudo cat {self.REMOTE_SSTABLEDUMP_PATH}", verbose=False, ignore_status=False
+            f"sudo cat {self.REMOTE_SSTABLE_DUMP_PATH}", verbose=False, ignore_status=False
         )
 
         if not result.ok:
@@ -457,16 +448,6 @@ class SstableUtils:
             self.db_node.remoter.sudo(f"dd if=/dev/urandom of={sstable} bs=1M count=1", verbose=True)
 
 
-def is_new_sstable_dump_supported(node) -> bool:
-    """
-    Determines if the new "scylla sstable" dump command is supported based on the Scylla version.
-
-    :param node: A DB node object to provide Scylla version.
-    :return: True if the new "scylla sstable" dump is supported, else False.
-    """
-    return ComparableScyllaVersion(node.scylla_version) >= "2023.1.3"
-
-
 def _generate_sstable_dump_command(node, command: str, keyspace: str, table: str) -> str:
     """
     Constructs the base command for the "scylla sstable" dump tool.
@@ -487,7 +468,7 @@ def _generate_sstable_dump_command(node, command: str, keyspace: str, table: str
 
 def get_sstable_metadata_dump_command(node, keyspace: str, table: str, debug_log_level: bool = True) -> str:
     """
-    Constructs the command for dumping sstable metadata using either "sstabledump" or "scylla sstable" tool.
+    Constructs the command for dumping sstable metadata using the "scylla sstable" tool.
 
     :param node: A DB node object to provide Scylla version.
     :param keyspace: Keyspace name.
@@ -495,9 +476,6 @@ def get_sstable_metadata_dump_command(node, keyspace: str, table: str, debug_log
     :param debug_log_level: If True, includes debug-level logging in the command.
     :return: Command string for metadata dump.
     """
-    if not is_new_sstable_dump_supported(node):
-        return "sstabledump"
-
     log_level_option = " --logger-log-level scylla-sstable=debug" if debug_log_level else ""
     command = f"dump-scylla-metadata{log_level_option}"
 
@@ -506,13 +484,11 @@ def get_sstable_metadata_dump_command(node, keyspace: str, table: str, debug_log
 
 def get_sstable_data_dump_command(node, keyspace: str, table: str) -> str:
     """
-    Constructs the command for dumping sstable data using either "sstabledump" or "scylla sstable" tool.
+    Constructs the command for dumping sstable data using the "scylla sstable" tool.
 
     :param node: A DB node object to provide Scylla version.
     :param keyspace: Keyspace name.
     :param table: Table name.
     :return: Command string for data dump.
     """
-    if not is_new_sstable_dump_supported(node):
-        return "sstabledump"
     return _generate_sstable_dump_command(node, "dump-data", keyspace, table)

@@ -896,10 +896,7 @@ class SlaPerUserTest(LongevityTest):
             pass
 
     def _compare_workloads_c_s_metrics(self, workloads_queue: list) -> dict:
-        comparison_axis = {"latency 95th percentile": 2.0, "latency 99th percentile": 2.0, "op rate": 2.0}
-        if ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version) >= "2024.2.0~rc3":
-            # Running the test with 2024.3  - deviation was improved
-            comparison_axis = {"latency 95th percentile": 1.0, "latency 99th percentile": 1.0, "op rate": 1.0}
+        comparison_axis = {"latency 95th percentile": 1.0, "latency 99th percentile": 1.0, "op rate": 1.0}
         workloads_results = {}
         for workload in workloads_queue:
             result = self.get_stress_results(queue=workload, store_results=False)
