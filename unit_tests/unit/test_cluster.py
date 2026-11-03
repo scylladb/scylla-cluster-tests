@@ -1196,3 +1196,32 @@ def test_proposed_scylla_yaml_object_storage_endpoint_region(tmp_path):
     assert scylla_yaml.object_storage_endpoints == [
         {"name": "s3.eu-west-1.amazonaws.com", "port": 443, "https": True, "aws_region": "eu-west-1"},
     ]
+
+
+def test_get_ks_cf_with_most_sstables_counts_with_one_ssh_call():
+    db_cluster = DummyScyllaCluster([])
+    db_cluster.get_non_system_ks_cf_list = unittest.mock.MagicMock(
+        return_value=["ks.t1", "ks.t2", 'ks."MixedCase"', "ks.empty"]
+    )
+    node = unittest.mock.MagicMock()
+    node.remoter.sudo.return_value.stdout = """
+/var/lib/scylla/data/ks/t1-1a2b/me-1-big-Data.db
+/var/lib/scylla/data/ks/t2-3c4d/me-1-big-Data.db
+/var/lib/scylla/data/ks/t2-3c4d/me-2-big-Data.db
+/var/lib/scylla/data/ks/MixedCase-5e6f/me-1-big-Data.db
+/var/lib/scylla/data/ks/MixedCase-5e6f/me-2-big-Data.db
+/var/lib/scylla/data/ks/MixedCase-5e6f/me-3-big-Data.db
+"""
+
+    assert db_cluster.get_ks_cf_with_most_sstables(db_node=node) == 'ks."MixedCase"'
+    node.remoter.sudo.assert_called_once()
+    node.run_nodetool.assert_not_called()
+
+
+def test_get_ks_cf_with_most_sstables_falls_back_to_default():
+    db_cluster = DummyScyllaCluster([])
+    db_cluster.get_non_system_ks_cf_list = unittest.mock.MagicMock(return_value=["ks.empty"])
+    node = unittest.mock.MagicMock()
+    node.remoter.sudo.return_value.stdout = ""
+
+    assert db_cluster.get_ks_cf_with_most_sstables(db_node=node) == "keyspace1.standard1"
