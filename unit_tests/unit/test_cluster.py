@@ -1006,6 +1006,17 @@ def test_traffic_control_targets_the_secondary_interface():
     node.remoter.run.assert_any_call('sudo bash -cxe "tc qdisc add dev ens5 root netem loss 5%"')
 
 
+def test_get_tables_with_sstable_folder():
+    node = unittest.mock.MagicMock()
+    node.remoter.sudo.return_value.stdout = """
+/var/lib/scylla/data/ks/t1-0123456789abcdef0123456789abcdef
+/var/lib/scylla/data/alternator_my-tbl/my-tbl-0123456789abcdef0123456789abcdef
+"""
+
+    assert BaseNode.get_tables_with_sstable_folder(node) == {"ks.t1", "alternator_my-tbl.my-tbl"}
+    node.remoter.sudo.assert_called_once()
+
+
 def test_vector_store_address_follows_the_re_created_container():
     """The Vector Store reconfiguration destroys the container and runs a new one."""
     parent_cluster = unittest.mock.MagicMock()
