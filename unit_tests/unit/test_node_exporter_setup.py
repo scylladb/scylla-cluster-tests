@@ -11,12 +11,15 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+import os
+import subprocess
 from unittest.mock import MagicMock
 
 import pytest
 
 from sdcm.cluster import BaseMonitorSet
-from sdcm.node_exporter_setup import NODE_EXPORTER_VERSION, NodeExporterSetup
+from sdcm.node_exporter_setup import NODE_EXPORTER_PORT_PROBE, NODE_EXPORTER_VERSION, NodeExporterSetup
+from sdcm.remote import shell_script_cmd
 
 
 def _remoter(machine, probe="free 9100\n"):
@@ -92,15 +95,51 @@ def test_install_without_a_scrape_host_skips_the_probe():
     assert "ss -Hltn" not in script
 
 
-def test_probe_asks_the_address_prometheus_scrapes():
-    """An exporter bound to loopback doesn't answer there, so it isn't reused and Prometheus isn't left blind."""
-    remoter = _remoter("x86_64")
+FAKE_SS = """#!/bin/sh
+# `ss -Hltn sport = :<port>` lists a socket when <port> is in $LISTENING
+case " $LISTENING " in *" ${4#:} "*) echo "LISTEN 0 4096 *:${4#:} *:*" ;; esac
+"""
 
-    NodeExporterSetup.install(remoter=remoter, scrape_host="10.0.0.7")
+FAKE_CURL = """#!/bin/sh
+# `curl -s --max-time 2 http://<host>:<port>/metrics` answers as a node_exporter when <host>:<port> is in $EXPORTERS
+address=${4#http://}
+case " $EXPORTERS " in *" ${address%/metrics} "*) echo 'node_exporter_build_info{version="1.8.2"} 1' ;; esac
+"""
 
-    probe = remoter.sudo.call_args.args[0]
-    assert "host=10.0.0.7" in probe
-    assert "http://$host:$p/metrics" in probe
+
+@pytest.fixture
+def run_probe(tmp_path):
+    """Runs the probe NodeExporterSetup.install sends under its lock, against fake `ss` and `curl`, and returns what
+    it prints."""
+    for name, script in (("ss", FAKE_SS), ("curl", FAKE_CURL)):
+        (tmp_path / name).write_text(script)
+        (tmp_path / name).chmod(0o755)
+
+    def run(scrape_host, listening="", exporters=""):
+        remoter = _remoter("x86_64")
+        NodeExporterSetup.install(remoter=remoter, scrape_host=scrape_host)
+        probe = f"host={scrape_host}\n{NODE_EXPORTER_PORT_PROBE}"
+        assert probe in remoter.sudo.call_args.args[0]
+        probe = shell_script_cmd(f'{probe}echo "$state $port"', quote="'")
+        env = dict(os.environ, PATH=f"{tmp_path}:{os.environ['PATH']}", LISTENING=listening, EXPORTERS=exporters)
+        return subprocess.run(probe, shell=True, env=env, capture_output=True, text=True, check=True).stdout.strip()
+
+    return run
+
+
+@pytest.mark.parametrize(
+    "listening, exporters, expected",
+    [
+        pytest.param("", "", "free 9100", id="nothing-listens"),
+        pytest.param("9100", "", "free 9101", id="9100-held-by-something-else"),
+        pytest.param("9100 9101", "10.0.0.7:9101", "running 9101", id="exporter-on-9101"),
+        pytest.param("9100", "127.0.0.1:9100", "free 9101", id="exporter-bound-to-loopback-only"),
+        pytest.param(" ".join(str(p) for p in range(9100, 9120)), "", "free", id="every-port-taken"),
+    ],
+)
+def test_probe_finds_an_exporter_at_the_address_prometheus_scrapes(run_probe, listening, exporters, expected):
+    """An exporter bound to loopback doesn't answer at the scrape address, so it isn't reused."""
+    assert run_probe("10.0.0.7", listening=listening, exporters=exporters) == expected
 
 
 def _monitor_set(monkeypatch, loaders=(), params=None):
