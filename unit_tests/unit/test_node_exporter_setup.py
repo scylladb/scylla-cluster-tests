@@ -20,9 +20,10 @@ from sdcm.node_exporter_setup import NODE_EXPORTER_VERSION, NodeExporterSetup
 
 
 def _remoter(machine, probe="free 9100\n"):
-    """A remoter whose port probe prints `probe` and whose `uname -m` prints `machine`."""
+    """A remoter whose `uname -m` prints `machine` and whose install script ends with what its port probe found."""
     remoter = MagicMock()
-    remoter.run.side_effect = lambda cmd, **_: MagicMock(stdout=f"{machine}\n" if cmd == "uname -m" else probe)
+    remoter.run.return_value = MagicMock(stdout=f"{machine}\n")
+    remoter.sudo.return_value = MagicMock(stdout=f"tar output\n{probe}")
     return remoter
 
 
@@ -59,18 +60,19 @@ def test_install_requires_a_node_or_a_remoter():
 
 
 def test_running_node_exporter_is_reused():
-    """A distro node_exporter, or the one set up for another node on the same host, is scraped as is."""
+    """A distro node_exporter, or the one another node on the same host started, is scraped as is.
+
+    The install script probes under a host lock, so a loader and a monitor on one host share an exporter.
+    """
     remoter = _remoter("x86_64", probe="running 9100\n")
 
     assert NodeExporterSetup.install(remoter=remoter) == 9100
-    remoter.sudo.assert_not_called()
 
 
 def test_install_listens_on_the_free_port_the_probe_found():
     remoter = _remoter("x86_64", probe="free 9101\n")
 
     assert NodeExporterSetup.install(remoter=remoter) == 9101
-    assert "--web.listen-address=:9101 " in remoter.sudo.call_args.args[0]
 
 
 def test_install_fails_when_every_port_is_taken():
@@ -78,7 +80,6 @@ def test_install_fails_when_every_port_is_taken():
 
     with pytest.raises(RuntimeError, match="No free port"):
         NodeExporterSetup.install(remoter=remoter)
-    remoter.sudo.assert_not_called()
 
 
 def test_probe_asks_the_address_prometheus_scrapes():
@@ -87,9 +88,9 @@ def test_probe_asks_the_address_prometheus_scrapes():
 
     NodeExporterSetup.install(remoter=remoter, scrape_host="10.0.0.7")
 
-    probe = remoter.run.call_args_list[0].args[0]
+    probe = remoter.sudo.call_args.args[0]
     assert "host=10.0.0.7" in probe
-    assert "http://$host:$port/metrics" in probe
+    assert "http://$host:$p/metrics" in probe
 
 
 def test_monitor_target_uses_the_port_its_exporter_serves_on(monkeypatch):
