@@ -38,11 +38,24 @@ RUN apt-get install -y --no-install-recommends \
     libffi-dev \
     libev4 \
     libev-dev \
-    librdkafka-dev
+    librdkafka-dev \
+    patchelf
 ADD uv.lock  .
 ADD pyproject.toml .
 COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /uvx /bin/
 RUN uv sync --frozen
+
+# ssh2-python has no cp315 wheels, so uv builds it from source, against the system libcrypto that the ssl module uses too.
+# libssh2 leaves OpenSSL errors on the per-thread error queue they then share, and ssl reports them as its own failures,
+# e.g. "[OSSL_DECODER] unsupported" on HTTPS calls to cloud APIs.
+# auditwheel bundles a private libcrypto copy into the wheel, as the PyPI wheels do. With a PyPI wheel this is a no-op.
+RUN if [ ! -d "$(python -c 'import site; print(site.getsitepackages()[0])')/ssh2_python.libs" ]; then \
+        pip wheel --no-deps --no-binary ssh2-python -w /tmp/ssh2-raw \
+            "ssh2-python==$(python -c 'import importlib.metadata as m; print(m.version("ssh2-python"))')" && \
+        uvx auditwheel@6.8.2 repair -w /tmp/ssh2-repaired /tmp/ssh2-raw/*.whl && \
+        uv pip install --system --no-deps --reinstall /tmp/ssh2-repaired/*.whl && \
+        rm -rf /tmp/ssh2-raw /tmp/ssh2-repaired; \
+    fi
 
 FROM python:$PYTHON_IMAGE_TAG
 ARG KUBECTL_VERSION=1.27.3
