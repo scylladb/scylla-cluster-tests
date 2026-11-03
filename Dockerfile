@@ -41,7 +41,7 @@ RUN apt-get install -y --no-install-recommends \
     librdkafka-dev
 ADD uv.lock  .
 ADD pyproject.toml .
-COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
 RUN uv sync --frozen
 
 FROM python:$PYTHON_IMAGE_TAG
