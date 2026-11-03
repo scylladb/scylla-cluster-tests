@@ -50,6 +50,7 @@ AWS_SUPPORTED_REGIONS: list[str] = [
     "us-east-2",
     "eu-north-1",
     "eu-central-1",
+    "ca-central-1",
 ]
 
 # Maps each cloud backend to the SCT config field that holds its machine image.
