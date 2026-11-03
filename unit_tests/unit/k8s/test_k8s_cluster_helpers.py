@@ -2,6 +2,7 @@ from unittest import mock
 
 import pytest
 import requests
+from botocore.exceptions import ClientError, NoCredentialsError
 
 from sdcm.cluster_k8s import (
     PROMETHEUS_OPERATOR_CONFIG_PATH,
@@ -73,3 +74,33 @@ def test_get_grafana_ip_takes_first(backend, stdout):
     cluster = _cluster(cluster_backend=backend)
     cluster.kubectl.return_value = mock.Mock(stdout=stdout)
     assert KubernetesCluster.get_grafana_ip(cluster, "sct-cluster", "scylla") == "10.4.0.1"
+
+
+DOCKER_HUB_CREDS = {"username": "user", "password": "pass", "email": "user@example.com"}
+REJECTED = ClientError({"Error": {"Code": "UnrecognizedClientException"}}, "GetSecretValue")
+
+
+@pytest.mark.parametrize(
+    "backend,read_result,secret_created",
+    [
+        pytest.param("k8s-local-kind", NoCredentialsError(), False, id="kind-without-credentials"),
+        pytest.param("k8s-local-kind", REJECTED, False, id="kind-with-other-account-credentials"),
+        pytest.param("k8s-local-kind", DOCKER_HUB_CREDS, True, id="kind-with-credentials"),
+        pytest.param("k8s-eks", DOCKER_HUB_CREDS, True, id="eks"),
+    ],
+)
+def test_docker_hub_auth_secret_optional_on_local_kind(backend, read_result, secret_created):
+    cluster = _cluster(cluster_backend=backend, docker_hub_auth_secret="docker-auth")
+    with mock.patch("sdcm.cluster_k8s.get_docker_hub_credentials", side_effect=[read_result]):
+        KubernetesCluster.create_docker_hub_auth_secret(cluster, "scylla")
+    assert cluster.kubectl.called is secret_created
+
+
+@pytest.mark.parametrize("backend", ["k8s-eks", "k8s-gke", "k8s-local-kind-aws"])
+def test_docker_hub_auth_secret_failure_is_fatal_on_cloud(backend):
+    cluster = _cluster(cluster_backend=backend, docker_hub_auth_secret="docker-auth")
+    with (
+        mock.patch("sdcm.cluster_k8s.get_docker_hub_credentials", side_effect=REJECTED),
+        pytest.raises(ClientError),
+    ):
+        KubernetesCluster.create_docker_hub_auth_secret(cluster, "scylla")

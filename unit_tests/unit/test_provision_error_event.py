@@ -29,6 +29,7 @@ def test_provision_resources_sends_error_event_to_argus():
         patch("sct.LocalHost"),
         patch("sct.SCTProvisionLayout") as mock_layout,
         patch("sct.add_file_logger"),
+        patch("sct.prepare_credentials"),
     ):
         # Setup mocks
         mock_params = MagicMock()
@@ -109,6 +110,7 @@ def test_provision_resources_reports_config_init_failure_to_argus(monkeypatch, t
         patch("sct.get_test_config") as mock_test_config,
         patch("sct.get_argus_client") as mock_get_argus_client,
         patch("sct.add_file_logger"),
+        patch("sct.prepare_credentials"),
     ):
         # init_and_verify_sct_config raises FileNotFoundError (unified package 404)
         config_error = FileNotFoundError(
@@ -174,6 +176,7 @@ def test_provision_resources_no_argus_report_without_test_id(monkeypatch):
         patch("sct.init_and_verify_sct_config") as mock_config,
         patch("sct.get_test_config") as mock_test_config,
         patch("sct.add_file_logger"),
+        patch("sct.prepare_credentials"),
     ):
         # init_and_verify_sct_config raises an error
         mock_config.side_effect = FileNotFoundError("Package not found")
