@@ -5,6 +5,7 @@ requires-python = ">=3.10, <3.16"
 dependencies = [
     "aexpect==1.6.2",
     "anyconfig==0.14.0",
+    "asyncssh==2.23.0",
     "awscli==1.45.28",
     "azure-identity==1.16.1",
     "azure-keyvault-keys==4.11.0",
