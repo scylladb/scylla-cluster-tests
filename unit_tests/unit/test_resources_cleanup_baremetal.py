@@ -148,7 +148,8 @@ def test_lab_hosts_are_cleaned_up_through_the_lab_access_service(cleaned, monkey
     resources_cleanup.clean_resources_baremetal({"TestId": TEST_ID}, config=_config())
 
     assert [(login["hostname"], login.get("port")) for login in logins] == [("10.0.0.1", None), ("172.17.0.5", 10027)]
-    assert [call[:3] for call in cleaned[1:]] == [("scylla-db 10.0.0.1", True, True), ("loader monster", True, False)]
+    # the access service blocks port forwarding, so the lab host had no tunnel ports to free
+    assert [call[:3] for call in cleaned[1:]] == [("scylla-db 10.0.0.1", True, True), ("loader monster", False, False)]
     localhost.lab_access_ssh_address.assert_called_once_with("monster")
     localhost.destroy.assert_called_once()
 

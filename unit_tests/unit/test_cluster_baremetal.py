@@ -796,6 +796,16 @@ def test_private_node_on_a_public_run_opens_no_tunnels(monkeypatch):
     release.assert_not_called()
 
 
+def test_host_reached_through_the_lab_access_service_is_private_on_a_public_role():
+    """The access service blocks SSH port forwarding, so such a host can't get reverse tunnels."""
+    node = _node_with_listeners("")
+    node.test_config.IP_SSH_CONNECTIONS = "public"
+    node.parent_cluster.ip_ssh_connections = "public"
+    node._access_name = "monster"
+
+    assert node.ip_ssh_connections == "private"
+
+
 def test_stale_tunnels_released_once_per_shared_host(monkeypatch):
     """A loader and a monitor on one host: the second node must not kill the tunnel the first one just opened."""
     monkeypatch.setattr(PhysicalMachineNode, "_tunnel_ports_released_on", set())

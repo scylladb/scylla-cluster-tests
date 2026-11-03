@@ -575,6 +575,12 @@ class PhysicalMachineNode(PhysicalHostCleanup, cluster.BaseNode):
         localhost = TestConfig().tester_obj().localhost
         return localhost.lab_access_ssh_address(self._access_name)
 
+    @property
+    def ip_ssh_connections(self) -> str:
+        # The lab access service blocks SSH port forwarding, so a host reached through it can't get reverse tunnels:
+        # it is `private` even on a `public` role, and sends its logs straight to the runner
+        return "private" if self._access_name else super().ip_ssh_connections
+
     def _init_port_mapping(self):
         # Nodes sharing a host (a loader and a monitor on one machine) share its tunnel ports, and the tunnel of the
         # first one serves both: releasing the ports again would kill that live tunnel, not a stale one.
