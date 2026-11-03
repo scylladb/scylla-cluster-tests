@@ -141,16 +141,30 @@ that, both usable independently:
   build to a named agent label, bypassing the region→builder mapping entirely. Only approved
   labels are accepted: the builder labels `getJenkinsLabels` itself maps to, the
   `minicloud-kvm-builders-*` family, and the `pinnableExtras` list in that file. A new lab
-  machine becomes pinnable with a one-line addition there. Empty (the default) keeps the
-  normal mapping, so build #1 - where parameters are not yet populated - behaves exactly as
-  before. Use it to debug on a specific machine or to prove out a new agent.
+  machine becomes pinnable with a one-line addition there. In longevityPipeline its default
+  comes from the jenkinsfile's `jenkins_label`; empty keeps the normal mapping. Use it to debug
+  on a specific machine, to prove out a new agent, or to put a baremetal run next to its hosts.
 
 - **`local_agent: true` (jenkinsfile literal, longevity / rolling-upgrade)** - skip the
   *Create SCT Runner* / *Clean SCT Runners* stages and run the test right on the Jenkins
   agent, the way `artifactsPipeline` always has (every stage helper already takes the
-  builder-local path when `./sct_runner_ip` is absent). It must be combined with something
-  that picks an appropriate agent - `minicloud: true` (which resolves the KVM-capable label)
-  or a `jenkins_label`.
+  builder-local path when `./sct_runner_ip` is absent). It is honored only with
+  `minicloud: true` (which resolves the KVM-capable label) or, in longevityPipeline only, with
+  `backend: baremetal`, which provisions nothing; on any other backend the sct-runner is still
+  created. A baremetal run
+  uses it when its hosts sit in a lab network a cloud sct-runner cannot reach: pin a lab agent
+  next to them with `jenkins_label`, e.g. `minicloud-kvm-builders-artifacts`. Without a
+  `jenkins_label` the test runs on the regular builder, which suits hosts that are cloud
+  instances.
+
+  ```groovy
+  longevityPipeline(
+      backend: 'baremetal',
+      local_agent: true,
+      jenkins_label: 'minicloud-kvm-builders-artifacts',
+      ...
+  )
+  ```
 
 Both are job parameters as well as jenkinsfile knobs, with one caveat worth knowing: the agent
 label is decided at pipeline-definition time, and `params` is empty on build #1 - the
