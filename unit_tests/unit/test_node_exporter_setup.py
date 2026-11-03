@@ -103,14 +103,45 @@ def test_probe_asks_the_address_prometheus_scrapes():
     assert "http://$host:$p/metrics" in probe
 
 
-def test_monitor_target_uses_the_port_its_exporter_serves_on(monkeypatch):
+def _monitor_set(monkeypatch, loaders=(), params=None):
+    """A monitor set with one monitor on 10.0.0.7:9101, and the list its node_exporter_servers.yml is written to."""
     monkeypatch.setattr("sdcm.cluster.get_my_ip", lambda: "10.0.0.1")
     exporter_targets = []
     monitor = MagicMock(private_ip_address="10.0.0.7", node_exporter_port=9101)
     monitor._remote_yaml.return_value.__enter__.return_value = exporter_targets
-    monitor_set = MagicMock(nodes=[monitor], targets={})
-    monitor_set.params.get.return_value = None
+    monitor_set = MagicMock(nodes=[monitor], targets={"loaders": MagicMock(nodes=list(loaders))})
+    monitor_set.DB_NODES_IP_ADDRESS = BaseMonitorSet.DB_NODES_IP_ADDRESS
+    monitor_set.params.get.side_effect = (params or {}).get
+    return monitor_set, exporter_targets
+
+
+def test_monitor_target_uses_the_port_its_exporter_serves_on(monkeypatch):
+    monitor_set, exporter_targets = _monitor_set(monkeypatch)
 
     BaseMonitorSet.reconfigure_scylla_monitoring(monitor_set)
 
     assert {"labels": {"dc": "monitor"}, "targets": ["10.0.0.7:9101"]} in exporter_targets
+
+
+def test_loader_target_follows_the_port_the_loader_picked(monkeypatch):
+    """The monitor may write the targets before the loader's setup picked its port; the next call fixes it."""
+    loader = MagicMock(ip_address="10.0.0.8", region="eu-west-1", node_exporter_port=9100)
+    monitor_set, exporter_targets = _monitor_set(monkeypatch, loaders=[loader])
+
+    BaseMonitorSet.reconfigure_scylla_monitoring(monitor_set)
+    loader.node_exporter_port = 9101
+    BaseMonitorSet.reconfigure_scylla_monitoring(monitor_set)
+
+    assert {"labels": {"dc": "eu-west-1"}, "targets": ["10.0.0.8:9101"]} in exporter_targets
+    assert not [dc for dc in exporter_targets if "10.0.0.8:9100" in dc["targets"]]
+
+
+def test_cloud_prometheus_keeps_only_the_loader_targets(monkeypatch):
+    loader = MagicMock(ip_address="10.0.0.8", region="eu-west-1", node_exporter_port=9101)
+    monitor_set, exporter_targets = _monitor_set(
+        monkeypatch, loaders=[loader], params={"cloud_prom_bearer_token": "token"}
+    )
+
+    BaseMonitorSet.reconfigure_scylla_monitoring(monitor_set)
+
+    assert exporter_targets == [{"labels": {"dc": "eu-west-1"}, "targets": ["10.0.0.8:9101"]}]
