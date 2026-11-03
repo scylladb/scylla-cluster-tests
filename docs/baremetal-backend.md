@@ -136,12 +136,14 @@ The node setup every SCT backend runs also runs on baremetal hosts, whatever the
 `hydra clean-resources` cleans up the hosts of the node types the post behavior asks to clean:
 
 - Frees the reverse SSH tunnel ports the run bound, for `public` hosts.
+- Every host: stops the journal followers a run left running on the host.
 - Monitor hosts: removes the run's monitoring stack containers and its `~/sct-monitoring-<test id>` directory, after
   log collection took the data. Another run's stack is left alone.
-- DB hosts: restores the package baseline. On a host the run installed Scylla on, it also undoes the Scylla disk
-  setup and removes the files the install left.
+- DB hosts: restores the package baseline, and starts the baseline's services that are stopped. On a host the run
+  installed Scylla on, it also undoes the Scylla disk setup and removes the files the install left.
 - Loader and monitor hosts keep their packages: other jobs share them, so restoring a baseline would remove their
-  packages too. The prerequisites SCT installed stay for the next run.
+  packages too. The prerequisites SCT installed stay for the next run, and so does SCT's own node_exporter (the
+  `node_exporter` user, `/usr/local/bin/node_exporter` and `node_exporter.service`), which the next run reuses.
 
 A run repeats the tunnel and disk steps at its start, for a host whose cleanup did not run. It doesn't remove a
 monitoring stack left by an earlier run whose cleanup did not run: that stack keeps the ports, and the next run's
