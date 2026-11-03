@@ -107,7 +107,8 @@ The node setup every SCT backend runs also runs on baremetal hosts, whatever the
 
 **Loader and monitor hosts**
 
-- Doesn't disable the host's apt-daily timers: the host's owner decides how it updates.
+- Doesn't disable the host's apt-daily timers or remove `unattended-upgrades` and `update-manager`, neither in the
+  node setup nor in the log shipper's setup script on the host's first run: the host's owner decides how it updates.
 - Loaders: install EPEL on RHEL-like hosts other than Fedora, append the coredump limits to
   `/etc/security/limits.d/20-coredump.conf` on every run, and log in to Docker Hub, which writes the SSH user's
   `~/.docker/config.json`.
