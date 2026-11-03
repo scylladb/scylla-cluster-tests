@@ -1,6 +1,6 @@
 # Upload a minicloud run to Argus
 
-A minicloud run is a local run. It has no Jenkins job, so SCT sends nothing to Argus during the run.
+`scripts/run-minicloud-test.sh` sets `SCT_ENABLE_ARGUS=false`, so SCT sends nothing to Argus during the run.
 SCT writes each Argus call to a replay log in the run directory instead.
 After the run, the `argus` CLI sends that log to Argus, and Argus files the run under your user.
 
@@ -19,7 +19,7 @@ scripts/run-minicloud-test.sh                 argus run replay
 
 - The replay log has one line for each Argus call. It records the run, its status, the SCT configuration, the packages, the resources, the stress commands and the events.
 - The replay keeps the run ID of the log. Upload the logs to S3 under the same ID, and Argus attaches them to the run.
-- Each replay into the same test gets the next build number: `#1`, `#2`, and so on.
+- A run that Argus does not hold yet gets the next build number of the test: `#1`, `#2`, and so on. A replay of a run that Argus already holds keeps its build number.
 
 ## Linux and macOS
 
@@ -37,14 +37,8 @@ The flow is the same on both platforms. These are the differences:
 
 `scripts/run-minicloud-test.sh` selects the correct column for you.
 On an arm64 host, Linux or macOS, it layers `configurations/minicloud/arm64.yaml`. KVM and HVF accelerate only guests of the host architecture, so that overlay selects arm64 instance types. It also removes the monitor node, because the `scylladb-monitor` AMI is amd64 only.
-On macOS, it also layers `configurations/minicloud/macos.yaml`, which turns off guest memory locking. Set the endpoint one time in your shell, because the steps below use it:
-
-```bash
-# Linux
-export SCT_MINICLOUD_ENDPOINT_URL=http://localhost:5000
-# macOS
-export SCT_MINICLOUD_ENDPOINT_URL=http://localhost:5050
-```
+On macOS, it also layers `configurations/minicloud/macos.yaml`, which turns off guest memory locking.
+The script also sets the endpoint for the run. Do not export `SCT_MINICLOUD_ENDPOINT_URL` in your shell. If you export it, every later `sct.py` or hydra command in that shell uses minicloud. For example, `clean-resources` then cleans minicloud and not AWS.
 
 ## Before you start
 
@@ -61,10 +55,11 @@ Do these steps one time.
    arch=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
    gh release download cli/v0.4.0 -R scylladb/argus -p "argus_0.4.0_${os}_${arch}.tar.gz"
    tar xzf "argus_0.4.0_${os}_${arch}.tar.gz" argus
+   mkdir -p ~/.local/bin
    mv argus ~/.local/bin/
    argus version
    ```
-   The last command shows `argus 0.4.0`.
+   The last command shows `argus 0.4.0`. macOS does not create `~/.local/bin`, and does not put it on your `PATH`. If `argus` is not found, add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile.
 3. Log in to Argus:
    ```bash
    argus auth
@@ -79,8 +74,14 @@ Do these steps one time.
    sudo usermod -aG kvm,docker "$USER"
    ```
    Log out and log in again after `usermod`.
-2. Make sure that `$HOME` has 80 GiB free. The guest disk cache goes to `~/.cache/minicloud`.
-3. On a firewalld host, for example Fedora, let `scripts/run-minicloud-test.sh` run `sudo -n firewall-cmd`. If it cannot, the guests boot but do not get their SSH key.
+2. Give your user passwordless sudo. The first start of minicloud runs `minicloud-setup.sh` with `sudo -n` to create the `minicloud0` device. On a firewalld host, for example Fedora, the script also runs `sudo -n firewall-cmd`. Without it, the guests boot but do not get their SSH key:
+   ```bash
+   echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/minicloud
+   sudo -n true && echo ok
+   ```
+   To use minicloud without sudo at run time, create `minicloud0` with a boot-time unit. See [Agent prerequisites](minicloud.md#agent-prerequisites).
+3. Make sure that `$HOME` has 80 GiB free. The guest disk cache goes to `~/.cache/minicloud`.
+4. Make sure that the host has 22 GiB of free memory for the `provision` flavor. Each guest gets 4 GiB, and the flavor starts 5 guests on x86_64. The preflight check stops the run if the memory is not sufficient.
 
 For the details, see [Running locally](minicloud.md#running-locally).
 
@@ -88,25 +89,31 @@ For the details, see [Running locally](minicloud.md#running-locally).
 
 Docker on macOS cannot give a container access to HVF, so SCT runs minicloud as a native process.
 
-1. Build minicloud and put the binary on your `PATH`:
+1. Install QEMU. minicloud uses `qemu-system-aarch64` and `qemu-img`:
    ```bash
+   brew install qemu
+   ```
+2. Build minicloud and put the binary on your `PATH`:
+   ```bash
+   mkdir -p ~/.local/bin
    gh repo clone scylladb/minicloud ~/Code/minicloud
    cd ~/Code/minicloud
    cargo build --release
    ln -sf "$PWD/target/release/minicloud" ~/.local/bin/minicloud
    ```
-2. Install the `minicloud-tund` helper. It holds the `utun` device and the routes to the guests:
+3. Install the `minicloud-tund` helper. It holds the `utun` device and the routes to the guests:
    ```bash
    sudo MINICLOUD_VPC_ROUTES=10.160.0.0/11,172.31.0.0/16 ./minicloud-setup.sh
    ```
-3. Make sure that the helper socket exists:
+4. Make sure that the helper socket exists:
    ```bash
    ls -l /var/run/minicloud-tund.sock
    ```
-4. Point the Docker SDK at your Docker daemon. OrbStack and Docker Desktop do not serve `/var/run/docker.sock`, and SCT starts the stress tools through the SDK. Add this line to your shell profile:
+5. Point the Docker SDK at your Docker daemon. OrbStack and Docker Desktop do not serve `/var/run/docker.sock`, and SCT starts the stress tools through the SDK. Add this line to your shell profile:
    ```bash
    export DOCKER_HOST=$(docker context inspect -f '{{.Endpoints.docker.Host}}')
    ```
+6. Make sure that the Mac has 18 GiB of free memory for the `provision` flavor. Each guest gets 4 GiB, and the flavor starts 4 guests on arm64. The preflight check cannot read the free memory on macOS. If the memory is not sufficient, the run continues until SSH to the guests times out.
 
 On macOS, `scripts/run-minicloud-test.sh` accepts only `-m direct`. The native minicloud and its `utun` device are on the host, outside the hydra container.
 
@@ -116,16 +123,21 @@ The `provision` flavor is a short smoke test: 3 DB nodes, 1 loader, a 1-minute w
 
 1. Give the run an ID, so that you know it before the run starts:
    ```bash
-   export SCT_TEST_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+   run_id=$(uuidgen | tr '[:upper:]' '[:lower:]')
    ```
+   Do not export `SCT_TEST_ID`. An exported ID stays in the shell, and the next run from that shell gets the same ID. The two runs then share one S3 prefix, and the second replay goes onto the first run.
 2. Start the test with a released Scylla version. The snapshots of dev AMIs are not shared with the QA account:
    ```bash
-   SCT_SCYLLA_VERSION=2026.1 scripts/run-minicloud-test.sh -f provision
+   SCT_TEST_ID=$run_id SCT_SCYLLA_VERSION=2026.1 scripts/run-minicloud-test.sh -f provision
    ```
 3. Wait for the end of the test. The pytest summary at the end shows the result.
-4. Make sure that the run wrote a replay log:
+4. Save the run directory. The next run moves `~/sct-results/latest`:
    ```bash
-   ls ~/sct-results/latest/argus_replay_log_*
+   run_dir=$(readlink -f ~/sct-results/latest)
+   ```
+5. Make sure that the run wrote a replay log:
+   ```bash
+   ls "$run_dir"/argus_replay_log_*
    ```
 
 The script sets `SCT_ENABLE_ARGUS=false`, so the run writes only the replay log.
@@ -137,10 +149,17 @@ The first run with a new AMI is slow. minicloud downloads each new AMI over the 
 This step is optional. A local run does not upload its logs to S3. Upload them under the run ID, so that Argus shows them with the run:
 
 ```bash
-uv run sct.py collect-logs --backend aws --test-id "$SCT_TEST_ID" --logdir ~/sct-results/latest
+# Linux
+SCT_MINICLOUD_ENDPOINT_URL=http://localhost:5000 SCT_ENABLE_ARGUS=false \
+  uv run sct.py collect-logs --backend aws --test-id "$run_id"
+# macOS
+SCT_MINICLOUD_ENDPOINT_URL=http://localhost:5050 SCT_ENABLE_ARGUS=false \
+  uv run sct.py collect-logs --backend aws --test-id "$run_id"
 ```
 
-minicloud must still run, because `collect-logs` reads the logs from the guests.
+Do not give `--logdir`. `collect-logs` finds the run directory under `~/sct-results` by the run ID.
+`collect-logs` uploads the SCT logs of the run. On Linux, it also uploads the `docker logs minicloud` output, so minicloud must still run.
+The run destroys the guests at teardown, so `collect-logs` gets no node logs by default. To get the node logs, start the test with `SCT_POST_BEHAVIOR_DB_NODES=keep`, and collect the logs before you stop minicloud.
 If you upload the logs after you publish the run, replay the run again. Argus then attaches the new logs.
 
 ## Stop minicloud
@@ -156,7 +175,7 @@ kill "$(cat ~/.cache/minicloud/minicloud.pid)"    # macOS
 
 1. Do a dry run. A dry run applies nothing and shows where the run goes:
    ```bash
-   argus run replay --dir ~/sct-results/latest --run-id "$SCT_TEST_ID" --test my-feature --dry-run
+   argus run replay --dir "$run_dir" --run-id "$run_id" --test my-feature --dry-run
    ```
    The last line shows the place of the run:
    ```
@@ -164,7 +183,7 @@ kill "$(cat ~/.cache/minicloud/minicloud.pid)"    # macOS
    ```
 2. Publish the run. Use the same command without `--dry-run`:
    ```bash
-   argus run replay --dir ~/sct-results/latest --run-id "$SCT_TEST_ID" --test my-feature
+   argus run replay --dir "$run_dir" --run-id "$run_id" --test my-feature
    ```
 3. Open the link in the output:
    ```
@@ -207,13 +226,14 @@ The [Argus CLI README](https://github.com/scylladb/argus/blob/cli/v0.4.0/cli/REA
 | ------- | ------------- |
 | `ExpiredToken` or `InvalidClientTokenId` before the test starts | The AWS credentials are not valid. Refresh them, then run `aws sts get-caller-identity`. |
 | `/dev/kvm is not available` (Linux) | KVM is off, or your user is not in the `kvm` group. Do step 1 of [Linux host](#linux-host). |
-| `'minicloud' is not on PATH` (macOS) | Do step 1 of [macOS host](#macos-host). |
-| `/var/run/minicloud-tund.sock does not exist` (macOS) | The `minicloud-tund` helper is not installed. Do step 2 of [macOS host](#macos-host). |
-| `Error while fetching server API version: ... FileNotFoundError` in `SetUp` (macOS) | The Docker SDK cannot find the daemon. Do step 4 of [macOS host](#macos-host). |
+| `'minicloud' is not on PATH` (macOS) | Do step 2 of [macOS host](#macos-host). |
+| `/var/run/minicloud-tund.sock does not exist` (macOS) | The `minicloud-tund` helper is not installed. Do step 3 of [macOS host](#macos-host). |
+| `Error while fetching server API version: ... FileNotFoundError` in `SetUp` (macOS) | The Docker SDK cannot find the daemon. Do step 5 of [macOS host](#macos-host). |
+| `minicloud-setup.sh failed` (Linux) | Your user does not have passwordless sudo. Do step 2 of [Linux host](#linux-host). |
 | `minicloud cannot lock guest memory on macOS` | `configurations/minicloud/macos.yaml` is not in the config list. Use `scripts/run-minicloud-test.sh`, or add `arm64.yaml` and then `macos.yaml` after `configurations/minicloud.yaml`. |
 | `SnapshotNotFound` in the minicloud log | The Scylla version is a dev build. Use a released version. |
 | SCT waits for nodes that never boot, and the minicloud log shows `background VM launch failed` after `GetSnapshotBlock` timeouts | The network dropped during the AMI download. minicloud downloads with 32 parallel connections, and a phone hotspot or a VPN often cannot keep them open. Stop the run and minicloud. Then run again on a stable network. |
-| guests boot, but SSH fails with `AuthenticationError` (Linux) | The firewall blocks the requests of the guests to IMDS. Do step 3 of [Linux host](#linux-host). |
+| guests boot, but SSH fails with `AuthenticationError` (Linux) | The firewall blocks the requests of the guests to IMDS. Do step 2 of [Linux host](#linux-host). |
 | `failed=1` in the replay summary | Read the table of errors under the summary. A run whose `submit_run` failed gets no link. |
 | No replay log in the run directory | The run stopped before it resolved its configuration. Fix the error in `output.log`, then run again. |
 
