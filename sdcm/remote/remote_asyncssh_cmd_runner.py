@@ -80,7 +80,9 @@ class RemoteAsyncSSHCmdRunner(RemoteCmdRunnerBase, ssh_transport="asyncssh"):
             try:
                 if self.connection.check_if_alive(timeout):
                     return True
-            except Exception:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
+                # wait_ssh_up only logs False; without this the reason SSH is down never reaches sct.log
+                self.log.debug("SSH to %s is not up: %r", self.hostname, exc)
                 try:
                     self.connection.close()
                     self.connection.open(timeout)

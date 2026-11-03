@@ -219,7 +219,9 @@ class Client:
             password=self.password,
             client_keys=[self.pkey] if self.pkey else [],
             known_hosts=None,
-            agent_path=() if self.allow_agent else None,
+            # a key file means that key only, as the libssh2 client: asyncssh would offer every agent key first, and
+            # past MaxAuthTries (6) sshd disconnects before it reaches the file; failures also feed PerSourcePenalties
+            agent_path=() if self.allow_agent and not self.pkey else None,
             agent_forwarding=self.forward_ssh_agent,
             keepalive_interval=self.keepalive_seconds or 0,
             connect_timeout=self.timings.ssh_session_timeout,

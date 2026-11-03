@@ -123,6 +123,13 @@ def new_client(port, user="test"):
     return Client(host="127.0.0.1", user=user, port=port, allow_agent=False)
 
 
+def test_key_file_disables_the_agent():
+    # as the libssh2 client: agent keys offered first can use up sshd MaxAuthTries before the key file
+    assert Client(host="h", user="u", pkey="/key")._connect_options()["agent_path"] is None
+    assert Client(host="h", user="u")._connect_options()["agent_path"] == ()
+    assert Client(host="h", user="u", allow_agent=False)._connect_options()["agent_path"] is None
+
+
 def test_dropped_client_closes_its_connection(ssh_port):
     # RemoteCmdRunnerBase drops a thread's client when the thread ends, without calling close()
     ssh_client = new_client(ssh_port, user="dropped")
