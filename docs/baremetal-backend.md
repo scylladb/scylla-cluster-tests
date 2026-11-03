@@ -127,10 +127,10 @@ The node setup every SCT backend runs also runs on baremetal hosts, whatever the
 
 - Each run gets its own monitoring install and data directory, `~/sct-monitoring-<test id>`, so a second run can't
   delete the first one's.
-- The run's stack is the containers with a mount under that directory. A restart stops only those, never the stack's
-  `kill-all.sh`, which removes every container with the stack's names. A stack that fails to start fails the setup.
-- Cleanup finds the run's stack containers by their `TestId` label instead, since the Grafana renderer has no mount
-  under the run's directory.
+- The run's stack is the containers with both the `TestId=<test id>` and `NodeType=monitor` labels, the Grafana
+  renderer included. Restart and cleanup remove only those, never through the stack's `kill-all.sh`, which removes
+  every container with the stack's names. The run's stress containers on a host that is also its loader don't match.
+  A stack that fails to start fails the setup.
 
 **DB hosts**
 
