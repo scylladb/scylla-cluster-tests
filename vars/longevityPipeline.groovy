@@ -127,7 +127,8 @@ def call(Map pipelineParams) {
                                 'provisioning an sct-runner: minicloud on a KVM-capable agent ' +
                                 '(the minicloud label, or set jenkins_label), or a baremetal run ' +
                                 'next to its hosts (set jenkins_label for a lab agent). ' +
-                                'Ignored unless the jenkinsfile sets `minicloud: true` or the backend is baremetal',
+                                'Ignored unless the jenkinsfile sets `minicloud: true` ' +
+                                'or the backend is baremetal',
                    name: 'local_agent')
             string(defaultValue: "${pipelineParams.get('minicloud_docker', '')}",
                    description: 'Minicloud Docker image reference, e.g. ghcr.io/scylladb/minicloud:<tag>. ' +
