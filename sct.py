@@ -169,7 +169,7 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
 from sdcm.test_config import TestConfig
 from sdcm.utils.aws_utils import AwsArchType, get_arch_from_instance_type
-from sdcm.utils.aws_okta import try_auth_with_okta
+from sdcm.utils.credentials import prepare_cli_credentials
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, GceZoneResolver, gce_public_addresses
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
@@ -243,6 +243,24 @@ class SctLoader(unittest.TestLoader):
         return test_cases
 
 
+# Commands that never need cloud credentials.
+COMMANDS_WITHOUT_CREDENTIALS = (
+    "update-conf-docs",
+    "conf-docs",
+    "nemesis-list",
+    "create-nemesis-pipelines",
+    "create-nemesis-yaml",
+    "pre-commit",
+    "unit-tests",
+    "lint-pipelines",
+    "trigger-matrix",
+    "trigger-matrix-audit",
+)
+# Commands that call prepare_credentials() themselves, once their --backend is known,
+# so local backends (docker, kind) can run without AWS credentials.
+COMMANDS_WITH_BACKEND = ("run-test", "run-pytest", "conf", "provision-resources", "integration-tests")
+
+
 @click.group()
 @click.option(
     "--install-bash-completion",
@@ -263,29 +281,15 @@ class SctLoader(unittest.TestLoader):
 @click.pass_context
 def cli(ctx):
     disable_loggers_during_startup()
-    # Ugly way of filtering the few command that do not require OKTA verification
-    if ctx.invoked_subcommand not in (
-        "update-conf-docs",
-        "conf-docs",
-        "nemesis-list",
-        "create-nemesis-pipelines",
-        "create-nemesis-yaml",
-        "pre-commit",
-        "unit-tests",
-        "lint-pipelines",
-        "trigger-matrix",
-        "trigger-matrix-audit",
-    ):
-        try_auth_with_okta()
+    if ctx.invoked_subcommand in COMMANDS_WITHOUT_CREDENTIALS or ctx.invoked_subcommand in COMMANDS_WITH_BACKEND:
+        return
+    prepare_credentials(backend=None)
 
-        key_store = KeyStore()
-        key_store.sync(
-            keys=["scylla_test_id_ed25519"],
-            local_path=Path("~/.ssh/").expanduser(),
-            permissions=0o0600,
-        )
 
-        docker_hub_login(remoter=LOCALRUNNER)
+def prepare_credentials(backend: str | None) -> None:
+    """Credential set-up every cloud-touching command runs before doing its work."""
+    prepare_cli_credentials(backend=backend)
+    docker_hub_login(remoter=LOCALRUNNER)
 
 
 def _report_provision_error_to_argus(backend: str, exc: Exception):
@@ -402,6 +406,7 @@ def provision_resources(backend, test_name: str, config: str):
         os.environ["SCT_CONFIG_FILES"] = str(list(config))
     if backend:
         os.environ["SCT_CLUSTER_BACKEND"] = backend
+    prepare_credentials(backend=os.environ.get("SCT_CLUSTER_BACKEND"))
 
     add_file_logger()
 
@@ -2230,6 +2235,7 @@ def conf(config_file, backend):
         os.environ["SCT_CLUSTER_BACKEND"] = backend
     if config_file:
         os.environ["SCT_CONFIG_FILES"] = config_file
+    prepare_credentials(backend=backend)
     config = SCTConfiguration()
     try:
         config.verify_configuration()
@@ -2527,6 +2533,8 @@ def unit_tests(test, n, junit_xml):
 @click.option("-n", required=False, default=4, help="Sets number of parallel tests to run, default is 4")
 @click.option("--junit-xml", required=False, default="", help="Path to write JUnit XML report")
 def integration_tests(test, n, junit_xml):
+    # The suite's own prerequisites are local (Docker, kind); tests that need a cloud bring their own credentials.
+    prepare_credentials(backend="docker")
     get_test_config().logdir()
     add_file_logger()
 
@@ -2608,6 +2616,7 @@ def run_test(argv, backend, config, logdir):
         os.environ["SCT_CONFIG_FILES"] = str(list(config))
     if backend:
         os.environ["SCT_CLUSTER_BACKEND"] = backend
+    prepare_credentials(backend=os.environ.get("SCT_CLUSTER_BACKEND"))
 
     # No minicloud hook here: ClusterTester.init_resources() owns the container lifecycle
     # for run-test (it has the resolved params for the memory gate and overlay validation).
@@ -2652,6 +2661,7 @@ def run_pytest(target, backend, config, logdir):
         os.environ["SCT_CONFIG_FILES"] = str(list(config))
     if backend:
         os.environ["SCT_CLUSTER_BACKEND"] = backend
+    prepare_credentials(backend=os.environ.get("SCT_CLUSTER_BACKEND"))
 
     if logdir:
         os.environ["_SCT_LOGDIR"] = logdir
