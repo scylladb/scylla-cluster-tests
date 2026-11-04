@@ -143,6 +143,15 @@ def exponential_retry(
     return cast(R, retry(func))
 
 
+def exponential_backoff_delay(attempt: int, max_delay: float) -> float:
+    """Seconds to wait after failed attempt number `attempt` (1-based): 1, 2, 4, 8, ..., capped at `max_delay`.
+
+    For hand-written retry loops that decide to retry from a result rather than an exception,
+    where `exponential_retry` doesn't fit.
+    """
+    return min(2 ** (attempt - 1), max_delay)
+
+
 @contextmanager
 def wait_for_log_lines(
     node, start_line_patterns, end_line_patterns, start_timeout=60, end_timeout=120, error_msg_ctx=""
