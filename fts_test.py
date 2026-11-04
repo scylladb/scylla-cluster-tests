@@ -13,15 +13,15 @@
 
 """Full-Text Search (BM25) performance test.
 
-The flow -- plan, datasets, cumulative shard steps, index build timing -- lives in
+The flow -- plan, datasets, cumulative shard steps, index build timing, query sets -- lives in
 search_perf_test.py and is shared with the other search benchmarks. This module is the full-text
 half of it: the rune script to run, the vocabulary to report in, and the names to report under.
 
-Driven by a YAML plan (the `search_test_config` param) naming the datasets and the shards to load. See
-docs/fts-search-test.md.
+Driven by a YAML plan (the `search_test_config` param) naming the datasets, the shards and the
+query configurations to test. See docs/fts-search-test.md.
 
-Results go to the run's results file (see 'RESULTS_FILE_NAME'): one record per index build. The
-query phase, which adds a record per query configuration, lands on top of this.
+Results go to the run's results file (see 'RESULTS_FILE_NAME'): one record per index build, and one
+latency/throughput record per query configuration.
 """
 
 from search_perf_test import LatteScriptParams, SearchPerformanceTest, SearchWorkload
@@ -33,6 +33,7 @@ FTS_WORKLOAD = SearchWorkload(
     name="fts_search",
     base_dir=FTS_BASE_DIR,
     script=f"{FTS_BASE_DIR}/fts.rn",
+    hdr_tag="fn--search",
     item_noun="docs",
     index_prefix="fts_idx",
     default_keyspace="fts_bench",
@@ -43,6 +44,10 @@ FTS_WORKLOAD = SearchWorkload(
         dataset_dir="fts_data_dir",
         records_file="documents_file",
         record_count="document_count",
+        queries_file="queries_file",
+        qrels_file="qrels_file",
+        search_limit="search_limit",
+        compute_accuracy="compute_accuracy",
         index_name="index_name",
         max_index_wait="max_index_wait_secs",
         min_probes="min_successful_probes",
@@ -59,8 +64,8 @@ class FtsSearchTest(SearchPerformanceTest):
     """FTS (Full-Text Search / BM25) performance test.
 
     Runs multi-dataset, multi-step FTS benchmarks from a YAML plan in the repo (see
-    'resolve_test_config_path'): per-shard loading, index building and result recording all come from
-    'SearchPerformanceTest'.
+    'resolve_test_config_path'): per-shard loading, index building, query execution and result
+    recording all come from 'SearchPerformanceTest'.
     """
 
     WORKLOAD = FTS_WORKLOAD

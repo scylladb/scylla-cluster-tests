@@ -75,7 +75,7 @@ def get_latte_operation_type(stress_cmd):
             counter_read = True
         elif re.findall(r"(?:^|_)(write|insert|update|delete)(?:_|$)", fn):
             write_found = True
-        elif re.findall(r"(?:^|_)(read|select|get|count)(?:_|$)", fn):
+        elif re.findall(r"(?:^|_)(read|select|get|count|search)(?:_|$)", fn):
             read_found = True
         else:
             return "user"
@@ -95,16 +95,24 @@ class LatteStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
     SCHEMA_CMD_CALL_COUNTER = {}
 
-    def __init__(self, *args, extra_files_to_stage=None, **kwargs):
+    def __init__(self, *args, extra_files_to_stage=None, record_hdr=True, **kwargs):
         """*extra_files_to_stage* is a list of '(local_path, container_path)' pairs only this
         invocation needs, such as a dataset shard. 'build_stress_cmd' copies them into the loader
         container with the rune script's directory; the container is removed after the run.
+
+        *record_hdr* set to False skips the HDR histogram of this invocation even when
+        'use_hdrhistogram' is on, for a command whose latency nobody reads.
         """
         super().__init__(*args, **kwargs)
         self.extra_files_to_stage: list[tuple[str, str]] = extra_files_to_stage or []
+        self.record_hdr = record_hdr
         for _, container_path in self.extra_files_to_stage:
             if not container_path.startswith("/"):
                 raise ValueError(f"Container path {container_path!r} of a staged file is not absolute")
+
+    def records_hdr(self) -> bool:
+        # 'latte schema' takes no '--hdrfile'
+        return self.record_hdr and bool(self.params.get("use_hdrhistogram")) and "latte schema" not in self.stress_cmd
 
     def set_stress_operation(self, stress_cmd):
         return get_latte_operation_type(self.stress_cmd)
@@ -301,7 +309,7 @@ class LatteStressThread(DockerBasedStressThread):
         )
         hosts = " ".join([i.cql_address for i in self.node_list])
         stress_cmd = self.build_stress_cmd(cmd_runner, loader, hosts)
-        if self.params.get("use_hdrhistogram") and "latte schema" not in self.stress_cmd:
+        if self.records_hdr():
             stress_cmd += f" --hdrfile={remote_hdr_file_name}"
             hdrh_logger_context = HDRHistogramFileLogger(
                 node=loader,
