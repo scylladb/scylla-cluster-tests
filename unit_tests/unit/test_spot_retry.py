@@ -8,12 +8,15 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import pytest
+from azure.core.exceptions import ResourceNotFoundError
 from click.testing import CliRunner
 
 import sct
 from sdcm import cluster as sdcm_cluster
 from sdcm.cluster_baremetal import PhysicalMachineNode
-from sdcm.provision.provisioner import OperationPreemptedError, ProvisionError
+from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.provision.provisioner import OperationPreemptedError, PricingModel, ProvisionError
+from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.tester import ClusterTester, CriticalTestFailure, teardown_on_exception
 from sdcm.utils import spot_retry
 from sdcm.utils.argus import ReplayOnlyArgusSCTClient
@@ -244,3 +247,53 @@ def test_spot_monitoring_starts_before_the_cloud_init_wait(monkeypatch):
         node.init()
 
     assert calls == ["spot monitoring", "cloud-init", "task threads"]
+
+
+@pytest.mark.parametrize(
+    "pricing_model, reclaimed, published",
+    [
+        (PricingModel.SPOT, True, True),
+        (PricingModel.SPOT, False, False),
+        (PricingModel.ON_DEMAND, True, False),
+    ],
+)
+def test_reclaim_during_the_cloud_init_wait_publishes_spot_termination_event(pricing_model, reclaimed, published):
+    """Azure waits for cloud-init before any node exists: only the cloud can tell a reclaim from a broken setup."""
+    provisioner = MagicMock()
+    provisioner.get_or_create_instances.return_value = [MagicMock(public_ip_address="1.2.3.4")]
+    provisioner.was_reclaimed.return_value = reclaimed
+    with (
+        patch("sdcm.sct_provision.instances_provider.RemoteCmdRunnerBase"),
+        patch("sdcm.sct_provision.instances_provider.wait_cloud_init_completes", side_effect=TimeoutError("ssh")),
+        patch("sdcm.sct_provision.instances_provider.SpotTerminationEvent") as event,
+        pytest.raises(TimeoutError),
+    ):
+        provision_instances_with_fallback(
+            provisioner,
+            definitions=[MagicMock(use_public_ip=True)],
+            pricing_model=pricing_model,
+            fallback_on_demand=False,
+        )
+
+    assert event.called is published
+
+
+@pytest.mark.parametrize(
+    "lookup, expected",
+    [
+        (ResourceNotFoundError("gone"), True),
+        (MagicMock(provisioning_state="Deleting"), True),
+        (MagicMock(provisioning_state="Succeeded"), False),
+    ],
+    ids=["deleted", "being-deleted", "running"],
+)
+def test_azure_reports_an_evicted_spot_vm_as_reclaimed(lookup, expected):
+    """SCT's Azure spot VMs use evictionPolicy=Delete, so an evicted VM is being deleted or already gone."""
+    provisioner = AzureProvisioner.__new__(AzureProvisioner)
+    provisioner._azure_service = MagicMock()
+    provisioner._test_id, provisioner._region, provisioner._az = "test-id", "eastus", ""
+    get = provisioner._azure_service.compute.virtual_machines.get
+    get.side_effect = lookup if isinstance(lookup, Exception) else None
+    get.return_value = lookup
+
+    assert provisioner.was_reclaimed("db-node-1") is expected
