@@ -44,9 +44,7 @@ MANAGER_REPO_MASTER_LATEST = {
 
 
 class ScyllaManagerError(Exception):
-    """
-    A custom exception for Manager related errors
-    """
+    """A custom exception for Manager related errors"""
 
 
 # ---------------------------------------------------------------------------
@@ -382,9 +380,7 @@ def calculate_restore_metrics(
 
 
 def get_backup_size(mgr_cluster, task_id):
-    """
-    Returns the generated backup size of a given Manager backup Task.
-    """
+    """Returns the generated backup size of a given Manager backup Task."""
     res = mgr_cluster.sctool.run(cmd=f"progress {task_id} -c {mgr_cluster.id}", parse_table_res=False)
     match = BACKUP_SIZE_REGEX.search(res.stdout)
     if match:

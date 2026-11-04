@@ -149,7 +149,7 @@ class SstableLoadUtils:
         start_timeout=60,
         end_timeout=600,
     ):
-        """runs load and stream using API request and waits for it to finish"""
+        """Runs load and stream using API request and waits for it to finish"""
         with wait_for_log_lines(
             node,
             start_line_patterns=[cls.LOAD_AND_STREAM_RUN_EXPR],

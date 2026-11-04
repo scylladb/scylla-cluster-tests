@@ -27,21 +27,15 @@ from fabric import Connection
 
 
 class OutputCheckError(Exception):
-    """
-    Remote command output check failed.
-    """
+    """Remote command output check failed."""
 
 
 class SSHConnectTimeoutError(Exception):
-    """
-    Remote command output check failed.
-    """
+    """Remote command output check failed."""
 
 
 class RetryableNetworkException(Exception):
-    """
-    SSH protocol exception that can be safely retried
-    """
+    """SSH protocol exception that can be safely retried"""
 
     def __init__(self, *args, original):
         self.original = original
@@ -89,16 +83,12 @@ class CommandRunner(metaclass=ABCMeta):
         pass
 
     def get_init_arguments(self) -> dict:
-        """
-        Return instance parameters required to rebuild instance
-        """
+        """Return instance parameters required to rebuild instance"""
         return {"hostname": self.hostname, "user": self.user, "password": self.password}
 
     @abstractmethod
     def is_up(self, timeout: Optional[float] = None) -> bool:
-        """
-        Return instance parameters required to rebuild instance
-        """
+        """Return instance parameters required to rebuild instance"""
 
     def stop(self):
         """

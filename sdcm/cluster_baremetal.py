@@ -67,6 +67,465 @@ class PhysicalHostCleanup:
                     self._reset_scylla_disk_setup(disks)
             except Exception as exc:  # noqa: BLE001
                 self.log.warning("Could not reset the scylla disk setup, the next setup will: %s", exc)
+<<<<<<< HEAD
+||||||| parent of 5c8d2e2be (style(docstrings): apply ruff pydocstyle auto-fixes)
+        try:
+            self.restore_packages()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Could not restore the packages of the host, the next cleanup will: %s", exc)
+        try:
+            self.restore_services()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Could not restore the services of the host, the next cleanup will: %s", exc)
+        if scylla_disk_setup:
+            try:
+                self.remove_scylla_leftovers()
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Could not remove the leftovers of the Scylla install, the next install will: %s", exc)
+
+    def record_host_baseline(self) -> None:
+        """Record the packages the host has and the services it runs, for the cleanup after the run to restore.
+
+        A baseline already on the host is kept: it was recorded by an earlier run whose cleanup did not run, or did not
+        restore all of it, and it holds the host from before that run. Each baseline is kept on its own, as a cleanup
+        can restore one and not the other. One older than BASELINE_MAX_AGE_DAYS is dropped and recorded again.
+        """
+        missing = []
+        for baseline, list_cmd in ((SERVICE_BASELINE, LIST_RUNNING_SERVICES), (PACKAGE_BASELINE, LIST_PACKAGES)):
+            if self._baseline_exists(baseline):
+                self.log.info("Keeping the %s an earlier run left on the host, its cleanup restores it", baseline)
+            else:
+                missing.append((baseline, list_cmd))
+        if not missing:
+            return
+        self.remoter.sudo(f"mkdir -p {BASELINE_DIR}")
+        # Each written aside first: a baseline cut short by a failure would remove every package it misses
+        for baseline, list_cmd in missing:
+            self.remoter.sudo(f"sh -c {shlex.quote(f'{list_cmd} > {baseline}.new')}")
+            self.remoter.sudo(f"mv {baseline}.new {baseline}")
+        self.log.info(
+            "Recorded %s, the cleanup after the run restores them", ", ".join(baseline for baseline, _ in missing)
+        )
+
+    def _baseline_exists(self, baseline: str) -> bool:
+        """Whether the host has `baseline`. One older than BASELINE_MAX_AGE_DAYS is removed instead: restoring it would
+        undo every change made to the host since, by its admins too."""
+        # With sudo, as root wrote it: the user SSH logs in as may not be able to read it
+        if not self.remoter.sudo(f"test -s {baseline}", ignore_status=True).ok:
+            return False
+        # The mtime is when it was recorded: it is written aside, then moved in place, and never written again
+        if not self.remoter.sudo(f"find {baseline} -mmin +{BASELINE_MAX_AGE_DAYS * 24 * 60}").stdout.strip():
+            return True
+        self.log.warning(
+            "Dropping %s, recorded over %s days ago and never restored: the host has changed outside SCT since",
+            baseline,
+            BASELINE_MAX_AGE_DAYS,
+        )
+        self.remoter.sudo(f"rm -f {baseline}")
+        return False
+
+    def restore_packages(self) -> None:
+        """Restore the packages of the baseline: remove what was installed since, reinstall what was removed.
+
+        Packages are compared by name, so an upgrade is kept: SCT upgrades openssh and openssl to fix sshd, and
+        downgrading them could cut the host off. An upgraded package can need a package the baseline does not have:
+        removing that one would remove the upgraded package with it, and with openssh-server, stop sshd. So a package
+        installed since that an installed package still needs is kept, as is one a reinstalled package needs. The
+        baseline is removed once every package of it is installed and every other package installed since is removed,
+        and kept otherwise, for the next cleanup to retry.
+
+        NOTE: a package something else installed on the host while the run was on it is removed too.
+        """
+        if not self._baseline_exists(PACKAGE_BASELINE):
+            self.log.info("No package baseline on the host, its packages are left as they are")
+            return
+        baseline = set(self.remoter.sudo(f"cat {PACKAGE_BASELINE}").stdout.split())
+        added = set(self.remoter.run(LIST_PACKAGES).stdout.split()) - baseline
+        debian = self.remoter.run("test -e /etc/debian_version", ignore_status=True).ok
+        if needed := self._needed_by_others(debian, added):
+            self.log.info("Keeping the packages installed since the baseline that others need: %s", " ".join(needed))
+        if unneeded := added - set(needed):
+            self.log.info("Removing the packages installed since the baseline: %s", " ".join(sorted(unneeded)))
+            self.remoter.sudo(self._package_cmd(debian, "remove", unneeded), ignore_status=True, retry=3, timeout=900)
+        before_reinstall = set(self.remoter.run(LIST_PACKAGES).stdout.split())
+        if removed := baseline - before_reinstall:
+            self.log.info("Reinstalling the packages removed since the baseline: %s", " ".join(sorted(removed)))
+            self.remoter.sudo(self._package_cmd(debian, "install", removed), ignore_status=True, retry=3, timeout=900)
+        installed = set(self.remoter.run(LIST_PACKAGES).stdout.split())
+        if differ := sorted((baseline - installed) | (unneeded & installed)):
+            self.log.warning(
+                "The packages still differ from the baseline, kept for the next cleanup: %s", " ".join(differ)
+            )
+            return
+        if pulled_in := sorted(installed - before_reinstall - baseline):
+            self.log.info("Keeping the packages the reinstalled ones need: %s", " ".join(pulled_in))
+        self.remoter.sudo(f"rm -f {PACKAGE_BASELINE}")
+        self.log.info("The packages of the host match the baseline again")
+
+    def restore_services(self) -> None:
+        """Start the services of the baseline that are stopped, e.g. one a package SCT installed replaced.
+
+        Only starts: a service the baseline does not have may be another job's. The baseline is removed once each of
+        its services runs, and kept otherwise, for the next cleanup to retry.
+        """
+        if not self._baseline_exists(SERVICE_BASELINE):
+            self.log.info("No service baseline on the host, its services are left as they are")
+            return
+        baseline = set(self.remoter.sudo(f"cat {SERVICE_BASELINE}").stdout.split())
+        if stopped := sorted(baseline - set(self.remoter.run(LIST_RUNNING_SERVICES).stdout.split())):
+            self.log.info("Starting the services stopped since the baseline: %s", " ".join(stopped))
+            self.remoter.sudo(f"systemctl start {' '.join(stopped)}", ignore_status=True)
+        if stopped := sorted(baseline - set(self.remoter.run(LIST_RUNNING_SERVICES).stdout.split())):
+            self.log.warning(
+                "The services still differ from the baseline, kept for the next cleanup: %s", " ".join(stopped)
+            )
+            return
+        self.remoter.sudo(f"rm -f {SERVICE_BASELINE}")
+        # Gone once both baselines are: the package one may still be kept for the next cleanup
+        self.remoter.sudo(f"rmdir --ignore-fail-on-non-empty {BASELINE_DIR}", ignore_status=True)
+        self.log.info("The services of the host run as in the baseline again")
+
+    @staticmethod
+    def _package_cmd(debian: bool, action: str, packages: set[str]) -> str:
+        names = " ".join(sorted(packages))
+        # Removing a package removes no dependency it was installed with, which the baseline may have, and reinstalling
+        # one installs no package it only recommends, which the baseline did not have
+        if debian:
+            subcommand = "purge -y" if action == "remove" else "install -y --no-install-recommends"
+            return f"DEBIAN_FRONTEND=noninteractive {apt_cmd(f'{subcommand} {names}', lock_wait=True)}"
+        setopt = "clean_requirements_on_remove" if action == "remove" else "install_weak_deps"
+        return rpm_cmd("yum", f"{action} -y --setopt={setopt}=False {names}")
+
+    def _needed_by_others(self, debian: bool, packages: set[str]) -> list[str]:
+        """The `packages` that an installed package outside them still needs, directly or through another of them.
+
+        Removing them all with dnf or apt would also remove every package that needs one of them. A dry run with rpm or
+        dpkg, which do not, lists what blocks it instead: dpkg names the needed package, rpm the capability it
+        provides. The needed ones are dropped and the rest tried again, until nothing blocks. A dry run that fails
+        for any other reason raises: nothing is removed, and the baseline is kept for the next cleanup.
+        """
+        removable = set(packages)
+        while removable:
+            names = " ".join(sorted(removable))
+            if debian:
+                result = self.remoter.sudo(f"dpkg --dry-run --purge {names}", ignore_status=True)
+                output = result.stdout + result.stderr
+                blocking = set(re.findall(r"dependency problems prevent removal of (\S+):$", output, re.MULTILINE))
+                # dpkg leaves out the architecture of a package installed for one only
+                needed = {package for package in removable if {package, package.split(":")[0]} & blocking}
+            else:
+                result = self.remoter.sudo(f"rpm -e --test {names}", ignore_status=True)
+                output = result.stdout + result.stderr
+                capabilities = re.findall(r"^\s+(\S+).* is needed by \(installed\) ", output, re.MULTILINE)
+                needed = set()
+                if capabilities:
+                    providers = self.remoter.run(
+                        f"rpm -q --whatprovides --qf '%{{NAME}}.%{{ARCH}}\\n' {shlex.join(sorted(set(capabilities)))}",
+                        ignore_status=True,
+                    ).stdout.split()
+                    needed = removable & set(providers)
+            if result.ok:
+                break
+            if not needed:
+                raise RuntimeError(f"Could not tell which packages others need, from a dry run: {output.strip()}")
+            removable -= needed
+        return sorted(packages - removable)
+
+    def remove_scylla_leftovers(self):
+        """Remove what an earlier Scylla install left on the host, so this install starts from a clean host.
+
+        Removing the packages keeps the config files a run changed, and everything scylla_setup and SCT added. Without a
+        data disk (scylla_setup_no_raid) the data directory survives too: clean_scylla_data() leaves its schema,
+        system tables and caches. /var/lib/scylla still on a disk an earlier scylla_setup set up is left to the reset
+        of that disk.
+        """
+        paths = list(SCYLLA_CONFIG_LEFTOVERS)
+        if self._scylla_dir_mounted():
+            self.log.info("/var/lib/scylla is on a disk an earlier scylla_setup set up, the disk reset resets it")
+        else:
+            paths += SCYLLA_DATA_LEFTOVERS
+        # ls -d lists what exists, and drops the patterns that match nothing, with no error to log for each
+        found = self.remoter.run(f"ls -d {' '.join(paths)} 2>/dev/null", ignore_status=True).stdout.split()
+        if not found:
+            self.log.info("No leftovers of an earlier Scylla install on the host")
+            return
+        self.log.info("Removing leftovers of an earlier Scylla install: %s", ", ".join(found))
+        if "/var/lib/scylla" in found:
+            self._undo_coredump_bind()
+        self.remoter.sudo(f"rm -rf {' '.join(found)}")
+        self.remoter.sudo("systemctl daemon-reload")
+        # A Scylla unit that failed stays listed as failed once its package is gone, e.g. scylla-node-exporter
+        self.remoter.sudo("systemctl reset-failed 'scylla-*'", ignore_status=True)
+
+    def _undo_coredump_bind(self, data_sources: frozenset[str] = frozenset()) -> None:
+        """Undo scylla_setup's bind of /var/lib/scylla/coredump to /var/lib/systemd/coredump, which keeps the data
+        directory, and the disk under it, busy. The next scylla_setup recreates it.
+
+        Stopping its unit unmounts it. A mount still there is unmounted only when it is that bind: of
+        /var/lib/scylla/coredump, or from `data_sources`, the devices /var/lib/scylla is mounted from.
+        """
+        self.remoter.sudo("systemctl stop var-lib-systemd-coredump.mount", ignore_status=True)
+        sources = self.remoter.run(
+            "findmnt -rn -o SOURCE --mountpoint /var/lib/systemd/coredump", ignore_status=True
+        ).stdout.split()
+        # A bind of a directory has a source like /dev/nvme0n1p4[/var/lib/scylla/coredump]
+        if any(
+            source.endswith("[/var/lib/scylla/coredump]") or source.split("[", 1)[0] in data_sources
+            for source in sources
+        ):
+            self.remoter.sudo("umount /var/lib/systemd/coredump")
+        self.remoter.sudo(
+            f"rm -f {SCYLLA_COREDUMP_MOUNT_UNIT} /etc/systemd/system/*.wants/var-lib-systemd-coredump.mount"
+        )
+
+    def _scylla_dir_mounted(self) -> bool:
+        return any("/var/lib/scylla" in targets for targets in self._mounts().values())
+
+    def _stop_stale_log_followers(self) -> None:
+        """Stop the log followers a run left on the host, and remove their scripts.
+
+        RemoteLogger starts each as `setsid bash /tmp/logger_cmd_<pid>.sh`, the leader of a process group with the
+        `journalctl -f` it runs, and kills that group when the run stops it. A run that did not stop it leaves it
+        following the journal of a host that outlives the run. The leaders are found by their command line, not by
+        /tmp/logger_<pid>.pid: the PID in a file a run left may belong to another process by now.
+        """
+        leaders = self.remoter.run(
+            r"pgrep -f '^bash /tmp/logger_cmd_[0-9]+\.sh$'", ignore_status=True, verbose=False
+        ).stdout.split()
+        if leaders := sorted(pid for pid in leaders if pid.isdigit()):
+            self.log.warning("Stopping the log followers a run left on the host: process groups %s", ", ".join(leaders))
+            self.remoter.sudo(f"kill -9 {' '.join(f'-{pid}' for pid in leaders)}", ignore_status=True)
+        self.remoter.sudo("rm -f /tmp/logger_*.pid /tmp/logger_cmd_*.sh", ignore_status=True)
+=======
+        try:
+            self.restore_packages()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Could not restore the packages of the host, the next cleanup will: %s", exc)
+        try:
+            self.restore_services()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Could not restore the services of the host, the next cleanup will: %s", exc)
+        if scylla_disk_setup:
+            try:
+                self.remove_scylla_leftovers()
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Could not remove the leftovers of the Scylla install, the next install will: %s", exc)
+
+    def record_host_baseline(self) -> None:
+        """Record the packages the host has and the services it runs, for the cleanup after the run to restore.
+
+        A baseline already on the host is kept: it was recorded by an earlier run whose cleanup did not run, or did not
+        restore all of it, and it holds the host from before that run. Each baseline is kept on its own, as a cleanup
+        can restore one and not the other. One older than BASELINE_MAX_AGE_DAYS is dropped and recorded again.
+        """
+        missing = []
+        for baseline, list_cmd in ((SERVICE_BASELINE, LIST_RUNNING_SERVICES), (PACKAGE_BASELINE, LIST_PACKAGES)):
+            if self._baseline_exists(baseline):
+                self.log.info("Keeping the %s an earlier run left on the host, its cleanup restores it", baseline)
+            else:
+                missing.append((baseline, list_cmd))
+        if not missing:
+            return
+        self.remoter.sudo(f"mkdir -p {BASELINE_DIR}")
+        # Each written aside first: a baseline cut short by a failure would remove every package it misses
+        for baseline, list_cmd in missing:
+            self.remoter.sudo(f"sh -c {shlex.quote(f'{list_cmd} > {baseline}.new')}")
+            self.remoter.sudo(f"mv {baseline}.new {baseline}")
+        self.log.info(
+            "Recorded %s, the cleanup after the run restores them", ", ".join(baseline for baseline, _ in missing)
+        )
+
+    def _baseline_exists(self, baseline: str) -> bool:
+        """Whether the host has `baseline`. One older than BASELINE_MAX_AGE_DAYS is removed instead: restoring it would
+        undo every change made to the host since, by its admins too.
+        """
+        # With sudo, as root wrote it: the user SSH logs in as may not be able to read it
+        if not self.remoter.sudo(f"test -s {baseline}", ignore_status=True).ok:
+            return False
+        # The mtime is when it was recorded: it is written aside, then moved in place, and never written again
+        if not self.remoter.sudo(f"find {baseline} -mmin +{BASELINE_MAX_AGE_DAYS * 24 * 60}").stdout.strip():
+            return True
+        self.log.warning(
+            "Dropping %s, recorded over %s days ago and never restored: the host has changed outside SCT since",
+            baseline,
+            BASELINE_MAX_AGE_DAYS,
+        )
+        self.remoter.sudo(f"rm -f {baseline}")
+        return False
+
+    def restore_packages(self) -> None:
+        """Restore the packages of the baseline: remove what was installed since, reinstall what was removed.
+
+        Packages are compared by name, so an upgrade is kept: SCT upgrades openssh and openssl to fix sshd, and
+        downgrading them could cut the host off. An upgraded package can need a package the baseline does not have:
+        removing that one would remove the upgraded package with it, and with openssh-server, stop sshd. So a package
+        installed since that an installed package still needs is kept, as is one a reinstalled package needs. The
+        baseline is removed once every package of it is installed and every other package installed since is removed,
+        and kept otherwise, for the next cleanup to retry.
+
+        NOTE: a package something else installed on the host while the run was on it is removed too.
+        """
+        if not self._baseline_exists(PACKAGE_BASELINE):
+            self.log.info("No package baseline on the host, its packages are left as they are")
+            return
+        baseline = set(self.remoter.sudo(f"cat {PACKAGE_BASELINE}").stdout.split())
+        added = set(self.remoter.run(LIST_PACKAGES).stdout.split()) - baseline
+        debian = self.remoter.run("test -e /etc/debian_version", ignore_status=True).ok
+        if needed := self._needed_by_others(debian, added):
+            self.log.info("Keeping the packages installed since the baseline that others need: %s", " ".join(needed))
+        if unneeded := added - set(needed):
+            self.log.info("Removing the packages installed since the baseline: %s", " ".join(sorted(unneeded)))
+            self.remoter.sudo(self._package_cmd(debian, "remove", unneeded), ignore_status=True, retry=3, timeout=900)
+        before_reinstall = set(self.remoter.run(LIST_PACKAGES).stdout.split())
+        if removed := baseline - before_reinstall:
+            self.log.info("Reinstalling the packages removed since the baseline: %s", " ".join(sorted(removed)))
+            self.remoter.sudo(self._package_cmd(debian, "install", removed), ignore_status=True, retry=3, timeout=900)
+        installed = set(self.remoter.run(LIST_PACKAGES).stdout.split())
+        if differ := sorted((baseline - installed) | (unneeded & installed)):
+            self.log.warning(
+                "The packages still differ from the baseline, kept for the next cleanup: %s", " ".join(differ)
+            )
+            return
+        if pulled_in := sorted(installed - before_reinstall - baseline):
+            self.log.info("Keeping the packages the reinstalled ones need: %s", " ".join(pulled_in))
+        self.remoter.sudo(f"rm -f {PACKAGE_BASELINE}")
+        self.log.info("The packages of the host match the baseline again")
+
+    def restore_services(self) -> None:
+        """Start the services of the baseline that are stopped, e.g. one a package SCT installed replaced.
+
+        Only starts: a service the baseline does not have may be another job's. The baseline is removed once each of
+        its services runs, and kept otherwise, for the next cleanup to retry.
+        """
+        if not self._baseline_exists(SERVICE_BASELINE):
+            self.log.info("No service baseline on the host, its services are left as they are")
+            return
+        baseline = set(self.remoter.sudo(f"cat {SERVICE_BASELINE}").stdout.split())
+        if stopped := sorted(baseline - set(self.remoter.run(LIST_RUNNING_SERVICES).stdout.split())):
+            self.log.info("Starting the services stopped since the baseline: %s", " ".join(stopped))
+            self.remoter.sudo(f"systemctl start {' '.join(stopped)}", ignore_status=True)
+        if stopped := sorted(baseline - set(self.remoter.run(LIST_RUNNING_SERVICES).stdout.split())):
+            self.log.warning(
+                "The services still differ from the baseline, kept for the next cleanup: %s", " ".join(stopped)
+            )
+            return
+        self.remoter.sudo(f"rm -f {SERVICE_BASELINE}")
+        # Gone once both baselines are: the package one may still be kept for the next cleanup
+        self.remoter.sudo(f"rmdir --ignore-fail-on-non-empty {BASELINE_DIR}", ignore_status=True)
+        self.log.info("The services of the host run as in the baseline again")
+
+    @staticmethod
+    def _package_cmd(debian: bool, action: str, packages: set[str]) -> str:
+        names = " ".join(sorted(packages))
+        # Removing a package removes no dependency it was installed with, which the baseline may have, and reinstalling
+        # one installs no package it only recommends, which the baseline did not have
+        if debian:
+            subcommand = "purge -y" if action == "remove" else "install -y --no-install-recommends"
+            return f"DEBIAN_FRONTEND=noninteractive {apt_cmd(f'{subcommand} {names}', lock_wait=True)}"
+        setopt = "clean_requirements_on_remove" if action == "remove" else "install_weak_deps"
+        return rpm_cmd("yum", f"{action} -y --setopt={setopt}=False {names}")
+
+    def _needed_by_others(self, debian: bool, packages: set[str]) -> list[str]:
+        """The `packages` that an installed package outside them still needs, directly or through another of them.
+
+        Removing them all with dnf or apt would also remove every package that needs one of them. A dry run with rpm or
+        dpkg, which do not, lists what blocks it instead: dpkg names the needed package, rpm the capability it
+        provides. The needed ones are dropped and the rest tried again, until nothing blocks. A dry run that fails
+        for any other reason raises: nothing is removed, and the baseline is kept for the next cleanup.
+        """
+        removable = set(packages)
+        while removable:
+            names = " ".join(sorted(removable))
+            if debian:
+                result = self.remoter.sudo(f"dpkg --dry-run --purge {names}", ignore_status=True)
+                output = result.stdout + result.stderr
+                blocking = set(re.findall(r"dependency problems prevent removal of (\S+):$", output, re.MULTILINE))
+                # dpkg leaves out the architecture of a package installed for one only
+                needed = {package for package in removable if {package, package.split(":")[0]} & blocking}
+            else:
+                result = self.remoter.sudo(f"rpm -e --test {names}", ignore_status=True)
+                output = result.stdout + result.stderr
+                capabilities = re.findall(r"^\s+(\S+).* is needed by \(installed\) ", output, re.MULTILINE)
+                needed = set()
+                if capabilities:
+                    providers = self.remoter.run(
+                        f"rpm -q --whatprovides --qf '%{{NAME}}.%{{ARCH}}\\n' {shlex.join(sorted(set(capabilities)))}",
+                        ignore_status=True,
+                    ).stdout.split()
+                    needed = removable & set(providers)
+            if result.ok:
+                break
+            if not needed:
+                raise RuntimeError(f"Could not tell which packages others need, from a dry run: {output.strip()}")
+            removable -= needed
+        return sorted(packages - removable)
+
+    def remove_scylla_leftovers(self):
+        """Remove what an earlier Scylla install left on the host, so this install starts from a clean host.
+
+        Removing the packages keeps the config files a run changed, and everything scylla_setup and SCT added. Without a
+        data disk (scylla_setup_no_raid) the data directory survives too: clean_scylla_data() leaves its schema,
+        system tables and caches. /var/lib/scylla still on a disk an earlier scylla_setup set up is left to the reset
+        of that disk.
+        """
+        paths = list(SCYLLA_CONFIG_LEFTOVERS)
+        if self._scylla_dir_mounted():
+            self.log.info("/var/lib/scylla is on a disk an earlier scylla_setup set up, the disk reset resets it")
+        else:
+            paths += SCYLLA_DATA_LEFTOVERS
+        # ls -d lists what exists, and drops the patterns that match nothing, with no error to log for each
+        found = self.remoter.run(f"ls -d {' '.join(paths)} 2>/dev/null", ignore_status=True).stdout.split()
+        if not found:
+            self.log.info("No leftovers of an earlier Scylla install on the host")
+            return
+        self.log.info("Removing leftovers of an earlier Scylla install: %s", ", ".join(found))
+        if "/var/lib/scylla" in found:
+            self._undo_coredump_bind()
+        self.remoter.sudo(f"rm -rf {' '.join(found)}")
+        self.remoter.sudo("systemctl daemon-reload")
+        # A Scylla unit that failed stays listed as failed once its package is gone, e.g. scylla-node-exporter
+        self.remoter.sudo("systemctl reset-failed 'scylla-*'", ignore_status=True)
+
+    def _undo_coredump_bind(self, data_sources: frozenset[str] = frozenset()) -> None:
+        """Undo scylla_setup's bind of /var/lib/scylla/coredump to /var/lib/systemd/coredump, which keeps the data
+        directory, and the disk under it, busy. The next scylla_setup recreates it.
+
+        Stopping its unit unmounts it. A mount still there is unmounted only when it is that bind: of
+        /var/lib/scylla/coredump, or from `data_sources`, the devices /var/lib/scylla is mounted from.
+        """
+        self.remoter.sudo("systemctl stop var-lib-systemd-coredump.mount", ignore_status=True)
+        sources = self.remoter.run(
+            "findmnt -rn -o SOURCE --mountpoint /var/lib/systemd/coredump", ignore_status=True
+        ).stdout.split()
+        # A bind of a directory has a source like /dev/nvme0n1p4[/var/lib/scylla/coredump]
+        if any(
+            source.endswith("[/var/lib/scylla/coredump]") or source.split("[", 1)[0] in data_sources
+            for source in sources
+        ):
+            self.remoter.sudo("umount /var/lib/systemd/coredump")
+        self.remoter.sudo(
+            f"rm -f {SCYLLA_COREDUMP_MOUNT_UNIT} /etc/systemd/system/*.wants/var-lib-systemd-coredump.mount"
+        )
+
+    def _scylla_dir_mounted(self) -> bool:
+        return any("/var/lib/scylla" in targets for targets in self._mounts().values())
+
+    def _stop_stale_log_followers(self) -> None:
+        """Stop the log followers a run left on the host, and remove their scripts.
+
+        RemoteLogger starts each as `setsid bash /tmp/logger_cmd_<pid>.sh`, the leader of a process group with the
+        `journalctl -f` it runs, and kills that group when the run stops it. A run that did not stop it leaves it
+        following the journal of a host that outlives the run. The leaders are found by their command line, not by
+        /tmp/logger_<pid>.pid: the PID in a file a run left may belong to another process by now.
+        """
+        leaders = self.remoter.run(
+            r"pgrep -f '^bash /tmp/logger_cmd_[0-9]+\.sh$'", ignore_status=True, verbose=False
+        ).stdout.split()
+        if leaders := sorted(pid for pid in leaders if pid.isdigit()):
+            self.log.warning("Stopping the log followers a run left on the host: process groups %s", ", ".join(leaders))
+            self.remoter.sudo(f"kill -9 {' '.join(f'-{pid}' for pid in leaders)}", ignore_status=True)
+        self.remoter.sudo("rm -f /tmp/logger_*.pid /tmp/logger_cmd_*.sh", ignore_status=True)
+>>>>>>> 5c8d2e2be (style(docstrings): apply ruff pydocstyle auto-fixes)
 
     def _release_stale_tunnel_ports(self):
         """Kill the sshd sessions still holding the reverse-tunnel ports of an earlier run.

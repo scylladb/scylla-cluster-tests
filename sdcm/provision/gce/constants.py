@@ -11,9 +11,7 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""
-Constants for GCE provisioning.
-"""
+"""Constants for GCE provisioning."""
 
 # Label constraints (GCE labels are more restrictive than AWS tags)
 MAX_LABEL_KEY_LENGTH = 63
@@ -36,7 +34,8 @@ BUNDLED_LOCAL_SSD_FAMILIES = frozenset({"z3"})
 
 def bundles_local_ssds(instance_type: str) -> bool:
     """Local SSD machine types (z3-*, z4d-*-highlssd, c4-*-lssd, c4d-*-lssd-metal, ...) come with their SSDs,
-    GCE rejects explicitly requested ones on top."""
+    GCE rejects explicitly requested ones on top.
+    """
     return "lssd" in instance_type or instance_type.split("-", maxsplit=1)[0] in BUNDLED_LOCAL_SSD_FAMILIES
 
 

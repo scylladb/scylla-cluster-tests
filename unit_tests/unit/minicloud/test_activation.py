@@ -211,3 +211,36 @@ def test_guard_refuses_arm_clients_before_activation(fresh_azure_service, monkey
     ):
         _ = AzureService().compute
     keystore.assert_not_called()
+<<<<<<< HEAD
+||||||| parent of 5c8d2e2be (style(docstrings): apply ruff pydocstyle auto-fixes)
+
+
+def test_real_cloud_service_ignores_minicloud(fresh_azure_service, monkeypatch):
+    """Runner management from a redirected process needs real Azure: a separate, cached instance
+    that neither the guard nor the endpoint redirect applies to."""
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
+    real = AzureService.real_cloud()
+    assert real is AzureService.real_cloud()
+    assert real is not AzureService()
+    assert real.minicloud_endpoint is None  # the singleton would raise MinicloudActivationError here
+    monkeypatch.setenv("AZURE_ENDPOINT_URL", "https://localhost:5443")
+    assert AzureService.real_cloud()._arm_client_kwargs() == {}
+    assert AzureService().minicloud_endpoint == "https://localhost:5443"
+=======
+
+
+def test_real_cloud_service_ignores_minicloud(fresh_azure_service, monkeypatch):
+    """Runner management from a redirected process needs real Azure: a separate, cached instance
+    that neither the guard nor the endpoint redirect applies to.
+    """
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
+    real = AzureService.real_cloud()
+    assert real is AzureService.real_cloud()
+    assert real is not AzureService()
+    assert real.minicloud_endpoint is None  # the singleton would raise MinicloudActivationError here
+    monkeypatch.setenv("AZURE_ENDPOINT_URL", "https://localhost:5443")
+    assert AzureService.real_cloud()._arm_client_kwargs() == {}
+    assert AzureService().minicloud_endpoint == "https://localhost:5443"
+>>>>>>> 5c8d2e2be (style(docstrings): apply ruff pydocstyle auto-fixes)

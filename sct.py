@@ -3629,7 +3629,7 @@ def hdr_investigate(
 
     Usage example:
        hydra hdr-investigate --stress-operation READ --throttled-load true --test-id 8732ecb1-7e1f-44e7-b109-6d789b15f4b5
-       --start-time \"2025-09-14\\ 20:45:18\" --duration-from-start-min 30
+       --start-time \\"2025-09-14\\ 20:45:18\\" --duration-from-start-min 30
     """
     stress_operation = stress_operation.upper()
 

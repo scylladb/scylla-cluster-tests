@@ -152,9 +152,7 @@ def recover_conf(node):
 
 
 class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
-    """
-    Test a Scylla cluster upgrade.
-    """
+    """Test a Scylla cluster upgrade."""
 
     def setUp(self):
         super().setUp()
@@ -211,8 +209,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     system_upgrade_timeout = 30 * 60
 
     def should_do_complex_profile(self) -> bool:
-        """
-        since tablets doesn't support complex profiles with index, we need to replace them with simple profiles without index
+        """Replace complex stress profiles with simple ones without indexes.
+
+        Tablets don't support complex profiles with an index.
         """
         if is_tablets_feature_enabled(self.db_cluster.nodes[0]):
             if SkipPerIssues("https://github.com/scylladb/scylladb/issues/22677", params=self.params):
@@ -590,7 +589,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
     def get_highest_supported_sstable_version(self):
         """
-        find the highest sstable format version supported in the cluster
+        Find the highest sstable format version supported in the cluster
 
         :return:
         """
@@ -724,7 +723,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     @staticmethod
     def shuffle_nodes_and_alternate_dcs(nodes: List[BaseNode]) -> List[BaseNode]:
         """Shuffles provided nodes based on dc (alternates dc's).
-        based on https://stackoverflow.com/a/21482016/3891194"""
+        based on https://stackoverflow.com/a/21482016/3891194
+        """
         dc_nodes = {}
         for node in nodes:
             dc_nodes.setdefault(node.dc_idx, []).append(node)

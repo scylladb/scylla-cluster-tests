@@ -132,7 +132,8 @@ class TestSctEventsGceBindRaceFilter(RealEventsTest):
     @pytest.mark.integration
     def test_default_filters_gce_first_boot_bind_race(self, monkeypatch):
         """SCT-545/SCT-411: on the GCE backend, first-boot posix_listen EADDRNOTAVAIL races should
-        be downgraded to WARNING, so they don't fail otherwise-passing runs."""
+        be downgraded to WARNING, so they don't fail otherwise-passing runs.
+        """
         monkeypatch.setattr(events_setup, "SkipPerIssues", lambda *args, **kwargs: True)
 
         with environment(SCT_CLUSTER_BACKEND="gce"):

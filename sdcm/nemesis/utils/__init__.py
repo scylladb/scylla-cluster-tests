@@ -9,9 +9,7 @@ class NEMESIS_TARGET_POOLS(enum.Enum):
 
 
 class DefaultValue:
-    """
-    This is class is intended to be used as default value for the cases when None is not applicable
-    """
+    """This is class is intended to be used as default value for the cases when None is not applicable"""
 
 
 def unique_disruption_name(disruption: str) -> str:
