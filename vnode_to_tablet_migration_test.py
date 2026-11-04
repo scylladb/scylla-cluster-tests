@@ -518,7 +518,9 @@ class VnodeToTabletMigrationTest(LongevityTest):
         stress_queue = []
         round_robin = self.params.get("round_robin")
         for cmd in self.params.get("stress_cmd"):
-            stress_queue.append(self.run_stress_thread(stress_cmd=cmd, duration=60, round_robin=round_robin))
+            stress_queue.append(
+                self.run_stress_thread(stress_cmd=self.render_stress_cmd(cmd), duration=60, round_robin=round_robin)
+            )
         for stress in stress_queue:
             self.verify_stress_thread(stress)
         return stress_queue
@@ -573,10 +575,35 @@ class VnodeToTabletMigrationTest(LongevityTest):
         stress_queue = []
         round_robin = self.params.get("round_robin")
         for cmd in self.params.get("stress_cmd"):
-            stress_queue.append(self.run_stress_thread(stress_cmd=cmd, duration=60, round_robin=round_robin))
+            stress_queue.append(
+                self.run_stress_thread(stress_cmd=self.render_stress_cmd(cmd), duration=60, round_robin=round_robin)
+            )
         for stress in stress_queue:
             self.verify_stress_thread(stress)
         return stress_queue
+
+    def verify_data_after_migration(self) -> None:
+        """Read back the whole prepared dataset with stress_read_cmd and fail on any error.
+
+        The stress during the migration reads only what it happens to sample. This reads
+        every prepared row at CL=QUORUM once the cluster has settled, so rows lost by a
+        resharding, a node replace or a rollback show up as stress errors.
+        Skipped when the test-case has no stress_read_cmd.
+        """
+        stress_read_cmd = self.params.get("stress_read_cmd")
+        if not stress_read_cmd:
+            self.log.info("No stress_read_cmd configured, skipping post-migration data verification")
+            return
+        if isinstance(stress_read_cmd, str):
+            stress_read_cmd = [stress_read_cmd]
+        InfoEvent(message="Verifying the prepared dataset after the migration").publish()
+        round_robin = self.params.get("round_robin")
+        stress_queue = [
+            self.run_stress_thread(stress_cmd=self.render_stress_cmd(cmd), round_robin=round_robin)
+            for cmd in stress_read_cmd
+        ]
+        for stress in stress_queue:
+            self.verify_stress_thread(stress)
 
     def _common_test_setup(self) -> None:
         """Shared setup for all vnode-to-tablet migration test methods"""
@@ -622,6 +649,7 @@ class VnodeToTabletMigrationTest(LongevityTest):
         self.db_cluster.start_nemesis()
         self.run_migration(migration_steps)
         self.run_post_migration_benchmark()
+        self.verify_data_after_migration()
 
     def test_vnode_to_tablet_migration_full_rollback(self):
         """Test migration reversibility by upgrading all nodes then rolling them all back.
@@ -658,6 +686,7 @@ class VnodeToTabletMigrationTest(LongevityTest):
         self.db_cluster.start_nemesis()
         self.run_migration(migration_steps)
         self.run_post_migration_benchmark()
+        self.verify_data_after_migration()
 
     def test_vnode_to_tablet_migration_with_node_replace(self):
         """Test node replacement during all three phases of vnode-to-tablet migration.
@@ -728,3 +757,4 @@ class VnodeToTabletMigrationTest(LongevityTest):
         self.db_cluster.start_nemesis()
         self.run_migration(migration_steps)
         self.run_post_migration_benchmark()
+        self.verify_data_after_migration()
