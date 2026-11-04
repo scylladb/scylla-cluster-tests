@@ -59,13 +59,23 @@ class AzureKmsProvider:
         )
 
     @classmethod
+    def get_key_name_for_test(cls, test_id: str) -> str:
+        num_of_keys = KeyStore().get_azure_kms_config()["num_of_keys"]
+        return f"scylla-key-{(hash(test_id) % num_of_keys) + 1}"
+
+    @classmethod
     def get_key_uri_for_test(cls, region: str, test_id: str) -> str:
+        return f"https://{cls._get_vault_name(region)}.vault.azure.net/{cls.get_key_name_for_test(test_id)}"
+
+    @classmethod
+    def get_vault_uri(cls, region: str, azure_service: AzureService) -> str:
         vault_name = cls._get_vault_name(region)
-        vault_uri = f"https://{vault_name}.vault.azure.net/"
-        kms_config = KeyStore().get_azure_kms_config()
-        num_of_keys = kms_config["num_of_keys"]
-        key_number = (hash(test_id) % num_of_keys) + 1
-        return f"{vault_uri}scylla-key-{key_number}"
+        if azure_service.minicloud_endpoint:
+            resource_group = KeyStore().get_azure_kms_config()["resource_group"]
+            return azure_service.keyvault.vaults.get(
+                resource_group_name=resource_group, vault_name=vault_name
+            ).properties.vault_uri
+        return f"https://{vault_name}.vault.azure.net/"
 
     @retrying(
         n=5, sleep_time=10, allowed_exceptions=(RuntimeError,), message="Retrying Key Vault setup due to conflict"

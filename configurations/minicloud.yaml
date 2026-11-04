@@ -9,9 +9,9 @@
 # configuration, so a single run can override any of it, and none of it needs a pipeline
 # change once minicloud grows the missing feature.
 
-# KMS is off by default. minicloud emulates AWS KMS and GCP Cloud KMS, so an aws or gce run
-# can opt in with SCT_ENTERPRISE_DISABLE_KMS=false (add SCT_ENABLE_KMS_KEY_ROTATION=true for
-# rotation). On Azure the preflight check rejects KMS.
+# KMS is off by default. minicloud emulates AWS KMS, GCP Cloud KMS and Azure Key Vault, so a run
+# on any of the three backends can opt in with SCT_ENTERPRISE_DISABLE_KMS=false (add
+# SCT_ENABLE_KMS_KEY_ROTATION=true for rotation).
 enterprise_disable_kms: true
 enable_kms_key_rotation: false
 
