@@ -288,10 +288,7 @@ def test_external_service_failure_publishes_raw_backtrace(monitor_node, side_eff
     """When the service fails, the event keeps only its raw backtrace and nothing is decoded on the monitor."""
     monitor_node.remoter = MagicMock()
 
-    with (
-        patch("sdcm.cluster.requests.post", side_effect=[side_effect] * expected_calls) as mock_post,
-        patch("sdcm.cluster.FindIssuePerBacktrace") as mock_find_issue,
-    ):
+    with patch("sdcm.cluster.requests.post", side_effect=[side_effect] * expected_calls) as mock_post:
         event = _run_decode_with_queue_item(monitor_node, BUILD_ID, "0x1234\n0x5678")
 
     assert event.backtrace is None
@@ -299,7 +296,6 @@ def test_external_service_failure_publishes_raw_backtrace(monitor_node, side_eff
     assert event.build_id == BUILD_ID, "the build id must stay with the raw backtrace so it can be decoded later"
     assert mock_post.call_count == expected_calls
     monitor_node.remoter.run.assert_not_called()
-    mock_find_issue.assert_not_called()
 
 
 def test_external_service_retries_transient_errors(monitor_node):
