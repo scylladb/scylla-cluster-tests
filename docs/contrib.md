@@ -29,13 +29,7 @@ To use the `.git-blame-ignore-revs` file locally:
 git config blame.ignoreRevsFile .git-blame-ignore-revs
 ```
 
-For PRs with formatting changes, add the `Formatting` label to your PR. This will trigger the automation that:
-- Extracts all format commit SHAs from your PR
-   - It only affects commits starting with `format`, e.g. `format: Add lint rules`
-- Adds them to `.git-blame-ignore-revs` with descriptive comments
-- Automatically commits and pushes the changes to your PR branch
-
-This automation is similar to the hydra image build workflow and ensures that formatting commits don't clutter `git blame` output.
+For PRs with formatting changes, add the SHAs of the format commits to `.git-blame-ignore-revs` in a follow-up PR after merge (squash-merged SHAs are the ones that matter).
 
 ### update the configuration docs
 

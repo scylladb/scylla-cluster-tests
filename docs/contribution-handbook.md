@@ -437,7 +437,6 @@ with the PR workflow and reduced Jenkins dependency.
 | [`call_jira_sync`](../.github/workflows/call_jira_sync.yml) | PR events | Syncs PR status to Jira tickets |
 | [`build-docker-image`](../.github/workflows/build-docker-image.yaml) | `New Hydra Version` label | Builds and pushes a new Hydra Docker image |
 | [`test-hydra-macos`](../.github/workflows/test-hydra-macos.yaml) | `test-macos` label | Tests Hydra on macOS runners |
-| [`update-git-blame-ignore-revs`](../.github/workflows/update-git-blame-ignore-revs.yaml) | `Formatting` label | Adds formatting commits to `.git-blame-ignore-revs` |
 | [`stale`](../.github/workflows/stale.yml) | Daily cron | Marks issues stale after 2 years, PRs after 1 year |
 | [`cache-issues`](../.github/workflows/cache-issues.yaml) | Every 2 hours | Caches issue/PR data to S3 for cross-repo analysis |
 
@@ -480,7 +479,6 @@ PR metadata.
 | **Provision tests** | `test-provision`, `test-provision-<backend>`, `test-provision-<backend>-reuse` | Trigger backend-specific provision tests |
 | **Integration** | `test-integration` | Trigger integration test suite |
 | **Docker image** | `New Hydra Version` | Build and push a new Hydra Docker image |
-| **Formatting** | `Formatting` | Auto-update `.git-blame-ignore-revs` |
 | **macOS** | `test-macos` | Trigger macOS Hydra test |
 | **Backport status** | `conflicts` | Added to backport PRs with cherry-pick conflicts |
 | **Stale** | `no-issue-activity`, `no-pr-activity` | Auto-applied by the stale bot |
