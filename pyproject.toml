@@ -70,7 +70,7 @@ dependencies = [
 dev = [
     "pre-commit==4.0.1",
     "pycodestyle==2.13.0",
-    "ruff==0.16.3",
+    "ruff==0.17.3",
     "uv-sort>=0.7.0,<0.8.0",
 ]
 profiling = [
