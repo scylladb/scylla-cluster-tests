@@ -69,7 +69,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Resilient Test Config Dependencies | `pending_pr` | [#13982](https://github.com/scylladb/scylla-cluster-tests/pull/13982) |
 | Typed Config Access Migration | `pending_pr` | [#13878](https://github.com/scylladb/scylla-cluster-tests/pull/13878) |
 | SCT Config Validation and Lazy Images | `draft` | [sct-config-validation-and-lazy-images.md](sct-config-validation-and-lazy-images.md) |
-| SCT Config Nested Sections | `draft` | [sct-config-nested-sections.md](config/sct-config-nested-sections.md) |
+| SCT Config Nested Sections | `in_progress` | [sct-config-nested-sections.md](config/sct-config-nested-sections.md) |
 | Config Type Normalization | `complete` | [config-type-normalization.md](config/config-type-normalization.md), [#14805](https://github.com/scylladb/scylla-cluster-tests/pull/14805) |
 | Constraint-Based Instance Sizing | `complete` | [constraint-based-sizing.md](config/constraint-based-sizing.md), [#14576](https://github.com/scylladb/scylla-cluster-tests/pull/14576) |
 
