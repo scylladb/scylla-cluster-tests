@@ -127,8 +127,11 @@ hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos
 Or automatically resolve the latest unified package:
 ```sh
 export SCT_SCYLLA_VERSION=relocatable:latest
-hydra run-test artifacts_test --backend aws --config test-cases/artifacts/centos9.yaml
+hydra run-test artifacts_test --backend aws --config test-cases/artifacts/amazon2023.yaml
 ```
+
+On AWS the test-case must set the distro AMI and its user (`ami_id_db_scylla`, `ami_db_scylla_user`),
+otherwise config load fails.
 
 For non-root offline installation:
 ```sh
