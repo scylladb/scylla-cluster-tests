@@ -23,8 +23,16 @@ if TYPE_CHECKING:
     from sdcm.utils.raft import Group0Member, TokenRingMember
 
 
-CHECK_NODE_HEALTH_RETRIES = 10
-CHECK_NODE_HEALTH_RETRY_DELAY = 15
+# 12 attempts with 1/2/4/8/15/15/... s between them: a disagreement that clears quickly costs about 1 s,
+# and the worst case stays close to the old 10 x 15 s (120 s instead of 135 s of waiting per node).
+CHECK_NODE_HEALTH_RETRIES = 12
+CHECK_NODE_HEALTH_MAX_RETRY_DELAY = 15
+
+
+def health_check_retry_delay(attempt: int) -> int:
+    """Seconds to wait after failed attempt number `attempt` (1-based): 1, 2, 4, 8, 15, 15, ..."""
+    return min(2 ** (attempt - 1), CHECK_NODE_HEALTH_MAX_RETRY_DELAY)
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -256,7 +264,7 @@ def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_H
     for retry_n in range(retries):
         if retry_n:
             err = ""
-            time.sleep(CHECK_NODE_HEALTH_RETRY_DELAY)
+            time.sleep(health_check_retry_delay(retry_n))
         message_pref = f"Check for schema agreement on the node {node.name} ({node}) [attempt #{retry_n}]."
         gossip_info = node.get_gossip_info()
         LOGGER.debug("%s Gossip info: %s", message_pref, gossip_info)

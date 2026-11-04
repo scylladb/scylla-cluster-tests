@@ -196,13 +196,13 @@ from sdcm.utils.grafana_api import (
 )
 from sdcm.utils.health_checker import (
     CHECK_NODE_HEALTH_RETRIES,
-    CHECK_NODE_HEALTH_RETRY_DELAY,
     check_group0_tokenring_consistency,
     check_node_status_in_gossip_and_nodetool_status,
     check_nodes_status,
     check_nulls_in_peers,
     check_schema_agreement_in_gossip_and_peers,
     check_schema_version,
+    health_check_retry_delay,
 )
 from sdcm.utils.install import InstallMode
 from sdcm.utils.issues import SkipPerIssues
@@ -3984,12 +3984,13 @@ class BaseNode(AutoSshContainerMixin):
 
             event.dont_publish()
 
+            delay = health_check_retry_delay(retry_n)
             LOGGER.debug(
                 "Wait for %d secs before next try to validate the health of the node `%s'",
-                CHECK_NODE_HEALTH_RETRY_DELAY,
+                delay,
                 self.name,
             )
-            time.sleep(CHECK_NODE_HEALTH_RETRY_DELAY)
+            time.sleep(delay)
 
     def get_nodes_status(self, nodes: list[BaseNode] | None = None) -> dict[BaseNode, dict]:
         nodes_status = {}
