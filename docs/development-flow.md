@@ -90,6 +90,32 @@ symptom.
 A bug fix that changes a contract or a module boundary can use the flow like
 any other big change.
 
+## Examples
+
+**A small fix.** A nemesis fails because a timeout is too short. The change
+has no documents. The commit message and the pull request description give
+the root cause.
+
+**A change in one pull request.** A new nemesis adds and removes a
+materialized view during a stress load. The branch has three commits:
+
+1. `docs/plans/nemesis/materialized-view-churn/intent.md`
+2. `docs/plans/nemesis/materialized-view-churn/spec.md`
+3. The code and the tests
+
+This pull request is the last one of the change, so it sets the `Status`
+line of the spec to `built`. `plan.md` stays on the machine of the author.
+
+**A change that spans pull requests.** A new cloud backend needs changes in
+the provisioning, the configuration, and the cleanup.
+
+1. The first pull request holds only
+   `docs/plans/infrastructure/new-cloud-backend/intent.md` and `spec.md`,
+   with `**Status:** draft`. The reviewers agree on the problem and the
+   design before the code.
+2. Each code pull request links the flow directory.
+3. The last code pull request sets the `Status` line to `built`.
+
 ## Changes during the build
 
 A decision during the build that changes the design updates `spec.md` in the
