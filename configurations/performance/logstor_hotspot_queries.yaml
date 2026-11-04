@@ -10,9 +10,22 @@
 # This test is a part of the benchmark done by Aerospike
 # https://aerospike.com/files/benchmarks/aerospike-vs-scylladb-performance-and-cost-at-multi-terabyte-scale.pdf
 
+# Each latte command of each step starts at its own cycle, because latte derives the key of a
+# cycle from the cycle number alone, and the written values from the key. Two commands that
+# start at the same cycle therefore use the same keys in the same order:
+#  - A write step that repeats the keys of an earlier write step overwrites the records of
+#    that step in the order that they were written. Whole segments then die at the same time,
+#    and the write amplification that the test measures is lower than in a real workload.
+#  - A read command and a write command that start at the same cycle go through the same keys
+#    in the same order, so the read of a key and the write of that key are correlated in time.
+# The start cycles of the commands of a step are 5e9 apart, and the start cycles of the steps
+# are 1e10 apart. A 60m step at 1M ops/s uses 3.6e9 cycles, so the ranges do not overlap.
+# The populate uses the sequential distribution, which maps cycles to keys differently, so it
+# needs no range of its own.
 perf_gradual_throttle_steps:
   mixed:
-    - {threads: 32, concurrency: 48, rate: '750000', write_rate: '225000', read_rate: '525000', duration: '60m'}
+    - {threads: 32, concurrency: 48, rate: '750000', write_rate: '225000', read_rate: '525000',
+       write_start_cycle: 1, read_start_cycle: 5000000000, duration: '60m'}
 
 perf_gradual_step_duration: {"mixed": '60m'}
 
@@ -47,7 +60,7 @@ stress_cmd_m:
   - >-
     latte run --function hotspot_write --consistency QUORUM --duration $duration
     --threads $threads --concurrency $concurrency --rate $write_rate
-    --start-cycle 1
+    --start-cycle $write_start_cycle
     -P row_count=500000000 -P offset=0 -P distribution=\"random\"
     -P column_count=10 -P column_size=200 -P key_size=48
     -P hotset_items=500000 -P hotset_chance=55
@@ -55,7 +68,7 @@ stress_cmd_m:
   - >-
     latte run --function hotspot_read --consistency ONE --duration $duration
     --threads $threads --concurrency $concurrency --rate $read_rate
-    --start-cycle 1
+    --start-cycle $read_start_cycle
     -P row_count=500000000 -P offset=0 -P distribution=\"random\"
     -P column_count=10 -P column_size=200 -P key_size=48
     -P hotset_items=500000 -P hotset_chance=55
