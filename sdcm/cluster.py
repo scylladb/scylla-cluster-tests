@@ -6590,8 +6590,9 @@ class BaseScyllaCluster:
             while True:
                 time.sleep(self.params.get("kms_key_rotation_interval") * 60)
                 try:
-                    key_uri = AzureKmsProvider.get_key_uri_for_test(region, test_id)
-                    rotated_key_id = azure_service.rotate_vault_key(key_uri)
+                    vault_uri = AzureKmsProvider.get_vault_uri(region, azure_service)
+                    key_name = AzureKmsProvider.get_key_name_for_test(test_id)
+                    rotated_key_id = azure_service.rotate_vault_key(vault_uri, key_name)
                     self.log.info(f"Azure KMS key rotated for test {test_id}: {rotated_key_id}")
                 except AzureResourceNotFoundError as e:
                     self.log.error(f"Azure KMS key not found for rotation: {e}")

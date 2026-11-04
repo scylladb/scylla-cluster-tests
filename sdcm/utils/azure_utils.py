@@ -209,28 +209,23 @@ class AzureService(metaclass=Singleton):
             credential=self.credential, subscription_id=self.subscription_id, **self._arm_client_kwargs()
         )
 
+    def _key_client(self, vault_uri: str) -> KeyClient:
+        return KeyClient(
+            vault_url=vault_uri, credential=self.credential, verify_challenge_resource=self.minicloud_endpoint is None
+        )
+
     def create_vault_key(self, vault_uri: str, key_name: str, key_size: int = 2048) -> str:
-        key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
-        key = key_client.create_rsa_key(name=key_name, size=key_size)
+        key = self._key_client(vault_uri).create_rsa_key(name=key_name, size=key_size)
         return key.id
 
     def get_vault_key(self, vault_uri: str, key_name: str):
         try:
-            key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
-            key = key_client.get_key(name=key_name)
-            return key
+            return self._key_client(vault_uri).get_key(name=key_name)
         except ResourceNotFoundError:
             return None
 
-    def rotate_vault_key(self, key_uri: str) -> str:
-        # Extract vault URI and key name from full key URI
-        # Format: https://vault-name.vault.azure.net/scylla-key-N
-        vault_uri = key_uri.split("scylla-key-", maxsplit=1)[0]
-        key_name = key_uri.rsplit("/", maxsplit=1)[-1]
-
-        key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
-        rotated_key = key_client.rotate_key(name=key_name)
-        return rotated_key.id
+    def rotate_vault_key(self, vault_uri: str, key_name: str) -> str:
+        return self._key_client(vault_uri).rotate_key(name=key_name).id
 
     def _get_ip_configuration_dicts(self, network_interface_id: str) -> list[dict]:
         """Every ipConfiguration of a NIC.
