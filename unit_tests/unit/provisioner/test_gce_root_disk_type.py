@@ -19,12 +19,12 @@ import pytest
 from sdcm.provision.gce.constants import (
     DISK_TYPE_HYPERDISK_BALANCED,
     DISK_TYPE_LOCAL_SSD,
-    bundles_local_ssds,
 )
 from sdcm.provision.gce.disk_provider import DiskProvider
 from sdcm.provision.gce.instance_provider import VirtualMachineProvider
 from sdcm.provision.gce.instance_provider import resolve_root_disk_type as _resolve_root_disk_type
 from sdcm.provision.provisioner import DataDisk, InstanceDefinition, PricingModel
+from sdcm.utils.gce_machine_types import bundles_local_ssds
 
 
 @pytest.mark.parametrize(
@@ -36,6 +36,7 @@ from sdcm.provision.provisioner import DataDisk, InstanceDefinition, PricingMode
         "c4a-standard-4",
         "c4d-highmem-8-lssd",
         "z3-highmem-8-highlssd",
+        "z4d-highmem-16-highlssd",
     ],
 )
 @pytest.mark.parametrize("configured", ["pd-standard", "pd-balanced", "pd-ssd", None])
@@ -78,7 +79,13 @@ def test_bundles_local_ssds(instance_type, expected):
 
 @pytest.mark.parametrize(
     "instance_type, expected_local_ssds",
-    [("c4-highmem-8-lssd", 0), ("c4d-highmem-8-lssd", 0), ("z3-highmem-88", 0), ("c4-highmem-8", 8)],
+    [
+        ("c4-highmem-8-lssd", 0),
+        ("c4d-highmem-8-lssd", 0),
+        ("z3-highmem-88", 0),
+        ("z4d-highmem-16-highlssd", 0),
+        ("c4-highmem-8", 8),
+    ],
 )
 @patch("sdcm.provision.gce.instance_provider.get_gce_service_accounts", return_value=None)
 def test_requested_local_ssds_are_dropped_on_bundled_ssd_types(_mock_sa, instance_type, expected_local_ssds):
