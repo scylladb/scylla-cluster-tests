@@ -10632,3 +10632,168 @@ instances:
     asia-east2: 14.83662807
     europe-west10: 14.228914328
     asia-northeast3: 14.192562586
+- instance_type: z4d-highmem-16-highlssd
+  family: z4d-highmem-highlssd
+  vcpus: 16
+  memory_gb: 126.0
+  local_disk_gb: 7000.0
+  local_disk_count: 2
+  arch: x86_64
+  price_per_hour:
+    us-east4: 2.528691507
+    us-central1: 2.528691507
+    us-east5: 2.528691507
+- instance_type: z4d-highmem-192-highlssd
+  family: z4d-highmem-highlssd
+  vcpus: 192
+  memory_gb: 1512.0
+  local_disk_gb: 84000.0
+  local_disk_count: 24
+  arch: x86_64
+  price_per_hour:
+    us-east4: 30.344298082
+    us-central1: 30.344298082
+    us-east5: 30.344298082
+- instance_type: z4d-highmem-32-highlssd
+  family: z4d-highmem-highlssd
+  vcpus: 32
+  memory_gb: 252.0
+  local_disk_gb: 14000.0
+  local_disk_count: 4
+  arch: x86_64
+  price_per_hour:
+    us-east4: 5.057383014
+    us-central1: 5.057383014
+    us-east5: 5.057383014
+- instance_type: z4d-highmem-48-highlssd
+  family: z4d-highmem-highlssd
+  vcpus: 48
+  memory_gb: 378.0
+  local_disk_gb: 21000.0
+  local_disk_count: 6
+  arch: x86_64
+  price_per_hour:
+    us-east4: 7.586074521
+    us-central1: 7.586074521
+    us-east5: 7.586074521
+- instance_type: z4d-highmem-64-highlssd
+  family: z4d-highmem-highlssd
+  vcpus: 64
+  memory_gb: 504.0
+  local_disk_gb: 28000.0
+  local_disk_count: 8
+  arch: x86_64
+  price_per_hour:
+    us-east4: 10.114766027
+    us-central1: 10.114766027
+    us-east5: 10.114766027
+- instance_type: z4d-highmem-8-highlssd
+  family: z4d-highmem-highlssd
+  vcpus: 8
+  memory_gb: 63.0
+  local_disk_gb: 3500.0
+  local_disk_count: 1
+  arch: x86_64
+  price_per_hour:
+    us-east4: 1.264345753
+    us-central1: 1.264345753
+    us-east5: 1.264345753
+- instance_type: z4d-highmem-96-highlssd
+  family: z4d-highmem-highlssd
+  vcpus: 96
+  memory_gb: 756.0
+  local_disk_gb: 42000.0
+  local_disk_count: 12
+  arch: x86_64
+  price_per_hour:
+    us-east4: 15.172149041
+    us-central1: 15.172149041
+    us-east5: 15.172149041
+- instance_type: z4d-highmem-16-standardlssd
+  family: z4d-highmem-standardlssd
+  vcpus: 16
+  memory_gb: 126.0
+  local_disk_gb: 3500.0
+  local_disk_count: 1
+  arch: x86_64
+  price_per_hour:
+    us-east5: 2.145129863
+    us-central1: 2.145129863
+    us-east4: 2.145129863
+- instance_type: z4d-highmem-192-standardlssd
+  family: z4d-highmem-standardlssd
+  vcpus: 192
+  memory_gb: 1512.0
+  local_disk_gb: 42000.0
+  local_disk_count: 12
+  arch: x86_64
+  price_per_hour:
+    us-east5: 25.741558356
+    us-central1: 25.741558356
+    us-east4: 25.741558356
+- instance_type: z4d-highmem-32-standardlssd
+  family: z4d-highmem-standardlssd
+  vcpus: 32
+  memory_gb: 252.0
+  local_disk_gb: 7000.0
+  local_disk_count: 2
+  arch: x86_64
+  price_per_hour:
+    us-east5: 4.290259726
+    us-central1: 4.290259726
+    us-east4: 4.290259726
+- instance_type: z4d-highmem-384-standardlssd
+  family: z4d-highmem-standardlssd
+  vcpus: 384
+  memory_gb: 3024.0
+  local_disk_gb: 84000.0
+  local_disk_count: 24
+  arch: x86_64
+  price_per_hour:
+    us-east5: 51.483116712
+    us-central1: 51.483116712
+    us-east4: 51.483116712
+- instance_type: z4d-highmem-384-standardlssd-metal
+  family: z4d-highmem-standardlssd
+  vcpus: 384
+  memory_gb: 3072.0
+  local_disk_gb: 84000.0
+  local_disk_count: 12
+  arch: x86_64
+  price_per_hour:
+    us-east5: 51.650924712
+    us-central1: 51.650924712
+    us-east4: 51.650924712
+- instance_type: z4d-highmem-48-standardlssd
+  family: z4d-highmem-standardlssd
+  vcpus: 48
+  memory_gb: 378.0
+  local_disk_gb: 10500.0
+  local_disk_count: 3
+  arch: x86_64
+  price_per_hour:
+    us-east5: 6.435389589
+    us-central1: 6.435389589
+    us-east4: 6.435389589
+- instance_type: z4d-highmem-64-standardlssd
+  family: z4d-highmem-standardlssd
+  vcpus: 64
+  memory_gb: 504.0
+  local_disk_gb: 14000.0
+  local_disk_count: 4
+  arch: x86_64
+  price_per_hour:
+    us-east5: 8.580519452
+    us-central1: 8.580519452
+    us-east4: 8.580519452
+- instance_type: z4d-highmem-96-standardlssd
+  family: z4d-highmem-standardlssd
+  vcpus: 96
+  memory_gb: 756.0
+  local_disk_gb: 21000.0
+  local_disk_count: 6
+  arch: x86_64
+  price_per_hour:
+    us-east5: 12.870779178
+    us-central1: 12.870779178
+    us-east4: 12.870779178
