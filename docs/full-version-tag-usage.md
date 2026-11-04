@@ -119,8 +119,14 @@ export SCT_SCYLLA_VERSION=relocatable:branch-2025.1:aarch64
 > On other backends (GCE, Azure, etc.), specify the architecture explicitly
 > using `relocatable:<branch>:<arch>` format.
 
+> **AWS**: the unified package is installed on a plain distro AMI, so the config must set
+> `ami_id_db_scylla` and `ami_db_scylla_user` (the default user of that AMI's distro, not the Scylla AMI
+> default `scyllaadm`), or config load fails.
+
 ```bash
-# AWS: arch auto-detected from instance type
+# AWS: arch auto-detected from instance type, base AMI and user from env
+export SCT_AMI_ID_DB_SCYLLA=resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+export SCT_AMI_DB_SCYLLA_USER=ubuntu
 hydra run-test longevity_test.LongevityTest.test_custom_time \
   --backend aws \
   --config test-cases/PR-provision-test.yaml
