@@ -3,7 +3,6 @@ experimental_features:
 
 append_scylla_yaml:
   logstor_disk_size_in_mb: 80000
-  logstor_separator_max_memory_in_mb: 256
   logstor_format_on_startup: true
   force_capacity_based_balancing: true
 
