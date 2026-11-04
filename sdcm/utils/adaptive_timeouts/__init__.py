@@ -57,6 +57,23 @@ def _get_new_node_timeout(
         return (timeout, None), {}
 
 
+def _get_refresh_timeout(
+    node_info_service: NodeLoadInfoService,
+    timeout: int | float = None,
+    tablets_enabled: bool = False,
+) -> tuple[tuple[int, int | None], dict[str, Any]]:
+    """Calculate timeout for 'nodetool refresh'.
+
+    With tablets, refresh is a load-and-stream, which first waits until no topology operation is running,
+    so use the same predefined timeouts as for adding a new node.
+    With vnodes, refresh only loads the local sstables, so use the caller-supplied timeout.
+    """
+    if tablets_enabled:
+        return _get_new_node_timeout(node_info_service, timeout=timeout, tablets_enabled=True)
+    soft_timeout, node_info = _get_soft_timeout(node_info_service=node_info_service, timeout=timeout)
+    return (soft_timeout, None), node_info
+
+
 def _get_soft_timeout(
     node_info_service: NodeLoadInfoService, timeout: int | float = None
 ) -> tuple[int | float, dict[str, Any]]:
@@ -191,6 +208,7 @@ class Operations(Enum):
         ("timeout", "service_level_for_test_step"),
     )
     TABLET_MIGRATION = ("tablet_migration", _get_soft_timeout, ("timeout",))
+    REFRESH = ("refresh", _get_refresh_timeout, ("timeout",))
     HEALTHCHECK = ("healthcheck", _get_soft_timeout, ("timeout",))
     SSH_CONNECTIVITY = ("ssh_connectivity", _get_soft_timeout_no_node_info, ("timeout",))
 
@@ -268,7 +286,7 @@ def adaptive_timeout(  # noqa: PLR0914
     Also store node load info and timeout value in AdaptiveTimeoutStore (ES by default) for future reference.
     Use Operation.SOFT_TIMEOUT to set timeout explicitly without calculations.
     """
-    tablet_sensitive_op = operation in {Operations.DECOMMISSION, Operations.NEW_NODE}
+    tablet_sensitive_op = operation in {Operations.DECOMMISSION, Operations.NEW_NODE, Operations.REFRESH}
     kwargs.setdefault("node_available", True)
 
     # in some situations we may want to skip tablet check, since it depends on ssh connectivity

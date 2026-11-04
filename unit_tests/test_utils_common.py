@@ -24,6 +24,7 @@ import pytest
 
 from sdcm import sct_config
 from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
+from sdcm.utils.adaptive_timeouts import Operations
 from sdcm.utils.distro import Distro
 from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud, get_testrun_dir, redact_cli_secrets
 from sdcm.utils.sstable import load_inventory
@@ -272,6 +273,23 @@ class TestSstableLoadUtils(unittest.TestCase):
         )
         assert test_data == load_inventory.MULTI_NODE_DATA, (
             f"Expected {load_inventory.MULTI_NODE_DATA}, got {test_data}"
+        )
+
+    @staticmethod
+    def test_run_refresh_has_timeout_and_no_retry():
+        """A load-and-stream refresh on tablets can wait forever for the topology to quiesce, so the nodetool
+        call must use the adaptive timeout, and must not be retried, since the first refresh still runs in Scylla.
+        """
+        node = unittest.mock.MagicMock()
+        test_data = load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA[0]
+
+        with unittest.mock.patch("sdcm.utils.sstable.load_utils.adaptive_timeout") as adaptive_timeout_mock:
+            adaptive_timeout_mock.return_value.__enter__.return_value = 7200
+            SstableLoadUtils.run_refresh(node, test_data=test_data, timeout=120)
+
+        adaptive_timeout_mock.assert_called_once_with(Operations.REFRESH, node, timeout=120)
+        node.run_nodetool.assert_called_once_with(
+            sub_cmd="refresh", args="-- keyspace_refresh standard1", timeout=7200, retry=0
         )
 
     @staticmethod
