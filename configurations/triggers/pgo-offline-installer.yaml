@@ -32,6 +32,7 @@ jobs:
     params:
       unified_package: "{unified_package}"
       nonroot_offline_install: "false"
+      extra_environment_variables: "SCT_AMI_ID_DB_SCYLLA=resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id\nSCT_AMI_DB_SCYLLA_USER=ubuntu"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64-write"
     backend: "aws"
@@ -43,6 +44,7 @@ jobs:
     params:
       unified_package: "{unified_package}"
       nonroot_offline_install: "false"
+      extra_environment_variables: "SCT_AMI_ID_DB_SCYLLA=resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id\nSCT_AMI_DB_SCYLLA_USER=ubuntu"
 
   # --- ARM64 microbenchmarks ---
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64"
@@ -55,6 +57,7 @@ jobs:
     params:
       unified_package: "{unified_package}"
       nonroot_offline_install: "false"
+      extra_environment_variables: "SCT_AMI_ID_DB_SCYLLA=resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id\nSCT_AMI_DB_SCYLLA_USER=ubuntu"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-write"
     backend: "aws"
@@ -66,3 +69,4 @@ jobs:
     params:
       unified_package: "{unified_package}"
       nonroot_offline_install: "false"
+      extra_environment_variables: "SCT_AMI_ID_DB_SCYLLA=resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id\nSCT_AMI_DB_SCYLLA_USER=ubuntu"
