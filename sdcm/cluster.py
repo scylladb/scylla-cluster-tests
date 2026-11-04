@@ -145,7 +145,6 @@ from sdcm.utils.database_query_utils import is_system_keyspace
 from sdcm.utils.distro import Distro
 from sdcm.utils.features import get_enabled_features, is_tablets_feature_enabled
 from sdcm.utils.install import InstallMode
-from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
 from sdcm.utils.health_checker import (
     check_nodes_status,
@@ -159,7 +158,6 @@ from sdcm.utils.health_checker import (
 )
 from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property, optional_stage
 from sdcm.test_config import TestConfig
-from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 from sdcm.utils.version_utils import (
     assume_version,
@@ -2313,7 +2311,6 @@ class BaseNode(AutoSshContainerMixin):
                 event.build_id = obj["build_id"]
                 if decoded := self._decode_backtrace_via_service(event.build_id, event.raw_backtrace):
                     event.backtrace = decoded
-                    self._match_known_issue(event)
             except queue.Empty:
                 pass
             except Exception as details:  # noqa: BLE001
@@ -2356,24 +2353,6 @@ class BaseNode(AutoSshContainerMixin):
             return None
         self.log.debug("Decoded backtrace via external service for build_id=%s", build_id)
         return decoded
-
-    def _match_known_issue(self, event) -> None:
-        """Look the decoded backtrace up in the known-issues map and adjust the event severity."""
-        issue_url = FindIssuePerBacktrace().find_issue(backtrace_type=event.type, decoded_backtrace=event.backtrace)
-        if not issue_url:
-            return
-
-        event.known_issue = issue_url
-        skip_per_issue = SkipPerIssues(issue_url, self.parent_cluster.params)
-
-        if not skip_per_issue.issues_opened():
-            if skip_per_issue.issues_labeled():
-                if event.severity.value > Severity.WARNING.value:
-                    event.severity = Severity.WARNING
-            elif event.severity.value < Severity.ERROR.value:
-                event.severity = Severity.ERROR
-
-        self.log.debug("Found issue for %s event: %s", event.event_id, event.known_issue)
 
     def get_scylla_build_id(self) -> Optional[str]:
         for scylla_executable in (
