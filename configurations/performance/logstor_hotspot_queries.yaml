@@ -10,9 +10,12 @@
 # This test is a part of the benchmark done by Aerospike
 # https://aerospike.com/files/benchmarks/aerospike-vs-scylladb-performance-and-cost-at-multi-terabyte-scale.pdf
 
+# The start cycles of the latte commands follow the same rules as in
+# logstor_uniform_queries.yaml. Read the comment there before you change them.
 perf_gradual_throttle_steps:
   mixed:
-    - {threads: 32, concurrency: 48, rate: '750000', write_rate: '225000', read_rate: '525000', duration: '60m'}
+    - {threads: 32, concurrency: 48, rate: '750000', write_rate: '225000', read_rate: '525000',
+       write_start_cycle: 1, read_start_cycle: 5000000000, duration: '60m'}
 
 perf_gradual_step_duration: {"mixed": '60m'}
 
@@ -47,7 +50,7 @@ stress_cmd_m:
   - >-
     latte run --function hotspot_write --consistency QUORUM --duration $duration
     --threads $threads --concurrency $concurrency --rate $write_rate
-    --start-cycle 1
+    --start-cycle $write_start_cycle
     -P row_count=500000000 -P offset=0 -P distribution=\"random\"
     -P column_count=10 -P column_size=200 -P key_size=48
     -P hotset_items=500000 -P hotset_chance=55
@@ -55,7 +58,7 @@ stress_cmd_m:
   - >-
     latte run --function hotspot_read --consistency ONE --duration $duration
     --threads $threads --concurrency $concurrency --rate $read_rate
-    --start-cycle 1
+    --start-cycle $read_start_cycle
     -P row_count=500000000 -P offset=0 -P distribution=\"random\"
     -P column_count=10 -P column_size=200 -P key_size=48
     -P hotset_items=500000 -P hotset_chance=55
