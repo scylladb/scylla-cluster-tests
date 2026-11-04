@@ -19,11 +19,14 @@ from pathlib import Path
 import pytest
 import ssh2.session
 
+from sdcm.utils.docker_utils import running_in_docker
+
 PROC_MAPS = Path("/proc/self/maps")
 
 pytestmark = pytest.mark.skipif(not PROC_MAPS.exists(), reason="/proc/self/maps not found")
 
 
+@pytest.mark.skipif(not running_in_docker(), reason="private libcrypto is bundled only in the hydra docker image")
 def test_ssh2_loads_private_libcrypto():
     """libssh2 leaves OpenSSL errors on the per-thread error queue of the libcrypto it is linked to.
 
