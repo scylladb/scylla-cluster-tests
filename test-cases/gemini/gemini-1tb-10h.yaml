@@ -19,12 +19,12 @@ n_db_nodes: 6
 n_test_oracle_db_nodes: 1
 n_loaders: 1
 sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
-  vcpu: 8
-  memory: '>=64'
+  vcpu: 4
+  memory: '>=32'
   arch: x86_64
 sizing_loader:
-  vcpu: 4
-  memory: '>=16'
+  vcpu: 8
+  memory: '>=32'
 
 user_prefix: 'gemini-1tb-10h'
 
