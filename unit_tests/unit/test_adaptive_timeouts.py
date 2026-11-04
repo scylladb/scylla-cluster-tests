@@ -312,6 +312,46 @@ def test_tablet_migration_uses_formula_when_tablets_disabled(
     hard_timeout_mock.assert_not_called()
 
 
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_tablets_refresh_timeout_is_calculated_as_tablet_migration(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
+):
+    # With tablets, refresh is a load-and-stream, which waits for a running tablet migration first
+    mock_tablets_feature.return_value = True
+    with adaptive_timeout(
+        operation=Operations.REFRESH, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+    ) as timeout:
+        throughput = _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
+        estimated = int(102400 * 0.9 / throughput)
+        soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
+        expected_hard = soft_timeout * 2
+        assert timeout == expected_hard
+
+    soft_timeout_mock.assert_not_called()
+    hard_timeout_mock.assert_not_called()
+    metrics = adaptive_timeout_store.get(operation=Operations.REFRESH.name)
+    assert metrics[0].get("tablets_enabled") is True
+    assert metrics[0]["hard_timeout"] == expected_hard
+
+
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_refresh_uses_caller_timeout_when_tablets_disabled(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store
+):
+    with adaptive_timeout(
+        operation=Operations.REFRESH, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+    ) as timeout:
+        assert timeout == 3600
+
+    soft_timeout_mock.assert_not_called()
+    hard_timeout_mock.assert_not_called()
+    metrics = adaptive_timeout_store.get(operation=Operations.REFRESH.name)
+    assert metrics[0]["node_name"] == "test-node"
+    assert metrics[0]["hard_timeout"] is None
+
+
 def test_node_disk_size_mb(fake_node):
     """node_disk_size_mb should return total /var/lib/scylla filesystem size in MB.
 

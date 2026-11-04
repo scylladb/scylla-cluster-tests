@@ -106,6 +106,23 @@ def _get_tablet_migration_timeout(
         return (timeout or 6 * 60 * 60, None), {}
 
 
+def _get_refresh_timeout(
+    node_info_service: NodeLoadInfoService,
+    timeout: int | float = None,
+    tablets_enabled: bool = False,
+) -> tuple[tuple[int, int | None], dict[str, Any]]:
+    """Calculate timeout for 'nodetool refresh'.
+
+    With tablets, refresh is a load-and-stream, which first waits until no topology operation is running.
+    The longest of them is a tablet migration, so use the tablet migration estimate.
+    With vnodes, refresh only loads the local sstables, so use the caller-supplied timeout.
+    """
+    if tablets_enabled:
+        return _get_tablet_migration_timeout(node_info_service, timeout=timeout, tablets_enabled=True)
+    soft_timeout, node_info = _get_soft_timeout(node_info_service=node_info_service, timeout=timeout)
+    return (soft_timeout, None), node_info
+
+
 def _get_soft_timeout(
     node_info_service: NodeLoadInfoService, timeout: int | float = None
 ) -> tuple[int | float, dict[str, Any]]:
@@ -241,6 +258,7 @@ class Operations(Enum):
         ("timeout", "service_level_for_test_step"),
     )
     TABLET_MIGRATION = ("tablet_migration", _get_tablet_migration_timeout, ("timeout",))
+    REFRESH = ("refresh", _get_refresh_timeout, ("timeout",))
     HEALTHCHECK = ("healthcheck", _get_soft_timeout, ("timeout",))
     SSH_CONNECTIVITY = ("ssh_connectivity", _get_soft_timeout_no_node_info, ("timeout",))
 
@@ -319,7 +337,12 @@ def adaptive_timeout(  # noqa: PLR0914
     Also store node load info and timeout value in AdaptiveTimeoutStore (ES by default) for future reference.
     Use Operation.SOFT_TIMEOUT to set timeout explicitly without calculations.
     """
-    tablet_sensitive_op = operation in {Operations.DECOMMISSION, Operations.NEW_NODE, Operations.TABLET_MIGRATION}
+    tablet_sensitive_op = operation in {
+        Operations.DECOMMISSION,
+        Operations.NEW_NODE,
+        Operations.TABLET_MIGRATION,
+        Operations.REFRESH,
+    }
     kwargs.setdefault("node_available", True)
 
     # in some situations we may want to skip tablet check, since it depends on ssh connectivity
