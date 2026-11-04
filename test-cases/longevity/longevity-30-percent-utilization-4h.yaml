@@ -1,0 +1,117 @@
+# Cluster:
+#   6 DB nodes (i8g.xlarge, ARM64), 3 simulated racks, 2 loaders
+#   RF=3, ICS compaction, server + client TLS
+#
+# Dataset:
+#   ~30% disk utilization on i8g.xlarge after prepare
+#   Sized from the available disk via stress_template_context
+#   2x write streams, each writing half of the rows
+#   512B x 4 columns
+#
+# Stress (stress_cmd, mixed):
+#   Reused across all three migration phases:
+#     - Pre-migration benchmark (60m)
+#     - Migration (killed when the migration ends; the 600m duration only has to outlast it,
+#       a run with three node replaces took ~6h)
+#     - Post-migration benchmark (60m)
+#
+# Verification (stress_read_cmd):
+#   After the post-migration benchmark, read every prepared row at CL=QUORUM.
+
+test_duration: 840
+
+# 6 DB nodes across 3 simulated racks (2 nodes per rack). With migration running
+# concurrently with disruptive nemesis, at least 2 nodes per rack are required to
+# keep quorum (RF=3) available while one node per rack is unavailable.
+n_db_nodes: 6
+n_loaders: 2
+seeds_num: 3
+simulated_racks: 3
+
+round_robin: true
+
+instance_type_db: 'i8g.xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+# disk utilization depends on IncrementalCompactionStrategy; keep it for the whole run
+nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
+nemesis_interval: 15
+
+user_prefix: 'longevity-30-percent-utilization-4h'
+
+pre_create_schema: true
+
+server_encrypt: true
+client_encrypt: true
+
+hinted_handoff: 'enabled'
+parallel_node_operations: true
+
+nemesis_during_prepare: false
+
+# Dataset is sized from the available disk.
+# fill_percent is the share of the usable /var/lib/scylla disk (per node, after RF) the prepare phase writes.
+# 30% fills ~30% of the disk on each node after prepare.
+stress_template_context:
+  fill_percent: 30
+  replication_factor: 3
+  col_count: 4
+  col_size_bytes: 512
+  row_size_bytes: "{{ col_count * col_size_bytes + 10 }}"  # + key
+  total_rows: "{{ ((effective_disk_size_bytes * db_node_count_per_dc * fill_percent) // 100 // replication_factor // row_size_bytes) | int }}"
+  rows_per_cmd: "{{ total_rows // 2 }}"
+  populated_rows: "{{ rows_per_cmd * 2 }}"
+
+prepare_write_cmd:
+  - >-
+    cassandra-stress write cl=QUORUM n={{ rows_per_cmd }}
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }}) compaction(strategy=IncrementalCompactionStrategy)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=1..{{ rows_per_cmd }}
+    -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})'
+    -log interval=5
+  - >-
+    cassandra-stress write cl=QUORUM n={{ rows_per_cmd }}
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }}) compaction(strategy=IncrementalCompactionStrategy)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq={{ rows_per_cmd + 1 }}..{{ populated_rows }}
+    -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})'
+    -log interval=5
+
+stress_cmd:
+  - >-
+    cassandra-stress mixed cl=QUORUM duration=600m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }}) compaction(strategy=IncrementalCompactionStrategy)'
+    -mode cql3 native
+    -rate threads=50 throttle=30000/s
+    -pop seq=1..{{ rows_per_cmd }}
+    -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})'
+    -log interval=5
+  - >-
+    cassandra-stress mixed cl=QUORUM duration=600m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={{ replication_factor }}) compaction(strategy=IncrementalCompactionStrategy)'
+    -mode cql3 native
+    -rate threads=50 throttle=30000/s
+    -pop seq={{ rows_per_cmd + 1 }}..{{ populated_rows }}
+    -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})'
+    -log interval=5
+
+stress_read_cmd:
+  - >-
+    cassandra-stress read cl=QUORUM n={{ rows_per_cmd }}
+    -mode cql3 native
+    -rate threads=100
+    -pop seq=1..{{ rows_per_cmd }}
+    -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})'
+    -log interval=5
+  - >-
+    cassandra-stress read cl=QUORUM n={{ rows_per_cmd }}
+    -mode cql3 native
+    -rate threads=100
+    -pop seq={{ rows_per_cmd + 1 }}..{{ populated_rows }}
+    -col 'n=FIXED({{ col_count }}) size=FIXED({{ col_size_bytes }})'
+    -log interval=5
+
+use_hdrhistogram: true
