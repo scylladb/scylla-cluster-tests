@@ -218,6 +218,42 @@ def test_tablets_new_node_uses_predefined_timeouts(
     assert metrics[0].get("tablets_enabled") is True
 
 
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_tablets_refresh_uses_predefined_timeouts(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
+):
+    # With tablets, refresh is a load-and-stream, which waits for a running topology operation first
+    mock_tablets_feature.return_value = True
+    with adaptive_timeout(
+        operation=Operations.REFRESH, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+    ) as timeout:
+        assert timeout == TABLETS_HARD_TIMEOUT
+
+    soft_timeout_mock.assert_not_called()
+    hard_timeout_mock.assert_not_called()
+    metrics = adaptive_timeout_store.get(operation=Operations.REFRESH.name)
+    assert metrics[0].get("tablets_enabled") is True
+    assert metrics[0]["hard_timeout"] == TABLETS_HARD_TIMEOUT
+
+
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_refresh_uses_caller_timeout_when_tablets_disabled(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store
+):
+    with adaptive_timeout(
+        operation=Operations.REFRESH, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+    ) as timeout:
+        assert timeout == 3600
+
+    soft_timeout_mock.assert_not_called()
+    hard_timeout_mock.assert_not_called()
+    metrics = adaptive_timeout_store.get(operation=Operations.REFRESH.name)
+    assert metrics[0]["node_name"] == "test-node"
+    assert metrics[0]["hard_timeout"] is None
+
+
 # ===== ArgusAdaptiveTimeoutStore hard_timeout reporting tests =====
 
 
