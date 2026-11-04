@@ -107,7 +107,7 @@ each collector persists in its own `store()`. The history is exposed through thr
 ```python
 for result in manager.get_results():
     print(result.collector_name, result.timestamp, result.collected, result.stored, result.error)
-    print(result.data)   # this cycle's snapshot — independent of every other cycle
+    print(result.data)  # this cycle's snapshot — independent of every other cycle
 ```
 
 Each cycle's `collect()` return value is recorded as an independent snapshot, so reading the
