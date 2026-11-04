@@ -286,6 +286,28 @@ def test_info_level_lines_keep_lower_severity_classification(line, expected):
     assert _classify(line).type == expected.type
 
 
+def test_mutation_write_exception_line_is_paxos_timeout():
+    line = (
+        "2026-11-03T14:31:24.998 db-node-1 !ERR | scylla[1] [shard 0] storage_proxy - exception during mutation write "
+        "to 10.0.0.1: exceptions::mutation_write_failure_exception (Operation failed for ks.t - received 0 responses "
+        "and 1 failures from 1 CL=ONE.)"
+    )
+    assert _classify(line).type == DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT.type
+
+
+def test_backtrace_frame_with_mutation_write_type_name_is_not_paxos_timeout():
+    """A frame of a decoded task backtrace, e.g. of a "topology version N held for X s past expiry" warning,
+    names the exception type in a template argument list: that's not a write timeout and must not raise an event."""
+    line = (
+        "seastar::internal::coroutine_traits_base<boost::outcome_v2::basic_result<"
+        "service::storage_proxy_coordinator_query_result, utils::exception_container<"
+        "exceptions::mutation_write_timeout_exception, exceptions::read_timeout_exception, "
+        "exceptions::read_failure_exception, exceptions::rate_limit_exception, exceptions::overloaded_exception, "
+        "exceptions::read_failure_exception_with_timeout>, utils::exception_container_throw_policy> >::promise_type"
+    )
+    assert _classify(line) is None
+
+
 NODE_NAME = "db-node-1"
 KS_CF = "ks_cf"
 MSG = "msg"
