@@ -598,7 +598,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
     def run_gradual_increase_load(self, workload: Workload, stress_num, num_loaders, test_name):  # noqa: PLR0914
         workload = self.update_num_threads_for_steps(workload=workload)
 
-        if workload.cs_cmd_warm_up is not None:
+        if workload.cs_cmd_warm_up:
             # Use the maximum thread count for warmup to ensure the cache is warmed up with the highest level of concurrency
             # Build warmup params dict
             max_threads = max(workload.num_threads)
