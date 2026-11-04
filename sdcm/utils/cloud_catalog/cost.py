@@ -29,7 +29,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
-from sdcm.provision.gce.constants import BUNDLED_LOCAL_SSD_FAMILIES
 from sdcm.sct_config.config import (
     SIZING_ROLE_PARAMS,
     SCTConfiguration,
@@ -45,6 +44,7 @@ from sdcm.utils.cloud_catalog.pricing import (
     catalog_price,
     catalog_spot_price,
 )
+from sdcm.utils.gce_machine_types import is_bundled_local_ssd_family
 
 LOGGER = logging.getLogger(__name__)
 
@@ -360,9 +360,9 @@ def estimate_run_cost(config: SCTConfiguration, duration_minutes: float | None =
     def role_is_spot(role: str, instance_type: str) -> bool:
         if backend == "xcloud" and role in _XCLOUD_MANAGED_ROLES:
             return False
-        # GCE types with bundled local SSD (z3) need on_host_maintenance=MIGRATE, which spot
+        # GCE types with bundled local SSD (z3, z4d) need on_host_maintenance=MIGRATE, which spot
         # cannot have, so SCT's GCE provisioning always requests them on-demand.
-        if cloud == "gce" and instance_type.split("-", maxsplit=1)[0] in BUNDLED_LOCAL_SSD_FAMILIES:
+        if cloud == "gce" and is_bundled_local_ssd_family(instance_type):
             return False
         return is_spot
 
