@@ -69,6 +69,7 @@ from sdcm.exceptions import (
     NoKeyspaceFound,
     QuotaConfigurationFailure,
     UnsupportedNemesis,
+    WaitForTimeoutError,
     WatcherCallableException,
 )
 from sdcm.log import SDCMAdapter
@@ -2127,7 +2128,19 @@ class NemesisRunner:
             mgr_task = mgr_cluster.create_repair_task(
                 ignore_down_hosts=ignore_down_hosts, incremental_mode=incremental_mode
             )
-            task_final_status = mgr_task.wait_and_get_final_status(timeout=timeout)  # timeout is 24 hours
+            try:
+                task_final_status = mgr_task.wait_and_get_final_status(timeout=timeout)
+            except WaitForTimeoutError:
+                # A repair left running makes later Manager repairs fail with "another task is running",
+                # and with tablets it keeps the topology busy, which blocks load-and-stream (nodetool refresh).
+                self.log.warning(
+                    "Stopping Scylla Manager repair task %s, it didn't finish in %ss", mgr_task.id, timeout
+                )
+                try:
+                    mgr_task.stop()
+                except Exception:  # noqa: BLE001
+                    self.log.error("Failed to stop Scylla Manager repair task %s", mgr_task.id, exc_info=True)
+                raise
             if task_final_status != TaskStatus.DONE:
                 progress_full_string = mgr_task.progress_string(
                     parse_table_res=False, is_verify_errorless_result=True
