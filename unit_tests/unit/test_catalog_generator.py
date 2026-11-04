@@ -20,6 +20,7 @@ from sdcm.utils.cloud_catalog import catalog_generator
 from sdcm.utils.cloud_catalog.catalog_generator import (
     _fetch_gce_resource_rates,
     _gce_price_for,
+    _parse_gce_storage_optimized_prices,
     generate_gce_catalog,
     generate_oci_catalog,
     write_catalog_file,
@@ -235,7 +236,9 @@ def test_gce_catalog_lssd_machine_types(monkeypatch):
         },
         "z3": {"us-central1": {"core": 0.02, "ram": 0.002, "ssd": 0.0001}},
     }
-    monkeypatch.setattr(catalog_generator, "_scrape_gce_z3_prices", lambda: {"z3-highmem-8-highlssd": {"r": 1.0}})
+    monkeypatch.setattr(
+        catalog_generator, "_scrape_gce_storage_optimized_prices", lambda _: {"z3-highmem-8-highlssd": {"r": 1.0}}
+    )
     on_demand_rates = {"c4": {"us-central1": {"core": 0.03, "ram": 0.004, "ssd": 0.0002}}}
     monkeypatch.setattr(catalog_generator, "_scrape_gce_general_prices", lambda _: {})
     monkeypatch.setattr(catalog_generator, "_fetch_gce_resource_rates", lambda: (spot_rates, on_demand_rates))
@@ -261,3 +264,90 @@ def test_gce_catalog_lssd_machine_types(monkeypatch):
     assert (z3.family, z3.local_disk_count, z3.local_disk_gb) == ("z3-highmem-highlssd", 1, 3000.0)
     assert z3.price_per_hour == {"r": 1.0}
     assert z3.spot_price_per_hour is None
+
+
+def test_gce_catalog_z4d_machine_types(monkeypatch):
+    """SCT-1384: z4d is listed from its own zone, sized by its 3500 GiB Titanium SSDs, and never priced at spot."""
+
+    def machine_type(name, vcpus, memory_gb, partitions):
+        return SimpleNamespace(
+            name=name,
+            guest_cpus=vcpus,
+            memory_mb=memory_gb * 1024,
+            architecture="X86_64",
+            bundled_local_ssds=SimpleNamespace(partition_count=partitions),
+        )
+
+    machine_types_by_zone = {
+        "us-east1-b": [machine_type("z3-highmem-8-highlssd", 8, 64, 1)],
+        "us-central1-a": [
+            machine_type("z3-highmem-8-highlssd", 8, 64, 1),
+            machine_type("z4d-highmem-16-highlssd", 16, 126, 2),
+            machine_type("z4d-highmem-16-standardlssd", 16, 126, 1),
+            machine_type("z4d-highmem-384-standardlssd-metal", 384, 3072, 12),
+        ],
+    }
+    scraped_series = []
+
+    def scrape(series):
+        scraped_series.extend(series)
+        return {"z4d-highmem-16-highlssd": {"us-central1": 2.5}, "z3-highmem-8-highlssd": {"us-east1": 1.0}}
+
+    monkeypatch.setattr(catalog_generator, "_scrape_gce_storage_optimized_prices", scrape)
+    monkeypatch.setattr(catalog_generator, "_scrape_gce_general_prices", lambda _: {})
+    spot_rates = {"z4d": {"us-central1": {"core": 0.02, "ram": 0.002, "ssd": 0.0001}}}
+    monkeypatch.setattr(catalog_generator, "_fetch_gce_resource_rates", lambda: (spot_rates, {}))
+    monkeypatch.setattr(catalog_generator, "KeyStore", lambda: SimpleNamespace(get_gcp_credentials=dict))
+    monkeypatch.setattr(catalog_generator.sa_module.Credentials, "from_service_account_info", lambda _: None)
+    monkeypatch.setattr(
+        catalog_generator.compute_v1,
+        "MachineTypesClient",
+        lambda **_: SimpleNamespace(list=lambda request: machine_types_by_zone[request.zone]),
+    )
+
+    result = generate_gce_catalog(["z3", "z4d"], project="p")
+
+    assert sorted(scraped_series) == ["z3", "z4d"]
+    # z3 comes from the default zone only, so a type offered in both zones is listed once.
+    assert sorted(i.instance_type for i in result) == [
+        "z3-highmem-8-highlssd",
+        "z4d-highmem-16-highlssd",
+        "z4d-highmem-16-standardlssd",
+        "z4d-highmem-384-standardlssd-metal",
+    ]
+    by_type = {i.instance_type: i for i in result}
+    highlssd = by_type["z4d-highmem-16-highlssd"]
+    assert (highlssd.family, highlssd.local_disk_count, highlssd.local_disk_gb) == ("z4d-highmem-highlssd", 2, 7000.0)
+    assert highlssd.price_per_hour == {"us-central1": 2.5}
+    assert highlssd.spot_price_per_hour is None
+    standardlssd = by_type["z4d-highmem-16-standardlssd"]
+    assert (standardlssd.family, standardlssd.local_disk_gb) == ("z4d-highmem-standardlssd", 3500.0)
+    assert standardlssd.spot_price_per_hour is None
+    metal = by_type["z4d-highmem-384-standardlssd-metal"]
+    assert (metal.local_disk_count, metal.local_disk_gb) == (12, 84000.0)
+
+
+def _pricing_row(machine_type: str, price: str) -> str:
+    return f'[[[1,1,null,[null,[null,"\\u003cp\\u003e{machine_type}\\u003c/p\\u003e"]]],[1,1,null,[null,[null,"{price} / 1 hour"]],1]]]'
+
+
+def test_parse_storage_optimized_prices_keeps_metal_apart():
+    """z4d-highmem-384-standardlssd is a prefix of its -metal type, which must not take its price."""
+    rows = "".join(
+        _pricing_row(machine_type, price)
+        for machine_type, price in [
+            ("z4d-highmem-16-standardlssd", "$2.1"),
+            # The pricing page's order: the -metal row after the prefix one, so it would take its price.
+            ("z4d-highmem-384-standardlssd", "$51.4"),
+            ("z4d-highmem-384-standardlssd-metal", "$51.6"),
+        ]
+    )
+    page = f'AF_initDataCallback({rows},"Iowa (us-central1)",[3],"z4d-highmem-with-standardlssd");'
+
+    prices = _parse_gce_storage_optimized_prices(page, ["z4d"])
+
+    assert prices == {
+        "z4d-highmem-16-standardlssd": {"us-central1": 2.1},
+        "z4d-highmem-384-standardlssd": {"us-central1": 51.4},
+        "z4d-highmem-384-standardlssd-metal": {"us-central1": 51.6},
+    }

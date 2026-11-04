@@ -116,6 +116,7 @@ clouds:
   gce:
     families:
       - z3
+      - z4d
       - n2d
       - n2
       - e2
