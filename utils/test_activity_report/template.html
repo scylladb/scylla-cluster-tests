@@ -1,0 +1,452 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCT test cost and activity report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the summary strip first, then full-width bands for the tables, then one column for prose. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #18202b; --ink-2: #4a5566; --ink-3: #6f7a8a;
+  --line: #dde2ea; --accent: #2c5bd6; --accent-soft: #e6edfc;
+  --product: #1d7a4f; --product-soft: #e2f3ea; --framework: #a35a00; --framework-soft: #fbeedb;
+  --critical: #b3261e; --critical-soft: #fbe5e3; --muted-soft: #eceff3;
+  --f-display: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11151b; --panel: #181e26; --ink: #e6eaf0; --ink-2: #b2bccb; --ink-3: #8a95a6;
+  --line: #2a323e; --accent: #7fa2ff; --accent-soft: #1f2a44;
+  --product: #5cc994; --product-soft: #16301f; --framework: #f0a94a; --framework-soft: #35260f;
+  --critical: #ff8a80; --critical-soft: #3a1a18; --muted-soft: #222a35; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #11151b; --panel: #181e26; --ink: #e6eaf0; --ink-2: #b2bccb; --ink-3: #8a95a6;
+  --line: #2a323e; --accent: #7fa2ff; --accent-soft: #1f2a44;
+  --product: #5cc994; --product-soft: #16301f; --framework: #f0a94a; --framework-soft: #35260f;
+  --critical: #ff8a80; --critical-soft: #3a1a18; --muted-soft: #222a35; color-scheme: dark }
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px }
+.wrap { max-width: 1440px; margin: 0 auto; display: grid; gap: 40px }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em }
+h1 { font-size: 2rem; line-height: 1.15 }
+h2 { font-size: 1.35rem }
+h3 { font-size: 1.05rem }
+p { margin: 0; max-width: 72ch }
+a { color: var(--accent) }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.eyebrow { font: 600 0.72rem/1 var(--f-display); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3) }
+header { display: grid; gap: 10px }
+header .meta { color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.92rem }
+header .meta b { color: var(--ink); font-weight: 700 }
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden }
+.stat { background: var(--panel); padding: 14px 16px; display: grid; gap: 4px; align-content: start }
+.stat .v { font: 500 1.5rem/1.1 var(--f-data); font-variant-numeric: tabular-nums }
+.kind { font: 600 0.66rem/1 var(--f-display); text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); margin-left: 4px }
+.kind.k-actual { color: var(--product) }
+.kind.k-mixed { color: var(--accent) }
+.stat .v small { font-size: 0.8rem; color: var(--ink-3) }
+.stat .l { font-size: 0.82rem; color: var(--ink-2) }
+section { display: grid; gap: 14px; min-width: 0 }
+.lead { color: var(--ink-2) }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center }
+.controls input[type=search], .controls select { font: inherit; font-size: 0.9rem; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); min-width: 0 }
+.controls input[type=search] { width: min(320px, 100%) }
+.chip { font: 600 0.8rem/1 var(--f-display); padding: 7px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); cursor: pointer }
+.chip[aria-pressed=true] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent) }
+.count { color: var(--ink-3); font-size: 0.85rem; margin-left: auto; font-variant-numeric: tabular-nums }
+.tablebox { overflow: auto; max-height: 78vh; border: 1px solid var(--line); border-radius: 8px; background: var(--panel) }
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap }
+th { position: sticky; top: 0; background: var(--panel); font: 600 0.74rem/1.2 var(--f-display); text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-2); z-index: 1; box-shadow: inset 0 -1px 0 var(--line) }
+th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center }
+th button:focus-visible { outline: 2px solid var(--accent) }
+th[aria-sort=ascending] button::after { content: "▲"; font-size: 0.6rem }
+th[aria-sort=descending] button::after { content: "▼"; font-size: 0.6rem }
+td.num, th.num { text-align: right; font-family: var(--f-data); font-variant-numeric: tabular-nums }
+td.test { white-space: normal; min-width: 260px; max-width: 420px; word-break: break-word }
+td.test .rel { display: block; color: var(--ink-3); font-size: 0.76rem }
+tr.main { cursor: pointer }
+tr.main:hover td { background: var(--muted-soft) }
+tr.detail td { background: var(--bg); white-space: normal }
+.pill { display: inline-block; font: 600 0.7rem/1 var(--f-display); padding: 4px 7px; border-radius: 4px; margin: 0 4px 3px 0; white-space: nowrap }
+.pill.fw { background: var(--framework-soft); color: var(--framework) }
+.pill.nl { background: var(--critical-soft); color: var(--critical) }
+.pill.ni { background: var(--muted-soft); color: var(--ink-2) }
+.pill.ur { background: var(--muted-soft); color: var(--ink-3) }
+.pill.uq { background: var(--product-soft); color: var(--product) }
+.n-prod { color: var(--product); font-weight: 600 }
+.n-fw { color: var(--framework); font-weight: 600 }
+.n-ov { color: var(--accent); font-weight: 600 }
+td.owner { white-space: normal; min-width: 130px; max-width: 220px }
+td.owner .src { display: block; color: var(--ink-3); font-size: 0.72rem }
+.zero { color: var(--ink-3) }
+.bar { display: inline-block; height: 6px; border-radius: 3px; background: var(--accent); vertical-align: middle; margin-left: 6px }
+.detailgrid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 18px }
+@media (max-width: 760px) { .detailgrid { grid-template-columns: 1fr } }
+.issues { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px }
+.issues li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; font-size: 0.84rem }
+.issues .runs { display: block; font-size: 0.78rem }
+.runlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 0.8rem; max-height: 320px; overflow: auto }
+.issues .area { font: 600 0.68rem/1.6 var(--f-display); text-transform: uppercase; letter-spacing: 0.05em }
+.area.product { color: var(--product) } .area.oversized { color: var(--accent) } .area.framework { color: var(--framework) } .area.other { color: var(--ink-3) }
+dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-size: 0.84rem }
+dl.kv dt { color: var(--ink-3) } dl.kv dd { margin: 0; font-family: var(--f-data); font-variant-numeric: tabular-nums }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap }
+.prose { display: grid; gap: 12px; max-width: 900px }
+.prose ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 80ch }
+.prose code, td code { font-family: var(--f-data); font-size: 0.86em; background: var(--muted-soft); padding: 1px 4px; border-radius: 3px }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 28px; align-items: start }
+.small { font-size: 0.84rem; color: var(--ink-2) }
+.srctable td { white-space: normal }
+.srctable td:first-child { white-space: nowrap; font-weight: 700 }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Argus and SCT pipelines</div>
+  <h1>SCT test cost and activity report</h1>
+  <p class="lead">The defined SCT tests that did not run. For each test that ran: its cost, duration, triage, owner and the issues linked to its runs. Issues found is one signal next to the others. It does not measure the coverage of a test, and coverage also matters.</p>
+  <div class="meta" id="meta"></div>
+</header>
+
+<div class="strip" id="strip"></div>
+
+<section id="notrun">
+  <h2>Defined tests with no run</h2>
+  <p class="lead" id="notrunLead"></p>
+  <div class="tabs">
+    <button class="chip" data-tab="defined" aria-pressed="true">Pipelines with no run</button>
+    <button class="chip" data-tab="jobs" aria-pressed="false">Release jobs with no run</button>
+    <button class="chip" data-tab="cases" aria-pressed="false">Test-cases no pipeline uses</button>
+  </div>
+  <div id="tab-defined" class="tabpanel">
+    <div class="controls">
+      <input type="search" id="q2" placeholder="Filter by name, path or owner" aria-label="Filter pipelines with no run">
+      <select id="folder" aria-label="Folder"><option value="">All folders</option></select>
+      <select id="lastf" aria-label="Last run"><option value="">Any last run</option><option value="never">Never ran</option><option value="old">Ran before the period</option></select>
+      <span class="count" id="count2"></span>
+    </div>
+    <div class="tablebox"><table id="t2"><thead></thead><tbody></tbody></table></div>
+  </div>
+  <div id="tab-jobs" class="tabpanel" hidden>
+    <p class="small">Enabled SCT jobs in the releases that had at least one run in the period, from the Argus test list (Argus mirrors the Jenkins job tree). "Pipeline ran elsewhere" means the same folder/job ran in another release, so only this release copy is idle.</p>
+    <div class="cols">
+      <div class="tablebox"><table id="t3"><thead><tr><th>Release</th><th class="num">Jobs with no run</th><th class="num">Pipeline ran elsewhere</th></tr></thead><tbody></tbody></table></div>
+      <div style="display:grid;gap:10px;min-width:0">
+        <div class="controls"><input type="search" id="q4" placeholder="Filter jobs whose pipeline ran elsewhere" aria-label="Filter jobs"><span class="count" id="count4"></span></div>
+        <div class="tablebox" style="max-height:60vh"><table id="t4"><thead><tr><th>Release</th><th>Job</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </div>
+  <div id="tab-cases" class="tabpanel" hidden>
+    <p class="small" id="casesLead"></p>
+    <div class="tablebox" style="max-height:60vh"><table id="t5"><thead><tr><th>Test-case file</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+<section id="tests">
+  <h2>Tests that ran</h2>
+  <p class="lead">One row per pipeline: the Jenkins folder and job name, summed over all releases it ran in. The table has no overall rank. It opens sorted by estimated total cost, and each column sorts. Click a row for its issues, its runs with Argus links, and its owner. The Release filter limits every count, the cost, the hours and the issues to the runs of that release.</p>
+  <p class="lead">"Failed runs looked at" shows how many failed runs of the test a person triaged in Argus. A failed run counts as looked at when its Argus investigation status is "investigated", "in progress" or "ignored", or when an issue is linked to it. A low share means that nobody triaged the failures. The issue counts of such a test can then be too low, because a failure with no triage has no linked issue. "–" means that the test had no failed run.</p>
+  <div class="controls">
+    <input type="search" id="q" placeholder="Filter by test name or issue key" aria-label="Filter by test name or issue key">
+    <select id="rel" aria-label="Release"><option value="">All releases</option></select>
+    <select id="be" aria-label="Backend"><option value="">All backends</option></select>
+    <select id="own" aria-label="Owner"><option value="">All owners</option><option value="__people">Argus plan assignee only</option><option value="__none">No owner</option></select>
+    <select id="kindf" aria-label="Cost source"><option value="">Any cost source</option><option value="actual">Actual</option><option value="estimated">Estimated</option><option value="mixed">Mixed</option><option value="non-cloud">$0 non-cloud</option><option value="no-data">No cost data</option></select>
+    <button class="chip" data-flag="not-looked-at" aria-pressed="false">Failures not looked at</button>
+    <button class="chip" data-flag="has-product" aria-pressed="false">Has product issues</button>
+    <button class="chip" data-flag="has-unique" aria-pressed="false">Has unique product issues</button>
+    <button class="chip" data-flag="framework-only" aria-pressed="false">Framework issues only</button>
+    <button class="chip" data-flag="no-issues" aria-pressed="false">No issues</button>
+    <button class="chip" data-flag="few-runs" aria-pressed="false">Fewer than 3 runs</button>
+    <span class="count" id="count"></span>
+  </div>
+  <div class="tablebox"><table id="t"><thead></thead><tbody></tbody></table></div>
+</section>
+
+<section class="prose" id="method">
+  <h2>Method</h2>
+  <ul id="methodList"></ul>
+</section>
+
+<section class="prose" id="sources">
+  <h2>Data source of each column</h2>
+  <div class="tablebox" style="max-height:none"><table class="srctable"><thead><tr><th>Column</th><th>Source</th></tr></thead><tbody id="srcBody"></tbody></table></div>
+</section>
+
+<section class="prose" id="gaps">
+  <h2>Data gaps</h2>
+  <ul id="gapList"></ul>
+</section>
+</div>
+
+<script>
+const D = /*__DATA__*/null;
+const S = D.summary;
+const fmt = (n, d = 0) => n == null ? "–" : Number(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const usd = (n, d = 0) => n == null ? "–" : "$" + fmt(n, d);
+const pct = x => x == null ? "–" : Math.round(x * 100) + "%";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---------- header ----------
+const failedAll = D.rows.reduce((a, r) => a + r.f, 0), lookedAll = D.rows.reduce((a, r) => a + r.fl, 0);
+document.getElementById("meta").innerHTML =
+  `<span>Period <b>${S.period[0]} to ${S.period[1]}</b> (run start time)</span>` +
+  `<span>Source <b>Argus</b>, SCT runs, and SCT at commit ${esc(S.sct_commit)}</span>` +
+  `<span>Data pulled <b>${S.generated.replace("T", " ")} UTC</b></span>`;
+const ownTxt = o => o.teams.length ? o.teams.join(", ") : o.people.length ? o.people.join(", ") : "";
+const stats = [
+  [fmt(S.not_run_defined), "defined pipelines with no run"],
+  [fmt(S.tests_in_scope), "tests that ran"],
+  [fmt(S.runs_in_scope), "runs in scope"],
+  [`${fmt(S.tests_with_cost)} <small>of ${fmt(S.tests_in_scope)}</small>`, "tests with a cost"],
+  [`${fmt(S.runs_by_kind.actual)} <small>+ ${fmt(S.runs_by_kind.estimated)} est.</small>`, "runs with actual cost, plus estimated"],
+  [`${fmt(S.runs_by_kind["no-data"])}`, "runs with no cost data"],
+  [usd(S.est_cost_with_data), "estimated total cost"],
+  [fmt(S.total_hours) + " h", "measured run time"],
+  [fmt(D.rows.reduce((a, r) => a + r.P, 0)), "product issues found"],
+  [`${fmt(D.rows.reduce((a, r) => a + r.U, 0))} <small>in ${fmt(D.rows.filter(r => r.U).length)} tests</small>`, "unique product issues"],
+  [fmt(D.rows.reduce((a, r) => a + r.OV, 0)), "oversized allocation issues found"],
+  [fmt(D.rows.reduce((a, r) => a + r.F, 0)), "framework issues found"],
+  [pct(failedAll ? lookedAll / failedAll : null), "failed runs looked at"],
+  [`${fmt(S.owner_rows.team + S.owner_rows.people_only)} <small>of ${fmt(S.tests_in_scope)}</small>`, "tests that ran with an owner"],
+];
+document.getElementById("strip").innerHTML = stats.map(([v, l]) => `<div class="stat"><span class="v">${v}</span><span class="l">${l}</span></div>`).join("");
+
+// ---------- tests that ran ----------
+const NODATA = `<span class="zero">no data</span>`;
+const KIND = { actual: "actual", estimated: "estimated", mixed: "mixed", "non-cloud": "$0 non-cloud", "no-data": "no data" };
+const COLS = [
+  ["est", "Est. total", "num"], ["t", "Test", ""], ["own", "Owner", ""],
+  ["n", "Runs", "num"], ["p", "Pass", "num"], ["f", "Fail", "num"], ["a", "Aborted", "num"],
+  ["looked", "Failed runs looked at", "num", "Failed runs with an Argus investigation status other than not investigated, or with a linked issue"],
+  ["mx", "Max cost/run", "num"], ["cn", "Runs with cost", "num"], ["h", "Est. total hours", "num"],
+  ["P", "Product", "num"], ["U", "Unique product", "num", "Distinct product issues that no other test links to in the period"],
+  ["OV", "Oversized alloc.", "num", "Links to oversized allocation issues, counted apart from product issues"],
+  ["F", "Framework", "num"], ["O", "Other", "num"], ["last", "Last run", ""], ["flags", "Flags", ""],
+];
+let sortKey = "est", sortDir = -1;
+const flagsOn = new Set();
+const thead = document.querySelector("#t thead"), tbody = document.querySelector("#t tbody");
+thead.innerHTML = "<tr>" + COLS.map(([k, l, c, tip]) => `<th class="${c}" data-k="${k}"${tip ? ` title="${tip}"` : ""}><button type="button">${l}</button></th>`).join("") + "</tr>";
+thead.addEventListener("click", e => {
+  const th = e.target.closest("th"); if (!th) return;
+  const k = th.dataset.k;
+  if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = ["t", "own"].includes(k) ? 1 : -1; }
+  render();
+});
+const rels = [...new Set(D.rows.flatMap(r => Object.keys(r.rel)))].sort();
+document.getElementById("rel").innerHTML += rels.map(r => `<option>${esc(r)}</option>`).join("");
+const bes = [...new Set(D.rows.flatMap(r => r.be.split("/")))].sort();
+document.getElementById("be").innerHTML += bes.map(r => `<option>${esc(r)}</option>`).join("");
+const teams = [...new Set(D.rows.flatMap(r => r.own.teams))].sort();
+document.getElementById("own").insertAdjacentHTML("beforeend", teams.map(t => `<option>${esc(t)}</option>`).join(""));
+document.querySelectorAll("#tests .chip").forEach(b => b.addEventListener("click", () => {
+  const f = b.dataset.flag; flagsOn.has(f) ? flagsOn.delete(f) : flagsOn.add(f);
+  b.setAttribute("aria-pressed", flagsOn.has(f)); render();
+}));
+["q", "rel", "be", "own", "kindf"].forEach(id => document.getElementById(id).addEventListener("input", render));
+const open = new Set();
+tbody.addEventListener("click", e => {
+  if (e.target.closest("a")) return;
+  const tr = e.target.closest("tr.main"); if (!tr) return;
+  const t = tr.dataset.t; open.has(t) ? open.delete(t) : open.add(t); render();
+});
+tbody.addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const tr = e.target.closest("tr.main"); if (!tr) return;
+  e.preventDefault(); const t = tr.dataset.t; open.has(t) ? open.delete(t) : open.add(t); render();
+  const again = tbody.querySelector(`tr.main[data-t="${CSS.escape(t)}"]`); again && again.focus();
+});
+
+function val(r, k) {
+  if (k === "flags") return r.flags.length;
+  if (k === "own") return ownTxt(r.own) || (sortDir > 0 ? "\uffff" : "");
+  const v = r[k];
+  return v == null ? (sortDir > 0 ? Infinity : -Infinity) : v;
+}
+function ownCell(o) {
+  if (o.teams.length) return `${esc(o.teams.join(", "))}<span class="src">SCT team</span>`;
+  if (o.people.length) return `${esc(o.people.join(", "))}<span class="src">Argus plan assignee</span>`;
+  return `<span class="zero">no owner</span>`;
+}
+function flagPills(r) {
+  const m = { "framework-only": ["fw", "Framework only"], "not-looked-at": ["nl", "Not looked at"], "no-issues": ["ni", "No issues"], "few-runs": ["ur", "Fewer than 3 runs"] };
+  return r.flags.map(f => `<span class="pill ${m[f][0]}">${m[f][1]}</span>`).join("");
+}
+const ARGUS = S.argus_url;
+const runUrl = id => `${ARGUS}/tests/scylla-cluster-tests/${id}`;
+const testUrl = id => `${ARGUS}/test/${id}/runs`;
+const RUNS_SHOWN = 40, ISSUE_RUNS_SHOWN = 8;
+function runLink(run, withRel) {
+  const [id, rel, bn, start, status] = run;
+  return `<a href="${runUrl(id)}" target="_blank" rel="noopener">${withRel ? esc(rel) + " " : ""}#${esc(bn ?? "?")}</a> <span class="zero">${esc(start.slice(0, 10))}, ${esc(status)}</span>`;
+}
+function detail(r) {
+  const multi = !r.selRel && Object.keys(r.rel).length > 1;
+  const iss = r.iss.map(([i, pos, u]) => [...D.issues[i], pos, u]);
+  const list = iss.length ? `<ul class="issues">${iss.map(([key, title, url, area, st, pos, u]) => {
+    const links = pos.slice(0, ISSUE_RUNS_SHOWN).map(i => runLink(r.runs[i], multi)).join(" · ");
+    const more = pos.length > ISSUE_RUNS_SHOWN ? ` · +${pos.length - ISSUE_RUNS_SHOWN} more` : "";
+    return `<li><span class="area ${area}">${area}</span><span>${u ? `<span class="pill uq">Unique</span>` : ""}<a href="${esc(url)}" target="_blank" rel="noopener">${esc(key)}</a> ${esc(title)} <span class="zero">(${esc(st)}, ${pos.length} linked run${pos.length === 1 ? "" : "s"})</span><span class="runs">${links}${more}</span></span></li>`;
+  }).join("")}</ul>`
+    : `<p class="small">No issue is linked to a run of this test${r.selRel ? " in this release" : ""} in the period.</p>`;
+  const runs = r.runs.filter(x => !r.selRel || x[1] === r.selRel);
+  const runList = `<ul class="runlist">${runs.slice(0, RUNS_SHOWN).map(x =>
+    `<li>${runLink(x, multi)} <span class="zero">by ${esc(x[5] || "?")}</span></li>`).join("")}</ul>` +
+    (runs.length > RUNS_SHOWN ? `<p class="small">Showing the newest ${RUNS_SHOWN} of ${runs.length} runs. The Argus test pages list all of them.</p>` : "");
+  const rels = Object.entries(r.rel).filter(([k]) => !r.selRel || k === r.selRel);
+  const rel = rels.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v} runs · ${r.tests.filter(([tr]) => tr === k)
+    .map(([, id], i, a) => `<a href="${testUrl(id)}" target="_blank" rel="noopener">Argus test${a.length > 1 ? " " + (i + 1) : ""}</a>`).join(" · ")}</dd>`).join("");
+  const inv = Object.entries(r.inv).map(([k, v]) => `${k.replace("_", " ")} ${v}`).join(", ") || "no failed runs";
+  return `<div class="detailgrid"><div style="display:grid;gap:14px"><div><h3>Linked issues in the period${r.selRel ? `, ${esc(r.selRel)}` : ""}</h3>${list}</div>
+  <div><h3>Runs in the period${r.selRel ? `, ${esc(r.selRel)}` : ""}</h3>${runList}</div></div>
+  <div style="display:grid;gap:14px;align-content:start"><dl class="kv">${rel}</dl>
+  <dl class="kv"><dt>Backend</dt><dd>${esc(r.be)}</dd><dt>Jobs</dt><dd>${r.jobs} Argus jobs</dd><dt>Timer runs</dt><dd>${r.timer} of ${r.n}</dd>
+  <dt>Unfinished</dt><dd>${r.run}</dd><dt>Failed, investigation</dt><dd>${esc(inv)}</dd>
+  <dt>Failed, looked at</dt><dd>${r.fl} of ${r.f}</dd><dt>Runs with cost</dt><dd>${r.cn} of ${r.n} (${r.cact} actual)</dd><dt>Cost source</dt><dd>${KIND[r.kind]}</dd>
+  <dt>Team (SCT)</dt><dd>${esc(r.own.teams.join(", ")) || "none"}</dd><dt>Argus plan assignees</dt><dd>${esc(r.own.people.join(", ")) || "none"}</dd></dl></div></div>`;
+}
+function render() {
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const rel = document.getElementById("rel").value, be = document.getElementById("be").value, own = document.getElementById("own").value, kf = document.getElementById("kindf").value;
+  // With a release selected, every count, cost and issue comes from the runs of that release only.
+  let rows = D.rows.filter(r => !rel || r.byRel[rel]).map(r => rel ? { ...r, ...r.byRel[rel], selRel: rel } : r).filter(r => {
+    if (q && !r.t.toLowerCase().includes(q) && !r.iss.some(([i]) => D.issues[i][0].toLowerCase().includes(q))) return false;
+    if (be && !r.be.split("/").includes(be)) return false;
+    if (own && (own === "__none" ? (r.own.teams.length || r.own.people.length)
+      : own === "__people" ? (r.own.teams.length || !r.own.people.length) : !r.own.teams.includes(own))) return false;
+    if (kf && r.kind !== kf) return false;
+    for (const f of flagsOn) {
+      if (f === "has-product" ? !r.P : f === "has-unique" ? !r.U : !r.flags.includes(f)) return false;
+    }
+    return true;
+  });
+  rows.sort((a, b) => {
+    const x = val(a, sortKey), y = val(b, sortKey);
+    return (typeof x === "string" ? x.localeCompare(y) : x - y) * sortDir || a.t.localeCompare(b.t);
+  });
+  thead.querySelectorAll("th").forEach(th => th.setAttribute("aria-sort", th.dataset.k === sortKey ? (sortDir > 0 ? "ascending" : "descending") : "none"));
+  document.getElementById("count").textContent = `${rows.length} of ${D.rows.length} tests` + (rel ? `, counts for ${rel} only` : "");
+  const maxCost = Math.max(1, ...rows.map(r => r.est || 0));
+  const z = (n, cls) => n ? `<span class="${cls}">${n}</span>` : `<span class="zero">0</span>`;
+  tbody.innerHTML = rows.map(r => {
+    const relNames = r.selRel ? [r.selRel] : Object.keys(r.rel);
+    const relTxt = relNames.slice(0, 3).join(", ") + (relNames.length > 3 ? ` +${relNames.length - 3}` : "");
+    const main = `<tr class="main" tabindex="0" data-t="${esc(r.t)}" aria-expanded="${open.has(r.t)}">
+      <td class="num">${r.est == null ? NODATA : usd(r.est, r.est < 10 ? 2 : 0) + `<span class="bar" style="width:${Math.max(1, Math.round(48 * r.est / maxCost))}px" aria-hidden="true"></span>`}</td>
+      <td class="test">${esc(r.t)}<span class="rel">${esc(relTxt)}</span></td>
+      <td class="owner">${ownCell(r.own)}</td>
+      <td class="num">${r.n}</td><td class="num">${r.p}</td><td class="num">${r.f}</td><td class="num">${r.a}</td>
+      <td class="num">${r.f ? `${pct(r.looked)} <span class="zero">${r.fl}/${r.f}</span>` : "–"}</td>
+      <td class="num">${r.mx == null ? NODATA : usd(r.mx, r.mx < 10 ? 2 : 0)} <span class="kind k-${r.kind}">${KIND[r.kind]}</span></td><td class="num">${r.cn}</td>
+      <td class="num">${fmt(r.h)}</td>
+      <td class="num">${z(r.P, "n-prod")}</td><td class="num">${z(r.U, "n-prod")}</td><td class="num">${z(r.OV, "n-ov")}</td><td class="num">${z(r.F, "n-fw")}</td><td class="num">${z(r.O, "")}</td>
+      <td>${r.last}</td><td>${flagPills(r)}</td></tr>`;
+    return main + (open.has(r.t) ? `<tr class="detail"><td></td><td colspan="${COLS.length - 1}">${detail(r)}</td></tr>` : "");
+  }).join("");
+}
+render();
+
+// ---------- not run ----------
+const nr = D.notRun;
+const never = nr.filter(x => !x.last).length;
+document.getElementById("notrunLead").textContent =
+  `${fmt(S.defined_jenkinsfiles)} pipelines are defined in jenkins-pipelines/ (jenkinsfiles plus _symlinks.yaml entries, trigger jobs left out). ` +
+  `${fmt(nr.length)} of them had no run outside staging and PR scans in the period. ${fmt(never)} of these never reported a run to Argus at all. ` +
+  `Pipelines in quarantine folders (${S.quarantine_dirs.join(", ")}) are left out. ` +
+  `${fmt(S.owner_not_run.team)} have an SCT team, ${fmt(S.owner_not_run.people_only)} have only an Argus plan assignee, and ${fmt(S.owner_not_run.none)} have no owner.`;
+document.querySelectorAll("#notrun .tabs .chip").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#notrun .tabs .chip").forEach(x => x.setAttribute("aria-pressed", x === b));
+  document.querySelectorAll("#notrun .tabpanel").forEach(p => p.hidden = p.id !== "tab-" + b.dataset.tab);
+}));
+const folders = [...new Set(nr.map(x => x.file.split("/").slice(1, -1).join("/")))].sort();
+document.getElementById("folder").innerHTML += folders.map(f => `<option>${esc(f)}</option>`).join("");
+document.querySelector("#t2 thead").innerHTML = "<tr><th>Pipeline (folder/job)</th><th>Owner</th><th>Jenkinsfile</th><th class=\"num\">Argus jobs</th><th>Last run ever</th><th>Ran in staging</th><th>Status</th></tr>";
+function renderNotRun() {
+  const q = document.getElementById("q2").value.trim().toLowerCase();
+  const fo = document.getElementById("folder").value, lf = document.getElementById("lastf").value;
+  const rows = nr.filter(x => (!q || (x.t + x.file + ownTxt(x.own)).toLowerCase().includes(q))
+    && (!fo || x.file.split("/").slice(1, -1).join("/") === fo)
+    && (!lf || (lf === "never" ? !x.last : !!x.last)));
+  rows.sort((a, b) => (b.last || "").localeCompare(a.last || "") || a.t.localeCompare(b.t));
+  document.getElementById("count2").textContent = `${rows.length} of ${nr.length}`;
+  document.querySelector("#t2 tbody").innerHTML = rows.map(x => `<tr><td>${esc(x.t)}</td><td class="owner">${ownCell(x.own)}</td><td><code>${esc(x.file)}</code></td>
+    <td class="num">${x.jobs ? `${x.en}/${x.jobs}` : `<span class="zero">none</span>`}</td>
+    <td>${x.last ? `${x.last} <span class="zero">${esc(x.ls)}</span>` : `<span class="zero">never</span>`}</td>
+    <td>${x.stg ? "yes" : ""}</td><td>${x.st === "active" ? "" : `<span class="pill ur">${esc(x.st)}</span>`}</td></tr>`).join("");
+}
+["q2", "folder", "lastf"].forEach(id => document.getElementById(id).addEventListener("input", renderNotRun));
+renderNotRun();
+document.querySelector("#t3 tbody").innerHTML = D.relNotRun.map(([r, n, e]) => `<tr><td>${esc(r)}</td><td class="num">${fmt(n)}</td><td class="num">${fmt(e)}</td></tr>`).join("");
+function renderJobs() {
+  const q = document.getElementById("q4").value.trim().toLowerCase();
+  const rows = D.jobsElsewhere.filter(j => !q || j[1].toLowerCase().includes(q));
+  document.getElementById("count4").textContent = `${rows.length} of ${D.jobsElsewhere.length}`;
+  document.querySelector("#t4 tbody").innerHTML = rows.slice(0, 600).map(j => `<tr><td>${esc(j[0])}</td><td><code>${esc(j[1])}</code></td></tr>`).join("") +
+    (rows.length > 600 ? `<tr><td colspan="2" class="zero">Showing 600. Filter to narrow the list.</td></tr>` : "");
+}
+document.getElementById("q4").addEventListener("input", renderJobs); renderJobs();
+document.getElementById("casesLead").textContent = `${D.unrefCases.length} of ${S.test_cases_total} files in test-cases/ are not named in any jenkinsfile. Some are used only as overlays or by other test-cases, so check each one before removal.`;
+document.querySelector("#t5 tbody").innerHTML = D.unrefCases.map(c => `<tr><td><code>${esc(c)}</code></td></tr>`).join("");
+
+// ---------- method, sources, gaps ----------
+const method = [
+  `Period: runs that started from ${S.period[0]} up to ${S.period[1]} (not included). The default period is the 6 months before the day of the report.`,
+  `Scope: Argus runs of the scylla-cluster-tests plugin, ${fmt(S.runs_total_pulled)} in total. The runs of ${S.excluded_releases.join(", ")} (${fmt(S.runs_excluded)}) are excluded, because they are development and PR checks, not scheduled tests. ${fmt(S.runs_in_scope)} runs remain.`,
+  `Test identity: the Jenkins folder and job name without the <code>-test</code> suffix, for example <code>longevity/longevity-10gb-3h-gce</code>. One jenkinsfile becomes one job in each release folder, so the rows sum all releases. The Argus test description is empty, so the join to jenkins-pipelines/ uses the jenkinsfile directory name and file stem. Some job trees add <code>-test</code> to the job name and some do not, so the key leaves the suffix out.`,
+  `Status: failed = <code>failed</code>, <code>test_error</code>, <code>error</code>. Aborted runs are a separate column. <code>running</code> and <code>created</code> runs are unfinished and do not count as pass or fail.`,
+  `Failed runs looked at: a failed run is a run with the status failed, test_error or error. Each Argus run has an investigation status, which the person who triages the run sets: not investigated, in progress, investigated or ignored. A failed run counts as looked at when this status is not "not investigated", or when at least one issue is linked to it. The column shows the share of failed runs looked at and the count, for example "50% 2/4". In the period, ${fmt(lookedAll)} of ${fmt(failedAll)} failed runs were looked at.`,
+  `Issues found: GitHub issues, GitHub pull requests and Jira issues linked in Argus to the runs of the test in the period. Each run that links to an issue counts as one issue found, also when the issue was found earlier or by another test. "Product", "Oversized alloc.", "Framework" and "Other" count these links per area. An issue linked to 4 runs of a test counts 4 times for that test.`,
+  `Unique product issues: distinct product issues that are linked to runs of one test only. Each issue counts once, not once per run. The check uses the in-scope runs of the period. An issue that is also linked to a run outside the period, or to a run in an excluded release, can thus show as unique. Variants of one test (for example the arm64 and x86_64 jobs) are different tests, so an issue that both variants found is not unique. Oversized allocation issues are not in this count.`,
+  `Oversized allocation: a product issue whose title names an oversized allocation (Seastar "oversized allocation" warnings, also spelled OVERSIZED_ALLOCATION) is in its own group, "Oversized alloc.". These issues are not in "Product" or "Unique product". ${fmt(S.area_counts.oversized || 0)} distinct issues are in this group.`,
+  `Areas: product = scylladb/scylladb, scylladb/scylla, scylladb/scylla-enterprise, scylla-machine-image, scylla-enterprise-machine-image, siren, siren-frontend, siren-devops, and the Jira projects SCYLLADB, SMI, CLOUD and SIREN. Framework = scylla-cluster-tests, scylla-qa-internal, argus, Jira SCT, QATOOLS and ARGUS. Other = all remaining repos and projects: ${Object.entries(S.other_repos).map(([k, v]) => `${esc(k)} (${v})`).join(", ")}.`,
+  `Cost of a run: the actual cost that SCT sends to Argus at the end of a run (SCT sends it since 2026-10-04). Without it, the cost is an estimate: run hours × the on-demand list price of each node. The estimate covers the db, loader and monitor nodes. It uses the backend, region, instance type and node count of the run's cloud setup in Argus. Kubernetes runs use the node instances (EKS on AWS prices, GKE on GCE prices). Scylla Cloud runs use the AWS or GCE price of the instance type that Argus records. Docker and bare-metal runs count as $0 and show as "$0 non-cloud".`,
+  `Prices: on-demand list prices from the SCT instance catalog <code>data/instance_catalog/*.yaml</code>, for the region of the run. For an instance type that the catalog does not have, the SCT pricing code asks the price API of the cloud vendor.`,
+  `Cost per run of a test: the maximum cost of its runs in the period, actual or estimated. A run with a low cost often did not finish, so the most expensive run sets the price. Estimated total = that maximum × the number of runs of the test in the period. The cost source shows "actual" when all priced runs have an actual cost, "estimated" when none has, and "mixed" otherwise.`,
+  `No cost data: a run whose cloud setup gives no instance type (no cloud setup in Argus, or "UNKNOWN") has no cost. A test with no run that has a cost shows "no data", never $0.`,
+  `Duration of a run: end time minus start time. When the end time is missing, the last heartbeat is the end. A run that stopped in setup has no end time and a heartbeat equal to its start, so it counts as 0 hours.`,
+  `Duration per run of a test: the maximum duration of its runs in the period, by the same rule as cost (a short run may not have finished). Estimated total hours = that maximum × the number of runs.`,
+  `Release filter: with a release selected, the row of a test uses only its runs in that release. Runs, pass, fail, triage, cost, hours, issue counts and the issue list all change. "Unique product" then means that no other test in that release links to the issue. The strip at the top always shows all releases.`,
+  `No overall rank: issues found is one signal. Cost, duration, triage and owner stand next to it, and the coverage of a test is not measured here. So the table gives no single score. It opens sorted by estimated total cost.`,
+  `Owner: the SCT team comes from <code>test_metadata.team_ownership</code> in the test-case YAML files that the jenkinsfile names. When no test-case has it, the owner is the Argus release-plan assignee of the test's Argus jobs, in the releases in scope. When neither exists, the test shows "no owner". The Argus test record has an assignee field, but it is empty for all tests.`,
+  `Flags: "Framework only" = framework issues and no product issue. "Not looked at" = at least 2 failed runs and none of them looked at. "No issues" = no linked issue of any area. "Fewer than 3 runs" = fewer than 3 finished runs in the period.`,
+  `Defined tests: every jenkinsfile in jenkins-pipelines/ and every entry in a _symlinks.yaml. Trigger jobs are left out. Pipelines in the quarantine folders are left out: ${S.quarantine_dirs.map(d => `<code>${d}</code>`).join(", ")} (${S.quarantined_pipelines.length} pipeline: ${S.quarantined_pipelines.join(", ")}). A symlink entry whose target is in a quarantine folder is left out too. A pipeline has no run when no in-scope run of its folder/job exists in the period. Jenkins itself was not queried. Argus mirrors the Jenkins job tree, so the Argus test list stands in for the Jenkins job list.`,
+  `Rebuild: <code>uv run sct.py test-activity-report --since YYYY-MM-DD --until YYYY-MM-DD</code> writes this page for a new period.`,
+];
+document.getElementById("methodList").innerHTML = method.map(m => `<li>${m}</li>`).join("");
+const src = [
+  ["Test, Releases", "Argus test list: GET /api/v1/releases, /api/v1/groups, /api/v1/tests (build_system_id, release name)."],
+  ["Runs, Pass, Fail, Aborted", "Argus runs: GET /api/v1/test/{id}/runs?full=true&after=… (status)."],
+  ["Product, Unique product, Oversized alloc., Framework, Other", "Argus issue links: GET /api/v1/issues/get?filterKey=release_id&aggregateByIssue=true (owner/repo, Jira project, run_id)."],
+  ["Owner", `SCT test-cases/ test_metadata.team_ownership at commit ${S.sct_commit}. Else Argus release-plan assignees: GET /api/v1/release/assignees/tests?groupId=… and GET /api/v1/users.`],
+  ["Failed runs looked at", "Argus runs (status, investigation_status) and the Argus issue links."],
+  ["Max cost/run, Runs with cost, Est. total", "Argus run cost GET /api/v1/cost/run/{id} (actual_cost), queried for runs that started on or after 2026-10-01. Else the estimate from Argus run cloud_setup, region_name and duration with vendor prices (see Method)."],
+  ["Est. total hours", "Argus runs: start_time, end_time and heartbeat. Est. total hours is computed (see Method)."],
+  ["Last run", "Argus runs: latest start_time in the period."],
+  ["Argus links", `Run page ${esc(S.argus_url)}/tests/scylla-cluster-tests/{run_id}. Test page ${esc(S.argus_url)}/test/{test_id}/runs. Build number, status and started_by come from the Argus runs.`],
+  ["Pipelines with no run", `jenkins-pipelines/ in scylla-cluster-tests at commit ${S.sct_commit}, compared with the Argus runs. Last run ever: GET /api/v1/test/{id}/runs?limit=1.`],
+  ["Release jobs with no run", "Argus test list (enabled jobs) compared with the Argus runs."],
+  ["Test-cases no pipeline uses", "test-cases/ compared with the test-cases paths named in the jenkinsfiles."],
+];
+document.getElementById("srcBody").innerHTML = src.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
+const gaps = [
+  `Actual cost exists only for runs from 2026-10-04 on (${fmt(S.runs_by_kind.actual)} runs). ${fmt(S.runs_by_kind.estimated)} runs use the estimate. ${fmt(S.runs_by_kind["non-cloud"])} runs are non-cloud at $0. ${fmt(S.runs_by_kind["no-data"])} runs have no cost data (${fmt(S.no_data_reasons["no-setup"] || 0)} with no cloud setup in Argus, ${fmt(S.no_data_reasons["no-instance-type"] || 0)} with an UNKNOWN instance type, ${fmt(S.no_data_reasons["no-price"] || 0)} with an instance type that has no price).`,
+  `The estimate and the actual cost can differ much for one run. The estimate uses the node count at the start of the run, so nodes that nemeses or scale tests add later are not in it.`,
+  `Prices are on-demand list prices. Spot discounts and committed-use discounts are not in them. Scylla Cloud runs are priced as plain cloud instances, not at Scylla Cloud rates. The EKS and GKE cluster fees are not in it.`,
+  `The maximum comes from one run. One run that was longer or larger than usual raises the estimated total for the whole period.`,
+  `Actual and estimated cost cover the db, loader and monitor instances. They leave out the SCT runner, Jenkins builders, disks, network and snapshots.`,
+  `Estimated total multiplies by all runs of the test, also the runs in releases that use a different instance type or duration.`,
+  `${fmt(S.runs_end_from_heartbeat)} finished runs have no end time. Most stopped in setup and count as 0 hours.`,
+  `Issue counts depend on people linking issues in Argus. An issue filed but not linked to a run is missed. Run comments are not read, so a comment alone does not count as "looked at".`,
+  `The area of an issue comes from its repository or Jira project, not from its root cause. Operator, Manager, driver and tool issues are in "other".`,
+  `Owner: ${fmt(S.owner_rows.none)} of ${fmt(S.tests_in_scope)} tests that ran, and ${fmt(S.owner_not_run.none)} of ${fmt(S.not_run_defined)} pipelines with no run, have no owner in SCT or Argus. An Argus plan assignee is the person who triages the test in a release plan, not always the owning team.`,
+  `Coverage is not measured. A test that finds few issues can still be the only test of a feature or a backend.`,
+  `Argus applies the period start in its local time, so runs within a few hours of ${S.period[0]} can be in or out.`,
+  `Jenkins was not queried. The Argus job list follows the Jenkins scan, which can lag behind new or deleted jobs.`,
+];
+document.getElementById("gapList").innerHTML = gaps.map(g => `<li>${g}</li>`).join("");
+</script>
