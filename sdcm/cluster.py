@@ -203,8 +203,8 @@ from sdcm.utils.grafana_api import (
     upload_dashboard,
 )
 from sdcm.utils.health_checker import (
+    CHECK_NODE_HEALTH_MAX_RETRY_DELAY,
     CHECK_NODE_HEALTH_RETRIES,
-    CHECK_NODE_HEALTH_RETRY_DELAY,
     check_group0_tokenring_consistency,
     check_node_status_in_gossip_and_nodetool_status,
     check_nodes_status,
@@ -243,7 +243,7 @@ from sdcm.utils.version_utils import (
     get_systemd_version,
     is_enterprise,
 )
-from sdcm.wait import wait_for_log_lines
+from sdcm.wait import exponential_backoff_delay, wait_for_log_lines
 
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
@@ -4139,12 +4139,13 @@ class BaseNode(AutoSshContainerMixin):
 
             event.dont_publish()
 
+            delay = exponential_backoff_delay(retry_n, CHECK_NODE_HEALTH_MAX_RETRY_DELAY)
             LOGGER.debug(
                 "Wait for %d secs before next try to validate the health of the node `%s'",
-                CHECK_NODE_HEALTH_RETRY_DELAY,
+                delay,
                 self.name,
             )
-            time.sleep(CHECK_NODE_HEALTH_RETRY_DELAY)
+            time.sleep(delay)
 
     def get_nodes_status(self, nodes: list[BaseNode] | None = None) -> dict[BaseNode, dict]:
         nodes_status = {}

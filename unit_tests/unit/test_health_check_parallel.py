@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sdcm.cluster import BaseScyllaCluster, ClusterHealthCheckError
+from sdcm.cluster import BaseNode, BaseScyllaCluster, ClusterHealthCheckError
 
 
 @pytest.fixture
@@ -209,3 +209,19 @@ def test_parallel_workers_bounds_checking(mock_event_cls, mock_timeout, cluster_
     # All nodes should be checked regardless of worker count
     for node in cluster_instance.nodes:
         node.check_node_health.assert_called_once_with()
+
+
+@patch("sdcm.cluster.time.sleep")
+def test_check_node_health_backs_off_and_publishes_on_last_attempt(mock_sleep):
+    """A node that never agrees is tried 12 times with 1/2/4/8/15... s between attempts; only the last attempt publishes."""
+    node = MagicMock()
+    failing_events = [MagicMock() for _ in range(12)]
+    node.node_health_events.side_effect = [iter([event]) for event in failing_events]
+
+    BaseNode.check_node_health(node)
+
+    assert [call.args[0] for call in mock_sleep.call_args_list] == [1, 2, 4, 8] + [15] * 7
+    for event in failing_events[:-1]:
+        event.dont_publish.assert_called_once_with()
+        event.publish.assert_not_called()
+    failing_events[-1].publish.assert_called_once_with()
