@@ -422,12 +422,16 @@ def test_check_group0_tokenring_consistency_member_missing_from_token_ring_repor
     )
 
 
-def test_check_group0_tokenring_consistency_failed_group0_read_warns(raft_node, non_voter_token_ring):
+def test_check_group0_tokenring_consistency_failed_group0_read_warns(raft_node):
     """A failed group0 read (empty members) with a populated token ring is reported, not passed as consistent."""
     raft = RaftFeature(raft_node)
+    tokenring_members = [
+        TokenRingMember(host_id="host-1", ip_address="127.0.0.1"),
+        TokenRingMember(host_id="host-2", ip_address="127.0.0.2"),
+    ]
 
     with patch.object(RaftFeature, "search_inconsistent_host_ids") as search:
-        events = list(raft.check_group0_tokenring_consistency([], non_voter_token_ring))
+        events = list(raft.check_group0_tokenring_consistency([], tokenring_members))
 
     assert len(events) == 1
     assert events[0].severity == Severity.WARNING
