@@ -181,6 +181,7 @@ from unit_tests.unit.nemesis.fake_cluster import FakeTester
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 from utils.build_system.throttle_categories import ThrottleCategory, ThrottleCategoryManager
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion, fetch_official_supported_versions
+from utils.test_activity_report.report import write_report
 
 SUPPORTED_CLOUDS = (
     "aws",
@@ -2666,6 +2667,32 @@ def run_pytest(target, backend, config, logdir):
     test_config.init_argus_client(params=SCTConfiguration())
     test_config.argus_client().sct_submit_junit_report(file_name=junit_file.name, raw_content=junit_file.read_text())
     sys.exit(return_code)
+
+
+@cli.command("test-activity-report", help="Write the SCT test cost and activity report (HTML) from Argus data")
+@click.option(
+    "--since",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="First day of the period. Default: 6 months before --until.",
+)
+@click.option("--until", type=click.DateTime(formats=["%Y-%m-%d"]), help="Day after the period. Default: today.")
+@click.option("--output", default="test-activity-report.html", show_default=True, type=click.Path(dir_okay=False))
+@click.option("--workers", default=6, show_default=True, help="Parallel Argus requests")
+def test_activity_report(since, until, output, workers):
+    """Read Argus (GET only) and the pipelines in this checkout, and write one HTML page.
+
+    The page lists the defined pipelines with no run in the period, and the cost, duration, triage,
+    owner and linked issues of each test that ran.
+    """
+    add_file_logger()
+    until = (until or datetime.now(UTC)).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=UTC)
+    since = since.replace(tzinfo=UTC) if since else until - timedelta(days=183)
+    summary = write_report(Path(sct_abs_path("")), since, until, Path(output), workers)
+    click.secho(
+        f"Wrote {output}: {summary['tests_in_scope']} tests that ran, "
+        f"{summary['not_run_defined']} defined pipelines with no run, {summary['period'][0]} to {summary['period'][1]}",
+        fg="green",
+    )
 
 
 @cli.command("cloud-usage-report", help="Generate and send Cloud usage report")
