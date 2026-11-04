@@ -91,6 +91,8 @@ lint.select = [
     "PIE",
     "B006",
     "PLW", # mainly for PLW0211
+    "D200", "D202", "D209", "D300", "D402", "D403",  # docstring formatting
+    "D405", "D410", "D411", "D412", "D416",  # docstring sections
 ]
 lint.ignore = ["E501", "PLR2004", "PLR0917"]
 
@@ -103,6 +105,9 @@ target-version = "py315"
 force-exclude = true
 line-length = 120
 respect-gitignore = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.pylint]
 max-args = 12
