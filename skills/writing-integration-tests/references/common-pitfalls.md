@@ -32,6 +32,7 @@ import pytest
 
 pytestmark = [pytest.mark.integration]
 
+
 def test_cql_query(docker_scylla):
     # All tests in this module are integration tests
     ...
@@ -102,6 +103,7 @@ def s3_bucket():
     # Cleanup always runs, even on failure
     s3.delete_bucket(Bucket=bucket_name)
 
+
 @pytest.mark.integration
 def test_bucket_operations(s3_bucket):
     s3 = boto3.client("s3")
@@ -149,6 +151,7 @@ def test_immediate_query(docker_scylla):
 The `docker_scylla` fixture already waits for CQL and Alternator ports. If you start your own services, use `wait.wait_for`:
 ```python
 from sdcm import wait
+
 
 @pytest.mark.integration
 def test_custom_service():
@@ -201,6 +204,7 @@ Tests that share a Docker container or expensive resource should use `@pytest.ma
 def test_01_create_table(docker_scylla):
     docker_scylla.run("cqlsh -e 'CREATE TABLE ...'")
 
+
 @pytest.mark.integration
 def test_02_insert_data(docker_scylla):
     # May get a DIFFERENT docker_scylla instance in parallel!
@@ -211,13 +215,12 @@ def test_02_insert_data(docker_scylla):
 ```python
 @pytest.mark.integration
 @pytest.mark.xdist_group("scylla-crud")
-def test_01_create_table(docker_scylla):
-    ...
+def test_01_create_table(docker_scylla): ...
+
 
 @pytest.mark.integration
 @pytest.mark.xdist_group("scylla-crud")
-def test_02_insert_data(docker_scylla):
-    ...
+def test_02_insert_data(docker_scylla): ...
 ```
 
 ---
@@ -282,8 +285,7 @@ Always provide a `reason` for skipped tests so developers know what's missing.
 ❌ **Bad:**
 ```python
 @pytest.mark.skip
-def test_azure_provisioning():
-    ...
+def test_azure_provisioning(): ...
 ```
 
 ✅ **Good:**
@@ -292,8 +294,7 @@ def test_azure_provisioning():
     not os.environ.get("AZURE_SUBSCRIPTION_ID"),
     reason="Azure credentials not configured — set AZURE_SUBSCRIPTION_ID",
 )
-def test_azure_provisioning():
-    ...
+def test_azure_provisioning(): ...
 ```
 
 ### AP-3: Ignoring Test Timeouts

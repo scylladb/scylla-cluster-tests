@@ -404,17 +404,22 @@ def test_with_fixture(tmpdir):
     test_file.write("key: value")
     assert test_file.read() == "key: value"
 
+
 # Testing exceptions
 def test_raises_exception():
     """Test that function raises expected exception."""
     with pytest.raises(ValueError, match="Invalid input"):
         function_that_should_fail("bad_input")
 
+
 # Parametrized tests
-@pytest.mark.parametrize("input,expected", [
-    ("value1", "result1"),
-    ("value2", "result2"),
-])
+@pytest.mark.parametrize(
+    "input,expected",
+    [
+        ("value1", "result1"),
+        ("value2", "result2"),
+    ],
+)
 def test_multiple_cases(input, expected):
     """Test multiple cases efficiently."""
     assert function(input) == expected
