@@ -18,6 +18,7 @@ def test_fetch_ami():
 ```python
 from unittest.mock import patch, MagicMock
 
+
 def test_fetch_ami():
     mock_client = MagicMock()
     mock_client.describe_images.return_value = {"Images": [{"ImageId": "ami-123"}]}
@@ -36,6 +37,7 @@ SCT requires pytest-style tests. `unittest.TestCase` breaks fixture injection an
 class TestConfig(unittest.TestCase):
     def setUp(self):
         self.config = create_config()
+
     def test_value(self):
         self.assertEqual(self.config.get("key"), "value")
 ```
@@ -45,6 +47,7 @@ class TestConfig(unittest.TestCase):
 @pytest.fixture
 def config():
     return create_config()
+
 
 def test_value(config):
     assert config.get("key") == "value"
@@ -60,6 +63,7 @@ This includes importing utility modules inside test functions to access module-l
 ```python
 def test_something():
     from sdcm.utils.common import get_data_dir_path  # inline import
+
     path = get_data_dir_path("test_data")
 ```
 
@@ -67,6 +71,7 @@ def test_something():
 ```python
 def test_presets():
     import utils.staging_trigger.constants as mod  # inline import
+
     mod._PRESETS = None
     ...
     mod._PRESETS = None
@@ -77,8 +82,10 @@ def test_presets():
 import utils.staging_trigger.constants as constants_mod
 from sdcm.utils.common import get_data_dir_path
 
+
 def test_something():
     path = get_data_dir_path("test_data")
+
 
 def test_presets():
     constants_mod._PRESETS = None
@@ -138,8 +145,12 @@ def config_file(tmp_path):
 ❌ **Bad:**
 ```python
 _shared_state = {}
+
+
 def test_01_setup():
     _shared_state["node"] = create_node()
+
+
 def test_02_verify():
     assert _shared_state["node"].is_up()  # fails if test_01 doesn't run first
 ```
@@ -151,6 +162,7 @@ def node():
     n = create_node()
     yield n
     n.cleanup()
+
 
 def test_node_is_up(node):
     assert node.is_up()
@@ -350,6 +362,7 @@ def _make_runner(disruptions):
     runner.disruptions_list = disruptions
     return runner
 
+
 def test_run_stops_after_skips(events_function_scope):
     runner = _make_runner(disruptions=[])  # events not wired to runner
     runner.disruptions_list = [SkippingTestNemesis(runner=runner)]
@@ -369,7 +382,9 @@ def make_nemesis_runner(events_function_scope):
         if disruptions is not None:
             runner.disruptions_list = disruptions
         return runner
+
     return _make
+
 
 # test file
 def test_run_stops_after_skips(make_nemesis_runner, events_function_scope):
@@ -383,7 +398,9 @@ def test_run_stops_after_skips(make_nemesis_runner, events_function_scope):
 ```python
 def _make_logger(logger_class, tmp_path):
     if issubclass(logger_class, HDRHistogramFileLogger):
-        return logger_class(node=MagicMock(), remote_log_file="/tmp/remote.hdr", target_log_file=str(tmp_path / "target.hdr"))
+        return logger_class(
+            node=MagicMock(), remote_log_file="/tmp/remote.hdr", target_log_file=str(tmp_path / "target.hdr")
+        )
     return logger_class(node=MagicMock(), target_log_file=str(tmp_path / "target.log"))
 
 
@@ -399,12 +416,13 @@ def test_stop_releases_the_pool_worker(logger_class, tmp_path):
 def logger(request, tmp_path):
     """One real logger of each kind that owns a log-follower pool."""
     if request.param == "hdr":
-        return HDRHistogramFileLogger(node=_node(), remote_log_file="/tmp/remote.hdr", target_log_file=str(tmp_path / "target.hdr"))
+        return HDRHistogramFileLogger(
+            node=_node(), remote_log_file="/tmp/remote.hdr", target_log_file=str(tmp_path / "target.hdr")
+        )
     return SSHGeneralSystemdLogger(node=_node(), target_log_file=str(tmp_path / "target.log"))
 
 
-def test_stop_releases_the_pool_worker(logger):
-    ...
+def test_stop_releases_the_pool_worker(logger): ...
 ```
 
 See also: [anti-patterns.md](anti-patterns.md) for broader testing anti-patterns.
@@ -433,6 +451,7 @@ def test_b(fake_node, ...):
 ✅ **Good — add an `autouse` fixture that clears the Singleton's mutable state after each test:**
 ```python
 from sdcm.utils.adaptive_timeouts.load_info_store import NodeLoadInfoServices
+
 
 @pytest.fixture(autouse=True)
 def clear_node_load_info_services_singleton():
@@ -518,8 +537,7 @@ Fixtures and helper classes go at the top of the module, after imports and const
 
 ❌ **Bad — PR #16093: underscore fixture defined halfway down the file:**
 ```python
-def test_fake_oci_image_is_indexable_as_the_resolvers_expect():
-    ...
+def test_fake_oci_image_is_indexable_as_the_resolvers_expect(): ...
 
 
 @pytest.fixture
@@ -528,8 +546,7 @@ def _restore_root_logger():
     ...
 
 
-def test_capacity_reservation_pipeline_lints_without_reaching_ec2(_restore_root_logger):
-    ...
+def test_capacity_reservation_pipeline_lints_without_reaching_ec2(_restore_root_logger): ...
 ```
 
 ✅ **Good — public name, shared via `conftest.py`:**

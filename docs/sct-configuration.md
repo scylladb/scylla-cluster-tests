@@ -21,6 +21,7 @@ The `SCTConfiguration` class in `sdcm/sct_config/config.py` is a Pydantic `BaseM
 from pydantic import BaseModel
 from sdcm.sct_config.types import SctField, StringOrList, IntOrList
 
+
 class SCTConfiguration(BaseModel):
     test_duration: int = SctField(
         description="Test duration in minutes",
@@ -93,6 +94,7 @@ For configuration options with a fixed set of allowed values, use `Literal`:
 
 ```python
 from typing import Literal
+
 
 class SCTConfiguration(BaseModel):
     ip_ssh_connections: Literal["public", "private", "ipv6"] = SctField(
@@ -220,12 +222,13 @@ If you need custom validation, add a Pydantic validator:
 ```python
 from pydantic import field_validator
 
+
 class SCTConfiguration(BaseModel):
     my_new_option: int = SctField(
         description="Must be between 1 and 100",
     )
 
-    @field_validator('my_new_option')
+    @field_validator("my_new_option")
     @classmethod
     def validate_my_new_option(cls, value):
         if value and not (1 <= value <= 100):
@@ -238,6 +241,7 @@ class SCTConfiguration(BaseModel):
 ```python
 # In sdcm/sct_config/config.py
 from typing import Literal
+
 
 class SCTConfiguration(BaseModel):
     # ... existing fields ...
@@ -261,7 +265,7 @@ class SCTConfiguration(BaseModel):
         description="Custom commands to run",
     )
 
-    @field_validator('custom_timeout')
+    @field_validator("custom_timeout")
     @classmethod
     def validate_custom_timeout(cls, value):
         if isinstance(value, list):
@@ -344,7 +348,7 @@ class MyTest(ClusterTester):
         duration = self.params.test_duration
 
         # Access via get() method (returns None if not set)
-        version = self.params.get('scylla_version')
+        version = self.params.get("scylla_version")
 
         # WARNING: config.get() with default parameter does NOT work like dict.get()!
         # Do NOT use: timeout = self.params.get('custom_timeout', 300)
@@ -353,7 +357,7 @@ class MyTest(ClusterTester):
         timeout = self.params.custom_timeout  # Will use YAML default
 
         # Check if value exists (truthiness check)
-        if self.params.get('enable_custom_feature'):
+        if self.params.get("enable_custom_feature"):
             self.run_custom_feature()
 ```
 
@@ -422,7 +426,7 @@ config_options = [
 ]
 
 # Access
-duration = config['test_duration']
+duration = config["test_duration"]
 ```
 
 **New way** (Pydantic-based):
@@ -430,9 +434,10 @@ duration = config['test_duration']
 class SCTConfiguration(BaseModel):
     test_duration: int = SctField(description="...")
 
+
 # Access (both work)
-duration = config.test_duration      # Attribute access
-duration = config.get('test_duration')  # Dict-style access (backward compatible)
+duration = config.test_duration  # Attribute access
+duration = config.get("test_duration")  # Dict-style access (backward compatible)
 ```
 
 ## Troubleshooting
