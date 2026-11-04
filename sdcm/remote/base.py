@@ -208,6 +208,20 @@ class CommandRunner(metaclass=ABCMeta):
                 return True
         return False
 
+    @classmethod
+    def _is_copy_error_retryable(cls, err_str: str) -> bool:
+        """Check that a failed file copy (rsync/scp) can be safely retried.
+
+        A copy is idempotent, so unlike a command it can also be retried when sshd refused or dropped the connection
+        before the session started. sshd can refuse new connections for some seconds, e.g. during log collection
+        or while it restarts.
+        """
+        return cls._is_error_retryable(err_str) or bool(
+            re.search(
+                r"kex_exchange_identification|Connection (closed|reset) by \S+ port \d+|Connection refused", err_str
+            )
+        )
+
     @staticmethod
     def _scp_remote_escape(filename: str) -> str:
         """
