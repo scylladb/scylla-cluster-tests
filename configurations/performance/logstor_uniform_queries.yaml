@@ -4,7 +4,8 @@
 # Measured step: random uniform selection (distribution="random" -> hash_range(i, ROW_COUNT))
 # over an unbounded cycle range (no --end-cycle) so the key sequence never repeats within the run.
 # Schema: 10 columns x 200 bytes each (matching kv_uniform.rn reference)
-# Mixed (write:30,read:70) workload ramps to 600k ops/s before the 60m measured step
+# Steps: a 60m conditioning step that writes at 250k ops/s and reads at 100 ops/s, then the 60m
+# measured step, mixed (write:30,read:70) at 600k ops/s
 # This test is a part of the benchmark done by Aerospike
 # https://aerospike.com/files/benchmarks/aerospike-vs-scylladb-performance-and-cost-at-multi-terabyte-scale.pdf
 
@@ -20,10 +21,31 @@
 # are 1e10 apart. A 60m step at 1M ops/s uses 3.6e9 cycles, so the ranges do not overlap.
 # The populate uses the sequential distribution, which maps cycles to keys differently, so it
 # needs no range of its own.
+#
+# The first step conditions the logstor pool, and its results are not a measurement. The
+# populate writes each key once, so after it the pool holds live records and no dead records,
+# and logstor compaction has no work. A measurement on that pool shows a write amplification of
+# about 1 and no compaction cost, which is not the steady state of the workload.
+#
+# The conditioning step writes at 250k ops/s and reads at only 100 ops/s, because only
+# overwrites make dead records. The read command still runs, because stress_cmd_m is one template
+# for all the steps and a step cannot remove a command. At 100 ops/s, each HDR interval of the
+# read command still has samples. At this rate, the free segments of the pool drop to the default
+# logstor_compaction_trigger_threshold of 0.05 after about 35 minutes, and the rest of the step
+# lets compaction get to a steady state.
+#
+# The conditioning step sets wait_no_compactions to false, so that the measured step starts right
+# after the conditioning step. The wait between the steps watches only the
+# scylla_compaction_manager_compactions metric, which does not count logstor compaction, so the
+# wait adds an idle gap of 3 minutes or more and nothing else. In that gap, logstor compaction
+# frees segments with no foreground writes, so the measured step would start with more free
+# segments than in the steady state.
 perf_gradual_throttle_steps:
   mixed:
+    - {threads: 64, concurrency: 48, rate: '250000', write_rate: '250000', read_rate: '100',
+       write_start_cycle: 1, read_start_cycle: 5000000000, duration: '60m', wait_no_compactions: false}
     - {threads: 64, concurrency: 48, rate: '600000', write_rate: '180000', read_rate: '420000',
-       write_start_cycle: 1, read_start_cycle: 5000000000, duration: '60m'}
+       write_start_cycle: 10000000001, read_start_cycle: 15000000000, duration: '60m'}
 
 perf_gradual_step_duration: {"mixed": '60m'}
 
