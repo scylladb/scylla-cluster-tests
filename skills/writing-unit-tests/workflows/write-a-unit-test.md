@@ -43,6 +43,7 @@ A 4-phase process for creating a new unit test in the SCT repository.
    ```python
    from unittest.mock import patch, MagicMock
 
+
    def test_something(monkeypatch):
        monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
        with patch("boto3.client") as mock_client:
@@ -54,6 +55,7 @@ A 4-phase process for creating a new unit test in the SCT repository.
    ```python
    from moto import mock_aws
 
+
    @mock_aws
    def test_aws_provisioning():
        ec2 = boto3.client("ec2", region_name="us-east-1")
@@ -64,6 +66,7 @@ A 4-phase process for creating a new unit test in the SCT repository.
    ```python
    import re
    from invoke import Result
+
 
    def test_remote_cmd(fake_remoter):
        fake_remoter.result_map = {
@@ -105,11 +108,14 @@ A 4-phase process for creating a new unit test in the SCT repository.
 
 2. **Use `@pytest.mark.parametrize` with `pytest.param(id=...)` for multiple cases:**
    ```python
-   @pytest.mark.parametrize("input_val,expected", [
-       pytest.param("5.2.1", (5, 2, 1), id="standard-version"),
-       pytest.param("2024.1.0", (2024, 1, 0), id="year-based-version"),
-       pytest.param("invalid", None, id="invalid-string"),
-   ])
+   @pytest.mark.parametrize(
+       "input_val,expected",
+       [
+           pytest.param("5.2.1", (5, 2, 1), id="standard-version"),
+           pytest.param("2024.1.0", (2024, 1, 0), id="year-based-version"),
+           pytest.param("invalid", None, id="invalid-string"),
+       ],
+   )
    def test_parse_version(input_val, expected):
        assert parse_version(input_val) == expected
    ```

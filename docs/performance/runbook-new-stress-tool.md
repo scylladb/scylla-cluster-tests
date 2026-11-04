@@ -87,7 +87,7 @@ if any(w in hdr_tag for w in ("write", "insert", "update", "delete")):
 elif any(r in hdr_tag for r in ("read", "select", "get", "count", "scan")):
     return "READ"
 elif self.stress_operation in ("WRITE", "READ"):
-    return self.stress_operation          # scylla-bench 'co-fixed' / 'raw' fallback
+    return self.stress_operation  # scylla-bench 'co-fixed' / 'raw' fallback
 raise ValueError(f"Failed to detect the workload type for the following hdr_tag: {hdr_tag}")
 ```
 

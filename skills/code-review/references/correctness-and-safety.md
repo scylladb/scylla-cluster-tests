@@ -253,7 +253,7 @@ shutdown it joins **every** live pool worker **with no timeout**:
 def _python_exit():
     ...
     for t, q in items:
-        t.join()          # no timeout, and no way to opt out
+        t.join()  # no timeout, and no way to opt out
 ```
 
 One leaked worker blocking on I/O is enough to hang the whole run after the test has already
@@ -278,7 +278,7 @@ class RemoteLogger:
 
     def stop(self):
         self._termination_event.set()
-        self._future.cancel()      # task ends -- but the worker thread does not
+        self._future.cancel()  # task ends -- but the worker thread does not
 ```
 
 **Good** — pool lives exactly as long as the task it runs:
