@@ -1,8 +1,8 @@
 ---
-status: draft
+status: in_progress
 domain: config
 created: 2026-03-01
-last_updated: 2026-10-22
+last_updated: 2026-11-04
 owner: pehala
 ---
 # SCT Configuration: Initial Support for Nested Sections
@@ -136,7 +136,7 @@ These options keep their form in this plan. Because they are already nested, the
    - **Local run.** A test case that uses the group runs end to end on minicloud, through teardown, log collection and resource cleanup, so a stage that sets an old name fails before the PR merges.
 
 **Non-goals:**
-- Converting any group other than `nemesis`. That is left to a future plan.
+- Converting any group other than `nemesis`. That is left to a future plan. The one exception is the `agent` option, which was already a dict with a fixed set of keys: Phase 1 turns it into a section in place, as the first real section.
 - Lazy or optional image resolution. That is covered by [sct-config-validation-and-lazy-images.md](../sct-config-validation-and-lazy-images.md).
 - Composing a partial configuration from a subset of mixins, for unit tests or for stages such as duration calculation, provisioning, log collection and cleanup. Keeping the mixins leaves that path open, but it is not part of this plan.
 - Migrating root `.get()` calls to attribute access and removing `get()` from the root. That is covered by the typed-access plan ([PR #13878](https://github.com/scylladb/scylla-cluster-tests/pull/13878)). This plan does not wait for it: `get()` stays on the root unchanged, and sections are typed from the start, read through attributes only. A converted group therefore needs no later typed-access migration, and the typed-access plan shrinks with every group converted. Every existing `nemesis` usage moves to typed access in Phase 2.
@@ -145,7 +145,7 @@ These options keep their form in this plan. Because they are already nested, the
 
 ### Section contract
 
-- **Declaration.** The group's mixin stays in `CONFIG_GROUPS` and declares the section as its only field: `nemesis: NemesisConfig = Field(default_factory=NemesisConfig)`. The mixin keeps its docstring and `config_group` title. The docs generator reads both per class from `CONFIG_GROUPS` (`_fields_by_group`, `_group_blurb`), never from the assembled model, which is why all 29 mixins already carry the same `config_group` ClassVar without clashing. The section model lives in `sdcm/sct_config/sections/<group>.py`.
+- **Declaration.** A section is a field of a mixin in `CONFIG_GROUPS`: `nemesis: NemesisConfig = SctField(default_factory=NemesisConfig)`. A group converted as a whole, such as `nemesis`, declares the section as its mixin's only field. A section may also sit among a group's flat options: `agent` stays in `CommonConfigMixin`, next to the other general options, so no new mixin or docs page is needed. The mixin keeps its docstring and `config_group` title. The docs generator reads both per class from `CONFIG_GROUPS`, never from the assembled model, which is why all mixins carry the same `config_group` ClassVar without clashing. The section model lives in `sdcm/sct_config/sections/<group>.py`.
 - **Base class.** A section is a Pydantic model deriving from a shared `ConfigSection` base in `sdcm/sct_config/sections/`. That base enables `validate_assignment`, so `config.nemesis.interval = "x"` fails the same way a root assignment does. It also forbids unknown keys, so a misspelled or outdated key inside a section fails loudly.
 - **Fields.** Section fields keep their `SctField` metadata: description, `appendable`, and `BeforeValidator` converters. They keep the same types they have today.
 - **Default.** The root declares each section with a default instance, so an empty section is always present and never `None`. Section fields default to unset, as root fields do today. `defaults/test_default.yaml` and the per-backend defaults files stay the source of truth for default values; they declare the section in its nested form and merge field by field like any other layer.
@@ -178,8 +178,8 @@ One rule set applies to every value, at every depth: root options, sections, fie
 
 | Value | Result |
 |---|---|
-| `stress_image`, `sizing_*`, `teardown_validators`, `agent`, `append_scylla_yaml` | Key by key (rule 1), unchanged |
-| `nemesis:` section, `nemesis.grow_shrink` | Field by field (rule 1) |
+| `stress_image`, `sizing_*`, `teardown_validators`, `append_scylla_yaml` | Key by key (rule 1), unchanged |
+| `agent` and `nemesis:` sections, `nemesis.grow_shrink` | Field by field (rule 1) |
 | `adaptive_timeout_multipliers`, `test_metadata`, `mgmt_agent_backup_config` | Field by field (rule 1). **Changed:** today replaced whole |
 | `nemesis.runners`, `scylla_network_config`, `kafka_connectors`, `grafana_screenshot_panels` | Replaced whole (rule 2), unchanged |
 | `nemesis.runners: ["++", …]` | Appended (rule 3) |
@@ -357,38 +357,37 @@ Env: `SCT_NEMESIS__INTERVAL=10` for a scalar field. `SCT_NEMESIS` and `SCT_NEMES
 
 ## Implementation Phases
 
-### Phase 1: Tooling
+### Phase 1: Tooling, with `agent` as the first section
 
-Everything the group conversions need, built in one PR. No option changes. A throwaway test section, declared on a throwaway mixin, exercises the machinery, in the same way `test_mixin_validators.py` uses throwaway mixins.
+**Status:** in progress, branch `nested_config_prereq` (PR not opened yet).
 
-- **Section model and strict access.**
-  - `ConfigSection` base class, in a new `sdcm/sct_config/sections/` package that holds the section models. A group's mixin declares its section field; the mixin stays the unit of `CONFIG_GROUPS`.
-  - `get()`, `[]`, `in` and `update()` on the root keep their behaviour. A converted group's flat names disappear from the root, so a missed `get("<old name>")` returns `None`. The group PR guards against that with the repo-wide migration (Phase 2 DoD), not with a change to `get()`.
-- **Layered loading.**
-  - YAML and env load into sections and merge across layers under the merge rules, which also apply to the existing nested options.
-  - `++` appending works on section fields, from YAML and from env.
-  - A list or a whole section can be given from env as a YAML or JSON string (`SCT_NEMESIS`, `SCT_NEMESIS__RUNNERS`).
-- **Name tables fail loudly.** Any table lookup of a name that is not a root field raises an error instead of being dropped. This fixes the silent drop in `_check_backend_defaults` before any group can trip it. The one stale entry in the tables, `aws_root_disk_name_monitor` in `BACKEND_REQUIRED_PARAMS` (twice in `defaults.py`, no such option exists), is removed in the same PR, since it would otherwise raise. Tables are not taught section paths: when a group converts, its entries leave the string tables and become attribute access or section validators.
-- **Docs.** The docs generator (`config.py` doc generation, `sct.py help`, `docs/configuration_options/`) renders nested values:
-  - A section field that `_fields_by_group` finds on a mixin is expanded into its sub-fields on that mixin's page. `_group_blurb` keeps reading the mixin's docstring.
-  - Each section page lists its fields under the section name, with the prefix-free field name (`interval`, not `nemesis_interval`).
-  - Each option shows its full YAML path (`nemesis.interval`), its nested env name (`SCT_NEMESIS__INTERVAL`) and a YAML example in the nested form.
-  - Anchors and the alphabetical index key on the dotted path, so fields with the same name in different sections do not collide.
-  - Defaults of section fields are shown per field, not as one dumped section value.
-  - `test_help.py` is updated to the new heading format.
-- **Migration script.** The script from the Design section exists, with tests on a sample YAML file.
+Everything the group conversions need. Instead of a throwaway test section, the existing `agent` option, a dict with a fixed set of keys, becomes the first real section, so the machinery is proven on a real option without renaming anything. The PR lands as five commits:
+
+1. **`refactor(k8s)`: the manager pod cluster reuses the cluster's params** instead of building a fresh `SCTConfiguration`. It drops the module-level `sdcm.sct_config` import from `sdcm.cluster_k8s`.
+2. **`refactor(config)`: `sdcm.nemesis` imports without `sdcm.sct_config`.** Moved here from Phase 2. The backend helpers (`AWS_SUPPORTED_REGIONS`, `backend_to_cloud`, `oracle_cluster_in_use`, `SIZING_ROLE_PARAMS`) move to `sdcm/utils/cloud_backends.py`, and modules that only annotate `SCTConfiguration` import it for type checking only. `BaseNode` checks `params` against `BaseModel`.
+3. **`feature(config)`: config sections.**
+   - `ConfigSection` base in `sdcm/sct_config/sections/`: forbids unknown keys, validates assignments.
+   - Layered loading: every layer merges into a section and into model-typed options field by field at any depth; `++` appends on appendable section fields; a whole section or a nested field takes a YAML or JSON string from env (`SCT_<SECTION>='{...}'`, `SCT_<SECTION>__<FIELD>=...`).
+   - `config.get()` returns a falsy dotted value (`stress_image.ycsb`) instead of falling back to the root option.
+   - Name tables fail loudly: `_check_backend_defaults` raises on a name that is not a root option, and the stale `aws_root_disk_name_monitor` entries are removed.
+   - `test_option_groups` checks that section fields carry no prefix of the section's name. The rule that a section is the only option of its group was dropped, so a section can sit among flat options.
+4. **`refactor(config)`: the docs generator becomes the `sdcm.sct_config.docs` package, with section support.**
+   - `ConfigDocs(model)` reads the model and the defaults files once into `GroupDoc`s holding one `OptionDoc` per option (path, env variable, help, default, type, backend overrides). `Renderer[T]` has one abstract method, `render(groups)`.
+   - `docs.markdown` renders the index and the per-group pages (`MarkdownPagesRenderer`) or one string (`MarkdownRenderer`); `docs.yaml` renders the YAML listing (`YamlRenderer`). Usage: `ConfigDocs(SCTConfiguration).render(MarkdownPagesRenderer())`.
+   - An option holding a pydantic model (not a `RootModel`) is documented as a section: its fields are listed by dotted path with their `SCT_<SECTION>__<FIELD>` variable and a nested YAML example, nested under the section key in the YAML listing, and indexed by dotted path.
+5. **`feature(config)`: the `agent` option becomes the `agent` section** (`AgentConfig`), still declared in `CommonConfigMixin`. The YAML form is unchanged; consumers read attributes, and `agent.installed` replaces the repeated `enabled and binary_url` check.
+
+The migration script moves to Phase 2, where the first rename needs it: `agent` keeps its YAML form, so Phase 1 rewrites no YAML.
 
 **DoD:**
-- [ ] A throwaway section is readable and writable through attribute access only, and every flat form raises.
-- [ ] Root `get()`, `[]`, `in` and `update()` behave as before. Tests pin it, including `get()` returning `None` for an unknown name and a dotted lookup into a dict-typed option returning `None` for a missing sub-key.
-- [ ] Tests cover defaults plus a partial user section (defaults retained), `++` on a section field, and the nested env form.
-- [ ] Tests cover each merge rule on each kind of value: a dict option, a model-typed option (merged field by field), a section and a field nested inside it, a replaced list, `++` on a nested list, and a string form from env.
+- [x] A section and a section nested in it merge field by field, a list is replaced, a YAML/JSON string for a nested section is parsed then merged, an unknown key and an invalid assignment fail, and an env var merges into a model-typed option set by a config file (`test_sections.py`).
+- [x] `++` appends to an appendable string and list field of a section, and fails on a field that is not appendable (`test_sections.py`).
+- [x] The generated docs show the dotted path, the nested env name and the nested YAML example of a section field, the index lists the dotted path, and the YAML listing nests the section's fields (`test_help.py`).
+- [x] `docs/configuration_options/` is regenerated and committed, and the `update-conf-docs` hook produces no further diff.
+- [x] `sdcm.nemesis` imports without loading `sdcm.sct_config.config`.
+- [ ] Root `get()`, `[]`, `in` and `update()` are pinned by tests, including a dotted lookup into a dict-typed option returning `None` for a missing sub-key.
 - [ ] Every file under `test-cases/` produces the same `sct.py conf` dump on this branch and on `master`.
-- [ ] A test proves an unknown name in `BACKEND_REQUIRED_PARAMS` fails loudly.
-- [ ] Every name in the tables in `defaults.py` and in `SIZING_ROLE_PARAMS` is a root field, which a test pins.
-- [ ] A test on a throwaway section shows the generated docs with the dotted YAML path, nested env name and nested YAML example, and the index lists the dotted path.
-- [ ] `docs/configuration_options/` is regenerated in the new format and committed, and the `update-conf-docs` hook then produces no further diff.
-- [ ] Unit tests, `uv run sct.py pre-commit` and `uv run sct.py lint-pipelines` pass.
+- [ ] Unit tests, `uv run sct.py pre-commit` and `uv run sct.py lint-pipelines` pass in CI.
 
 **Dependencies:** none.
 
@@ -407,7 +406,7 @@ The PR may be split into commits for review, but it lands as one change:
 
 - **Section.**
   - `NemesisConfigMixin` stays in `CONFIG_GROUPS` with its docstring and `config_group`, and declares one field, `nemesis: NemesisConfig`. Its 12 flat fields move into `NemesisConfig(ConfigSection)` in `sdcm/sct_config/sections/nemesis.py`, reshaped as described in [Nemesis section redesign](#nemesis-section-redesign), with `NemesisRunnerConfig` and `CategoricalMonkeyConfig` next to their runners. `defaults/test_default.yaml` declares a single `NoOpMonkey` runner.
-  - `sdcm.nemesis` imports `sdcm.cluster`, which imports `sdcm.sct_config` at module level (`SCTConfiguration`, `backend_to_cloud`), so the config cannot import the runner classes. The cycle is broken first: backend helpers move to `sdcm/utils/cloud_backends.py`, and modules that only annotate `SCTConfiguration` import it for type checking only.
+  - The config builds its runner models from the runner classes in `sdcm.nemesis`; the import cycle that blocked this is broken in Phase 1.
 - **Validators.** Changed as listed under the redesign's Validators.
 - **Runners and consumers.**
   - `NemesisRunner`, `CategoricalMonkey` and `FixedOrderMonkey` take their resolved config as a required constructor argument and read every option from it. The selector/seed/dist kwargs and the flat-option fallbacks are removed. `FixedOrderMonkey` reads `order` instead of splitting the selector. No test case in the repo uses it yet, so only its unit tests and `docs/nemesis.md` change.
@@ -441,13 +440,18 @@ The PR may be split into commits for review, but it lands as one change:
 - [ ] `scylla-pkg` and `qa-internal` have no reference to an old nemesis `SCT_*` name or YAML key, or a companion PR migrating them is ready to merge with this one. The search result is recorded in the PR description.
 - [ ] A parallel-runner nemesis test case, downscaled with the `downscaling-for-minicloud` skill, runs on minicloud from config load through teardown, log collection and resource cleanup.
 
+**Status:** in progress, [PR #16733](https://github.com/scylladb/scylla-cluster-tests/pull/16733) (branch `nemesis_config`). It carries its own copies of Phase 1's first commits and must be rebased onto Phase 1. Beyond the scope above, it also:
+- adds the migration script (`chore(utils)`);
+- lets `__` env vars nest to any depth (`SCT_NEMESIS__GROW_SHRINK__INSTANCE_TYPE`), which the docs then list per field;
+- dumps runner entries with only the options they set.
+
 **Dependencies:** Phase 1.
 
 ## Testing Requirements
 
 | Phase | Unit | Integration / lint | Manual |
 |---|---|---|---|
-| 1 | Throwaway section: attribute access works and every flat form raises; layered merge; `++`; nested env; loud name-table failure; migration script on a sample file | `lint-pipelines` | `sct.py conf` docker dump compared with `master` |
+| 1 | Merge rules on test-only sections (field by field, nested, replaced list, `++`, YAML string, unknown key, validated assignment); nested env into a model-typed option; loud name-table failure; generated docs and YAML listing | `lint-pipelines` | `sct.py conf` docker dump compared with `master` |
 | 2 | `NemesisConfig` instantiates and validates alone; runner entry validation by runner class (model selection, missing, foreign and out-of-range option, unknown class) and default resolution, with a test-only runner hierarchy; loading from a config file, overlay merge, env override; runners read their options from the config they are given; grow/shrink instance-type check, filter-seeds vs. seed-count check with a per-runner `filter_seeds` override, AZ/zone resolvers and capacity reservation with the nested value; migration script on single-runner, parallel-runner and overlay files; `test_option_groups` rule for the group; no dict fakes | `lint-pipelines`; migration-script verification over every test case; repo-wide grep for old names; search of `scylla-pkg` and `qa-internal` for old names | Minicloud run of a parallel-runner test case through teardown and cleanup; artifact test; one single-runner and one parallel-nemesis longevity; `cdc-replication-longevity` (`CategoricalMonkey` from YAML); `perf-regression-latency-backup-nemesis` (reads `interval` outside a runner); one GrowShrink test (`add_node_cnt`, capacity reservation) |
 
 Every PR runs `uv run sct.py unit-tests`, `uv run sct.py pre-commit` and `uv run sct.py lint-pipelines`.
