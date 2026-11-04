@@ -651,14 +651,15 @@ def test_xcloud_db_nodes_are_never_priced_at_spot(fake_ec2):
     assert "i4i.4xlarge" not in fake_ec2.calls[0]
 
 
-def test_gce_z3_db_nodes_are_never_priced_at_spot():
-    """SCT's GCE provisioning requests z3 on-demand: its bundled local SSD needs MIGRATE."""
+@pytest.mark.parametrize("db_instance_type", ["z3-highmem-8-highlssd", "z4d-highmem-16-highlssd"])
+def test_gce_bundled_ssd_db_nodes_are_never_priced_at_spot(db_instance_type):
+    """SCT's GCE provisioning requests z3 and z4d on-demand: their bundled local SSD needs MIGRATE."""
     params = _config(
         cluster_backend="gce",
         gce_datacenter="us-east1",
         test_duration=60,
         instance_provision="spot",
-        gce_instance_type_db="z3-highmem-8-highlssd",
+        gce_instance_type_db=db_instance_type,
         n_db_nodes=3,
         gce_instance_type_loader="n2-standard-16",
         n_loaders=1,
