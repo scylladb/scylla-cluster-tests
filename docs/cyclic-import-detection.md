@@ -41,9 +41,10 @@ parent/child relationship, because a re-exporting package is cyclic by construct
 
 ```python
 # sdcm/pkg/__init__.py
-from sdcm.pkg import sub      # pkg -> pkg.sub
+from sdcm.pkg import sub  # pkg -> pkg.sub
+
 # sdcm/pkg/sub.py
-from sdcm.pkg import helper   # pkg.sub -> pkg  (implicit anyway)
+from sdcm.pkg import helper  # pkg.sub -> pkg  (implicit anyway)
 ```
 
 Python executes this fine as long as `__init__.py` defines `helper` *before* importing
@@ -93,8 +94,10 @@ git commit -m "fix(imports): break cyclic import between module_a and module_b"
 # BEFORE — creates cycle:
 from sdcm.cluster import BaseCluster
 
+
 def restart_node(cluster: BaseCluster) -> None:
     cluster.restart()
+
 
 # AFTER — breaks cycle:
 from __future__ import annotations
@@ -102,6 +105,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseCluster
+
 
 def restart_node(cluster: BaseCluster) -> None:
     cluster.restart()  # still works — object is passed in at runtime
@@ -121,12 +125,15 @@ def restart_node(cluster: BaseCluster) -> None:
 # BEFORE — creates cycle at module load:
 from sdcm.cluster import TestConfig
 
+
 def get_skip_stages():
     return TestConfig().tester_obj().skip_test_stages
+
 
 # AFTER — defers import to call time:
 def get_skip_stages():
     from sdcm.cluster import TestConfig  # noqa: PLC0415
+
     return TestConfig().tester_obj().skip_test_stages
 ```
 
@@ -164,15 +171,19 @@ AFTER (no cycle):
 # BEFORE — decorators.py imports cluster.py for check_cluster_layout:
 from sdcm.cluster import BaseCluster
 
+
 def validate(cluster: BaseCluster):
     if not cluster.is_ready():
         raise RuntimeError("Cluster not ready")
 
+
 # AFTER — accept the check as a callable parameter:
 from typing import Protocol
 
+
 class ClusterLike(Protocol):
     def is_ready(self) -> bool: ...
+
 
 def validate(cluster: ClusterLike):
     if not cluster.is_ready():

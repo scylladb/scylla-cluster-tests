@@ -33,10 +33,13 @@ def test_all_config_options():
 
 ✅ **Good:**
 ```python
-@pytest.mark.parametrize("option,value,expected", [
-    pytest.param("cluster_backend", "aws", "aws", id="backend-aws"),
-    pytest.param("cluster_backend", "docker", "docker", id="backend-docker"),
-])
+@pytest.mark.parametrize(
+    "option,value,expected",
+    [
+        pytest.param("cluster_backend", "aws", "aws", id="backend-aws"),
+        pytest.param("cluster_backend", "docker", "docker", id="backend-docker"),
+    ],
+)
 def test_config_option(option, value, expected, monkeypatch):
     monkeypatch.setenv(f"SCT_{option.upper()}", value)
     assert SCTConfiguration().get(option) == expected
@@ -71,8 +74,7 @@ class TestEvaluateSkip:
         nemesis = CustomNemesisA(runner=...)
         assert nemesis.evaluate_skip() == []
 
-    def test_skippable_excluded(self):
-        ...
+    def test_skippable_excluded(self): ...
 ```
 
 ✅ **Good — flat module-level functions:**
@@ -81,8 +83,8 @@ def test_evaluate_skip_default_returns_empty_list():
     nemesis = CustomNemesisA(runner=...)
     assert nemesis.evaluate_skip() == []
 
-def test_evaluate_skip_skippable_excluded():
-    ...
+
+def test_evaluate_skip_skippable_excluded(): ...
 ```
 
 Group related tests with a comment block (e.g. `# --- filtering tests ---`) instead of a class.
@@ -97,8 +99,10 @@ Writing new fake objects, base classes, runner stubs, or fixture setup code when
 ```python
 captured_events = []
 
+
 def fake_publish(event):
     captured_events.append(str(event))
+
 
 with patch("sdcm.sct_events.base.SctEvent.publish", fake_publish):
     run_something()
@@ -157,6 +161,7 @@ class FakeDockerCluster:
             ...
         return new_nodes
 
+
 def test_round_robin_rack_assignment():
     cluster = FakeDockerCluster(racks_count=3)
     nodes = cluster._create_nodes(6)
@@ -168,11 +173,15 @@ def test_round_robin_rack_assignment():
 from unittest.mock import MagicMock, patch
 from sdcm.cluster_docker import DockerCluster
 
-@pytest.mark.parametrize("racks_count,node_count,expected_racks", [
-    pytest.param(3, 6, [0, 1, 2, 0, 1, 2], id="round-robin-3-racks"),
-    pytest.param(2, 5, [0, 1, 0, 1, 0],    id="round-robin-2-racks"),
-    pytest.param(1, 3, [0, 0, 0],           id="single-rack"),
-])
+
+@pytest.mark.parametrize(
+    "racks_count,node_count,expected_racks",
+    [
+        pytest.param(3, 6, [0, 1, 2, 0, 1, 2], id="round-robin-3-racks"),
+        pytest.param(2, 5, [0, 1, 0, 1, 0], id="round-robin-2-racks"),
+        pytest.param(1, 3, [0, 0, 0], id="single-rack"),
+    ],
+)
 def test_create_nodes_round_robin(racks_count, node_count, expected_racks, params):
     params["simulated_racks"] = racks_count
     params["n_db_nodes"] = node_count
@@ -248,10 +257,13 @@ Both tests copy the script back into the assertions. Neither one shows that vect
 1. **Run the code with its own runtime.** If the language has a test tool (for example bats for shell, or JenkinsPipelineUnit for Groovy), test the code there, not from pytest. SCT has no such framework set up today. What it has are runnable test scripts that execute the real code and check the result, for example `.github/workflows/test_cache_issues.sh` (runs the cache-issues `gh api` pagination for real) and `scripts/test-renovate-local.sh` (runs the Renovate JSONata transform against live S3 data). Follow that pattern when the code can run outside a job.
 2. **Test the Python logic around it.** If Python code picks values or branches (distro checks, version gates, computed timeouts, which packages to install), move that decision into a function that returns plain data and test that function (`should_skip_epel` below is an illustration, not an existing helper):
    ```python
-   @pytest.mark.parametrize("distro,expected", [
-       pytest.param(Distro.FEDORA36, True, id="fedora-skips-epel"),
-       pytest.param(Distro.ROCKY9, False, id="rocky-uses-epel"),
-   ])
+   @pytest.mark.parametrize(
+       "distro,expected",
+       [
+           pytest.param(Distro.FEDORA36, True, id="fedora-skips-epel"),
+           pytest.param(Distro.ROCKY9, False, id="rocky-uses-epel"),
+       ],
+   )
    def test_skip_epel_by_distro(distro, expected):
        assert should_skip_epel(distro) is expected
    ```
@@ -272,11 +284,10 @@ Real example: PR [#16093](https://github.com/scylladb/scylla-cluster-tests/pull/
 
 ❌ **Bad — restating `_CLOUD_API_PATCHES` and `_FAKE_IMAGE` (dropped in review):**
 ```python
-@pytest.mark.parametrize("target", [
-    "sdcm.provision.azure.utils.get_released_scylla_images",
-    "sdcm.utils.oci_utils.get_scylla_images_by_version",
-    ...
-])
+@pytest.mark.parametrize(
+    "target",
+    ["sdcm.provision.azure.utils.get_released_scylla_images", "sdcm.utils.oci_utils.get_scylla_images_by_version", ...],
+)
 def test_every_cloud_lookup_reached_from_sct_configuration_is_stubbed(target):
     assert target in _CLOUD_API_PATCHES
 
@@ -288,11 +299,14 @@ def test_fake_image_carries_every_attribute_the_resolvers_read(attribute):
 
 ✅ **Good — lint a pipeline that takes each lookup path and assert it never reaches the network (abridged from the PR):**
 ```python
-@pytest.mark.parametrize("pipeline", [
-    pytest.param("azure-released-image", id="azure-released-image"),
-    pytest.param("oci-released-image", id="oci-released-image"),
-    ...
-])
+@pytest.mark.parametrize(
+    "pipeline",
+    [
+        pytest.param("azure-released-image", id="azure-released-image"),
+        pytest.param("oci-released-image", id="oci-released-image"),
+        ...,
+    ],
+)
 def test_validate_pipeline_cloud_lookup_never_reaches_the_network(pipeline, remote_connections, test_data_dir):
     pipeline_path = test_data_dir / "lint" / f"{pipeline}.jenkinsfile"
     is_error, message = validate_pipeline(pipeline_path, build_env(parse_jenkinsfile(pipeline_path)))
@@ -389,8 +403,7 @@ def _module_level_target_ids():
 
 
 @pytest.mark.parametrize("target", _module_level_target_ids())
-def test_no_call_site_shadows_the_patch_target(target):
-    ...
+def test_no_call_site_shadows_the_patch_target(target): ...
 ```
 
 ## AP-12: Importing Private Names Into Tests
@@ -420,6 +433,7 @@ from sdcm.utils.lint.validator import validate_pipeline
 ```python
 from concurrent.futures.thread import _threads_queues
 
+
 def _live_pool_workers() -> set[threading.Thread]:
     return {thread for thread in _threads_queues if thread.is_alive()}
 ```
@@ -429,6 +443,7 @@ def _live_pool_workers() -> set[threading.Thread]:
 def journal_task():
     state.worker = threading.current_thread()
     ...
+
 
 logger.stop()
 journal.worker.join(timeout=10)

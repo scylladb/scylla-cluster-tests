@@ -70,10 +70,20 @@ Both users receive `self.key_pair.public_key` — the same S3-stored key.
 **File**: `sdcm/keystore.py`
 
 ```python
-def get_ec2_ssh_key_pair(self):   return self.get_ssh_key_pair(name="scylla_test_id_ed25519")  # line 94
-def get_gce_ssh_key_pair(self):   return self.get_ssh_key_pair(name="scylla_test_id_ed25519")  # line 97
-def get_azure_ssh_key_pair(self): return self.get_ssh_key_pair(name="scylla_test_id_ed25519")  # line 100
-def get_oci_ssh_key_pair(self):   return self.get_ssh_key_pair(name="scylla_test_id_ed25519")  # line 103
+def get_ec2_ssh_key_pair(self):
+    return self.get_ssh_key_pair(name="scylla_test_id_ed25519")  # line 94
+
+
+def get_gce_ssh_key_pair(self):
+    return self.get_ssh_key_pair(name="scylla_test_id_ed25519")  # line 97
+
+
+def get_azure_ssh_key_pair(self):
+    return self.get_ssh_key_pair(name="scylla_test_id_ed25519")  # line 100
+
+
+def get_oci_ssh_key_pair(self):
+    return self.get_ssh_key_pair(name="scylla_test_id_ed25519")  # line 103
 ```
 
 All backends use the same key from S3 bucket `scylla-qa-keystore`.

@@ -74,14 +74,12 @@ Apply the version regex filter based on the chosen build type:
 Example filter logic:
 ```python
 import re
+
 MASTER_RE = re.compile(r"^\d{4}\.\d+\.\d+.+dev$")
 RELEASE_RE = re.compile(r"^\d{4}\.\d+\.\d+$")
 
 version_re = MASTER_RE if build_type == "master" else RELEASE_RE
-filtered_runs = [
-    run for run in all_runs
-    if version_re.match(run.get("scylla_version") or "")
-]
+filtered_runs = [run for run in all_runs if version_re.match(run.get("scylla_version") or "")]
 ```
 
 Also include runs with status `"running"`.

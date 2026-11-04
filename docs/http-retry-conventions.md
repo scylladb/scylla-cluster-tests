@@ -137,8 +137,13 @@ the helper into the f-string rather than writing curl flags by hand:
 
 ```python
 download_curl = curl_with_retry(
-    "$_vector_url", silent=True, follow_redirects=True, fail_early=True,
-    max_time=VECTOR_DOWNLOAD_MAX_TIME, output="$_vector_dst", extra_flags="-S"
+    "$_vector_url",
+    silent=True,
+    follow_redirects=True,
+    fail_early=True,
+    max_time=VECTOR_DOWNLOAD_MAX_TIME,
+    output="$_vector_dst",
+    extra_flags="-S",
 )
 return dedent(f"""\
     _vector_url=$_vector_base/$_vector_pkg

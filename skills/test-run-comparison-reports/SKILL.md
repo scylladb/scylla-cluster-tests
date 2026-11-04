@@ -62,16 +62,16 @@ import requests
 
 creds = KeyStore().get_argus_rest_credentials_per_provider()
 headers = {
-    'Authorization': f'token {creds["token"]}',
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-    **creds.get('extra_headers', {})
+    "Authorization": f"token {creds['token']}",
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    **creds.get("extra_headers", {}),
 }
 
 # Get run info (status, config, packages, cloud_setup, build_job_url)
-url = f'{creds["baseUrl"]}/api/v1/client/testrun/scylla-cluster-tests/{run_id}/get'
+url = f"{creds['baseUrl']}/api/v1/client/testrun/scylla-cluster-tests/{run_id}/get"
 resp = requests.get(url, headers=headers, timeout=30)
-run_data = resp.json()['response']
+run_data = resp.json()["response"]
 ```
 
 ### Step 2: Get Latency Results from S3 Logs
@@ -90,24 +90,26 @@ The `latency_results` dict has this structure per phase:
 
 ```python
 {
-    'Steady State': {  # flat dict for baseline
-        'hdr_summary': {
-            'WRITE--WRITE-rt': {'percentile_99': ..., 'throughput': ...},
-            'READ--READ-rt': {'percentile_99': ..., 'throughput': ...},
+    "Steady State": {  # flat dict for baseline
+        "hdr_summary": {
+            "WRITE--WRITE-rt": {"percentile_99": ..., "throughput": ...},
+            "READ--READ-rt": {"percentile_99": ..., "throughput": ...},
         },
-        'cycle_hdr_throughput': ...,  # combined write+read
-        'duration_in_sec': ...,
+        "cycle_hdr_throughput": ...,  # combined write+read
+        "duration_in_sec": ...,
     },
-    'add_new_nodes': {  # phases with cycles
-        'cycles': [{
-            'hdr_summary': {
-                'WRITE--WRITE-rt': {'percentile_99': ..., 'percentile_90': ..., 'throughput': ...},
-                'READ--READ-rt': {'percentile_99': ..., 'percentile_90': ..., 'throughput': ...},
-            },
-            'cycle_hdr_throughput': ...,
-            'duration': '0:45:07',
-            'duration_in_sec': 2707,
-        }],
+    "add_new_nodes": {  # phases with cycles
+        "cycles": [
+            {
+                "hdr_summary": {
+                    "WRITE--WRITE-rt": {"percentile_99": ..., "percentile_90": ..., "throughput": ...},
+                    "READ--READ-rt": {"percentile_99": ..., "percentile_90": ..., "throughput": ...},
+                },
+                "cycle_hdr_throughput": ...,
+                "duration": "0:45:07",
+                "duration_in_sec": 2707,
+            }
+        ],
     },
 }
 ```
