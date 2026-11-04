@@ -41,6 +41,7 @@ from google.oauth2 import service_account as sa_module
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceTypeInfo
+from sdcm.utils.gce_machine_types import bundles_local_ssds, is_bundled_local_ssd_family, machine_family
 
 LOG = logging.getLogger(__name__)
 
@@ -232,12 +233,16 @@ _GCE_SUBFAMILY_FAMILIES = {"n4a"}
 _GCE_LSSD_ONLY_FAMILIES = {"c4-highmem", "c4a-highmem", "c4d-highmem"}
 _GCE_LSSD_METAL_DISK_SIZE_GIB = 3000.0
 
-_Z3_DISK_SIZE_GIB = 3000.0
-_Z3_METAL_DISK_SIZE_GIB = 6000.0
+# Titanium SSD partition size of the storage-optimized series, in GiB: (VM, bare metal).
+_TITANIUM_SSD_DISK_SIZE_GIB: dict[str, tuple[float, float]] = {
+    "z3": (3000.0, 6000.0),
+    "z4d": (3500.0, 7000.0),
+}
 
-# z3 local SSD partition counts per instance (from GCE docs).
+# Titanium SSD partition counts per instance (from GCE docs).
 # Used as fallback when the API doesn't return bundled_local_ssds.
-_Z3_PARTITION_COUNTS: dict[str, int] = {
+# Also lists the pricing page sections: keep each sub-family's first-on-page type first.
+_TITANIUM_SSD_PARTITION_COUNTS: dict[str, int] = {
     "z3-highmem-8-highlssd": 1,
     "z3-highmem-16-highlssd": 2,
     "z3-highmem-22-highlssd": 3,
@@ -250,6 +255,21 @@ _Z3_PARTITION_COUNTS: dict[str, int] = {
     "z3-highmem-44-standardlssd": 3,
     "z3-highmem-88-standardlssd": 6,
     "z3-highmem-176-standardlssd": 12,
+    "z4d-highmem-8-highlssd": 1,
+    "z4d-highmem-16-highlssd": 2,
+    "z4d-highmem-32-highlssd": 4,
+    "z4d-highmem-48-highlssd": 6,
+    "z4d-highmem-64-highlssd": 8,
+    "z4d-highmem-96-highlssd": 12,
+    "z4d-highmem-192-highlssd": 24,
+    "z4d-highmem-16-standardlssd": 1,
+    "z4d-highmem-32-standardlssd": 2,
+    "z4d-highmem-48-standardlssd": 3,
+    "z4d-highmem-64-standardlssd": 4,
+    "z4d-highmem-96-standardlssd": 6,
+    "z4d-highmem-192-standardlssd": 12,
+    "z4d-highmem-384-standardlssd": 24,
+    "z4d-highmem-384-standardlssd-metal": 12,
 }
 
 # GCE resource-based pricing: per-vCPU/hr and per-GB-RAM/hr rates (USD, us-east1).
@@ -283,42 +303,49 @@ _GCE_SECTION_MAP: dict[str, list[str]] = {
     ],
 }
 
-_GCE_Z3_PRICING_URL = "https://cloud.google.com/products/compute/pricing/storage-optimized"
+# Families that the default catalog zone (us-east1-b) does not offer, mapped to a zone that does.
+# z4d is offered only in us-central1, us-east4 and us-east5.
+_GCE_FAMILY_ZONES: dict[str, str] = {"z4d": "us-central1-a"}
 
-# z3 machine type names by sub-family (used for scraping validation).
-_Z3_HIGHLSSD_TYPES = [
-    "z3-highmem-8-highlssd",
-    "z3-highmem-16-highlssd",
-    "z3-highmem-22-highlssd",
-    "z3-highmem-32-highlssd",
-    "z3-highmem-44-highlssd",
-    "z3-highmem-88-highlssd",
-    "z3-highmem-192-highlssd-metal",
-]
-_Z3_STANDARDLSSD_TYPES = [
-    "z3-highmem-14-standardlssd",
-    "z3-highmem-22-standardlssd",
-    "z3-highmem-44-standardlssd",
-    "z3-highmem-88-standardlssd",
-    "z3-highmem-176-standardlssd",
-]
+_GCE_STORAGE_OPTIMIZED_PRICING_URL = "https://cloud.google.com/products/compute/pricing/storage-optimized"
+
+# Storage-optimized sub-families, in the order their sections appear on the pricing page.
+_STORAGE_OPTIMIZED_SUB_FAMILIES = ("standardlssd", "highlssd")
 
 
-def _scrape_gce_z3_prices() -> dict[str, dict[str, float]]:  # noqa: PLR0914
-    """Scrape per-region bundled z3 on-demand prices from GCE pricing page.
+def _storage_optimized_types(series: str, sub_family: str) -> list[str]:
+    """Machine types of one pricing page section, from `_TITANIUM_SSD_PARTITION_COUNTS`.
+
+    The types of a sub-family come before its "<series>-highmem-with-<sub-family>" marker on the page.
+    The first type returned starts the section, so `_TITANIUM_SSD_PARTITION_COUNTS` lists each
+    sub-family's first-on-page type first.
+    """
+    return [
+        name for name in _TITANIUM_SSD_PARTITION_COUNTS if name.startswith(f"{series}-") and f"-{sub_family}" in name
+    ]
+
+
+def _scrape_gce_storage_optimized_prices(series: list[str]) -> dict[str, dict[str, float]]:
+    """Scrape per-region bundled on-demand prices of storage-optimized series (z3, z4d) from GCE pricing page.
 
     Returns:
         Dict mapping machine type name -> {region: price_per_hour}.
         Empty dict on fetch/parse failure.
     """
     try:
-        req = urllib.request.Request(_GCE_Z3_PRICING_URL, headers={"User-Agent": "SCT-CatalogGenerator/1.0"})
+        req = urllib.request.Request(
+            _GCE_STORAGE_OPTIMIZED_PRICING_URL, headers={"User-Agent": "SCT-CatalogGenerator/1.0"}
+        )
         with urllib.request.urlopen(req, timeout=30) as resp:
             page_html = resp.read().decode("utf-8", errors="replace")
     except (urllib.error.URLError, OSError) as exc:
-        LOG.error("Failed to fetch GCE z3 pricing page: %s", exc)
+        LOG.error("Failed to fetch GCE storage-optimized pricing page: %s", exc)
         return {}
+    return _parse_gce_storage_optimized_prices(page_html, series)
 
+
+def _parse_gce_storage_optimized_prices(page_html: str, series: list[str]) -> dict[str, dict[str, float]]:  # noqa: PLR0914
+    """Parse the per-region prices of `series` out of the GCE storage-optimized pricing page."""
     # Extract the AF_initDataCallback data blob containing pricing tables.
     af_match = re.search(r"AF_initDataCallback\((.*?)\);", page_html, re.DOTALL)
     if not af_match:
@@ -328,26 +355,30 @@ def _scrape_gce_z3_prices() -> dict[str, dict[str, float]]:  # noqa: PLR0914
     data_str = af_match.group(1)
     results: dict[str, dict[str, float]] = {}
 
-    # Extract prices for each z3 sub-family section.
+    # Extract prices for each sub-family section.
     # Page structure: machine type prices appear before their region label.
     # Sections are bounded by markers like "z3-highmem-with-highlssd".
-    for section_types, section_marker in [
-        (_Z3_STANDARDLSSD_TYPES, '"z3-highmem-with-standardlssd"'),
-        (_Z3_HIGHLSSD_TYPES, '"z3-highmem-with-highlssd"'),
-    ]:
+    sections = [
+        (section_types, f'"{name}-highmem-with-{sub_family}"')
+        for name in series
+        for sub_family in _STORAGE_OPTIMIZED_SUB_FAMILIES
+        if (section_types := _storage_optimized_types(name, sub_family))
+    ]
+    for section_types, section_marker in sections:
         first_type = section_types[0]
         section_start = data_str.find(first_type)
         section_end = data_str.find(section_marker)
         if section_start < 0 or section_end < 0 or section_start >= section_end:
-            LOG.warning("GCE z3 pricing: could not find section for %s", first_type)
+            LOG.warning("GCE storage-optimized pricing: could not find section for %s", first_type)
             continue
 
         section = data_str[section_start:section_end]
 
         # For each machine type, find all "$price / 1 hour" entries and map to regions.
         for machine_type in section_types:
-            # Find all (position, price) for this machine type
-            price_pattern = re.escape(machine_type) + r".*?\$(\d+\.\d+) / 1 hour"
+            # Find all (position, price) for this machine type. The lookahead keeps
+            # z4d-highmem-384-standardlssd from matching z4d-highmem-384-standardlssd-metal.
+            price_pattern = re.escape(machine_type) + r"(?![\w-]).*?\$(\d+\.\d+) / 1 hour"
             price_positions = [(m.start(), float(m.group(1))) for m in re.finditer(price_pattern, section)]
 
             # Find all region labels: "Location (region-id)"
@@ -378,12 +409,12 @@ def _scrape_gce_z3_prices() -> dict[str, dict[str, float]]:  # noqa: PLR0914
 
     if results:
         LOG.info(
-            "GCE z3 pricing: scraped %d machine types across %d regions",
+            "GCE storage-optimized pricing: scraped %d machine types across %d regions",
             len(results),
             max(len(v) for v in results.values()),
         )
     else:
-        LOG.error("GCE z3 pricing: scraping returned no results")
+        LOG.error("GCE storage-optimized pricing: scraping returned no results")
 
     return results
 
@@ -666,15 +697,18 @@ def generate_gce_catalog(  # noqa: PLR0914
     Cloud SDK import is deferred because google-cloud-compute is optional.
 
     Args:
-        families: List of machine type family prefixes (e.g. ["n2", "z3"]).
+        families: List of machine type family prefixes (e.g. ["n2", "z3", "z4d"]).
         project: GCP project ID. If empty, reads from application default credentials.
-        zone: GCP zone to query (default "us-east1-b").
+        zone: GCP zone to query (default "us-east1-b"), except for the families in _GCE_FAMILY_ZONES.
 
     Returns:
         List of InstanceTypeInfo. Returns empty list on credential/import error.
     """
     results: list[InstanceTypeInfo] = []
-    z3_prices = _scrape_gce_z3_prices() if any(f.startswith("z3") for f in families) else {}
+    storage_optimized_series = [f for f in families if is_bundled_local_ssd_family(f)]
+    storage_optimized_prices = (
+        _scrape_gce_storage_optimized_prices(storage_optimized_series) if storage_optimized_series else {}
+    )
     general_prices = _scrape_gce_general_prices(families)
     spot_rates, on_demand_rates = _fetch_gce_resource_rates()
 
@@ -686,17 +720,26 @@ def generate_gce_catalog(  # noqa: PLR0914
         if not project:
             project = info.get("project_id", "")
 
-        request = compute_v1.ListMachineTypesRequest(project=project, zone=zone)
-        page_result = client.list(request=request)
+        # A family missing from `zone` is listed from the zone in _GCE_FAMILY_ZONES instead.
+        zone_families: dict[str, list[str]] = {}
+        for family_prefix in families:
+            zone_families.setdefault(_GCE_FAMILY_ZONES.get(family_prefix, zone), []).append(family_prefix)
+        page_result = [
+            (machine_type, listed_families)
+            for listed_zone, listed_families in zone_families.items()
+            for machine_type in client.list(
+                request=compute_v1.ListMachineTypesRequest(project=project, zone=listed_zone)
+            )
+        ]
 
         gce_arch_map = {
             compute_v1.MachineType.Architecture.ARM64.name: "arm64",
             compute_v1.MachineType.Architecture.X86_64.name: "x86_64",
         }
 
-        for machine_type in page_result:
+        for machine_type, listed_families in page_result:
             name = machine_type.name
-            family = next((f for f in families if name.startswith(f)), None)
+            family = next((f for f in listed_families if name.startswith(f)), None)
             if family is None:
                 continue
 
@@ -713,21 +756,24 @@ def generate_gce_catalog(  # noqa: PLR0914
                     arch,
                 )
 
-            bundled_ssd = name.startswith("z3") or "lssd" in name
+            series = machine_family(name)
+            storage_optimized = is_bundled_local_ssd_family(name)
+            bundled_ssd = bundles_local_ssds(name)
             if bundled_ssd:
                 bundled = getattr(machine_type, "bundled_local_ssds", None)
-                partition_count = bundled.partition_count if bundled else _Z3_PARTITION_COUNTS.get(name, 0)
-                if name.startswith("z3"):
-                    disk_size = _Z3_METAL_DISK_SIZE_GIB if "metal" in name else _Z3_DISK_SIZE_GIB
+                partition_count = bundled.partition_count if bundled else _TITANIUM_SSD_PARTITION_COUNTS.get(name, 0)
+                if storage_optimized:
+                    vm_disk_size, metal_disk_size = _TITANIUM_SSD_DISK_SIZE_GIB[series]
+                    disk_size = metal_disk_size if "metal" in name else vm_disk_size
                 else:
                     disk_size = _GCE_LSSD_METAL_DISK_SIZE_GIB if "metal" in name else _GCE_LOCAL_SSD_DISK_GB
                 local_disk_count = partition_count
                 local_disk_gb = partition_count * disk_size
                 if "highlssd" in name:
-                    family = "z3-highmem-highlssd"
+                    family = f"{series}-highmem-highlssd"
                 elif "standardlssd" in name:
-                    family = "z3-highmem-standardlssd"
-                elif not name.startswith("z3"):
+                    family = f"{series}-highmem-standardlssd"
+                elif not storage_optimized:
                     family = f"{family}-lssd"
                 else:
                     continue
@@ -745,16 +791,16 @@ def generate_gce_catalog(  # noqa: PLR0914
                     family = "-".join(name.split("-")[:2])
 
             ssd_gib = local_disk_gb if bundled_ssd else 0.0
-            price: float | dict[str, float] | None = z3_prices.get(name) or general_prices.get(name)
-            if price is None and bundled_ssd and not name.startswith("z3"):
+            price: float | dict[str, float] | None = storage_optimized_prices.get(name) or general_prices.get(name)
+            if price is None and bundled_ssd and not storage_optimized:
                 # c4/c4a/c4d -lssd: priced from their vCPU + RAM + SSD SKUs, see _fetch_gce_resource_rates
                 price = _gce_price_for(on_demand_rates, family, vcpus, memory_gb, bundled_ssd_gib=ssd_gib) or None
-            # z3 bundles local SSD, which needs live migration that spot cannot have, so SCT never
-            # runs it as spot and a vCPU+RAM spot price would only be a wrong number on file.
+            # z3 and z4d bundle local SSD, which needs live migration that spot cannot have, so SCT never
+            # runs them as spot and a vCPU+RAM spot price would only be a wrong number on file.
             # c4/c4a/c4d -lssd can run as spot; their spot price must include the bundled SSD.
             spot_price = (
                 {}
-                if name.startswith("z3")
+                if storage_optimized
                 else _gce_price_for(spot_rates, family, vcpus, memory_gb, bundled_ssd_gib=ssd_gib)
             )
 
