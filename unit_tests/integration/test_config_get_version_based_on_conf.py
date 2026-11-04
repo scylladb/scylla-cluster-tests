@@ -196,66 +196,63 @@ def test_unified_package(monkeypatch):
     assert not _is_enterprise
 
 
-def test_unified_package_aws_sets_ubuntu_user(monkeypatch):
-    """Test that unified_package on AWS forces ami_db_scylla_user='ubuntu'."""
+UNIFIED_PACKAGE_X86 = (
+    "https://downloads.scylladb.com/unstable/scylla/master/relocatable/2023-11-13T03:04:27Z/"
+    "scylla-unified-5.5.0~dev-0.20231113.7b08886e8dd8.x86_64.tar.gz"
+)
+UBUNTU_SSM_AMI = "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/{ssm_arch}/hvm/ebs-gp3/ami-id"
+
+
+@pytest.mark.parametrize(
+    "ami, user",
+    [
+        pytest.param(None, None, id="no-ami"),
+        pytest.param("ami-test123", None, id="default-scyllaadm-user"),
+    ],
+)
+def test_unified_package_aws_fails_fast_without_ami_and_user(ami, user, monkeypatch):
+    """unified_package on AWS needs the config to bring a plain distro AMI and its user; SCT doesn't guess."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv(
-        "SCT_UNIFIED_PACKAGE",
-        (
-            "https://downloads.scylladb.com/unstable/scylla/master/relocatable/2023-11-13T03:04:27Z/"
-            "scylla-unified-5.5.0~dev-0.20231113.7b08886e8dd8.x86_64.tar.gz"
-        ),
-    )
+    monkeypatch.setenv("SCT_UNIFIED_PACKAGE", UNIFIED_PACKAGE_X86)
+    if ami:
+        monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", ami)
+
+    with pytest.raises(ValueError, match="unified_package on AWS needs a plain distro AMI and its SSH user"):
+        sct_config.SCTConfiguration()
+
+
+def test_unified_package_aws_keeps_configured_user(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_UNIFIED_PACKAGE", UNIFIED_PACKAGE_X86)
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-test123")
+    monkeypatch.setenv("SCT_AMI_DB_SCYLLA_USER", "ec2-user")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
 
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
     assert conf.get("use_preinstalled_scylla") is False
-    assert conf.get("ami_db_scylla_user") == "ubuntu"
+    assert conf.get("ami_db_scylla_user") == "ec2-user"
 
 
 @pytest.mark.parametrize(
-    "scylla_version, backend, expected_ami_ssm",
+    "scylla_version, arch, ssm_arch",
     [
-        pytest.param(
-            "relocatable:latest",
-            "aws",
-            "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
-            id="relocatable-latest-aws-x86_64",
-        ),
-        pytest.param(
-            "relocatable:master:x86_64",
-            "aws",
-            "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
-            id="relocatable-master-x86_64-aws",
-        ),
-        pytest.param(
-            "relocatable:master:aarch64",
-            "aws",
-            "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id",
-            id="relocatable-master-aarch64-aws",
-        ),
-        pytest.param("relocatable:latest", "gce", None, id="relocatable-latest-gce"),
+        pytest.param("relocatable:master:x86_64", "x86_64", "amd64", id="relocatable-x86_64"),
+        pytest.param("relocatable:master:aarch64", "aarch64", "arm64", id="relocatable-aarch64"),
     ],
 )
-def test_relocatable_version_resolves_unified_package(scylla_version, backend, expected_ami_ssm, monkeypatch):
-    """Test that relocatable:<branch> scylla_version resolves to unified_package URL without crashing."""
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
+def test_relocatable_version_on_aws_with_ubuntu_ami(scylla_version, arch, ssm_arch, monkeypatch):
+    """relocatable: resolves to a unified_package; the base AMI and user come from env, as the PGO trigger passes them."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", scylla_version)
-    if backend == "gce":
-        monkeypatch.setenv(
-            "SCT_GCE_IMAGE_DB",
-            "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7",
-        )
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", UBUNTU_SSM_AMI.format(ssm_arch=ssm_arch))
+    monkeypatch.setenv("SCT_AMI_DB_SCYLLA_USER", "ubuntu")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
 
-    fake_url = (
-        "https://downloads.scylladb.com/unstable/scylla/master/relocatable/latest/"
-        "scylla-unified-6.3.0~dev-0.20260101.abcdef123456.x86_64.tar.gz"
-    )
+    fake_url = f"https://example.com/relocatable/latest/scylla-unified-6.3.0~dev-0.20260101.abcdef123456.{arch}.tar.gz"
     with (
-        unittest.mock.patch("sdcm.sct_config.config.latest_unified_package", return_value=fake_url),
+        unittest.mock.patch("sdcm.sct_config.config.latest_unified_package", return_value=fake_url) as latest,
         unittest.mock.patch(
             "sdcm.sct_config.config.convert_name_to_ami_if_needed",
             side_effect=lambda param, region_names: param,
@@ -264,63 +261,29 @@ def test_relocatable_version_resolves_unified_package(scylla_version, backend, e
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
+    latest.assert_called_once_with(arch=arch, branch="master")
     assert conf.get("unified_package") == fake_url
     assert conf.get("scylla_version") == ""
     assert conf.get("use_preinstalled_scylla") is False
-    if expected_ami_ssm:
-        # On AWS, ami_id_db_scylla should be auto-set to the Ubuntu 24.04 SSM resolve pattern
-        assert conf.get("ami_id_db_scylla") == expected_ami_ssm
-
-
-def test_unified_package_aws_auto_resolves_ami(monkeypatch):
-    """Test that unified_package on AWS auto-resolves ami_id_db_scylla to Ubuntu 24.04 base AMI when not set."""
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv(
-        "SCT_UNIFIED_PACKAGE",
-        (
-            "https://downloads.scylladb.com/unstable/scylla/master/relocatable/2023-11-13T03:04:27Z/"
-            "scylla-unified-5.5.0~dev-0.20231113.7b08886e8dd8.x86_64.tar.gz"
-        ),
-    )
-
-    with unittest.mock.patch(
-        "sdcm.sct_config.config.convert_name_to_ami_if_needed",
-        side_effect=lambda param, region_names: param,
-    ):
-        conf = sct_config.SCTConfiguration()
-        conf.verify_configuration()
-
-    assert conf.get("use_preinstalled_scylla") is False
     assert conf.get("ami_db_scylla_user") == "ubuntu"
-    # ami_id_db_scylla should be auto-set to the Ubuntu 24.04 SSM resolve pattern
-    assert "resolve:ssm:" in conf.get("ami_id_db_scylla")
-    assert "ubuntu" in conf.get("ami_id_db_scylla")
+    assert conf.get("ami_id_db_scylla") == UBUNTU_SSM_AMI.format(ssm_arch=ssm_arch)
 
 
-def test_unified_package_aws_verify_passes_without_ami(monkeypatch):
-    """Test that verify_configuration passes with unified_package on AWS even if ami_id_db_scylla is not explicitly set."""
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+def test_relocatable_version_resolves_unified_package_on_gce(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "relocatable:latest")
     monkeypatch.setenv(
-        "SCT_UNIFIED_PACKAGE",
-        (
-            "https://downloads.scylladb.com/unstable/scylla/master/relocatable/2023-11-13T03:04:27Z/"
-            "scylla-unified-5.5.0~dev-0.20231113.7b08886e8dd8.x86_64.tar.gz"
-        ),
+        "SCT_GCE_IMAGE_DB",
+        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7",
     )
 
-    # Mock convert_name_to_ami_if_needed to pass through the SSM pattern (simulates AMI resolution)
-    with unittest.mock.patch(
-        "sdcm.sct_config.config.convert_name_to_ami_if_needed",
-        side_effect=lambda param, region_names: param,
-    ):
+    fake_url = "https://example.com/relocatable/latest/scylla-unified-6.3.0~dev-0.20260101.abcdef123456.x86_64.tar.gz"
+    with unittest.mock.patch("sdcm.sct_config.config.latest_unified_package", return_value=fake_url):
         conf = sct_config.SCTConfiguration()
-        # This should NOT raise AssertionError about ami_id_db_scylla,
-        # because unified_package is set and _check_version_supplied should not
-        # require backend-specific images when unified_package is provided
         conf.verify_configuration()
 
+    assert conf.get("unified_package") == fake_url
     assert conf.get("use_preinstalled_scylla") is False
-    assert conf.get("unified_package") is not None
 
 
 def test_aws_ami_missing_scylla_version_tag(monkeypatch):

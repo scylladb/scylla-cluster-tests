@@ -467,7 +467,6 @@ class SCTConfiguration(*CONFIG_GROUPS):
         dist_version = scylla_linux_distro.split("-")[-1]
 
         # 6.0) handle relocatable:<version> scylla_version format
-        relocatable_arch = None  # Track arch resolved from relocatable: format for use in section 6.0.1
         if scylla_version := self.get("scylla_version"):
             if scylla_version.startswith("relocatable:"):
                 self.log.info("Resolving scylla_version='%s' to unified package URL", scylla_version)
@@ -488,11 +487,9 @@ class SCTConfiguration(*CONFIG_GROUPS):
                         "architecture explicitly, e.g. 'relocatable:master:aarch64'",
                         arch,
                     )
-                relocatable_arch = arch
                 unified_url = latest_unified_package(arch=arch, branch=branch)
                 self.log.info("Resolved unified package URL: %s", unified_url)
                 self["unified_package"] = unified_url
-                # ami_id_db_scylla auto-setting is handled below in section 6.0.1
                 self["scylla_version"] = ""
                 scylla_version = ""
 
@@ -514,7 +511,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
                 self._replace_docker_image_latest_tag()
             elif self.get("unified_package"):
                 # unified_package is already set (either directly or resolved from relocatable:);
-                # skip image/repo lookup — the base OS image will be auto-set in section 6.0.1
+                # skip image/repo lookup — the base OS image comes from the config (checked in section 6.0.1)
                 pass
             elif not self.get("ami_id_db_scylla") and self.get("cluster_backend") == "aws":
                 ami_list = []
@@ -659,29 +656,20 @@ class SCTConfiguration(*CONFIG_GROUPS):
                     self.target_db_image_ids = [ami.image_id for ami in target_ami_list]
 
         # 6.0.1) when unified_package is used (either directly or resolved from relocatable:),
-        #        override use_preinstalled_scylla and ami_db_scylla_user for AWS
+        #        override use_preinstalled_scylla; on AWS the config must bring a plain distro AMI and its user.
+        #        Only the Scylla AMI default user is caught here: a user that doesn't match the AMI's distro
+        #        (e.g. 'ubuntu' on Amazon Linux) still fails later, on the SSH wait.
         if self.get("unified_package"):
             self.log.info("unified_package is set, forcing use_preinstalled_scylla=False")
             self["use_preinstalled_scylla"] = False
-            if self.get("cluster_backend") == "aws":
-                self.log.info("unified_package is set on AWS backend, forcing ami_db_scylla_user='ubuntu'")
-                self["ami_db_scylla_user"] = "ubuntu"
-                if not self.get("ami_id_db_scylla"):
-                    # Use arch from relocatable: format if available, otherwise detect from instance type
-                    arch = relocatable_arch or self._get_normalized_arch(
-                        self.get("instance_type_db"), region_name=region_names[0]
-                    )
-                    ubuntu_ssm_map = {
-                        "x86_64": "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
-                        "aarch64": "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id",
-                    }
-                    ami_ssm = ubuntu_ssm_map.get(arch, ubuntu_ssm_map["x86_64"])
-                    self.log.info(
-                        "unified_package: auto-setting ami_id_db_scylla to Ubuntu 24.04 base AMI for arch=%s: %s",
-                        arch,
-                        ami_ssm,
-                    )
-                    self["ami_id_db_scylla"] = convert_name_to_ami_if_needed(ami_ssm, tuple(region_names))
+            if self.get("cluster_backend") == "aws" and (
+                not self.get("ami_id_db_scylla") or self.get("ami_db_scylla_user") == "scyllaadm"
+            ):
+                raise ValueError(
+                    "unified_package on AWS needs a plain distro AMI and its SSH user: set ami_id_db_scylla and "
+                    "ami_db_scylla_user to the default user of that AMI's distro (not the Scylla AMI default "
+                    "'scyllaadm'), e.g. an Ubuntu 24.04 AMI with ami_db_scylla_user='ubuntu'"
+                )
 
         # 6.1) handle oracle_scylla_version if exists
         if (oracle_scylla_version := self.get("oracle_scylla_version")) and self.get("db_type") == "mixed_scylla":
