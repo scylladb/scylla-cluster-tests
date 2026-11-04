@@ -10,14 +10,11 @@
 instance_type_db: 'i8g.large'
 instance_type_loader: 'c7g.large'
 
-# The roles without a literal type fall back to sizing: zero-token nodes to sizing_db and the
-# oracle cluster to sizing_db_oracle. These override the x86_64 pin of configurations/minicloud.yaml.
-sizing_db:
-  arch: arm64
-sizing_db_oracle:
-  arch: arm64
-sizing_loader:
-  arch: arm64
+# The zero-token nodes and the oracle cluster get literal types too. A sizing dict needs a vcpu
+# constraint, and the x86_64 pin of configurations/minicloud.yaml has none, so sizing gives these
+# roles no type.
+zero_token_instance_type_db: 'i8g.large'
+instance_type_db_oracle: 'i8g.large'
 
 # The scylladb-monitor AMI is published for amd64 only, so there is no arm64 monitor to boot.
 n_monitor_nodes: 0
