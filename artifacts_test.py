@@ -24,7 +24,7 @@ import requests
 
 from sdcm.argus_results import send_iotune_results_to_argus
 from sdcm.sct_events import Severity
-from sdcm.provision.gce.constants import BUNDLED_LOCAL_SSD_FAMILIES
+from sdcm.provision.gce.constants import bundles_local_ssds
 from sdcm.provision.helpers.certificate import c_s_transport_str
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.tester import ClusterTester
@@ -282,7 +282,7 @@ class ArtifactsTest(ClusterTester):
                     if (
                         backend == "gce"
                         and not self.params.get("gce_n_local_ssd_disk_db")
-                        and self.node.db_node_instance_type.split("-", maxsplit=1)[0] not in BUNDLED_LOCAL_SSD_FAMILIES
+                        and not bundles_local_ssds(self.node.db_node_instance_type)
                     ):
                         self.skipTest("the data disk is a persistent disk - skipping this test.")
                     validator = IOTuneValidator(self.node, backend)
