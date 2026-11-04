@@ -82,12 +82,11 @@ from sdcm.nemesis import NemesisBaseClass
 
 
 class DiskCorruptionMonkey(NemesisBaseClass):
-    disruptive = True        # This disrupts the node
-    networking = False       # No network operations
-    kubernetes = False       # Not K8s-compatible
+    disruptive = True  # This disrupts the node
+    networking = False  # No network operations
+    kubernetes = False  # Not K8s-compatible
 
-    def disrupt(self):
-        ...
+    def disrupt(self): ...
 ```
 
 If your nemesis is part of a logical group, create a new module (e.g., `monkey/disk_operations.py`). The auto-discovery will find it.
@@ -152,10 +151,10 @@ By default, nemesis target data nodes. Use decorators to change this:
 ```python
 from sdcm.nemesis import NemesisBaseClass, target_all_nodes
 
+
 @target_all_nodes  # Target any node (data + zero-token)
 class MyAllNodesMonkey(NemesisBaseClass):
-    def disrupt(self):
-        ...
+    def disrupt(self): ...
 ```
 
 ### Step 5: Add CI configuration (optional)
@@ -169,8 +168,7 @@ class DiskCorruptionMonkey(NemesisBaseClass):
     additional_configs = ["configurations/disk-corruption.yaml"]
     additional_params = {"disk_size": "100GB"}
 
-    def disrupt(self):
-        ...
+    def disrupt(self): ...
 ```
 
 These are consumed by `NemesisJobGenerator` to create per-nemesis Jenkins pipelines.

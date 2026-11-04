@@ -261,8 +261,7 @@ class MyTabletNemesis(NemesisBaseClass):
 
         return None  # runnable — keep in the rotation
 
-    def disrupt(self):
-        ...
+    def disrupt(self): ...
 ```
 
 #### What belongs in `precheck()` vs `disrupt()`
@@ -334,15 +333,15 @@ By default, nemesis target data nodes. Use decorators to change this:
 ```python
 from sdcm.nemesis import NemesisBaseClass, target_all_nodes, target_data_nodes
 
+
 @target_all_nodes  # Target any node (data + zero-token)
 class MyAllNodesMonkey(NemesisBaseClass):
-    def disrupt(self):
-        ...
+    def disrupt(self): ...
+
 
 @target_data_nodes  # Explicitly target only data nodes (default)
 class MyDataNodeMonkey(NemesisBaseClass):
-    def disrupt(self):
-        ...
+    def disrupt(self): ...
 ```
 
 ### Step 4: Add CI configuration (optional)
@@ -359,8 +358,7 @@ class MyNewMonkey(NemesisBaseClass):
     # Extra parameters for Jenkins pipeline generation
     additional_params = {"my_param": "value"}
 
-    def disrupt(self):
-        ...
+    def disrupt(self): ...
 ```
 
 These are used by `NemesisJobGenerator` to create per-nemesis Jenkins jobs and test configs.
@@ -414,11 +412,13 @@ Select specific nemesis by class name:
 class MyFixedSetRunner(NemesisRunner):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.disruptions_list = self.build_disruptions_by_name([
-            "StopStartMonkey",
-            "DecommissionMonkey",
-            "MajorCompactionMonkey",
-        ])
+        self.disruptions_list = self.build_disruptions_by_name(
+            [
+                "StopStartMonkey",
+                "DecommissionMonkey",
+                "MajorCompactionMonkey",
+            ]
+        )
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 ```
 
