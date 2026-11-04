@@ -11,13 +11,20 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from sdcm.provision.gce.constants import (
     DISK_TYPE_HYPERDISK_BALANCED,
+    DISK_TYPE_LOCAL_SSD,
+    bundles_local_ssds,
 )
-from sdcm.provision.gce.instance_provider import bundles_local_ssds
+from sdcm.provision.gce.disk_provider import DiskProvider
+from sdcm.provision.gce.instance_provider import VirtualMachineProvider
 from sdcm.provision.gce.instance_provider import resolve_root_disk_type as _resolve_root_disk_type
+from sdcm.provision.provisioner import DataDisk, InstanceDefinition, PricingModel
 
 
 @pytest.mark.parametrize(
@@ -67,3 +74,41 @@ def test_other_families_keep_the_configured_root_disk_type(instance_type, config
 )
 def test_bundles_local_ssds(instance_type, expected):
     assert bundles_local_ssds(instance_type) is expected
+
+
+@pytest.mark.parametrize(
+    "instance_type, expected_local_ssds",
+    [("c4-highmem-8-lssd", 0), ("c4d-highmem-8-lssd", 0), ("z3-highmem-88", 0), ("c4-highmem-8", 8)],
+)
+@patch("sdcm.provision.gce.instance_provider.get_gce_service_accounts", return_value=None)
+def test_requested_local_ssds_are_dropped_on_bundled_ssd_types(_mock_sa, instance_type, expected_local_ssds):
+    """SCT-1408: GCE answers `should have [1] local SSD(s)` when SCT adds requested ones on top."""
+    network_provider = MagicMock()
+    network_provider.get_network_tags.return_value = []
+    network_provider.get_network_url.return_value = "global/networks/default"
+    with patch("sdcm.provision.gce.instance_provider.get_gce_compute_instances_client", return_value=(MagicMock(), {})):
+        provider = VirtualMachineProvider(
+            project_id="p",
+            zone="us-central1-a",
+            test_id="t",
+            disk_provider=DiskProvider("p", "us-central1-a"),
+            network_provider=network_provider,
+        )
+    provider._build_and_insert_instance(
+        definition=InstanceDefinition(
+            name="db-1",
+            image_id="projects/p/global/images/i",
+            type=instance_type,
+            user_name="scyllaadm",
+            ssh_key=SimpleNamespace(name="k", public_key=b"ssh-rsa AAA k"),
+            tags={},
+            data_disks=[DataDisk(type=DISK_TYPE_LOCAL_SSD, size=375, count=8)],
+        ),
+        pricing_model=PricingModel.ON_DEMAND,
+        user_data="",
+        startup_script="",
+        normalized_name="db-1",
+    )
+
+    instance = provider._instances_client.insert.call_args.kwargs["request"].instance_resource
+    assert sum("-data-local-ssd-" in d.device_name for d in instance.disks) == expected_local_ssds
