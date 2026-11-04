@@ -7519,6 +7519,8 @@ class BaseMonitorSet:
     # This is a Mixin for monitoring cluster and should not be inherited
     DB_NODES_IP_ADDRESS = "ip_address"
     json_file_params_for_replace = {"$test_name": get_test_name()}
+    # Parallel callers (e.g. parallel decommissions) race on the same targets files
+    _reconfigure_lock = threading.Lock()
 
     def __init__(self, targets, params, monitor_id: str = None):
         self.targets = targets
@@ -8173,78 +8175,79 @@ class BaseMonitorSet:
         message="Waiting for reconfiguring scylla monitoring",
     )
     def reconfigure_scylla_monitoring(self):
-        scylla_targets_per_dc = {}
-        node_export_targets_per_dc = {
-            "sct-runner": {
-                "labels": {"dc": "sct-runner"},
-                "targets": [f"{normalize_ipv6_url(get_my_ip())}:9100"],
+        with self._reconfigure_lock:
+            scylla_targets_per_dc = {}
+            node_export_targets_per_dc = {
+                "sct-runner": {
+                    "labels": {"dc": "sct-runner"},
+                    "targets": [f"{normalize_ipv6_url(get_my_ip())}:9100"],
+                }
             }
-        }
-        for db_node in getattr(self.targets.get("db_cluster"), "nodes", []):
-            if db_node.region not in scylla_targets_per_dc:
-                scylla_targets_per_dc[db_node.region] = []
-            if db_node.region not in node_export_targets_per_dc:
-                node_export_targets_per_dc[db_node.region] = {"labels": {"dc": db_node.region}, "targets": []}
-            db_node_as_target = f"{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}"
-            scylla_targets_per_dc[db_node.region].append(db_node_as_target)
+            for db_node in getattr(self.targets.get("db_cluster"), "nodes", []):
+                if db_node.region not in scylla_targets_per_dc:
+                    scylla_targets_per_dc[db_node.region] = []
+                if db_node.region not in node_export_targets_per_dc:
+                    node_export_targets_per_dc[db_node.region] = {"labels": {"dc": db_node.region}, "targets": []}
+                db_node_as_target = f"{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}"
+                scylla_targets_per_dc[db_node.region].append(db_node_as_target)
 
-            # NOTE: DB host node metrics
-            node_export_targets_per_dc[db_node.region]["targets"].append(db_node_as_target)
-            # NOTE: DB node syslog-ng metrics
-            node_export_targets_per_dc[db_node.region]["targets"].append(
-                f"{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}:9577"
-            )
-        # NOTE: per-dc metrics get configured like the following:
-        #       genconfig.py ... -dc dc1:192.168.1.1,192.168.1.2 -dc dc2:192.168.2.1,192.168.2.2
-        scylla_targets = ""
-        for region, targets_list in scylla_targets_per_dc.items():
-            targets = ",".join(targets_list)
-            scylla_targets += f"-dc {region}:{targets} "
+                # NOTE: DB host node metrics
+                node_export_targets_per_dc[db_node.region]["targets"].append(db_node_as_target)
+                # NOTE: DB node syslog-ng metrics
+                node_export_targets_per_dc[db_node.region]["targets"].append(
+                    f"{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}:9577"
+                )
+            # NOTE: per-dc metrics get configured like the following:
+            #       genconfig.py ... -dc dc1:192.168.1.1,192.168.1.2 -dc dc2:192.168.2.1,192.168.2.2
+            scylla_targets = ""
+            for region, targets_list in scylla_targets_per_dc.items():
+                targets = ",".join(targets_list)
+                scylla_targets += f"-dc {region}:{targets} "
 
-        for node in self.nodes:
-            if "monitor" not in node_export_targets_per_dc:
-                node_export_targets_per_dc["monitor"] = {"labels": {"dc": "monitor"}, "targets": []}
-            node_export_targets_per_dc["monitor"]["targets"].append(
-                f"{normalize_ipv6_url(node.private_ip_address)}:9100"
-            )
+            for node in self.nodes:
+                if "monitor" not in node_export_targets_per_dc:
+                    node_export_targets_per_dc["monitor"] = {"labels": {"dc": "monitor"}, "targets": []}
+                node_export_targets_per_dc["monitor"]["targets"].append(
+                    f"{normalize_ipv6_url(node.private_ip_address)}:9100"
+                )
 
-        for node in self.nodes:
-            node.remoter.run(
-                shell_script_cmd(f"""\
-                cd {self.monitor_install_path}
-                mkdir -p {self.monitoring_conf_dir}
-                export PATH=/usr/local/bin:$PATH  # hack to enable running on docker
-                python3 genconfig.py -s -n -d {self.monitoring_conf_dir} {scylla_targets}
-            """),
-                verbose=True,
-            )
-
-            with node._remote_yaml(
-                f"{self.monitoring_conf_dir}/node_exporter_servers.yml", sudo=False
-            ) as exporter_yaml:
-                exporter_yaml.clear()
-                for dc_data in node_export_targets_per_dc.values():
-                    exporter_yaml.append(dc_data)
-
-            if self.params.get("cloud_prom_bearer_token") or (
-                self.params.get("cluster_backend") == "xcloud" and self.promproxy_config
-            ):
+            for node in self.nodes:
                 node.remoter.run(
                     shell_script_cmd(f"""\
-                    echo "targets: [] " > {self.monitoring_conf_dir}/scylla_servers.yml
-                    echo "targets: [] " > {self.monitoring_conf_dir}/node_exporter_servers.yml
+                    cd {self.monitor_install_path}
+                    mkdir -p {self.monitoring_conf_dir}
+                    export PATH=/usr/local/bin:$PATH  # hack to enable running on docker
+                    python3 genconfig.py -s -n -d {self.monitoring_conf_dir} {scylla_targets}
                 """),
                     verbose=True,
                 )
 
-            if self.params.get("scylla_rsyslog_setup"):
-                for db_node in self.targets["db_cluster"].nodes:
-                    db_node.remoter.sudo(
-                        shell_script_cmd(
-                            f"[ -f /etc/rsyslog.d/scylla.conf ] || scylla_rsyslog_setup --remote-server {node.ip_address}"
-                        ),
+                with node._remote_yaml(
+                    f"{self.monitoring_conf_dir}/node_exporter_servers.yml", sudo=False
+                ) as exporter_yaml:
+                    exporter_yaml.clear()
+                    for dc_data in node_export_targets_per_dc.values():
+                        exporter_yaml.append(dc_data)
+
+                if self.params.get("cloud_prom_bearer_token") or (
+                    self.params.get("cluster_backend") == "xcloud" and self.promproxy_config
+                ):
+                    node.remoter.run(
+                        shell_script_cmd(f"""\
+                        echo "targets: [] " > {self.monitoring_conf_dir}/scylla_servers.yml
+                        echo "targets: [] " > {self.monitoring_conf_dir}/node_exporter_servers.yml
+                    """),
                         verbose=True,
                     )
+
+                if self.params.get("scylla_rsyslog_setup"):
+                    for db_node in self.targets["db_cluster"].nodes:
+                        db_node.remoter.sudo(
+                            shell_script_cmd(
+                                f"[ -f /etc/rsyslog.d/scylla.conf ] || scylla_rsyslog_setup --remote-server {node.ip_address}"
+                            ),
+                            verbose=True,
+                        )
 
     def _create_manager_prometheus_yaml(self, node):
         manager_prometheus_port = self.params.get("manager_prometheus_port")
