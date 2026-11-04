@@ -1051,6 +1051,7 @@ def create_instance(  # noqa: PLR0913
     # They cannot be spot instances because MIGRATE is incompatible with spot VMs
     if "z3-highmem" in machine_type:
         instance.scheduling.on_host_maintenance = "MIGRATE"
+        instance.disks = [disk for disk in disks if "-data-local-ssd-" not in disk.device_name]
     elif spot:
         # Set the Spot VM setting
         # Spot VMs require on_host_maintenance to be TERMINATE as they cannot live migrate
@@ -1064,10 +1065,6 @@ def create_instance(  # noqa: PLR0913
         # avoid live migration and unexpected restarts disrupting tests
         instance.scheduling.on_host_maintenance = "TERMINATE"
         instance.scheduling.automatic_restart = False
-
-    if "lssd" in machine_type or "z3-highmem" in machine_type:
-        # local SSD machine types (z3, z4d, c4, c4a, c4d) come with their SSDs, GCE rejects explicitly requested ones on top
-        instance.disks = [disk for disk in disks if "-data-local-ssd-" not in disk.device_name]
 
     if custom_hostname is not None:
         # Set the custom hostname for the instance
