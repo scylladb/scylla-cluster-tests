@@ -93,22 +93,22 @@ Docker on macOS cannot give a container access to HVF, so SCT runs minicloud as 
    ```bash
    brew install qemu
    ```
-2. Build minicloud and put the binary on your `PATH`:
+2. Install minicloud with Homebrew:
    ```bash
-   mkdir -p ~/.local/bin
-   gh repo clone scylladb/minicloud ~/Code/minicloud
-   cd ~/Code/minicloud
-   cargo build --release
-   ln -sf "$PWD/target/release/minicloud" ~/.local/bin/minicloud
+   brew tap scylladb/minicloud https://github.com/scylladb/minicloud
+   brew install --HEAD minicloud
    ```
+   Do not start it with `brew services start minicloud`. That service uses port 5050 without the arguments that SCT needs, and SCT does not start a run on it.
 3. Install the `minicloud-tund` helper. It holds the `utun` device and the routes to the guests:
    ```bash
-   sudo MINICLOUD_VPC_ROUTES=10.160.0.0/11,172.31.0.0/16 ./minicloud-setup.sh
+   sudo MINICLOUD_VPC_ROUTES=10.160.0.0/11,172.31.0.0/16 "$(brew --prefix)/bin/minicloud-setup.sh" \
+     --tund "$(brew --prefix)/bin/minicloud-tund"
    ```
 4. Make sure that the helper socket exists:
    ```bash
    ls -l /var/run/minicloud-tund.sock
    ```
+   If you set `MINICLOUD_TUND_SOCKET` to a different path, SCT and minicloud both use that path.
 5. Point the Docker SDK at your Docker daemon. OrbStack and Docker Desktop do not serve `/var/run/docker.sock`, and SCT starts the stress tools through the SDK. Add this line to your shell profile:
    ```bash
    export DOCKER_HOST=$(docker context inspect -f '{{.Endpoints.docker.Host}}')
@@ -228,6 +228,8 @@ The [Argus CLI README](https://github.com/scylladb/argus/blob/cli/v0.4.0/cli/REA
 | `/dev/kvm is not available` (Linux) | KVM is off, or your user is not in the `kvm` group. Do step 1 of [Linux host](#linux-host). |
 | `'minicloud' is not on PATH` (macOS) | Do step 2 of [macOS host](#macos-host). |
 | `/var/run/minicloud-tund.sock does not exist` (macOS) | The `minicloud-tund` helper is not installed. Do step 3 of [macOS host](#macos-host). |
+| `a minicloud that SCT did not start serves http://localhost:5050` (macOS) | Another minicloud uses the port, for example the Homebrew service. Run `brew services stop minicloud`, then run again. |
+| `an arm64 host supports only -b aws` | The gce and azure guest images are x86-64. On an arm64 host, use the `aws` backend. |
 | `Error while fetching server API version: ... FileNotFoundError` in `SetUp` (macOS) | The Docker SDK cannot find the daemon. Do step 5 of [macOS host](#macos-host). |
 | `minicloud-setup.sh failed` (Linux) | Your user does not have passwordless sudo. Do step 2 of [Linux host](#linux-host). |
 | `minicloud cannot lock guest memory on macOS` | `configurations/minicloud/macos.yaml` is not in the config list. Use `scripts/run-minicloud-test.sh`, or add `arm64.yaml` and then `macos.yaml` after `configurations/minicloud.yaml`. |
