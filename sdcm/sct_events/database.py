@@ -138,10 +138,12 @@ DatabaseLogEvent.add_subevent_type(
 # it before DATABASE_ERROR. Message example:
 # storage_proxy - Failed to apply mutation from 10.0.2.108#8: exceptions::mutation_write_timeout_exception
 # (Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE.)
+# Match the exception only when its message follows it, so C++ type names in the frames of a decoded task
+# backtrace (e.g. "utils::exception_container<exceptions::mutation_write_timeout_exception, ...>") don't match.
 DatabaseLogEvent.add_subevent_type(
     "SYSTEM_PAXOS_TIMEOUT",
     severity=Severity.WARNING,
-    regex="(mutation_write_|Operation timed out for system.paxos|Operation failed for system.paxos)",
+    regex=r"(mutation_write_\w+ \(|Operation timed out for system.paxos|Operation failed for system.paxos)",
 )
 DatabaseLogEvent.add_subevent_type(
     "SERVICE_LEVEL_CONTROLLER",
