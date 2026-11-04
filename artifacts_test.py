@@ -24,12 +24,12 @@ import requests
 
 from sdcm.argus_results import send_iotune_results_to_argus
 from sdcm.sct_events import Severity
-from sdcm.provision.gce.constants import bundles_local_ssds
 from sdcm.provision.helpers.certificate import c_s_transport_str
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.tester import ClusterTester
 from sdcm.utils.adaptive_timeouts import NodeLoadInfoServices
 from sdcm.utils.common import get_latest_scylla_release
+from sdcm.utils.gce_machine_types import bundles_local_ssds
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.minicloud.endpoint import is_minicloud_active
 from sdcm.utils.perftune_validator import PerftuneOutputChecker

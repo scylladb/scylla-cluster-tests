@@ -8,6 +8,7 @@ sdcm.utils.gce_utils.create_instance (SCT runner VM).
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
 from google.cloud import compute_v1
 
 from sdcm.provision.gce.instance_provider import VirtualMachineProvider
@@ -71,7 +72,8 @@ def test_instance_provider_default_branch_sets_terminate_and_no_auto_restart(_mo
     _assert_terminate_no_restart(instance)
 
 
-def test_create_instance_default_branch_sets_terminate_and_no_auto_restart() -> None:
+def _create_instance_insert_request(machine_type: str, disks: list[compute_v1.AttachedDisk], **kwargs):
+    """Run `gce_utils.create_instance` against a mocked client and return the instance it sends."""
     instance_client = MagicMock()
     instance_client.get.return_value = compute_v1.Instance()
 
@@ -83,10 +85,43 @@ def test_create_instance_default_branch_sets_terminate_and_no_auto_restart() -> 
             project_id="test-project",
             zone="us-central1-a",
             instance_name="test-runner",
-            disks=[compute_v1.AttachedDisk(boot=True, device_name="boot")],
-            machine_type="n2-standard-1",
+            disks=disks,
+            machine_type=machine_type,
             network_name="default",
+            **kwargs,
         )
 
-    instance = instance_client.insert.call_args.kwargs["request"].instance_resource
+    return instance_client.insert.call_args.kwargs["request"].instance_resource
+
+
+def test_create_instance_default_branch_sets_terminate_and_no_auto_restart() -> None:
+    instance = _create_instance_insert_request(
+        "n2-standard-1", [compute_v1.AttachedDisk(boot=True, device_name="boot")]
+    )
     _assert_terminate_no_restart(instance)
+
+
+@pytest.mark.parametrize("spot", [False, True], ids=["on-demand", "spot"])
+@pytest.mark.parametrize(
+    "machine_type",
+    [
+        "z3-highmem-8-highlssd",
+        "z4d-highmem-16-highlssd",
+        "z4d-highmem-16-standardlssd",
+        "zones/us-central1-a/machineTypes/z4d-highmem-16-highlssd",
+    ],
+)
+def test_create_instance_bundled_ssd_family_migrates_without_extra_local_ssds(machine_type, spot) -> None:
+    """SCT-1410: GCE rejects z4d with TERMINATE, and rejects local SSDs requested on top of the bundled ones."""
+    instance = _create_instance_insert_request(
+        machine_type,
+        [
+            compute_v1.AttachedDisk(boot=True, device_name="boot"),
+            compute_v1.AttachedDisk(device_name="test-runner-data-local-ssd-0"),
+        ],
+        spot=spot,
+    )
+
+    assert instance.scheduling.on_host_maintenance == "MIGRATE"
+    assert not instance.scheduling.provisioning_model
+    assert [disk.device_name for disk in instance.disks] == ["boot"]

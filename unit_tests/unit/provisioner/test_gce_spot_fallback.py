@@ -73,12 +73,17 @@ def test_spot_pricing_sets_the_spot_provisioning_model(instance_type):
 
 
 @pytest.mark.parametrize("pricing_model", [PricingModel.SPOT, PricingModel.ON_DEMAND], ids=["spot", "on-demand"])
-def test_bundled_local_ssd_family_is_never_requested_as_spot(pricing_model):
-    """z3 has no spot form: GCE rejects the insert with "OnHostMaintenance must be set to MIGRATE".
+@pytest.mark.parametrize(
+    "instance_type",
+    ["z3-highmem-8-highlssd", "z3-highmem-88", "z4d-highmem-16-highlssd", "z4d-highmem-16-standardlssd"],
+)
+def test_bundled_local_ssd_family_is_never_requested_as_spot(instance_type, pricing_model):
+    """z3 and z4d have no spot form: GCE rejects the insert with "OnHostMaintenance must be set to MIGRATE"
+    (z3), or "Scheduling must have onHostMaintenance be one of the following valid types: [MIGRATE]" (z4d).
 
     Asking for it anyway fails provisioning outright, so a spot request is served on-demand instead.
     """
-    scheduling = build_scheduling("z3-highmem-8-highlssd", pricing_model)
+    scheduling = build_scheduling(instance_type, pricing_model)
 
     assert scheduling.on_host_maintenance == "MIGRATE"
     assert not scheduling.provisioning_model
