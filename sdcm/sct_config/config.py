@@ -45,7 +45,6 @@ from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.common.oracle import ORACLE_IMAGE_PARAMS, ORACLE_USER_PREFIX_SUFFIX
 from sdcm.provision.network_configuration import azure_network_interfaces, ssh_connection_ip_type
-from sdcm.provision.provisioner import VmArch
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.sct_config.defaults import (
     AMI_ID_PARAMS,
@@ -117,6 +116,7 @@ from sdcm.utils.version_utils import (
     parse_scylla_version_tag,
     resolve_latest_repo_symlink,
 )
+from sdcm.utils.vm_arch import VmArch
 from sdcm.xcloud.api_client import CloudProviderType, ScyllaCloudAPIClient
 from sdcm.xcloud.cluster_config_utils import (
     MIN_SCYLLA_VERSION_FOR_VS,

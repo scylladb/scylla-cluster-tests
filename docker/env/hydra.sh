@@ -17,6 +17,17 @@ HOST_NAME=SCT-CONTAINER
 USER_ID=$(id -u "${USER}"):$(id -g "${USER}")
 HOME_DIR=${HOME}
 
+# Shell completion (utils/.bash_completion sets _HYDRA_COMPLETE): ask sct.py inside the image and print
+# nothing but its answer. --pull=never keeps a TAB press from hanging on a download; run hydra once first.
+if [[ -n "${_HYDRA_COMPLETE}" ]]; then
+    tool=${HYDRA_TOOL-$(command -v docker >/dev/null && echo docker || echo podman)}
+    exec ${tool} run --rm --pull=never -u "${USER_ID}" \
+        -v "${SCT_DIR}:${SCT_DIR}" -w "${SCT_DIR}" -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro \
+        -e _HYDRA_COMPLETE -e COMP_WORDS -e COMP_CWORD -e _SCT_LOGDIR \
+        -e HOME="${HOME_DIR}" -v "${HOME_DIR}:${HOME_DIR}" \
+        "${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION}" ./sct.py 2>/dev/null
+fi
+
 CREATE_RUNNER_INSTANCE=""
 RUNNER_IP_FILE="${SCT_DIR}/sct_runner_ip"
 RUNNER_IP=""
