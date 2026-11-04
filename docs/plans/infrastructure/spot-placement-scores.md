@@ -176,6 +176,7 @@ The discovery-based client does, and it is **already a dependency** — `google-
 ```python
 # sdcm/utils/gce_region.py:76 and gce_utils.py:744 already do exactly this for iam/v1 and logging/v2
 from googleapiclient.discovery import build
+
 service = build("compute", "beta", credentials=credentials, cache_discovery=False)
 service.advice().capacity(project=project, region=region, body={...}).execute()
 ```

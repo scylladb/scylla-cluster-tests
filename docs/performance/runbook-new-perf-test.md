@@ -46,8 +46,8 @@ Rules that are not optional:
 
 ```python
 @latency_calculator_decorator(legend="My new scenario", cycle_name="my_scenario")
-def _run_my_scenario(self, stress_cmd):
-    ...
+def _run_my_scenario(self, stress_cmd): ...
+
 
 def test_latency_my_scenario(self):
     self.preload_data()
