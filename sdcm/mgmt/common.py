@@ -60,6 +60,12 @@ class BackupRetentionLockMode(StrEnum):
     LOCKED = "locked"
 
 
+class RepairIncrementalMode(StrEnum):
+    INCREMENTAL = "incremental"
+    FULL = "full"
+    DISABLED = "disabled"
+
+
 class HostRestStatus(Enum):
     UP = "UP"
     DOWN = "DOWN"
