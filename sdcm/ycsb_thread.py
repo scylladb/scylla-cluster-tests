@@ -302,7 +302,7 @@ class YcsbStressThread(DockerBasedStressThread):
     @staticmethod
     def parse_final_output(result):
         """
-        parse ycsb final results to match what we get out of cassandra-stress
+        Parse ycsb final results to match what we get out of cassandra-stress
         latencies returned in milliseconds
 
         :param result: output of ycsb command

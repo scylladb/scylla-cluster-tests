@@ -31,9 +31,7 @@ TABLE_NAME = "standard1"
 
 class IcsSpaceAmplificationTest(LongevityTest):
     def _get_filesystem_available_size_list(self, node, start_time):
-        """
-        :returns a list of file-system free-capacity on point in time from 'start_time' up to now.
-        """
+        """:returns a list of file-system free-capacity on point in time from 'start_time' up to now."""
         node_capacity_query_postfix = self.prometheus_db.generate_node_capacity_query_postfix(node)
         available_capacity_query = f"{AVAIL_SIZE_METRIC}{node_capacity_query_postfix}"
         available_size_res = self.prometheus_db.query(
@@ -110,9 +108,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
         ).publish()
 
     def _get_nodes_used_capacity(self) -> dict:
-        """
-        :rtype: dictionary with capacity per node-ip
-        """
+        """:rtype: dictionary with capacity per node-ip"""
         dict_nodes_used_capacity = {}
         for node in self.db_cluster.nodes:
             dict_nodes_used_capacity[node.private_ip_address] = self.prometheus_db.get_used_capacity_gb(node=node)
@@ -129,7 +125,6 @@ class IcsSpaceAmplificationTest(LongevityTest):
         Alters table compaction like: ALTER TABLE mykeyspace.mytable WITH
                                        compaction = {'class' : 'IncrementalCompactionStrategy'}
         """
-
         base_query = f"ALTER TABLE {keyspace_name}.{table_name} WITH compaction = "
         dict_requested_compaction = {"class": compaction_strategy.value}
         if additional_compaction_params:
@@ -172,7 +167,6 @@ class IcsSpaceAmplificationTest(LongevityTest):
         Example test output:
         Nodes used capacity before start overwriting data: {'10.4.1.43': 1307.47, '10.4.1.34': 1665.81, '10.4.1.144': 1297.73}
         """
-
         self._set_enforce_min_threshold_true()
         # (1) writing new data.
         prepare_write_cmd = self.params.get("prepare_write_cmd")

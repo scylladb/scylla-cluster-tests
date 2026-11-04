@@ -274,7 +274,8 @@ def test_upload_runner_script_cds_to_tmp_so_client_mode_finds_relative_config():
     """In client deploy mode the driver JVM inherits the wrapper script's CWD;
     spark.scylla.config is a relative path, so the script must cd into /tmp
     (where it just downloaded migrator-config.yaml) before invoking spark-submit.
-    Without cd, validator main fails with FileNotFoundException: migrator-config.yaml."""
+    Without cd, validator main fails with FileNotFoundException: migrator-config.yaml.
+    """
     boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="sct-emr-spark-migrator-us-east-1")
 
     runner = SparkMigratorRunner(MagicMock(region_name="us-east-1"))

@@ -24,9 +24,7 @@ from sdcm.utils.common import get_data_dir_path, skip_optional_stage
 
 
 class GrowClusterTest(ClusterTester):
-    """
-    Test scylla cluster growth (adding nodes after an initial cluster size).
-    """
+    """Test scylla cluster growth (adding nodes after an initial cluster size)."""
 
     def setUp(self):
         super().setUp()

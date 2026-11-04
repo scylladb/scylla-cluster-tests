@@ -62,9 +62,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
     @computed_field
     @property
     def raid_level(self) -> RaidLevelType:
-        """
-        Tell scylla setup to create RAID0 or RAID5 on disks
-        """
+        """Tell scylla setup to create RAID0 or RAID5 on disks"""
         return RaidLevelType(self.params.get("raid_level") or 0)
 
     @computed_field

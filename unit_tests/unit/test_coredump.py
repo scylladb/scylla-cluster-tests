@@ -240,7 +240,7 @@ def test_cores_are_looked_up_since_the_run_started(journal_since, expected_optio
 
 
 def test_no_core_since_the_run_started_is_no_core():
-    """coredumpctl exits 1, with no JSON, when no core matches --since."""
+    """Coredumpctl exits 1, with no JSON, when no core matches --since."""
     thread = _systemd_thread("@1791969271")
     thread.node.remoter.run.return_value = MagicMock(ok=False, stdout="", stderr="No coredumps found.")
 

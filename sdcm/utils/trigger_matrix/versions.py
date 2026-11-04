@@ -18,7 +18,8 @@ themselves live in `sdcm.utils.version_utils`, which is the single home for them
 module holds the trigger-matrix predicates and extractors built on top.
 
 Choosing *which* build a backend should run is policy, not parsing -- that lives in
-`resolution`, which is allowed to call the cloud image lookups this module must not."""
+`resolution`, which is allowed to call the cloud image lookups this module must not.
+"""
 
 import logging
 import re

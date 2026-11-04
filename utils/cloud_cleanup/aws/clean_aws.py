@@ -398,9 +398,7 @@ def clean_dedicate_hosts(region_name):
 
 
 def clean_unattached_security_groups(region_name: str):
-    """
-    Clean unattached security groups in the specified AWS region.
-    """
+    """Clean unattached security groups in the specified AWS region."""
     deleted = 0
 
     if VERBOSE:

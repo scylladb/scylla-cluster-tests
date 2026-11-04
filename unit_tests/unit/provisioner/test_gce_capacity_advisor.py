@@ -87,7 +87,8 @@ def test_unparsable_uptime_does_not_lose_the_score(mock_advice):
 
 def test_request_pins_a_single_zone_per_call(mock_advice):
     """Ranking zones against each other requires scoring each on its own; a balanced multi-zone
-    recommendation says nothing about the zones it did not pick."""
+    recommendation says nothing about the zones it did not pick.
+    """
     mock_advice.return_value = _recommendation(0.5)
     built = []
     real_build_request_body = capacity_advisor._build_request_body
@@ -218,7 +219,8 @@ class TestRankRegions:
 class TestPartialZoneFailures:
     """GCP rejects the whole call when one zone cannot host the machine type - verified live against
     `us-west1`, where `us-west1-c` does not offer `z3-highmem-8-highlssd` and the region therefore came
-    back entirely unranked. Ranking the zones that DO work is the whole job."""
+    back entirely unranked. Ranking the zones that DO work is the whole job.
+    """
 
     def test_one_unsupported_zone_does_not_cost_the_others(self, mock_advice):
         unsupported = RuntimeError("Machine specification is not supported in locations: [us-west1-c].")
@@ -249,7 +251,8 @@ class TestPartialZoneFailures:
 def test_the_hint_names_the_actual_cause(message, expected_hint):
     """These three read nothing alike, and the enrolment one is NOT a permission problem - pointing at IAM
     sends the reader to a console that is already correct. Seen live: enrolment is per provisioning model,
-    so SPOT advice works on our project while on-demand returns 'not available for this project'."""
+    so SPOT advice works on our project while on-demand returns 'not available for this project'.
+    """
     assert expected_hint in capacity_advisor._unavailable_hint(message)
 
 

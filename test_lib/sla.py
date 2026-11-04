@@ -266,9 +266,7 @@ class UserRoleBase:
     # does the attachment. We have to wait until all nodes have added the service level
     @retrying(n=6, sleep_time=5, message="Waiting until all nodes have added the service level")
     def attach_service_level(self, service_level: ServiceLevel):
-        """
-        :param service_level: service level object
-        """
+        """:param service_level: service level object"""
         query = f"ATTACH SERVICE_LEVEL {service_level.name} TO {self.name}"
         if self.verbose:
             LOGGER.debug("Attach service level query: %s", query)
@@ -280,9 +278,7 @@ class UserRoleBase:
         self._attached_scheduler_group_name = service_level.scheduler_group_name
 
     def detach_service_level(self):
-        """
-        :param auth_name: it may be role name or user name
-        """
+        """:param auth_name: it may be role name or user name"""
         query = f"DETACH SERVICE_LEVEL FROM {self.name}"
         if self.verbose:
             LOGGER.debug("Detach service level query: %s", query)

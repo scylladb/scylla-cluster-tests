@@ -354,7 +354,8 @@ class TestMonitoringConnectivity:
 
     def test_every_subnet_carries_the_scylla_security_group(self, make_provisioner, azure_service):
         """Prometheus scrapes a DB node on the address scylla_network_config picks, which may be on
-        a secondary subnet - so the open-ports rules must apply there too, not only on 'default'."""
+        a secondary subnet - so the open-ports rules must apply there too, not only on 'default'.
+        """
         provisioner = make_provisioner(3)
         provisioner.get_or_create_instance(definition("nsg-vm"), PricingModel.ON_DEMAND)
         resource_group = provisioner.resource_group_name
@@ -392,7 +393,8 @@ def test_minicloud_vnet_subnets_are_carved_from_the_emulated_range(make_provisio
 
 def test_real_cloud_vnet_keeps_the_real_range_under_minicloud(make_provisioner, azure_service, monkeypatch):
     """The sct-runner is created on real Azure by a process that has SCT_MINICLOUD_ENDPOINT_URL set:
-    an emulated range there would shadow the guests' TUN route on the runner."""
+    an emulated range there would shadow the guests' TUN route on the runner.
+    """
     monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
     provisioner = make_provisioner(1)
     provisioner.get_or_create_instances([definition("node-1")])

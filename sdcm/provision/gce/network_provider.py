@@ -11,9 +11,7 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""
-Network configuration provider for GCE provisioning.
-"""
+"""Network configuration provider for GCE provisioning."""
 
 import logging
 from typing import List

@@ -634,7 +634,7 @@ def test_managed_backends_price_through_their_underlying_cloud(backend):
 
 
 def test_xcloud_prices_through_its_configured_provider():
-    """xcloud has no cloud of its own; config resolves it from xcloud_provider."""
+    """Xcloud has no cloud of its own; config resolves it from xcloud_provider."""
     params = _aws_params(cluster_backend="xcloud", xcloud_provider="aws")
     estimate = estimate_run_cost(params)
     assert estimate.total is not None
