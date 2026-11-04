@@ -6,6 +6,7 @@ from typing import Any, List, Iterable
 
 from sdcm.keystore import KeyStore
 from sdcm.remote import LocalCmdRunner
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import remote_get_file, LOGGER, RemoteTemporaryFolder
 from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.sstable.load_inventory import (
@@ -166,14 +167,20 @@ class SstableLoadUtils:
             node.remoter.run(load_api_cmd)
 
     @staticmethod
-    def run_refresh(node, test_data: namedtuple, keyspace_name: str = "keyspace_refresh") -> Iterable[str]:
+    def run_refresh(
+        node, test_data: namedtuple, keyspace_name: str = "keyspace_refresh", timeout: int = 3600
+    ) -> Iterable[str]:
         LOGGER.debug("Loading %s keys to %s by refresh", test_data.keys_num, node.name)
         # Resharding of the loaded sstable files is performed before they are moved from upload to the main folder.
         # So we need to validate that resharded files are placed in the "upload" folder before moving.
         # Find the compaction output that reported about the resharding
 
         system_log_follower = node.follow_system_log(patterns=[r"Resharded.*"])
-        node.run_nodetool(sub_cmd="refresh", args=f"-- {keyspace_name} standard1")
+        # With tablets, refresh is a load-and-stream, which waits until no topology operation is running.
+        # A tablet repair or migration that never ends makes it wait forever, so don't wait without a limit.
+        # Don't retry on timeout either: the refresh keeps running in Scylla and a new one would be rejected.
+        with adaptive_timeout(Operations.REFRESH, node, timeout=timeout) as refresh_timeout:
+            node.run_nodetool(sub_cmd="refresh", args=f"-- {keyspace_name} standard1", timeout=refresh_timeout, retry=0)
         return system_log_follower
 
     @staticmethod
