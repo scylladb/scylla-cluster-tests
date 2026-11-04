@@ -20,6 +20,7 @@ from logging import getLogger
 from unittest.mock import patch
 
 import pytest
+from invoke.exceptions import UnexpectedExit
 
 # from parameterized import parameterized
 
@@ -689,3 +690,45 @@ def test_minicloud_channel_timeout_alert_counts_a_wrapped_open_channel_timeout(_
             RemoteLibSSH2CmdRunner._run_on_retryable_exception(runner, wrapped, new_session=True, suppress_errors=True)
 
     assert RemoteLibSSH2CmdRunner._minicloud_channel_timeouts == {"10.0.0.5": 1}
+
+
+@pytest.mark.parametrize(
+    "stderr,expected",
+    [
+        pytest.param("Connection closed by 10.142.15.202 port 22\r\n", True, id="connection-closed"),
+        pytest.param(
+            "kex_exchange_identification: read: Connection reset by peer\r\nConnection reset by 10.142.15.202 port 22",
+            True,
+            id="kex-reset",
+        ),
+        pytest.param("ssh: connect to host 10.142.15.202 port 22: Connection refused\r\n", True, id="sshd-down"),
+        pytest.param("scylla-test@10.0.0.1: Permission denied (publickey).", False, id="auth-failure"),
+        pytest.param('rsync: link_stat "/tmp/x" failed: No such file or directory (2)', False, id="missing-file"),
+    ],
+)
+def test_copy_error_retryable_on_connection_refusal(stderr, expected):
+    """Sshd refusing a new connection is transient, so a file copy is retried; other errors are not."""
+    assert RemoteLibSSH2CmdRunner._is_copy_error_retryable(stderr) is expected
+
+
+@pytest.mark.parametrize("remoter_type", [RemoteCmdRunner, RemoteLibSSH2CmdRunner])
+def test_receive_files_retries_when_sshd_refuses_the_connection(remoter_type, tmp_path):
+    """A refused rsync falls back to scp, and a refused scp retries the copy, with either SSH transport.
+
+    rsync and scp run through LocalCmdRunner, which raises invoke's exceptions, not the libssh2 ones.
+    """
+    refused = UnexpectedExit(Result(command="copy", exited=255, stderr="Connection closed by 10.0.0.1 port 22"))
+    copied = Result(command="scp", exited=0)
+    runner = remoter_type(hostname="10.0.0.1", user="scylla-test", key_file="/dev/null")
+
+    with (
+        patch("sdcm.remote.remote_base.LocalCmdRunner") as local_runner,
+        patch("sdcm.utils.decorators.time.sleep") as sleep,
+        patch.object(remoter_type, "use_rsync", return_value=True),
+    ):
+        # 1st attempt: rsync and scp refused; 2nd attempt: rsync refused, scp copies
+        local_runner.return_value.run.side_effect = [refused, refused, refused, copied]
+        runner.receive_files(src="/tmp/system.log", dst=str(tmp_path))
+
+    assert local_runner.return_value.run.call_count == 4
+    sleep.assert_called_once()
