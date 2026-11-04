@@ -43,6 +43,7 @@ from sdcm.provision.gce.constants import (
     GCE_MAX_NETWORK_INTERFACES,
     GCE_MIN_NETWORK_INTERFACES,
     GCE_SUPPORTED_NETWORK_INTERFACES,
+    bundles_local_ssds,
 )
 from sdcm.provision.gce.utils import tags_to_gce_labels, normalize_instance_name
 from sdcm.utils.gce_utils import (
@@ -124,12 +125,6 @@ def build_network_interfaces(
                 )
             )
     return interfaces
-
-
-def bundles_local_ssds(instance_type: str) -> bool:
-    """Local SSD machine types (z3-*, z4d-*-highlssd, c4-*-lssd, c4d-*-lssd-metal, ...) come with their SSDs,
-    GCE rejects explicitly requested ones on top."""
-    return "lssd" in instance_type or instance_type.split("-", maxsplit=1)[0] in BUNDLED_LOCAL_SSD_FAMILIES
 
 
 def resolve_root_disk_type(instance_type: str, configured: str | None) -> str:
