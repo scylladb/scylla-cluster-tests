@@ -33,6 +33,7 @@ from sdcm.provision.provisioner import (
 )
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying
@@ -73,6 +74,15 @@ def _record_outcome(
             instance_type=instance_type,
             count=count,
         )
+
+
+def _was_reclaimed(provisioner: Provisioner, name: str) -> bool:
+    """`provisioner.was_reclaimed`, answering False when the cloud API fails, so its error never hides the real one."""
+    try:
+        return provisioner.was_reclaimed(name)
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Could not check whether %s was reclaimed", name, exc_info=True)
+        return False
 
 
 def provision_instances_with_fallback(
@@ -127,7 +137,15 @@ def provision_instances_with_fallback(
             "key_file": f"~/.ssh/{v_m.ssh_key_name}",
         }
         remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
-        wait_cloud_init_completes(remoter=remoter, instance=v_m)
+        try:
+            wait_cloud_init_completes(remoter=remoter, instance=v_m)
+        except Exception:
+            # No node exists yet to watch for reclaims, so ask the cloud, or SCT-707 retries nothing.
+            if pricing_model.is_spot() and _was_reclaimed(provisioner, v_m.name):
+                SpotTerminationEvent(
+                    node=v_m.name, message="Spot VM reclaimed while waiting for cloud-init"
+                ).publish_or_dump(default_logger=LOGGER)
+            raise
         # todo: wait for scylla-machine-image service to complete if instance is scylla-db?
     return provisioned_instances
 
