@@ -36,14 +36,15 @@ List<Integer> call(Map params, String region){
     def testData = sh(script: cmd, returnStdout: true).trim()
     println(testData)
     if (params.stress_duration == "" || params.stress_duration == null) {
-        testData = testData =~ /test_duration: (\d+)/
+        // Anchor to the line start, otherwise 'spot_max_test_duration' (printed first) matches.
+        testData = testData =~ /(?m)^test_duration: (\d+)/
         testDuration = testData[0][1].toInteger()
     } else {
         stressDuration = params.stress_duration.toInteger()
         try {
             prepareDuration = params.prepare_stress_duration.toInteger()
         } catch (e) {
-            testData = testData =~ /prepare_stress_duration: (\d+)/
+            testData = testData =~ /(?m)^prepare_stress_duration: (\d+)/
             prepareDuration = testData[0][1].toInteger()
         }
         Integer stressEndup = 10
