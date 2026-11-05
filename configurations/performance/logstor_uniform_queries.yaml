@@ -7,7 +7,8 @@
 # The reads use BYPASS CACHE, so that each read goes to the logstor segments on disk and not to
 # the logstor record cache.
 # Steps: a 60m conditioning step that writes at 250k ops/s and reads at 100 ops/s, then the 60m
-# measured step, mixed (write:30,read:70) at 600k ops/s
+# measured step, mixed (write:30,read:70) at 600k ops/s, then a 30m write-only step at 500k ops/s
+# and a 30m read-only step at 620k ops/s
 # This test is a part of the benchmark done by Aerospike
 # https://aerospike.com/files/benchmarks/aerospike-vs-scylladb-performance-and-cost-at-multi-terabyte-scale.pdf
 
@@ -47,7 +48,15 @@ perf_gradual_throttle_steps:
     - {threads: 64, concurrency: 48, rate: '250000', write_rate: '250000', read_rate: '100',
        write_start_cycle: 1, read_start_cycle: 5000000000, duration: '60m', wait_no_compactions: false}
     - {threads: 64, concurrency: 48, rate: '600000', write_rate: '180000', read_rate: '420000',
-       write_start_cycle: 10000000001, read_start_cycle: 15000000000, duration: '60m'}
+       write_start_cycle: 10000000001, read_start_cycle: 15000000000, duration: '60m', wait_no_compactions: false}
+    # Write-only and read-only (from disk, BYPASS CACHE) steps. They run inside the mixed sub-test
+    # because the write sub-test drops the keyspace around every step, so a write step there would
+    # always start on an empty pool. The command that is not measured runs at 100 ops/s, like the
+    # reads of the conditioning step. Each rate is unique, because the rate names the step in Argus.
+    - {threads: 64, concurrency: 48, rate: '500000', write_rate: '500000', read_rate: '100',
+       write_start_cycle: 20000000001, read_start_cycle: 25000000000, duration: '30m', wait_no_compactions: false}
+    - {threads: 64, concurrency: 48, rate: '620000', write_rate: '100', read_rate: '620000',
+       write_start_cycle: 30000000001, read_start_cycle: 35000000000, duration: '30m'}
 
 perf_gradual_step_duration: {"mixed": '60m'}
 

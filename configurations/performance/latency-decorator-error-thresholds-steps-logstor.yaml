@@ -1,0 +1,78 @@
+# Argus latency limits of the logstor uniform and hotspot jobs (A1) and their EC twin (A0).
+# Replaces latency-decorator-error-thresholds-steps-ent-tablets.yaml in those jobs: its steps are
+# calibrated for cassandra-stress on the live EC jobs, and its keys would match logstor steps.
+# Only the mixed sub-test runs, and each step is named by its rate:
+#   250000  conditioning step of both workloads, not a measurement
+#   600000  uniform mixed, the Aerospike target: request P99 under 3 ms (dev, 2026-06-29)
+#   750000  hotspot mixed, the Aerospike target: request P99 under 3 ms
+#   500000 / 620000  uniform write-only / read-only (from disk)
+#   550000 / 640000  hotspot write-only / read-only (through the cache)
+# The write-only and read-only steps have no limits until the first green runs give a baseline.
+# Their rates stay at or under 640k ops/s, the most one latte command has been shown to offer;
+# check the delivered rate against the asked rate before reading their latency.
+# Without an entry here a step falls back to mixed.default in defaults/test_default.yaml (P99 10 ms).
+latency_decorator_error_thresholds:
+  mixed:
+    "250000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "600000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 3
+      P99 read:
+        fixed_limit: 3
+    "750000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 3
+      P99 read:
+        fixed_limit: 3
+    "500000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "620000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "550000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "640000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null

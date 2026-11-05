@@ -8,7 +8,8 @@
 # Measured step uses random uniform selection (distribution="random") over an unbounded cycle
 # range (no --end-cycle) so the key sequence never repeats within the 60m run.
 # Steps: a 60m conditioning step that writes at 250k ops/s and reads at 100 ops/s, then the 60m
-# measured step, mixed (write:30,read:70) at 750k ops/s
+# measured step, mixed (write:30,read:70) at 750k ops/s, then a 30m write-only step at 550k ops/s
+# and a 30m read-only step at 640k ops/s
 # This test is a part of the benchmark done by Aerospike
 # https://aerospike.com/files/benchmarks/aerospike-vs-scylladb-performance-and-cost-at-multi-terabyte-scale.pdf
 
@@ -48,7 +49,18 @@ perf_gradual_throttle_steps:
     - {threads: 32, concurrency: 48, rate: '250000', write_rate: '250000', read_rate: '100',
        write_start_cycle: 1, read_start_cycle: 5000000000, duration: '60m', wait_no_compactions: false}
     - {threads: 32, concurrency: 48, rate: '750000', write_rate: '225000', read_rate: '525000',
-       write_start_cycle: 10000000001, read_start_cycle: 15000000000, duration: '60m'}
+       write_start_cycle: 10000000001, read_start_cycle: 15000000000, duration: '60m', wait_no_compactions: false}
+    # Write-only and read-only (through the cache, which holds the hot set) steps. They run inside
+    # the mixed sub-test because the write sub-test drops the keyspace around every step, so a write
+    # step there would always start on an empty pool. The command that is not measured runs at
+    # 100 ops/s. Each rate is unique across both logstor workloads, because the rate names the step
+    # in Argus and latency-decorator-error-thresholds-steps-logstor.yaml is shared. All the steps use
+    # 32 threads, because steps with different thread counts get '_<threads>_threads' added to their
+    # names, and then the names do not match the keys of the thresholds file.
+    - {threads: 32, concurrency: 48, rate: '550000', write_rate: '550000', read_rate: '100',
+       write_start_cycle: 20000000001, read_start_cycle: 25000000000, duration: '30m', wait_no_compactions: false}
+    - {threads: 32, concurrency: 48, rate: '640000', write_rate: '100', read_rate: '640000',
+       write_start_cycle: 30000000001, read_start_cycle: 35000000000, duration: '30m'}
 
 perf_gradual_step_duration: {"mixed": '60m'}
 
