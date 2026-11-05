@@ -69,6 +69,8 @@ prepare_stress_cmd: >-
 
 # Populate all 500M rows uniformly (sequential single pass, full coverage) so no key is empty.
 # Hotspot skew is applied only to the measured mixed workload below, not to the populate.
+# The utilization of the logstor pool (about 44%) depends on the row count, the row shape and
+# logstor_disk_size_in_mb in enable_logstor.yaml. Read enable_logstor.yaml before you change them.
 prepare_write_cmd:
   - >-
     latte run --function write --consistency ALL --duration 500000000

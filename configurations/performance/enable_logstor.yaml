@@ -1,6 +1,27 @@
 experimental_features:
   - logstor
 
+# The pool utilization is the live data of a node divided by the size of the logstor pool of the
+# node. The utilization is an important property of the workload, because it sets how much live
+# data logstor compaction must copy to free a segment. At a higher utilization, compaction copies
+# more data for each segment that it frees, so the write amplification is higher.
+#
+# Three parameters set the utilization, and the logstor workloads (uniform, hotspot and the
+# logstor table of the dual-engine workload) use the same values for them:
+#  - The number of keys is 500M (row_count), and the populate writes each key once. With RF=2 on
+#    4 nodes, each node holds 500M x 2 / 4 = 250M records.
+#  - The size of a record is about 2.2 KB. A record holds a 48-byte key (key_size) and 10 columns
+#    of 200 bytes (column_count and column_size), and the mutation and the framing add the rest.
+#    So the live data of a node is 250M x 2.2 KB, which is about 556 GB.
+#  - The size of the pool is logstor_disk_size_in_mb. Scylla applies this value to each shard,
+#    and not to each node, so with 15 shards the pool of a node is 15 x 80000 MiB, which is
+#    about 1.26 TB.
+#
+# The utilization is therefore 556 GB / 1.26 TB, which is about 44%, and the free segments start
+# at about 56% of the pool after the populate. The conditioning step of the uniform and hotspot
+# workloads is sized for this free fraction. If you change the number of keys, the row shape, the
+# replication factor, the number of nodes, the number of shards or logstor_disk_size_in_mb, then
+# calculate the utilization again and adjust the other parameters or the conditioning step.
 append_scylla_yaml:
   logstor_disk_size_in_mb: 80000
   logstor_format_on_startup: true

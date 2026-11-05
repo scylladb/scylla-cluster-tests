@@ -60,6 +60,8 @@ prepare_stress_cmd: >-
   data_dir/latte/latte_cs_alike.rn
 
 # Populate 500M rows with uniform distribution
+# The utilization of the logstor pool (about 44%) depends on the row count, the row shape and
+# logstor_disk_size_in_mb in enable_logstor.yaml. Read enable_logstor.yaml before you change them.
 prepare_write_cmd:
   - >-
     latte run --function write --consistency ALL --duration 500000000
