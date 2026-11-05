@@ -50,6 +50,27 @@ didn't wait for the stop operation.
 **Fix:** make sure `GceSctRunner._stop_image_builder_instance()` waits for the operation
 (`wait_for_extended_operation`). Delete the leftover builder instance, then rerun the build.
 
+## AWS configure fails with "'NoneType' object has no attribute 'subnet_id'"
+
+**Symptom:** `configure-jenkins-builders -c aws` stops in one region at `create_auto_scaling_group`.
+The regions before it are done.
+
+**Cause:** AWS added a zone to the region (eu-west-2d) and SCT has no subnet there, so
+`sct_subnet()` returned None for it.
+
+**Fix:** make sure `create_auto_scaling_group()` uses only the zones that have an SCT subnet, then
+rerun the command. It updates the groups that already exist and goes on from the failed region.
+
+## A new builder label waits with "All nodes of label ... are offline"
+
+**Symptom:** the first job on a new label waits a few minutes.
+
+**Cause:** a new auto scaling group starts at zero instances, and the EC2 fleet plugin starts one
+on demand. This is normal for the first job; a wait longer than about 10 minutes is not.
+
+**Fix:** none for a short wait. For a long one, check the group's activity in the EC2 console for
+launch errors (subnet, instance type capacity, launch template).
+
 ## `ssh-cmd` reports values from your own machine
 
 **Symptom:** the runner "has" your laptop's kernel or Java version.
