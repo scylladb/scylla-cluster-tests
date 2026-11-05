@@ -24,9 +24,10 @@ from google.oauth2 import service_account
 
 from sdcm.keystore import KeyStore
 from sdcm.sct_runner import GceSctRunner
+from sdcm.utils.builder_access import get_builder_ssh_sources
 from sdcm.utils.context_managers import environment
-from sdcm.utils.gce_region import GceRegion
-from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, SUPPORTED_REGIONS
+from sdcm.utils.gce_region import BUILDER_NETWORK_TAG, GceRegion
+from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, SUPPORTED_REGIONS, gce_set_tags
 
 LOGGER = logging.getLogger(__name__)
 
@@ -226,6 +227,7 @@ class GceBuilder:
             "keep": "alive",
             "billing_project": "sct-runners",
         }
+        template.properties.tags = compute_v1.Tags(items=[BUILDER_NETWORK_TAG])
 
         template_client = compute_v1.InstanceTemplatesClient(credentials=self.credentials)
         try:
@@ -239,9 +241,81 @@ class GceBuilder:
 
         return template_client.get(project=self.region.project, instance_template=self.name)
 
+    def _image_exists(self, source_image: str) -> bool:
+        parts = source_image.split("/")
+        if "projects" not in parts:
+            return False
+
+        images_client = compute_v1.ImagesClient(credentials=self.credentials)
+        try:
+            images_client.get(project=parts[parts.index("projects") + 1], image=parts[-1])
+        except google.api_core.exceptions.NotFound:
+            return False
+
+        return True
+
+    def tag_builder_templates(self) -> int:
+        """Add the builder network tag to every builder template in this region.
+
+        Covers all builder versions, since release branches still use older ones.
+        Each template is replaced by a tagged copy with the same name, unless its image is gone.
+
+        Returns:
+            The number of templates that were replaced.
+        """
+        template_client = compute_v1.InstanceTemplatesClient(credentials=self.credentials)
+        prefix = f"gce-{self.region.project}-{self.region.region_name}-qa-builder"
+        replaced = 0
+        for existing in template_client.list(project=self.region.project):
+            if not existing.name.startswith(prefix) or BUILDER_NETWORK_TAG in existing.properties.tags.items:
+                continue
+
+            source_image = existing.properties.disks[0].initialize_params.source_image
+            if not self._image_exists(source_image):
+                click.secho(f"template: {existing.name} keeps no tag, its image {source_image} is gone", fg="yellow")
+                continue
+
+            replacement = compute_v1.InstanceTemplate(
+                name=existing.name, description=existing.description, properties=existing.properties
+            )
+            replacement.properties.tags = compute_v1.Tags(items=[*existing.properties.tags.items, BUILDER_NETWORK_TAG])
+            click.echo(f"template: {existing.name} gets the {BUILDER_NETWORK_TAG} tag, replacing it")
+            operation = template_client.delete(project=self.region.project, instance_template=existing.name)
+            self._wait_for_extended_operation(operation, "instance template deletion")
+            operation = template_client.insert(project=self.region.project, instance_template_resource=replacement)
+            self._wait_for_extended_operation(operation, "instance template creation")
+            replaced += 1
+        return replaced
+
+    def tag_running_builders(self) -> int:
+        """Put the running builders of this region under the builder firewall rules."""
+        client = compute_v1.InstancesClient(credentials=self.credentials)
+        request = compute_v1.AggregatedListInstancesRequest(project=self.region.project, filter="name:builders*")
+        tagged = 0
+        for zone_key, scoped_list in client.aggregated_list(request=request):
+            zone = zone_key.split("/")[-1]
+            if not zone.startswith(f"{self.region.region_name}-"):
+                continue
+
+            for instance in scoped_list.instances:
+                if instance.status != "RUNNING" or BUILDER_NETWORK_TAG in instance.tags.items:
+                    continue
+
+                click.echo(f"{self.region.project}: {zone}: tagging builder {instance.name} with {BUILDER_NETWORK_TAG}")
+                try:
+                    gce_set_tags(client, instance, [BUILDER_NETWORK_TAG], self.region.project, zone)
+                except google.api_core.exceptions.NotFound:
+                    click.echo(f"{self.region.project}: {zone}: builder {instance.name} is gone, skipping it")
+                    continue
+                tagged += 1
+        return tagged
+
     def configure(self):
+        self.region.configure_builder_firewall(get_builder_ssh_sources())
         self._create_launch_template()
         self._add_cloud_configuration_to_jenkins()
+        self.tag_builder_templates()
+        self.tag_running_builders()
 
     @classmethod
     def configure_in_all_region(cls, regions=None):

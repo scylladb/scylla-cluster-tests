@@ -379,6 +379,33 @@ gcloud compute firewall-rules create qa-vpc-allow-grafana-public \
     --priority=100 \
     --project="$NEW_PROJECT_ID"
 
+# Jenkins builders (sct-builder tag): deny all - priority 200
+gcloud compute firewall-rules create qa-vpc-builder-deny-all \
+    --network=qa-vpc --direction=INGRESS \
+    --action=DENY --rules=all \
+    --source-ranges=0.0.0.0/0 \
+    --target-tags=sct-builder \
+    --priority=200 \
+    --project="$NEW_PROJECT_ID"
+
+# Jenkins builders: SSH from builder_ssh_sources.json (see docs/jenkins-builders.md) - priority 100
+gcloud compute firewall-rules create qa-vpc-builder-allow-ssh \
+    --network=qa-vpc --direction=INGRESS \
+    --action=ALLOW --rules=tcp:22 \
+    --source-ranges=<allowed sources> \
+    --target-tags=sct-builder \
+    --priority=100 \
+    --project="$NEW_PROJECT_ID"
+
+# Jenkins builders: internal traffic - priority 100
+gcloud compute firewall-rules create qa-vpc-builder-allow-internal \
+    --network=qa-vpc --direction=INGRESS \
+    --action=ALLOW --rules=all \
+    --source-ranges=10.0.0.0/8 \
+    --target-tags=sct-builder \
+    --priority=100 \
+    --project="$NEW_PROJECT_ID"
+
 # Allow all public for sct-allow-public tagged instances - priority 100
 gcloud compute firewall-rules create qa-vpc-allow-public \
     --network=qa-vpc --direction=INGRESS \

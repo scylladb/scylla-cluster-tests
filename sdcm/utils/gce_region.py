@@ -26,14 +26,77 @@ from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
 from sdcm.provision.gce.constants import SECONDARY_SUBNET_NAME_TMPL
+from sdcm.utils.builder_access import BUILDER_SSH_PORT, flatten_sources, get_builder_ssh_sources
 from sdcm.utils.gce_utils import _gce_client_options, wait_for_extended_operation
 
 LOGGER = logging.getLogger(__name__)
+
+BUILDER_NETWORK_TAG = "sct-builder"
+# the API stores 1000 when a rule is created without a priority
+DEFAULT_FIREWALL_PRIORITY = 1000
+
+
+def _firewall_priority(rule: Firewall) -> int:
+    return rule.priority if "priority" in rule else DEFAULT_FIREWALL_PRIORITY
+
+
+def firewall_needs_patch(live: Firewall, desired: Firewall) -> bool:
+    """Tell whether a live firewall rule differs from the desired one in what it lets through."""
+    return (
+        list(live.allowed) != list(desired.allowed)
+        or list(live.denied) != list(desired.denied)
+        or list(live.source_ranges) != list(desired.source_ranges)
+        or list(live.target_tags) != list(desired.target_tags)
+        or _firewall_priority(live) != _firewall_priority(desired)
+    )
+
+
+def builder_firewall_rules(network_name: str, network_link: str, sources: dict[str, list[str]]) -> list[Firewall]:
+    """Return the builder firewall rules: allow SSH from `sources` and traffic from the SCT network, deny the rest.
+
+    The deny rule is last, so it is never applied before the allow rules.
+    """
+    pairs = flatten_sources(sources)
+    roles = ", ".join(sorted({role for _, role in pairs}))
+    return [
+        Firewall(
+            name=f"{network_name}-builder-allow-ssh",
+            description=f"SSH to SCT Jenkins builders from: {roles}",
+            direction="INGRESS",
+            allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=[str(BUILDER_SSH_PORT)])],
+            source_ranges=sorted({cidr for cidr, _ in pairs}),
+            network=network_link,
+            target_tags=[BUILDER_NETWORK_TAG],
+            priority=100,
+        ),
+        Firewall(
+            name=f"{network_name}-builder-allow-internal",
+            description="Allow ingress to SCT Jenkins builders from the SCT network",
+            direction="INGRESS",
+            allowed=[compute_v1.Allowed(I_p_protocol="all")],
+            source_ranges=["10.0.0.0/8"],
+            network=network_link,
+            target_tags=[BUILDER_NETWORK_TAG],
+            priority=100,
+        ),
+        Firewall(
+            name=f"{network_name}-builder-deny-all",
+            description="Deny all ingress to SCT Jenkins builders",
+            direction="INGRESS",
+            denied=[compute_v1.Denied(I_p_protocol="all")],
+            source_ranges=["0.0.0.0/0"],
+            network=network_link,
+            target_tags=[BUILDER_NETWORK_TAG],
+            priority=200,
+        ),
+    ]
 
 
 class GceRegion:
     SCT_NETWORK_NAME = "qa-vpc"
     SCT_BACKUP_SERVICE_ACCOUNT = "sct-manager-backup"
+    # old live rules to delete, mapped to the rules that replace them
+    STALE_FIREWALL_RULES = {f"{SCT_NETWORK_NAME}-ssh": f"{SCT_NETWORK_NAME}-allow-ssh"}
 
     # Secondary subnets for extra network interfaces.
     # `qa-vpc` is auto-mode and already uses 10.128.0.0/9, so we keep these in 10.100.X.0/24.
@@ -109,8 +172,8 @@ class GceRegion:
         self.network_client.insert(project=self.project, network_resource=_network)
         return self.network_client.get(project=self.project, network=self.SCT_NETWORK_NAME)
 
-    def configure_firewall(self):
-        firewall_configurations = [
+    def base_firewall_rules(self) -> list[Firewall]:
+        return [
             Firewall(
                 name=f"{self.SCT_NETWORK_NAME}-allow-ssh",
                 direction="INGRESS",
@@ -225,18 +288,64 @@ class GceRegion:
                 priority=100,
             ),
         ]
-        for firewall_rule in firewall_configurations:
+
+    def apply_firewall_rules(self, rules: list[Firewall]) -> None:
+        for firewall_rule in rules:
             try:
-                self.firewall_client.insert(project=self.project, firewall_resource=firewall_rule)
+                operation = self.firewall_client.insert(project=self.project, firewall_resource=firewall_rule)
+                wait_for_extended_operation(operation, f"create firewall rule {firewall_rule.name}")
             except google.api_core.exceptions.Conflict:
                 firewall = self.firewall_client.get(project=self.project, firewall=firewall_rule.name)
-                if firewall.allowed != firewall_rule.allowed or firewall.source_ranges != firewall_rule.source_ranges:
-                    LOGGER.info("updating firewall")
-                    LOGGER.info("before: %s %s", firewall.allowed, firewall.source_ranges)
-                    LOGGER.info("after : %s %s", firewall_rule.allowed, firewall_rule.source_ranges)
-                    self.firewall_client.patch(
+                if firewall_needs_patch(firewall, firewall_rule):
+                    LOGGER.info("updating firewall %s", firewall_rule.name)
+                    LOGGER.info(
+                        "before: %s %s %s %s %s",
+                        firewall.allowed,
+                        firewall.denied,
+                        firewall.source_ranges,
+                        firewall.target_tags,
+                        _firewall_priority(firewall),
+                    )
+                    LOGGER.info(
+                        "after : %s %s %s %s %s",
+                        firewall_rule.allowed,
+                        firewall_rule.denied,
+                        firewall_rule.source_ranges,
+                        firewall_rule.target_tags,
+                        _firewall_priority(firewall_rule),
+                    )
+                    operation = self.firewall_client.patch(
                         project=self.project, firewall=firewall_rule.name, firewall_resource=firewall_rule
                     )
+                    wait_for_extended_operation(operation, f"update firewall rule {firewall_rule.name}")
+
+    def delete_stale_firewall_rules(self) -> None:
+        for name, replacement in self.STALE_FIREWALL_RULES.items():
+            try:
+                self.firewall_client.get(project=self.project, firewall=replacement)
+            except google.api_core.exceptions.NotFound:
+                LOGGER.warning(
+                    "Keeping stale firewall rule '%s' in project '%s': its replacement '%s' does not exist",
+                    name,
+                    self.project,
+                    replacement,
+                )
+                continue
+            try:
+                operation = self.firewall_client.delete(project=self.project, firewall=name)
+            except google.api_core.exceptions.NotFound:
+                continue
+            wait_for_extended_operation(operation, f"delete firewall rule {name}")
+            LOGGER.info("Deleted stale firewall rule '%s' in project '%s'", name, self.project)
+
+    def configure_builder_firewall(self, sources: dict[str, list[str]]) -> None:
+        self.apply_firewall_rules(builder_firewall_rules(self.SCT_NETWORK_NAME, self.network.self_link, sources))
+        self.delete_stale_firewall_rules()
+
+    def configure_firewall(self) -> None:
+        self.apply_firewall_rules(self.base_firewall_rules())
+        if not self._is_minicloud:
+            self.configure_builder_firewall(get_builder_ssh_sources())
 
     def create_backup_service_account(self):
         """Creates a service account."""

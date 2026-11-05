@@ -24,6 +24,7 @@ from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from sdcm.keystore import KeyStore
 from sdcm.test_config import TestConfig
 from sdcm.utils.aws_utils import tags_as_ec2_tags
+from sdcm.utils.builder_access import get_builder_ssh_sources, ssh_ingress_diff
 from sdcm.utils.decorators import retrying
 from sdcm.utils.minicloud.addressing import MINICLOUD_REGION_INDEX_OFFSET
 from sdcm.utils.minicloud.endpoint import is_minicloud_active
@@ -41,6 +42,8 @@ class AwsRegion:
     SCT_ROUTE_TABLE_NAME = "SCT-2-rt{index}"
     SCT_KEY_PAIR_NAME = "scylla_test_id_ed25519"  # TODO: change legacy name to sct-keypair-aws
     SCT_SSH_GROUP_NAME = "SCT-ssh-sg"
+    SCT_BUILDER_GROUP_NAME = "SCT-builder-sg"
+    BUILDER_LAUNCH_TEMPLATE_PREFIX = "aws-sct-builders"
     SCT_SUBNET_PER_AZ = 2  # how many subnets to configure in each region.
     SCT_NODES_ROLE_ARN = "qa-scylla-manager-backup-role"
 
@@ -719,6 +722,111 @@ class AwsRegion:
                 ]
             )
 
+    @property
+    def builder_security_group(self) -> EC2ServiceResource.SecurityGroup | None:
+        security_groups = self.client.describe_security_groups(
+            Filters=[{"Name": "tag:Name", "Values": [self.SCT_BUILDER_GROUP_NAME]}]
+        )
+        existing_sgs = security_groups.get("SecurityGroups", [])
+        if len(existing_sgs) == 0:
+            return None
+
+        assert len(existing_sgs) == 1, (
+            f"More than 1 Security group with {self.SCT_BUILDER_GROUP_NAME} found in {self.region_name}: {existing_sgs}!"
+        )
+        return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])
+
+    def ensure_builder_security_group(self, sources: dict[str, list[str]]) -> EC2ServiceResource.SecurityGroup:
+        """Create the Jenkins builder security group when missing and allow SSH from the allowed sources only."""
+        security_group = self.builder_security_group
+        if security_group is None:
+            result = self.client.create_security_group(
+                Description="SSH to SCT Jenkins builders from allowed sources only",
+                GroupName=self.SCT_BUILDER_GROUP_NAME,
+                VpcId=self.sct_vpc.vpc_id,
+            )
+            security_group = self.resource.SecurityGroup(result["GroupId"])
+            security_group.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_BUILDER_GROUP_NAME}])
+            LOGGER.info("'%s' with id '%s' created.", self.SCT_BUILDER_GROUP_NAME, security_group.group_id)
+        revoke, authorize = ssh_ingress_diff(security_group.ip_permissions, sources)
+
+        if revoke:
+            LOGGER.info("Revoking ingress from '%s' in %s: %s", self.SCT_BUILDER_GROUP_NAME, self.region_name, revoke)
+            security_group.revoke_ingress(IpPermissions=revoke)
+
+        if authorize:
+            LOGGER.info(
+                "Authorizing ingress to '%s' in %s: %s", self.SCT_BUILDER_GROUP_NAME, self.region_name, authorize
+            )
+            security_group.authorize_ingress(IpPermissions=authorize)
+
+        return security_group
+
+    def secure_builder_launch_templates(self, group_id: str) -> int:
+        """Set the builder group as the only security group of every builder launch template in the region.
+
+        Covers all builder versions, since release branches still use older ones.
+
+        Args:
+            group_id: id of the builder security group.
+
+        Returns:
+            The number of launch templates that got a new default version.
+        """
+        updated = 0
+        for page in self.client.get_paginator("describe_launch_templates").paginate():
+            for template in page["LaunchTemplates"]:
+                if not template["LaunchTemplateName"].startswith(self.BUILDER_LAUNCH_TEMPLATE_PREFIX):
+                    continue
+
+                default = self.client.describe_launch_template_versions(
+                    LaunchTemplateId=template["LaunchTemplateId"], Versions=["$Default"]
+                )["LaunchTemplateVersions"][0]
+                if default["LaunchTemplateData"].get("SecurityGroupIds") == [group_id]:
+                    continue
+
+                new_version = self.client.create_launch_template_version(
+                    LaunchTemplateId=template["LaunchTemplateId"],
+                    SourceVersion=str(default["VersionNumber"]),
+                    LaunchTemplateData={"SecurityGroupIds": [group_id]},
+                    VersionDescription="SSH from the allowed sources only",
+                )["LaunchTemplateVersion"]["VersionNumber"]
+                self.client.modify_launch_template(
+                    LaunchTemplateId=template["LaunchTemplateId"], DefaultVersion=str(new_version)
+                )
+                LOGGER.info(
+                    "%s: launch template '%s' now uses only '%s' (version %s)",
+                    self.region_name,
+                    template["LaunchTemplateName"],
+                    self.SCT_BUILDER_GROUP_NAME,
+                    new_version,
+                )
+                updated += 1
+        return updated
+
+    def secure_running_builders(self, group_id: str) -> int:
+        """Set the builder group as the only security group of every running builder in the region.
+
+        Args:
+            group_id: id of the builder security group.
+
+        Returns:
+            The number of builders that were moved.
+        """
+        instances = self.resource.instances.filter(
+            Filters=[
+                {"Name": "tag:aws:autoscaling:groupName", "Values": [f"aws-{self.region_name}-qa-builder-*"]},
+                {"Name": "instance-state-name", "Values": ["running"]},
+            ]
+        )
+        moved = 0
+        for instance in instances:
+            if {group["GroupId"] for group in instance.security_groups} != {group_id}:
+                LOGGER.info("%s: moving builder %s to '%s'", self.region_name, instance.id, self.SCT_BUILDER_GROUP_NAME)
+                instance.modify_attribute(Groups=[group_id])
+                moved += 1
+        return moved
+
     def _get_ec2_key_fingerprint(self):
         """Return the SHA256 fingerprint of the EC2 key pair, or None if it doesn't exist."""
         try:
@@ -864,6 +972,8 @@ class AwsRegion:
         self.create_sct_subnets()
         self.create_sct_security_group()
         self.create_sct_ssh_security_group()
+        if not self._is_minicloud:
+            self.ensure_builder_security_group(get_builder_ssh_sources())
         self.configure_backup_storage()
         self.configure_ssm()
         LOGGER.info("Region configured successfully.")

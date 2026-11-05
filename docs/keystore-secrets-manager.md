@@ -57,6 +57,7 @@ is set. `KeyStore` therefore always passes `region_name`, defaulting to
 | `aws_images_role.json` | json | AWS role for image copying |
 | `github_access.json` | json | GitHub API token |
 | `jenkins.json` | json | Jenkins API credentials |
+| `builder_ssh_sources.json` | json | Allowed SSH sources for Jenkins builders, by role |
 | `scylla_doctor_full.json` | json | scylla-doctor credentials |
 
 ## Optional entries
@@ -227,7 +228,7 @@ required="scylla_test_id_ed25519 scylla_test_id_ed25519.pub
           azure_kms_config.json gcp_kms_config.json
           scylladb_upload.json qa_users.json bucket-users.json
           gcp-scylladbaaslab.json aws_images_role.json
-          github_access.json jenkins.json scylla_doctor_full.json
+          github_access.json jenkins.json builder_ssh_sources.json scylla_doctor_full.json
           CA.pem SCYLLADB.pem hytrust-kmip-cacert.pem hytrust-kmip-scylla.pem"
 
 # Needed only by the jobs that use them -- see "Optional entries" above.  The
