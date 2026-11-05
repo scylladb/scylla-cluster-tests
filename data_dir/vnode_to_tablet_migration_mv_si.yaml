@@ -1,0 +1,70 @@
+### cassandra-stress profile for the vnode-to-tablet migration test with views and indexes ###
+#
+# The test-case creates the schema in pre_create_keyspace: views and indexes must exist,
+# with tombstone_gc 'repair', before the migration starts. The definitions here only
+# match it, so cassandra-stress finds the table.
+#
+# Views and indexes of mv_migration.base:
+#   base_by_pk_c1           view, same partition key as the base (co-located after migration)
+#   base_by_c2              view, partition key c2 (tablets of its own)
+#   base_c3_global_index    backing view of the global index on c3 (tablets of its own)
+#   base_c4_local_index     backing view of the local index on (pk), c4 (co-located)
+
+keyspace: mv_migration
+
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS mv_migration WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'enabled': false};
+
+table: base
+
+table_definition: |
+  CREATE TABLE IF NOT EXISTS base (
+      pk bigint,
+      ck bigint,
+      c1 bigint,
+      c2 bigint,
+      c3 bigint,
+      c4 bigint,
+      v blob,
+      PRIMARY KEY (pk, ck))
+      WITH compaction = {'class': 'IncrementalCompactionStrategy'}
+      AND tombstone_gc = {'mode': 'repair'};
+
+columnspec:
+  - name: pk
+    population: uniform(1..10000000000)
+  - name: ck
+    cluster: fixed(10)
+    population: uniform(1..1000000)
+  - name: c1
+    population: uniform(1..1000000000)
+  - name: c2
+    population: uniform(1..1000000000)
+  - name: c3
+    population: uniform(1..1000000000)
+  - name: c4
+    population: uniform(1..1000000000)
+  - name: v
+    size: fixed(512)
+
+insert:
+  partitions: fixed(1)
+  select: fixed(1)/1
+  batchtype: UNLOGGED
+
+queries:
+  read:
+    cql: select * from mv_migration.base where pk = ? and ck = ?
+    fields: samerow
+  mv_colocated_read:
+    cql: select * from mv_migration.base_by_pk_c1 where pk = ? and c1 = ?
+    fields: samerow
+  mv_read:
+    cql: select * from mv_migration.base_by_c2 where c2 = ?
+    fields: samerow
+  si_global_read:
+    cql: select pk, ck from mv_migration.base where c3 = ?
+    fields: samerow
+  si_local_read:
+    cql: select ck from mv_migration.base where pk = ? and c4 = ?
+    fields: samerow
