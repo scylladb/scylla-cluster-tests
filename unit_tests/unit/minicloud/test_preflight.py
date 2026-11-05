@@ -10,6 +10,7 @@ from sdcm.utils.minicloud.manager import MinicloudManager
 from sdcm.utils.minicloud.preflight import (
     check_scylla_memory_budget,
     container_mem_in_use_gib,
+    db_guest_count,
     host_available_memory_gib,
     scylla_reserve_memory,
 )
@@ -433,3 +434,14 @@ def test_check_host_memory_fails_on_macos_when_guests_exceed_available(tmp_path)
 def test_host_available_memory_is_none_without_a_source():
     with _no_meminfo_path_patch(), patch("sdcm.utils.minicloud.preflight.sys.platform", "freebsd"):
         assert host_available_memory_gib() is None
+
+
+def test_db_guest_count_counts_the_peak_db_guests():
+    assert db_guest_count({"n_db_nodes": [3, 3]}) == 6
+    assert db_guest_count({"n_db_nodes": 3, "cluster_target_size": 5}) == 5
+
+
+def test_db_guest_count_counts_an_oracle_cluster_only_when_one_is_provisioned():
+    oracle = {"n_db_nodes": 3, "n_test_oracle_db_nodes": 1}
+    assert db_guest_count({**oracle, "db_type": "mixed_scylla"}) == 4
+    assert db_guest_count({**oracle, "db_type": "scylla"}) == 3
