@@ -11,21 +11,51 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
+<<<<<<< HEAD
 import os
 import logging
 from typing import Optional
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+import logging
+import os
+from typing import Optional
+=======
+lazy import logging
+lazy import os
+lazy from typing import Optional
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 
-import click
+lazy import click
 
+<<<<<<< HEAD
 import __main__
 
 from sdcm.cluster import TestConfig
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.azure_region import region_name_to_location
 from sdcm.utils.common import (
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+import __main__
+from sdcm.cluster import TestConfig
+from sdcm.utils.azure_region import region_name_to_location
+from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.common import (
+=======
+lazy import __main__
+lazy from sdcm.cluster import TestConfig
+lazy from sdcm.utils.azure_region import region_name_to_location
+lazy from sdcm.utils.azure_utils import AzureService
+lazy from sdcm.utils.common import (
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
     all_aws_regions,
     get_all_gce_regions,
 )
+<<<<<<< HEAD
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
+from sdcm.utils.oci_region import SUPPORTED_REGIONS as OCI_SUPPORTED_REGIONS
+=======
+lazy from sdcm.utils.oci_region import SUPPORTED_REGIONS as OCI_SUPPORTED_REGIONS
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports)
 
 
 def get_all_regions(cloud_provider: str) -> list[str] | None:

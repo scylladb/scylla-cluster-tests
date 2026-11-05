@@ -1,10 +1,44 @@
+<<<<<<< HEAD:sdcm/utils/nemesis_generation.py
 from pathlib import Path
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports):sdcm/nemesis/generator.py
+"""
+Module containing logic for generating nemesis related files
+Generates nemesis.yaml and nemesis_classes.yml, which serve as a list of current disruptions
+Generates configs/pipelines for each nemesis
 
-import yaml
-from jinja2 import Template
+"""
 
+import logging
+from functools import cached_property
+from pathlib import Path
+=======
+"""
+Module containing logic for generating nemesis related files
+Generates nemesis.yaml and nemesis_classes.yml, which serve as a list of current disruptions
+Generates configs/pipelines for each nemesis
+
+"""
+
+lazy import logging
+lazy from functools import cached_property
+lazy from pathlib import Path
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports):sdcm/nemesis/generator.py
+
+lazy import yaml
+lazy from jinja2 import Template
+
+<<<<<<< HEAD:sdcm/utils/nemesis_generation.py
 from sdcm import sct_abs_path
 from sdcm.nemesis import *
+||||||| parent of 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports):sdcm/nemesis/generator.py
+from sdcm import nemesis, sct_abs_path
+from sdcm.nemesis import NemesisBaseClass, NemesisFlags
+from sdcm.nemesis.registry import NemesisRegistry
+=======
+lazy from sdcm import nemesis, sct_abs_path
+lazy from sdcm.nemesis import NemesisBaseClass, NemesisFlags
+lazy from sdcm.nemesis.registry import NemesisRegistry
+>>>>>>> 658ddb2c3 (perf(cli): start sct.py in 0.1s with PEP 810 lazy imports):sdcm/nemesis/generator.py
 
 DEFAULT_JOB_NAME = "longevity-5gb-1h"
 TEST_CASE_TEMPLATE_DIR = "test_config"
