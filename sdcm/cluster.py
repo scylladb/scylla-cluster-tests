@@ -146,6 +146,7 @@ from sdcm.sct_events.database import (
     SYSTEM_ERROR_EVENTS_PATTERNS,
     ScyllaHelpErrorEvent,
     ScyllaYamlUpdateEvent,
+    get_system_error_events_patterns,
 )
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
@@ -1699,7 +1700,9 @@ class BaseNode(AutoSshContainerMixin):
             system_log=self.system_log,
             remoter=self.remoter,
             node_name=str(self.name),
-            system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+            system_event_patterns=get_system_error_events_patterns(
+                self.parent_cluster.params.get("topology_barrier_stall_events")
+            ),
             decoding_queue=self.test_config.DECODING_QUEUE,
             log_lines=self.parent_cluster.params.get("logs_transport") in ["syslog-ng", "vector"],
             backtrace_stall_decoding=self.parent_cluster.params.get("backtrace_stall_decoding"),
@@ -2489,7 +2492,9 @@ class BaseNode(AutoSshContainerMixin):
                     event.backtrace = decoded
                     self._match_known_issue(event)
             except queue.Empty:
-                pass
+                # only a timed-out get() proves the queue is drained, empty() lags put() on a multiprocessing queue
+                if self.termination_event.is_set():
+                    break
             except Exception as details:  # noqa: BLE001
                 self.log.error("failed to decode backtrace %s", details)
                 if "is closed" in str(details):
@@ -2498,9 +2503,6 @@ class BaseNode(AutoSshContainerMixin):
                 if event:
                     event.ready_to_publish()
                     event.publish()
-
-            if self.termination_event.is_set() and self.test_config.DECODING_QUEUE.empty():
-                break
 
     def _decode_backtrace_via_service(self, build_id: Optional[str], raw_backtrace: str) -> Optional[str]:
         """Decode a backtrace with backtrace.scylladb.com, or return None to publish it undecoded.
