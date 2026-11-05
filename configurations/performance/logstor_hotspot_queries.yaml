@@ -7,15 +7,33 @@
 # Schema: 10 columns x 200 bytes each (matching kv_hotspot.rn reference)
 # Measured step uses random uniform selection (distribution="random") over an unbounded cycle
 # range (no --end-cycle) so the key sequence never repeats within the 60m run.
+# Steps: a 60m conditioning step that writes at 250k ops/s and reads at 100 ops/s, then the 60m
+# measured step, mixed (write:30,read:70) at 750k ops/s
 # This test is a part of the benchmark done by Aerospike
 # https://aerospike.com/files/benchmarks/aerospike-vs-scylladb-performance-and-cost-at-multi-terabyte-scale.pdf
 
-# The start cycles of the latte commands follow the same rules as in
-# logstor_uniform_queries.yaml. Read the comment there before you change them.
+# The steps, the start cycles of the latte commands and wait_no_compactions follow the same
+# rules as in logstor_uniform_queries.yaml. Read the comment there before you change them.
 perf_gradual_throttle_steps:
   mixed:
+    - {threads: 32, concurrency: 48, rate: '250000', write_rate: '250000', read_rate: '100',
+       write_start_cycle: 0, read_start_cycle: 5000000000, duration: '60m', wait_no_compactions: false}
     - {threads: 32, concurrency: 48, rate: '750000', write_rate: '225000', read_rate: '525000',
-       write_start_cycle: 0, read_start_cycle: 5000000000, duration: '60m'}
+       write_start_cycle: 10000000000, read_start_cycle: 15000000000, duration: '60m'}
+
+# The conditioning step (250000) is not a measurement, so its latencies have no limits. Without
+# this entry, the step gets the P99 limit of 10 ms from mixed.default in test_default.yaml.
+latency_decorator_error_thresholds:
+  mixed:
+    '250000':
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
 
 perf_gradual_step_duration: {"mixed": '60m'}
 
