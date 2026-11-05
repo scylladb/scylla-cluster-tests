@@ -1526,6 +1526,45 @@ def test_verify_firewall_disabled_reports_a_dropping_policy(firewall_node):
         BaseNode.verify_firewall_disabled(node)
 
 
+CVE_2026_98432_TABLE_DUMP = """\
+table inet cve_2026_98432 {
+	chain input {
+		type filter hook input priority -310; policy accept;
+		ip protocol tcp ip hdrlength > 5 counter packets 0 bytes 0 drop
+	}
+}
+"""
+
+
+def nft_node(nft_ruleset: str) -> BaseNode:
+    node = BaseNode.__new__(BaseNode)
+    node.name, node.log = "test-node", logging.getLogger("test-node")
+    node.remoter = unittest.mock.Mock()
+    node.remoter.sudo.side_effect = lambda command, **_: unittest.mock.Mock(
+        ok=True, return_code=0, stdout=nft_ruleset if "nft list" in command else "", stderr=""
+    )
+    return node
+
+
+def test_verify_firewall_disabled_ignores_the_cve_2026_98432_mitigation():
+    """Its rule drops only TCP with IP options: OCI node setup failed on it in the PR provision test."""
+    BaseNode.verify_firewall_disabled(nft_node(CVE_2026_98432_TABLE_DUMP))
+
+
+def test_verify_firewall_disabled_still_reports_a_table_after_the_mitigation():
+    blocking_table = "table inet filter {\n  chain input { type filter hook input priority 0; policy drop; }\n}\n"
+
+    with pytest.raises(FirewallNotDisabled, match="policy drop"):
+        BaseNode.verify_firewall_disabled(nft_node(CVE_2026_98432_TABLE_DUMP + blocking_table))
+
+
+def test_verify_firewall_disabled_still_reports_the_same_rule_in_another_table():
+    with pytest.raises(FirewallNotDisabled, match="hdrlength"):
+        BaseNode.verify_firewall_disabled(
+            nft_node(CVE_2026_98432_TABLE_DUMP.replace("cve_2026_98432", "someone_elses"))
+        )
+
+
 def test_verify_firewall_disabled_reports_a_dropping_nftables_input_hook():
     """The iptables wrappers do not show the rules written natively through nft."""
     nft_ruleset = """\
