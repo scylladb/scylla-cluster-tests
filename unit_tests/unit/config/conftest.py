@@ -50,13 +50,3 @@ def fixture_env(monkeypatch):
     monkeypatch.setenv("SCT_USE_MGMT", "false")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
-
-
-@pytest.fixture(scope="module")
-def help_yaml():
-    return sct_config.SCTConfiguration.dump_help_config_yaml()
-
-
-@pytest.fixture(scope="module")
-def help_markdown():
-    return sct_config.SCTConfiguration.dump_help_config_markdown()

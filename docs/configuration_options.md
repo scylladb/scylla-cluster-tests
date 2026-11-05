@@ -4,6 +4,16 @@ Every option can be set in a config file, or as an environment variable named
 `SCT_<OPTION>` (upper-cased). Options are grouped by what they configure: cross-cutting
 concerns first, then one page per backend, then one per test type.
 
+#### Sections
+* Some groups hold their options in a section, e.g. `agent`: in YAML they nest under
+       the section key (`agent: {enabled: true}`), and they are listed by their dotted
+       path (`agent.enabled`).
+* A section field is set from the environment as `SCT_<SECTION>__<FIELD>`
+       (`SCT_AGENT__ENABLED=true`); a whole section, or a field holding a list or a
+       nested section, takes a YAML or JSON string (`SCT_AGENT='{enabled: true}'`).
+* Each layer (defaults, config files, environment) merges into a section field by
+       field, so a config file setting `agent: {enabled: true}` keeps every other default.
+
 #### Appending with environment variables or with config files
 * **strings:** can be appended with adding `++` at the beginning of the string:
        `export SCT_APPEND_SCYLLA_ARGS="++ --overprovisioned 1"`
@@ -28,11 +38,11 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-529 options across 29 groups.
+535 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
-| [General and provisioning](configuration_options/general-and-provisioning.md) | 74 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
+| [General and provisioning](configuration_options/general-and-provisioning.md) | 80 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
 | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 72 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
@@ -71,6 +81,12 @@ concerns first, then one page per backend, then one per test type.
 | [`add_cs_user_profiles_extra_tables`](configuration_options/stress-commands-and-load-generation.md#add_cs_user_profiles_extra_tables) | `SCT_ADD_CS_USER_PROFILES_EXTRA_TABLES` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`add_node_cnt`](configuration_options/general-and-provisioning.md#add_node_cnt) | `SCT_ADD_NODE_CNT` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`agent`](configuration_options/general-and-provisioning.md#agent) | `SCT_AGENT` | [General and provisioning](configuration_options/general-and-provisioning.md) |
+| [`agent.binary_url`](configuration_options/general-and-provisioning.md#agent.binary_url) | `SCT_AGENT__BINARY_URL` | [General and provisioning](configuration_options/general-and-provisioning.md) |
+| [`agent.enabled`](configuration_options/general-and-provisioning.md#agent.enabled) | `SCT_AGENT__ENABLED` | [General and provisioning](configuration_options/general-and-provisioning.md) |
+| [`agent.log_level`](configuration_options/general-and-provisioning.md#agent.log_level) | `SCT_AGENT__LOG_LEVEL` | [General and provisioning](configuration_options/general-and-provisioning.md) |
+| [`agent.max_concurrent_jobs`](configuration_options/general-and-provisioning.md#agent.max_concurrent_jobs) | `SCT_AGENT__MAX_CONCURRENT_JOBS` | [General and provisioning](configuration_options/general-and-provisioning.md) |
+| [`agent.port`](configuration_options/general-and-provisioning.md#agent.port) | `SCT_AGENT__PORT` | [General and provisioning](configuration_options/general-and-provisioning.md) |
+| [`agent.tls`](configuration_options/general-and-provisioning.md#agent.tls) | `SCT_AGENT__TLS` | [General and provisioning](configuration_options/general-and-provisioning.md) |
 | [`alternator_access_key_id`](configuration_options/alternator-dynamodb-api.md#alternator_access_key_id) | `SCT_ALTERNATOR_ACCESS_KEY_ID` | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) |
 | [`alternator_enforce_authorization`](configuration_options/alternator-dynamodb-api.md#alternator_enforce_authorization) | `SCT_ALTERNATOR_ENFORCE_AUTHORIZATION` | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) |
 | [`alternator_loadbalancing`](configuration_options/alternator-dynamodb-api.md#alternator_loadbalancing) | `SCT_ALTERNATOR_LOADBALANCING` | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) |

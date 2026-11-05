@@ -69,6 +69,9 @@ lazy from sdcm.provision.gce.capacity_advisor import get_zone_advice
 lazy from sdcm.provision.provisioner import VmInstance
 lazy from sdcm.remote import LOCALRUNNER
 lazy from sdcm.sct_config import AWS_SUPPORTED_REGIONS, SCTConfiguration, available_backends, init_and_verify_sct_config
+lazy from sdcm.sct_config.docs import ConfigDocs
+lazy from sdcm.sct_config.docs.markdown import MarkdownPagesRenderer, MarkdownRenderer
+lazy from sdcm.sct_config.docs.yaml import YamlRenderer
 lazy from sdcm.sct_provision.common.layout import SCTProvisionLayout
 lazy from sdcm.sct_provision.instances_provider import provision_sct_resources
 lazy from sdcm.sct_runner import (
@@ -436,7 +439,7 @@ def provision_resources(backend, test_name: str, config: str):
             click.echo("No need provision logging service")
 
         agent_config = params.get("agent")
-        if agent_config.get("enabled") and agent_config.get("binary_url"):
+        if agent_config.installed:
             click.echo("Generate SCT agent API key")
             test_config.generate_and_save_agent_api_key()
 
@@ -2254,17 +2257,17 @@ def conf(config_file, backend):
 )
 def conf_docs(output_format):
     if output_format == "markdown":
-        click.secho(SCTConfiguration.dump_help_config_markdown())
+        click.secho(ConfigDocs(SCTConfiguration).render(MarkdownRenderer()))
     elif output_format == "yaml":
-        click.secho(SCTConfiguration.dump_help_config_yaml())
+        click.secho(ConfigDocs(SCTConfiguration).render(YamlRenderer()))
 
 
 @cli.command("update-conf-docs", help="Update the docs configuration markdown")
 def update_conf_docs():
     root = Path(__name__).parent
-    pages = SCTConfiguration.dump_help_config_markdown_pages()
+    pages = ConfigDocs(SCTConfiguration).render(MarkdownPagesRenderer())
 
-    docs_dir = root / SCTConfiguration.DOCS_DIR
+    docs_dir = root / MarkdownPagesRenderer.DIR
     docs_dir.mkdir(parents=True, exist_ok=True)
 
     written = set()
@@ -2280,7 +2283,7 @@ def update_conf_docs():
             stale.unlink()
             click.secho(f"removed stale {stale}", fg="yellow")
 
-    click.secho(f"docs written: {len(pages)} pages under {docs_dir} (index: {root / SCTConfiguration.DOCS_INDEX})")
+    click.secho(f"docs written: {len(pages)} pages under {docs_dir} (index: {root / MarkdownPagesRenderer.INDEX})")
 
 
 @click.group(help="Group of commands for investigating testrun")

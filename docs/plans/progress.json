@@ -287,8 +287,8 @@
       "id": "sct-config-nested-sections",
       "title": "SCT Config Nested Sections",
       "domain": "config",
-      "status": "draft",
-      "pr": null,
+      "status": "in_progress",
+      "pr": 16733,
       "phases_total": 2,
       "phases_done": 0
     },
