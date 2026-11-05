@@ -124,8 +124,6 @@ from sdcm.xcloud.cluster_config_utils import (
 )
 
 _SIZING_RESOLUTION_CACHE: dict[tuple, tuple[str, str]] = {}
-#: The config option holding each cloud's region, for region-aware sizing.
-_SIZING_REGION_PARAMS = {"aws": "region_name", "gce": "gce_datacenter", "azure": "azure_region_name"}
 
 LOGGER = logging.getLogger("sdcm.sct_config")
 
@@ -1630,11 +1628,8 @@ class SCTConfiguration(*CONFIG_GROUPS):
         # Spot runs prefer types with lower interruption rates in the first region (SCT-707).
         provision = (env.get("instance_provision") if env else None) or self.get("instance_provision")
         is_spot = provision in ("spot", "spot_fleet")
-        region_param = _SIZING_REGION_PARAMS.get(cloud)
-        regions = ((env.get(region_param) if env else None) or self.get(region_param)) if region_param else None
-        # A str, a list, or (from an env var) a list holding one space-separated str.
-        regions = " ".join(regions).split() if isinstance(regions, list) else (regions or "").split()
-        spot_region = regions[0] if regions and is_spot else None
+        # Only AWS has interruption data (data/instance_catalog/interruption.yaml).
+        spot_region = self.region_names[0] if is_spot and cloud == "aws" and self.region_names else None
         role_params = SIZING_ROLE_PARAMS.get(cloud, {})
         for role, param_name in role_params.items():
             if role == "db_oracle" and not oracle_cluster_in_use(db_type):
