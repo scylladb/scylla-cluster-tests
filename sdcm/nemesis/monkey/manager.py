@@ -14,7 +14,13 @@ from sdcm import mgmt
 from sdcm.exceptions import UnsupportedNemesis, WaitForTimeoutError
 from sdcm.mgmt.argus_report import report_manager_backup_results_to_argus
 from sdcm.mgmt.backup import run_manager_backup
-from sdcm.mgmt.common import TaskStatus, TERMINAL_TASK_STATUSES, ObjectStorageUploadMode, get_persistent_snapshots
+from sdcm.mgmt.common import (
+    TaskStatus,
+    TERMINAL_TASK_STATUSES,
+    ObjectStorageUploadMode,
+    RepairIncrementalMode,
+    get_persistent_snapshots,
+)
 from sdcm.mgmt.helpers import get_dc_name_from_ks_statement, get_schema_create_statements_from_snapshot
 from sdcm.nemesis import NemesisBaseClass, target_data_nodes
 from sdcm.nemesis.utils.common import destroy_data_and_restart_scylla
@@ -449,4 +455,5 @@ class MgmtCorruptThenRepair(ManagerMonkeyBase):
         # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
         # following manager repair would then propagate the resurrected data to the other replicas.
         destroy_data_and_restart_scylla(self.runner, skip_sstables_with_tombstones=True)
-        self.runner.run_repair_manager()
+        # full mode, since incremental repair skips the destroyed repaired sstables
+        self.runner.run_repair_manager(incremental_mode=RepairIncrementalMode.FULL)
