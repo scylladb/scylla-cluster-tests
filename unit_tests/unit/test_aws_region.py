@@ -96,3 +96,12 @@ def test_get_common_availability_zones_preferred_unavailable_ignored(aws_region)
     result = aws_region.get_common_availability_zones(["i4i.large"], preferred_azs=["us-east-1c"])
     assert set(result) == {"us-east-1a", "us-east-1b"}
     assert "us-east-1c" not in result
+
+
+def test_ensure_builder_security_group_keeps_an_existing_group_alive(aws_region):
+    group = MagicMock(ip_permissions=[])
+    aws_region._mock_ec2.describe_security_groups.return_value = {"SecurityGroups": [{"GroupId": "sg-builder"}]}
+    aws_region.resource.SecurityGroup.return_value = group
+
+    aws_region.ensure_builder_security_group({"jenkins": ["192.0.2.10/32"]})
+    assert {"Key": "keep", "Value": "alive"} in group.create_tags.call_args.kwargs["Tags"]
