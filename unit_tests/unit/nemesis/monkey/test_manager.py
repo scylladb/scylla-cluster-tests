@@ -20,6 +20,7 @@ from sdcm.nemesis.utils.common import destroy_data_and_restart_scylla
 
 MODULE = "sdcm.nemesis.monkey.manager"
 COMMON_MODULE = "sdcm.nemesis.utils.common"
+KMS_AUTO_HOST_YAML = {"kms_hosts": {"auto": {"master_key": "alias/testid-fake", "aws_region": "auto"}}}
 
 pytestmark = pytest.mark.usefixtures("events")
 
@@ -313,12 +314,13 @@ def test_destroy_data_restarts_scylla_on_file_removal_error(destroy_node_data_ru
 
 
 @pytest.mark.parametrize(
-    ("cluster_backend", "region_names", "issues_open", "expected"),
+    ("cluster_backend", "region_names", "issues_open", "append_scylla_yaml", "expected"),
     [
         pytest.param(
             "gce",
             ["us-east-1"],
             False,
+            KMS_AUTO_HOST_YAML,
             "The restore test only supports 'AWS' and 'K8S-EKS' backends.",
             id="unsupported-backend",
         ),
@@ -326,17 +328,42 @@ def test_destroy_data_restarts_scylla_on_file_removal_error(destroy_node_data_ru
             "aws",
             ["us-east-1", "us-west-2"],
             True,
+            KMS_AUTO_HOST_YAML,
             "MultiDC cluster configuration is not supported by this nemesis",
             id="multi-dc-while-manager-issues-open",
         ),
-        pytest.param("aws", ["us-east-1", "us-west-2"], False, None, id="multi-dc-after-manager-issues-closed"),
-        pytest.param("k8s-eks", ["us-east-1"], False, None, id="eks-single-dc"),
+        pytest.param(
+            "aws",
+            ["us-east-1", "us-west-2"],
+            False,
+            KMS_AUTO_HOST_YAML,
+            None,
+            id="multi-dc-after-manager-issues-closed",
+        ),
+        pytest.param("k8s-eks", ["us-east-1"], False, KMS_AUTO_HOST_YAML, None, id="eks-single-dc"),
+        pytest.param(
+            "aws",
+            ["us-east-1"],
+            False,
+            None,
+            "The persistent snapshots are KMS-encrypted, but the 'auto' KMS host is not configured",
+            id="kms-disabled",
+        ),
+        pytest.param(
+            "aws",
+            ["us-east-1"],
+            False,
+            {"kms_hosts": {"kms-host": {"master_key": "alias/testid-fake"}}},
+            "The persistent snapshots are KMS-encrypted, but the 'auto' KMS host is not configured",
+            id="kms-without-auto-host",
+        ),
     ],
 )
-def test_restore_precheck(runner, set_params, cluster_backend, region_names, issues_open, expected):
-    """MgmtRestore.precheck() skips non-AWS backends, and multi-DC clusters only while the
-    Manager cross-DC restore issues are still open."""
-    set_params(use_mgmt=True, cluster_backend=cluster_backend)
+def test_restore_precheck(runner, set_params, cluster_backend, region_names, issues_open, append_scylla_yaml, expected):
+    """MgmtRestore.precheck() skips non-AWS backends, multi-DC clusters only while the Manager
+    cross-DC restore issues are still open, and clusters without the 'auto' KMS host that the
+    KMS-encrypted persistent snapshots need (https://scylladb.atlassian.net/browse/SCT-823)."""
+    set_params(use_mgmt=True, cluster_backend=cluster_backend, append_scylla_yaml=append_scylla_yaml)
     runner.cluster.params.region_names = region_names
 
     with patch(f"{MODULE}.SkipPerIssues", return_value=issues_open):
