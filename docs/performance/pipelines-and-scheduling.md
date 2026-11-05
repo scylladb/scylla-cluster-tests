@@ -22,6 +22,7 @@ version.
 | 1st of month | `master-monthly` | Throughput staircase and latency-under-nemesis on i8g **vnodes**; 2.5 TB elasticity |
 | 2nd Tuesday | `gce-custom-monthly` | latte customer steady-state scenario, GCE, tablets and vnodes |
 | Saturday | `alternator-weekly` | Alternator `test_full` |
+| Friday | `logstor-weekly` | Logstor uniform, hotspot, EC twin and 60/40 dual engine, i4i (2027.1 branch-cut gate) |
 | Daily | `alternator-daily` | Nothing currently — the cron exists with no job entries |
 
 Two more cadences appear in job entries and in `runbook-new-perf-test.md` but have no cron in
