@@ -4,6 +4,8 @@
 # Measured step: random uniform selection (distribution="random" -> hash_range(i, ROW_COUNT))
 # over an unbounded cycle range (no --end-cycle) so the key sequence never repeats within the run.
 # Schema: 10 columns x 200 bytes each (matching kv_uniform.rn reference)
+# The reads use BYPASS CACHE, so that each read goes to the logstor segments on disk and not to
+# the logstor record cache.
 # Steps: a 60m conditioning step that writes at 250k ops/s and reads at 100 ops/s, then the 60m
 # measured step, mixed (write:30,read:70) at 600k ops/s
 # This test is a part of the benchmark done by Aerospike
@@ -81,7 +83,7 @@ stress_cmd_m:
     --threads $threads --concurrency $concurrency --rate $read_rate
     --start-cycle $read_start_cycle
     -P row_count=500000000 -P offset=0 -P distribution=\"random\"
-    -P column_count=10 -P column_size=200 -P key_size=48
+    -P column_count=10 -P column_size=200 -P key_size=48 -P bypass_cache=true
     data_dir/latte/latte_cs_alike.rn
 
 latte_schema_parameters:
