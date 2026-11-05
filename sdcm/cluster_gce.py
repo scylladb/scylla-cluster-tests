@@ -507,7 +507,7 @@ class GCECluster(cluster.BaseCluster):
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
 
-        instances_by_tags = list_instances_gce(tags_dict={"TestId": test_id, "NodeType": self.node_type})
+        instances_by_tags = list_instances_gce(tags_dict={"TestId": test_id, "NodeType": self.node_type}, running=True)
         # Use provisioner's zone to extract region, ensuring consistency with where instances are created
         provisioner_zone = self.provisioners[dc_idx].availability_zone
         region = provisioner_zone[:-2]  # Remove zone suffix (e.g., "us-east1-b" -> "us-east1")
