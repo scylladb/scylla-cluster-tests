@@ -369,6 +369,23 @@ def list_instances_oci(
     return all_instances
 
 
+def get_oci_instance_ips(instance: Instance) -> tuple[str | None, str]:
+    """Return the (public, private) IP of the primary VNIC of an OCI instance.
+
+    `Instance.region` is a short key (`iad`, `phx`) for the oldest regions, so map it to the full name.
+    """
+    region = oci.regions.REGIONS_SHORT_NAMES.get(instance.region, instance.region)
+    attachments = oci.pagination.list_call_get_all_results(
+        OciService().get_compute_client(region=region).list_vnic_attachments,
+        compartment_id=instance.compartment_id,
+        instance_id=instance.id,
+    ).data
+    network_client = OciService().get_network_client(region=region)
+    vnics = [network_client.get_vnic(a.vnic_id).data for a in attachments if a.lifecycle_state == "ATTACHED"]
+    vnic = next(v for v in vnics if v.is_primary)
+    return vnic.public_ip, vnic.private_ip
+
+
 def filter_oci_by_tags(tags_dict: dict, instances: list[Instance], tag_namespace: str = "sct") -> list[Instance]:
     """Filter OCI instances by defined tags within a specific namespace.
 
