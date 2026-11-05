@@ -635,7 +635,7 @@ class GCECluster(cluster.BaseCluster):
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
 
-        instances_by_tags = list_instances_gce(tags_dict={"TestId": test_id, "NodeType": self.node_type})
+        instances_by_tags = list_instances_gce(tags_dict={"TestId": test_id, "NodeType": self.node_type}, running=True)
         region = self.provisioners[dc_idx].region
         # Use ssh_connection_ip_type from params if _node_public_ips is not yet set (during __init__)
         # If _node_public_ips exists, use it; otherwise fallback to ssh_connection_ip_type
