@@ -11,12 +11,16 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""Unit tests for GCE multiple network interfaces support."""
+"""Unit tests for GCE networking: multiple network interfaces and the Jenkins builder firewall."""
 
 import subprocess
 from ipaddress import ip_network
+from unittest.mock import MagicMock, patch
 
+import google.api_core.exceptions
 import pytest
+from google.cloud import compute_v1
+from google.cloud.compute_v1 import Firewall
 
 from sdcm.provision.gce.instance_provider import (
     VirtualMachineProvider,
@@ -25,7 +29,7 @@ from sdcm.provision.gce.instance_provider import (
 )
 from sdcm.provision.gce.network_provider import NetworkProvider
 from sdcm.provision.provisioner import ProvisionError
-from sdcm.utils.gce_region import GceRegion
+from sdcm.utils.gce_region import BUILDER_NETWORK_TAG, GceRegion, firewall_needs_patch
 from sdcm.utils.gce_utils import (
     SECONDARY_NIC_ROUTING_SCRIPT,
     gce_mac_address_for_ipv4,
@@ -151,3 +155,61 @@ def test_secondary_nic_routing_script_is_valid_bash(tmp_path):
     script.write_text(SECONDARY_NIC_ROUTING_SCRIPT)
     result = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True, check=False)
     assert result.returncode == 0, f"script has bash syntax errors: {result.stderr}"
+
+
+BUILDER_SOURCES = {"jenkins": ["192.0.2.10/32"], "office": ["198.51.100.10/32"]}
+
+
+def _rule(**overrides):
+    base = dict(
+        name="r",
+        direction="INGRESS",
+        priority=100,
+        source_ranges=["1.2.3.4/32"],
+        allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["22"])],
+        target_tags=["sct-builder"],
+    )
+    fields = base | overrides
+    return Firewall(**{key: value for key, value in fields.items() if value is not None})
+
+
+def test_firewall_needs_patch_detects_priority_and_target_tags():
+    assert not firewall_needs_patch(_rule(), _rule())
+    assert firewall_needs_patch(_rule(priority=1000), _rule())
+    assert firewall_needs_patch(_rule(target_tags=[]), _rule())
+    assert firewall_needs_patch(_rule(allowed=[], denied=[compute_v1.Denied(I_p_protocol="all")]), _rule())
+    # a live rule at the API default must equal a desired rule that never set a priority
+    assert not firewall_needs_patch(_rule(priority=1000), _rule(priority=None))
+
+
+def _firewall_region():
+    region = new_region()
+    region.project = PROJECT_ID
+    region.firewall_client = MagicMock()
+    region.__dict__["network"] = MagicMock(self_link="net-link")
+    return region
+
+
+def test_builder_firewall_applies_allows_before_deny_and_waits():
+    region = _firewall_region()
+    with patch("sdcm.utils.gce_region.wait_for_extended_operation") as wait:
+        region.configure_builder_firewall(BUILDER_SOURCES)
+
+    inserted = [call.kwargs["firewall_resource"] for call in region.firewall_client.insert.call_args_list]
+    # without the tag, the deny rule would cut off every host in the project
+    assert all(list(rule.target_tags) == [BUILDER_NETWORK_TAG] for rule in inserted)
+    # a deny rule without its allow rules would lock Jenkins out of new builders
+    assert inserted[-1].name == "qa-vpc-builder-deny-all"
+    # an untagged allow rule at priority 100 (qa-vpc-allow-ssh in one project) must not beat the deny rule
+    assert max(rule.priority for rule in inserted[:-1]) < inserted[-1].priority < 100
+    waited = [call.args[0] for call in wait.call_args_list]
+    assert waited.count(region.firewall_client.insert.return_value) == 3
+
+
+def test_stale_ssh_rule_kept_when_its_replacement_is_missing():
+    region = _firewall_region()
+    region.firewall_client.get.side_effect = google.api_core.exceptions.NotFound("no such rule")
+
+    region.delete_stale_firewall_rules()
+
+    region.firewall_client.delete.assert_not_called()

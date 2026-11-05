@@ -23,6 +23,7 @@ from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 
 from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
+from sdcm.utils.builder_access import builder_ingress_diff, get_builder_ssh_sources
 from sdcm.utils.decorators import retrying
 from sdcm.utils.aws_utils import tags_as_ec2_tags
 
@@ -32,6 +33,7 @@ LOGGER = logging.getLogger(__name__)
 class AwsRegion:
     SCT_VPC_NAME = "SCT-2-vpc"
     SCT_VPC_CIDR_TMPL = "10.{}.0.0/16"
+    SCT_VPCS_CIDR = "10.0.0.0/8"
     SCT_SECURITY_GROUP_NAME = "SCT-2-sg"
     SCT_TEST_SECURITY_GROUP_NAME_TMPL = "SCT-2-sg-{}"
     SCT_SUBNET_NAME = "SCT-2-subnet-{availability_zone}{subnet_index}"
@@ -39,6 +41,7 @@ class AwsRegion:
     SCT_ROUTE_TABLE_NAME = "SCT-2-rt{index}"
     SCT_KEY_PAIR_NAME = "scylla_test_id_ed25519"  # TODO: change legacy name to sct-keypair-aws
     SCT_SSH_GROUP_NAME = "SCT-ssh-sg"
+    SCT_BUILDER_GROUP_NAME = "SCT-builder-sg"
     SCT_SUBNET_PER_AZ = 2  # how many subnets to configure in each region.
     SCT_NODES_ROLE_ARN = "qa-scylla-manager-backup-role"
 
@@ -697,6 +700,54 @@ class AwsRegion:
                 ]
             )
 
+    @property
+    def builder_security_group(self) -> EC2ServiceResource.SecurityGroup | None:
+        security_groups = self.client.describe_security_groups(
+            Filters=[{"Name": "tag:Name", "Values": [self.SCT_BUILDER_GROUP_NAME]}]
+        )
+        existing_sgs = security_groups.get("SecurityGroups", [])
+        if len(existing_sgs) == 0:
+            return None
+
+        assert len(existing_sgs) == 1, (
+            f"More than 1 Security group with {self.SCT_BUILDER_GROUP_NAME} found in {self.region_name}: {existing_sgs}!"
+        )
+        return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])
+
+    def ensure_builder_security_group(self, sources: dict[str, list[str]]) -> EC2ServiceResource.SecurityGroup:
+        """Create the builder security group if missing and keep only the allowed ingress.
+
+        Allows SSH from `sources` and all traffic from the SCT VPCs: a test that runs on the builder
+        gets the logs of its nodes, which can be in another region and come over VPC peering.
+        """
+        security_group = self.builder_security_group
+        if security_group is None:
+            result = self.client.create_security_group(
+                Description="SSH to SCT Jenkins builders from allowed sources only",
+                GroupName=self.SCT_BUILDER_GROUP_NAME,
+                VpcId=self.sct_vpc.vpc_id,
+            )
+            security_group = self.resource.SecurityGroup(result["GroupId"])
+            LOGGER.info("'%s' with id '%s' created.", self.SCT_BUILDER_GROUP_NAME, security_group.group_id)
+        # the AWS cleanup deletes unattached security groups; this one is unattached while no builder runs
+        security_group.create_tags(
+            Tags=[{"Key": "Name", "Value": self.SCT_BUILDER_GROUP_NAME}, {"Key": "keep", "Value": "alive"}]
+        )
+        internal = {self.SCT_VPCS_CIDR: "SCT networks"}
+        revoke, authorize = builder_ingress_diff(security_group.ip_permissions, sources, internal)
+
+        if authorize:
+            LOGGER.info(
+                "Authorizing ingress to '%s' in %s: %s", self.SCT_BUILDER_GROUP_NAME, self.region_name, authorize
+            )
+            security_group.authorize_ingress(IpPermissions=authorize)
+
+        if revoke:
+            LOGGER.info("Revoking ingress from '%s' in %s: %s", self.SCT_BUILDER_GROUP_NAME, self.region_name, revoke)
+            security_group.revoke_ingress(IpPermissions=revoke)
+
+        return security_group
+
     def _get_ec2_key_fingerprint(self):
         """Return the SHA256 fingerprint of the EC2 key pair, or None if it doesn't exist."""
         try:
@@ -803,5 +854,6 @@ class AwsRegion:
         self.create_sct_subnets()
         self.create_sct_security_group()
         self.create_sct_ssh_security_group()
+        self.ensure_builder_security_group(get_builder_ssh_sources())
         self.configure_ssm()
         LOGGER.info("Region configured successfully.")
