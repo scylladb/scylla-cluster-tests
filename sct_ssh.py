@@ -22,6 +22,7 @@ lazy import click
 lazy import questionary
 lazy from azure.mgmt.compute.models import VirtualMachine
 lazy from google.cloud import compute_v1
+lazy from oci.core.models import Instance as OciInstance
 lazy from questionary import Choice
 
 lazy from sdcm.utils.aws_region import AwsRegion
@@ -44,6 +45,7 @@ lazy from sdcm.utils.gce_utils import (
     gce_set_tags,
     get_gce_compute_instances_client,
 )
+lazy from sdcm.utils.oci_utils import get_oci_instance_ips, list_instances_oci
 
 LOGGER = logging.getLogger(__name__)
 
@@ -59,6 +61,8 @@ def get_tags(instance) -> dict:
         return gce_meta_to_dict(instance.metadata)
     if isinstance(instance, VirtualMachine):
         return instance.tags
+    if isinstance(instance, OciInstance):
+        return (instance.defined_tags or {}).get("sct", {})
     raise NotImplementedError()
 
 
@@ -67,6 +71,8 @@ def get_name(instance):
         return get_tags(instance).get("Name")
     if isinstance(instance, (compute_v1.Instance, VirtualMachine)):
         return instance.name
+    if isinstance(instance, OciInstance):
+        return instance.display_name
     raise NotImplementedError()
 
 
@@ -77,6 +83,8 @@ def get_target_ip(instance):
         return list(gce_private_addresses(instance))[0]
     if isinstance(instance, VirtualMachine):
         return AzureService().get_virtual_machine_ips(virtual_machine=instance).private_ip
+    if isinstance(instance, OciInstance):
+        return get_oci_instance_ips(instance)[1]
     raise NotImplementedError()
 
 
@@ -114,14 +122,22 @@ def azure_find_bastion_for_instance(instance: VirtualMachine) -> VirtualMachine:
     return bastions[0]
 
 
-def guess_username(instance: dict | compute_v1.Instance | VirtualMachine) -> str:
-    user_name = get_tags(instance).get("UserName")
+def oci_find_bastion_for_instance(instance: OciInstance) -> OciInstance:
+    tags = {"bastion": "true", "TestId": get_tags(instance).get("TestId")}
+    bastions = list_instances_oci(tags, running=True, verbose=False)
+    assert bastions, "No bastion found"
+    return bastions[0]
+
+
+def guess_username(instance: dict | compute_v1.Instance | VirtualMachine | OciInstance) -> str:
+    tags = get_tags(instance)
+    user_name = tags.get("UserName") or tags.get("ssh_user")  # OCI nodes carry `ssh_user`
     if isinstance(instance, compute_v1.Instance):
         user_name, _ = gce_get_user_and_ssh_keys(instance)
     if user_name:
         return user_name
 
-    node_type = get_tags(instance).get("NodeType")
+    node_type = tags.get("NodeType")
     node_type = node_type.lower() if node_type else node_type
     if node_type == "builder":
         return "jenkins"
@@ -138,6 +154,10 @@ def get_proxy_command(
         return gce_get_proxy_command(instance, strict_host_checking=strict_host_checking)
     elif isinstance(instance, VirtualMachine):
         return azure_get_proxy_command(
+            instance, force_use_public_ip=force_use_public_ip, strict_host_checking=strict_host_checking
+        )
+    elif isinstance(instance, OciInstance):
+        return oci_get_proxy_command(
             instance, force_use_public_ip=force_use_public_ip, strict_host_checking=strict_host_checking
         )
     else:
@@ -201,6 +221,21 @@ def azure_get_proxy_command(instance: VirtualMachine, force_use_public_ip: bool,
     return proxy_command, target_ip, target_username, target_key
 
 
+def oci_get_proxy_command(instance: OciInstance, force_use_public_ip: bool, strict_host_checking: bool):
+    target_key = f"~/.ssh/{get_tags(instance).get('ssh_key') or SSH_KEY_AWS_DEFAULT}"
+    target_username = guess_username(instance)
+    public_ip, private_ip = get_oci_instance_ips(instance)
+    if force_use_public_ip:
+        return "", public_ip, target_username, target_key
+    bastion = oci_find_bastion_for_instance(instance)
+    strict_host_check = "" if strict_host_checking else "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+    proxy_command = (
+        f'-o ProxyCommand="ssh {strict_host_check} -i {target_key} -W %h:%p '
+        f'{guess_username(bastion)}@{get_oci_instance_ips(bastion)[0]}"'
+    )
+    return proxy_command, private_ip, target_username, target_key
+
+
 def aws_get_proxy_command(
     instance: dict, force_use_public_ip: bool, strict_host_checking: bool = False
 ) -> [str, str, str]:
@@ -226,6 +261,11 @@ def aws_get_proxy_command(
     return proxy_command, target_ip, target_username, target_key
 
 
+def oci_choice(vm: OciInstance) -> Choice:
+    public_ip, private_ip = get_oci_instance_ips(vm)
+    return Choice(f"oci - {vm.display_name} - {public_ip} {private_ip} - {vm.availability_domain}", value=vm)
+
+
 def select_instance(region: str = None, **tags) -> dict | None:
     user = tags.get("user")
     test_id = tags.get("test_id")
@@ -243,10 +283,12 @@ def select_instance(region: str = None, **tags) -> dict | None:
 
     azure_vms = list_instances_azure(tags, running=True, verbose=False)
 
-    if len(aws_vms + gce_vms + azure_vms) == 1:
-        return (aws_vms + gce_vms + azure_vms)[0]
+    oci_vms = list_instances_oci(tags, running=True, verbose=False)
 
-    if not aws_vms and not gce_vms and not azure_vms:
+    if len(aws_vms + gce_vms + azure_vms + oci_vms) == 1:
+        return (aws_vms + gce_vms + azure_vms + oci_vms)[0]
+
+    if not aws_vms and not gce_vms and not azure_vms and not oci_vms:
         click.echo(click.style("Found no matching instances", fg="red"))
         return {}
     # create the question object
@@ -272,7 +314,8 @@ def select_instance(region: str = None, **tags) -> dict | None:
                 value=vm,
             )
             for vm in azure_vms
-        ],
+        ]
+        + [oci_choice(vm) for vm in oci_vms],
         show_selected=True,
     )
 
@@ -307,6 +350,7 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
     aws_vms = []
     gce_vms = []
     azure_vms = []
+    oci_vms = []
 
     if "aws" in backends:
         aws_vms = list_instances_aws(tags, running=True, region_name=region)
@@ -317,10 +361,13 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
     if "azure" in backends:
         azure_vms = list_instances_azure(tags, running=True, verbose=False)
 
-    if len(aws_vms + gce_vms + azure_vms) == 1:
-        return aws_vms + gce_vms + azure_vms
+    if "oci" in backends:
+        oci_vms = list_instances_oci(tags, running=True, verbose=False)
 
-    if not aws_vms and not gce_vms and not azure_vms:
+    if len(aws_vms + gce_vms + azure_vms + oci_vms) == 1:
+        return aws_vms + gce_vms + azure_vms + oci_vms
+
+    if not aws_vms and not gce_vms and not azure_vms and not oci_vms:
         click.echo(click.style("Found no matching instances", fg="red"))
         return []
 
@@ -346,6 +393,7 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
             )
             for vm in azure_vms
         ]
+        + [oci_choice(vm) for vm in oci_vms]
     )
     # create the question object
     question = questionary.checkbox(
@@ -463,6 +511,11 @@ def tunnel(user, test_id, region, port, wait_for_port, node_name):
                 guess_username(bastion),
                 AzureService().get_virtual_machine_ips(virtual_machine=bastion).public_ip,
             )
+            target_ip = get_target_ip(connect_vm)
+        elif isinstance(connect_vm, OciInstance):
+            target_key = f"~/.ssh/{get_tags(connect_vm).get('ssh_key') or SSH_KEY_AWS_DEFAULT}"
+            bastion = oci_find_bastion_for_instance(connect_vm)
+            bastion_username, bastion_ip = guess_username(bastion), get_oci_instance_ips(bastion)[0]
             target_ip = get_target_ip(connect_vm)
         else:
             target_key = f"~/.ssh/{SSH_KEY_AWS_DEFAULT}"
