@@ -255,13 +255,18 @@ def test_spot_monitoring_starts_before_the_cloud_init_wait(monkeypatch):
         (PricingModel.SPOT, True, True),
         (PricingModel.SPOT, False, False),
         (PricingModel.ON_DEMAND, True, False),
+        # the cloud API failing must not replace the cloud-init error
+        (PricingModel.SPOT, ConnectionError("azure api down"), False),
     ],
 )
 def test_reclaim_during_the_cloud_init_wait_publishes_spot_termination_event(pricing_model, reclaimed, published):
     """Azure waits for cloud-init before any node exists: only the cloud can tell a reclaim from a broken setup."""
     provisioner = MagicMock()
     provisioner.get_or_create_instances.return_value = [MagicMock(public_ip_address="1.2.3.4")]
-    provisioner.was_reclaimed.return_value = reclaimed
+    if isinstance(reclaimed, Exception):
+        provisioner.was_reclaimed.side_effect = reclaimed
+    else:
+        provisioner.was_reclaimed.return_value = reclaimed
     with (
         patch("sdcm.sct_provision.instances_provider.RemoteCmdRunnerBase"),
         patch("sdcm.sct_provision.instances_provider.wait_cloud_init_completes", side_effect=TimeoutError("ssh")),

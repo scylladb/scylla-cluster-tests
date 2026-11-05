@@ -76,6 +76,15 @@ def _record_outcome(
         )
 
 
+def _was_reclaimed(provisioner: Provisioner, name: str) -> bool:
+    """`provisioner.was_reclaimed`, answering False when the cloud API fails, so its error never hides the real one."""
+    try:
+        return provisioner.was_reclaimed(name)
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Could not check whether %s was reclaimed", name, exc_info=True)
+        return False
+
+
 def provision_instances_with_fallback(
     provisioner: Provisioner,
     definitions: List[InstanceDefinition],
@@ -132,7 +141,7 @@ def provision_instances_with_fallback(
             wait_cloud_init_completes(remoter=remoter, instance=v_m)
         except Exception:
             # No node exists yet to watch for reclaims, so ask the cloud, or SCT-707 retries nothing.
-            if pricing_model.is_spot() and provisioner.was_reclaimed(v_m.name):
+            if pricing_model.is_spot() and _was_reclaimed(provisioner, v_m.name):
                 SpotTerminationEvent(
                     node=v_m.name, message="Spot VM reclaimed while waiting for cloud-init"
                 ).publish_or_dump(default_logger=LOGGER)
